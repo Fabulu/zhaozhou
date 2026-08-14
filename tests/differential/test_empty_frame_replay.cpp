@@ -180,6 +180,12 @@ int main(int argc, char** argv) {
     // both sides must also agree the frame was REJECTED
     zhao::check(top.frames_rejected == 1 && zref.error != ZH_ABI_OK, c.name, 1,
                 top.frames_rejected);
+    // W6 conformance pin: bytes_consumed parity on REJECTED frames too
+    // (spec 3.2: 36 on header-level abort, else the whole packet). This
+    // check was missing in W4, which let the C++ validator report 0 on
+    // header-level aborts while the stub reported 36.
+    zhao::check(zref.bytes_consumed == top.bytes_consumed, c.name,
+                zref.bytes_consumed, top.bytes_consumed);
     if (zref.error != top.status) {
       zhao::save_failing_vector("replay_error_parity", c.whole,
                                 "zref error=" + std::to_string(zref.error),

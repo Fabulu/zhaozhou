@@ -177,6 +177,14 @@ verilate(test_abi_fuzz_parity
 add_test(NAME abi_fuzz_parity COMMAND test_abi_fuzz_parity)
 set_tests_properties(abi_fuzz_parity PROPERTIES LABELS "fast;nightly")
 
+# ---- W6: ZRef shell (spec/capture_format.md 3.2-3.3; session layer) --------
+# Golden frame replays green; corrupt variants return the exact fail-safe
+# error codes; implemented-but-semantic-free commands count as no-ops.
+add_executable(test_zref_shell unit/test_zref_shell.cpp)
+target_link_libraries(test_zref_shell PRIVATE zhao_zref)
+add_test(NAME zref_shell COMMAND test_zref_shell)
+set_tests_properties(zref_shell PROPERTIES LABELS "fast;nightly")
+
 # ---- W5: field IR (spec/form/field-ir.md; gate (d)) -------------------------
 # The differential test compiles the TS-generated wrapper
 # (compiler/tests/generated/crater_ring.hpp), owns the golden .zvec from the

@@ -26,6 +26,16 @@ uint32_t rd32(const uint8_t* p) {
 
 ZhaoValidateResult zhao_frame_validate(const uint8_t* pkt, size_t len, uint32_t slot_bytes) {
   ZhaoValidateResult r;
+  // Header-level aborts (checks 1-3) report exactly ZHAO_FRAME_HEADER_BYTES
+  // consumed (capture_format.md 3.2) — W6 conformance fix: this used to
+  // report 0, contradicting the spec, the SV stub (pinned at 36 by
+  // test_stub_top) and the TS mirror (frame.ts defaults 36).
+  const auto fail_hdr = [&](zhao_abi_error e) {
+    r.error = e;
+    r.commands_consumed = 0;
+    r.bytes_consumed = ZHAO_FRAME_HEADER_BYTES;
+    return r;
+  };
   const auto fail = [&](zhao_abi_error e, uint32_t seen, uint32_t consumed) {
     r.error = e;
     r.commands_consumed = seen;
@@ -34,31 +44,31 @@ ZhaoValidateResult zhao_frame_validate(const uint8_t* pkt, size_t len, uint32_t 
   };
 
   // 1. magic (whenever 4 bytes exist), header completeness, abi version, flags
-  if (len < 4) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
+  if (len < 4) return fail_hdr(ZH_ABI_BAD_LENGTH);
   if (rd32(pkt + ZHAO_OFF_MAGIC) != ZHAO_FRAME_MAGIC) {
-    return fail(ZH_ABI_BAD_MAGIC, 0, 0);
+    return fail_hdr(ZH_ABI_BAD_MAGIC);
   }
-  if (len < ZHAO_FRAME_HEADER_BYTES) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
+  if (len < ZHAO_FRAME_HEADER_BYTES) return fail_hdr(ZH_ABI_BAD_LENGTH);
   if (rd16(pkt + ZHAO_OFF_ABI_VERSION) != ZHAO_ABI_VERSION) {
-    return fail(ZH_ABI_BAD_ABI_VERSION, 0, 0);
+    return fail_hdr(ZH_ABI_BAD_ABI_VERSION);
   }
   const uint16_t frame_flags = rd16(pkt + ZHAO_OFF_FLAGS);
   if ((frame_flags & ~ZHAO_FRAME_FLAG_CONTAINS_DEBUG) != 0) {
-    return fail(ZH_ABI_RESERVED_FLAG, 0, 0);
+    return fail_hdr(ZH_ABI_RESERVED_FLAG);
   }
 
   // 2. bounds
   const uint32_t command_bytes = rd32(pkt + ZHAO_OFF_COMMAND_BYTES);
   const uint32_t command_count = rd32(pkt + ZHAO_OFF_COMMAND_COUNT);
   const uint32_t full = ZHAO_FRAME_OVERHEAD + command_bytes;
-  if (command_bytes % ZHAO_COMMAND_ALIGNMENT != 0) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
-  if (full > slot_bytes) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
-  if (uint64_t(command_count) * 16 > command_bytes) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
-  if (len != full) return fail(ZH_ABI_BAD_LENGTH, 0, 0);
+  if (command_bytes % ZHAO_COMMAND_ALIGNMENT != 0) return fail_hdr(ZH_ABI_BAD_LENGTH);
+  if (full > slot_bytes) return fail_hdr(ZH_ABI_BAD_LENGTH);
+  if (uint64_t(command_count) * 16 > command_bytes) return fail_hdr(ZH_ABI_BAD_LENGTH);
+  if (len != full) return fail_hdr(ZH_ABI_BAD_LENGTH);
 
   // 3. header CRC over [0,32)
   if (zhao_crc32c(0, pkt, 32) != rd32(pkt + ZHAO_OFF_HEADER_CRC)) {
-    return fail(ZH_ABI_BAD_HEADER_CRC, 0, 0);
+    return fail_hdr(ZH_ABI_BAD_HEADER_CRC);
   }
 
   // 4. payload CRC over the command stream

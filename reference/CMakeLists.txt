@@ -1,10 +1,11 @@
 # ZRef — the C++17 golden-reference library (charter 20).
 # W3: fixed-point core is header-only constexpr (zref_fixp/rcp/trig/sat +
 #     generated tables). W4 adds the frame packet + .zcap container
-#     (zref_frame) and sha256; W6 adds the shell loop here.
+#     (zref_frame) and sha256; W6 adds the shell loop (zref.cpp).
 
 add_library(zhao_zref STATIC
   src/zref_frame.cpp
+  src/zref.cpp
   src/zfield/zfield_decode.cpp
   src/zfield/zfield_interpret.cpp)
 target_include_directories(zhao_zref PUBLIC
