@@ -2,8 +2,14 @@
   "name": "@zhaozhou/fixgen",
   "version": "0.0.1",
   "private": true,
-  "description": "fixed-point table generator: one source -> C++ header + SV .mem + TS module (lands W3; placeholder until then)",
+  "description": "fixed-point table generator (spec/qformats.md 11): one source -> C++ header + SV .mem + TS module + golden vector binaries, byte-identical",
   "scripts": {
-    "test": "echo [W1 placeholder] fixgen tests land in W3"
+    "gen": "tsc -p . && node dist/cli.js gen",
+    "check": "tsc -p . && node dist/cli.js check",
+    "test": "tsc -p . && node --test dist/test/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.6.3"
   }
 }

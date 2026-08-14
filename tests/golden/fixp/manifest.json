@@ -1,0 +1,35 @@
+{
+  "qfmt_version": 1,
+  "generator": "tools/fixgen",
+  "spec": "spec/qformats.md 12",
+  "files": [
+    {
+      "file": "sin_cos_u16.bin",
+      "records": 65536,
+      "bytes": 524288,
+      "layout": "per angle a (ascending): s32 LE fx_sin(a).raw, s32 LE fx_cos(a).raw",
+      "sha256": "3b1159c39ab816a422e8d89b4093944deeae3e0b91a072a0ad35b48a98735165"
+    },
+    {
+      "file": "unit8_mul_u8.bin",
+      "records": 65536,
+      "bytes": 65536,
+      "layout": "out[a*256 + b] = unit_mul(a, b), u8",
+      "sha256": "1f0947a62b86c5ab5d4b05bdfcf969122d89b86bbe9386ae0d4e94ce72af60f6"
+    },
+    {
+      "file": "rcp24_sample.bin",
+      "records": 1048576,
+      "bytes": 8388608,
+      "layout": "per i (ascending): u32 LE d = (i*16 + (i & 15)) | 1, u32 LE r = rcp_u24(d).r",
+      "sha256": "0fc8e0072647f817248a10ce8cfad6a4d9d3599d4cf86b20abba6c62a0927c6e"
+    },
+    {
+      "file": "noise2_kat.bin",
+      "records": 1024,
+      "bytes": 20480,
+      "layout": "per record: u32 LE x = i*2654435761 mod 2^32, y = i*40503 mod 2^32, seed = i*0x9E3779B1 mod 2^32 + 1, h0, h1",
+      "sha256": "95b37910271c53b2a207165b251813ab33a601d233e1e10a90018f10dc94e7db"
+    }
+  ]
+}
