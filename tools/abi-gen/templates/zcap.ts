@@ -1,0 +1,283 @@
+// zcap.ts — consumer-side TS .zcap reader/writer. Hand-maintained mirror of
+// the C++ zref_frame writer/reader; law: spec/capture_format.md 4
+// (header + section table, u64 lengths, per-section CRC-32C, skip-unknown).
+// Byte-identical output locked by the golden zcap_minimal.zcap.
+
+import {
+  ZHAO_ZCAP_SCHEMA_VERSION,
+  crc32c,
+} from './abi.js';
+
+export const ZCAP_MAGIC = 0x5041435a; // 'Z','C','A','P' little-endian u32
+export const ZCAP_FORMAT_VERSION = 1;
+export const ZCAP_HEADER_BYTES = 32;
+export const ZCAP_SECTION_ENTRY_BYTES = 32;
+export const ZCAP_FLAG_LITTLE_ENDIAN = 0x0001;
+export const ZCAP_SECTION_CRC_PRESENT = 0x0001;
+
+export const ZCAP_SECTION = {
+  ABI_INFO: 0x0001,
+  FRAME_PACKET: 0x0002,
+  RESOURCE_PAGES: 0x0003,
+  CONTROLLER_SNAPSHOT: 0x0004,
+  FRAMEBUFFER_EXPECTED: 0x0005,
+  TILE_CRC: 0x0006,
+  DEPTH_STENCIL_CRC: 0x0007,
+  COUNTERS: 0x0008,
+  SOURCE_MAP: 0x0009,
+  TRACE: 0x000a,
+} as const;
+
+export interface ZcapSectionInput {
+  readonly type: number;
+  readonly version: number;
+  readonly body: Uint8Array;
+  readonly crcPresent?: boolean;
+}
+
+export interface ZcapSectionEntry {
+  readonly type: number;
+  readonly version: number;
+  readonly flags: number;
+  readonly bodyOffset: number;
+  readonly bodyLength: number;
+  readonly crc: number;
+}
+
+/** Build a complete .zcap in memory (mirror of the C++ seek/backpatch writer). */
+export function buildZcap(sections: readonly ZcapSectionInput[]): Uint8Array {
+  if (sections.length === 0) throw new Error('.zcap needs at least one section');
+  const tableBytes = sections.length * ZCAP_SECTION_ENTRY_BYTES;
+  const bodyTotal = sections.reduce((n, s) => n + s.body.length, 0);
+  const total = ZCAP_HEADER_BYTES + tableBytes + bodyTotal;
+
+  const out = new Uint8Array(total);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, ZCAP_MAGIC, true);
+  dv.setUint16(4, ZCAP_FORMAT_VERSION, true);
+  dv.setUint16(6, ZCAP_FLAG_LITTLE_ENDIAN, true);
+  dv.setUint32(12, sections.length, true);
+  dv.setUint32(16, ZCAP_HEADER_BYTES, true);
+  dv.setUint32(20, ZCAP_SECTION_ENTRY_BYTES, true);
+  dv.setBigUint64(24, BigInt(total), true);
+
+  let tableOff = ZCAP_HEADER_BYTES;
+  let bodyOff = ZCAP_HEADER_BYTES + tableBytes;
+  for (const s of sections) {
+    const crcPresent = s.crcPresent ?? true;
+    out.set(s.body, bodyOff);
+    dv.setUint16(tableOff + 0, s.type, true);
+    dv.setUint16(tableOff + 2, s.version, true);
+    dv.setUint16(tableOff + 4, crcPresent ? ZCAP_SECTION_CRC_PRESENT : 0, true);
+    dv.setBigUint64(tableOff + 8, BigInt(bodyOff), true);
+    dv.setBigUint64(tableOff + 16, BigInt(s.body.length), true);
+    dv.setUint32(tableOff + 24, crcPresent ? crc32c(0, s.body) : 0, true);
+    tableOff += ZCAP_SECTION_ENTRY_BYTES;
+    bodyOff += s.body.length;
+  }
+  dv.setUint32(8, crc32c(0, out, 0, 8), true); // header CRC last
+  return out;
+}
+
+export type ZcapReadError = 'OK' | 'BAD_MAGIC' | 'BAD_FLAGS' | 'BAD_HEADER_CRC' | 'BAD_TABLE';
+
+export interface ZcapFile {
+  readonly formatVersion: number;
+  readonly totalLength: number;
+  readonly sections: readonly ZcapSectionEntry[];
+  readonly error: ZcapReadError;
+}
+
+/** Parse header + section table (bodies are NOT loaded; random access). */
+export function readZcap(file: Uint8Array): ZcapFile {
+  const fail = (error: ZcapReadError): ZcapFile =>
+    ({ formatVersion: 0, totalLength: 0, sections: [], error });
+  if (file.length < ZCAP_HEADER_BYTES) return fail('BAD_MAGIC');
+  const dv = new DataView(file.buffer, file.byteOffset, file.byteLength);
+  if (dv.getUint32(0, true) !== ZCAP_MAGIC) return fail('BAD_MAGIC');
+  if ((dv.getUint16(6, true) & ZCAP_FLAG_LITTLE_ENDIAN) === 0) return fail('BAD_FLAGS');
+  if (crc32c(0, file, 0, 8) !== dv.getUint32(8, true)) return fail('BAD_HEADER_CRC');
+
+  const formatVersion = dv.getUint16(4, true);
+  if (formatVersion !== ZCAP_FORMAT_VERSION) return fail('BAD_MAGIC'); // v1 only
+  const count = dv.getUint32(12, true);
+  const tableOff = dv.getUint32(16, true);
+  const entrySize = dv.getUint32(20, true);
+  const totalLength = Number(dv.getBigUint64(24, true));
+  if (entrySize !== ZCAP_SECTION_ENTRY_BYTES || tableOff !== ZCAP_HEADER_BYTES) {
+    return fail('BAD_TABLE');
+  }
+  if (tableOff + count * entrySize > file.length || totalLength !== file.length) {
+    return fail('BAD_TABLE');
+  }
+
+  const sections: ZcapSectionEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    const e = tableOff + i * entrySize;
+    sections.push({
+      type: dv.getUint16(e + 0, true),
+      version: dv.getUint16(e + 2, true),
+      flags: dv.getUint16(e + 4, true),
+      bodyOffset: Number(dv.getBigUint64(e + 8, true)),
+      bodyLength: Number(dv.getBigUint64(e + 16, true)),
+      crc: dv.getUint32(e + 24, true),
+    });
+  }
+  return { formatVersion, totalLength, sections, error: 'OK' };
+}
+
+/** Section body slice (bounds-checked against the table entry). */
+export function sectionBody(file: Uint8Array, s: ZcapSectionEntry): Uint8Array | undefined {
+  if (s.bodyOffset + s.bodyLength > file.length) return undefined;
+  return file.subarray(s.bodyOffset, s.bodyOffset + s.bodyLength);
+}
+
+/** Verify a section's CRC on demand. */
+export function verifySection(file: Uint8Array, s: ZcapSectionEntry): boolean {
+  if ((s.flags & ZCAP_SECTION_CRC_PRESENT) === 0) return true;
+  const body = sectionBody(file, s);
+  if (!body) return false;
+  return crc32c(0, body) === s.crc;
+}
+
+export function findSections(z: ZcapFile, type: number): readonly ZcapSectionEntry[] {
+  return z.sections.filter((s) => s.type === type);
+}
+
+// ---- ABI_INFO (capture_format.md 4.2) ----------------------------------------
+
+export interface ZcapAbiInfo {
+  abiVersion: number;
+  zcapSchemaVersion: number;
+  generatorName: string;
+  generatorSha256: Uint8Array;
+  zidlSha256: Uint8Array;
+}
+
+export function parseAbiInfo(body: Uint8Array): ZcapAbiInfo {
+  if (body.length !== 88) throw new Error(`ABI_INFO body must be 88 B, got ${body.length}`);
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  let nameEnd = 8;
+  while (nameEnd < 24 && body[nameEnd] !== 0) nameEnd++;
+  return {
+    abiVersion: dv.getUint32(0, true),
+    zcapSchemaVersion: dv.getUint32(4, true),
+    generatorName: new TextDecoder().decode(body.subarray(8, nameEnd)),
+    generatorSha256: body.subarray(24, 56),
+    zidlSha256: body.subarray(56, 88),
+  };
+}
+
+export function buildAbiInfo(
+  abiVersion: number,
+  generatorName: string,
+  generatorSha256: Uint8Array,
+  zidlSha256: Uint8Array,
+  zcapSchemaVersion = ZHAO_ZCAP_SCHEMA_VERSION,
+): Uint8Array {
+  const name = new Uint8Array(16);
+  for (let i = 0; i < Math.min(16, generatorName.length); i++) {
+    name[i] = generatorName.charCodeAt(i);
+  }
+  const out = new Uint8Array(88);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, abiVersion, true);
+  dv.setUint32(4, zcapSchemaVersion, true);
+  out.set(name, 8);
+  out.set(generatorSha256, 24);
+  out.set(zidlSha256, 56);
+  return out;
+}
+
+// ---- SOURCE_MAP (capture_format.md 5) ----------------------------------------
+
+export interface ZcapSourceMapEntry {
+  sourceId: number;
+  moduleId: number;
+  kind: number;
+  flags: number;
+  line: number;
+  name: string;
+  file: string;
+}
+
+export function parseSourceMap(body: Uint8Array): readonly ZcapSourceMapEntry[] {
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const count = dv.getUint32(0, true);
+  const blobStart = 4 + count * 16;
+  const readStr = (off: number): string => {
+    let end = blobStart + off;
+    while (end < body.length && body[end] !== 0) end++;
+    return new TextDecoder().decode(body.subarray(blobStart + off, end));
+  };
+  const out: ZcapSourceMapEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    const e = 4 + i * 16;
+    out.push({
+      sourceId: dv.getUint32(e + 0, true),
+      moduleId: dv.getUint16(e + 4, true),
+      kind: body[e + 6]!,
+      flags: body[e + 7]!,
+      line: dv.getUint32(e + 8, true),
+      name: readStr(dv.getUint16(e + 12, true)),
+      file: readStr(dv.getUint16(e + 14, true)),
+    });
+  }
+  return out;
+}
+
+export function buildSourceMap(entries: readonly ZcapSourceMapEntry[]): Uint8Array {
+  const blob: number[] = [];
+  const put = (s: string): number => {
+    const off = blob.length;
+    for (const b of new TextEncoder().encode(s)) blob.push(b);
+    blob.push(0);
+    return off;
+  };
+  const metas = entries.map((e) => ({ e, nameOff: put(e.name), fileOff: put(e.file) }));
+  const body = new Uint8Array(4 + entries.length * 16 + blob.length);
+  const dv = new DataView(body.buffer);
+  dv.setUint32(0, entries.length, true);
+  let off = 4;
+  for (const { e, nameOff, fileOff } of metas) {
+    dv.setUint32(off + 0, e.sourceId, true);
+    dv.setUint16(off + 4, e.moduleId, true);
+    body[off + 6] = e.kind;
+    body[off + 7] = e.flags;
+    dv.setUint32(off + 8, e.line, true);
+    dv.setUint16(off + 12, nameOff, true);
+    dv.setUint16(off + 14, fileOff, true);
+    off += 16;
+  }
+  body.set(blob, off);
+  return body;
+}
+
+// ---- RESOURCE_PAGES (capture_format.md 4.2; program hashes) -------------------
+
+export interface ZcapResourcePage {
+  kind: number;
+  pageId: number;
+  byteLength: number;
+  sha256: Uint8Array;
+  ref: string;
+}
+
+export function parseResourcePages(body: Uint8Array): readonly ZcapResourcePage[] {
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const count = dv.getUint32(0, true);
+  const out: ZcapResourcePage[] = [];
+  let off = 4;
+  for (let i = 0; i < count; i++) {
+    const kind = body[off]!;
+    const pageId = dv.getUint32(off + 4, true);
+    const byteLength = Number(dv.getBigUint64(off + 8, true));
+    const sha = body.subarray(off + 16, off + 48);
+    let refEnd = off + 48;
+    while (refEnd < off + 112 && body[refEnd] !== 0) refEnd++;
+    const ref = new TextDecoder().decode(body.subarray(off + 48, refEnd));
+    out.push({ kind, pageId, byteLength, sha256: sha, ref });
+    off += 112;
+  }
+  return out;
+}

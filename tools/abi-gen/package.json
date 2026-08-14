@@ -2,8 +2,16 @@
   "name": "@zhaozhou/abi-gen",
   "version": "0.0.1",
   "private": true,
-  "description": "commands.zidl -> byte-identical C++/TS/SV ABI emitters (lands W4; placeholder until then)",
+  "description": "spec/commands.zidl -> byte-identical C++/TS/SV ABI, docs, goldens, fuzz corpus (zero external parser deps)",
+  "type": "module",
   "scripts": {
-    "test": "echo [W1 placeholder] abi-gen tests land in W4"
+    "build": "tsc -p tsconfig.json",
+    "gen": "npm run build && node dist/src/main.js gen",
+    "check": "npm run build && node dist/src/main.js check",
+    "test": "npm run build && node --test dist/test/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
   }
 }

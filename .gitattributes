@@ -15,3 +15,19 @@ reference/include/zref/generated/*.hpp -text
 compiler/src/generated/tables.ts -text
 tests/golden/fixp/* -text
 *.bin binary
+# Byte-identity discipline (W4, spec/capture_format.md 6): generated outputs
+# must byte-compare identically on every clone. core.autocrlf=true on Windows
+# would round-trip them to CRLF and break `npm run abi:check`; pin them to LF.
+tools/abi-gen/templates/** text eol=lf
+compiler/src/generated/** text eol=lf
+runtime/include/zhao_abi.h text eol=lf
+fpga/rtl/generated/** text eol=lf
+spec/generated/** text eol=lf
+tests/fuzz/*.ts text eol=lf
+
+# Committed binary evidence: never touch.
+*.bin -text
+*.zcap -text
+*.zcorpus -text
+tests/abi/golden/** -text
+captures/** -text
