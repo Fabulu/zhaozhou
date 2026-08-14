@@ -204,6 +204,9 @@ export function emitSv(ir: LayoutIR): string {
   for (const c of ir.commands) {
     P(`  localparam logic [15:0] ZHAO_OP_${upperSnake(c.name)} = 16'h${c.opcode.toString(16).toUpperCase().padStart(4, '0')};`);
   }
+  P('  /* verilator lint_off UNUSEDPARAM */');
+  P(`  localparam int unsigned ZHAO_MAX_RECORD_BYTES = ${Math.max(...ir.commands.map((c) => c.recordBytes))};  // consumed by the probe`);
+  P('  /* verilator lint_on UNUSEDPARAM */');
   P("  localparam logic [15:0] ZHAO_DEBUG_OPCODE_LO = 16'hF000;");
   P("  localparam logic [15:0] ZHAO_DEBUG_OPCODE_HI = 16'hF0FF;");
   P('');

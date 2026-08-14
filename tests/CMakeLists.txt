@@ -10,30 +10,45 @@ add_library(zhao_harness STATIC harness/zhao_sim.cpp)
 target_include_directories(zhao_harness PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/harness)
 
 # ---- unit: Verilated zhao_stub_top (Phase-1 gate (a) stub test) -----------
+# W4: the stub now consumes the GENERATED zhao_abi_pkg (the W1 placeholder
+# zhao_frame_pkg.sv was removed when the swap landed).
+set(ZHAO_ABI_PKG ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
+
 add_executable(test_stub_top unit/test_stub_top.cpp)
-target_link_libraries(test_stub_top PRIVATE zhao_harness)
+target_link_libraries(test_stub_top PRIVATE zhao_harness zhao_zref)
 verilate(test_stub_top
   PREFIX Vzhao_stub_top      # default derives from first SOURCE (the package!)
   TOP_MODULE zhao_stub_top
   INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_frame_pkg.sv
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+  SOURCES ${ZHAO_ABI_PKG}
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_stub_top.sv)
 
 add_test(NAME stub_top COMMAND test_stub_top)
 set_tests_properties(stub_top PROPERTIES LABELS "fast;nightly")
 
 # ---- lint: verilator --lint-only -Wall over the RTL (gate per charter 21) -
+# Direct test command (no nested-cmake wrapper): the ENVIRONMENT property
+# carries VERILATOR_ROOT from the cache variable resolved by zhao_verilate.cmake
+# (env hint first, then derived from the binary location), so an env-less
+# reconfigure (ninja regenerate) cannot poison it.
 find_program(ZHAO_VERILATOR_BIN NAMES verilator_bin verilator_bin.exe)
 if(NOT ZHAO_VERILATOR_BIN)
   message(FATAL_ERROR "verilator_bin not found on PATH — source tools/env/zhao-env.ps1|.bat")
 endif()
-# VERILATOR_ROOT comes from the cache variable resolved by zhao_verilate.cmake
-# (env hint first, then derived from the binary location) — NOT the raw env, so
-# an env-less reconfigure (ninja regenerate) cannot poison the lint script.
-configure_file(lint/lint_stub.cmake.in lint/lint_stub.cmake @ONLY)
+# mingw ctest treats forward-slash drive paths in raw test commands as
+# relative; normalize to the native backslash form
+set(ZHAO_VERILATOR_LINT "${ZHAO_VERILATOR_BIN}")
+string(REPLACE "/" "\\" ZHAO_VERILATOR_LINT "${ZHAO_VERILATOR_LINT}")
 add_test(NAME lint_stub_top
-         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/lint_stub.cmake)
-set_tests_properties(lint_stub_top PROPERTIES LABELS "lint;fast")
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_stub_top
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_stub_top.sv
+                 ${CMAKE_SOURCE_DIR}/tests/differential/zhao_abi_probe.sv)
+set_tests_properties(lint_stub_top PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---- formal: SymbiYosys lane smoke (SKIP when sby absent) -----------------
 # W1 wires the lane only; real properties land with the blocks that own them.
@@ -81,4 +96,34 @@ if(ZHAO_NPM_BIN)
 else()
   message(STATUS "zhao: npm not found; abi_staleness ctest shim disabled")
 endif()
+
+# differential: empty frame replays through ZRef AND the Verilated stub
+# (status/completion/counters parity + tri-language error parity + .zcap
+# source-id/program-hash round trip)
+add_executable(test_empty_frame_replay differential/test_empty_frame_replay.cpp)
+target_link_libraries(test_empty_frame_replay PRIVATE zhao_harness zhao_zref)
+verilate(test_empty_frame_replay
+  PREFIX Vzhao_stub_top
+  TOP_MODULE zhao_stub_top
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_stub_top.sv)
+add_test(NAME empty_frame_replay COMMAND test_empty_frame_replay)
+set_tests_properties(empty_frame_replay PROPERTIES LABELS "fast;nightly")
+
+# fuzz: tri-language parity over the committed corpus (C++ + SV via the
+# probe; TS asserts the same corpus in the compiler workspace) + the SV
+# pack/unpack byte-identity matrix for every command
+add_executable(test_abi_fuzz_parity fuzz/test_abi_fuzz_parity.cpp)
+target_link_libraries(test_abi_fuzz_parity PRIVATE zhao_harness zhao_zref)
+verilate(test_abi_fuzz_parity
+  PREFIX Vzhao_abi_probe
+  TOP_MODULE zhao_abi_probe
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/tests/differential
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/tests/differential/zhao_abi_probe.sv)
+add_test(NAME abi_fuzz_parity COMMAND test_abi_fuzz_parity)
+set_tests_properties(abi_fuzz_parity PROPERTIES LABELS "fast;nightly")
 

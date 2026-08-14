@@ -1,21 +1,21 @@
-// test_stub_top.cpp — Phase-1 gate (a) stub test (plan W1).
+// test_stub_top.cpp — Verilated stub top test (W1 gate (a), W4 semantics).
 //
-// Drives the Verilated zhao_stub_top model:
-//   1. valid empty frame  -> completion OK, zero error;
-//   2. corrupt magic      -> safe error code (STATUS_ERR_MAGIC), no accept;
-//   3. bad abi / lengths  -> STATUS_ERR_ABI / STATUS_ERR_LENGTH;
-//   4. small fuzz corpus  -> never hangs, never writes outside its arena
-//      (counters stay consistent: accepted + rejected <= frames started,
-//      bytes_consumed <= bytes fed; the model has no write port at all —
-//      this asserts the shell stays inside its own counters/state).
+// The stub now consumes the FULL sealed packet (40 + N, capture_format.md 3)
+// and validates it with the generated zhao_abi_pkg: status carries the
+// zhao_abi_error codes, header_crc32c is genuinely checked, and a
+// commands_consumed counter exists. Packets are built with the ZRef frame
+// builder (same bytes as the committed goldens).
 //
-// Header layout source: fpga/rtl/common/zhao_frame_pkg.sv (placeholder for
-// the W4-generated zhao_abi_pkg; constants kept in sync manually in W1).
+// Driving rule for error cases: header-level aborts (spec 3.2 checks 1-3)
+// consume exactly 36 bytes and the stub resyncs, so the test feeds ONLY the
+// 36-byte header for those; payload-level verdicts consume the full packet.
 
 #include "Vzhao_stub_top.h"
 #include "verilated.h"
 
 #include "zhao_sim.hpp"
+#include "zhao_abi.h"  // generated
+#include "zref/zref_frame.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -24,65 +24,55 @@
 
 namespace {
 
-// status codes (zhao_frame_pkg::status_e)
-constexpr uint8_t STATUS_IDLE = 0x00;
-constexpr uint8_t STATUS_OK = 0x01;
-constexpr uint8_t STATUS_ERR_MAGIC = 0x02;
-constexpr uint8_t STATUS_ERR_ABI = 0x03;
-constexpr uint8_t STATUS_ERR_LENGTH = 0x04;
-// completion flags
-constexpr uint8_t COMPL_DONE = 0x01;
-constexpr uint8_t COMPL_ERR = 0x02;
+using namespace zhao_abi;
 
-constexpr uint32_t FRAME_MAGIC_LE = 0x314B505A;  // wire 'Z','P','K','1', LE
-constexpr uint16_t ABI_VERSION = 1;
-constexpr size_t HEADER_BYTES = 36;
+// error codes under test (zhao_abi_error values)
+constexpr uint8_t E_OK = ZH_ABI_OK;
+constexpr uint8_t E_BAD_MAGIC = ZH_ABI_BAD_MAGIC;
+constexpr uint8_t E_BAD_ABI = ZH_ABI_BAD_ABI_VERSION;
+constexpr uint8_t E_RESERVED_FLAG = ZH_ABI_RESERVED_FLAG;
+constexpr uint8_t E_BAD_LENGTH = ZH_ABI_BAD_LENGTH;
+constexpr uint8_t E_BAD_HEADER_CRC = ZH_ABI_BAD_HEADER_CRC;
+constexpr uint8_t E_BAD_PAYLOAD_CRC = ZH_ABI_BAD_PAYLOAD_CRC;
+constexpr uint8_t COMPL_DONE = ZHAO_COMPL_DONE;
+constexpr uint8_t COMPL_ERR = ZHAO_COMPL_ERR;
 
-void put16(std::vector<uint8_t>& v, uint16_t x) {
-  v.push_back(static_cast<uint8_t>(x & 0xFF));
-  v.push_back(static_cast<uint8_t>(x >> 8));
-}
-void put32(std::vector<uint8_t>& v, uint32_t x) {
-  for (int i = 0; i < 4; ++i) {
-    v.push_back(static_cast<uint8_t>((x >> (8 * i)) & 0xFF));
-  }
-}
-
-std::vector<uint8_t> make_header(uint32_t magic = FRAME_MAGIC_LE,
-                                 uint16_t abi = ABI_VERSION,
-                                 uint16_t flags = 0,
-                                 uint32_t frame_id = 1,
-                                 uint32_t sequence = 0,
-                                 uint32_t resource_epoch = 1,
-                                 uint32_t deadline = 0,
-                                 uint32_t command_count = 0,
-                                 uint32_t command_bytes = 0,
-                                 uint32_t header_crc = 0) {
-  std::vector<uint8_t> v;
-  v.reserve(HEADER_BYTES);
-  put32(v, magic);
-  put16(v, abi);
-  put16(v, flags);
-  put32(v, frame_id);
-  put32(v, sequence);
-  put32(v, resource_epoch);
-  put32(v, deadline);
-  put32(v, command_count);
-  put32(v, command_bytes);
-  put32(v, header_crc);
-  return v;
+std::vector<uint8_t> golden_frame() {
+  // the canonical minimal frame (== tests/abi/golden/frame_minimal.bin)
+  std::vector<uint8_t> rec;
+  zhao::ZhaoFrameBuilder fb;
+  zhao_pack_begin_frame(zhao_sample_begin_frame(), rec);
+  fb.append_record(rec);
+  rec.clear();
+  zhao_pack_nop(zhao_sample_nop(), rec);
+  fb.append_record(rec);
+  rec.clear();
+  zhao_pack_end_frame(zhao_sample_end_frame(), rec);
+  fb.append_record(rec);
+  return fb.seal(1, 0, 1, 0, 0);
 }
 
-// Feed a full frame (header [+ payload]) and return the header checksum-ish
-// observed status after the model settled.
-void feed_frame(Vzhao_stub_top& top, const std::vector<uint8_t>& bytes) {
+std::vector<uint8_t> resealed(std::vector<uint8_t> pkt) {
+  // recompute both CRCs over the mutated packet
+  const uint32_t command_bytes =
+      uint32_t(pkt[28]) | (uint32_t(pkt[29]) << 8) | (uint32_t(pkt[30]) << 16) | (uint32_t(pkt[31]) << 24);
+  const auto put32 = [&](uint32_t off, uint32_t v) {
+    for (int i = 0; i < 4; i++) pkt[off + i] = uint8_t(v >> (8 * i));
+  };
+  put32(ZHAO_OFF_HEADER_CRC, zhao_crc32c(0, pkt.data(), 32));
+  put32(ZHAO_FRAME_HEADER_BYTES + command_bytes,
+        zhao_crc32c(0, pkt.data() + ZHAO_FRAME_HEADER_BYTES, command_bytes));
+  return pkt;
+}
+
+void feed(Vzhao_stub_top& top, const std::vector<uint8_t>& bytes) {
   for (uint8_t b : bytes) {
     if (!zhao::send_byte(top, b)) {
       zhao::check(false, "send_byte hung (ready stalled)", 0, 1);
       return;
     }
   }
-  zhao::idle(top, 4);  // let S_CHECK + completion settle
+  zhao::idle(top, 4);
 }
 
 }  // namespace
@@ -91,138 +81,142 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_stub_top top;
 
-  // ---- 1. valid empty frame -> completion OK -----------------------------
+  const auto frame = golden_frame();
+
+  // ---- 1. valid minimal frame -> accept, DONE, counters ----------------------
   zhao::reset(top);
   {
-    auto frame = make_header();
-    feed_frame(top, frame);
-    zhao::check(top.status == STATUS_OK, "empty frame status", STATUS_OK, top.status);
-    zhao::check((top.completion_flags & COMPL_DONE) != 0,
-                "empty frame completion DONE", COMPL_DONE, top.completion_flags);
-    zhao::check((top.completion_flags & COMPL_ERR) == 0,
-                "empty frame no error flag", 0, top.completion_flags & COMPL_ERR);
+    feed(top, frame);
+    zhao::check(top.status == E_OK, "minimal frame status", E_OK, top.status);
+    zhao::check((top.completion_flags & COMPL_DONE) != 0, "minimal frame DONE",
+                COMPL_DONE, top.completion_flags);
+    zhao::check((top.completion_flags & COMPL_ERR) == 0, "minimal frame no ERR",
+                0, top.completion_flags & COMPL_ERR);
     zhao::check(top.frames_accepted == 1, "frames_accepted", 1, top.frames_accepted);
     zhao::check(top.frames_rejected == 0, "frames_rejected", 0, top.frames_rejected);
-    zhao::check(top.bytes_consumed == HEADER_BYTES, "bytes_consumed",
-                HEADER_BYTES, top.bytes_consumed);
-    // hdr_parity covers the ignored fields: flags=0, frame_id=1, seq=0,
-    // epoch=1, deadline=0, crc=0 -> parity = XOR of all their assembled bits.
-    const uint32_t words[6] = {0, 1, 0, 1, 0, 0};  // flags,fid,seq,epoch,deadline,crc
-    uint8_t parity = 0;
-    for (uint32_t w : words) {
-      for (int i = 0; i < 32; ++i) {
-        parity ^= static_cast<uint8_t>((w >> i) & 1u);
+    zhao::check(top.bytes_consumed == frame.size(), "bytes_consumed",
+                frame.size(), top.bytes_consumed);
+    zhao::check(top.commands_consumed == 3, "commands_consumed", 3, top.commands_consumed);
+  }
+
+  // ---- 2. valid empty frame (40 bytes) ----------------------------------------
+  {
+    zhao::ZhaoFrameBuilder fb;  // no commands
+    const auto empty = fb.seal(2, 1, 1, 0, 0);
+    feed(top, empty);
+    zhao::check(top.status == E_OK, "empty frame status", E_OK, top.status);
+    zhao::check(top.frames_accepted == 2, "empty frame accepted", 2, top.frames_accepted);
+    zhao::check(top.bytes_consumed == frame.size() + 40, "bytes after empty frame",
+                frame.size() + 40, top.bytes_consumed);
+    zhao::check(top.commands_consumed == 0, "empty frame commands", 0, top.commands_consumed);
+  }
+
+  // ---- 3. header-level aborts (feed the 36-byte header only) ------------------
+  {
+    struct Case {
+      const char* name;
+      std::vector<uint8_t> hdr;  // 36 bytes
+      uint8_t want;
+    };
+    auto hdr_of = [](std::vector<uint8_t> pkt, int abi_override = 0) {
+      pkt.resize(36);
+      if (abi_override) {
+        pkt[4] = uint8_t(abi_override);
+        pkt[5] = uint8_t(abi_override >> 8);
+      }
+      return pkt;
+    };
+    std::vector<Case> cases;
+    {
+      auto h = hdr_of(frame);
+      h[0] = 0xEF;  // corrupt magic (no re-seal: corruption IS the test)
+      cases.push_back({"bad magic", h, E_BAD_MAGIC});
+    }
+    cases.push_back({"bad abi", hdr_of(frame, 2), E_BAD_ABI});
+    {
+      // reserved frame flag bit set, resealed (so earlier checks pass)
+      auto full = resealed([&] { auto f = frame; f[6] = 0x08; return f; }());
+      full.resize(36);
+      cases.push_back({"reserved flag", full, E_RESERVED_FLAG});
+    }
+    {
+      auto h = hdr_of(frame);
+      h[28] = 13;  // misaligned command_bytes
+      cases.push_back({"misaligned length", h, E_BAD_LENGTH});
+    }
+    {
+      auto h = hdr_of(frame);
+      h[25] = 9;  // command_count = 0x900 > capacity (no re-seal needed)
+      cases.push_back({"count over capacity", h, E_BAD_LENGTH});
+    }
+    {
+      auto h = hdr_of(frame);
+      h[33] ^= 0x40;  // corrupt header CRC word
+      cases.push_back({"bad header crc", h, E_BAD_HEADER_CRC});
+    }
+
+    for (const auto& c : cases) {
+      zhao::reset(top);
+      feed(top, c.hdr);
+      zhao::check(top.status == c.want, c.name, c.want, top.status);
+      zhao::check((top.completion_flags & COMPL_ERR) != 0, c.name, COMPL_ERR,
+                  top.completion_flags);
+      zhao::check(top.frames_rejected == 1, c.name, 1, top.frames_rejected);
+      // header-level abort: exactly 36 bytes consumed (spec 3.2)
+      zhao::check(top.bytes_consumed == 36, c.name, 36, top.bytes_consumed);
+      if (top.status != c.want) {
+        zhao::save_failing_vector("stub_abort_case", c.hdr,
+                                  "status=" + std::to_string(c.want),
+                                  "status=" + std::to_string(top.status));
       }
     }
-    zhao::check(top.hdr_parity == parity, "hdr_parity over ignored fields",
-                parity, top.hdr_parity);
   }
 
-  // ---- 2. corrupt magic -> safe error, frame rejected ---------------------
-  {
-    auto frame = make_header(/*magic=*/0xDEADBEEF);
-    feed_frame(top, frame);
-    zhao::check(top.status == STATUS_ERR_MAGIC, "bad magic status",
-                STATUS_ERR_MAGIC, top.status);
-    zhao::check((top.completion_flags & COMPL_ERR) != 0, "bad magic ERR flag",
-                COMPL_ERR, top.completion_flags & COMPL_ERR);
-    zhao::check(top.frames_accepted == 1, "accepted unchanged after reject",
-                1, top.frames_accepted);
-    zhao::check(top.frames_rejected == 1, "frames_rejected", 1, top.frames_rejected);
-    zhao::check(top.bytes_consumed == 2 * HEADER_BYTES, "bytes_consumed",
-                2 * HEADER_BYTES, top.bytes_consumed);
-    if (top.status != STATUS_ERR_MAGIC) {
-      zhao::save_failing_vector("stub_bad_magic", frame,
-                                "status=STATUS_ERR_MAGIC",
-                                "status=" + std::to_string(top.status));
-    }
-  }
-
-  // ---- 3. bad abi version -------------------------------------------------
-  {
-    auto frame = make_header(FRAME_MAGIC_LE, /*abi=*/2);
-    feed_frame(top, frame);
-    zhao::check(top.status == STATUS_ERR_ABI, "bad abi status",
-                STATUS_ERR_ABI, top.status);
-    zhao::check(top.frames_rejected == 2, "frames_rejected", 2, top.frames_rejected);
-    if (top.status != STATUS_ERR_ABI) {
-      zhao::save_failing_vector("stub_bad_abi", frame,
-                                "status=STATUS_ERR_ABI",
-                                "status=" + std::to_string(top.status));
-    }
-  }
-
-  // ---- 4. bad lengths -----------------------------------------------------
-  {
-    // misaligned command_bytes
-    auto f1 = make_header(FRAME_MAGIC_LE, ABI_VERSION, 0, 2, 0, 1, 0, 0, 8);
-    feed_frame(top, f1);
-    zhao::check(top.status == STATUS_ERR_LENGTH, "misaligned length status",
-                STATUS_ERR_LENGTH, top.status);
-
-    // command_count exceeds aligned record capacity
-    auto f2 = make_header(FRAME_MAGIC_LE, ABI_VERSION, 0, 3, 0, 1, 0, 2, 16);
-    feed_frame(top, f2);
-    zhao::check(top.status == STATUS_ERR_LENGTH, "count>capacity status",
-                STATUS_ERR_LENGTH, top.status);
-
-    // payload larger than the frame slot
-    auto f3 = make_header(FRAME_MAGIC_LE, ABI_VERSION, 0, 4, 0, 1, 0, 0, 1048576 - 16);
-    feed_frame(top, f3);
-    zhao::check(top.status == STATUS_ERR_LENGTH, "oversize payload status",
-                STATUS_ERR_LENGTH, top.status);
-
-    zhao::check(top.frames_rejected == 5, "frames_rejected", 5, top.frames_rejected);
-    zhao::check(top.frames_accepted == 1, "accepted still 1", 1, top.frames_accepted);
-  }
-
-  // ---- 5. frame WITH payload completes after exact byte count -------------
-  {
-    auto hdr = make_header(FRAME_MAGIC_LE, ABI_VERSION, 0, 5, 0, 1, 0, 1, 16);
-    feed_frame(top, hdr);  // header only; S_CHECK -> S_PAYLOAD, not complete
-    zhao::check(top.frames_accepted == 1, "not accepted before payload",
-                1, top.frames_accepted);
-    std::vector<uint8_t> payload(16, 0xAB);
-    for (uint8_t b : payload) {
-      zhao::send_byte(top, b);
-    }
-    zhao::idle(top, 4);
-    zhao::check(top.status == STATUS_OK, "payload frame status", STATUS_OK, top.status);
-    zhao::check(top.frames_accepted == 2, "payload frame accepted",
-                2, top.frames_accepted);
-    uint64_t expect_bytes = 7ULL * HEADER_BYTES + 16;  // 7 headers fed so far
-    zhao::check(top.bytes_consumed == expect_bytes, "bytes after payload frame",
-                expect_bytes, top.bytes_consumed);
-  }
-
-  // ---- 6. fuzz corpus: no hang, no arena escape ---------------------------
+  // ---- 4. payload-level verdict: corrupted payload CRC ------------------------
   {
     zhao::reset(top);
-    uint32_t lcg = 0x5A175A17u;  // FORM 16 demo seed echo, arbitrary for fuzz
+    auto bad = frame;
+    bad[bad.size() - 1] ^= 0x80;  // flip a bit in payload_crc32c
+    feed(top, bad);
+    zhao::check(top.status == E_BAD_PAYLOAD_CRC, "bad payload crc", E_BAD_PAYLOAD_CRC,
+                top.status);
+    zhao::check(top.frames_rejected == 1, "payload crc rejected", 1, top.frames_rejected);
+    zhao::check(top.bytes_consumed == bad.size(), "payload crc bytes", bad.size(),
+                top.bytes_consumed);
+  }
+
+  // ---- 5. back-to-back valid frames stream seamlessly --------------------------
+  {
+    zhao::reset(top);
+    feed(top, frame);
+    feed(top, frame);
+    zhao::check(top.status == E_OK, "second frame status", E_OK, top.status);
+    zhao::check(top.frames_accepted == 2, "two frames accepted", 2, top.frames_accepted);
+    zhao::check(top.bytes_consumed == 2 * frame.size(), "two frames bytes",
+                2 * frame.size(), top.bytes_consumed);
+  }
+
+  // ---- 6. fuzz: no hang, counters self-consistent ------------------------------
+  {
+    zhao::reset(top);
+    uint32_t lcg = 0x5A175A17u;
     const int FUZZ_BYTES = 4096;
-    for (int i = 0; i < FUZZ_BYTES; ++i) {
+    for (int i = 0; i < FUZZ_BYTES; i++) {
       lcg = lcg * 1664525u + 1013904223u;
       const uint8_t b = static_cast<uint8_t>(lcg >> 24);
       if (!zhao::send_byte(top, b, /*max_wait=*/1000)) {
-        zhao::check(false, "fuzz: model hung (ready stalled >1000 cycles)", 0, i);
+        zhao::check(false, "fuzz: model hung", 0, i);
         break;
       }
-      // arena invariant: the model cannot have consumed more than fed
       if (top.bytes_consumed > static_cast<uint32_t>(i + 1)) {
-        zhao::check(false, "fuzz: bytes_consumed exceeds bytes fed", i + 1,
-                    top.bytes_consumed);
+        zhao::check(false, "fuzz: consumed more than fed", i + 1, top.bytes_consumed);
         break;
       }
     }
     zhao::idle(top, 8);
-    // every accepted-or-rejected frame decision must account consistently
-    const uint64_t decided =
-        static_cast<uint64_t>(top.frames_accepted) + top.frames_rejected;
-    zhao::check(decided * HEADER_BYTES <= top.bytes_consumed + 36 + 35,
-                "fuzz: frame decisions imply more header bytes than consumed",
-                0, decided);
-    zhao::check(top.frames_accepted <= top.bytes_consumed,
-                "fuzz: accepted frames without consumed bytes", 1, 0);
+    const uint64_t decided = uint64_t(top.frames_accepted) + top.frames_rejected;
+    zhao::check(decided * 36 <= top.bytes_consumed + 71,
+                "fuzz: decisions vs consumed bytes", 0, decided);
     std::printf("fuzz: accepted=%u rejected=%u bytes=%u\n",
                 static_cast<unsigned>(top.frames_accepted),
                 static_cast<unsigned>(top.frames_rejected),

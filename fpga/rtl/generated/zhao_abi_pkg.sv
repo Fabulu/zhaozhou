@@ -70,6 +70,9 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_DRAW_PROCEDURAL = 16'h0302;
   localparam logic [15:0] ZHAO_OP_EMIT_AUDIO_EVENT = 16'h0400;
   localparam logic [15:0] ZHAO_OP_DEBUG_BOOTSTRAP = 16'hF001;
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_MAX_RECORD_BYTES = 112;  // consumed by the probe
+  /* verilator lint_on UNUSEDPARAM */
   localparam logic [15:0] ZHAO_DEBUG_OPCODE_LO = 16'hF000;
   localparam logic [15:0] ZHAO_DEBUG_OPCODE_HI = 16'hF0FF;
 
