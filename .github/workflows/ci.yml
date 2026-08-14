@@ -1,0 +1,185 @@
+# Zhaozhou CI (plan W1 / P1 findings 5).
+#
+# Lanes:
+#   build (push/PR)  : oss-cad-suite (pinned + SHA256 + cached) -> cmake
+#                      windows-ci preset -> ctest -L fast
+#   npm (push/PR)    : npm ci -> ledger:check -> abi:check -> test
+#   nightly (sched)  : ctest -L nightly (fuzz + formal lane)
+#
+# Hardware synthesis lanes are BLOCKED-on-hardware (ZH-002..006): no Quartus,
+# no board; gate on lint/diff/units only until that changes.
+#
+# NOTE (W1): oss-cad-suite is downloaded as the release asset
+# "oss-cad-suite-windows-x64-20260814.exe" which is actually a gzip tar
+# (verified locally); extract with tar -xzf. The suite ships no g++, so the
+# compiler comes from the runner image (MinGW on PATH or C:\msys64\mingw64).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *'  # nightly (UTC): full nightly label
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned toolchain (charter 29: pins before products).
+  ZHAO_SUITE_VERSION: '20260814'
+  ZHAO_SUITE_SHA256: '4A3891A642681AB087FD9F6324519247B4C3761AFDC74DC1683067A2DAABD663'
+  ZHAO_SUITE_URL: 'https://github.com/YosysHQ/oss-cad-suite-build/releases/download/20260814/oss-cad-suite-windows-x64-20260814.exe'
+
+jobs:
+  build:
+    name: cmake + ctest (fast)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore oss-cad-suite cache
+        id: suite-cache
+        uses: actions/cache@v4
+        with:
+          path: oss-cad-suite
+          key: oss-cad-suite-windows-x64-${{ env.ZHAO_SUITE_VERSION }}-${{ env.ZHAO_SUITE_SHA256 }}
+
+      - name: Download + verify oss-cad-suite
+        if: steps.suite-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.exe
+          $actual = (Get-FileHash suite-download.exe -Algorithm SHA256).Hash
+          if ($actual -ne $env:ZHAO_SUITE_SHA256) {
+            throw "oss-cad-suite SHA256 mismatch: got $actual want $env:ZHAO_SUITE_SHA256"
+          }
+          Write-Host "SHA256 OK ($actual)"
+          # The asset is a gzip tar despite the .exe name (verified locally).
+          tar -xzf suite-download.exe
+          if (-not (Test-Path 'oss-cad-suite/share/verilator/verilator-config.cmake')) {
+            throw 'unexpected suite layout: share/verilator/verilator-config.cmake missing'
+          }
+
+      - name: Put suite on PATH (VERILATOR_ROOT, bin, lib)
+        shell: pwsh
+        run: |
+          $suite = Join-Path $env:GITHUB_WORKSPACE 'oss-cad-suite'
+          Add-Content $env:GITHUB_ENV "VERILATOR_ROOT=$(Join-Path $suite 'share/verilator')"
+          Add-Content $env:GITHUB_PATH "$suite/bin"
+          Add-Content $env:GITHUB_PATH "$suite/lib"
+
+      - name: Locate a g++ (the suite ships none)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gpp = Get-Command g++.exe -ErrorAction SilentlyContinue
+          if (-not $gpp) {
+            foreach ($cand in 'C:\msys64\mingw64\bin', 'C:\mingw64\bin') {
+              if (Test-Path (Join-Path $cand 'g++.exe')) {
+                Add-Content $env:GITHUB_PATH $cand
+                Write-Host "g++ from $cand"
+                return
+              }
+            }
+            throw 'no g++ found on the runner (PATH, C:\msys64\mingw64\bin, C:\mingw64\bin)'
+          }
+          & g++.exe --version | Select-Object -First 1
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          cmake --version | Select-Object -First 1
+          ninja --version
+          g++ --version | Select-Object -First 1
+          verilator_bin.exe --version
+
+      - name: Configure + build + test (fast)
+        shell: pwsh
+        run: |
+          cmake --preset windows-ci
+          cmake --build build
+          ctest --test-dir build -L fast --output-on-failure
+
+  npm:
+    name: npm workspaces (ledger/abi/test)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: npm ci + gates
+        shell: pwsh
+        run: |
+          npm ci
+          # W1: placeholder scripts succeed with a message. From W2/W4 these
+          # enforce ledger validity and generated-ABI staleness (byte-identity
+          # across C++/TS/SV is hashed and compared by abi:check).
+          npm run ledger:check
+          npm run abi:check
+          npm test
+
+  nightly:
+    name: ctest (nightly + formal)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore oss-cad-suite cache
+        id: suite-cache
+        uses: actions/cache@v4
+        with:
+          path: oss-cad-suite
+          key: oss-cad-suite-windows-x64-${{ env.ZHAO_SUITE_VERSION }}-${{ env.ZHAO_SUITE_SHA256 }}
+
+      - name: Download + verify oss-cad-suite
+        if: steps.suite-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.exe
+          $actual = (Get-FileHash suite-download.exe -Algorithm SHA256).Hash
+          if ($actual -ne $env:ZHAO_SUITE_SHA256) {
+            throw "oss-cad-suite SHA256 mismatch: got $actual want $env:ZHAO_SUITE_SHA256"
+          }
+          tar -xzf suite-download.exe
+
+      - name: Put suite on PATH (VERILATOR_ROOT, bin, lib)
+        shell: pwsh
+        run: |
+          $suite = Join-Path $env:GITHUB_WORKSPACE 'oss-cad-suite'
+          Add-Content $env:GITHUB_ENV "VERILATOR_ROOT=$(Join-Path $suite 'share/verilator')"
+          Add-Content $env:GITHUB_PATH "$suite/bin"
+          Add-Content $env:GITHUB_PATH "$suite/lib"
+
+      - name: Locate a g++ (the suite ships none)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gpp = Get-Command g++.exe -ErrorAction SilentlyContinue
+          if (-not $gpp) {
+            foreach ($cand in 'C:\msys64\mingw64\bin', 'C:\mingw64\bin') {
+              if (Test-Path (Join-Path $cand 'g++.exe')) {
+                Add-Content $env:GITHUB_PATH $cand
+                return
+              }
+            }
+            throw 'no g++ found on the runner'
+          }
+
+      - name: Configure + build + nightly tests
+        shell: pwsh
+        run: |
+          cmake --preset windows-ci
+          cmake --build build
+          ctest --test-dir build -L nightly --output-on-failure
