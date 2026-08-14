@@ -1,73 +1,73 @@
 # Contract — CMD.DMA (Command DMA)
 
-> Ledger: `design/blocks.yml` · owner ZH-007 · phase 1 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-007 · phase 2 · maturity SPECIFIED
 
 ## Purpose and exclusions
 
-Fetch sealed frame packets from the HPS-DDR ring via the framework bridge; verify CRC and epoch before any byte reaches the decoder; the documented hps→gpu async bridge for the command stream.
+Fetch sealed frame packets from the HPS-DDR FRAME_RING (triple-buffered, descriptor law spec/memory_rules.md §4.1) through the functional HPS bridge, and verify BOTH CRCs and the resource epoch before any byte reaches the decoder. Wave 2 matures this from stub to real fetch with the CRC gate before the first byte (plan D8). The documented hps→gpu async bridge for the command stream.
 
-Exclusions: no semantic decoding (that is CMD.DECODER), no reordering of packets within an epoch. Clock/reset: gpu domain, reset returns the fetch FSM to idle with the ring pointer unadvanced (a partially fetched packet is never handed on). Malformed input: header CRC failure or epoch mismatch drops the packet, increments deadline_faults, and yields the safe error code — never partial delivery.
+Exclusions: no semantic decoding (CMD.DECODER), no reordering of packets within an epoch, no slot ownership decisions (CMD.SCHEDULER claims READY slots; DMA fetches them).
 
 ## Clock and reset semantics
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+`gpu_clk` domain, synchronous active-low `rst_n`. Reset: fetch FSM idle, ring pointer unadvanced — a partially fetched packet is NEVER handed on; bridge port idle; epoch register 0.
 
 ## Input and output packet layouts
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+Input: FRAME_RING descriptors + slot bytes via MEM.HPS.BRIDGE bursts (`zhao_hps_burst_req_t`); the slot body is a sealed frame packet (capture_format.md §3) up to `FRAME_SLOT_BYTES` (1 MiB). Output: the verified packet bytes into the command-slot buffer (ready/valid), plus `{status, bytes_consumed, commands_consumed}` per packet (the generated validator's verdict).
 
 ## Backpressure rules
 
-Backpressure: `ready_valid`.
+`ready_valid` into the decoder-facing buffer; credit-based at the bridge port (one burst in flight).
 
 ## Memory ownership
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+Read-only on FRAME_RING slots and descriptors EXCEPT the single `state` word transition READY→FPGA_RUNNING it performs on claim (the only word both sides ever write, never simultaneously — spec/memory_rules.md §4.1). No VRAM writes.
 
 ## Q formats and rounding
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+None (byte streams, lengths, CRCs).
 
 ## Latency (fixed or variable)
 
-Latency: `variable`.
+Variable: bounded by slot length × bridge beat profile (16 + 1/cycle on the sim profile) plus CRC passes (1 byte/clock per lane).
 
 ## Target throughput
 
-Target throughput: saturate one HPS-DDR burst slot per frame.
+Saturate one HPS-DDR burst slot per frame: a full 1 MiB worst-case packet fetch + verify inside the smallest frame period (217,984 gpu cycles) is the budget test.
 
 ## Overflow and malformed-input behaviour
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+Fail-safe order per capture_format.md §3.2 — never emits a byte of a packet whose HEADER CRC failed; header CRC fail, ABI version mismatch, reserved flag, or bounds error ⇒ the packet is dropped whole, the slot returned DONE with the safe error code, `deadline_faults`++ (the frame repeats per video law), ring pointer consistent. Payload CRC fail after the header passed ⇒ same drop semantics, no partial decode. Epoch mismatch (slot `resource_epoch` ≠ current epoch) ⇒ drop before the first payload byte. No partial delivery, ever (formal `cmd_dma_crc_gate`).
 
 ## Counters and traces
 
-Counters: `commands`, `hps_ddr_bytes_by_client`, `deadline_faults`. Source IDs: propagated.
+`commands` (validated records handed on), `hps_ddr_bytes_by_client` (fetch bytes), `deadline_faults` (drops). Source IDs: propagated verbatim from packet records.
 
 ## Scalar reference function
 
-Reference: `zref::CmdDma` (SW.ZREF).
+`zref::CmdDma` — fetch/verify oracle: given ring state and slot contents (incl. corrupted variants), the exact verdict, byte counts and slot transitions.
 
 ## Directed tests
 
-Planned: `tests/command/cmd_dma_directed.cpp`.
+`tests/command/cmd_dma_directed.cpp` — happy path; corrupt header CRC ⇒ ZERO bytes forwarded; corrupt payload CRC; epoch mismatch; truncated slot; 1 MiB worst-case timing budget.
 
 ## Randomized differential tests
 
-Planned: `tests/command/cmd_dma_random.cpp`.
+`tests/command/cmd_dma_random.cpp` — fuzz corpus replay (the committed abi_corpus.zcorpus error set) + PCG ring timelines vs `zref::CmdDma`.
 
 ## Formal properties
 
-None planned for this block.
+`tests/formal/cmd_dma_crc_gate.sby` — no byte leaves before the header CRC passes; reset leaves no partial handoff.
 
 ## Synthesis / resource ceiling
 
-Budget group: `command_debug` (§25). Per-block percentages unfrozen until Phase 0 (V5 gate).
+Budget group `command_debug` (§25 5% ceiling). CRC lane + counters (reuses zhao_crc32c_step from zhao_abi_pkg).
 
 ## Integration capture cases
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+`captures/golden/wave2/{z60,storm,duo}_10frame.zcap` and `duo_markers.zcap` — every FRAME_PACKET section in every capture was fetched and verified through this path in the Verilator run (run-twice-assert-identical).
 
 ## Notes
 
-Fail-safe order per capture_format.md §3.3 — never emits a byte of a packet whose header CRC failed.
+CRC law: the SAME CRC-32C machine as the ABI (capture_format.md §2; one polynomial machine-wide — A3d).
