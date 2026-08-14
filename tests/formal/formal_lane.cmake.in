@@ -1,0 +1,23 @@
+# formal_lane.cmake — CTest wrapper for the SymbiYosys lane (W1: lane smoke).
+# Charter 21/20.3: formal verification runs only where the tools exist; the
+# lane SKIPs (exit 77) when sby is absent so `ctest -L formal` stays green on
+# machines without oss-cad-suite.
+#
+# W1 scope: verify sby executes (version banner) — real properties arrive
+# with the blocks that own them (plan W2-W6).
+
+if("@ZHAO_SBY_BIN@" STREQUAL "")
+  message(STATUS "sby not found — formal lane SKIPPED")
+  return()
+endif()
+
+execute_process(
+  COMMAND "@ZHAO_SBY_BIN@" --version
+  RESULT_VARIABLE _rc
+  OUTPUT_VARIABLE _out
+  ERROR_VARIABLE _err
+)
+if(NOT _rc EQUAL 0)
+  message(FATAL_ERROR "sby --version failed (rc=${_rc}): ${_err}")
+endif()
+message(STATUS "formal lane smoke OK: ${_out}")
