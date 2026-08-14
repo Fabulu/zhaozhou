@@ -185,6 +185,16 @@ target_link_libraries(test_zref_shell PRIVATE zhao_zref)
 add_test(NAME zref_shell COMMAND test_zref_shell)
 set_tests_properties(zref_shell PROPERTIES LABELS "fast;nightly")
 
+# ---- W6: product stub smoke runs (ZEmu + desktop runtime link ZRef and ------
+# ---- replay the golden frame through the shell; exit 0 = green) -------------
+add_test(NAME zemu_smoke
+         COMMAND zemu ${CMAKE_SOURCE_DIR}/tests/abi/golden/frame_minimal.bin)
+set_tests_properties(zemu_smoke PROPERTIES LABELS "fast;nightly")
+
+add_test(NAME desktop_smoke
+         COMMAND zhao-desktop ${CMAKE_SOURCE_DIR}/tests/abi/golden/frame_minimal.bin)
+set_tests_properties(desktop_smoke PROPERTIES LABELS "fast;nightly")
+
 # ---- W5: field IR (spec/form/field-ir.md; gate (d)) -------------------------
 # The differential test compiles the TS-generated wrapper
 # (compiler/tests/generated/crater_ring.hpp), owns the golden .zvec from the

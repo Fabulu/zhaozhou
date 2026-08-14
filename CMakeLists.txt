@@ -23,5 +23,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/zhao_verilate.cmake)
 enable_testing()
 
 add_subdirectory(reference)  # ZRef C++ library (lands in W3/W6)
+add_subdirectory(emulator)   # ZEmu product stub (W6; charter 23 Phase-1 'empty ZEmu')
+add_subdirectory(runtime/desktop)  # ZSDK desktop runtime stub (W6)
 add_subdirectory(tools)      # native tool helpers (later waves)
 add_subdirectory(tests)      # CTest: labels fast / nightly / formal / lint
