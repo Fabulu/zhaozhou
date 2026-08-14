@@ -271,12 +271,18 @@ variant internally).
 ### 7.3 `smoothstep(e0, e1, x, L)`
 
 ```
-d = fx_sub(e1, e0, L)
-r = field_rcp(d, L)                       // d == 0 -> pinned r + RCP0
-t = fx_mul(fx_sub(x, e0, L), r, L)        // single-rounded (§3)
-t = clamp(t, 0, 0x10000)
-result = fx_mul(t, fx_sub(3<<16, fx_mul(2<<16, t, L), L), L)   // t²(3−2t), exact constant order
+d  = fx_sub(e1, e0, L)
+r  = field_rcp(d, L)                       // d == 0 -> pinned r + RCP0
+t  = fx_mul(fx_sub(x, e0, L), r, L)        // single-rounded (§3)
+t  = clamp(t, 0, 0x10000)
+t2 = fx_mul(t, t, L)                       // t²
+result = fx_mul(t2, fx_sub(3<<16, fx_mul(2<<16, t, L), L), L)  // t²(3−2t)
 ```
+
+(NB: the P3 recon sketch wrote `fx_mul(t, 3<<16 − fx_mul(2<<16,t))`, which
+computes t·(3−2t), not t²(3−2t) — that polynomial is *decreasing* for
+t > 0.75 and was caught by the monotonicity test. The corrected form above
+is the C1 Hermite weight; endpoints exact: f(0)=0, f(1/2)=1/2, f(1)=1.)
 
 ### 7.4 `normalize_approx(v, L)`
 

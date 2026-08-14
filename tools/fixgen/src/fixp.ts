@@ -180,10 +180,10 @@ export function rcp24SampleInput(i: number): number {
   return ((i * 16 + (i & 15)) | 1) >>> 0;
 }
 
-/** noise2 KAT inputs for record i (qformats.md 12). */
+/** noise2 KAT inputs for record i (qformats.md 12; all arithmetic mod 2^32). */
 export function noise2KatInputs(i: number): { x: number; y: number; seed: number } {
   const x = (i * 2654435761) >>> 0; // floor(i * golden-ratio fraction), wraps u32
   const y = (i * 40503) >>> 0;
-  const seed = ((Math.imul(i, 0x9e3779b1) >>> 0) + 1) >>> 0;
+  const seed = (((Math.imul(i, 0x9e3779b1) >>> 0) + 1) | 0) >>> 0; // wrap the +1 too
   return { x, y, seed };
 }
