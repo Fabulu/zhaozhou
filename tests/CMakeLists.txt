@@ -177,3 +177,27 @@ verilate(test_abi_fuzz_parity
 add_test(NAME abi_fuzz_parity COMMAND test_abi_fuzz_parity)
 set_tests_properties(abi_fuzz_parity PROPERTIES LABELS "fast;nightly")
 
+# ---- W5: field IR (spec/form/field-ir.md; gate (d)) -------------------------
+# The differential test compiles the TS-generated wrapper
+# (compiler/tests/generated/crater_ring.hpp), owns the golden .zvec from the
+# C++ oracle (captures/golden/field/), runs the 8 scripted checks of
+# field-ir.md §12 incl. the minimize demo artifact (captures/failures/field/).
+add_executable(test_field_crater_ring differential/test_field_crater_ring.cpp)
+target_link_libraries(test_field_crater_ring PRIVATE zhao_zref)
+target_include_directories(test_field_crater_ring PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+target_compile_definitions(test_field_crater_ring PRIVATE
+  ZHAO_CAPTURE_DIR="${CMAKE_SOURCE_DIR}/captures")
+add_test(NAME field_crater_ring COMMAND test_field_crater_ring)
+set_tests_properties(field_crater_ring PROPERTIES LABELS "fast;nightly")
+
+# fuzz corpus replay: TS-vs-C++ interpretation parity over the committed
+# corpus (tests/fuzz/corpus/field, generated + committed by
+# tests/fuzz/field_corpus_gen.ts). Nightly label per plan W5.
+add_executable(test_field_fuzz_parity fuzz/test_field_fuzz_parity.cpp)
+target_link_libraries(test_field_fuzz_parity PRIVATE zhao_zref)
+target_compile_definitions(test_field_fuzz_parity PRIVATE
+  ZHAO_FIELD_CORPUS_DIR="${CMAKE_SOURCE_DIR}/tests/fuzz/corpus/field")
+add_test(NAME field_fuzz_parity COMMAND test_field_fuzz_parity)
+set_tests_properties(field_fuzz_parity PROPERTIES LABELS "nightly")
+

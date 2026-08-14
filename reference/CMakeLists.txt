@@ -4,7 +4,9 @@
 #     (zref_frame) and sha256; W6 adds the shell loop here.
 
 add_library(zhao_zref STATIC
-  src/zref_frame.cpp)
+  src/zref_frame.cpp
+  src/zfield/zfield_decode.cpp
+  src/zfield/zfield_interpret.cpp)
 target_include_directories(zhao_zref PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/runtime/include)  # generated zhao_abi.h
