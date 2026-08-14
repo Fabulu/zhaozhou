@@ -1,20 +1,25 @@
-# build output
+# Build output (CMake/Ninja build tree, synth images)
 build/
+build-*/
 out/
 *.bit
 *.svf
-*.bin
-*.json
 *.asc
 *.config
+# NOTE: no global *.bin ignore — golden vector binaries (tests/golden/,
+# tests/abi/golden/, captures/) are committed evidence, not build output.
 
-# simulation
+# Simulation artifacts
 obj_dir/
 *.vcd
 *.fst
-*.log
+# NOTE: no global *.log ignore — evidence logs under reports/ are committed.
+# Tool logs land in build/ (ignored above) or /tmp.
 
-# editors / os
+# Node
+node_modules/
+
+# Editors / OS
 .vscode/
 .idea/
 Thumbs.db
