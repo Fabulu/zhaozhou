@@ -27,7 +27,9 @@ find_program(ZHAO_VERILATOR_BIN NAMES verilator_bin verilator_bin.exe)
 if(NOT ZHAO_VERILATOR_BIN)
   message(FATAL_ERROR "verilator_bin not found on PATH — source tools/env/zhao-env.ps1|.bat")
 endif()
-set(VERILATOR_ROOT "$ENV{VERILATOR_ROOT}")
+# VERILATOR_ROOT comes from the cache variable resolved by zhao_verilate.cmake
+# (env hint first, then derived from the binary location) — NOT the raw env, so
+# an env-less reconfigure (ninja regenerate) cannot poison the lint script.
 configure_file(lint/lint_stub.cmake.in lint/lint_stub.cmake @ONLY)
 add_test(NAME lint_stub_top
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/lint_stub.cmake)
@@ -42,3 +44,41 @@ add_test(NAME formal_lane
 set_tests_properties(formal_lane PROPERTIES
   LABELS "formal;nightly"
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+
+# ---- W4: abi/frame/zcap -----------------------------------------------------
+# Self-contained block (clean merge): CRC conformance, byte-identity matrix
+# (C++ testee), .zcap round-trips, the zhao-capture CLI smoke, the fuzz-corpus
+# parity (C++ + Verilated SV probe vs oracle expectations), and the npm
+# staleness shim (plan R11: local ctest enforces abi:check too).
+
+add_executable(test_crc unit/test_crc.cpp)
+target_link_libraries(test_crc PRIVATE zhao_zref zhao_harness)
+add_test(NAME crc COMMAND test_crc)
+set_tests_properties(crc PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_abi_golden unit/test_abi_golden.cpp)
+target_link_libraries(test_abi_golden PRIVATE zhao_zref zhao_harness)
+add_test(NAME abi_golden COMMAND test_abi_golden)
+set_tests_properties(abi_golden PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_zcap_roundtrip unit/test_zcap_roundtrip.cpp)
+target_link_libraries(test_zcap_roundtrip PRIVATE zhao_zref zhao_harness)
+add_test(NAME zcap_roundtrip COMMAND test_zcap_roundtrip)
+set_tests_properties(zcap_roundtrip PROPERTIES LABELS "fast;nightly")
+
+add_test(NAME capture_cli_verify
+         COMMAND zhao-capture verify ${CMAKE_SOURCE_DIR}/tests/abi/golden/zcap_minimal.zcap)
+set_tests_properties(capture_cli_verify PROPERTIES LABELS "fast;nightly")
+
+# npm staleness shim (R11): regenerates all abi outputs and diffs them.
+# npm must be the Windows launcher (npm.cmd), not the bundled sh script
+unset(ZHAO_NPM_BIN CACHE)
+find_program(ZHAO_NPM_BIN NAMES npm.cmd npm)
+if(ZHAO_NPM_BIN)
+  add_test(NAME abi_staleness
+           COMMAND ${ZHAO_NPM_BIN} run abi:check --prefix ${CMAKE_SOURCE_DIR})
+  set_tests_properties(abi_staleness PROPERTIES LABELS "fast;nightly")
+else()
+  message(STATUS "zhao: npm not found; abi_staleness ctest shim disabled")
+endif()
+

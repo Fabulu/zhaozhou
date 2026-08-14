@@ -1,3 +1,9 @@
 # ZRef — the C++17 golden-reference library (charter 20).
-# Targets land in W3 (zref_fixp/trig/rcp) and W4/W6 (frame, zfield, shell).
-# This file exists now so the root CMakeLists can add_subdirectory it from day one.
+# W4 lands the frame packet + .zcap container (zref_frame) and sha256; W3
+# adds zref_fixp/trig/rcp in parallel; W6 adds the shell loop.
+
+add_library(zhao_zref STATIC
+  src/zref_frame.cpp)
+target_include_directories(zhao_zref PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/runtime/include)  # generated zhao_abi.h
