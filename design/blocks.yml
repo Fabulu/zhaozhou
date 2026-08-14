@@ -237,7 +237,13 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). Byte layout comes from the generated zhao_abi_pkg.sv (W4) — never hand-written.
+    notes: >-
+      Contract filled (Phase-1-active). Byte layout comes from the generated
+      zhao_abi_pkg.sv (W4) — never hand-written. Dashboard note (W6) — stays
+      SPECIFIED by design; the wave-1 zhao_stub_top is a VALIDATION shell
+      (magic/CRC/walk fail-safe order), not this block's decoder contract.
+      Its reference (zref_frame validate/execute + the empty shell) and ABI
+      package exist, so RTL work starts with full goldens on the bench.
 
   - id: CMD.SCHEDULER
     name: Frame-slot scheduler
@@ -268,7 +274,11 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). The dispatch fan-out mirrors charter §5's CMD → engines edges.
+    notes: >-
+      Contract filled (Phase-1-active). The dispatch fan-out mirrors charter
+      §5's CMD → engines edges. Dashboard note (W6) — stays SPECIFIED by
+      design; the wave-1 stub models no slot FSM, and this block's RTL (with
+      the formal slot-FSM property) is later-phase scope with the decoder.
 
   # ===========================================================================
   # MEM — memory system (fpga/rtl/memory)
@@ -2632,7 +2642,7 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: 2026-08-14
@@ -2642,6 +2652,10 @@ blocks:
         date: 2026-08-14
         commit: '8bdeac8'
         evidence: tools/ledger/src/gen/dashboard.ts
+      - state: UNIT_VERIFIED
+        date: 2026-08-14
+        commit: 'f036f75'
+        evidence: tools/ledger/src/test/rules.test.ts
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2650,9 +2664,11 @@ blocks:
       unit: tools/ledger/src/test/rules.test.ts
     notes: >-
       Contract filled (Phase-1-active). `npm run ledger:check` / `ledger:gen`
-      — staleness is CI failure (plan R11). W6 step 1 of 2 (ladder law): the
-      validator + generators (V1-V14, git-history V2) are complete; the unit
-      suite evidence lifts it to UNIT_VERIFIED in the next ledger commit.
+      — staleness is CI failure (plan R11). W6 advanced to UNIT_VERIFIED —
+      own suite 10/10 (schema, relational law incl. the reject-advance
+      negative test, git-history bootstrap) plus the byte-identity staleness
+      gate exercised live by every subsequent ledger edit (this W6 climb
+      included).
 
   - id: SW.TOOLS.ABIDOC
     name: ABI generator
@@ -2670,7 +2686,7 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: 2026-08-14
@@ -2680,16 +2696,21 @@ blocks:
         date: 2026-08-14
         commit: '0383ed1'
         evidence: tests/abi/golden/frame_minimal.bin
+      - state: UNIT_VERIFIED
+        date: 2026-08-14
+        commit: '4493b9b'
+        evidence: tools/abi-gen/test/abi_gen.test.ts
     deferred: false
     cut_order: null
     superseded_by: null
     tests:
       unit: tools/abi-gen/test/abi_gen.test.ts
     notes: >-
-      Contract filled (Phase-1-active scope note; tool lands W4). W6 step 1
-      of 2 (ladder law): the five-emitter generator + goldens are complete;
-      the 17/17 suite + byte-identity matrix lift it to UNIT_VERIFIED in the
-      next ledger commit.
+      Contract filled (Phase-1-active scope note; tool lands W4). W6 advanced
+      to UNIT_VERIFIED — own suite 17/17 (grammar, layout law, CRC vectors,
+      determinism, goldens; green on autocrlf checkouts since 4493b9b) plus
+      the tri-language byte-identity matrix (C++/TS/SV vs committed goldens,
+      CTest abi_golden + abi_fuzz_parity + abi_staleness).
 
   - id: SW.TOOLS.ASSET
     name: Asset pipeline
@@ -2730,7 +2751,7 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: 2026-08-14
@@ -2740,6 +2761,10 @@ blocks:
         date: 2026-08-14
         commit: '9d8dc79'
         evidence: tests/unit/test_zcap_roundtrip.cpp
+      - state: UNIT_VERIFIED
+        date: 2026-08-14
+        commit: '0383ed1'
+        evidence: tests/abi/golden/zcap_minimal.zcap
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2748,9 +2773,10 @@ blocks:
       unit: tests/unit/test_zcap_roundtrip.cpp
     notes: >-
       Contract filled (Phase-1-active). Registered as its OWN block per plan
-      1.D (P2's +1 over 83). W6 step 1 of 2 (ladder law): the CLI + container
-      round-trips are complete; the CLI smoke + corpus evidence lifts it to
-      UNIT_VERIFIED in the next ledger commit.
+      1.D (P2's +1 over 83). W6 advanced to UNIT_VERIFIED — .zcap round-trip
+      suite (incl. skip-unknown-section, source IDs, program hashes) plus the
+      zhao-capture CLI smoke over the committed golden (CTest
+      capture_cli_verify).
 
   - id: SW.TOOLS.REPORT
     name: Quartus report parser
