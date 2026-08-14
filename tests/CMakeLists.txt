@@ -42,3 +42,19 @@ add_test(NAME formal_lane
 set_tests_properties(formal_lane PROPERTIES
   LABELS "formal;nightly"
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+
+# ---- W2: ledger npm checks (plan R11) --------------------------------------
+# The design-ledger validator + staleness gate (npm run ledger:check) also
+# runs locally via ctest so byte-identity/maturity rules cannot rot between
+# CI runs. Wrapped in cmake -P (same pattern as the lint lane): CTest cannot
+# launch npm.cmd directly on Windows. Self-contained append; merges cleanly
+# with the W3/W4 shims.
+find_program(ZHAO_NPM_BIN NAMES npm.cmd npm)
+if(NOT ZHAO_NPM_BIN)
+  message(STATUS "npm not found on PATH — ledger_check test not registered (source tools/env/zhao-env.ps1|.bat)")
+else()
+  configure_file(npm/ledger_check.cmake.in npm/ledger_check.cmake @ONLY)
+  add_test(NAME ledger_check
+           COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/npm/ledger_check.cmake)
+  set_tests_properties(ledger_check PROPERTIES LABELS "fast")
+endif()

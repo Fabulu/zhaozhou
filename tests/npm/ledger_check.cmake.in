@@ -1,0 +1,22 @@
+# W2 ledger npm check wrapper (plan R11). Configured from tests/CMakeLists.txt.
+# CTest/CreateProcess cannot launch npm.cmd directly, so we run it from CMake
+# script mode, which handles batch wrappers correctly.
+set(ZHAO_NPM_BIN "@ZHAO_NPM_BIN@")
+set(ZHAO_ROOT "@CMAKE_SOURCE_DIR@")
+
+execute_process(
+  COMMAND "${ZHAO_NPM_BIN}" run ledger:check
+  WORKING_DIRECTORY "${ZHAO_ROOT}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE out
+  ERROR_VARIABLE err
+)
+if(out)
+  message(STATUS "${out}")
+endif()
+if(err)
+  message(STATUS "${err}")
+endif()
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "npm run ledger:check failed with exit code ${rc}")
+endif()

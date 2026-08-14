@@ -1,0 +1,278 @@
+---
+title: Zhaozhou console architecture — generated from design/blocks.yml (do not edit)
+---
+flowchart LR
+
+    %% classDef per maturity: the schematic is the status dashboard (charter §4)
+    classDef specified fill:#f2f2f2,stroke:#999,color:#333
+    classDef advanced fill:#cfe8cf,stroke:#3c7a3c,color:#111
+    classDef blocked fill:#f7d4d4,stroke:#b33,stroke-dasharray:5 4,color:#111
+    classDef deferred fill:#eee6f7,stroke:#86c,stroke-dasharray:2 3,color:#333
+
+    subgraph platform["SYS — platform glue"]
+        n_SYS_PLL["SYS.PLL\nVendor PLL wrappers"]
+        n_SYS_RESET["SYS.RESET\nReset sequencer"]
+        n_SYS_CDC["SYS.CDC\nReady/valid CDC FIFO library"]
+    end
+
+    subgraph command["CMD — command path"]
+        n_CMD_DMA["CMD.DMA\nCommand DMA"]
+        n_CMD_DECODER["CMD.DECODER\nCommand decoder"]
+        n_CMD_SCHEDULER["CMD.SCHEDULER\nFrame-slot scheduler"]
+    end
+
+    subgraph memory["MEM — memory system"]
+        n_MEM_SDRAM["MEM.SDRAM\nLocal SDRAM controller"]
+        n_MEM_VRAM_ARBITER["MEM.VRAM.ARBITER\nVRAM arbiter"]
+        n_MEM_HPS_BRIDGE["MEM.HPS.BRIDGE\nHPS-DDR burst bridge"]
+        n_MEM_GUARD["MEM.GUARD\nMemory guard"]
+    end
+
+    subgraph field["FIELD — Field IR sequencers"]
+        n_FIELD_PROGCACHE["FIELD.PROGCACHE\nField program cache"]
+        n_FIELD_SEQ_EARTH["FIELD.SEQ.EARTH\nEarth8 field sequencer"]
+        n_FIELD_SEQ_WARP["FIELD.SEQ.WARP\nWarp8 field sequencer"]
+        n_FIELD_SEQ_FLOW["FIELD.SEQ.FLOW\nFlow field sequencer"]
+        n_FIELD_SEQ_FORMATION["FIELD.SEQ.FORMATION\nFormation field sequencer"]
+        n_FIELD_SEQ_STAMP["FIELD.SEQ.STAMP\nScar Scribe stamp sequencer"]
+    end
+
+    subgraph input["INPUT"]
+        n_INPUT_SNAPSHOT["INPUT.SNAPSHOT\nPad snapshot bridge"]
+        n_INPUT_RUMBLE["INPUT.RUMBLE\nRumble bridge"]
+        n_INPUT_SNAC["INPUT.SNAC\nSNAC adapter (optional)"]
+    end
+
+    subgraph audio["AUDIO"]
+        n_AUDIO_FIFO["AUDIO.FIFO\nPCM audio FIFO"]
+    end
+
+    subgraph video["VIDEO"]
+        n_VIDEO_MODE["VIDEO.MODE\nVideo mode generator"]
+        n_VIDEO_SCANOUT["VIDEO.SCANOUT\nScanout engine"]
+        n_VIDEO_SCALER["VIDEO.SCALER\nScaler feed"]
+        n_VIDEO_FRAMECTL["VIDEO.FRAMECTL\nFrame control handshake"]
+    end
+
+    subgraph measure["MEASURE — The Measure"]
+        n_MEASURE_GOVERNOR["MEASURE.GOVERNOR\nScreen-error LOD governor"]
+        n_MEASURE_TOKENS["MEASURE.TOKENS\nGeometry/fragment token guard"]
+        n_MEASURE_HISTOGRAM["MEASURE.HISTOGRAM\nError histogram"]
+    end
+
+    subgraph terrain["TERRAIN — Mantle"]
+        n_TERRAIN_PATCH["TERRAIN.PATCH\nTerrain patch state engine"]
+        n_TERRAIN_TESS["TERRAIN.TESS\nCrack-safe tessellator"]
+        n_TERRAIN_NORMALS["TERRAIN.NORMALS\nDeformed normals"]
+        n_TERRAIN_VELOCITY["TERRAIN.VELOCITY\nHeight velocity output"]
+        n_TERRAIN_BAKE["TERRAIN.BAKE\nPersistent scar bake"]
+        n_TERRAIN_LOD["TERRAIN.LOD\nTerrain LOD selector"]
+        n_TERRAIN_PROJECT["TERRAIN.PROJECT\nTerrain dual-view projection"]
+    end
+
+    subgraph surface["SURFACE — Scar Scribe"]
+        n_SURFACE_SHEET["SURFACE.SHEET\nSurface sheet store"]
+        n_SURFACE_STAMP["SURFACE.STAMP\nDeterministic stamp engine"]
+    end
+
+    subgraph geometry["GEOM — Ten Thousand Forms"]
+        n_GEOM_MESHFETCH["GEOM.MESHFETCH\nMeshlet fetch and cull"]
+        n_GEOM_VDECODE["GEOM.VDECODE\nVertex decode"]
+        n_GEOM_SKIN["GEOM.SKIN\nSkinning stage"]
+        n_GEOM_LOOM["GEOM.LOOM\nTransform Loom"]
+        n_GEOM_WARP["GEOM.WARP\nWarp8 application stage"]
+        n_GEOM_WCACHE["GEOM.WCACHE\nWorld-space vertex cache"]
+        n_GEOM_PROJECT["GEOM.PROJECT\nDual-view projection"]
+        n_GEOM_CLIP["GEOM.CLIP\nClip and cull"]
+        n_GEOM_SETUP["GEOM.SETUP\nTriangle setup"]
+        n_GEOM_BINNER["GEOM.BINNER\nTile binner"]
+    end
+
+    subgraph raster["RASTER — tile renderer"]
+        n_RASTER_TILESTORE["RASTER.TILESTORE\nTile store"]
+        n_RASTER_EDGEWALK["RASTER.EDGEWALK\nEdge walker"]
+        n_RASTER_EARLYZ["RASTER.EARLYZ\nEarly-Z reject"]
+        n_RASTER_FRAGMENT["RASTER.FRAGMENT\nFragment pipeline"]
+        n_RASTER_RESOLVE["RASTER.RESOLVE\nTile resolve"]
+    end
+
+    subgraph texture["TEXTURE"]
+        n_TEXTURE_TMU["TEXTURE.TMU\nPrimary TMU"]
+        n_TEXTURE_AUX["TEXTURE.AUX\nRestricted auxiliary source"]
+        n_TEXTURE_CACHE["TEXTURE.CACHE\nTexture/material cache"]
+        n_TEXTURE_MOSAIC["TEXTURE.MOSAIC\nTerrain Mosaic selector"]
+    end
+
+    subgraph particles["PART — Myriad"]
+        n_PART_STATE["PART.STATE\nParticle state stream"]
+        n_PART_UPDATE["PART.UPDATE\nParticle update"]
+        n_PART_COLLIDE["PART.COLLIDE\nParticle collision"]
+        n_PART_SPAWN["PART.SPAWN\nDeterministic child spawn"]
+        n_PART_LADDER["PART.LADDER\nRepresentation ladder"]
+        n_PART_EXPAND["PART.EXPAND\nPolygon-particle expansion"]
+        n_PART_SOFT["PART.SOFT\nSoft particle endpoint"]
+    end
+
+    subgraph forge["FORGE — Primitive Forge"]
+        n_FORGE_PRIM["FORGE.PRIM\nProcedural primitives"]
+        n_FORGE_CLIFF["FORGE.CLIFF\nTerrain cliffs and skirts"]
+    end
+
+    subgraph compositor["TWOD/POST — Twin Horizons · Mirror Gate"]
+        n_TWOD_PLANE["TWOD.PLANE\nTwin Horizons planes"]
+        n_TWOD_SPRITE["TWOD.SPRITE\nHUD sprite engine"]
+        n_POST_GATHER["POST.GATHER\nGlow/distortion gather"]
+        n_POST_COMPOSITE["POST.COMPOSITE\nCompositor"]
+        n_POST_ECHO["POST.ECHO\nFrame echo (optional)"]
+    end
+
+    subgraph debug["DEBUG"]
+        n_DEBUG_COUNTERS["DEBUG.COUNTERS\nCounter aggregation"]
+        n_DEBUG_CRC["DEBUG.CRC\nTile/frame CRC"]
+        n_DEBUG_TRACE["DEBUG.TRACE\nTrace ring and source IDs"]
+    end
+
+    subgraph sw["SW — software (HPS)"]
+        n_SW_RUNTIME_HPS["SW.RUNTIME.HPS\nHPS game runtime"]
+        n_SW_MIXER["SW.MIXER\nFixed-point audio mixer"]
+        n_SW_CMDBUILD["SW.CMDBUILD\nFrame-packet builder"]
+        n_SW_CPUCOLL["SW.CPUCOLL\nCPU-side collision and canonical scars"]
+        n_SW_STREAM["SW.STREAM\nStreaming and asset preparation"]
+        n_SW_ZREF["SW.ZREF\nZRef scalar oracle library"]
+        n_SW_ZEMU["SW.ZEMU\nDesktop emulator"]
+        n_SW_COMPILER_FORM["SW.COMPILER.FORM\nForm compiler"]
+        n_SW_FIELDIR["SW.FIELDIR\nField IR evaluator and tooling"]
+        n_SW_TOOLS_LEDGER["SW.TOOLS.LEDGER\nDesign ledger tooling"]
+        n_SW_TOOLS_ABIDOC["SW.TOOLS.ABIDOC\nABI generator"]
+        n_SW_TOOLS_ASSET["SW.TOOLS.ASSET\nAsset pipeline"]
+        n_SW_TOOLS_CAPTURE["SW.TOOLS.CAPTURE\nCapture tooling"]
+        n_SW_TOOLS_REPORT["SW.TOOLS.REPORT\nQuartus report parser"]
+        n_SW_TOOLS_BOARDPROBE["SW.TOOLS.BOARDPROBE\nBoard probe suite"]
+    end
+
+    %% dataflow edges — exactly the upstream/downstream relation of blocks.yml (V7-checked)
+    n_SYS_PLL -->n_SYS_RESET
+    n_SYS_RESET -->n_SYS_CDC
+    n_SW_CMDBUILD -. CDC .->n_CMD_DMA
+    n_MEM_HPS_BRIDGE -->n_CMD_DMA
+    n_CMD_DMA -->n_CMD_DECODER
+    n_CMD_DECODER -->n_CMD_SCHEDULER
+    n_VIDEO_FRAMECTL -. CDC .->n_CMD_SCHEDULER
+    n_MEM_SDRAM -. CDC .->n_MEM_VRAM_ARBITER
+    n_MEM_GUARD -->n_MEM_VRAM_ARBITER
+    n_DEBUG_TRACE -->n_MEM_HPS_BRIDGE
+    n_CMD_SCHEDULER -->n_MEM_GUARD
+    n_TERRAIN_PATCH -->n_MEM_GUARD
+    n_TERRAIN_VELOCITY -->n_MEM_GUARD
+    n_SURFACE_SHEET -->n_MEM_GUARD
+    n_GEOM_MESHFETCH -->n_MEM_GUARD
+    n_TEXTURE_CACHE -->n_MEM_GUARD
+    n_PART_STATE -->n_MEM_GUARD
+    n_RASTER_RESOLVE -->n_MEM_GUARD
+    n_POST_GATHER -->n_MEM_GUARD
+    n_POST_ECHO -->n_MEM_GUARD
+    n_VIDEO_SCANOUT -. CDC .->n_MEM_GUARD
+    n_CMD_SCHEDULER -->n_FIELD_PROGCACHE
+    n_FIELD_PROGCACHE -->n_FIELD_SEQ_EARTH
+    n_FIELD_PROGCACHE -->n_FIELD_SEQ_WARP
+    n_FIELD_PROGCACHE -->n_FIELD_SEQ_FLOW
+    n_FIELD_PROGCACHE -->n_FIELD_SEQ_FORMATION
+    n_FIELD_PROGCACHE -->n_FIELD_SEQ_STAMP
+    n_INPUT_SNAC -->n_INPUT_SNAPSHOT
+    n_SW_RUNTIME_HPS -. CDC .->n_INPUT_RUMBLE
+    n_SW_MIXER -. CDC .->n_AUDIO_FIFO
+    n_POST_COMPOSITE -. CDC .->n_VIDEO_SCANOUT
+    n_VIDEO_MODE -->n_VIDEO_SCANOUT
+    n_VIDEO_SCANOUT -->n_VIDEO_SCALER
+    n_CMD_SCHEDULER -->n_MEASURE_GOVERNOR
+    n_MEASURE_HISTOGRAM -->n_MEASURE_GOVERNOR
+    n_CMD_SCHEDULER -->n_MEASURE_TOKENS
+    n_RASTER_FRAGMENT -->n_MEASURE_HISTOGRAM
+    n_CMD_SCHEDULER -->n_TERRAIN_PATCH
+    n_FIELD_SEQ_EARTH -->n_TERRAIN_PATCH
+    n_TERRAIN_BAKE -->n_TERRAIN_PATCH
+    n_TERRAIN_PATCH -->n_TERRAIN_TESS
+    n_TERRAIN_TESS -->n_TERRAIN_NORMALS
+    n_TERRAIN_PATCH -->n_TERRAIN_VELOCITY
+    n_SURFACE_STAMP -->n_TERRAIN_BAKE
+    n_TERRAIN_PATCH -->n_TERRAIN_LOD
+    n_MEASURE_GOVERNOR -->n_TERRAIN_LOD
+    n_TERRAIN_LOD -->n_TERRAIN_PROJECT
+    n_TERRAIN_NORMALS -->n_TERRAIN_PROJECT
+    n_CMD_SCHEDULER -->n_SURFACE_STAMP
+    n_FIELD_SEQ_STAMP -->n_SURFACE_STAMP
+    n_SURFACE_SHEET -->n_SURFACE_STAMP
+    n_CMD_SCHEDULER -->n_GEOM_MESHFETCH
+    n_MEASURE_GOVERNOR -->n_GEOM_MESHFETCH
+    n_GEOM_MESHFETCH -->n_GEOM_VDECODE
+    n_GEOM_VDECODE -->n_GEOM_SKIN
+    n_GEOM_SKIN -->n_GEOM_LOOM
+    n_FIELD_SEQ_FORMATION -->n_GEOM_LOOM
+    n_GEOM_LOOM -->n_GEOM_WARP
+    n_FIELD_SEQ_WARP -->n_GEOM_WARP
+    n_GEOM_SKIN -->n_GEOM_WCACHE
+    n_GEOM_WARP -->n_GEOM_PROJECT
+    n_GEOM_WCACHE -->n_GEOM_PROJECT
+    n_GEOM_PROJECT -->n_GEOM_CLIP
+    n_TERRAIN_PROJECT -->n_GEOM_CLIP
+    n_GEOM_CLIP -->n_GEOM_SETUP
+    n_FORGE_PRIM -->n_GEOM_SETUP
+    n_FORGE_CLIFF -->n_GEOM_SETUP
+    n_PART_EXPAND -->n_GEOM_SETUP
+    n_GEOM_SETUP -->n_GEOM_BINNER
+    n_MEASURE_TOKENS -->n_GEOM_BINNER
+    n_GEOM_BINNER -->n_RASTER_EDGEWALK
+    n_RASTER_EDGEWALK -->n_RASTER_EARLYZ
+    n_RASTER_TILESTORE -->n_RASTER_FRAGMENT
+    n_RASTER_EARLYZ -->n_RASTER_FRAGMENT
+    n_PART_SOFT -->n_RASTER_FRAGMENT
+    n_MEASURE_TOKENS -->n_RASTER_FRAGMENT
+    n_RASTER_FRAGMENT -->n_RASTER_RESOLVE
+    n_RASTER_FRAGMENT -->n_TEXTURE_TMU
+    n_TEXTURE_CACHE -->n_TEXTURE_TMU
+    n_TEXTURE_MOSAIC -->n_TEXTURE_TMU
+    n_RASTER_FRAGMENT -->n_TEXTURE_AUX
+    n_TERRAIN_PROJECT -->n_TEXTURE_MOSAIC
+    n_CMD_SCHEDULER -->n_PART_STATE
+    n_MEM_HPS_BRIDGE -->n_PART_STATE
+    n_PART_SPAWN -->n_PART_STATE
+    n_PART_STATE -->n_PART_UPDATE
+    n_FIELD_SEQ_FLOW -->n_PART_UPDATE
+    n_PART_UPDATE -->n_PART_COLLIDE
+    n_TERRAIN_PATCH -->n_PART_COLLIDE
+    n_PART_UPDATE -->n_PART_SPAWN
+    n_MEASURE_GOVERNOR -->n_PART_LADDER
+    n_PART_LADDER -->n_PART_EXPAND
+    n_PART_LADDER -->n_PART_SOFT
+    n_CMD_SCHEDULER -->n_FORGE_PRIM
+    n_TERRAIN_TESS -->n_FORGE_CLIFF
+    n_CMD_SCHEDULER -->n_TWOD_PLANE
+    n_CMD_SCHEDULER -->n_TWOD_SPRITE
+    n_CMD_SCHEDULER -->n_POST_GATHER
+    n_RASTER_RESOLVE -->n_POST_GATHER
+    n_CMD_SCHEDULER -->n_POST_COMPOSITE
+    n_POST_GATHER -->n_POST_COMPOSITE
+    n_TWOD_PLANE -->n_POST_COMPOSITE
+    n_TWOD_SPRITE -->n_POST_COMPOSITE
+    n_POST_COMPOSITE -->n_POST_ECHO
+    n_CMD_SCHEDULER -->n_DEBUG_COUNTERS
+    n_RASTER_RESOLVE -->n_DEBUG_CRC
+    n_CMD_DECODER -->n_DEBUG_TRACE
+    n_INPUT_SNAPSHOT -. CDC .->n_SW_RUNTIME_HPS
+    n_SW_CPUCOLL -->n_SW_RUNTIME_HPS
+    n_SW_RUNTIME_HPS -->n_SW_MIXER
+    n_SW_RUNTIME_HPS -->n_SW_CMDBUILD
+    n_SW_TOOLS_ABIDOC -->n_SW_CMDBUILD
+    n_SW_ZREF -->n_SW_CPUCOLL
+    n_SW_RUNTIME_HPS -->n_SW_STREAM
+    n_SW_TOOLS_ASSET -->n_SW_STREAM
+    n_SW_FIELDIR -->n_SW_ZREF
+    n_SW_ZREF -->n_SW_ZEMU
+    n_SW_RUNTIME_HPS -->n_SW_ZEMU
+    n_SW_COMPILER_FORM -->n_SW_FIELDIR
+    n_SW_ZEMU -->n_SW_TOOLS_CAPTURE
+
+    %% maturity classes
+    class n_CMD_DMA,n_CMD_DECODER,n_CMD_SCHEDULER,n_MEM_VRAM_ARBITER,n_MEM_HPS_BRIDGE,n_MEM_GUARD,n_FIELD_PROGCACHE,n_FIELD_SEQ_EARTH,n_FIELD_SEQ_FLOW,n_FIELD_SEQ_FORMATION,n_FIELD_SEQ_STAMP,n_INPUT_SNAPSHOT,n_INPUT_RUMBLE,n_AUDIO_FIFO,n_VIDEO_MODE,n_VIDEO_SCANOUT,n_VIDEO_SCALER,n_VIDEO_FRAMECTL,n_MEASURE_GOVERNOR,n_MEASURE_TOKENS,n_MEASURE_HISTOGRAM,n_TERRAIN_PATCH,n_TERRAIN_TESS,n_TERRAIN_NORMALS,n_TERRAIN_VELOCITY,n_TERRAIN_BAKE,n_TERRAIN_LOD,n_TERRAIN_PROJECT,n_SURFACE_SHEET,n_SURFACE_STAMP,n_GEOM_MESHFETCH,n_GEOM_VDECODE,n_GEOM_SKIN,n_GEOM_LOOM,n_GEOM_WCACHE,n_GEOM_PROJECT,n_GEOM_CLIP,n_GEOM_SETUP,n_GEOM_BINNER,n_RASTER_TILESTORE,n_RASTER_EDGEWALK,n_RASTER_EARLYZ,n_RASTER_FRAGMENT,n_RASTER_RESOLVE,n_TEXTURE_TMU,n_TEXTURE_AUX,n_TEXTURE_CACHE,n_TEXTURE_MOSAIC,n_PART_STATE,n_PART_UPDATE,n_PART_COLLIDE,n_PART_SPAWN,n_PART_LADDER,n_PART_EXPAND,n_PART_SOFT,n_FORGE_PRIM,n_FORGE_CLIFF,n_TWOD_PLANE,n_TWOD_SPRITE,n_POST_GATHER,n_POST_COMPOSITE,n_DEBUG_COUNTERS,n_DEBUG_CRC,n_DEBUG_TRACE,n_SW_RUNTIME_HPS,n_SW_MIXER,n_SW_CMDBUILD,n_SW_CPUCOLL,n_SW_STREAM,n_SW_ZREF,n_SW_ZEMU,n_SW_COMPILER_FORM,n_SW_FIELDIR,n_SW_TOOLS_LEDGER,n_SW_TOOLS_ABIDOC,n_SW_TOOLS_ASSET,n_SW_TOOLS_CAPTURE specified
+    class n_SYS_PLL,n_SYS_RESET,n_SYS_CDC,n_MEM_SDRAM,n_SW_TOOLS_REPORT,n_SW_TOOLS_BOARDPROBE blocked
+    class n_FIELD_SEQ_WARP,n_INPUT_SNAC,n_GEOM_WARP,n_POST_ECHO deferred
