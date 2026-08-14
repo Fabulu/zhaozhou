@@ -17,7 +17,14 @@ import { buildCorpus } from '../src/fuzz.js';
 import { sampleCommand, sampleRecordBytes } from '../src/sample.js';
 import { repoRoot, goldenDir } from './helpers.js';
 
-const zidlSource = () => readFileSync(path.join(repoRoot(), 'spec', 'commands.zidl'), 'utf8');
+// Normalize CRLF -> LF: the mutation anchors below embed \n, and a Windows
+// checkout with core.autocrlf=true hands us a CRLF working tree where those
+// replaces silently no-op (observed as two phantom-green->red tests on this
+// machine; commit 0a384fb already re-pinned generated outputs after the same
+// EOL churn). The parser accepts either line ending, so the tests exercise
+// the same grammar either way.
+const zidlSource = () =>
+  readFileSync(path.join(repoRoot(), 'spec', 'commands.zidl'), 'utf8').replace(/\r\n/g, '\n');
 
 function parseAndLayout(source: string) {
   return semantic(new Parser(tokenize(source)).parse(), { opcodeRanges: OPCODE_RANGES });
