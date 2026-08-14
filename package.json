@@ -10,13 +10,13 @@
     "tools/fixgen"
   ],
   "scripts": {
-    "test": "echo [W1 placeholder] workspace tests land with W2-W5",
-    "ledger:check": "echo [W1 placeholder] design ledger validator lands in W2",
-    "ledger:gen": "echo [W1 placeholder] ledger diagram generator lands in W2",
-    "abi:check": "echo [W1 placeholder] ABI staleness check lands in W4",
-    "tables:check": "echo [W1 placeholder] fixgen byte-identity check lands in W3",
-    "abi:gen": "echo [W1 placeholder] ABI generator lands in W4",
-    "tables:gen": "echo [W1 placeholder] table generator lands in W3"
+    "test": "echo [placeholder] root test aggregation lands in W6",
+    "ledger:check": "npm run -w tools/ledger check",
+    "ledger:gen": "npm run -w tools/ledger gen",
+    "tables:check": "npm run -w tools/fixgen check",
+    "tables:gen": "npm run -w tools/fixgen gen",
+    "abi:check": "npm run -w tools/abi-gen check",
+    "abi:gen": "npm run -w tools/abi-gen gen"
   },
   "engines": {
     "node": ">=20"
