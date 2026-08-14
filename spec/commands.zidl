@@ -1,0 +1,206 @@
+// commands.zidl — Zhaozhou command ABI, single source of truth (charter 19/29-5).
+//
+// Grammar: EBNF in P5 recon (RUN-20260814-1852-wave1-abi-capture FINDINGS 1.2),
+// normatively restated in spec/capture_format.md 1. Two ratified extensions
+// over that EBNF (both documented there):
+//   * command status keyword: `command <name> <opcode> implemented|reserved`
+//     — implemented commands are executed by the Phase-1 decoder shell;
+//     reserved commands have a FROZEN wire layout but no execution semantics
+//     yet (their records still validate structurally).
+//   * `enum` entries may carry a trailing doc comment via `//` (lexical).
+//
+// Fixed-point fields reference spec/qformats.md (W3): `fx16` is a Q16.16
+// value carried in a 4-byte (int32) container — 16 fractional bits, 16
+// integer bits, little-endian on the wire. All other Q formats live there.
+//
+// Opcode ranges (plan 1.E / P5 1.2, table-derived):
+//   0x0000-0x00FF  frame control, views, presentation
+//   0x0200-0x02FF  terrain / surface (semantic, reserved in Phase 1)
+//   0x0300-0x03FF  forms / populations / procedural (reserved in Phase 1)
+//   0x0400-0x04FF  audio (reserved in Phase 1)
+//   0xF000-0xF0FF  bootstrap/debug umbrella — never game-facing; any frame
+//                  containing one of these opcodes MUST set frame header
+//                  flags bit0 contains_debug_commands (ZH_ABI_DEBUG_FLAG_REQUIRED)
+//
+// This file is the ABI. Generated C++/TS/SV byte-identity is enforced by
+// tools/abi-gen goldens; editing layout here requires regenerating
+// (`npm run abi:gen`) and re-committing every generated artifact.
+
+abi zhao {
+  version 1
+  endian little
+  command_alignment 16
+  opcode_width u16
+}
+
+// Frame-slot bound (plan 1.E): provisional until Phase 2 measurements;
+// every validator bound-checks against this constant, never a magic number.
+const u32 FRAME_SLOT_BYTES = 1048576;
+
+// Error codes — generated verbatim into C++/TS/SV and shared by the frame
+// validator (spec/capture_format.md 4.2), the .zcap tools, and the stub RTL.
+// Order matters: it is the fail-safe validation order of capture_format.md.
+// Values 0-11 are the P5 3.3 set; 12-14 are wave-1 ratifications (1.E).
+enum zhao_abi_error : u32 {
+  ZH_ABI_OK = 0;                     // frame accepted
+  ZH_ABI_BAD_MAGIC = 1;              // frame magic mismatch
+  ZH_ABI_BAD_ABI_VERSION = 2;        // abi_version != generated ABI version
+  ZH_ABI_RESERVED_FLAG = 3;          // undefined flag bit set (frame or record)
+  ZH_ABI_BAD_LENGTH = 4;             // lengths misaligned / out of bounds
+  ZH_ABI_BAD_HEADER_CRC = 5;         // header_crc32c mismatch
+  ZH_ABI_BAD_PAYLOAD_CRC = 6;        // payload_crc32c mismatch
+  ZH_ABI_UNKNOWN_OPCODE = 7;         // opcode not in the generated table
+  ZH_ABI_RESERVED_FIELD = 8;         // reserved/pad byte nonzero on the wire
+  ZH_ABI_BAD_VALUE = 9;              // enum/bitfield out of range (none in v1)
+  ZH_ABI_STALE_HANDLE = 10;          // handle generation mismatch (none in v1)
+  ZH_ABI_TRUNCATED = 11;             // records end before command_bytes
+  ZH_ABI_DEBUG_FLAG_REQUIRED = 12;   // 0xF00n opcode without header flags bit0
+  ZH_ABI_COUNT_MISMATCH = 13;        // records walked != command_count
+  ZH_ABI_UNIMPLEMENTED_COMMAND = 14; // executor-level: reserved opcode used
+}
+
+// ---- composed fixed-point containers (element = fx16, Q16.16, spec/qformats.md)
+
+// Axis-aligned footprint in world units.
+struct rectfx {
+  fx16 x0;
+  fx16 y0;
+  fx16 x1;
+  fx16 y1;
+}
+
+// Affine 2D transform: translation then row-major 2x2.
+struct transform2fx {
+  fx16 tx;
+  fx16 ty;
+  fx16 r00;
+  fx16 r01;
+  fx16 r10;
+  fx16 r11;
+}
+
+// Row-major 4x4 view-projection matrix.
+struct mat4fx {
+  fx16 m00;
+  fx16 m01;
+  fx16 m02;
+  fx16 m03;
+  fx16 m10;
+  fx16 m11;
+  fx16 m12;
+  fx16 m13;
+  fx16 m20;
+  fx16 m21;
+  fx16 m22;
+  fx16 m23;
+  fx16 m30;
+  fx16 m31;
+  fx16 m32;
+  fx16 m33;
+}
+
+// ---- frame control ---------------------------------------------------------
+
+command Nop 0x0000 implemented {
+  // decoder test vehicle; record = bare 16-byte command header
+}
+
+command BeginFrame 0x0001 implemented {
+  u32 frame_id;
+  u32 resource_epoch;
+  u32 flags;
+  u32 deadline_cycles;
+}
+
+command EndFrame 0x0002 implemented {
+  u32 completion_flags;
+  u32 expected_crc_valid;
+  u32 expected_framebuffer_crc;
+  pad[4];
+}
+
+// ---- views / presentation --------------------------------------------------
+
+command SetView 0x0010 implemented {
+  u8 view_id;
+  u8 viewport_id;
+  u16 flags;
+  mat4fx view_projection;
+  fx16 pixel_error;
+  u32 geometry_tokens;
+  u32 fragment_tokens;
+}
+
+command SetPresentationContract 0x0020 implemented {
+  u8 mode;
+  u8 view_count;
+  u16 flags;
+  u32 geometry_tokens[2];
+  u32 fragment_tokens[2];
+  u32 shared_tokens;
+  pad[8];
+}
+
+// ---- terrain / surface (semantic commands; layouts frozen, execution reserved)
+
+command TerrainField 0x0200 reserved {
+  handle32[program] program;
+  rectfx footprint;
+  u32 start_tick;
+  u32 duration_ticks;
+  u8 parameters[64];
+  pad[4];
+}
+
+command SurfaceStamp 0x0210 reserved {
+  handle32[brush] brush;
+  handle32[patch] patch;
+  u8 operation;
+  u8 tag;
+  u16 strength;
+  transform2fx transform;
+  pad[12];
+}
+
+// ---- forms / populations / procedural (reserved)
+
+command DrawForm 0x0300 reserved {
+  handle32[form] form;
+  handle32[material_set] material_set;
+  handle32[transform] transform;
+  u8 viewport_mask;
+  u8 semantic_weight;
+  u16 flags;
+}
+
+command DrawPopulation 0x0301 reserved {
+  handle32[population] population;
+  u8 viewport_mask;
+  u8 semantic_weight;
+  u16 flags;
+  pad[8];
+}
+
+command DrawProcedural 0x0302 reserved {
+  handle32[forge_program] program;
+  handle32[material] material;
+  transform2fx transform;
+  fx16 screen_error;
+  pad[12];
+}
+
+// ---- audio (reserved)
+
+command EmitAudioEvent 0x0400 reserved {
+  u32 event_id;
+  i16 pan_fx;
+  u16 gain;
+  u32 sample_handle;
+  u32 timestamp;
+}
+
+// ---- bootstrap / debug umbrella (never game-facing; header flags bit0 required)
+
+command DebugBootstrap 0xF001 reserved {
+  u8 data[48];
+}

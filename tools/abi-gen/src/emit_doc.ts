@@ -1,0 +1,126 @@
+// emit_doc.ts — spec/generated/abi.md emitter: the Markdown ABI documentation
+// charter 19 requires, straight from the LayoutIR (byte maps per command).
+
+import { CommandIR, LayoutIR, snakeCase, upperSnake } from './types.js';
+
+export function emitDoc(ir: LayoutIR, identitySha256: string, zidlSha256: string): string {
+  const L: string[] = [];
+  L.push('# Zhaozhou Command ABI — generated reference');
+  L.push('');
+  L.push('GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`');
+  L.push('(`npm run abi:gen`). Law: `spec/capture_format.md`. Fixed-point formats:');
+  L.push('`spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).');
+  L.push('');
+  L.push('```');
+  L.push(`abi_identity_sha256 = ${identitySha256}`);
+  L.push(`zidl_sha256         = ${zidlSha256}`);
+  L.push('```');
+  L.push('');
+  L.push(`ABI version **${ir.abi.version}**, little-endian, command alignment`);
+  L.push(`**${ir.abi.commandAlignment} B**, opcode width u16,`);
+  L.push(`${ir.commands.length} commands (${ir.commands.filter((c) => c.implemented).length} implemented).`);
+  L.push('');
+
+  L.push('## Commands');
+  L.push('');
+  L.push('| Command | Opcode | Record bytes | Status |');
+  L.push('|---|---|---|---|');
+  for (const c of ir.commands) {
+    L.push(`| \`${c.name}\` | \`${c.opcodeHex}\` | ${c.recordBytes} | ${c.implemented ? 'implemented' : 'reserved'} |`);
+  }
+  L.push('');
+  L.push('Every record starts with the 16-byte command header (capture_format.md 3.1):');
+  L.push('');
+  L.push('| Offset | Size | Field | Rule |');
+  L.push('|---|---|---|---|');
+  L.push('| +0 | u16 | opcode | must exist in the table above |');
+  L.push('| +2 | u16 | record_bytes | total record size, multiple of 16, `>= 16` |');
+  L.push('| +4 | u32 | source_id | capture_format.md 5 |');
+  L.push('| +8 | u32 | flags | no defined bits in v1 — must be 0 |');
+  L.push('| +12 | u32 | reserved0 | must be 0 |');
+  L.push('');
+
+  for (const c of ir.commands) {
+    L.push(`### ${c.name} — ${c.opcodeHex} (${c.recordBytes} B, ${c.implemented ? 'implemented' : 'reserved'})`);
+    L.push('');
+    L.push('Payload bytes (offsets relative to payload start, i.e. record offset + 16):');
+    L.push('');
+    L.push('| Offset | Size | Field | Type |');
+    L.push('|---|---|---|---|');
+    if (c.fields.length === 0) {
+      L.push('| — | 0 | *(no payload)* | — |');
+    }
+    for (const f of c.fields) {
+      const type = f.kind === 'pad' ? 'pad (zero)'
+        : f.kind === 'handle' ? `handle32${f.handleKind ? ` [${f.handleKind}]` : ''}`
+          : f.kind === 'struct' ? f.type
+            : f.type;
+      const arr = f.count > 1 ? ` ×${f.count}` : '';
+      L.push(`| ${f.offset} | ${f.size} | \`${f.name}\` | ${type}${arr} |`);
+    }
+    L.push('');
+    // leaf-level byte map for structs/arrays
+    const structFields = c.fields.filter((f) => f.kind === 'struct');
+    for (const f of structFields) {
+      L.push(`\`${f.name}\` (${f.type}) leaves:`);
+      L.push('');
+      L.push('| Offset | Size | Leaf | Type |');
+      L.push('|---|---|---|---|');
+      for (const leaf of f.leaves) {
+        L.push(`| ${f.offset + leaf.offset} | ${leaf.size} | \`${leaf.name}\` | ${leaf.prim} |`);
+      }
+      L.push('');
+    }
+    L.push(`Golden sample: \`tests/abi/golden/cmd_${snakeCase(c.name)}.bin\` (C++ packer`);
+    L.push(`\`zhao_abi::zhao_pack_${snakeCase(c.name)}(zhao_abi::zhao_sample_${snakeCase(c.name)}(), ...)\`,`);
+    L.push(`TS \`zhaoPack${c.name}(zhaoSample${c.name}(), ...)\`, SV round-trips it via`);
+    L.push(`\`zhao_unpack_${snakeCase(c.name)}\`/\`zhao_pack_${snakeCase(c.name)}\`).`);
+    L.push('');
+  }
+
+  L.push('## Composed structs');
+  L.push('');
+  for (const s of ir.structs.values()) {
+    L.push(`### ${s.name} — ${s.size} B`);
+    L.push('');
+    L.push('| Offset | Size | Field | Type |');
+    L.push('|---|---|---|---|');
+    for (const f of s.fields) {
+      const type = f.kind === 'pad' ? 'pad (zero)'
+        : f.kind === 'handle' ? `handle32${f.handleKind ? ` [${f.handleKind}]` : ''}`
+          : f.kind === 'struct' ? f.type : f.type;
+      const arr = f.count > 1 ? ` ×${f.count}` : '';
+      L.push(`| ${f.offset} | ${f.size} | \`${f.name}\` | ${type}${arr} |`);
+    }
+    L.push('');
+  }
+
+  L.push('## Error codes (generated enum, shared verbatim C++/TS/SV)');
+  L.push('');
+  const errEnum = ir.enums.find((e) => e.name === 'zhao_abi_error');
+  if (errEnum) {
+    L.push('| Value | Name | Meaning |');
+    L.push('|---|---|---|');
+    for (const e of errEnum.entries) L.push(`| ${e.value} | \`${e.name}\` | |`);
+    L.push('');
+  }
+
+  L.push('## Frame packet');
+  L.push('');
+  L.push('See `spec/capture_format.md` 3. 36-byte sealed header + command stream');
+  L.push('+ trailing payload CRC-32C; total `40 + command_bytes`; slot bounded by');
+  L.push(`\`FRAME_SLOT_BYTES = ${ir.consts.find((c) => c.name === 'FRAME_SLOT_BYTES')?.value ?? '?'}\`.`);
+  L.push('');
+  L.push('## Golden binaries (committed evidence, regenerated by `npm run abi:gen`)');
+  L.push('');
+  L.push('| File | Contents |');
+  L.push('|---|---|');
+  for (const c of ir.commands) {
+    L.push(`| \`tests/abi/golden/cmd_${snakeCase(c.name)}.bin\` | canonical ${c.name} sample record |`);
+  }
+  L.push('| `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |');
+  L.push('| `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |');
+  L.push('| `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |');
+  L.push('');
+  return L.join('\n');
+}

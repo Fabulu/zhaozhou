@@ -24,3 +24,6 @@ node_modules/
 .idea/
 Thumbs.db
 desktop.ini
+
+# TS build outputs (tools/abi-gen, compiler): npm scripts rebuild on demand
+dist/

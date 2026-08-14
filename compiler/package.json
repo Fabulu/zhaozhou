@@ -2,8 +2,14 @@
   "name": "@zhaozhou/compiler",
   "version": "0.0.1",
   "private": true,
-  "description": "Form compiler: frontend, HIR, ZIR, Field IR, backends (lands W5; placeholders until then)",
+  "description": "Form compiler: frontend, HIR, ZIR, Field IR, backends. W4 lands the generated ABI consumer side (abi.ts/frame.ts/zcap.ts) + conformance tests; the rest lands W5.",
+  "type": "module",
   "scripts": {
-    "test": "echo [W1 placeholder] compiler tests land in W5"
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
   }
 }
