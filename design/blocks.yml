@@ -1644,8 +1644,12 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Fixed-point blend exactly per spec/qformats.md; no floating-point anywhere in the path (§26).
-
+    notes: >-
+      Sky/beam recipes per spec/sky_and_beams.md: sky_backdrop (pass-1: Z-forced-far,
+      Z-test off, blend off, effect-tag init), sky_cloud_fade (a = tex.a x
+      vertex.a, alpha blend), sun_additive (additive + optional glow tag),
+      beam_additive_fade (tex.RGB x vertex.RGB, dst = sat(dst + src);
+      bilinear TMU mandatory).
   - id: RASTER.RESOLVE
     name: Tile resolve
     kind: rtl
@@ -2012,18 +2016,15 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Depth-fade math per spec/qformats.md.
-
-  # ===========================================================================
-  # FORGE — Primitive Forge (fpga/rtl/forge)
-  # ===========================================================================
-
+    notes: >-
+      Soft sprite endpoint; also the beam ladder rung for projected width 2-6 px
+      (spec/sky_and_beams.md).
   - id: FORGE.PRIM
     name: Procedural primitives
     kind: rtl
     subsystem: forge
     clock_domain: gpu
-    purpose: Ribbons, tubes, radial shells, rings, chains, shard bursts, billboard sheets, spline walls, cones — bounded subdivision with screen-error LOD.
+    purpose: Ribbons, tubes, radial shells, rings, chains, shard bursts, billboard sheets, spline walls, cones, sky modes (sky_drum/sky_cap/sky_plane/sky_cloud_sheet) and beam_cone per spec/sky_and_beams.md — bounded subdivision with screen-error LOD.
     contract: design/contracts/FORGE.PRIM.md
     phase: 11
     owner_issue: ZH-044
@@ -2046,7 +2047,16 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Subdivision caps are spec constants; overflow degrades gracefully.
+    notes: >-
+      Subdivision caps are spec constants; overflow degrades gracefully. Sky
+      modes per spec/sky_and_beams.md: inside-facing winding (generator-side,
+      no cull-flip hardware), bounded columns (48 default, spec constant),
+      rotation-only transform from DrawSky rot_proj, fixed-cost /
+      Measure-exempt (budget lines sky_triangles, sky_fragments).
+      sky_cloud_sheet bakes per-vertex alpha = (1-r^2)*max_alpha in fx16 at
+      generation. beam_cone: circumferential-U radial-fade mapping with
+      back-placed seam, V-to-axis-height, vertex fade band, base ring at
+      ARM-supplied canonical ground height; ladder 16-24/12/4/2/0 tris.
 
   - id: FORGE.CLIFF
     name: Terrain cliffs and skirts
@@ -2174,14 +2184,16 @@ blocks:
     deferred: false
     cut_order: 6
     superseded_by: null
-    notes: Buffer precision is cut-order 6 (§26).
-
+    notes: >-
+      Sun quad and tagged horizon/sky texels write the glow effect tag; gather
+      path unchanged — the sky is the dominant natural glow source
+      (spec/sky_and_beams.md).
   - id: POST.COMPOSITE
     name: Compositor
     kind: rtl
     subsystem: compositor
     clock_domain: gpu
-    purpose: Bloom, haze, shockwave, refraction, grading, palette and flash composition of 3D frame + planes + sprites into the scanout framebuffer.
+    purpose: Bloom, haze, shockwave, refraction, grading, palette and flash composition of 3D frame + planes + sprites into the scanout framebuffer. Plus radial_decay sun-shaft mode of the glow path (spec/sky_and_beams.md; frozen constants 96x60 Z60 / 2x64x48 Duo, 12 taps, decay 61/64 Q0.16 table, guard clamp, saturating u16 accumulate).
     contract: design/contracts/POST.COMPOSITE.md
     phase: 11
     owner_issue: ZH-070
@@ -2425,8 +2437,10 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: One semantics, two consumers (FPGA terrain + CPU collision) — never re-derived by hand (§29-6).
-
+    notes: >-
+      Also serves the per-beam occlusion DDA: one ray per beam per view, apex to
+      camera eye, N=64 fixed steps vs canonical heightfield; oracle
+      zref::beam::occlusion_intensity (spec/sky_and_beams.md).
   - id: SW.STREAM
     name: Streaming and asset preparation
     kind: software
