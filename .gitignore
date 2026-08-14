@@ -18,6 +18,8 @@ obj_dir/
 
 # Node
 node_modules/
+# TypeScript build output of the npm workspace tools (never committed)
+dist/
 
 # Editors / OS
 .vscode/

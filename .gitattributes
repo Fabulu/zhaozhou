@@ -1,0 +1,8 @@
+# Byte-exact text artifacts: the ledger staleness check (npm run ledger:gen -- --verify)
+# regenerates these with LF and diffs against the working tree, so checkouts must
+# never translate line endings on them (repo has core.autocrlf=true locally).
+design/blocks.yml text eol=lf
+design/ops.yml text eol=lf
+design/diagrams/*.mmd text eol=lf
+design/diagrams/*.md text eol=lf
+design/contracts/*.md text eol=lf

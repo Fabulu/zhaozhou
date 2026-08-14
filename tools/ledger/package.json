@@ -2,8 +2,22 @@
   "name": "@zhaozhou/ledger",
   "version": "0.0.1",
   "private": true,
-  "description": "design ledger validator + diagram/dashboard generators (lands W2; placeholder until then)",
+  "description": "design ledger validator (V1-V14) + architecture/dashboard/contract generators",
+  "type": "commonjs",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo [W1 placeholder] ledger tests land in W2"
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run build && node dist/cli.js check",
+    "gen": "npm run build && node dist/cli.js gen",
+    "gen-contracts": "npm run build && node dist/cli.js gen-contracts",
+    "test": "npm run build && node --test dist/test/"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
   }
 }

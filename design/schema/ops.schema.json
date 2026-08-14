@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhaozhou.local/schemas/ops.schema.json",
+  "title": "Zhaozhou Design Ledger — ops.yml",
+  "description": "Structural schema for design/ops.yml (charter §4). Q-format fields are pointers into spec/qformats.md (ZH-012) — never numeric literals here.",
+  "type": "object",
+  "required": ["schema_version", "profiles", "ops"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profiles": {
+      "type": "object",
+      "propertyNames": { "enum": ["E", "W", "F", "M", "S"] },
+      "minProperties": 5,
+      "maxProperties": 5,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "description", "sequencer"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 10 },
+          "sequencer": {
+            "type": "string",
+            "pattern": "^FIELD\\.SEQ\\.[A-Z]+$"
+          }
+        }
+      }
+    },
+    "ops": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/op" }
+    }
+  },
+  "$defs": {
+    "opId": {
+      "type": "string",
+      "pattern": "^FIELD(\\.[A-Z][A-Z0-9]*)+$",
+      "maxLength": 64
+    },
+    "qPointer": {
+      "description": "Pointer to a spec/qformats.md section (ZH-012). Never a numeric literal.",
+      "type": "string",
+      "pattern": "^spec/qformats\\.md.+$"
+    },
+    "op": {
+      "type": "object",
+      "required": ["id", "name", "class", "profiles", "semantics", "operand_q", "result_q", "rounding", "reference_function", "implementation_blocks", "cost_units", "differential_tests"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/opId" },
+        "name": { "type": "string", "minLength": 1 },
+        "class": { "enum": ["alu", "table", "sink", "stamp_mode"] },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["E", "W", "F", "M", "S"] }
+        },
+        "semantics": { "type": "string", "minLength": 20 },
+        "operand_q": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/qPointer" } },
+        "result_q": { "$ref": "#/$defs/qPointer" },
+        "rounding": { "enum": ["saturating", "wrapping"] },
+        "reference_function": {
+          "type": "string",
+          "pattern": "^zref::fieldir::[a-z0-9_]+$"
+        },
+        "implementation_blocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^([A-Z][A-Z0-9]*)(\\.[A-Z][A-Z0-9]*)+$"
+          }
+        },
+        "cost_units": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "field_ir_opcode": {
+          "description": "Numeric hex where the plan froze it (e.g. 0x1C NOISE2, 0x1D DCURVE) or a symbolic mnemonic pinned to a number by the ISA v1 table (spec/form/field-ir.md, W5).",
+          "type": "string",
+          "pattern": "^(0x[0-9A-F]{2}|[A-Z][A-Z0-9._]*)$"
+        },
+        "field_ir_macro": {
+          "description": "Macro-expansion reference: op ids this op composes from (A3e alternative to field_ir_opcode).",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/opId" }
+        },
+        "differential_tests": { "type": "string", "pattern": "^tests/.+\\.(cpp|ts)$" },
+        "notes": { "type": ["string", "null"] }
+      },
+      "anyOf": [
+        { "required": ["field_ir_opcode"] },
+        { "required": ["field_ir_macro"] }
+      ]
+    }
+  }
+}

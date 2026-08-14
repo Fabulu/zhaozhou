@@ -1,0 +1,2687 @@
+# =============================================================================
+# Zhaozhou Design Ledger — design/blocks.yml
+# The authoritative console schematic (charter §4): every hardware and software
+# block, its maturity, its contract, its owner issue and its place in the
+# dataflow graph. The §5 architecture diagram and the status dashboard are
+# GENERATED from this file (tools/ledger, `npm run ledger:gen`); never edit the
+# generated files by hand.
+#
+# Counts: 87 blocks = 72 FPGA (kind: rtl) + 15 software (kind: software).
+# ARITHMETIC NOTE: P2's headline said "83 = 69 FPGA + 14 SW", but P2's own
+# §1 group enumeration sums to 72 FPGA (SYS3 CMD3 MEM4 FIELD6 INPUT3 AUDIO1
+# VIDEO4 MEASURE3 TERRAIN7 SURFACE2 GEOM10 RASTER5 TEXTURE4 PART7 FORGE2
+# TWOD2 POST3 DEBUG3) — every listed block is registered here, none trimmed
+# (plan 1.D: "Accept, no trim; completeness beats minimalism"). Software is
+# P2's 14 PLUS SW.TOOLS.CAPTURE ratified as its own block (plan 1.D) = 15.
+# Total 87. If a count of 84 was expected, the delta is this same P2
+# headline-vs-enumeration discrepancy, not a registration error.
+#
+# Maturity law (charter §4): SPECIFIED < REFERENCE_COMPLETE < UNIT_VERIFIED <
+# RTL_VERIFIED < SYNTHESIZED < INTEGRATED < HARDWARE_PROVEN. One step at a
+# time, evidence pinned in maturity_log, validated against git history (V2).
+# Every block starts at SPECIFIED in this file's first commit (bootstrap).
+#
+# blocked_on: hardware — never advances from SPECIFIED regardless of evidence
+# until the orchestrator clears the hardware lane (plan §4).
+# =============================================================================
+
+schema_version: 1
+
+# §25 mandatory counters (snake_case) plus the declared platform extensions.
+# Block `counters` must be a subset of this catalog (rule V12).
+counter_catalog:
+  # §25 minimum list
+  - frame_cycles
+  - deadline_faults
+  - commands
+  - meshlets_fetched
+  - vertices_decoded
+  - vertices_transformed
+  - triangles_submitted
+  - triangles_clipped
+  - triangles_culled
+  - lod_representation_counts
+  - field_instructions_by_profile
+  - progcach_hits
+  - progcach_misses
+  - programs_rejected
+  - terrain_samples_evaluated
+  - terrain_triangles_emitted
+  - surface_stamps
+  - surface_texels_touched
+  - tile_references
+  - max_tile_list_depth
+  - covered_fragments
+  - early_z_rejects
+  - texture_samples
+  - cache_hits
+  - cache_misses
+  - blended_fragments
+  - soft_particles
+  - polygon_particles
+  - vram_bytes_by_client
+  - hps_ddr_bytes_by_client
+  - scanout_starvation_cycles
+  - audio_underruns
+  # declared extensions (§25 says "at minimum"; these are platform glue)
+  - pll_lock_lost
+  - reset_assertions
+  - cdc_drops
+  - input_sequence_gaps
+  - rumble_frames_dropped
+  - sdram_refresh_stalls
+  - sdram_bank_conflicts
+
+blocks:
+
+  # ===========================================================================
+  # SYS — platform glue (fpga/rtl/platform). Hardware-gated: sys/ vendor
+  # wrappers are pinned by upstream hash post-board (ZH-000, plan 1.F).
+  # ===========================================================================
+
+  - id: SYS.PLL
+    name: Vendor PLL wrappers
+    kind: rtl
+    subsystem: platform
+    clock_domain: async
+    purpose: Instantiate the Cyclone V PLL/IP wrappers producing the gpu/sdram/video/audio clock tree; nothing else may touch clock configuration.
+    contract: design/contracts/SYS.PLL.md
+    phase: 0
+    owner_issue: ZH-000
+    inputs: [ref_clk, pll_config]
+    outputs: [gpu_clk, sdram_clk, video_clk, audio_clk, pll_locked]
+    upstream: []
+    downstream: [SYS.RESET]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: n/a (configuration wrapper)
+    reference_model: zref::SysPll
+    tests:
+      directed: tests/platform/sys_pll_directed.cpp
+      random: tests/platform/sys_pll_random.cpp
+    counters: [pll_lock_lost]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Absolute frequencies frozen post-Phase-0 (charter §25); Verilator lane uses a single conceptual clock.
+
+  - id: SYS.RESET
+    name: Reset sequencer
+    kind: rtl
+    subsystem: platform
+    clock_domain: async
+    purpose: Sequence per-domain resets after pll_locked; formal property reset-reaches-idle (every FSM returns to its idle state on reset assertion).
+    contract: design/contracts/SYS.RESET.md
+    phase: 0
+    owner_issue: ZH-000
+    inputs: [pll_locked, hard_reset_n]
+    outputs: [rst_n_gpu, rst_n_sdram, rst_n_video, rst_n_audio]
+    upstream: [SYS.PLL]
+    downstream: [SYS.CDC]
+    backpressure: none
+    latency: variable_bounded:16
+    target_throughput: n/a (sequencer)
+    reference_model: zref::ResetSequencer
+    tests:
+      directed: tests/platform/sys_reset_directed.cpp
+      random: tests/platform/sys_reset_random.cpp
+      formal: tests/formal/sys_reset_reset_reaches_idle.sby
+    counters: [reset_assertions]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Fanout to every domain's reset; only the SYS.CDC edge is drawn in the schematic.
+
+  - id: SYS.CDC
+    name: Ready/valid CDC FIFO library
+    kind: rtl
+    subsystem: platform
+    clock_domain: async
+    purpose: "The ONLY general clock-domain-crossing primitive: parameterised ready/valid async FIFOs. Any edge crossing clock domains routes through this block or a block documented as its own async bridge (rule V8)."
+    contract: design/contracts/SYS.CDC.md
+    phase: 0
+    owner_issue: ZH-000
+    inputs: [w_valid, w_data, r_ready, wr_clk, rd_clk]
+    outputs: [w_ready, r_valid, r_data]
+    upstream: [SYS.RESET]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable_bounded:4
+    target_throughput: 1 word per clock per direction
+    reference_model: zref::CdcFifo
+    tests:
+      directed: tests/platform/sys_cdc_directed.cpp
+      random: tests/platform/sys_cdc_random.cpp
+      formal: tests/formal/sys_cdc_no_data_loss.sby
+    counters: [cdc_drops]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "leaf consumer of the reset tree; instantiated by every bridge block (async_bridge: true below)."
+
+  # ===========================================================================
+  # CMD — command path (fpga/rtl/command)
+  # ===========================================================================
+
+  - id: CMD.DMA
+    name: Command DMA
+    kind: rtl
+    subsystem: command
+    clock_domain: gpu
+    purpose: Fetch sealed frame packets from the HPS-DDR ring via the framework bridge; verify CRC and epoch before any byte reaches the decoder; the documented hps→gpu async bridge for the command stream.
+    contract: design/contracts/CMD.DMA.md
+    phase: 1
+    owner_issue: ZH-007
+    inputs: [hps_ddr_burst_rd, ring_descriptor, slot_epoch]
+    outputs: [sealed_packet_bytes, dma_status]
+    upstream: [SW.CMDBUILD, MEM.HPS.BRIDGE]
+    downstream: [CMD.DECODER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: saturate one HPS-DDR burst slot per frame
+    reference_model: zref::CmdDma
+    tests:
+      directed: tests/command/cmd_dma_directed.cpp
+      random: tests/command/cmd_dma_random.cpp
+    counters: [commands, hps_ddr_bytes_by_client, deadline_faults]
+    source_ids: true
+    async_bridge: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Fail-safe order per capture_format.md §3.3 — never emits a byte of a packet whose header CRC failed.
+
+  - id: CMD.DECODER
+    name: Command decoder
+    kind: rtl
+    subsystem: command
+    clock_domain: gpu
+    purpose: Validate and dispatch semantic commands from sealed packets (generated ABI package); any malformed record becomes a safe error code, never a partial write.
+    contract: design/contracts/CMD.DECODER.md
+    phase: 1
+    owner_issue: ZH-008
+    inputs: [sealed_packet_bytes]
+    outputs: [decoded_records, decode_error]
+    upstream: [CMD.DMA]
+    downstream: [CMD.SCHEDULER, DEBUG.TRACE]
+    backpressure: ready_valid
+    latency: variable_bounded:4
+    target_throughput: 1 record per clock
+    reference_model: zref::CmdDecoder
+    tests:
+      directed: tests/command/cmd_decoder_directed.cpp
+      random: tests/command/cmd_decoder_random.cpp
+    counters: [commands]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Byte layout comes from the generated zhao_abi_pkg.sv (W4) — never hand-written.
+
+  - id: CMD.SCHEDULER
+    name: Frame-slot scheduler
+    kind: rtl
+    subsystem: command
+    clock_domain: gpu
+    purpose: Own the frame-slot FSM (FREE → CLAIMED → EXECUTING → FENCED → DONE); enforce deadlines with a fault counter, issue the completion fence, hand engine dispatch and region ownership to the engines and the memory guard.
+    contract: design/contracts/CMD.SCHEDULER.md
+    phase: 1
+    owner_issue: ZH-009
+    inputs: [decoded_records, frame_complete]
+    outputs: [engine_dispatch, slot_state, guard_policy, fence]
+    upstream: [CMD.DECODER, VIDEO.FRAMECTL]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE]
+    backpressure: credit
+    latency: variable
+    target_throughput: 1 slot transition per clock
+    reference_model: zref::CmdScheduler
+    tests:
+      directed: tests/command/cmd_scheduler_directed.cpp
+      random: tests/command/cmd_scheduler_random.cpp
+      formal: tests/formal/cmd_scheduler_slot_fsm.sby
+    counters: [frame_cycles, deadline_faults, commands]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). The dispatch fan-out mirrors charter §5's CMD → engines edges.
+
+  # ===========================================================================
+  # MEM — memory system (fpga/rtl/memory)
+  # ===========================================================================
+
+  - id: MEM.SDRAM
+    name: Local SDRAM controller
+    kind: rtl
+    subsystem: memory
+    clock_domain: sdram
+    purpose: 128 MB local BGA SDRAM controller (refresh, bank scheduling, burst shaping); the documented sdram↔gpu async bridge.
+    contract: design/contracts/MEM.SDRAM.md
+    phase: 2
+    owner_issue: ZH-004
+    inputs: [arb_req, sdram_phy]
+    outputs: [arb_rsp, sdram_phy]
+    upstream: []
+    downstream: [MEM.VRAM.ARBITER]
+    backpressure: credit
+    latency: variable
+    target_throughput: sustained read bandwidth per Phase-0 measurements
+    reference_model: zref::SdramController
+    tests:
+      directed: tests/memory/mem_sdram_directed.cpp
+      random: tests/memory/mem_sdram_random.cpp
+    counters: [sdram_refresh_stalls, sdram_bank_conflicts, vram_bytes_by_client]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Timings are board data (ZH-004); simulation model is cycle-approximate until board_truth.json exists.
+
+  - id: MEM.VRAM.ARBITER
+    name: VRAM arbiter
+    kind: rtl
+    subsystem: memory
+    clock_domain: gpu
+    purpose: Guaranteed-client-liveness arbiter between VRAM clients and the SDRAM controller; formally proven to never starve a guaranteed client.
+    contract: design/contracts/MEM.VRAM.ARBITER.md
+    phase: 2
+    owner_issue: ZH-026
+    inputs: [client_req]
+    outputs: [client_rsp, sdram_req]
+    upstream: [MEM.SDRAM, MEM.GUARD]
+    downstream: []
+    backpressure: credit
+    latency: variable
+    target_throughput: 1 accepted request per clock
+    reference_model: zref::VramArbiter
+    tests:
+      directed: tests/memory/mem_vram_arbiter_directed.cpp
+      random: tests/memory/mem_vram_arbiter_random.cpp
+      formal: tests/formal/mem_vram_arbiter_liveness.sby
+    counters: [vram_bytes_by_client, deadline_faults]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "leaf (serves MEM.GUARD requests); leaf: true semantics."
+
+  - id: MEM.HPS.BRIDGE
+    name: HPS-DDR burst bridge
+    kind: rtl
+    subsystem: memory
+    clock_domain: gpu
+    purpose: The FPGA-side client of the framework's HPS-DDR AXI/bridge port — command rings, particle state, PCM audio and the trace arena cross here.
+    contract: design/contracts/MEM.HPS.BRIDGE.md
+    phase: 1
+    owner_issue: ZH-020
+    inputs: [hps_axi, client_req]
+    outputs: [client_rsp, hps_axi]
+    upstream: [DEBUG.TRACE]
+    downstream: [CMD.DMA, PART.STATE]
+    backpressure: credit
+    latency: variable
+    target_throughput: 1 burst in flight per client
+    reference_model: zref::HpsBridge
+    tests:
+      directed: tests/memory/mem_hps_bridge_directed.cpp
+      random: tests/memory/mem_hps_bridge_random.cpp
+    counters: [hps_ddr_bytes_by_client]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: The hps↔gpu data bridge; command/particle/audio/trace traffic is accounted per client (§25).
+
+  - id: MEM.GUARD
+    name: Memory guard
+    kind: rtl
+    subsystem: memory
+    clock_domain: gpu
+    purpose: "Region/ownership checker between every fabric client and VRAM: a malformed command can never write outside the region the frame slot owns. Formally proven."
+    contract: design/contracts/MEM.GUARD.md
+    phase: 1
+    owner_issue: ZH-029
+    inputs: [client_req, guard_policy]
+    outputs: [arb_req, guard_violation]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT]
+    downstream: [MEM.VRAM.ARBITER]
+    backpressure: ready_valid
+    latency: fixed:1
+    target_throughput: 1 checked request per clock
+    reference_model: zref::MemoryGuard
+    tests:
+      directed: tests/memory/mem_guard_directed.cpp
+      random: tests/memory/mem_guard_random.cpp
+      formal: tests/formal/mem_guard_no_escape.sby
+    counters: [vram_bytes_by_client, hps_ddr_bytes_by_client]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: All VRAM traffic flows through the guard; the schematic draws the major clients only.
+
+  # ===========================================================================
+  # FIELD — Field IR sequencers (fpga/rtl/field)
+  # ===========================================================================
+
+  - id: FIELD.PROGCACHE
+    name: Field program cache
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Cache Field IR microprograms + constant tables with hash/version check; a program that fails validation is safely rejected (charter §19.4), never executed.
+    contract: design/contracts/FIELD.PROGCACHE.md
+    phase: 7
+    owner_issue: ZH-032
+    inputs: [program_bytes, hash_check]
+    outputs: [cached_program, reject_status]
+    upstream: [CMD.SCHEDULER]
+    downstream: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 instruction issue per clock per sequencer
+    reference_model: zref::ProgCache
+    tests:
+      directed: tests/field/field_progcache_directed.cpp
+      random: tests/field/field_progcache_random.cpp
+    counters: [progcach_hits, progcach_misses, programs_rejected]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Planning split (charter §6A): sequencers may merge/share ALUs post-synthesis; superseded_by will record it."
+
+  - id: FIELD.SEQ.EARTH
+    name: Earth8 field sequencer
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Evaluate Earth8 patch programs (height/material/nav/hazard field semantics) against terrain patches; implements the E profile of ops.yml.
+    contract: design/contracts/FIELD.SEQ.EARTH.md
+    phase: 7
+    owner_issue: ZH-035
+    inputs: [cached_program, patch_intake]
+    outputs: [field_results]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [TERRAIN.PATCH]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 Field IR instruction per clock
+    reference_model: zref::fieldir::interpret
+    tests:
+      directed: tests/field/field_seq_earth_directed.cpp
+      random: tests/field/field_seq_earth_random.cpp
+    counters: [field_instructions_by_profile, terrain_samples_evaluated]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Golden semantics = the single C++ interpreter (W5); RTL is its differential pen-mate.
+
+  - id: FIELD.SEQ.WARP
+    name: Warp8 field sequencer
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Evaluate Warp8 vertex-deformation programs on mesh vertices; implements the W profile of ops.yml.
+    contract: design/contracts/FIELD.SEQ.WARP.md
+    phase: 9
+    owner_issue: ZH-045
+    inputs: [cached_program, vertex_stream]
+    outputs: [displaced_vertices]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [GEOM.WARP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 Field IR instruction per clock
+    reference_model: zref::fieldir::interpret
+    tests:
+      directed: tests/field/field_seq_warp_directed.cpp
+      random: tests/field/field_seq_warp_random.cpp
+    counters: [field_instructions_by_profile]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: true
+    cut_order: 5
+    superseded_by: null
+    notes: Deferred (P9+); Warp8 throughput is cut-order 5 (§26).
+
+  - id: FIELD.SEQ.FLOW
+    name: Flow field sequencer
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Evaluate particle/force-field programs driving Myriad updates; implements the F profile of ops.yml.
+    contract: design/contracts/FIELD.SEQ.FLOW.md
+    phase: 10
+    owner_issue: ZH-042
+    inputs: [cached_program, force_queries]
+    outputs: [force_results]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [PART.UPDATE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 Field IR instruction per clock
+    reference_model: zref::fieldir::interpret
+    tests:
+      directed: tests/field/field_seq_flow_directed.cpp
+      random: tests/field/field_seq_flow_random.cpp
+    counters: [field_instructions_by_profile]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
+
+  - id: FIELD.SEQ.FORMATION
+    name: Formation field sequencer
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Evaluate transform-generation programs feeding the Transform Loom; implements the M profile of ops.yml.
+    contract: design/contracts/FIELD.SEQ.FORMATION.md
+    phase: 9
+    owner_issue: ZH-041
+    inputs: [cached_program, loom_queries]
+    outputs: [transform_samples]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [GEOM.LOOM]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 Field IR instruction per clock
+    reference_model: zref::fieldir::interpret
+    tests:
+      directed: tests/field/field_seq_formation_directed.cpp
+      random: tests/field/field_seq_formation_random.cpp
+    counters: [field_instructions_by_profile]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
+
+  - id: FIELD.SEQ.STAMP
+    name: Scar Scribe stamp sequencer
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: Evaluate Scar Scribe sheet programs (stamp placement/conversion); implements the S profile of ops.yml.
+    contract: design/contracts/FIELD.SEQ.STAMP.md
+    phase: 6
+    owner_issue: ZH-045
+    inputs: [cached_program, sheet_intake]
+    outputs: [stamp_field_results]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [SURFACE.STAMP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 Field IR instruction per clock
+    reference_model: zref::fieldir::interpret
+    tests:
+      directed: tests/field/field_seq_stamp_directed.cpp
+      random: tests/field/field_seq_stamp_random.cpp
+    counters: [field_instructions_by_profile]
+    source_ids: true
+    budget_group: field
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
+
+  # ===========================================================================
+  # INPUT (fpga/rtl/input)
+  # ===========================================================================
+
+  - id: INPUT.SNAPSHOT
+    name: Pad snapshot bridge
+    kind: rtl
+    subsystem: input
+    clock_domain: async
+    purpose: Latch pad state at the frame boundary with a monotonic sequence number and hand the canonical PadFrame to the HPS; the documented pad→hps async bridge.
+    contract: design/contracts/INPUT.SNAPSHOT.md
+    phase: 2
+    owner_issue: ZH-017
+    inputs: [pad_pins, frame_tick]
+    outputs: [pad_frame, pad_sequence]
+    upstream: [INPUT.SNAC]
+    downstream: [SW.RUNTIME.HPS]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 snapshot per frame
+    reference_model: zref::PadSnapshot
+    tests:
+      directed: tests/input/input_snapshot_directed.cpp
+      random: tests/input/input_snapshot_random.cpp
+    counters: [input_sequence_gaps]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: PadFrame layout is ABI (commands.zidl), never ad-hoc.
+
+  - id: INPUT.RUMBLE
+    name: Rumble bridge
+    kind: rtl
+    subsystem: input
+    clock_domain: async
+    purpose: Carry runtime rumble requests out to the pad; the documented hps→pad async bridge.
+    contract: design/contracts/INPUT.RUMBLE.md
+    phase: 2
+    owner_issue: ZH-017
+    inputs: [rumble_cmd]
+    outputs: [rumble_pwm]
+    upstream: [SW.RUNTIME.HPS]
+    downstream: []
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 update per frame
+    reference_model: zref::RumbleBridge
+    tests:
+      directed: tests/input/input_rumble_directed.cpp
+      random: tests/input/input_rumble_random.cpp
+    counters: [rumble_frames_dropped]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: leaf (pad PHY out).
+
+  - id: INPUT.SNAC
+    name: SNAC adapter (optional)
+    kind: rtl
+    subsystem: input
+    clock_domain: async
+    purpose: Optional PS1/SNAC peripheral adapter merging into the canonical pad snapshot path.
+    contract: design/contracts/INPUT.SNAC.md
+    phase: 2
+    owner_issue: ZH-017
+    inputs: [snac_pins]
+    outputs: [pad_pins]
+    upstream: []
+    downstream: [INPUT.SNAPSHOT]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 poll per frame
+    reference_model: zref::SnacAdapter
+    tests:
+      directed: tests/input/input_snac_directed.cpp
+      random: tests/input/input_snac_random.cpp
+    counters: [input_sequence_gaps]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: true
+    cut_order: null
+    superseded_by: null
+    notes: Deferred; registered so the ledger records the option without spending a directory.
+
+  # ===========================================================================
+  # AUDIO (fpga/rtl/audio)
+  # ===========================================================================
+
+  - id: AUDIO.FIFO
+    name: PCM audio FIFO
+    kind: rtl
+    subsystem: audio
+    clock_domain: audio
+    purpose: Read the PCM ring and cross it into the framework audio clock; underrun repeats/fades the last sample and counts it; optional boot tone. The documented mixer→audio-clock bridge.
+    contract: design/contracts/AUDIO.FIFO.md
+    phase: 2
+    owner_issue: ZH-018
+    inputs: [pcm_ring_rd, audio_clk]
+    outputs: [pcm_out, underrun_status]
+    upstream: [SW.MIXER]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable_bounded:64
+    target_throughput: 1 sample per audio clock
+    reference_model: zref::AudioFifo
+    tests:
+      directed: tests/audio/audio_fifo_directed.cpp
+      random: tests/audio/audio_fifo_random.cpp
+    counters: [audio_underruns]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: leaf (I2S/framework audio out). Q formats per spec/qformats.md (fx24 accumulators upstream, plan Q5).
+
+  # ===========================================================================
+  # VIDEO (fpga/rtl/video)
+  # ===========================================================================
+
+  - id: VIDEO.MODE
+    name: Video mode generator
+    kind: rtl
+    subsystem: video
+    clock_domain: video
+    purpose: Z60/Storm/Duo timing generators (mode table, sync/polarity, pixel clock ratios).
+    contract: design/contracts/VIDEO.MODE.md
+    phase: 2
+    owner_issue: ZH-016
+    inputs: [mode_select]
+    outputs: [timing, sync]
+    upstream: []
+    downstream: [VIDEO.SCANOUT]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 timing tick per video clock
+    reference_model: zref::VideoMode
+    tests:
+      directed: tests/video/video_mode_directed.cpp
+      random: tests/video/video_mode_random.cpp
+    counters: [scanout_starvation_cycles]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Mode constants frozen from board data (ZH-016) post-Phase-0.
+
+  - id: VIDEO.SCANOUT
+    name: Scanout engine
+    kind: rtl
+    subsystem: video
+    clock_domain: video
+    purpose: Double-buffered scanout of the resolved framebuffer with line buffers; a missed deadline repeats the previous frame; the documented gpu→video pixel-domain bridge.
+    contract: design/contracts/VIDEO.SCANOUT.md
+    phase: 2
+    owner_issue: ZH-016
+    inputs: [fb_tiles, timing]
+    outputs: [pixel_stream, frame_repeat_status]
+    upstream: [POST.COMPOSITE, VIDEO.MODE]
+    downstream: [VIDEO.SCALER, MEM.GUARD]
+    backpressure: none
+    latency: variable
+    target_throughput: 1 pixel per video clock
+    reference_model: zref::Scanout
+    tests:
+      directed: tests/video/video_scanout_directed.cpp
+      random: tests/video/video_scanout_random.cpp
+    counters: [scanout_starvation_cycles, frame_cycles]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Reads backbuffer tiles through MEM.GUARD (arbiter client).
+
+  - id: VIDEO.SCALER
+    name: Scaler feed
+    kind: rtl
+    subsystem: video
+    clock_domain: video
+    purpose: Feed the framework/MiSTer scaler output path from the native pixel stream.
+    contract: design/contracts/VIDEO.SCALER.md
+    phase: 2
+    owner_issue: ZH-016
+    inputs: [pixel_stream]
+    outputs: [scaler_out]
+    upstream: [VIDEO.SCANOUT]
+    downstream: []
+    backpressure: ready_valid
+    latency: fixed:2
+    target_throughput: 1 pixel per video clock
+    reference_model: zref::ScalerFeed
+    tests:
+      directed: tests/video/video_scaler_directed.cpp
+      random: tests/video/video_scaler_random.cpp
+    counters: [scanout_starvation_cycles]
+    source_ids: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: leaf (framework scaler consumes it).
+
+  - id: VIDEO.FRAMECTL
+    name: Frame control handshake
+    kind: rtl
+    subsystem: video
+    clock_domain: video
+    purpose: Frame-complete/frame-repeat handshake back to CMD.SCHEDULER; the documented video→gpu control bridge.
+    contract: design/contracts/VIDEO.FRAMECTL.md
+    phase: 2
+    owner_issue: ZH-016
+    inputs: [scanout_status]
+    outputs: [frame_complete, frame_repeated]
+    upstream: []
+    downstream: [CMD.SCHEDULER]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 handshake per frame
+    reference_model: zref::FrameCtl
+    tests:
+      directed: tests/video/video_framectl_directed.cpp
+      random: tests/video/video_framectl_random.cpp
+    counters: [frame_cycles, deadline_faults]
+    source_ids: true
+    async_bridge: true
+    budget_group: platform
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Closes the frame loop: scheduler claims → engines run → scanout completes → fence."
+
+  # ===========================================================================
+  # MEASURE — The Measure (fpga/rtl/measure)
+  # ===========================================================================
+
+  - id: MEASURE.GOVERNOR
+    name: Screen-error LOD governor
+    kind: rtl
+    subsystem: measure
+    clock_domain: gpu
+    purpose: Per-camera threshold traversal for LOD selection with hysteresis, minimum-hold and geomorph; feeds Mantle, Forms and Myriad LOD decisions.
+    contract: design/contracts/MEASURE.GOVERNOR.md
+    phase: 8
+    owner_issue: ZH-047
+    inputs: [screen_error_stats, dispatch]
+    outputs: [lod_targets]
+    upstream: [CMD.SCHEDULER, MEASURE.HISTOGRAM]
+    downstream: [TERRAIN.LOD, GEOM.MESHFETCH, PART.LADDER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 decision per frame per camera
+    reference_model: zref::MeasureGovernor
+    tests:
+      directed: tests/measure/measure_governor_directed.cpp
+      random: tests/measure/measure_governor_random.cpp
+    counters: [lod_representation_counts]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Hysteresis/hold constants provisional until Wound Lab evidence (charter §12).
+
+  - id: MEASURE.TOKENS
+    name: Geometry/fragment token guard
+    kind: rtl
+    subsystem: measure
+    clock_domain: gpu
+    purpose: Global token guard bounding geometry and fragment work; Duo dual-camera 45/45/10 fairness split.
+    contract: design/contracts/MEASURE.TOKENS.md
+    phase: 8
+    owner_issue: ZH-048
+    inputs: [dispatch, token_return]
+    outputs: [token_grant, token_denial]
+    upstream: [CMD.SCHEDULER]
+    downstream: [GEOM.BINNER, RASTER.FRAGMENT]
+    backpressure: credit
+    latency: fixed:1
+    target_throughput: 1 grant decision per clock
+    reference_model: zref::MeasureTokens
+    tests:
+      directed: tests/measure/measure_tokens_directed.cpp
+      random: tests/measure/measure_tokens_random.cpp
+      formal: tests/formal/measure_tokens_fairness.sby
+    counters: [lod_representation_counts, triangles_culled]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Fairness property formally checked once SBY lane is populated.
+
+  - id: MEASURE.HISTOGRAM
+    name: Error histogram
+    kind: rtl
+    subsystem: measure
+    clock_domain: gpu
+    purpose: Error-bucket histogram and cutoff feedback ("Version 2" quality loop) feeding the governor.
+    contract: design/contracts/MEASURE.HISTOGRAM.md
+    phase: 8
+    owner_issue: ZH-049
+    inputs: [fragment_error]
+    outputs: [error_buckets]
+    upstream: [RASTER.FRAGMENT]
+    downstream: [MEASURE.GOVERNOR]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 bucket update per fragment batch
+    reference_model: zref::MeasureHistogram
+    tests:
+      directed: tests/measure/measure_histogram_directed.cpp
+      random: tests/measure/measure_histogram_random.cpp
+    counters: [lod_representation_counts]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Charter §12 calls this Version 2: registered now, built late."
+
+  # ===========================================================================
+  # TERRAIN — Mantle (fpga/rtl/terrain)
+  # ===========================================================================
+
+  - id: TERRAIN.PATCH
+    name: Terrain patch state engine
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Own patch state layers and the bounded field-list intake with bake/compose/reject-on-overflow (charter §11.4); the Mantle entry point.
+    contract: design/contracts/TERRAIN.PATCH.md
+    phase: 6
+    owner_issue: ZH-033
+    inputs: [dispatch, field_results, baked_scars]
+    outputs: [patch_state, subpatch_requests]
+    upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE]
+    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 patch-layer update per clock
+    reference_model: zref::TerrainPatch
+    tests:
+      directed: tests/terrain/terrain_patch_directed.cpp
+      random: tests/terrain/terrain_patch_random.cpp
+    counters: [terrain_samples_evaluated]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Overflow policy is reject, never silently drop (§11.4).
+
+  - id: TERRAIN.TESS
+    name: Crack-safe tessellator
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Subpatch tessellation at crack-safe resolution with stitching and geomorph between levels.
+    contract: design/contracts/TERRAIN.TESS.md
+    phase: 6
+    owner_issue: ZH-034
+    inputs: [patch_state, lod_target]
+    outputs: [terrain_mesh]
+    upstream: [TERRAIN.PATCH]
+    downstream: [TERRAIN.NORMALS, FORGE.CLIFF]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 emitted vertex per clock
+    reference_model: zref::TerrainTess
+    tests:
+      directed: tests/terrain/terrain_tess_directed.cpp
+      random: tests/terrain/terrain_tess_random.cpp
+    counters: [terrain_triangles_emitted]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Crack-safety is a formal candidate (stitch invariants).
+
+  - id: TERRAIN.NORMALS
+    name: Deformed normals
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Recompute normals over the deformed height field for terrain shading.
+    contract: design/contracts/TERRAIN.NORMALS.md
+    phase: 6
+    owner_issue: ZH-038
+    inputs: [terrain_mesh]
+    outputs: [terrain_normals]
+    upstream: [TERRAIN.TESS]
+    downstream: [TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 normal per vertex per clock
+    reference_model: zref::TerrainNormals
+    tests:
+      directed: tests/terrain/terrain_normals_directed.cpp
+      random: tests/terrain/terrain_normals_random.cpp
+    counters: [terrain_samples_evaluated]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Q formats per spec/qformats.md height16/normal entries.
+
+  - id: TERRAIN.VELOCITY
+    name: Height velocity output
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Produce the height-velocity field for gameplay (Earth8 velocity sink target) and publish it to VRAM for CPU-side collision.
+    contract: design/contracts/TERRAIN.VELOCITY.md
+    phase: 7
+    owner_issue: ZH-039
+    inputs: [patch_state]
+    outputs: [height_velocity]
+    upstream: [TERRAIN.PATCH]
+    downstream: [MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 velocity sample per clock
+    reference_model: zref::TerrainVelocity
+    tests:
+      directed: tests/terrain/terrain_velocity_directed.cpp
+      random: tests/terrain/terrain_velocity_random.cpp
+    counters: [terrain_samples_evaluated]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Driven by the DCURVE-based Earth8 velocity lane (plan 1.D).
+
+  - id: TERRAIN.BAKE
+    name: Persistent scar bake
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Bake Scar Scribe stamps into persistent terrain scar state (canonical scars mirrored by SW.CPUCOLL).
+    contract: design/contracts/TERRAIN.BAKE.md
+    phase: 7
+    owner_issue: ZH-036
+    inputs: [stamp_results]
+    outputs: [baked_scars]
+    upstream: [SURFACE.STAMP]
+    downstream: [TERRAIN.PATCH]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 bake texel per clock
+    reference_model: zref::TerrainBake
+    tests:
+      directed: tests/terrain/terrain_bake_directed.cpp
+      random: tests/terrain/terrain_bake_random.cpp
+    counters: [surface_texels_touched]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Canonical-scar ownership is shared with SW.CPUCOLL (ZH-036); the bake is capture-exact.
+
+  - id: TERRAIN.LOD
+    name: Terrain LOD selector
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Projected-error LOD selection with the deformed-height cache built once per frame; consumes governor targets.
+    contract: design/contracts/TERRAIN.LOD.md
+    phase: 6
+    owner_issue: ZH-050
+    inputs: [patch_state, lod_targets]
+    outputs: [lod_decisions]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR]
+    downstream: [TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 decision per patch per frame
+    reference_model: zref::TerrainLod
+    tests:
+      directed: tests/terrain/terrain_lod_directed.cpp
+      random: tests/terrain/terrain_lod_random.cpp
+    counters: [lod_representation_counts, terrain_triangles_emitted]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Geomorph transitions keep cracks invisible (§11).
+
+  - id: TERRAIN.PROJECT
+    name: Terrain dual-view projection
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: Project the shared terrain cache into both camera views (Duo); select Mosaic texture candidates.
+    contract: design/contracts/TERRAIN.PROJECT.md
+    phase: 6
+    owner_issue: ZH-051
+    inputs: [lod_decisions, terrain_normals]
+    outputs: [terrain_primitives, mosaic_candidates]
+    upstream: [TERRAIN.LOD, TERRAIN.NORMALS]
+    downstream: [GEOM.CLIP, TEXTURE.MOSAIC]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 projected vertex per clock
+    reference_model: zref::TerrainProject
+    tests:
+      directed: tests/terrain/terrain_project_directed.cpp
+      random: tests/terrain/terrain_project_random.cpp
+    counters: [terrain_triangles_emitted]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Kept separate from GEOM.PROJECT by architect ruling (1.D): merging later is a trivial edit."
+
+  # ===========================================================================
+  # SURFACE — Scar Scribe (fpga/rtl/surface)
+  # ===========================================================================
+
+  - id: SURFACE.SHEET
+    name: Surface sheet store
+    kind: rtl
+    subsystem: surface
+    clock_domain: gpu
+    purpose: Store 64×64 per-patch tag+strength sheets with residency tracking; the substrate Scar Scribe stamps into.
+    contract: design/contracts/SURFACE.SHEET.md
+    phase: 6
+    owner_issue: ZH-031
+    inputs: [sheet_requests]
+    outputs: [sheet_pages, residency_status]
+    upstream: []
+    downstream: [SURFACE.STAMP, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 sheet texel per clock
+    reference_model: zref::SurfaceSheet
+    tests:
+      directed: tests/surface/surface_sheet_directed.cpp
+      random: tests/surface/surface_sheet_random.cpp
+    counters: [surface_texels_touched]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Residency policy per §11; overflow rejects the stamp, never partial-writes.
+
+  - id: SURFACE.STAMP
+    name: Deterministic stamp engine
+    kind: rtl
+    subsystem: surface
+    clock_domain: gpu
+    purpose: Execute stamp primitives (circle/ring/spline/brush) with material conversion, age/decay and capture-exact ordering; blend modes are the five stamp modes of ops.yml.
+    contract: design/contracts/SURFACE.STAMP.md
+    phase: 6
+    owner_issue: ZH-052
+    inputs: [dispatch, stamp_field_results, sheet_pages]
+    outputs: [stamp_results]
+    upstream: [CMD.SCHEDULER, FIELD.SEQ.STAMP, SURFACE.SHEET]
+    downstream: [TERRAIN.BAKE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 stamp texel per clock
+    reference_model: zref::SurfaceStamp
+    tests:
+      directed: tests/surface/surface_stamp_directed.cpp
+      random: tests/surface/surface_stamp_random.cpp
+    counters: [surface_stamps, surface_texels_touched]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Capture-exact: identical inputs replay to identical sheets (§20 discipline)."
+
+  # ===========================================================================
+  # GEOM — Ten Thousand Forms (fpga/rtl/geometry)
+  # ===========================================================================
+
+  - id: GEOM.MESHFETCH
+    name: Meshlet fetch and cull
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Fetch meshlet descriptors, cull against camera visibility sectors and decide LOD per governor targets.
+    contract: design/contracts/GEOM.MESHFETCH.md
+    phase: 8
+    owner_issue: ZH-037
+    inputs: [dispatch, lod_targets]
+    outputs: [meshlet_stream]
+    upstream: [CMD.SCHEDULER, MEASURE.GOVERNOR]
+    downstream: [GEOM.VDECODE, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 meshlet descriptor per clock
+    reference_model: zref::MeshFetch
+    tests:
+      directed: tests/geometry/geom_meshfetch_directed.cpp
+      random: tests/geometry/geom_meshfetch_random.cpp
+    counters: [meshlets_fetched, triangles_culled]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Meshlet limits are Phase-0 data (P2 risk 1) — schema fields stay unfrozen.
+
+  - id: GEOM.VDECODE
+    name: Vertex decode
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Fetch and decode compressed vertex data (positions/normals/UV) into the skinning format.
+    contract: design/contracts/GEOM.VDECODE.md
+    phase: 8
+    owner_issue: ZH-053
+    inputs: [meshlet_stream]
+    outputs: [vertex_batch]
+    upstream: [GEOM.MESHFETCH]
+    downstream: [GEOM.SKIN]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 decoded vertex per clock
+    reference_model: zref::VertexDecode
+    tests:
+      directed: tests/geometry/geom_vdecode_directed.cpp
+      random: tests/geometry/geom_vdecode_random.cpp
+    counters: [vertices_decoded]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Compression format owned by SW.TOOLS.ASSET (pack side) — one spec, two ends.
+
+  - id: GEOM.SKIN
+    name: Skinning stage
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Rigid and two-weight skinning of decoded vertices into world space.
+    contract: design/contracts/GEOM.SKIN.md
+    phase: 9
+    owner_issue: ZH-054
+    inputs: [vertex_batch, bone_palette]
+    outputs: [skinned_vertices]
+    upstream: [GEOM.VDECODE]
+    downstream: [GEOM.LOOM, GEOM.WCACHE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 skinned vertex per clock
+    reference_model: zref::Skin
+    tests:
+      directed: tests/geometry/geom_skin_directed.cpp
+      random: tests/geometry/geom_skin_random.cpp
+    counters: [vertices_transformed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Q formats per spec/qformats.md (A3c screen widths downstream).
+
+  - id: GEOM.LOOM
+    name: Transform Loom
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Bounded transform graph evaluation (orbit/aim/billboard/oscillator/spline/gait/formations) producing instance transforms; consumes formation-field samples.
+    contract: design/contracts/GEOM.LOOM.md
+    phase: 9
+    owner_issue: ZH-041
+    inputs: [skinned_vertices, transform_graph, transform_samples]
+    outputs: [instanced_transforms]
+    upstream: [GEOM.SKIN, FIELD.SEQ.FORMATION]
+    downstream: [GEOM.WARP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 transform per clock
+    reference_model: zref::TransformLoom
+    tests:
+      directed: tests/geometry/geom_loom_directed.cpp
+      random: tests/geometry/geom_loom_random.cpp
+      formal: tests/formal/geom_loom_graph_bounds.sby
+    counters: [vertices_transformed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Bounded graph: cycle/depth limits are spec constants; overflow degrades, never hangs."
+
+  - id: GEOM.WARP
+    name: Warp8 application stage
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Apply Warp8 deformation programs to instanced vertices (consumes FIELD.SEQ.WARP results).
+    contract: design/contracts/GEOM.WARP.md
+    phase: 9
+    owner_issue: ZH-045
+    inputs: [instanced_transforms, displaced_vertices]
+    outputs: [warped_vertices]
+    upstream: [GEOM.LOOM, FIELD.SEQ.WARP]
+    downstream: [GEOM.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 warped vertex per clock
+    reference_model: zref::GeomWarp
+    tests:
+      directed: tests/geometry/geom_warp_directed.cpp
+      random: tests/geometry/geom_warp_random.cpp
+    counters: [vertices_transformed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: true
+    cut_order: 5
+    superseded_by: null
+    notes: Warp8 throughput is cut-order 5 (§26).
+
+  - id: GEOM.WCACHE
+    name: World-space vertex cache
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Cache world-space/post-transform vertices as the dual-view sharing point (compute once, project twice).
+    contract: design/contracts/GEOM.WCACHE.md
+    phase: 8
+    owner_issue: ZH-040
+    inputs: [skinned_vertices]
+    outputs: [cached_vertices]
+    upstream: [GEOM.SKIN]
+    downstream: [GEOM.PROJECT]
+    backpressure: ready_valid
+    latency: variable_bounded:64
+    target_throughput: 1 cache lookup per clock
+    reference_model: zref::WorldCache
+    tests:
+      directed: tests/geometry/geom_wcache_directed.cpp
+      random: tests/geometry/geom_wcache_random.cpp
+      formal: tests/formal/geom_wcache_arena_bounds.sby
+    counters: [cache_hits, cache_misses, vertices_transformed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Formal arena-bounds property candidate (P2 V-list).
+
+  - id: GEOM.PROJECT
+    name: Dual-view projection
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Camera 0/1 projection + lighting for cached or warped vertices; screen-space output per A3c widths (S 12.8, s64 edge setup).
+    contract: design/contracts/GEOM.PROJECT.md
+    phase: 8
+    owner_issue: ZH-055
+    inputs: [warped_vertices, cached_vertices, camera_pair]
+    outputs: [view_vertices]
+    upstream: [GEOM.WARP, GEOM.WCACHE]
+    downstream: [GEOM.CLIP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 projected vertex per clock
+    reference_model: zref::GeomProject
+    tests:
+      directed: tests/geometry/geom_project_directed.cpp
+      random: tests/geometry/geom_project_random.cpp
+    counters: [vertices_transformed, triangles_submitted]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Kept separate from TERRAIN.PROJECT by architect ruling (1.D).
+
+  - id: GEOM.CLIP
+    name: Clip and cull
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Near-plane + guard-band clipping (±2048 px), backface cull, scissor/viewport test. NEVER CUT (§26).
+    contract: design/contracts/GEOM.CLIP.md
+    phase: 5
+    owner_issue: ZH-056
+    inputs: [view_vertices]
+    outputs: [clipped_triangles]
+    upstream: [GEOM.PROJECT, TERRAIN.PROJECT]
+    downstream: [GEOM.SETUP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 accepted triangle per clock
+    reference_model: zref::Clip
+    tests:
+      directed: tests/geometry/geom_clip_directed.cpp
+      random: tests/geometry/geom_clip_random.cpp
+    counters: [triangles_submitted, triangles_clipped, triangles_culled]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Guard band ±2048 px ratified (A3c); fixed-point clipping exactly per reference.
+
+  - id: GEOM.SETUP
+    name: Triangle setup
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Screen-space triangle setup (edge coefficients, gradients) for the tile renderer; accepts geometry, Forge and polygon-particle packets alike.
+    contract: design/contracts/GEOM.SETUP.md
+    phase: 5
+    owner_issue: ZH-057
+    inputs: [clipped_triangles, forge_primitives, expanded_particles]
+    outputs: [setup_triangles]
+    upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.CLIFF, PART.EXPAND]
+    downstream: [GEOM.BINNER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 setup triangle per clock
+    reference_model: zref::Setup
+    tests:
+      directed: tests/geometry/geom_setup_directed.cpp
+      random: tests/geometry/geom_setup_random.cpp
+    counters: [triangles_submitted]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: In-tile stepping s32, edge setup s64 (A3c).
+
+  - id: GEOM.BINNER
+    name: Tile binner
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Bin setup triangles into 16×16 tile chunked lists with safe overflow; formally bounded arena.
+    contract: design/contracts/GEOM.BINNER.md
+    phase: 5
+    owner_issue: ZH-058
+    inputs: [setup_triangles, token_grant]
+    outputs: [tile_lists]
+    upstream: [GEOM.SETUP, MEASURE.TOKENS]
+    downstream: [RASTER.EDGEWALK]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 bin reference per clock
+    reference_model: zref::Binner
+    tests:
+      directed: tests/geometry/geom_binner_directed.cpp
+      random: tests/geometry/geom_binner_random.cpp
+      formal: tests/formal/geom_binner_arena_bounds.sby
+    counters: [tile_references, max_tile_list_depth, triangles_culled]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Safe overflow: excess triangles degrade to next-frame, never scribble."
+
+  # ===========================================================================
+  # RASTER — tile renderer (fpga/rtl/raster)
+  # ===========================================================================
+
+  - id: RASTER.TILESTORE
+    name: Tile store
+    kind: rtl
+    subsystem: raster
+    clock_domain: gpu
+    purpose: Ping-pong 16×16 tile RAM at 64bpp with clear; the color/Z/stencil working set of the tile renderer.
+    contract: design/contracts/RASTER.TILESTORE.md
+    phase: 4
+    owner_issue: ZH-021
+    inputs: [tile_write, tile_clear]
+    outputs: [tile_read]
+    upstream: []
+    downstream: [RASTER.FRAGMENT]
+    backpressure: ready_valid
+    latency: fixed:1
+    target_throughput: 1 tile access per clock
+    reference_model: zref::TileStore
+    tests:
+      directed: tests/raster/raster_tilestore_directed.cpp
+      random: tests/raster/raster_tilestore_random.cpp
+    counters: [tile_references]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: M10K budget per §7.3; ping-pong hides resolve latency.
+
+  - id: RASTER.EDGEWALK
+    name: Edge walker
+    kind: rtl
+    subsystem: raster
+    clock_domain: gpu
+    purpose: Walk triangle edges and produce exact top-left coverage masks for the fragment pipeline.
+    contract: design/contracts/RASTER.EDGEWALK.md
+    phase: 4
+    owner_issue: ZH-022
+    inputs: [tile_lists]
+    outputs: [covered_fragments]
+    upstream: [GEOM.BINNER]
+    downstream: [RASTER.EARLYZ]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 coverage set per clock
+    reference_model: zref::EdgeWalk
+    tests:
+      directed: tests/raster/raster_edgewalk_directed.cpp
+      random: tests/raster/raster_edgewalk_random.cpp
+      formal: tests/formal/raster_edgewalk_top_left.sby
+    counters: [covered_fragments]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Top-left rule exactness is a formal candidate (ZH-023 covers fill conventions).
+
+  - id: RASTER.EARLYZ
+    name: Early-Z reject
+    kind: rtl
+    subsystem: raster
+    clock_domain: gpu
+    purpose: Early-Z rejection plus coarse transparent-depth bins; kills occluded fragments before shading.
+    contract: design/contracts/RASTER.EARLYZ.md
+    phase: 5
+    owner_issue: ZH-059
+    inputs: [covered_fragments]
+    outputs: [shaded_candidates, z_reject]
+    upstream: [RASTER.EDGEWALK]
+    downstream: [RASTER.FRAGMENT]
+    backpressure: ready_valid
+    latency: fixed:1
+    target_throughput: 1 reject decision per clock
+    reference_model: zref::EarlyZ
+    tests:
+      directed: tests/raster/raster_earlyz_directed.cpp
+      random: tests/raster/raster_earlyz_random.cpp
+    counters: [early_z_rejects, covered_fragments]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Kept separate from RASTER.FRAGMENT by architect ruling (1.D).
+
+  - id: RASTER.FRAGMENT
+    name: Fragment pipeline
+    kind: rtl
+    subsystem: raster
+    clock_domain: gpu
+    purpose: Shade one covered fragment and perform depth/stencil/blend/fog — the charter §4 exemplar block.
+    contract: design/contracts/RASTER.FRAGMENT.md
+    phase: 4
+    owner_issue: ZH-025
+    inputs: [shaded_candidates, tile_read, texture_samples, soft_particles]
+    outputs: [tile_write, fragment_error]
+    upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS]
+    downstream: [RASTER.RESOLVE, TEXTURE.TMU, TEXTURE.AUX, MEASURE.HISTOGRAM]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 accepted fast-path fragment per clock
+    reference_model: zref::FragmentPipeline
+    tests:
+      directed: tests/raster/raster_fragment_directed.cpp
+      random: tests/raster/raster_fragment_random.cpp
+    counters: [covered_fragments, blended_fragments]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Fixed-point blend exactly per spec/qformats.md; no floating-point anywhere in the path (§26).
+
+  - id: RASTER.RESOLVE
+    name: Tile resolve
+    kind: rtl
+    subsystem: raster
+    clock_domain: gpu
+    purpose: Ordered-dither RGB565 resolve of finished tiles and the tile-CRC handoff to DEBUG.CRC / scanout.
+    contract: design/contracts/RASTER.RESOLVE.md
+    phase: 4
+    owner_issue: ZH-024
+    inputs: [resolved_tile_trigger, tile_read]
+    outputs: [fb_tiles, tile_crc]
+    upstream: [RASTER.FRAGMENT]
+    downstream: [DEBUG.CRC, POST.GATHER, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 resolved tile per pass
+    reference_model: zref::TileResolve
+    tests:
+      directed: tests/raster/raster_resolve_directed.cpp
+      random: tests/raster/raster_resolve_random.cpp
+    counters: [tile_references]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Dither matrix is a generated table (W3 fixgen), never hand-typed.
+
+  # ===========================================================================
+  # TEXTURE (fpga/rtl/texture)
+  # ===========================================================================
+
+  - id: TEXTURE.TMU
+    name: Primary TMU
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: "The one primary texture unit: nearest/bilinear/mip/CLUT/direct/wrap modes (§26 forbids a second unrestricted TMU)."
+    contract: design/contracts/TEXTURE.TMU.md
+    phase: 5
+    owner_issue: ZH-027
+    inputs: [texture_requests, cached_texels, mosaic_pick]
+    outputs: [texture_samples]
+    upstream: [RASTER.FRAGMENT, TEXTURE.CACHE, TEXTURE.MOSAIC]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable_bounded:16
+    target_throughput: 1 sample per clock (bilinear = 1 request)
+    reference_model: zref::Tmu
+    tests:
+      directed: tests/texture/texture_tmu_directed.cpp
+      random: tests/texture/texture_tmu_random.cpp
+    counters: [texture_samples]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Sample modes are spec constants; secondary decal modes are cut-order 7 (§26).
+
+  - id: TEXTURE.AUX
+    name: Restricted auxiliary source
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: Restricted aux texel source (surface sheets, light/shadow compare, distortion) — deliberately NOT a general second TMU (§26).
+    contract: design/contracts/TEXTURE.AUX.md
+    phase: 6
+    owner_issue: ZH-060
+    inputs: [aux_requests]
+    outputs: [aux_samples]
+    upstream: [RASTER.FRAGMENT]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable_bounded:8
+    target_throughput: 1 aux sample per clock
+    reference_model: zref::AuxSource
+    tests:
+      directed: tests/texture/texture_aux_directed.cpp
+      random: tests/texture/texture_aux_random.cpp
+    counters: [texture_samples]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: 2
+    superseded_by: null
+    notes: Cut-order 2 (auxiliary filtering, §26).
+
+  - id: TEXTURE.CACHE
+    name: Texture/material cache
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: M10K-backed texture/palette/material cache with tag checks and hit/miss counters; fetches misses from VRAM through the guard.
+    contract: design/contracts/TEXTURE.CACHE.md
+    phase: 5
+    owner_issue: ZH-061
+    inputs: [miss_addresses]
+    outputs: [cached_texels, fill_requests]
+    upstream: []
+    downstream: [TEXTURE.TMU, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 cache access per clock
+    reference_model: zref::TextureCache
+    tests:
+      directed: tests/texture/texture_cache_directed.cpp
+      random: tests/texture/texture_cache_random.cpp
+    counters: [cache_hits, cache_misses]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: M10K budget per §7.3; capacity frozen post-Phase-0.
+
+  - id: TEXTURE.MOSAIC
+    name: Terrain Mosaic selector
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: Stable procedural pattern picking the terrain texture candidate; yields exactly one primary sample per texel.
+    contract: design/contracts/TEXTURE.MOSAIC.md
+    phase: 6
+    owner_issue: ZH-030
+    inputs: [mosaic_candidates]
+    outputs: [mosaic_pick]
+    upstream: [TERRAIN.PROJECT]
+    downstream: [TEXTURE.TMU]
+    backpressure: ready_valid
+    latency: fixed:2
+    target_throughput: 1 candidate pick per clock
+    reference_model: zref::Mosaic
+    tests:
+      directed: tests/texture/texture_mosaic_directed.cpp
+      random: tests/texture/texture_mosaic_random.cpp
+    counters: [texture_samples]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Determinism of the pattern is a capture-exact requirement.
+
+  # ===========================================================================
+  # PART — Myriad (fpga/rtl/particles)
+  # ===========================================================================
+
+  - id: PART.STATE
+    name: Particle state stream
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Stream 128-bit particle state (provisional packing, plan Q3) from HPS DDR, write back spawned/died particles.
+    contract: design/contracts/PART.STATE.md
+    phase: 10
+    owner_issue: ZH-042
+    inputs: [dispatch, state_fill, spawn_results]
+    outputs: [particle_batch, state_drain]
+    upstream: [CMD.SCHEDULER, MEM.HPS.BRIDGE, PART.SPAWN]
+    downstream: [PART.UPDATE, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 particle per clock
+    reference_model: zref::ParticleState
+    tests:
+      directed: tests/particles/part_state_directed.cpp
+      random: tests/particles/part_state_random.cpp
+    counters: [polygon_particles, hps_ddr_bytes_by_client]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: particle128 layout provisional (charter §13); Phase 10 revisits seed starvation.
+
+  - id: PART.UPDATE
+    name: Particle update
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Fixed integration recipes (integrate/gravity/drag/attract/orbit/vortex/wind/shockwave/spline-flow) driven by flow-field results.
+    contract: design/contracts/PART.UPDATE.md
+    phase: 10
+    owner_issue: ZH-062
+    inputs: [particle_batch, force_results]
+    outputs: [updated_particles]
+    upstream: [PART.STATE, FIELD.SEQ.FLOW]
+    downstream: [PART.COLLIDE, PART.SPAWN]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 particle update per clock
+    reference_model: zref::ParticleUpdate
+    tests:
+      directed: tests/particles/part_update_directed.cpp
+      random: tests/particles/part_update_random.cpp
+    counters: [polygon_particles, soft_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Recipes are spec constants; forces come from FIELD.SEQ.FLOW, never ad-hoc math.
+
+  - id: PART.COLLIDE
+    name: Particle collision
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Plane and heightfield collision following the LIVE deformed terrain; bounce/slide/stick/die transitions.
+    contract: design/contracts/PART.COLLIDE.md
+    phase: 10
+    owner_issue: ZH-063
+    inputs: [updated_particles, patch_state]
+    outputs: [collided_particles]
+    upstream: [PART.UPDATE, TERRAIN.PATCH]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 collision test per clock
+    reference_model: zref::ParticleCollide
+    tests:
+      directed: tests/particles/part_collide_directed.cpp
+      random: tests/particles/part_collide_random.cpp
+    counters: [polygon_particles, soft_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: leaf (results return through PART.STATE's writeback path).
+
+  - id: PART.SPAWN
+    name: Deterministic child spawn
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Deterministic child-particle spawning (seeded, ordered, budgeted) writing back into the state stream.
+    contract: design/contracts/PART.SPAWN.md
+    phase: 10
+    owner_issue: ZH-064
+    inputs: [updated_particles]
+    outputs: [spawn_results]
+    upstream: [PART.UPDATE]
+    downstream: [PART.STATE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 spawn decision per clock
+    reference_model: zref::ParticleSpawn
+    tests:
+      directed: tests/particles/part_spawn_directed.cpp
+      random: tests/particles/part_spawn_random.cpp
+    counters: [polygon_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "Determinism: identical state+program ⇒ identical children (capture-exact)."
+
+  - id: PART.LADDER
+    name: Representation ladder
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Choose each particle's representation by projected size and budget (soft sprite vs streak vs polygon particle), consuming governor targets.
+    contract: design/contracts/PART.LADDER.md
+    phase: 10
+    owner_issue: ZH-043
+    inputs: [lod_targets, particle_metrics]
+    outputs: [ladder_assignments]
+    upstream: [MEASURE.GOVERNOR]
+    downstream: [PART.EXPAND, PART.SOFT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 ladder decision per clock
+    reference_model: zref::RepresentationLadder
+    tests:
+      directed: tests/particles/part_ladder_directed.cpp
+      random: tests/particles/part_ladder_random.cpp
+    counters: [lod_representation_counts, polygon_particles, soft_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Ladder thresholds provisional until Phase-10 evidence.
+
+  - id: PART.EXPAND
+    name: Polygon-particle expansion
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Expand polygon-particle instances into normal geometry packets for the setup stage.
+    contract: design/contracts/PART.EXPAND.md
+    phase: 10
+    owner_issue: ZH-065
+    inputs: [ladder_assignments]
+    outputs: [expanded_particles]
+    upstream: [PART.LADDER]
+    downstream: [GEOM.SETUP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 expanded particle per clock
+    reference_model: zref::ParticleExpand
+    tests:
+      directed: tests/particles/part_expand_directed.cpp
+      random: tests/particles/part_expand_random.cpp
+    counters: [polygon_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Kept separate from PART.SOFT by architect ruling (1.D).
+
+  - id: PART.SOFT
+    name: Soft particle endpoint
+    kind: rtl
+    subsystem: particles
+    clock_domain: gpu
+    purpose: Soft sprite/streak endpoint feeding the fragment pipeline's soft-particle blend path.
+    contract: design/contracts/PART.SOFT.md
+    phase: 10
+    owner_issue: ZH-066
+    inputs: [ladder_assignments]
+    outputs: [soft_particles]
+    upstream: [PART.LADDER]
+    downstream: [RASTER.FRAGMENT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 soft sprite per clock
+    reference_model: zref::SoftParticles
+    tests:
+      directed: tests/particles/part_soft_directed.cpp
+      random: tests/particles/part_soft_random.cpp
+    counters: [soft_particles]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Depth-fade math per spec/qformats.md.
+
+  # ===========================================================================
+  # FORGE — Primitive Forge (fpga/rtl/forge)
+  # ===========================================================================
+
+  - id: FORGE.PRIM
+    name: Procedural primitives
+    kind: rtl
+    subsystem: forge
+    clock_domain: gpu
+    purpose: Ribbons, tubes, radial shells, rings, chains, shard bursts, billboard sheets, spline walls, cones — bounded subdivision with screen-error LOD.
+    contract: design/contracts/FORGE.PRIM.md
+    phase: 11
+    owner_issue: ZH-044
+    inputs: [dispatch]
+    outputs: [forge_primitives]
+    upstream: [CMD.SCHEDULER]
+    downstream: [GEOM.SETUP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 emitted vertex per clock
+    reference_model: zref::ForgePrim
+    tests:
+      directed: tests/forge/forge_prim_directed.cpp
+      random: tests/forge/forge_prim_random.cpp
+    counters: [triangles_submitted]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Subdivision caps are spec constants; overflow degrades gracefully.
+
+  - id: FORGE.CLIFF
+    name: Terrain cliffs and skirts
+    kind: rtl
+    subsystem: forge
+    clock_domain: gpu
+    purpose: Generate cliff/skirt geometry hanging off tessellated terrain edges (hides LOD seams at world edges).
+    contract: design/contracts/FORGE.CLIFF.md
+    phase: 6
+    owner_issue: ZH-067
+    inputs: [terrain_mesh]
+    outputs: [forge_primitives]
+    upstream: [TERRAIN.TESS]
+    downstream: [GEOM.SETUP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 skirt vertex per clock
+    reference_model: zref::ForgeCliff
+    tests:
+      directed: tests/forge/forge_cliff_directed.cpp
+      random: tests/forge/forge_cliff_random.cpp
+    counters: [triangles_submitted]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Skirt depth from terrain LOD delta, not a tunable.
+
+  # ===========================================================================
+  # TWOD — Twin Horizons + HUD (fpga/rtl/compositor)
+  # ===========================================================================
+
+  - id: TWOD.PLANE
+    name: Twin Horizons planes
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: Two scanout/tile-aware world planes (affine/scroll sky, water/lava, fog sheet, world-space depth plane).
+    contract: design/contracts/TWOD.PLANE.md
+    phase: 11
+    owner_issue: ZH-068
+    inputs: [dispatch]
+    outputs: [plane_fragments]
+    upstream: [CMD.SCHEDULER]
+    downstream: [POST.COMPOSITE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 plane texel per clock
+    reference_model: zref::TwoPlanes
+    tests:
+      directed: tests/compositor/twod_plane_directed.cpp
+      random: tests/compositor/twod_plane_random.cpp
+    counters: [blended_fragments]
+    source_ids: true
+    budget_group: twod_post
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: 4
+    superseded_by: null
+    notes: Second world-space plane mode is cut-order 4 (§26).
+
+  - id: TWOD.SPRITE
+    name: HUD sprite engine
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: "HUD overlay sprites: descriptors, affine, CLUT+direct, text windows, heat maps; composited after glow/distortion."
+    contract: design/contracts/TWOD.SPRITE.md
+    phase: 11
+    owner_issue: ZH-069
+    inputs: [dispatch]
+    outputs: [sprite_fragments]
+    upstream: [CMD.SCHEDULER]
+    downstream: [POST.COMPOSITE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 sprite texel per clock
+    reference_model: zref::HudSprites
+    tests:
+      directed: tests/compositor/twod_sprite_directed.cpp
+      random: tests/compositor/twod_sprite_random.cpp
+    counters: [blended_fragments, texture_samples]
+    source_ids: true
+    budget_group: twod_post
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Text/heat-map tiles via the TMU's CLUT path only — no private sampler.
+
+  # ===========================================================================
+  # POST — Mirror Gate (fpga/rtl/compositor)
+  # ===========================================================================
+
+  - id: POST.GATHER
+    name: Glow/distortion gather
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: Accumulate low-resolution glow, distortion-XY and outline buffers from the resolved frame.
+    contract: design/contracts/POST.GATHER.md
+    phase: 11
+    owner_issue: ZH-046
+    inputs: [dispatch, fb_tiles]
+    outputs: [lowres_buffers]
+    upstream: [CMD.SCHEDULER, RASTER.RESOLVE]
+    downstream: [POST.COMPOSITE, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 gather texel per clock
+    reference_model: zref::PostGather
+    tests:
+      directed: tests/compositor/post_gather_directed.cpp
+      random: tests/compositor/post_gather_random.cpp
+    counters: [vram_bytes_by_client]
+    source_ids: true
+    budget_group: twod_post
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: 6
+    superseded_by: null
+    notes: Buffer precision is cut-order 6 (§26).
+
+  - id: POST.COMPOSITE
+    name: Compositor
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: Bloom, haze, shockwave, refraction, grading, palette and flash composition of 3D frame + planes + sprites into the scanout framebuffer.
+    contract: design/contracts/POST.COMPOSITE.md
+    phase: 11
+    owner_issue: ZH-070
+    inputs: [dispatch, lowres_buffers, plane_fragments, sprite_fragments]
+    outputs: [fb_tiles]
+    upstream: [CMD.SCHEDULER, POST.GATHER, TWOD.PLANE, TWOD.SPRITE]
+    downstream: [VIDEO.SCANOUT, POST.ECHO]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 composited pixel per clock
+    reference_model: zref::PostComposite
+    tests:
+      directed: tests/compositor/post_composite_directed.cpp
+      random: tests/compositor/post_composite_random.cpp
+    counters: [covered_fragments, blended_fragments]
+    source_ids: true
+    budget_group: twod_post
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Palette/grading tables are generated assets, never runtime-computed.
+
+  - id: POST.ECHO
+    name: Frame echo (optional)
+    kind: rtl
+    subsystem: compositor
+    clock_domain: gpu
+    purpose: Optional echo of the composited frame back to a capture buffer; first on the §26 cut list.
+    contract: design/contracts/POST.ECHO.md
+    phase: 11
+    owner_issue: ZH-071
+    inputs: [fb_tiles]
+    outputs: [echo_frame]
+    upstream: [POST.COMPOSITE]
+    downstream: [MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 echo pixel per clock
+    reference_model: zref::PostEcho
+    tests:
+      directed: tests/compositor/post_echo_directed.cpp
+      random: tests/compositor/post_echo_random.cpp
+    counters: [vram_bytes_by_client]
+    source_ids: true
+    budget_group: twod_post
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: true
+    cut_order: 1
+    superseded_by: null
+    notes: cut_order 1 — the first thing to go if synthesis fails (§26).
+
+  # ===========================================================================
+  # DEBUG (fpga/rtl/debug)
+  # ===========================================================================
+
+  - id: DEBUG.COUNTERS
+    name: Counter aggregation
+    kind: rtl
+    subsystem: debug
+    clock_domain: gpu
+    purpose: Aggregate the §25 mandatory counter set (bytes by client, per-engine counts) and expose it to debug commands.
+    contract: design/contracts/DEBUG.COUNTERS.md
+    phase: 1
+    owner_issue: ZH-072
+    inputs: [dispatch, counter_events]
+    outputs: [counter_snapshot]
+    upstream: [CMD.SCHEDULER]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 counter update per clock
+    reference_model: zref::DebugCounters
+    tests:
+      directed: tests/debug/debug_counters_directed.cpp
+      random: tests/debug/debug_counters_random.cpp
+    counters: [frame_cycles]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Counter set = the counter_catalog of this file (V12).
+
+  - id: DEBUG.CRC
+    name: Tile/frame CRC
+    kind: rtl
+    subsystem: debug
+    clock_domain: gpu
+    purpose: CRC-32C over resolved tiles and whole frames — the hardware-proven maturity evidence primitive (§20/§29-17).
+    contract: design/contracts/DEBUG.CRC.md
+    phase: 4
+    owner_issue: ZH-073
+    inputs: [tile_crc]
+    outputs: [frame_crc]
+    upstream: [RASTER.RESOLVE]
+    downstream: []
+    backpressure: ready_valid
+    latency: variable_bounded:4
+    target_throughput: 1 byte per clock per lane
+    reference_model: zref::Crc32c
+    tests:
+      directed: tests/debug/debug_crc_directed.cpp
+      random: tests/debug/debug_crc_random.cpp
+    counters: [tile_references]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: CRC-32C identical to the ABI/frame CRC (A3d) — one polynomial machine-wide.
+
+  - id: DEBUG.TRACE
+    name: Trace ring and source IDs
+    kind: rtl
+    subsystem: debug
+    clock_domain: gpu
+    purpose: Selectable trace ring (charter §20.6) with source-ID propagation into the HPS trace arena.
+    contract: design/contracts/DEBUG.TRACE.md
+    phase: 1
+    owner_issue: ZH-074
+    inputs: [decoded_records]
+    outputs: [trace_events]
+    upstream: [CMD.DECODER]
+    downstream: [MEM.HPS.BRIDGE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 trace event per clock
+    reference_model: zref::DebugTrace
+    tests:
+      directed: tests/debug/debug_trace_directed.cpp
+      random: tests/debug/debug_trace_random.cpp
+    counters: [commands]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Source-ID scheme per capture_format.md §5.
+
+  # ===========================================================================
+  # Software blocks (15). Reduced ladder: max INTEGRATED unless
+  # runs_on_target_hardware (V13). Game runtime is content, NOT a block.
+  # ===========================================================================
+
+  - id: SW.RUNTIME.HPS
+    name: HPS game runtime
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: "The game-facing runtime on the ARM side: gameplay loop, frame-packet issuance, streaming requests, mixer drive, pad consumption."
+    contract: design/contracts/SW.RUNTIME.HPS.md
+    phase: 1
+    owner_issue: ZH-014
+    inputs: [pad_frame, canonical_scars]
+    outputs: [frame_packets, rumble_cmd, stream_requests, audio_mix]
+    upstream: [INPUT.SNAPSHOT, SW.CPUCOLL]
+    downstream: [INPUT.RUMBLE, SW.CMDBUILD, SW.ZEMU, SW.MIXER, SW.STREAM]
+    backpressure: none
+    latency: variable
+    target_throughput: 1 frame per frame deadline
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Game content itself is excluded from the ledger.
+
+  - id: SW.MIXER
+    name: Fixed-point audio mixer
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: 48 kHz fixed-point 32-voice 3-bus mixer; same code in ZRef/ZEmu/hardware path (Q5 ruling); fx24 internal accumulators.
+    contract: design/contracts/SW.MIXER.md
+    phase: 2
+    owner_issue: ZH-075
+    inputs: [audio_mix]
+    outputs: [pcm_ring]
+    upstream: [SW.RUNTIME.HPS]
+    downstream: [AUDIO.FIFO]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: 1 output sample per 48 kHz tick
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active scope note). Adopts the ZRef fixed-point library per plan Q5.
+
+  - id: SW.CMDBUILD
+    name: Frame-packet builder
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Build semantic frame packets with epochs and seal them with CRC-32C against the generated ABI (0xF00n debug-flag rule included).
+    contract: design/contracts/SW.CMDBUILD.md
+    phase: 1
+    owner_issue: ZH-076
+    inputs: [frame_packets, abi_generated]
+    outputs: [sealed_packets]
+    upstream: [SW.RUNTIME.HPS, SW.TOOLS.ABIDOC]
+    downstream: [CMD.DMA]
+    backpressure: none
+    latency: variable
+    target_throughput: 1 frame packet per frame
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Types from compiler/src/generated/abi.ts only — no hand-written records.
+
+  - id: SW.CPUCOLL
+    name: CPU-side collision and canonical scars
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Terrain collision, canonical scar state and navigation on the ARM side, derived from the exact same field semantics the FPGA evaluates.
+    contract: design/contracts/SW.CPUCOLL.md
+    phase: 7
+    owner_issue: ZH-036
+    inputs: [field_semantics, baked_scars]
+    outputs: [canonical_scars]
+    upstream: [SW.ZREF]
+    downstream: [SW.RUNTIME.HPS]
+    backpressure: none
+    latency: variable
+    target_throughput: gameplay-rate queries
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: One semantics, two consumers (FPGA terrain + CPU collision) — never re-derived by hand (§29-6).
+
+  - id: SW.STREAM
+    name: Streaming and asset preparation
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Asset streaming and preparation pipeline feeding the runtime's requests.
+    contract: design/contracts/SW.STREAM.md
+    phase: 3
+    owner_issue: ZH-077
+    inputs: [stream_requests, packed_assets]
+    outputs: [resident_assets]
+    upstream: [SW.RUNTIME.HPS, SW.TOOLS.ASSET]
+    downstream: []
+    backpressure: none
+    latency: variable
+    target_throughput: deadline-driven
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: leaf.
+
+  - id: SW.ZREF
+    name: ZRef scalar oracle library
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: The scalar reference oracle hosting every block's reference_model symbol (frame, fixed-point, field interpreter); the differential anchor for all RTL.
+    contract: design/contracts/SW.ZREF.md
+    phase: 1
+    owner_issue: ZH-015
+    inputs: [sealed_packets, field_programs]
+    outputs: [reference_results, golden_vectors]
+    upstream: [SW.FIELDIR]
+    downstream: [SW.ZEMU, SW.CPUCOLL]
+    backpressure: none
+    latency: variable
+    target_throughput: n/a (oracle)
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). ZRef FUNCTIONS are not blocks — they are values of rtl blocks' reference_model (P2 §1).
+
+  - id: SW.ZEMU
+    name: Desktop emulator
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Desktop emulator product linking ZRef; the host for capture replay and differential runs.
+    contract: design/contracts/SW.ZEMU.md
+    phase: 1
+    owner_issue: ZH-078
+    inputs: [reference_results, runtime_loop]
+    outputs: [emulated_frames, captures]
+    upstream: [SW.ZREF, SW.RUNTIME.HPS]
+    downstream: [SW.TOOLS.CAPTURE]
+    backpressure: none
+    latency: variable
+    target_throughput: real-time target
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active, empty-shell scope per plan W6).
+
+  - id: SW.COMPILER.FORM
+    name: Form compiler
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Form language frontend → HIR → ZIR → backends (C++/ZDL); emits Field IR programs via SW.FIELDIR.
+    contract: design/contracts/SW.COMPILER.FORM.md
+    phase: 1
+    owner_issue: ZH-019
+    inputs: [form_sources]
+    outputs: [zir, field_ir_programs]
+    upstream: []
+    downstream: [SW.FIELDIR]
+    backpressure: none
+    latency: variable
+    target_throughput: batch
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). Full parser is Phase-3 scope (plan §4); Field IR builder API drives wave-1 tests (FORM §18-L0).
+
+  - id: SW.FIELDIR
+    name: Field IR evaluator and tooling
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Exact Field IR builder/serializer/evaluator/vector-generator/validity-checker — the single TS-side semantics (subordinate to the C++ golden interpreter).
+    contract: design/contracts/SW.FIELDIR.md
+    phase: 1
+    owner_issue: ZH-010
+    inputs: [zir]
+    outputs: [zprog, zvec]
+    upstream: [SW.COMPILER.FORM]
+    downstream: [SW.ZREF]
+    backpressure: none
+    latency: variable
+    target_throughput: batch
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active). ISA v1 frozen incl. DCURVE 0x1D (plan 1.B-4).
+
+  - id: SW.TOOLS.LEDGER
+    name: Design ledger tooling
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: "This tool: schema + V1–V14 validation of blocks.yml/ops.yml, git-history maturity law, and deterministic architecture/dashboard/contract generators."
+    contract: design/contracts/SW.TOOLS.LEDGER.md
+    phase: 1
+    owner_issue: ZH-001
+    inputs: [blocks.yml, ops.yml]
+    outputs: [architecture.mmd, dashboard.md]
+    upstream: []
+    downstream: []
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    leaf: true
+    notes: Contract filled (Phase-1-active). `npm run ledger:check` / `ledger:gen` — staleness is CI failure (plan R11).
+
+  - id: SW.TOOLS.ABIDOC
+    name: ABI generator
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: spec/*.zidl → byte-identical C++/TS/SV ABI packages + docs + fuzz corpus (W4's tool).
+    contract: design/contracts/SW.TOOLS.ABIDOC.md
+    phase: 1
+    owner_issue: ZH-013
+    inputs: [commands.zidl]
+    outputs: [abi_generated]
+    upstream: []
+    downstream: [SW.CMDBUILD]
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Contract filled (Phase-1-active scope note; tool lands W4).
+
+  - id: SW.TOOLS.ASSET
+    name: Asset pipeline
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Meshlet/LOD/microform/texture packers producing streamable assets.
+    contract: design/contracts/SW.TOOLS.ASSET.md
+    phase: 3
+    owner_issue: ZH-079
+    inputs: [source_assets]
+    outputs: [packed_assets]
+    upstream: []
+    downstream: [SW.STREAM]
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: Microform crossfade sophistication is §26 cut item 8.
+
+  - id: SW.TOOLS.CAPTURE
+    name: Capture tooling
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Own the .zcap container spec plus reader/writer and round-trip tests (tools/capture + tools/inspect); replay captures through ZEmu.
+    contract: design/contracts/SW.TOOLS.CAPTURE.md
+    phase: 1
+    owner_issue: ZH-080
+    inputs: [captures]
+    outputs: [zcap_files, replay_reports]
+    upstream: [SW.ZEMU]
+    downstream: []
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    leaf: true
+    notes: Contract filled (Phase-1-active). Registered as its OWN block per plan 1.D (P2's +1 over 83).
+
+  - id: SW.TOOLS.REPORT
+    name: Quartus report parser
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: Parse Quartus synthesis/timing reports into reports/synthesis/*.json feeding every block's resource_actual (never hand-typed).
+    contract: design/contracts/SW.TOOLS.REPORT.md
+    phase: 0
+    owner_issue: ZH-002
+    inputs: [quartus_reports]
+    outputs: [resource_actual]
+    upstream: []
+    downstream: []
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    leaf: true
+    notes: Contract filled (Phase-1-active scope note). Parser untested until Quartus exists (plan §4); V5 activates at SYNTHESIZED.
+
+  - id: SW.TOOLS.BOARDPROBE
+    name: Board probe suite
+    kind: software
+    subsystem: sw
+    clock_domain: hps
+    purpose: "Phase-0 hardware probes producing reports/board_truth.json (ZH-003…006): SDRAM timings, clock tree, bandwidth, input latency."
+    contract: design/contracts/SW.TOOLS.BOARDPROBE.md
+    phase: 0
+    owner_issue: ZH-003
+    inputs: [board_access]
+    outputs: [board_truth_json]
+    upstream: []
+    downstream: []
+    backpressure: none
+    latency: batch
+    target_throughput: n/a (tool)
+    maturity: SPECIFIED
+    maturity_log: []
+    blocked_on: hardware
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    leaf: true
+    notes: Contract filled (Phase-1-active scope note). No architecture constant is frozen from assumptions while this is blocked (§23 Phase-0 gate).
