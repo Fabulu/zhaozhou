@@ -1,16 +1,16 @@
 # Contract — SW.TOOLS.CAPTURE (Capture tooling)
 
-> Ledger: `design/blocks.yml` · owner ZH-080 · phase 1 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-080 · phase 1 · maturity UNIT_VERIFIED (W6; evidence pinned in the ledger)
 
 ## Purpose and exclusions
 
 Own the .zcap container spec plus reader/writer and round-trip tests (tools/capture + tools/inspect); replay captures through ZEmu.
 
-Phase-1 scope: this software block is wave-1-active. Its contract is authoritative NOW; the headings below that name C++/RTL artifacts describe the shape of the evidence to come, and no maturity advance happens without that evidence being committed (rules V2/V3).
+Exclusions: the frame-packet format itself and the C++/.TS readers/writers are owned by spec/capture_format.md §4 + SW.ZREF (`reference/src/zref_frame.cpp`); this block owns the CLI tooling and the round-trip guarantees.
 
 ## Input and output packet layouts
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+`.zcap` per capture_format.md §4: 32-byte header (magic 'ZCAP', format_version 1, u64 lengths from day one — plan P5), 32-byte section entries (types 0x0001–0x000A), per-section CRC-32C, header CRC backpatched last; unknown section types are skipped forward-compatibly (tested).
 
 ## Backpressure rules
 
@@ -18,11 +18,11 @@ Backpressure: `none`.
 
 ## Memory ownership
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+The CLI streams via the SW.ZREF writer/reader classes (seekable file, backpatch at close); no format logic is duplicated in the tool.
 
 ## Q formats and rounding
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+N/A (container layer).
 
 ## Latency (fixed or variable)
 
@@ -34,19 +34,19 @@ Target throughput: n/a (tool).
 
 ## Overflow and malformed-input behaviour
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+Reader validates magic/flags/header-CRC/table bounds/total-length before any body access; section bodies are CRC-verified on fetch. Bad input returns a typed error (kBadMagic/kBadFlags/kBadHeaderCrc/kBadTable/kIo), never a partial read.
 
 ## Directed tests
 
-Planned: `(tbd)`.
+`tests/unit/test_zcap_roundtrip.cpp` (write→read→resolve incl. skip-unknown-section and source-ID/program-hash survival) and the CTest CLI smoke `capture_cli_verify` (`zhao-capture verify` over the committed golden `tests/abi/golden/zcap_minimal.zcap`).
 
 ## Randomized differential tests
 
-Planned: `(tbd)`.
+The .zcap corpus rides the ABI fuzz corpus lanes (abi_corpus.zcorpus tri-language parity); round-trips are exercised against freshly built frames in test_empty_frame_replay case 4.
 
 ## Integration capture cases
 
-TODO — fill before this block advances past SPECIFIED (charter §4: no RTL before contract and reference exist).
+`tests/abi/golden/zcap_minimal.zcap` (committed, verifies green), `captures/golden/field/` + `captures/failures/field/` (the §29-17 discipline artifacts).
 
 ## Notes
 
