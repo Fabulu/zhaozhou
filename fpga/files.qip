@@ -1,0 +1,5 @@
+# files.qip — hand-maintained Quartus file list placeholder (charter 22).
+# Format when populated:
+#   set_global_assignment -name SYSTEMVERILOG_FILE rtl/common/zhao_stub_top.sv
+#   set_global_assignment -name SYSTEMVERILOG_FILE rtl/generated/zhao_abi_pkg.sv
+# BLOCKED-on-hardware (ZH-002). Never let Quartus regenerate this list.

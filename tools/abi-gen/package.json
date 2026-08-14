@@ -1,0 +1,9 @@
+{
+  "name": "@zhaozhou/abi-gen",
+  "version": "0.0.1",
+  "private": true,
+  "description": "commands.zidl -> byte-identical C++/TS/SV ABI emitters (lands W4; placeholder until then)",
+  "scripts": {
+    "test": "echo [W1 placeholder] abi-gen tests land in W4"
+  }
+}

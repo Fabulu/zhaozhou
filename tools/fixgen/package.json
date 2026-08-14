@@ -1,0 +1,9 @@
+{
+  "name": "@zhaozhou/fixgen",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixed-point table generator: one source -> C++ header + SV .mem + TS module (lands W3; placeholder until then)",
+  "scripts": {
+    "test": "echo [W1 placeholder] fixgen tests land in W3"
+  }
+}

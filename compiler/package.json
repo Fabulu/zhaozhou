@@ -1,0 +1,9 @@
+{
+  "name": "@zhaozhou/compiler",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Form compiler: frontend, HIR, ZIR, Field IR, backends (lands W5; placeholders until then)",
+  "scripts": {
+    "test": "echo [W1 placeholder] compiler tests land in W5"
+  }
+}

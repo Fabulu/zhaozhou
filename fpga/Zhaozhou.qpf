@@ -1,0 +1,8 @@
+# Zhaozhou.qpf — Quartus project file placeholder (charter 22).
+# Quartus 17.0.2 pinned per MiSTer template; BLOCKED-on-hardware (ZH-002):
+# no Quartus on this machine. Copy of Template_MiSTer Template.qpf shape;
+# set PROJECT_REVISION to Zhaozhou when the hardware lane opens.
+QUARTUS_VERSION = "17.0"
+DATE = "00:00:00  January 01, 2026"
+
+PROJECT_REVISION = "Zhaozhou"

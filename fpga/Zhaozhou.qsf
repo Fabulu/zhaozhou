@@ -1,0 +1,9 @@
+# Zhaozhou.qsf — Quartus settings file placeholder (charter 22).
+# BLOCKED-on-hardware (ZH-002): no Quartus locally. When the hardware lane
+# opens, mirror Template_MiSTer Template.qsf:
+#   set_global_assignment -name TOP_LEVEL_ENTITY sys_top
+#   set_global_assignment -name SYSTEMVERILOG_FILE Zhaozhou.sv
+#   source sys/sys.tcl
+#   source sys/sys_analog.tcl
+#   source files.qip
+# Do NOT let Quartus "spit" generated settings into this file (template rule).

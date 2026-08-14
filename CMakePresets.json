@@ -1,0 +1,60 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "ZHAO_NOTE": "Source tools/env/zhao-env.ps1|.bat before configuring: sets VERILATOR_ROOT and puts oss-cad-suite bin/lib + winlibs cmake/ninja/g++ on PATH ahead of the broken devkitPro msys2 cmake."
+      }
+    },
+    {
+      "name": "windows-native",
+      "inherits": "windows-base",
+      "displayName": "windows-native (this machine: winlibs g++ 16.1.0 + Ninja + oss-cad-suite Verilator)",
+      "description": "Pins the verified local toolchain absolutely. Requires VERILATOR_ROOT from tools/env/zhao-env.*.",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "C:/programmieren/dsstuff/mingw64/bin/g++.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/programmieren/dsstuff/mingw64/bin/ninja.exe"
+      }
+    },
+    {
+      "name": "windows-ci",
+      "inherits": "windows-base",
+      "displayName": "windows-ci (GitHub Actions windows-latest)",
+      "description": "Compiler resolved from PATH (the workflow guarantees a g++ there); no machine-local absolute paths.",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-native", "configurePreset": "windows-native" },
+    { "name": "windows-ci", "configurePreset": "windows-ci" }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-native",
+      "configurePreset": "windows-native",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    {
+      "name": "windows-ci",
+      "configurePreset": "windows-ci",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    }
+  ]
+}

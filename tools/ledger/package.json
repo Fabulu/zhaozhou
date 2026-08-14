@@ -1,0 +1,9 @@
+{
+  "name": "@zhaozhou/ledger",
+  "version": "0.0.1",
+  "private": true,
+  "description": "design ledger validator + diagram/dashboard generators (lands W2; placeholder until then)",
+  "scripts": {
+    "test": "echo [W1 placeholder] ledger tests land in W2"
+  }
+}
