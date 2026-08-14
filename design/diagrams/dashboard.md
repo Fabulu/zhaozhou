@@ -23,15 +23,26 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | 5 | · | · | · | · | · | · | · | 5 |
 | surface | 2 | · | · | · | · | · | · | · | 2 |
-| sw | 15 | · | · | · | · | · | · | 2 | 15 |
+| sw | 13 | 2 | · | · | · | · | · | 2 | 15 |
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
-| **all** | 87 | · | · | · | · | · | · | 6 | 87 |
+| **all** | 85 | 2 | · | · | · | · | · | 6 | 87 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
-_None yet — every block is SPECIFIED (wave-1 bootstrap). Advancement requires commit-pinned evidence (rule V3, charter §4)._
+| block | state | date | commit | evidence |
+|---|---|---|---|---|
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | reference/src/zref_frame.cpp |
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `4131647` | tests/differential/test_empty_frame_replay.cpp |
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `e8d652e` | reference/src/zfield/zfield_interpret.cpp |
+| SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `5db7844` | reference/src/zref.cpp |
+| SW.FIELDIR | REFERENCE_COMPLETE | 2026-08-14 | `500965d` | spec/form/field-ir.md |
+| SW.FIELDIR | REFERENCE_COMPLETE | 2026-08-14 | `681a0b6` | compiler/src/field_ir |
+| SW.FIELDIR | REFERENCE_COMPLETE | 2026-08-14 | `e8d652e` | captures/golden/field/crater_ring.zvec |
+| SW.FIELDIR | REFERENCE_COMPLETE | 2026-08-14 | `681a0b6` | tests/fuzz/corpus/field |
 
 ## Budget groups vs §25 ceilings
 

@@ -2480,12 +2480,48 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: n/a (oracle)
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '7279493'
+        evidence: tests/unit/test_fixp.cpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: 'f0edffa'
+        evidence: reference/include/zref/generated/zref_tables.hpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '9d8dc79'
+        evidence: reference/src/zref_frame.cpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '4131647'
+        evidence: tests/differential/test_empty_frame_replay.cpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: 'e8d652e'
+        evidence: reference/src/zfield/zfield_interpret.cpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '5db7844'
+        evidence: reference/src/zref.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). ZRef FUNCTIONS are not blocks — they are values of rtl blocks' reference_model (P2 §1).
+    tests:
+      directed: tests/unit/test_fixp.cpp
+      unit: tests/unit/test_zref_shell.cpp
+      differential: tests/differential/test_empty_frame_replay.cpp
+    notes: >-
+      Contract filled (Phase-1-active). ZRef FUNCTIONS are not blocks — they
+      are values of rtl blocks' reference_model (P2 §1). W6 advanced to
+      REFERENCE_COMPLETE — fixp (W3 exhaustive sin/cos + golden tables),
+      frame/.zcap (W4), zfield interpreter + crater_ring goldens (W5),
+      empty-frame shell loop (W6, spec capture_format.md 3.2-3.3). fixgen
+      ownership ruling — tools/fixgen has NO own block; its generated
+      tables/golden vectors are ZRef deliverables (qformats.md 11), see the
+      contract.
 
   - id: SW.ZEMU
     name: Desktop emulator
@@ -2549,12 +2585,36 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: batch
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '500965d'
+        evidence: spec/form/field-ir.md
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '681a0b6'
+        evidence: compiler/src/field_ir
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: 'e8d652e'
+        evidence: captures/golden/field/crater_ring.zvec
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '681a0b6'
+        evidence: tests/fuzz/corpus/field
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). ISA v1 frozen incl. DCURVE 0x1D (plan 1.B-4).
+    tests:
+      unit: compiler/tests/field_ir.test.ts
+      differential: compiler/tests/field_ts_differential.test.ts
+    notes: >-
+      Contract filled (Phase-1-active). ISA v1 frozen incl. DCURVE 0x1D (plan
+      1.B-4). W6 advanced to REFERENCE_COMPLETE — frozen ISA spec, TS
+      builder/allocator/serializer/interpreter (30/30 compiler suite),
+      crater_ring golden .zvec from the C++ oracle, committed TS-vs-C++ fuzz
+      corpus.
 
   - id: SW.TOOLS.LEDGER
     name: Design ledger tooling
