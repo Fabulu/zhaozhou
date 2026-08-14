@@ -19,6 +19,7 @@ function cppPrim(t: string): string {
     case 'i64': return 'int64_t';
     case 'fx16': return 'int32_t'; // Q16.16 in a 32-bit container (qformats.md)
     case 'fx32': return 'int64_t'; // Q32.32 in a 64-bit container
+    case 'angle16': return 'uint16_t'; // U 0.0.16 turns (qformats.md 2)
     default: return t;
   }
 }
@@ -40,6 +41,7 @@ function declField(f: FieldIR, owner: string): string {
   if (f.kind === 'handle') {
     return `  uint32_t ${f.name}${arr};  // handle32 {index:24, generation:8}${f.handleKind ? ` kind=${f.handleKind}` : ''}`;
   }
+  if (f.kind === 'enum') return `  ${f.type} ${f.name}${arr};  // enum, ${f.size / f.count} B`;
   if (f.kind === 'struct') return `  ${structName(f.type)} ${f.name}${arr};`;
   return `  ${cppPrim(f.type)} ${f.name}${arr};`;
 }
@@ -47,19 +49,20 @@ function declField(f: FieldIR, owner: string): string {
 function writeScalar(prim: string, expr: string): string {
   switch (prim) {
     case 'u8': case 'i8': return `w.u8(${expr});`;
-    case 'u16': case 'i16': return `w.u16(${expr});`;
+    case 'u16': case 'i16': case 'angle16': return `w.u16(${expr});`;
     case 'u32': case 'i32': case 'fx16': return `w.u32(${expr});`;
     case 'u64': case 'i64': case 'fx32': return `w.u64(${expr});`;
     default: return `w.u32(${expr});`;
   }
 }
 
-function readScalar(prim: string, expr: string): string {
+function readScalar(prim: string, expr: string, castTo?: string): string {
+  const dst = castTo ? `${expr} = static_cast<${castTo}>(t)` : `${expr} = t`;
   switch (prim) {
-    case 'u8': case 'i8': return `{ uint8_t t; if (!r.take8(t)) return false; ${expr} = t; }`;
-    case 'u16': case 'i16': return `{ uint16_t t; if (!r.take16(t)) return false; ${expr} = t; }`;
-    case 'u32': case 'i32': case 'fx16': return `{ uint32_t t; if (!r.take32(t)) return false; ${expr} = t; }`;
-    default: return `{ uint64_t t; if (!r.take64(t)) return false; ${expr} = t; }`;
+    case 'u8': case 'i8': return `{ uint8_t t; if (!r.take8(t)) return false; ${dst}; }`;
+    case 'u16': case 'i16': case 'angle16': return `{ uint16_t t; if (!r.take16(t)) return false; ${dst}; }`;
+    case 'u32': case 'i32': case 'fx16': return `{ uint32_t t; if (!r.take32(t)) return false; ${dst}; }`;
+    default: return `{ uint64_t t; if (!r.take64(t)) return false; ${dst}; }`;
   }
 }
 
@@ -71,7 +74,10 @@ function hexBytes(hex: string): string {
 
 export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string): string {
   const L: string[] = [];
-  const primOf = (f: FieldIR) => (f.kind === 'handle' ? 'u32' : f.type);
+  // wire prim of a field: handles are u32; enums ride their BACKING prim
+  // (the typed C++ member is the enum, but the wire width is the backing type)
+  const primOf = (f: FieldIR) => (f.kind === 'handle' ? 'u32'
+    : f.kind === 'enum' ? f.leaves[0]!.prim : f.type);
 
   // which structs are reachable from commands (emit samples/packs for those)
   const usedStructs = new Set<string>();
@@ -113,6 +119,16 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
   if (errEnum) {
     L.push(`enum ${errEnum.name} : uint32_t {`);
     for (const e of errEnum.entries) L.push(`  ${e.name} = ${e.value},`);
+    L.push('};');
+    L.push('');
+  }
+
+  // ---- value enums (ABI v2: typed members with their backing wire width) --------
+  for (const e of ir.enums) {
+    if (e.name === 'zhao_abi_error') continue;
+    L.push(`// enum ${e.name}: ${e.type} on the wire (capture_format.md 3.2 step 7)`);
+    L.push(`enum ${e.name} : ${cppPrim(e.type)} {`);
+    for (const entry of e.entries) L.push(`  ${entry.name} = ${entry.value},`);
     L.push('};');
     L.push('');
   }
@@ -259,7 +275,8 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
       }
       for (let k = 0; k < f.count; k++) {
         const leaf = sample.leaves[li]!;
-        L.push(`  v.${f.name}${f.count > 1 ? `[${k}]` : ''} = ${cppValue(leaf.value, primOf(f))};`);
+        const val = cppValue(leaf.value, primOf(f));
+        L.push(`  v.${f.name}${f.count > 1 ? `[${k}]` : ''} = ${f.kind === 'enum' ? `static_cast<${f.type}>(${val})` : val};`);
         li++;
       }
     }
@@ -281,8 +298,7 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
     let li = 0;
     for (const f of c.fields) {
       if (f.kind === 'pad') {
-        li += f.count;
-        continue;
+        continue; // pads produce no sample leaves (sample.ts skips them)
       }
       if (f.kind === 'struct') {
         for (let k = 0; k < f.count; k++) {
@@ -293,7 +309,8 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
       }
       for (let k = 0; k < f.count; k++) {
         const leaf = sample.leaves[li]!;
-        L.push(`  r.payload.${f.name}${f.count > 1 ? `[${k}]` : ''} = ${cppValue(leaf.value, primOf(f))};`);
+        const val = cppValue(leaf.value, primOf(f));
+        L.push(`  r.payload.${f.name}${f.count > 1 ? `[${k}]` : ''} = ${f.kind === 'enum' ? `static_cast<${f.type}>(${val})` : val};`);
         li++;
       }
     }
@@ -359,7 +376,7 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
         }
       } else {
         for (let k = 0; k < f.count; k++) {
-          L.push(`  ${readScalar(primOf(f), `out.${f.name}${f.count > 1 ? `[${k}]` : ''}`)}`);
+          L.push(`  ${readScalar(primOf(f), `out.${f.name}${f.count > 1 ? `[${k}]` : ''}`, f.kind === 'enum' ? f.type : undefined)}`);
         }
       }
     }
@@ -383,7 +400,7 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
         }
       } else {
         for (let k = 0; k < f.count; k++) {
-          L.push(`  ${readScalar(primOf(f), `out.payload.${f.name}${f.count > 1 ? `[${k}]` : ''}`)}`);
+          L.push(`  ${readScalar(primOf(f), `out.payload.${f.name}${f.count > 1 ? `[${k}]` : ''}`, f.kind === 'enum' ? f.type : undefined)}`);
         }
       }
     }
@@ -425,6 +442,34 @@ export function emitCpp(ir: LayoutIR, identitySha256: string, zidlSha256: string
   L.push('inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {');
   L.push('  for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;');
   L.push('  return nullptr;');
+  L.push('}');
+  L.push('');
+
+  // ---- enum range check (capture_format.md 3.2 step 7, active since ABI v2) ------
+  // p points at the record PAYLOAD (record start + 16). True iff every enum
+  // field carries a declared member value; false => ZH_ABI_BAD_VALUE.
+  L.push('inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {');
+  L.push('  switch (opcode) {');
+  for (const c of ir.commands) {
+    const checks = c.fields.filter((f) => f.kind === 'enum');
+    if (checks.length === 0) continue;
+    L.push(`    case ZHAO_OP_${upperSnake(c.name)}: {`);
+    for (let i = 0; i < checks.length; i++) {
+      const f = checks[i]!;
+      const size = f.size / f.count;
+      const v = size === 1 ? `uint32_t(p[${f.offset}])`
+        : size === 2 ? `(uint32_t(p[${f.offset}]) | (uint32_t(p[${f.offset + 1}]) << 8))`
+          : `(uint32_t(p[${f.offset}]) | (uint32_t(p[${f.offset + 1}]) << 8) | (uint32_t(p[${f.offset + 2}]) << 16) | (uint32_t(p[${f.offset + 3}]) << 24))`;
+      const entries = ir.enums.find((e) => e.name === f.type)!.entries;
+      const members = entries.map((x) => `v${i} == ${x.value}u`).join(' || ');
+      L.push(`      const uint32_t v${i} = ${v};  // ${f.name}: ${f.type}`);
+      L.push(`      if (!(${members})) return false;`);
+    }
+    L.push('      return true;');
+    L.push('    }');
+  }
+  L.push('    default: return true;');
+  L.push('  }');
   L.push('}');
   L.push('');
 

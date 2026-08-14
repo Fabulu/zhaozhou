@@ -124,6 +124,7 @@ function layoutFields(
           name: `${f.name}${f.count > 1 ? `[${k}]` : ''}`,
           prim: kind === 'enum' ? enums.get(f.type)! : (kind === 'handle' ? 'u32' : f.type),
           offset: off + k * elemSize, size: elemSize, kind,
+          enumName: kind === 'enum' ? f.type : undefined,
         });
       }
     }
@@ -196,9 +197,16 @@ export function semantic(ast: ZidlAst, opts: SemanticOptions = { opcodeRanges: O
 
   for (const e of ast.enums) {
     const seen = new Set<number>();
+    const max = e.type in PRIM_TYPES ? 2 ** (8 * PRIM_TYPES[e.type]!) : 0;
     for (const entry of e.entries) {
       if (seen.has(entry.value)) {
         throw new ZidlError(`enum '${e.name}': duplicate value ${entry.value}`, { line: 1, col: 1 });
+      }
+      if (entry.value < 0 || entry.value >= max) {
+        throw new ZidlError(
+          `enum '${e.name}': value ${entry.value} does not fit the ${e.type} backing type`,
+          { line: 1, col: 1 },
+        );
       }
       seen.add(entry.value);
     }
@@ -222,6 +230,21 @@ export function semantic(ast: ZidlAst, opts: SemanticOptions = { opcodeRanges: O
         const { fields, size } = layoutFields(s.fields, structIR, enumTypes, `struct ${s.name}`);
         if (size <= 0) {
           throw new ZidlError(`struct '${s.name}' is empty`, { line: 1, col: 1 });
+        }
+        // rule 3 (capture_format.md 1.1): element alignment is min(size,4)
+        // capped at 4 — a struct used as an array element must have a stride
+        // that keeps every member of every element naturally aligned, so the
+        // struct size itself must be a multiple of its alignment cap.
+        const align = Math.min(
+          4,
+          Math.max(...fields.filter((f) => f.kind !== 'pad').map((f) => f.size / f.count), 1),
+        );
+        if (size % align !== 0) {
+          throw new ZidlError(
+            `struct '${s.name}': size ${size} is not a multiple of its alignment cap ` +
+            `${align} (rule 3: array stride must keep members aligned) — add explicit pad`,
+            { line: 1, col: 1 },
+          );
         }
         structIR.set(s.name, { name: s.name, size, fields });
         pending.splice(i, 1);
@@ -264,14 +287,11 @@ export function semantic(ast: ZidlAst, opts: SemanticOptions = { opcodeRanges: O
         cmd.pos,
       );
     }
-    const isDebug = cmd.opcode >= DEBUG_OPCODE_LO && cmd.opcode <= DEBUG_OPCODE_HI;
-    if (isDebug && cmd.implemented) {
-      throw new ZidlError(
-        `debug opcode ${hex4(cmd.opcode)} ('${cmd.name}') can never be an implemented ` +
-        'game-facing command (plan 1.E)',
-        cmd.pos,
-      );
-    }
+    // ABI v2 (wave 2): debug-umbrella opcodes MAY be `implemented` — they are
+    // executed by the console shell (debug-blit DMA, rumble), never game-facing
+    // (a frame containing one still requires header flags bit0, checked by
+    // every validator as ZH_ABI_DEBUG_FLAG_REQUIRED). The Phase-1 blanket
+    // prohibition was lifted by plan W2.1/D8.
 
     const { fields, size } = layoutFields(cmd.fields, structIR, enumTypes, `command ${cmd.name}`);
     const record = 16 + size;

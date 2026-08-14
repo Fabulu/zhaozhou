@@ -58,6 +58,9 @@ int main() {
     {"draw_procedural", ZHAO_OP_DRAW_PROCEDURAL},
     {"emit_audio_event", ZHAO_OP_EMIT_AUDIO_EVENT},
     {"debug_bootstrap", ZHAO_OP_DEBUG_BOOTSTRAP},
+    {"draw_sky", ZHAO_OP_DRAW_SKY},
+    {"debug_frame_blit", ZHAO_OP_DEBUG_FRAME_BLIT},
+    {"debug_rumble", ZHAO_OP_DEBUG_RUMBLE},
   };
 
   // ---- per-command goldens: pack(sample) == committed bytes -----------------
@@ -80,6 +83,9 @@ int main() {
       case ZHAO_OP_DRAW_PROCEDURAL: zhao_pack_draw_procedural(zhao_sample_draw_procedural(), got); break;
       case ZHAO_OP_EMIT_AUDIO_EVENT: zhao_pack_emit_audio_event(zhao_sample_emit_audio_event(), got); break;
       case ZHAO_OP_DEBUG_BOOTSTRAP: zhao_pack_debug_bootstrap(zhao_sample_debug_bootstrap(), got); break;
+      case ZHAO_OP_DRAW_SKY: zhao_pack_draw_sky(zhao_sample_draw_sky(), got); break;
+      case ZHAO_OP_DEBUG_FRAME_BLIT: zhao_pack_debug_frame_blit(zhao_sample_debug_frame_blit(), got); break;
+      case ZHAO_OP_DEBUG_RUMBLE: zhao_pack_debug_rumble(zhao_sample_debug_rumble(), got); break;
       default: break;
     }
 

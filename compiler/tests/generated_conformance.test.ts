@@ -14,6 +14,9 @@ import {
   ZH_ABI_OK,
   zhaoSampleBeginFrame,
   zhaoSampleDebugBootstrap,
+  zhaoSampleDrawSky,
+  zhaoSampleDebugFrameBlit,
+  zhaoSampleDebugRumble,
   zhaoSampleDrawForm,
   zhaoSampleDrawPopulation,
   zhaoSampleDrawProcedural,
@@ -26,6 +29,9 @@ import {
   zhaoSampleTerrainField,
   zhaoPackBeginFrame,
   zhaoPackDebugBootstrap,
+  zhaoPackDrawSky,
+  zhaoPackDebugFrameBlit,
+  zhaoPackDebugRumble,
   zhaoPackDrawForm,
   zhaoPackDrawPopulation,
   zhaoPackDrawProcedural,
@@ -77,6 +83,9 @@ const SAMPLES: readonly CmdEntry[] = [
   { snake: 'draw_procedural', sample: zhaoSampleDrawProcedural, pack: zhaoPackDrawProcedural },
   { snake: 'emit_audio_event', sample: zhaoSampleEmitAudioEvent, pack: zhaoPackEmitAudioEvent },
   { snake: 'debug_bootstrap', sample: zhaoSampleDebugBootstrap, pack: zhaoPackDebugBootstrap },
+  { snake: 'draw_sky', sample: zhaoSampleDrawSky, pack: zhaoPackDrawSky },
+  { snake: 'debug_frame_blit', sample: zhaoSampleDebugFrameBlit, pack: zhaoPackDebugFrameBlit },
+  { snake: 'debug_rumble', sample: zhaoSampleDebugRumble, pack: zhaoPackDebugRumble },
 ];
 
 test('byte-identity: TS packer reproduces every command golden', () => {
@@ -148,7 +157,7 @@ test('zcap reader: golden parses, verifies, and round-trips source IDs', () => {
   const infoBody = sectionBody(file, info[0]!)!;
   assert.ok(verifySection(file, info[0]!));
   const abi = parseAbiInfo(infoBody);
-  assert.equal(abi.abiVersion, 1);
+  assert.equal(abi.abiVersion, ZHAO_ABI_VERSION); // ABI v2 since wave 2
   assert.equal(abi.generatorName, 'zhaozhou-abi-gen');
 
   const map = findSections(z, ZCAP_SECTION.SOURCE_MAP);

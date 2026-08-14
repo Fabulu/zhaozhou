@@ -92,6 +92,20 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     deadline: 0, commandCount: 2, commandBytes: debugStream.length,
   }, debugStream);
 
+  // ABI v2: implemented debug commands execute in the shell (plan W2.1/D8);
+  // they still require the header debug flag like every 0xF00n opcode.
+  const blitStream = new Uint8Array([
+    ...cmd('BeginFrame'), ...cmd('DebugFrameBlit'), ...cmd('DebugRumble'), ...cmd('EndFrame'),
+  ]);
+  const blitOk = buildFrame(ir, {
+    abiVersion: ir.abi.version, flags: 1, frameId: 5, sequence: 3, resourceEpoch: 1,
+    deadline: 0, commandCount: 4, commandBytes: blitStream.length,
+  }, blitStream);
+  const blitNoFlag = buildFrame(ir, {
+    abiVersion: ir.abi.version, flags: 0, frameId: 6, sequence: 4, resourceEpoch: 1,
+    deadline: 0, commandCount: 4, commandBytes: blitStream.length,
+  }, blitStream);
+
   const empty = buildFrame(ir, {
     abiVersion: ir.abi.version, flags: 0, frameId: 4, sequence: 3, resourceEpoch: 1,
     deadline: 0, commandCount: 0, commandBytes: 0,
@@ -102,6 +116,8 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     { name: 'valid_all_implemented', packet: full },
     { name: 'valid_empty_frame', packet: empty },
     { name: 'valid_debug_with_flag', packet: debugWith },
+    { name: 'valid_debug_blit_rumble', packet: blitOk },
+    { name: 'debug_blit_without_flag', packet: blitNoFlag },
 
     // header-level corruption (no re-seal: the corruption IS the test)
     { name: 'bad_magic', packet: mutate32(base, 0, 0xdeadbeef, false) },
@@ -127,6 +143,11 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     { name: 'record_flags_nonzero', packet: reframe(mutate32(base, HEADER_BYTES + 8, 0x1, false)) },
     { name: 'record_reserved_nonzero', packet: reframe(mutate32(base, HEADER_BYTES + 12, 0x1, false)) },
     { name: 'payload_pad_nonzero', packet: reframe(mutate(base, HEADER_BYTES + 48 + 16 + 12, 0x42)) },
+
+    // enum range (ABI v2, capture_format.md 3.2 step 7). full stream:
+    // BeginFrame@0 (32B), SetView@32 (96B), SetPresentationContract@128 (48B);
+    // the SPC payload 'mode' (video_mode u8) sits at stream offset 128+16.
+    { name: 'enum_out_of_range', packet: reframe(mutate(full, HEADER_BYTES + 128 + 16, 0x07)) },
 
     // walk-level
     { name: 'count_mismatch', packet: mutate32(base, OFF_COMMAND_COUNT, 2, true) },

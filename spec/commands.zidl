@@ -4,9 +4,11 @@
 // normatively restated in spec/capture_format.md 1. Two ratified extensions
 // over that EBNF (both documented there):
 //   * command status keyword: `command <name> <opcode> implemented|reserved`
-//     — implemented commands are executed by the Phase-1 decoder shell;
-//     reserved commands have a FROZEN wire layout but no execution semantics
-//     yet (their records still validate structurally).
+//     — implemented commands are executed by the decoder/shell; reserved
+//     commands have a FROZEN wire layout but no execution semantics yet
+//     (their records still validate structurally). Since ABI v2 (wave 2)
+//     this includes debug-umbrella opcodes (never game-facing; the header
+//     flags-bit0 rule is unchanged).
 //   * `enum` entries may carry a trailing doc comment via `//` (lexical).
 //
 // Fixed-point fields reference spec/qformats.md (W3): `fx16` is a Q16.16
@@ -27,7 +29,7 @@
 // (`npm run abi:gen`) and re-committing every generated artifact.
 
 abi zhao {
-  version 1
+  version 2
   endian little
   command_alignment 16
   opcode_width u16
@@ -57,6 +59,18 @@ enum zhao_abi_error : u32 {
   ZH_ABI_DEBUG_FLAG_REQUIRED = 12;   // 0xF00n opcode without header flags bit0
   ZH_ABI_COUNT_MISMATCH = 13;        // records walked != command_count
   ZH_ABI_UNIMPLEMENTED_COMMAND = 14; // executor-level: reserved opcode used
+}
+
+// ---- value enums (ABI v2, wave 2) -------------------------------------------
+
+// Presentation/video mode — the ONE mode selector machine-wide (plan D6).
+// Wire-identical with the Phase-1 `u8 mode` of SetPresentationContract and
+// the .zcap FRAMEBUFFER_EXPECTED `mode` byte; RTL latches it only at frame
+// start (vblank) — effective next frame, never mid-frame (spec/video_rules.md).
+enum video_mode : u8 {
+  VIDEO_Z60 = 0;    // 384x240, canvas 184,320 B RGB565
+  VIDEO_STORM = 1;  // 320x240, canvas 153,600 B RGB565
+  VIDEO_DUO = 2;   // 512x240 (2 x 256x192), canvas 245,760 B RGB565
 }
 
 // ---- composed fixed-point containers (element = fx16, Q16.16, spec/qformats.md)
@@ -99,6 +113,33 @@ struct mat4fx {
   fx16 m33;
 }
 
+// ---- controller (plan D5): the canonical pad snapshot ------------------------
+//
+// ONE definition machine-wide: the .zcap CONTROLLER_SNAPSHOT (0x0004) entry
+// IS this struct; abi-gen emits it into C++/TS/SV and fpga/rtl/common/
+// zhao_pkg.sv re-exports the generated SV type.
+//
+// Size reconciliation (plan D5 said "24 B, 4-aligned"; the shipped .zcap
+// 0x0004 layout is 20 B): the .zidl grammar (capture_format.md 1.1 rule 3)
+// caps element alignment at 4 — a 4-byte `buttons` inside every array
+// element requires a stride divisible by 4. The declared fields of the
+// shipped section sum to 18 B; one explicit 4-byte reserved word closes the
+// struct at exactly 20 B, already 4-aligned. 24 B would NOT be
+// wire-compatible with the shipped 0x0004 section, and the grammar forbids
+// the hidden 2-4 tail bytes a 24-B layout would need. DECISION: 20 B
+// (u32 rsv), array stride 20. Law: spec/input_rules.md.
+struct PadFrame {
+  u8 pad_index;   // 0-3 (four slots, charter 17)
+  u8 flags;       // bit0 = pad_present; bits 1-7 reserved 0
+  u16 sequence;   // per-pad monotonic snapshot sequence
+  u32 buttons;    // 32 digital bits (bit i = button i, active high)
+  i16 lx;         // left stick X,  signed, center 0
+  i16 ly;         // left stick Y,  signed, center 0, positive = down
+  i16 rx;         // right stick X, signed, center 0
+  i16 ry;         // right stick Y, signed, center 0, positive = down
+  u32 rsv;        // reserved, must be 0 (closes the struct at 20 B / stride 4)
+}
+
 // ---- frame control ---------------------------------------------------------
 
 command Nop 0x0000 implemented {
@@ -132,7 +173,7 @@ command SetView 0x0010 implemented {
 }
 
 command SetPresentationContract 0x0020 implemented {
-  u8 mode;
+  video_mode mode;  // ABI v2: was `u8 mode` — wire-identical (1 byte, same offset)
   u8 view_count;
   u16 flags;
   u32 geometry_tokens[2];
@@ -189,6 +230,26 @@ command DrawProcedural 0x0302 reserved {
   pad[12];
 }
 
+// Sky pass (spec/sky_and_beams.md 4 — the W4 post-patch ABI reservation).
+// Reserved: layout FROZEN, execution lands in wave 8. rot_proj is
+// rotation-only per view (translation rows must be zero — validated when
+// the command activates). flags: b0 under_plane, b1 cloud, b2 sun, b3 cap,
+// b4 sun_glow_tag; b5..b7 reserved-0. reserved0/reserved1 must be zero.
+// Opcodes 0x0311..0x031F are reserved for sky extensions — never allocate
+// one without a spec/sky_and_beams.md version bump.
+command DrawSky 0x0310 reserved {
+  handle32[sky_set] sky_set;   // sky asset set (bands/cap/under/clouds/sun)
+  mat4fx rot_proj[2];          // per-view rotation-only view-projection
+  fx16 cloud_scroll_u;         // cloud sheet scroll offset, u axis (turns of the sheet)
+  fx16 cloud_scroll_v;         // cloud sheet scroll offset, v axis
+  angle16 drum_yaw;            // sky drum yaw (U 0.0.16 turns, qformats.md 2)
+  u8 viewport_mask;            // which viewports this sky applies to
+  u8 flags;                    // layer enable bits (see above)
+  u8 reserved0;                // must be 0
+  u8 reserved1;                // must be 0
+  pad[14];                     // to the 16-B record alignment (176 B record)
+}
+
 // ---- audio (reserved)
 
 command EmitAudioEvent 0x0400 reserved {
@@ -203,4 +264,31 @@ command EmitAudioEvent 0x0400 reserved {
 
 command DebugBootstrap 0xF001 reserved {
   u8 data[48];
+}
+
+// ABI v2 (wave 2): the two debug commands the console shell EXECUTES (plan
+// W2.1/D8 — Phase-2 sinks of the CMD.SCHEDULER dispatch interface). Still
+// never game-facing: a frame containing them MUST set header flags bit0.
+// Wire layout (incl. reserved bytes as declared pads, so the validator
+// zero-checks them per capture_format.md 1.1 rule 5):
+//   dst_slot @0 u8, mode @1 video_mode, rsv @2 (2 B pad),
+//   src_addr_hps @4 u32, byte_len @8 u32, expected_crc32c @12 u32,
+//   rsv2+align @16 (16 B pad) — 32-B payload, 48-B record.
+command DebugFrameBlit 0xF002 implemented {
+  u8 dst_slot;          // framebuffer slot 0/1 the blit targets
+  video_mode mode;      // mode the blit payload is laid out for
+  pad[2];               // rsv
+  u32 src_addr_hps;     // HPS-side source address (byte granule)
+  u32 byte_len;         // blit length in bytes (must equal mode canvas bytes)
+  u32 expected_crc32c;  // CRC-32C over the blit payload, checked pre-commit
+  pad[16];              // rsv2 (u32) + 12-B alignment pad
+}
+
+// ABI v2 (wave 2): rumble request from the sealed frame (plan W2.1). One
+// update per frame is applied (INPUT.RUMBLE latch law, spec/input_rules.md).
+command DebugRumble 0xF004 implemented {
+  u8 pad_index;   // 0-3
+  u8 enable;      // 0 = stop, nonzero = run
+  u8 strength;    // PWM duty numerator (duty = strength/256)
+  pad[13];        // rsv byte + 12-B alignment pad — 16-B payload, 32-B record
 }

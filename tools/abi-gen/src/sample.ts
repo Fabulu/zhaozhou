@@ -31,13 +31,22 @@ function maskFor(prim: string): number {
 /**
  * Deterministic scalar sample. Arbitrary but stable; readable in traces:
  * fx16 values are small Q16.16 magnitudes, integers mix the field name with
- * its leaf ordinal and byte offset.
+ * its leaf ordinal and byte offset. Enum leaves cycle through the DECLARED
+ * entries only — a golden sample must validate (capture_format.md 3.2 step 7).
  */
-export function sampleScalar(leaf: LeafIR, ordinal: number): number {
+export function sampleScalar(
+  leaf: LeafIR,
+  ordinal: number,
+  enumEntries?: ReadonlyMap<string, readonly { readonly name: string; readonly value: number }[]>,
+): number {
   if (leaf.kind === 'pad') return 0; // pads are always zero (validator law)
   if (leaf.kind === 'handle') {
     // allocated handle: generation 0x2A, index = leaf ordinal + 1
     return ((0x2a << 24) | (ordinal + 1)) >>> 0;
+  }
+  if (leaf.kind === 'enum' && leaf.enumName && enumEntries) {
+    const entries = enumEntries.get(leaf.enumName)!;
+    return entries[ordinal % entries.length]!.value;
   }
   if (leaf.prim === 'fx16') {
     // small Q16.16: (ordinal%8 + 1) + 0x5A17/65536
@@ -49,6 +58,13 @@ export function sampleScalar(leaf: LeafIR, ordinal: number): number {
   return v & maskFor(leaf.prim);
 }
 
+/** enum name -> declared entries (sample values must be VALID enum members) */
+export function enumEntryMap(
+  ir: LayoutIR,
+): ReadonlyMap<string, readonly { readonly name: string; readonly value: number }[]> {
+  return new Map(ir.enums.map((e) => [e.name, e.entries] as const));
+}
+
 /** Per-struct sample: leaf writes relative to the struct start, own ordinals. */
 export function structSample(
   ir: LayoutIR,
@@ -57,6 +73,7 @@ export function structSample(
   const s = ir.structs.get(structName);
   if (!s) throw new Error(`unknown struct '${structName}'`);
   const leaves: { offset: number; size: number; value: number }[] = [];
+  const enums = enumEntryMap(ir);
   let ordinal = 0;
   const walk = (fields: readonly FieldIR[], base: number) => {
     for (const f of fields) {
@@ -65,12 +82,16 @@ export function structSample(
         continue;
       }
       if (f.kind === 'struct') {
-        walk(ir.structs.get(f.type)!.fields, base + f.offset);
+        // struct ARRAYS expand per element at stride = struct size
+        const sub = ir.structs.get(f.type)!;
+        for (let k = 0; k < f.count; k++) {
+          walk(sub.fields, base + f.offset + k * sub.size);
+        }
         ordinal += f.leaves.length;
         continue;
       }
       for (const leaf of f.leaves) {
-        leaves.push({ offset: base + leaf.offset, size: leaf.size, value: sampleScalar(leaf, ordinal) });
+        leaves.push({ offset: base + leaf.offset, size: leaf.size, value: sampleScalar(leaf, ordinal, enums) });
         ordinal++;
       }
     }
@@ -99,6 +120,7 @@ export interface SampleRecord {
  */
 export function sampleCommand(ir: LayoutIR, cmd: CommandIR): SampleRecord {
   const leaves: { offset: number; size: number; value: number }[] = [];
+  const enums = enumEntryMap(ir);
   let ordinal = 0;
   const walk = (fields: readonly FieldIR[]) => {
     for (const f of fields) {
@@ -107,14 +129,19 @@ export function sampleCommand(ir: LayoutIR, cmd: CommandIR): SampleRecord {
         continue;
       }
       if (f.kind === 'struct') {
-        for (const leaf of structSample(ir, f.type).leaves) {
-          leaves.push({ offset: f.offset + leaf.offset, size: leaf.size, value: leaf.value });
+        // struct ARRAYS: one copy of the struct's leaf writes per element,
+        // at stride = struct size (element 1 of rot_proj[2] must not alias 0)
+        const sub = ir.structs.get(f.type)!;
+        for (let k = 0; k < f.count; k++) {
+          for (const leaf of structSample(ir, f.type).leaves) {
+            leaves.push({ offset: f.offset + k * sub.size + leaf.offset, size: leaf.size, value: leaf.value });
+          }
         }
         ordinal += f.leaves.length;
         continue;
       }
       for (const leaf of f.leaves) {
-        leaves.push({ offset: leaf.offset, size: leaf.size, value: sampleScalar(leaf, ordinal) });
+        leaves.push({ offset: leaf.offset, size: leaf.size, value: sampleScalar(leaf, ordinal, enums) });
         ordinal++;
       }
     }

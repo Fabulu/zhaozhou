@@ -29,7 +29,10 @@ function hexBytes(hex: string): string {
 
 export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string): string {
   const L: string[] = [];
-  const primOf = (f: FieldIR) => (f.kind === 'handle' ? 'u32' : f.type);
+  // wire prim of a field: handles are u32; enums ride their BACKING prim
+  const primOf = (f: FieldIR) => (f.kind === 'handle' ? 'u32'
+    : f.kind === 'enum' ? f.leaves[0]!.prim
+      : f.type === 'angle16' ? 'u16' : f.type);
   const arrSuffix = (f: FieldIR) => (f.count > 1 ? '[]' : '');
   const tsFieldType = (f: FieldIR): string => {
     if (f.kind === 'struct') return `${structIface(f.type)}${arrSuffix(f)}`;
@@ -72,6 +75,14 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
     L.push('export const ZHAO_ERROR_NAMES: Record<number, string> = {');
     for (const e of errEnum.entries) L.push(`  [${e.value}]: '${e.name}',`);
     L.push('};');
+    L.push('');
+  }
+  // value enums (ABI v2): members + the valid-value sets the validator needs
+  for (const e of ir.enums) {
+    if (e.name === 'zhao_abi_error') continue;
+    L.push(`// enum ${e.name}: ${e.type} on the wire (capture_format.md 3.2 step 7)`);
+    for (const entry of e.entries) L.push(`export const ${entry.name} = ${entry.value} as const;`);
+    L.push(`export const ZHAO_ENUM_${upperSnake(e.name)}: readonly number[] = [${e.entries.map((x) => x.value).join(', ')}];`);
     L.push('');
   }
   L.push('// opcodes');
@@ -117,6 +128,10 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
         L.push(`  ${f.name}: number${arrSuffix(f)}; // fx16 (Q16.16, int32), @${f.offset}`);
       } else if (f.type === 'fx32') {
         L.push(`  ${f.name}: number${arrSuffix(f)}; // fx32 (Q32.32, int64), @${f.offset}`);
+      } else if (f.type === 'angle16') {
+        L.push(`  ${f.name}: number${arrSuffix(f)}; // angle16 (U 0.0.16 turns, u16), @${f.offset}`);
+      } else if (f.kind === 'enum') {
+        L.push(`  ${f.name}: number${arrSuffix(f)}; // ${f.type} (${f.leaves[0]!.prim}), @${f.offset}`);
       } else {
         L.push(`  ${f.name}: number${arrSuffix(f)}; // ${f.type}, @${f.offset}`);
       }
@@ -148,6 +163,10 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
         L.push(`  ${f.name}: number${arrSuffix(f)}; // fx16 (Q16.16, int32), @${f.offset}`);
       } else if (f.type === 'fx32') {
         L.push(`  ${f.name}: number${arrSuffix(f)}; // fx32 (Q32.32, int64), @${f.offset}`);
+      } else if (f.type === 'angle16') {
+        L.push(`  ${f.name}: number${arrSuffix(f)}; // angle16 (U 0.0.16 turns, u16), @${f.offset}`);
+      } else if (f.kind === 'enum') {
+        L.push(`  ${f.name}: number${arrSuffix(f)}; // ${f.type} (${f.leaves[0]!.prim}), @${f.offset}`);
       } else {
         L.push(`  ${f.name}: number${arrSuffix(f)}; // ${f.type}, @${f.offset}`);
       }
@@ -164,6 +183,8 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
   L.push('  implemented: boolean;');
   L.push('  /** payload-relative byte offsets that must be zero (pads) */');
   L.push('  padOffsets: readonly number[];');
+  L.push('  /** enum range checks (capture_format.md 3.2 step 7, ABI v2) */');
+  L.push('  enumChecks: readonly { readonly offset: number; readonly size: number; readonly values: readonly number[] }[];');
   L.push('}');
   L.push('export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [');
   for (const c of ir.commands) {
@@ -171,7 +192,10 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
     for (const f of c.fields) {
       if (f.kind === 'pad') for (let k = 0; k < f.count; k++) pads.push(f.offset + k);
     }
-    L.push(`  { name: '${c.name}', opcode: ${c.opcodeHex}, recordBytes: ${c.recordBytes}, implemented: ${c.implemented}, padOffsets: [${pads.join(', ')}] },`);
+    const enums = c.fields
+      .filter((f) => f.kind === 'enum')
+      .map((f) => `{ offset: ${f.offset}, size: ${f.size / f.count}, values: [${ir.enums.find((e) => e.name === f.type)!.entries.map((x) => x.value).join(', ')}] }`);
+    L.push(`  { name: '${c.name}', opcode: ${c.opcodeHex}, recordBytes: ${c.recordBytes}, implemented: ${c.implemented}, padOffsets: [${pads.join(', ')}], enumChecks: [${enums.join(', ')}] },`);
   }
   L.push('];');
   L.push(`export const ZHAO_COMMAND_COUNT = ${ir.commands.length} as const;`);
@@ -272,8 +296,7 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
     let li = 0;
     for (const f of s.fields) {
       if (f.kind === 'pad') {
-        li += f.count;
-        continue;
+        continue; // pads produce no sample leaves (sample.ts skips them)
       }
       if (f.kind === 'struct') {
         const items = Array.from({ length: f.count }, () => `zhaoSample${cap(f.type)}()`);
@@ -307,8 +330,7 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
     let li = 0;
     for (const f of c.fields) {
       if (f.kind === 'pad') {
-        li += f.count;
-        continue;
+        continue; // pads produce no sample leaves (sample.ts skips them)
       }
       if (f.kind === 'struct') {
         const items = Array.from({ length: f.count }, () => `zhaoSample${cap(f.type)}()`);
@@ -337,7 +359,7 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
         L.push(`  w.zeros(${f.count}); // ${f.name}`);
       } else if (f.kind === 'struct') {
         for (let k = 0; k < f.count; k++) {
-          L.push(`  zhaoPack${cap(f.type)}(v.${f.name}${f.count > 1 ? `[${k}]` : ''}, w);`);
+          L.push(`  zhaoPack${cap(f.type)}(v.${f.name}${f.count > 1 ? `[${k}]!` : ''}, w);`);
         }
       } else if (f.count > 1) {
         L.push(`  for (let i = 0; i < ${f.count}; i++) w.${primOf(f)}(v.${f.name}[i]!);`);
@@ -358,7 +380,7 @@ export function emitTs(ir: LayoutIR, identitySha256: string, zidlSha256: string)
         L.push(`  w.zeros(${f.count}); // ${f.name}`);
       } else if (f.kind === 'struct') {
         for (let k = 0; k < f.count; k++) {
-          L.push(`  zhaoPack${cap(f.type)}(r.${f.name}${f.count > 1 ? `[${k}]` : ''}, w);`);
+          L.push(`  zhaoPack${cap(f.type)}(r.${f.name}${f.count > 1 ? `[${k}]!` : ''}, w);`);
         }
       } else if (f.count > 1) {
         L.push(`  for (let i = 0; i < ${f.count}; i++) w.${primOf(f)}(r.${f.name}[i]!);`);

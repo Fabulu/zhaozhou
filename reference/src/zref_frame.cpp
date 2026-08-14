@@ -93,6 +93,10 @@ ZhaoValidateResult zhao_frame_validate(const uint8_t* pkt, size_t len, uint32_t 
         return fail(ZH_ABI_RESERVED_FIELD, seen, full);
       }
     }
+    // 7. enum fields must carry a declared member value (ABI v2)
+    if (!zhao_enum_value_ok(opcode, stream + off + 16)) {
+      return fail(ZH_ABI_BAD_VALUE, seen, full);
+    }
 
     if (opcode >= 0xF000 && opcode <= 0xF0FF) any_debug = true;
     off += rec_bytes;

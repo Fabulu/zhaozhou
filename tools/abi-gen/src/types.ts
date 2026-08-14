@@ -18,11 +18,12 @@ export const PRIM_TYPES: Readonly<Record<string, number>> = {
   u8: 1, u16: 2, u32: 4, u64: 8,
   i8: 1, i16: 2, i32: 4, i64: 8,
   fx16: 4, fx32: 8,
+  angle16: 2, // qformats.md 2: U 0.0.16 TURNS (u16 storage, wraps mod 2^16)
   pad: 1,
 };
 
 export const INT_TYPES: ReadonlySet<string> = new Set([
-  'u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'i32', 'i64', 'fx16', 'fx32',
+  'u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'i32', 'i64', 'fx16', 'fx32', 'angle16',
 ]);
 
 // ---- AST -------------------------------------------------------------------
@@ -105,6 +106,8 @@ export interface LeafIR {
   readonly offset: number;
   readonly size: number;
   readonly kind: FieldKind;
+  /** for kind === 'enum': the .zidl enum name (valid-value set source) */
+  readonly enumName?: string;
 }
 
 export interface StructIR {

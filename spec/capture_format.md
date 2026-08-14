@@ -1,10 +1,13 @@
 # Zhaozhou Capture Format — Command ABI, Frame Packet, .zcap Container
 
 **Status:** Phase 1 ratified (wave 1, plan RUN-20260814-1912 W4 / P5 recon
-RUN-20260814-1852-wave1-abi-capture). Single source of truth for everything
-that crosses a language or a machine boundary. `spec/commands.zidl` is the
-machine-readable ABI definition; this document is its law and the law of the
-two containers built on it.
+RUN-20260814-1852-wave1-abi-capture); **ABI v2 amendments ratified in wave 2**
+(plan W2.1/D5/D6/D8, run RUN-20260814-2154): `video_mode` enum, `PadFrame`
+struct, implemented debug commands (0xF002/0xF004), `angle16` wire type,
+`DrawSky 0x0310` reservation (spec/sky_and_beams.md 4). Single source of
+truth for everything that crosses a language or a machine boundary.
+`spec/commands.zidl` is the machine-readable ABI definition; this document is
+its law and the law of the two containers built on it.
 
 Fixed-point types (`fx16` = Q16.16 in a 4-byte int32 container) are defined by
 `spec/qformats.md` (W3) — that file is the authority; this one only references
@@ -54,6 +57,7 @@ field_type   = prim_type | handle_type | enum_ref | struct_ref ;
 prim_type    = "u8" | "u16" | "u32" | "u64"
              | "i8" | "i16" | "i32" | "i64"
              | "fx16" | "fx32" | "fx64"                  (* Q formats: qformats.md *)
+             | "angle16"                                 (* [v2] U 0.0.16 turns, u16 *)
              | "pad" ;                                   (* one byte; pad[12] etc. *)
 
 handle_type  = "handle32" , [ "[" , ident , "]" ] ;       (* u32 {index:24, gen:8} *)
@@ -67,11 +71,14 @@ array_suffix = "[" , int , "]" ;                          (* fixed length only *
 Ratified wave-1 extensions:
 
 1. **Command status keyword.** `implemented` commands are executed by the
-   Phase-1 decoder shell (as no-ops with counters); `reserved` commands have a
-   frozen wire layout and validate structurally, but carry no execution
-   semantics yet — an executor asked to run one reports
-   `ZH_ABI_UNIMPLEMENTED_COMMAND`. Omitting the keyword is a generator error
-   (status is part of the ABI contract, not an optional comment).
+   decoder/shell; `reserved` commands have a frozen wire layout and validate
+   structurally, but carry no execution semantics yet — an executor asked to
+   run one reports `ZH_ABI_UNIMPLEMENTED_COMMAND`. Omitting the keyword is a
+   generator error (status is part of the ABI contract, not an optional
+   comment). Since v2, debug-umbrella opcodes (0xF000-0xF0FF) MAY be
+   `implemented` — the console shell executes them (debug-blit DMA, rumble),
+   they stay never-game-facing, and the header flags-bit0 requirement is
+   unchanged.
 2. **`bits` containers are legal grammar but unused in v1.** The generator
    implements them (LSB-first members, overflow rejected); no v1 command
    declares one. Bitfield-having commands activate the `ZH_ABI_BAD_VALUE`
@@ -91,7 +98,16 @@ Ratified wave-1 extensions:
 5. `pad` fields and `reserved` handle/kind words must be zero on the wire;
    nonzero is `ZH_ABI_RESERVED_FIELD`.
 6. `fx16` is 4 bytes (Q16.16 in int32); `fx32` is 8 bytes (Q32.32 in int64).
-   The *name* counts fractional bits, not container bytes.
+   The *name* counts fractional bits, not container bytes. `angle16`
+   (**[v2]**) is 2 bytes — an unsigned 16-bit *turns* phase (qformats.md 2);
+   u16 add/sub is exact mod one turn.
+7. (**[v2]**) A struct's total size must be a multiple of its alignment cap
+   `min(max member size, 4)` — the generator hard-errors otherwise — so a
+   struct used as an array element keeps every member of every element
+   naturally aligned (rule 3). Tail padding is explicit, never hidden.
+8. (**[v2]**) Enum-typed fields (`enum video_mode : u8` etc.) occupy their
+   backing primitive's width; a value outside the declared member set is
+   `ZH_ABI_BAD_VALUE` (3.2 step 7 — active since v2).
 
 ### 1.2 Opcode ranges
 
@@ -99,9 +115,9 @@ Ratified wave-1 extensions:
 |---|---|---|
 | `0x0000-0x00FF` | frame control, views, presentation | Nop 0x0000, BeginFrame 0x0001, EndFrame 0x0002, SetView 0x0010, SetPresentationContract 0x0020 |
 | `0x0200-0x02FF` | terrain / surface | TerrainField 0x0200, SurfaceStamp 0x0210 (reserved) |
-| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (reserved) |
+| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (reserved); DrawSky 0x0310 reserved [v2, spec/sky_and_beams.md 4]; `0x0311-0x031F` reserved for sky extensions (never allocate without a spec/sky_and_beams.md version bump) |
 | `0x0400-0x04FF` | audio | EmitAudioEvent 0x0400 (reserved) |
-| `0xF000-0xF0FF` | bootstrap/debug umbrella | DebugBootstrap 0xF001 (reserved; never game-facing) |
+| `0xF000-0xF0FF` | bootstrap/debug umbrella | DebugBootstrap 0xF001 (reserved), DebugFrameBlit 0xF002 (implemented [v2]), DebugRumble 0xF004 (implemented [v2]) — never game-facing |
 
 Opcodes are frozen once shipped: opcode, field set and sizes never change;
 additive change = new opcode, old kept as deprecated alias. A frame containing
@@ -123,7 +139,10 @@ a `0xF000-0xF0FF` opcode MUST set frame header flags bit0
 | DrawPopulation | 0x0301 | 32 | reserved |
 | DrawProcedural | 0x0302 | 64 | reserved |
 | EmitAudioEvent | 0x0400 | 32 | reserved |
+| DrawSky | 0x0310 | 176 | reserved |
 | DebugBootstrap | 0xF001 | 64 | reserved |
+| DebugFrameBlit | 0xF002 | 48 | implemented |
+| DebugRumble | 0xF004 | 32 | implemented |
 
 Deviations from the P5 recon table (record sizes there were estimates; the
 .zidl layout math above is normative and the differences are all consequences
@@ -257,11 +276,12 @@ Offset  Size  Field          Notes
 
 `handle32` wire format: `{ index: 24 bits, generation: 8 bits }`. Consumers
 compare `generation` against the current epoch's generation and reject stale
-handles with `ZH_ABI_STALE_HANDLE`. **v1 scope:** no *implemented* v1 command
-carries a handle or enum field, so the stale-handle and bad-value checks are
-generated but not yet exercised by any live command; they activate with the
-first command that declares such fields (recorded as a known deferral, not a
-gap — the error codes and check sites exist).
+handles with `ZH_ABI_STALE_HANDLE`. **v2 scope:** enum range checks are LIVE —
+`SetPresentationContract.mode` and `DebugFrameBlit.mode` carry `video_mode`
+(u8, members 0-2); an out-of-range value fails with `ZH_ABI_BAD_VALUE`
+(corpus case `enum_out_of_range`). The stale-handle check remains generated
+but unexercised (no live command carries a handle yet; DrawSky will activate
+it in wave 8).
 
 ### 3.2 Validation order (fail-safe; normative)
 
@@ -281,7 +301,7 @@ frame aborts: no partial consumption, no writes outside assigned memory
 | 4 | payload_crc32c (bytes [36, 36+N)) | `ZH_ABI_BAD_PAYLOAD_CRC` |
 | 5 | per record, in stream order: `record_bytes % 16 == 0 && >= 16`; running sum + record_bytes ≤ command_bytes; opcode known; `record_bytes == LayoutIR[opcode].size` | `ZH_ABI_BAD_LENGTH` / `ZH_ABI_UNKNOWN_OPCODE` |
 | 6 | record header `reserved0 == 0`; record header `flags == 0` (no defined bits in v1); payload pad bytes zero | `ZH_ABI_RESERVED_FIELD` / `ZH_ABI_RESERVED_FLAG` |
-| 7 | enum ranges / bitfield widths | `ZH_ABI_BAD_VALUE` (no v1 field) |
+| 7 | enum ranges / bitfield widths | `ZH_ABI_BAD_VALUE` (v2: `video_mode` fields) |
 | 8 | handle generations vs resource_epoch | `ZH_ABI_STALE_HANDLE` (no v1 field) |
 | 9 | records sum exactly to command_bytes; records walked == command_count | `ZH_ABI_TRUNCATED` / `ZH_ABI_COUNT_MISMATCH` |
 | 10 | any opcode in `0xF000-0xF0FF` requires frame flags bit0 | `ZH_ABI_DEBUG_FLAG_REQUIRED` |
@@ -336,8 +356,8 @@ Section-table entry:
 | 0x0001 | ABI_INFO | `u32 abi_version; u32 zcap_schema_version; u8 generator_name[16]; u8 generator_sha256[32]; u8 zidl_sha256[32]` — must be first |
 | 0x0002 | FRAME_PACKET | raw sealed frame packet bytes (3) |
 | 0x0003 | RESOURCE_PAGES | `u32 count` + count × `{u8 kind; u8 rsv[3]; u32 page_id; u64 byte_length; u8 sha256[32]; u8 ref[64]}` |
-| 0x0004 | CONTROLLER_SNAPSHOT | `u32 count` + count × `{u8 pad_index; u8 flags; u16 sequence; u32 buttons; i16 lx, ly, rx, ry; u16 rsv}` |
-| 0x0005 | FRAMEBUFFER_EXPECTED | `{u8 mode; u8 view_count; u16 flags; u16 width; u16 height; u16 rsv; u32 expected_crc32c}` |
+| 0x0004 | CONTROLLER_SNAPSHOT | `u32 count` + count × `PadFrame` — the GENERATED struct from spec/commands.zidl (v2): `{u8 pad_index; u8 flags; u16 sequence; u32 buttons; i16 lx, ly, rx, ry; u32 rsv}` = 20 B, array stride 20. Semantics: spec/input_rules.md. (The wave-1 sketch ended `u16 rsv` = 18 B; the grammar's rule-3 stride law requires one explicit 4-B reserved word — the generator now enforces it and this doc follows the .zidl.) |
+| 0x0005 | FRAMEBUFFER_EXPECTED | `{u8 mode; u8 view_count; u16 flags; u16 width; u16 height; u16 rsv; u32 expected_crc32c}` — `mode` is the `video_mode` enum (v2: same u8 byte, 0=Z60, 1=Storm, 2=Duo); `expected_crc32c` covers the DISPLAYED stream after the repeat decision (spec/video_rules.md) |
 | 0x0006 | TILE_CRC | `u32 count` + count × `{u32 tile_index; u32 crc32c}` |
 | 0x0007 | DEPTH_STENCIL_CRC | optional; same shape as TILE_CRC |
 | 0x0008 | COUNTERS | `u32 count` + count × `{u16 counter_id; u16 rsv; u64 expected_value}` |
@@ -415,3 +435,20 @@ builds → raw hex display. Never a wrong guess.
 - Every validator (C++ `zref_frame`, TS `frame.ts`, SV `zhao_abi_pkg`) walks
   the 3.2 order; the fuzz corpus asserts tri-language error-code identity on
   malformed inputs.
+
+### 6.1 Wave-2 golden capture naming ([v2], plan W2.7)
+
+Per-mode 10-frame replays and the Duo marker trajectory live under
+`captures/golden/wave2/`:
+
+| File | Contents |
+|---|---|
+| `captures/golden/wave2/z60_10frame.zcap` | Z60, 10 sealed frames + per-frame FRAMEBUFFER_EXPECTED (displayed-CRC) + CONTROLLER_SNAPSHOT + COUNTERS |
+| `captures/golden/wave2/storm_10frame.zcap` | same, Storm |
+| `captures/golden/wave2/duo_10frame.zcap` | same, Duo (both view canvases) |
+| `captures/golden/wave2/duo_markers.zcap` | 600-frame Duo marker demo: trajectory hash = CRC-32C chain over the 600 displayed-frame CRCs, recorded as a COUNTERS entry |
+
+Every wave-2 capture records its timing profile version in ABI_INFO
+generator identity (sim tables are provisional until ZH-016; plan R3), and
+uses section_version = 1 for all sections above. FRAMEBUFFER_EXPECTED
+sections are one per frame, in frame order.

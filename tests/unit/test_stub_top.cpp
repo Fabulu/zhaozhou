@@ -132,7 +132,9 @@ int main(int argc, char** argv) {
       h[0] = 0xEF;  // corrupt magic (no re-seal: corruption IS the test)
       cases.push_back({"bad magic", h, E_BAD_MAGIC});
     }
-    cases.push_back({"bad abi", hdr_of(frame, 2), E_BAD_ABI});
+    // ABI v2 since wave 2: 1 (the v1 value) and 3 are both wrong
+    cases.push_back({"bad abi v1", hdr_of(frame, 1), E_BAD_ABI});
+    cases.push_back({"bad abi v3", hdr_of(frame, 3), E_BAD_ABI});
     {
       // reserved frame flag bit set, resealed (so earlier checks pass)
       auto full = resealed([&] { auto f = frame; f[6] = 0x08; return f; }());
