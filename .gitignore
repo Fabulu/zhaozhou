@@ -24,3 +24,6 @@ node_modules/
 .idea/
 Thumbs.db
 desktop.ini
+
+# TS build output (fixgen tsc -> dist/, never committed)
+dist/
