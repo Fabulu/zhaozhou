@@ -2632,13 +2632,27 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: 'f036f75'
+        evidence: tools/ledger/src/rules.ts
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '8bdeac8'
+        evidence: tools/ledger/src/gen/dashboard.ts
     deferred: false
     cut_order: null
     superseded_by: null
     leaf: true
-    notes: Contract filled (Phase-1-active). `npm run ledger:check` / `ledger:gen` — staleness is CI failure (plan R11).
+    tests:
+      unit: tools/ledger/src/test/rules.test.ts
+    notes: >-
+      Contract filled (Phase-1-active). `npm run ledger:check` / `ledger:gen`
+      — staleness is CI failure (plan R11). W6 step 1 of 2 (ladder law): the
+      validator + generators (V1-V14, git-history V2) are complete; the unit
+      suite evidence lifts it to UNIT_VERIFIED in the next ledger commit.
 
   - id: SW.TOOLS.ABIDOC
     name: ABI generator
@@ -2656,12 +2670,26 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '562787f'
+        evidence: tools/abi-gen/src/main.ts
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '0383ed1'
+        evidence: tests/abi/golden/frame_minimal.bin
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active scope note; tool lands W4).
+    tests:
+      unit: tools/abi-gen/test/abi_gen.test.ts
+    notes: >-
+      Contract filled (Phase-1-active scope note; tool lands W4). W6 step 1
+      of 2 (ladder law): the five-emitter generator + goldens are complete;
+      the 17/17 suite + byte-identity matrix lift it to UNIT_VERIFIED in the
+      next ledger commit.
 
   - id: SW.TOOLS.ASSET
     name: Asset pipeline
@@ -2702,13 +2730,27 @@ blocks:
     backpressure: none
     latency: batch
     target_throughput: n/a (tool)
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '9d8dc79'
+        evidence: tools/capture/zhao_capture.cpp
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-14
+        commit: '9d8dc79'
+        evidence: tests/unit/test_zcap_roundtrip.cpp
     deferred: false
     cut_order: null
     superseded_by: null
     leaf: true
-    notes: Contract filled (Phase-1-active). Registered as its OWN block per plan 1.D (P2's +1 over 83).
+    tests:
+      unit: tests/unit/test_zcap_roundtrip.cpp
+    notes: >-
+      Contract filled (Phase-1-active). Registered as its OWN block per plan
+      1.D (P2's +1 over 83). W6 step 1 of 2 (ladder law): the CLI + container
+      round-trips are complete; the CLI smoke + corpus evidence lifts it to
+      UNIT_VERIFIED in the next ledger commit.
 
   - id: SW.TOOLS.REPORT
     name: Quartus report parser
