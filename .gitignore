@@ -1,0 +1,21 @@
+# build output
+build/
+out/
+*.bit
+*.svf
+*.bin
+*.json
+*.asc
+*.config
+
+# simulation
+obj_dir/
+*.vcd
+*.fst
+*.log
+
+# editors / os
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
