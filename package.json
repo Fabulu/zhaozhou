@@ -16,7 +16,8 @@
     "tables:check": "npm run -w tools/fixgen check",
     "tables:gen": "npm run -w tools/fixgen gen",
     "abi:check": "npm run -w tools/abi-gen check",
-    "abi:gen": "npm run -w tools/abi-gen gen"
+    "abi:gen": "npm run -w tools/abi-gen gen",
+    "field:check": "npm run -w compiler test"
   },
   "engines": {
     "node": ">=20"
