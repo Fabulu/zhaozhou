@@ -196,7 +196,12 @@ constexpr unit8 unit8_from_fx16(fx16 x, SatLedger* L) {
     int32_t r = x.raw;
     if (r < 0) { detail::ledger_bump(L, &SatLedger::unit); return unit8{0}; }
     if (r > 0xFFFF) { detail::ledger_bump(L, &SatLedger::unit); return unit8{255}; }
-    return unit8{static_cast<uint8_t>((r + 128) >> 8)};
+    // Review C2 (RUN-20260814-1912): r in [0xFF80, 0xFFFF] gives
+    // (r + 128) >> 8 == 256, which truncated to uint8_t wrapped to 0 — a ~1.0
+    // weight silently became 0. Clamp to the 255 rail instead (defensive
+    // clamp, unrecorded, mirroring unit_mul's retained 255 clamp; §2/§3).
+    const int32_t q = (r + 128) >> 8;
+    return unit8{static_cast<uint8_t>(q > 255 ? 255 : q)};
 }
 
 constexpr fx16 fx_from_height16(height16 h) {       // exact (§9)

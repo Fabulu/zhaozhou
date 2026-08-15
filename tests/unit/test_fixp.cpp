@@ -588,6 +588,20 @@ static void test_conversions() {
     }
     CHECK_EQ(unit8_from_fx16(fx16{0x10000}, nullptr).raw, 255);   // 1.0 clamps
     CHECK_EQ(unit8_from_fx16(fx16{-1}, nullptr).raw, 0);
+    // Review C2 boundary corpus: raws one LSB below / at / at the top of the
+    // round-to-256 region. Pre-fix, 0xFF80..0xFFFF wrapped (256 -> uint8 0).
+    CHECK_EQ(unit8_from_fx16(fx16{0xFF7F}, nullptr).raw, 255);    // 0.996.. rounds up
+    CHECK_EQ(unit8_from_fx16(fx16{0xFF80}, nullptr).raw, 255);    // was 0 (wrap)
+    CHECK_EQ(unit8_from_fx16(fx16{0xFFFF}, nullptr).raw, 255);    // was 0 (wrap)
+    CHECK_EQ(unit8_from_fx16(fx16{-1}, nullptr).raw, 0);
+    CHECK_EQ(unit8_from_fx16(fx16{INT32_MIN}, nullptr).raw, 0);   // bottom rail
+    CHECK_EQ(unit8_from_fx16(fx16{INT32_MAX}, nullptr).raw, 255); // top rail
+    {   // negative clamps record exactly one unit counter (qformats.md 5)
+        SatLedger L;
+        unit8_from_fx16(fx16{-1}, &L);
+        unit8_from_fx16(fx16{0xFF80}, &L);   // in-range rail: no record
+        CHECK_EQ(L.unit, 1u);
+    }
 
     // screenXY: round-half-up from fx16, guard clamp at +-2048 px (qformats.md 8)
     CHECK_EQ(to_screen_xy(fx16{0}, nullptr), 0);
