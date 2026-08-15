@@ -41,8 +41,13 @@ void check(bool ok, const char* what) {
 //     pixel-CENTRE range, not ceil/floor of the vertex extent, and the
 //     top-left bias applies to the exact s64 E0, not to the floored E' =
 //     E0>>8 (B56D4F2A -> 6396C558).
-constexpr uint32_t kGoldenCanvasCrc = 0x6396C558u;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0x168F145Bu;  // [w3.5-golden]
+//   heightfield shading normal rescale(cross, 32) -> rescale(cross, 16): the
+//     cross of two Q16.16 edge vectors is Q32.32, so >>32 quantised the
+//     normal to whole world-units^2 (black below ~1 m spacing). The golden
+//     island is 17x17 over +-8 m = exactly 1 m, so its shading moves from the
+//     quantised normal to the exact one (6396C558 -> 803958B5).
+constexpr uint32_t kGoldenCanvasCrc = 0x803958B5u;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0x99F2AD34u;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

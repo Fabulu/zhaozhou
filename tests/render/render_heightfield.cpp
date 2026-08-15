@@ -249,12 +249,80 @@ void test_ring_stamp() {
   check(s.strength[32 * 64 + 28] == 0, "annulus hole boundary respected");
 }
 
+// ---- sub-metre grid spacing (defect fixed 2026-08-15) ----------------------
+//
+// draw_heightfield built its shading normal with rescale_s32(cross, 32). The
+// cross product of two fx16 (Q16.16) edge vectors is Q32.32, so >>32 yields
+// Q32.0 — the normal quantised to WHOLE world-units^2. Below ~1 m grid
+// spacing every component of a near-flat cell rounds to 0, the nmag2 == 0
+// guard fires for every triangle, and the whole patch shades solid black.
+// The rescale is 16 now. This test renders a 41x41 bump over +-12 m (0.6 m
+// spacing) and demands (a) the patch is NOT a black silhouette and (b) its
+// shading actually VARIES across the bump.
+void test_submetre_shading() {
+  // 0.6 m spacing: 24 m across 40 cells
+  const zref::render::TerrainPatch patch = rtest::bump_patch(41, 41, 12, 10);
+  zref::render::Material mat{200, 180, 160};
+  zref::render::RenderResources res;
+  res.terrain_patches.push_back({44, &patch});
+  res.materials.push_back({45, mat});
+
+  zref::render::SoftwareRenderer rend;
+  zref::render::RenderCanvas canvas;
+  const zref::render::RenderResult r = render_island(rend, canvas, res, 1, false);
+  check(r.status == zhao_abi::ZH_ABI_OK, "sub-metre patch frame renders");
+
+  // ortho_topdown(2048) => px = 192 + x*6, py = 120 + z*3.75; +-12 m maps to
+  // x in [120,264), y in [75,165). Sample the interior conservatively.
+  uint32_t lit = 0, total = 0;
+  std::vector<uint16_t> distinct;
+  for (uint32_t y = 78; y < 162; ++y) {
+    for (uint32_t x = 123; x < 261; ++x) {
+      ++total;
+      const uint16_t p = rtest::px(canvas, 0, x, y, 384);
+      const uint32_t r5 = p >> 11, g6 = (p >> 5) & 63, b5 = p & 31;
+      if (r5 + g6 + b5 > 6) ++lit;
+      // Bayer index is (y&3, x&3): sample only the B == 0 phase so any
+      // variation seen is SHADING, never dither.
+      if ((x & 3) == 0 && (y & 3) == 0) {
+        bool seen = false;
+        for (uint16_t v : distinct)
+          if (v == p) seen = true;
+        if (!seen && distinct.size() < 64) distinct.push_back(p);
+      }
+    }
+  }
+  std::printf("  sub-metre patch: %u/%u lit px, %zu distinct undithered values\n", lit, total,
+              distinct.size());
+  check(lit > (total * 9) / 10, "0.6 m grid spacing is NOT a black silhouette");
+  check(distinct.size() >= 3, "sub-metre patch shading varies across the bump");
+
+  // and the same envelope at 1.0 m spacing (25x25) must agree qualitatively —
+  // the old code only worked here, which is why nothing caught the defect
+  const zref::render::TerrainPatch coarse = rtest::bump_patch(25, 25, 12, 10);
+  zref::render::RenderResources res2;
+  res2.terrain_patches.push_back({44, &coarse});
+  res2.materials.push_back({45, mat});
+  zref::render::SoftwareRenderer rend2;
+  zref::render::RenderCanvas canvas2;
+  check(render_island(rend2, canvas2, res2, 1, false).status == zhao_abi::ZH_ABI_OK,
+        "1.0 m spacing control frame renders");
+  uint32_t lit2 = 0;
+  for (uint32_t y = 78; y < 162; ++y)
+    for (uint32_t x = 123; x < 261; ++x) {
+      const uint16_t p = rtest::px(canvas2, 0, x, y, 384);
+      if ((p >> 11) + ((p >> 5) & 63) + (p & 31) > 6) ++lit2;
+    }
+  check(lit2 > (total * 9) / 10, "1.0 m spacing control is lit too");
+}
+
 }  // namespace
 
 int main() {
   test_flat_quad_oracle();
   test_surface_sheet_tint();
   test_ring_stamp();
+  test_submetre_shading();
   if (failures == 0) std::printf("render_heightfield: all green\n");
   return failures == 0 ? 0 : 1;
 }

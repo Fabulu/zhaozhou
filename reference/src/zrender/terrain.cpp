@@ -262,22 +262,37 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       const int64_t e2x = static_cast<int64_t>(cx) - ax;
       const int64_t e2y = static_cast<int64_t>(cy) - ay;
       const int64_t e2z = static_cast<int64_t>(cz) - az;
-      const int64_t n0 = e1y * e2z - e1z * e2y;  // 32.32 raw
+      // Q-format algebra, stated: e1/e2 components are fx16 differences, i.e.
+      // Q16.16 raw. A product of two Q16.16 raws is Q32.32 raw (32 fraction
+      // bits), so the cross-product lanes n0/n1/n2 are Q32.32 and the shift
+      // back to the Q16.16 the code below assumes is rescale(.,16) — NOT 32.
+      //
+      // DEFECT FIXED 2026-08-15: it was rescale(.,32), which yields Q32.0 —
+      // the normal quantised to WHOLE world-units^2. Under ~1 m grid spacing
+      // every component of a near-flat cell rounds to 0, the nmag2 == 0 guard
+      // fires for every triangle, and the entire patch shades solid black.
+      // (41x41 over +-12 m = 0.6 m spacing was a black silhouette; 25x25 over
+      // the same envelope = 1.0 m rendered correctly.) Phase-6 Mantle patches
+      // are 32x32 cells per world patch — sub-metre by design.
+      // Test: tests/render/render_heightfield.cpp test_submetre_shading.
+      const int64_t n0 = e1y * e2z - e1z * e2y;  // Q32.32 raw
       const int64_t n1 = e1z * e2x - e1x * e2z;
       const int64_t n2 = e1x * e2y - e1y * e2x;
-      const int32_t fx = rescale_s32(n0, 32, L);
-      const int32_t fy = rescale_s32(n1, 32, L);
-      const int32_t fz = rescale_s32(n2, 32, L);
+      const int32_t fx = rescale_s32(n0, 16, L);  // -> Q16.16 world-units^2
+      const int32_t fy = rescale_s32(n1, 16, L);
+      const int32_t fz = rescale_s32(n2, 16, L);
       const __int128 ndot = static_cast<__int128>(fx) * kLightX +
                             static_cast<__int128>(fy) * kLightY +
                             static_cast<__int128>(fz) * kLightZ;
       const uint64_t nmag2 = static_cast<uint64_t>(fx) * static_cast<uint64_t>(fx) +
                              static_cast<uint64_t>(fy) * static_cast<uint64_t>(fy) +
                              static_cast<uint64_t>(fz) * static_cast<uint64_t>(fz);
-      if (nmag2 == 0) return 0;
+      if (nmag2 == 0) return 0;  // exactly degenerate (zero-area) triangle
       // scale check: n_fx is Q16.16, so ndot = n.L is Q32.32 raw and
-      // nmag = |n_fx| is Q16.16 raw — ndot/nmag is exactly (nhat.L) in
-      // Q16.16 (§4 one rounding). No extra shift.
+      // nmag2 = |n_fx|^2 is Q32.32 raw, hence isqrt_u64(nmag2) = |n_fx| is
+      // Q16.16 raw — ndot/nmag is exactly (nhat.L) in Q16.16 (§4 one
+      // rounding). No extra shift. (This paragraph was already right; the
+      // rescale above was the lie.)
       const int32_t shade = div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
       return shade < 0 ? 0 : (shade > 0x10000 ? 0x10000 : shade);
     };
