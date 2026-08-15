@@ -1,0 +1,36 @@
+# input_snapshot_atomic.sby — INPUT.SNAPSHOT formal properties (W2.3).
+#
+# Law: spec/input_rules.md 2.1/2.3, plan 4. Properties live in the RTL under
+# `ifdef FORMAL` (read with -DFORMAL):
+#   (a) atomicity  — no latched PadFrame bit or frame_id changes between two
+#                    consecutive frame_ticks (the snapshot is a single
+#                    instant; mid-frame input changes are invisible)
+#   (b) sequence   — increments by exactly 1 per tick while a pad is present
+#                    (mod 2^16), never moves without a tick
+#   (c) gap law    — input_sequence_gaps stays 0 forever: the synchronous
+#                    latch cannot produce a gap by construction
+#
+# BMC depth 30 covers the double-buffer gray-pointer swap, absence freezes
+# and the increment paths across interleaved tick/no-tick cycles.
+
+[tasks]
+bmc
+
+[options]
+mode bmc
+depth 30
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+# the slang frontend (auto-loaded plugin) — the built-in Verilog reader
+# cannot parse the generated abi package's array localparams
+read_slang --top zhao_input_snapshot -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_input_snapshot.sv
+prep -top zhao_input_snapshot
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/input/zhao_input_snapshot.sv

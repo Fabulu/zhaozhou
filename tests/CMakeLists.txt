@@ -191,3 +191,80 @@ add_test(NAME lint_zhao_pkg
 set_tests_properties(lint_zhao_pkg PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- W2.3: input ------------------------------------------------------------
+# INPUT.SNAPSHOT + INPUT.RUMBLE (spec/input_rules.md). ZRef oracles are
+# header-only (reference/include/zref/zref_input.hpp via zhao_zref's public
+# include dir); the two RTL modules verilate against the frozen zhao_pkg +
+# generated zhao_abi_pkg. Random differential registers two modes of the
+# same binary: 1k frames (fast) and the 100k soak (nightly).
+set(ZHAO_ZHAO_PKG ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv)
+set(ZHAO_INPUT_SNAPSHOT_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/input/zhao_input_snapshot.sv)
+set(ZHAO_INPUT_RUMBLE_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/input/zhao_input_rumble.sv)
+set(ZHAO_INPUT_INCLUDES ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                        ${CMAKE_SOURCE_DIR}/fpga/rtl/generated)
+
+add_executable(test_input_snapshot_directed input/input_snapshot_directed.cpp)
+target_link_libraries(test_input_snapshot_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_input_snapshot_directed
+  PREFIX Vzhao_input_snapshot
+  TOP_MODULE zhao_input_snapshot
+  INCLUDE_DIRS ${ZHAO_INPUT_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_SNAPSHOT_SV})
+add_test(NAME input_snapshot_directed COMMAND test_input_snapshot_directed)
+set_tests_properties(input_snapshot_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_input_rumble_directed input/input_rumble_directed.cpp)
+target_link_libraries(test_input_rumble_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_input_rumble_directed
+  PREFIX Vzhao_input_rumble
+  TOP_MODULE zhao_input_rumble
+  INCLUDE_DIRS ${ZHAO_INPUT_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_RUMBLE_SV})
+add_test(NAME input_rumble_directed COMMAND test_input_rumble_directed)
+set_tests_properties(input_rumble_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_input_random input/input_random.cpp)
+target_link_libraries(test_input_random PRIVATE zhao_harness zhao_zref)
+verilate(test_input_random
+  PREFIX Vzhao_input_snapshot
+  TOP_MODULE zhao_input_snapshot
+  INCLUDE_DIRS ${ZHAO_INPUT_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_SNAPSHOT_SV})
+verilate(test_input_random
+  PREFIX Vzhao_input_rumble
+  TOP_MODULE zhao_input_rumble
+  INCLUDE_DIRS ${ZHAO_INPUT_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_RUMBLE_SV})
+add_test(NAME input_random COMMAND test_input_random)
+set_tests_properties(input_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME input_random_soak COMMAND test_input_random --frames 100000)
+set_tests_properties(input_random_soak PROPERTIES LABELS "nightly")
+
+add_test(NAME lint_input_snapshot
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_input_snapshot
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_SNAPSHOT_SV})
+set_tests_properties(lint_input_snapshot PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_input_rumble
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_input_rumble
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_RUMBLE_SV})
+set_tests_properties(lint_input_rumble PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: INPUT.SNAPSHOT atomicity + sequence-exactly-once (SKIP when sby
+# absent — same lane pattern as formal_lane)
+configure_file(formal/input_snapshot_atomic.cmake.in
+               formal/input_snapshot_atomic.cmake @ONLY)
+add_test(NAME input_snapshot_atomic
+         COMMAND ${CMAKE_COMMAND} -P
+                 ${CMAKE_CURRENT_BINARY_DIR}/formal/input_snapshot_atomic.cmake)
+set_tests_properties(input_snapshot_atomic PROPERTIES
+  LABELS "formal;nightly"
+  SKIP_REGULAR_EXPRESSION "formal SKIPPED")

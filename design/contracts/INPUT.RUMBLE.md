@@ -54,7 +54,7 @@ Fixed: latched at the NEXT frame_tick after command execution (≤ 1 frame); PWM
 
 ## Randomized differential tests
 
-`tests/input/input_rumble_random.cpp` — PCG command timelines (0-4 per frame per pad) vs `zref::RumbleBridge` duty trace bit-exact.
+`tests/input/input_random.cpp` — PCG command timelines (0-5 per frame, valid + out-of-range indices, duplicate-pad replacements) vs `zref::RumbleBridge` duty table + PWM carrier bit-exact every cycle; 1k fast / 100k nightly (shared timeline with the snapshot differential).
 
 ## Formal properties
 

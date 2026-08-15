@@ -54,7 +54,7 @@ Absent pad ⇒ `pad_present=0`, `buttons=0`, sticks `0`, sequence frozen (spec/i
 
 ## Randomized differential tests
 
-`tests/input/input_snapshot_random.cpp` — PCG pad streams (presence toggles, jittered change points) vs `zref::PadSnapshot`, bit-exact arrays, 1k/100k.
+`tests/input/input_random.cpp` — PCG pad streams (presence toggles, jittered change points) vs `zref::PadSnapshot`, bit-exact arrays, 1k fast / 100k nightly; the same binary also drives the rumble differential (shared timeline, run-twice determinism hash).
 
 ## Formal properties
 

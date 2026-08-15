@@ -604,9 +604,11 @@ blocks:
     latency: fixed:1
     target_throughput: 1 snapshot per frame
     reference_model: zref::PadSnapshot
+    implementation: fpga/rtl/input/zhao_input_snapshot.sv
     tests:
       directed: tests/input/input_snapshot_directed.cpp
-      random: tests/input/input_snapshot_random.cpp
+      random: tests/input/input_random.cpp
+      formal: tests/formal/input_snapshot_atomic.sby
     counters: [input_sequence_gaps]
     source_ids: true
     async_bridge: true
@@ -635,9 +637,10 @@ blocks:
     latency: fixed:1
     target_throughput: 1 update per frame
     reference_model: zref::RumbleBridge
+    implementation: fpga/rtl/input/zhao_input_rumble.sv
     tests:
       directed: tests/input/input_rumble_directed.cpp
-      random: tests/input/input_rumble_random.cpp
+      random: tests/input/input_random.cpp
     counters: [rumble_frames_dropped]
     source_ids: true
     async_bridge: true
