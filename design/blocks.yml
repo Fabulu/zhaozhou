@@ -202,12 +202,16 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
         commit: "38f9b96"
         evidence: reference/include/zref/zref_cmd2.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "b64afe2"
+        evidence: tests/command/cmd_dma_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -273,12 +277,16 @@ blocks:
     counters: [frame_cycles, deadline_faults, commands]
     source_ids: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
         commit: "38f9b96"
         evidence: reference/include/zref/zref_cmd2.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "b64afe2"
+        evidence: tests/command/cmd_scheduler_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2348,12 +2356,16 @@ blocks:
     counters: [frame_cycles]
     source_ids: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
         commit: "38f9b96"
         evidence: reference/include/zref/zref_cmd2.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "b64afe2"
+        evidence: tests/debug/debug_counters_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2382,12 +2394,16 @@ blocks:
     counters: [tile_references]
     source_ids: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
         commit: "38f9b96"
         evidence: reference/include/zref/zref_cmd2.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "b64afe2"
+        evidence: tests/debug/debug_crc_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
