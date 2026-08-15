@@ -1,0 +1,310 @@
+{
+ "decls": [
+  {
+   "items": [
+    {
+     "kind": "seed",
+     "span": {
+      "end": 439,
+      "file": "scenario.form",
+      "start": 435
+     },
+     "value": "23063"
+    },
+    {
+     "kind": "load",
+     "span": {
+      "end": 456,
+      "file": "scenario.form",
+      "start": 452
+     },
+     "target": "declarations"
+    },
+    {
+     "at": "spawn_origin",
+     "index": "0",
+     "kind": "spawn_player",
+     "span": {
+      "end": 480,
+      "file": "scenario.form",
+      "start": 475
+     }
+    },
+    {
+     "at": "spawn_origin",
+     "index": "1",
+     "kind": "spawn_player",
+     "span": {
+      "end": 516,
+      "file": "scenario.form",
+      "start": 511
+     }
+    },
+    {
+     "action": {
+      "args": [],
+      "callee": {
+       "kind": "ident",
+       "name": "input_latch",
+       "span": {
+        "end": 569,
+        "file": "scenario.form",
+        "start": 558
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 571,
+       "file": "scenario.form",
+       "start": 558
+      }
+     },
+     "kind": "at",
+     "span": {
+      "end": 549,
+      "file": "scenario.form",
+      "start": 547
+     },
+     "tick": "0"
+    },
+    {
+     "action": {
+      "args": [],
+      "callee": {
+       "kind": "ident",
+       "name": "integrate",
+       "span": {
+        "end": 597,
+        "file": "scenario.form",
+        "start": 588
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 599,
+       "file": "scenario.form",
+       "start": 588
+      }
+     },
+     "kind": "at",
+     "span": {
+      "end": 579,
+      "file": "scenario.form",
+      "start": 577
+     },
+     "tick": "1"
+    },
+    {
+     "action": {
+      "args": [],
+      "callee": {
+       "kind": "ident",
+       "name": "apply_earth",
+       "span": {
+        "end": 629,
+        "file": "scenario.form",
+        "start": 618
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 631,
+       "file": "scenario.form",
+       "start": 618
+      }
+     },
+     "kind": "at",
+     "span": {
+      "end": 607,
+      "file": "scenario.form",
+      "start": 605
+     },
+     "tick": "120"
+    },
+    {
+     "expr": {
+      "kind": "binary",
+      "l": {
+       "kind": "ident",
+       "name": "peak_marker",
+       "span": {
+        "end": 655,
+        "file": "scenario.form",
+        "start": 644
+       }
+      },
+      "op": "==",
+      "r": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "2",
+        "suffix": "m"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 661,
+        "file": "scenario.form",
+        "start": 659
+       },
+       "text": "2m"
+      },
+      "span": {
+       "end": 661,
+       "file": "scenario.form",
+       "start": 644
+      }
+     },
+     "kind": "assert",
+     "span": {
+      "end": 643,
+      "file": "scenario.form",
+      "start": 637
+     },
+     "tolerance": {
+      "frac": {
+       "fracDigits": "25",
+       "intDigits": "0",
+       "suffix": ""
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 673,
+       "file": "scenario.form",
+       "start": 669
+      },
+      "text": "0.25"
+     }
+    },
+    {
+     "expr": {
+      "kind": "binary",
+      "l": {
+       "field": "count",
+       "fieldSpan": {
+        "end": 701,
+        "file": "scenario.form",
+        "start": 696
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "creatures",
+        "span": {
+         "end": 695,
+         "file": "scenario.form",
+         "start": 686
+        }
+       },
+       "span": {
+        "end": 701,
+        "file": "scenario.form",
+        "start": 686
+       }
+      },
+      "op": "==",
+      "r": {
+       "intVal": "0",
+       "kind": "literal",
+       "lit": "int",
+       "span": {
+        "end": 706,
+        "file": "scenario.form",
+        "start": 705
+       },
+       "text": "0"
+      },
+      "span": {
+       "end": 706,
+       "file": "scenario.form",
+       "start": 686
+      }
+     },
+     "kind": "assert",
+     "span": {
+      "end": 685,
+      "file": "scenario.form",
+      "start": 679
+     },
+     "tolerance": null
+    },
+    {
+     "frame": "150",
+     "kind": "capture",
+     "name": "opposing_waves",
+     "span": {
+      "end": 719,
+      "file": "scenario.form",
+      "start": 712
+     }
+    },
+    {
+     "budgetSet": "duo",
+     "kind": "assert_budget",
+     "span": {
+      "end": 768,
+      "file": "scenario.form",
+      "start": 755
+     }
+    }
+   ],
+   "kind": "Scenario",
+   "name": "opposing_waves",
+   "span": {
+    "end": 777,
+    "file": "scenario.form",
+    "start": 405
+   }
+  }
+ ],
+ "imports": [
+  {
+   "kind": "Import",
+   "module": "declarations",
+   "names": [
+    "creatures",
+    "spawn_origin",
+    "peak_marker"
+   ],
+   "span": {
+    "end": 311,
+    "file": "scenario.form",
+    "start": 250
+   }
+  },
+  {
+   "kind": "Import",
+   "module": "systems",
+   "names": [
+    "input_latch",
+    "integrate",
+    "apply_earth"
+   ],
+   "span": {
+    "end": 369,
+    "file": "scenario.form",
+    "start": 314
+   }
+  },
+  {
+   "kind": "Import",
+   "module": "wound_present",
+   "names": [
+    "duo"
+   ],
+   "span": {
+    "end": 401,
+    "file": "scenario.form",
+    "start": 372
+   }
+  }
+ ],
+ "kind": "Module",
+ "name": "wound_scenario",
+ "span": {
+  "end": 780,
+  "file": "scenario.form",
+  "start": 224
+ }
+}

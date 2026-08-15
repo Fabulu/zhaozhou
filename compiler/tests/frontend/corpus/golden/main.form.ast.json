@@ -1,0 +1,264 @@
+{
+ "decls": [
+  {
+   "init": {
+    "field": "SHARED_SCALE",
+    "fieldSpan": {
+     "end": 201,
+     "file": "main.form",
+     "start": 189
+    },
+    "kind": "member",
+    "obj": {
+     "kind": "ident",
+     "name": "library",
+     "span": {
+      "end": 188,
+      "file": "main.form",
+      "start": 181
+     }
+    },
+    "span": {
+     "end": 201,
+     "file": "main.form",
+     "start": 181
+    }
+   },
+   "kind": "Global",
+   "name": "tuned",
+   "span": {
+    "end": 202,
+    "file": "main.form",
+    "start": 160
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 178,
+     "file": "main.form",
+     "start": 174
+    }
+   }
+  },
+  {
+   "init": {
+    "field": "_INTERNAL_STEP",
+    "fieldSpan": {
+     "end": 249,
+     "file": "main.form",
+     "start": 235
+    },
+    "kind": "member",
+    "obj": {
+     "kind": "ident",
+     "name": "library",
+     "span": {
+      "end": 234,
+      "file": "main.form",
+      "start": 227
+     }
+    },
+    "span": {
+     "end": 249,
+     "file": "main.form",
+     "start": 227
+    }
+   },
+   "kind": "Global",
+   "name": "stepped",
+   "span": {
+    "end": 250,
+    "file": "main.form",
+    "start": 205
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 224,
+     "file": "main.form",
+     "start": 221
+    }
+   }
+  },
+  {
+   "body": [
+    {
+     "init": {
+      "fields": [
+       {
+        "name": "gain",
+        "span": {
+         "end": 309,
+         "file": "main.form",
+         "start": 305
+        },
+        "value": {
+         "kind": "ident",
+         "name": "SHARED_SCALE",
+         "span": {
+          "end": 324,
+          "file": "main.form",
+          "start": 312
+         }
+        }
+       }
+      ],
+      "kind": "record",
+      "span": {
+       "end": 326,
+       "file": "main.form",
+       "start": 296
+      },
+      "typeName": "tuning"
+     },
+     "kind": "let",
+     "name": "t",
+     "span": {
+      "end": 327,
+      "file": "main.form",
+      "start": 288
+     },
+     "type": null
+    },
+    {
+     "kind": "return",
+     "span": {
+      "end": 358,
+      "file": "main.form",
+      "start": 332
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "args": [
+        {
+         "kind": "ident",
+         "name": "x",
+         "span": {
+          "end": 347,
+          "file": "main.form",
+          "start": 346
+         }
+        }
+       ],
+       "callee": {
+        "kind": "ident",
+        "name": "scaled",
+        "span": {
+         "end": 345,
+         "file": "main.form",
+         "start": 339
+        }
+       },
+       "kind": "call",
+       "span": {
+        "end": 348,
+        "file": "main.form",
+        "start": 339
+       }
+      },
+      "op": "+",
+      "r": {
+       "field": "gain",
+       "fieldSpan": {
+        "end": 357,
+        "file": "main.form",
+        "start": 353
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "t",
+        "span": {
+         "end": 352,
+         "file": "main.form",
+         "start": 351
+        }
+       },
+       "span": {
+        "end": 357,
+        "file": "main.form",
+        "start": 351
+       }
+      },
+      "span": {
+       "end": 357,
+       "file": "main.form",
+       "start": 339
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "use_all",
+   "params": [
+    {
+     "name": "x",
+     "span": {
+      "end": 266,
+      "file": "main.form",
+      "start": 265
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 272,
+       "file": "main.form",
+       "start": 268
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 281,
+     "file": "main.form",
+     "start": 277
+    }
+   },
+   "span": {
+    "end": 362,
+    "file": "main.form",
+    "start": 254
+   }
+  }
+ ],
+ "imports": [
+  {
+   "kind": "Import",
+   "module": "library",
+   "names": [
+    "SHARED_SCALE",
+    "tuning",
+    "scaled"
+   ],
+   "span": {
+    "end": 138,
+    "file": "main.form",
+    "start": 90
+   }
+  },
+  {
+   "kind": "Import",
+   "module": "library",
+   "names": [],
+   "span": {
+    "end": 156,
+    "file": "main.form",
+    "start": 141
+   }
+  }
+ ],
+ "kind": "Module",
+ "name": "main",
+ "span": {
+  "end": 365,
+  "file": "main.form",
+  "start": 74
+ }
+}

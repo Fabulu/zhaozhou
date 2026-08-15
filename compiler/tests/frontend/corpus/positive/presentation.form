@@ -1,0 +1,35 @@
+// presentation.form — the present domain: view layout (Duo contract), shared
+// budget reserve, all five L1 emit kinds lowered to ABI v3 command templates
+// (draw_form 0x0300, draw_population 0x0301, draw_procedural 0x0302,
+// surface_stamp 0x0210, audio 0x0400), pure reads of truth state only.
+module wound_present {
+  import declarations { creatures, MAX_CREATURES };
+  import fields { shatter_storm };
+
+  const FORM_PAGE: u32 = 12;
+  const PATCH_PAGE: u32 = 3;
+  const BRUSH_PAGE: u32 = 7;
+
+  global cam_a: world3 = world3 { x = 0w, y = 40w, z = -12w };
+  global cam_b: world3 = world3 { x = 8w, y = 30w, z = 8w };
+  global hit_point: world3 = world3 { x = 1w, y = 2w, z = 3w };
+  global screen_err: fx16 = 0.5m;
+
+  sound earth_break {
+    sample "tone/earth_break.ztone";
+    gain 80%;
+    pitch 1.0;
+    pan 0;
+  }
+
+  presentation duo {
+    view 0 from cam_a budget 45%;
+    view 1 from cam_b budget 45%;
+    shared budget 10%;
+    emit draw_form(form: FORM_PAGE, transform: hit_point, view_mask: 3, weight: 100%);
+    emit draw_population(pool: creatures, view_mask: 3, weight: 80%);
+    emit draw_procedural(patch: PATCH_PAGE, transform: hit_point, screen_error: screen_err);
+    emit surface_stamp(brush: BRUSH_PAGE, at: hit_point, radius: 2m, ring_width: 0.5m, tag: 1, strength: 80%);
+    emit audio(sound: earth_break, at: hit_point);
+  }
+}

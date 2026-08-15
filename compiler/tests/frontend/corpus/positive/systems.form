@@ -1,0 +1,94 @@
+// systems.form — the sim domain: reads/writes admission, multi-rate,
+// stagger, bounded for (range + pool sugar), spawn/kill, apply terrain_field,
+// flow application per element, the §4.6 intrinsic table (input, random,
+// terrain, math, conversions, mix), if statements, single-assignment lets.
+// The read/write sets here are the D6 scheduler's input (W3.3 goldens).
+module systems {
+  import declarations { creature, creatures, ridge_params, spell_kind, spawn_origin };
+  import fields { shatter_storm, shatter_params };
+
+  pool wizards: creature[2];
+  pool shards: creature[64];
+  global wizard_pos: world3 = world3 { x = 0w, y = 0w, z = 0w };
+  global peak_height: fx16 = 0m;
+  global rng_id: u32 = 7;
+
+  fn lift(x: fx16) -> fx16 {
+    return abs(x) + min(1m, max(0m, x));
+  }
+
+  system input_latch every 1 ticks
+    reads input
+    writes wizard_pos
+  {
+    let pad = input.player(0);
+    let up = input.held(pad, BTN_UP);
+    let step = if up { 0.25m } else { 0m };
+    wizard_pos = world3 { x = 0w, y = 0w, z = 0w };
+  }
+
+  system spawn_waves every 60 ticks
+    reads wizard_pos, spawn_origin
+    writes creatures
+  {
+    spawn(creatures, creature {
+      position = wizard_pos,
+      velocity = velocity3 { x = 0w, y = 0w, z = 0w },
+      age = 0,
+      kind = spell_kind.wave,
+      hp = 100%,
+    });
+  }
+
+  system integrate every 1 ticks
+    reads creatures, terrain, rng_id
+    writes creatures.position, creatures.velocity, creatures.age
+  {
+    for i in 0..creatures.count {
+      let h = terrain.height(world2 { x = 0w, y = 0w });
+      let s = random.stream(rng_id, i);
+      let jitter = random.fx16(s, -0.5m, 0.5m);
+      let angle = random.angle16(s);
+      let fwd = sin(angle) * 0.125m;
+      let dx = random.fx16(s, -0.5m, 0.5m);
+      let mixed = mix(creatures.hp[i], 100%, 50%);
+      let energy = lift(to_fx16(jitter * 0.5m + fwd));
+      creatures.age[i] = creatures.age[i] + 1;
+      creatures.velocity[i] = velocity3 { x = 0w, y = 0w, z = 0w };
+      creatures.position[i] = world3 { x = 0w, y = to_fx24(energy), z = 0w };
+    }
+  }
+
+  system reap every 4 ticks
+    reads
+    writes creatures
+  {
+    kill(creatures, 0);
+  }
+
+  system shatter_tick every 4 ticks stagger over shards
+    reads shards
+    writes shards
+  {
+    shatter_storm(shards, shatter_params { threshold = 1m, bias = 0.5m });
+  }
+
+  system apply_earth every 4 ticks
+    reads wizard_pos
+    writes terrain
+  {
+    apply terrain_field rising_ridge(
+      origin: world2 { x = 0w, y = 0w },
+      params: ridge_params { amplitude = 2m, width = 8m }
+    ) duration 45t;
+  }
+
+  @earth field rising_ridge(params: ridge_params) -> terrain_delta
+    footprint circle(0m, 0m, 8m);
+    max_ops 32
+  {
+    let d = dist(sample.x, sample.z, 0m, 0m);
+    let falloff = if d < params.width { params.amplitude } else { 0m };
+    return terrain_delta { height = falloff, velocity = 0m, material = 0, nav_cost = 0m };
+  }
+}

@@ -1,0 +1,2890 @@
+{
+ "decls": [
+  {
+   "capacity": {
+    "kind": "int",
+    "span": {
+     "end": 557,
+     "file": "systems.form",
+     "start": 556
+    },
+    "value": "2"
+   },
+   "kind": "Pool",
+   "name": "wizards",
+   "span": {
+    "end": 559,
+    "file": "systems.form",
+    "start": 533
+   },
+   "structName": "creature"
+  },
+  {
+   "capacity": {
+    "kind": "int",
+    "span": {
+     "end": 586,
+     "file": "systems.form",
+     "start": 584
+    },
+    "value": "64"
+   },
+   "kind": "Pool",
+   "name": "shards",
+   "span": {
+    "end": 588,
+    "file": "systems.form",
+    "start": 562
+   },
+   "structName": "creature"
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 629,
+       "file": "systems.form",
+       "start": 628
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 634,
+        "file": "systems.form",
+        "start": 632
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 637,
+       "file": "systems.form",
+       "start": 636
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 642,
+        "file": "systems.form",
+        "start": 640
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 645,
+       "file": "systems.form",
+       "start": 644
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 650,
+        "file": "systems.form",
+        "start": 648
+       },
+       "text": "0w"
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 652,
+     "file": "systems.form",
+     "start": 619
+    },
+    "typeName": "world3"
+   },
+   "kind": "Global",
+   "name": "wizard_pos",
+   "span": {
+    "end": 653,
+    "file": "systems.form",
+    "start": 591
+   },
+   "type": {
+    "kind": "named",
+    "name": "world3",
+    "span": {
+     "end": 616,
+     "file": "systems.form",
+     "start": 610
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "",
+     "intDigits": "0",
+     "suffix": "m"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 685,
+     "file": "systems.form",
+     "start": 683
+    },
+    "text": "0m"
+   },
+   "kind": "Global",
+   "name": "peak_height",
+   "span": {
+    "end": 686,
+    "file": "systems.form",
+    "start": 656
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 680,
+     "file": "systems.form",
+     "start": 676
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "7",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 711,
+     "file": "systems.form",
+     "start": 710
+    },
+    "text": "7"
+   },
+   "kind": "Global",
+   "name": "rng_id",
+   "span": {
+    "end": 712,
+    "file": "systems.form",
+    "start": 689
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 707,
+     "file": "systems.form",
+     "start": 704
+    }
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 783,
+      "file": "systems.form",
+      "start": 747
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "args": [
+        {
+         "kind": "ident",
+         "name": "x",
+         "span": {
+          "end": 759,
+          "file": "systems.form",
+          "start": 758
+         }
+        }
+       ],
+       "callee": {
+        "kind": "ident",
+        "name": "abs",
+        "span": {
+         "end": 757,
+         "file": "systems.form",
+         "start": 754
+        }
+       },
+       "kind": "call",
+       "span": {
+        "end": 760,
+        "file": "systems.form",
+        "start": 754
+       }
+      },
+      "op": "+",
+      "r": {
+       "args": [
+        {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "1",
+          "suffix": "m"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 769,
+          "file": "systems.form",
+          "start": 767
+         },
+         "text": "1m"
+        },
+        {
+         "args": [
+          {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 777,
+            "file": "systems.form",
+            "start": 775
+           },
+           "text": "0m"
+          },
+          {
+           "kind": "ident",
+           "name": "x",
+           "span": {
+            "end": 780,
+            "file": "systems.form",
+            "start": 779
+           }
+          }
+         ],
+         "callee": {
+          "kind": "ident",
+          "name": "max",
+          "span": {
+           "end": 774,
+           "file": "systems.form",
+           "start": 771
+          }
+         },
+         "kind": "call",
+         "span": {
+          "end": 781,
+          "file": "systems.form",
+          "start": 771
+         }
+        }
+       ],
+       "callee": {
+        "kind": "ident",
+        "name": "min",
+        "span": {
+         "end": 766,
+         "file": "systems.form",
+         "start": 763
+        }
+       },
+       "kind": "call",
+       "span": {
+        "end": 782,
+        "file": "systems.form",
+        "start": 763
+       }
+      },
+      "span": {
+       "end": 782,
+       "file": "systems.form",
+       "start": 754
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "lift",
+   "params": [
+    {
+     "name": "x",
+     "span": {
+      "end": 725,
+      "file": "systems.form",
+      "start": 724
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 731,
+       "file": "systems.form",
+       "start": 727
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 740,
+     "file": "systems.form",
+     "start": 736
+    }
+   },
+   "span": {
+    "end": 787,
+    "file": "systems.form",
+    "start": 716
+   }
+  },
+  {
+   "body": [
+    {
+     "init": {
+      "args": [
+       {
+        "intVal": "0",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 894,
+         "file": "systems.form",
+         "start": 893
+        },
+        "text": "0"
+       }
+      ],
+      "callee": {
+       "field": "player",
+       "fieldSpan": {
+        "end": 892,
+        "file": "systems.form",
+        "start": 886
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "input",
+        "span": {
+         "end": 885,
+         "file": "systems.form",
+         "start": 880
+        }
+       },
+       "span": {
+        "end": 892,
+        "file": "systems.form",
+        "start": 880
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 895,
+       "file": "systems.form",
+       "start": 880
+      }
+     },
+     "kind": "let",
+     "name": "pad",
+     "span": {
+      "end": 896,
+      "file": "systems.form",
+      "start": 870
+     },
+     "type": null
+    },
+    {
+     "init": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "pad",
+        "span": {
+         "end": 924,
+         "file": "systems.form",
+         "start": 921
+        }
+       },
+       {
+        "kind": "ident",
+        "name": "BTN_UP",
+        "span": {
+         "end": 932,
+         "file": "systems.form",
+         "start": 926
+        }
+       }
+      ],
+      "callee": {
+       "field": "held",
+       "fieldSpan": {
+        "end": 920,
+        "file": "systems.form",
+        "start": 916
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "input",
+        "span": {
+         "end": 915,
+         "file": "systems.form",
+         "start": 910
+        }
+       },
+       "span": {
+        "end": 920,
+        "file": "systems.form",
+        "start": 910
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 933,
+       "file": "systems.form",
+       "start": 910
+      }
+     },
+     "kind": "let",
+     "name": "up",
+     "span": {
+      "end": 934,
+      "file": "systems.form",
+      "start": 901
+     },
+     "type": null
+    },
+    {
+     "init": {
+      "cond": {
+       "kind": "ident",
+       "name": "up",
+       "span": {
+        "end": 955,
+        "file": "systems.form",
+        "start": 953
+       }
+      },
+      "else": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "m"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 975,
+        "file": "systems.form",
+        "start": 973
+       },
+       "text": "0m"
+      },
+      "kind": "if_expr",
+      "span": {
+       "end": 975,
+       "file": "systems.form",
+       "start": 950
+      },
+      "then": {
+       "frac": {
+        "fracDigits": "25",
+        "intDigits": "0",
+        "suffix": "m"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 963,
+        "file": "systems.form",
+        "start": 958
+       },
+       "text": "0.25m"
+      }
+     },
+     "kind": "let",
+     "name": "step",
+     "span": {
+      "end": 978,
+      "file": "systems.form",
+      "start": 939
+     },
+     "type": null
+    },
+    {
+     "kind": "assign",
+     "span": {
+      "end": 1030,
+      "file": "systems.form",
+      "start": 983
+     },
+     "target": {
+      "kind": "ident",
+      "name": "wizard_pos",
+      "span": {
+       "end": 993,
+       "file": "systems.form",
+       "start": 983
+      }
+     },
+     "value": {
+      "fields": [
+       {
+        "name": "x",
+        "span": {
+         "end": 1006,
+         "file": "systems.form",
+         "start": 1005
+        },
+        "value": {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "0",
+          "suffix": "w"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1011,
+          "file": "systems.form",
+          "start": 1009
+         },
+         "text": "0w"
+        }
+       },
+       {
+        "name": "y",
+        "span": {
+         "end": 1014,
+         "file": "systems.form",
+         "start": 1013
+        },
+        "value": {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "0",
+          "suffix": "w"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1019,
+          "file": "systems.form",
+          "start": 1017
+         },
+         "text": "0w"
+        }
+       },
+       {
+        "name": "z",
+        "span": {
+         "end": 1022,
+         "file": "systems.form",
+         "start": 1021
+        },
+        "value": {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "0",
+          "suffix": "w"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1027,
+          "file": "systems.form",
+          "start": 1025
+         },
+         "text": "0w"
+        }
+       }
+      ],
+      "kind": "record",
+      "span": {
+       "end": 1029,
+       "file": "systems.form",
+       "start": 996
+      },
+      "typeName": "world3"
+     }
+    }
+   ],
+   "every": "1",
+   "kind": "System",
+   "name": "input_latch",
+   "reads": [
+    {
+     "kind": "access",
+     "parts": [
+      "input"
+     ],
+     "span": {
+      "end": 839,
+      "file": "systems.form",
+      "start": 834
+     }
+    }
+   ],
+   "span": {
+    "end": 1034,
+    "file": "systems.form",
+    "start": 791
+   },
+   "staggerPool": null,
+   "staggerRate": null,
+   "staggerSpan": null,
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "wizard_pos"
+     ],
+     "span": {
+      "end": 861,
+      "file": "systems.form",
+      "start": 851
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "kind": "spawn",
+     "pool": "creatures",
+     "span": {
+      "end": 1317,
+      "file": "systems.form",
+      "start": 1136
+     },
+     "value": {
+      "fields": [
+       {
+        "name": "position",
+        "span": {
+         "end": 1178,
+         "file": "systems.form",
+         "start": 1170
+        },
+        "value": {
+         "kind": "ident",
+         "name": "wizard_pos",
+         "span": {
+          "end": 1191,
+          "file": "systems.form",
+          "start": 1181
+         }
+        }
+       },
+       {
+        "name": "velocity",
+        "span": {
+         "end": 1207,
+         "file": "systems.form",
+         "start": 1199
+        },
+        "value": {
+         "fields": [
+          {
+           "name": "x",
+           "span": {
+            "end": 1223,
+            "file": "systems.form",
+            "start": 1222
+           },
+           "value": {
+            "frac": {
+             "fracDigits": "",
+             "intDigits": "0",
+             "suffix": "w"
+            },
+            "kind": "literal",
+            "lit": "frac",
+            "span": {
+             "end": 1228,
+             "file": "systems.form",
+             "start": 1226
+            },
+            "text": "0w"
+           }
+          },
+          {
+           "name": "y",
+           "span": {
+            "end": 1231,
+            "file": "systems.form",
+            "start": 1230
+           },
+           "value": {
+            "frac": {
+             "fracDigits": "",
+             "intDigits": "0",
+             "suffix": "w"
+            },
+            "kind": "literal",
+            "lit": "frac",
+            "span": {
+             "end": 1236,
+             "file": "systems.form",
+             "start": 1234
+            },
+            "text": "0w"
+           }
+          },
+          {
+           "name": "z",
+           "span": {
+            "end": 1239,
+            "file": "systems.form",
+            "start": 1238
+           },
+           "value": {
+            "frac": {
+             "fracDigits": "",
+             "intDigits": "0",
+             "suffix": "w"
+            },
+            "kind": "literal",
+            "lit": "frac",
+            "span": {
+             "end": 1244,
+             "file": "systems.form",
+             "start": 1242
+            },
+            "text": "0w"
+           }
+          }
+         ],
+         "kind": "record",
+         "span": {
+          "end": 1246,
+          "file": "systems.form",
+          "start": 1210
+         },
+         "typeName": "velocity3"
+        }
+       },
+       {
+        "name": "age",
+        "span": {
+         "end": 1257,
+         "file": "systems.form",
+         "start": 1254
+        },
+        "value": {
+         "intVal": "0",
+         "kind": "literal",
+         "lit": "int",
+         "span": {
+          "end": 1261,
+          "file": "systems.form",
+          "start": 1260
+         },
+         "text": "0"
+        }
+       },
+       {
+        "name": "kind",
+        "span": {
+         "end": 1273,
+         "file": "systems.form",
+         "start": 1269
+        },
+        "value": {
+         "field": "wave",
+         "fieldSpan": {
+          "end": 1291,
+          "file": "systems.form",
+          "start": 1287
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "spell_kind",
+          "span": {
+           "end": 1286,
+           "file": "systems.form",
+           "start": 1276
+          }
+         },
+         "span": {
+          "end": 1291,
+          "file": "systems.form",
+          "start": 1276
+         }
+        }
+       },
+       {
+        "name": "hp",
+        "span": {
+         "end": 1301,
+         "file": "systems.form",
+         "start": 1299
+        },
+        "value": {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "100",
+          "suffix": "%"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1308,
+          "file": "systems.form",
+          "start": 1304
+         },
+         "text": "100%"
+        }
+       }
+      ],
+      "kind": "record",
+      "span": {
+       "end": 1315,
+       "file": "systems.form",
+       "start": 1153
+      },
+      "typeName": "creature"
+     }
+    }
+   ],
+   "every": "60",
+   "kind": "System",
+   "name": "spawn_waves",
+   "reads": [
+    {
+     "kind": "access",
+     "parts": [
+      "wizard_pos"
+     ],
+     "span": {
+      "end": 1092,
+      "file": "systems.form",
+      "start": 1082
+     }
+    },
+    {
+     "kind": "access",
+     "parts": [
+      "spawn_origin"
+     ],
+     "span": {
+      "end": 1106,
+      "file": "systems.form",
+      "start": 1094
+     }
+    }
+   ],
+   "span": {
+    "end": 1321,
+    "file": "systems.form",
+    "start": 1038
+   },
+   "staggerPool": null,
+   "staggerRate": null,
+   "staggerSpan": null,
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "creatures"
+     ],
+     "span": {
+      "end": 1127,
+      "file": "systems.form",
+      "start": 1118
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "body": [
+      {
+       "init": {
+        "args": [
+         {
+          "fields": [
+           {
+            "name": "x",
+            "span": {
+             "end": 1535,
+             "file": "systems.form",
+             "start": 1534
+            },
+            "value": {
+             "frac": {
+              "fracDigits": "",
+              "intDigits": "0",
+              "suffix": "w"
+             },
+             "kind": "literal",
+             "lit": "frac",
+             "span": {
+              "end": 1540,
+              "file": "systems.form",
+              "start": 1538
+             },
+             "text": "0w"
+            }
+           },
+           {
+            "name": "y",
+            "span": {
+             "end": 1543,
+             "file": "systems.form",
+             "start": 1542
+            },
+            "value": {
+             "frac": {
+              "fracDigits": "",
+              "intDigits": "0",
+              "suffix": "w"
+             },
+             "kind": "literal",
+             "lit": "frac",
+             "span": {
+              "end": 1548,
+              "file": "systems.form",
+              "start": 1546
+             },
+             "text": "0w"
+            }
+           }
+          ],
+          "kind": "record",
+          "span": {
+           "end": 1550,
+           "file": "systems.form",
+           "start": 1525
+          },
+          "typeName": "world2"
+         }
+        ],
+        "callee": {
+         "field": "height",
+         "fieldSpan": {
+          "end": 1524,
+          "file": "systems.form",
+          "start": 1518
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "terrain",
+          "span": {
+           "end": 1517,
+           "file": "systems.form",
+           "start": 1510
+          }
+         },
+         "span": {
+          "end": 1524,
+          "file": "systems.form",
+          "start": 1510
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1551,
+         "file": "systems.form",
+         "start": 1510
+        }
+       },
+       "kind": "let",
+       "name": "h",
+       "span": {
+        "end": 1552,
+        "file": "systems.form",
+        "start": 1502
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "rng_id",
+          "span": {
+           "end": 1587,
+           "file": "systems.form",
+           "start": 1581
+          }
+         },
+         {
+          "kind": "ident",
+          "name": "i",
+          "span": {
+           "end": 1590,
+           "file": "systems.form",
+           "start": 1589
+          }
+         }
+        ],
+        "callee": {
+         "field": "stream",
+         "fieldSpan": {
+          "end": 1580,
+          "file": "systems.form",
+          "start": 1574
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "random",
+          "span": {
+           "end": 1573,
+           "file": "systems.form",
+           "start": 1567
+          }
+         },
+         "span": {
+          "end": 1580,
+          "file": "systems.form",
+          "start": 1567
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1591,
+         "file": "systems.form",
+         "start": 1567
+        }
+       },
+       "kind": "let",
+       "name": "s",
+       "span": {
+        "end": 1592,
+        "file": "systems.form",
+        "start": 1559
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "s",
+          "span": {
+           "end": 1625,
+           "file": "systems.form",
+           "start": 1624
+          }
+         },
+         {
+          "kind": "unary",
+          "op": "-",
+          "operand": {
+           "frac": {
+            "fracDigits": "5",
+            "intDigits": "0",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 1632,
+            "file": "systems.form",
+            "start": 1628
+           },
+           "text": "0.5m"
+          },
+          "span": {
+           "end": 1632,
+           "file": "systems.form",
+           "start": 1627
+          }
+         },
+         {
+          "frac": {
+           "fracDigits": "5",
+           "intDigits": "0",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1638,
+           "file": "systems.form",
+           "start": 1634
+          },
+          "text": "0.5m"
+         }
+        ],
+        "callee": {
+         "field": "fx16",
+         "fieldSpan": {
+          "end": 1623,
+          "file": "systems.form",
+          "start": 1619
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "random",
+          "span": {
+           "end": 1618,
+           "file": "systems.form",
+           "start": 1612
+          }
+         },
+         "span": {
+          "end": 1623,
+          "file": "systems.form",
+          "start": 1612
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1639,
+         "file": "systems.form",
+         "start": 1612
+        }
+       },
+       "kind": "let",
+       "name": "jitter",
+       "span": {
+        "end": 1640,
+        "file": "systems.form",
+        "start": 1599
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "s",
+          "span": {
+           "end": 1675,
+           "file": "systems.form",
+           "start": 1674
+          }
+         }
+        ],
+        "callee": {
+         "field": "angle16",
+         "fieldSpan": {
+          "end": 1673,
+          "file": "systems.form",
+          "start": 1666
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "random",
+          "span": {
+           "end": 1665,
+           "file": "systems.form",
+           "start": 1659
+          }
+         },
+         "span": {
+          "end": 1673,
+          "file": "systems.form",
+          "start": 1659
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1676,
+         "file": "systems.form",
+         "start": 1659
+        }
+       },
+       "kind": "let",
+       "name": "angle",
+       "span": {
+        "end": 1677,
+        "file": "systems.form",
+        "start": 1647
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "kind": "binary",
+        "l": {
+         "args": [
+          {
+           "kind": "ident",
+           "name": "angle",
+           "span": {
+            "end": 1703,
+            "file": "systems.form",
+            "start": 1698
+           }
+          }
+         ],
+         "callee": {
+          "kind": "ident",
+          "name": "sin",
+          "span": {
+           "end": 1697,
+           "file": "systems.form",
+           "start": 1694
+          }
+         },
+         "kind": "call",
+         "span": {
+          "end": 1704,
+          "file": "systems.form",
+          "start": 1694
+         }
+        },
+        "op": "*",
+        "r": {
+         "frac": {
+          "fracDigits": "125",
+          "intDigits": "0",
+          "suffix": "m"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1713,
+          "file": "systems.form",
+          "start": 1707
+         },
+         "text": "0.125m"
+        },
+        "span": {
+         "end": 1713,
+         "file": "systems.form",
+         "start": 1694
+        }
+       },
+       "kind": "let",
+       "name": "fwd",
+       "span": {
+        "end": 1714,
+        "file": "systems.form",
+        "start": 1684
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "s",
+          "span": {
+           "end": 1743,
+           "file": "systems.form",
+           "start": 1742
+          }
+         },
+         {
+          "kind": "unary",
+          "op": "-",
+          "operand": {
+           "frac": {
+            "fracDigits": "5",
+            "intDigits": "0",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 1750,
+            "file": "systems.form",
+            "start": 1746
+           },
+           "text": "0.5m"
+          },
+          "span": {
+           "end": 1750,
+           "file": "systems.form",
+           "start": 1745
+          }
+         },
+         {
+          "frac": {
+           "fracDigits": "5",
+           "intDigits": "0",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1756,
+           "file": "systems.form",
+           "start": 1752
+          },
+          "text": "0.5m"
+         }
+        ],
+        "callee": {
+         "field": "fx16",
+         "fieldSpan": {
+          "end": 1741,
+          "file": "systems.form",
+          "start": 1737
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "random",
+          "span": {
+           "end": 1736,
+           "file": "systems.form",
+           "start": 1730
+          }
+         },
+         "span": {
+          "end": 1741,
+          "file": "systems.form",
+          "start": 1730
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1757,
+         "file": "systems.form",
+         "start": 1730
+        }
+       },
+       "kind": "let",
+       "name": "dx",
+       "span": {
+        "end": 1758,
+        "file": "systems.form",
+        "start": 1721
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "index": {
+           "kind": "ident",
+           "name": "i",
+           "span": {
+            "end": 1795,
+            "file": "systems.form",
+            "start": 1794
+           }
+          },
+          "kind": "index",
+          "obj": {
+           "field": "hp",
+           "fieldSpan": {
+            "end": 1793,
+            "file": "systems.form",
+            "start": 1791
+           },
+           "kind": "member",
+           "obj": {
+            "kind": "ident",
+            "name": "creatures",
+            "span": {
+             "end": 1790,
+             "file": "systems.form",
+             "start": 1781
+            }
+           },
+           "span": {
+            "end": 1793,
+            "file": "systems.form",
+            "start": 1781
+           }
+          },
+          "span": {
+           "end": 1796,
+           "file": "systems.form",
+           "start": 1781
+          }
+         },
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "100",
+           "suffix": "%"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1802,
+           "file": "systems.form",
+           "start": 1798
+          },
+          "text": "100%"
+         },
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "50",
+           "suffix": "%"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1807,
+           "file": "systems.form",
+           "start": 1804
+          },
+          "text": "50%"
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "mix",
+         "span": {
+          "end": 1780,
+          "file": "systems.form",
+          "start": 1777
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1808,
+         "file": "systems.form",
+         "start": 1777
+        }
+       },
+       "kind": "let",
+       "name": "mixed",
+       "span": {
+        "end": 1809,
+        "file": "systems.form",
+        "start": 1765
+       },
+       "type": null
+      },
+      {
+       "init": {
+        "args": [
+         {
+          "args": [
+           {
+            "kind": "binary",
+            "l": {
+             "kind": "binary",
+             "l": {
+              "kind": "ident",
+              "name": "jitter",
+              "span": {
+               "end": 1848,
+               "file": "systems.form",
+               "start": 1842
+              }
+             },
+             "op": "*",
+             "r": {
+              "frac": {
+               "fracDigits": "5",
+               "intDigits": "0",
+               "suffix": "m"
+              },
+              "kind": "literal",
+              "lit": "frac",
+              "span": {
+               "end": 1855,
+               "file": "systems.form",
+               "start": 1851
+              },
+              "text": "0.5m"
+             },
+             "span": {
+              "end": 1855,
+              "file": "systems.form",
+              "start": 1842
+             }
+            },
+            "op": "+",
+            "r": {
+             "kind": "ident",
+             "name": "fwd",
+             "span": {
+              "end": 1861,
+              "file": "systems.form",
+              "start": 1858
+             }
+            },
+            "span": {
+             "end": 1861,
+             "file": "systems.form",
+             "start": 1842
+            }
+           }
+          ],
+          "callee": {
+           "kind": "ident",
+           "name": "to_fx16",
+           "span": {
+            "end": 1841,
+            "file": "systems.form",
+            "start": 1834
+           }
+          },
+          "kind": "call",
+          "span": {
+           "end": 1862,
+           "file": "systems.form",
+           "start": 1834
+          }
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "lift",
+         "span": {
+          "end": 1833,
+          "file": "systems.form",
+          "start": 1829
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1863,
+         "file": "systems.form",
+         "start": 1829
+        }
+       },
+       "kind": "let",
+       "name": "energy",
+       "span": {
+        "end": 1864,
+        "file": "systems.form",
+        "start": 1816
+       },
+       "type": null
+      },
+      {
+       "kind": "assign",
+       "span": {
+        "end": 1911,
+        "file": "systems.form",
+        "start": 1871
+       },
+       "target": {
+        "index": {
+         "kind": "ident",
+         "name": "i",
+         "span": {
+          "end": 1886,
+          "file": "systems.form",
+          "start": 1885
+         }
+        },
+        "kind": "index",
+        "obj": {
+         "field": "age",
+         "fieldSpan": {
+          "end": 1884,
+          "file": "systems.form",
+          "start": 1881
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "creatures",
+          "span": {
+           "end": 1880,
+           "file": "systems.form",
+           "start": 1871
+          }
+         },
+         "span": {
+          "end": 1884,
+          "file": "systems.form",
+          "start": 1871
+         }
+        },
+        "span": {
+         "end": 1887,
+         "file": "systems.form",
+         "start": 1871
+        }
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "index": {
+          "kind": "ident",
+          "name": "i",
+          "span": {
+           "end": 1905,
+           "file": "systems.form",
+           "start": 1904
+          }
+         },
+         "kind": "index",
+         "obj": {
+          "field": "age",
+          "fieldSpan": {
+           "end": 1903,
+           "file": "systems.form",
+           "start": 1900
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "creatures",
+           "span": {
+            "end": 1899,
+            "file": "systems.form",
+            "start": 1890
+           }
+          },
+          "span": {
+           "end": 1903,
+           "file": "systems.form",
+           "start": 1890
+          }
+         },
+         "span": {
+          "end": 1906,
+          "file": "systems.form",
+          "start": 1890
+         }
+        },
+        "op": "+",
+        "r": {
+         "intVal": "1",
+         "kind": "literal",
+         "lit": "int",
+         "span": {
+          "end": 1910,
+          "file": "systems.form",
+          "start": 1909
+         },
+         "text": "1"
+        },
+        "span": {
+         "end": 1910,
+         "file": "systems.form",
+         "start": 1890
+        }
+       }
+      },
+      {
+       "kind": "assign",
+       "span": {
+        "end": 1979,
+        "file": "systems.form",
+        "start": 1918
+       },
+       "target": {
+        "index": {
+         "kind": "ident",
+         "name": "i",
+         "span": {
+          "end": 1938,
+          "file": "systems.form",
+          "start": 1937
+         }
+        },
+        "kind": "index",
+        "obj": {
+         "field": "velocity",
+         "fieldSpan": {
+          "end": 1936,
+          "file": "systems.form",
+          "start": 1928
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "creatures",
+          "span": {
+           "end": 1927,
+           "file": "systems.form",
+           "start": 1918
+          }
+         },
+         "span": {
+          "end": 1936,
+          "file": "systems.form",
+          "start": 1918
+         }
+        },
+        "span": {
+         "end": 1939,
+         "file": "systems.form",
+         "start": 1918
+        }
+       },
+       "value": {
+        "fields": [
+         {
+          "name": "x",
+          "span": {
+           "end": 1955,
+           "file": "systems.form",
+           "start": 1954
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 1960,
+            "file": "systems.form",
+            "start": 1958
+           },
+           "text": "0w"
+          }
+         },
+         {
+          "name": "y",
+          "span": {
+           "end": 1963,
+           "file": "systems.form",
+           "start": 1962
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 1968,
+            "file": "systems.form",
+            "start": 1966
+           },
+           "text": "0w"
+          }
+         },
+         {
+          "name": "z",
+          "span": {
+           "end": 1971,
+           "file": "systems.form",
+           "start": 1970
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 1976,
+            "file": "systems.form",
+            "start": 1974
+           },
+           "text": "0w"
+          }
+         }
+        ],
+        "kind": "record",
+        "span": {
+         "end": 1978,
+         "file": "systems.form",
+         "start": 1942
+        },
+        "typeName": "velocity3"
+       }
+      },
+      {
+       "kind": "assign",
+       "span": {
+        "end": 2057,
+        "file": "systems.form",
+        "start": 1986
+       },
+       "target": {
+        "index": {
+         "kind": "ident",
+         "name": "i",
+         "span": {
+          "end": 2006,
+          "file": "systems.form",
+          "start": 2005
+         }
+        },
+        "kind": "index",
+        "obj": {
+         "field": "position",
+         "fieldSpan": {
+          "end": 2004,
+          "file": "systems.form",
+          "start": 1996
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "creatures",
+          "span": {
+           "end": 1995,
+           "file": "systems.form",
+           "start": 1986
+          }
+         },
+         "span": {
+          "end": 2004,
+          "file": "systems.form",
+          "start": 1986
+         }
+        },
+        "span": {
+         "end": 2007,
+         "file": "systems.form",
+         "start": 1986
+        }
+       },
+       "value": {
+        "fields": [
+         {
+          "name": "x",
+          "span": {
+           "end": 2020,
+           "file": "systems.form",
+           "start": 2019
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2025,
+            "file": "systems.form",
+            "start": 2023
+           },
+           "text": "0w"
+          }
+         },
+         {
+          "name": "y",
+          "span": {
+           "end": 2028,
+           "file": "systems.form",
+           "start": 2027
+          },
+          "value": {
+           "args": [
+            {
+             "kind": "ident",
+             "name": "energy",
+             "span": {
+              "end": 2045,
+              "file": "systems.form",
+              "start": 2039
+             }
+            }
+           ],
+           "callee": {
+            "kind": "ident",
+            "name": "to_fx24",
+            "span": {
+             "end": 2038,
+             "file": "systems.form",
+             "start": 2031
+            }
+           },
+           "kind": "call",
+           "span": {
+            "end": 2046,
+            "file": "systems.form",
+            "start": 2031
+           }
+          }
+         },
+         {
+          "name": "z",
+          "span": {
+           "end": 2049,
+           "file": "systems.form",
+           "start": 2048
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2054,
+            "file": "systems.form",
+            "start": 2052
+           },
+           "text": "0w"
+          }
+         }
+        ],
+        "kind": "record",
+        "span": {
+         "end": 2056,
+         "file": "systems.form",
+         "start": 2010
+        },
+        "typeName": "world3"
+       }
+      }
+     ],
+     "kind": "for",
+     "range": {
+      "hi": {
+       "field": "count",
+       "fieldSpan": {
+        "end": 1493,
+        "file": "systems.form",
+        "start": 1488
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "creatures",
+        "span": {
+         "end": 1487,
+         "file": "systems.form",
+         "start": 1478
+        }
+       },
+       "span": {
+        "end": 1493,
+        "file": "systems.form",
+        "start": 1478
+       }
+      },
+      "kind": "range",
+      "lo": {
+       "intVal": "0",
+       "kind": "literal",
+       "lit": "int",
+       "span": {
+        "end": 1476,
+        "file": "systems.form",
+        "start": 1475
+       },
+       "text": "0"
+      }
+     },
+     "span": {
+      "end": 2063,
+      "file": "systems.form",
+      "start": 1466
+     },
+     "varName": "i"
+    }
+   ],
+   "every": "1",
+   "kind": "System",
+   "name": "integrate",
+   "reads": [
+    {
+     "kind": "access",
+     "parts": [
+      "creatures"
+     ],
+     "span": {
+      "end": 1375,
+      "file": "systems.form",
+      "start": 1366
+     }
+    },
+    {
+     "kind": "access",
+     "parts": [
+      "terrain"
+     ],
+     "span": {
+      "end": 1384,
+      "file": "systems.form",
+      "start": 1377
+     }
+    },
+    {
+     "kind": "access",
+     "parts": [
+      "rng_id"
+     ],
+     "span": {
+      "end": 1392,
+      "file": "systems.form",
+      "start": 1386
+     }
+    }
+   ],
+   "span": {
+    "end": 2067,
+    "file": "systems.form",
+    "start": 1325
+   },
+   "staggerPool": null,
+   "staggerRate": null,
+   "staggerSpan": null,
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "creatures",
+      "position"
+     ],
+     "span": {
+      "end": 1422,
+      "file": "systems.form",
+      "start": 1404
+     }
+    },
+    {
+     "kind": "access",
+     "parts": [
+      "creatures",
+      "velocity"
+     ],
+     "span": {
+      "end": 1442,
+      "file": "systems.form",
+      "start": 1424
+     }
+    },
+    {
+     "kind": "access",
+     "parts": [
+      "creatures",
+      "age"
+     ],
+     "span": {
+      "end": 1457,
+      "file": "systems.form",
+      "start": 1444
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "index": {
+      "intVal": "0",
+      "kind": "literal",
+      "lit": "int",
+      "span": {
+       "end": 2153,
+       "file": "systems.form",
+       "start": 2152
+      },
+      "text": "0"
+     },
+     "kind": "kill",
+     "pool": "creatures",
+     "span": {
+      "end": 2155,
+      "file": "systems.form",
+      "start": 2136
+     }
+    }
+   ],
+   "every": "4",
+   "kind": "System",
+   "name": "reap",
+   "reads": [],
+   "span": {
+    "end": 2159,
+    "file": "systems.form",
+    "start": 2071
+   },
+   "staggerPool": null,
+   "staggerRate": null,
+   "staggerSpan": null,
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "creatures"
+     ],
+     "span": {
+      "end": 2127,
+      "file": "systems.form",
+      "start": 2118
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "call": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "shards",
+        "span": {
+         "end": 2280,
+         "file": "systems.form",
+         "start": 2274
+        }
+       },
+       {
+        "fields": [
+         {
+          "name": "threshold",
+          "span": {
+           "end": 2308,
+           "file": "systems.form",
+           "start": 2299
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "1",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2313,
+            "file": "systems.form",
+            "start": 2311
+           },
+           "text": "1m"
+          }
+         },
+         {
+          "name": "bias",
+          "span": {
+           "end": 2319,
+           "file": "systems.form",
+           "start": 2315
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "5",
+            "intDigits": "0",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2326,
+            "file": "systems.form",
+            "start": 2322
+           },
+           "text": "0.5m"
+          }
+         }
+        ],
+        "kind": "record",
+        "span": {
+         "end": 2328,
+         "file": "systems.form",
+         "start": 2282
+        },
+        "typeName": "shatter_params"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "shatter_storm",
+       "span": {
+        "end": 2273,
+        "file": "systems.form",
+        "start": 2260
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 2329,
+       "file": "systems.form",
+       "start": 2260
+      }
+     },
+     "kind": "call_stmt",
+     "span": {
+      "end": 2329,
+      "file": "systems.form",
+      "start": 2260
+     }
+    }
+   ],
+   "every": "4",
+   "kind": "System",
+   "name": "shatter_tick",
+   "reads": [
+    {
+     "kind": "access",
+     "parts": [
+      "shards"
+     ],
+     "span": {
+      "end": 2233,
+      "file": "systems.form",
+      "start": 2227
+     }
+    }
+   ],
+   "span": {
+    "end": 2334,
+    "file": "systems.form",
+    "start": 2163
+   },
+   "staggerPool": "shards",
+   "staggerRate": null,
+   "staggerSpan": {
+    "end": 2204,
+    "file": "systems.form",
+    "start": 2197
+   },
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "shards"
+     ],
+     "span": {
+      "end": 2251,
+      "file": "systems.form",
+      "start": 2245
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "applyKind": "terrain_field",
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "origin",
+       "span": {
+        "end": 2465,
+        "file": "systems.form",
+        "start": 2459
+       },
+       "value": {
+        "fields": [
+         {
+          "name": "x",
+          "span": {
+           "end": 2477,
+           "file": "systems.form",
+           "start": 2476
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2482,
+            "file": "systems.form",
+            "start": 2480
+           },
+           "text": "0w"
+          }
+         },
+         {
+          "name": "y",
+          "span": {
+           "end": 2485,
+           "file": "systems.form",
+           "start": 2484
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "0",
+            "suffix": "w"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2490,
+            "file": "systems.form",
+            "start": 2488
+           },
+           "text": "0w"
+          }
+         }
+        ],
+        "kind": "record",
+        "span": {
+         "end": 2492,
+         "file": "systems.form",
+         "start": 2467
+        },
+        "typeName": "world2"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "params",
+       "span": {
+        "end": 2506,
+        "file": "systems.form",
+        "start": 2500
+       },
+       "value": {
+        "fields": [
+         {
+          "name": "amplitude",
+          "span": {
+           "end": 2532,
+           "file": "systems.form",
+           "start": 2523
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "2",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2537,
+            "file": "systems.form",
+            "start": 2535
+           },
+           "text": "2m"
+          }
+         },
+         {
+          "name": "width",
+          "span": {
+           "end": 2544,
+           "file": "systems.form",
+           "start": 2539
+          },
+          "value": {
+           "frac": {
+            "fracDigits": "",
+            "intDigits": "8",
+            "suffix": "m"
+           },
+           "kind": "literal",
+           "lit": "frac",
+           "span": {
+            "end": 2549,
+            "file": "systems.form",
+            "start": 2547
+           },
+           "text": "8m"
+          }
+         }
+        ],
+        "kind": "record",
+        "span": {
+         "end": 2551,
+         "file": "systems.form",
+         "start": 2508
+        },
+        "typeName": "ridge_params"
+       }
+      }
+     ],
+     "duration": {
+      "intVal": "45",
+      "kind": "literal",
+      "lit": "tick",
+      "span": {
+       "end": 2570,
+       "file": "systems.form",
+       "start": 2567
+      },
+      "text": "45t"
+     },
+     "kind": "apply",
+     "program": "rising_ridge",
+     "programSpan": {
+      "end": 2451,
+      "file": "systems.form",
+      "start": 2439
+     },
+     "span": {
+      "end": 2571,
+      "file": "systems.form",
+      "start": 2419
+     }
+    }
+   ],
+   "every": "4",
+   "kind": "System",
+   "name": "apply_earth",
+   "reads": [
+    {
+     "kind": "access",
+     "parts": [
+      "wizard_pos"
+     ],
+     "span": {
+      "end": 2391,
+      "file": "systems.form",
+      "start": 2381
+     }
+    }
+   ],
+   "span": {
+    "end": 2575,
+    "file": "systems.form",
+    "start": 2338
+   },
+   "staggerPool": null,
+   "staggerRate": null,
+   "staggerSpan": null,
+   "writes": [
+    {
+     "kind": "access",
+     "parts": [
+      "terrain"
+     ],
+     "span": {
+      "end": 2410,
+      "file": "systems.form",
+      "start": 2403
+     }
+    }
+   ]
+  },
+  {
+   "body": [
+    {
+     "kind": "field_let",
+     "name": "d",
+     "span": {
+      "end": 2742,
+      "file": "systems.form",
+      "start": 2701
+     },
+     "value": {
+      "args": [
+       {
+        "field": "x",
+        "fieldSpan": {
+         "end": 2722,
+         "file": "systems.form",
+         "start": 2721
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 2720,
+          "file": "systems.form",
+          "start": 2714
+         }
+        },
+        "span": {
+         "end": 2722,
+         "file": "systems.form",
+         "start": 2714
+        }
+       },
+       {
+        "field": "z",
+        "fieldSpan": {
+         "end": 2732,
+         "file": "systems.form",
+         "start": 2731
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 2730,
+          "file": "systems.form",
+          "start": 2724
+         }
+        },
+        "span": {
+         "end": 2732,
+         "file": "systems.form",
+         "start": 2724
+        }
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2736,
+         "file": "systems.form",
+         "start": 2734
+        },
+        "text": "0m"
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2740,
+         "file": "systems.form",
+         "start": 2738
+        },
+        "text": "0m"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "dist",
+       "span": {
+        "end": 2713,
+        "file": "systems.form",
+        "start": 2709
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 2741,
+       "file": "systems.form",
+       "start": 2709
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "falloff",
+     "span": {
+      "end": 2814,
+      "file": "systems.form",
+      "start": 2747
+     },
+     "value": {
+      "cond": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "d",
+        "span": {
+         "end": 2765,
+         "file": "systems.form",
+         "start": 2764
+        }
+       },
+       "op": "<",
+       "r": {
+        "field": "width",
+        "fieldSpan": {
+         "end": 2780,
+         "file": "systems.form",
+         "start": 2775
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "params",
+         "span": {
+          "end": 2774,
+          "file": "systems.form",
+          "start": 2768
+         }
+        },
+        "span": {
+         "end": 2780,
+         "file": "systems.form",
+         "start": 2768
+        }
+       },
+       "span": {
+        "end": 2780,
+        "file": "systems.form",
+        "start": 2764
+       }
+      },
+      "else": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "m"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 2811,
+        "file": "systems.form",
+        "start": 2809
+       },
+       "text": "0m"
+      },
+      "kind": "if_expr",
+      "span": {
+       "end": 2811,
+       "file": "systems.form",
+       "start": 2761
+      },
+      "then": {
+       "field": "amplitude",
+       "fieldSpan": {
+        "end": 2799,
+        "file": "systems.form",
+        "start": 2790
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "params",
+        "span": {
+         "end": 2789,
+         "file": "systems.form",
+         "start": 2783
+        }
+       },
+       "span": {
+        "end": 2799,
+        "file": "systems.form",
+        "start": 2783
+       }
+      }
+     }
+    },
+    {
+     "fields": [
+      {
+       "name": "height",
+       "span": {
+        "end": 2848,
+        "file": "systems.form",
+        "start": 2842
+       },
+       "value": {
+        "kind": "ident",
+        "name": "falloff",
+        "span": {
+         "end": 2858,
+         "file": "systems.form",
+         "start": 2851
+        }
+       }
+      },
+      {
+       "name": "velocity",
+       "span": {
+        "end": 2868,
+        "file": "systems.form",
+        "start": 2860
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2873,
+         "file": "systems.form",
+         "start": 2871
+        },
+        "text": "0m"
+       }
+      },
+      {
+       "name": "material",
+       "span": {
+        "end": 2883,
+        "file": "systems.form",
+        "start": 2875
+       },
+       "value": {
+        "intVal": "0",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 2887,
+         "file": "systems.form",
+         "start": 2886
+        },
+        "text": "0"
+       }
+      },
+      {
+       "name": "nav_cost",
+       "span": {
+        "end": 2897,
+        "file": "systems.form",
+        "start": 2889
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2902,
+         "file": "systems.form",
+         "start": 2900
+        },
+        "text": "0m"
+       }
+      }
+     ],
+     "kind": "field_return",
+     "record": "terrain_delta",
+     "span": {
+      "end": 2905,
+      "file": "systems.form",
+      "start": 2819
+     }
+    }
+   ],
+   "footprint": {
+    "args": [
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 2667,
+       "file": "systems.form",
+       "start": 2665
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 2671,
+       "file": "systems.form",
+       "start": 2669
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "8",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 2675,
+       "file": "systems.form",
+       "start": 2673
+      },
+      "text": "8m"
+     }
+    ],
+    "kind": "circle",
+    "span": {
+     "end": 2664,
+     "file": "systems.form",
+     "start": 2658
+    }
+   },
+   "kind": "Field",
+   "maxOps": "32",
+   "name": "rising_ridge",
+   "paramsSpan": {
+    "end": 2611,
+    "file": "systems.form",
+    "start": 2605
+   },
+   "paramsStruct": "ridge_params",
+   "profile": "earth",
+   "profileSpan": {
+    "end": 2585,
+    "file": "systems.form",
+    "start": 2580
+   },
+   "returns": "terrain_delta",
+   "span": {
+    "end": 2909,
+    "file": "systems.form",
+    "start": 2579
+   }
+  }
+ ],
+ "imports": [
+  {
+   "kind": "Import",
+   "module": "declarations",
+   "names": [
+    "creature",
+    "creatures",
+    "ridge_params",
+    "spell_kind",
+    "spawn_origin"
+   ],
+   "span": {
+    "end": 478,
+    "file": "systems.form",
+    "start": 394
+   }
+  },
+  {
+   "kind": "Import",
+   "module": "fields",
+   "names": [
+    "shatter_storm",
+    "shatter_params"
+   ],
+   "span": {
+    "end": 529,
+    "file": "systems.form",
+    "start": 481
+   }
+  }
+ ],
+ "kind": "Module",
+ "name": "systems",
+ "span": {
+  "end": 2912,
+  "file": "systems.form",
+  "start": 375
+ }
+}

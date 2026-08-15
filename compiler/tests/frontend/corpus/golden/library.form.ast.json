@@ -1,0 +1,176 @@
+{
+ "decls": [
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "5",
+     "intDigits": "0",
+     "suffix": "m"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 258,
+     "file": "library.form",
+     "start": 254
+    },
+    "text": "0.5m"
+   },
+   "kind": "Const",
+   "name": "SHARED_SCALE",
+   "span": {
+    "end": 259,
+    "file": "library.form",
+    "start": 227
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 251,
+     "file": "library.form",
+     "start": 247
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "4",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 291,
+     "file": "library.form",
+     "start": 290
+    },
+    "text": "4"
+   },
+   "kind": "Const",
+   "name": "_INTERNAL_STEP",
+   "span": {
+    "end": 292,
+    "file": "library.form",
+    "start": 262
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 287,
+     "file": "library.form",
+     "start": 284
+    }
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "gain",
+     "span": {
+      "end": 316,
+      "file": "library.form",
+      "start": 312
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 322,
+       "file": "library.form",
+       "start": 318
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "tuning",
+   "span": {
+    "end": 325,
+    "file": "library.form",
+    "start": 296
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 386,
+      "file": "library.form",
+      "start": 362
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "ident",
+       "name": "x",
+       "span": {
+        "end": 370,
+        "file": "library.form",
+        "start": 369
+       }
+      },
+      "op": "*",
+      "r": {
+       "kind": "ident",
+       "name": "SHARED_SCALE",
+       "span": {
+        "end": 385,
+        "file": "library.form",
+        "start": 373
+       }
+      },
+      "span": {
+       "end": 385,
+       "file": "library.form",
+       "start": 369
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "scaled",
+   "params": [
+    {
+     "name": "x",
+     "span": {
+      "end": 340,
+      "file": "library.form",
+      "start": 339
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 346,
+       "file": "library.form",
+       "start": 342
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 355,
+     "file": "library.form",
+     "start": 351
+    }
+   },
+   "span": {
+    "end": 390,
+    "file": "library.form",
+    "start": 329
+   }
+  }
+ ],
+ "imports": [],
+ "kind": "Module",
+ "name": "library",
+ "span": {
+  "end": 393,
+  "file": "library.form",
+  "start": 208
+ }
+}

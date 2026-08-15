@@ -1,0 +1,1016 @@
+{
+ "decls": [
+  {
+   "init": {
+    "intVal": "12",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 438,
+     "file": "presentation.form",
+     "start": 436
+    },
+    "text": "12"
+   },
+   "kind": "Const",
+   "name": "FORM_PAGE",
+   "span": {
+    "end": 439,
+    "file": "presentation.form",
+    "start": 413
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 433,
+     "file": "presentation.form",
+     "start": 430
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "3",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 467,
+     "file": "presentation.form",
+     "start": 466
+    },
+    "text": "3"
+   },
+   "kind": "Const",
+   "name": "PATCH_PAGE",
+   "span": {
+    "end": 468,
+    "file": "presentation.form",
+    "start": 442
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 463,
+     "file": "presentation.form",
+     "start": 460
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "7",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 496,
+     "file": "presentation.form",
+     "start": 495
+    },
+    "text": "7"
+   },
+   "kind": "Const",
+   "name": "BRUSH_PAGE",
+   "span": {
+    "end": 497,
+    "file": "presentation.form",
+    "start": 471
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 492,
+     "file": "presentation.form",
+     "start": 489
+    }
+   }
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 534,
+       "file": "presentation.form",
+       "start": 533
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 539,
+        "file": "presentation.form",
+        "start": 537
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 542,
+       "file": "presentation.form",
+       "start": 541
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "40",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 548,
+        "file": "presentation.form",
+        "start": 545
+       },
+       "text": "40w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 551,
+       "file": "presentation.form",
+       "start": 550
+      },
+      "value": {
+       "kind": "unary",
+       "op": "-",
+       "operand": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "12",
+         "suffix": "w"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 558,
+         "file": "presentation.form",
+         "start": 555
+        },
+        "text": "12w"
+       },
+       "span": {
+        "end": 558,
+        "file": "presentation.form",
+        "start": 554
+       }
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 560,
+     "file": "presentation.form",
+     "start": 524
+    },
+    "typeName": "world3"
+   },
+   "kind": "Global",
+   "name": "cam_a",
+   "span": {
+    "end": 561,
+    "file": "presentation.form",
+    "start": 501
+   },
+   "type": {
+    "kind": "named",
+    "name": "world3",
+    "span": {
+     "end": 521,
+     "file": "presentation.form",
+     "start": 515
+    }
+   }
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 597,
+       "file": "presentation.form",
+       "start": 596
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "8",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 602,
+        "file": "presentation.form",
+        "start": 600
+       },
+       "text": "8w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 605,
+       "file": "presentation.form",
+       "start": 604
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "30",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 611,
+        "file": "presentation.form",
+        "start": 608
+       },
+       "text": "30w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 614,
+       "file": "presentation.form",
+       "start": 613
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "8",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 619,
+        "file": "presentation.form",
+        "start": 617
+       },
+       "text": "8w"
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 621,
+     "file": "presentation.form",
+     "start": 587
+    },
+    "typeName": "world3"
+   },
+   "kind": "Global",
+   "name": "cam_b",
+   "span": {
+    "end": 622,
+    "file": "presentation.form",
+    "start": 564
+   },
+   "type": {
+    "kind": "named",
+    "name": "world3",
+    "span": {
+     "end": 584,
+     "file": "presentation.form",
+     "start": 578
+    }
+   }
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 662,
+       "file": "presentation.form",
+       "start": 661
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "1",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 667,
+        "file": "presentation.form",
+        "start": 665
+       },
+       "text": "1w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 670,
+       "file": "presentation.form",
+       "start": 669
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "2",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 675,
+        "file": "presentation.form",
+        "start": 673
+       },
+       "text": "2w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 678,
+       "file": "presentation.form",
+       "start": 677
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "3",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 683,
+        "file": "presentation.form",
+        "start": 681
+       },
+       "text": "3w"
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 685,
+     "file": "presentation.form",
+     "start": 652
+    },
+    "typeName": "world3"
+   },
+   "kind": "Global",
+   "name": "hit_point",
+   "span": {
+    "end": 686,
+    "file": "presentation.form",
+    "start": 625
+   },
+   "type": {
+    "kind": "named",
+    "name": "world3",
+    "span": {
+     "end": 649,
+     "file": "presentation.form",
+     "start": 643
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "5",
+     "intDigits": "0",
+     "suffix": "m"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 719,
+     "file": "presentation.form",
+     "start": 715
+    },
+    "text": "0.5m"
+   },
+   "kind": "Global",
+   "name": "screen_err",
+   "span": {
+    "end": 720,
+    "file": "presentation.form",
+    "start": 689
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 712,
+     "file": "presentation.form",
+     "start": 708
+    }
+   }
+  },
+  {
+   "kind": "Sound",
+   "name": "earth_break",
+   "params": [
+    {
+     "kind": "gain",
+     "span": {
+      "end": 789,
+      "file": "presentation.form",
+      "start": 785
+     },
+     "value": {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "80",
+       "suffix": "%"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 793,
+       "file": "presentation.form",
+       "start": 790
+      },
+      "text": "80%"
+     }
+    },
+    {
+     "kind": "pitch",
+     "span": {
+      "end": 804,
+      "file": "presentation.form",
+      "start": 799
+     },
+     "value": {
+      "frac": {
+       "fracDigits": "0",
+       "intDigits": "1",
+       "suffix": ""
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 808,
+       "file": "presentation.form",
+       "start": 805
+      },
+      "text": "1.0"
+     }
+    },
+    {
+     "kind": "pan",
+     "span": {
+      "end": 817,
+      "file": "presentation.form",
+      "start": 814
+     },
+     "value": {
+      "intVal": "0",
+      "kind": "literal",
+      "lit": "int",
+      "span": {
+       "end": 819,
+       "file": "presentation.form",
+       "start": 818
+      },
+      "text": "0"
+     }
+    }
+   ],
+   "sample": "tone/earth_break.ztone",
+   "sampleSpan": {
+    "end": 779,
+    "file": "presentation.form",
+    "start": 755
+   },
+   "span": {
+    "end": 824,
+    "file": "presentation.form",
+    "start": 724
+   }
+  },
+  {
+   "items": [
+    {
+     "budgetPct": "45",
+     "camera": {
+      "kind": "ident",
+      "name": "cam_a",
+      "span": {
+       "end": 868,
+       "file": "presentation.form",
+       "start": 863
+      }
+     },
+     "id": "0",
+     "kind": "view",
+     "span": {
+      "end": 880,
+      "file": "presentation.form",
+      "start": 851
+     }
+    },
+    {
+     "budgetPct": "45",
+     "camera": {
+      "kind": "ident",
+      "name": "cam_b",
+      "span": {
+       "end": 902,
+       "file": "presentation.form",
+       "start": 897
+      }
+     },
+     "id": "1",
+     "kind": "view",
+     "span": {
+      "end": 914,
+      "file": "presentation.form",
+      "start": 885
+     }
+    },
+    {
+     "kind": "shared_budget",
+     "pct": "10",
+     "span": {
+      "end": 925,
+      "file": "presentation.form",
+      "start": 919
+     }
+    },
+    {
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "form",
+       "span": {
+        "end": 961,
+        "file": "presentation.form",
+        "start": 957
+       },
+       "value": {
+        "kind": "ident",
+        "name": "FORM_PAGE",
+        "span": {
+         "end": 972,
+         "file": "presentation.form",
+         "start": 963
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "transform",
+       "span": {
+        "end": 983,
+        "file": "presentation.form",
+        "start": 974
+       },
+       "value": {
+        "kind": "ident",
+        "name": "hit_point",
+        "span": {
+         "end": 994,
+         "file": "presentation.form",
+         "start": 985
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "view_mask",
+       "span": {
+        "end": 1005,
+        "file": "presentation.form",
+        "start": 996
+       },
+       "value": {
+        "intVal": "3",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1008,
+         "file": "presentation.form",
+         "start": 1007
+        },
+        "text": "3"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "weight",
+       "span": {
+        "end": 1016,
+        "file": "presentation.form",
+        "start": 1010
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "100",
+         "suffix": "%"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1022,
+         "file": "presentation.form",
+         "start": 1018
+        },
+        "text": "100%"
+       }
+      }
+     ],
+     "emitKind": "draw_form",
+     "kind": "emit",
+     "span": {
+      "end": 1024,
+      "file": "presentation.form",
+      "start": 942
+     }
+    },
+    {
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "pool",
+       "span": {
+        "end": 1054,
+        "file": "presentation.form",
+        "start": 1050
+       },
+       "value": {
+        "kind": "ident",
+        "name": "creatures",
+        "span": {
+         "end": 1065,
+         "file": "presentation.form",
+         "start": 1056
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "view_mask",
+       "span": {
+        "end": 1076,
+        "file": "presentation.form",
+        "start": 1067
+       },
+       "value": {
+        "intVal": "3",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1079,
+         "file": "presentation.form",
+         "start": 1078
+        },
+        "text": "3"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "weight",
+       "span": {
+        "end": 1087,
+        "file": "presentation.form",
+        "start": 1081
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "80",
+         "suffix": "%"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1092,
+         "file": "presentation.form",
+         "start": 1089
+        },
+        "text": "80%"
+       }
+      }
+     ],
+     "emitKind": "draw_population",
+     "kind": "emit",
+     "span": {
+      "end": 1094,
+      "file": "presentation.form",
+      "start": 1029
+     }
+    },
+    {
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "patch",
+       "span": {
+        "end": 1125,
+        "file": "presentation.form",
+        "start": 1120
+       },
+       "value": {
+        "kind": "ident",
+        "name": "PATCH_PAGE",
+        "span": {
+         "end": 1137,
+         "file": "presentation.form",
+         "start": 1127
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "transform",
+       "span": {
+        "end": 1148,
+        "file": "presentation.form",
+        "start": 1139
+       },
+       "value": {
+        "kind": "ident",
+        "name": "hit_point",
+        "span": {
+         "end": 1159,
+         "file": "presentation.form",
+         "start": 1150
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "screen_error",
+       "span": {
+        "end": 1173,
+        "file": "presentation.form",
+        "start": 1161
+       },
+       "value": {
+        "kind": "ident",
+        "name": "screen_err",
+        "span": {
+         "end": 1185,
+         "file": "presentation.form",
+         "start": 1175
+        }
+       }
+      }
+     ],
+     "emitKind": "draw_procedural",
+     "kind": "emit",
+     "span": {
+      "end": 1187,
+      "file": "presentation.form",
+      "start": 1099
+     }
+    },
+    {
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "brush",
+       "span": {
+        "end": 1216,
+        "file": "presentation.form",
+        "start": 1211
+       },
+       "value": {
+        "kind": "ident",
+        "name": "BRUSH_PAGE",
+        "span": {
+         "end": 1228,
+         "file": "presentation.form",
+         "start": 1218
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "at",
+       "span": {
+        "end": 1232,
+        "file": "presentation.form",
+        "start": 1230
+       },
+       "value": {
+        "kind": "ident",
+        "name": "hit_point",
+        "span": {
+         "end": 1243,
+         "file": "presentation.form",
+         "start": 1234
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "radius",
+       "span": {
+        "end": 1251,
+        "file": "presentation.form",
+        "start": 1245
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "2",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1255,
+         "file": "presentation.form",
+         "start": 1253
+        },
+        "text": "2m"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "ring_width",
+       "span": {
+        "end": 1267,
+        "file": "presentation.form",
+        "start": 1257
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "5",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1273,
+         "file": "presentation.form",
+         "start": 1269
+        },
+        "text": "0.5m"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "tag",
+       "span": {
+        "end": 1278,
+        "file": "presentation.form",
+        "start": 1275
+       },
+       "value": {
+        "intVal": "1",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1281,
+         "file": "presentation.form",
+         "start": 1280
+        },
+        "text": "1"
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "strength",
+       "span": {
+        "end": 1291,
+        "file": "presentation.form",
+        "start": 1283
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "80",
+         "suffix": "%"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1296,
+         "file": "presentation.form",
+         "start": 1293
+        },
+        "text": "80%"
+       }
+      }
+     ],
+     "emitKind": "surface_stamp",
+     "kind": "emit",
+     "span": {
+      "end": 1298,
+      "file": "presentation.form",
+      "start": 1192
+     }
+    },
+    {
+     "args": [
+      {
+       "kind": "emit_arg",
+       "name": "sound",
+       "span": {
+        "end": 1319,
+        "file": "presentation.form",
+        "start": 1314
+       },
+       "value": {
+        "kind": "ident",
+        "name": "earth_break",
+        "span": {
+         "end": 1332,
+         "file": "presentation.form",
+         "start": 1321
+        }
+       }
+      },
+      {
+       "kind": "emit_arg",
+       "name": "at",
+       "span": {
+        "end": 1336,
+        "file": "presentation.form",
+        "start": 1334
+       },
+       "value": {
+        "kind": "ident",
+        "name": "hit_point",
+        "span": {
+         "end": 1347,
+         "file": "presentation.form",
+         "start": 1338
+        }
+       }
+      }
+     ],
+     "emitKind": "audio",
+     "kind": "emit",
+     "span": {
+      "end": 1349,
+      "file": "presentation.form",
+      "start": 1303
+     }
+    }
+   ],
+   "kind": "Presentation",
+   "name": "duo",
+   "span": {
+    "end": 1353,
+    "file": "presentation.form",
+    "start": 828
+   }
+  }
+ ],
+ "imports": [
+  {
+   "kind": "Import",
+   "module": "declarations",
+   "names": [
+    "creatures",
+    "MAX_CREATURES"
+   ],
+   "span": {
+    "end": 374,
+    "file": "presentation.form",
+    "start": 325
+   }
+  },
+  {
+   "kind": "Import",
+   "module": "fields",
+   "names": [
+    "shatter_storm"
+   ],
+   "span": {
+    "end": 409,
+    "file": "presentation.form",
+    "start": 377
+   }
+  }
+ ],
+ "kind": "Module",
+ "name": "wound_present",
+ "span": {
+  "end": 1356,
+  "file": "presentation.form",
+  "start": 300
+ }
+}
