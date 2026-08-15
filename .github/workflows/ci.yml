@@ -30,9 +30,14 @@ concurrency:
 
 env:
   # Pinned toolchain (charter 29: pins before products).
+  # W6 fix (2026-08-15): the release tag is the dashed date form (2026-08-14)
+  # and the windows asset ships as .tgz — the W1 pin used the no-dash tag with
+  # a .exe suffix, which 404'd on the first GitHub run (asset 31839033681).
+  # SHA256 verified against the release asset digest AND the local .tools
+  # copy (byte-identical).
   ZHAO_SUITE_VERSION: '20260814'
   ZHAO_SUITE_SHA256: '4A3891A642681AB087FD9F6324519247B4C3761AFDC74DC1683067A2DAABD663'
-  ZHAO_SUITE_URL: 'https://github.com/YosysHQ/oss-cad-suite-build/releases/download/20260814/oss-cad-suite-windows-x64-20260814.exe'
+  ZHAO_SUITE_URL: 'https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-08-14/oss-cad-suite-windows-x64-20260814.tgz'
 
 jobs:
   build:
@@ -54,14 +59,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.exe
-          $actual = (Get-FileHash suite-download.exe -Algorithm SHA256).Hash
+          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.tgz
+          $actual = (Get-FileHash suite-download.tgz -Algorithm SHA256).Hash
           if ($actual -ne $env:ZHAO_SUITE_SHA256) {
             throw "oss-cad-suite SHA256 mismatch: got $actual want $env:ZHAO_SUITE_SHA256"
           }
           Write-Host "SHA256 OK ($actual)"
-          # The asset is a gzip tar despite the .exe name (verified locally).
-          tar -xzf suite-download.exe
+          # The asset is a gzip tar (the local .tools copy is named .exe but
+          # is the same bytes — SHA256 above is the cross-check).
+          tar -xzf suite-download.tgz
           if (-not (Test-Path 'oss-cad-suite/share/verilator/verilator-config.cmake')) {
             throw 'unexpected suite layout: share/verilator/verilator-config.cmake missing'
           }
@@ -147,12 +153,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.exe
-          $actual = (Get-FileHash suite-download.exe -Algorithm SHA256).Hash
+          Invoke-WebRequest -Uri $env:ZHAO_SUITE_URL -OutFile suite-download.tgz
+          $actual = (Get-FileHash suite-download.tgz -Algorithm SHA256).Hash
           if ($actual -ne $env:ZHAO_SUITE_SHA256) {
             throw "oss-cad-suite SHA256 mismatch: got $actual want $env:ZHAO_SUITE_SHA256"
           }
-          tar -xzf suite-download.exe
+          tar -xzf suite-download.tgz
 
       - name: Put suite on PATH (VERILATOR_ROOT, bin, lib)
         shell: pwsh
