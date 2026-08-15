@@ -1,0 +1,49 @@
+# cmd_formal_lane.cmake — CTest wrapper for the W2.6 CMD/DEBUG SymbiYosys
+# BMC lane (property @ZHAO_CMD_FORMAL_NAME@, test @ZHAO_CMD_FORMAL_TEST@).
+#
+# Lane law (charter 20.3 / plan 4): formal runs only where the tools exist
+# — the wrapper SKIPs (exit 77, "formal lane SKIPPED") when sby is absent
+# so `ctest -L formal` stays green on machines without oss-cad-suite.
+#
+# Workdir depth: the .sby [files] paths resolve against the sby process
+# CWD, which must sit exactly two levels below the repo root for
+# ../../fpga/... to land (same constraint as W2.3's input lane).
+#
+# The suite's yosys/boolector resolve their DLLs from bin/../lib — the
+# suite dirs go FIRST on PATH so a mingw toolchain earlier in PATH cannot
+# shadow them with incompatible builds.
+
+if("@ZHAO_SBY_BIN@" STREQUAL "")
+  message(STATUS "formal lane SKIPPED (sby absent) — @ZHAO_CMD_FORMAL_TEST@")
+  return()
+endif()
+
+get_filename_component(ZHAO_SBY_DIR "@ZHAO_SBY_BIN@" DIRECTORY)
+set(ENV{PATH} "${ZHAO_SBY_DIR}\;${ZHAO_SBY_DIR}/../lib\;$ENV{PATH}")
+
+set(WORK "@CMAKE_BINARY_DIR@/@ZHAO_CMD_FORMAL_WORK@")
+file(REMOVE_RECURSE "${WORK}")
+file(MAKE_DIRECTORY "${WORK}")
+
+execute_process(
+  COMMAND "@ZHAO_SBY_BIN@" -f -d bmc
+          "@CMAKE_SOURCE_DIR@/tests/formal/@ZHAO_CMD_FORMAL_NAME@.sby"
+  WORKING_DIRECTORY "${WORK}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE out
+  ERROR_VARIABLE err
+  TIMEOUT 1800
+)
+string(REGEX REPLACE "\n" ";" lines "${out}${err}")
+foreach(line IN LISTS lines)
+  message(STATUS "${line}")
+endforeach()
+
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "sby @ZHAO_CMD_FORMAL_NAME@ FAILED (rc=${rc})")
+endif()
+string(FIND "${out}${err}" "DONE (PASS" pos)
+if(pos EQUAL -1)
+  message(FATAL_ERROR "@ZHAO_CMD_FORMAL_NAME@ produced no PASS:\n${out}\n${err}")
+endif()
+message(STATUS "@ZHAO_CMD_FORMAL_NAME@: DONE (PASS)")

@@ -1,0 +1,42 @@
+# cmd_scheduler_slot_fsm.sby — CMD.SCHEDULER slot-FSM formal (plan W2.6 /
+# plan 4 / charter 7.4 + 20.4). Properties live in the RTL under
+# `ifdef FORMAL (read with -DFORMAL):
+#   (a) every slot is in exactly one of the five charter states
+#   (b) no two owners: at most one slot in FPGA_RUNNING (one frame pipeline)
+#   (c) DONE precedes FREE: a slot enters FREE only from DONE (the
+#       forward-only charter cycle)
+#   (d) reset-idle: the first cycle after reset release has every slot FREE
+#   (e) fence-exactly-once: every fence pulse is 1:1 with a slot's
+#       FPGA_RUNNING -> DONE transition (both directions proven)
+#
+# Frontend: read_slang (the slang plugin) reads the REAL frozen zhao_pkg.sv
+# and the REAL generated zhao_abi_pkg.sv — no stubs, no mechanical copies,
+# nothing under verification is transformed (W2.3's lane choice; W2.4's
+# committed-stub approach exists for cones that avoid generated items,
+# this cone deliberately does not — the scheduler keys on the generated
+# opcode constants and ZHAO_TIMING frame periods).
+#
+# BMC depth 40 covers multi-slot interleavings: seal/claim/run/DONE->FREE
+# across at least two frame windows under free harness-as-HPS word inputs.
+#
+# Run via `ctest -L formal` (test cmd_scheduler_slot_fsm; wrapper
+# tests/formal/cmd_formal_lane.cmake.in, SKIP when sby is absent) or by
+# hand from a workdir exactly two levels below the repo root:
+#   sby -f -d bmc tests/formal/cmd_scheduler_slot_fsm.sby
+
+[options]
+mode bmc
+depth 40
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top zhao_cmd_scheduler -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_cmd_scheduler.sv
+prep -top zhao_cmd_scheduler
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/command/zhao_cmd_scheduler.sv
