@@ -16,7 +16,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 2 | · | · | · | · | · | · | · | 2 |
 | geometry | 10 | · | · | · | · | · | · | · | 10 |
-| input | 1 | 2 | · | · | · | · | · | · | 3 |
+| input | 1 | · | 2 | · | · | · | · | · | 3 |
 | measure | 3 | · | · | · | · | · | · | · | 3 |
 | memory | 4 | · | · | · | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
@@ -27,14 +27,16 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
-| **all** | 85 | 2 | · | · | · | · | · | 6 | 87 |
+| **all** | 85 | · | 2 | · | · | · | · | 6 | 87 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
 | block | state | date | commit | evidence |
 |---|---|---|---|---|
 | INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
 | INPUT.RUMBLE | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.RUMBLE | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_rumble_directed.cpp |
 
 ## Budget groups vs §25 ceilings
 
