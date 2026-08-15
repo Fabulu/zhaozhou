@@ -400,7 +400,7 @@ blocks:
     reference_model: zref::HpsBridge
     tests:
       directed: tests/memory/hps_bridge_directed.cpp
-      random: tests/memory/hps_bridge_directed.cpp
+      random: tests/memory/hps_bridge_random.cpp
     counters: [hps_ddr_bytes_by_client]
     source_ids: true
     async_bridge: true
@@ -414,11 +414,11 @@ blocks:
       - state: UNIT_VERIFIED
         date: "2026-08-15"
         commit: 6bcc4e9
-        evidence: tests/memory/vram_arbiter_directed.cpp
+        evidence: tests/memory/hps_bridge_directed.cpp
       - state: RTL_VERIFIED
         date: "2026-08-15"
-        commit: 6bcc4e9
-        evidence: tests/memory/mem_random.cpp
+        commit: b8db7e8
+        evidence: tests/memory/hps_bridge_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -426,13 +426,22 @@ blocks:
       The hps↔gpu data bridge; command/particle/audio/trace traffic is
       accounted per client (§25). W2.5: harness-as-HPS verified per D10;
       the framework-AXI adapter remains the hardware-lane seam.
+      2026-08-15 correction: this block sat at RTL_VERIFIED with NO
+      randomized differential — `tests.random` aliased the directed file and
+      the maturity_log cited mem_random.cpp, which never instantiates the
+      bridge (charter §21 step 5 was skipped, and the evidence was
+      copy-pasted from MEM.VRAM.ARBITER). tests/memory/hps_bridge_random.cpp
+      now supplies a real PCG differential against zref::HpsBridge (beat
+      counts, 1-beat/cycle spacing, constant first-beat latency, malformed
+      rejection, per-client byte accounting); the maturity_log evidence now
+      points at files that actually exercise this block.
 
   - id: MEM.GUARD
     name: Memory guard
     kind: rtl
     subsystem: memory
     clock_domain: gpu
-    purpose: "Region/ownership checker between every fabric client and VRAM: a malformed command can never write outside the region the frame slot owns. Formally proven."
+    purpose: "Region/ownership checker between every fabric client and VRAM: a malformed command can never write outside the region the frame slot owns."
     contract: design/contracts/MEM.GUARD.md
     phase: 1
     owner_issue: ZH-029
@@ -460,11 +469,11 @@ blocks:
       - state: UNIT_VERIFIED
         date: "2026-08-15"
         commit: 6bcc4e9
-        evidence: tests/memory/vram_arbiter_directed.cpp
+        evidence: tests/memory/mem_guard_directed.cpp
       - state: RTL_VERIFIED
         date: "2026-08-15"
-        commit: 6bcc4e9
-        evidence: tests/memory/mem_random.cpp
+        commit: b8db7e8
+        evidence: tests/formal/formal_mem_guard.sv
     deferred: false
     cut_order: null
     superseded_by: null
@@ -474,9 +483,23 @@ blocks:
       slot 0 @ 0x0000_0000 and slot 1 @ 0x0003_C000, each 0x3C000 B
       (largest canvas); everything else is a violation by construction.
       W2.5: verified through the full chain (nothing-written proven against
-      the model's memory). Formal mem_guard_no_escape.sby committed; SKIPs
-      under oss-cad-suite yosys (SV-frontend gap, see
-      tests/formal/mem_formal_lane.cmake.in).
+      the model's memory).
+      2026-08-15 correction: the purpose field claimed "Formally proven."
+      while mem_guard_no_escape had never been elaborated even once — the
+      lane SKIPped on a "syntax error" match, and underneath that the
+      harness's headline no-escape assertions were VACUOUS (arb_req.valid was
+      unreachable because the `(* anyseq *)` environment did not survive
+      elaboration). The claim has been struck and the proof made real: the
+      harness now uses free input PORTS and a deterministic reset, the .sby
+      runs under read_slang with a mandatory `cover` task proving
+      reachability, and the property PASSES (bmc depth 30, all 7 covers
+      reached). Mutation-verified: removing the scanout bound, the blit lower
+      bound, the blit_span clamp, or the length check each makes it FAIL.
+      NOTE on evidence scope: there is still no separate randomized
+      differential for this block — `tests.random` aliases the directed file,
+      and mem_random.cpp does not instantiate the guard. RTL_VERIFIED here
+      rests on mem_guard_directed.cpp plus the (now genuine, non-vacuous)
+      formal no-escape proof.
 
   # ===========================================================================
   # FIELD — Field IR sequencers (fpga/rtl/field)

@@ -524,6 +524,25 @@ verilate(test_hps_bridge_directed
 add_test(NAME mem_hps_bridge_directed COMMAND test_hps_bridge_directed)
 set_tests_properties(mem_hps_bridge_directed PROPERTIES LABELS "fast;nightly")
 
+# MEM.HPS.BRIDGE randomized differential vs zref::HpsBridge (charter §21
+# step 5). Previously the block's `tests.random` was an ALIAS of the directed
+# file and the cited mem_random.cpp never instantiated the bridge — the
+# randomized evidence for its RTL_VERIFIED claim did not exist.
+add_executable(test_hps_bridge_random memory/hps_bridge_random.cpp)
+target_link_libraries(test_hps_bridge_random PRIVATE zhao_harness zhao_zref)
+verilate(test_hps_bridge_random
+  PREFIX Vtb_zhao_hps_bridge TOP_MODULE tb_zhao_hps_bridge
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_MEM_PKGS}
+          ${ZHAO_MEM_RTL}/zhao_hps_bridge.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_hps_bridge.sv)
+add_test(NAME mem_hps_bridge_random COMMAND test_hps_bridge_random)
+set_tests_properties(mem_hps_bridge_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME mem_hps_bridge_random_long COMMAND test_hps_bridge_random --long)
+set_tests_properties(mem_hps_bridge_random_long PROPERTIES LABELS "nightly" TIMEOUT 900)
+
 # formal lane (plan 4): one wrapper per SBY property, SKIP-if-absent like
 # the W1 formal lane smoke; full set runs under the formal/nightly labels
 if(ZHAO_SBY_BIN)

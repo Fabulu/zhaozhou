@@ -5,11 +5,18 @@
 > from SPECIFIED regardless of evidence (rule V2, plan §4) until the
 > orchestrator clears the lane. Currently 6 blocks across 4 owner issues.
 
-Machine truth: this machine has **no Quartus, no MiSTer board, no
-DE10-compatible hardware** (ENV: oss-cad-suite 20260814, mingw64 g++ 16.1.0,
-Node 20.17, Windows 11). Nothing below is achievable locally; nothing above
-was frozen from assumptions while they are open (charter §23 Phase-0 gate:
-"no architecture constants frozen from internet assumptions").
+Machine truth (updated 2026-08-15): this machine has **Quartus Prime Lite
+17.0.2** (`C:/intelFPGA_lite/17.0/quartus/bin64/quartus_sh.exe`) — the
+synthesis lane was opened in commit 5189f0c, which produced the first real
+fabric numbers from the standing ABI synth probe. It still has **no MiSTer
+board and no DE10-compatible hardware** (ENV: oss-cad-suite 20260814, mingw64
+g++ 16.1.0, Node 20.17, Windows 11).
+
+So the entries below split in two: everything needing a *board* remains
+blocked, while everything needing only *synthesis* is now achievable locally
+and is no longer covered by this document's blanket claim. Nothing was frozen
+from assumptions while they are open (charter §23 Phase-0 gate: "no
+architecture constants frozen from internet assumptions").
 
 ## ZH-000 — MiSTer `sys/` vendoring (SYS.* blocks: 3)
 
@@ -33,12 +40,16 @@ Blocks: `SYS.CLOCK`, `SYS.RESET`, `SYS.CDC` (design/blocks.yml, all
 
 Block: `SW.TOOLS.REPORT` (SPECIFIED, `blocked_on: hardware`).
 
-- **What is missing:** a real Quartus fitter report. The parser schema
-  (reports/synthesis/*.json) is designed; the parser is deliberately untested.
-- **EXACT unblocking action:** install Quartus Prime (version pinned in
-  ENV.txt when it exists), synthesize the stub top, run the tool over the
-  actual report; every `resource_actual` entry must come from the parser
-  output — never hand-typed (charter discipline; V5 activates at SYNTHESIZED).
+- **NO LONGER BLOCKED ON MISSING QUARTUS** (2026-08-15). Quartus Prime Lite
+  17.0.2 is installed and commit 5189f0c opened the lane. What remains is
+  ordinary work, not a hardware blocker: run the fitter over the stub top and
+  point the parser at the real report.
+- **What is missing:** the parser has still not been exercised against a real
+  fitter report. The schema (reports/synthesis/*.json) is designed.
+- **EXACT unblocking action:** synthesize the stub top with the installed
+  Quartus and run the tool over the actual report; every `resource_actual`
+  entry must come from the parser output — never hand-typed (charter
+  discipline; V5 activates at SYNTHESIZED).
 
 ## ZH-003 … ZH-006 — Phase-0 board probes (SW.TOOLS.BOARDPROBE, MEM.SDRAM)
 
@@ -62,9 +73,10 @@ Blocks: `SW.TOOLS.BOARDPROBE`, `MEM.SDRAM` (SPECIFIED, `blocked_on: hardware`).
 
 ## Consequences downstream (states that cannot be reached yet)
 
-- **SYNTHESIZED / INTEGRATED / HARDWARE_PROVEN** for every RTL block: requires
-  Quartus + board (ZH-002 upward). All 72 RTL blocks are SPECIFIED — none has
-  violated the ladder by skipping ahead.
+- **INTEGRATED / HARDWARE_PROVEN** for every RTL block: requires the board.
+  **SYNTHESIZED** no longer requires anything missing — Quartus is installed
+  (5189f0c) — so that rung is reachable work rather than a hardware blocker.
+  No RTL block has violated the ladder by skipping ahead.
 - **8-hour stress / 24-hour memory stress** (charter Phase-0 gate): requires
   the board; not runnable, not simulated.
 - **MiSTer runtime product** (`runtime/mister/`): empty on purpose, folds
