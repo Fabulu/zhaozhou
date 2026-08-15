@@ -345,7 +345,7 @@ blocks:
     counters: [vram_bytes_by_client, deadline_faults]
     source_ids: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -355,10 +355,21 @@ blocks:
         date: "2026-08-15"
         commit: 6bcc4e9
         evidence: tests/memory/vram_arbiter_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: tests/memory/mem_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "leaf (serves MEM.GUARD requests); leaf: true semantics."
+    notes: >-
+      leaf (serves MEM.GUARD requests). W2.5: the offered burst is a
+      REGISTERED stable offer (a combinational selection can change between
+      the controller's acceptance edge and the grant pulse); the aging
+      override (threshold 20 < two MAX_BURST_SPAN gaps) makes the frozen
+      B=40 bound structural. Formal mem_vram_arbiter_liveness.sby committed;
+      SKIPs under oss-cad-suite yosys (SV-frontend gap vs the frozen
+      package style, see tests/formal/mem_formal_lane.cmake.in).
 
   - id: MEM.HPS.BRIDGE
     name: HPS-DDR burst bridge
@@ -384,7 +395,7 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -394,10 +405,17 @@ blocks:
         date: "2026-08-15"
         commit: 6bcc4e9
         evidence: tests/memory/vram_arbiter_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: tests/memory/mem_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: The hps↔gpu data bridge; command/particle/audio/trace traffic is accounted per client (§25).
+    notes: >-
+      The hps↔gpu data bridge; command/particle/audio/trace traffic is
+      accounted per client (§25). W2.5: harness-as-HPS verified per D10;
+      the framework-AXI adapter remains the hardware-lane seam.
 
   - id: MEM.GUARD
     name: Memory guard
@@ -423,7 +441,7 @@ blocks:
     counters: [vram_bytes_by_client, hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -433,10 +451,22 @@ blocks:
         date: "2026-08-15"
         commit: 6bcc4e9
         evidence: tests/memory/vram_arbiter_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: tests/memory/mem_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "All VRAM traffic flows through the guard; the schematic draws the major clients only. Phase-2 region map (spec/memory_rules.md 5): FB slot 0 @ 0x0000_0000 and slot 1 @ 0x0003_C000, each 0x3C000 B (largest canvas); everything else is a violation by construction."
+    notes: >-
+      All VRAM traffic flows through the guard; the schematic draws the
+      major clients only. Phase-2 region map (spec/memory_rules.md 5): FB
+      slot 0 @ 0x0000_0000 and slot 1 @ 0x0003_C000, each 0x3C000 B
+      (largest canvas); everything else is a violation by construction.
+      W2.5: verified through the full chain (nothing-written proven against
+      the model's memory). Formal mem_guard_no_escape.sby committed; SKIPs
+      under oss-cad-suite yosys (SV-frontend gap, see
+      tests/formal/mem_formal_lane.cmake.in).
 
   # ===========================================================================
   # FIELD — Field IR sequencers (fpga/rtl/field)
