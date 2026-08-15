@@ -4,7 +4,11 @@
 RUN-20260814-1852-wave1-abi-capture); **ABI v2 amendments ratified in wave 2**
 (plan W2.1/D5/D6/D8, run RUN-20260814-2154): `video_mode` enum, `PadFrame`
 struct, implemented debug commands (0xF002/0xF004), `angle16` wire type,
-`DrawSky 0x0310` reservation (spec/sky_and_beams.md 4). Single source of
+`DrawSky 0x0310` reservation (spec/sky_and_beams.md 4). **Wave-3 amendments**
+(plan W3.1/D7/D11, run RUN-20260815-0544): Phase-3 command promotions
+(§1.2 note), source-ID kinds 8-11 (§5), binary `sourceids.zmap` (§7),
+`.zpak` cartridge container (spec/cartridge.md, which reuses §4 verbatim).
+Single source of
 truth for everything that crosses a language or a machine boundary.
 `spec/commands.zidl` is the machine-readable ABI definition; this document is
 its law and the law of the two containers built on it.
@@ -114,10 +118,18 @@ Ratified wave-1 extensions:
 | Range | Meaning | v1 |
 |---|---|---|
 | `0x0000-0x00FF` | frame control, views, presentation | Nop 0x0000, BeginFrame 0x0001, EndFrame 0x0002, SetView 0x0010, SetPresentationContract 0x0020 |
-| `0x0200-0x02FF` | terrain / surface | TerrainField 0x0200, SurfaceStamp 0x0210 (reserved) |
-| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (reserved); DrawSky 0x0310 reserved [v2, spec/sky_and_beams.md 4]; `0x0311-0x031F` reserved for sky extensions (never allocate without a spec/sky_and_beams.md version bump) |
-| `0x0400-0x04FF` | audio | EmitAudioEvent 0x0400 (reserved) |
+| `0x0200-0x02FF` | terrain / surface | TerrainField 0x0200, SurfaceStamp 0x0210 (**implemented [w3]**, D7 — software console executes them) |
+| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (**implemented [w3]**, D7); DrawSky 0x0310 reserved [v2, spec/sky_and_beams.md 4; wave 8]; `0x0311-0x031F` reserved for sky extensions (never allocate without a spec/sky_and_beams.md version bump) |
+| `0x0400-0x04FF` | audio | EmitAudioEvent 0x0400 (**implemented [w3]**, D7 — wave-2 mixer tone) |
 | `0xF000-0xF0FF` | bootstrap/debug umbrella | DebugBootstrap 0xF001 (reserved), DebugFrameBlit 0xF002 (implemented [v2]), DebugRumble 0xF004 (implemented [v2]) — never game-facing |
+
+**[w3] Promotion law (D7):** the six Phase-3 promotions are execution-
+semantics changes only — record layouts, opcodes and sizes are untouched
+(except the pad-byte reinterpretations noted in 1.3, which preserve every
+byte offset and total size). The `.zidl` `abi version` therefore stays **2**:
+its frozen rule (below) bumps only for wire changes, and every change in
+wave 3 is additive or same-bytes reinterpretation of never-executed reserved
+payload.
 
 Opcodes are frozen once shipped: opcode, field set and sizes never change;
 additive change = new opcode, old kept as deprecated alias. A frame containing
@@ -133,16 +145,26 @@ a `0xF000-0xF0FF` opcode MUST set frame header flags bit0
 | EndFrame | 0x0002 | 32 | implemented |
 | SetView | 0x0010 | 96 | implemented |
 | SetPresentationContract | 0x0020 | 48 | implemented |
-| TerrainField | 0x0200 | 112 | reserved |
-| SurfaceStamp | 0x0210 | 64 | reserved |
-| DrawForm | 0x0300 | 32 | reserved |
-| DrawPopulation | 0x0301 | 32 | reserved |
-| DrawProcedural | 0x0302 | 64 | reserved |
-| EmitAudioEvent | 0x0400 | 32 | reserved |
+| TerrainField | 0x0200 | 112 | **implemented [w3]** |
+| SurfaceStamp | 0x0210 | 64 | **implemented [w3]** |
+| DrawForm | 0x0300 | 32 | **implemented [w3]** |
+| DrawPopulation | 0x0301 | 32 | **implemented [w3]** |
+| DrawProcedural | 0x0302 | 64 | **implemented [w3]** |
+| EmitAudioEvent | 0x0400 | 32 | **implemented [w3]** |
 | DrawSky | 0x0310 | 176 | reserved |
 | DebugBootstrap | 0xF001 | 64 | reserved |
 | DebugFrameBlit | 0xF002 | 48 | implemented |
 | DebugRumble | 0xF004 | 32 | implemented |
+
+**[w3] Same-bytes reinterpretations** (the v2 `u8 mode` → `video_mode`
+precedent applied to never-executed reserved payload; every byte offset and
+the record total are unchanged, old all-zero-pad frames remain valid):
+`DrawProcedural` payload byte 36 (was `pad[12]` byte 0) is now
+`forge_kind` (u8 enum, 0 = `heightfield_patch` — zero was already mandatory
+for pads, so ABI-v2-era captures stay valid); `SurfaceStamp` payload bytes
+36-43 (was `pad[12]` bytes 0-7) are now `radius`/`ring_width` (fx16 × 2,
+circle/ring stamp geometry per D7). Both are validated range-wise as enum /
+fx16 fields from wave 3 on; the details are law in `spec/commands.zidl`.
 
 Deviations from the P5 recon table (record sizes there were estimates; the
 .zidl layout math above is normative and the differences are all consequences
@@ -402,17 +424,31 @@ computation that produced its tables.
 `source_id: u32 = { kind: 4 bits, module: 12 bits, index: 16 bits }`
 
 - kinds: 0 NONE (bootstrap), 1 form declaration, 2 population, 3 field
-  program, 4 material, 5 command site, 6 audio event, 7 stamp operation.
+  program, 4 material, 5 command site, 6 audio event, 7 stamp operation;
+  **[w3]** 8 system, 9 presentation emit site, 10 pool, 11 scenario.
 - 4096 modules, 65536 declarations per module. Structure is visible in traces
   (`0x0301AF` = kind 0, module 0x301, decl 0xAF), which hashes are not.
 - Allocation is a sequential registry, not hashing: compiler assigns `module`
   by canonical sort of module paths, `index` in declaration order — a rebuild
   of unchanged sources yields identical IDs. Content identity travels
   separately as program hashes (sha-256 in RESOURCE_PAGES / CRC-32C per 1.B-7).
-- Compiler sidecar `sourceids.zmap` (JSON, Phase 1): one entry per ID
-  `{id, kind, module, file, line, name, program_hash?}`. At capture time the
+- Compiler sidecar `sourceids.zmap` — **[w3]** binary, format §7 (was JSON in
+  Phase 1; D11): one entry per ID
+  `{source_id, kind, file_index, span, name}`. At capture time the
   manifest is embedded as the SOURCE_MAP section so a .zcap is self-describing
   forever.
+
+**[w3] Kind allocation note (deviation recorded):** plan D11 named the new
+kinds "5=system, 6=presentation emit site, 7=pool, 8=scenario", but kinds
+5-7 were already frozen in Phase 1 (command site / audio event / stamp
+operation) and appear in committed goldens (`zcap_minimal.zcap` carries kind-5
+command-site entries). The wave-3 kinds are therefore **appended as 8-11**;
+no existing kind value changed meaning. The four new kinds attribute the
+wave-3 language objects that own runtime costs: 8 = `system` declarations
+(per-phase/rate cost rows), 9 = presentation emit statements (each lowers to
+one ABI command template — the record `source_id` of an emitted command
+points here), 10 = `pool` declarations (capacity/bandwidth rows), 11 =
+`scenario` blocks (golden capture provenance).
 
 SOURCE_MAP body: `u32 count` + count × `{u32 source_id; u16 module_id; u8 kind; u8 flags; u32 line; u16 name_off; u16 file_off}` + UTF-8 string blob (`name_off`/`file_off` are byte offsets into the blob, each string NUL-terminated).
 
@@ -452,3 +488,77 @@ Every wave-2 capture records its timing profile version in ABI_INFO
 generator identity (sim tables are provisional until ZH-016; plan R3), and
 uses section_version = 1 for all sections above. FRAMEBUFFER_EXPECTED
 sections are one per frame, in frame order.
+
+---
+
+## 7. `sourceids.zmap` — binary source-ID sidecar **[w3]** (D11)
+
+The compiler-sidecar upgrade of the Phase-1 JSON map: one file per build,
+embedded verbatim as the SOURCE_MAP section of captures (§5) and as a
+page of the `.zpak` cartridge (spec/cartridge.md §2/§3, kind 1). Little-endian
+throughout; CRC-32C per §2 parameterization.
+
+### 7.1 File layout
+
+```
+Offset  Size  Field                Notes
+0       4     magic 'Z','S','M','P'  (u32 LE 0x504D535A)
+4       2     format_version = 1
+6       2     flags                 bit0 = contains_program_hashes; bits 1-15 reserved 0
+8       4     entry_count           u32
+12      4     file_count            u32
+16      4     string_blob_bytes     u32 (blob follows the tables)
+20      4     body_crc32c           CRC-32C over ALL following bytes (entries + files + blob)
+24      8     reserved              u64, must be 0
+32      ..    entries: entry_count × 24-B records (7.2), source_id ascending
+        ..    files:  file_count × 8-B records (7.3), file_index ascending
+        ..    string blob: string_blob_bytes UTF-8, every string NUL-terminated
+```
+
+### 7.2 Entry record (24 B)
+
+```
++0  u32  source_id          §5 scheme {kind:4, module:12, index:16}
++4  u16  file_index         index into the file table (7.3)
++6  u8   kind               the §5 kind (denormalized for tooling convenience;
++7  u8   flags              bit0 = has_program_hash; bits 1-7 reserved 0
+                            must equal source_id's kind field — a mismatch is
+                            a corrupt map)
++8  u32  span_begin         byte offset in the file (lexer law, language-semantics §1)
++12 u32  span_end           byte offset, exclusive; span_end >= span_begin
++16 u16  name_off           byte offset into the string blob
++18 u16  rsv                0
++20 u32  program_hash       CRC-32C over code+tables (field-ir §5.4);
+                            0 unless flags bit0
+```
+
+Spans are the same `SourceSpan` byte offsets the parser attaches to every
+AST node and the Field IR builder consumes (D2/D3) — the map is the
+`source_id → {kind; file_index; span; name}` registry of D11, and a
+field-program PC resolves to a span through field-ir §8 exactly as before.
+
+### 7.3 File record (8 B)
+
+```
++0  u32  path_off           byte offset into the string blob (module path)
++4  u32  rsv                0
+```
+
+Module identity order matches §5: `module` ids assigned by canonical sort of
+module paths; the file table is written in that order so `file_index`
+ordering equals module-id ordering.
+
+### 7.4 Laws
+
+- **Determinism:** the map is a pure function of the compiled sources —
+  byte-identical across rebuilds (the canonicalization law of §6; asserted by
+  `form:check`).
+- **Ascending:** entries are sorted by `source_id` ascending; duplicates are
+  a corrupt map (registry uniqueness, §5).
+- **Integrity:** `body_crc32c` covers bytes [32, EOF); a mismatch refuses
+  the whole map — never a partial resolution. The magic/version check comes
+  first (fail-safe order, §3.2 discipline).
+- **Resolution order** (inspector/tools, §5): embedded SOURCE_MAP → this
+  sidecar for live builds → raw hex display. Never a wrong guess.
+- **Phase-1 JSON compat:** the JSON sidecar remains readable by tools for
+  old captures; new builds emit binary only.
