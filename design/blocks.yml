@@ -718,7 +718,7 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: 2026-08-15
@@ -728,6 +728,14 @@ blocks:
         date: 2026-08-15
         commit: 'a3cd94a'
         evidence: tests/audio/audio_fifo_directed.cpp
+      - state: RTL_VERIFIED
+        date: 2026-08-15
+        commit: 'a3cd94a'
+        evidence: tests/audio/audio_fifo_random.cpp
+      - state: RTL_VERIFIED
+        date: 2026-08-15
+        commit: 'a3cd94a'
+        evidence: tests/formal/audio_fifo_bounds.sby
     deferred: false
     cut_order: null
     superseded_by: null
@@ -739,7 +747,11 @@ blocks:
       REFERENCE_COMPLETE with the committed tone goldens (mixer_tone_*),
       then UNIT_VERIFIED with the directed D4 scenarios green against the
       RTL (reset silence / steady 800-per-frame / underrun repeat+count /
-      full backpressure / tone passthrough / snapshot law).
+      full backpressure / tone passthrough / snapshot law), then
+      RTL_VERIFIED with the PCG differential (full stream/occupancy/shadow
+      bit-exact vs the oracle, 1k fast + 100k nightly), the
+      audio_fifo_bounds formal proof (occupancy bounds / no-accept-when-
+      full / underrun law; mutation-verified) and the -Wall lint all green.
 
   # ===========================================================================
   # VIDEO (fpga/rtl/video)
