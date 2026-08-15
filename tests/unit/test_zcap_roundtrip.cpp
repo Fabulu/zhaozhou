@@ -54,9 +54,9 @@ std::vector<uint8_t> minimal_frame() {
 
 std::vector<zhao::ZhaoSourceMapEntry> minimal_source_map() {
   return {
-    {zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"},
-    {zhao::zhao_source_id(5, 1, 0), 1, 5, 0, 20, "nop", "demo_form.zf"},
-    {zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"},
+      {zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"},
+      {zhao::zhao_source_id(5, 1, 0), 1, 5, 0, 20, "nop", "demo_form.zf"},
+      {zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"},
   };
 }
 
@@ -97,10 +97,9 @@ int main() {
     zhao::check(r.open() == ZhaoZcapError::kOk, "roundtrip zcap opens", int(ZhaoZcapError::kOk),
                 int(r.open()));
     zhao::check(r.sections().size() == 5, "section count", 5, r.sections().size());
-    zhao::check(r.info().total_file_length ==
-                    static_cast<uint64_t>(fs::file_size(path)),
-                "total_file_length matches actual size",
-                fs::file_size(path), r.info().total_file_length);
+    zhao::check(r.info().total_file_length == static_cast<uint64_t>(fs::file_size(path)),
+                "total_file_length matches actual size", fs::file_size(path),
+                r.info().total_file_length);
 
     // every CRC verifies
     for (const auto& s : r.sections()) {
@@ -110,8 +109,7 @@ int main() {
 
     // source IDs + program hashes survive
     std::vector<uint8_t> body;
-    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_SOURCE_MAP), body),
-                "SOURCE_MAP body", 1, 0);
+    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_SOURCE_MAP), body), "SOURCE_MAP body", 1, 0);
     const auto entries = zhao_zcap_parse_source_map(body.data(), body.size());
     zhao::check(entries.size() == 3, "SOURCE_MAP entries", 3, entries.size());
     const auto want = minimal_source_map();
@@ -125,8 +123,7 @@ int main() {
       zhao::check(kind == 5 && module == 1, "source id decodes {kind,module}", 5, kind);
     }
 
-    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_RESOURCE_PAGES), body),
-                "RESOURCE_PAGES body", 1, 0);
+    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_RESOURCE_PAGES), body), "RESOURCE_PAGES body", 1, 0);
     const auto pages = zhao_zcap_parse_resource_pages(body.data(), body.size());
     zhao::check(pages.size() == 1, "resource page count", 1, pages.size());
     if (!pages.empty()) {
@@ -139,15 +136,14 @@ int main() {
     }
 
     // the private 0x8001 section is SKIPPED, not an error
-    zhao::check(r.find(0x8001) != nullptr, "unknown section present (skippable)",
-                1, r.find(0x8001) != nullptr ? 1 : 0);
+    zhao::check(r.find(0x8001) != nullptr, "unknown section present (skippable)", 1,
+                r.find(0x8001) != nullptr ? 1 : 0);
     std::vector<uint8_t> priv;
     zhao::check(r.read_body(*r.find(0x8001), priv) && priv.size() == 4,
                 "unknown section body readable", 4, priv.size());
 
     // embedded frame still validates
-    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_FRAME_PACKET), body),
-                "FRAME_PACKET body", 1, 0);
+    zhao::check(r.read_body(*r.find(ZHAO_ZCAP_FRAME_PACKET), body), "FRAME_PACKET body", 1, 0);
     const auto v = zhao_frame_validate(body);
     zhao::check(v.error == zhao_abi::ZH_ABI_OK, "embedded frame validates", 0, v.error);
   }
@@ -185,14 +181,12 @@ int main() {
       out.write(reinterpret_cast<const char*>(corrupt.data()), corrupt.size());
     }
     ZhaoZcapReader r(p3);
-    zhao::check(r.open() == ZhaoZcapError::kOk, "corrupt zcap header still ok", 0,
-                int(r.open()));
+    zhao::check(r.open() == ZhaoZcapError::kOk, "corrupt zcap header still ok", 0, int(r.open()));
     std::vector<uint8_t> body;
     // header CRC covers [0,8) only, so the file opens; the last section's
     // body CRC must fail
     const auto& last = r.sections().back();
-    zhao::check(!r.read_body(last, body), "corrupted section body rejected by CRC",
-                0, 1);
+    zhao::check(!r.read_body(last, body), "corrupted section body rejected by CRC", 0, 1);
   }
 
   // ---- 4. unknown section VERSION rejects cleanly -------------------------------
@@ -207,8 +201,8 @@ int main() {
     zhao::check(r.open() == ZhaoZcapError::kOk, "bad-version opens (reader never guesses)", 0,
                 int(r.open()));
     const auto* s = r.find(ZHAO_ZCAP_ABI_INFO);
-    zhao::check(s != nullptr && s->version == 99, "section version visible for clean reject",
-                99, s != nullptr ? s->version : 0);
+    zhao::check(s != nullptr && s->version == 99, "section version visible for clean reject", 99,
+                s != nullptr ? s->version : 0);
   }
 
   std::remove((tmp + "_roundtrip.zcap").c_str());

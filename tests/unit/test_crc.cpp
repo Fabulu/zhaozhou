@@ -31,12 +31,24 @@ struct Vector {
 
 std::vector<Vector> vectors() {
   return {
-    {"empty", {}, 0x00000000u},
-    {"123456789", {'1', '2', '3', '4', '5', '6', '7', '8', '9'}, 0xE3069283u},
-    {"32x00", std::vector<uint8_t>(32, 0x00), 0x8A9136AAu},
-    {"32xFF", std::vector<uint8_t>(32, 0xFF), 0x62A8AB43u},
-    {"00..1F", [] { std::vector<uint8_t> v; for (int i = 0; i < 32; i++) v.push_back(uint8_t(i)); return v; }(), 0x46DD794Eu},
-    {"1F..00", [] { std::vector<uint8_t> v; for (int i = 0; i < 32; i++) v.push_back(uint8_t(31 - i)); return v; }(), 0x113FDB5Cu},
+      {"empty", {}, 0x00000000u},
+      {"123456789", {'1', '2', '3', '4', '5', '6', '7', '8', '9'}, 0xE3069283u},
+      {"32x00", std::vector<uint8_t>(32, 0x00), 0x8A9136AAu},
+      {"32xFF", std::vector<uint8_t>(32, 0xFF), 0x62A8AB43u},
+      {"00..1F",
+       [] {
+         std::vector<uint8_t> v;
+         for (int i = 0; i < 32; i++) v.push_back(uint8_t(i));
+         return v;
+       }(),
+       0x46DD794Eu},
+      {"1F..00",
+       [] {
+         std::vector<uint8_t> v;
+         for (int i = 0; i < 32; i++) v.push_back(uint8_t(31 - i));
+         return v;
+       }(),
+       0x113FDB5Cu},
   };
 }
 
@@ -74,14 +86,15 @@ int main() {
     zhao::check(zhao_abi::ZHAO_CRC32C_TABLE[0x80] == 0x82F63B78u,
                 "crc table[0x80] == reflected poly", 0x82F63B78u,
                 zhao_abi::ZHAO_CRC32C_TABLE[0x80]);
-    zhao::check(zhao_abi::ZHAO_CRC32C_TABLE[0] == 0u,
-                "crc table[0] == 0", 0, zhao_abi::ZHAO_CRC32C_TABLE[0]);
+    zhao::check(zhao_abi::ZHAO_CRC32C_TABLE[0] == 0u, "crc table[0] == 0", 0,
+                zhao_abi::ZHAO_CRC32C_TABLE[0]);
   }
 
   // SHA-256 (FIPS 180-4) — the C++ half of the golden .zcap lock
   {
     const auto h0 = zhao::sha256(nullptr, 0);
-    const std::string empty_hex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const std::string empty_hex =
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     std::string got;
     for (uint8_t b : h0) {
       char hex[3];

@@ -3,6 +3,13 @@
 # Lanes:
 #   build (push/PR)  : oss-cad-suite (pinned + SHA256 + cached) -> cmake
 #                      windows-ci preset -> ctest -L fast
+#                      (since review M1 the fast label also carries the
+#                      formal_lane smoke and the SKIP-if-absent format /
+#                      cppcheck shims; sby --version costs < 1 s, well inside
+#                      the 60-min timeout)
+#   format (push/PR) : charter-27 tiers — clang-format --dry-run --Werror
+#                      (pinned npm clang-format = LLVM 15) + cppcheck
+#                      --enable=warning over the tracked C/C++ set
 #   npm (push/PR)    : npm ci -> ledger:check -> abi:check -> test
 #   nightly (sched)  : ctest -L nightly (fuzz + formal lane)
 #
@@ -13,6 +20,9 @@
 # "oss-cad-suite-windows-x64-20260814.exe" which is actually a gzip tar
 # (verified locally); extract with tar -xzf. The suite ships no g++, so the
 # compiler comes from the runner image (MinGW on PATH or C:\msys64\mingw64).
+# The suite also ships NO clang-format and NO cppcheck — that gap is why the
+# format tier lives in its own ubuntu job with a version-pinned npm package
+# (runner-distro clang-format drifts across LLVM majors).
 
 name: ci
 
@@ -123,6 +133,46 @@ jobs:
           cmake --preset windows-ci
           cmake --build build
           ctest --test-dir build -L fast --output-on-failure
+
+  format:
+    name: format + static analysis (charter 27)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # M1 (review RUN-20260814-1912): the every-commit "format" tier. The
+      # npm clang-format package is PINNED so local checks (npx -y
+      # clang-format@1.8.0 = LLVM 15) and CI agree bit-for-bit; ubuntu's
+      # distro clang-format drifts across LLVM majors.
+      - name: clang-format --dry-run --Werror (pinned LLVM 15)
+        shell: bash
+        run: |
+          npx -y clang-format@1.8.0 --version
+          # tracked C/C++ under reference/ tests/ tools/capture, EXCEPT
+          # generated (fixgen-owned reference/include/zref/generated;
+          # abi-gen-owned runtime/include/zhao_abi.h is outside the sweep)
+          files=$(git ls-files reference tests tools/capture \
+            | grep -E '\.(cpp|hpp|h)$' | grep -v generated)
+          echo "$files" | wc -l
+          npx -y clang-format@1.8.0 --dry-run --Werror $files
+      # M1: the "static analysis" tier. tsc already gates every TS change in
+      # the npm job; cppcheck covers the C++ side. Verified clean against
+      # cppcheck 2.20.0 locally with this exact flag set; the runner's apt
+      # build may be older (fewer checks — never silently more).
+      - name: cppcheck --enable=warning
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck
+          cppcheck --version
+          files=$(git ls-files reference tests tools/capture \
+            | grep -E '\.(cpp|hpp|h)$' | grep -v generated)
+          cppcheck --enable=warning --std=c++17 --inline-suppr \
+            --suppress=missingIncludeSystem --error-exitcode=2 \
+            -I reference/include -I runtime/include -I tests/harness \
+            --platform=unix64 $files
 
   npm:
     name: npm workspaces (ledger/abi/test)

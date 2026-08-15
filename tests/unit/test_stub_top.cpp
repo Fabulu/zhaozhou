@@ -54,8 +54,8 @@ std::vector<uint8_t> golden_frame() {
 
 std::vector<uint8_t> resealed(std::vector<uint8_t> pkt) {
   // recompute both CRCs over the mutated packet
-  const uint32_t command_bytes =
-      uint32_t(pkt[28]) | (uint32_t(pkt[29]) << 8) | (uint32_t(pkt[30]) << 16) | (uint32_t(pkt[31]) << 24);
+  const uint32_t command_bytes = uint32_t(pkt[28]) | (uint32_t(pkt[29]) << 8) |
+                                 (uint32_t(pkt[30]) << 16) | (uint32_t(pkt[31]) << 24);
   const auto put32 = [&](uint32_t off, uint32_t v) {
     for (int i = 0; i < 4; i++) pkt[off + i] = uint8_t(v >> (8 * i));
   };
@@ -88,14 +88,14 @@ int main(int argc, char** argv) {
   {
     feed(top, frame);
     zhao::check(top.status == E_OK, "minimal frame status", E_OK, top.status);
-    zhao::check((top.completion_flags & COMPL_DONE) != 0, "minimal frame DONE",
-                COMPL_DONE, top.completion_flags);
-    zhao::check((top.completion_flags & COMPL_ERR) == 0, "minimal frame no ERR",
-                0, top.completion_flags & COMPL_ERR);
+    zhao::check((top.completion_flags & COMPL_DONE) != 0, "minimal frame DONE", COMPL_DONE,
+                top.completion_flags);
+    zhao::check((top.completion_flags & COMPL_ERR) == 0, "minimal frame no ERR", 0,
+                top.completion_flags & COMPL_ERR);
     zhao::check(top.frames_accepted == 1, "frames_accepted", 1, top.frames_accepted);
     zhao::check(top.frames_rejected == 0, "frames_rejected", 0, top.frames_rejected);
-    zhao::check(top.bytes_consumed == frame.size(), "bytes_consumed",
-                frame.size(), top.bytes_consumed);
+    zhao::check(top.bytes_consumed == frame.size(), "bytes_consumed", frame.size(),
+                top.bytes_consumed);
     zhao::check(top.commands_consumed == 3, "commands_consumed", 3, top.commands_consumed);
   }
 
@@ -137,7 +137,11 @@ int main(int argc, char** argv) {
     cases.push_back({"bad abi v3", hdr_of(frame, 3), E_BAD_ABI});
     {
       // reserved frame flag bit set, resealed (so earlier checks pass)
-      auto full = resealed([&] { auto f = frame; f[6] = 0x08; return f; }());
+      auto full = resealed([&] {
+        auto f = frame;
+        f[6] = 0x08;
+        return f;
+      }());
       full.resize(36);
       cases.push_back({"reserved flag", full, E_RESERVED_FLAG});
     }
@@ -161,14 +165,12 @@ int main(int argc, char** argv) {
       zhao::reset(top);
       feed(top, c.hdr);
       zhao::check(top.status == c.want, c.name, c.want, top.status);
-      zhao::check((top.completion_flags & COMPL_ERR) != 0, c.name, COMPL_ERR,
-                  top.completion_flags);
+      zhao::check((top.completion_flags & COMPL_ERR) != 0, c.name, COMPL_ERR, top.completion_flags);
       zhao::check(top.frames_rejected == 1, c.name, 1, top.frames_rejected);
       // header-level abort: exactly 36 bytes consumed (spec 3.2)
       zhao::check(top.bytes_consumed == 36, c.name, 36, top.bytes_consumed);
       if (top.status != c.want) {
-        zhao::save_failing_vector("stub_abort_case", c.hdr,
-                                  "status=" + std::to_string(c.want),
+        zhao::save_failing_vector("stub_abort_case", c.hdr, "status=" + std::to_string(c.want),
                                   "status=" + std::to_string(top.status));
       }
     }
@@ -180,8 +182,7 @@ int main(int argc, char** argv) {
     auto bad = frame;
     bad[bad.size() - 1] ^= 0x80;  // flip a bit in payload_crc32c
     feed(top, bad);
-    zhao::check(top.status == E_BAD_PAYLOAD_CRC, "bad payload crc", E_BAD_PAYLOAD_CRC,
-                top.status);
+    zhao::check(top.status == E_BAD_PAYLOAD_CRC, "bad payload crc", E_BAD_PAYLOAD_CRC, top.status);
     zhao::check(top.frames_rejected == 1, "payload crc rejected", 1, top.frames_rejected);
     zhao::check(top.bytes_consumed == bad.size(), "payload crc bytes", bad.size(),
                 top.bytes_consumed);
@@ -194,8 +195,8 @@ int main(int argc, char** argv) {
     feed(top, frame);
     zhao::check(top.status == E_OK, "second frame status", E_OK, top.status);
     zhao::check(top.frames_accepted == 2, "two frames accepted", 2, top.frames_accepted);
-    zhao::check(top.bytes_consumed == 2 * frame.size(), "two frames bytes",
-                2 * frame.size(), top.bytes_consumed);
+    zhao::check(top.bytes_consumed == 2 * frame.size(), "two frames bytes", 2 * frame.size(),
+                top.bytes_consumed);
   }
 
   // ---- 6. fuzz: no hang, counters self-consistent ------------------------------
@@ -217,12 +218,11 @@ int main(int argc, char** argv) {
     }
     zhao::idle(top, 8);
     const uint64_t decided = uint64_t(top.frames_accepted) + top.frames_rejected;
-    zhao::check(decided * 36 <= top.bytes_consumed + 71,
-                "fuzz: decisions vs consumed bytes", 0, decided);
-    std::printf("fuzz: accepted=%u rejected=%u bytes=%u\n",
-                static_cast<unsigned>(top.frames_accepted),
-                static_cast<unsigned>(top.frames_rejected),
-                static_cast<unsigned>(top.bytes_consumed));
+    zhao::check(decided * 36 <= top.bytes_consumed + 71, "fuzz: decisions vs consumed bytes", 0,
+                decided);
+    std::printf(
+        "fuzz: accepted=%u rejected=%u bytes=%u\n", static_cast<unsigned>(top.frames_accepted),
+        static_cast<unsigned>(top.frames_rejected), static_cast<unsigned>(top.bytes_consumed));
   }
 
   top.final();

@@ -10,8 +10,7 @@
 
 namespace zhao {
 
-ZhaoExecutionResult ZhaoZrefShell::submit(const uint8_t* pkt, size_t len,
-                                          uint32_t slot_bytes) {
+ZhaoExecutionResult ZhaoZrefShell::submit(const uint8_t* pkt, size_t len, uint32_t slot_bytes) {
   // The per-frame verdict comes from the single W4 executor (never a second
   // implementation — charter §29-6); the shell only accumulates.
   last_ = zhao_frame_execute_empty(pkt, len, slot_bytes);
@@ -26,8 +25,7 @@ ZhaoExecutionResult ZhaoZrefShell::submit(const uint8_t* pkt, size_t len,
   return last_;
 }
 
-ZhaoExecutionResult ZhaoZrefShell::submit(const std::vector<uint8_t>& pkt,
-                                          uint32_t slot_bytes) {
+ZhaoExecutionResult ZhaoZrefShell::submit(const std::vector<uint8_t>& pkt, uint32_t slot_bytes) {
   return submit(pkt.data(), pkt.size(), slot_bytes);
 }
 

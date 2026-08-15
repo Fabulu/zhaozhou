@@ -71,8 +71,7 @@ int main() {
     check(r.counters.frames_accepted == 1 && r.counters.frames_rejected == 0,
           "golden frame accepted");
     check(r.counters.bytes_consumed == 120, "golden consumes the whole packet");
-    check(shell.session().frames_submitted == 1 &&
-              shell.session().frames_accepted == 1 &&
+    check(shell.session().frames_submitted == 1 && shell.session().frames_accepted == 1 &&
               shell.session().commands_total == 3,
           "session counters mirror the single green frame");
   }
@@ -92,28 +91,23 @@ int main() {
     std::vector<uint8_t> bad_hcrc = golden;
     bad_hcrc[ZHAO_OFF_HEADER_CRC] ^= 0x01;  // header CRC word
     const zhao::ZhaoExecutionResult r2 = shell.submit(bad_hcrc);
-    check(r2.status == ZH_ABI_BAD_HEADER_CRC,
-          "corrupt header CRC -> ZH_ABI_BAD_HEADER_CRC");
+    check(r2.status == ZH_ABI_BAD_HEADER_CRC, "corrupt header CRC -> ZH_ABI_BAD_HEADER_CRC");
     check(r2.counters.bytes_consumed == 36,
           "header-level abort consumes exactly 36 bytes (spec 3.2)");
 
     std::vector<uint8_t> bad_pcrc = golden;
     bad_pcrc[ZHAO_FRAME_HEADER_BYTES + 4] ^= 0x80;  // inside the command stream
     const zhao::ZhaoExecutionResult r3 = shell.submit(bad_pcrc);
-    check(r3.status == ZH_ABI_BAD_PAYLOAD_CRC,
-          "corrupt payload -> ZH_ABI_BAD_PAYLOAD_CRC");
+    check(r3.status == ZH_ABI_BAD_PAYLOAD_CRC, "corrupt payload -> ZH_ABI_BAD_PAYLOAD_CRC");
     check(r3.counters.bytes_consumed == 120,
           "payload verdict consumes the whole packet (spec 3.2)");
 
-    check(shell.session().frames_submitted == 3 &&
-              shell.session().frames_rejected == 3 &&
-              shell.session().frames_accepted == 0 &&
-              shell.session().commands_total == 0,
+    check(shell.session().frames_submitted == 3 && shell.session().frames_rejected == 3 &&
+              shell.session().frames_accepted == 0 && shell.session().commands_total == 0,
           "three corrupt frames rejected, none executed");
 
     shell.reset();
-    check(shell.session().frames_submitted == 0 &&
-              shell.last_status() == ZH_ABI_OK,
+    check(shell.session().frames_submitted == 0 && shell.last_status() == ZH_ABI_OK,
           "reset clears session and last-frame latch");
   }
 
@@ -126,13 +120,11 @@ int main() {
     rec.clear();
     zhao_pack_set_presentation_contract(zhao_sample_set_presentation_contract(), rec);
     fb.append_record(rec);
-    const std::vector<uint8_t> pkt =
-        fb.seal(/*frame_id=*/7, /*sequence=*/0, /*resource_epoch=*/1);
+    const std::vector<uint8_t> pkt = fb.seal(/*frame_id=*/7, /*sequence=*/0, /*resource_epoch=*/1);
 
     zhao::ZhaoZrefShell shell;
     const zhao::ZhaoExecutionResult r = shell.submit(pkt);
-    check(r.status == ZH_ABI_OK,
-          "SetView+SetPresentationContract frame executes OK (spec 3.3)");
+    check(r.status == ZH_ABI_OK, "SetView+SetPresentationContract frame executes OK (spec 3.3)");
     check(r.completion_flags == ZHAO_COMPL_DONE, "presentation frame completes DONE");
     check(r.counters.commands_total == 2 && r.counters.begin_frames == 0 &&
               r.counters.end_frames == 0 && r.counters.nops == 0,

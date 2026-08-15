@@ -14,8 +14,7 @@ namespace {
 
 uint16_t rd16(const uint8_t* p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 uint32_t rd32(const uint8_t* p) {
-  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
-         ((uint32_t)p[3] << 24);
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 struct Fail {
@@ -26,41 +25,85 @@ struct Fail {
 // op metadata mirrors field-ir.md §2 (dst group width, source group widths,
 // imm use) — duplicated from types.ts by hand ONCE, asserted by the fuzz
 // corpus replay (any drift shows up as a decode/interpret divergence).
-struct OpMeta { int dstW; int srcGroups[3]; int nGroups; char imm; };  // imm: 0 none, 1 raw, 2 cmp, 3 table, 4 seed, 5 rot3
+struct OpMeta {
+  int dstW;
+  int srcGroups[3];
+  int nGroups;
+  char imm;
+};  // imm: 0 none, 1 raw, 2 cmp, 3 table, 4 seed, 5 rot3
 bool opMeta(uint8_t op, OpMeta& m) {
   switch (op) {
-    case OP_END:    m = {0, {0,0,0}, 0, 0}; return true;
-    case OP_MOV:    m = {1, {1,0,0}, 1, 0}; return true;
-    case OP_LDC:    m = {1, {0,0,0}, 0, 1}; return true;
+    case OP_END:
+      m = {0, {0, 0, 0}, 0, 0};
+      return true;
+    case OP_MOV:
+      m = {1, {1, 0, 0}, 1, 0};
+      return true;
+    case OP_LDC:
+      m = {1, {0, 0, 0}, 0, 1};
+      return true;
     case OP_ADD:
     case OP_SUB:
     case OP_MUL:
     case OP_MIN:
-    case OP_MAX:    m = {1, {1,1,0}, 2, 0}; return true;
+    case OP_MAX:
+      m = {1, {1, 1, 0}, 2, 0};
+      return true;
     case OP_MAD:
     case OP_CLAMP:
-    case OP_SELECT: m = {1, {1,1,1}, 3, 0}; return true;
+    case OP_SELECT:
+      m = {1, {1, 1, 1}, 3, 0};
+      return true;
     case OP_ABS:
     case OP_RCP:
     case OP_SIN:
-    case OP_COS:    m = {1, {1,0,0}, 1, 0}; return true;
-    case OP_CMP:    m = {1, {1,1,0}, 2, 2}; return true;
+    case OP_COS:
+      m = {1, {1, 0, 0}, 1, 0};
+      return true;
+    case OP_CMP:
+      m = {1, {1, 1, 0}, 2, 2};
+      return true;
     case OP_DOT2:
-    case OP_DIST2:  m = {1, {2,2,0}, 2, 0}; return true;
-    case OP_DOT3:   m = {1, {3,3,0}, 2, 0}; return true;
-    case OP_LEN2:   m = {1, {2,0,0}, 1, 0}; return true;
-    case OP_LEN3:   m = {1, {3,0,0}, 1, 0}; return true;
-    case OP_NORMALIZE2: m = {2, {2,0,0}, 1, 0}; return true;
-    case OP_NORMALIZE3: m = {3, {3,0,0}, 1, 0}; return true;
+    case OP_DIST2:
+      m = {1, {2, 2, 0}, 2, 0};
+      return true;
+    case OP_DOT3:
+      m = {1, {3, 3, 0}, 2, 0};
+      return true;
+    case OP_LEN2:
+      m = {1, {2, 0, 0}, 1, 0};
+      return true;
+    case OP_LEN3:
+      m = {1, {3, 0, 0}, 1, 0};
+      return true;
+    case OP_NORMALIZE2:
+      m = {2, {2, 0, 0}, 1, 0};
+      return true;
+    case OP_NORMALIZE3:
+      m = {3, {3, 0, 0}, 1, 0};
+      return true;
     case OP_CURVE:
     case OP_SPLINE:
-    case OP_DCURVE: m = {1, {1,0,0}, 1, 3}; return true;
-    case OP_NOISE2: m = {2, {2,0,0}, 1, 4}; return true;
-    case OP_RING:   m = {1, {1,1,1}, 3, 0}; return true;
-    case OP_RIDGE:  m = {1, {1,1,0}, 2, 4}; return true;
-    case OP_ROT2:   m = {2, {2,1,0}, 2, 0}; return true;
-    case OP_ROT3:   m = {3, {3,1,0}, 2, 5}; return true;
-    default: return false;
+    case OP_DCURVE:
+      m = {1, {1, 0, 0}, 1, 3};
+      return true;
+    case OP_NOISE2:
+      m = {2, {2, 0, 0}, 1, 4};
+      return true;
+    case OP_RING:
+      m = {1, {1, 1, 1}, 3, 0};
+      return true;
+    case OP_RIDGE:
+      m = {1, {1, 1, 0}, 2, 4};
+      return true;
+    case OP_ROT2:
+      m = {2, {2, 1, 0}, 2, 0};
+      return true;
+    case OP_ROT3:
+      m = {3, {3, 1, 0}, 2, 5};
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -68,23 +111,40 @@ bool opMeta(uint8_t op, OpMeta& m) {
 
 const char* decodeErrorName(DecodeError e) {
   switch (e) {
-    case DecodeError::kOk: return "ok";
-    case DecodeError::kBadMagic: return "V1 bad magic";
-    case DecodeError::kBadVersion: return "V1 bad version";
-    case DecodeError::kBadLength: return "V1 bad length";
-    case DecodeError::kBadCrc: return "V2 body CRC mismatch";
-    case DecodeError::kBadHash: return "V2 program hash mismatch";
-    case DecodeError::kBadProfile: return "V3 profile out of range";
-    case DecodeError::kBadFlags: return "V3 flags nonzero";
-    case DecodeError::kInstrCeiling: return "V4 instr ceiling";
-    case DecodeError::kBadTable: return "V5 table";
-    case DecodeError::kBadIoMap: return "V6 io map";
-    case DecodeError::kRegOutOfRange: return "V7 register >= 64";
-    case DecodeError::kDstOverlapsInputOrSource: return "V8 dst overlaps input/source";
-    case DecodeError::kBadOpcodeOrImm: return "V9 opcode/imm discipline";
-    case DecodeError::kBadEnd: return "V10 END placement";
-    case DecodeError::kUseBeforeDef: return "V11 use before def";
-    case DecodeError::kOutputNeverDefined: return "V12 output never defined";
+    case DecodeError::kOk:
+      return "ok";
+    case DecodeError::kBadMagic:
+      return "V1 bad magic";
+    case DecodeError::kBadVersion:
+      return "V1 bad version";
+    case DecodeError::kBadLength:
+      return "V1 bad length";
+    case DecodeError::kBadCrc:
+      return "V2 body CRC mismatch";
+    case DecodeError::kBadHash:
+      return "V2 program hash mismatch";
+    case DecodeError::kBadProfile:
+      return "V3 profile out of range";
+    case DecodeError::kBadFlags:
+      return "V3 flags nonzero";
+    case DecodeError::kInstrCeiling:
+      return "V4 instr ceiling";
+    case DecodeError::kBadTable:
+      return "V5 table";
+    case DecodeError::kBadIoMap:
+      return "V6 io map";
+    case DecodeError::kRegOutOfRange:
+      return "V7 register >= 64";
+    case DecodeError::kDstOverlapsInputOrSource:
+      return "V8 dst overlaps input/source";
+    case DecodeError::kBadOpcodeOrImm:
+      return "V9 opcode/imm discipline";
+    case DecodeError::kBadEnd:
+      return "V10 END placement";
+    case DecodeError::kUseBeforeDef:
+      return "V11 use before def";
+    case DecodeError::kOutputNeverDefined:
+      return "V12 output never defined";
   }
   return "?";
 }
@@ -124,10 +184,9 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
   const uint32_t body_crc = rd32(bytes + 24);
 
   const size_t body_start = ZPROG_HEADER_BYTES + (size_t)8 * instr_count;
-  const size_t expected = ZPROG_HEADER_BYTES + (size_t)8 * instr_count +
-                          table_bytes + map_bytes;
-  if (n != expected) return fail(DecodeError::kBadLength,
-                                 std::to_string(n) + " != " + std::to_string(expected));
+  const size_t expected = ZPROG_HEADER_BYTES + (size_t)8 * instr_count + table_bytes + map_bytes;
+  if (n != expected)
+    return fail(DecodeError::kBadLength, std::to_string(n) + " != " + std::to_string(expected));
 
   // V2 (CRC over the image with the CRC field zeroed)
   {
@@ -177,16 +236,24 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
     Table& tab = res.prog.tables[t];
     tab.kind = *p++;
     const uint8_t rsvd = *p++;
-    const uint16_t cnt = rd16(p); p += 2;
+    const uint16_t cnt = rd16(p);
+    p += 2;
     if (tab.kind > 1) return fail(DecodeError::kBadTable, "kind");
     if (rsvd != 0) return fail(DecodeError::kBadTable, "reserved byte");
     if (cnt < 2 || cnt > 64) return fail(DecodeError::kBadTable, "entry count");
-    tab.x.resize(cnt); tab.y.resize(cnt); tab.dy.resize(cnt);
+    tab.x.resize(cnt);
+    tab.y.resize(cnt);
+    tab.dy.resize(cnt);
     for (uint16_t i = 0; i < cnt; ++i) {
-      const int32_t x = (int32_t)rd32(p); p += 4;
-      const int32_t y = (int32_t)rd32(p); p += 4;
-      const int32_t dy = (int32_t)rd32(p); p += 4;
-      tab.x[i] = x; tab.y[i] = y; tab.dy[i] = dy;
+      const int32_t x = (int32_t)rd32(p);
+      p += 4;
+      const int32_t y = (int32_t)rd32(p);
+      p += 4;
+      const int32_t dy = (int32_t)rd32(p);
+      p += 4;
+      tab.x[i] = x;
+      tab.y[i] = y;
+      tab.dy[i] = dy;
       if (i > 0 && x <= tab.x[i - 1]) return fail(DecodeError::kBadTable, "x order");
     }
     if (tab.kind == 1) {
@@ -206,15 +273,20 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
   if (io_lane_count == 0 || io_lane_count > 32) {
     return fail(DecodeError::kBadIoMap, "lane count");
   }
-  struct RawLane { uint8_t reg, kind, type, name_id; int32_t min, max; };
+  struct RawLane {
+    uint8_t reg, kind, type, name_id;
+    int32_t min, max;
+  };
   std::vector<RawLane> lanes(io_lane_count);
   for (uint8_t i = 0; i < io_lane_count; ++i) {
     lanes[i].reg = *p++;
     lanes[i].kind = *p++;
     lanes[i].type = *p++;
     lanes[i].name_id = *p++;
-    lanes[i].min = (int32_t)rd32(p); p += 4;
-    lanes[i].max = (int32_t)rd32(p); p += 4;
+    lanes[i].min = (int32_t)rd32(p);
+    p += 4;
+    lanes[i].max = (int32_t)rd32(p);
+    p += 4;
   }
   // source map (8 bytes per instruction)
   res.prog.src_map.resize(instr_count);
@@ -238,9 +310,8 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
     }
     names.push_back(s);
   }
-  if (p != bytes + n ||
-      (size_t)(p - names_start) !=
-          map_bytes - (size_t)12 * io_lane_count - (size_t)8 * instr_count) {
+  if (p != bytes + n || (size_t)(p - names_start) !=
+                            map_bytes - (size_t)12 * io_lane_count - (size_t)8 * instr_count) {
     return fail(DecodeError::kBadIoMap, "map section length");
   }
 
@@ -256,8 +327,10 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
     lane.reg = l.reg;
     lane.min = l.min;
     lane.max = l.max;
-    if (l.kind == 0) res.prog.in_lanes.push_back(lane);
-    else res.prog.out_lanes.push_back(lane);
+    if (l.kind == 0)
+      res.prog.in_lanes.push_back(lane);
+    else
+      res.prog.out_lanes.push_back(lane);
   }
   for (size_t i = 0; i < res.prog.in_lanes.size(); ++i) {
     if (res.prog.in_lanes[i].reg != i) {
@@ -288,8 +361,7 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
     const Instr& ins = res.prog.instrs[pc];
     OpMeta m;
     if (!opMeta(ins.op, m)) {
-      return fail(DecodeError::kBadOpcodeOrImm,
-                  "pc " + std::to_string(pc) + " unknown opcode");
+      return fail(DecodeError::kBadOpcodeOrImm, "pc " + std::to_string(pc) + " unknown opcode");
     }
     const uint16_t srcFields[3] = {ins.a, ins.b, ins.c};
     bool srcIsReg[3] = {false, false, false};
@@ -300,8 +372,7 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
       for (int k = 0; k < m.srcGroups[g]; ++k) {
         const int r = srcFields[g] + k;
         if (r >= (int)REG_COUNT) {
-          return fail(DecodeError::kRegOutOfRange,
-                      "pc " + std::to_string(pc) + " src reg");
+          return fail(DecodeError::kRegOutOfRange, "pc " + std::to_string(pc) + " src reg");
         }
         if (!defined[r]) {
           return fail(DecodeError::kUseBeforeDef,
@@ -332,15 +403,21 @@ DecodeResult decode(const uint8_t* bytes, size_t n) {
     }
     // V9 imm discipline
     switch (m.imm) {
-      case 0: if (ins.imm != 0) return fail(DecodeError::kBadOpcodeOrImm, "imm nonzero"); break;
-      case 1: break;                                        // LDC raw
-      case 2: if (ins.imm > 5) return fail(DecodeError::kBadOpcodeOrImm, "cmp mode"); break;
+      case 0:
+        if (ins.imm != 0) return fail(DecodeError::kBadOpcodeOrImm, "imm nonzero");
+        break;
+      case 1:
+        break;  // LDC raw
+      case 2:
+        if (ins.imm > 5) return fail(DecodeError::kBadOpcodeOrImm, "cmp mode");
+        break;
       case 3:
         if (ins.imm >= res.prog.tables.size()) {
           return fail(DecodeError::kBadOpcodeOrImm, "table id");
         }
         break;
-      case 4: break;                                        // seed
+      case 4:
+        break;  // seed
       case 5:
         if ((ins.imm & ~3u) != 0 || (ins.imm & 3) > 2) {
           return fail(DecodeError::kBadOpcodeOrImm, "rot3 axis");

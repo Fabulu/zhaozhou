@@ -1,0 +1,49 @@
+# cppcheck_check.cmake — CTest wrapper for the charter-27 "static analysis"
+# tier (review M1, RUN-20260814-1912-wave1-architecture-plan).
+#
+# cppcheck --enable=warning over the same tracked file set as the format
+# tier (see format_check.cmake). TS static analysis is already gated by tsc
+# (npm test compiles first); clang-tidy is deliberately NOT wired per-commit
+# (optional nightly later) — scope recorded honestly.
+#
+# SKIP discipline: when cppcheck is not installed locally the test SKIPS;
+# the CI "format" job installs cppcheck on the runner and runs the same
+# command. Verified clean against cppcheck 2.20.0 (local) with the exact
+# flag set below.
+if("@ZHAO_CPPCHECK_BIN@" STREQUAL "" OR "@ZHAO_CPPCHECK_BIN@" MATCHES "NOTFOUND")
+  message(STATUS "cppcheck not found — static analysis tier SKIPPED")
+  return()
+endif()
+
+execute_process(
+  COMMAND git -C "@CMAKE_SOURCE_DIR@" ls-files reference tests tools/capture
+  OUTPUT_VARIABLE _raw
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE _git_rc)
+if(NOT _git_rc EQUAL 0)
+  message(FATAL_ERROR "static analysis tier: git ls-files failed (rc=${_git_rc})")
+endif()
+string(REPLACE "\n" ";" _files "${_raw}")
+list(FILTER _files INCLUDE REGEX "\\.(cpp|hpp|h)$")
+list(FILTER _files EXCLUDE REGEX "generated")
+if(NOT _files)
+  message(FATAL_ERROR "static analysis tier: empty file set")
+endif()
+
+execute_process(
+  COMMAND "@ZHAO_CPPCHECK_BIN@" --enable=warning --std=c++17 --inline-suppr
+          --suppress=missingIncludeSystem --error-exitcode=2
+          -I "@CMAKE_SOURCE_DIR@/reference/include"
+          -I "@CMAKE_SOURCE_DIR@/runtime/include"
+          -I "@CMAKE_SOURCE_DIR@/tests/harness"
+          --platform=unix64
+          ${_files}
+  WORKING_DIRECTORY "@CMAKE_SOURCE_DIR@"
+  RESULT_VARIABLE _rc
+  OUTPUT_VARIABLE _out
+  ERROR_VARIABLE _err)
+if(NOT _rc EQUAL 0)
+  message(FATAL_ERROR "static analysis tier: cppcheck findings (rc=${_rc}):\n${_err}")
+endif()
+list(LENGTH _files _n)
+message(STATUS "static analysis tier OK: ${_n} files, zero warnings")

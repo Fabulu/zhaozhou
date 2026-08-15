@@ -15,12 +15,8 @@ using namespace zhao_abi;
 
 namespace {
 
-uint16_t rd16(const uint8_t* p) {
-  return uint16_t(p[0]) | (uint16_t(p[1]) << 8);
-}
-uint32_t rd32(const uint8_t* p) {
-  return rd16(p) | (uint32_t(rd16(p + 2)) << 16);
-}
+uint16_t rd16(const uint8_t* p) { return uint16_t(p[0]) | (uint16_t(p[1]) << 8); }
+uint32_t rd32(const uint8_t* p) { return rd16(p) | (uint32_t(rd16(p + 2)) << 16); }
 
 }  // namespace
 
@@ -238,10 +234,17 @@ ZhaoExecutionResult zhao_frame_execute_empty(const uint8_t* pkt, size_t len, uin
       return res;
     }
     switch (opcode) {
-      case ZHAO_OP_BEGIN_FRAME: res.counters.begin_frames++; break;
-      case ZHAO_OP_END_FRAME: res.counters.end_frames++; break;
-      case ZHAO_OP_NOP: res.counters.nops++; break;
-      default: break;  // implemented but semantically a no-op in Phase 1
+      case ZHAO_OP_BEGIN_FRAME:
+        res.counters.begin_frames++;
+        break;
+      case ZHAO_OP_END_FRAME:
+        res.counters.end_frames++;
+        break;
+      case ZHAO_OP_NOP:
+        res.counters.nops++;
+        break;
+      default:
+        break;  // implemented but semantically a no-op in Phase 1
     }
     off += rec_bytes;
     res.counters.commands_total++;
@@ -274,17 +277,17 @@ ZhaoZcapWriter::ZhaoZcapWriter(const std::string& path) : path_(path) {}
 
 ZhaoZcapWriter::~ZhaoZcapWriter() = default;
 
-void ZhaoZcapWriter::add_section(uint16_t type, uint16_t version, const uint8_t* body,
-                                 size_t n, bool crc_present) {
+void ZhaoZcapWriter::add_section(uint16_t type, uint16_t version, const uint8_t* body, size_t n,
+                                 bool crc_present) {
   entries_.push_back(Entry{type, version,
-                           crc_present ? uint16_t(ZHAO_ZCAP_SECTION_CRC_PRESENT) : uint16_t(0),
-                           0, n, crc_present ? zhao_crc32c(0, body, n) : 0});
+                           crc_present ? uint16_t(ZHAO_ZCAP_SECTION_CRC_PRESENT) : uint16_t(0), 0,
+                           n, crc_present ? zhao_crc32c(0, body, n) : 0});
   bodies_.emplace_back(body, body + n);
   count_++;
 }
 
-void ZhaoZcapWriter::add_section(uint16_t type, uint16_t version,
-                                 const std::vector<uint8_t>& body, bool crc_present) {
+void ZhaoZcapWriter::add_section(uint16_t type, uint16_t version, const std::vector<uint8_t>& body,
+                                 bool crc_present) {
   add_section(type, version, body.data(), body.size(), crc_present);
 }
 

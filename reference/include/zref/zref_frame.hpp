@@ -57,17 +57,15 @@ ZhaoFrameHeader zhao_frame_parse_header(const uint8_t* pkt);
  */
 class ZhaoFrameBuilder {
  public:
-  ZhaoFrameBuilder& begin_frame(uint32_t frame_id, uint32_t resource_epoch,
-                                uint32_t flags, uint32_t deadline_cycles,
-                                uint32_t source_id = 0);
+  ZhaoFrameBuilder& begin_frame(uint32_t frame_id, uint32_t resource_epoch, uint32_t flags,
+                                uint32_t deadline_cycles, uint32_t source_id = 0);
   ZhaoFrameBuilder& nop(uint32_t source_id = 0);
   ZhaoFrameBuilder& end_frame(uint32_t completion_flags, uint32_t source_id = 0);
   ZhaoFrameBuilder& append_record(const uint8_t* bytes, size_t n);
   ZhaoFrameBuilder& append_record(const std::vector<uint8_t>& bytes);
 
-  std::vector<uint8_t> seal(uint32_t frame_id, uint32_t sequence,
-                            uint32_t resource_epoch, uint32_t deadline_cycles = 0,
-                            uint16_t flags = 0) const;
+  std::vector<uint8_t> seal(uint32_t frame_id, uint32_t sequence, uint32_t resource_epoch,
+                            uint32_t deadline_cycles = 0, uint16_t flags = 0) const;
   uint32_t command_count() const { return count_; }
   uint32_t command_bytes() const { return static_cast<uint32_t>(stream_.size()); }
 
@@ -90,8 +88,8 @@ struct ZhaoFrameCounters {
 };
 
 struct ZhaoExecutionResult {
-  uint8_t status = 0;             // zhao_abi_error code of the frame
-  uint8_t completion_flags = 0;   // ZHAO_COMPL_DONE / ZHAO_COMPL_ERR
+  uint8_t status = 0;            // zhao_abi_error code of the frame
+  uint8_t completion_flags = 0;  // ZHAO_COMPL_DONE / ZHAO_COMPL_ERR
   ZhaoFrameCounters counters;
 };
 

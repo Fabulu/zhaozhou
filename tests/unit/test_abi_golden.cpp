@@ -46,21 +46,21 @@ int main() {
     uint16_t opcode;
   };
   const Entry cmds[] = {
-    {"nop", ZHAO_OP_NOP},
-    {"begin_frame", ZHAO_OP_BEGIN_FRAME},
-    {"end_frame", ZHAO_OP_END_FRAME},
-    {"set_view", ZHAO_OP_SET_VIEW},
-    {"set_presentation_contract", ZHAO_OP_SET_PRESENTATION_CONTRACT},
-    {"terrain_field", ZHAO_OP_TERRAIN_FIELD},
-    {"surface_stamp", ZHAO_OP_SURFACE_STAMP},
-    {"draw_form", ZHAO_OP_DRAW_FORM},
-    {"draw_population", ZHAO_OP_DRAW_POPULATION},
-    {"draw_procedural", ZHAO_OP_DRAW_PROCEDURAL},
-    {"emit_audio_event", ZHAO_OP_EMIT_AUDIO_EVENT},
-    {"debug_bootstrap", ZHAO_OP_DEBUG_BOOTSTRAP},
-    {"draw_sky", ZHAO_OP_DRAW_SKY},
-    {"debug_frame_blit", ZHAO_OP_DEBUG_FRAME_BLIT},
-    {"debug_rumble", ZHAO_OP_DEBUG_RUMBLE},
+      {"nop", ZHAO_OP_NOP},
+      {"begin_frame", ZHAO_OP_BEGIN_FRAME},
+      {"end_frame", ZHAO_OP_END_FRAME},
+      {"set_view", ZHAO_OP_SET_VIEW},
+      {"set_presentation_contract", ZHAO_OP_SET_PRESENTATION_CONTRACT},
+      {"terrain_field", ZHAO_OP_TERRAIN_FIELD},
+      {"surface_stamp", ZHAO_OP_SURFACE_STAMP},
+      {"draw_form", ZHAO_OP_DRAW_FORM},
+      {"draw_population", ZHAO_OP_DRAW_POPULATION},
+      {"draw_procedural", ZHAO_OP_DRAW_PROCEDURAL},
+      {"emit_audio_event", ZHAO_OP_EMIT_AUDIO_EVENT},
+      {"debug_bootstrap", ZHAO_OP_DEBUG_BOOTSTRAP},
+      {"draw_sky", ZHAO_OP_DRAW_SKY},
+      {"debug_frame_blit", ZHAO_OP_DEBUG_FRAME_BLIT},
+      {"debug_rumble", ZHAO_OP_DEBUG_RUMBLE},
   };
 
   // ---- per-command goldens: pack(sample) == committed bytes -----------------
@@ -70,29 +70,59 @@ int main() {
 
     std::vector<uint8_t> got;
     switch (e.opcode) {
-      case ZHAO_OP_NOP: zhao_pack_nop(zhao_sample_nop(), got); break;
-      case ZHAO_OP_BEGIN_FRAME: zhao_pack_begin_frame(zhao_sample_begin_frame(), got); break;
-      case ZHAO_OP_END_FRAME: zhao_pack_end_frame(zhao_sample_end_frame(), got); break;
-      case ZHAO_OP_SET_VIEW: zhao_pack_set_view(zhao_sample_set_view(), got); break;
+      case ZHAO_OP_NOP:
+        zhao_pack_nop(zhao_sample_nop(), got);
+        break;
+      case ZHAO_OP_BEGIN_FRAME:
+        zhao_pack_begin_frame(zhao_sample_begin_frame(), got);
+        break;
+      case ZHAO_OP_END_FRAME:
+        zhao_pack_end_frame(zhao_sample_end_frame(), got);
+        break;
+      case ZHAO_OP_SET_VIEW:
+        zhao_pack_set_view(zhao_sample_set_view(), got);
+        break;
       case ZHAO_OP_SET_PRESENTATION_CONTRACT:
-        zhao_pack_set_presentation_contract(zhao_sample_set_presentation_contract(), got); break;
-      case ZHAO_OP_TERRAIN_FIELD: zhao_pack_terrain_field(zhao_sample_terrain_field(), got); break;
-      case ZHAO_OP_SURFACE_STAMP: zhao_pack_surface_stamp(zhao_sample_surface_stamp(), got); break;
-      case ZHAO_OP_DRAW_FORM: zhao_pack_draw_form(zhao_sample_draw_form(), got); break;
-      case ZHAO_OP_DRAW_POPULATION: zhao_pack_draw_population(zhao_sample_draw_population(), got); break;
-      case ZHAO_OP_DRAW_PROCEDURAL: zhao_pack_draw_procedural(zhao_sample_draw_procedural(), got); break;
-      case ZHAO_OP_EMIT_AUDIO_EVENT: zhao_pack_emit_audio_event(zhao_sample_emit_audio_event(), got); break;
-      case ZHAO_OP_DEBUG_BOOTSTRAP: zhao_pack_debug_bootstrap(zhao_sample_debug_bootstrap(), got); break;
-      case ZHAO_OP_DRAW_SKY: zhao_pack_draw_sky(zhao_sample_draw_sky(), got); break;
-      case ZHAO_OP_DEBUG_FRAME_BLIT: zhao_pack_debug_frame_blit(zhao_sample_debug_frame_blit(), got); break;
-      case ZHAO_OP_DEBUG_RUMBLE: zhao_pack_debug_rumble(zhao_sample_debug_rumble(), got); break;
-      default: break;
+        zhao_pack_set_presentation_contract(zhao_sample_set_presentation_contract(), got);
+        break;
+      case ZHAO_OP_TERRAIN_FIELD:
+        zhao_pack_terrain_field(zhao_sample_terrain_field(), got);
+        break;
+      case ZHAO_OP_SURFACE_STAMP:
+        zhao_pack_surface_stamp(zhao_sample_surface_stamp(), got);
+        break;
+      case ZHAO_OP_DRAW_FORM:
+        zhao_pack_draw_form(zhao_sample_draw_form(), got);
+        break;
+      case ZHAO_OP_DRAW_POPULATION:
+        zhao_pack_draw_population(zhao_sample_draw_population(), got);
+        break;
+      case ZHAO_OP_DRAW_PROCEDURAL:
+        zhao_pack_draw_procedural(zhao_sample_draw_procedural(), got);
+        break;
+      case ZHAO_OP_EMIT_AUDIO_EVENT:
+        zhao_pack_emit_audio_event(zhao_sample_emit_audio_event(), got);
+        break;
+      case ZHAO_OP_DEBUG_BOOTSTRAP:
+        zhao_pack_debug_bootstrap(zhao_sample_debug_bootstrap(), got);
+        break;
+      case ZHAO_OP_DRAW_SKY:
+        zhao_pack_draw_sky(zhao_sample_draw_sky(), got);
+        break;
+      case ZHAO_OP_DEBUG_FRAME_BLIT:
+        zhao_pack_debug_frame_blit(zhao_sample_debug_frame_blit(), got);
+        break;
+      case ZHAO_OP_DEBUG_RUMBLE:
+        zhao_pack_debug_rumble(zhao_sample_debug_rumble(), got);
+        break;
+      default:
+        break;
     }
 
     bool equal = got.size() == want.size();
     for (size_t i = 0; equal && i < want.size(); i++) equal = got[i] == want[i];
-    zhao::check(equal, (std::string("byte-identity cmd_") + e.snake + ".bin").c_str(),
-                want.size(), equal ? want.size() : got.size());
+    zhao::check(equal, (std::string("byte-identity cmd_") + e.snake + ".bin").c_str(), want.size(),
+                equal ? want.size() : got.size());
   }
 
   // ---- round-trip: pack -> unpack -> pack is stable ---------------------------
@@ -131,8 +161,8 @@ int main() {
     const auto v = zhao::zhao_frame_validate(pkt);
     zhao::check(v.error == ZH_ABI_OK, "frame_minimal validates", ZH_ABI_OK, v.error);
     zhao::check(v.commands_consumed == 3, "frame_minimal commands", 3, v.commands_consumed);
-    zhao::check(v.bytes_consumed == want.size(), "frame_minimal bytes_consumed",
-                want.size(), v.bytes_consumed);
+    zhao::check(v.bytes_consumed == want.size(), "frame_minimal bytes_consumed", want.size(),
+                v.bytes_consumed);
 
     if (!equal) {
       zhao::save_failing_vector("abi_frame_minimal_mismatch", pkt,
@@ -145,10 +175,9 @@ int main() {
   {
     const auto frame = read_file(dir / "frame_minimal.bin");
     zhao::ZhaoZcapReader reader((dir / "zcap_minimal.zcap").string());
-    zhao::check(reader.open() == zhao::ZhaoZcapError::kOk, "golden zcap opens clean",
-                0, int(reader.open()));
-    zhao::check(reader.sections().size() == 3, "golden zcap sections", 3,
-                reader.sections().size());
+    zhao::check(reader.open() == zhao::ZhaoZcapError::kOk, "golden zcap opens clean", 0,
+                int(reader.open()));
+    zhao::check(reader.sections().size() == 3, "golden zcap sections", 3, reader.sections().size());
     std::vector<uint8_t> body;
     const auto* fp = reader.find(zhao::ZhaoZcapSection::ZHAO_ZCAP_FRAME_PACKET);
     zhao::check(fp != nullptr, "golden zcap has FRAME_PACKET", 1, fp != nullptr ? 1 : 0);

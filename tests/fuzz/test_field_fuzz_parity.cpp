@@ -30,14 +30,14 @@ std::vector<uint8_t> readFile(const std::string& path) {
 }
 
 uint32_t rd32(const uint8_t* p) {
-  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
-         ((uint32_t)p[3] << 24);
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 int failures = 0;
 
 void checkProgram(const std::string& name) {
-  const std::vector<uint8_t> progBytes = readFile(std::string(ZHAO_FIELD_CORPUS_DIR) + "/" + name + ".zprog");
+  const std::vector<uint8_t> progBytes =
+      readFile(std::string(ZHAO_FIELD_CORPUS_DIR) + "/" + name + ".zprog");
   if (progBytes.empty()) {
     printf("FAIL %s: .zprog missing (run `npm run -w compiler test`)\n", name.c_str());
     ++failures;
@@ -45,13 +45,14 @@ void checkProgram(const std::string& name) {
   }
   const zfield::DecodeResult dec = zfield::decode(progBytes.data(), progBytes.size());
   if (dec.error != zfield::DecodeError::kOk) {
-    printf("FAIL %s: decode %s (%s)\n", name.c_str(),
-           zfield::decodeErrorName(dec.error), dec.detail.c_str());
+    printf("FAIL %s: decode %s (%s)\n", name.c_str(), zfield::decodeErrorName(dec.error),
+           dec.detail.c_str());
     ++failures;
     return;
   }
 
-  const std::vector<uint8_t> vecBytes = readFile(std::string(ZHAO_FIELD_CORPUS_DIR) + "/" + name + ".zvec");
+  const std::vector<uint8_t> vecBytes =
+      readFile(std::string(ZHAO_FIELD_CORPUS_DIR) + "/" + name + ".zvec");
   if (vecBytes.size() < 32) {
     printf("FAIL %s: .zvec missing\n", name.c_str());
     ++failures;
@@ -62,8 +63,8 @@ void checkProgram(const std::string& name) {
   const uint32_t inLanes = vecBytes[24];
   const uint32_t outLanes = vecBytes[25];
   if (hash != dec.prog.program_hash) {
-    printf("FAIL %s: hash mismatch zvec 0x%08x vs prog 0x%08x\n", name.c_str(),
-           hash, dec.prog.program_hash);
+    printf("FAIL %s: hash mismatch zvec 0x%08x vs prog 0x%08x\n", name.c_str(), hash,
+           dec.prog.program_hash);
     ++failures;
     return;
   }
@@ -76,28 +77,27 @@ void checkProgram(const std::string& name) {
   const uint8_t* p = vecBytes.data() + 32;
   for (uint32_t i = 0; i < count; ++i, p += recBytes) {
     int32_t out[8] = {0};
-    const zfield::Status st = zfield::interpret(dec.prog, (const int32_t*)p,
+    const zfield::Status st = zfield::interpret(dec.prog, reinterpret_cast<const int32_t*>(p),
                                                 inLanes, out, outLanes);
     const uint32_t actStatus = (st.sat ? 1u : 0u) | (st.rcp0 ? 2u : 0u);
-    const int32_t* exp = (const int32_t*)(p + inLanes * 4);
+    const int32_t* exp = reinterpret_cast<const int32_t*>(p + inLanes * 4);
     const uint32_t expStatus = rd32(p + inLanes * 4 + outLanes * 4);
     for (uint32_t k = 0; k < outLanes; ++k) {
       if (out[k] != exp[k]) {
-        printf("FAIL %s: record %u lane %u: expected 0x%08x got 0x%08x\n",
-               name.c_str(), i, k, (uint32_t)exp[k], (uint32_t)out[k]);
+        printf("FAIL %s: record %u lane %u: expected 0x%08x got 0x%08x\n", name.c_str(), i, k,
+               (uint32_t)exp[k], (uint32_t)out[k]);
         ++failures;
         return;
       }
     }
     if (actStatus != expStatus) {
-      printf("FAIL %s: record %u status: expected 0x%x got 0x%x\n",
-             name.c_str(), i, expStatus, actStatus);
+      printf("FAIL %s: record %u status: expected 0x%x got 0x%x\n", name.c_str(), i, expStatus,
+             actStatus);
       ++failures;
       return;
     }
   }
-  printf("ok %s: %u records bit-identical (outputs + status)\n",
-         name.c_str(), count);
+  printf("ok %s: %u records bit-identical (outputs + status)\n", name.c_str(), count);
 }
 
 }  // namespace

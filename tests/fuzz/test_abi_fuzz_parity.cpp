@@ -124,23 +124,37 @@ int main(int argc, char** argv) {
 
   // ---- 1. per-command golden round-trip through SV unpack -> pack -------------
   {
-    const struct { const char* snake; } cmds[] = {
-      "nop", "begin_frame", "end_frame", "set_view", "set_presentation_contract",
-      "terrain_field", "surface_stamp", "draw_form", "draw_population",
-      "draw_procedural", "emit_audio_event", "debug_bootstrap",
-      "draw_sky", "debug_frame_blit", "debug_rumble",
+    const struct {
+      const char* snake;
+    } cmds[] = {
+        "nop",
+        "begin_frame",
+        "end_frame",
+        "set_view",
+        "set_presentation_contract",
+        "terrain_field",
+        "surface_stamp",
+        "draw_form",
+        "draw_population",
+        "draw_procedural",
+        "emit_audio_event",
+        "debug_bootstrap",
+        "draw_sky",
+        "debug_frame_blit",
+        "debug_rumble",
     };
     for (const auto& c : cmds) {
-      const auto record = read_file(root / "tests" / "abi" / "golden" / ("cmd_" + std::string(c.snake) + ".bin"));
-      zhao::check(record.size() >= 16, (std::string("golden record ") + c.snake).c_str(),
-                  16, record.size());
+      const auto record =
+          read_file(root / "tests" / "abi" / "golden" / ("cmd_" + std::string(c.snake) + ".bin"));
+      zhao::check(record.size() >= 16, (std::string("golden record ") + c.snake).c_str(), 16,
+                  record.size());
       const auto repacked = probe_pack_roundtrip(probe, record);
       bool equal = repacked.size() == record.size();
       for (size_t i = 0; equal && i < record.size(); i++) equal = repacked[i] == record[i];
       zhao::check(equal, (std::string("SV pack/unpack byte-identity: ") + c.snake).c_str(),
                   record.size(), equal ? record.size() : repacked.size());
-      zhao::check(probe.pu_mismatch == 0, (std::string("SV mismatch flag: ") + c.snake).c_str(),
-                  0, probe.pu_mismatch);
+      zhao::check(probe.pu_mismatch == 0, (std::string("SV mismatch flag: ") + c.snake).c_str(), 0,
+                  probe.pu_mismatch);
     }
   }
 
@@ -222,10 +236,9 @@ int main(int argc, char** argv) {
         nonzero_errors++;
       }
       if (v.error != expected || sv_err != expected) {
-        zhao::save_failing_vector("fuzz_parity_" + name, pkt,
-                                  "expected error=" + std::to_string(expected),
-                                  "cpp=" + std::to_string(v.error) +
-                                      " sv=" + std::to_string(sv_err));
+        zhao::save_failing_vector(
+            "fuzz_parity_" + name, pkt, "expected error=" + std::to_string(expected),
+            "cpp=" + std::to_string(v.error) + " sv=" + std::to_string(sv_err));
       }
       ran++;
     }

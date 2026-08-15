@@ -28,10 +28,8 @@ void check(bool cond, const char* what, uint64_t expected, uint64_t actual) {
     return;
   }
   ++g_failures;
-  std::printf("FAIL: %s: expected 0x%llX, got 0x%llX\n",
-              what,
-              static_cast<unsigned long long>(expected),
-              static_cast<unsigned long long>(actual));
+  std::printf("FAIL: %s: expected 0x%llX, got 0x%llX\n", what,
+              static_cast<unsigned long long>(expected), static_cast<unsigned long long>(actual));
 }
 
 int report_and_exit(const char* suite_name) {
@@ -44,10 +42,8 @@ int report_and_exit(const char* suite_name) {
 }
 
 // --- failing-vector serializer (charter 20.3 / 29-17 shape) ----------------
-void save_failing_vector(const std::string& name,
-                         const std::vector<uint8_t>& input,
-                         const std::string& expected,
-                         const std::string& actual) {
+void save_failing_vector(const std::string& name, const std::vector<uint8_t>& input,
+                         const std::string& expected, const std::string& actual) {
   namespace fs = std::filesystem;
   std::error_code ec;
   fs::path repo_root = fs::current_path();  // tests run from build/; walk up

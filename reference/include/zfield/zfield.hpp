@@ -38,7 +38,7 @@ namespace zfield {
 // ---------------------------------------------------------------- version ---
 
 constexpr uint16_t FIELD_IR_VERSION = 1;
-constexpr uint32_t ZPROG_MAGIC = 0x5049465Au;   // 'Z','F','I','P' LE
+constexpr uint32_t ZPROG_MAGIC = 0x5049465Au;  // 'Z','F','I','P' LE
 constexpr uint32_t ZPROG_HEADER_BYTES = 28;
 constexpr size_t REG_COUNT = 64;
 constexpr size_t GLOBAL_CEILING = 64;
@@ -51,32 +51,59 @@ constexpr uint16_t PROFILE_CEILING[5] = {32, 48, 48, 64, 32};  // provisional (7
 // --------------------------------------------------------------- opcodes ---
 
 enum Op : uint8_t {
-  OP_END = 0x00, OP_MOV = 0x01, OP_LDC = 0x02, OP_ADD = 0x03, OP_SUB = 0x04,
-  OP_MUL = 0x05, OP_MAD = 0x06, OP_MIN = 0x07, OP_MAX = 0x08, OP_ABS = 0x09,
-  OP_CLAMP = 0x0A, OP_SELECT = 0x0B, OP_CMP = 0x0C,
-  OP_DOT2 = 0x10, OP_DOT3 = 0x11, OP_LEN2 = 0x12, OP_LEN3 = 0x13,
-  OP_DIST2 = 0x14, OP_NORMALIZE2 = 0x15, OP_NORMALIZE3 = 0x16,
-  OP_RCP = 0x17, OP_SIN = 0x18, OP_COS = 0x19,
-  OP_CURVE = 0x1A, OP_SPLINE = 0x1B, OP_NOISE2 = 0x1C, OP_DCURVE = 0x1D,
-  OP_RING = 0x21, OP_RIDGE = 0x22, OP_ROT2 = 0x28, OP_ROT3 = 0x29,
+  OP_END = 0x00,
+  OP_MOV = 0x01,
+  OP_LDC = 0x02,
+  OP_ADD = 0x03,
+  OP_SUB = 0x04,
+  OP_MUL = 0x05,
+  OP_MAD = 0x06,
+  OP_MIN = 0x07,
+  OP_MAX = 0x08,
+  OP_ABS = 0x09,
+  OP_CLAMP = 0x0A,
+  OP_SELECT = 0x0B,
+  OP_CMP = 0x0C,
+  OP_DOT2 = 0x10,
+  OP_DOT3 = 0x11,
+  OP_LEN2 = 0x12,
+  OP_LEN3 = 0x13,
+  OP_DIST2 = 0x14,
+  OP_NORMALIZE2 = 0x15,
+  OP_NORMALIZE3 = 0x16,
+  OP_RCP = 0x17,
+  OP_SIN = 0x18,
+  OP_COS = 0x19,
+  OP_CURVE = 0x1A,
+  OP_SPLINE = 0x1B,
+  OP_NOISE2 = 0x1C,
+  OP_DCURVE = 0x1D,
+  OP_RING = 0x21,
+  OP_RIDGE = 0x22,
+  OP_ROT2 = 0x28,
+  OP_ROT3 = 0x29,
 };
 
 // ---------------------------------------------------------- decode errors ---
 
 enum class DecodeError {
   kOk = 0,
-  kBadMagic, kBadVersion, kBadLength,          // V1
-  kBadCrc, kBadHash,                           // V2
-  kBadProfile, kBadFlags,                      // V3
-  kInstrCeiling,                               // V4
-  kBadTable,                                   // V5
-  kBadIoMap,                                   // V6
-  kRegOutOfRange,                              // V7
-  kDstOverlapsInputOrSource,                   // V8
-  kBadOpcodeOrImm,                             // V9
-  kBadEnd,                                     // V10
-  kUseBeforeDef,                               // V11
-  kOutputNeverDefined,                         // V12
+  kBadMagic,
+  kBadVersion,
+  kBadLength,  // V1
+  kBadCrc,
+  kBadHash,  // V2
+  kBadProfile,
+  kBadFlags,                  // V3
+  kInstrCeiling,              // V4
+  kBadTable,                  // V5
+  kBadIoMap,                  // V6
+  kRegOutOfRange,             // V7
+  kDstOverlapsInputOrSource,  // V8
+  kBadOpcodeOrImm,            // V9
+  kBadEnd,                    // V10
+  kUseBeforeDef,              // V11
+  kOutputNeverDefined,        // V12
 };
 
 const char* decodeErrorName(DecodeError e);
@@ -85,18 +112,18 @@ const char* decodeErrorName(DecodeError e);
 
 struct Instr {
   uint8_t op;
-  uint8_t dst, a, b, c;    // 6-bit register fields (group starts, 1.3)
-  uint32_t imm;            // raw u32
+  uint8_t dst, a, b, c;  // 6-bit register fields (group starts, 1.3)
+  uint32_t imm;          // raw u32
 };
 
 struct Table {
-  uint8_t kind;            // 0 curve, 1 spline
+  uint8_t kind;  // 0 curve, 1 spline
   std::vector<int32_t> x, y, dy;
 };
 
 struct IoLane {
   std::string name;
-  uint8_t type;            // 0 fx, 1 unit, 2 angle, 3 u32
+  uint8_t type;  // 0 fx, 1 unit, 2 angle, 3 u32
   uint8_t reg;
   int32_t min = 0, max = 0;  // declared bounds; inputs only
 };
@@ -125,8 +152,8 @@ struct Decoded {
 
 struct DecodeResult {
   DecodeError error = DecodeError::kOk;
-  std::string detail;             // human context (pc / lane / index)
-  Decoded prog;                   // valid when error == kOk
+  std::string detail;  // human context (pc / lane / index)
+  Decoded prog;        // valid when error == kOk
 };
 
 /** Load + re-validate a .zprog byte image (field-ir.md 4/5). */
@@ -167,7 +194,6 @@ constexpr uint32_t programHashConst(const uint8_t* p, size_t n) {
  * Every op is total; Status is sticky per call. Only reachable on a decoded
  * (i.e. validated) program.
  */
-Status interpret(const Decoded& prog, const int32_t* in, size_t n_in,
-                 int32_t* out, size_t n_out);
+Status interpret(const Decoded& prog, const int32_t* in, size_t n_in, int32_t* out, size_t n_out);
 
 }  // namespace zfield

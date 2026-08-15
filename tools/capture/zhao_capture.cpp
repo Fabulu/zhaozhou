@@ -36,17 +36,28 @@ std::vector<uint8_t> read_file(const std::string& path) {
 
 const char* section_name(uint16_t type) {
   switch (type) {
-    case 0x0001: return "ABI_INFO";
-    case 0x0002: return "FRAME_PACKET";
-    case 0x0003: return "RESOURCE_PAGES";
-    case 0x0004: return "CONTROLLER_SNAPSHOT";
-    case 0x0005: return "FRAMEBUFFER_EXPECTED";
-    case 0x0006: return "TILE_CRC";
-    case 0x0007: return "DEPTH_STENCIL_CRC";
-    case 0x0008: return "COUNTERS";
-    case 0x0009: return "SOURCE_MAP";
-    case 0x000A: return "TRACE";
-    default: return (type >= 0x8000) ? "private" : "unknown";
+    case 0x0001:
+      return "ABI_INFO";
+    case 0x0002:
+      return "FRAME_PACKET";
+    case 0x0003:
+      return "RESOURCE_PAGES";
+    case 0x0004:
+      return "CONTROLLER_SNAPSHOT";
+    case 0x0005:
+      return "FRAMEBUFFER_EXPECTED";
+    case 0x0006:
+      return "TILE_CRC";
+    case 0x0007:
+      return "DEPTH_STENCIL_CRC";
+    case 0x0008:
+      return "COUNTERS";
+    case 0x0009:
+      return "SOURCE_MAP";
+    case 0x000A:
+      return "TRACE";
+    default:
+      return (type >= 0x8000) ? "private" : "unknown";
   }
 }
 
@@ -58,13 +69,11 @@ int cmd_info(const std::string& path) {
     return 2;
   }
   std::printf("%s: format_version=%u sections=%llu total=%llu B\n", path.c_str(),
-              r.info().format_version,
-              static_cast<unsigned long long>(r.sections().size()),
+              r.info().format_version, static_cast<unsigned long long>(r.sections().size()),
               static_cast<unsigned long long>(r.info().total_file_length));
   for (const auto& s : r.sections()) {
     std::printf("  type=0x%04X %-22s ver=%u crc=%s off=%llu len=%llu\n", s.type,
-                section_name(s.type), s.version,
-                (s.flags & 0x0001) ? "present" : "none",
+                section_name(s.type), s.version, (s.flags & 0x0001) ? "present" : "none",
                 static_cast<unsigned long long>(s.body_offset),
                 static_cast<unsigned long long>(s.body_length));
   }
@@ -83,8 +92,8 @@ int cmd_verify(const std::string& path) {
   for (const auto& s : r.sections()) {
     if (!r.read_body(s, body)) {
       std::fprintf(stderr, "FAIL: section type=0x%04X (%s) at offset %llu: %s\n", s.type,
-                   section_name(s.type),
-                   static_cast<unsigned long long>(s.body_offset), r.error().c_str());
+                   section_name(s.type), static_cast<unsigned long long>(s.body_offset),
+                   r.error().c_str());
       failures++;
       continue;  // never trust contents; keep checking the remaining sections
     }
@@ -117,8 +126,8 @@ int cmd_write(const std::string& out, const std::string& frame_path) {
   }
   const auto v = zhao::zhao_frame_validate(frame);
   if (v.error != zhao_abi::ZH_ABI_OK) {
-    std::fprintf(stderr, "error: %s is not a valid sealed packet (error %d)\n",
-                 frame_path.c_str(), int(v.error));
+    std::fprintf(stderr, "error: %s is not a valid sealed packet (error %d)\n", frame_path.c_str(),
+                 int(v.error));
     return 2;
   }
   zhao::ZhaoZcapWriter w(out);

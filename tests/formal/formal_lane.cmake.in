@@ -6,7 +6,10 @@
 # W1 scope: verify sby executes (version banner) — real properties arrive
 # with the blocks that own them (plan W2-W6).
 
-if("@ZHAO_SBY_BIN@" STREQUAL "")
+# (M1 note: find_program failure sets the cache var to "<NAME>-NOTFOUND",
+# which configure_file substitutes verbatim — hence the MATCHES guard; the
+# original STREQUAL "" test never fired on a truly sby-less machine.)
+if("@ZHAO_SBY_BIN@" STREQUAL "" OR "@ZHAO_SBY_BIN@" MATCHES "NOTFOUND")
   message(STATUS "sby not found — formal lane SKIPPED")
   return()
 endif()

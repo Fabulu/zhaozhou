@@ -77,8 +77,8 @@ void feed(Vzhao_stub_top& top, const std::vector<uint8_t>& bytes) {
 }
 
 std::vector<uint8_t> resealed(std::vector<uint8_t> pkt) {
-  const uint32_t command_bytes =
-      uint32_t(pkt[28]) | (uint32_t(pkt[29]) << 8) | (uint32_t(pkt[30]) << 16) | (uint32_t(pkt[31]) << 24);
+  const uint32_t command_bytes = uint32_t(pkt[28]) | (uint32_t(pkt[29]) << 8) |
+                                 (uint32_t(pkt[30]) << 16) | (uint32_t(pkt[31]) << 24);
   const auto put32 = [&](uint32_t off, uint32_t v) {
     for (int i = 0; i < 4; i++) pkt[off + i] = uint8_t(v >> (8 * i));
   };
@@ -99,8 +99,8 @@ int main(int argc, char** argv) {
   // ---- 1. C++-built packet == committed golden (== TS-built, proven in npm) --
   {
     const auto golden = read_file(root / "tests" / "abi" / "golden" / "frame_minimal.bin");
-    zhao::check(frame == golden, "C++ minimal frame == golden frame_minimal.bin",
-                golden.size(), frame.size());
+    zhao::check(frame == golden, "C++ minimal frame == golden frame_minimal.bin", golden.size(),
+                frame.size());
   }
 
   // ---- 2. replay: ZRef executor vs Verilated stub -----------------------------
@@ -118,31 +118,33 @@ int main(int argc, char** argv) {
     zhao::check(zref.counters.frames_rejected == top.frames_rejected,
                 "replay frames_rejected parity", zref.counters.frames_rejected,
                 top.frames_rejected);
-    zhao::check(zref.counters.bytes_consumed == top.bytes_consumed,
-                "replay bytes_consumed parity", zref.counters.bytes_consumed,
-                top.bytes_consumed);
-    zhao::check(zref.counters.commands_total == top.commands_consumed,
-                "replay commands parity", zref.counters.commands_total,
-                top.commands_consumed);
+    zhao::check(zref.counters.bytes_consumed == top.bytes_consumed, "replay bytes_consumed parity",
+                zref.counters.bytes_consumed, top.bytes_consumed);
+    zhao::check(zref.counters.commands_total == top.commands_consumed, "replay commands parity",
+                zref.counters.commands_total, top.commands_consumed);
     // and the specific Phase-1 expectations
     zhao::check(zref.status == ZH_ABI_OK, "replay accepted", ZH_ABI_OK, zref.status);
-    zhao::check(zref.counters.begin_frames == 1 && zref.counters.nops == 1 &&
-                zref.counters.end_frames == 1, "replay command counters", 1,
-                zref.counters.nops);
+    zhao::check(
+        zref.counters.begin_frames == 1 && zref.counters.nops == 1 && zref.counters.end_frames == 1,
+        "replay command counters", 1, zref.counters.nops);
   }
 
   // ---- 3. corrupted / reserved cases: C++ validator vs SV stub, error parity --
   struct Case {
     const char* name;
-    std::vector<uint8_t> pkt;   // what the STUB is fed
-    std::vector<uint8_t> whole; // what ZRef validates (full packet)
+    std::vector<uint8_t> pkt;    // what the STUB is fed
+    std::vector<uint8_t> whole;  // what ZRef validates (full packet)
   };
   std::vector<Case> cases;
   {
     auto bad_hcrc = frame;
     bad_hcrc[33] ^= 0x40;  // corrupt header CRC word (no re-seal)
     bad_hcrc.resize(36);
-    cases.push_back({"bad header crc", bad_hcrc, [&] { auto w = frame; w[33] ^= 0x40; return w; }()});
+    cases.push_back({"bad header crc", bad_hcrc, [&] {
+                       auto w = frame;
+                       w[33] ^= 0x40;
+                       return w;
+                     }()});
   }
   {
     auto bad_pcrc = frame;
@@ -184,8 +186,8 @@ int main(int argc, char** argv) {
     // (spec 3.2: 36 on header-level abort, else the whole packet). This
     // check was missing in W4, which let the C++ validator report 0 on
     // header-level aborts while the stub reported 36.
-    zhao::check(zref.bytes_consumed == top.bytes_consumed, c.name,
-                zref.bytes_consumed, top.bytes_consumed);
+    zhao::check(zref.bytes_consumed == top.bytes_consumed, c.name, zref.bytes_consumed,
+                top.bytes_consumed);
     if (zref.error != top.status) {
       zhao::save_failing_vector("replay_error_parity", c.whole,
                                 "zref error=" + std::to_string(zref.error),
@@ -201,14 +203,15 @@ int main(int argc, char** argv) {
 
     {
       zhao::ZhaoZcapWriter w(tmp);
-      w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_ABI_INFO, 1,
-                    zhao::zhao_zcap_build_abi_info());
+      w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_ABI_INFO, 1, zhao::zhao_zcap_build_abi_info());
       w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_FRAME_PACKET, 1, frame);
       w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_SOURCE_MAP, 1, [&] {
         std::vector<zhao::ZhaoSourceMapEntry> entries;
-        entries.push_back({zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"});
+        entries.push_back(
+            {zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"});
         entries.push_back({zhao::zhao_source_id(5, 1, 0), 1, 5, 0, 20, "nop", "demo_form.zf"});
-        entries.push_back({zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"});
+        entries.push_back(
+            {zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"});
         return zhao::zhao_zcap_build_source_map(entries);
       }());
       zhao::ZhaoResourcePage page;
@@ -253,8 +256,7 @@ int main(int argc, char** argv) {
     // embedded frame replays identically after the round trip
     zhao::check(r.read_body(*r.find(zhao::ZhaoZcapSection::ZHAO_ZCAP_FRAME_PACKET), body),
                 "replay FRAME_PACKET", 1, 0);
-    zhao::check(body == frame, "embedded frame unchanged by capture", frame.size(),
-                body.size());
+    zhao::check(body == frame, "embedded frame unchanged by capture", frame.size(), body.size());
     std::remove(tmp.c_str());
   }
 

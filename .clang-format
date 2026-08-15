@@ -1,0 +1,21 @@
+# Zhaozhou C++ format law (charter 27 "format" tier, review M1).
+#
+# Base Google (2-space, 80-col heritage) widened to 100 columns because the
+# frozen numeric laws and identifier-heavy fixed-point lines legitimately run
+# long; include sorting OFF (order carries the generated-before-consumer and
+# spec-citation conventions). This file was chosen to MINIMIZE reformat churn
+# against the hand-written tree (measured: ~2.9k changed lines vs ~7.2k for a
+# 4-space LLVM base) — the one-time mechanical reformat lives in its own
+# commit so blame/grief stays attributable.
+#
+# Scope (the tier checks exactly this): reference/, tests/, tools/capture
+# C/C++ sources EXCEPT generated files (reference/include/zref/generated/ is
+# fixgen-owned byte-identity evidence; runtime/include/zhao_abi.h lives
+# outside the swept dirs and is abi-gen-owned). Verify with:
+#   npx -y clang-format@1.8.0 --dry-run --Werror <files>   (LLVM 15)
+# The npm package pin keeps local and CI checks on the SAME clang-format
+# major version (runner-distro clang-format drifts).
+---
+BasedOnStyle: Google
+ColumnLimit: 100
+SortIncludes: Never

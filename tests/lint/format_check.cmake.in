@@ -1,0 +1,43 @@
+# format_check.cmake — CTest wrapper for the charter-27 "format" tier
+# (review M1, RUN-20260814-1912-wave1-architecture-plan).
+#
+# Runs clang-format --dry-run --Werror over the tracked C/C++ files under
+# reference/, tests/ and tools/capture EXCEPT generated sources
+# (reference/include/zref/generated/ is fixgen-owned byte-identity evidence;
+# runtime/include/zhao_abi.h is abi-gen-owned and outside the swept dirs).
+#
+# SKIP discipline (same as the formal lane): when clang-format is not
+# installed locally the test SKIPS — the dedicated CI "format" job runs the
+# authoritative check with the pinned npm clang-format (LLVM 15, see
+# .clang-format and .github/workflows/ci.yml).
+if("@ZHAO_CLANG_FORMAT_BIN@" STREQUAL "" OR "@ZHAO_CLANG_FORMAT_BIN@" MATCHES "NOTFOUND")
+  message(STATUS "clang-format not found — format tier SKIPPED")
+  return()
+endif()
+
+execute_process(
+  COMMAND git -C "@CMAKE_SOURCE_DIR@" ls-files reference tests tools/capture
+  OUTPUT_VARIABLE _raw
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE _git_rc)
+if(NOT _git_rc EQUAL 0)
+  message(FATAL_ERROR "format tier: git ls-files failed (rc=${_git_rc})")
+endif()
+string(REPLACE "\n" ";" _files "${_raw}")
+list(FILTER _files INCLUDE REGEX "\\.(cpp|hpp|h)$")
+list(FILTER _files EXCLUDE REGEX "generated")
+if(NOT _files)
+  message(FATAL_ERROR "format tier: empty file set")
+endif()
+
+execute_process(
+  COMMAND "@ZHAO_CLANG_FORMAT_BIN@" --dry-run --Werror ${_files}
+  WORKING_DIRECTORY "@CMAKE_SOURCE_DIR@"
+  RESULT_VARIABLE _rc
+  OUTPUT_VARIABLE _out
+  ERROR_VARIABLE _err)
+if(NOT _rc EQUAL 0)
+  message(FATAL_ERROR "format tier: clang-format drift (rc=${_rc}):\n${_err}")
+endif()
+list(LENGTH _files _n)
+message(STATUS "format tier OK: ${_n} files clean under .clang-format")

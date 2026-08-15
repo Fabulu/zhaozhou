@@ -24,18 +24,16 @@ namespace zhao {
 // ---------------------------------------------------------------- checks --
 // Model-independent bit-exact compare registry. Tests accumulate failures
 // via zhao_check(); main() finishes with zhao_report_and_exit().
-int  check_failures();
+int check_failures();
 void check(bool cond, const char* what, uint64_t expected, uint64_t actual);
-int  report_and_exit(const char* suite_name);  // prints summary, returns exit code
+int report_and_exit(const char* suite_name);  // prints summary, returns exit code
 
 // ------------------------------------------------------- failing vectors --
 // Charter 29-17: every minimal failing vector is saved, not just printed.
 // Writes captures/failures/<name>.txt with the charter 20.3 shape:
 //   input bytes (hex), expected, actual. Creates the directory if needed.
-void save_failing_vector(const std::string& name,
-                         const std::vector<uint8_t>& input,
-                         const std::string& expected,
-                         const std::string& actual);
+void save_failing_vector(const std::string& name, const std::vector<uint8_t>& input,
+                         const std::string& expected, const std::string& actual);
 
 // ------------------------------------------------- clock / eval loop -----
 // One full clock cycle: settle low, rising edge (sequential logic fires),

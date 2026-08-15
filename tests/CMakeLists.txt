@@ -1,8 +1,11 @@
 # Tests. CTest labels (charter 20.3, P1 findings 4):
 #   fast    — every commit (the default gate: ctest --test-dir build -L fast)
 #   nightly — full fuzz + capture replay (scheduled CI job)
-#   formal  — SymbiYosys lane; wrapper test SKIPs when sby is absent
-#   lint    — per-module verilator --lint-only -Wall (charter 21 step 8)
+#   formal  — SymbiYosys lane; wrapper test SKIPs when sby is absent.
+#             Since review M1 the smoke (sby --version) also carries `fast`:
+#             sby IS in CI's oss-cad-suite, and the smoke costs < 1 s.
+#   lint    — per-module verilator --lint-only -Wall (charter 21 step 8) +
+#             the charter-27 format / static-analysis tiers (review M1)
 
 # ---- shared harness library (clock/eval loop, ready/valid stimulus,  -------
 # ---- bit-exact compare, failing-vector serializer, sc_time_stamp shim) ----
@@ -62,7 +65,7 @@ configure_file(formal/formal_lane.cmake.in formal/formal_lane.cmake @ONLY)
 add_test(NAME formal_lane
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/formal/formal_lane.cmake)
 set_tests_properties(formal_lane PROPERTIES
-  LABELS "formal;nightly"
+  LABELS "formal;fast;nightly"
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 
 # ---- W2: ledger npm checks (plan R11) --------------------------------------
@@ -232,3 +235,25 @@ add_test(NAME lint_zhao_pkg
 set_tests_properties(lint_zhao_pkg PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- M1 (review RUN-20260814-1912): charter-27 format + static-analysis ----
+# Every-commit tiers, mirrored locally as SKIP-if-absent CTest shims (same
+# discipline as formal_lane): clang-format is not shipped in oss-cad-suite,
+# so machines without it SKIP and the dedicated CI "format" job carries the
+# authoritative gate (pinned npm clang-format = LLVM 15; see .clang-format).
+# cppcheck is present in this repo's MinGW toolchain and on CI runners.
+find_program(ZHAO_CLANG_FORMAT_BIN NAMES clang-format clang-format.exe)
+configure_file(lint/format_check.cmake.in lint/format_check.cmake @ONLY)
+add_test(NAME format_check
+         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/format_check.cmake)
+set_tests_properties(format_check PROPERTIES
+  LABELS "lint;fast"
+  SKIP_REGULAR_EXPRESSION "format tier SKIPPED")
+
+find_program(ZHAO_CPPCHECK_BIN NAMES cppcheck cppcheck.exe)
+configure_file(lint/cppcheck_check.cmake.in lint/cppcheck_check.cmake @ONLY)
+add_test(NAME cppcheck_check
+         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/cppcheck_check.cmake)
+set_tests_properties(cppcheck_check PROPERTIES
+  LABELS "lint;fast"
+  SKIP_REGULAR_EXPRESSION "static analysis tier SKIPPED")

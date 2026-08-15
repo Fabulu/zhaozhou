@@ -56,9 +56,7 @@ class ZhaoZrefShell {
   const ZhaoShellCounters& session() const { return session_; }
   uint8_t last_status() const { return last_.status; }
   uint8_t last_completion_flags() const { return last_.completion_flags; }
-  const ZhaoFrameCounters& last_frame_counters() const {
-    return last_.counters;
-  }
+  const ZhaoFrameCounters& last_frame_counters() const { return last_.counters; }
 
   /** Clear the session (counters + last-frame latch). */
   void reset();
