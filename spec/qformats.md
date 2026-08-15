@@ -356,20 +356,52 @@ p = 21 for S 12.8 ⇒ **s64 setup**, bound 2^43 − 2; s32 stepping inside
 ```
 a'  = rescale(a.fx16 · 256, 16)                      // to S 12.8
 E0  = (b.x−a.x)·(c.y−a.y) − (b.y−a.y)·(c.x−a.x)  s64 // subpixel² units, exact
-E'  = E0 >> 8 (exact at pixel centers; low 8 bits constant per edge)
-bias = is_top_left(edge) ? 0 : −1
-inside(p) ⟺ E'(p) + bias ≥ 0                          // D3D top-left fill convention
+E'  = E0 >> 8 (tile-local stepping form; low 8 bits constant per edge)
+bias = is_top_left(edge) ? 0 : −1                     // subpixel² units
+inside(p) ⟺ E0(p) + bias ≥ 0                          // D3D top-left fill convention
 ```
 
-**The comparison is `≥ 0`, not `> 0` (spec defect fixed 2026-08-15).** With a
-strict `>`, a pixel centre lying exactly on a shared edge (`E' = 0`) is
+**The comparison is `≥ 0`, not `> 0`, and it is taken on the EXACT `E0`, not
+on the floored `E'` (spec defects fixed 2026-08-15).**
+
+With a strict `>`, a pixel centre lying exactly on a shared edge (`E0 = 0`) is
 rejected by BOTH triangles — the top-left side fails `0 > 0` and the
-non-top-left side fails `−1 > 0` — so the shared edge is a line of holes, and
-non-top-left edges additionally drop their whole strictly-interior `E' = 1`
-rank. That contradicts both the D3D convention this rule names and the
-exactly-once property below. With `≥`, the bias does what it is for: the
-top-left owner takes `E' = 0` (`0 + 0 ≥ 0`), the other side declines it
-(`0 − 1 ≥ 0` is false), and every pixel is covered exactly once.
+non-top-left side fails `−1 > 0` — so the shared edge is a line of holes.
+
+With `≥` but the bias applied to `E' = E0 >> 8`, a second class of hole
+survives. Flooring merges *strictly inside by less than one subpixel² unit*
+(`E0 ∈ [1,255] ⇒ E' = 0`) with *exactly on the edge* (`E0 = 0 ⇒ E' = 0`). The
+two sides of a shared edge see `(E0, −E0)`, i.e. `(E', −E'−1)`, so for
+`E0 ∈ [1,255]` the non-top-left owner rejects `E' = 0` on its `−1` bias and
+the other side sees `E' = −1` and rejects too — a hole on a pixel that is
+strictly inside one of the two triangles. (Observed at a seam fraction of
+89/256 with `E0 = ±128`.)
+
+Taken on `E0`, the rule is literally D3D's: accept `E0 > 0` always, and accept
+`E0 = 0` only on a top-left edge (the `−1` bias turns `≥ 0` into `≥ 1` for the
+other side). Every pixel is then covered exactly once.
+
+The RTL keeps its s32 tile-local stepping: because the low 8 bits of `E0` are
+constant per edge, with `r = E0 & 255` the two tests are `E0 ≥ 0 ⟺ E' ≥ 0` and
+`E0 ≥ 1 ⟺ E' > 0 ∨ (E' = 0 ∧ r ≠ 0)` — one extra constant bit per edge, no
+wider datapath.
+
+**Bounding box (spec defect fixed 2026-08-15).** A pixel is a candidate iff
+its CENTRE — subpixel `256·p + 128` — can lie in the triangle, so the scan
+range on each axis is
+
+```
+p_min = ceil((v_min − 128)/256) = (v_min + 127) >> 8
+p_max = floor((v_max − 128)/256) = (v_max − 128) >> 8
+```
+
+**not** `ceil(v_min/256)`. Using `ceil(v_min/256)` skips one whole column (or
+row) whenever `v_min`'s subpixel fraction is in `(0,128]`: that pixel's centre
+is inside, but the walker never tests it. Across a shared seam the other side's
+edge functions correctly reject the same pixel, so it is covered by NOBODY and
+the clear colour shows through — a full-height 1-pixel crack at every drum
+column / terrain grid boundary. The bbox is part of the coverage law, not an
+optimization, and the exactly-once property below is only true with it.
 
 Adjacent-triangle exactly-once coverage is a SymbiYosys formal property
 (charter §20.4; lands with the rasterizer, Phase 4/5). The software raster

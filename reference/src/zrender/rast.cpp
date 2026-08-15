@@ -9,10 +9,15 @@
 //   §8  screenXY: S 12.8, rescale(.,8) + clamp to the ±2048 px guard band;
 //       edge functions: s64 setup in subpixel^2 (Giesen bound 2^43-2 at p=21),
 //       E' = E0 >> 8 evaluated at pixel centres (low 8 bits constant per
-//       edge), D3D top-left fill convention (bias 0 / -1, inside ⟺ E'+bias>0),
+//       edge), D3D top-left fill convention (bias 0 / -1),
 //       exact incremental stepping; depth test strict-greater, clear 0.
-//       The fill comparison is `E' + bias >= 0` — see the note at the test
-//       below; a strict `>` drops every shared-edge pixel on BOTH sides.
+//       The fill comparison is `E0 + bias >= 0` on the EXACT s64 edge value —
+//       see the note at the test below; a strict `>` drops every shared-edge
+//       pixel on BOTH sides, and biasing the floored E' drops sub-unit
+//       strictly-interior pixels on both sides.
+//       The scan bbox is the pixel-CENTRE range, not ceil/floor of the vertex
+//       extent — see the note at the bbox; getting that wrong opens a 1px
+//       crack at every shared vertical/horizontal seam.
 // The depth lane is Q16.16 1/w (plan W3.5/D7 — NOT the Phase-4 invw24
 // pipeline; the switch is a frozen one-line change in project_vertex).
 
@@ -84,15 +89,37 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
     area = -area;
   }
 
-  // bbox in whole pixels, scissored to the viewport
+  // bbox in whole pixels, scissored to the viewport.
+  //
+  // The bbox must enumerate exactly the pixels whose CENTRE can lie in the
+  // triangle, and the centre of pixel p sits at 256*p + 128 subpixels (§8).
+  // So the first candidate column is the smallest p with 256p + 128 >= v_min,
+  // i.e. p = ceil((v_min - 128)/256) = (v_min + 127) >> 8, and the last is the
+  // largest p with 256p + 128 <= v_max, i.e. p = (v_max - 128) >> 8.
+  //
+  // DEFECT FIXED 2026-08-15: this used to be ceil(v_min/256) = (v_min+255)>>8,
+  // which is one column too far right whenever v_min's subpixel fraction lies
+  // in (0,128] — the pixel centre is still inside, but the loop never visits
+  // it. On a shared vertical seam between two quads (sky drum columns, terrain
+  // grid columns) the left quad's edge functions correctly reject that pixel
+  // and the right quad's bbox refuses to test it, so NOBODY covers it and the
+  // clear colour shows through as a full-height 1px crack. Same on Y.
+  // Instrumented proof: sky drum seam at subpixel x = 9547 (px 37.293), pixel
+  // (37,60) — the right-hand quads' edge test says INSIDE (E' = 6189/26206/403
+  // against biases 0/0/-1) but the old min_x = 38 excluded the column; the
+  // left-hand quads say outside. Tests: render_directed.cpp
+  // test_seam_subpixel_sweep / test_no_seam_cracks_drum / _terrain.
+  // The max side was conservative rather than wrong (a centre strictly right
+  // of every vertex is always rejected by an edge function); it is tightened
+  // to the same law so the bbox is exactly "pixel centres in [v_min, v_max]".
   const int32_t min_x =
-      std::max<int32_t>((std::min({A.x, B.x, C.x}) + 255) >> 8, static_cast<int32_t>(vp.x0));
-  const int32_t max_x =
-      std::min<int32_t>(std::max({A.x, B.x, C.x}) >> 8, static_cast<int32_t>(vp.x0 + vp.w) - 1);
+      std::max<int32_t>((std::min({A.x, B.x, C.x}) + 127) >> 8, static_cast<int32_t>(vp.x0));
+  const int32_t max_x = std::min<int32_t>((std::max({A.x, B.x, C.x}) - 128) >> 8,
+                                          static_cast<int32_t>(vp.x0 + vp.w) - 1);
   const int32_t min_y =
-      std::max<int32_t>((std::min({A.y, B.y, C.y}) + 255) >> 8, static_cast<int32_t>(vp.y0));
-  const int32_t max_y =
-      std::min<int32_t>(std::max({A.y, B.y, C.y}) >> 8, static_cast<int32_t>(vp.y0 + vp.h) - 1);
+      std::max<int32_t>((std::min({A.y, B.y, C.y}) + 127) >> 8, static_cast<int32_t>(vp.y0));
+  const int32_t max_y = std::min<int32_t>((std::max({A.y, B.y, C.y}) - 128) >> 8,
+                                          static_cast<int32_t>(vp.y0 + vp.h) - 1);
   if (min_x > max_x || min_y > max_y) return;
 
   // per-pixel edge deltas (one pixel = 256 subpixel units, §8)
@@ -100,10 +127,10 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
   const int64_t dw1_dx = -(static_cast<int64_t>(A.y) - C.y) * 256;
   const int64_t dw2_dx = -(static_cast<int64_t>(B.y) - A.y) * 256;
 
-  // top-left biases (§8): E'(p) + bias > 0, bias 0 / -1
-  const int32_t bias0 = edge_top_left(B, C) ? 0 : -1;
-  const int32_t bias1 = edge_top_left(C, A) ? 0 : -1;
-  const int32_t bias2 = edge_top_left(A, B) ? 0 : -1;
+  // top-left biases (§8): E0(p) + bias >= 0, bias 0 / -1, in subpixel^2 units
+  const int64_t bias0 = edge_top_left(B, C) ? 0 : -1;
+  const int64_t bias1 = edge_top_left(C, A) ? 0 : -1;
+  const int64_t bias2 = edge_top_left(A, B) ? 0 : -1;
 
   // affine scanline gradients for depth and (optional) alpha: ONE
   // round_half_up division per attribute at setup, exact s32 stepping
@@ -144,13 +171,27 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                        area);
     }
     for (int32_t px = min_x; px <= max_x; ++px) {
-      // §8: inside ⟺ E' + bias >= 0. The comparison MUST be >=: with a
-      // strict >, a pixel centre exactly on a shared edge (E' == 0) is
-      // rejected by both triangles (0 > 0 on the top-left side, -1 > 0 on the
-      // other), so shared edges become holes and the exactly-once property
-      // fails. With >=, the bias hands E' == 0 to the top-left owner alone.
-      const bool inside =
-          ((w0 >> 8) + bias0 >= 0) && ((w1 >> 8) + bias1 >= 0) && ((w2 >> 8) + bias2 >= 0);
+      // §8: inside ⟺ E0 + bias >= 0, bias 0 (top-left) / -1, applied to the
+      // EXACT s64 edge value in subpixel^2 units. That is literally the D3D
+      // convention: accept E0 > 0 always, and accept E0 == 0 only on a
+      // top-left edge (bias -1 turns `>= 0` into `>= 1` for the other side).
+      //
+      // DEFECT FIXED 2026-08-15: the bias used to be applied to the FLOORED
+      // E' = E0 >> 8. Flooring merges "strictly inside by less than one
+      // subpixel^2 unit" (E0 in [1,255] -> E' = 0) with "exactly on the edge"
+      // (E0 = 0 -> E' = 0), and merges "strictly outside" (E0 in [-255,-1] ->
+      // E' = -1) with a full unit outside. On a shared edge the two sides see
+      // (E0, -E0), i.e. (E', -E'-1): for E0 in [1,255] the non-top-left owner
+      // rejects E' = 0 (bias -1) and the top-left side sees E' = -1 and also
+      // rejects — a hole on a pixel that is strictly inside one triangle.
+      // Found by tests/render/render_directed.cpp test_seam_subpixel_sweep
+      // (seam fraction 89/256, pixel (14,8), E0 = -128/+128).
+      //
+      // The RTL freeze keeps its s32 tile stepping: the low 8 bits of E0 are
+      // constant per edge (§8), so with r = E0 & 255, `E0 >= 0` is `E' >= 0`
+      // and `E0 >= 1` is `E' > 0 || (E' == 0 && r != 0)` — one extra constant
+      // bit per edge, no wider datapath.
+      const bool inside = (w0 + bias0 >= 0) && (w1 + bias1 >= 0) && (w2 + bias2 >= 0);
       if (inside) {
         const int32_t dz = m.use_fixed_depth ? m.fixed_depth : d;
         size_t idx = static_cast<size_t>(py) * s.w + px;

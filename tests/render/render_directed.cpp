@@ -206,6 +206,176 @@ void test_shared_edge_exactly_once() {
   check(outside == 0, "no pixel outside the square is touched");
 }
 
+// ---- 3b. NO SEAM CRACKS (defect fixed 2026-08-15) --------------------------
+//
+// The raster bbox used to be ceil(v_min / 256), but a pixel is a candidate
+// when its CENTRE (256*p + 128) is inside, so the first candidate column is
+// ceil((v_min - 128)/256). Whenever the seam's subpixel fraction landed in
+// (0,128] the right-hand quad's bbox skipped a column that its own edge
+// functions accept, the left-hand quad's edge functions correctly rejected
+// it, and the clear colour showed through as a full-height 1px crack. These
+// three tests pin it: an exhaustive subpixel sweep of a shared seam (both
+// axes), a full-screen sky drum, and a full-screen terrain grid.
+
+// Sweep a shared vertical (and horizontal) seam through every one of the 256
+// subpixel offsets and demand exactly-once coverage at each.
+void test_seam_subpixel_sweep() {
+  using namespace zref::render;
+  constexpr int32_t kDim = 24;
+  const Viewport vp{0, 0, kDim, kDim};
+  auto sv = [](int32_t x8, int32_t y8) {
+    ScreenV v;
+    v.x = x8;
+    v.y = y8;
+    return v;
+  };
+  auto quad_cover = [&](std::vector<int>& n, const ScreenV& a, const ScreenV& b, const ScreenV& c,
+                        const ScreenV& d) {
+    // a b / d c, split on the a-c diagonal; count coverage per pixel
+    WorkSurface s;
+    s.reset(kDim, kDim, zref::sky::SkyColor{0, 0, 0});
+    TriMode m;
+    m.depth_test = false;
+    m.depth_write = false;
+    m.use_fixed_depth = true;
+    m.fixed_depth = 1;
+    for (int half = 0; half < 2; ++half) {
+      WorkSurface one;
+      one.reset(kDim, kDim, zref::sky::SkyColor{0, 0, 0});
+      if (half == 0)
+        raster_tri(one, vp, a, b, c, 255, 255, 255, m);
+      else
+        raster_tri(one, vp, a, c, d, 255, 255, 255, m);
+      for (size_t i = 0; i < n.size(); ++i)
+        if (one.rgb[i * 3] != 0) n[i] += 1;
+    }
+  };
+  uint32_t bad_v = 0, bad_h = 0;
+  for (int32_t frac = 0; frac < 256; ++frac) {
+    // vertical seam at x = 12 px + frac/256, quads spanning [4,seam] and
+    // [seam,20] over rows [4,20]
+    const int32_t seam = (12 << 8) + frac;
+    std::vector<int> n(static_cast<size_t>(kDim) * kDim, 0);
+    quad_cover(n, sv(4 << 8, 4 << 8), sv(seam, 4 << 8), sv(seam, 20 << 8), sv(4 << 8, 20 << 8));
+    quad_cover(n, sv(seam, 4 << 8), sv(20 << 8, 4 << 8), sv(20 << 8, 20 << 8), sv(seam, 20 << 8));
+    for (int32_t y = 4; y < 20; ++y)
+      for (int32_t x = 4; x < 20; ++x)
+        if (n[static_cast<size_t>(y) * kDim + x] != 1) ++bad_v;
+    // horizontal seam, same sweep on Y
+    std::vector<int> nh(static_cast<size_t>(kDim) * kDim, 0);
+    quad_cover(nh, sv(4 << 8, 4 << 8), sv(20 << 8, 4 << 8), sv(20 << 8, seam), sv(4 << 8, seam));
+    quad_cover(nh, sv(4 << 8, seam), sv(20 << 8, seam), sv(20 << 8, 20 << 8), sv(4 << 8, 20 << 8));
+    for (int32_t y = 4; y < 20; ++y)
+      for (int32_t x = 4; x < 20; ++x)
+        if (nh[static_cast<size_t>(y) * kDim + x] != 1) ++bad_h;
+  }
+  std::printf("  seam sweep: %u vertical / %u horizontal mis-covered pixels over 256 offsets\n",
+              bad_v, bad_h);
+  check(bad_v == 0, "vertical seam covered exactly once at every subpixel offset");
+  check(bad_h == 0, "horizontal seam covered exactly once at every subpixel offset");
+}
+
+// Full-screen sky drum: NO pixel may keep the sky-set background colour.
+void test_no_seam_cracks_drum() {
+  using namespace zref::render;
+  constexpr uint32_t kW = 384, kH = 240;
+  zref::sky::SkySet set{};
+  set.background = zref::sky::SkyColor{214, 117, 90};  // sentinel (warm)
+  set.band_lower_horizon = zref::sky::SkyColor{132, 77, 107};
+  set.band_lower_top = zref::sky::SkyColor{100, 60, 130};
+  set.band_upper_bottom = zref::sky::SkyColor{90, 60, 140};
+  set.band_upper_top = zref::sky::SkyColor{60, 40, 120};
+  set.cap = zref::sky::SkyColor{40, 30, 100};
+  const std::vector<zref::sky::SkyPrimitive> prims =
+      zref::sky::emit_layers(set, 0, zref::angle16{0}, zref::sky::kLayerCap);
+
+  // rotation-only rot_proj (w = 1, sky_and_beams §1): x' = s*x, y' = -s*y
+  // (world y up -> screen y down). s = 40 makes the drum overflow the frame
+  // on both axes, so EVERY pixel must be covered by some band column.
+  zref::mat4fx rp;
+  for (int a = 0; a < 4; ++a)
+    for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{0};
+  rp.m[0][0] = zref::fx16{40};
+  rp.m[1][1] = zref::fx16{-40};
+  rp.m[2][2] = zref::fx16{40};
+  rp.m[3][3] = zref::fx16{1 << 16};
+  check(zref::sky::rot_proj_is_rotation_only(rp), "drum crack fixture is rotation-only");
+
+  WorkSurface surf;
+  surf.reset(kW, kH, set.background);
+  const Viewport vp{0, 0, kW, kH};
+  TriMode m;
+  m.depth_test = false;
+  m.depth_write = false;
+  m.use_fixed_depth = true;
+  m.fixed_depth = 1;
+  for (const zref::sky::SkyPrimitive& p : prims) {
+    ScreenV s[3];
+    bool ok = true;
+    for (int k = 0; k < 3; ++k) {
+      const ProjOut o = project_vertex(rp, vp, p.v[k].x, p.v[k].y, p.v[k].z, nullptr);
+      if (!o.in) {
+        ok = false;
+        break;
+      }
+      s[k] = o.s;
+    }
+    if (!ok) continue;
+    raster_tri(surf, vp, s[0], s[1], s[2], 100, 60, 130, m);
+  }
+  uint32_t bg = 0;
+  std::vector<uint32_t> per_col(kW, 0);
+  for (uint32_t y = 0; y < kH; ++y)
+    for (uint32_t x = 0; x < kW; ++x) {
+      const size_t i = static_cast<size_t>(y) * kW + x;
+      if (surf.rgb[i * 3] == set.background.r && surf.rgb[i * 3 + 1] == set.background.g &&
+          surf.rgb[i * 3 + 2] == set.background.b) {
+        ++bg;
+        per_col[x]++;
+      }
+    }
+  if (bg != 0) {
+    for (uint32_t x = 0; x < kW; ++x)
+      if (per_col[x] != 0) std::fprintf(stderr, "  drum crack column x=%u (%u px)\n", x, per_col[x]);
+  }
+  std::printf("  full-screen drum: %u background pixels (must be 0)\n", bg);
+  check(bg == 0, "full-screen sky drum leaves no uncovered (crack) pixel");
+}
+
+// Full-screen terrain grid: same assertion for draw_heightfield's quads.
+void test_no_seam_cracks_terrain() {
+  using namespace zref::render;
+  constexpr uint32_t kW = 320, kH = 240;
+  // 33x33 cells over +-8 m, projected top-down at a scale that overflows the
+  // frame, so every pixel is inside some cell.
+  const TerrainPatch patch = rtest::bump_patch(33, 33, 8, 6);
+  const Material mat{96, 128, 72};
+  const zref::mat4fx vpm = to_zref(rtest::ortho_topdown(16384));  // +-4 m fills
+  WorkSurface surf;
+  const zref::sky::SkyColor bgc{214, 117, 90};  // sentinel (warm)
+  surf.reset(kW, kH, bgc);
+  const Viewport vp{0, 0, kW, kH};
+  draw_heightfield(surf, vp, vpm, patch, rtest::xform_identity(), mat, nullptr, {}, 0, nullptr,
+                   nullptr);
+  uint32_t bg = 0;
+  std::vector<uint32_t> per_col(kW, 0);
+  for (uint32_t y = 0; y < kH; ++y)
+    for (uint32_t x = 0; x < kW; ++x) {
+      const size_t i = static_cast<size_t>(y) * kW + x;
+      if (surf.rgb[i * 3] == bgc.r && surf.rgb[i * 3 + 1] == bgc.g && surf.rgb[i * 3 + 2] == bgc.b) {
+        ++bg;
+        per_col[x]++;
+      }
+    }
+  if (bg != 0) {
+    for (uint32_t x = 0; x < kW; ++x)
+      if (per_col[x] != 0)
+        std::fprintf(stderr, "  terrain crack column x=%u (%u px)\n", x, per_col[x]);
+  }
+  std::printf("  full-screen terrain grid: %u background pixels (must be 0)\n", bg);
+  check(bg == 0, "full-screen terrain grid leaves no uncovered (crack) pixel");
+}
+
 void test_validation_gate() {
   zref::render::SoftwareRenderer rend;
   zref::render::RenderCanvas canvas;
@@ -523,6 +693,9 @@ int main() {
   test_projection_hand_computed();
   test_marker_perspective_sizing();
   test_shared_edge_exactly_once();
+  test_seam_subpixel_sweep();
+  test_no_seam_cracks_drum();
+  test_no_seam_cracks_terrain();
   test_validation_gate();
   test_draw_form();
   test_draw_population();

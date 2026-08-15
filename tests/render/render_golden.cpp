@@ -37,8 +37,12 @@ void check(bool ok, const char* what) {
 //     sub-order (sun now rasters BEFORE cloud) (4D179BE6 -> 5475D2D1).
 //   MAJOR-2 §8 fill rule `E' + bias >= 0` — the strict `>` dropped every
 //     shared-edge pixel on BOTH sides (5475D2D1 -> B56D4F2A).
-constexpr uint32_t kGoldenCanvasCrc = 0xB56D4F2Au;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0x8F17C2F6u;  // [w3.5-golden]
+//   §8 raster COVERAGE fixes (user-reported 1px cracks): the scan bbox is the
+//     pixel-CENTRE range, not ceil/floor of the vertex extent, and the
+//     top-left bias applies to the exact s64 E0, not to the floored E' =
+//     E0>>8 (B56D4F2A -> 6396C558).
+constexpr uint32_t kGoldenCanvasCrc = 0x6396C558u;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0x168F145Bu;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the
