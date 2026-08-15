@@ -718,12 +718,16 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: 2026-08-15
         commit: '9e813e0'
         evidence: reference/src/zref_audio.cpp
+      - state: UNIT_VERIFIED
+        date: 2026-08-15
+        commit: 'a3cd94a'
+        evidence: tests/audio/audio_fifo_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -732,7 +736,10 @@ blocks:
       accumulators upstream, plan Q5). W2.4: zref::AudioFifo is the
       register-exact oracle (depth/watermark/underrun law incl. both 2FF
       gray synchronisers at the gpu_clk/4 sim seam); advanced to
-      REFERENCE_COMPLETE with the committed tone goldens (mixer_tone_*).
+      REFERENCE_COMPLETE with the committed tone goldens (mixer_tone_*),
+      then UNIT_VERIFIED with the directed D4 scenarios green against the
+      RTL (reset silence / steady 800-per-frame / underrun repeat+count /
+      full backpressure / tone passthrough / snapshot law).
 
   # ===========================================================================
   # VIDEO (fpga/rtl/video)
