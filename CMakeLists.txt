@@ -11,10 +11,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Static C++ runtime (W4): test executables must run under ANY PATH order.
+# Static runtime (W4): test executables must run under ANY PATH order.
 # The oss-cad-suite lib dir carries an msys2 libstdc++-6.dll that shadows the
 # winlibs one and breaks entry points (0xc0000139) when it wins resolution.
-add_link_options(-static-libgcc -static-libstdc++)
+#
+# `-static-libgcc -static-libstdc++` alone did NOT achieve that, despite W4's
+# note claiming it did: they say nothing about libwinpthread, so every target
+# linking -pthread (the Verilator harnesses, and anything using <chrono>)
+# still imported libwinpthread-1.dll and died with a DLL-load failure
+# (exit 127) whenever mingw64/bin was absent from PATH — after a multi-minute
+# Windows DLL-search stall, which read as a hang in CTest. Plain `-static`
+# closes it: verify with `objdump -p <exe> | grep 'DLL Name'`, which must
+# show only KERNEL32 and api-ms-win-crt-*.
+add_link_options(-static -static-libgcc -static-libstdc++)
 
 # Verilator integration. Requires VERILATOR_ROOT = <oss-cad-suite>/share/verilator
 # (tools/env/zhao-env.ps1|.bat sets this up; see cmake/zhao_verilate.cmake).

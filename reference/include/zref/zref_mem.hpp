@@ -566,7 +566,6 @@ private:
     unsigned credits_[NCLIENTS];
     unsigned age_[NCLIENTS];
     uint64_t bytes_[NCLIENTS];
-    bool port_grant_[NCLIENTS];
     unsigned rr_;
     unsigned last_issuer_;
     uint64_t scanout_preempted_;
