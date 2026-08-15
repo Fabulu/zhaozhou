@@ -232,3 +232,21 @@ add_test(NAME lint_zhao_pkg
 set_tests_properties(lint_zhao_pkg PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- W2.4: audio (plan W2.4; spec/audio_rules.md, contracts AUDIO.FIFO ----
+# ---- + SW.MIXER) ------------------------------------------------------------
+# Tone subset (SW.MIXER): golden-vector directed + PCG tone-switching random,
+# both pure ZRef (RTL never generates the tone — mixer-side only).
+add_executable(test_mixer_tone_directed audio/mixer_tone_directed.cpp)
+target_link_libraries(test_mixer_tone_directed PRIVATE zhao_zref)
+target_compile_definitions(test_mixer_tone_directed PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/golden/fixp")
+add_test(NAME mixer_tone_directed COMMAND test_mixer_tone_directed)
+set_tests_properties(mixer_tone_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_mixer_tone_random audio/mixer_tone_random.cpp)
+target_link_libraries(test_mixer_tone_random PRIVATE zhao_zref)
+target_compile_definitions(test_mixer_tone_random PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/golden/fixp")
+add_test(NAME mixer_tone_random COMMAND test_mixer_tone_random)
+set_tests_properties(mixer_tone_random PROPERTIES LABELS "fast;nightly")
