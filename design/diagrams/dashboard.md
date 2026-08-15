@@ -9,7 +9,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 
 | subsystem | SPECIFIED | REFERENCE_COMPLETE | UNIT_VERIFIED | RTL_VERIFIED | SYNTHESIZED | INTEGRATED | HARDWARE_PROVEN | blocked | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| audio | 1 | · | · | · | · | · | · | · | 1 |
+| audio | · | · | · | 1 | · | · | · | · | 1 |
 | command | 3 | · | · | · | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | 3 | · | · | · | · | · | · | · | 3 |
@@ -23,21 +23,27 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | 5 | · | · | · | · | · | · | · | 5 |
 | surface | 2 | · | · | · | · | · | · | · | 2 |
-| sw | 10 | 2 | 3 | · | · | · | · | 2 | 15 |
+| sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
-<<<<<<< HEAD
-| **all** | 82 | 2 | 3 | · | · | · | · | 6 | 87 |
-=======
-| **all** | 85 | · | · | 2 | · | · | · | 6 | 87 |
->>>>>>> wp/w2.3-input
+| **all** | 78 | 3 | 3 | 3 | · | · | · | 6 | 87 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
 | block | state | date | commit | evidence |
 |---|---|---|---|---|
-<<<<<<< HEAD
+| INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
+| INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
+| INPUT.RUMBLE | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.RUMBLE | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_rumble_directed.cpp |
+| INPUT.RUMBLE | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
+| AUDIO.FIFO | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | reference/src/zref_audio.cpp |
+| AUDIO.FIFO | UNIT_VERIFIED | 2026-08-15 | `a3cd94a` | tests/audio/audio_fifo_directed.cpp |
+| AUDIO.FIFO | RTL_VERIFIED | 2026-08-15 | `a3cd94a` | tests/audio/audio_fifo_random.cpp |
+| AUDIO.FIFO | RTL_VERIFIED | 2026-08-15 | `a3cd94a` | tests/formal/audio_fifo_bounds.sby |
+| SW.MIXER | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | tests/audio/mixer_tone_directed.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | reference/src/zref_frame.cpp |
@@ -57,14 +63,6 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | SW.TOOLS.CAPTURE | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | tools/capture/zhao_capture.cpp |
 | SW.TOOLS.CAPTURE | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | tests/unit/test_zcap_roundtrip.cpp |
 | SW.TOOLS.CAPTURE | UNIT_VERIFIED | 2026-08-14 | `0383ed1` | tests/abi/golden/zcap_minimal.zcap |
-=======
-| INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
-| INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
-| INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
-| INPUT.RUMBLE | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
-| INPUT.RUMBLE | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_rumble_directed.cpp |
-| INPUT.RUMBLE | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
->>>>>>> wp/w2.3-input
 
 ## Budget groups vs §25 ceilings
 

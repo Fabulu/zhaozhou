@@ -333,3 +333,74 @@ add_test(NAME input_snapshot_atomic
 set_tests_properties(input_snapshot_atomic PROPERTIES
   LABELS "formal;nightly"
   SKIP_REGULAR_EXPRESSION "formal SKIPPED")
+# ---- W2.4: audio (plan W2.4; spec/audio_rules.md, contracts AUDIO.FIFO ----
+# ---- + SW.MIXER) ------------------------------------------------------------
+# Tone subset (SW.MIXER): golden-vector directed + PCG tone-switching random,
+# both pure ZRef (RTL never generates the tone — mixer-side only).
+add_executable(test_mixer_tone_directed audio/mixer_tone_directed.cpp)
+target_link_libraries(test_mixer_tone_directed PRIVATE zhao_zref)
+target_compile_definitions(test_mixer_tone_directed PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/golden/fixp")
+add_test(NAME mixer_tone_directed COMMAND test_mixer_tone_directed)
+set_tests_properties(mixer_tone_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_mixer_tone_random audio/mixer_tone_random.cpp)
+target_link_libraries(test_mixer_tone_random PRIVATE zhao_zref)
+target_compile_definitions(test_mixer_tone_random PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/golden/fixp")
+add_test(NAME mixer_tone_random COMMAND test_mixer_tone_random)
+set_tests_properties(mixer_tone_random PROPERTIES LABELS "fast;nightly")
+
+# AUDIO.FIFO: directed D4 scenarios + PCG-jittered differential vs the
+# cycle-accurate oracle (tests/audio/audio_dev.hpp drives the Verilated
+# module and zref::AudioFifo through the identical dual-clock protocol).
+add_executable(test_audio_fifo_directed audio/audio_fifo_directed.cpp)
+target_link_libraries(test_audio_fifo_directed PRIVATE zhao_zref zhao_harness)
+verilate(test_audio_fifo_directed
+  PREFIX Vzhao_audio_fifo
+  TOP_MODULE zhao_audio_fifo
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/audio/zhao_audio_fifo.sv)
+add_test(NAME audio_fifo_directed COMMAND test_audio_fifo_directed)
+set_tests_properties(audio_fifo_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_audio_fifo_random audio/audio_fifo_random.cpp)
+target_link_libraries(test_audio_fifo_random PRIVATE zhao_zref zhao_harness)
+verilate(test_audio_fifo_random
+  PREFIX Vzhao_audio_fifo
+  TOP_MODULE zhao_audio_fifo
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/audio/zhao_audio_fifo.sv)
+add_test(NAME audio_fifo_random COMMAND test_audio_fifo_random)
+set_tests_properties(audio_fifo_random PROPERTIES LABELS "fast;nightly")
+# 100k-schedule nightly mode of the same binary (1k fast above)
+add_test(NAME audio_fifo_random_nightly COMMAND test_audio_fifo_random --nightly)
+set_tests_properties(audio_fifo_random_nightly PROPERTIES LABELS "nightly")
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_zhao_audio_fifo
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_audio_fifo
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/audio/zhao_audio_fifo.sv)
+set_tests_properties(lint_zhao_audio_fifo PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: audio_fifo_bounds (plan §4) — SKIP when sby absent. The wrapper
+# stages the mechanical formal copy of zhao_pkg.sv (see audio_formal_lane)
+# and runs the committed property file.
+configure_file(formal/audio_formal_lane.cmake.in formal/audio_formal_lane.cmake @ONLY)
+add_test(NAME formal_audio_fifo
+         COMMAND ${CMAKE_COMMAND} -P
+                 ${CMAKE_CURRENT_BINARY_DIR}/formal/audio_formal_lane.cmake)
+set_tests_properties(formal_audio_fifo PROPERTIES
+  LABELS "formal;nightly"
+  SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")

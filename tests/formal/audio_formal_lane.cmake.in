@@ -1,0 +1,74 @@
+# audio_formal_lane.cmake — CTest wrapper for the W2.4 AUDIO.FIFO formal
+# property (tests/formal/audio_fifo_bounds.sby, test formal_audio_fifo).
+#
+# Lane law (charter 20.3 / plan §4): formal runs only where the tools
+# exist — the wrapper SKIPs (exit 77, "formal lane SKIPPED") when sby is
+# absent so `ctest -L formal` stays green on machines without
+# oss-cad-suite.
+#
+# Staging (see the .sby header): the wrapper generates the MECHANICAL
+# formal copy of the frozen zhao_pkg.sv into build/tests/formal_audio:
+#   - the package-scoped `import zhao_abi_pkg::*;` line is commented out
+#     (yosys rejects package-scoped imports; nothing from the ABI package
+#     is in any formal cone — the ABI side is the committed stub package)
+#   - the ZHAO_TIMING unpacked-array localparam block (video timing, also
+#     beyond yosys's grammar) is replaced by a pointer comment; it is
+#     video-only and unreferenced by the audio DUT
+# The DUT (fpga/rtl/audio/zhao_audio_fifo.sv), the harness and the stub
+# are read as committed bytes — nothing under verification is transformed.
+
+if("@ZHAO_SBY_BIN@" STREQUAL "")
+  message(STATUS "formal lane SKIPPED (sby absent)")
+  return()
+endif()
+
+set(src_dir "@CMAKE_CURRENT_SOURCE_DIR@/formal")
+set(stage_dir "@CMAKE_BINARY_DIR@/tests/formal_audio")
+file(MAKE_DIRECTORY "${stage_dir}")
+
+# ---- mechanical formal copy of the frozen zhao_pkg.sv ----------------------
+file(READ "@CMAKE_SOURCE_DIR@/fpga/rtl/common/zhao_pkg.sv" pkg)
+string(REPLACE "import zhao_abi_pkg::*;"
+  "/* formal copy: package-scoped import removed (yosys SV-frontend gap; nothing from zhao_abi_pkg is in the formal cones) */"
+  pkg "${pkg}")
+string(FIND "${pkg}" "localparam zhao_timing_t ZHAO_TIMING" tstart)
+if(tstart EQUAL -1)
+  message(FATAL_ERROR "audio formal staging: ZHAO_TIMING block not found in the frozen zhao_pkg.sv — update the staging transform")
+endif()
+string(SUBSTRING "${pkg}" ${tstart} -1 pkg_from)
+string(FIND "${pkg_from}" "};" tend_rel)
+if(tend_rel EQUAL -1)
+  message(FATAL_ERROR "audio formal staging: ZHAO_TIMING block end not found — update the staging transform")
+endif()
+math(EXPR tend_abs "${tstart} + ${tend_rel} + 2")
+string(SUBSTRING "${pkg}" 0 ${tstart} pkg_head)
+string(SUBSTRING "${pkg}" ${tend_abs} -1 pkg_tail)
+string(CONCAT pkg "${pkg_head}"
+  "/* formal copy: ZHAO_TIMING unpacked-array localparam removed (yosys SV-frontend gap; video-only, unused by the audio formal cone) */"
+  "${pkg_tail}")
+file(WRITE "${stage_dir}/zhao_pkg.sv" "${pkg}")
+
+# ---- run the property -------------------------------------------------------
+# PATH order matters on this kit: the suite's own bin/ + lib/ must precede
+# anything else or the msys2-built yosys loads a foreign libstdc++-6.dll and
+# dies with STATUS_ENTRYPOINT_NOT_FOUND (0xC0000139) — the same DLL-shadowing
+# pitfall the top-level CMakeLists documents for the C++ tools. Launching
+# through `cmake -E env` prepends the suite dirs derived from the sby path.
+get_filename_component(zhao_sby_dir "@ZHAO_SBY_BIN@" DIRECTORY)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env
+          "PATH=${zhao_sby_dir};${zhao_sby_dir}/../lib;$ENV{PATH}"
+          "@ZHAO_SBY_BIN@" -f -t audio_fifo_bounds.sby
+  WORKING_DIRECTORY "${src_dir}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE out
+  ERROR_VARIABLE err
+)
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "audio_fifo_bounds formal FAILED (rc=${rc}):\n${out}\n${err}")
+endif()
+string(FIND "${out}${err}" "DONE (PASS" pos)
+if(pos EQUAL -1)
+  message(FATAL_ERROR "audio_fifo_bounds formal produced no PASS:\n${out}\n${err}")
+endif()
+message(STATUS "audio_fifo_bounds: DONE (PASS)")

@@ -1,0 +1,51 @@
+# audio_fifo_bounds — AUDIO.FIFO formal bounds (plan W2.4 / plan §4).
+# Law: spec/audio_rules.md §2 (D4) + design/contracts/AUDIO.FIFO.md
+# "Formal properties". Harness: audio_fifo_bounds_harness.sv.
+#
+#   P1 occupancy ∈ [0, DEPTH] (the gpu view is a conservative overestimate,
+#      so the bound carries to the true occupancy — overflow impossible)
+#   P2 no accepted write when full (backpressure law)
+#   P3 underrun law: repeat previous pair bit-exact + exactly one counter
+#      increment per continuous event
+#
+# BMC, depth 32, multiclock: the harness drives clk_audio = clk_gpu/4 (the
+# sim seam ratio, plan R1) via a divider — with a shared single clock the
+# write/pop rates balance and the FIFO can never fill, which would silently
+# vacate the backpressure property. DEPTH shrunk to 8 in the harness for
+# tractability; the D4 geometry (2048/512/256) is exercised at full size by
+# the ctest lane (audio_fifo_directed / audio_fifo_random).
+#
+# Source staging: zhao_audio_fifo.sv and the harness are the committed
+# bytes; zhao_abi_pkg.sv is the committed FORMAL STUB (the generated ABI
+# package uses unpacked-array localparams yosys cannot parse, and nothing
+# from it is in this cone — see zhao_abi_pkg_formal_stub.sv); zhao_pkg.sv
+# is the MECHANICAL formal copy generated into build/tests/formal_audio by
+# the CTest wrapper (tests/formal/audio_formal_lane.cmake.in): the frozen
+# package's package-scoped `import` and its ZHAO_TIMING unpacked-array
+# localparam (video-only) are removed — both are yosys SV-frontend grammar
+# gaps, neither is in the audio cone. Run via `ctest -L formal` (test
+# formal_audio_fifo; SKIP-if-absent when sby is missing) or stage + run by
+# hand from tests/formal:   sby -f -t audio_fifo_bounds.sby
+
+[options]
+mode bmc
+depth 32
+multiclock on
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+# NB: read_verilog (NOT the `read` wrapper) — see staging note above.
+read_verilog -formal -sv zhao_abi_pkg.sv
+read_verilog -formal -sv zhao_pkg.sv
+read_verilog -formal -sv zhao_audio_fifo.sv
+read_verilog -formal -sv audio_fifo_bounds_harness.sv
+prep -top zhao_audio_fifo_bounds
+
+[files]
+zhao_abi_pkg.sv zhao_abi_pkg_formal_stub.sv
+../../build/tests/formal_audio/zhao_pkg.sv
+../../fpga/rtl/audio/zhao_audio_fifo.sv
+audio_fifo_bounds_harness.sv
