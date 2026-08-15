@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 9804c583a0589d5b78bba654a1aec0457bfa8755a69568cc1de67e691485e423
-//   zidl_sha256         = 1a6e526e01f232e5c3db280ea32787b51db787c5426c420f1b8b11620456a987
+//   abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
+//   zidl_sha256         = 3b219be7a3070cba34db9196e4d43dfc32b49f70ef2cfe0c40ff670ce3bb6302
 #pragma once
 
 #include <cstdint>
@@ -42,18 +42,23 @@ enum video_mode : uint8_t {
   VIDEO_DUO = 2,
 };
 
+// enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
+enum forge_kind : uint8_t {
+  FORGE_HEIGHTFIELD_PATCH = 0,
+};
+
 constexpr uint16_t ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 constexpr uint16_t ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_VIEW = 0x0010; // 96 B, implemented
 constexpr uint16_t ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
-constexpr uint16_t ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, reserved
-constexpr uint16_t ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, reserved
-constexpr uint16_t ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, reserved
-constexpr uint16_t ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, reserved
-constexpr uint16_t ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, reserved
+constexpr uint16_t ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, implemented
+constexpr uint16_t ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, implemented
+constexpr uint16_t ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
-constexpr uint16_t ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, reserved
+constexpr uint16_t ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
@@ -382,7 +387,7 @@ struct ZhRecordSetPresentationContract {
 };
 static_assert(sizeof(ZhRecordSetPresentationContract) == 48, "layout drift: SetPresentationContract record");
 
-// TerrainField 0x0200: 112-byte record (reserved)
+// TerrainField 0x0200: 112-byte record (implemented)
 struct ZhCmdTerrainField {
   uint32_t program;  // handle32 {index:24, generation:8} kind=program
   ZhRectfx footprint;
@@ -405,7 +410,7 @@ struct ZhRecordTerrainField {
 };
 static_assert(sizeof(ZhRecordTerrainField) == 112, "layout drift: TerrainField record");
 
-// SurfaceStamp 0x0210: 64-byte record (reserved)
+// SurfaceStamp 0x0210: 64-byte record (implemented)
 struct ZhCmdSurfaceStamp {
   uint32_t brush;  // handle32 {index:24, generation:8} kind=brush
   uint32_t patch;  // handle32 {index:24, generation:8} kind=patch
@@ -413,7 +418,9 @@ struct ZhCmdSurfaceStamp {
   uint8_t tag;
   uint16_t strength;
   ZhTransform2fx transform;
-  uint8_t pad[12];
+  int32_t radius;
+  int32_t ring_width;
+  uint8_t pad[4];
 };
 static_assert(offsetof(ZhCmdSurfaceStamp, brush) == 0, "layout drift: SurfaceStamp.brush");
 static_assert(offsetof(ZhCmdSurfaceStamp, patch) == 4, "layout drift: SurfaceStamp.patch");
@@ -421,7 +428,9 @@ static_assert(offsetof(ZhCmdSurfaceStamp, operation) == 8, "layout drift: Surfac
 static_assert(offsetof(ZhCmdSurfaceStamp, tag) == 9, "layout drift: SurfaceStamp.tag");
 static_assert(offsetof(ZhCmdSurfaceStamp, strength) == 10, "layout drift: SurfaceStamp.strength");
 static_assert(offsetof(ZhCmdSurfaceStamp, transform) == 12, "layout drift: SurfaceStamp.transform");
-static_assert(offsetof(ZhCmdSurfaceStamp, pad[0]) == 36, "layout drift: SurfaceStamp.pad");
+static_assert(offsetof(ZhCmdSurfaceStamp, radius) == 36, "layout drift: SurfaceStamp.radius");
+static_assert(offsetof(ZhCmdSurfaceStamp, ring_width) == 40, "layout drift: SurfaceStamp.ring_width");
+static_assert(offsetof(ZhCmdSurfaceStamp, pad[0]) == 44, "layout drift: SurfaceStamp.pad");
 static_assert(sizeof(ZhCmdSurfaceStamp) == 48, "layout drift: SurfaceStamp payload");
 
 struct ZhRecordSurfaceStamp {
@@ -430,7 +439,7 @@ struct ZhRecordSurfaceStamp {
 };
 static_assert(sizeof(ZhRecordSurfaceStamp) == 64, "layout drift: SurfaceStamp record");
 
-// DrawForm 0x0300: 32-byte record (reserved)
+// DrawForm 0x0300: 32-byte record (implemented)
 struct ZhCmdDrawForm {
   uint32_t form;  // handle32 {index:24, generation:8} kind=form
   uint32_t material_set;  // handle32 {index:24, generation:8} kind=material_set
@@ -453,7 +462,7 @@ struct ZhRecordDrawForm {
 };
 static_assert(sizeof(ZhRecordDrawForm) == 32, "layout drift: DrawForm record");
 
-// DrawPopulation 0x0301: 32-byte record (reserved)
+// DrawPopulation 0x0301: 32-byte record (implemented)
 struct ZhCmdDrawPopulation {
   uint32_t population;  // handle32 {index:24, generation:8} kind=population
   uint8_t viewport_mask;
@@ -474,19 +483,21 @@ struct ZhRecordDrawPopulation {
 };
 static_assert(sizeof(ZhRecordDrawPopulation) == 32, "layout drift: DrawPopulation record");
 
-// DrawProcedural 0x0302: 64-byte record (reserved)
+// DrawProcedural 0x0302: 64-byte record (implemented)
 struct ZhCmdDrawProcedural {
   uint32_t program;  // handle32 {index:24, generation:8} kind=forge_program
   uint32_t material;  // handle32 {index:24, generation:8} kind=material
   ZhTransform2fx transform;
   int32_t screen_error;
-  uint8_t pad[12];
+  forge_kind kind;  // enum, 1 B
+  uint8_t pad[11];
 };
 static_assert(offsetof(ZhCmdDrawProcedural, program) == 0, "layout drift: DrawProcedural.program");
 static_assert(offsetof(ZhCmdDrawProcedural, material) == 4, "layout drift: DrawProcedural.material");
 static_assert(offsetof(ZhCmdDrawProcedural, transform) == 8, "layout drift: DrawProcedural.transform");
 static_assert(offsetof(ZhCmdDrawProcedural, screen_error) == 32, "layout drift: DrawProcedural.screen_error");
-static_assert(offsetof(ZhCmdDrawProcedural, pad[0]) == 36, "layout drift: DrawProcedural.pad");
+static_assert(offsetof(ZhCmdDrawProcedural, kind) == 36, "layout drift: DrawProcedural.kind");
+static_assert(offsetof(ZhCmdDrawProcedural, pad[0]) == 37, "layout drift: DrawProcedural.pad");
 static_assert(sizeof(ZhCmdDrawProcedural) == 48, "layout drift: DrawProcedural payload");
 
 struct ZhRecordDrawProcedural {
@@ -526,7 +537,7 @@ struct ZhRecordDrawSky {
 };
 static_assert(sizeof(ZhRecordDrawSky) == 176, "layout drift: DrawSky record");
 
-// EmitAudioEvent 0x0400: 32-byte record (reserved)
+// EmitAudioEvent 0x0400: 32-byte record (implemented)
 struct ZhCmdEmitAudioEvent {
   uint32_t event_id;
   int16_t pan_fx;
@@ -808,6 +819,8 @@ inline ZhRecordSurfaceStamp zhao_sample_surface_stamp() {
   r.payload.tag = 3u;
   r.payload.strength = 60507u;
   r.payload.transform = zhao_sample_transform2fx();
+  r.payload.radius = 285207;
+  r.payload.ring_width = 350743;
   return r;
 }
 
@@ -852,6 +865,7 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   r.payload.material = 704643074u;
   r.payload.transform = zhao_sample_transform2fx();
   r.payload.screen_error = 88599;
+  r.payload.kind = static_cast<forge_kind>(0u);
   return r;
 }
 
@@ -1085,7 +1099,9 @@ inline void zhao_pack_surface_stamp(const ZhRecordSurfaceStamp& r, std::vector<u
   w.u8(r.payload.tag);
   w.u16(r.payload.strength);
   zhao_pack_transform2fx(r.payload.transform, w);
-  for (int i = 0; i < 12; ++i) w.u8(r.payload.pad[i]);
+  w.u32(r.payload.radius);
+  w.u32(r.payload.ring_width);
+  for (int i = 0; i < 4; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline void zhao_pack_draw_form(const ZhRecordDrawForm& r, std::vector<uint8_t>& out) {
@@ -1119,7 +1135,8 @@ inline void zhao_pack_draw_procedural(const ZhRecordDrawProcedural& r, std::vect
   w.u32(r.payload.material);
   zhao_pack_transform2fx(r.payload.transform, w);
   w.u32(r.payload.screen_error);
-  for (int i = 0; i < 12; ++i) w.u8(r.payload.pad[i]);
+  w.u8(r.payload.kind);
+  for (int i = 0; i < 11; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline void zhao_pack_draw_sky(const ZhRecordDrawSky& r, std::vector<uint8_t>& out) {
@@ -1373,7 +1390,9 @@ inline bool zhao_unpack_surface_stamp(ZhReader& r, ZhRecordSurfaceStamp& out) {
   { uint8_t t; if (!r.take8(t)) return false; out.payload.tag = t; }
   { uint16_t t; if (!r.take16(t)) return false; out.payload.strength = t; }
   if (!zhao_unpack_transform2fx(r, out.payload.transform)) return false;
-  if (!r.skip(12)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.radius = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.ring_width = t; }
+  if (!r.skip(4)) return false;
   return true;
 }
 
@@ -1413,7 +1432,8 @@ inline bool zhao_unpack_draw_procedural(ZhReader& r, ZhRecordDrawProcedural& out
   { uint32_t t; if (!r.take32(t)) return false; out.payload.material = t; }
   if (!zhao_unpack_transform2fx(r, out.payload.transform)) return false;
   { uint32_t t; if (!r.take32(t)) return false; out.payload.screen_error = t; }
-  if (!r.skip(12)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.kind = static_cast<forge_kind>(t); }
+  if (!r.skip(11)) return false;
   return true;
 }
 
@@ -1543,9 +1563,9 @@ struct ZhCommandInfo {
 constexpr uint16_t ZHAO_PADS_END_FRAME[] = {12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_SET_PRESENTATION_CONTRACT[] = {24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_TERRAIN_FIELD[] = {92, 93, 94, 95};
-constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
+constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_POPULATION[] = {8, 9, 10, 11, 12, 13, 14, 15};
-constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
+constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159};
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -1555,13 +1575,13 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"EndFrame", 0x0002, 32, true, ZHAO_PADS_END_FRAME, 4},
   {"SetView", 0x0010, 96, true, nullptr, 0},
   {"SetPresentationContract", 0x0020, 48, true, ZHAO_PADS_SET_PRESENTATION_CONTRACT, 8},
-  {"TerrainField", 0x0200, 112, false, ZHAO_PADS_TERRAIN_FIELD, 4},
-  {"SurfaceStamp", 0x0210, 64, false, ZHAO_PADS_SURFACE_STAMP, 12},
-  {"DrawForm", 0x0300, 32, false, nullptr, 0},
-  {"DrawPopulation", 0x0301, 32, false, ZHAO_PADS_DRAW_POPULATION, 8},
-  {"DrawProcedural", 0x0302, 64, false, ZHAO_PADS_DRAW_PROCEDURAL, 12},
+  {"TerrainField", 0x0200, 112, true, ZHAO_PADS_TERRAIN_FIELD, 4},
+  {"SurfaceStamp", 0x0210, 64, true, ZHAO_PADS_SURFACE_STAMP, 4},
+  {"DrawForm", 0x0300, 32, true, nullptr, 0},
+  {"DrawPopulation", 0x0301, 32, true, ZHAO_PADS_DRAW_POPULATION, 8},
+  {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 11},
   {"DrawSky", 0x0310, 176, false, ZHAO_PADS_DRAW_SKY, 14},
-  {"EmitAudioEvent", 0x0400, 32, false, nullptr, 0},
+  {"EmitAudioEvent", 0x0400, 32, true, nullptr, 0},
   {"DebugBootstrap", 0xF001, 64, false, nullptr, 0},
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
@@ -1580,6 +1600,11 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
       if (!(v0 == 0u || v0 == 1u || v0 == 2u)) return false;
       return true;
     }
+    case ZHAO_OP_DRAW_PROCEDURAL: {
+      const uint32_t v0 = uint32_t(p[36]);  // kind: forge_kind
+      if (!(v0 == 0u)) return false;
+      return true;
+    }
     case ZHAO_OP_DEBUG_FRAME_BLIT: {
       const uint32_t v0 = uint32_t(p[1]);  // mode: video_mode
       if (!(v0 == 0u || v0 == 1u || v0 == 2u)) return false;
@@ -1591,8 +1616,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x98, 0x04, 0xC5, 0x83, 0xA0, 0x58, 0x9D, 0x5B, 0x78, 0xBB, 0xA6, 0x54, 0xA1, 0xAE, 0xC0, 0x45, 0x7B, 0xFA, 0x87, 0x55, 0xA6, 0x95, 0x68, 0xCC, 0x1D, 0xE6, 0x7E, 0x69, 0x14, 0x85, 0xE4, 0x23};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x1A, 0x6E, 0x52, 0x6E, 0x01, 0xF2, 0x32, 0xE5, 0xC3, 0xDB, 0x28, 0x0E, 0xA3, 0x27, 0x87, 0xB5, 0x1D, 0xB7, 0x87, 0xC5, 0x42, 0x6C, 0x42, 0x0F, 0x1B, 0x8B, 0x11, 0x62, 0x04, 0x56, 0xA9, 0x87};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x3B, 0x4D, 0xD3, 0x86, 0x9F, 0xDB, 0x39, 0xBB, 0xC9, 0xC2, 0x3D, 0x87, 0x62, 0x0F, 0x99, 0x8C, 0xCE, 0xD2, 0xC8, 0x1B, 0xEE, 0x95, 0x6B, 0x75, 0xD3, 0x61, 0xCE, 0x02, 0x2A, 0x23, 0x80, 0x23};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x3B, 0x21, 0x9B, 0xE7, 0xA3, 0x07, 0x0C, 0xBA, 0x34, 0xDB, 0x91, 0x96, 0xE4, 0xD4, 0x3D, 0xFC, 0x32, 0xB4, 0x9F, 0x70, 0xEF, 0x2C, 0xFE, 0x0C, 0x40, 0xFF, 0x67, 0x0C, 0xE3, 0xBB, 0x63, 0x02};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

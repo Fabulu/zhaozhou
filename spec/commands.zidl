@@ -27,6 +27,20 @@
 // This file is the ABI. Generated C++/TS/SV byte-identity is enforced by
 // tools/abi-gen goldens; editing layout here requires regenerating
 // (`npm run abi:gen`) and re-committing every generated artifact.
+//
+// Wave 3 (ABI v2 content, D7 promotions — run RUN-20260815-0544): the six
+// Phase-3 software-console commands are promoted reserved->implemented
+// (TerrainField, SurfaceStamp, DrawForm, DrawPopulation, DrawProcedural,
+// EmitAudioEvent). VERSION DECISION: `abi version` STAYS 2. The frozen rule
+// (spec/capture_format.md 1.2) is "opcodes, field sets and sizes never
+// change; additive change = new opcode"; promotions change execution
+// semantics only, and the two payload reinterpretations below (forge_kind,
+// radius/ring_width) reuse never-executed reserved pad bytes at unchanged
+// offsets and sizes — the same-bytes precedent the v2 `u8 mode` ->
+// `video_mode` conversion set. A bump would invalidate every committed
+// wave-2 capture (their frame headers pin abi_version 2) without buying a
+// single compat guarantee. Promotions are recorded in capture_format.md
+// 1.2/1.3 [w3] rows.
 
 abi zhao {
   version 2
@@ -75,6 +89,16 @@ enum video_mode : u8 {
   VIDEO_Z60 = 0;    // 384x240, canvas 184,320 B RGB565
   VIDEO_STORM = 1;  // 320x240, canvas 153,600 B RGB565
   VIDEO_DUO = 2;   // 512x240 (2 x 256x192), canvas 245,760 B RGB565
+}
+
+// [w3/D7] Primitive Forge kind for DrawProcedural. Member 0 is deliberately
+// the wave-3 island form: the byte reused by this enum was a mandatory-zero
+// pad in v2, so ABI-v2-era records (zero there) remain valid and now read as
+// the one implemented kind. New kinds are additive members (values ascend);
+// a value outside the member set is ZH_ABI_BAD_VALUE (rule 1.1-8).
+enum forge_kind : u8 {
+  FORGE_HEIGHTFIELD_PATCH = 0;  // authored heightfield patch projected as
+                                // terrain skirt/ground — the Wound Lab island
 }
 
 // ---- composed fixed-point containers (element = fx16, Q16.16, spec/qformats.md)
@@ -186,9 +210,17 @@ command SetPresentationContract 0x0020 implemented {
   pad[8];
 }
 
-// ---- terrain / surface (semantic commands; layouts frozen, execution reserved)
+// ---- terrain / surface (semantic commands; implemented in wave 3 — D7)
 
-command TerrainField 0x0200 reserved {
+// [w3] EXECUTED by the software console (zref terrain stage): applies the
+// earth field .zprog named by `program` (cartridge PROGRAM page, spec/
+// cartridge.md 3 kind 0) over the heightfield columns inside `footprint`,
+// via the zfield interpreter (field-ir.md 1.1 — the only C++ semantics).
+// Parameter-blob convention (spec/form/domains-and-effects.md 5): the earth
+// params-struct lanes packed Q16.16 LE in declaration order into p0..p7
+// (field-ir.md 7.1) — bytes [0, 4*lane_count) carry lanes, the rest MUST be
+// zero. start_tick/duration_ticks drive the age/phase input lanes exactly.
+command TerrainField 0x0200 implemented {
   handle32[program] program;
   rectfx footprint;
   u32 start_tick;
@@ -197,19 +229,38 @@ command TerrainField 0x0200 reserved {
   pad[4];
 }
 
-command SurfaceStamp 0x0210 reserved {
+// [w3] EXECUTED by the software console (surface-sheet stage): stamps a
+// circle/ring into the 64x64 surface sheet named by `brush` (SURFACE_STAMP
+// is the scar response of D7). Geometry: circle of `radius` (world metres,
+// fx16) at the transform translation; when `ring_width` > 0 the filled disc
+// becomes an annulus [radius - ring_width, radius]. tag/strength/operation
+// are the stamp-profile output vocabulary (field-ir.md 7.1 stamp record:
+// tag_op semantics as u8 tag + operation, strength scaled u16).
+// radius/ring_width reuse bytes that were mandatory-zero pad in v2 (same-
+// bytes reinterpretation, capture_format.md 1.3 [w3]); ring stamps were
+// unrepresentable before, so no v2 record changes meaning.
+command SurfaceStamp 0x0210 implemented {
   handle32[brush] brush;
   handle32[patch] patch;
-  u8 operation;
-  u8 tag;
-  u16 strength;
-  transform2fx transform;
-  pad[12];
+  u8 operation;        // stamp op: 0 = stamp, 1 = decay-accumulate (L1 uses 0)
+  u8 tag;              // surface-sheet tag byte (scar family)
+  u16 strength;        // 0..65535 initial/peak strength
+  transform2fx transform;  // sheet placement (translation = centre)
+  fx16 radius;         // [w3] circle radius, world metres
+  fx16 ring_width;     // [w3] 0 = filled disc, >0 = annulus of this width
+  pad[4];
 }
 
-// ---- forms / populations / procedural (reserved)
+// ---- forms / populations / procedural (implemented in wave 3 — D7)
 
-command DrawForm 0x0300 reserved {
+// [w3] EXECUTED by the software renderer (marker/billboard path — the two
+// wizards, marker-law lineage of the wave-2 Duo demo). The L1 draw_form emit
+// lowers here (spec/form/language-semantics.md 5). `form` names a cartridge
+// page (marker quad set); `transform` names the transform resource for the
+// entity. Payload flags bits [w3]: b0 = billboard (face the view camera),
+// b1 = screen-space size (marker law) vs world-space size; bits 2-15
+// reserved 0. semantic_weight feeds the Measure policy (degrade order).
+command DrawForm 0x0300 implemented {
   handle32[form] form;
   handle32[material_set] material_set;
   handle32[transform] transform;
@@ -218,7 +269,12 @@ command DrawForm 0x0300 reserved {
   u16 flags;
 }
 
-command DrawPopulation 0x0301 reserved {
+// [w3] EXECUTED by the software renderer: point/triangle particle sprites
+// from a pool's SoA state through the generated-code manifest (draw_population
+// emit, spec/form/language-semantics.md 5). Payload flags bits [w3]:
+// b0 = point sprites, b1 = triangle sprites (both may be set; ladder-free
+// L1 chooses statically); bits 2-15 reserved 0.
+command DrawPopulation 0x0301 implemented {
   handle32[population] population;
   u8 viewport_mask;
   u8 semantic_weight;
@@ -226,12 +282,21 @@ command DrawPopulation 0x0301 reserved {
   pad[8];
 }
 
-command DrawProcedural 0x0302 reserved {
+// [w3] EXECUTED by the software renderer: Primitive Forge descriptor in
+// software — the island (forge_kind FORGE_HEIGHTFIELD_PATCH projects the
+// authored terrain-patch page per D7/D9-island). Parameter-blob convention:
+// forge parameters do NOT travel inline; `program` names the cartridge
+// terrain-patch page (spec/cartridge.md 4 kind 4) whose header carries the
+// patch extents, and `transform`/`screen_error` carry placement + the
+// pixels-per-error policy. forge_kind reuses a mandatory-zero v2 pad byte
+// (same-bytes reinterpretation, capture_format.md 1.3 [w3]).
+command DrawProcedural 0x0302 implemented {
   handle32[forge_program] program;
   handle32[material] material;
   transform2fx transform;
   fx16 screen_error;
-  pad[12];
+  forge_kind kind;     // [w3] forge family (see enum above)
+  pad[11];
 }
 
 // Sky pass (spec/sky_and_beams.md 4 — the W4 post-patch ABI reservation).
@@ -254,9 +319,15 @@ command DrawSky 0x0310 reserved {
   pad[14];                     // to the 16-B record alignment (176 B record)
 }
 
-// ---- audio (reserved)
+// ---- audio (implemented in wave 3 — D7)
 
-command EmitAudioEvent 0x0400 reserved {
+// [w3] EXECUTED: routes a wave-2 mixer tone (MixerTone, spec/audio_rules.md
+// lane). event_id indexes the cartridge tone bank (TONE_BANK page, spec/
+// cartridge.md 4 kind 5); sample_handle is the tone's sample index within
+// the bank; gain/pan override the tone's declared defaults where nonzero.
+// Fire-and-forget: audio failure or voice stealing NEVER changes gameplay
+// truth (FORM 15). timestamp = the tick the event was emitted for.
+command EmitAudioEvent 0x0400 implemented {
   u32 event_id;
   i16 pan_fx;
   u16 gain;

@@ -65,6 +65,11 @@ package zhao_abi_pkg;
     VIDEO_DUO = 8'd2
   } zhao_video_mode_e;
 
+  // enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
+  typedef enum logic [7:0] {
+    FORGE_HEIGHTFIELD_PATCH = 8'd0
+  } zhao_forge_kind_e;
+
   // opcodes
   localparam logic [15:0] ZHAO_OP_NOP = 16'h0000;
   localparam logic [15:0] ZHAO_OP_BEGIN_FRAME = 16'h0001;
@@ -385,7 +390,7 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SET_PRESENTATION_CONTRACT_OFF_SHARED_TOKENS = 36;
   localparam int unsigned ZHAO_SET_PRESENTATION_CONTRACT_OFF_PAD = 40;
 
-  // TerrainField 0x0200: 112-B record (reserved).
+  // TerrainField 0x0200: 112-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
     logic [31:0] pad;  // 4 zero byte(s) @108
@@ -542,10 +547,12 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_TERRAIN_FIELD_OFF_PARAMETERS_63 = 107;
   localparam int unsigned ZHAO_TERRAIN_FIELD_OFF_PAD = 108;
 
-  // SurfaceStamp 0x0210: 64-B record (reserved).
+  // SurfaceStamp 0x0210: 64-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
-    logic [95:0] pad;  // 12 zero byte(s) @52
+    logic [31:0] pad;  // 4 zero byte(s) @60
+    logic [31:0] ring_width;  // fx16 = Q16.16 in 32 bits (qformats.md) @56
+    logic [31:0] radius;  // fx16 = Q16.16 in 32 bits (qformats.md) @52
     zhao_transform2fx_t transform;  // 24 B @28
     logic [15:0] strength;  // u16 @26
     logic [7:0] tag;  // u8 @25
@@ -573,9 +580,11 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_TAG = 25;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_STRENGTH = 26;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_TRANSFORM = 28;
-  localparam int unsigned ZHAO_SURFACE_STAMP_OFF_PAD = 52;
+  localparam int unsigned ZHAO_SURFACE_STAMP_OFF_RADIUS = 52;
+  localparam int unsigned ZHAO_SURFACE_STAMP_OFF_RING_WIDTH = 56;
+  localparam int unsigned ZHAO_SURFACE_STAMP_OFF_PAD = 60;
 
-  // DrawForm 0x0300: 32-B record (reserved).
+  // DrawForm 0x0300: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
     logic [15:0] flags;  // u16 @30
@@ -606,7 +615,7 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_FORM_OFF_SEMANTIC_WEIGHT = 29;
   localparam int unsigned ZHAO_DRAW_FORM_OFF_FLAGS = 30;
 
-  // DrawPopulation 0x0301: 32-B record (reserved).
+  // DrawPopulation 0x0301: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
     logic [63:0] pad;  // 8 zero byte(s) @24
@@ -635,10 +644,11 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_POPULATION_OFF_FLAGS = 22;
   localparam int unsigned ZHAO_DRAW_POPULATION_OFF_PAD = 24;
 
-  // DrawProcedural 0x0302: 64-B record (reserved).
+  // DrawProcedural 0x0302: 64-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
-    logic [95:0] pad;  // 12 zero byte(s) @52
+    logic [87:0] pad;  // 11 zero byte(s) @53
+    logic [7:0] kind;  // forge_kind @52
     logic [31:0] screen_error;  // fx16 = Q16.16 in 32 bits (qformats.md) @48
     zhao_transform2fx_t transform;  // 24 B @24
     logic [31:0] material;  // handle32 @20  // handle32 {index:24, generation:8}
@@ -662,7 +672,8 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL = 20;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM = 24;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR = 48;
-  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD = 52;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_KIND = 52;
+  localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD = 53;
 
   // DrawSky 0x0310: 176-B record (reserved).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -705,7 +716,7 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_SKY_OFF_RESERVED1 = 161;
   localparam int unsigned ZHAO_DRAW_SKY_OFF_PAD = 162;
 
-  // EmitAudioEvent 0x0400: 32-B record (reserved).
+  // EmitAudioEvent 0x0400: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
     logic [31:0] timestamp;  // u32 @28
@@ -1379,7 +1390,9 @@ package zhao_abi_pkg;
       v[ZHAO_SURFACE_STAMP_OFF_TAG*8 +: 8] = c.tag;
       v[ZHAO_SURFACE_STAMP_OFF_STRENGTH*8 +: 16] = c.strength;
       v[ZHAO_SURFACE_STAMP_OFF_TRANSFORM*8 +: 192] = c.transform;
-      v[ZHAO_SURFACE_STAMP_OFF_PAD*8 +: 96] = c.pad;
+      v[ZHAO_SURFACE_STAMP_OFF_RADIUS*8 +: 32] = c.radius;
+      v[ZHAO_SURFACE_STAMP_OFF_RING_WIDTH*8 +: 32] = c.ring_width;
+      v[ZHAO_SURFACE_STAMP_OFF_PAD*8 +: 32] = c.pad;
       zhao_pack_surface_stamp = v;
     end
   endfunction
@@ -1398,7 +1411,9 @@ package zhao_abi_pkg;
       c.tag = v[ZHAO_SURFACE_STAMP_OFF_TAG*8 +: 8];
       c.strength = v[ZHAO_SURFACE_STAMP_OFF_STRENGTH*8 +: 16];
       c.transform = v[ZHAO_SURFACE_STAMP_OFF_TRANSFORM*8 +: 192];
-      c.pad = v[ZHAO_SURFACE_STAMP_OFF_PAD*8 +: 96];
+      c.radius = v[ZHAO_SURFACE_STAMP_OFF_RADIUS*8 +: 32];
+      c.ring_width = v[ZHAO_SURFACE_STAMP_OFF_RING_WIDTH*8 +: 32];
+      c.pad = v[ZHAO_SURFACE_STAMP_OFF_PAD*8 +: 32];
       zhao_unpack_surface_stamp = c;
     end
   endfunction
@@ -1485,7 +1500,8 @@ package zhao_abi_pkg;
       v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL*8 +: 32] = c.material;
       v[ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM*8 +: 192] = c.transform;
       v[ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR*8 +: 32] = c.screen_error;
-      v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 96] = c.pad;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_KIND*8 +: 8] = c.kind;
+      v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 88] = c.pad;
       zhao_pack_draw_procedural = v;
     end
   endfunction
@@ -1502,7 +1518,8 @@ package zhao_abi_pkg;
       c.material = v[ZHAO_DRAW_PROCEDURAL_OFF_MATERIAL*8 +: 32];
       c.transform = v[ZHAO_DRAW_PROCEDURAL_OFF_TRANSFORM*8 +: 192];
       c.screen_error = v[ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR*8 +: 32];
-      c.pad = v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 96];
+      c.kind = v[ZHAO_DRAW_PROCEDURAL_OFF_KIND*8 +: 8];
+      c.pad = v[ZHAO_DRAW_PROCEDURAL_OFF_PAD*8 +: 88];
       zhao_unpack_draw_procedural = c;
     end
   endfunction
@@ -1830,13 +1847,13 @@ package zhao_abi_pkg;
           if (zhao_bytes_nonzero(p, base, 108, 4)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_SURFACE_STAMP: begin
-          if (zhao_bytes_nonzero(p, base, 52, 12)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 60, 4)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DRAW_POPULATION: begin
           if (zhao_bytes_nonzero(p, base, 24, 8)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DRAW_PROCEDURAL: begin
-          if (zhao_bytes_nonzero(p, base, 52, 12)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 53, 11)) zhao_record_pad_nonzero = 1'b1;
         end
         ZHAO_OP_DRAW_SKY: begin
           if (zhao_bytes_nonzero(p, base, 162, 14)) zhao_record_pad_nonzero = 1'b1;
@@ -1865,6 +1882,10 @@ package zhao_abi_pkg;
         ZHAO_OP_SET_PRESENTATION_CONTRACT: begin
           v = {24'b0, p[base+16+0]};  // mode: video_mode
           if (!(v == 32'd0 || v == 32'd1 || v == 32'd2)) zhao_record_enum_bad = 1'b1;
+        end
+        ZHAO_OP_DRAW_PROCEDURAL: begin
+          v = {24'b0, p[base+16+36]};  // kind: forge_kind
+          if (!(v == 32'd0)) zhao_record_enum_bad = 1'b1;
         end
         ZHAO_OP_DEBUG_FRAME_BLIT: begin
           v = {24'b0, p[base+16+1]};  // mode: video_mode

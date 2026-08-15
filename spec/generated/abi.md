@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 9804c583a0589d5b78bba654a1aec0457bfa8755a69568cc1de67e691485e423
-zidl_sha256         = 1a6e526e01f232e5c3db280ea32787b51db787c5426c420f1b8b11620456a987
+abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
+zidl_sha256         = 3b219be7a3070cba34db9196e4d43dfc32b49f70ef2cfe0c40ff670ce3bb6302
 ```
 
 ABI version **2**, little-endian, command alignment
 **16 B**, opcode width u16,
-15 commands (7 implemented).
+15 commands (13 implemented).
 
 ## Commands
 
@@ -22,13 +22,13 @@ ABI version **2**, little-endian, command alignment
 | `EndFrame` | `0x0002` | 32 | implemented |
 | `SetView` | `0x0010` | 96 | implemented |
 | `SetPresentationContract` | `0x0020` | 48 | implemented |
-| `TerrainField` | `0x0200` | 112 | reserved |
-| `SurfaceStamp` | `0x0210` | 64 | reserved |
-| `DrawForm` | `0x0300` | 32 | reserved |
-| `DrawPopulation` | `0x0301` | 32 | reserved |
-| `DrawProcedural` | `0x0302` | 64 | reserved |
+| `TerrainField` | `0x0200` | 112 | implemented |
+| `SurfaceStamp` | `0x0210` | 64 | implemented |
+| `DrawForm` | `0x0300` | 32 | implemented |
+| `DrawPopulation` | `0x0301` | 32 | implemented |
+| `DrawProcedural` | `0x0302` | 64 | implemented |
 | `DrawSky` | `0x0310` | 176 | reserved |
-| `EmitAudioEvent` | `0x0400` | 32 | reserved |
+| `EmitAudioEvent` | `0x0400` | 32 | implemented |
 | `DebugBootstrap` | `0xF001` | 64 | reserved |
 | `DebugFrameBlit` | `0xF002` | 48 | implemented |
 | `DebugRumble` | `0xF004` | 32 | implemented |
@@ -147,7 +147,7 @@ Golden sample: `tests/abi/golden/cmd_set_presentation_contract.bin` (C++ packer
 TS `zhaoPackSetPresentationContract(zhaoSampleSetPresentationContract(), ...)`, SV round-trips it via
 `zhao_unpack_set_presentation_contract`/`zhao_pack_set_presentation_contract`).
 
-### TerrainField — 0x0200 (112 B, reserved)
+### TerrainField — 0x0200 (112 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -174,7 +174,7 @@ Golden sample: `tests/abi/golden/cmd_terrain_field.bin` (C++ packer
 TS `zhaoPackTerrainField(zhaoSampleTerrainField(), ...)`, SV round-trips it via
 `zhao_unpack_terrain_field`/`zhao_pack_terrain_field`).
 
-### SurfaceStamp — 0x0210 (64 B, reserved)
+### SurfaceStamp — 0x0210 (64 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -186,7 +186,9 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 | 9 | 1 | `tag` | u8 |
 | 10 | 2 | `strength` | u16 |
 | 12 | 24 | `transform` | transform2fx |
-| 36 | 12 | `pad` | pad (zero) ×12 |
+| 36 | 4 | `radius` | fx16 |
+| 40 | 4 | `ring_width` | fx16 |
+| 44 | 4 | `pad` | pad (zero) ×4 |
 
 `transform` (transform2fx) leaves:
 
@@ -204,7 +206,7 @@ Golden sample: `tests/abi/golden/cmd_surface_stamp.bin` (C++ packer
 TS `zhaoPackSurfaceStamp(zhaoSampleSurfaceStamp(), ...)`, SV round-trips it via
 `zhao_unpack_surface_stamp`/`zhao_pack_surface_stamp`).
 
-### DrawForm — 0x0300 (32 B, reserved)
+### DrawForm — 0x0300 (32 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -222,7 +224,7 @@ Golden sample: `tests/abi/golden/cmd_draw_form.bin` (C++ packer
 TS `zhaoPackDrawForm(zhaoSampleDrawForm(), ...)`, SV round-trips it via
 `zhao_unpack_draw_form`/`zhao_pack_draw_form`).
 
-### DrawPopulation — 0x0301 (32 B, reserved)
+### DrawPopulation — 0x0301 (32 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -239,7 +241,7 @@ Golden sample: `tests/abi/golden/cmd_draw_population.bin` (C++ packer
 TS `zhaoPackDrawPopulation(zhaoSampleDrawPopulation(), ...)`, SV round-trips it via
 `zhao_unpack_draw_population`/`zhao_pack_draw_population`).
 
-### DrawProcedural — 0x0302 (64 B, reserved)
+### DrawProcedural — 0x0302 (64 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -249,7 +251,8 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 | 4 | 4 | `material` | handle32 [material] |
 | 8 | 24 | `transform` | transform2fx |
 | 32 | 4 | `screen_error` | fx16 |
-| 36 | 12 | `pad` | pad (zero) ×12 |
+| 36 | 1 | `kind` | forge_kind |
+| 37 | 11 | `pad` | pad (zero) ×11 |
 
 `transform` (transform2fx) leaves:
 
@@ -326,7 +329,7 @@ Golden sample: `tests/abi/golden/cmd_draw_sky.bin` (C++ packer
 TS `zhaoPackDrawSky(zhaoSampleDrawSky(), ...)`, SV round-trips it via
 `zhao_unpack_draw_sky`/`zhao_pack_draw_sky`).
 
-### EmitAudioEvent — 0x0400 (32 B, reserved)
+### EmitAudioEvent — 0x0400 (32 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -457,6 +460,12 @@ TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
 | 0 | `VIDEO_Z60` |
 | 1 | `VIDEO_STORM` |
 | 2 | `VIDEO_DUO` |
+
+### `forge_kind` — backing `u8`
+
+| Value | Name |
+|---|---|
+| 0 | `FORGE_HEIGHTFIELD_PATCH` |
 
 ## Error codes (generated enum, shared verbatim C++/TS/SV)
 

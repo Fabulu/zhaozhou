@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 9804c583a0589d5b78bba654a1aec0457bfa8755a69568cc1de67e691485e423
-//   zidl_sha256         = 1a6e526e01f232e5c3db280ea32787b51db787c5426c420f1b8b11620456a987
+//   abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
+//   zidl_sha256         = 3b219be7a3070cba34db9196e4d43dfc32b49f70ef2cfe0c40ff670ce3bb6302
 
 // ---------------------------------------------------------------- abi ---
 
@@ -51,19 +51,23 @@ export const VIDEO_STORM = 1 as const;
 export const VIDEO_DUO = 2 as const;
 export const ZHAO_ENUM_VIDEO_MODE: readonly number[] = [0, 1, 2];
 
+// enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
+export const FORGE_HEIGHTFIELD_PATCH = 0 as const;
+export const ZHAO_ENUM_FORGE_KIND: readonly number[] = [0];
+
 // opcodes
 export const ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 export const ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
 export const ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
 export const ZHAO_OP_SET_VIEW = 0x0010; // 96 B, implemented
 export const ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
-export const ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, reserved
-export const ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, reserved
-export const ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, reserved
-export const ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, reserved
-export const ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, reserved
+export const ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, implemented
+export const ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, implemented
+export const ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, implemented
+export const ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, implemented
+export const ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, implemented
 export const ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
-export const ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, reserved
+export const ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, implemented
 export const ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 export const ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 export const ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
@@ -200,7 +204,7 @@ export interface ZhRecordSetPresentationContract {
   shared_tokens: number; // u32, @20
 }
 
-/** TerrainField 0x0200: 112-byte record (reserved) */
+/** TerrainField 0x0200: 112-byte record (implemented) */
 export interface ZhRecordTerrainField {
   hdr: ZhCmdHeader;
   program: number; // handle32, @0
@@ -210,7 +214,7 @@ export interface ZhRecordTerrainField {
   parameters: number[]; // u8, @28
 }
 
-/** SurfaceStamp 0x0210: 64-byte record (reserved) */
+/** SurfaceStamp 0x0210: 64-byte record (implemented) */
 export interface ZhRecordSurfaceStamp {
   hdr: ZhCmdHeader;
   brush: number; // handle32, @0
@@ -219,9 +223,11 @@ export interface ZhRecordSurfaceStamp {
   tag: number; // u8, @9
   strength: number; // u16, @10
   transform: ZhTransform2fx; // @12
+  radius: number; // fx16 (Q16.16, int32), @36
+  ring_width: number; // fx16 (Q16.16, int32), @40
 }
 
-/** DrawForm 0x0300: 32-byte record (reserved) */
+/** DrawForm 0x0300: 32-byte record (implemented) */
 export interface ZhRecordDrawForm {
   hdr: ZhCmdHeader;
   form: number; // handle32, @0
@@ -232,7 +238,7 @@ export interface ZhRecordDrawForm {
   flags: number; // u16, @14
 }
 
-/** DrawPopulation 0x0301: 32-byte record (reserved) */
+/** DrawPopulation 0x0301: 32-byte record (implemented) */
 export interface ZhRecordDrawPopulation {
   hdr: ZhCmdHeader;
   population: number; // handle32, @0
@@ -241,13 +247,14 @@ export interface ZhRecordDrawPopulation {
   flags: number; // u16, @6
 }
 
-/** DrawProcedural 0x0302: 64-byte record (reserved) */
+/** DrawProcedural 0x0302: 64-byte record (implemented) */
 export interface ZhRecordDrawProcedural {
   hdr: ZhCmdHeader;
   program: number; // handle32, @0
   material: number; // handle32, @4
   transform: ZhTransform2fx; // @8
   screen_error: number; // fx16 (Q16.16, int32), @32
+  kind: number; // forge_kind (u8), @36
 }
 
 /** DrawSky 0x0310: 176-byte record (reserved) */
@@ -264,7 +271,7 @@ export interface ZhRecordDrawSky {
   reserved1: number; // u8, @145
 }
 
-/** EmitAudioEvent 0x0400: 32-byte record (reserved) */
+/** EmitAudioEvent 0x0400: 32-byte record (implemented) */
 export interface ZhRecordEmitAudioEvent {
   hdr: ZhCmdHeader;
   event_id: number; // u32, @0
@@ -314,13 +321,13 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'EndFrame', opcode: 0x0002, recordBytes: 32, implemented: true, padOffsets: [12, 13, 14, 15], enumChecks: [] },
   { name: 'SetView', opcode: 0x0010, recordBytes: 96, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'SetPresentationContract', opcode: 0x0020, recordBytes: 48, implemented: true, padOffsets: [24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 0, size: 1, values: [0, 1, 2] }] },
-  { name: 'TerrainField', opcode: 0x0200, recordBytes: 112, implemented: false, padOffsets: [92, 93, 94, 95], enumChecks: [] },
-  { name: 'SurfaceStamp', opcode: 0x0210, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [] },
-  { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: false, padOffsets: [], enumChecks: [] },
-  { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: false, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
-  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [] },
+  { name: 'TerrainField', opcode: 0x0200, recordBytes: 112, implemented: true, padOffsets: [92, 93, 94, 95], enumChecks: [] },
+  { name: 'SurfaceStamp', opcode: 0x0210, recordBytes: 64, implemented: true, padOffsets: [44, 45, 46, 47], enumChecks: [] },
+  { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
+  { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: true, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
+  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0] }] },
   { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
-  { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: false, padOffsets: [], enumChecks: [] },
+  { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DebugBootstrap', opcode: 0xF001, recordBytes: 64, implemented: false, padOffsets: [], enumChecks: [] },
   { name: 'DebugFrameBlit', opcode: 0xF002, recordBytes: 48, implemented: true, padOffsets: [2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 1, size: 1, values: [0, 1, 2] }] },
   { name: 'DebugRumble', opcode: 0xF004, recordBytes: 32, implemented: true, padOffsets: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
@@ -587,6 +594,8 @@ export function zhaoSampleSurfaceStamp(): ZhRecordSurfaceStamp {
     tag: 3,
     strength: 60507,
     transform: zhaoSampleTransform2fx(),
+    radius: 285207,
+    ring_width: 350743,
   };
 }
 
@@ -634,6 +643,7 @@ export function zhaoSampleDrawProcedural(): ZhRecordDrawProcedural {
     material: 704643074,
     transform: zhaoSampleTransform2fx(),
     screen_error: 88599,
+    kind: 0,
   };
 }
 
@@ -817,7 +827,9 @@ export function zhaoPackSurfaceStamp(r: ZhRecordSurfaceStamp, w: ZhByteWriter): 
   w.u8(r.tag);
   w.u16(r.strength);
   zhaoPackTransform2fx(r.transform, w);
-  w.zeros(12); // pad
+  w.fx16(r.radius);
+  w.fx16(r.ring_width);
+  w.zeros(4); // pad
 }
 
 export function zhaoPackDrawForm(r: ZhRecordDrawForm, w: ZhByteWriter): void {
@@ -848,7 +860,8 @@ export function zhaoPackDrawProcedural(r: ZhRecordDrawProcedural, w: ZhByteWrite
   w.u32(r.material);
   zhaoPackTransform2fx(r.transform, w);
   w.fx16(r.screen_error);
-  w.zeros(12); // pad
+  w.u8(r.kind);
+  w.zeros(11); // pad
 }
 
 export function zhaoPackDrawSky(r: ZhRecordDrawSky, w: ZhByteWriter): void {
@@ -906,6 +919,6 @@ export function zhaoPackDebugRumble(r: ZhRecordDebugRumble, w: ZhByteWriter): vo
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x98, 0x04, 0xC5, 0x83, 0xA0, 0x58, 0x9D, 0x5B, 0x78, 0xBB, 0xA6, 0x54, 0xA1, 0xAE, 0xC0, 0x45, 0x7B, 0xFA, 0x87, 0x55, 0xA6, 0x95, 0x68, 0xCC, 0x1D, 0xE6, 0x7E, 0x69, 0x14, 0x85, 0xE4, 0x23];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x1A, 0x6E, 0x52, 0x6E, 0x01, 0xF2, 0x32, 0xE5, 0xC3, 0xDB, 0x28, 0x0E, 0xA3, 0x27, 0x87, 0xB5, 0x1D, 0xB7, 0x87, 0xC5, 0x42, 0x6C, 0x42, 0x0F, 0x1B, 0x8B, 0x11, 0x62, 0x04, 0x56, 0xA9, 0x87];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x3B, 0x4D, 0xD3, 0x86, 0x9F, 0xDB, 0x39, 0xBB, 0xC9, 0xC2, 0x3D, 0x87, 0x62, 0x0F, 0x99, 0x8C, 0xCE, 0xD2, 0xC8, 0x1B, 0xEE, 0x95, 0x6B, 0x75, 0xD3, 0x61, 0xCE, 0x02, 0x2A, 0x23, 0x80, 0x23];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x3B, 0x21, 0x9B, 0xE7, 0xA3, 0x07, 0x0C, 0xBA, 0x34, 0xDB, 0x91, 0x96, 0xE4, 0xD4, 0x3D, 0xFC, 0x32, 0xB4, 0x9F, 0x70, 0xEF, 0x2C, 0xFE, 0x0C, 0x40, 0xFF, 0x67, 0x0C, 0xE3, 0xBB, 0x63, 0x02];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;
