@@ -8,6 +8,7 @@
 
 #include "render_helpers.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -53,6 +54,81 @@ void test_layer_census() {
   check(per_layer[0] == 768 && per_layer[1] == 768, "48x8x2 per band");
   check(per_layer[2] == 16 && per_layer[3] == 2 && per_layer[4] == 128 && per_layer[5] == 4,
         "cap 16 / under 2 / cloud 128 / sun 4");
+}
+
+// §1.1 rows 1-2: the drum bands are a REAL 48-column cylinder. The column
+// angle is `drum_yaw + a` where `a` is the circumferential parameter — an
+// fx16 turn fraction in [0,65536), which IS the angle16 u16-turns container
+// (qformats §2). A conversion that collapses `a` to 0 makes every column
+// share one angle: the drum degenerates to a vertical line, every triangle
+// has zero screen area, and `raster_tri` drops all 1536 of them — the 360°
+// skybox silently ceases to exist while every census/UV/scroll test stays
+// green. These assertions pin the geometry itself.
+void test_band_geometry() {
+  const zref::sky::SkySet s = test_set();
+  const auto prims = zref::sky::emit_layers(s, 0, zref::angle16{0}, 0);
+  check(prims.size() == 1536, "bands-only emission");
+
+  // 1. the columns occupy MANY distinct world positions, not one.
+  // 48 evenly spaced angles + the per-row radius lerp: cos/sin take on well
+  // over 24 distinct values each. The collapsed-angle bug yields 9.
+  std::vector<int32_t> xs, zs;
+  for (const auto& p : prims)
+    for (int k = 0; k < 3; ++k) {
+      xs.push_back(p.v[k].x.raw);
+      zs.push_back(p.v[k].z.raw);
+    }
+  auto distinct = [](std::vector<int32_t> v) {
+    std::sort(v.begin(), v.end());
+    return static_cast<size_t>(std::unique(v.begin(), v.end()) - v.begin());
+  };
+  const size_t nx = distinct(xs);
+  const size_t nz = distinct(zs);
+  if (nx <= 24 || nz <= 24)
+    std::fprintf(stderr, "  band distinct X=%zu Z=%zu (collapsed drum gives 9)\n", nx, nz);
+  check(nx > 24, "band columns span many distinct X (drum is a cylinder)");
+  check(nz > 24, "band columns span many distinct Z (drum is a cylinder)");
+
+  // 2. no band triangle is degenerate in the horizontal plane: every triangle
+  // must have two vertices at DIFFERENT column angles, else it is a vertical
+  // sliver that no rasteriser can fill.
+  size_t degenerate = 0;
+  for (const auto& p : prims) {
+    const bool same = p.v[0].x.raw == p.v[1].x.raw && p.v[1].x.raw == p.v[2].x.raw &&
+                      p.v[0].z.raw == p.v[1].z.raw && p.v[1].z.raw == p.v[2].z.raw;
+    if (same) ++degenerate;
+  }
+  check(degenerate == 0, "no band triangle collapses to a vertical line");
+
+  // 3. drum_yaw rotates the GEOMETRY while the UVs stay glued to the columns
+  // (§1 — the texture visibly rotates with the drum).
+  const auto rot = zref::sky::emit_layers(s, 0, zref::angle16{0x4000}, 0);
+  size_t moved = 0, uv_changed = 0;
+  for (size_t i = 0; i < prims.size(); ++i)
+    for (int k = 0; k < 3; ++k) {
+      if (prims[i].v[k].x.raw != rot[i].v[k].x.raw || prims[i].v[k].z.raw != rot[i].v[k].z.raw)
+        ++moved;
+      if (prims[i].v[k].u.raw != rot[i].v[k].u.raw || prims[i].v[k].v.raw != rot[i].v[k].v.raw)
+        ++uv_changed;
+    }
+  check(moved > 0, "drum_yaw rotates band geometry");
+  check(uv_changed == 0, "drum_yaw leaves band UVs glued to the columns");
+
+  // 4. a quarter-turn yaw is exactly the 12-column shift of the 48-column
+  // drum: column c at yaw 0x4000 sits where column c+12 sits at yaw 0.
+  // (kDrumCols/4 == 12; the angles are the same u16 raws, so this is exact.)
+  const int cols = zref::sky::kDrumCols;
+  const int rows = zref::sky::kBandRows;
+  size_t shift_mismatch = 0;
+  for (int c = 0; c < cols; ++c) {
+    // lower band, row 0, first triangle of the (col,row) pair
+    const size_t base = static_cast<size_t>(c) * rows * 2;
+    const size_t shifted = static_cast<size_t>((c + cols / 4) % cols) * rows * 2;
+    if (rot[base].v[0].x.raw != prims[shifted].v[0].x.raw ||
+        rot[base].v[0].z.raw != prims[shifted].v[0].z.raw)
+      ++shift_mismatch;
+  }
+  check(shift_mismatch == 0, "yaw 0x4000 == a 12-column rotation of the 48-column drum");
 }
 
 void test_cloud_vertex_alpha_law() {
@@ -243,6 +319,30 @@ void test_fallback_clear() {
     check(count_colour(s.cap.r, s.cap.g, s.cap.b) > 0, "zenith cap flat colour visible");
     check(count_colour(s.under.r, s.under.g, s.under.b) > 0,
           "under-plane flat colour visible (real-depth pass 3)");
+
+    // ...and the BANDS themselves — the backdrop that makes the drum a
+    // skybox. Each band row carries lerp8(bottom, top, row, kBandRows) (the
+    // render_frame.cpp gradient law); count pixels matching ANY band row
+    // colour. A degenerate drum rasterises zero band pixels and this is the
+    // only assertion that notices.
+    const auto lerp8 = [](uint8_t a, uint8_t b, int num, int den) {
+      return static_cast<uint8_t>(
+          (static_cast<int32_t>(a) * (den - num) + static_cast<int32_t>(b) * num + den / 2) / den);
+    };
+    uint32_t band_px = 0;
+    for (int band = 0; band < 2; ++band) {
+      const zref::sky::SkyColor lo = band == 0 ? s.band_lower_horizon : s.band_upper_bottom;
+      const zref::sky::SkyColor hi = band == 0 ? s.band_lower_top : s.band_upper_top;
+      for (int row = 0; row < zref::sky::kBandRows; ++row)
+        band_px += count_colour(lerp8(lo.r, hi.r, row, zref::sky::kBandRows),
+                                lerp8(lo.g, hi.g, row, zref::sky::kBandRows),
+                                lerp8(lo.b, hi.b, row, zref::sky::kBandRows));
+    }
+    // measured 371 with this fixture (the cap and under-plane cover the rest);
+    // the collapsed-drum bug scores exactly 0, so the margin is the whole
+    // distance between "the skybox exists" and "it does not".
+    std::printf("render_sky: band pixels on canvas = %u\n", band_px);
+    check(band_px > 100, "drum band pixels reach the canvas (the 360 deg backdrop exists)");
   }
 }
 
@@ -250,6 +350,7 @@ void test_fallback_clear() {
 
 int main() {
   test_layer_census();
+  test_band_geometry();
   test_cloud_vertex_alpha_law();
   test_scroll_determinism();
   test_rot_proj_validation();

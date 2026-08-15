@@ -86,8 +86,11 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
       const fx16 u_r = band_u(a_r);
       // geometry angles add drum_yaw (angle16 arithmetic wraps mod 2^16,
       // qformats §2 — the angle lane is the u16 turns container itself)
-      const angle16 ga_l = angle16{static_cast<uint16_t>(drum_yaw.raw + (a_l.raw >> 16))};
-      const angle16 ga_r = angle16{static_cast<uint16_t>(drum_yaw.raw + (a_r.raw >> 16))};
+      // a_* IS the u16-turns container already (fx16 turn fraction in
+      // [0,65536) == angle16 raw); adding drum_yaw wraps mod 2^16. The zenith
+      // cap below builds its angles the same way.
+      const angle16 ga_l = angle16{static_cast<uint16_t>(drum_yaw.raw + a_l.raw)};
+      const angle16 ga_r = angle16{static_cast<uint16_t>(drum_yaw.raw + a_r.raw)};
       for (int row = 0; row < kBandRows; ++row) {
         const fx16 t0 = fx16{(row << 16) / kBandRows};
         const fx16 t1 = fx16{((row + 1) << 16) / kBandRows};
