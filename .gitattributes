@@ -31,3 +31,10 @@ tests/fuzz/*.ts text eol=lf
 *.zcorpus -text
 tests/abi/golden/** -text
 captures/** -text
+
+# W6 CI fix (2026-08-15): the W5-emitted wrapper crater_ring.hpp is
+# byte-compared by compiler/tests/crater_ring.test.ts on every run; a fresh
+# autocrlf=true checkout translated it to CRLF and failed the gate on the
+# first GitHub Actions run (run 31839033681). Same byte-identity rule as
+# the W4 block above.
+compiler/tests/generated/** text eol=lf
