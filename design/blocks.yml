@@ -613,8 +613,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "8400661"
+        evidence: reference/include/zref/zref_input.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -645,8 +649,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "8400661"
+        evidence: reference/include/zref/zref_input.hpp
     deferred: false
     cut_order: null
     superseded_by: null
