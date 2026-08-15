@@ -29,8 +29,10 @@ namespace zhao_audio {
 // Verilated zhao_audio_fifo wrapper.
 class RtlDev {
  public:
-  RtlDev() : top_(new Vzhao_audio_fifo) { reset(); }
+  RtlDev() : top_(new Vzhao_audio_fifo), cycle_(0) { reset(); }
   ~RtlDev() { top_->final(); delete top_; }
+  RtlDev(const RtlDev&) = delete;             // owns the Verilated model
+  RtlDev& operator=(const RtlDev&) = delete;
 
   void reset() {
     top_->rst_gpu_n = 0;
@@ -92,11 +94,11 @@ class RtlDev {
   }
 
   // audio-tick outputs (post-edge; stable until the next audio edge)
-  bool audio_edge_fired;
-  bool pcm_valid;
+  bool audio_edge_fired = false;
+  bool pcm_valid = false;
   uint16_t pcm_l = 0;
   uint16_t pcm_r = 0;
-  bool underrun_status;
+  bool underrun_status = false;
 
  private:
   void gpu_edge() {
@@ -113,7 +115,7 @@ class RtlDev {
   }
 
   Vzhao_audio_fifo* top_;
-  uint64_t cycle_;
+  uint64_t cycle_{0};
 };
 
 // zref::AudioFifo wrapper with the identical device interface.
