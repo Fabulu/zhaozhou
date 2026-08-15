@@ -246,11 +246,20 @@ T[i] = round_half_up(sin(π/2 · i / 256) · 2^16),  i = 0..256      // T[0]=0, 
   i = a13 >> 6 (8-bit index), t = a13 & 0x3F (6-bit sub-tick):
 
 ```
-qw(a13) = T[i] + rescale((T[i+1] − T[i]) · t, 6)                  // quarter-wave value, s18
+qw(a13) = i == 256 ? T[256] : T[i] + rescale((T[i+1] − T[i]) · t, 6)   // quarter-wave value, s18
 fx_sin(a) = q even ? +qw(a13) : −qw(a13)      (sign by quadrant, mirrored index 0x4000 − a13)
 fx_sin:  q0: +qw(a13)   q1: +qw(0x4000 − a13)   q2: −qw(a13)   q3: −qw(0x4000 − a13)
 ```
 
+- **Endpoint guard (spec defect fixed 2026-08-15).** `a13 = 0x4000` — the
+  mirrored index of `a13 = 0`, reached by every `fx_cos(0)` / `fx_cos(0x8000)`
+  and by `fx_sin(0x4000)` / `fx_sin(0xC000)` — gives `i = 256`, so the
+  unguarded slope `T[i+1] − T[i]` requires a **T[257] that does not exist**.
+  The `i == 256` case above returns `T[256]` directly. `t` is 0 there, so no
+  value changes; the guard removes an out-of-bounds read (a hard error under
+  `constexpr`, and an X-propagation hazard in RTL). Implementations MUST carry
+  the guard: `reference/include/zref/zref_trig.hpp`,
+  `compiler/src/field_ir/numeric.ts`.
 - **Error bound (frozen, exhaustively proven over all 2^16 angles):**
   `|fx_sin(a)/2^16 − sin(2π·a/2^16)| ≤ 1.3 · 2^-16`.
   Derivation: interpolation error ≤ h²/8·max|f″| = (π/512)²/8 ≈ 0.31 LSB;

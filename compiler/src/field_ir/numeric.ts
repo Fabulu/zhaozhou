@@ -63,6 +63,12 @@ function sinQuarter(a13: number): number {
   const i = a13 >>> 6;
   const t = a13 & 0x3f;
   const ti = SIN_Q16[i]!;
+  // a13 == 0x4000 lands on i == 256, the last of the 257 entries; the slope
+  // would read SIN_Q16[257] (undefined -> NaN -> 0 here, a hard compile error
+  // in the C++ constexpr twin). Reached by every fxCos(0)/fxCos(0x8000) and
+  // by fxSin(0x4000)/fxSin(0xC000). t is 0 there, so the value is exactly
+  // T[256] — mirrors the guard in reference/include/zref/zref_trig.hpp.
+  if (i === 256) return ti;
   const d = SIN_Q16[i + 1]! - ti;
   return ti + ((d * t + 32) >> 6);
 }

@@ -30,10 +30,17 @@ namespace detail {
 constexpr int32_t sin_quarter(uint32_t a13) {
   const uint32_t i = a13 >> 6;
   const uint32_t t = a13 & 0x3Fu;
-  const int32_t d =
-      static_cast<int32_t>(gen::SIN_Q16[i + 1]) - static_cast<int32_t>(gen::SIN_Q16[i]);
-  return static_cast<int32_t>(gen::SIN_Q16[i]) +
-         static_cast<int32_t>((static_cast<int64_t>(d) * t + 32) >> 6);
+  const int32_t base = static_cast<int32_t>(gen::SIN_Q16[i]);
+  // a13 == 0x4000 (the quarter-turn endpoint) lands on i == 256, the LAST
+  // table entry; the interpolation slope would read SIN_Q16[257], one past
+  // the end of the 257-entry table. It is reached by every fx_cos(0) and
+  // fx_cos(0x8000), and by fx_sin(0x4000)/fx_sin(0xC000) — a constexpr
+  // evaluation of any of those is a hard compile error, and at runtime it is
+  // an out-of-bounds read (UBSan / RTL X-propagation hazard). t is 0 there,
+  // so the returned VALUE is unchanged: the endpoint is exactly T[256].
+  if (i == 256) return base;
+  const int32_t d = static_cast<int32_t>(gen::SIN_Q16[i + 1]) - base;
+  return base + static_cast<int32_t>((static_cast<int64_t>(d) * t + 32) >> 6);
 }
 
 }  // namespace detail

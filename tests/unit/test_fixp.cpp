@@ -145,6 +145,43 @@ static void test_sin_cos() {
 }
 
 // =============================================================================
+// sin table endpoint: the quarter-wave index must never read T[257]
+// (qformats.md 7.1 "Endpoint guard")
+// =============================================================================
+// The four angles whose mirrored index is a13 = 0x4000 -> i = 256. Evaluating
+// them as CONSTANT EXPRESSIONS is the real regression detector: an unguarded
+// SIN_Q16[i + 1] is a hard compile error here ("array subscript 257 is outside
+// the bounds of uint32_t [257]"), so a reintroduction cannot even build. The
+// exhaustive golden loop above cannot see it — t is 0, so the garbage read is
+// multiplied away and every VALUE is correct.
+static_assert(fx_sin(angle16{0x4000}).raw == 0x10000, "sin(1/4 turn) = 1");
+static_assert(fx_sin(angle16{0xC000}).raw == -0x10000, "sin(3/4 turn) = -1");
+static_assert(fx_cos(angle16{0}).raw == 0x10000, "cos(0) = 1");
+static_assert(fx_cos(angle16{0x8000}).raw == -0x10000, "cos(1/2 turn) = -1");
+// the guard returns T[256] itself, which the table pins at exactly 1.0
+static_assert(gen::SIN_Q16[256] == 0x10000u, "quarter-wave endpoint T[256] = 1.0");
+
+static void test_sin_table_endpoint() {
+  // the same four at runtime (constant-folding is not the only build mode)
+  CHECK_EQ(fx_sin(angle16{0x4000}).raw, 0x10000);
+  CHECK_EQ(fx_sin(angle16{0xC000}).raw, -0x10000);
+  CHECK_EQ(fx_cos(angle16{0}).raw, 0x10000);
+  CHECK_EQ(fx_cos(angle16{0x8000}).raw, -0x10000);
+  // fx_cos(a) = fx_sin(a + 0x4000) must still hold ACROSS the guarded index
+  CHECK_EQ(fx_cos(angle16{0}).raw, fx_sin(angle16{0x4000}).raw);
+  CHECK_EQ(fx_cos(angle16{0x8000}).raw, fx_sin(angle16{0xC000}).raw);
+  // the neighbourhood is unaffected: the peak is symmetric about 0x4000, and
+  // the interpolated entries below it still climb to it. (0x3FFF itself
+  // ROUNDS to 0x10000 — T[255] = 0xFFFF plus the t = 63 sub-tick — so the
+  // strict inequality only holds a few ticks out.)
+  CHECK_EQ(fx_sin(angle16{0x3FFF}).raw, fx_sin(angle16{0x4001}).raw);
+  CHECK_EQ(fx_sin(angle16{0x3F00}).raw, fx_sin(angle16{0x4100}).raw);
+  CHECK(fx_sin(angle16{0x3F00}).raw < 0x10000);
+  CHECK(fx_sin(angle16{0x3F00}).raw > 0xFF00);
+  std::printf("  sin endpoint: i == 256 guarded (constexpr + runtime)\n");
+}
+
+// =============================================================================
 // unit8: exhaustive 2^16 pairs vs golden + oracle (qformats.md 3)
 // =============================================================================
 static void test_unit8() {
@@ -720,6 +757,7 @@ int main(int argc, char** argv) {
   CHECK_EQ(gen::QFMT_VERSION, 1u);
 
   test_sin_cos();
+  test_sin_table_endpoint();
   test_unit8();
   test_noise2();
   test_fx16_oracles();

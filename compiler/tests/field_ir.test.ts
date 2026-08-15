@@ -171,6 +171,26 @@ test('fxSin identities (qformats.md §7.1, exact)', () => {
   assert.equal(SIN_Q16.length, 257);
 });
 
+test('fxSin quarter-wave endpoint never reads T[257] (qformats.md §7.1 guard)', () => {
+  // a13 = 0x4000 -> i = 256, the LAST of the 257 entries. Without the i == 256
+  // guard the slope reads SIN_Q16[257]: `undefined` here (NaN -> 0 after the
+  // shift, so the values still happen to come out right) and a hard compile
+  // error in the C++ constexpr twin. These four angles are the ones that hit
+  // it — every fxCos(0)/fxCos(0x8000) among them.
+  assert.equal(SIN_Q16[257], undefined, 'the table really is 257 entries (0..256)');
+  assert.equal(SIN_Q16[256], 0x10000, 'quarter-wave endpoint T[256] = 1.0');
+  assert.equal(num.fxSin(0x4000), 0x10000);
+  assert.equal(num.fxSin(0xc000), -0x10000);
+  assert.equal(num.fxCos(0), 0x10000);
+  assert.equal(num.fxCos(0x8000), -0x10000);
+  // the identity must hold ACROSS the guarded index, and stay integral
+  assert.equal(num.fxCos(0), num.fxSin(0x4000));
+  assert.equal(num.fxCos(0x8000), num.fxSin(0xc000));
+  for (const v of [num.fxSin(0x4000), num.fxSin(0xc000), num.fxCos(0), num.fxCos(0x8000)]) {
+    assert.ok(Number.isInteger(v), `endpoint value must be an integer, got ${v}`);
+  }
+});
+
 test('noise2Hash matches the committed KAT golden (tests/golden/fixp)', () => {
   const bin = readFileSync(path.join(repoRoot(), 'tests', 'golden', 'fixp', 'noise2_kat.bin'));
   for (let i = 0; i < 64; i++) {
