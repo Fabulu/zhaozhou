@@ -1,0 +1,188 @@
+// internal.hpp — zrender internal surface (NOT installed; the public API is
+// zref/zref_render.hpp). Shared by rast.cpp / terrain.cpp / sprites.cpp /
+// render_frame.cpp / resolve.cpp.
+//
+// Law: spec/qformats.md §2 (mat4fx x vec4 s128 exact row sum + ONE rescale),
+// §3 (single-rounding fx16 ops), §4 (round_half_up signed division),
+// §8 (screenXY S 12.8, ±2048 px guard band, edge functions E0 s64 setup /
+// E' = E0>>8 / top-left bias / exact stepping, depth = 1/z larger-closer);
+// charter §8 (24-bit RGB working colour, RGB565 at resolve);
+// plan W3.5/D7 (painter's algorithm with Q16.16 1/z depth per view).
+
+#pragma once
+
+#include "zref/zref_render.hpp"
+
+namespace zref {
+namespace render {
+
+// generated ABI record types used by the internal draw entry points
+using zhao_abi::ZhCmdSurfaceStamp;
+using zhao_abi::ZhCmdTerrainField;
+using zhao_abi::ZhTransform2fx;
+
+// ---- viewport (canvas-local pixels; Duo map per video_rules.md §3.1) ------
+
+struct Viewport {
+  uint32_t x0 = 0, y0 = 0, w = 0, h = 0;
+};
+
+/** The viewports of a mode: Duo = two 256x192 halves; else one full canvas. */
+inline uint32_t viewports_of(zhao_abi::video_mode m, Viewport out[2]) {
+  if (m == zhao_abi::VIDEO_DUO) {
+    out[0] = Viewport{0, 0, 256, 192};
+    out[1] = Viewport{256, 0, 256, 192};
+    return 2;
+  }
+  const uint32_t w = canvas_width(m), h = canvas_height(m);
+  out[0] = Viewport{0, 0, w, h};
+  return 1;
+}
+
+// ---- working surface (charter §8: RGB888 working, Q16.16 depth) -----------
+
+struct WorkSurface {
+  uint32_t w = 0, h = 0;
+  std::vector<uint8_t> rgb;    // w*h*3
+  std::vector<int32_t> depth;  // Q16.16 1/w; clear value 0 = far (§8)
+
+  void reset(uint32_t width, uint32_t height, sky::SkyColor bg) {
+    w = width;
+    h = height;
+    rgb.assign(static_cast<size_t>(width) * height * 3, 0);
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
+      rgb[i * 3 + 0] = bg.r;
+      rgb[i * 3 + 1] = bg.g;
+      rgb[i * 3 + 2] = bg.b;
+    }
+    depth.assign(static_cast<size_t>(width) * height, 0);
+  }
+};
+
+// ---- projection (qformats.md §2/§3/§8) --------------------------------------
+
+struct ScreenV {
+  int32_t x = 0, y = 0;  // S 12.8 canvas pixels (§8)
+  int32_t d = 0;         // Q16.16 1/w depth (D7)
+  int32_t a = 0;         // Q16.16 interpolated attribute (vertex alpha)
+};
+
+struct ProjOut {
+  bool in = false;  // false: w <= 0 (behind the eye) — Phase-3 near-plane
+                    // rejection culls the whole primitive (documented)
+  ScreenV s;
+};
+
+/**
+ * World vertex -> canvas screen vertex. Pipeline (every step cited):
+ *   clip   = mat4_vec4(vp, {x,y,z,1})        qformats §2 (s128 row sum)
+ *   ndc    = fx_div_exact(clip, w)           §3 (one rounding)
+ *   screen = fx_mad(ndc, half_extent, c) + to_screen_xy  §3 + §8
+ *            (+Y NDC maps to +Y canvas row — pixel (0,0) is top-left,
+ *             video_rules.md §2; the game authors its matrix y-down)
+ *   depth  = fx_div_exact(1, w)              Q16.16 1/z, D7
+ */
+ProjOut project_vertex(const mat4fx& vp, const Viewport& vp_px, fx16 x, fx16 y, fx16 z,
+                       SatLedger* L);
+
+// round_half_up signed division on s128 (qformats §4) — the ONE rounding of
+// the barycentric plane-equation setup below.
+int32_t div_rhu_s128(__int128 n, __int128 d);
+
+// ---- raster (qformats.md §8 edge-function law) ------------------------------
+
+enum class BlendMode { kOpaque, kAlpha, kAdditive };
+
+struct TriMode {
+  bool depth_test = true;
+  bool depth_write = true;
+  bool use_fixed_depth = false;  // sky layer depths (§1.1 layer table)
+  int32_t fixed_depth = 0;       // Q16.16
+  BlendMode blend = BlendMode::kOpaque;
+  bool interp_alpha = false;  // blend with v[i].a (Q16.16)
+};
+
+/**
+ * Rasterize one triangle with the §8 law: s64 edge setup (subpixel^2),
+ * E' = E0 >> 8 at pixel centres, D3D top-left bias, exact incremental
+ * stepping, affine plane-equation interpolation of depth/alpha (ONE
+ * round_half_up at setup, then exact s32 steps — the §8 "stepped edge"
+ * model). Double-sided (Phase-3: terrain quads and the sky drum are emitted
+ * with recorded windings but the software raster shades both — the RTL
+ * backface-culling freeze is Phase 4/5; deviation noted in render_frame.cpp).
+ * Scissored to `vp`.
+ *
+ * PAINTER/DEPTH LAW (D7 "painter's algorithm with Q16.16 1/z depth per
+ * view", frozen here): terrain cells rasterize with depth_test = OFF and
+ * depth_write = ON — the painter sort IS the ordering between terrain
+ * cells, because a constant-w (orthographic) view-projection makes 1/z
+ * constant per triangle, so a strict-greater depth test would reject every
+ * later cell against the first writer and leave a single quad standing.
+ * Depth is still WRITTEN per pixel so every later pass that depth-tests
+ * (sky pass-6 sun/cloud, DrawForm markers, DrawPopulation sprites) resolves
+ * against the terrain's 1/z exactly as qformats §8 prescribes. Under a
+ * perspective matrix the sort and the depth lane agree, so the law is a
+ * no-op refinement there; under ortho it is the only correct reading.
+ */
+void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A, const ScreenV& B,
+                const ScreenV& C, uint8_t r, uint8_t g, uint8_t b, const TriMode& m);
+
+// ---- shared constants -------------------------------------------------------
+
+// Flat-shading light: unit (1,2,1)/sqrt(6), hand-normalized to Q16.16
+// (0.40825 -> 26758, 0.81650 -> 53521). The renderer's ONE light; W3.7's
+// look is tuned against it (change = golden-CRC regen).
+inline constexpr int32_t kLightX = 26758;
+inline constexpr int32_t kLightY = 53521;
+inline constexpr int32_t kLightZ = 26758;
+
+// ---- terrain.cpp ------------------------------------------------------------
+
+/** SurfaceStamp into a sheet over the patch envelope (charter §12). */
+void stamp_surface(SurfaceSheet& sheet, const TerrainPatch& patch, const ZhCmdSurfaceStamp& st);
+
+/** Sheet strength at a world position (charter §12 Phase-3 tint input). */
+uint8_t sample_sheet(const SurfaceSheet& sheet, const TerrainPatch& patch, fx16 wx, fx16 wz);
+
+struct FieldApp {
+  const zfield::Decoded* prog;  // nullptr = resource miss (counted at walk)
+  ZhCmdTerrainField cmd;
+};
+
+/**
+ * DrawProcedural (forge_kind heightfield_patch): build the world grid
+ * (envelope + authored height16 + TerrainField deltas via the ONE zfield
+ * interpreter), project, painter-sort far-to-near by centroid Q16.16 1/z
+ * (D7), flat-shade (exact fx16 cross products -> §7.4-style normalize ->
+ * single-rounded lambert dot), tint by the surface sheet, raster with depth.
+ */
+void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
+                      const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,
+                      const SurfaceSheet* sheet, const std::vector<FieldApp>& fields,
+                      uint32_t frame_tick, std::vector<TerrainVelocitySample>* velocity_out,
+                      SatLedger* L);
+
+// ---- sprites.cpp ------------------------------------------------------------
+
+/**
+ * DrawForm: the marker/billboard quad — the fixed 8x8 pattern scaled by
+ * `half_px` (screen-space when flags b1, else the world size perspective-
+ * divided at projection scale 1), centred on the projected transform
+ * position, WALL-CLAMPED to the canvas (the marker slides along the wall,
+ * never vanishes — the wave-2 Duo marker demo law lineage). Opaque, depth
+ * test + write.
+ */
+void draw_form_marker(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
+                      const FormPattern& form, const FormTransform& xf, uint16_t flags,
+                      SatLedger* L);
+
+/**
+ * DrawPopulation: point (flags b0) / triangle (flags b1) particle sprites
+ * from the pool snapshot, depth-tested, no depth write (charter §8 pass 7 —
+ * particles never occlude). Draw order = snapshot order (deterministic).
+ */
+void draw_population(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
+                     const Population& pop, uint16_t flags, SatLedger* L);
+
+}  // namespace render
+}  // namespace zref

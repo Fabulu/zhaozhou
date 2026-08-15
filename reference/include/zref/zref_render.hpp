@@ -1,0 +1,303 @@
+// zref_render.hpp — W3.5 ZRef software renderer (plan W3.5 / ratified D7:
+// "zref::render — exact, slow, integer-only, CRC-able").
+//
+// The renderer consumes a VALIDATED sealed frame packet (zhao execution
+// result with the command stream, spec/capture_format.md §3) plus a 2-slot
+// RGB565 canvas and renders the Phase-3 subset of ABI commands:
+//
+//   SetView 0x0010, SetPresentationContract 0x0020 — per-view state, mat4fx
+//       projection (zref::mat4_vec4), viewport maps per video_rules.md;
+//   DrawProcedural 0x0302 (forge_kind = heightfield_patch) — the island;
+//   TerrainField 0x0200 — earth .zprog over the footprint via the ONE zfield
+//       interpreter (never reimplemented here);
+//   SurfaceStamp 0x0210 — circle/ring into the 64x64 surface sheet (the scar
+//       response), persistent across frames;
+//   DrawForm 0x0300 — marker/billboard quads (the wizards);
+//   DrawPopulation 0x0301 — point/triangle particle sprites;
+//   DrawSky 0x0310 — through zref::sky::emit_layers (spec/sky_and_beams.md);
+//   EmitAudioEvent 0x0400 — tone triggers for the caller's zref::MixerTone.
+//
+// Law (in citation order):
+//   spec/qformats.md   §2 mat4fx x vec4 (s128 exact row sum, ONE rescale),
+//                      fx16/height16 conversions
+//                      §3 single-rounding law (fx_mul/fx_mad/fx_div_exact)
+//                      §8 screenXY S 12.8 + ±2048 guard band, edge functions
+//                         (s64 setup, E' = E0>>8, top-left bias), depth law
+//   spec/video_rules.md §1 modes + mode latch law (frame start only)
+//                      §3 framebuffer layout (2 slots, RGB565 LE, slot size
+//                         = largest canvas), §3.1 Duo canvas map
+//                      §4 displayed-CRC law (raster order, border rows)
+//   charter §8         pass order inside a frame (the renderer's render
+//                      order: prefill -> under-plane -> opaque terrain+forms
+//                      -> translucent sky -> particles -> resolve)
+//   charter §12        surface sheet: 64x64 texels, 8-bit tag + 8-bit
+//                      strength, per-patch, persistent; stamps deterministic
+//   spec/capture_format.md §3 sealed frame packet + fail-safe validation
+//   spec/form/field-ir.md §7.1 earth I/O record (x, z, age, phase, p0..p7 ->
+//                      height, velocity, material, nav_cost)
+//   spec/audio_rules.md §4 frozen tone table (the EmitAudioEvent consumer)
+//   spec/cartridge.md  §4 page families (terrain patch kind 4 shape below)
+//   spec/sky_and_beams.md — via zref_sky.hpp
+//
+// NO floats anywhere in the render path (plan W3.5; grep-audited by
+// tests/render). Every numeric helper lives in zref:: (qformats.md is the
+// single numeric law — nothing is re-derived here).
+
+#pragma once
+
+#include "zhao_abi.h"  // generated: opcodes, video_mode, record structs
+
+#include "zref/zref_audio.hpp"
+#include "zref/zref_fixp.hpp"
+#include "zref/zref_sat.hpp"
+#include "zref/zref_sky.hpp"
+
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+namespace zfield {
+struct Decoded;  // reference/include/zfield/zfield.hpp (called, never re-done)
+}
+
+namespace zref {
+namespace render {
+
+// ---------------------------------------------------------------- canvas ----
+
+// video_rules.md §3: two slots, each sized for the LARGEST canvas
+// (0x3C000 = 245,760 B) so a mode switch never moves a slot.
+inline constexpr uint32_t kSlotBytes = 0x3C000;
+
+/**
+ * Canvas bytes written per mode (video_rules.md §1/§3.1). Duo renders a
+ * 512x192x2 canvas (both views side by side, §3.1 source regions); its 48
+ * border rows are scanout-side and exist only in the displayed-stream CRC.
+ */
+inline constexpr uint32_t canvas_bytes(zhao_abi::video_mode m) {
+  switch (m) {
+    case zhao_abi::VIDEO_Z60:
+      return 184320u;  // 384x240x2
+    case zhao_abi::VIDEO_STORM:
+      return 153600u;  // 320x240x2
+    case zhao_abi::VIDEO_DUO:
+      return 196608u;  // 512x192x2 (§3.1)
+  }
+  return 0;
+}
+
+/** Raster dimensions of the canvas a mode renders into (§1/§3.1). */
+inline constexpr uint32_t canvas_width(zhao_abi::video_mode m) {
+  return m == zhao_abi::VIDEO_DUO ? 512u : (m == zhao_abi::VIDEO_Z60 ? 384u : 320u);
+}
+inline constexpr uint32_t canvas_height(zhao_abi::video_mode m) {
+  return m == zhao_abi::VIDEO_DUO ? 192u : 240u;  // Duo border is scanout-side
+}
+
+/** The 2-slot RGB565 canvas (video_rules.md §3). Row-major, LE halfwords. */
+struct RenderCanvas {
+  std::vector<uint8_t> slot[2];
+  RenderCanvas() {
+    slot[0].assign(kSlotBytes, 0);
+    slot[1].assign(kSlotBytes, 0);
+  }
+};
+
+// ------------------------------------------------------------- resources ----
+
+/**
+ * Authored heightfield patch — the terrain-patch page body (spec/cartridge.md
+ * §4 kind 4): header extents + width x height height16 samples. Heights are
+ * s16 S 1.7.8 raw (qformats §9); world positions come from the envelope.
+ */
+struct TerrainPatch {
+  uint16_t width = 0;
+  uint16_t height = 0;
+  int32_t env_x0 = 0, env_z0 = 0, env_x1 = 0, env_z1 = 0;  // rectfx raw fx16
+  std::vector<int16_t> heights;                            // ascending z-then-x (cartridge.md §4)
+};
+
+/** DrawProcedural material page (Phase-3 subset: a flat base colour). */
+struct Material {
+  uint8_t r = 128, g = 128, b = 128;
+};
+
+/**
+ * DrawForm marker page — the fixed 8x8 pattern (plan W3.5: "fixed 8x8
+ * pattern scaled, wall-clamped per the demo law lineage"). 64 texels of
+ * RGB888 plus a 1-bit colour key: mask 0 = transparent (pattern pixel is
+ * skipped), mask 1 = opaque.
+ */
+struct FormPattern {
+  uint8_t rgb[64 * 3] = {};
+  uint8_t mask[64] = {};
+};
+
+/** DrawForm transform resource: world placement + size (both fx16 raw). */
+struct FormTransform {
+  int32_t x = 0, y = 0, z = 0;  // world3 centre
+  int32_t size = 1 << 16;       // fx16 half-extent (world m or screen px)
+};
+
+/** DrawPopulation particle (pool SoA snapshot; qformats §10 spirit). */
+struct Particle {
+  int32_t x = 0, y = 0, z = 0;  // world3 fx16 raw
+  uint8_t size = 16;            // U 0.4.4 px (side length), qformats §10
+  uint8_t r = 255, g = 255, b = 255;
+};
+
+struct Population {
+  std::vector<Particle> parts;
+};
+
+/** Tone bank entry (cartridge.md §4 kind 5 record shape). */
+struct ToneBankEntry {
+  uint32_t event_id = 0;
+  uint16_t gain = 0;
+  int16_t pan = 0;
+  uint32_t sample_index = 0;  // 0..2 -> audio_rules.md §4 frozen tone table
+};
+
+/**
+ * Host-supplied resource tables (W3.6 ZEmu fills these from the .zpak pages;
+ * tests build them by hand). Lookup is by the FULL handle value the command
+ * carried (handle32 {index:24, generation:8}) — linear, deterministic.
+ * A handle that resolves to nothing is counted in RenderResult::resource_misses
+ * and the command is skipped: a missing asset never changes geometry that
+ * did draw (fail-safe, capture_format.md §3 spirit).
+ */
+struct RenderResources {
+  std::vector<std::pair<uint32_t, const zfield::Decoded*>> field_programs;
+  std::vector<std::pair<uint32_t, const TerrainPatch*>> terrain_patches;
+  std::vector<std::pair<uint32_t, Material>> materials;
+  std::vector<std::pair<uint32_t, FormPattern>> forms;
+  std::vector<std::pair<uint32_t, FormTransform>> transforms;
+  std::vector<std::pair<uint32_t, Population>> populations;
+  std::vector<std::pair<uint32_t, sky::SkySet>> sky_sets;
+  std::vector<std::pair<uint32_t, ToneBankEntry>> tones;
+
+  const zfield::Decoded* field_program(uint32_t h) const;
+  const TerrainPatch* terrain_patch(uint32_t h) const;
+  const Material* material(uint32_t h) const;
+  const FormPattern* form(uint32_t h) const;
+  const FormTransform* transform(uint32_t h) const;
+  const Population* population(uint32_t h) const;
+  const sky::SkySet* sky_set(uint32_t h) const;
+  const ToneBankEntry* tone(uint32_t h) const;
+};
+
+// ----------------------------------------------------------- surface sheet --
+
+/**
+ * The per-patch surface sheet (charter §12: 64x64 texels, 8-bit tag + 8-bit
+ * strength). Persistent across frames inside the renderer; stamps are
+ * deterministic inputs (charter §12 "stamps are deterministic commands").
+ */
+struct SurfaceSheet {
+  uint8_t tag[64 * 64] = {};
+  uint8_t strength[64 * 64] = {};
+};
+
+// ----------------------------------------------------------------- results --
+
+/** EmitAudioEvent -> tone trigger (spec/audio_rules.md lane; the caller —
+ *  ZEmu — feeds zref::MixerTone; fire-and-forget, FORM §15). */
+struct AudioEventTrigger {
+  uint32_t event_id = 0;
+  int16_t pan_fx = 0;
+  uint16_t gain = 0;
+  uint32_t sample_handle = 0;
+  uint32_t timestamp = 0;
+};
+
+/** TerrainField velocity output lane, recorded per evaluated column. */
+struct TerrainVelocitySample {
+  int32_t world_x = 0;   // fx16 raw
+  int32_t world_z = 0;   // fx16 raw
+  int32_t velocity = 0;  // fx16 raw (field-ir.md §7.1 earth out lane 2)
+};
+
+struct RenderResult {
+  uint8_t status = 0;  // zhao_abi_error: validation status of the packet
+  uint32_t frame_id = 0;
+  uint32_t canvas_crc32c = 0;     // CRC-32C over the canvas bytes written
+  uint32_t displayed_crc32c = 0;  // video_rules.md §4 displayed-stream law
+  uint32_t commands_executed = 0;
+  uint32_t resource_misses = 0;
+  std::vector<AudioEventTrigger> audio_events;
+  std::vector<TerrainVelocitySample> terrain_velocity;
+  SatLedger sat;  // the frame's overflow observability (qformats §5)
+};
+
+// -------------------------------------------------------------- renderer ----
+
+/**
+ * The Phase-3 software console renderer (plan W3.5). One instance owns the
+ * persistent per-patch surface sheets and the video-mode latch
+ * (video_rules.md §1.1: the mode written by SetPresentationContract becomes
+ * effective at the NEXT frame start — never mid-frame).
+ *
+ * Render order inside a frame is the charter §8 pass order; see
+ * reference/src/zrender/render_frame.cpp for the pass table.
+ */
+class SoftwareRenderer {
+ public:
+  SoftwareRenderer() = default;
+
+  /**
+   * Validate (fail-safe, capture_format.md §3.2) + render one sealed frame
+   * packet into canvas.slot[dst_slot]. On a validation error nothing is
+   * drawn and status carries the error code.
+   */
+  RenderResult render_frame(const uint8_t* pkt, size_t len, uint32_t dst_slot, RenderCanvas& canvas,
+                            const RenderResources& res);
+  RenderResult render_frame(const std::vector<uint8_t>& pkt, uint32_t dst_slot,
+                            RenderCanvas& canvas, const RenderResources& res);
+
+  /** Clear persistent state (sheets, latched mode -> VIDEO_Z60 reset, §1.1). */
+  void reset();
+
+  zhao_abi::video_mode latched_mode() const { return mode_latched_; }
+
+  /** Persistent scar state (charter §12) — test/inspection hook. */
+  const std::vector<std::pair<uint32_t, SurfaceSheet>>& sheets() const { return sheets_; }
+  SurfaceSheet& sheet_for(uint32_t patch_handle);  // creates on first use
+
+ private:
+  // video_rules.md §1.1: SetPresentationContract writes the register; the
+  // LATCH (used for the frame) happens at frame start — render_frame reads
+  // mode_latched_ first, then the walk may rewrite it for the next frame.
+  zhao_abi::video_mode mode_latched_ = zhao_abi::VIDEO_Z60;
+  std::vector<std::pair<uint32_t, SurfaceSheet>> sheets_;
+};
+
+// ------------------------------------------------------- resolve + CRC laws --
+
+/**
+ * Charter §8 resolve: high-quality ORDERED DITHER on the RGB565 resolve.
+ * 4x4 Bayer, thresholds (B+0.5)/16 — the fixgen family has NO dither table
+ * today (checked W3.5), so the matrix is defined here, once; when Phase-4
+ * freezes the RTL resolve matrix this is the single point to regenerate.
+ */
+void resolve_rgb565(const uint8_t* rgb888, uint32_t width, uint32_t height,
+                    uint8_t* out565);  // out must hold width*height*2 bytes
+
+/** CRC-32C over exactly the canvas bytes of a mode (zhao_crc32c, §3 layout). */
+uint32_t canvas_crc32c(zhao_abi::video_mode mode, const uint8_t* slot);
+
+/**
+ * The displayed-stream CRC (video_rules.md §4): CRC-32C over exactly
+ * 2 x active_width x 240 bytes in raster order, AFTER the repeat decision —
+ * for Duo this includes the 48 border rows (black, §3.1) around the two
+ * 256x192 view canvases. zref::framePixelCrc from W2.2 was checked for and
+ * does NOT exist; this implements that law (noted to W3.8).
+ */
+uint32_t displayed_crc32c(zhao_abi::video_mode mode, const uint8_t* slot);
+
+// ------------------------------------------------------------ audio helper --
+
+/** sample_index -> the frozen Phase-2 tone (audio_rules.md §4 table). */
+bool tone_id_for(uint32_t sample_index, ToneId* out);
+
+}  // namespace render
+}  // namespace zref

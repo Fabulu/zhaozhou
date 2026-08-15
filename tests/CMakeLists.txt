@@ -549,3 +549,45 @@ if(ZHAO_SBY_BIN)
   endforeach()
 endif()
 
+# ---- W3.5: render (plan W3.5/D7; library: reference/src/zrender + zsky) ----
+# Directed per-command tests with hand-computed fixed-point projections,
+# the naive-oracle heightfield differential, the sky emitter laws, the
+# committed 2-view golden canvas CRC, and the 600-frame runtime budget
+# (fast label: the whole set runs in seconds on the reference machine).
+add_executable(test_render_directed render/render_directed.cpp)
+target_link_libraries(test_render_directed PRIVATE zhao_zref)
+target_include_directories(test_render_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+add_test(NAME render_directed COMMAND test_render_directed)
+set_tests_properties(render_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_render_heightfield render/render_heightfield.cpp)
+target_link_libraries(test_render_heightfield PRIVATE zhao_zref)
+target_include_directories(test_render_heightfield PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render)
+add_test(NAME render_heightfield COMMAND test_render_heightfield)
+set_tests_properties(render_heightfield PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_render_sky render/render_sky.cpp)
+target_link_libraries(test_render_sky PRIVATE zhao_zref)
+target_include_directories(test_render_sky PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render)
+add_test(NAME render_sky COMMAND test_render_sky)
+set_tests_properties(render_sky PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_render_golden render/render_golden.cpp)
+target_link_libraries(test_render_golden PRIVATE zhao_zref)
+target_include_directories(test_render_golden PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)  # crater_ring wrapper
+add_test(NAME render_golden COMMAND test_render_golden)
+set_tests_properties(render_golden PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_render_budget render/render_budget.cpp)
+target_link_libraries(test_render_budget PRIVATE zhao_zref)
+target_include_directories(test_render_budget PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME render_budget COMMAND test_render_budget)
+set_tests_properties(render_budget PROPERTIES LABELS "fast;nightly")
