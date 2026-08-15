@@ -1,0 +1,13 @@
+// main.form — the importing side of the module pair with library.form.
+module main {
+  import library { SHARED_SCALE, tuning, scaled };
+  import library;
+
+  global tuned: fx16 = library.SHARED_SCALE;
+  global stepped: u32 = library._INTERNAL_STEP;
+
+  fn use_all(x: fx16) -> fx16 {
+    let t = tuning { gain = SHARED_SCALE };
+    return scaled(x) + t.gain;
+  }
+}

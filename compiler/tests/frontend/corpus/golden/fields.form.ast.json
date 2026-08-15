@@ -1,0 +1,2890 @@
+{
+ "decls": [
+  {
+   "fields": [
+    {
+     "name": "threshold",
+     "span": {
+      "end": 524,
+      "file": "fields.form",
+      "start": 515
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 530,
+       "file": "fields.form",
+       "start": 526
+      }
+     }
+    },
+    {
+     "name": "bias",
+     "span": {
+      "end": 536,
+      "file": "fields.form",
+      "start": 532
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 542,
+       "file": "fields.form",
+       "start": 538
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "shatter_params",
+   "span": {
+    "end": 545,
+    "file": "fields.form",
+    "start": 491
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "ramp",
+     "span": {
+      "end": 574,
+      "file": "fields.form",
+      "start": 570
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 580,
+       "file": "fields.form",
+       "start": 576
+      }
+     }
+    },
+    {
+     "name": "skew",
+     "span": {
+      "end": 586,
+      "file": "fields.form",
+      "start": 582
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 592,
+       "file": "fields.form",
+       "start": 588
+      }
+     }
+    },
+    {
+     "name": "lift",
+     "span": {
+      "end": 598,
+      "file": "fields.form",
+      "start": 594
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 604,
+       "file": "fields.form",
+       "start": 600
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "slope_params",
+   "span": {
+    "end": 607,
+    "file": "fields.form",
+    "start": 548
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "position",
+     "span": {
+      "end": 638,
+      "file": "fields.form",
+      "start": 630
+     },
+     "type": {
+      "kind": "named",
+      "name": "world3",
+      "span": {
+       "end": 646,
+       "file": "fields.form",
+       "start": 640
+      }
+     }
+    },
+    {
+     "name": "velocity",
+     "span": {
+      "end": 660,
+      "file": "fields.form",
+      "start": 652
+     },
+     "type": {
+      "kind": "named",
+      "name": "velocity3",
+      "span": {
+       "end": 671,
+       "file": "fields.form",
+       "start": 662
+      }
+     }
+    },
+    {
+     "name": "age",
+     "span": {
+      "end": 680,
+      "file": "fields.form",
+      "start": 677
+     },
+     "type": {
+      "kind": "named",
+      "name": "u32",
+      "span": {
+       "end": 685,
+       "file": "fields.form",
+       "start": 682
+      }
+     }
+    },
+    {
+     "name": "representation",
+     "span": {
+      "end": 705,
+      "file": "fields.form",
+      "start": 691
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 711,
+       "file": "fields.form",
+       "start": 707
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "shard",
+   "span": {
+    "end": 716,
+    "file": "fields.form",
+    "start": 611
+   }
+  },
+  {
+   "capacity": {
+    "kind": "int",
+    "span": {
+     "end": 740,
+     "file": "fields.form",
+     "start": 738
+    },
+    "value": "32"
+   },
+   "kind": "Pool",
+   "name": "motes",
+   "span": {
+    "end": 742,
+    "file": "fields.form",
+    "start": 720
+   },
+   "structName": "shard"
+  },
+  {
+   "body": [
+    {
+     "kind": "field_let",
+     "name": "d",
+     "span": {
+      "end": 913,
+      "file": "fields.form",
+      "start": 872
+     },
+     "value": {
+      "args": [
+       {
+        "field": "x",
+        "fieldSpan": {
+         "end": 893,
+         "file": "fields.form",
+         "start": 892
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 891,
+          "file": "fields.form",
+          "start": 885
+         }
+        },
+        "span": {
+         "end": 893,
+         "file": "fields.form",
+         "start": 885
+        }
+       },
+       {
+        "field": "z",
+        "fieldSpan": {
+         "end": 903,
+         "file": "fields.form",
+         "start": 902
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 901,
+          "file": "fields.form",
+          "start": 895
+         }
+        },
+        "span": {
+         "end": 903,
+         "file": "fields.form",
+         "start": 895
+        }
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 907,
+         "file": "fields.form",
+         "start": 905
+        },
+        "text": "0m"
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 911,
+         "file": "fields.form",
+         "start": 909
+        },
+        "text": "0m"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "dist",
+       "span": {
+        "end": 884,
+        "file": "fields.form",
+        "start": 880
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 912,
+       "file": "fields.form",
+       "start": 880
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "band",
+     "span": {
+      "end": 945,
+      "file": "fields.form",
+      "start": 918
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "d",
+        "span": {
+         "end": 935,
+         "file": "fields.form",
+         "start": 934
+        }
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "2",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 939,
+         "file": "fields.form",
+         "start": 937
+        },
+        "text": "2m"
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "6",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 943,
+         "file": "fields.form",
+         "start": 941
+        },
+        "text": "6m"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "ring",
+       "span": {
+        "end": 933,
+        "file": "fields.form",
+        "start": 929
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 944,
+       "file": "fields.form",
+       "start": 929
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "n",
+     "span": {
+      "end": 997,
+      "file": "fields.form",
+      "start": 950
+     },
+     "value": {
+      "args": [
+       {
+        "field": "x",
+        "fieldSpan": {
+         "end": 973,
+         "file": "fields.form",
+         "start": 972
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 971,
+          "file": "fields.form",
+          "start": 965
+         }
+        },
+        "span": {
+         "end": 973,
+         "file": "fields.form",
+         "start": 965
+        }
+       },
+       {
+        "field": "z",
+        "fieldSpan": {
+         "end": 983,
+         "file": "fields.form",
+         "start": 982
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 981,
+          "file": "fields.form",
+          "start": 975
+         }
+        },
+        "span": {
+         "end": 983,
+         "file": "fields.form",
+         "start": 975
+        }
+       },
+       {
+        "field": "age",
+        "fieldSpan": {
+         "end": 995,
+         "file": "fields.form",
+         "start": 992
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 991,
+          "file": "fields.form",
+          "start": 985
+         }
+        },
+        "span": {
+         "end": 995,
+         "file": "fields.form",
+         "start": 985
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "noise2",
+       "span": {
+        "end": 964,
+        "file": "fields.form",
+        "start": 958
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 996,
+       "file": "fields.form",
+       "start": 958
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "blended",
+     "span": {
+      "end": 1066,
+      "file": "fields.form",
+      "start": 1002
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "binary",
+       "l": {
+        "field": "ramp",
+        "fieldSpan": {
+         "end": 1027,
+         "file": "fields.form",
+         "start": 1023
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "params",
+         "span": {
+          "end": 1022,
+          "file": "fields.form",
+          "start": 1016
+         }
+        },
+        "span": {
+         "end": 1027,
+         "file": "fields.form",
+         "start": 1016
+        }
+       },
+       "op": "*",
+       "r": {
+        "args": [
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "0",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1043,
+           "file": "fields.form",
+           "start": 1041
+          },
+          "text": "0m"
+         },
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "1",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1047,
+           "file": "fields.form",
+           "start": 1045
+          },
+          "text": "1m"
+         },
+         {
+          "kind": "ident",
+          "name": "n",
+          "span": {
+           "end": 1050,
+           "file": "fields.form",
+           "start": 1049
+          }
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "smoothstep",
+         "span": {
+          "end": 1040,
+          "file": "fields.form",
+          "start": 1030
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1051,
+         "file": "fields.form",
+         "start": 1030
+        }
+       },
+       "span": {
+        "end": 1051,
+        "file": "fields.form",
+        "start": 1016
+       }
+      },
+      "op": "+",
+      "r": {
+       "field": "lift",
+       "fieldSpan": {
+        "end": 1065,
+        "file": "fields.form",
+        "start": 1061
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "params",
+        "span": {
+         "end": 1060,
+         "file": "fields.form",
+         "start": 1054
+        }
+       },
+       "span": {
+        "end": 1065,
+        "file": "fields.form",
+        "start": 1054
+       }
+      },
+      "span": {
+       "end": 1065,
+       "file": "fields.form",
+       "start": 1016
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "picked",
+     "span": {
+      "end": 1120,
+      "file": "fields.form",
+      "start": 1071
+     },
+     "value": {
+      "cond": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "band",
+        "span": {
+         "end": 1091,
+         "file": "fields.form",
+         "start": 1087
+        }
+       },
+       "op": ">",
+       "r": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1096,
+         "file": "fields.form",
+         "start": 1094
+        },
+        "text": "0m"
+       },
+       "span": {
+        "end": 1096,
+        "file": "fields.form",
+        "start": 1087
+       }
+      },
+      "else": {
+       "kind": "ident",
+       "name": "d",
+       "span": {
+        "end": 1117,
+        "file": "fields.form",
+        "start": 1116
+       }
+      },
+      "kind": "if_expr",
+      "span": {
+       "end": 1117,
+       "file": "fields.form",
+       "start": 1084
+      },
+      "then": {
+       "kind": "ident",
+       "name": "blended",
+       "span": {
+        "end": 1106,
+        "file": "fields.form",
+        "start": 1099
+       }
+      }
+     }
+    },
+    {
+     "fields": [
+      {
+       "name": "height",
+       "span": {
+        "end": 1154,
+        "file": "fields.form",
+        "start": 1148
+       },
+       "value": {
+        "kind": "ident",
+        "name": "picked",
+        "span": {
+         "end": 1163,
+         "file": "fields.form",
+         "start": 1157
+        }
+       }
+      },
+      {
+       "name": "velocity",
+       "span": {
+        "end": 1173,
+        "file": "fields.form",
+        "start": 1165
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1178,
+         "file": "fields.form",
+         "start": 1176
+        },
+        "text": "0m"
+       }
+      },
+      {
+       "name": "material",
+       "span": {
+        "end": 1188,
+        "file": "fields.form",
+        "start": 1180
+       },
+       "value": {
+        "intVal": "0",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1192,
+         "file": "fields.form",
+         "start": 1191
+        },
+        "text": "0"
+       }
+      },
+      {
+       "name": "nav_cost",
+       "span": {
+        "end": 1202,
+        "file": "fields.form",
+        "start": 1194
+       },
+       "value": {
+        "kind": "ident",
+        "name": "n",
+        "span": {
+         "end": 1206,
+         "file": "fields.form",
+         "start": 1205
+        }
+       }
+      }
+     ],
+     "kind": "field_return",
+     "record": "terrain_delta",
+     "span": {
+      "end": 1209,
+      "file": "fields.form",
+      "start": 1125
+     }
+    }
+   ],
+   "footprint": {
+    "args": [
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 832,
+       "file": "fields.form",
+       "start": 830
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 836,
+       "file": "fields.form",
+       "start": 834
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "16",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 841,
+       "file": "fields.form",
+       "start": 838
+      },
+      "text": "16m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "16",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 846,
+       "file": "fields.form",
+       "start": 843
+      },
+      "text": "16m"
+     }
+    ],
+    "kind": "rect",
+    "span": {
+     "end": 829,
+     "file": "fields.form",
+     "start": 825
+    }
+   },
+   "kind": "Field",
+   "maxOps": "32",
+   "name": "rising_ridge",
+   "paramsSpan": {
+    "end": 778,
+    "file": "fields.form",
+    "start": 772
+   },
+   "paramsStruct": "slope_params",
+   "profile": "earth",
+   "profileSpan": {
+    "end": 752,
+    "file": "fields.form",
+    "start": 747
+   },
+   "returns": "terrain_delta",
+   "span": {
+    "end": 1213,
+    "file": "fields.form",
+    "start": 746
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "field_let",
+     "name": "d",
+     "span": {
+      "end": 1369,
+      "file": "fields.form",
+      "start": 1328
+     },
+     "value": {
+      "args": [
+       {
+        "field": "x",
+        "fieldSpan": {
+         "end": 1349,
+         "file": "fields.form",
+         "start": 1348
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 1347,
+          "file": "fields.form",
+          "start": 1341
+         }
+        },
+        "span": {
+         "end": 1349,
+         "file": "fields.form",
+         "start": 1341
+        }
+       },
+       {
+        "field": "z",
+        "fieldSpan": {
+         "end": 1359,
+         "file": "fields.form",
+         "start": 1358
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "sample",
+         "span": {
+          "end": 1357,
+          "file": "fields.form",
+          "start": 1351
+         }
+        },
+        "span": {
+         "end": 1359,
+         "file": "fields.form",
+         "start": 1351
+        }
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "4",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1363,
+         "file": "fields.form",
+         "start": 1361
+        },
+        "text": "4m"
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "4",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1367,
+         "file": "fields.form",
+         "start": 1365
+        },
+        "text": "4m"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "dist",
+       "span": {
+        "end": 1340,
+        "file": "fields.form",
+        "start": 1336
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1368,
+       "file": "fields.form",
+       "start": 1336
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "dip",
+     "span": {
+      "end": 1414,
+      "file": "fields.form",
+      "start": 1374
+     },
+     "value": {
+      "cond": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "d",
+        "span": {
+         "end": 1388,
+         "file": "fields.form",
+         "start": 1387
+        }
+       },
+       "op": "<",
+       "r": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "4",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1393,
+         "file": "fields.form",
+         "start": 1391
+        },
+        "text": "4m"
+       },
+       "span": {
+        "end": 1393,
+        "file": "fields.form",
+        "start": 1387
+       }
+      },
+      "else": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "m"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1411,
+        "file": "fields.form",
+        "start": 1409
+       },
+       "text": "0m"
+      },
+      "kind": "if_expr",
+      "span": {
+       "end": 1411,
+       "file": "fields.form",
+       "start": 1384
+      },
+      "then": {
+       "kind": "unary",
+       "op": "-",
+       "operand": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "1",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1399,
+         "file": "fields.form",
+         "start": 1397
+        },
+        "text": "1m"
+       },
+       "span": {
+        "end": 1399,
+        "file": "fields.form",
+        "start": 1396
+       }
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "ring_band",
+     "span": {
+      "end": 1453,
+      "file": "fields.form",
+      "start": 1419
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "d",
+        "span": {
+         "end": 1441,
+         "file": "fields.form",
+         "start": 1440
+        }
+       },
+       {
+        "frac": {
+         "fracDigits": "5",
+         "intDigits": "3",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1447,
+         "file": "fields.form",
+         "start": 1443
+        },
+        "text": "3.5m"
+       },
+       {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "4",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1451,
+         "file": "fields.form",
+         "start": 1449
+        },
+        "text": "4m"
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "ring",
+       "span": {
+        "end": 1439,
+        "file": "fields.form",
+        "start": 1435
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1452,
+       "file": "fields.form",
+       "start": 1435
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "floor",
+     "span": {
+      "end": 1505,
+      "file": "fields.form",
+      "start": 1458
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "dip",
+        "span": {
+         "end": 1473,
+         "file": "fields.form",
+         "start": 1470
+        }
+       },
+       "op": "*",
+       "r": {
+        "kind": "binary",
+        "l": {
+         "frac": {
+          "fracDigits": "",
+          "intDigits": "1",
+          "suffix": "m"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1479,
+          "file": "fields.form",
+          "start": 1477
+         },
+         "text": "1m"
+        },
+        "op": "-",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "d",
+          "span": {
+           "end": 1483,
+           "file": "fields.form",
+           "start": 1482
+          }
+         },
+         "op": "*",
+         "r": {
+          "frac": {
+           "fracDigits": "25",
+           "intDigits": "0",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1491,
+           "file": "fields.form",
+           "start": 1486
+          },
+          "text": "0.25m"
+         },
+         "span": {
+          "end": 1491,
+          "file": "fields.form",
+          "start": 1482
+         }
+        },
+        "span": {
+         "end": 1491,
+         "file": "fields.form",
+         "start": 1477
+        }
+       },
+       "span": {
+        "end": 1491,
+        "file": "fields.form",
+        "start": 1470
+       }
+      },
+      "op": "+",
+      "r": {
+       "kind": "ident",
+       "name": "ring_band",
+       "span": {
+        "end": 1504,
+        "file": "fields.form",
+        "start": 1495
+       }
+      },
+      "span": {
+       "end": 1504,
+       "file": "fields.form",
+       "start": 1470
+      }
+     }
+    },
+    {
+     "fields": [
+      {
+       "name": "height",
+       "span": {
+        "end": 1539,
+        "file": "fields.form",
+        "start": 1533
+       },
+       "value": {
+        "kind": "ident",
+        "name": "floor",
+        "span": {
+         "end": 1547,
+         "file": "fields.form",
+         "start": 1542
+        }
+       }
+      },
+      {
+       "name": "velocity",
+       "span": {
+        "end": 1557,
+        "file": "fields.form",
+        "start": 1549
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1562,
+         "file": "fields.form",
+         "start": 1560
+        },
+        "text": "0m"
+       }
+      },
+      {
+       "name": "material",
+       "span": {
+        "end": 1572,
+        "file": "fields.form",
+        "start": 1564
+       },
+       "value": {
+        "intVal": "1",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1576,
+         "file": "fields.form",
+         "start": 1575
+        },
+        "text": "1"
+       }
+      },
+      {
+       "name": "nav_cost",
+       "span": {
+        "end": 1586,
+        "file": "fields.form",
+        "start": 1578
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "1",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1591,
+         "file": "fields.form",
+         "start": 1589
+        },
+        "text": "1m"
+       }
+      }
+     ],
+     "kind": "field_return",
+     "record": "terrain_delta",
+     "span": {
+      "end": 1594,
+      "file": "fields.form",
+      "start": 1510
+     }
+    }
+   ],
+   "footprint": {
+    "args": [
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 1286,
+       "file": "fields.form",
+       "start": 1284
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "0",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 1290,
+       "file": "fields.form",
+       "start": 1288
+      },
+      "text": "0m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "8",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 1294,
+       "file": "fields.form",
+       "start": 1292
+      },
+      "text": "8m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "8",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 1298,
+       "file": "fields.form",
+       "start": 1296
+      },
+      "text": "8m"
+     },
+     {
+      "frac": {
+       "fracDigits": "",
+       "intDigits": "4",
+       "suffix": "m"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 1302,
+       "file": "fields.form",
+       "start": 1300
+      },
+      "text": "4m"
+     }
+    ],
+    "kind": "capsule",
+    "span": {
+     "end": 1283,
+     "file": "fields.form",
+     "start": 1276
+    }
+   },
+   "kind": "Field",
+   "maxOps": "32",
+   "name": "crater_break",
+   "paramsSpan": null,
+   "paramsStruct": null,
+   "profile": "earth",
+   "profileSpan": {
+    "end": 1223,
+    "file": "fields.form",
+    "start": 1218
+   },
+   "returns": "terrain_delta",
+   "span": {
+    "end": 1598,
+    "file": "fields.form",
+    "start": 1217
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "field_let",
+     "name": "len",
+     "span": {
+      "end": 1740,
+      "file": "fields.form",
+      "start": 1710
+     },
+     "value": {
+      "args": [
+       {
+        "field": "vx",
+        "fieldSpan": {
+         "end": 1732,
+         "file": "fields.form",
+         "start": 1730
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 1729,
+          "file": "fields.form",
+          "start": 1728
+         }
+        },
+        "span": {
+         "end": 1732,
+         "file": "fields.form",
+         "start": 1728
+        }
+       },
+       {
+        "field": "vz",
+        "fieldSpan": {
+         "end": 1738,
+         "file": "fields.form",
+         "start": 1736
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 1735,
+          "file": "fields.form",
+          "start": 1734
+         }
+        },
+        "span": {
+         "end": 1738,
+         "file": "fields.form",
+         "start": 1734
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "length2",
+       "span": {
+        "end": 1727,
+        "file": "fields.form",
+        "start": 1720
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1739,
+       "file": "fields.form",
+       "start": 1720
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "inv",
+     "span": {
+      "end": 1774,
+      "file": "fields.form",
+      "start": 1745
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "binary",
+        "l": {
+         "kind": "ident",
+         "name": "len",
+         "span": {
+          "end": 1762,
+          "file": "fields.form",
+          "start": 1759
+         }
+        },
+        "op": "+",
+        "r": {
+         "frac": {
+          "fracDigits": "0625",
+          "intDigits": "0",
+          "suffix": "m"
+         },
+         "kind": "literal",
+         "lit": "frac",
+         "span": {
+          "end": 1772,
+          "file": "fields.form",
+          "start": 1765
+         },
+         "text": "0.0625m"
+        },
+        "span": {
+         "end": 1772,
+         "file": "fields.form",
+         "start": 1759
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "rcp",
+       "span": {
+        "end": 1758,
+        "file": "fields.form",
+        "start": 1755
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1773,
+       "file": "fields.form",
+       "start": 1755
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "nx",
+     "span": {
+      "end": 1799,
+      "file": "fields.form",
+      "start": 1779
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "field": "vx",
+       "fieldSpan": {
+        "end": 1792,
+        "file": "fields.form",
+        "start": 1790
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "p",
+        "span": {
+         "end": 1789,
+         "file": "fields.form",
+         "start": 1788
+        }
+       },
+       "span": {
+        "end": 1792,
+        "file": "fields.form",
+        "start": 1788
+       }
+      },
+      "op": "*",
+      "r": {
+       "kind": "ident",
+       "name": "inv",
+       "span": {
+        "end": 1798,
+        "file": "fields.form",
+        "start": 1795
+       }
+      },
+      "span": {
+       "end": 1798,
+       "file": "fields.form",
+       "start": 1788
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "nz",
+     "span": {
+      "end": 1824,
+      "file": "fields.form",
+      "start": 1804
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "field": "vz",
+       "fieldSpan": {
+        "end": 1817,
+        "file": "fields.form",
+        "start": 1815
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "p",
+        "span": {
+         "end": 1814,
+         "file": "fields.form",
+         "start": 1813
+        }
+       },
+       "span": {
+        "end": 1817,
+        "file": "fields.form",
+        "start": 1813
+       }
+      },
+      "op": "*",
+      "r": {
+       "kind": "ident",
+       "name": "inv",
+       "span": {
+        "end": 1823,
+        "file": "fields.form",
+        "start": 1820
+       }
+      },
+      "span": {
+       "end": 1823,
+       "file": "fields.form",
+       "start": 1813
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "spin",
+     "span": {
+      "end": 1886,
+      "file": "fields.form",
+      "start": 1829
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "swing_table",
+        "span": {
+         "end": 1858,
+         "file": "fields.form",
+         "start": 1847
+        }
+       },
+       {
+        "args": [
+         {
+          "field": "x",
+          "fieldSpan": {
+           "end": 1870,
+           "file": "fields.form",
+           "start": 1869
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 1868,
+            "file": "fields.form",
+            "start": 1867
+           }
+          },
+          "span": {
+           "end": 1870,
+           "file": "fields.form",
+           "start": 1867
+          }
+         },
+         {
+          "field": "z",
+          "fieldSpan": {
+           "end": 1875,
+           "file": "fields.form",
+           "start": 1874
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 1873,
+            "file": "fields.form",
+            "start": 1872
+           }
+          },
+          "span": {
+           "end": 1875,
+           "file": "fields.form",
+           "start": 1872
+          }
+         },
+         {
+          "field": "seed",
+          "fieldSpan": {
+           "end": 1883,
+           "file": "fields.form",
+           "start": 1879
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 1878,
+            "file": "fields.form",
+            "start": 1877
+           }
+          },
+          "span": {
+           "end": 1883,
+           "file": "fields.form",
+           "start": 1877
+          }
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "noise2",
+         "span": {
+          "end": 1866,
+          "file": "fields.form",
+          "start": 1860
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1884,
+         "file": "fields.form",
+         "start": 1860
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "spline",
+       "span": {
+        "end": 1846,
+        "file": "fields.form",
+        "start": 1840
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1885,
+       "file": "fields.form",
+       "start": 1840
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "damp",
+     "span": {
+      "end": 1927,
+      "file": "fields.form",
+      "start": 1891
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "damp_table",
+        "span": {
+         "end": 1919,
+         "file": "fields.form",
+         "start": 1909
+        }
+       },
+       {
+        "field": "dt",
+        "fieldSpan": {
+         "end": 1925,
+         "file": "fields.form",
+         "start": 1923
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 1922,
+          "file": "fields.form",
+          "start": 1921
+         }
+        },
+        "span": {
+         "end": 1925,
+         "file": "fields.form",
+         "start": 1921
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "dcurve",
+       "span": {
+        "end": 1908,
+        "file": "fields.form",
+        "start": 1902
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1926,
+       "file": "fields.form",
+       "start": 1902
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "vx",
+     "span": {
+      "end": 1977,
+      "file": "fields.form",
+      "start": 1932
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "nx",
+        "span": {
+         "end": 1943,
+         "file": "fields.form",
+         "start": 1941
+        }
+       },
+       "op": "*",
+       "r": {
+        "field": "threshold",
+        "fieldSpan": {
+         "end": 1962,
+         "file": "fields.form",
+         "start": 1953
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "params",
+         "span": {
+          "end": 1952,
+          "file": "fields.form",
+          "start": 1946
+         }
+        },
+        "span": {
+         "end": 1962,
+         "file": "fields.form",
+         "start": 1946
+        }
+       },
+       "span": {
+        "end": 1962,
+        "file": "fields.form",
+        "start": 1941
+       }
+      },
+      "op": "+",
+      "r": {
+       "kind": "binary",
+       "l": {
+        "kind": "ident",
+        "name": "spin",
+        "span": {
+         "end": 1969,
+         "file": "fields.form",
+         "start": 1965
+        }
+       },
+       "op": "*",
+       "r": {
+        "frac": {
+         "fracDigits": "5",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1976,
+         "file": "fields.form",
+         "start": 1972
+        },
+        "text": "0.5m"
+       },
+       "span": {
+        "end": 1976,
+        "file": "fields.form",
+        "start": 1965
+       }
+      },
+      "span": {
+       "end": 1976,
+       "file": "fields.form",
+       "start": 1941
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "vz",
+     "span": {
+      "end": 2013,
+      "file": "fields.form",
+      "start": 1982
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "ident",
+       "name": "nz",
+       "span": {
+        "end": 1993,
+        "file": "fields.form",
+        "start": 1991
+       }
+      },
+      "op": "*",
+      "r": {
+       "field": "threshold",
+       "fieldSpan": {
+        "end": 2012,
+        "file": "fields.form",
+        "start": 2003
+       },
+       "kind": "member",
+       "obj": {
+        "kind": "ident",
+        "name": "params",
+        "span": {
+         "end": 2002,
+         "file": "fields.form",
+         "start": 1996
+        }
+       },
+       "span": {
+        "end": 2012,
+        "file": "fields.form",
+        "start": 1996
+       }
+      },
+      "span": {
+       "end": 2012,
+       "file": "fields.form",
+       "start": 1991
+      }
+     }
+    },
+    {
+     "fields": [
+      {
+       "name": "x",
+       "span": {
+        "end": 2046,
+        "file": "fields.form",
+        "start": 2045
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "field": "x",
+         "fieldSpan": {
+          "end": 2052,
+          "file": "fields.form",
+          "start": 2051
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "p",
+          "span": {
+           "end": 2050,
+           "file": "fields.form",
+           "start": 2049
+          }
+         },
+         "span": {
+          "end": 2052,
+          "file": "fields.form",
+          "start": 2049
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "vx",
+          "span": {
+           "end": 2057,
+           "file": "fields.form",
+           "start": 2055
+          }
+         },
+         "op": "*",
+         "r": {
+          "kind": "ident",
+          "name": "damp",
+          "span": {
+           "end": 2064,
+           "file": "fields.form",
+           "start": 2060
+          }
+         },
+         "span": {
+          "end": 2064,
+          "file": "fields.form",
+          "start": 2055
+         }
+        },
+        "span": {
+         "end": 2064,
+         "file": "fields.form",
+         "start": 2049
+        }
+       }
+      },
+      {
+       "name": "y",
+       "span": {
+        "end": 2073,
+        "file": "fields.form",
+        "start": 2072
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "field": "y",
+         "fieldSpan": {
+          "end": 2079,
+          "file": "fields.form",
+          "start": 2078
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "p",
+          "span": {
+           "end": 2077,
+           "file": "fields.form",
+           "start": 2076
+          }
+         },
+         "span": {
+          "end": 2079,
+          "file": "fields.form",
+          "start": 2076
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "ident",
+         "name": "damp",
+         "span": {
+          "end": 2086,
+          "file": "fields.form",
+          "start": 2082
+         }
+        },
+        "span": {
+         "end": 2086,
+         "file": "fields.form",
+         "start": 2076
+        }
+       }
+      },
+      {
+       "name": "z",
+       "span": {
+        "end": 2095,
+        "file": "fields.form",
+        "start": 2094
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "field": "z",
+         "fieldSpan": {
+          "end": 2101,
+          "file": "fields.form",
+          "start": 2100
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "p",
+          "span": {
+           "end": 2099,
+           "file": "fields.form",
+           "start": 2098
+          }
+         },
+         "span": {
+          "end": 2101,
+          "file": "fields.form",
+          "start": 2098
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "vz",
+          "span": {
+           "end": 2106,
+           "file": "fields.form",
+           "start": 2104
+          }
+         },
+         "op": "*",
+         "r": {
+          "kind": "ident",
+          "name": "damp",
+          "span": {
+           "end": 2113,
+           "file": "fields.form",
+           "start": 2109
+          }
+         },
+         "span": {
+          "end": 2113,
+          "file": "fields.form",
+          "start": 2104
+         }
+        },
+        "span": {
+         "end": 2113,
+         "file": "fields.form",
+         "start": 2098
+        }
+       }
+      },
+      {
+       "name": "vx",
+       "span": {
+        "end": 2123,
+        "file": "fields.form",
+        "start": 2121
+       },
+       "value": {
+        "kind": "ident",
+        "name": "vx",
+        "span": {
+         "end": 2128,
+         "file": "fields.form",
+         "start": 2126
+        }
+       }
+      },
+      {
+       "name": "vy",
+       "span": {
+        "end": 2138,
+        "file": "fields.form",
+        "start": 2136
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2143,
+         "file": "fields.form",
+         "start": 2141
+        },
+        "text": "0m"
+       }
+      },
+      {
+       "name": "vz",
+       "span": {
+        "end": 2153,
+        "file": "fields.form",
+        "start": 2151
+       },
+       "value": {
+        "kind": "ident",
+        "name": "vz",
+        "span": {
+         "end": 2158,
+         "file": "fields.form",
+         "start": 2156
+        }
+       }
+      },
+      {
+       "name": "attr0",
+       "span": {
+        "end": 2171,
+        "file": "fields.form",
+        "start": 2166
+       },
+       "value": {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "vz",
+          "span": {
+           "end": 2180,
+           "file": "fields.form",
+           "start": 2178
+          }
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "abs",
+         "span": {
+          "end": 2177,
+          "file": "fields.form",
+          "start": 2174
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 2181,
+         "file": "fields.form",
+         "start": 2174
+        }
+       }
+      }
+     ],
+     "kind": "field_return",
+     "record": "flow_update",
+     "span": {
+      "end": 2189,
+      "file": "fields.form",
+      "start": 2018
+     }
+    }
+   ],
+   "footprint": {
+    "kind": "none",
+    "span": {
+     "end": 1685,
+     "file": "fields.form",
+     "start": 1681
+    }
+   },
+   "kind": "Field",
+   "maxOps": "48",
+   "name": "shatter_storm",
+   "paramsSpan": {
+    "end": 1634,
+    "file": "fields.form",
+    "start": 1628
+   },
+   "paramsStruct": "shatter_params",
+   "profile": "flow",
+   "profileSpan": {
+    "end": 1607,
+    "file": "fields.form",
+    "start": 1603
+   },
+   "returns": "flow_update",
+   "span": {
+    "end": 2193,
+    "file": "fields.form",
+    "start": 1602
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "field_let",
+     "name": "a",
+     "span": {
+      "end": 2298,
+      "file": "fields.form",
+      "start": 2281
+     },
+     "value": {
+      "frac": {
+       "fracDigits": "25",
+       "intDigits": "0",
+       "suffix": "turn"
+      },
+      "kind": "literal",
+      "lit": "frac",
+      "span": {
+       "end": 2297,
+       "file": "fields.form",
+       "start": 2289
+      },
+      "text": "0.25turn"
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "rotor",
+     "span": {
+      "end": 2333,
+      "file": "fields.form",
+      "start": 2303
+     },
+     "value": {
+      "args": [
+       {
+        "field": "x",
+        "fieldSpan": {
+         "end": 2323,
+         "file": "fields.form",
+         "start": 2322
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 2321,
+          "file": "fields.form",
+          "start": 2320
+         }
+        },
+        "span": {
+         "end": 2323,
+         "file": "fields.form",
+         "start": 2320
+        }
+       },
+       {
+        "field": "z",
+        "fieldSpan": {
+         "end": 2328,
+         "file": "fields.form",
+         "start": 2327
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 2326,
+          "file": "fields.form",
+          "start": 2325
+         }
+        },
+        "span": {
+         "end": 2328,
+         "file": "fields.form",
+         "start": 2325
+        }
+       },
+       {
+        "kind": "ident",
+        "name": "a",
+        "span": {
+         "end": 2331,
+         "file": "fields.form",
+         "start": 2330
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "rot2",
+       "span": {
+        "end": 2319,
+        "file": "fields.form",
+        "start": 2315
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 2332,
+       "file": "fields.form",
+       "start": 2315
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "dirx",
+     "span": {
+      "end": 2356,
+      "file": "fields.form",
+      "start": 2338
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "a",
+        "span": {
+         "end": 2354,
+         "file": "fields.form",
+         "start": 2353
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "cos",
+       "span": {
+        "end": 2352,
+        "file": "fields.form",
+        "start": 2349
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 2355,
+       "file": "fields.form",
+       "start": 2349
+      }
+     }
+    },
+    {
+     "kind": "field_let",
+     "name": "dirz",
+     "span": {
+      "end": 2379,
+      "file": "fields.form",
+      "start": 2361
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "ident",
+        "name": "a",
+        "span": {
+         "end": 2377,
+         "file": "fields.form",
+         "start": 2376
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "sin",
+       "span": {
+        "end": 2375,
+        "file": "fields.form",
+        "start": 2372
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 2378,
+       "file": "fields.form",
+       "start": 2372
+      }
+     }
+    },
+    {
+     "fields": [
+      {
+       "name": "x",
+       "span": {
+        "end": 2412,
+        "file": "fields.form",
+        "start": 2411
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "field": "x",
+         "fieldSpan": {
+          "end": 2418,
+          "file": "fields.form",
+          "start": 2417
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "p",
+          "span": {
+           "end": 2416,
+           "file": "fields.form",
+           "start": 2415
+          }
+         },
+         "span": {
+          "end": 2418,
+          "file": "fields.form",
+          "start": 2415
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "dirx",
+          "span": {
+           "end": 2425,
+           "file": "fields.form",
+           "start": 2421
+          }
+         },
+         "op": "*",
+         "r": {
+          "field": "dt",
+          "fieldSpan": {
+           "end": 2432,
+           "file": "fields.form",
+           "start": 2430
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 2429,
+            "file": "fields.form",
+            "start": 2428
+           }
+          },
+          "span": {
+           "end": 2432,
+           "file": "fields.form",
+           "start": 2428
+          }
+         },
+         "span": {
+          "end": 2432,
+          "file": "fields.form",
+          "start": 2421
+         }
+        },
+        "span": {
+         "end": 2432,
+         "file": "fields.form",
+         "start": 2415
+        }
+       }
+      },
+      {
+       "name": "y",
+       "span": {
+        "end": 2441,
+        "file": "fields.form",
+        "start": 2440
+       },
+       "value": {
+        "field": "y",
+        "fieldSpan": {
+         "end": 2447,
+         "file": "fields.form",
+         "start": 2446
+        },
+        "kind": "member",
+        "obj": {
+         "kind": "ident",
+         "name": "p",
+         "span": {
+          "end": 2445,
+          "file": "fields.form",
+          "start": 2444
+         }
+        },
+        "span": {
+         "end": 2447,
+         "file": "fields.form",
+         "start": 2444
+        }
+       }
+      },
+      {
+       "name": "z",
+       "span": {
+        "end": 2456,
+        "file": "fields.form",
+        "start": 2455
+       },
+       "value": {
+        "kind": "binary",
+        "l": {
+         "field": "z",
+         "fieldSpan": {
+          "end": 2462,
+          "file": "fields.form",
+          "start": 2461
+         },
+         "kind": "member",
+         "obj": {
+          "kind": "ident",
+          "name": "p",
+          "span": {
+           "end": 2460,
+           "file": "fields.form",
+           "start": 2459
+          }
+         },
+         "span": {
+          "end": 2462,
+          "file": "fields.form",
+          "start": 2459
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "dirz",
+          "span": {
+           "end": 2469,
+           "file": "fields.form",
+           "start": 2465
+          }
+         },
+         "op": "*",
+         "r": {
+          "field": "dt",
+          "fieldSpan": {
+           "end": 2476,
+           "file": "fields.form",
+           "start": 2474
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 2473,
+            "file": "fields.form",
+            "start": 2472
+           }
+          },
+          "span": {
+           "end": 2476,
+           "file": "fields.form",
+           "start": 2472
+          }
+         },
+         "span": {
+          "end": 2476,
+          "file": "fields.form",
+          "start": 2465
+         }
+        },
+        "span": {
+         "end": 2476,
+         "file": "fields.form",
+         "start": 2459
+        }
+       }
+      },
+      {
+       "name": "vx",
+       "span": {
+        "end": 2486,
+        "file": "fields.form",
+        "start": 2484
+       },
+       "value": {
+        "kind": "ident",
+        "name": "dirx",
+        "span": {
+         "end": 2493,
+         "file": "fields.form",
+         "start": 2489
+        }
+       }
+      },
+      {
+       "name": "vy",
+       "span": {
+        "end": 2503,
+        "file": "fields.form",
+        "start": 2501
+       },
+       "value": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "0",
+         "suffix": "m"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 2508,
+         "file": "fields.form",
+         "start": 2506
+        },
+        "text": "0m"
+       }
+      },
+      {
+       "name": "vz",
+       "span": {
+        "end": 2518,
+        "file": "fields.form",
+        "start": 2516
+       },
+       "value": {
+        "kind": "ident",
+        "name": "dirz",
+        "span": {
+         "end": 2525,
+         "file": "fields.form",
+         "start": 2521
+        }
+       }
+      },
+      {
+       "name": "attr0",
+       "span": {
+        "end": 2538,
+        "file": "fields.form",
+        "start": 2533
+       },
+       "value": {
+        "args": [
+         {
+          "field": "x",
+          "fieldSpan": {
+           "end": 2552,
+           "file": "fields.form",
+           "start": 2551
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 2550,
+            "file": "fields.form",
+            "start": 2549
+           }
+          },
+          "span": {
+           "end": 2552,
+           "file": "fields.form",
+           "start": 2549
+          }
+         },
+         {
+          "field": "y",
+          "fieldSpan": {
+           "end": 2557,
+           "file": "fields.form",
+           "start": 2556
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 2555,
+            "file": "fields.form",
+            "start": 2554
+           }
+          },
+          "span": {
+           "end": 2557,
+           "file": "fields.form",
+           "start": 2554
+          }
+         },
+         {
+          "field": "z",
+          "fieldSpan": {
+           "end": 2562,
+           "file": "fields.form",
+           "start": 2561
+          },
+          "kind": "member",
+          "obj": {
+           "kind": "ident",
+           "name": "p",
+           "span": {
+            "end": 2560,
+            "file": "fields.form",
+            "start": 2559
+           }
+          },
+          "span": {
+           "end": 2562,
+           "file": "fields.form",
+           "start": 2559
+          }
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "length3",
+         "span": {
+          "end": 2548,
+          "file": "fields.form",
+          "start": 2541
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 2563,
+         "file": "fields.form",
+         "start": 2541
+        }
+       }
+      }
+     ],
+     "kind": "field_return",
+     "record": "flow_update",
+     "span": {
+      "end": 2571,
+      "file": "fields.form",
+      "start": 2384
+     }
+    }
+   ],
+   "footprint": {
+    "kind": "none",
+    "span": {
+     "end": 2256,
+     "file": "fields.form",
+     "start": 2252
+    }
+   },
+   "kind": "Field",
+   "maxOps": "48",
+   "name": "drift_motes",
+   "paramsSpan": null,
+   "paramsStruct": null,
+   "profile": "flow",
+   "profileSpan": {
+    "end": 2202,
+    "file": "fields.form",
+    "start": 2198
+   },
+   "returns": "flow_update",
+   "span": {
+    "end": 2575,
+    "file": "fields.form",
+    "start": 2197
+   }
+  }
+ ],
+ "imports": [
+  {
+   "kind": "Import",
+   "module": "declarations",
+   "names": [
+    "creature",
+    "creatures"
+   ],
+   "span": {
+    "end": 487,
+    "file": "fields.form",
+    "start": 443
+   }
+  }
+ ],
+ "kind": "Module",
+ "name": "fields",
+ "span": {
+  "end": 2578,
+  "file": "fields.form",
+  "start": 425
+ }
+}

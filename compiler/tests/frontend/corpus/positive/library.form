@@ -1,0 +1,13 @@
+// library.form + main.form — modules and imports (§4.1): whole-module import
+// (`import m;` -> qualified `m.name`), selective import (unqualified names),
+// underscore-private names used qualified only.
+module library {
+  const SHARED_SCALE: fx16 = 0.5m;
+  const _INTERNAL_STEP: u32 = 4;
+
+  struct tuning { gain: fx16; }
+
+  fn scaled(x: fx16) -> fx16 {
+    return x * SHARED_SCALE;
+  }
+}

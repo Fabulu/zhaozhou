@@ -1,0 +1,1473 @@
+{
+ "decls": [
+  {
+   "init": {
+    "intVal": "3",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 348,
+     "file": "declarations.form",
+     "start": 347
+    },
+    "text": "3"
+   },
+   "kind": "Const",
+   "name": "ISLAND_PATCH",
+   "span": {
+    "end": 349,
+    "file": "declarations.form",
+    "start": 321
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 344,
+     "file": "declarations.form",
+     "start": 341
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "512",
+    "kind": "literal",
+    "lit": "int",
+    "span": {
+     "end": 382,
+     "file": "declarations.form",
+     "start": 379
+    },
+    "text": "512"
+   },
+   "kind": "Const",
+   "name": "MAX_CREATURES",
+   "span": {
+    "end": 383,
+    "file": "declarations.form",
+    "start": 352
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 376,
+     "file": "declarations.form",
+     "start": 373
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "5",
+     "intDigits": "0",
+     "suffix": "m"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 409,
+     "file": "declarations.form",
+     "start": 405
+    },
+    "text": "0.5m"
+   },
+   "kind": "Const",
+   "name": "HALF",
+   "span": {
+    "end": 410,
+    "file": "declarations.form",
+    "start": 386
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 402,
+     "file": "declarations.form",
+     "start": 398
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "25",
+     "intDigits": "2",
+     "suffix": "w"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 437,
+     "file": "declarations.form",
+     "start": 432
+    },
+    "text": "2.25w"
+   },
+   "kind": "Const",
+   "name": "WIDE",
+   "span": {
+    "end": 438,
+    "file": "declarations.form",
+    "start": 413
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx24",
+    "span": {
+     "end": 429,
+     "file": "declarations.form",
+     "start": 425
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "25",
+     "intDigits": "0",
+     "suffix": "turn"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 479,
+     "file": "declarations.form",
+     "start": 471
+    },
+    "text": "0.25turn"
+   },
+   "kind": "Const",
+   "name": "QUARTER_TURN",
+   "span": {
+    "end": 480,
+    "file": "declarations.form",
+    "start": 441
+   },
+   "type": {
+    "kind": "named",
+    "name": "angle16",
+    "span": {
+     "end": 468,
+     "file": "declarations.form",
+     "start": 461
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "",
+     "intDigits": "90",
+     "suffix": "deg"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 517,
+     "file": "declarations.form",
+     "start": 512
+    },
+    "text": "90deg"
+   },
+   "kind": "Const",
+   "name": "RIGHT_ANGLE",
+   "span": {
+    "end": 518,
+    "file": "declarations.form",
+    "start": 483
+   },
+   "type": {
+    "kind": "named",
+    "name": "angle16",
+    "span": {
+     "end": 509,
+     "file": "declarations.form",
+     "start": 502
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "",
+     "intDigits": "80",
+     "suffix": "%"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 544,
+     "file": "declarations.form",
+     "start": 541
+    },
+    "text": "80%"
+   },
+   "kind": "Const",
+   "name": "LOUD",
+   "span": {
+    "end": 545,
+    "file": "declarations.form",
+    "start": 521
+   },
+   "type": {
+    "kind": "named",
+    "name": "unit8",
+    "span": {
+     "end": 538,
+     "file": "declarations.form",
+     "start": 533
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "120",
+    "kind": "literal",
+    "lit": "tick",
+    "span": {
+     "end": 576,
+     "file": "declarations.form",
+     "start": 572
+    },
+    "text": "120t"
+   },
+   "kind": "Const",
+   "name": "TONE_START",
+   "span": {
+    "end": 577,
+    "file": "declarations.form",
+    "start": 548
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 569,
+     "file": "declarations.form",
+     "start": 566
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "12595248",
+    "kind": "literal",
+    "lit": "colour",
+    "span": {
+     "end": 613,
+     "file": "declarations.form",
+     "start": 606
+    },
+    "text": "#C03030"
+   },
+   "kind": "Const",
+   "name": "SCAR_RED",
+   "span": {
+    "end": 614,
+    "file": "declarations.form",
+    "start": 580
+   },
+   "type": {
+    "kind": "named",
+    "name": "colour8",
+    "span": {
+     "end": 603,
+     "file": "declarations.form",
+     "start": 596
+    }
+   }
+  },
+  {
+   "init": {
+    "intVal": "2160078896",
+    "kind": "literal",
+    "lit": "colour",
+    "span": {
+     "end": 654,
+     "file": "declarations.form",
+     "start": 645
+    },
+    "text": "#80C03030"
+   },
+   "kind": "Const",
+   "name": "SCAR_ALPHA",
+   "span": {
+    "end": 655,
+    "file": "declarations.form",
+    "start": 617
+   },
+   "type": {
+    "kind": "named",
+    "name": "colour8",
+    "span": {
+     "end": 642,
+     "file": "declarations.form",
+     "start": 635
+    }
+   }
+  },
+  {
+   "init": {
+    "kind": "binary",
+    "l": {
+     "kind": "binary",
+     "l": {
+      "kind": "ident",
+      "name": "ISLAND_PATCH",
+      "span": {
+       "end": 692,
+       "file": "declarations.form",
+       "start": 680
+      }
+     },
+     "op": "+",
+     "r": {
+      "intVal": "1",
+      "kind": "literal",
+      "lit": "int",
+      "span": {
+       "end": 696,
+       "file": "declarations.form",
+       "start": 695
+      },
+      "text": "1"
+     },
+     "span": {
+      "end": 696,
+      "file": "declarations.form",
+      "start": 680
+     }
+    },
+    "op": "*",
+    "r": {
+     "intVal": "2",
+     "kind": "literal",
+     "lit": "int",
+     "span": {
+      "end": 701,
+      "file": "declarations.form",
+      "start": 700
+     },
+     "text": "2"
+    },
+    "span": {
+     "end": 701,
+     "file": "declarations.form",
+     "start": 680
+    }
+   },
+   "kind": "Const",
+   "name": "DERIVED",
+   "span": {
+    "end": 702,
+    "file": "declarations.form",
+    "start": 658
+   },
+   "type": {
+    "kind": "named",
+    "name": "u32",
+    "span": {
+     "end": 676,
+     "file": "declarations.form",
+     "start": 673
+    }
+   }
+  },
+  {
+   "kind": "Enum",
+   "members": [
+    {
+     "name": "raise",
+     "span": {
+      "end": 729,
+      "file": "declarations.form",
+      "start": 724
+     },
+     "value": null
+    },
+    {
+     "name": "wave",
+     "span": {
+      "end": 735,
+      "file": "declarations.form",
+      "start": 731
+     },
+     "value": null
+    },
+    {
+     "name": "break_rock",
+     "span": {
+      "end": 747,
+      "file": "declarations.form",
+      "start": 737
+     },
+     "value": "5"
+    },
+    {
+     "name": "shatter",
+     "span": {
+      "end": 760,
+      "file": "declarations.form",
+      "start": 753
+     },
+     "value": null
+    }
+   ],
+   "name": "spell_kind",
+   "span": {
+    "end": 762,
+    "file": "declarations.form",
+    "start": 706
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "origin",
+     "span": {
+      "end": 796,
+      "file": "declarations.form",
+      "start": 790
+     },
+     "type": {
+      "kind": "named",
+      "name": "world3",
+      "span": {
+       "end": 804,
+       "file": "declarations.form",
+       "start": 798
+      }
+     }
+    },
+    {
+     "name": "dir",
+     "span": {
+      "end": 813,
+      "file": "declarations.form",
+      "start": 810
+     },
+     "type": {
+      "kind": "named",
+      "name": "velocity3",
+      "span": {
+       "end": 824,
+       "file": "declarations.form",
+       "start": 815
+      }
+     }
+    },
+    {
+     "name": "tone",
+     "span": {
+      "end": 834,
+      "file": "declarations.form",
+      "start": 830
+     },
+     "type": {
+      "kind": "named",
+      "name": "colour8",
+      "span": {
+       "end": 843,
+       "file": "declarations.form",
+       "start": 836
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "vec_holder",
+   "span": {
+    "end": 848,
+    "file": "declarations.form",
+    "start": 766
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "position",
+     "span": {
+      "end": 882,
+      "file": "declarations.form",
+      "start": 874
+     },
+     "type": {
+      "kind": "named",
+      "name": "world3",
+      "span": {
+       "end": 890,
+       "file": "declarations.form",
+       "start": 884
+      }
+     }
+    },
+    {
+     "name": "velocity",
+     "span": {
+      "end": 904,
+      "file": "declarations.form",
+      "start": 896
+     },
+     "type": {
+      "kind": "named",
+      "name": "velocity3",
+      "span": {
+       "end": 915,
+       "file": "declarations.form",
+       "start": 906
+      }
+     }
+    },
+    {
+     "name": "age",
+     "span": {
+      "end": 924,
+      "file": "declarations.form",
+      "start": 921
+     },
+     "type": {
+      "kind": "named",
+      "name": "u32",
+      "span": {
+       "end": 929,
+       "file": "declarations.form",
+       "start": 926
+      }
+     }
+    },
+    {
+     "name": "kind",
+     "span": {
+      "end": 939,
+      "file": "declarations.form",
+      "start": 935
+     },
+     "type": {
+      "kind": "named",
+      "name": "spell_kind",
+      "span": {
+       "end": 951,
+       "file": "declarations.form",
+       "start": 941
+      }
+     }
+    },
+    {
+     "name": "hp",
+     "span": {
+      "end": 959,
+      "file": "declarations.form",
+      "start": 957
+     },
+     "type": {
+      "kind": "named",
+      "name": "unit8",
+      "span": {
+       "end": 966,
+       "file": "declarations.form",
+       "start": 961
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "creature",
+   "span": {
+    "end": 971,
+    "file": "declarations.form",
+    "start": 852
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "samples",
+     "span": {
+      "end": 1005,
+      "file": "declarations.form",
+      "start": 998
+     },
+     "type": {
+      "elem": {
+       "kind": "named",
+       "name": "fx16",
+       "span": {
+        "end": 1011,
+        "file": "declarations.form",
+        "start": 1007
+       }
+      },
+      "kind": "array",
+      "len": {
+       "kind": "int",
+       "value": "4"
+      },
+      "span": {
+       "end": 1011,
+       "file": "declarations.form",
+       "start": 1007
+      }
+     }
+    },
+    {
+     "name": "note",
+     "span": {
+      "end": 1024,
+      "file": "declarations.form",
+      "start": 1020
+     },
+     "type": {
+      "kind": "named",
+      "name": "spell_kind",
+      "span": {
+       "end": 1036,
+       "file": "declarations.form",
+       "start": 1026
+      }
+     }
+    },
+    {
+     "name": "holder",
+     "span": {
+      "end": 1048,
+      "file": "declarations.form",
+      "start": 1042
+     },
+     "type": {
+      "kind": "named",
+      "name": "vec_holder",
+      "span": {
+       "end": 1060,
+       "file": "declarations.form",
+       "start": 1050
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "trace_log",
+   "span": {
+    "end": 1065,
+    "file": "declarations.form",
+    "start": 975
+   }
+  },
+  {
+   "fields": [
+    {
+     "name": "amplitude",
+     "span": {
+      "end": 1100,
+      "file": "declarations.form",
+      "start": 1091
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1106,
+       "file": "declarations.form",
+       "start": 1102
+      }
+     }
+    },
+    {
+     "name": "width",
+     "span": {
+      "end": 1113,
+      "file": "declarations.form",
+      "start": 1108
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1119,
+       "file": "declarations.form",
+       "start": 1115
+      }
+     }
+    }
+   ],
+   "kind": "Struct",
+   "name": "ridge_params",
+   "span": {
+    "end": 1122,
+    "file": "declarations.form",
+    "start": 1069
+   }
+  },
+  {
+   "capacity": {
+    "kind": "name",
+    "name": "MAX_CREATURES",
+    "span": {
+     "end": 1164,
+     "file": "declarations.form",
+     "start": 1151
+    }
+   },
+   "kind": "Pool",
+   "name": "creatures",
+   "span": {
+    "end": 1166,
+    "file": "declarations.form",
+    "start": 1126
+   },
+   "structName": "creature"
+  },
+  {
+   "capacity": {
+    "kind": "int",
+    "span": {
+     "end": 1196,
+     "file": "declarations.form",
+     "start": 1194
+    },
+    "value": "16"
+   },
+   "kind": "Pool",
+   "name": "particles",
+   "span": {
+    "end": 1198,
+    "file": "declarations.form",
+    "start": 1169
+   },
+   "structName": "creature"
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "25",
+     "intDigits": "2",
+     "suffix": "w"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 1230,
+     "file": "declarations.form",
+     "start": 1225
+    },
+    "text": "2.25w"
+   },
+   "kind": "Global",
+   "name": "gravity",
+   "span": {
+    "end": 1231,
+    "file": "declarations.form",
+    "start": 1202
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx24",
+    "span": {
+     "end": 1222,
+     "file": "declarations.form",
+     "start": 1218
+    }
+   }
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 1274,
+       "file": "declarations.form",
+       "start": 1273
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1279,
+        "file": "declarations.form",
+        "start": 1277
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 1282,
+       "file": "declarations.form",
+       "start": 1281
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "30",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1288,
+        "file": "declarations.form",
+        "start": 1285
+       },
+       "text": "30w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 1291,
+       "file": "declarations.form",
+       "start": 1290
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1296,
+        "file": "declarations.form",
+        "start": 1294
+       },
+       "text": "0w"
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 1298,
+     "file": "declarations.form",
+     "start": 1264
+    },
+    "typeName": "world3"
+   },
+   "kind": "Global",
+   "name": "spawn_origin",
+   "span": {
+    "end": 1299,
+    "file": "declarations.form",
+    "start": 1234
+   },
+   "type": {
+    "kind": "named",
+    "name": "world3",
+    "span": {
+     "end": 1261,
+     "file": "declarations.form",
+     "start": 1255
+    }
+   }
+  },
+  {
+   "init": {
+    "fields": [
+     {
+      "name": "x",
+      "span": {
+       "end": 1341,
+       "file": "declarations.form",
+       "start": 1340
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1346,
+        "file": "declarations.form",
+        "start": 1344
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "y",
+      "span": {
+       "end": 1349,
+       "file": "declarations.form",
+       "start": 1348
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "0",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1354,
+        "file": "declarations.form",
+        "start": 1352
+       },
+       "text": "0w"
+      }
+     },
+     {
+      "name": "z",
+      "span": {
+       "end": 1357,
+       "file": "declarations.form",
+       "start": 1356
+      },
+      "value": {
+       "frac": {
+        "fracDigits": "",
+        "intDigits": "1",
+        "suffix": "w"
+       },
+       "kind": "literal",
+       "lit": "frac",
+       "span": {
+        "end": 1362,
+        "file": "declarations.form",
+        "start": 1360
+       },
+       "text": "1w"
+      }
+     }
+    ],
+    "kind": "record",
+    "span": {
+     "end": 1364,
+     "file": "declarations.form",
+     "start": 1328
+    },
+    "typeName": "velocity3"
+   },
+   "kind": "Global",
+   "name": "drift",
+   "span": {
+    "end": 1365,
+    "file": "declarations.form",
+    "start": 1302
+   },
+   "type": {
+    "kind": "named",
+    "name": "velocity3",
+    "span": {
+     "end": 1325,
+     "file": "declarations.form",
+     "start": 1316
+    }
+   }
+  },
+  {
+   "init": {
+    "frac": {
+     "fracDigits": "",
+     "intDigits": "0",
+     "suffix": "m"
+    },
+    "kind": "literal",
+    "lit": "frac",
+    "span": {
+     "end": 1397,
+     "file": "declarations.form",
+     "start": 1395
+    },
+    "text": "0m"
+   },
+   "kind": "Global",
+   "name": "peak_marker",
+   "span": {
+    "end": 1398,
+    "file": "declarations.form",
+    "start": 1368
+   },
+   "type": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 1392,
+     "file": "declarations.form",
+     "start": 1388
+    }
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 1478,
+      "file": "declarations.form",
+      "start": 1444
+     },
+     "value": {
+      "args": [
+       {
+        "kind": "binary",
+        "l": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "x",
+          "span": {
+           "end": 1464,
+           "file": "declarations.form",
+           "start": 1463
+          }
+         },
+         "op": "*",
+         "r": {
+          "kind": "ident",
+          "name": "x",
+          "span": {
+           "end": 1468,
+           "file": "declarations.form",
+           "start": 1467
+          }
+         },
+         "span": {
+          "end": 1468,
+          "file": "declarations.form",
+          "start": 1463
+         }
+        },
+        "op": "+",
+        "r": {
+         "kind": "binary",
+         "l": {
+          "kind": "ident",
+          "name": "z",
+          "span": {
+           "end": 1472,
+           "file": "declarations.form",
+           "start": 1471
+          }
+         },
+         "op": "*",
+         "r": {
+          "kind": "ident",
+          "name": "z",
+          "span": {
+           "end": 1476,
+           "file": "declarations.form",
+           "start": 1475
+          }
+         },
+         "span": {
+          "end": 1476,
+          "file": "declarations.form",
+          "start": 1471
+         }
+        },
+        "span": {
+         "end": 1476,
+         "file": "declarations.form",
+         "start": 1463
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "sqrt_approx",
+       "span": {
+        "end": 1462,
+        "file": "declarations.form",
+        "start": 1451
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1477,
+       "file": "declarations.form",
+       "start": 1451
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "speed2",
+   "params": [
+    {
+     "name": "x",
+     "span": {
+      "end": 1413,
+      "file": "declarations.form",
+      "start": 1412
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1419,
+       "file": "declarations.form",
+       "start": 1415
+      }
+     }
+    },
+    {
+     "name": "z",
+     "span": {
+      "end": 1422,
+      "file": "declarations.form",
+      "start": 1421
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1428,
+       "file": "declarations.form",
+       "start": 1424
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 1437,
+     "file": "declarations.form",
+     "start": 1433
+    }
+   },
+   "span": {
+    "end": 1482,
+    "file": "declarations.form",
+    "start": 1402
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 1561,
+      "file": "declarations.form",
+      "start": 1527
+     },
+     "value": {
+      "args": [
+       {
+        "args": [
+         {
+          "kind": "ident",
+          "name": "x",
+          "span": {
+           "end": 1550,
+           "file": "declarations.form",
+           "start": 1549
+          }
+         },
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "0",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1554,
+           "file": "declarations.form",
+           "start": 1552
+          },
+          "text": "0m"
+         },
+         {
+          "frac": {
+           "fracDigits": "",
+           "intDigits": "1",
+           "suffix": "m"
+          },
+          "kind": "literal",
+          "lit": "frac",
+          "span": {
+           "end": 1558,
+           "file": "declarations.form",
+           "start": 1556
+          },
+          "text": "1m"
+         }
+        ],
+        "callee": {
+         "kind": "ident",
+         "name": "clamp",
+         "span": {
+          "end": 1548,
+          "file": "declarations.form",
+          "start": 1543
+         }
+        },
+        "kind": "call",
+        "span": {
+         "end": 1559,
+         "file": "declarations.form",
+         "start": 1543
+        }
+       }
+      ],
+      "callee": {
+       "kind": "ident",
+       "name": "to_unit8",
+       "span": {
+        "end": 1542,
+        "file": "declarations.form",
+        "start": 1534
+       }
+      },
+      "kind": "call",
+      "span": {
+       "end": 1560,
+       "file": "declarations.form",
+       "start": 1534
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "clamp_to_unit",
+   "params": [
+    {
+     "name": "x",
+     "span": {
+      "end": 1504,
+      "file": "declarations.form",
+      "start": 1503
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1510,
+       "file": "declarations.form",
+       "start": 1506
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "unit8",
+    "span": {
+     "end": 1520,
+     "file": "declarations.form",
+     "start": 1515
+    }
+   },
+   "span": {
+    "end": 1565,
+    "file": "declarations.form",
+    "start": 1486
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 1657,
+      "file": "declarations.form",
+      "start": 1623
+     },
+     "value": {
+      "cond": {
+       "kind": "ident",
+       "name": "take_b",
+       "span": {
+        "end": 1639,
+        "file": "declarations.form",
+        "start": 1633
+       }
+      },
+      "else": {
+       "kind": "ident",
+       "name": "a",
+       "span": {
+        "end": 1654,
+        "file": "declarations.form",
+        "start": 1653
+       }
+      },
+      "kind": "if_expr",
+      "span": {
+       "end": 1654,
+       "file": "declarations.form",
+       "start": 1630
+      },
+      "then": {
+       "kind": "ident",
+       "name": "b",
+       "span": {
+        "end": 1643,
+        "file": "declarations.form",
+        "start": 1642
+       }
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "pick",
+   "params": [
+    {
+     "name": "a",
+     "span": {
+      "end": 1578,
+      "file": "declarations.form",
+      "start": 1577
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1584,
+       "file": "declarations.form",
+       "start": 1580
+      }
+     }
+    },
+    {
+     "name": "b",
+     "span": {
+      "end": 1587,
+      "file": "declarations.form",
+      "start": 1586
+     },
+     "type": {
+      "kind": "named",
+      "name": "fx16",
+      "span": {
+       "end": 1593,
+       "file": "declarations.form",
+       "start": 1589
+      }
+     }
+    },
+    {
+     "name": "take_b",
+     "span": {
+      "end": 1601,
+      "file": "declarations.form",
+      "start": 1595
+     },
+     "type": {
+      "kind": "named",
+      "name": "bool",
+      "span": {
+       "end": 1607,
+       "file": "declarations.form",
+       "start": 1603
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "fx16",
+    "span": {
+     "end": 1616,
+     "file": "declarations.form",
+     "start": 1612
+    }
+   },
+   "span": {
+    "end": 1661,
+    "file": "declarations.form",
+    "start": 1569
+   }
+  },
+  {
+   "body": [
+    {
+     "kind": "return",
+     "span": {
+      "end": 1732,
+      "file": "declarations.form",
+      "start": 1708
+     },
+     "value": {
+      "kind": "binary",
+      "l": {
+       "kind": "ident",
+       "name": "a",
+       "span": {
+        "end": 1716,
+        "file": "declarations.form",
+        "start": 1715
+       }
+      },
+      "op": "+",
+      "r": {
+       "kind": "ident",
+       "name": "QUARTER_TURN",
+       "span": {
+        "end": 1731,
+        "file": "declarations.form",
+        "start": 1719
+       }
+      },
+      "span": {
+       "end": 1731,
+       "file": "declarations.form",
+       "start": 1715
+      }
+     }
+    }
+   ],
+   "kind": "Fn",
+   "name": "angle_step",
+   "params": [
+    {
+     "name": "a",
+     "span": {
+      "end": 1680,
+      "file": "declarations.form",
+      "start": 1679
+     },
+     "type": {
+      "kind": "named",
+      "name": "angle16",
+      "span": {
+       "end": 1689,
+       "file": "declarations.form",
+       "start": 1682
+      }
+     }
+    }
+   ],
+   "ret": {
+    "kind": "named",
+    "name": "angle16",
+    "span": {
+     "end": 1701,
+     "file": "declarations.form",
+     "start": 1694
+    }
+   },
+   "span": {
+    "end": 1736,
+    "file": "declarations.form",
+    "start": 1665
+   }
+  }
+ ],
+ "imports": [],
+ "kind": "Module",
+ "name": "declarations",
+ "span": {
+  "end": 1739,
+  "file": "declarations.form",
+  "start": 297
+ }
+}

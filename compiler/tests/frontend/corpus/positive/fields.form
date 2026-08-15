@@ -1,0 +1,86 @@
+// fields.form — the field dialect (§6): both admitted profiles, every
+// footprint form, params lane packing, the §6.3 expression surface
+// (arithmetic incl. MAD fusion, min/max/abs/clamp, if select-expression,
+// comparisons feeding SELECT, dot2/dot3, length2/3, dist, normalize2/3, rcp,
+// sin/cos, curve/spline/dcurve, noise2, ridge, ring, rot2/rot3,
+// smoothstep), and the flow lane mapping onto an attached pool.
+module fields {
+  import declarations { creature, creatures };
+
+  struct shatter_params { threshold: fx16; bias: fx16; }
+  struct slope_params { ramp: fx16; skew: fx16; lift: fx16; }
+
+  struct shard {
+    position: world3;
+    velocity: velocity3;
+    age: u32;
+    representation: fx16;
+  }
+
+  pool motes: shard[32];
+
+  @earth field rising_ridge(params: slope_params) -> terrain_delta
+    footprint rect(0m, 0m, 16m, 16m);
+    max_ops 32
+  {
+    let d = dist(sample.x, sample.z, 0m, 0m);
+    let band = ring(d, 2m, 6m);
+    let n = noise2(sample.x, sample.z, sample.age);
+    let blended = params.ramp * smoothstep(0m, 1m, n) + params.lift;
+    let picked = if band > 0m { blended } else { d };
+    return terrain_delta { height = picked, velocity = 0m, material = 0, nav_cost = n };
+  }
+
+  @earth field crater_break() -> terrain_delta
+    footprint capsule(0m, 0m, 8m, 8m, 4m);
+    max_ops 32
+  {
+    let d = dist(sample.x, sample.z, 4m, 4m);
+    let dip = if d < 4m { -1m } else { 0m };
+    let ring_band = ring(d, 3.5m, 4m);
+    let floor = dip * (1m - d * 0.25m) + ring_band;
+    return terrain_delta { height = floor, velocity = 0m, material = 1, nav_cost = 1m };
+  }
+
+  @flow field shatter_storm(params: shatter_params) -> flow_update
+    footprint none;
+    max_ops 48
+  {
+    let len = length2(p.vx, p.vz);
+    let inv = rcp(len + 0.0625m);
+    let nx = p.vx * inv;
+    let nz = p.vz * inv;
+    let spin = spline(swing_table, noise2(p.x, p.z, p.seed));
+    let damp = dcurve(damp_table, p.dt);
+    let vx = nx * params.threshold + spin * 0.5m;
+    let vz = nz * params.threshold;
+    return flow_update {
+      x = p.x + vx * damp,
+      y = p.y + damp,
+      z = p.z + vz * damp,
+      vx = vx,
+      vy = 0m,
+      vz = vz,
+      attr0 = abs(vz),
+    };
+  }
+
+  @flow field drift_motes() -> flow_update
+    footprint none;
+    max_ops 48
+  {
+    let a = 0.25turn;
+    let rotor = rot2(p.x, p.z, a);
+    let dirx = cos(a);
+    let dirz = sin(a);
+    return flow_update {
+      x = p.x + dirx * p.dt,
+      y = p.y,
+      z = p.z + dirz * p.dt,
+      vx = dirx,
+      vy = 0m,
+      vz = dirz,
+      attr0 = length3(p.x, p.y, p.z),
+    };
+  }
+}

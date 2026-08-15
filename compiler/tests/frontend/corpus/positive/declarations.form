@@ -1,0 +1,65 @@
+// declarations.form — every declaration form of D1's IN list: module, const
+// (with const-arithmetic), enum (implicit + explicit values), struct (nested,
+// array, enum, vector fields), pool (literal + const capacity), global
+// (scalar, vector record), fn (params, select-expression return).
+module declarations {
+  const ISLAND_PATCH: u32 = 3;
+  const MAX_CREATURES: u32 = 512;
+  const HALF: fx16 = 0.5m;
+  const WIDE: fx24 = 2.25w;
+  const QUARTER_TURN: angle16 = 0.25turn;
+  const RIGHT_ANGLE: angle16 = 90deg;
+  const LOUD: unit8 = 80%;
+  const TONE_START: u32 = 120t;
+  const SCAR_RED: colour8 = #C03030;
+  const SCAR_ALPHA: colour8 = #80C03030;
+  const DERIVED: u32 = (ISLAND_PATCH + 1) * 2;
+
+  enum spell_kind { raise, wave, break_rock = 5, shatter }
+
+  struct vec_holder {
+    origin: world3;
+    dir: velocity3;
+    tone: colour8;
+  }
+
+  struct creature {
+    position: world3;
+    velocity: velocity3;
+    age: u32;
+    kind: spell_kind;
+    hp: unit8;
+  }
+
+  struct trace_log {
+    samples: fx16[4];
+    note: spell_kind;
+    holder: vec_holder;
+  }
+
+  struct ridge_params { amplitude: fx16; width: fx16; }
+
+  pool creatures: creature[MAX_CREATURES];
+  pool particles: creature[16];
+
+  global gravity: fx24 = 2.25w;
+  global spawn_origin: world3 = world3 { x = 0w, y = 30w, z = 0w };
+  global drift: velocity3 = velocity3 { x = 0w, y = 0w, z = 1w };
+  global peak_marker: fx16 = 0m;
+
+  fn speed2(x: fx16, z: fx16) -> fx16 {
+    return sqrt_approx(x * x + z * z);
+  }
+
+  fn clamp_to_unit(x: fx16) -> unit8 {
+    return to_unit8(clamp(x, 0m, 1m));
+  }
+
+  fn pick(a: fx16, b: fx16, take_b: bool) -> fx16 {
+    return if take_b { b } else { a };
+  }
+
+  fn angle_step(a: angle16) -> angle16 {
+    return a + QUARTER_TURN;
+  }
+}

@@ -1,0 +1,22 @@
+// scenario.form — the test domain: seed, load, spawn player, ascending at
+// ticks driving system entries, truth assertions (with fx16 tolerance),
+// frame captures, budget asserts against a presentation's view contract.
+module wound_scenario {
+  import declarations { creatures, spawn_origin, peak_marker };
+  import systems { input_latch, integrate, apply_earth };
+  import wound_present { duo };
+
+  scenario opposing_waves {
+    seed 0x5A17;
+    load declarations;
+    spawn player 0 at spawn_origin;
+    spawn player 1 at spawn_origin;
+    at 0 ticks input_latch();
+    at 1 ticks integrate();
+    at 120 ticks apply_earth();
+    assert peak_marker == 2m within 0.25;
+    assert creatures.count == 0;
+    capture frame 150 as "opposing_waves";
+    assert_budget duo;
+  }
+}
