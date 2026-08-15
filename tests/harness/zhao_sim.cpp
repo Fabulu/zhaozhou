@@ -33,12 +33,25 @@ void check(bool cond, const char* what, uint64_t expected, uint64_t actual) {
 }
 
 int report_and_exit(const char* suite_name) {
+  int rc;
   if (g_failures == 0) {
     std::printf("[%s] %d checks passed\n", suite_name, g_checks);
-    return 0;
+    rc = 0;
+  } else {
+    std::printf("[%s] %d/%d checks FAILED\n", suite_name, g_failures, g_checks);
+    rc = 1;
   }
-  std::printf("[%s] %d/%d checks FAILED\n", suite_name, g_failures, g_checks);
-  return 1;
+  std::fflush(nullptr);
+  // Terminate without static destructors (P-machine finding, 2026-08-15):
+  // Verilator 5.051 + winlibs libwinpthread intermittently deadlocks in
+  // VlThreadPool::~VlThreadPool() during exit-time static destruction of
+  // the default VerilatedContext — observed on every Verilated exe on this
+  // toolchain, including pre-existing test_stub_top (hang with ~0 CPU,
+  // WaitForSingleObject in the pool dtor). Every observable side effect
+  // (stdout/stderr above, failing-vector files, which are closed inside
+  // save_failing_vector) is flushed before this point, so skipping static
+  // teardown is safe and makes process exit deterministic.
+  std::_Exit(rc);
 }
 
 // --- failing-vector serializer (charter 20.3 / 29-17 shape) ----------------

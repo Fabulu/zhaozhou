@@ -1,0 +1,40 @@
+# input_snapshot_atomic.cmake — CTest wrapper for the SymbiYosys BMC of
+# INPUT.SNAPSHOT atomicity + sequence-exactly-once (plan W2.3 / plan 4).
+# Charter 21/20.3: formal verification runs only where the tools exist; the
+# wrapper SKIPs (SKIP_REGULAR_EXPRESSION on the message below) when sby is
+# absent so `ctest -L formal` stays green on machines without oss-cad-suite.
+
+if("@ZHAO_SBY_BIN@" STREQUAL "")
+  message(STATUS "sby not found — input_snapshot_atomic formal SKIPPED")
+  return()
+endif()
+
+# The suite's yosys/boolector resolve their DLLs from bin/../lib — put the
+# oss-cad-suite dirs FIRST so a mingw toolchain earlier in PATH cannot shadow
+# them with incompatible builds (DLL-not-found, 0xC0000135).
+get_filename_component(ZHAO_SBY_DIR "@ZHAO_SBY_BIN@" DIRECTORY)
+set(ENV{PATH} "${ZHAO_SBY_DIR}\;${ZHAO_SBY_DIR}/../lib\;$ENV{PATH}")
+
+# Workdir depth matters: the .sby [files] paths resolve against the sby
+# process CWD, which must sit exactly two levels below the repo root for
+# ../../fpga/... to land (verified against this sby build; see the .sby).
+set(WORK "@CMAKE_BINARY_DIR@/formal-input")
+file(REMOVE_RECURSE "${WORK}")
+file(MAKE_DIRECTORY "${WORK}")
+
+execute_process(
+  COMMAND "@ZHAO_SBY_BIN@" -f -d bmc
+          "@CMAKE_SOURCE_DIR@/tests/formal/input_snapshot_atomic.sby"
+  WORKING_DIRECTORY "${WORK}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE out
+  ERROR_VARIABLE err
+)
+string(REGEX REPLACE "\n" ";" lines "${out}${err}")
+foreach(line IN LISTS lines)
+  message(STATUS "${line}")
+endforeach()
+
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "sby input_snapshot_atomic FAILED (rc=${rc})")
+endif()

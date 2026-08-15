@@ -614,15 +614,29 @@ blocks:
     latency: fixed:1
     target_throughput: 1 snapshot per frame
     reference_model: zref::PadSnapshot
+    implementation: fpga/rtl/input/zhao_input_snapshot.sv
     tests:
       directed: tests/input/input_snapshot_directed.cpp
-      random: tests/input/input_snapshot_random.cpp
+      random: tests/input/input_random.cpp
+      formal: tests/formal/input_snapshot_atomic.sby
     counters: [input_sequence_gaps]
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: RTL_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "8400661"
+        evidence: reference/include/zref/zref_input.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "bc94ced"
+        evidence: tests/input/input_snapshot_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: "7ed046a"
+        evidence: tests/input/input_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -645,15 +659,28 @@ blocks:
     latency: fixed:1
     target_throughput: 1 update per frame
     reference_model: zref::RumbleBridge
+    implementation: fpga/rtl/input/zhao_input_rumble.sv
     tests:
       directed: tests/input/input_rumble_directed.cpp
-      random: tests/input/input_rumble_random.cpp
+      random: tests/input/input_random.cpp
     counters: [rumble_frames_dropped]
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: RTL_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "8400661"
+        evidence: reference/include/zref/zref_input.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-15"
+        commit: "bc94ced"
+        evidence: tests/input/input_rumble_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: "7ed046a"
+        evidence: tests/input/input_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null

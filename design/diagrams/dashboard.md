@@ -16,7 +16,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 2 | · | · | · | · | · | · | · | 2 |
 | geometry | 10 | · | · | · | · | · | · | · | 10 |
-| input | 3 | · | · | · | · | · | · | · | 3 |
+| input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 3 | · | · | · | · | · | · | · | 3 |
 | memory | 4 | · | · | · | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
@@ -27,12 +27,17 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
+<<<<<<< HEAD
 | **all** | 82 | 2 | 3 | · | · | · | · | 6 | 87 |
+=======
+| **all** | 85 | · | · | 2 | · | · | · | 6 | 87 |
+>>>>>>> wp/w2.3-input
 
 ## Evidence ledger (maturity > SPECIFIED)
 
 | block | state | date | commit | evidence |
 |---|---|---|---|---|
+<<<<<<< HEAD
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | reference/src/zref_frame.cpp |
@@ -52,6 +57,14 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | SW.TOOLS.CAPTURE | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | tools/capture/zhao_capture.cpp |
 | SW.TOOLS.CAPTURE | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | tests/unit/test_zcap_roundtrip.cpp |
 | SW.TOOLS.CAPTURE | UNIT_VERIFIED | 2026-08-14 | `0383ed1` | tests/abi/golden/zcap_minimal.zcap |
+=======
+| INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
+| INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
+| INPUT.RUMBLE | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
+| INPUT.RUMBLE | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_rumble_directed.cpp |
+| INPUT.RUMBLE | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
+>>>>>>> wp/w2.3-input
 
 ## Budget groups vs §25 ceilings
 
