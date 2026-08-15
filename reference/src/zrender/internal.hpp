@@ -27,11 +27,18 @@ struct Viewport {
   uint32_t x0 = 0, y0 = 0, w = 0, h = 0;
 };
 
-/** The viewports of a mode: Duo = two 256x192 halves; else one full canvas. */
+/**
+ * The viewports of a mode: Duo = two 256x192 view blocks STACKED in the
+ * storage raster (video_rules.md §3.1 packed layout, ratified 2026-08-15) —
+ * view 0 at rows 0..191 (slot bytes [0,0x18000)), view 1 at rows 192..383
+ * (slot bytes [0x18000,0x30000)). NOT side by side: the views are separate
+ * contiguous blocks, and the 512-wide displayed row is assembled at scanout.
+ * Else one full canvas.
+ */
 inline uint32_t viewports_of(zhao_abi::video_mode m, Viewport out[2]) {
   if (m == zhao_abi::VIDEO_DUO) {
     out[0] = Viewport{0, 0, 256, 192};
-    out[1] = Viewport{256, 0, 256, 192};
+    out[1] = Viewport{0, 192, 256, 192};
     return 2;
   }
   const uint32_t w = canvas_width(m), h = canvas_height(m);

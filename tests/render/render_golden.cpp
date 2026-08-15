@@ -46,8 +46,14 @@ void check(bool ok, const char* what) {
 //     normal to whole world-units^2 (black below ~1 m spacing). The golden
 //     island is 17x17 over +-8 m = exactly 1 m, so its shading moves from the
 //     quantised normal to the exact one (6396C558 -> 803958B5).
-constexpr uint32_t kGoldenCanvasCrc = 0x803958B5u;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0x99F2AD34u;  // [w3.5-golden]
+//   Duo PACKED two-block layout ratified (review MAJOR-3): view 0 at slot
+//     bytes [0,0x18000), view 1 at [0x18000,0x30000), each contiguous — the
+//     canvas bytes are rearranged, the displayed CRC is now assembled at
+//     scanout, and view 1's marker (wall-clamped with viewport-relative
+//     bounds and then scissored) becomes VISIBLE for the first time
+//     (803958B5 -> D56BB9F4).
+constexpr uint32_t kGoldenCanvasCrc = 0xD56BB9F4u;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0x8614BB64u;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

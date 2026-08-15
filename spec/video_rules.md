@@ -19,11 +19,21 @@ board truth post-ZH-016 WITHOUT changing any contract surface here.
 `enum video_mode : u8` (commands.zidl, ABI v2) — one mode selector
 machine-wide:
 
-| Value | Name | Active raster | Canvas (RGB565) | Canvas bytes |
+| Value | Name | Active raster | Slot **allocation** | Bytes a frame **occupies** |
 |---|---|---|---|---|
-| 0 | `VIDEO_Z60` | 384×240 | 184,320 B | 0x02D000 |
-| 1 | `VIDEO_STORM` | 320×240 | 153,600 B | 0x025800 |
-| 2 | `VIDEO_DUO` | 512×240 (2 × 256×192) | 245,760 B | 0x03C000 |
+| 0 | `VIDEO_Z60` | 384×240 | 0x03C000 (245,760 B) | 184,320 B = 0x02D000 (384×240×2) |
+| 1 | `VIDEO_STORM` | 320×240 | 0x03C000 (245,760 B) | 153,600 B = 0x025800 (320×240×2) |
+| 2 | `VIDEO_DUO` | 512×240 (2 × 256×192) | 0x03C000 (245,760 B) | 196,608 B = 0x030000 (2 × 256×192×2) |
+
+**Allocation is not occupancy.** Every slot is always allocated 0x3C000 bytes
+— the size of the LARGEST canvas — so a mode switch never moves or resizes a
+slot (§3). What a frame actually *stores* is the third column, and it differs
+per mode: Z60 and Storm fill a full 384×240 / 320×240 raster, while Duo stores
+only its two 256×192 view canvases (§3.1) and stores **no** border rows — the
+48 black border lines are generated at scanout, so Duo occupancy is 0x30000,
+not 0x3C000. Earlier revisions of this table listed 0x3C000 in the canvas
+column for Duo, which read as a contradiction of §3.1; it never was one — it
+was the allocation.
 
 The same value is carried by `SetPresentationContract.mode`, by
 `DebugFrameBlit.mode`, and by the .zcap FRAMEBUFFER_EXPECTED `mode` byte.
@@ -112,6 +122,16 @@ no mirroring — a 1:1 copy (VIDEO.SCALER is a pass-through formatter, §6).
 The 48 border rows are part of the displayed stream and therefore part of
 the displayed-frame CRC.
 
+Each view is one CONTIGUOUS block: view 1 begins at slot byte `0x18000`, not
+at column 256 of a 512-wide image. There is no interleaving — a displayed row
+`y ∈ [24,215]` is assembled at scanout by concatenating view-0 row `y − 24`
+(512 B) with view-1 row `y − 24` (512 B). This is what `zhao_scanout_fetch`
+reads and what `zref::render` writes; a Duo frame therefore occupies
+`0x30000` bytes of its `0x3C000` slot (§1), and the last `0xC000` bytes are
+untouched and outside both CRCs (ratified 2026-08-15, review MAJOR-3: the
+scanout fetcher wants one linear burst stream per view, which the interleaved
+layout would break every 256 pixels mid-line).
+
 ## 4. Scanout law (D7) — repeat, never tear
 
 VIDEO.SCANOUT decomposes into:
@@ -142,7 +162,12 @@ slot is READY; the swap decision is made at the vblank start line
 **Displayed-CRC law:** the frame CRC-32C (DEBUG.CRC, .zcap
 FRAMEBUFFER_EXPECTED) is computed ON THE DISPLAYED STREAM, AFTER the repeat
 decision, over exactly `2 × active_width × 240` bytes per frame in raster
-order (border rows included in Duo). A repeated frame must CRC IDENTICAL to
+order (border rows included in Duo). "On the displayed stream" is literal in
+Duo: it is 240 rows of 512 pixels **as scanned out** — `16'h0000` for rows
+0..23 and 216..239, and for each row 24..215 the concatenation of view-0's row
+and view-1's row assembled at scanout (§3.1), NOT a linear walk of the stored
+bytes, which hold the two views as separate contiguous blocks. A repeated
+frame must CRC IDENTICAL to
 its first display — this mechanically proves the 60 Hz law; the directed
 test `forced_missed_deadline` asserts it.
 

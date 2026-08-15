@@ -6,10 +6,15 @@
 //                         working tile is 24-bit RGB, the framebuffer RGB565
 //   spec/video_rules.md §3 framebuffer layout: RGB565 [15:11]R[10:5]G[4:0]B,
 //                         little-endian halfwords, row-major, no row padding
+//                         §3.1 Duo packed two-block layout: view 0 at slot
+//                         bytes [0,0x18000), view 1 at [0x18000,0x30000),
+//                         each contiguous (ratified 2026-08-15, MAJOR-3)
 //                         §4 displayed-CRC law: CRC-32C over exactly
 //                         2 x active_width x 240 bytes in raster order AFTER
 //                         the repeat decision — Duo border rows (black §3.1)
-//                         are part of the displayed stream
+//                         are part of the displayed stream, and each Duo
+//                         displayed row is assembled at scanout from the two
+//                         view blocks
 //   plan W3.5             the 4x4 Bayer matrix: fixgen has NO dither table
 //                         today (checked at W3.5 start), so the canonical
 //                         4x4 Bayer thresholds (B+0.5)/16 are defined HERE,
@@ -63,13 +68,21 @@ uint32_t displayed_crc32c(zhao_abi::video_mode mode, const uint8_t* slot) {
     // single-view modes: the displayed stream IS the canvas (§4)
     return zhao_abi::zhao_crc32c(0, slot, canvas_bytes(mode));
   }
-  // Duo (§3.1/§4): 512x240 raster; rows 0..23 and 216..239 are the black
-  // border; rows 24..215 are the 512x192 canvas in order.
+  // Duo (§3.1/§4): the displayed stream is 240 rows of 512 px AS SCANNED OUT.
+  // Rows 0..23 and 216..239 are the black border (16'h0000, never stored);
+  // each row 24..215 is view-0's row CONCATENATED with view-1's row, and the
+  // two views live in separate contiguous blocks (view 0 at [0,0x18000),
+  // view 1 at [0x18000,0x30000)) — so this walks two cursors, it does NOT
+  // stream the stored bytes linearly. Ratified 2026-08-15 (review MAJOR-3).
+  constexpr size_t kViewRowBytes = 256 * 2;
   static const uint8_t border_row[512 * 2] = {};  // black (16'h0000)
   uint32_t crc = 0;
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border_row, sizeof(border_row));
-  for (uint32_t row = 0; row < 192; ++row)
-    crc = zhao_abi::zhao_crc32c(crc, slot + static_cast<size_t>(row) * 512 * 2, 512 * 2);
+  for (uint32_t row = 0; row < 192; ++row) {
+    const size_t off = static_cast<size_t>(row) * kViewRowBytes;
+    crc = zhao_abi::zhao_crc32c(crc, slot + off, kViewRowBytes);                  // view 0
+    crc = zhao_abi::zhao_crc32c(crc, slot + kDuoViewBytes + off, kViewRowBytes);  // view 1
+  }
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border_row, sizeof(border_row));
   return crc;
 }

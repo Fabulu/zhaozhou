@@ -583,13 +583,17 @@ void test_resolve_and_crc() {
   check(zref::render::canvas_crc32c(zhao_abi::VIDEO_Z60, slot.data()) ==
             zref::render::displayed_crc32c(zhao_abi::VIDEO_Z60, slot.data()),
         "Z60 canvas CRC == displayed CRC");
-  // displayed stream is 512*240*2 bytes: border(24) + canvas(192) + border(24)
-  // rows; recompute by hand with zhao_crc32c chunks
+  // displayed stream is 512*240*2 bytes: border(24) + 192 rows assembled at
+  // SCANOUT from the two packed view blocks (§3.1) + border(24); recompute by
+  // hand with zhao_crc32c chunks
   uint32_t crc = 0;
   const uint8_t border[512 * 2] = {};
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
-  for (uint32_t row = 0; row < 192; ++row)
-    crc = zhao_abi::zhao_crc32c(crc, slot.data() + static_cast<size_t>(row) * 512 * 2, 512 * 2);
+  for (uint32_t row = 0; row < 192; ++row) {
+    crc = zhao_abi::zhao_crc32c(crc, slot.data() + static_cast<size_t>(row) * 256 * 2, 256 * 2);
+    crc = zhao_abi::zhao_crc32c(
+        crc, slot.data() + 0x18000 + static_cast<size_t>(row) * 256 * 2, 256 * 2);
+  }
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
   check(crc == c_disp, "displayed CRC law recomputed by hand matches");
 }
@@ -640,11 +644,109 @@ void test_mode_latch() {
   const zref::render::RenderResult f2 =
       rend.render_frame(rtest::seal_frame(2, body), 0, canvas, res);
   check(f2.status == zhao_abi::ZH_ABI_OK, "frame 2 renders");
-  // frame 2 is Duo: view 0 is 256x192, so the marker centre is (128,96)
-  // (the Z60 frame put it at (192,120) in its 384x240 viewport)
-  check(rtest::px(canvas, 0, 128, 96, 512) == red565,
+  // frame 2 is Duo: view 0 is a 256x192 CONTIGUOUS block at slot byte 0, so
+  // the marker centre is (128,96) at row stride 256 (the Z60 frame put it at
+  // (192,120) in its 384x240 viewport)
+  check(rtest::px(canvas, 0, 128, 96, 256) == red565,
         "frame 2 rendered Duo geometry (marker at 128,96)");
   check(f2.displayed_crc32c != f2.canvas_crc32c, "Duo displayed CRC carries the border rows");
+}
+
+// ---- 7b. Duo PACKED two-block layout (video_rules §3.1, ratified 2026-08-15)
+//
+// view 0 = slot bytes [0, 0x18000), view 1 = [0x18000, 0x30000), each
+// contiguous. The renderer used to emit ONE 512x240 row-major image with the
+// views interleaved every 256 pixels; the RTL scanout fetcher reads one linear
+// burst stream per view, so the packed layout is law and the renderer moved to
+// meet it. This test pins view 1's FIRST pixel to slot byte 0x18000 so the
+// interleaved reading can never silently return.
+void test_duo_packed_layout() {
+  zref::render::FormPattern form;
+  for (int i = 0; i < 64; ++i) {
+    form.mask[i] = 1;
+    form.rgb[i * 3 + 0] = 255;  // pure red marker
+  }
+  zref::render::RenderResources res;
+  res.forms.push_back({7, form});
+  // a screen-space marker pinned to the top-left corner of its view: the
+  // wall-clamp law keeps it inside, so its first pixel IS the view's origin
+  // ortho_topdown maps screen x from world x and screen y from world Z, so a
+  // far -x/-z position clamps the marker into the view's TOP-LEFT corner
+  res.transforms.push_back(
+      {8, zref::render::FormTransform{-1000 << 16, 0, -1000 << 16, 8 << 16}});
+  const auto body = [&](zhao::ZhaoFrameBuilder& b) {
+    auto spc = zhao_abi::zhao_sample_set_presentation_contract();
+    spc.payload.mode = zhao_abi::VIDEO_DUO;
+    spc.payload.view_count = 2;
+    std::vector<uint8_t> v;
+    zhao_abi::zhao_pack_set_presentation_contract(spc, v);
+    b.append_record(v);
+    for (uint32_t view = 0; view < 2; ++view) {
+      auto sv = zhao_abi::zhao_sample_set_view();
+      sv.payload.view_id = static_cast<uint8_t>(view);
+      sv.payload.view_projection = rtest::ortho_topdown(2048);
+      std::vector<uint8_t> v2;
+      zhao_abi::zhao_pack_set_view(sv, v2);
+      b.append_record(v2);
+    }
+    // ONLY view 1 draws — so every non-zero pixel in the slot must live in
+    // view 1's block, and view 0's block must be untouched.
+    auto df = zhao_abi::zhao_sample_draw_form();
+    df.payload.form = 7;
+    df.payload.transform = 8;
+    df.payload.viewport_mask = 2;  // view 1 only
+    df.payload.flags = 0x0002;     // screen-space marker
+    std::vector<uint8_t> v3;
+    zhao_abi::zhao_pack_draw_form(df, v3);
+    b.append_record(v3);
+  };
+  zref::render::SoftwareRenderer rend;
+  zref::render::RenderCanvas canvas;
+  rend.render_frame(rtest::seal_frame(1, body), 0, canvas, res);  // Z60 warm-up
+  const zref::render::RenderResult r = rend.render_frame(rtest::seal_frame(2, body), 0, canvas, res);
+  check(r.status == zhao_abi::ZH_ABI_OK, "Duo two-view frame renders");
+
+  check(zref::render::kDuoViewBytes == 0x18000u, "one Duo view canvas is 0x18000 bytes");
+  check(zref::render::canvas_bytes(zhao_abi::VIDEO_DUO) == 0x30000u,
+        "a Duo frame OCCUPIES 0x30000 bytes (allocation stays 0x3C000)");
+  check(zref::render::kSlotBytes == 0x3C000u, "slot allocation is the largest canvas");
+
+  // view 1's first pixel is at slot byte 0x18000 — the whole point.
+  const uint8_t* s = canvas.slot[0].data();
+  const uint16_t v1_first =
+      static_cast<uint16_t>(s[0x18000] | (static_cast<uint16_t>(s[0x18001]) << 8));
+  const uint16_t red565 = 31u << 11;
+  check(v1_first == red565, "view 1's FIRST pixel lives at slot byte 0x18000");
+  // every red (marker) pixel in the slot is inside view 1's block — the old
+  // interleaved layout would have put them at column 256 of a 512-wide row,
+  // i.e. scattered through [0, 0x30000) every 512 bytes
+  size_t red_in_v0 = 0, red_in_v1 = 0;
+  for (size_t off = 0; off + 1 < 0x30000; off += 2) {
+    const uint16_t p = static_cast<uint16_t>(s[off] | (static_cast<uint16_t>(s[off + 1]) << 8));
+    if ((p >> 11) >= 16) (off < zref::render::kDuoViewBytes ? red_in_v0 : red_in_v1)++;
+  }
+  std::printf("  duo layout: marker px in view0 block %zu, in view1 block %zu\n", red_in_v0,
+              red_in_v1);
+  check(red_in_v0 == 0, "a view-1-only draw writes NOTHING into view 0's block [0,0x18000)");
+  check(red_in_v1 == 256, "the 16x16 marker lands entirely in view 1's block");
+  // nothing is written past the Duo occupancy either (allocation != occupancy)
+  uint32_t past = 0;
+  for (uint32_t i = 0x30000; i < zref::render::kSlotBytes; ++i)
+    if (s[i] != 0) ++past;
+  check(past == 0, "nothing is written past 0x30000 (the slot tail is unused)");
+
+  // displayed CRC = 24 black rows + 192 rows of (view0 row || view1 row) + 24
+  // black rows, recomputed here by hand from the two blocks (§3.1/§4)
+  uint32_t crc = 0;
+  const uint8_t border[512 * 2] = {};
+  for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
+  for (uint32_t row = 0; row < 192; ++row) {
+    crc = zhao_abi::zhao_crc32c(crc, s + static_cast<size_t>(row) * 512, 512);
+    crc = zhao_abi::zhao_crc32c(crc, s + 0x18000 + static_cast<size_t>(row) * 512, 512);
+  }
+  for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
+  check(crc == r.displayed_crc32c,
+        "displayed CRC is the scanout-assembled 512x240 stream including borders");
 }
 
 // ---- 8. the no-float audit (plan W3.5) --------------------------------------
@@ -702,6 +804,7 @@ int main() {
   test_audio_events();
   test_resolve_and_crc();
   test_mode_latch();
+  test_duo_packed_layout();
   test_no_float_audit();
   if (failures == 0) std::printf("render_directed: all green\n");
   return failures == 0 ? 0 : 1;

@@ -65,14 +65,22 @@ namespace render {
 
 // ---------------------------------------------------------------- canvas ----
 
-// video_rules.md §3: two slots, each sized for the LARGEST canvas
-// (0x3C000 = 245,760 B) so a mode switch never moves a slot.
+// video_rules.md §1/§3: ALLOCATION, not occupancy — two slots, each sized for
+// the LARGEST canvas (0x3C000 = 245,760 B) so a mode switch never moves a
+// slot. What a frame OCCUPIES is canvas_bytes(mode) below.
 inline constexpr uint32_t kSlotBytes = 0x3C000;
 
+/** Duo: one view canvas = 256x192x2 = 0x18000 B (video_rules.md §3.1). */
+inline constexpr uint32_t kDuoViewBytes = 0x18000;
+
 /**
- * Canvas bytes written per mode (video_rules.md §1/§3.1). Duo renders a
- * 512x192x2 canvas (both views side by side, §3.1 source regions); its 48
- * border rows are scanout-side and exist only in the displayed-stream CRC.
+ * Canvas bytes a frame OCCUPIES per mode (video_rules.md §1/§3.1).
+ *
+ * Duo stores its two views as CONTIGUOUS PACKED BLOCKS — view 0 at slot bytes
+ * [0, 0x18000), view 1 at [0x18000, 0x30000) — NOT interleaved side-by-side
+ * every 256 pixels of a 512-wide image (ratified 2026-08-15, review MAJOR-3:
+ * the scanout fetcher reads one linear burst stream per view). The 48 black
+ * border rows are scanout-side: never stored, but part of the displayed CRC.
  */
 inline constexpr uint32_t canvas_bytes(zhao_abi::video_mode m) {
   switch (m) {
@@ -81,17 +89,23 @@ inline constexpr uint32_t canvas_bytes(zhao_abi::video_mode m) {
     case zhao_abi::VIDEO_STORM:
       return 153600u;  // 320x240x2
     case zhao_abi::VIDEO_DUO:
-      return 196608u;  // 512x192x2 (§3.1)
+      return 196608u;  // 0x30000 = 2 x 256x192x2, packed blocks (§3.1)
   }
   return 0;
 }
 
-/** Raster dimensions of the canvas a mode renders into (§1/§3.1). */
+/**
+ * STORAGE raster of the canvas a mode renders into (§1/§3.1) — the shape of
+ * the byte image in the slot, which for Duo is the two view blocks STACKED
+ * (256 wide, 384 tall: view 0 rows 0..191, view 1 rows 192..383), so a plain
+ * row-major resolve emits exactly the packed layout above. The DISPLAYED
+ * raster is 512x240 and is assembled at scanout (displayed_crc32c).
+ */
 inline constexpr uint32_t canvas_width(zhao_abi::video_mode m) {
-  return m == zhao_abi::VIDEO_DUO ? 512u : (m == zhao_abi::VIDEO_Z60 ? 384u : 320u);
+  return m == zhao_abi::VIDEO_DUO ? 256u : (m == zhao_abi::VIDEO_Z60 ? 384u : 320u);
 }
 inline constexpr uint32_t canvas_height(zhao_abi::video_mode m) {
-  return m == zhao_abi::VIDEO_DUO ? 192u : 240u;  // Duo border is scanout-side
+  return m == zhao_abi::VIDEO_DUO ? 384u : 240u;  // Duo = 2 stacked view blocks
 }
 
 /** The 2-slot RGB565 canvas (video_rules.md §3). Row-major, LE halfwords. */

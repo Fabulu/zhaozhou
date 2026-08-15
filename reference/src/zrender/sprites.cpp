@@ -117,10 +117,20 @@ void draw_form_marker(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   // visible; a quad larger than the view centres on the wall axis
   int32_t cx_px = c.s.x >> 8;
   int32_t cy_px = c.s.y >> 8;
+  // The wall is the VIEWPORT's wall, so the clamp bounds carry the viewport
+  // origin. DEFECT FIXED 2026-08-15: they were viewport-RELATIVE while cx/cy
+  // are canvas coordinates, so any view not at the canvas origin had its
+  // markers clamped into the OTHER view's region and then scissored away —
+  // in Duo, view 1's markers were silently invisible. Latent until now
+  // because view 1 was the only viewport with a non-zero origin.
   const int32_t vw = static_cast<int32_t>(vpp.w);
   const int32_t vh = static_cast<int32_t>(vpp.h);
-  cx_px = 2 * half_px <= vw ? clamp_i32(cx_px, half_px, vw - 1 - half_px) : vw / 2;
-  cy_px = 2 * half_px <= vh ? clamp_i32(cy_px, half_px, vh - 1 - half_px) : vh / 2;
+  const int32_t vx0 = static_cast<int32_t>(vpp.x0);
+  const int32_t vy0 = static_cast<int32_t>(vpp.y0);
+  cx_px = 2 * half_px <= vw ? clamp_i32(cx_px, vx0 + half_px, vx0 + vw - 1 - half_px)
+                            : vx0 + vw / 2;
+  cy_px = 2 * half_px <= vh ? clamp_i32(cy_px, vy0 + half_px, vy0 + vh - 1 - half_px)
+                            : vy0 + vh / 2;
 
   blit_pattern_8x8(surf, vpp, cx_px - half_px, cy_px - half_px, half_px * 2, half_px * 2, form,
                    c.s.d, /*depth_write=*/true);
