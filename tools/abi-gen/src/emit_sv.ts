@@ -721,5 +721,35 @@ export function emitSv(ir: LayoutIR): string {
 
   P('endpackage : zhao_abi_pkg');
   P('');
-  return L.join('\n');
+
+  // Quartus Prime 17.0.2 compatibility: its parser rejects open-range
+  // unpacked-array function arguments (`input logic [7:0] p []`). Those
+  // helpers exist for verification (Verilator/probe byte-identity); synthesis
+  // only needs the register-based zhao_crc32c_step. Quartus predefines
+  // QUARTUS_SYNTHESIS during analysis & synthesis, so guard every function
+  // whose port list carries an open array. (First exercised by the
+  // .tools/synth-smoke Quartus flow, 2026-08-15.)
+  const out: string[] = [];
+  let li = 0;
+  while (li < L.length) {
+    if (/^\s*function /.test(L[li]!)) {
+      let lj = li;
+      while (lj < L.length && !/^\s*endfunction/.test(L[lj]!)) lj++;
+      if (lj < L.length) {
+        const block = L.slice(li, lj + 1);
+        if (block.some((l) => /\[\]\s*[,);]/.test(l))) {
+          out.push('  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;');
+          out.push('  // verification-only helper (Verilator/probe); not needed for synthesis');
+          out.push('`ifndef QUARTUS_SYNTHESIS');
+          out.push(...block);
+          out.push('`endif');
+          li = lj + 1;
+          continue;
+        }
+      }
+    }
+    out.push(L[li]!);
+    li++;
+  }
+  return out.join('\n');
 }

@@ -174,6 +174,9 @@ package zhao_abi_pkg;
   endfunction
 
   // finalized CRC over n bytes of p starting at off (running form of the spec)
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic [31:0] zhao_crc32c_bytes(input logic [7:0] p [],
                                                    input int unsigned off,
                                                    input int unsigned n);
@@ -185,16 +188,25 @@ package zhao_abi_pkg;
       zhao_crc32c_bytes = ~c;
     end
   endfunction
+`endif
 
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic [15:0] zhao_get16(input logic [7:0] p [],
                                             input int unsigned off);
     zhao_get16 = {p[off+1], p[off]};
   endfunction
+`endif
 
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic [31:0] zhao_get32(input logic [7:0] p [],
                                             input int unsigned off);
     zhao_get32 = {p[off+3], p[off+2], p[off+1], p[off]};
   endfunction
+`endif
 
   // rectfx: 16 B (spec/commands.zidl). REVERSE field order.
   typedef struct packed {
@@ -1819,6 +1831,9 @@ package zhao_abi_pkg;
   endfunction
 
   // true if any byte in p[base+off .. base+off+n) is nonzero
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic zhao_bytes_nonzero(input logic [7:0] p [],
                                              input int unsigned base,
                                              input int unsigned off,
@@ -1829,8 +1844,12 @@ package zhao_abi_pkg;
         if (p[base+off+i] != 8'h00) zhao_bytes_nonzero = 1'b1;
     end
   endfunction
+`endif
 
   // true if any declared pad byte of the record at stream offset off is nonzero
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic zhao_record_pad_nonzero(input logic [15:0] op,
                                                   input logic [7:0] p [],
                                                   input int unsigned base);
@@ -1869,9 +1888,13 @@ package zhao_abi_pkg;
       endcase
     end
   endfunction
+`endif
 
   // true if any enum field of the record at stream offset base carries a
   // value outside its declared member set (capture_format.md 3.2 step 7)
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic logic zhao_record_enum_bad(input logic [15:0] op,
                                                  input logic [7:0] p [],
                                                  input int unsigned base);
@@ -1895,6 +1918,7 @@ package zhao_abi_pkg;
       endcase
     end
   endfunction
+`endif
 
   // sealed frame header (capture_format.md 3), REVERSE field order
   typedef struct packed {
@@ -1927,6 +1951,9 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic zhao_frame_hdr_t zhao_unpack_frame_hdr(input logic [7:0] p []);
     zhao_frame_hdr_t c;
     begin
@@ -1943,6 +1970,7 @@ package zhao_abi_pkg;
       zhao_unpack_frame_hdr = c;
     end
   endfunction
+`endif
 
   // $bits sanity for every generated struct (probe asserts this at reset).
   function automatic logic zhao_layout_ok();
@@ -1972,6 +2000,9 @@ package zhao_abi_pkg;
 
   // Fail-safe validation order — byte-for-byte the same contract as the C++
   // (zref_frame) and TS (frame.ts) validators. On any error, no partial state.
+  // guarded: open-array argument unsupported by the Quartus 17.0.2 parser;
+  // verification-only helper (Verilator/probe); not needed for synthesis
+`ifndef QUARTUS_SYNTHESIS
   function automatic zhao_abi_error_e zhao_frame_validate(
       input logic [7:0] pkt [],
       input int unsigned len,
@@ -2118,5 +2149,6 @@ package zhao_abi_pkg;
       zhao_frame_validate = ZH_ABI_OK;
     end
   endfunction
+`endif
 
 endpackage : zhao_abi_pkg

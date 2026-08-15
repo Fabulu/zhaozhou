@@ -94,7 +94,14 @@ module zhao_stub_top
     v_cmds  = 32'd0;
     if (state == S_FINAL) begin
       v_total = 32'(ZHAO_FRAME_OVERHEAD) + h_command_bytes;
-      v_err   = zhao_frame_validate(slot, v_total, FRAME_SLOT_BYTES, v_cmds);
+`ifndef QUARTUS_SYNTHESIS
+      // Full buffer-random-access validation is a VERIFICATION convenience
+      // (open-array helper; Quartus 17.0.2 parser + streaming reality). Real
+      // silicon validates STREAMING byte-by-byte — the W2.6 CMD.DMA/DECODER
+      // lane. The early header checks below run in both worlds.
+      // Explicit enum cast: Quartus enforces strict enum assignment.
+      v_err   = zhao_abi_error_e'(zhao_frame_validate(slot, v_total, FRAME_SLOT_BYTES, v_cmds));
+`endif
     end
   end
 
