@@ -82,6 +82,77 @@ void test_projection_hand_computed() {
 }
 
 // ---- 2. validation gates everything (capture_format §3.2) ------------------
+// qformats §8 fill rule: two triangles sharing an edge must cover every pixel
+// EXACTLY ONCE — no holes, no double-fill. This is the Phase-4/5 SymbiYosys
+// property, asserted here on the software raster because the rule it depends
+// on is frozen now.
+//
+// Fixture: the 10x10 pixel square [2,12]x[2,12] split along its MAIN
+// DIAGONAL. That split is the load-bearing choice: the diagonal is y = x, so
+// the centre of every diagonal pixel (k+0.5, k+0.5) lies EXACTLY on the
+// shared edge and E' is exactly 0 there. The top-left bias is supposed to
+// hand each such pixel to exactly one of the two triangles.
+//
+// With the pre-fix strict `E' + bias > 0`, both sides reject it (0 > 0 on the
+// top-left owner, -1 > 0 on the other) and the diagonal is a line of 10
+// holes; non-top-left edges additionally drop their strictly-interior E' = 1
+// rank. `>= 0` is the D3D rule the spec sentence already named.
+void test_shared_edge_exactly_once() {
+  using namespace zref::render;
+  constexpr int32_t kLo = 2, kHi = 12, kDim = 16;
+  auto sv = [](int32_t px, int32_t py) {
+    ScreenV v;
+    v.x = px << 8;  // S 12.8, exactly on the pixel grid
+    v.y = py << 8;
+    return v;
+  };
+  const ScreenV v00 = sv(kLo, kLo), v10 = sv(kHi, kLo), v11 = sv(kHi, kHi), v01 = sv(kLo, kHi);
+
+  // coverage mask of one triangle drawn alone (background 0, fill 255)
+  auto cover = [&](const ScreenV& a, const ScreenV& b, const ScreenV& c) {
+    WorkSurface s;
+    s.reset(kDim, kDim, zref::sky::SkyColor{0, 0, 0});
+    const Viewport vp{0, 0, kDim, kDim};
+    TriMode m;
+    m.depth_test = false;
+    m.depth_write = false;
+    m.use_fixed_depth = true;
+    m.fixed_depth = 1;
+    raster_tri(s, vp, a, b, c, 255, 255, 255, m);
+    std::vector<uint8_t> mask(static_cast<size_t>(kDim) * kDim, 0);
+    for (size_t i = 0; i < mask.size(); ++i) mask[i] = s.rgb[i * 3] != 0 ? 1 : 0;
+    return mask;
+  };
+
+  // both halves keep the same (positive-area) winding, so neither is flipped
+  const std::vector<uint8_t> t1 = cover(v00, v10, v11);  // upper-right half
+  const std::vector<uint8_t> t2 = cover(v00, v11, v01);  // lower-left half
+
+  uint32_t holes = 0, doubles = 0, covered = 0, outside = 0, diag_covered = 0;
+  for (int32_t y = 0; y < kDim; ++y)
+    for (int32_t x = 0; x < kDim; ++x) {
+      const size_t i = static_cast<size_t>(y) * kDim + x;
+      const int n = t1[i] + t2[i];
+      // pixel centre (x+0.5, y+0.5) is inside the square iff x,y in [2,11]
+      const bool in_square = x >= kLo && x < kHi && y >= kLo && y < kHi;
+      if (in_square) {
+        if (n == 0) ++holes;
+        if (n > 1) ++doubles;
+        if (n == 1) ++covered;
+        if (x == y && n >= 1) ++diag_covered;
+      } else if (n != 0) {
+        ++outside;
+      }
+    }
+  std::printf("  shared edge: covered %u holes %u doubles %u diag %u/10\n", covered, holes, doubles,
+              diag_covered);
+  check(holes == 0, "shared-edge split leaves no holes");
+  check(doubles == 0, "shared-edge split double-fills nothing");
+  check(covered == 100, "shared-edge split covers all 100 pixels exactly once");
+  check(diag_covered == 10, "every pixel centre ON the shared edge is claimed by one side");
+  check(outside == 0, "no pixel outside the square is touched");
+}
+
 void test_validation_gate() {
   zref::render::SoftwareRenderer rend;
   zref::render::RenderCanvas canvas;
@@ -397,6 +468,7 @@ void test_no_float_audit() {
 
 int main() {
   test_projection_hand_computed();
+  test_shared_edge_exactly_once();
   test_validation_gate();
   test_draw_form();
   test_draw_population();

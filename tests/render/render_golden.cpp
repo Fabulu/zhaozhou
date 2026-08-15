@@ -35,8 +35,10 @@ void check(bool ok, const char* what) {
 //     rasterised NOTHING; the drum now renders (15AB7655 -> 4D179BE6).
 //   CRITICAL-2 sun alpha (wrapped 256 -> 0, sun invisible) + MAJOR-4 pass-6
 //     sub-order (sun now rasters BEFORE cloud) (4D179BE6 -> 5475D2D1).
-constexpr uint32_t kGoldenCanvasCrc = 0x5475D2D1u;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0xEC9B19A7u;  // [w3.5-golden]
+//   MAJOR-2 §8 fill rule `E' + bias >= 0` — the strict `>` dropped every
+//     shared-edge pixel on BOTH sides (5475D2D1 -> B56D4F2A).
+constexpr uint32_t kGoldenCanvasCrc = 0xB56D4F2Au;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0x8F17C2F6u;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

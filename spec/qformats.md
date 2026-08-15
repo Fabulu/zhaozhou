@@ -358,11 +358,23 @@ a'  = rescale(a.fx16 · 256, 16)                      // to S 12.8
 E0  = (b.x−a.x)·(c.y−a.y) − (b.y−a.y)·(c.x−a.x)  s64 // subpixel² units, exact
 E'  = E0 >> 8 (exact at pixel centers; low 8 bits constant per edge)
 bias = is_top_left(edge) ? 0 : −1
-inside(p) ⟺ E'(p) + bias > 0                          // D3D top-left fill convention
+inside(p) ⟺ E'(p) + bias ≥ 0                          // D3D top-left fill convention
 ```
 
+**The comparison is `≥ 0`, not `> 0` (spec defect fixed 2026-08-15).** With a
+strict `>`, a pixel centre lying exactly on a shared edge (`E' = 0`) is
+rejected by BOTH triangles — the top-left side fails `0 > 0` and the
+non-top-left side fails `−1 > 0` — so the shared edge is a line of holes, and
+non-top-left edges additionally drop their whole strictly-interior `E' = 1`
+rank. That contradicts both the D3D convention this rule names and the
+exactly-once property below. With `≥`, the bias does what it is for: the
+top-left owner takes `E' = 0` (`0 + 0 ≥ 0`), the other side declines it
+(`0 − 1 ≥ 0` is false), and every pixel is covered exactly once.
+
 Adjacent-triangle exactly-once coverage is a SymbiYosys formal property
-(charter §20.4; lands with the rasterizer, Phase 4/5).
+(charter §20.4; lands with the rasterizer, Phase 4/5). The software raster
+asserts it today over a shared-edge quad
+(`tests/render/render_directed.cpp`, `test_shared_edge_exactly_once`).
 
 **Depth — `invw24`:** 1/W is linear in screen space; it interpolates with the
 same plane-equation machinery:

@@ -11,6 +11,8 @@
 //       E' = E0 >> 8 evaluated at pixel centres (low 8 bits constant per
 //       edge), D3D top-left fill convention (bias 0 / -1, inside ⟺ E'+bias>0),
 //       exact incremental stepping; depth test strict-greater, clear 0.
+//       The fill comparison is `E' + bias >= 0` — see the note at the test
+//       below; a strict `>` drops every shared-edge pixel on BOTH sides.
 // The depth lane is Q16.16 1/w (plan W3.5/D7 — NOT the Phase-4 invw24
 // pipeline; the switch is a frozen one-line change in project_vertex).
 
@@ -142,8 +144,13 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                        area);
     }
     for (int32_t px = min_x; px <= max_x; ++px) {
+      // §8: inside ⟺ E' + bias >= 0. The comparison MUST be >=: with a
+      // strict >, a pixel centre exactly on a shared edge (E' == 0) is
+      // rejected by both triangles (0 > 0 on the top-left side, -1 > 0 on the
+      // other), so shared edges become holes and the exactly-once property
+      // fails. With >=, the bias hands E' == 0 to the top-left owner alone.
       const bool inside =
-          ((w0 >> 8) + bias0 > 0) && ((w1 >> 8) + bias1 > 0) && ((w2 >> 8) + bias2 > 0);
+          ((w0 >> 8) + bias0 >= 0) && ((w1 >> 8) + bias1 >= 0) && ((w2 >> 8) + bias2 >= 0);
       if (inside) {
         const int32_t dz = m.use_fixed_depth ? m.fixed_depth : d;
         size_t idx = static_cast<size_t>(py) * s.w + px;
