@@ -10,7 +10,10 @@
 //   3. SetView + SetPresentationContract (implemented, semantically no-op
 //      in Phase 1) execute as counted no-ops — spec §3.3;
 //   4. session accumulation: accepted + rejected frames sum across submits;
-//      reset() clears the session.
+//      reset() clears the session;
+//   5. a reserved command (DrawForm 0x0300) validates structurally but the
+//      executor refuses it with the exact code ZH_ABI_UNIMPLEMENTED_COMMAND
+//      (review m2, RUN-20260814-1912).
 
 #include "zhao_abi.h"  // generated
 #include "zref/zref.hpp"
@@ -129,6 +132,27 @@ int main() {
     check(r.counters.commands_total == 2 && r.counters.begin_frames == 0 &&
               r.counters.end_frames == 0 && r.counters.nops == 0,
           "implemented-but-semantically-empty commands still count");
+  }
+
+  // -- 3b/m2: a RESERVED command validates structurally but is refused at ---
+  // -- execution time with the exact executor-level code (spec 3.2/3.3) -----
+  {
+    std::vector<uint8_t> rec;
+    zhao::ZhaoFrameBuilder fb;
+    zhao_pack_draw_form(zhao_sample_draw_form(), rec);  // 0x0300, reserved
+    fb.append_record(rec);
+    const std::vector<uint8_t> pkt = fb.seal(/*frame_id=*/8, /*sequence=*/0, /*resource_epoch=*/1);
+
+    zhao::ZhaoZrefShell shell;
+    const zhao::ZhaoExecutionResult r = shell.submit(pkt);
+    check(r.status == ZH_ABI_UNIMPLEMENTED_COMMAND,
+          "reserved DrawForm executes -> ZH_ABI_UNIMPLEMENTED_COMMAND (14)");
+    check(r.completion_flags == ZHAO_COMPL_ERR, "unimplemented command completes ERR");
+    check(r.counters.frames_rejected == 1 && r.counters.frames_accepted == 0,
+          "unimplemented command rejects the frame");
+    check(r.counters.commands_total == 0, "nothing counts as executed before the refusal");
+    check(r.counters.bytes_consumed == pkt.size(),
+          "the full validated packet is consumed before execution");
   }
 
   if (failures != 0) {

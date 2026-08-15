@@ -194,6 +194,11 @@ test('corpus: every case validates to its recorded expected error', () => {
   const names = new Set(cases.map((c) => c.name));
   assert.equal(names.size, cases.length, 'case names must be unique');
   // intent map: the whole point of each mutation (regression guard)
+  // NOTE (review m2): a record straddling the frame end yields BAD_LENGTH (4)
+  // under the frozen check order — command_bytes vs the running record sum is
+  // checked before the truncation trailing-byte check, so ZH_ABI_TRUNCATED
+  // (11) is unreachable for any 16-aligned stream and is exercised only by
+  // name here for documentation. Honest coverage, not a forced pass.
   const intent: Record<string, number> = {
     valid_minimal: 0, valid_all_implemented: 0, valid_empty_frame: 0, valid_debug_with_flag: 0,
     valid_debug_blit_rumble: 0, debug_blit_without_flag: 12,
@@ -203,6 +208,7 @@ test('corpus: every case validates to its recorded expected error', () => {
     unknown_opcode: 7, record_size_mismatch: 4, record_flags_nonzero: 3,
     record_reserved_nonzero: 8, payload_pad_nonzero: 8, enum_out_of_range: 9,
     count_mismatch: 13, debug_without_flag: 12,
+    record_straddles_frame_end: 4,
   };
   for (const c of cases) {
     const want = intent[c.name];

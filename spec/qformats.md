@@ -66,9 +66,12 @@ ZRef sim-truth accumulator outside Field IR.
 - `fx16 → screenXY`: `rescale(x · 256, 16)` = `x` rescaled from 16 to 8
   fraction bits (round-half-up), then clamp to the guard band (§8).
 
-**`mat4fx × vec4`:** four 32×32→64 products summed in s64 (fx16 lanes) in fixed
-index order (exact integer sum, no intermediate rounding), then one
-`rescale(·,16)` + saturate. The single-rounding law (§3) applies.
+**`mat4fx × vec4`:** four 32×32→64 products summed **exactly in s128** (fx16
+lanes) in fixed index order (exact integer sum, no intermediate rounding; the
+original v1 wording "summed in s64" is amended — the reference and tests
+implement the exact s128 row sum, which is also what an RTL DSP chain must
+accumulate before the single rounding), then one `rescale(·,16)` + saturate.
+The single-rounding law (§3) applies.
 
 ## 3. Core arithmetic pseudocode
 
@@ -443,6 +446,7 @@ format, the rounding/saturation laws (§3–§5), any frozen constant or table
 formula (§6–§7), a golden-vector layout (§12), or the fixgen output set (§11).
 A bump requires: spec amendment, full regeneration + recomittance of tables
 and goldens, re-derivation of every error bound, and orchestrator sign-off.
-The constant travels in the ABI version word (W4, `spec/commands.zidl`) so
-capture replay can refuse mismatched numerics. Editorial changes (prose,
-citations, provisional extents re-ratified per Q4) do not bump.
+The constant travels in the ABI (`spec/commands.zidl`, `const u16
+QFMT_VERSION` — emitted into all three generated languages) so capture replay
+can refuse mismatched numerics. Editorial changes (prose, citations,
+provisional extents re-ratified per Q4) do not bump.

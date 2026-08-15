@@ -152,6 +152,31 @@ export function buildCorpus(ir: LayoutIR, slotBytes: number): readonly CorpusCas
     // walk-level
     { name: 'count_mismatch', packet: mutate32(base, OFF_COMMAND_COUNT, 2, true) },
     { name: 'debug_without_flag', packet: mutate16(debugWith, OFF_FLAGS, 0x0000, true) },
+
+    // m2 (review RUN-20260814-1912): a record STRADDLING the frame end.
+    // Everything header-level passes (48 B aligned stream, both CRCs valid —
+    // the stream really is BeginFrame + a Nop record whose declared
+    // record_bytes is widened to 32 so it runs past command_bytes) and the
+    // walk reaches record 2. NOTE, discovered while writing this case: under
+    // the frozen fail-safe order the straddling record trips check 2
+    // ("lengths ... out of bounds", off + record_bytes > command_bytes) and
+    // returns ZH_ABI_BAD_LENGTH (4) — ZH_ABI_TRUNCATED (11) is DEFENSIVE
+    // walk code that is unreachable while command_bytes and every
+    // record_bytes are 16-aligned (both are enforced before any 11 site).
+    // The exact code is asserted, not assumed: expectedError below comes
+    // from the oracle validator itself.
+    {
+      name: 'record_straddles_frame_end',
+      packet: (() => {
+        const nop = cmd('Nop');
+        nop[2] = 32; // record_bytes: 16 -> 32 (wider than the 16 B remaining)
+        nop[3] = 0;
+        return buildFrame(ir, {
+          abiVersion: ir.abi.version, flags: 0, frameId: 7, sequence: 5,
+          resourceEpoch: 1, deadline: 0, commandCount: 2, commandBytes: 48,
+        }, new Uint8Array([...cmd('BeginFrame'), ...nop]));
+      })(),
+    },
   ];
 
   return cases.map((c) => {

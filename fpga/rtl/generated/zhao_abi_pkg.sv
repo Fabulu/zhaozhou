@@ -16,6 +16,7 @@ package zhao_abi_pkg;
   // not necessarily referenced inside this package.
   /* verilator lint_off UNUSEDPARAM */
   localparam logic [31:0] FRAME_SLOT_BYTES = 32'd1048576;
+  localparam logic [31:0] QFMT_VERSION = 32'd1;
   /* verilator lint_on UNUSEDPARAM */
 
   // frame packet (capture_format.md 3)

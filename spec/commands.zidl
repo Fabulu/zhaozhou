@@ -39,6 +39,10 @@ abi zhao {
 // every validator bound-checks against this constant, never a magic number.
 const u32 FRAME_SLOT_BYTES = 1048576;
 
+// Numeric-law version (spec/qformats.md §13): travels with the ABI so capture
+// replay can refuse mismatched numerics. Bump on any frozen Q-format change.
+const u16 QFMT_VERSION = 1;
+
 // Error codes — generated verbatim into C++/TS/SV and shared by the frame
 // validator (spec/capture_format.md 4.2), the .zcap tools, and the stub RTL.
 // Order matters: it is the fail-safe validation order of capture_format.md.

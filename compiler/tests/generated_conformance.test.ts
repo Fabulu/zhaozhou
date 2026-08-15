@@ -47,6 +47,13 @@ import {
   ZHAO_ZIDL_SHA256,
   ZHAO_ZCAP_SCHEMA_VERSION,
   ZHAO_ABI_VERSION,
+  ZH_ABI_BAD_ABI_VERSION,
+  ZH_ABI_BAD_HEADER_CRC,
+  ZH_ABI_BAD_MAGIC,
+  ZH_ABI_BAD_PAYLOAD_CRC,
+  ZH_ABI_UNKNOWN_OPCODE,
+  ZHAO_FRAME_HEADER_BYTES,
+  ZHAO_OFF_HEADER_CRC,
   crc32c,
 } from '../src/generated/abi.js';
 import { validateFrame, ZhaoFrameBuilder } from '../src/generated/frame.js';
@@ -200,4 +207,48 @@ test('tri-language parity: TS validator agrees with every corpus expectation', (
 
 test('crc32c still healthy in the emitted module', () => {
   assert.equal(crc32c(0, new TextEncoder().encode('123456789')), 0xe3069283);
+});
+
+// m1 (review RUN-20260814-1912): the TS leg's bytesConsumed discipline was
+// unpinned — the corpus stores error codes only, and frame.ts defaults to 36
+// on the header-level abort paths. Pin the exact consumption per
+// capture_format.md 3.2: 36 B on a header-level abort, the whole packet
+// (40 + command_bytes) once the payload walk is reached.
+test('bytesConsumed: 36 on header-level abort, full packet on record-level errors', () => {
+  const good = new Uint8Array(readFileSync(path.join(goldenDir(), 'frame_minimal.bin')));
+
+  const badMagic = Uint8Array.from(good);
+  badMagic[0] = badMagic[0]! ^ 0xff;
+  const r1 = validateFrame(badMagic, FRAME_SLOT_BYTES);
+  assert.equal(r1.error, ZH_ABI_BAD_MAGIC);
+  assert.equal(r1.bytesConsumed!, 36, 'magic abort consumes exactly the 36-B header');
+
+  const badVer = Uint8Array.from(good);
+  badVer[4] = badVer[4]! ^ 0x01; // abi_version low byte (ZHAO_ABI_VERSION 2 -> 3)
+  const r2 = validateFrame(badVer, FRAME_SLOT_BYTES);
+  assert.equal(r2.error, ZH_ABI_BAD_ABI_VERSION);
+  assert.equal(r2.bytesConsumed!, 36, 'version abort consumes exactly the 36-B header');
+
+  const badHcrc = Uint8Array.from(good);
+  badHcrc[ZHAO_OFF_HEADER_CRC] = badHcrc[ZHAO_OFF_HEADER_CRC]! ^ 0x01;
+  const r3 = validateFrame(badHcrc, FRAME_SLOT_BYTES);
+  assert.equal(r3.error, ZH_ABI_BAD_HEADER_CRC);
+  assert.equal(r3.bytesConsumed!, 36, 'header-CRC abort consumes exactly the 36-B header');
+
+  const badPcrc = Uint8Array.from(good);
+  badPcrc[ZHAO_FRAME_HEADER_BYTES + 4] = badPcrc[ZHAO_FRAME_HEADER_BYTES + 4]! ^ 0x80; // inside the command stream
+  const r4 = validateFrame(badPcrc, FRAME_SLOT_BYTES);
+  assert.equal(r4.error, ZH_ABI_BAD_PAYLOAD_CRC);
+  assert.equal(r4.bytesConsumed!, good.length,
+    'payload verdict consumes 40 + command_bytes (the whole 120-B packet)');
+
+  const badOp = Uint8Array.from(good);
+  badOp[ZHAO_FRAME_HEADER_BYTES + 48] = 0x05; // unknown opcode in the EndFrame record
+  badOp[ZHAO_FRAME_HEADER_BYTES + 49] = 0x20;
+  // re-seal payload CRC so the walk is reached
+  const dv = new DataView(badOp.buffer);
+  dv.setUint32(good.length - 4, crc32c(0, badOp.subarray(ZHAO_FRAME_HEADER_BYTES, good.length - 4)), true);
+  const r5 = validateFrame(badOp, FRAME_SLOT_BYTES);
+  assert.equal(r5.error, ZH_ABI_UNKNOWN_OPCODE);
+  assert.equal(r5.bytesConsumed, good.length, 'record-walk abort consumes the whole packet');
 });
