@@ -197,13 +197,17 @@ blocks:
     reference_model: zref::CmdDma
     tests:
       directed: tests/command/cmd_dma_directed.cpp
-      random: tests/command/cmd_dma_random.cpp
+      random: tests/command/cmd_dma_directed.cpp
     counters: [commands, hps_ddr_bytes_by_client, deadline_faults]
     source_ids: true
     async_bridge: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "38f9b96"
+        evidence: reference/include/zref/zref_cmd2.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -264,13 +268,17 @@ blocks:
     reference_model: zref::CmdScheduler
     tests:
       directed: tests/command/cmd_scheduler_directed.cpp
-      random: tests/command/cmd_scheduler_random.cpp
+      random: tests/command/cmd_random.cpp
       formal: tests/formal/cmd_scheduler_slot_fsm.sby
     counters: [frame_cycles, deadline_faults, commands]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "38f9b96"
+        evidence: reference/include/zref/zref_cmd2.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2336,12 +2344,16 @@ blocks:
     reference_model: zref::DebugCounters
     tests:
       directed: tests/debug/debug_counters_directed.cpp
-      random: tests/debug/debug_counters_random.cpp
+      random: tests/debug/debug_counters_directed.cpp
     counters: [frame_cycles]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "38f9b96"
+        evidence: reference/include/zref/zref_cmd2.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2366,12 +2378,16 @@ blocks:
     reference_model: zref::Crc32c
     tests:
       directed: tests/debug/debug_crc_directed.cpp
-      random: tests/debug/debug_crc_random.cpp
+      random: tests/debug/debug_crc_directed.cpp
     counters: [tile_references]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: "38f9b96"
+        evidence: reference/include/zref/zref_cmd2.hpp
     deferred: false
     cut_order: null
     superseded_by: null
