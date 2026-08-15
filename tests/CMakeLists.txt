@@ -551,7 +551,21 @@ if(ZHAO_SBY_BIN)
   # SEPARATE from the lane scripts). The -P script path itself is normalized
   # to backslashes for mingw ctest (same machine rule as the lint lane).
   set(ZHAO_MEM_FORMAL_WORK "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
-  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_sdram_refresh_bound)
+  # mem_sdram_refresh_bound is NOT in this list. It is a depth-900 BMC (the
+  # refresh bound itself is ~862 cycles, so the depth cannot be meaningfully
+  # reduced), and it had never actually been elaborated before — under the old
+  # SKIP it "ran" instantly. With a genuinely free environment it does not
+  # finish in any CI-shaped budget (>50 min and still going when measured), so
+  # putting it in the routine lane would only manufacture timeouts that look
+  # like failures. Measured: its `cover` task PASSES in ~11 min (all three
+  # covers reached, so the bound is not vacuous), while the `bmc` task was
+  # still running after 50 min — NOT ESTABLISHED, which is an unfinished
+  # proof, not a failing one. Kept runnable by hand:
+  #     cd tests/formal && sby -f --prefix <dir> mem_sdram_refresh_bound.sby
+  # See the wave-3 TASK_LOG.
+  # MEM.SDRAM is SPECIFIED / blocked_on: hardware, so no maturity claim rests
+  # on it today.
+  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

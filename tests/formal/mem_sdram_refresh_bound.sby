@@ -2,7 +2,20 @@
 # SPECIFIED, blocked_on: hardware). Under fully adversarial client pressure
 # and an adversarial hold_refresh, AUTO_REFRESH commands are bounded-deferred:
 # never more than INTERVAL + URGENT + spans + execution cycles apart.
-# Run with cwd = tests/formal (the CTest wrapper and the docs both do).
+# Run with cwd = tests/formal.
+#
+# NOT IN THE AUTOMATED LANE (see tests/CMakeLists.txt). depth 900 is forced by
+# the bound itself (~862 cycles), and now that the environment is genuinely
+# free rather than elaborating to constants the tasks cost real time. Measured
+# 2026-08-15, first time this property was ever actually elaborated:
+#   cover : PASSES in ~11 min — all three covers reached (init_done at step 28,
+#           since_ref > 100 at step 129, a real AUTO_REFRESH at step 812), so
+#           the bound is NOT a vacuous implication on init_done.
+#   bmc   : still running after 50 min; NOT ESTABLISHED. Not a failure — an
+#           unfinished proof.
+# Run by hand:  sby -f --prefix <dir> mem_sdram_refresh_bound.sby
+# The harness defects it shared with the other two MEM properties (free rst_n,
+# non-surviving anyseq) are fixed here.
 # Frontend: read_slang. The built-in yosys Verilog reader cannot parse the
 # frozen package style (unpacked-array localparams, `module X import P::*;`),
 # which is why this lane used to SKIP; the slang plugin shipped with
