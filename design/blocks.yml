@@ -2433,7 +2433,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). Game content itself is excluded from the ledger.
+    notes: "Wave-3 scope = the deterministic core cross target (plan W3.8/D9) - devkitA64 freestanding compile+archive (CTest arm-cross, SKIP-if-absent) and optional ARM64-native CI run of the sim-hash golden; same generated code as desktop (D5 cross-target equality by construction). The real HPS run is the hardware lane - nothing unexecuted is claimed. Maturity target REFERENCE_COMPLETE at the wave-3 gate (plan D12); HARDWARE_PROVEN stays blocked_on hardware. Game content itself is excluded from the ledger."
 
   - id: SW.MIXER
     name: Fixed-point audio mixer
@@ -2621,7 +2621,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active, empty-shell scope per plan W6).
+    notes: "Wave-3 scope = the software console (plan W3.6/D10) - .zpak load, pad snapshot -> sim_tick -> present_frame -> sealed packet -> zref::render -> canvas CRC, .zcap capture writer, --realtime pacing that never feeds timing into truth. Deterministic by default; run-twice-identical is the acceptance. Maturity target REFERENCE_COMPLETE at the wave-3 gate (plan D12); hardware execution stays in the SW.RUNTIME.HPS lane."
 
   - id: SW.COMPILER.FORM
     name: Form compiler
@@ -2644,7 +2644,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). Full parser is Phase-3 scope (plan §4); Field IR builder API drives wave-1 tests (FORM §18-L0).
+    notes: "Wave-3 scope = the L1 frontend + HIR/ZIR/scheduler/backend (plan W3.2-W3.3); language law spec/form/language-semantics.md (L1 v1, FORM-E-nnn catalog), effects spec/form/domains-and-effects.md, schedule spec/form/deterministic-scheduling.md, artifacts costs.zcost + sourceids.zmap. Field programs lower through SW.FIELDIR's frozen builder (spec/form/field-ir.md never edited). Maturity target UNIT_VERIFIED at the wave-3 gate (plan D12)."
 
   - id: SW.FIELDIR
     name: Field IR evaluator and tooling
@@ -2800,7 +2800,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Microform crossfade sophistication is §26 cut item 8.
+    notes: "Wave-3 scope = the cartridge packer subset only (plan W3.6/D8) - tools/pack emits deterministic .zpak per spec/cartridge.md with the pack:check staleness gate. Meshlet/LOD/microform lanes stay L4. Microform crossfade sophistication is §26 cut item 8. Maturity target REFERENCE_COMPLETE for the packer subset at the wave-3 gate (plan D12)."
 
   - id: SW.TOOLS.CAPTURE
     name: Capture tooling
