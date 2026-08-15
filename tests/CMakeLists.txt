@@ -315,14 +315,21 @@ set_tests_properties(mem_hps_bridge_directed PROPERTIES LABELS "fast;nightly")
 # formal lane (plan 4): one wrapper per SBY property, SKIP-if-absent like
 # the W1 formal lane smoke; full set runs under the formal/nightly labels
 if(ZHAO_SBY_BIN)
+  # Formal wrappers: all paths baked in at configure time (script-mode cmake
+  # has no reliable CMAKE_CURRENT_BINARY_DIR; the sby work root is kept
+  # SEPARATE from the lane scripts). The -P script path itself is normalized
+  # to backslashes for mingw ctest (same machine rule as the lint lane).
+  set(ZHAO_MEM_FORMAL_WORK "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
   foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_sdram_refresh_bound)
+    set(PROP "${sby_prop}")
+    set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
+    set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
     configure_file(formal/mem_formal_lane.cmake.in
                    formal/${sby_prop}_lane.cmake @ONLY)
+    set(zhao_formal_script "${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake")
+    string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
     add_test(NAME formal_${sby_prop}
-             COMMAND ${CMAKE_COMMAND}
-                     -DPROP=${sby_prop}
-                     -DSRC=${CMAKE_SOURCE_DIR}
-                     -P ${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake)
+             COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
     set_tests_properties(formal_${sby_prop} PROPERTIES
       LABELS "formal;nightly"
       TIMEOUT 900

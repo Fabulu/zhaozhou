@@ -57,10 +57,12 @@ package zhao_sdram_params_pkg;
   // liveness bound (zhao_pkg.ZHAO_ARB_LIVENESS_BOUND) as the deferral budget.
   localparam int unsigned REFRESH_URGENT    = 40;
 
-  // MAX_BURST_SPAN: worst grant-to-grant span of one burst under this profile
-  // (bank-conflict READ: PRE, T_RP, ACT, T_RCD, READ, CAS, BURST; the law
-  // table in zhao_sdram_ctrl.sv derives the exact number). The arbiter's
-  // aging-override threshold and the refresh deferral bound consume it.
+  // MAX_BURST_SPAN: an UPPER BOUND on the worst grant-to-grant span of one
+  // burst under this profile. The exact worst case is the bank-conflict
+  // full read: PRE, tRP, ACT, tRCD, READ, CAS, full 8-beat bus burst =>
+  // span 18 (the law table in zhao_sdram_ctrl.sv derives 12/15/18 read,
+  // 10/13/16 write); 19 keeps one cycle of margin in the derived bounds
+  // (arbiter aging threshold, refresh hard-preempt) that consume it.
   localparam int unsigned MAX_BURST_SPAN = 19;
 
   // Geometry: 128 MB = 4 banks x 8192 rows x 2048 cols x 2 B (16-bit words).

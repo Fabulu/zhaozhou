@@ -437,6 +437,11 @@ public:
     // the previous edge; credits routed to the issuing client
     bool grant_now(unsigned k) const { return grant_q_[k]; }
     unsigned dbg_age(unsigned k) const { return age_[k]; }   // test tap
+    unsigned dbg_credits(unsigned k) const { return credits_[k]; }
+    bool dbg_pend_active(unsigned k) const { return pend_[k].active; }
+    unsigned dbg_pend_words(unsigned k) const { return pend_[k].words; }
+    unsigned dbg_offer_client() const { return offer_client_; }
+    bool dbg_offer_valid() const { return offer_.valid; }
     unsigned credits_now(unsigned k, unsigned ctrl_credits) const {
         return (ctrl_credits && last_issuer_ == k) ? ctrl_credits : 0;
     }

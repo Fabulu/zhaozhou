@@ -2,6 +2,11 @@
 # Same SKIP-if-absent law as the W1 formal lane smoke: `ctest -L formal`
 # stays green on machines without the tools.
 #
+# Every path below is substituted at CONFIGURE time (@ONLY): script-mode
+# cmake has no reliable CMAKE_CURRENT_BINARY_DIR, and the sby work dir is
+# kept SEPARATE from the lane scripts' directory so no run can ever touch
+# them.
+#
 # KNOWN TOOLCHAIN GAP (documented in the wave-2 TASK_LOG): the oss-cad-suite
 # yosys SV frontend cannot parse the FROZEN interface-package style this
 # codebase is written in (unpacked-array localparams like ZHAO_CRC32C_TABLE /
@@ -10,18 +15,18 @@
 # ready and correct; they run when the toolchain integrates UHDM/Surelog or
 # on the hardware lane). Any other failure is FATAL.
 
-if("@ZHAO_SBY_BIN@" STREQUAL "" OR NOT DEFINED PROP OR NOT DEFINED SRC)
+if("@ZHAO_SBY_BIN@" STREQUAL "")
   message(STATUS "sby not found — formal lane SKIPPED")
   return()
 endif()
 
-set(workdir "${CMAKE_CURRENT_BINARY_DIR}/formal/@PROP@")
+set(workdir "@FORMAL_WORK_ROOT@/@PROP@")
 file(REMOVE_RECURSE "${workdir}")
 file(MAKE_DIRECTORY "${workdir}")
 
 execute_process(
-  COMMAND "@ZHAO_SBY_BIN@" -f -d "${workdir}" "${SRC}/tests/formal/@PROP@.sby"
-  WORKING_DIRECTORY "${SRC}/tests/formal"
+  COMMAND "@ZHAO_SBY_BIN@" -f -d "${workdir}" "@PROP@.sby"
+  WORKING_DIRECTORY "@FORMAL_SRC_DIR@"
   RESULT_VARIABLE _rc
   OUTPUT_VARIABLE _out
   ERROR_VARIABLE _err

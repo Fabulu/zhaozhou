@@ -250,7 +250,15 @@ struct ChainHarness {
             if (!cur.active || cur.write) note("rdata_valid w/o read burst");
             else {
                 const uint32_t waddr = (cur.addr >> 1) + cur.beat;
-                if (top.rdata != shadow.at(waddr)) note("read data vs shadow");
+                if (top.rdata != shadow.at(waddr)) {
+                    std::printf("  rdmm: waddr=%u rdata=%04x shadow=%04x "
+                                "gen=%04x curaddr=%x beat=%u words=%u modelerr=%d\n",
+                                waddr, (unsigned)top.rdata,
+                                (unsigned)shadow.at(waddr),
+                                (unsigned)word_data(waddr), cur.addr, cur.beat,
+                                cur.words, (int)top.model_error);
+                    note("read data vs shadow");
+                }
                 if (++cur.beat >= cur.words) cur.active = false;
             }
         }

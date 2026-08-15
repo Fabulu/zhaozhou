@@ -48,7 +48,10 @@ int main(int argc, char** argv) {
         Sched s;
         s.arrive = h.cycle + 1 + pcg.range(30);
         s.write = (k == 0) ? false : (k == 1 ? true : pcg.range(2) == 0);
-        s.addr = (pcg.range(SHADOW_WORDS) * 2) & ~1u;   // word-aligned
+        // word-aligned INSIDE the compare window with headroom for one max
+        // request (32 words): requests crossing the 64-KiB window boundary
+        // would alias in the shadow while the model uses real addresses
+        s.addr = (pcg.range(SHADOW_WORDS - 32) * 2) & ~1u;
         s.len = 1 + pcg.range(64);
         if (s.len & 1) s.len = s.len < 64 ? s.len + 1 : 63;  // even lengths
         return s;
@@ -62,13 +65,15 @@ int main(int argc, char** argv) {
     unsigned grants_seen = 0;
     uint64_t blit_t0_ = 0;
 
-    while (issued < nreq || h.cycle < 1'000'000ull) {
+    for (;;) {   // exits via the completion break or the safety valve
         // terminate when everything is done and drained
         bool any_pending = false;
         for (unsigned k = 0; k < 5; k++) any_pending = any_pending || h.req_pending(k);
-        if (issued >= nreq && !any_pending) {
-            // drain the last bursts
-            for (int i = 0; i < 300; i++) h.step(h.auto_reqs());
+        // terminate only when every issued request has been granted at the
+        // port (the last one may still be waiting for credit returns —
+        // bounded by the loop's safety valve below)
+        if (issued >= nreq && grants_seen >= issued) {
+            for (int i = 0; i < 400; i++) h.step(h.auto_reqs());   // retire
             break;
         }
 
