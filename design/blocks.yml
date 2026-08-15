@@ -613,7 +613,7 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -623,6 +623,10 @@ blocks:
         date: "2026-08-15"
         commit: "bc94ced"
         evidence: tests/input/input_snapshot_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: "7ed046a"
+        evidence: tests/input/input_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -653,7 +657,7 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -663,6 +667,10 @@ blocks:
         date: "2026-08-15"
         commit: "bc94ced"
         evidence: tests/input/input_rumble_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-15"
+        commit: "7ed046a"
+        evidence: tests/input/input_random.cpp
     deferred: false
     cut_order: null
     superseded_by: null
