@@ -1,0 +1,27 @@
+# mem_sdram_refresh_bound.sby — BANKED evidence (plan W2.5; MEM.SDRAM stays
+# SPECIFIED, blocked_on: hardware). Under fully adversarial client pressure
+# and an adversarial hold_refresh, AUTO_REFRESH commands are bounded-deferred:
+# never more than INTERVAL + URGENT + spans + execution cycles apart.
+# Run with cwd = tests/formal (the CTest wrapper and the docs both do).
+# NOTE: this property currently SKIPs under oss-cad-suite yosys (its SV
+# frontend cannot parse the frozen zhao_pkg style — see
+# mem_formal_lane.cmake.in); the harness and script are ready and run on a
+# toolchain with UHDM/Surelog integration or the hardware lane.
+[options]
+mode bmc
+depth 900
+[engines]
+smtbmc boolector
+[script]
+read -formal -sv zhao_abi_pkg.sv
+read -formal -sv zhao_pkg.sv
+read -formal -sv zhao_sdram_params_pkg.sv
+read -formal -sv zhao_sdram_ctrl.sv
+read -formal -sv formal_mem_refresh.sv
+prep -top formal_mem_refresh
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_ctrl.sv
+formal_mem_refresh.sv

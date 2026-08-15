@@ -191,3 +191,142 @@ add_test(NAME lint_zhao_pkg
 set_tests_properties(lint_zhao_pkg PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- W2.5: memory -----------------------------------------------------------
+# Plan W2.5: synthesizable modules lint individually (charter 21 step 8);
+# the BEHAVIOURAL SDRAM MODEL (sim/models/zhao_sdram_model.sv) is a
+# TESTBENCH-ONLY component (spec/memory_rules.md 1, plan D2) and is
+# DELIBERATELY EXCLUDED from every lint target and from fpga/files.qip —
+# it is compiled only into the Verilated testbench wrappers below.
+# Test tops live in tests/memory/ (also never linted/synthesized).
+set(ZHAO_MEM_RTL ${CMAKE_SOURCE_DIR}/fpga/rtl/memory)
+set(ZHAO_MEM_PKGS
+    ${ZHAO_ABI_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${ZHAO_MEM_RTL}/zhao_sdram_params_pkg.sv)
+
+# per-module lint (synthesizable subset only)
+foreach(mem_mod IN ITEMS sdram_ctrl vram_arbiter mem_guard hps_bridge)
+  add_test(NAME lint_mem_${mem_mod}
+           COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                   --top-module zhao_${mem_mod}
+                   ${ZHAO_MEM_PKGS} ${ZHAO_MEM_RTL}/zhao_${mem_mod}.sv)
+  set_tests_properties(lint_mem_${mem_mod} PROPERTIES
+    LABELS "lint;fast"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
+add_test(NAME lint_mem_params
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 ${ZHAO_MEM_RTL}/zhao_sdram_params_pkg.sv)
+set_tests_properties(lint_mem_params PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# directed/random/budget tests (Verilated wrappers; the sim model rides
+# along only where the chain is instantiated)
+set(ZHAO_MEM_SOURCES_CHAIN
+    ${ZHAO_MEM_PKGS}
+    ${ZHAO_MEM_RTL}/zhao_sdram_ctrl.sv
+    ${ZHAO_MEM_RTL}/zhao_vram_arbiter.sv
+    ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_mem_chain.sv)
+
+add_executable(test_sdram_directed memory/sdram_directed.cpp)
+target_link_libraries(test_sdram_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_sdram_directed
+  PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_MEM_SOURCES_CHAIN})
+add_test(NAME mem_sdram_directed COMMAND test_sdram_directed)
+set_tests_properties(mem_sdram_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_vram_arbiter_directed memory/vram_arbiter_directed.cpp)
+target_link_libraries(test_vram_arbiter_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_vram_arbiter_directed
+  PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_MEM_SOURCES_CHAIN})
+add_test(NAME mem_vram_arbiter_directed COMMAND test_vram_arbiter_directed)
+set_tests_properties(mem_vram_arbiter_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_mem_random memory/mem_random.cpp)
+target_link_libraries(test_mem_random PRIVATE zhao_harness zhao_zref)
+verilate(test_mem_random
+  PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_MEM_SOURCES_CHAIN})
+add_test(NAME mem_random COMMAND test_mem_random)
+set_tests_properties(mem_random PROPERTIES LABELS "fast;nightly")
+# nightly long mode of the same binary: 100,000-request PCG streams
+add_test(NAME mem_random_long COMMAND test_mem_random --long)
+set_tests_properties(mem_random_long PROPERTIES LABELS "nightly")
+
+add_executable(test_mem_bandwidth_budget memory/mem_bandwidth_budget.cpp)
+target_link_libraries(test_mem_bandwidth_budget PRIVATE zhao_harness zhao_zref)
+verilate(test_mem_bandwidth_budget
+  PREFIX Vtb_zhao_mem_chain TOP_MODULE tb_zhao_mem_chain
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_MEM_SOURCES_CHAIN})
+add_test(NAME mem_bandwidth_budget COMMAND test_mem_bandwidth_budget)
+set_tests_properties(mem_bandwidth_budget PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_mem_guard_directed memory/mem_guard_directed.cpp)
+target_link_libraries(test_mem_guard_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_mem_guard_directed
+  PREFIX Vtb_zhao_mem_guard TOP_MODULE tb_zhao_mem_guard
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_MEM_PKGS}
+          ${ZHAO_MEM_RTL}/zhao_sdram_ctrl.sv
+          ${ZHAO_MEM_RTL}/zhao_vram_arbiter.sv
+          ${ZHAO_MEM_RTL}/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_mem_guard.sv)
+add_test(NAME mem_guard_directed COMMAND test_mem_guard_directed)
+set_tests_properties(mem_guard_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_hps_bridge_directed memory/hps_bridge_directed.cpp)
+target_link_libraries(test_hps_bridge_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_hps_bridge_directed
+  PREFIX Vtb_zhao_hps_bridge TOP_MODULE tb_zhao_hps_bridge
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_MEM_PKGS}
+          ${ZHAO_MEM_RTL}/zhao_hps_bridge.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_zhao_hps_bridge.sv)
+add_test(NAME mem_hps_bridge_directed COMMAND test_hps_bridge_directed)
+set_tests_properties(mem_hps_bridge_directed PROPERTIES LABELS "fast;nightly")
+
+# formal lane (plan 4): one wrapper per SBY property, SKIP-if-absent like
+# the W1 formal lane smoke; full set runs under the formal/nightly labels
+if(ZHAO_SBY_BIN)
+  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_sdram_refresh_bound)
+    configure_file(formal/mem_formal_lane.cmake.in
+                   formal/${sby_prop}_lane.cmake @ONLY)
+    add_test(NAME formal_${sby_prop}
+             COMMAND ${CMAKE_COMMAND}
+                     -DPROP=${sby_prop}
+                     -DSRC=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake)
+    set_tests_properties(formal_${sby_prop} PROPERTIES
+      LABELS "formal;nightly"
+      TIMEOUT 900
+      SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+  endforeach()
+endif()
+

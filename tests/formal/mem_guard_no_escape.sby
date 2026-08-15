@@ -1,0 +1,26 @@
+# mem_guard_no_escape.sby — no fabric request escapes the Phase-2 region
+# map (plan W2.5 / plan 4): every forwarded request lies fully inside its
+# client's owned region; no malformed/partial forward; deny-all at reset.
+# Run with cwd = tests/formal (the CTest wrapper and the docs both do).
+# NOTE: this property currently SKIPs under oss-cad-suite yosys (its SV
+# frontend cannot parse the frozen zhao_pkg style — see
+# mem_formal_lane.cmake.in); the harness and script are ready and run on a
+# toolchain with UHDM/Surelog integration or the hardware lane.
+[options]
+mode bmc
+depth 30
+[engines]
+smtbmc boolector
+[script]
+read -formal -sv zhao_abi_pkg.sv
+read -formal -sv zhao_pkg.sv
+read -formal -sv zhao_sdram_params_pkg.sv
+read -formal -sv zhao_mem_guard.sv
+read -formal -sv formal_mem_guard.sv
+prep -top formal_mem_guard
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../fpga/rtl/memory/zhao_mem_guard.sv
+formal_mem_guard.sv

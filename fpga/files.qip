@@ -3,3 +3,17 @@
 #   set_global_assignment -name SYSTEMVERILOG_FILE rtl/common/zhao_stub_top.sv
 #   set_global_assignment -name SYSTEMVERILOG_FILE rtl/generated/zhao_abi_pkg.sv
 # BLOCKED-on-hardware (ZH-002). Never let Quartus regenerate this list.
+
+# ---- W2.5: memory (synthesizable subset; plan D2) ---------------------------
+# The params package is the ZH-004 seam: once the board probe emits
+# rtl/generated/sdram_params.svh, the synthesis flow defines
+# ZHAO_SDRAM_BOARD_PARAMS and nothing below changes.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/zhao_sdram_params_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/zhao_sdram_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/zhao_vram_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/zhao_mem_guard.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/zhao_hps_bridge.sv
+# sim/models/zhao_sdram_model.sv is the BEHAVIOURAL TESTBENCH MODEL
+# (spec/memory_rules.md 1, plan D2): non-synthesizable, deliberately NOT
+# listed here and NOT in any lint target. It rides only in Verilator
+# testbench wrappers under tests/memory/.
