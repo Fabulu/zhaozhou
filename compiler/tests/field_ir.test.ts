@@ -419,3 +419,70 @@ test('VecPRNG: same (hash, seed) → same stream; hash perturbs it', () => {
   for (let i = 0; i < 100; i++) assert.equal(a.draw(), b.draw());
   assert.notEqual(new VecPRNG(0x11111111, 7).draw(), c.draw());
 });
+
+// ---------------------------------------------------------------------------
+// SPLINE hand-computed unit vectors (field-ir.md §3.15; review C1 — the
+// pre-fix interpreters computed rescale(v<<16, 1) = v·2^15 instead of the
+// law's rescale(v, 1) = v/2, saturating at any non-knot input)
+// ---------------------------------------------------------------------------
+
+test('SPLINE: hand-computed unit vectors, uniform 5-knot 0,0,1,1,1', () => {
+  // Table: x = 0,1,2,3,4 (raw 0x10000 step), y = 0,0,1,1,1 (raw 0/0x10000).
+  // dy_i = round_half_up((1<<32)/Δx) = 0x10000  (Q16.16 of 1/1.0).
+  const span = { sourceId: 1, line: 1, col: 1 };
+  const b = new FieldBuilder('earth', 1, [
+    { name: 'a', type: 'fx', reg: 0, min: 0, max: 5 << 16 },
+  ]);
+  const tid = b.addTable('spline', [
+    { x: 0, y: 0 }, { x: 1 << 16, y: 0 }, { x: 2 << 16, y: 1 << 16 },
+    { x: 3 << 16, y: 1 << 16 }, { x: 4 << 16, y: 1 << 16 },
+  ]);
+  const s = b.spline(tid, b.inputVal(0), span);
+  b.output('s', 'fx', s);
+  b.end(span);
+  const prog = decodeZprog(serializeProgram(buildProgram(b)));
+  assert.ok(prog.ok, prog.ok ? '' : prog.errors.join('; '));
+
+  // Segment i=1 (x in [1.0, 2.0)), t = 0.5: a = 1.5 raw 0x18000.
+  //   t   = rescale((0x8000)·0x10000, 16) = rescale(2^31, 16) = 0x8000
+  //   P0 = 0, P1 = 0, P2 = 0x10000, P3 = 0x10000
+  //   C1 = 0x10000 − 0 = 0x10000
+  //   C2 = 2·0 − 5·0 + 4·0x10000 − 0x10000 = 3·0x10000
+  //   C3 = −0 + 3·0 − 3·0x10000 + 0x10000 = −2·0x10000
+  //   u = fx_mad(0x8000, −0x20000, 0x30000) = rescale(−2^32 + 3·2^32, 16)
+  //     = rescale(2^33, 16) = 0x20000
+  //   u = fx_mad(0x8000, 0x20000, 0x10000) = rescale(2^32 + 2^32, 16)
+  //     = rescale(2^33, 16) = 0x20000
+  //   v = fx_mul(0x8000, 0x20000) = rescale(2^32, 16) = 0x10000
+  //   dst = fx_add(P1=0, rescale(0x10000, 1)) = (0x10000 + 1) >> 1 = 0x8000
+  // CR ground truth: uniform Catmull-Rom at t=0.5 over knots (0,0,1,1) is
+  // (−P0 + 9·P1 + 9·P2 − P3)/16 = 8/16 = 0.5 → raw 0x8000 = 32768.
+  // (The pre-fix rescale(v<<16, 1) gave rescale(2^48, 1) → saturate
+  // 0x7FFFFFFF.)
+  //
+  // Segment i=2 (x in [2.0, 3.0)), t = 0.75: a = 2.75 raw 0x2C000.
+  //   t   = rescale(0xC000·0x10000, 16) = 0xC000
+  //   P0 = 0, P1 = 0x10000, P2 = 0x10000, P3 = 0x10000
+  //   C1 = 0x10000, C2 = −2·0x10000, C3 = 0x10000
+  //   u = fx_mad(0xC000, 0x10000, −0x20000) = rescale(3·2^30 − 2^33, 16)
+  //     = rescale(−5·2^30, 16) = −0x14000
+  //   u = fx_mad(0xC000, −0x14000, 0x10000)
+  //     = rescale(−15·2^28 + 2^32, 16) = rescale(2^28, 16) = 0x1000
+  //   v = fx_mul(0xC000, 0x1000) = rescale(3·2^26, 16) = 0xC00
+  //   dst = fx_add(0x10000, rescale(0xC00, 1)) = 0x10000 + 0x600 = 0x10600
+  // CR ground truth at t=0.75 over knots (0,1,1,1):
+  // 1 + 0.75·(0 + 0.75·(−2 + 0.75·1))/2 = 1 + 0.75·0.0625/2 = 1.0234375
+  // → raw 0x10600 = 67072 (the CR tail overshoot).
+  const cases: Array<[number, number, string]> = [
+    [0, 0, 'knot t=0 (i=0): y[0] exact'],
+    [1 << 16, 0, 'knot t=0 (i=1): y[1] exact'],
+    [0x18000, 0x8000, 'midpoint t=0.5 (i=1): 32768'],
+    [0x2C000, 0x10600, 'near-endpoint t=0.75 (i=2): 67072 (CR overshoot)'],
+    [5 << 16, 1 << 16, 'beyond domain clamps to the last knot (y[4])'],
+  ];
+  for (const [a, want, why] of cases) {
+    const r = interpret(prog.prog, [a]);
+    assert.equal(r.outputs[0], want, `${why} (a=${a})`);
+    assert.equal(r.status.sat, false, `no saturation at a=${a}`);
+  }
+});

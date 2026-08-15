@@ -7,7 +7,7 @@
 // (decoded program, input record). int64 paths go through i64.ts limbs.
 
 import {
-  U64, Ledger, mulS32, addU64, shl16S32, rescaleSat, satS32,
+  U64, Ledger, mulS32, addU64, rescaleSat, satS32,
   acc96Add, acc96Finish, Acc96,
 } from './i64.js';
 import {
@@ -175,7 +175,11 @@ export function interpret(prog: DecodedProgram, inputs: number[]): InterpResult 
         let u = fxMad(tt, C3, C2, L);                      // Horner
         u = fxMad(tt, u, C1, L);
         const v = fxMul(tt, u, L);
-        reg[ins.dst] = fxAdd(p1, rescaleSat(shl16S32(v), 1, L), L);
+        // §3.15: dst = fx_add(P1, rescale_s32(v, 1)) — the ½ of Catmull-Rom.
+        // rescale the sign-extended RAW v by 1 (review C1: the pre-fix
+        // `rescaleSat(shl16S32(v), 1)` amplified the term by 2^16).
+        reg[ins.dst] = fxAdd(
+          p1, rescaleSat({ hi: v < 0 ? 0xffffffff : 0, lo: v >>> 0 }, 1, L), L);
         break;
       }
       case 0x1c: {                                                        // NOISE2

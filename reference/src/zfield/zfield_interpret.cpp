@@ -202,8 +202,11 @@ Status interpret(const Decoded& prog, const int32_t* in, size_t n_in,
         int32_t u = zref::fx_mad(F(tt), F(C3), F(C2), &L).raw;      // Horner
         u = zref::fx_mad(F(tt), F(u), F(C1), &L).raw;
         const int32_t v = zref::fx_mul(F(tt), F(u), &L).raw;
+        // §3.15: dst = fx_add(P1, rescale_s32(v, 1)) — the ½ of Catmull-Rom.
+        // rescale the RAW v by 1; the pre-fix `v << 16` here amplified the
+        // term by 2^16 (review C1, RUN-20260814-1912 wave-1).
         reg[ins.dst] = zref::fx_add(F(p1),
-                                    F(zref::rescale_s32((int64_t)v << 16, 1, &L)), &L).raw;
+                                    F(zref::rescale_s32((int64_t)v, 1, &L)), &L).raw;
         break;
       }
       case OP_NOISE2: {

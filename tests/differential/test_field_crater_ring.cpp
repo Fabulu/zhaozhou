@@ -370,6 +370,55 @@ int main() {
     (void)st;
   }
 
+  // ---- review C1 (RUN-20260814-1912): SPLINE hand-computed unit vectors --
+  // Uniform 5-knot table x = 0..4 step 0x10000, y = 0,0,1,1,1;
+  // dy_i = round_half_up((1<<32)/Δx) = 0x10000 (§3.15 spline kind).
+  // Mirrored unit test: compiler/tests/field_ir.test.ts (same derivation).
+  {
+    zfield::Decoded p;
+    p.tables.push_back(zfield::Table{1,
+                                     {0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
+                                     {0, 0, 1 << 16, 1 << 16, 1 << 16},
+                                     {1 << 16, 1 << 16, 1 << 16, 1 << 16, 1 << 16}});
+    p.in_lanes.push_back(zfield::IoLane{"a", 0, 0, 0, 5 << 16});
+    p.out_lanes.push_back(zfield::IoLane{"s", 0, 1, 0, 0});
+    p.instrs.push_back(zfield::Instr{zfield::OP_SPLINE, 1, 0, 0, 0, 0});
+    p.instrs.push_back(zfield::Instr{zfield::OP_END, 0, 0, 0, 0, 0});
+
+    // Hand derivation, segment i=1, t=0.5 (a = 1.5 = 0x18000):
+    //   t  = rescale((0x18000−0x10000)·0x10000, 16) = 0x8000
+    //   P0=0, P1=0, P2=0x10000, P3=0x10000
+    //   C1 = 0x10000;  C2 = 3·0x10000;  C3 = −2·0x10000
+    //   u  = fx_mad(0x8000, −0x20000, 0x30000) = rescale(2^33, 16) = 0x20000
+    //   u  = fx_mad(0x8000,  0x20000,  0x10000) = rescale(2^33, 16) = 0x20000
+    //   v  = fx_mul(0x8000, 0x20000) = rescale(2^32, 16) = 0x10000
+    //   dst = fx_add(0, rescale(0x10000, 1)) = (0x10000+1)>>1 = 0x8000
+    // CR ground truth (−P0+9P1+9P2−P3)/16 = 8/16 = 0.5 → 32768. The pre-fix
+    // law `rescale(v<<16, 1)` saturated this input to 0x7FFFFFFF.
+    // Segment i=2, t=0.75 (a = 2.75 = 0x2C000):
+    //   C1 = 0x10000;  C2 = −2·0x10000;  C3 = 0x10000;  t = 0xC000
+    //   u  = fx_mad(0xC000, 0x10000, −0x20000) = rescale(−5·2^30, 16) = −0x14000
+    //   u  = fx_mad(0xC000, −0x14000, 0x10000) = rescale(2^28, 16) = 0x1000
+    //   v  = fx_mul(0xC000, 0x1000) = rescale(3·2^26, 16) = 0xC00
+    //   dst = fx_add(0x10000, rescale(0xC00, 1)) = 0x10000 + 0x600 = 0x10600
+    // (CR tail overshoot 1.0234375; the pre-fix law gave 0x10000+0x60000000.)
+    const struct { int32_t a; int32_t want; const char* why; } vecs[] = {
+        {0, 0, "spline knot t=0 (i=0): y[0] exact"},
+        {1 << 16, 0, "spline knot t=0 (i=1): y[1] exact"},
+        {0x18000, 0x8000, "spline midpoint t=0.5 (i=1): 32768"},
+        {0x2C000, 0x10600, "spline near-endpoint t=0.75 (i=2): 67072"},
+        {5 << 16, 1 << 16, "spline beyond domain clamps to the last knot"},
+    };
+    for (const auto& v : vecs) {
+      int32_t out[1] = {0};
+      const zfield::Status st = zfield::interpret(p, &v.a, 1, out, 1);
+      char msg[128];
+      snprintf(msg, sizeof(msg), "%s (a=0x%x)", v.why, (unsigned)v.a);
+      CHECK(out[0] == v.want, msg);
+      CHECK(!st.sat, "spline hand vector saturates nothing");
+    }
+  }
+
   if (failures != 0) {
     printf("%d FAILURE(S)\n", failures);
     return 1;
