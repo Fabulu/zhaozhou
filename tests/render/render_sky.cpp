@@ -225,6 +225,92 @@ void test_sun_visible_on_canvas() {
   check(diff > 0, "the sun quad changes pixels (additive blend reaches the canvas)");
 }
 
+// ---- WHICH WAY IS UP (latent defect pinned 2026-08-15) ---------------------
+//
+// Screen Y grows DOWNWARD (video_rules.md §2: pixel (0,0) is top-left, and
+// project_vertex maps +Y NDC to +Y canvas row). World Y grows UP. So a
+// rotation-only rot_proj authored with a naively POSITIVE y coefficient puts
+// the zenith cap at the BOTTOM of the frame and the under-plane at the top —
+// an exactly upside-down sky. Every other sky test passes on it: they check
+// the layer census, the UV laws, scroll determinism and "some cap pixels
+// exist", never which way is up.
+//
+// The fixture below is the canonically-authored matrix — a downward tilt with
+// the y-down screen convention applied:
+//   clip.x = 13*wx                      (+-5120 world -> about +-1 ndc)
+//   clip.y = -26*wy + 10*wz             (w = 1: rotation-only)
+// Cap (wy = +2560): ndc_y in [-117760, -15360] -> strictly NEGATIVE -> upper
+// half. Under-plane (wy = -2560): ndc_y in [+15360, +117760] -> strictly
+// POSITIVE -> lower half. Flip any sign in that chain — the matrix, the
+// viewport map, or the sky's Y constants — and this test fires.
+void test_sky_orientation() {
+  const zref::sky::SkySet s = test_set();
+  zref::render::RenderResources res;
+  res.sky_sets.push_back({2, s});
+  const int32_t m[16] = {13, 0, 0, 0, 0, -26, 10, 0, 0, 0, 13, 0, 0, 0, 0, 1 << 16};
+  {
+    zref::mat4fx rp;
+    for (int a = 0; a < 4; ++a)
+      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{m[a * 4 + b]};
+    check(zref::sky::rot_proj_is_rotation_only(rp), "orientation fixture is rotation-only (§1)");
+  }
+
+  auto render_with = [&](uint8_t flags, std::vector<uint16_t>& out) {
+    zref::render::SoftwareRenderer rend;
+    zref::render::RenderCanvas canvas;
+    const auto pkt = rtest::seal_frame(11, [&](zhao::ZhaoFrameBuilder& b) {
+      auto sv = zhao_abi::zhao_sample_set_view();
+      sv.payload.view_id = 0;
+      sv.payload.view_projection = rtest::ortho_topdown(2048);
+      std::vector<uint8_t> v1;
+      zhao_abi::zhao_pack_set_view(sv, v1);
+      b.append_record(v1);
+      auto sk = zhao_abi::zhao_sample_draw_sky();
+      sk.payload.sky_set = 2;
+      sk.payload.rot_proj[0] = rtest::mat(m);
+      sk.payload.rot_proj[1] = rtest::mat(m);
+      sk.payload.drum_yaw = 0;
+      sk.payload.viewport_mask = 1;
+      sk.payload.flags = flags;
+      std::vector<uint8_t> v2;
+      zhao_abi::zhao_pack_draw_sky(sk, v2);
+      b.append_record(v2);
+    });
+    check(rend.render_frame(pkt, 0, canvas, res).status == zhao_abi::ZH_ABI_OK,
+          "orientation fixture frame renders");
+    out.clear();
+    for (uint32_t y = 0; y < 240; ++y)
+      for (uint32_t x = 0; x < 384; ++x) out.push_back(rtest::px(canvas, 0, x, y, 384));
+  };
+
+  // bands-only baseline; the pixels a layer CHANGES are that layer's pixels
+  std::vector<uint16_t> bands_only, with_cap, with_under;
+  render_with(0, bands_only);
+  render_with(zref::sky::kLayerCap, with_cap);
+  render_with(zref::sky::kLayerUnder, with_under);
+
+  uint32_t cap_px = 0, cap_lower = 0, under_px = 0, under_upper = 0;
+  for (uint32_t y = 0; y < 240; ++y) {
+    for (uint32_t x = 0; x < 384; ++x) {
+      const size_t i = static_cast<size_t>(y) * 384 + x;
+      if (with_cap[i] != bands_only[i]) {
+        ++cap_px;
+        if (y >= 120) ++cap_lower;
+      }
+      if (with_under[i] != bands_only[i]) {
+        ++under_px;
+        if (y < 120) ++under_upper;
+      }
+    }
+  }
+  std::printf("render_sky: orientation — cap %u px (%u below the midline), under %u px (%u above)\n",
+              cap_px, cap_lower, under_px, under_upper);
+  check(cap_px > 0, "the zenith cap reaches the canvas at all");
+  check(under_px > 0, "the under-plane reaches the canvas at all");
+  check(cap_lower == 0, "ZENITH cap pixels land in the UPPER half of the frame");
+  check(under_upper == 0, "UNDER-plane pixels land in the LOWER half of the frame");
+}
+
 void test_scroll_determinism() {
   // §1.1 tick-exact scroll: T vs T+3840 byte-equal UVs (the 1-tile/64 s law)
   const zref::sky::SkySet s = test_set();
@@ -433,6 +519,7 @@ int main() {
   test_cloud_vertex_alpha_law();
   test_sun_centre_alpha();
   test_sun_visible_on_canvas();
+  test_sky_orientation();
   test_scroll_determinism();
   test_rot_proj_validation();
   test_fallback_clear();
