@@ -18,20 +18,38 @@
 // (Currently SKIPped under oss-cad-suite yosys — SV-frontend gap vs the
 // frozen package style; see mem_formal_lane.cmake.in.)
 
+// RESET AND ENVIRONMENT DISCIPLINE (see formal_mem_guard.sv for the full
+// reasoning): `rst_n` is generated from an initialised counter rather than
+// being a free input (a free rst_n lets the solver start out of reset with
+// `since_ref` already past the bound — the free-init trap), and the free
+// environment is carried on PORTS because `(* anyseq *)` locals do not
+// survive this frontend and elaborate to constants.
 module formal_mem_refresh
   import zhao_pkg::*;
   import zhao_sdram_params_pkg::*;
 (
-  input logic clk,
-  input logic rst_n
+  input logic        clk,
+  input logic        env_valid,
+  input logic        env_write,
+  input logic [26:0] env_addr,
+  input logic [6:0]  env_len,
+  input logic        env_hold,
+  input logic [15:0] env_wdata_i
 );
 
-  (* anyseq *) logic        env_valid;
-  (* anyseq *) logic        env_write;
-  (* anyseq *) logic [26:0] env_addr;
-  (* anyseq *) logic [6:0]  env_len;
-  (* anyseq *) logic        env_hold;
-  (* anyconst *) logic [15:0] env_wdata;
+  // ---- reset discipline -----------------------------------------------------
+  logic [3:0] cyc = 4'd0;
+  always_ff @(posedge clk) begin
+    if (cyc != 4'hF) cyc <= cyc + 4'd1;
+  end
+  wire rst_n    = (cyc >= 4'd2);
+  wire checking = (cyc >= 4'd3);
+
+  // write data is a don't-care constant for this property
+  logic [15:0] env_wdata;
+  always_ff @(posedge clk) begin
+    if (cyc == 4'd0) env_wdata <= env_wdata_i;
+  end
 
   zhao_arb_req_t req;
   assign req.valid = env_valid;
@@ -68,10 +86,21 @@ module formal_mem_refresh
     11'(REFRESH_INTERVAL + REFRESH_URGENT + 2 * MAX_BURST_SPAN + 4);
 
   always_comb begin
-    if (init_done) begin
+    if (checking && init_done) begin
       assert (since_ref <= BOUND)
         else $error("refresh bound: %0d cycles since last AUTO_REFRESH (bound %0d)",
                     since_ref, BOUND);
+    end
+  end
+
+  // Non-vacuity: the bound is an implication on init_done. If initialisation
+  // is never reached within the BMC depth the assertion proves nothing, and
+  // a refresh must actually be observed for the counter to mean anything.
+  always_ff @(posedge clk) begin
+    if (checking) begin
+      c_init_done: cover (init_done);
+      c_refresh:   cover (init_done && refresh_pulse);
+      c_aged:      cover (init_done && since_ref > 11'd100);
     end
   end
 

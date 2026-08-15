@@ -83,12 +83,20 @@ module zhao_mem_guard
   // scanout: read-only, within the two FB slots [0, 0x78000)
   assign scan_ok = !req.write && (end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN);
 
-  // blit: write-only, within the granted slot window
-  logic [31:0] blit_base, blit_end;
-  assign blit_base = blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
-  assign blit_end  = blit_base + blit_span;
-  assign blit_ok   = req.write && map_valid
-                     && (addr32 >= blit_base) && (end32 <= blit_end);
+  // blit: write-only, within the granted slot window.
+  // blit_span is clamped to the slot's own span before use. CMD.SCHEDULER is
+  // specified to write canvas_bytes(mode) (<= ZHAO_FB_SLOT_SPAN), but the
+  // guard must not TRUST that: an over-large span made blit_base + blit_span
+  // wrap 32 bits, and a wrapped window admitted writes far outside the map —
+  // an escape, in the one block whose entire contract is that no escape
+  // exists. Clamping keeps every legal request legal (they never exceed the
+  // slot) and closes the wrap by construction.
+  logic [31:0] blit_base, blit_end, blit_span_eff;
+  assign blit_base     = blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
+  assign blit_span_eff = (blit_span > ZHAO_FB_SLOT_SPAN) ? ZHAO_FB_SLOT_SPAN : blit_span;
+  assign blit_end      = blit_base + blit_span_eff;
+  assign blit_ok       = req.write && map_valid
+                         && (addr32 >= blit_base) && (end32 <= blit_end);
 
   always_comb begin
     unique case (req.client)
@@ -109,22 +117,38 @@ module zhao_mem_guard
     arb_req       = fwd_req;
     arb_req.valid = fwd_active;
   end
-  assign rsp.ready = !fwd_active;   // level; verdict 1 cycle after accept
+
+  // `rsp` gets exactly ONE kind of driver. Continuously assigning rsp.ready
+  // while driving rsp.ok/rsp.violation from the always_ff below mixes a
+  // continuous and a procedural driver on one variable, which IEEE 1800
+  // forbids (a variable may be written by procedural statements OR by a
+  // single continuous assignment, never both) — packed struct fields are not
+  // separate variables. Tools that accept it resolve the struct
+  // inconsistently: in the elaborated formal model arb_req.valid became
+  // unreachable, which silently made the no-escape assertions VACUOUS.
+  // The verdict bits are registered here and the whole struct is assembled
+  // by this single always_comb.
+  logic rsp_ok_q, rsp_violation_q;
+  always_comb begin
+    rsp.ready     = !fwd_active;   // level; verdict 1 cycle after accept
+    rsp.ok        = rsp_ok_q;
+    rsp.violation = rsp_violation_q;
+  end
 
   // ------------------------------------------------------------- seq core --
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       fwd_active          <= 1'b0;
       fwd_req             <= '0;
-      rsp.ok              <= 1'b0;
-      rsp.violation       <= 1'b0;
+      rsp_ok_q            <= 1'b0;
+      rsp_violation_q     <= 1'b0;
       guard_violation     <= 1'b0;
       guard_violations    <= 32'd0;
       guard_violation_req <= '0;
     end else begin
       // defaults: one-cycle verdict pulses
-      rsp.ok           <= 1'b0;
-      rsp.violation    <= 1'b0;
+      rsp_ok_q         <= 1'b0;
+      rsp_violation_q  <= 1'b0;
       guard_violation  <= 1'b0;
 
       // forwarded request leaves when the arbiter accepts it
@@ -133,14 +157,14 @@ module zhao_mem_guard
       // accept at most one request per cycle (rsp.ready level above)
       if (req.valid && !fwd_active) begin
         if (pass_ok) begin
-          rsp.ok            <= 1'b1;
+          rsp_ok_q          <= 1'b1;
           fwd_active        <= 1'b1;
           fwd_req.write     <= req.write;
           fwd_req.client    <= req.client;
           fwd_req.addr      <= req.addr;
           fwd_req.len       <= req.len;
         end else begin
-          rsp.violation       <= 1'b1;
+          rsp_violation_q     <= 1'b1;
           guard_violation     <= 1'b1;
           guard_violations    <= guard_violations + 32'd1;
           guard_violation_req <= req;   // full request traced to the harness

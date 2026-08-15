@@ -2,22 +2,38 @@
 # map (plan W2.5 / plan 4): every forwarded request lies fully inside its
 # client's owned region; no malformed/partial forward; deny-all at reset.
 # Run with cwd = tests/formal (the CTest wrapper and the docs both do).
-# NOTE: this property currently SKIPs under oss-cad-suite yosys (its SV
-# frontend cannot parse the frozen zhao_pkg style — see
-# mem_formal_lane.cmake.in); the harness and script are ready and run on a
-# toolchain with UHDM/Surelog integration or the hardware lane.
+#
+# TWO TASKS, both required:
+#   bmc   — the safety properties A1/A2/A3 hold to the depth below.
+#   cover — the covers in the harness are REACHABLE. Without this the bmc
+#           result is worthless: A1/A2 are implications on arb_req.valid, and
+#           they passed vacuously for as long as the DUT's mixed-driver defect
+#           made the forwarding path unreachable in the elaborated model.
+#
+# Frontend: read_slang. The built-in yosys Verilog reader cannot parse the
+# frozen package style (unpacked-array localparams, `module X import P::*;`),
+# which is why this lane used to SKIP; the slang plugin shipped with
+# oss-cad-suite reads these same frozen packages (the INPUT lane has been
+# doing it since W2.3), so the SKIP was never actually necessary.
+
+[tasks]
+bmc
+cover
+
 [options]
-mode bmc
-depth 30
+bmc: mode bmc
+bmc: depth 30
+cover: mode cover
+cover: depth 30
+expect pass
+
 [engines]
 smtbmc boolector
+
 [script]
-read -formal -sv zhao_abi_pkg.sv
-read -formal -sv zhao_pkg.sv
-read -formal -sv zhao_sdram_params_pkg.sv
-read -formal -sv zhao_mem_guard.sv
-read -formal -sv formal_mem_guard.sv
+read_slang --top formal_mem_guard zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_mem_guard.sv formal_mem_guard.sv
 prep -top formal_mem_guard
+
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv
