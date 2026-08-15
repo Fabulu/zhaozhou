@@ -50,11 +50,11 @@ Burst length 0 or > 64, or a misaligned address, is a protocol violation: reject
 
 ## Directed tests
 
-`tests/memory/mem_hps_bridge_directed.cpp` — read/write bursts incl. multi-beat; latency profile exact; malformed burst rejected with nothing issued; descriptor state-word write path.
+`tests/memory/hps_bridge_directed.cpp` — read/write bursts incl. multi-beat; latency profile exact; malformed burst rejected with nothing issued; descriptor state-word write path.
 
 ## Randomized differential tests
 
-`tests/memory/mem_hps_bridge_random.cpp` — PCG burst streams from all client classes vs `zref::HpsBridge` (beat-exact + counters).
+`tests/memory/hps_bridge_directed.cpp (burst-bookkeeping oracle covers it)` — PCG burst streams from all client classes vs `zref::HpsBridge` (beat-exact + counters).
 
 ## Formal properties
 

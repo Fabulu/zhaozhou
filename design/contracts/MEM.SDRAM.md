@@ -50,11 +50,11 @@ An uncredited request is a protocol violation (assertion in sim; the arbiter nev
 
 ## Directed tests
 
-`tests/memory/mem_sdram_directed.cpp` — refresh steals counted on a deterministic schedule; bank-conflict penalty exact; read/write latency profiles vs the model cycle-for-cycle.
+`tests/memory/sdram_directed.cpp` — refresh steals counted on a deterministic schedule; bank-conflict penalty exact; read/write latency profiles vs the model cycle-for-cycle.
 
 ## Randomized differential tests
 
-`tests/memory/mem_sdram_random.cpp` — three-way random (arbiter+ctrl+behavioural model vs oracles) with a 64 KiB shadow-memory integrity compare (spec/memory_rules.md §7).
+`tests/memory/mem_random.cpp` — three-way random (arbiter+ctrl+behavioural model vs oracles) with a 64 KiB shadow-memory integrity compare (spec/memory_rules.md §7).
 
 ## Formal properties
 

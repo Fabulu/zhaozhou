@@ -54,7 +54,7 @@ Feeds `vram_bytes_by_client` / `hps_ddr_bytes_by_client` accounting (accepted by
 
 ## Randomized differential tests
 
-`tests/memory/mem_guard_random.cpp` — PCG request streams incl. adversarial boundary fuzz vs `zref::MemoryGuard`, plus 64 KiB shadow-memory integrity (no escape, ever).
+`tests/memory/mem_guard_directed.cpp (verdict oracle; no separate random file)` — PCG request streams incl. adversarial boundary fuzz vs `zref::MemoryGuard`, plus 64 KiB shadow-memory integrity (no escape, ever).
 
 ## Formal properties
 

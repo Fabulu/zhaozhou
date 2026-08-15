@@ -1,0 +1,29 @@
+# mem_vram_arbiter_liveness.sby — D3 liveness bound (plan W2.5 / plan 4).
+# The composed arbiter+controller (real RTL, no memory model) serves every
+# guaranteed client's first SDRAM-edge burst within B = 40 cycles of port
+# acceptance, under the documented Phase-2 population assumptions (G=2).
+# Run with cwd = tests/formal (the CTest wrapper and the docs both do).
+# NOTE: this property currently SKIPs under oss-cad-suite yosys (its SV
+# frontend cannot parse the frozen zhao_pkg style — see
+# mem_formal_lane.cmake.in); the harness and script are ready and run on a
+# toolchain with UHDM/Surelog integration or the hardware lane.
+[options]
+mode bmc
+depth 130
+[engines]
+smtbmc boolector
+[script]
+read -formal -sv zhao_abi_pkg.sv
+read -formal -sv zhao_pkg.sv
+read -formal -sv zhao_sdram_params_pkg.sv
+read -formal -sv zhao_sdram_ctrl.sv
+read -formal -sv zhao_vram_arbiter.sv
+read -formal -sv formal_mem_arbiter.sv
+prep -top formal_mem_arbiter
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_ctrl.sv
+../../fpga/rtl/memory/zhao_vram_arbiter.sv
+formal_mem_arbiter.sv

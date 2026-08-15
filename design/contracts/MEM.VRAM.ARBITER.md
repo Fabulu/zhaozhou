@@ -50,11 +50,11 @@ An uncredited or out-of-region request cannot arrive (guard + credit protocol); 
 
 ## Directed tests
 
-`tests/memory/mem_vram_arbiter_directed.cpp` — scanout preempts at a burst boundary; RR fairness among guaranteed clients; refresh steal visible; bandwidth budget (Duo worst line + blit ⇒ zero starvation, spec/memory_rules.md §2).
+`tests/memory/vram_arbiter_directed.cpp` — scanout preempts at a burst boundary; RR fairness among guaranteed clients; refresh steal visible; bandwidth budget (Duo worst line + blit ⇒ zero starvation, spec/memory_rules.md §2).
 
 ## Randomized differential tests
 
-`tests/memory/mem_vram_arbiter_random.cpp` — three-way random vs `zref::VramArbiter` + `zref::SdramController` with grant-order equality and 64 KiB shadow-memory integrity.
+`tests/memory/mem_random.cpp` — three-way random vs `zref::VramArbiter` + `zref::SdramController` with grant-order equality and 64 KiB shadow-memory integrity.
 
 ## Formal properties
 

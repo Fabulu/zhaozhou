@@ -18,7 +18,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | geometry | 10 | · | · | · | · | · | · | · | 10 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 3 | · | · | · | · | · | · | · | 3 |
-| memory | 4 | · | · | · | · | · | · | 1 | 4 |
+| memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | 5 | · | · | · | · | · | · | · | 5 |
@@ -27,12 +27,22 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
-| **all** | 78 | 3 | 3 | 3 | · | · | · | 6 | 87 |
+| **all** | 75 | 3 | 3 | 6 | · | · | · | 6 | 87 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
 | block | state | date | commit | evidence |
 |---|---|---|---|---|
+| MEM.SDRAM | SPECIFIED | 2026-08-15 | `6bcc4e9` | BANKED (blocked_on: hardware — never advances from SPECIFIED, plan D2): synthesizable core zhao_sdram_ctrl.sv + behavioural model sim/models/zhao_sdram_model.sv verified against the frozen sim profile — ctest mem_sdram_directed (exact grant-to-grant spans, refresh steals = 12 per preempted refresh, DQM-masked partial bursts, bank-conflict accounting, model timing-clean) and the three-way differential mem_random (1k/100k, oracle mismatches 0); verilator -Wall lint clean; formal mem_sdram_refresh_bound ready (SKIPped on the oss-cad-suite yosys SV-frontend gap, see tests/formal/mem_formal_lane.cmake.in). ZH-004 obligations unfreeze the profile via zhao_sdram_params_pkg.sv. |
+| MEM.VRAM.ARBITER | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
+| MEM.VRAM.ARBITER | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
+| MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_random.cpp |
+| MEM.HPS.BRIDGE | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
+| MEM.HPS.BRIDGE | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
+| MEM.HPS.BRIDGE | RTL_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_random.cpp |
+| MEM.GUARD | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
+| MEM.GUARD | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
+| MEM.GUARD | RTL_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_random.cpp |
 | INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
 | INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
 | INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
