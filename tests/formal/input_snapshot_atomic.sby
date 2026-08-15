@@ -12,13 +12,23 @@
 #
 # BMC depth 30 covers the double-buffer gray-pointer swap, absence freezes
 # and the increment paths across interleaved tick/no-tick cycles.
+#
+# The `cover` task is LOAD-BEARING, not decoration. Every property above is an
+# implication guarded by $past(frame_tick.pulse): if the elaborated model
+# cannot reach a tick, all three hold vacuously and the bmc task is green
+# while proving nothing. That is precisely how MEM.GUARD's proof passed
+# meaninglessly for a wave. design/formal_runs.yml records covers: true for
+# this property only because this task exists (ledger rule V16).
 
 [tasks]
 bmc
+cover
 
 [options]
-mode bmc
-depth 30
+bmc:   mode bmc
+bmc:   depth 30
+cover: mode cover
+cover: depth 30
 expect pass
 
 [engines]

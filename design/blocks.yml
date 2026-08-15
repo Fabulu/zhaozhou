@@ -336,7 +336,7 @@ blocks:
     kind: rtl
     subsystem: memory
     clock_domain: gpu
-    purpose: Guaranteed-client-liveness arbiter between VRAM clients and the SDRAM controller; formally proven to never starve a guaranteed client.
+    purpose: Guaranteed-client-liveness arbiter between VRAM clients and the SDRAM controller; formally proven to grant every guaranteed client within a tight, bisected bound (spec/memory_rules.md 2.1).
     contract: design/contracts/MEM.VRAM.ARBITER.md
     phase: 2
     owner_issue: ZH-026
@@ -369,6 +369,26 @@ blocks:
         date: "2026-08-15"
         commit: 6bcc4e9
         evidence: tests/memory/mem_random.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "0000000"
+        evidence: tests/formal/mem_vram_arbiter_liveness.sby
+        regression_reason: >-
+          CORRECTION, not an advance. The 2026-08-15 RTL_VERIFIED entry above
+          was earned on directed + random evidence, but this block's headline
+          claim ("formally proven to never starve a guaranteed client") rested
+          on mem_vram_arbiter_liveness citing B = 40 — a bound whose proof had
+          NEVER BEEN ELABORATED and which FAILS when it is. Ratified for
+          re-derivation in RATIFICATION-arbiter-liveness-bound.md (run
+          RUN-20260814-2154-wave2-phase2-console-shell). B is re-derived in
+          spec/memory_rules.md §2.1 (the old formula kept struck through) and
+          re-proven TIGHT in both directions: the bmc task passes at the
+          derived refresh-free bounds (RR 52, scanout 34) and bmc_tight_rr /
+          bmc_tight_scanout FAIL at bound-1 (51 / 33); operational bounds add
+          a 13-cycle refresh steal => 65 / 47. All 8 covers reached, so the
+          asserts are not vacuous. The block STAYS at RTL_VERIFIED because
+          the corrected bound IS proven; had it not been, this entry would
+          have dropped it to UNIT_VERIFIED per the ratification.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -376,10 +396,12 @@ blocks:
       leaf (serves MEM.GUARD requests). W2.5: the offered burst is a
       REGISTERED stable offer (a combinational selection can change between
       the controller's acceptance edge and the grant pulse); the aging
-      override (threshold 20 < two MAX_BURST_SPAN gaps) makes the frozen
-      B=40 bound structural. Formal mem_vram_arbiter_liveness.sby committed;
-      SKIPs under oss-cad-suite yosys (SV-frontend gap vs the frozen
-      package style, see tests/formal/mem_formal_lane.cmake.in).
+      override (threshold 20) is what makes the liveness bound finite at all
+      under strict scanout priority. 2026-08-16: the frozen B = 40 was
+      DISPROVEN and re-derived — scanout 34/47, RR class 52/65
+      (spec/memory_rules.md §2.1). The formal lane no longer SKIPs: it reads
+      the frozen package style with read_slang, and design/formal_runs.yml
+      records the green run (ledger rule V16).
 
   - id: MEM.HPS.BRIDGE
     name: HPS-DDR burst bridge

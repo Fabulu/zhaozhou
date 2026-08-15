@@ -7,8 +7,9 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadLedger } from './load';
+import { loadLedger, loadYaml } from './load';
 import { checkAll } from './rules';
+import type { FormalRunsDoc } from './types';
 import { readPrevBlocks } from './git';
 import { renderArchitecture } from './gen/architecture';
 import { renderDashboard } from './gen/dashboard';
@@ -22,13 +23,42 @@ function repoRelativeExists(p: string): boolean {
   return fs.existsSync(path.join(REPO_ROOT, p));
 }
 
+/**
+ * Every `.sby` under tests/formal, repo-relative with forward slashes — the
+ * V16 "a property on disk must have a recorded run" side of the check.
+ */
+function formalTasksOnDisk(): string[] {
+  const dir = path.join(REPO_ROOT, 'tests', 'formal');
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.sby'))
+    .map((f) => `tests/formal/${f}`)
+    .sort();
+}
+
 function cmdCheck(): number {
   const { blocks, ops } = loadLedger(DESIGN_DIR);
   const errors: string[] = [...blocks.schemaErrors, ...ops.schemaErrors];
+  const formalFile = path.join(DESIGN_DIR, 'formal_runs.yml');
+  let formalDoc: FormalRunsDoc | undefined;
+  if (!fs.existsSync(formalFile)) {
+    errors.push('V16: design/formal_runs.yml is missing — the formal-run registry is not optional');
+  } else {
+    formalDoc = loadYaml<FormalRunsDoc>(formalFile);
+  }
   if (errors.length === 0) {
     const prev = readPrevBlocks(REPO_ROOT);
-    errors.push(...checkAll(blocks.doc, ops.doc, { prevBlocks: prev.doc, exists: repoRelativeExists }));
+    errors.push(
+      ...checkAll(
+        blocks.doc,
+        ops.doc,
+        { prevBlocks: prev.doc, exists: repoRelativeExists, formalTasksOnDisk: formalTasksOnDisk() },
+        formalDoc
+      )
+    );
     console.log(`ledger: V2 git-history — ${prev.note}`);
+    console.log(`ledger: V16 formal registry — ${formalDoc?.runs?.length ?? 0} recorded run(s)`);
   }
   const nBlocks = blocks.doc.blocks?.length ?? 0;
   const nOps = ops.doc.ops?.length ?? 0;
@@ -55,7 +85,7 @@ function cmdCheck(): number {
     return 1;
   }
   const blocked = blocks.doc.blocks.filter((b) => b.blocked_on === 'hardware').length;
-  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V14 + staleness green`);
+  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V16 + staleness green`);
   return 0;
 }
 

@@ -49,12 +49,128 @@ Four client classes at the arbiter; one request channel to MEM.SDRAM.
 - **Credit-based at the SDRAM edge, ready/valid at client ports.** A client
   holds credits; each accepted beat consumes one; the controller reissues
   credits as bursts retire.
-- **Liveness bound (formal, `mem_vram_arbiter_liveness`):** every guaranteed
-  client is granted within
-  `B = G · MAX_BURST + REFRESH_OVERHEAD` sdram cycles, where G = number of
-  guaranteed clients, MAX_BURST = burst length (8) + activate/precharge
-  overhead (tRCD + tRP = 6), REFRESH_OVERHEAD = tRC + tRP = 12.
-  Phase-2 bound: B = 2 · 14 + 12 = 40 sdram cycles worst-case grant latency.
+- **Aging override (load-bearing, was missing from this section):** a
+  guaranteed client whose pending bursts have waited `AGING_OVERRIDE = 20`
+  cycles is served ahead of everything, lowest id first. Without it strict
+  scanout priority would starve the RR class forever and *no* finite B would
+  exist. It is the mechanism the bound below actually rests on.
+
+- **Liveness bound (formal, `mem_vram_arbiter_liveness`):** see §2.1.
+
+### 2.1 The liveness bound B (D3) — corrected 2026-08-16
+
+> **~~SUPERSEDED — the original D3 bound was wrong and its proof had never
+> been run.~~**
+> ~~`B = G · MAX_BURST + REFRESH_OVERHEAD` sdram cycles, where G = number of
+> guaranteed clients, MAX_BURST = burst length (8) + activate/precharge
+> overhead (tRCD + tRP = 6), REFRESH_OVERHEAD = tRC + tRP = 12.
+> Phase-2 bound: B = 2 · 14 + 12 = 40 sdram cycles worst-case grant latency.~~
+>
+> Kept visible rather than rewritten (charter honesty discipline). The
+> constant was frozen in `zhao_pkg.sv` and cited by `MEM.VRAM.ARBITER`'s
+> `RTL_VERIFIED` entry for a full wave while the proof it named had never
+> been elaborated. The moment it was, **B = 40 failed**. Ratified for
+> re-derivation in `runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/RATIFICATION-arbiter-liveness-bound.md`.
+>
+> **Two independent errors, which partly cancelled:**
+> 1. It budgeted **one burst per client turn**. A 64-byte request is
+>    `64 / (BURST_LENGTH · WORD_BYTES) = 64 / 16 =` **4 bursts**, and the
+>    arbiter re-arbitrates only at burst boundaries, so a competitor's whole
+>    multi-burst request can sit in front of the waiting client.
+> 2. `MAX_BURST = 8 + tRCD + tRP = 14` is **not** the worst grant-to-grant
+>    span. The bank-conflict full read is PRE, tRP, ACT, tRCD, READ, CAS and
+>    the full 8-beat bus burst ⇒ **18** cycles (the ctrl law table in
+>    `zhao_sdram_ctrl.sv` derives 12/15/18 read, 10/13/16 write).
+
+**Corrected derivation.** A client accepted at its port waits out `N` whole
+burst spans, because the arbiter never preempts mid-burst (D3):
+
+```
+N = 1                                            (the burst already in flight)
+  + bursts the competitor may still take before it must yield
+
+  scanout (strict priority):  + 1   = 2
+      at most ONE aging-override burst from the RR class can be interposed;
+      serving it resets that client's age, so a second cannot follow.
+
+  RR class (blit/engine):     + min(BURSTS_PER_REQ, ceil(AGING_OVERRIDE / MAX_BURST_SPAN))
+                              = min(4, ceil(20/18)) = min(4, 2) = 2   = 3
+      ^^^^^^^^^^^^^^^^ the bursts-per-request factor the old formula omitted:
+      with one burst per turn this term is 1 and the bound collapses to the
+      old, wrong, 2 spans.
+
+B_noref = N · MAX_BURST_SPAN − 2
+```
+
+The `− 2` is the alignment between the port-grant pulse and the arbitration
+boundary: the client becomes visible to the selection one cycle after its
+grant pulse, and the bound is stated exclusively (`waited < B`).
+
+| | N | B (refresh-free) | + refresh steal | **B operational** |
+|---|---|---|---|---|
+| scanout (strict priority) | 2 | 2·18 − 2 = **34** | +13 | **47** |
+| RR class (blit, engine)   | 3 | 3·18 − 2 = **52** | +13 | **65** |
+
+**Refresh steal = 13.** One AUTO_REFRESH can land inside a wait window (and
+only one: `REFRESH_INTERVAL` = 780 ≫ 65). It costs the arbitration boundary
+cycle plus tRP + tRC = 12 ⇒ 13 cycles of extra grant latency. Worst placement
+is the *last* boundary of the window: a refresh anywhere earlier closes every
+row, so the burst behind it is a MISS (15) rather than a CONFLICT (18) and
+gives 3 cycles back. An aging-override offer raises `hold_refresh`, so only a
+*hard* refresh (`refresh_cnt ≥ 840`) can take that boundary — possible, hence
+counted.
+
+**Measured tight bounds (evidence, both directions).** Bisected on
+`tests/formal/formal_mem_arbiter.sv` at depth 130 with boolector:
+
+| client | largest FAILING B | smallest PASSING B |
+|---|---|---|
+| RR class (client 1) | **51** | **52** |
+| scanout (client 0)  | **33** | **34** |
+
+The endpoints of each pair are adjacent, so 52 and 34 are the exact worst
+cases — not values that merely happened to pass. Both directions are
+committed as `.sby` tasks (`bmc`, `bmc_tight_rr`, `bmc_tight_scanout`), and
+the `cover` task carries `c_near_rr` / `c_near_sc` so the asserts cannot pass
+by starving the environment instead of the arbiter.
+
+**Scope of the proof (stated, not assumed).** The BMC horizon is 130 cycles,
+in which `refresh_cnt` cannot reach even `CNT_PENDING` = 780 — so **34 and 52
+are the refresh-free bounds**, and the +13 is analytic (the refresh sequence's
+own cycle count is verified cycle-exactly by `mem_sdram_directed`, and
+`mem_sdram_refresh_bound` is banked on the hardware gate). The harness
+machine-checks this scope claim with `a_horizon_is_refresh_free`: raising the
+depth past the refresh interval makes it fire, which is the signal to prove
+the composed bound rather than to re-run it.
+
+**The bound is a STEADY-STATE bound**, measured from an acceptance at or after
+`init_done`. The arbiter's port handshake does not know about `init_done`, so
+a client can be accepted during the ~26-cycle power-on init and the offer then
+latched sits un-taken for the whole init sequence. Measuring from such an
+acceptance measures initialization, not arbitration — it inflated the scanout
+number from 34 to 38 until the harness was gated. Power-on is not covered by B
+and never was.
+
+**Scanout re-check (does the correction break "scanout never starves"?).**
+No — and it is now proven rather than argued. Scanout is a separate, tighter
+case because it is strict priority: the only thing that can get in front of it
+is one aging-override burst from the RR class, and serving that burst resets
+that client's age so a second cannot follow. Hence N = 2 and B = 34/47 versus
+the RR class's 3 and 52/65 — scanout's bound *improved* relative to the
+believed-but-false 40. The same harness asserts client 0's bound alongside
+client 1's, so "scanout is granted within a finite, known bound" is a proof
+obligation of `mem_vram_arbiter_liveness`, not a side remark. The separate
+zero-starvation law (`scanout_preempted == 0` under mixed load, §2 bandwidth
+budget) is unaffected: it counts non-override grants of offers latched while
+scanout was eligible, a mechanism the corrected derivation does not touch, and
+the directed `bandwidth_budget` test still asserts zero.
+
+**Note on `REFRESH_URGENT`.** `zhao_sdram_params_pkg` sets it to 40 and its
+comment justified that as "= the arbiter liveness bound". That justification
+is now stale — it is simply a 40-cycle deferral budget, and it is *not*
+re-pinned to 65 here: doing so would move `CNT_HARD` and invalidate the
+cycle-exact SDRAM directed tests and the `zref` oracle, which the ratification
+did not authorise. Recorded as a follow-up, not silently coupled.
 - Per-client byte counters (`vram_bytes_by_client`) count accepted payload
   bytes by client id (client id enum in zhao_pkg.sv).
 - **Bandwidth budget proof (risk R4):** worst Phase-2 case = Duo scanout

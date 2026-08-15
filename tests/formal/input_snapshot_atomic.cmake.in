@@ -22,8 +22,14 @@ set(WORK "@CMAKE_BINARY_DIR@/formal-input")
 file(REMOVE_RECURSE "${WORK}")
 file(MAKE_DIRECTORY "${WORK}")
 
+# --prefix, not -d: this property carries TWO tasks now (bmc AND cover), and
+# `-d` accepts exactly one. The cover task is load-bearing — every assertion
+# in the DUT is guarded by $past(frame_tick.pulse), so without a reachable
+# tick the bmc task is green while proving nothing. `-d bmc` would have run
+# only half the property; sby rejects it outright, which is the correct
+# failure. (Same pattern as tests/formal/mem_formal_lane.cmake.in.)
 execute_process(
-  COMMAND "@ZHAO_SBY_BIN@" -f -d bmc
+  COMMAND "@ZHAO_SBY_BIN@" -f --prefix "${WORK}/input_snapshot_atomic"
           "@CMAKE_SOURCE_DIR@/tests/formal/input_snapshot_atomic.sby"
   WORKING_DIRECTORY "${WORK}"
   RESULT_VARIABLE rc

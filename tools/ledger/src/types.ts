@@ -86,6 +86,42 @@ export interface BlocksDoc {
   blocks: Block[];
 }
 
+/**
+ * design/formal_runs.yml — the formal-lane run registry (rule V16).
+ *
+ * A `.sby` file existing on disk is NOT evidence: twice in wave 2 a block's
+ * maturity rested on a property that had never been elaborated, because the
+ * lane could not distinguish "skipped, tool absent" from "never ran". This
+ * registry makes the distinction explicit and machine-checkable.
+ */
+export type FormalRunStatus = 'green' | 'banked' | 'never_ran';
+
+export interface FormalRunEntry {
+  /** repo-relative path to the .sby */
+  property: string;
+  status: FormalRunStatus;
+  date: string;
+  commit: string;
+  /** CTest test name that runs it, or null when deliberately not in the lane. */
+  lane?: string | null;
+  tasks: string[];
+  /** at least one of `tasks` is a cover task (assertions proven reachable) */
+  covers: boolean;
+  notes?: string | null;
+}
+
+export interface FormalRunsDoc {
+  version: number;
+  runs: FormalRunEntry[];
+}
+
+/**
+ * Maturity at or above which a cited formal property must be `green` AND
+ * carry cover statements. Below this a block may cite a property it has not
+ * yet finished proving; at or above it, the claim is load-bearing.
+ */
+export const FORMAL_EVIDENCE_MIN_MATURITY: Maturity = 'RTL_VERIFIED';
+
 export type ProfileId = 'E' | 'W' | 'F' | 'M' | 'S';
 
 export interface OpProfile {

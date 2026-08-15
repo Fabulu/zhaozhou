@@ -1,28 +1,58 @@
 # mem_vram_arbiter_liveness.sby — D3 liveness bound (plan W2.5 / plan 4).
 # The composed arbiter+controller (real RTL, no memory model) serves every
-# guaranteed client's first SDRAM-edge burst within B = 40 cycles of port
-# acceptance, under the documented Phase-2 population assumptions (G=2).
+# guaranteed client's first SDRAM-edge burst within the CORRECTED bound, under
+# the documented Phase-2 population assumptions (G=2).
 # Run with cwd = tests/formal (the CTest wrapper and the docs both do).
+#
 # Frontend: read_slang. The built-in yosys Verilog reader cannot parse the
 # frozen package style (unpacked-array localparams, `module X import P::*;`),
 # which is why this lane used to SKIP; the slang plugin shipped with
 # oss-cad-suite reads these same frozen packages, so the SKIP was never
 # actually necessary.
+#
+# TASKS — the bound is proven in BOTH DIRECTIONS, which is the whole point.
+# The frozen B = 40 was believed for a wave because nothing ever ran; a bound
+# that only passes is not proven tight, so bound-1 must be shown to FAIL:
+#
+#   bmc                 asserts the derived bounds (RR 52 / scanout 34)  PASS
+#   bmc_tight_rr        asserts RR 51      (scanout relaxed to 90)       FAIL
+#   bmc_tight_scanout   asserts scanout 33 (RR relaxed to 90)            FAIL
+#   cover               non-vacuity: the waits are reachable near bound  PASS
+#
+# 51/52 and 33/34 are adjacent, so these are the exact worst cases.
+# Derivation and the refresh term: zhao_pkg.sv, spec/memory_rules.md §2.
+# Ratification: runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/
+# RATIFICATION-arbiter-liveness-bound.md
 [tasks]
 bmc
+bmc_tight_rr
+bmc_tight_scanout
 cover
 
 [options]
-bmc: mode bmc
-bmc: depth 130
-cover: mode cover
-cover: depth 130
-expect pass
+bmc:               mode bmc
+bmc:               depth 130
+bmc:               expect pass
+bmc_tight_rr:      mode bmc
+bmc_tight_rr:      depth 130
+bmc_tight_rr:      expect fail
+bmc_tight_scanout: mode bmc
+bmc_tight_scanout: depth 130
+bmc_tight_scanout: expect fail
+cover:             mode cover
+cover:             depth 130
+cover:             expect pass
+
 [engines]
 smtbmc boolector
+
 [script]
-read_slang --top formal_mem_arbiter zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_sdram_ctrl.sv zhao_vram_arbiter.sv formal_mem_arbiter.sv
+bmc:               read_slang --top formal_mem_arbiter -G BOUND=52 -G BOUND_SC=34 zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_sdram_ctrl.sv zhao_vram_arbiter.sv formal_mem_arbiter.sv
+cover:             read_slang --top formal_mem_arbiter -G BOUND=52 -G BOUND_SC=34 zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_sdram_ctrl.sv zhao_vram_arbiter.sv formal_mem_arbiter.sv
+bmc_tight_rr:      read_slang --top formal_mem_arbiter -G BOUND=51 -G BOUND_SC=90 zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_sdram_ctrl.sv zhao_vram_arbiter.sv formal_mem_arbiter.sv
+bmc_tight_scanout: read_slang --top formal_mem_arbiter -G BOUND=90 -G BOUND_SC=33 zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_sdram_ctrl.sv zhao_vram_arbiter.sv formal_mem_arbiter.sv
 prep -top formal_mem_arbiter
+
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv

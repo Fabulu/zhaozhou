@@ -60,6 +60,15 @@ An uncredited or out-of-region request cannot arrive (guard + credit protocol); 
 
 `tests/formal/mem_vram_arbiter_liveness.sby` — the B bound: every guaranteed client granted within B cycles (charter §20.4 "arbiters eventually service guaranteed clients").
 
+**B was corrected on 2026-08-16.** The wave-2 constant B = 40 had never been elaborated and is false; the proof fails at 40. Re-derived and re-proven per `spec/memory_rules.md` §2.1 (ratified: `runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/RATIFICATION-arbiter-liveness-bound.md`):
+
+| client | B refresh-free (proven tight) | B operational (+13 refresh steal) |
+|---|---|---|
+| scanout (strict priority) | 34 | **47** |
+| RR class (blit, engine) | 52 | **65** |
+
+Both refresh-free bounds are proven in BOTH directions: the `bmc` task passes at them and `bmc_tight_rr` / `bmc_tight_scanout` FAIL at bound−1 (51 / 33), so they are the exact worst cases. The bound is a steady-state bound, measured from an acceptance at or after `init_done` — power-on is not covered by B.
+
 ## Synthesis / resource ceiling
 
 Budget group `platform` (§25 14% ceiling). Small — mux + counters.

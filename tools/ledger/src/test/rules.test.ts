@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkAll } from '../rules';
-import type { Block, BlocksDoc, OpsDoc, Op } from '../types';
+import type { Block, BlocksDoc, OpsDoc, Op, FormalRunsDoc, FormalRunEntry } from '../types';
 
 const exists = (p: string) => p.startsWith('tests/') || p.startsWith('design/');
 
@@ -227,4 +227,99 @@ test('V12: a block counter outside the catalog is rejected (counter_id totality)
   blocks.blocks[1] = rtlBlock({ counters: ['not_a_catalog_counter'] });
   const errors = checkAll(blocks, ops, { exists });
   assert.ok(errors.some((e) => e.startsWith('V12:') && e.includes('not in counter_catalog')), errors.join('\n'));
+});
+
+// ---------------------------------------------------------------------------
+// V16 — a formal property may back a maturity claim only if the lane recorded
+// a GREEN run for it. These tests encode the two wave-2 escapes directly:
+// a proof that had never been elaborated, and a proof passing vacuously for
+// want of cover statements.
+// ---------------------------------------------------------------------------
+
+function formalDoc(over: Partial<FormalRunEntry> = {}): FormalRunsDoc {
+  return {
+    version: 1,
+    runs: [
+      {
+        property: 'tests/formal/cmd_decoder_safe.sby',
+        status: 'green',
+        date: '2026-08-16',
+        commit: 'abc1234',
+        lane: 'formal_cmd_decoder_safe',
+        tasks: ['bmc', 'cover'],
+        covers: true,
+        ...over,
+      },
+    ],
+  };
+}
+
+function provenBlocks() {
+  const { blocks, ops } = baseline();
+  blocks.blocks[1] = rtlBlock({
+    maturity: 'RTL_VERIFIED',
+    maturity_log: [
+      { state: 'RTL_VERIFIED', date: '2026-08-16', commit: 'abc1234', evidence: 'tests/command/cmd_decoder_random.cpp' },
+    ],
+    tests: {
+      directed: 'tests/command/cmd_decoder_directed.cpp',
+      random: 'tests/command/cmd_decoder_random.cpp',
+      formal: 'tests/formal/cmd_decoder_safe.sby',
+    },
+  });
+  return { blocks, ops };
+}
+
+test('V16: a green, covered formal run backs an RTL_VERIFIED claim', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(blocks, ops, { exists }, formalDoc());
+  assert.deepEqual(errors, []);
+});
+
+test('V16: a property that has NEVER RUN is a hard failure, not a skip', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(blocks, ops, { exists }, formalDoc({ status: 'never_ran' }));
+  assert.ok(errors.some((e) => /V16.*never_ran/.test(e)), errors.join('\n'));
+});
+
+test('V16: a proof with no cover task cannot back a maturity claim (vacuity)', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(blocks, ops, { exists }, formalDoc({ tasks: ['bmc'], covers: false }));
+  assert.ok(errors.some((e) => /V16.*covers: false/.test(e)), errors.join('\n'));
+});
+
+test('V16: banked evidence cannot back a maturity claim', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(blocks, ops, { exists }, formalDoc({ status: 'banked' }));
+  assert.ok(errors.some((e) => /V16.*not green/.test(e)), errors.join('\n'));
+});
+
+test('V16: covers: true must be backed by an actual cover task name', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(blocks, ops, { exists }, formalDoc({ tasks: ['bmc'], covers: true }));
+  assert.ok(errors.some((e) => /V16.*claims covers: true/.test(e)), errors.join('\n'));
+});
+
+test('V16: a .sby on disk with no registry entry is rejected', () => {
+  const { blocks, ops } = provenBlocks();
+  const errors = checkAll(
+    blocks,
+    ops,
+    { exists, formalTasksOnDisk: ['tests/formal/cmd_decoder_safe.sby', 'tests/formal/orphan.sby'] },
+    formalDoc()
+  );
+  assert.ok(errors.some((e) => /V16.*orphan\.sby.*HARD FAILURE/.test(e)), errors.join('\n'));
+});
+
+test('V16: a SPECIFIED block may cite a formal property that does not exist yet', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks[1] = rtlBlock({
+    tests: {
+      directed: 'tests/command/cmd_decoder_directed.cpp',
+      random: 'tests/command/cmd_decoder_random.cpp',
+      formal: 'planned/not_yet.sby',
+    },
+  });
+  const errors = checkAll(blocks, ops, { exists }, formalDoc());
+  assert.deepEqual(errors, []);
 });

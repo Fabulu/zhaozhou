@@ -575,9 +575,16 @@ if(ZHAO_SBY_BIN)
     string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
     add_test(NAME formal_${sby_prop}
              COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+    # TIMEOUT 2100 (was 900). mem_vram_arbiter_liveness now carries FOUR tasks
+    # — bmc plus the two `expect fail` tightness tasks that prove the bound is
+    # exact, plus cover — and measures 9m31s wall with all four in parallel on
+    # the reference machine. 900s left ~35% headroom, which is how a proof lane
+    # starts producing timeouts that get read as failures (or, worse, get
+    # "fixed" by deleting tasks). The wrapper's own TIMEOUT is 1800 so it fails
+    # with a readable sby message before CTest kills it from outside.
     set_tests_properties(formal_${sby_prop} PROPERTIES
       LABELS "formal;nightly"
-      TIMEOUT 900
+      TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
 endif()

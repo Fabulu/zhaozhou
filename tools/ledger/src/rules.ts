@@ -12,8 +12,10 @@ import {
   SOFTWARE_MAX_MATURITY,
   BUDGET_CEILINGS,
   TOTAL_ALM_CEILING_PERCENT,
+  FORMAL_EVIDENCE_MIN_MATURITY,
   type Block,
   type BlocksDoc,
+  type FormalRunsDoc,
   type Maturity,
   type OpsDoc,
   type ProfileId,
@@ -24,6 +26,8 @@ export interface RuleOptions {
   prevBlocks?: BlocksDoc | null;
   /** Path-existence probe (repo-root-relative). Defaults to () => true. */
   exists?: (p: string) => boolean;
+  /** Repo-relative paths of every `.sby` found under tests/formal (rule V16). */
+  formalTasksOnDisk?: string[];
 }
 
 const LADDER_INDEX: ReadonlyMap<Maturity, number> = new Map(
@@ -252,6 +256,114 @@ export function checkBlocks(blocksDoc: BlocksDoc, opts: RuleOptions = {}): strin
   return errors;
 }
 
+/**
+ * V16: a formal property may back a maturity claim only if the lane recorded
+ * a GREEN run for it — and "the .sby exists" is not a run.
+ *
+ * This rule exists because the repo lost that distinction twice on the same
+ * lane. MEM.GUARD's ledger said "Formally proven." while the proof failed and
+ * its assertions were vacuous; MEM.VRAM.ARBITER carried RTL_VERIFIED citing a
+ * liveness bound that FAILS when run. Both survived a full wave because a
+ * `.sby` that had never parsed produced the same green SKIP as a machine with
+ * no oss-cad-suite installed. The lane wrappers now hard-fail on anything but
+ * a missing tool; this rule closes the ledger side.
+ *
+ * Checks:
+ *   a. every `.sby` on disk is registered (adding a property without running
+ *      it is a failure, not a silent SKIP);
+ *   b. every registered property exists on disk;
+ *   c. entries are dated, commit-pinned, and name at least one task;
+ *   d. a block at >= RTL_VERIFIED citing `tests.formal` needs an entry with
+ *      status `green` AND covers: true (reachable assertions, not vacuous);
+ *   e. `never_ran` is a hard failure the moment anything cites it;
+ *   f. `banked` may not back a maturity claim.
+ *
+ * `formalTasksOnDisk` is injected (like `exists`) so the rule stays pure.
+ */
+export function checkFormalRuns(
+  blocksDoc: BlocksDoc,
+  formalDoc: FormalRunsDoc,
+  opts: RuleOptions = {}
+): string[] {
+  const exists = opts.exists ?? (() => true);
+  const errors: string[] = [];
+  const runs = formalDoc.runs ?? [];
+  const byProperty = new Map(runs.map((r) => [r.property, r] as const));
+
+  if (byProperty.size !== runs.length) {
+    errors.push('V16: design/formal_runs.yml has duplicate property entries');
+  }
+
+  // (b) + (c): registry hygiene
+  for (const r of runs) {
+    if (!exists(r.property)) {
+      errors.push(`V16: formal_runs entry "${r.property}" does not exist on disk`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) {
+      errors.push(`V16: formal_runs "${r.property}" has invalid date "${r.date}"`);
+    }
+    if (!/^[0-9a-f]{7,40}$/.test(r.commit)) {
+      errors.push(`V16: formal_runs "${r.property}" has invalid commit "${r.commit}"`);
+    }
+    if (!Array.isArray(r.tasks) || r.tasks.length === 0) {
+      errors.push(`V16: formal_runs "${r.property}" records no tasks — a run with no tasks is not a run`);
+    }
+    if (r.status === 'green' && r.covers && !(r.tasks ?? []).some((t) => /cover/.test(t))) {
+      errors.push(
+        `V16: formal_runs "${r.property}" claims covers: true but no task name contains "cover" (${(r.tasks ?? []).join(', ')})`
+      );
+    }
+  }
+
+  // (a): every .sby on disk is registered
+  for (const p of opts.formalTasksOnDisk ?? []) {
+    if (!byProperty.has(p)) {
+      errors.push(
+        `V16: ${p} exists but is not in design/formal_runs.yml — a formal property that has never been recorded as run is a HARD FAILURE, not a SKIP`
+      );
+    }
+  }
+
+  // (d)(e)(f): maturity claims
+  const minRank = rank(FORMAL_EVIDENCE_MIN_MATURITY);
+  for (const b of blocksDoc.blocks) {
+    const prop = b.tests?.formal;
+    if (!prop) continue;
+    const entry = byProperty.get(prop);
+    const loadBearing = rank(b.maturity) >= minRank;
+    if (!entry) {
+      // A SPECIFIED block may cite a property that does not exist yet (V6
+      // gates path existence the same way) — but only if it truly is absent.
+      if (exists(prop)) {
+        errors.push(
+          `V16: ${b.id} cites formal "${prop}" which exists on disk but has no design/formal_runs.yml entry`
+        );
+      } else if (loadBearing) {
+        errors.push(`V16: ${b.id} is ${b.maturity} but its formal property "${prop}" does not exist`);
+      }
+      continue;
+    }
+    if (entry.status === 'never_ran') {
+      errors.push(
+        `V16: ${b.id} cites formal "${prop}" whose recorded status is never_ran — it has never successfully elaborated`
+      );
+      continue;
+    }
+    if (!loadBearing) continue;
+    if (entry.status !== 'green') {
+      errors.push(
+        `V16: ${b.id} is ${b.maturity} but formal "${prop}" is recorded as "${entry.status}", not green — banked evidence cannot back a maturity claim`
+      );
+    } else if (!entry.covers) {
+      errors.push(
+        `V16: ${b.id} is ${b.maturity} citing formal "${prop}" with covers: false — a proof with no cover task has not shown its assertions are reachable (the MEM.GUARD vacuity failure)`
+      );
+    }
+  }
+
+  return errors;
+}
+
 export function checkOps(
   opsDoc: OpsDoc,
   blocksDoc: BlocksDoc,
@@ -327,7 +439,12 @@ export function checkOps(
 export function checkAll(
   blocksDoc: BlocksDoc,
   opsDoc: OpsDoc,
-  opts: RuleOptions = {}
+  opts: RuleOptions = {},
+  formalDoc?: FormalRunsDoc
 ): string[] {
-  return [...checkBlocks(blocksDoc, opts), ...checkOps(opsDoc, blocksDoc, opts)];
+  return [
+    ...checkBlocks(blocksDoc, opts),
+    ...checkOps(opsDoc, blocksDoc, opts),
+    ...(formalDoc ? checkFormalRuns(blocksDoc, formalDoc, opts) : []),
+  ];
 }

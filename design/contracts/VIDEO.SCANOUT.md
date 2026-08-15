@@ -18,7 +18,7 @@ Input (gpu domain): `zhao_guard_req_t` reads — 2 B per pixel, bursts per line 
 
 ## Backpressure rules
 
-Scanout fetch is the STRICT-PRIORITY guaranteed arbiter client (D3): it never receives backpressure at the arbiter beyond the liveness bound B (spec/memory_rules.md §2); it preempts other clients at burst boundaries only. The serializer has no backpressure (free-running raster): starvation is visible via counters and the never-torn law, never a stall.
+Scanout fetch is the STRICT-PRIORITY guaranteed arbiter client (D3): it never receives backpressure at the arbiter beyond its liveness bound (34 sdram cycles refresh-free, 47 with a refresh steal — spec/memory_rules.md §2.1; tighter than the RR class's 65 because only one aging-override burst can precede it); it preempts other clients at burst boundaries only. The serializer has no backpressure (free-running raster): starvation is visible via counters and the never-torn law, never a stall.
 
 ## Memory ownership
 

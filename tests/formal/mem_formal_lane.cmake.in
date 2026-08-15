@@ -24,6 +24,16 @@ if("@ZHAO_SBY_BIN@" STREQUAL "")
   return()
 endif()
 
+# PATH order matters on this kit (the same pitfall the INPUT and AUDIO lane
+# wrappers already document, missing here): the suite's yosys resolves its
+# DLLs from bin/../lib, and a mingw toolchain earlier in PATH shadows them
+# with an incompatible libstdc++, so yosys dies with STATUS_ENTRYPOINT_NOT_
+# FOUND (0xC0000139) before it parses a single line. That is a "never
+# elaborated" failure wearing a tooling costume — it hard-fails below rather
+# than SKIPping, but it should not happen at all. Prepend the suite dirs.
+get_filename_component(zhao_sby_dir "@ZHAO_SBY_BIN@" DIRECTORY)
+set(ENV{PATH} "${zhao_sby_dir}\;${zhao_sby_dir}/../lib\;$ENV{PATH}")
+
 set(workdir "@FORMAL_WORK_ROOT@/@PROP@")
 file(REMOVE_RECURSE "${workdir}")
 file(MAKE_DIRECTORY "${workdir}")
@@ -37,7 +47,7 @@ execute_process(
   RESULT_VARIABLE _rc
   OUTPUT_VARIABLE _out
   ERROR_VARIABLE _err
-  TIMEOUT 1500
+  TIMEOUT 1800
 )
 if(_rc EQUAL 0)
   message(STATUS "formal @PROP@: PASS (bmc + cover)")

@@ -7,8 +7,8 @@
 //   2. strict scanout priority: zero scanout_preempted under mixed load
 //   3. RR fairness among {blit, engine0, engine1}
 //   4. liveness under load: a fresh guaranteed request is granted its first
-//      burst within the frozen bound B = 40 (zhao_pkg law) while scanout
-//      streams back-to-back; and every pending request completes (no drop)
+//      burst within the bound B (zhao_pkg law) while scanout streams
+//      back-to-back; and every pending request completes (no drop)
 
 #include "zhao_mem_chain.hpp"
 
@@ -26,7 +26,13 @@ void chk(bool ok, const char* what, long long expected = -1, long long actual = 
         std::printf("ok: %s\n", what);
     }
 }
-constexpr unsigned B = 40;   // ZHAO_ARB_LIVENESS_BOUND
+// ZHAO_ARB_LIVENESS_BOUND (RR class, operational: 52 refresh-free + 13 refresh
+// steal). Corrected from the never-proven 40 — spec/memory_rules.md §2.1.
+// This directed test drives realistic traffic, not the adversarial worst case
+// the formal harness constructs, so it normally lands far under B; it is a
+// regression net, not the source of the number.
+constexpr unsigned B = 65;
+constexpr unsigned B_NOREF = 52;  // the formally proven, tight, refresh-free bound
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -183,8 +189,14 @@ int main(int argc, char** argv) {
             }
             chk(complete, "blit request fully served (no drop)");
         }
-        chk(max_wait <= B, "first-burst grant within B=40 under load", B,
+        chk(max_wait <= B, "first-burst grant within B=65 under load", B,
             (long long)max_wait);
+        // Tighter net: this test's traffic never provokes a refresh inside a
+        // wait window, so it must also stay under the refresh-free bound. If
+        // this one ever fires while the B check passes, the refresh-steal
+        // reasoning in spec/memory_rules.md §2.1 is what needs re-examining.
+        chk(max_wait <= B_NOREF, "first-burst grant within the refresh-free 52",
+            B_NOREF, (long long)max_wait);
         for (unsigned k = 0; k < 5; k++) h.set_client(k, false, false, 0, 0);
         for (int i = 0; i < 200; i++) h.step(h.auto_reqs());
         chk(h.mismatches == 0, "oracle agrees (liveness phase)", 0, h.mismatches);

@@ -3,11 +3,36 @@
 // zhao_sdram_ctrl (both synthesizable, no memory model needed — the ctrl
 // owns only timing).
 //
-// PROPERTY (the frozen D3 bound, spec/memory_rules.md §2):
+// PROPERTY (the CORRECTED D3 bound, spec/memory_rules.md §2):
 //   once a guaranteed client's request is accepted at its port
 //   (client_rsp[k].grant pulse), its FIRST SDRAM-edge burst
 //   (ctrl_rsp.grant with ctrl_req.client == k) is served within
-//   B = ZHAO_ARB_LIVENESS_BOUND = 40 cycles.
+//     BOUND    = ZHAO_ARB_LIVENESS_BOUND_NOREF = 52 cycles  (RR class), and
+//     BOUND_SC = ZHAO_ARB_SCANOUT_BOUND_NOREF  = 34 cycles  (scanout).
+//
+// Both numbers are the REFRESH-FREE bounds and both are proven TIGHT here:
+// the `bmc` task passes at them, and the `bmc_tight_rr` / `bmc_tight_scanout`
+// tasks FAIL at bound-1 (expect fail). A bound that only passes is not proven
+// tight, so both directions are committed — see the .sby [tasks] block.
+//
+// The frozen constant this replaces was B = G*MAX_BURST + REFRESH_OVERHEAD =
+// 2*14 + 12 = 40, which had never been elaborated and is false. Ratified in
+// runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/
+// RATIFICATION-arbiter-liveness-bound.md. The derivation is in
+// spec/memory_rules.md §2 and zhao_pkg.sv; in one line, a client waits out
+// at most N whole burst spans and MAX_BURST_SPAN is 18, not 14:
+//   scanout  N = 2 => 2*18 - 2 = 34
+//   RR class N = 3 => 3*18 - 2 = 52   (N picks up the bursts-per-request
+//                                      factor the old formula omitted)
+//
+// REFRESH IS OUT OF THIS PROOF'S HORIZON — deliberately, and guarded.
+// REFRESH_INTERVAL is 780 sdram cycles; this BMC runs to depth 130, in which
+// refresh_cnt cannot reach even CNT_PENDING. So the numbers above are
+// refresh-free, and zhao_pkg adds ZHAO_ARB_REFRESH_STEAL = 13 analytically
+// for the one AUTO_REFRESH that can land inside a wait window. The assertion
+// a_horizon_is_refresh_free below MACHINE-CHECKS that scope claim: raise
+// `depth` past the refresh interval and it fires. That is the signal to prove
+// the composed bound properly, NOT to delete the assertion.
 //
 // ASSUMPTIONS (environment law, all documented):
 //   * Phase-2 guaranteed population (memory_rules §2: G=2): clients
@@ -35,7 +60,12 @@
 //     which silently empties the model.
 module formal_mem_arbiter
   import zhao_pkg::*;
-(
+#(
+  // Overridden per task from the .sby (`read_slang -G ...`) so the SAME
+  // committed harness proves the bound AND disproves bound-1.
+  parameter int unsigned BOUND    = ZHAO_ARB_LIVENESS_BOUND_NOREF,  // RR class
+  parameter int unsigned BOUND_SC = ZHAO_ARB_SCANOUT_BOUND_NOREF    // scanout
+)(
   input logic clk,
   // free per-client request environment (2 guaranteed Phase-2 clients)
   input logic [1:0]  env_valid,
@@ -140,6 +170,15 @@ module formal_mem_arbiter
   logic [1:0] waiting;      // accepted at port, first burst not yet served
   logic [6:0] waited [0:1];
 
+  // The measurement starts only on an acceptance at or after init_done.
+  // WHY (this was a real defect found while bisecting): the arbiter's port
+  // handshake does not know about init_done, so a client can be accepted at
+  // its port DURING the ~26-cycle power-on init, and the offer the arbiter
+  // latches then sits un-taken for the whole init sequence. Measuring from
+  // such an acceptance measures the init sequence, not arbitration — it
+  // inflated the scanout bound from 34 to 38 until this gate was added. D3 is
+  // a STEADY-STATE service bound (the harness header always said so); making
+  // the counter agree with that sentence is the fix, not raising the bound.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       waiting <= 2'b0;
@@ -147,7 +186,7 @@ module formal_mem_arbiter
       waited[1] <= 7'd0;
     end else begin
       for (int k = 0; k < 2; k++) begin
-        if (client_rsp[k].grant) begin
+        if (client_rsp[k].grant && ctrl_init_done) begin
           waiting[k] <= 1'b1;
           waited[k] <= 7'd0;
         end else if (ctrl_rsp.grant && (ctrl_req.client == zhao_client_e'(3'(k)))) begin
@@ -160,33 +199,29 @@ module formal_mem_arbiter
     end
   end
 
-  // !! THIS PROPERTY CURRENTLY FAILS — AND THE FAILURE IS REAL. !!
-  //
-  // The first time this harness was ever actually elaborated (it had been
-  // SKIPped, and its environment was empty besides), the frozen D3 bound
-  // B = 40 did not hold. Measured by re-running this proof with the bound
-  // raised: it FAILS at 40, and PASSES at 60, 90 and 120 — so the true
-  // worst-case first-burst latency is somewhere in 41..60 cycles.
-  //
-  // The likely reason the derivation is short: B = G*MAX_BURST +
-  // REFRESH_OVERHEAD = 2*14 + 12 = 40 budgets each client's turn at ONE
-  // maximum burst, but a 64-byte request is 32 words = four 8-word bursts, so
-  // one client's turn can cost about 4*14 and the other client waits behind
-  // all of it.
-  //
-  // The assertion below deliberately still states the FROZEN bound, so this
-  // proof fails loudly instead of quietly agreeing with itself. Deciding
-  // whether the spec constant is wrong (re-derive B) or the arbiter must
-  // interleave at burst granularity is a ratification call for the
-  // orchestrator, not something to paper over by editing a frozen number.
-  // Note this lane is labelled formal/nightly, not fast.
+  // MEASURED WORST CASES (bisected on this harness, depth 130, boolector):
+  //   client 1 (RR class): passes at 52, FAILS at 51  -> tight bound 52
+  //   client 0 (scanout) : passes at 34, FAILS at 33  -> tight bound 34
+  // The endpoints of each pair are adjacent, so these are the exact bounds,
+  // not merely values that happened to pass. The `bmc_tight_*` tasks re-run
+  // the failing side as committed evidence.
   always_comb begin
     for (int k = 0; k < 2; k++) begin
       if (checking && ctrl_init_done && waiting[k]) begin
-        assert (waited[k] < 7'd40)
-          else $error("liveness: client %0d unserved for %0d cycles (bound B=40)",
-                      k, waited[k]);
+        assert (waited[k] < 7'((k == 0) ? BOUND_SC : BOUND))
+          else $error("liveness: client %0d unserved for %0d cycles", k, waited[k]);
       end
+    end
+  end
+
+  // ---- horizon guard: this proof is refresh-free BY CONSTRUCTION -------------
+  // See the header. If someone raises `depth` past REFRESH_INTERVAL, the
+  // refresh-free bounds above stop being the whole story and this fires.
+  always_comb begin
+    if (checking) begin
+      a_horizon_is_refresh_free:
+        assert (u_ctrl.refresh_cnt < 32'(zhao_sdram_params_pkg::REFRESH_INTERVAL))
+          else $error("BMC horizon now reaches a refresh: the bound must be re-proven WITH refresh interference, not merely re-run");
     end
   end
 
@@ -201,6 +236,11 @@ module formal_mem_arbiter
       c_served:    cover (ctrl_init_done && ctrl_rsp.grant);
       c_waited:    cover (ctrl_init_done && waiting[0] && waited[0] > 7'd8);
       c_both:      cover (ctrl_init_done && waiting[0] && waiting[1]);
+      // The bounds are only meaningful if the model can actually get NEAR
+      // them; these two covers are what stops a future edit from making the
+      // asserts pass by starving the environment instead of the arbiter.
+      c_near_rr:   cover (ctrl_init_done && waiting[1] && waited[1] > 7'd40);
+      c_near_sc:   cover (ctrl_init_done && waiting[0] && waited[0] > 7'd25);
     end
   end
 

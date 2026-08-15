@@ -191,18 +191,75 @@ package zhao_pkg;
     logic [7:0]  credits;  // reissued credits as bursts retire (D3 law)
   } zhao_arb_rsp_t;
 
-  // Guaranteed-client liveness bound B = G*MAX_BURST + REFRESH_OVERHEAD
-  // (spec/memory_rules.md §2): G=2 guaranteed Phase-2 clients,
-  // MAX_BURST = 8 (burst) + tRCD + tRP = 6 => 14; REFRESH_OVERHEAD =
-  // tRC + tRP = 12. Formal property mem_vram_arbiter_liveness proves grants
-  // within this bound (in sdram cycles). The bound constants are consumed
-  // by the arbiter's formal property and tests, not inside this package.
+  // ------------------------------------------------------------------------
+  // Guaranteed-client liveness bound B (spec/memory_rules.md §2, D3)
+  // ------------------------------------------------------------------------
+  // SUPERSEDED — the wave-2 plan froze
+  //     B = ZHAO_ARB_GUARANTEED * MAX_BURST + REFRESH_OVERHEAD
+  //       = 2 * 14 + 12 = 40
+  // and mem_vram_arbiter_liveness cites it. That proof had never been
+  // elaborated; when it finally was, B = 40 FAILED. Two independent errors,
+  // which partly cancelled and made 40 look plausible:
+  //   (a) it budgeted ONE burst per client turn. A 64-B request is FOUR
+  //       8-word bursts (ZHAO_ARB_BURSTS_PER_REQ) and the arbiter
+  //       re-arbitrates only at burst boundaries, so a competitor's whole
+  //       multi-burst request sits in front of the waiting client.
+  //   (b) MAX_BURST = 8 + tRCD + tRP = 14 is not the worst grant-to-grant
+  //       span. The bank-conflict full read is PRE, tRP, ACT, tRCD, READ,
+  //       CAS, 8 bus beats => 18 (ZHAO_ARB_MAX_BURST_SPAN).
+  // Re-derivation and the measured tight bounds: spec/memory_rules.md §2.
+  // This edit to the frozen wave-2 interface IS the ratified sign-off:
+  // runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/
+  // RATIFICATION-arbiter-liveness-bound.md (2026-08-15).
+  //
+  // A waiting client waits out N whole burst spans, where N counts the one
+  // burst already in flight (never preempted mid-burst, D3) plus the bursts
+  // the competitor is still allowed to take before it must yield:
+  //   scanout  (strict priority): N = 1 + 1 = 2
+  //       — at most ONE aging-override burst from the RR class can be
+  //         interposed; the override resets that client's age, so a second
+  //         cannot follow it.
+  //   RR class (blit/engine):     N = 1 + 2 = 3
+  //       — the competitor may take min(BURSTS_PER_REQ, ceil(AGING/SPAN))
+  //         = min(4, 2) = 2 bursts before the aging override closes the
+  //         window. THIS is where the bursts-per-request factor enters: with
+  //         one burst per turn the term is 1 and the bound collapses to the
+  //         old (wrong) 2 spans.
+  // The -2 is the alignment between the port-grant pulse and the arbitration
+  // boundary (the client becomes visible to the selection one cycle after
+  // its grant pulse, and the bound is stated exclusively, `waited < B`).
+  //
+  // Both refresh-free bounds are proven TIGHT by mem_vram_arbiter_liveness:
+  // the bmc task PASSES at them and the bmc_tight_* tasks FAIL at bound-1.
   /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned ZHAO_ARB_GUARANTEED = 2;
-  localparam int unsigned ZHAO_ARB_MAX_BURST  = 14;
-  localparam int unsigned ZHAO_ARB_REFRESH_OVERHEAD = 12;
+  localparam int unsigned ZHAO_ARB_GUARANTEED     = 2;   // Phase-2 G
+  localparam int unsigned ZHAO_ARB_BURSTS_PER_REQ = 4;   // 64 B / (8 words * 2 B)
+  localparam int unsigned ZHAO_ARB_MAX_BURST_SPAN = 18;  // worst grant-to-grant
+  localparam int unsigned ZHAO_ARB_AGING_OVERRIDE = 20;  // zhao_vram_arbiter
+
+  localparam int unsigned ZHAO_ARB_SPANS_SCANOUT = 2;    // 1 in-flight + 1 override
+  localparam int unsigned ZHAO_ARB_SPANS_RR      = 3;    // 1 in-flight + 2 competitor
+
+  // Refresh-free bounds — formally proven, and proven tight (bisected).
+  localparam int unsigned ZHAO_ARB_SCANOUT_BOUND_NOREF =
+    ZHAO_ARB_SPANS_SCANOUT * ZHAO_ARB_MAX_BURST_SPAN - 2;   // 34
+  localparam int unsigned ZHAO_ARB_LIVENESS_BOUND_NOREF =
+    ZHAO_ARB_SPANS_RR * ZHAO_ARB_MAX_BURST_SPAN - 2;        // 52
+
+  // One AUTO_REFRESH can land inside a wait window (REFRESH_INTERVAL = 780
+  // sdram cycles >> either bound, so at most one). It costs the boundary
+  // cycle plus tRP + tRC = 12 => 13 cycles of extra grant latency. This term
+  // is ANALYTIC, not BMC-proven: the liveness BMC runs to depth 130, in which
+  // refresh_cnt cannot reach the interval. The harness asserts that scope
+  // claim (a_horizon_is_refresh_free) so it cannot silently rot, and the
+  // refresh sequence's own cycle count is verified by mem_sdram_directed.
+  localparam int unsigned ZHAO_ARB_REFRESH_STEAL = 13;
+
+  // The operational bounds quoted by the contracts and spec/memory_rules.md.
+  localparam int unsigned ZHAO_ARB_SCANOUT_BOUND =
+    ZHAO_ARB_SCANOUT_BOUND_NOREF + ZHAO_ARB_REFRESH_STEAL;  // 47
   localparam int unsigned ZHAO_ARB_LIVENESS_BOUND =
-    ZHAO_ARB_GUARANTEED * ZHAO_ARB_MAX_BURST + ZHAO_ARB_REFRESH_OVERHEAD; // 40
+    ZHAO_ARB_LIVENESS_BOUND_NOREF + ZHAO_ARB_REFRESH_STEAL; // 65
   /* verilator lint_on UNUSEDPARAM */
 
   // --------------------------------------------------------------------------

@@ -1,0 +1,103 @@
+# design/formal_runs.yml — the formal-lane run registry.
+#
+# WHY THIS FILE EXISTS
+# Twice in wave 2 a block's maturity rested on a formal property that had
+# NEVER BEEN ELABORATED. MEM.GUARD's ledger entry said "Formally proven."
+# while the proof failed and its assertions were vacuous; MEM.VRAM.ARBITER
+# carried RTL_VERIFIED citing a liveness bound that FAILS when actually run.
+# Both survived because the lane could not tell "skipped because the tool is
+# absent" from "never ran at all" — a `.sby` that had never parsed produced a
+# green SKIP, indistinguishable from a healthy machine without oss-cad-suite.
+#
+# So: a `.sby` existing is not evidence. A block may cite `tests.formal:` as
+# maturity evidence only if THIS file records a green run for it. Rule V16 in
+# tools/ledger enforces that (npm run ledger:check / CTest ledger_check), and
+# it also fails when a `.sby` appears on disk with no entry here at all —
+# adding a property without running it is now a build failure, not a SKIP.
+#
+# status:
+#   green     — the lane ran it and every task reached its `expect`, INCLUDING
+#               a cover task (assertions proven reachable, not vacuous).
+#               Only `green` may back a maturity claim.
+#   banked    — deliberately excluded from the automated lane, with measured
+#               reasons recorded. May NOT back a maturity claim; the citing
+#               block must be SPECIFIED (typically blocked_on: hardware).
+#   never_ran — the property exists but has never successfully elaborated.
+#               HARD FAILURE the moment anything cites it. Never a SKIP.
+#
+# `tasks` lists the sby tasks that were run; `covers: true` asserts at least
+# one of them is a cover task. `commit` pins the evidence, like maturity_log.
+
+version: 1
+
+runs:
+  - property: tests/formal/mem_vram_arbiter_liveness.sby
+    status: green
+    date: "2026-08-16"
+    commit: 88b8ea1
+    lane: formal_mem_vram_arbiter_liveness
+    tasks: [bmc, bmc_tight_rr, bmc_tight_scanout, cover]
+    covers: true
+    notes: >-
+      D3 liveness bound, re-derived and re-proven after the frozen B = 40 was
+      disproven (spec/memory_rules.md §2.1). Proven in BOTH directions: bmc
+      passes at the derived bounds (RR 52, scanout 34) and bmc_tight_rr /
+      bmc_tight_scanout FAIL at bound-1 (51 / 33), so the bounds are tight,
+      not merely satisfied. Refresh-free by horizon (depth 130 << the 780
+      cycle refresh interval), which the harness itself asserts.
+
+  - property: tests/formal/mem_guard_no_escape.sby
+    status: green
+    date: "2026-08-15"
+    commit: 1b4b273
+    lane: formal_mem_guard_no_escape
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      No write outside an assigned region. First real elaboration found a
+      genuine escape (unclamped blit_span wrapping 32 bits); removing the
+      clamp fails the proof again.
+
+  - property: tests/formal/mem_sdram_refresh_bound.sby
+    status: banked
+    date: "2026-08-15"
+    commit: 1b4b273
+    lane: null
+    tasks: [cover]
+    covers: true
+    notes: >-
+      The cover passes non-vacuously (~11 min) but the depth-900 BMC does not
+      finish. Kept OUT of the automated lane with the measurements recorded
+      rather than manufacturing a timeout that would look like a pass.
+      MEM.SDRAM is SPECIFIED / blocked_on: hardware, so nothing cites this as
+      maturity evidence — which is exactly why `banked` may not back a claim.
+
+  - property: tests/formal/input_snapshot_atomic.sby
+    status: green
+    date: "2026-08-15"
+    commit: 1b4b273
+    lane: formal_input_snapshot_atomic
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      INPUT.SNAPSHOT atomicity + sequence-exactly-once. Introducing V16
+      surfaced that this property had NO cover task while INPUT.SNAPSHOT is
+      RTL_VERIFIED on it — every assertion is guarded by
+      $past(frame_tick.pulse), so an unreachable tick would have made all
+      three vacuous, the same hole as MEM.GUARD. Five covers added to the
+      RTL's `ifdef FORMAL block and a cover task to the .sby; both run green.
+
+  - property: tests/formal/audio_fifo_bounds.sby
+    status: green
+    date: "2026-08-15"
+    commit: 1b4b273
+    lane: formal_audio_fifo
+    tasks: [bmc]
+    covers: false
+    notes: >-
+      AUDIO.FIFO occupancy/overflow bounds. covers: false — this property has
+      no cover task, so its assertions are not proven reachable. Recorded
+      honestly rather than counted as fully green. No block cites it under
+      tests.formal, so V16 does not (yet) reject it; the moment AUDIO.FIFO
+      pins its maturity to this property, V16 will demand a cover task, which
+      is the intended ratchet.

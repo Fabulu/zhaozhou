@@ -205,6 +205,25 @@ module zhao_input_snapshot
       assert(input_sequence_gaps == 64'd0);
     end
   end
+
+  // ---- non-vacuity covers (added 2026-08-16, ratified process fix) ---------
+  // Every assertion above is an implication guarded by $past(frame_tick.pulse)
+  // and $past(rst_n). If the elaborated model cannot reach a tick — which is
+  // EXACTLY how MEM.GUARD's proof was vacuous for a whole wave, and how this
+  // lane's properties passed while never having run at all — all three hold
+  // trivially and the proof means nothing. These covers are the witness that
+  // the antecedents are reachable; the `cover` task in
+  // tests/formal/input_snapshot_atomic.sby is what makes design/formal_runs.yml
+  // able to record covers: true for this property (ledger rule V16).
+  always_ff @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      c_tick:          cover (frame_tick.pulse);
+      c_tick_present:  cover (frame_tick.pulse && pad_present[0]);
+      c_seq_advanced:  cover (pad_sequence[0] != 16'd0);
+      c_two_ticks:     cover (pad_sequence[0] > 16'd1);
+      c_pad_absent:    cover (frame_tick.pulse && !pad_present[0]);
+    end
+  end
 `endif
 
 endmodule : zhao_input_snapshot

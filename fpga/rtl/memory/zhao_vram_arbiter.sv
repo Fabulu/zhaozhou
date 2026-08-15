@@ -4,11 +4,22 @@
 // Policy (D3), evaluated at every SDRAM-edge acceptance boundary:
 //   1. AGING OVERRIDE — a guaranteed client (scanout/blit/engine0/engine1)
 //      whose pending bursts have waited >= AGING_OVERRIDE cycles is served
-//      first (oldest wins, lowest id breaks ties). This makes the frozen
-//      liveness bound B = 40 (zhao_pkg.ZHAO_ARB_LIVENESS_BOUND) a STRUCTURAL
-//      theorem: worst case is one in-flight burst (MAX_BURST_SPAN = 18) plus
-//      one competitor burst (18) = 36 < B, and an override raises
-//      hold_refresh so an urgent (not hard) refresh cannot push past it.
+//      first (oldest wins, lowest id breaks ties). This is what makes the
+//      liveness bound finite at all: without it, strict scanout priority
+//      starves the RR class forever.
+//
+//      CORRECTED 2026-08-16 (ratified; see zhao_pkg.sv and
+//      spec/memory_rules.md §2.1). This comment used to claim B = 40 was a
+//      structural theorem because "one in-flight burst (18) plus one
+//      competitor burst (18) = 36 < 40". That argument is wrong twice over:
+//      the competitor gets TWO bursts, not one (a 64-B request is four
+//      bursts and the override only closes the window after
+//      ceil(AGING_OVERRIDE / MAX_BURST_SPAN) = 2 of them), and 40 was itself
+//      computed with MAX_BURST = 14 rather than the true worst span 18. The
+//      proven, tight, refresh-free bounds are 34 (scanout) and 52 (RR); the
+//      operational bounds add a 13-cycle refresh steal => 47 and 65.
+//      An override does raise hold_refresh, so an urgent (not hard) refresh
+//      cannot push past it — that part of the old comment stands.
 //   2. SCANOUT — strict priority (isochronous display fetch). It preempts
 //      the RR class at BURST BOUNDARIES only (never mid-burst: the ctrl
 //      executes whole bursts and re-arbitrates at each acceptance edge).
