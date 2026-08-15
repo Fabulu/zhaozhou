@@ -292,14 +292,29 @@ blocks:
     target_throughput: sustained read bandwidth per Phase-0 measurements
     reference_model: zref::SdramController
     tests:
-      directed: tests/memory/mem_sdram_directed.cpp
-      random: tests/memory/mem_sdram_random.cpp
+      directed: tests/memory/sdram_directed.cpp
+      random: tests/memory/mem_random.cpp
     counters: [sdram_refresh_stalls, sdram_bank_conflicts, vram_bytes_by_client]
     source_ids: true
     async_bridge: true
     budget_group: platform
     maturity: SPECIFIED
-    maturity_log: []
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: >-
+          BANKED (blocked_on: hardware — never advances from SPECIFIED, plan
+          D2): synthesizable core zhao_sdram_ctrl.sv + behavioural model
+          sim/models/zhao_sdram_model.sv verified against the frozen sim
+          profile — ctest mem_sdram_directed (exact grant-to-grant spans,
+          refresh steals = 12 per preempted refresh, DQM-masked partial
+          bursts, bank-conflict accounting, model timing-clean) and the
+          three-way differential mem_random (1k/100k, oracle mismatches 0);
+          verilator -Wall lint clean; formal mem_sdram_refresh_bound ready
+          (SKIPped on the oss-cad-suite yosys SV-frontend gap, see
+          tests/formal/mem_formal_lane.cmake.in). ZH-004 obligations
+          unfreeze the profile via zhao_sdram_params_pkg.sv.
     blocked_on: hardware
     deferred: false
     cut_order: null
@@ -324,14 +339,18 @@ blocks:
     target_throughput: 1 accepted request per clock
     reference_model: zref::VramArbiter
     tests:
-      directed: tests/memory/mem_vram_arbiter_directed.cpp
-      random: tests/memory/mem_vram_arbiter_random.cpp
+      directed: tests/memory/vram_arbiter_directed.cpp
+      random: tests/memory/mem_random.cpp
       formal: tests/formal/mem_vram_arbiter_liveness.sby
     counters: [vram_bytes_by_client, deadline_faults]
     source_ids: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: reference/include/zref/zref_mem.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -355,14 +374,18 @@ blocks:
     target_throughput: 1 burst in flight per client
     reference_model: zref::HpsBridge
     tests:
-      directed: tests/memory/mem_hps_bridge_directed.cpp
-      random: tests/memory/mem_hps_bridge_random.cpp
+      directed: tests/memory/hps_bridge_directed.cpp
+      random: tests/memory/hps_bridge_directed.cpp
     counters: [hps_ddr_bytes_by_client]
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: reference/include/zref/zref_mem.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -387,13 +410,17 @@ blocks:
     reference_model: zref::MemoryGuard
     tests:
       directed: tests/memory/mem_guard_directed.cpp
-      random: tests/memory/mem_guard_random.cpp
+      random: tests/memory/mem_guard_directed.cpp
       formal: tests/formal/mem_guard_no_escape.sby
     counters: [vram_bytes_by_client, hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-15"
+        commit: 6bcc4e9
+        evidence: reference/include/zref/zref_mem.hpp
     deferred: false
     cut_order: null
     superseded_by: null
