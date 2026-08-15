@@ -718,12 +718,21 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-15
+        commit: '9e813e0'
+        evidence: reference/src/zref_audio.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: leaf (I2S/framework audio out). Q formats per spec/qformats.md (fx24 accumulators upstream, plan Q5).
+    notes: >-
+      leaf (I2S/framework audio out). Q formats per spec/qformats.md (fx24
+      accumulators upstream, plan Q5). W2.4: zref::AudioFifo is the
+      register-exact oracle (depth/watermark/underrun law incl. both 2FF
+      gray synchronisers at the gpu_clk/4 sim seam); advanced to
+      REFERENCE_COMPLETE with the committed tone goldens (mixer_tone_*).
 
   # ===========================================================================
   # VIDEO (fpga/rtl/video)
@@ -2396,12 +2405,24 @@ blocks:
     backpressure: none
     latency: fixed:1
     target_throughput: 1 output sample per 48 kHz tick
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: 2026-08-15
+        commit: '9e813e0'
+        evidence: tests/audio/mixer_tone_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active scope note). Adopts the ZRef fixed-point library per plan Q5.
+    tests:
+      directed: tests/audio/mixer_tone_directed.cpp
+      random: tests/audio/mixer_tone_random.cpp
+    notes: >-
+      Contract filled (Phase-1-active scope note). Adopts the ZRef
+      fixed-point library per plan Q5. W2.4: advanced to REFERENCE_COMPLETE
+      on the tone+ring subset (plan W2.4 scope note in the contract) —
+      zref::MixerTone bit-exact vs the committed exhaustive sin goldens,
+      full mixer lands with the software phases.
 
   - id: SW.CMDBUILD
     name: Frame-packet builder

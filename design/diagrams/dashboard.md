@@ -9,7 +9,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 
 | subsystem | SPECIFIED | REFERENCE_COMPLETE | UNIT_VERIFIED | RTL_VERIFIED | SYNTHESIZED | INTEGRATED | HARDWARE_PROVEN | blocked | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| audio | 1 | · | · | · | · | · | · | · | 1 |
+| audio | · | 1 | · | · | · | · | · | · | 1 |
 | command | 3 | · | · | · | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | 3 | · | · | · | · | · | · | · | 3 |
@@ -23,16 +23,18 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | 5 | · | · | · | · | · | · | · | 5 |
 | surface | 2 | · | · | · | · | · | · | · | 2 |
-| sw | 10 | 2 | 3 | · | · | · | · | 2 | 15 |
+| sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | 4 | · | · | · | · | · | · | · | 4 |
-| **all** | 82 | 2 | 3 | · | · | · | · | 6 | 87 |
+| **all** | 80 | 4 | 3 | · | · | · | · | 6 | 87 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
 | block | state | date | commit | evidence |
 |---|---|---|---|---|
+| AUDIO.FIFO | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | reference/src/zref_audio.cpp |
+| SW.MIXER | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | tests/audio/mixer_tone_directed.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `9d8dc79` | reference/src/zref_frame.cpp |
