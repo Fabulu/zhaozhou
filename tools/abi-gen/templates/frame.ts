@@ -19,6 +19,7 @@ import {
   ZHAO_COMMAND_TABLE,
   ZH_ABI_BAD_ABI_VERSION,
   ZH_ABI_BAD_HEADER_CRC,
+  ZH_ABI_BAD_VALUE,
   ZH_ABI_BAD_LENGTH,
   ZH_ABI_BAD_MAGIC,
   ZH_ABI_BAD_PAYLOAD_CRC,
@@ -116,6 +117,14 @@ export function validateFrame(
       if (info.padOffsets.includes(b - 16) && pkt[ZHAO_FRAME_HEADER_BYTES + off + b] !== 0) {
         return fail(ZH_ABI_RESERVED_FIELD, seen, full);
       }
+    }
+    // 7. enum fields must carry a declared member value (ABI v2)
+    for (const ec of info.enumChecks) {
+      let v = 0;
+      for (let b = ec.size - 1; b >= 0; b--) {
+        v = v * 256 + pkt[ZHAO_FRAME_HEADER_BYTES + off + 16 + ec.offset + b]!;
+      }
+      if (!ec.values.includes(v)) return fail(ZH_ABI_BAD_VALUE, seen, full);
     }
 
     if (opcode >= 0xf000 && opcode <= 0xf0ff) anyDebug = true;

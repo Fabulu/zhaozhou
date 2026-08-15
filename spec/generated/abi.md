@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 107a8ad35169c68450e1a94095ee91956e4a3be8dff84c9fbfc17701036f6ee7
-zidl_sha256         = fce80439767212fc28c1c15d4919877219b518066c1c8e8acb8de3d87415a461
+abi_identity_sha256 = 6564728392c29ecfc8392f032cbcb0f34196702f49e913eec4875a6475599af2
+zidl_sha256         = 30cca6270f3e68f566ad5216947de56b0ac85e8a126a86aa5ed54621c90aa04a
 ```
 
-ABI version **1**, little-endian, command alignment
+ABI version **2**, little-endian, command alignment
 **16 B**, opcode width u16,
-12 commands (5 implemented).
+15 commands (7 implemented).
 
 ## Commands
 
@@ -27,8 +27,11 @@ ABI version **1**, little-endian, command alignment
 | `DrawForm` | `0x0300` | 32 | reserved |
 | `DrawPopulation` | `0x0301` | 32 | reserved |
 | `DrawProcedural` | `0x0302` | 64 | reserved |
+| `DrawSky` | `0x0310` | 176 | reserved |
 | `EmitAudioEvent` | `0x0400` | 32 | reserved |
 | `DebugBootstrap` | `0xF001` | 64 | reserved |
+| `DebugFrameBlit` | `0xF002` | 48 | implemented |
+| `DebugRumble` | `0xF004` | 32 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -131,7 +134,7 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
 | Offset | Size | Field | Type |
 |---|---|---|---|
-| 0 | 1 | `mode` | u8 |
+| 0 | 1 | `mode` | video_mode |
 | 1 | 1 | `view_count` | u8 |
 | 2 | 2 | `flags` | u16 |
 | 4 | 8 | `geometry_tokens` | u32 ×2 |
@@ -264,6 +267,65 @@ Golden sample: `tests/abi/golden/cmd_draw_procedural.bin` (C++ packer
 TS `zhaoPackDrawProcedural(zhaoSampleDrawProcedural(), ...)`, SV round-trips it via
 `zhao_unpack_draw_procedural`/`zhao_pack_draw_procedural`).
 
+### DrawSky — 0x0310 (176 B, reserved)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `sky_set` | handle32 [sky_set] |
+| 4 | 128 | `rot_proj` | mat4fx ×2 |
+| 132 | 4 | `cloud_scroll_u` | fx16 |
+| 136 | 4 | `cloud_scroll_v` | fx16 |
+| 140 | 2 | `drum_yaw` | angle16 |
+| 142 | 1 | `viewport_mask` | u8 |
+| 143 | 1 | `flags` | u8 |
+| 144 | 1 | `reserved0` | u8 |
+| 145 | 1 | `reserved1` | u8 |
+| 146 | 14 | `pad` | pad (zero) ×14 |
+
+`rot_proj` (mat4fx) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 8 | 4 | `rot_proj[0].m00` | fx16 |
+| 12 | 4 | `rot_proj[0].m01` | fx16 |
+| 16 | 4 | `rot_proj[0].m02` | fx16 |
+| 20 | 4 | `rot_proj[0].m03` | fx16 |
+| 24 | 4 | `rot_proj[0].m10` | fx16 |
+| 28 | 4 | `rot_proj[0].m11` | fx16 |
+| 32 | 4 | `rot_proj[0].m12` | fx16 |
+| 36 | 4 | `rot_proj[0].m13` | fx16 |
+| 40 | 4 | `rot_proj[0].m20` | fx16 |
+| 44 | 4 | `rot_proj[0].m21` | fx16 |
+| 48 | 4 | `rot_proj[0].m22` | fx16 |
+| 52 | 4 | `rot_proj[0].m23` | fx16 |
+| 56 | 4 | `rot_proj[0].m30` | fx16 |
+| 60 | 4 | `rot_proj[0].m31` | fx16 |
+| 64 | 4 | `rot_proj[0].m32` | fx16 |
+| 68 | 4 | `rot_proj[0].m33` | fx16 |
+| 72 | 4 | `rot_proj[1].m00` | fx16 |
+| 76 | 4 | `rot_proj[1].m01` | fx16 |
+| 80 | 4 | `rot_proj[1].m02` | fx16 |
+| 84 | 4 | `rot_proj[1].m03` | fx16 |
+| 88 | 4 | `rot_proj[1].m10` | fx16 |
+| 92 | 4 | `rot_proj[1].m11` | fx16 |
+| 96 | 4 | `rot_proj[1].m12` | fx16 |
+| 100 | 4 | `rot_proj[1].m13` | fx16 |
+| 104 | 4 | `rot_proj[1].m20` | fx16 |
+| 108 | 4 | `rot_proj[1].m21` | fx16 |
+| 112 | 4 | `rot_proj[1].m22` | fx16 |
+| 116 | 4 | `rot_proj[1].m23` | fx16 |
+| 120 | 4 | `rot_proj[1].m30` | fx16 |
+| 124 | 4 | `rot_proj[1].m31` | fx16 |
+| 128 | 4 | `rot_proj[1].m32` | fx16 |
+| 132 | 4 | `rot_proj[1].m33` | fx16 |
+
+Golden sample: `tests/abi/golden/cmd_draw_sky.bin` (C++ packer
+`zhao_abi::zhao_pack_draw_sky(zhao_abi::zhao_sample_draw_sky(), ...)`,
+TS `zhaoPackDrawSky(zhaoSampleDrawSky(), ...)`, SV round-trips it via
+`zhao_unpack_draw_sky`/`zhao_pack_draw_sky`).
+
 ### EmitAudioEvent — 0x0400 (32 B, reserved)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
@@ -293,6 +355,41 @@ Golden sample: `tests/abi/golden/cmd_debug_bootstrap.bin` (C++ packer
 `zhao_abi::zhao_pack_debug_bootstrap(zhao_abi::zhao_sample_debug_bootstrap(), ...)`,
 TS `zhaoPackDebugBootstrap(zhaoSampleDebugBootstrap(), ...)`, SV round-trips it via
 `zhao_unpack_debug_bootstrap`/`zhao_pack_debug_bootstrap`).
+
+### DebugFrameBlit — 0xF002 (48 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `dst_slot` | u8 |
+| 1 | 1 | `mode` | video_mode |
+| 2 | 2 | `pad` | pad (zero) ×2 |
+| 4 | 4 | `src_addr_hps` | u32 |
+| 8 | 4 | `byte_len` | u32 |
+| 12 | 4 | `expected_crc32c` | u32 |
+| 16 | 16 | `pad_1` | pad (zero) ×16 |
+
+Golden sample: `tests/abi/golden/cmd_debug_frame_blit.bin` (C++ packer
+`zhao_abi::zhao_pack_debug_frame_blit(zhao_abi::zhao_sample_debug_frame_blit(), ...)`,
+TS `zhaoPackDebugFrameBlit(zhaoSampleDebugFrameBlit(), ...)`, SV round-trips it via
+`zhao_unpack_debug_frame_blit`/`zhao_pack_debug_frame_blit`).
+
+### DebugRumble — 0xF004 (32 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `pad_index` | u8 |
+| 1 | 1 | `enable` | u8 |
+| 2 | 1 | `strength` | u8 |
+| 3 | 13 | `pad` | pad (zero) ×13 |
+
+Golden sample: `tests/abi/golden/cmd_debug_rumble.bin` (C++ packer
+`zhao_abi::zhao_pack_debug_rumble(zhao_abi::zhao_sample_debug_rumble(), ...)`,
+TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
+`zhao_unpack_debug_rumble`/`zhao_pack_debug_rumble`).
 
 ## Composed structs
 
@@ -337,6 +434,30 @@ TS `zhaoPackDebugBootstrap(zhaoSampleDebugBootstrap(), ...)`, SV round-trips it 
 | 56 | 4 | `m32` | fx16 |
 | 60 | 4 | `m33` | fx16 |
 
+### PadFrame — 20 B
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `pad_index` | u8 |
+| 1 | 1 | `flags` | u8 |
+| 2 | 2 | `sequence` | u16 |
+| 4 | 4 | `buttons` | u32 |
+| 8 | 2 | `lx` | i16 |
+| 10 | 2 | `ly` | i16 |
+| 12 | 2 | `rx` | i16 |
+| 14 | 2 | `ry` | i16 |
+| 16 | 4 | `rsv` | u32 |
+
+## Value enums (ABI v2)
+
+### `video_mode` — backing `u8`
+
+| Value | Name |
+|---|---|
+| 0 | `VIDEO_Z60` |
+| 1 | `VIDEO_STORM` |
+| 2 | `VIDEO_DUO` |
+
 ## Error codes (generated enum, shared verbatim C++/TS/SV)
 
 | Value | Name | Meaning |
@@ -377,8 +498,11 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_draw_form.bin` | canonical DrawForm sample record |
 | `tests/abi/golden/cmd_draw_population.bin` | canonical DrawPopulation sample record |
 | `tests/abi/golden/cmd_draw_procedural.bin` | canonical DrawProcedural sample record |
+| `tests/abi/golden/cmd_draw_sky.bin` | canonical DrawSky sample record |
 | `tests/abi/golden/cmd_emit_audio_event.bin` | canonical EmitAudioEvent sample record |
 | `tests/abi/golden/cmd_debug_bootstrap.bin` | canonical DebugBootstrap sample record |
+| `tests/abi/golden/cmd_debug_frame_blit.bin` | canonical DebugFrameBlit sample record |
+| `tests/abi/golden/cmd_debug_rumble.bin` | canonical DebugRumble sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |

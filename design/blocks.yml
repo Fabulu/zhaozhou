@@ -250,7 +250,7 @@ blocks:
     kind: rtl
     subsystem: command
     clock_domain: gpu
-    purpose: Own the frame-slot FSM (FREE → CLAIMED → EXECUTING → FENCED → DONE); enforce deadlines with a fault counter, issue the completion fence, hand engine dispatch and region ownership to the engines and the memory guard.
+    purpose: "Own the frame-slot FSM (charter 7.4 names: FREE → ARM_WRITING → READY → FPGA_RUNNING → DONE) across 3 slots; enforce BeginFrame.deadline_cycles with deadline_faults, issue exactly one completion fence per FPGA_RUNNING→DONE, hand engine dispatch and region ownership to the engines and the memory guard. Wave 2 (plan D8): real sinks are debug-blit DMA and the counter snapshot; engine fan-out ports exist with no-op sinks."
     contract: design/contracts/CMD.SCHEDULER.md
     phase: 1
     owner_issue: ZH-009
@@ -407,7 +407,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: All VRAM traffic flows through the guard; the schematic draws the major clients only.
+    notes: "All VRAM traffic flows through the guard; the schematic draws the major clients only. Phase-2 region map (spec/memory_rules.md 5): FB slot 0 @ 0x0000_0000 and slot 1 @ 0x0003_C000, each 0x3C000 B (largest canvas); everything else is a violation by construction."
 
   # ===========================================================================
   # FIELD — Field IR sequencers (fpga/rtl/field)

@@ -32,9 +32,9 @@ function parseAndLayout(source: string) {
 
 test('parser accepts the real commands.zidl', () => {
   const ir = parseAndLayout(zidlSource());
-  assert.equal(ir.abi.version, 1);
+  assert.equal(ir.abi.version, 2); // ABI v2 (wave 2)
   assert.equal(ir.abi.commandAlignment, 16);
-  assert.equal(ir.commands.length, 12);
+  assert.equal(ir.commands.length, 15);
 });
 
 test('parser rejects missing command status keyword', () => {
@@ -75,6 +75,7 @@ test('computed record sizes match the ratified table (capture_format.md 1.3)', (
     Nop: 16, BeginFrame: 32, EndFrame: 32, SetView: 96, SetPresentationContract: 48,
     TerrainField: 112, SurfaceStamp: 64, DrawForm: 32, DrawPopulation: 32,
     DrawProcedural: 64, EmitAudioEvent: 32, DebugBootstrap: 64,
+    DebugFrameBlit: 48, DebugRumble: 32, DrawSky: 176,
   };
   for (const [name, bytes] of Object.entries(want)) {
     const c = ir.commands.find((x) => x.name === name);
@@ -88,6 +89,31 @@ test('fx16 is a 4-byte container; mat4fx is 64 B', () => {
   assert.equal(ir.structs.get('mat4fx')!.size, 64);
   assert.equal(ir.structs.get('rectfx')!.size, 16);
   assert.equal(ir.structs.get('transform2fx')!.size, 24);
+});
+
+test('ABI v2: PadFrame is 20 B / 4-aligned; video_mode is u8-backed', () => {
+  const ir = parseAndLayout(zidlSource());
+  const pf = ir.structs.get('PadFrame')!;
+  assert.equal(pf.size, 20);
+  assert.equal(pf.size % 4, 0); // array stride keeps `buttons` 4-aligned
+  const buttons = pf.fields.find((f) => f.name === 'buttons')!;
+  assert.equal(buttons.offset, 4);
+  const rsv = pf.fields.find((f) => f.name === 'rsv')!;
+  assert.equal(rsv.offset, 16);
+  const vm = ir.enums.find((e) => e.name === 'video_mode')!;
+  assert.equal(vm.type, 'u8');
+  assert.deepEqual(vm.entries.map((x) => x.value), [0, 1, 2]);
+});
+
+test('layout law: enum entry values must fit the backing type', () => {
+  const bad = zidlSource().replace('VIDEO_DUO = 2;', 'VIDEO_DUO = 300;');
+  assert.throws(() => parseAndLayout(bad), /fit the u8 backing type/i);
+});
+
+test('layout law: struct array stride must keep members aligned (rule 3)', () => {
+  // u16 rsv would close PadFrame at 18 B — not a multiple of the 4-B cap
+  const bad = zidlSource().replace('u32 rsv;        // reserved', 'u16 rsv;        // reserved');
+  assert.throws(() => parseAndLayout(bad), /not a multiple of its alignment cap/i);
 });
 
 test('CRC-32C vectors (capture_format.md 2.1 — normative)', () => {
@@ -153,7 +179,7 @@ test('oracle: sealed frame builder round-trips', () => {
   const ir = parseAndLayout(zidlSource());
   const slot = ir.consts.find((c) => c.name === 'FRAME_SLOT_BYTES')!.value;
   const pkt = buildFrame(ir, {
-    abiVersion: 1, flags: 0, frameId: 7, sequence: 3, resourceEpoch: 2,
+    abiVersion: ir.abi.version, flags: 0, frameId: 7, sequence: 3, resourceEpoch: 2,
     deadline: 99, commandCount: 0, commandBytes: 0,
   }, new Uint8Array(0));
   assert.equal(pkt.length, 40);
@@ -170,12 +196,13 @@ test('corpus: every case validates to its recorded expected error', () => {
   // intent map: the whole point of each mutation (regression guard)
   const intent: Record<string, number> = {
     valid_minimal: 0, valid_all_implemented: 0, valid_empty_frame: 0, valid_debug_with_flag: 0,
+    valid_debug_blit_rumble: 0, debug_blit_without_flag: 12,
     bad_magic: 1, bad_abi_version: 2, bad_header_crc: 5, reserved_frame_flag: 3,
     misaligned_command_bytes: 4, count_exceeds_capacity: 4, oversize_command_bytes: 4,
     packet_truncated: 4, packet_too_short: 4, bad_payload_crc: 6, payload_bit_flip: 6,
     unknown_opcode: 7, record_size_mismatch: 4, record_flags_nonzero: 3,
-    record_reserved_nonzero: 8, payload_pad_nonzero: 8, count_mismatch: 13,
-    debug_without_flag: 12,
+    record_reserved_nonzero: 8, payload_pad_nonzero: 8, enum_out_of_range: 9,
+    count_mismatch: 13, debug_without_flag: 12,
   };
   for (const c of cases) {
     const want = intent[c.name];

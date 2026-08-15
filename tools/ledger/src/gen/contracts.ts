@@ -20,7 +20,7 @@ const FILLED_NOTES: Record<string, string> = {
     'Malformed input: per-record length/opcode checks; a malformed record stops the packet with a safe error and no register/memory side effects (Dalvik model — reject before any write).',
   'CMD.SCHEDULER':
     'Exclusions: no decoding, no data-path work. ' +
-    'Slot FSM: FREE → CLAIMED → EXECUTING → FENCED → DONE with deadline enforcement and a fault counter; the completion fence is the only signal that releases a slot. ' +
+    'Slot FSM (charter 7.4 names): FREE → ARM_WRITING → READY → FPGA_RUNNING → DONE with deadline enforcement and a fault counter; the completion fence is the only signal that releases a slot. ' +
     'Overflow/malformed: a slot that misses its deadline faults, repeats or drops per policy, and NEVER crosses the frame boundary into the next slot.',
   'DEBUG.COUNTERS':
     'Exclusions: no trace (DEBUG.TRACE), no CRCs (DEBUG.CRC). ' +

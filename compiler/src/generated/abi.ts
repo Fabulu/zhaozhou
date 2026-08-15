@@ -1,12 +1,12 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 107a8ad35169c68450e1a94095ee91956e4a3be8dff84c9fbfc17701036f6ee7
-//   zidl_sha256         = fce80439767212fc28c1c15d4919877219b518066c1c8e8acb8de3d87415a461
+//   abi_identity_sha256 = 6564728392c29ecfc8392f032cbcb0f34196702f49e913eec4875a6475599af2
+//   zidl_sha256         = 30cca6270f3e68f566ad5216947de56b0ac85e8a126a86aa5ed54621c90aa04a
 
 // ---------------------------------------------------------------- abi ---
 
-export const ZHAO_ABI_VERSION = 1 as const;
+export const ZHAO_ABI_VERSION = 2 as const;
 export const ZHAO_COMMAND_ALIGNMENT = 16 as const;
 export const FRAME_SLOT_BYTES = 1048576 as const;
 
@@ -44,6 +44,12 @@ export const ZHAO_ERROR_NAMES: Record<number, string> = {
   [14]: 'ZH_ABI_UNIMPLEMENTED_COMMAND',
 };
 
+// enum video_mode: u8 on the wire (capture_format.md 3.2 step 7)
+export const VIDEO_Z60 = 0 as const;
+export const VIDEO_STORM = 1 as const;
+export const VIDEO_DUO = 2 as const;
+export const ZHAO_ENUM_VIDEO_MODE: readonly number[] = [0, 1, 2];
+
 // opcodes
 export const ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 export const ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
@@ -55,8 +61,11 @@ export const ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, reserved
 export const ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, reserved
 export const ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, reserved
 export const ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, reserved
+export const ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
 export const ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, reserved
 export const ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
+export const ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
+export const ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 
 // frame packet (capture_format.md 3)
 export const ZHAO_FRAME_MAGIC = 0x314b505a; // 'Z','P','K','1' LE
@@ -124,6 +133,19 @@ export interface ZhMat4fx {
   m33: number; // fx16 (Q16.16, int32), @60
 }
 
+/** PadFrame: 20 bytes (spec/commands.zidl); pads are not modeled */
+export interface ZhPadFrame {
+  pad_index: number; // u8, @0
+  flags: number; // u8, @1
+  sequence: number; // u16, @2
+  buttons: number; // u32, @4
+  lx: number; // i16, @8
+  ly: number; // i16, @10
+  rx: number; // i16, @12
+  ry: number; // i16, @14
+  rsv: number; // u32, @16
+}
+
 /** 16-byte command record header (capture_format.md 3.1) */
 export interface ZhCmdHeader {
   opcode: number;
@@ -169,7 +191,7 @@ export interface ZhRecordSetView {
 /** SetPresentationContract 0x0020: 48-byte record (implemented) */
 export interface ZhRecordSetPresentationContract {
   hdr: ZhCmdHeader;
-  mode: number; // u8, @0
+  mode: number; // video_mode (u8), @0
   view_count: number; // u8, @1
   flags: number; // u16, @2
   geometry_tokens: number[]; // u32, @4
@@ -227,6 +249,20 @@ export interface ZhRecordDrawProcedural {
   screen_error: number; // fx16 (Q16.16, int32), @32
 }
 
+/** DrawSky 0x0310: 176-byte record (reserved) */
+export interface ZhRecordDrawSky {
+  hdr: ZhCmdHeader;
+  sky_set: number; // handle32, @0
+  rot_proj: ZhMat4fx[]; // @4
+  cloud_scroll_u: number; // fx16 (Q16.16, int32), @132
+  cloud_scroll_v: number; // fx16 (Q16.16, int32), @136
+  drum_yaw: number; // angle16 (U 0.0.16 turns, u16), @140
+  viewport_mask: number; // u8, @142
+  flags: number; // u8, @143
+  reserved0: number; // u8, @144
+  reserved1: number; // u8, @145
+}
+
 /** EmitAudioEvent 0x0400: 32-byte record (reserved) */
 export interface ZhRecordEmitAudioEvent {
   hdr: ZhCmdHeader;
@@ -243,6 +279,24 @@ export interface ZhRecordDebugBootstrap {
   data: number[]; // u8, @0
 }
 
+/** DebugFrameBlit 0xF002: 48-byte record (implemented) */
+export interface ZhRecordDebugFrameBlit {
+  hdr: ZhCmdHeader;
+  dst_slot: number; // u8, @0
+  mode: number; // video_mode (u8), @1
+  src_addr_hps: number; // u32, @4
+  byte_len: number; // u32, @8
+  expected_crc32c: number; // u32, @12
+}
+
+/** DebugRumble 0xF004: 32-byte record (implemented) */
+export interface ZhRecordDebugRumble {
+  hdr: ZhCmdHeader;
+  pad_index: number; // u8, @0
+  enable: number; // u8, @1
+  strength: number; // u8, @2
+}
+
 export interface ZhCommandInfo {
   name: string;
   opcode: number;
@@ -250,23 +304,28 @@ export interface ZhCommandInfo {
   implemented: boolean;
   /** payload-relative byte offsets that must be zero (pads) */
   padOffsets: readonly number[];
+  /** enum range checks (capture_format.md 3.2 step 7, ABI v2) */
+  enumChecks: readonly { readonly offset: number; readonly size: number; readonly values: readonly number[] }[];
 }
 export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
-  { name: 'Nop', opcode: 0x0000, recordBytes: 16, implemented: true, padOffsets: [] },
-  { name: 'BeginFrame', opcode: 0x0001, recordBytes: 32, implemented: true, padOffsets: [] },
-  { name: 'EndFrame', opcode: 0x0002, recordBytes: 32, implemented: true, padOffsets: [12, 13, 14, 15] },
-  { name: 'SetView', opcode: 0x0010, recordBytes: 96, implemented: true, padOffsets: [] },
-  { name: 'SetPresentationContract', opcode: 0x0020, recordBytes: 48, implemented: true, padOffsets: [24, 25, 26, 27, 28, 29, 30, 31] },
-  { name: 'TerrainField', opcode: 0x0200, recordBytes: 112, implemented: false, padOffsets: [92, 93, 94, 95] },
-  { name: 'SurfaceStamp', opcode: 0x0210, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47] },
-  { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: false, padOffsets: [] },
-  { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: false, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15] },
-  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47] },
-  { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: false, padOffsets: [] },
-  { name: 'DebugBootstrap', opcode: 0xF001, recordBytes: 64, implemented: false, padOffsets: [] },
+  { name: 'Nop', opcode: 0x0000, recordBytes: 16, implemented: true, padOffsets: [], enumChecks: [] },
+  { name: 'BeginFrame', opcode: 0x0001, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
+  { name: 'EndFrame', opcode: 0x0002, recordBytes: 32, implemented: true, padOffsets: [12, 13, 14, 15], enumChecks: [] },
+  { name: 'SetView', opcode: 0x0010, recordBytes: 96, implemented: true, padOffsets: [], enumChecks: [] },
+  { name: 'SetPresentationContract', opcode: 0x0020, recordBytes: 48, implemented: true, padOffsets: [24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 0, size: 1, values: [0, 1, 2] }] },
+  { name: 'TerrainField', opcode: 0x0200, recordBytes: 112, implemented: false, padOffsets: [92, 93, 94, 95], enumChecks: [] },
+  { name: 'SurfaceStamp', opcode: 0x0210, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [] },
+  { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: false, padOffsets: [], enumChecks: [] },
+  { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: false, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
+  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: false, padOffsets: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [] },
+  { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
+  { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: false, padOffsets: [], enumChecks: [] },
+  { name: 'DebugBootstrap', opcode: 0xF001, recordBytes: 64, implemented: false, padOffsets: [], enumChecks: [] },
+  { name: 'DebugFrameBlit', opcode: 0xF002, recordBytes: 48, implemented: true, padOffsets: [2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 1, size: 1, values: [0, 1, 2] }] },
+  { name: 'DebugRumble', opcode: 0xF004, recordBytes: 32, implemented: true, padOffsets: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
 ];
-export const ZHAO_COMMAND_COUNT = 12 as const;
-export const ZHAO_MAX_RECORD_BYTES = 112 as const;
+export const ZHAO_COMMAND_COUNT = 15 as const;
+export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
 }
@@ -488,7 +547,7 @@ export function zhaoSampleSetPresentationContract(): ZhRecordSetPresentationCont
       sourceId: 1342242820, // kind 5, module 1, index 4
       flags: 0,
     },
-    mode: 133,
+    mode: 0,
     view_count: 133,
     flags: 33377,
     geometry_tokens: [0, 0],
@@ -577,12 +636,32 @@ export function zhaoSampleDrawProcedural(): ZhRecordDrawProcedural {
   };
 }
 
+export function zhaoSampleDrawSky(): ZhRecordDrawSky {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_DRAW_SKY,
+      recordBytes: 176,
+      sourceId: 1342242826, // kind 5, module 1, index 10
+      flags: 0,
+    },
+    sky_set: 704643073,
+    rot_proj: [zhaoSampleMat4fx(), zhaoSampleMat4fx()],
+    cloud_scroll_u: 154135,
+    cloud_scroll_v: 219671,
+    drum_yaw: 44900,
+    viewport_mask: 215,
+    flags: 163,
+    reserved0: 211,
+    reserved1: 167,
+  };
+}
+
 export function zhaoSampleEmitAudioEvent(): ZhRecordEmitAudioEvent {
   return {
     hdr: {
       opcode: ZHAO_OP_EMIT_AUDIO_EVENT,
       recordBytes: 32,
-      sourceId: 1342242826, // kind 5, module 1, index 10
+      sourceId: 1342242827, // kind 5, module 1, index 11
       flags: 0,
     },
     event_id: 0,
@@ -598,10 +677,40 @@ export function zhaoSampleDebugBootstrap(): ZhRecordDebugBootstrap {
     hdr: {
       opcode: ZHAO_OP_DEBUG_BOOTSTRAP,
       recordBytes: 64,
-      sourceId: 1342242827, // kind 5, module 1, index 11
+      sourceId: 1342242828, // kind 5, module 1, index 12
       flags: 0,
     },
     data: [113, 17, 53, 185, 245, 21, 109, 189, 137, 201, 49, 1, 201, 193, 109, 93, 73, 157, 233, 89, 81, 41, 61, 217, 149, 93, 245, 157, 153, 81, 117, 165, 129, 213, 185, 169, 113, 233, 253, 237, 21, 157, 21, 189, 17, 25, 93, 57],
+  };
+}
+
+export function zhaoSampleDebugFrameBlit(): ZhRecordDebugFrameBlit {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_DEBUG_FRAME_BLIT,
+      recordBytes: 48,
+      sourceId: 1342242829, // kind 5, module 1, index 13
+      flags: 0,
+    },
+    dst_slot: 53,
+    mode: 1,
+    src_addr_hps: 0,
+    byte_len: 0,
+    expected_crc32c: 0,
+  };
+}
+
+export function zhaoSampleDebugRumble(): ZhRecordDebugRumble {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_DEBUG_RUMBLE,
+      recordBytes: 32,
+      sourceId: 1342242830, // kind 5, module 1, index 14
+      flags: 0,
+    },
+    pad_index: 113,
+    enable: 169,
+    strength: 117,
   };
 }
 
@@ -741,6 +850,22 @@ export function zhaoPackDrawProcedural(r: ZhRecordDrawProcedural, w: ZhByteWrite
   w.zeros(12); // pad
 }
 
+export function zhaoPackDrawSky(r: ZhRecordDrawSky, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u32(r.sky_set);
+  zhaoPackMat4fx(r.rot_proj[0]!, w);
+  zhaoPackMat4fx(r.rot_proj[1]!, w);
+  w.fx16(r.cloud_scroll_u);
+  w.fx16(r.cloud_scroll_v);
+  w.u16(r.drum_yaw);
+  w.u8(r.viewport_mask);
+  w.u8(r.flags);
+  w.u8(r.reserved0);
+  w.u8(r.reserved1);
+  w.zeros(14); // pad
+}
+
 export function zhaoPackEmitAudioEvent(r: ZhRecordEmitAudioEvent, w: ZhByteWriter): void {
   w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
   w.u32(r.hdr.flags); w.zeros(4); // reserved0
@@ -757,8 +882,29 @@ export function zhaoPackDebugBootstrap(r: ZhRecordDebugBootstrap, w: ZhByteWrite
   for (let i = 0; i < 48; i++) w.u8(r.data[i]!);
 }
 
+export function zhaoPackDebugFrameBlit(r: ZhRecordDebugFrameBlit, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.dst_slot);
+  w.u8(r.mode);
+  w.zeros(2); // pad
+  w.u32(r.src_addr_hps);
+  w.u32(r.byte_len);
+  w.u32(r.expected_crc32c);
+  w.zeros(16); // pad_1
+}
+
+export function zhaoPackDebugRumble(r: ZhRecordDebugRumble, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.pad_index);
+  w.u8(r.enable);
+  w.u8(r.strength);
+  w.zeros(13); // pad
+}
+
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x10, 0x7A, 0x8A, 0xD3, 0x51, 0x69, 0xC6, 0x84, 0x50, 0xE1, 0xA9, 0x40, 0x95, 0xEE, 0x91, 0x95, 0x6E, 0x4A, 0x3B, 0xE8, 0xDF, 0xF8, 0x4C, 0x9F, 0xBF, 0xC1, 0x77, 0x01, 0x03, 0x6F, 0x6E, 0xE7];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0xFC, 0xE8, 0x04, 0x39, 0x76, 0x72, 0x12, 0xFC, 0x28, 0xC1, 0xC1, 0x5D, 0x49, 0x19, 0x87, 0x72, 0x19, 0xB5, 0x18, 0x06, 0x6C, 0x1C, 0x8E, 0x8A, 0xCB, 0x8D, 0xE3, 0xD8, 0x74, 0x15, 0xA4, 0x61];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x65, 0x64, 0x72, 0x83, 0x92, 0xC2, 0x9E, 0xCF, 0xC8, 0x39, 0x2F, 0x03, 0x2C, 0xBC, 0xB0, 0xF3, 0x41, 0x96, 0x70, 0x2F, 0x49, 0xE9, 0x13, 0xEE, 0xC4, 0x87, 0x5A, 0x64, 0x75, 0x59, 0x9A, 0xF2];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x30, 0xCC, 0xA6, 0x27, 0x0F, 0x3E, 0x68, 0xF5, 0x66, 0xAD, 0x52, 0x16, 0x94, 0x7D, 0xE5, 0x6B, 0x0A, 0xC8, 0x5E, 0x8A, 0x12, 0x6A, 0x86, 0xAA, 0x5E, 0xD5, 0x46, 0x21, 0xC9, 0x0A, 0xA0, 0x4A];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

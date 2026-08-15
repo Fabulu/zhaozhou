@@ -111,6 +111,20 @@ export function validateFrame(ir: LayoutIR, pkt: Uint8Array, slotBytes: number):
   const sizeFor = new Map<number, number>();
   for (const c of ir.commands) sizeFor.set(c.opcode, c.recordBytes);
 
+  // 7. enum ranges (capture_format.md 3.2 step 7 — active since ABI v2):
+  // payload-relative {offset, size, valid values} for every enum field
+  const enumChecks = new Map<number, { offset: number; size: number; values: number[] }[]>();
+  for (const c of ir.commands) {
+    const checks = c.fields
+      .filter((f) => f.kind === 'enum')
+      .map((f) => ({
+        offset: f.offset,
+        size: f.size / f.count,
+        values: ir.enums.find((e) => e.name === f.type)!.entries.map((x) => x.value),
+      }));
+    if (checks.length > 0) enumChecks.set(c.opcode, checks);
+  }
+
   let off = 0;
   let seen = 0;
   let anyDebug = false;
@@ -139,6 +153,15 @@ export function validateFrame(ir: LayoutIR, pkt: Uint8Array, slotBytes: number):
           return ok(8, seen, FRAME_OVERHEAD + commandBytes);
         }
       }
+    }
+
+    // 7. enum fields must carry a declared member value (ZH_ABI_BAD_VALUE)
+    for (const ef of enumChecks.get(opcode) ?? []) {
+      let v = 0;
+      for (let b = ef.size - 1; b >= 0; b--) {
+        v = v * 256 + pkt[HEADER_BYTES + off + 16 + ef.offset + b]!;
+      }
+      if (!ef.values.includes(v)) return ok(9, seen, FRAME_OVERHEAD + commandBytes);
     }
 
     if (opcode >= DEBUG_OPCODE_LO && opcode <= DEBUG_OPCODE_HI) anyDebug = true;

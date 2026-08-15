@@ -33,12 +33,17 @@ const svId = (name: string): string => (SV_KEYWORDS.has(name) ? `${name}_f` : na
 /** wire type of a leaf/field in SV bits */
 function fieldBits(f: FieldIR): number {
   if (f.kind === 'handle') return 32;
+  if (f.kind === 'enum') return primBits(f.leaves[0]!.prim); // backing width
   if (f.kind === 'struct') {
     return -1; // handled by caller (typed member)
   }
-  switch (f.type) {
+  return primBits(f.type);
+}
+
+function primBits(prim: string): number {
+  switch (prim) {
     case 'u8': case 'i8': case 'pad': return 8;
-    case 'u16': case 'i16': return 16;
+    case 'u16': case 'i16': case 'angle16': return 16;
     case 'u32': case 'i32': case 'fx16': return 32;
     case 'u64': case 'i64': case 'fx32': return 64;
     default: return 32;
@@ -47,7 +52,8 @@ function fieldBits(f: FieldIR): number {
 
 function svComment(t: string): string {
   return t === 'fx16' ? 'fx16 = Q16.16 in 32 bits (qformats.md)'
-    : t === 'fx32' ? 'fx32 = Q32.32 in 64 bits' : t;
+    : t === 'fx32' ? 'fx32 = Q32.32 in 64 bits'
+      : t === 'angle16' ? 'angle16 = U 0.0.16 turns in 16 bits (qformats.md 2)' : t;
 }
 
 /** emit a packed struct body in REVERSE field order (MSB-first packing). */
@@ -200,6 +206,20 @@ export function emitSv(ir: LayoutIR): string {
   }
   P('  } zhao_abi_error_e;');
   P('');
+
+  // ---- value enums (ABI v2): typed, backing-width, reverse-independent ------
+  for (const e of ir.enums) {
+    if (e.name === 'zhao_abi_error') continue;
+    const bits = primBits(e.type);
+    P(`  // enum ${e.name}: ${e.type} on the wire (capture_format.md 3.2 step 7)`);
+    P(`  typedef enum logic [${bits - 1}:0] {`);
+    e.entries.forEach((entry, i) => {
+      const comma = i === e.entries.length - 1 ? '' : ',';
+      P(`    ${entry.name} = ${bits}'d${entry.value}${comma}`);
+    });
+    P(`  } zhao_${snakeCase(e.name)}_e;`);
+    P('');
+  }
   P('  // opcodes');
   for (const c of ir.commands) {
     P(`  localparam logic [15:0] ZHAO_OP_${upperSnake(c.name)} = 16'h${c.opcode.toString(16).toUpperCase().padStart(4, '0')};`);
@@ -450,6 +470,39 @@ export function emitSv(ir: LayoutIR): string {
   P('  endfunction');
   P('');
 
+  // ---- per-command enum range check (3.2 step 7, active since ABI v2) ---------
+  P('  // true if any enum field of the record at stream offset base carries a');
+  P('  // value outside its declared member set (capture_format.md 3.2 step 7)');
+  P('  function automatic logic zhao_record_enum_bad(input logic [15:0] op,');
+  P('                                                 input logic [7:0] p [],');
+  P('                                                 input int unsigned base);');
+  P('    logic [31:0] v;');
+  P('    begin');
+  P('      zhao_record_enum_bad = 1\'b0;');
+  P('      case (op)');
+  for (const c of ir.commands) {
+    const checks = c.fields.filter((f) => f.kind === 'enum');
+    if (checks.length === 0) continue;
+    P(`        ZHAO_OP_${upperSnake(c.name)}: begin`);
+    for (const f of checks) {
+      const size = f.size / f.count;
+      const o = `base+16+${f.offset}`;
+      const v = size === 1 ? `{24'b0, p[${o}]}`
+        : size === 2 ? `{16'b0, p[${o}+1], p[${o}]}`
+          : `{p[${o}+3], p[${o}+2], p[${o}+1], p[${o}]}`;
+      const entries = ir.enums.find((e) => e.name === f.type)!.entries;
+      const members = entries.map((x) => `v == 32'd${x.value}`).join(' || ');
+      P(`          v = ${v};  // ${f.name}: ${f.type}`);
+      P(`          if (!(${members})) zhao_record_enum_bad = 1'b1;`);
+    }
+    P('        end');
+  }
+  P('        default: zhao_record_enum_bad = 1\'b0;');
+  P('      endcase');
+  P('    end');
+  P('  endfunction');
+  P('');
+
   // ---- frame header struct + pack/unpack --------------------------------------------------
   P('  // sealed frame header (capture_format.md 3), REVERSE field order');
   P('  typedef struct packed {');
@@ -638,6 +691,12 @@ export function emitSv(ir: LayoutIR): string {
   P('        if (zhao_record_pad_nonzero(16\'(opcode), pkt, ZHAO_FRAME_HEADER_BYTES + off)) begin');
   P('          commands_consumed = seen;');
   P('          zhao_frame_validate = ZH_ABI_RESERVED_FIELD;');
+  P('          return zhao_frame_validate;');
+  P('        end');
+  P('        // 7. enum fields must carry a declared member value (ABI v2)');
+  P('        if (zhao_record_enum_bad(16\'(opcode), pkt, ZHAO_FRAME_HEADER_BYTES + off)) begin');
+  P('          commands_consumed = seen;');
+  P('          zhao_frame_validate = ZH_ABI_BAD_VALUE;');
   P('          return zhao_frame_validate;');
   P('        end');
   P('        if ((16\'(opcode) >= ZHAO_DEBUG_OPCODE_LO) && (16\'(opcode) <= ZHAO_DEBUG_OPCODE_HI))');

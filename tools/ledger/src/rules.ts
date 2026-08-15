@@ -41,6 +41,35 @@ export function checkBlocks(blocksDoc: BlocksDoc, opts: RuleOptions = {}): strin
   const byId = new Map<string, Block>();
   const catalog = new Set(blocksDoc.counter_catalog ?? []);
 
+  // --- V15: counter_id totality (plan W2.1/D9, spec/counters.md 2) -------------
+  // counter_id = catalog index (u16 everywhere: .zcap COUNTERS, RTL read-mux,
+  // debug payloads). That law is only sound if the index space is DENSE and
+  // TOTAL: the catalog must be duplicate-free (a duplicate tears a hole in
+  // the index space a reader cannot interpret), and every counter a block
+  // declares must map to a catalog index (membership itself is V12; this
+  // rule additionally rejects duplicate declarations inside one block,
+  // which would alias the same counter_id twice in a snapshot).
+  const catalogList = blocksDoc.counter_catalog ?? [];
+  const seenCatalog = new Set<string>();
+  catalogList.forEach((c, idx) => {
+    if (seenCatalog.has(c)) {
+      errors.push(
+        `V15: counter_catalog entry "${c}" at index ${idx} duplicates index ${catalogList.indexOf(c)} — ` +
+        'counter_id = catalog index requires a duplicate-free, contiguous index space (spec/counters.md 2)'
+      );
+    }
+    seenCatalog.add(c);
+  });
+  for (const b of blocks) {
+    const seen = new Set<string>();
+    for (const c of b.counters ?? []) {
+      if (seen.has(c)) {
+        errors.push(`V15: ${b.id} declares counter "${c}" twice (one counter_id, one snapshot entry)`);
+      }
+      seen.add(c);
+    }
+  }
+
   // --- V1: id uniqueness (regex/subsystem shape live in the JSON Schema) ---
   for (const b of blocks) {
     if (byId.has(b.id)) errors.push(`V1: duplicate block id ${b.id}`);

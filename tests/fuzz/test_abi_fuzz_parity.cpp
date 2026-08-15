@@ -128,6 +128,7 @@ int main(int argc, char** argv) {
       "nop", "begin_frame", "end_frame", "set_view", "set_presentation_contract",
       "terrain_field", "surface_stamp", "draw_form", "draw_population",
       "draw_procedural", "emit_audio_event", "debug_bootstrap",
+      "draw_sky", "debug_frame_blit", "debug_rumble",
     };
     for (const auto& c : cmds) {
       const auto record = read_file(root / "tests" / "abi" / "golden" / ("cmd_" + std::string(c.snake) + ".bin"));

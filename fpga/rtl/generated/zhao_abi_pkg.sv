@@ -10,7 +10,7 @@
 package zhao_abi_pkg;
 
   // ---------------------------------------------------------- ABI ---
-  localparam int unsigned ZHAO_ABI_VERSION        = 1;
+  localparam int unsigned ZHAO_ABI_VERSION        = 2;
   localparam int unsigned ZHAO_COMMAND_ALIGNMENT = 16;
   // exported ABI constants: consumed by importing modules (stub top, probe),
   // not necessarily referenced inside this package.
@@ -57,6 +57,13 @@ package zhao_abi_pkg;
     ZH_ABI_UNIMPLEMENTED_COMMAND = 8'd14
   } zhao_abi_error_e;
 
+  // enum video_mode: u8 on the wire (capture_format.md 3.2 step 7)
+  typedef enum logic [7:0] {
+    VIDEO_Z60 = 8'd0,
+    VIDEO_STORM = 8'd1,
+    VIDEO_DUO = 8'd2
+  } zhao_video_mode_e;
+
   // opcodes
   localparam logic [15:0] ZHAO_OP_NOP = 16'h0000;
   localparam logic [15:0] ZHAO_OP_BEGIN_FRAME = 16'h0001;
@@ -68,10 +75,13 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_DRAW_FORM = 16'h0300;
   localparam logic [15:0] ZHAO_OP_DRAW_POPULATION = 16'h0301;
   localparam logic [15:0] ZHAO_OP_DRAW_PROCEDURAL = 16'h0302;
+  localparam logic [15:0] ZHAO_OP_DRAW_SKY = 16'h0310;
   localparam logic [15:0] ZHAO_OP_EMIT_AUDIO_EVENT = 16'h0400;
   localparam logic [15:0] ZHAO_OP_DEBUG_BOOTSTRAP = 16'hF001;
+  localparam logic [15:0] ZHAO_OP_DEBUG_FRAME_BLIT = 16'hF002;
+  localparam logic [15:0] ZHAO_OP_DEBUG_RUMBLE = 16'hF004;
   /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned ZHAO_MAX_RECORD_BYTES = 112;  // consumed by the probe
+  localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
   localparam logic [15:0] ZHAO_DEBUG_OPCODE_LO = 16'hF000;
   localparam logic [15:0] ZHAO_DEBUG_OPCODE_HI = 16'hF0FF;
@@ -218,6 +228,19 @@ package zhao_abi_pkg;
     logic [31:0] m00;  // fx16 = Q16.16 in 32 bits (qformats.md) @0
   } zhao_mat4fx_t;
 
+  // PadFrame: 20 B (spec/commands.zidl). REVERSE field order.
+  typedef struct packed {
+    logic [31:0] rsv;  // u32 @16
+    logic [15:0] ry;  // i16 @14
+    logic [15:0] rx;  // i16 @12
+    logic [15:0] ly;  // i16 @10
+    logic [15:0] lx;  // i16 @8
+    logic [31:0] buttons;  // u32 @4
+    logic [15:0] sequence_f;  // u16 @2
+    logic [7:0] flags;  // u8 @1
+    logic [7:0] pad_index;  // u8 @0
+  } zhao_pad_frame_t;
+
   // Nop 0x0000: 16-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
@@ -335,7 +358,7 @@ package zhao_abi_pkg;
     logic [31:0] geometry_tokens_0;  // u32 @20
     logic [15:0] flags;  // u16 @18
     logic [7:0] view_count;  // u8 @17
-    logic [7:0] mode;  // u8 @16
+    logic [7:0] mode;  // video_mode @16
     logic [15:0] h_opcode;  // u16 @0
     logic [15:0] h_record_bytes;  // u16 @2
     logic [31:0] h_source_id;  // u32 @4
@@ -640,6 +663,47 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_SCREEN_ERROR = 48;
   localparam int unsigned ZHAO_DRAW_PROCEDURAL_OFF_PAD = 52;
 
+  // DrawSky 0x0310: 176-B record (reserved).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [111:0] pad;  // 14 zero byte(s) @162
+    logic [7:0] reserved1;  // u8 @161
+    logic [7:0] reserved0;  // u8 @160
+    logic [7:0] flags;  // u8 @159
+    logic [7:0] viewport_mask;  // u8 @158
+    logic [15:0] drum_yaw;  // angle16 = U 0.0.16 turns in 16 bits (qformats.md 2) @156
+    logic [31:0] cloud_scroll_v;  // fx16 = Q16.16 in 32 bits (qformats.md) @152
+    logic [31:0] cloud_scroll_u;  // fx16 = Q16.16 in 32 bits (qformats.md) @148
+    zhao_mat4fx_t rot_proj_1;  // @84
+    zhao_mat4fx_t rot_proj_0;  // @20
+    logic [31:0] sky_set;  // handle32 @16  // handle32 {index:24, generation:8}
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_draw_sky_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_SKY_BYTES = 176;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_SKY_SET = 16;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_ROT_PROJ_0 = 20;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_ROT_PROJ_1 = 84;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_U = 148;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_V = 152;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_DRUM_YAW = 156;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_VIEWPORT_MASK = 158;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_FLAGS = 159;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_RESERVED0 = 160;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_RESERVED1 = 161;
+  localparam int unsigned ZHAO_DRAW_SKY_OFF_PAD = 162;
+
   // EmitAudioEvent 0x0400: 32-B record (reserved).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
@@ -784,6 +848,66 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DEBUG_BOOTSTRAP_OFF_DATA_46 = 62;
   localparam int unsigned ZHAO_DEBUG_BOOTSTRAP_OFF_DATA_47 = 63;
 
+  // DebugFrameBlit 0xF002: 48-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [127:0] pad_1;  // 16 zero byte(s) @32
+    logic [31:0] expected_crc32c;  // u32 @28
+    logic [31:0] byte_len;  // u32 @24
+    logic [31:0] src_addr_hps;  // u32 @20
+    logic [15:0] pad;  // 2 zero byte(s) @18
+    logic [7:0] mode;  // video_mode @17
+    logic [7:0] dst_slot;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_debug_frame_blit_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_DST_SLOT = 16;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_MODE = 17;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_PAD = 18;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_SRC_ADDR_HPS = 20;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_BYTE_LEN = 24;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_EXPECTED_CRC32C = 28;
+  localparam int unsigned ZHAO_DEBUG_FRAME_BLIT_OFF_PAD_1 = 32;
+
+  // DebugRumble 0xF004: 32-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [103:0] pad;  // 13 zero byte(s) @19
+    logic [7:0] strength;  // u8 @18
+    logic [7:0] enable;  // u8 @17
+    logic [7:0] pad_index;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_debug_rumble_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_BYTES = 32;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_PAD_INDEX = 16;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_ENABLE = 17;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_STRENGTH = 18;
+  localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_PAD = 19;
+
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
     begin
@@ -875,6 +999,38 @@ package zhao_abi_pkg;
       c.m32 = v[448 +: 32];
       c.m33 = v[480 +: 32];
       zhao_unpack_mat4fx = c;
+    end
+  endfunction
+
+  function automatic logic [159:0] zhao_pack_pad_frame(input zhao_pad_frame_t c);
+    logic [159:0] v;
+    begin
+      v[0 +: 8] = c.pad_index;
+      v[8 +: 8] = c.flags;
+      v[16 +: 16] = c.sequence_f;
+      v[32 +: 32] = c.buttons;
+      v[64 +: 16] = c.lx;
+      v[80 +: 16] = c.ly;
+      v[96 +: 16] = c.rx;
+      v[112 +: 16] = c.ry;
+      v[128 +: 32] = c.rsv;
+      zhao_pack_pad_frame = v;
+    end
+  endfunction
+
+  function automatic zhao_pad_frame_t zhao_unpack_pad_frame(input logic [159:0] v);
+    zhao_pad_frame_t c;
+    begin
+      c.pad_index = v[0 +: 8];
+      c.flags = v[8 +: 8];
+      c.sequence_f = v[16 +: 16];
+      c.buttons = v[32 +: 32];
+      c.lx = v[64 +: 16];
+      c.ly = v[80 +: 16];
+      c.rx = v[96 +: 16];
+      c.ry = v[112 +: 16];
+      c.rsv = v[128 +: 32];
+      zhao_unpack_pad_frame = c;
     end
   endfunction
 
@@ -1350,6 +1506,52 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [1407:0] zhao_pack_draw_sky(input zhao_rec_draw_sky_t c);
+    logic [1407:0] v;
+    begin
+      v[ZHAO_DRAW_SKY_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DRAW_SKY_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DRAW_SKY_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DRAW_SKY_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DRAW_SKY_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DRAW_SKY_OFF_SKY_SET*8 +: 32] = c.sky_set;
+      v[ZHAO_DRAW_SKY_OFF_ROT_PROJ_0*8 +: 512] = c.rot_proj_0;
+      v[ZHAO_DRAW_SKY_OFF_ROT_PROJ_1*8 +: 512] = c.rot_proj_1;
+      v[ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_U*8 +: 32] = c.cloud_scroll_u;
+      v[ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_V*8 +: 32] = c.cloud_scroll_v;
+      v[ZHAO_DRAW_SKY_OFF_DRUM_YAW*8 +: 16] = c.drum_yaw;
+      v[ZHAO_DRAW_SKY_OFF_VIEWPORT_MASK*8 +: 8] = c.viewport_mask;
+      v[ZHAO_DRAW_SKY_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_DRAW_SKY_OFF_RESERVED0*8 +: 8] = c.reserved0;
+      v[ZHAO_DRAW_SKY_OFF_RESERVED1*8 +: 8] = c.reserved1;
+      v[ZHAO_DRAW_SKY_OFF_PAD*8 +: 112] = c.pad;
+      zhao_pack_draw_sky = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_draw_sky_t zhao_unpack_draw_sky(input logic [1407:0] v);
+    zhao_rec_draw_sky_t c;
+    begin
+      c.h_opcode = v[ZHAO_DRAW_SKY_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DRAW_SKY_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DRAW_SKY_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DRAW_SKY_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DRAW_SKY_OFF_H_RESERVED0*8 +: 32];
+      c.sky_set = v[ZHAO_DRAW_SKY_OFF_SKY_SET*8 +: 32];
+      c.rot_proj_0 = v[ZHAO_DRAW_SKY_OFF_ROT_PROJ_0*8 +: 512];
+      c.rot_proj_1 = v[ZHAO_DRAW_SKY_OFF_ROT_PROJ_1*8 +: 512];
+      c.cloud_scroll_u = v[ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_U*8 +: 32];
+      c.cloud_scroll_v = v[ZHAO_DRAW_SKY_OFF_CLOUD_SCROLL_V*8 +: 32];
+      c.drum_yaw = v[ZHAO_DRAW_SKY_OFF_DRUM_YAW*8 +: 16];
+      c.viewport_mask = v[ZHAO_DRAW_SKY_OFF_VIEWPORT_MASK*8 +: 8];
+      c.flags = v[ZHAO_DRAW_SKY_OFF_FLAGS*8 +: 8];
+      c.reserved0 = v[ZHAO_DRAW_SKY_OFF_RESERVED0*8 +: 8];
+      c.reserved1 = v[ZHAO_DRAW_SKY_OFF_RESERVED1*8 +: 8];
+      c.pad = v[ZHAO_DRAW_SKY_OFF_PAD*8 +: 112];
+      zhao_unpack_draw_sky = c;
+    end
+  endfunction
+
   function automatic logic [255:0] zhao_pack_emit_audio_event(input zhao_rec_emit_audio_event_t c);
     logic [255:0] v;
     begin
@@ -1504,6 +1706,76 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [383:0] zhao_pack_debug_frame_blit(input zhao_rec_debug_frame_blit_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_DST_SLOT*8 +: 8] = c.dst_slot;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_MODE*8 +: 8] = c.mode;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_PAD*8 +: 16] = c.pad;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_SRC_ADDR_HPS*8 +: 32] = c.src_addr_hps;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_BYTE_LEN*8 +: 32] = c.byte_len;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_EXPECTED_CRC32C*8 +: 32] = c.expected_crc32c;
+      v[ZHAO_DEBUG_FRAME_BLIT_OFF_PAD_1*8 +: 128] = c.pad_1;
+      zhao_pack_debug_frame_blit = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_debug_frame_blit_t zhao_unpack_debug_frame_blit(input logic [383:0] v);
+    zhao_rec_debug_frame_blit_t c;
+    begin
+      c.h_opcode = v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DEBUG_FRAME_BLIT_OFF_H_RESERVED0*8 +: 32];
+      c.dst_slot = v[ZHAO_DEBUG_FRAME_BLIT_OFF_DST_SLOT*8 +: 8];
+      c.mode = v[ZHAO_DEBUG_FRAME_BLIT_OFF_MODE*8 +: 8];
+      c.pad = v[ZHAO_DEBUG_FRAME_BLIT_OFF_PAD*8 +: 16];
+      c.src_addr_hps = v[ZHAO_DEBUG_FRAME_BLIT_OFF_SRC_ADDR_HPS*8 +: 32];
+      c.byte_len = v[ZHAO_DEBUG_FRAME_BLIT_OFF_BYTE_LEN*8 +: 32];
+      c.expected_crc32c = v[ZHAO_DEBUG_FRAME_BLIT_OFF_EXPECTED_CRC32C*8 +: 32];
+      c.pad_1 = v[ZHAO_DEBUG_FRAME_BLIT_OFF_PAD_1*8 +: 128];
+      zhao_unpack_debug_frame_blit = c;
+    end
+  endfunction
+
+  function automatic logic [255:0] zhao_pack_debug_rumble(input zhao_rec_debug_rumble_t c);
+    logic [255:0] v;
+    begin
+      v[ZHAO_DEBUG_RUMBLE_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_DEBUG_RUMBLE_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_DEBUG_RUMBLE_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_DEBUG_RUMBLE_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_DEBUG_RUMBLE_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_DEBUG_RUMBLE_OFF_PAD_INDEX*8 +: 8] = c.pad_index;
+      v[ZHAO_DEBUG_RUMBLE_OFF_ENABLE*8 +: 8] = c.enable;
+      v[ZHAO_DEBUG_RUMBLE_OFF_STRENGTH*8 +: 8] = c.strength;
+      v[ZHAO_DEBUG_RUMBLE_OFF_PAD*8 +: 104] = c.pad;
+      zhao_pack_debug_rumble = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_debug_rumble_t zhao_unpack_debug_rumble(input logic [255:0] v);
+    zhao_rec_debug_rumble_t c;
+    begin
+      c.h_opcode = v[ZHAO_DEBUG_RUMBLE_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_DEBUG_RUMBLE_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_DEBUG_RUMBLE_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_DEBUG_RUMBLE_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_DEBUG_RUMBLE_OFF_H_RESERVED0*8 +: 32];
+      c.pad_index = v[ZHAO_DEBUG_RUMBLE_OFF_PAD_INDEX*8 +: 8];
+      c.enable = v[ZHAO_DEBUG_RUMBLE_OFF_ENABLE*8 +: 8];
+      c.strength = v[ZHAO_DEBUG_RUMBLE_OFF_STRENGTH*8 +: 8];
+      c.pad = v[ZHAO_DEBUG_RUMBLE_OFF_PAD*8 +: 104];
+      zhao_unpack_debug_rumble = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -1518,8 +1790,11 @@ package zhao_abi_pkg;
         ZHAO_OP_DRAW_FORM: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_POPULATION: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_PROCEDURAL: zhao_opcode_record_bytes = 64;
+        ZHAO_OP_DRAW_SKY: zhao_opcode_record_bytes = 176;
         ZHAO_OP_EMIT_AUDIO_EVENT: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DEBUG_BOOTSTRAP: zhao_opcode_record_bytes = 64;
+        ZHAO_OP_DEBUG_FRAME_BLIT: zhao_opcode_record_bytes = 48;
+        ZHAO_OP_DEBUG_RUMBLE: zhao_opcode_record_bytes = 32;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -1562,7 +1837,39 @@ package zhao_abi_pkg;
         ZHAO_OP_DRAW_PROCEDURAL: begin
           if (zhao_bytes_nonzero(p, base, 52, 12)) zhao_record_pad_nonzero = 1'b1;
         end
+        ZHAO_OP_DRAW_SKY: begin
+          if (zhao_bytes_nonzero(p, base, 162, 14)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_DEBUG_FRAME_BLIT: begin
+          if (zhao_bytes_nonzero(p, base, 18, 2)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 32, 16)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_DEBUG_RUMBLE: begin
+          if (zhao_bytes_nonzero(p, base, 19, 13)) zhao_record_pad_nonzero = 1'b1;
+        end
         default: zhao_record_pad_nonzero = 1'b0;
+      endcase
+    end
+  endfunction
+
+  // true if any enum field of the record at stream offset base carries a
+  // value outside its declared member set (capture_format.md 3.2 step 7)
+  function automatic logic zhao_record_enum_bad(input logic [15:0] op,
+                                                 input logic [7:0] p [],
+                                                 input int unsigned base);
+    logic [31:0] v;
+    begin
+      zhao_record_enum_bad = 1'b0;
+      case (op)
+        ZHAO_OP_SET_PRESENTATION_CONTRACT: begin
+          v = {24'b0, p[base+16+0]};  // mode: video_mode
+          if (!(v == 32'd0 || v == 32'd1 || v == 32'd2)) zhao_record_enum_bad = 1'b1;
+        end
+        ZHAO_OP_DEBUG_FRAME_BLIT: begin
+          v = {24'b0, p[base+16+1]};  // mode: video_mode
+          if (!(v == 32'd0 || v == 32'd1 || v == 32'd2)) zhao_record_enum_bad = 1'b1;
+        end
+        default: zhao_record_enum_bad = 1'b0;
       endcase
     end
   endfunction
@@ -1629,11 +1936,15 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_draw_form_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_population_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_procedural_t) != 8*64) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_draw_sky_t) != 8*176) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_emit_audio_event_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_bootstrap_t) != 8*64) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_debug_frame_blit_t) != 8*48) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_debug_rumble_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_pad_frame_t) != 8*20) zhao_layout_ok = 1'b0;
     end
   endfunction
 
@@ -1759,6 +2070,12 @@ package zhao_abi_pkg;
         if (zhao_record_pad_nonzero(16'(opcode), pkt, ZHAO_FRAME_HEADER_BYTES + off)) begin
           commands_consumed = seen;
           zhao_frame_validate = ZH_ABI_RESERVED_FIELD;
+          return zhao_frame_validate;
+        end
+        // 7. enum fields must carry a declared member value (ABI v2)
+        if (zhao_record_enum_bad(16'(opcode), pkt, ZHAO_FRAME_HEADER_BYTES + off)) begin
+          commands_consumed = seen;
+          zhao_frame_validate = ZH_ABI_BAD_VALUE;
           return zhao_frame_validate;
         end
         if ((16'(opcode) >= ZHAO_DEBUG_OPCODE_LO) && (16'(opcode) <= ZHAO_DEBUG_OPCODE_HI))

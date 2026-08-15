@@ -95,6 +95,17 @@ export function emitDoc(ir: LayoutIR, identitySha256: string, zidlSha256: string
     L.push('');
   }
 
+  L.push('## Value enums (ABI v2)');
+  L.push('');
+  for (const e of ir.enums) {
+    if (e.name === 'zhao_abi_error') continue;
+    L.push(`### \`${e.name}\` — backing \`${e.type}\``);
+    L.push('');
+    L.push('| Value | Name |');
+    L.push('|---|---|');
+    for (const entry of e.entries) L.push(`| ${entry.value} | \`${entry.name}\` |`);
+    L.push('');
+  }
   L.push('## Error codes (generated enum, shared verbatim C++/TS/SV)');
   L.push('');
   const errEnum = ir.enums.find((e) => e.name === 'zhao_abi_error');

@@ -132,6 +132,18 @@ module zhao_abi_probe
         pu_repacked[ZHAO_DEBUG_BOOTSTRAP_BYTES*8-1:0] =
           zhao_pack_debug_bootstrap(zhao_unpack_debug_bootstrap(pu_vec[ZHAO_DEBUG_BOOTSTRAP_BYTES*8-1:0]));
       end
+      ZHAO_OP_DRAW_SKY: begin
+        pu_repacked[ZHAO_DRAW_SKY_BYTES*8-1:0] =
+          zhao_pack_draw_sky(zhao_unpack_draw_sky(pu_vec[ZHAO_DRAW_SKY_BYTES*8-1:0]));
+      end
+      ZHAO_OP_DEBUG_FRAME_BLIT: begin
+        pu_repacked[ZHAO_DEBUG_FRAME_BLIT_BYTES*8-1:0] =
+          zhao_pack_debug_frame_blit(zhao_unpack_debug_frame_blit(pu_vec[ZHAO_DEBUG_FRAME_BLIT_BYTES*8-1:0]));
+      end
+      ZHAO_OP_DEBUG_RUMBLE: begin
+        pu_repacked[ZHAO_DEBUG_RUMBLE_BYTES*8-1:0] =
+          zhao_pack_debug_rumble(zhao_unpack_debug_rumble(pu_vec[ZHAO_DEBUG_RUMBLE_BYTES*8-1:0]));
+      end
       default: pu_repacked = '0;  // never reached (tests drive known records)
     endcase
   end

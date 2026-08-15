@@ -219,3 +219,16 @@ target_compile_definitions(test_field_fuzz_parity PRIVATE
 add_test(NAME field_fuzz_parity COMMAND test_field_fuzz_parity)
 set_tests_properties(field_fuzz_parity PROPERTIES LABELS "nightly")
 
+# ---- W2.1: frozen interface package lint (charter 21 step 8) ---------------
+# fpga/rtl/common/zhao_pkg.sv is the FROZEN wave-2 interface package (plan
+# §3: changes require architect sign-off). Lint it standalone with its only
+# dependency (the generated ABI package) so interface drift is caught the
+# moment it is written, before any consumer module exists. Banner-append
+# block (merge rule, plan §3).
+add_test(NAME lint_zhao_pkg
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv)
+set_tests_properties(lint_zhao_pkg PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

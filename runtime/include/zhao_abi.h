@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 107a8ad35169c68450e1a94095ee91956e4a3be8dff84c9fbfc17701036f6ee7
-//   zidl_sha256         = fce80439767212fc28c1c15d4919877219b518066c1c8e8acb8de3d87415a461
+//   abi_identity_sha256 = 6564728392c29ecfc8392f032cbcb0f34196702f49e913eec4875a6475599af2
+//   zidl_sha256         = 30cca6270f3e68f566ad5216947de56b0ac85e8a126a86aa5ed54621c90aa04a
 #pragma once
 
 #include <cstdint>
@@ -11,7 +11,7 @@
 
 namespace zhao_abi {
 
-constexpr uint16_t ZHAO_ABI_VERSION        = 1;
+constexpr uint16_t ZHAO_ABI_VERSION        = 2;
 constexpr uint16_t ZHAO_COMMAND_ALIGNMENT = 16;
 constexpr uint16_t ZHAO_OPCODE_WIDTH      = 2; // u16
 constexpr uint32_t FRAME_SLOT_BYTES = 1048576u;
@@ -34,6 +34,13 @@ enum zhao_abi_error : uint32_t {
   ZH_ABI_UNIMPLEMENTED_COMMAND = 14,
 };
 
+// enum video_mode: u8 on the wire (capture_format.md 3.2 step 7)
+enum video_mode : uint8_t {
+  VIDEO_Z60 = 0,
+  VIDEO_STORM = 1,
+  VIDEO_DUO = 2,
+};
+
 constexpr uint16_t ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 constexpr uint16_t ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
@@ -44,8 +51,11 @@ constexpr uint16_t ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, reserved
 constexpr uint16_t ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, reserved
 constexpr uint16_t ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, reserved
+constexpr uint16_t ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
 constexpr uint16_t ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
+constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
+constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -239,6 +249,29 @@ static_assert(offsetof(ZhMat4fx, m32) == 56, "layout drift: mat4fx.m32");
 static_assert(offsetof(ZhMat4fx, m33) == 60, "layout drift: mat4fx.m33");
 static_assert(sizeof(ZhMat4fx) == 64, "layout drift: mat4fx size");
 
+// PadFrame: 20 bytes (spec/commands.zidl)
+struct ZhPadFrame {
+  uint8_t pad_index;
+  uint8_t flags;
+  uint16_t sequence;
+  uint32_t buttons;
+  int16_t lx;
+  int16_t ly;
+  int16_t rx;
+  int16_t ry;
+  uint32_t rsv;
+};
+static_assert(offsetof(ZhPadFrame, pad_index) == 0, "layout drift: PadFrame.pad_index");
+static_assert(offsetof(ZhPadFrame, flags) == 1, "layout drift: PadFrame.flags");
+static_assert(offsetof(ZhPadFrame, sequence) == 2, "layout drift: PadFrame.sequence");
+static_assert(offsetof(ZhPadFrame, buttons) == 4, "layout drift: PadFrame.buttons");
+static_assert(offsetof(ZhPadFrame, lx) == 8, "layout drift: PadFrame.lx");
+static_assert(offsetof(ZhPadFrame, ly) == 10, "layout drift: PadFrame.ly");
+static_assert(offsetof(ZhPadFrame, rx) == 12, "layout drift: PadFrame.rx");
+static_assert(offsetof(ZhPadFrame, ry) == 14, "layout drift: PadFrame.ry");
+static_assert(offsetof(ZhPadFrame, rsv) == 16, "layout drift: PadFrame.rsv");
+static_assert(sizeof(ZhPadFrame) == 20, "layout drift: PadFrame size");
+
 // 16-byte command record header (capture_format.md 3.1)
 struct ZhCmdHeader {
   uint16_t opcode;
@@ -325,7 +358,7 @@ static_assert(sizeof(ZhRecordSetView) == 96, "layout drift: SetView record");
 
 // SetPresentationContract 0x0020: 48-byte record (implemented)
 struct ZhCmdSetPresentationContract {
-  uint8_t mode;
+  video_mode mode;  // enum, 1 B
   uint8_t view_count;
   uint16_t flags;
   uint32_t geometry_tokens[2];
@@ -461,6 +494,37 @@ struct ZhRecordDrawProcedural {
 };
 static_assert(sizeof(ZhRecordDrawProcedural) == 64, "layout drift: DrawProcedural record");
 
+// DrawSky 0x0310: 176-byte record (reserved)
+struct ZhCmdDrawSky {
+  uint32_t sky_set;  // handle32 {index:24, generation:8} kind=sky_set
+  ZhMat4fx rot_proj[2];
+  int32_t cloud_scroll_u;
+  int32_t cloud_scroll_v;
+  uint16_t drum_yaw;
+  uint8_t viewport_mask;
+  uint8_t flags;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint8_t pad[14];
+};
+static_assert(offsetof(ZhCmdDrawSky, sky_set) == 0, "layout drift: DrawSky.sky_set");
+static_assert(offsetof(ZhCmdDrawSky, rot_proj[0]) == 4, "layout drift: DrawSky.rot_proj");
+static_assert(offsetof(ZhCmdDrawSky, cloud_scroll_u) == 132, "layout drift: DrawSky.cloud_scroll_u");
+static_assert(offsetof(ZhCmdDrawSky, cloud_scroll_v) == 136, "layout drift: DrawSky.cloud_scroll_v");
+static_assert(offsetof(ZhCmdDrawSky, drum_yaw) == 140, "layout drift: DrawSky.drum_yaw");
+static_assert(offsetof(ZhCmdDrawSky, viewport_mask) == 142, "layout drift: DrawSky.viewport_mask");
+static_assert(offsetof(ZhCmdDrawSky, flags) == 143, "layout drift: DrawSky.flags");
+static_assert(offsetof(ZhCmdDrawSky, reserved0) == 144, "layout drift: DrawSky.reserved0");
+static_assert(offsetof(ZhCmdDrawSky, reserved1) == 145, "layout drift: DrawSky.reserved1");
+static_assert(offsetof(ZhCmdDrawSky, pad[0]) == 146, "layout drift: DrawSky.pad");
+static_assert(sizeof(ZhCmdDrawSky) == 160, "layout drift: DrawSky payload");
+
+struct ZhRecordDrawSky {
+  ZhCmdHeader hdr;
+  ZhCmdDrawSky payload;
+};
+static_assert(sizeof(ZhRecordDrawSky) == 176, "layout drift: DrawSky record");
+
 // EmitAudioEvent 0x0400: 32-byte record (reserved)
 struct ZhCmdEmitAudioEvent {
   uint32_t event_id;
@@ -494,6 +558,50 @@ struct ZhRecordDebugBootstrap {
   ZhCmdDebugBootstrap payload;
 };
 static_assert(sizeof(ZhRecordDebugBootstrap) == 64, "layout drift: DebugBootstrap record");
+
+// DebugFrameBlit 0xF002: 48-byte record (implemented)
+struct ZhCmdDebugFrameBlit {
+  uint8_t dst_slot;
+  video_mode mode;  // enum, 1 B
+  uint8_t pad[2];
+  uint32_t src_addr_hps;
+  uint32_t byte_len;
+  uint32_t expected_crc32c;
+  uint8_t pad_1[16];
+};
+static_assert(offsetof(ZhCmdDebugFrameBlit, dst_slot) == 0, "layout drift: DebugFrameBlit.dst_slot");
+static_assert(offsetof(ZhCmdDebugFrameBlit, mode) == 1, "layout drift: DebugFrameBlit.mode");
+static_assert(offsetof(ZhCmdDebugFrameBlit, pad[0]) == 2, "layout drift: DebugFrameBlit.pad");
+static_assert(offsetof(ZhCmdDebugFrameBlit, src_addr_hps) == 4, "layout drift: DebugFrameBlit.src_addr_hps");
+static_assert(offsetof(ZhCmdDebugFrameBlit, byte_len) == 8, "layout drift: DebugFrameBlit.byte_len");
+static_assert(offsetof(ZhCmdDebugFrameBlit, expected_crc32c) == 12, "layout drift: DebugFrameBlit.expected_crc32c");
+static_assert(offsetof(ZhCmdDebugFrameBlit, pad_1[0]) == 16, "layout drift: DebugFrameBlit.pad_1");
+static_assert(sizeof(ZhCmdDebugFrameBlit) == 32, "layout drift: DebugFrameBlit payload");
+
+struct ZhRecordDebugFrameBlit {
+  ZhCmdHeader hdr;
+  ZhCmdDebugFrameBlit payload;
+};
+static_assert(sizeof(ZhRecordDebugFrameBlit) == 48, "layout drift: DebugFrameBlit record");
+
+// DebugRumble 0xF004: 32-byte record (implemented)
+struct ZhCmdDebugRumble {
+  uint8_t pad_index;
+  uint8_t enable;
+  uint8_t strength;
+  uint8_t pad[13];
+};
+static_assert(offsetof(ZhCmdDebugRumble, pad_index) == 0, "layout drift: DebugRumble.pad_index");
+static_assert(offsetof(ZhCmdDebugRumble, enable) == 1, "layout drift: DebugRumble.enable");
+static_assert(offsetof(ZhCmdDebugRumble, strength) == 2, "layout drift: DebugRumble.strength");
+static_assert(offsetof(ZhCmdDebugRumble, pad[0]) == 3, "layout drift: DebugRumble.pad");
+static_assert(sizeof(ZhCmdDebugRumble) == 16, "layout drift: DebugRumble payload");
+
+struct ZhRecordDebugRumble {
+  ZhCmdHeader hdr;
+  ZhCmdDebugRumble payload;
+};
+static_assert(sizeof(ZhRecordDebugRumble) == 32, "layout drift: DebugRumble record");
 
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
@@ -597,7 +705,7 @@ inline ZhRecordSetPresentationContract zhao_sample_set_presentation_contract() {
   r.hdr.source_id    = 1342242820u; // kind 5, module 1, index 4
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
-  r.payload.mode = 133u;
+  r.payload.mode = static_cast<video_mode>(0u);
   r.payload.view_count = 133u;
   r.payload.flags = 33377u;
   r.payload.geometry_tokens[0] = 0u;
@@ -746,11 +854,31 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   return r;
 }
 
+inline ZhRecordDrawSky zhao_sample_draw_sky() {
+  ZhRecordDrawSky r{};
+  r.hdr.opcode       = ZHAO_OP_DRAW_SKY;
+  r.hdr.record_bytes = 176;
+  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.sky_set = 704643073u;
+  r.payload.rot_proj[0] = zhao_sample_mat4fx();
+  r.payload.rot_proj[1] = zhao_sample_mat4fx();
+  r.payload.cloud_scroll_u = 154135;
+  r.payload.cloud_scroll_v = 219671;
+  r.payload.drum_yaw = 44900;
+  r.payload.viewport_mask = 215u;
+  r.payload.flags = 163u;
+  r.payload.reserved0 = 211u;
+  r.payload.reserved1 = 167u;
+  return r;
+}
+
 inline ZhRecordEmitAudioEvent zhao_sample_emit_audio_event() {
   ZhRecordEmitAudioEvent r{};
   r.hdr.opcode       = ZHAO_OP_EMIT_AUDIO_EVENT;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
+  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.event_id = 0u;
@@ -765,7 +893,7 @@ inline ZhRecordDebugBootstrap zhao_sample_debug_bootstrap() {
   ZhRecordDebugBootstrap r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_BOOTSTRAP;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
+  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.data[0] = 113u;
@@ -816,6 +944,34 @@ inline ZhRecordDebugBootstrap zhao_sample_debug_bootstrap() {
   r.payload.data[45] = 25u;
   r.payload.data[46] = 93u;
   r.payload.data[47] = 57u;
+  return r;
+}
+
+inline ZhRecordDebugFrameBlit zhao_sample_debug_frame_blit() {
+  ZhRecordDebugFrameBlit r{};
+  r.hdr.opcode       = ZHAO_OP_DEBUG_FRAME_BLIT;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.dst_slot = 53u;
+  r.payload.mode = static_cast<video_mode>(1u);
+  r.payload.src_addr_hps = 0u;
+  r.payload.byte_len = 0u;
+  r.payload.expected_crc32c = 0u;
+  return r;
+}
+
+inline ZhRecordDebugRumble zhao_sample_debug_rumble() {
+  ZhRecordDebugRumble r{};
+  r.hdr.opcode       = ZHAO_OP_DEBUG_RUMBLE;
+  r.hdr.record_bytes = 32;
+  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.pad_index = 113u;
+  r.payload.enable = 169u;
+  r.payload.strength = 117u;
   return r;
 }
 
@@ -965,6 +1121,23 @@ inline void zhao_pack_draw_procedural(const ZhRecordDrawProcedural& r, std::vect
   for (int i = 0; i < 12; ++i) w.u8(r.payload.pad[i]);
 }
 
+inline void zhao_pack_draw_sky(const ZhRecordDrawSky& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.sky_set);
+  zhao_pack_mat4fx(r.payload.rot_proj[0], w);
+  zhao_pack_mat4fx(r.payload.rot_proj[1], w);
+  w.u32(r.payload.cloud_scroll_u);
+  w.u32(r.payload.cloud_scroll_v);
+  w.u16(r.payload.drum_yaw);
+  w.u8(r.payload.viewport_mask);
+  w.u8(r.payload.flags);
+  w.u8(r.payload.reserved0);
+  w.u8(r.payload.reserved1);
+  for (int i = 0; i < 14; ++i) w.u8(r.payload.pad[i]);
+}
+
 inline void zhao_pack_emit_audio_event(const ZhRecordEmitAudioEvent& r, std::vector<uint8_t>& out) {
   ZhWriter w(out);
   w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
@@ -981,6 +1154,29 @@ inline void zhao_pack_debug_bootstrap(const ZhRecordDebugBootstrap& r, std::vect
   w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
   w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
   for (int i = 0; i < 48; ++i) { w.u8(r.payload.data[i]); }
+}
+
+inline void zhao_pack_debug_frame_blit(const ZhRecordDebugFrameBlit& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.dst_slot);
+  w.u8(r.payload.mode);
+  for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
+  w.u32(r.payload.src_addr_hps);
+  w.u32(r.payload.byte_len);
+  w.u32(r.payload.expected_crc32c);
+  for (int i = 0; i < 16; ++i) w.u8(r.payload.pad_1[i]);
+}
+
+inline void zhao_pack_debug_rumble(const ZhRecordDebugRumble& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.pad_index);
+  w.u8(r.payload.enable);
+  w.u8(r.payload.strength);
+  for (int i = 0; i < 13; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -1076,7 +1272,7 @@ inline bool zhao_unpack_set_presentation_contract(ZhReader& r, ZhRecordSetPresen
   if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
       !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
       !r.take32(out.hdr.reserved0)) return false;
-  { uint8_t t; if (!r.take8(t)) return false; out.payload.mode = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.mode = static_cast<video_mode>(t); }
   { uint8_t t; if (!r.take8(t)) return false; out.payload.view_count = t; }
   { uint16_t t; if (!r.take16(t)) return false; out.payload.flags = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.geometry_tokens[0] = t; }
@@ -1220,6 +1416,25 @@ inline bool zhao_unpack_draw_procedural(ZhReader& r, ZhRecordDrawProcedural& out
   return true;
 }
 
+inline bool zhao_unpack_draw_sky(ZhReader& r, ZhRecordDrawSky& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.sky_set = t; }
+  if (!zhao_unpack_mat4fx(r, out.payload.rot_proj[0])) return false;
+  if (!zhao_unpack_mat4fx(r, out.payload.rot_proj[1])) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.cloud_scroll_u = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.cloud_scroll_v = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.drum_yaw = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.viewport_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.reserved0 = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.reserved1 = t; }
+  if (!r.skip(14)) return false;
+  return true;
+}
+
 inline bool zhao_unpack_emit_audio_event(ZhReader& r, ZhRecordEmitAudioEvent& out) {
   out = {};
   if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
@@ -1289,6 +1504,33 @@ inline bool zhao_unpack_debug_bootstrap(ZhReader& r, ZhRecordDebugBootstrap& out
   return true;
 }
 
+inline bool zhao_unpack_debug_frame_blit(ZhReader& r, ZhRecordDebugFrameBlit& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.dst_slot = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.mode = static_cast<video_mode>(t); }
+  if (!r.skip(2)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.src_addr_hps = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.byte_len = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.expected_crc32c = t; }
+  if (!r.skip(16)) return false;
+  return true;
+}
+
+inline bool zhao_unpack_debug_rumble(ZhReader& r, ZhRecordDebugRumble& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.pad_index = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.enable = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.strength = t; }
+  if (!r.skip(13)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -1303,6 +1545,9 @@ constexpr uint16_t ZHAO_PADS_TERRAIN_FIELD[] = {92, 93, 94, 95};
 constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_POPULATION[] = {8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
+constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159};
+constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -1314,20 +1559,39 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DrawForm", 0x0300, 32, false, nullptr, 0},
   {"DrawPopulation", 0x0301, 32, false, ZHAO_PADS_DRAW_POPULATION, 8},
   {"DrawProcedural", 0x0302, 64, false, ZHAO_PADS_DRAW_PROCEDURAL, 12},
+  {"DrawSky", 0x0310, 176, false, ZHAO_PADS_DRAW_SKY, 14},
   {"EmitAudioEvent", 0x0400, 32, false, nullptr, 0},
   {"DebugBootstrap", 0xF001, 64, false, nullptr, 0},
+  {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
+  {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 12;
-constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 112;
+constexpr size_t ZHAO_COMMAND_COUNT = 15;
+constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
   return nullptr;
 }
 
+inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
+  switch (opcode) {
+    case ZHAO_OP_SET_PRESENTATION_CONTRACT: {
+      const uint32_t v0 = uint32_t(p[0]);  // mode: video_mode
+      if (!(v0 == 0u || v0 == 1u || v0 == 2u)) return false;
+      return true;
+    }
+    case ZHAO_OP_DEBUG_FRAME_BLIT: {
+      const uint32_t v0 = uint32_t(p[1]);  // mode: video_mode
+      if (!(v0 == 0u || v0 == 1u || v0 == 2u)) return false;
+      return true;
+    }
+    default: return true;
+  }
+}
+
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x10, 0x7A, 0x8A, 0xD3, 0x51, 0x69, 0xC6, 0x84, 0x50, 0xE1, 0xA9, 0x40, 0x95, 0xEE, 0x91, 0x95, 0x6E, 0x4A, 0x3B, 0xE8, 0xDF, 0xF8, 0x4C, 0x9F, 0xBF, 0xC1, 0x77, 0x01, 0x03, 0x6F, 0x6E, 0xE7};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xFC, 0xE8, 0x04, 0x39, 0x76, 0x72, 0x12, 0xFC, 0x28, 0xC1, 0xC1, 0x5D, 0x49, 0x19, 0x87, 0x72, 0x19, 0xB5, 0x18, 0x06, 0x6C, 0x1C, 0x8E, 0x8A, 0xCB, 0x8D, 0xE3, 0xD8, 0x74, 0x15, 0xA4, 0x61};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x65, 0x64, 0x72, 0x83, 0x92, 0xC2, 0x9E, 0xCF, 0xC8, 0x39, 0x2F, 0x03, 0x2C, 0xBC, 0xB0, 0xF3, 0x41, 0x96, 0x70, 0x2F, 0x49, 0xE9, 0x13, 0xEE, 0xC4, 0x87, 0x5A, 0x64, 0x75, 0x59, 0x9A, 0xF2};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x30, 0xCC, 0xA6, 0x27, 0x0F, 0x3E, 0x68, 0xF5, 0x66, 0xAD, 0x52, 0x16, 0x94, 0x7D, 0xE5, 0x6B, 0x0A, 0xC8, 0x5E, 0x8A, 0x12, 0x6A, 0x86, 0xAA, 0x5E, 0xD5, 0x46, 0x21, 0xC9, 0x0A, 0xA0, 0x4A};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

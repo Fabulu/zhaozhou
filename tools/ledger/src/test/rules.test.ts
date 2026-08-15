@@ -207,3 +207,24 @@ test('generators are deterministic: two renders are byte-identical', async () =>
   assert.equal(renderArchitecture(blocks), renderArchitecture(blocks));
   assert.equal(renderDashboard(blocks, ops), renderDashboard(blocks, ops));
 });
+
+test('V15: rejects a duplicate counter_catalog entry (counter_id = index needs a dense index space)', () => {
+  const { blocks, ops } = baseline();
+  blocks.counter_catalog = ['commands', 'frame_cycles', 'commands'];
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(errors.some((e) => e.startsWith('V15:') && e.includes('duplicate-free')), errors.join('\n'));
+});
+
+test('V15: rejects a block declaring the same counter twice', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks[1] = rtlBlock({ counters: ['commands', 'commands'] });
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(errors.some((e) => e.startsWith('V15:') && e.includes('twice')), errors.join('\n'));
+});
+
+test('V12: a block counter outside the catalog is rejected (counter_id totality)', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks[1] = rtlBlock({ counters: ['not_a_catalog_counter'] });
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(errors.some((e) => e.startsWith('V12:') && e.includes('not in counter_catalog')), errors.join('\n'));
+});
