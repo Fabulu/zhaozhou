@@ -371,7 +371,7 @@ blocks:
         evidence: tests/memory/mem_random.cpp
       - state: RTL_VERIFIED
         date: "2026-08-16"
-        commit: "0000000"
+        commit: 9d49806
         evidence: tests/formal/mem_vram_arbiter_liveness.sby
         regression_reason: >-
           CORRECTION, not an advance. The 2026-08-15 RTL_VERIFIED entry above

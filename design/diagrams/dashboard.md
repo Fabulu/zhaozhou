@@ -37,7 +37,7 @@ Blocks: **87** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEM.VRAM.ARBITER | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.VRAM.ARBITER | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
 | MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_random.cpp |
-| MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-16 | `0000000` | tests/formal/mem_vram_arbiter_liveness.sby |
+| MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-16 | `9d49806` | tests/formal/mem_vram_arbiter_liveness.sby |
 | MEM.HPS.BRIDGE | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.HPS.BRIDGE | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/hps_bridge_directed.cpp |
 | MEM.HPS.BRIDGE | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/memory/hps_bridge_random.cpp |

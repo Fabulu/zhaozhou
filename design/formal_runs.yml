@@ -34,7 +34,7 @@ runs:
   - property: tests/formal/mem_vram_arbiter_liveness.sby
     status: green
     date: "2026-08-16"
-    commit: 88b8ea1
+    commit: 9d49806
     lane: formal_mem_vram_arbiter_liveness
     tasks: [bmc, bmc_tight_rr, bmc_tight_scanout, cover]
     covers: true
@@ -74,8 +74,8 @@ runs:
 
   - property: tests/formal/input_snapshot_atomic.sby
     status: green
-    date: "2026-08-15"
-    commit: 1b4b273
+    date: "2026-08-16"
+    commit: 9d49806
     lane: formal_input_snapshot_atomic
     tasks: [bmc, cover]
     covers: true
