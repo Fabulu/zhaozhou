@@ -97,6 +97,59 @@ void test_projection_hand_computed() {
 // top-left owner, -1 > 0 on the other) and the diagonal is a line of 10
 // holes; non-top-left edges additionally drop their strictly-interior E' = 1
 // rank. `>= 0` is the D3D rule the spec sentence already named.
+// World-space DrawForm markers must SHRINK with distance. The depth lane
+// carries 1/w, so the screen half-extent is size * (1/w) — a multiply.
+// Dividing by it computes size * w and inverts the perspective: distant
+// markers grow. Every existing fixture uses an ortho matrix (w == 1), where
+// multiply and divide agree exactly, so nothing noticed. This fixture is
+// therefore PERSPECTIVE on purpose: w = z + 32, so the far marker sits at
+// twice the w of the near one and must come out at half the size.
+void test_marker_perspective_sizing() {
+  using namespace zref::render;
+  constexpr int32_t kDim = 128;
+  // perspective: x*2, y*-2, w = z + 32
+  const int32_t mm[16] = {2 << 16, 0, 0,       0, 0, -2 << 16, 0,       0,
+                          0,       0, 1 << 16, 0, 0, 0,        1 << 16, 32 << 16};
+  const zref::mat4fx vp = to_zref(rtest::mat(mm));
+  const Viewport vpp{0, 0, kDim, kDim};
+
+  FormPattern solid;
+  for (int i = 0; i < 64; ++i) {
+    solid.mask[i] = 1;
+    solid.rgb[i * 3 + 0] = 255;
+    solid.rgb[i * 3 + 1] = 255;
+    solid.rgb[i * 3 + 2] = 255;
+  }
+
+  // returns the drawn marker's pixel width (bounding box of non-background)
+  auto marker_width = [&](int32_t z_raw) {
+    WorkSurface s;
+    s.reset(kDim, kDim, zref::sky::SkyColor{0, 0, 0});
+    FormTransform xf{0, 0, z_raw, 320 << 16};  // world size 320 units
+    draw_form_marker(s, vpp, vp, solid, xf, /*flags=*/0, nullptr);
+    int32_t lo = kDim, hi = -1;
+    for (int32_t x = 0; x < kDim; ++x)
+      for (int32_t y = 0; y < kDim; ++y)
+        if (s.rgb[(static_cast<size_t>(y) * kDim + x) * 3] != 0) {
+          if (x < lo) lo = x;
+          if (x > hi) hi = x;
+          break;
+        }
+    return hi < lo ? 0 : hi - lo + 1;
+  };
+
+  const int32_t near_w = marker_width(0);         // w = 32
+  const int32_t far_w = marker_width(32 << 16);   // w = 64 — twice as far
+  const int32_t far2_w = marker_width(96 << 16);  // w = 128 — four times
+  std::printf("  marker widths: near %d far %d far2 %d\n", near_w, far_w, far2_w);
+  check(near_w > 0 && far_w > 0 && far2_w > 0, "all three markers are drawn");
+  check(near_w > far_w, "a more distant marker is SMALLER (perspective, not inverted)");
+  check(far_w > far2_w, "and keeps shrinking with distance");
+  // exact law: half-extent scales with 1/w, so doubling w halves the marker
+  check(near_w == 2 * far_w - 1 || near_w == 2 * far_w || near_w == 2 * far_w + 1,
+        "doubling the distance halves the marker (1/w law, +-1 px rounding)");
+}
+
 void test_shared_edge_exactly_once() {
   using namespace zref::render;
   constexpr int32_t kLo = 2, kHi = 12, kDim = 16;
@@ -468,6 +521,7 @@ void test_no_float_audit() {
 
 int main() {
   test_projection_hand_computed();
+  test_marker_perspective_sizing();
   test_shared_edge_exactly_once();
   test_validation_gate();
   test_draw_form();

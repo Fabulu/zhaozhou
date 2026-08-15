@@ -101,8 +101,12 @@ void draw_form_marker(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
     // screen-space size (marker law): the fx16 lane IS the pixel half-extent
     half_sub = rescale_s32(static_cast<int64_t>(xf.size), 8, L);
   } else {
-    // world-space size: perspective divide at projection scale 1
-    const fx16 w_fx = fx_div_exact(fx16{xf.size}, fx16{c.s.d}, L);
+    // world-space size: perspective divide at projection scale 1. The depth
+    // lane c.s.d IS 1/w (Q16.16), so the divide is already done — the screen
+    // half-extent is size * (1/w), a MULTIPLY. Dividing by c.s.d computes
+    // size * w instead, which makes markers GROW with distance; only ortho
+    // matrices (w == 1) hide the inversion.
+    const fx16 w_fx = fx_mul(fx16{xf.size}, fx16{c.s.d}, L);
     half_sub = rescale_s32(static_cast<int64_t>(w_fx.raw), 8, L);
   }
   if (half_sub < 0) half_sub = -half_sub;
