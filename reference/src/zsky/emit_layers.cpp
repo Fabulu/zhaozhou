@@ -202,9 +202,13 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
     const fx16 py = fx16{INT32_C(2048) << 16};  // mid upper band (z+2560 top)
     // centre vertex alpha = min(3*energy, 1) — the software stand-in for the
     // asset-baked min(3*lum, 1) alpha ([w3.5-software], §1.1 row 6)
+    // The fx16 -> u8 narrowing is the ONE frozen §2 conversion
+    // (unit8_from_fx16, which saturates 0x10000 to 255). Hand-rolling
+    // `(a + 128) >> 8` here wrapped 256 -> 0 and made the sun invisible for
+    // every energy >= 1/3 — the exact defect class the §2 primitive exists to
+    // prevent (charter §29-6: no second implementation of a frozen law).
     const fx16 e3 = fx_mul(set.sun_energy, fx16{3 << 16}, nullptr);
-    const int32_t a_raw = e3.raw > (1 << 16) ? (1 << 16) : e3.raw;
-    const uint8_t ca = static_cast<uint8_t>((a_raw + 128) >> 8);
+    const uint8_t ca = unit8_from_fx16(fx_clamp(e3, fx16{0}, fx16{1 << 16}), nullptr).raw;
     // horizontal tangent of the drum at the anchor: T = (d.z, 0, -d.x)
     const fx16 hx = fx_mul(d.z, fx16{kSunHalf}, nullptr);
     const fx16 hz = fx_mul(fx16{-d.x.raw}, fx16{kSunHalf}, nullptr);

@@ -146,6 +146,85 @@ void test_cloud_vertex_alpha_law() {
         "r2 > 1 clamps to 0 (corner case)");
 }
 
+// §1.1 row 6: the sun centre vertex carries alpha = min(3*energy, 1) narrowed
+// to u8 through the ONE §2 conversion. A hand-rolled `(a + 128) >> 8` wraps
+// 256 -> 0 for every energy >= 1/3 (the default is 1.0), so the additive quad
+// contributed nothing and the sun was invisible. Rim vertices are 0 by design,
+// so the centre alpha is the whole signal.
+void test_sun_centre_alpha() {
+  zref::sky::SkySet s = test_set();
+  auto centre_alpha = [&](int32_t energy_raw) {
+    s.sun_energy = zref::fx16{energy_raw};
+    const auto prims = zref::sky::emit_layers(s, 0, zref::angle16{0}, zref::sky::kLayerSun);
+    // 4 sun tris, each a fan around the shared centre vertex v[0]
+    uint8_t a = 0;
+    int seen = 0;
+    for (const auto& p : prims)
+      if (p.layer == zref::sky::SkyLayer::Sun) {
+        a = p.v[0].alpha;
+        ++seen;
+        check(p.v[1].alpha == 0 && p.v[2].alpha == 0, "sun rim vertices alpha 0 (radial falloff)");
+      }
+    check(seen == 4, "sun is a 4-triangle fan");
+    return a;
+  };
+  // the energies the review found wrapping to 0 — all must now be full alpha
+  check(centre_alpha(1 << 16) == 255, "sun energy 1.0 -> centre alpha 255");
+  check(centre_alpha(32768) == 255, "sun energy 0.5 -> 3*e saturates -> 255");
+  check(centre_alpha(21846) == 255, "sun energy just above 1/3 -> 255");
+  check(centre_alpha(21845) == 255, "sun energy just below 1/3 -> 255 (0xFFFF rounds up)");
+  // and the law itself below the saturation knee: alpha = 3*energy
+  check(centre_alpha(1 << 14) == 192, "sun energy 0.25 -> 3*e = 0.75 -> 192");
+  check(centre_alpha(0) == 0, "sun energy 0 -> alpha 0");
+}
+
+// ...and the quad must actually reach the canvas. Render the same frame with
+// and without kLayerSun: the additive sun has to change pixels.
+void test_sun_visible_on_canvas() {
+  const zref::sky::SkySet s = test_set();
+  zref::render::RenderResources res;
+  res.sky_sets.push_back({2, s});
+  const int32_t m[16] = {12, 0, 0, 0, 0, 9, -9, 0, 0, 9, 9, 0, 0, 0, 0, 1 << 16};
+
+  auto render_with = [&](uint8_t flags, std::vector<uint16_t>& out) {
+    zref::render::SoftwareRenderer rend;
+    zref::render::RenderCanvas canvas;
+    const auto pkt = rtest::seal_frame(9, [&](zhao::ZhaoFrameBuilder& b) {
+      auto sv = zhao_abi::zhao_sample_set_view();
+      sv.payload.view_id = 0;
+      sv.payload.view_projection = rtest::ortho_topdown(2048);
+      std::vector<uint8_t> v1;
+      zhao_abi::zhao_pack_set_view(sv, v1);
+      b.append_record(v1);
+      auto sk = zhao_abi::zhao_sample_draw_sky();
+      sk.payload.sky_set = 2;
+      sk.payload.rot_proj[0] = rtest::mat(m);
+      sk.payload.rot_proj[1] = rtest::mat(m);
+      sk.payload.drum_yaw = 0;
+      sk.payload.viewport_mask = 1;
+      sk.payload.flags = flags;
+      std::vector<uint8_t> v2;
+      zhao_abi::zhao_pack_draw_sky(sk, v2);
+      b.append_record(v2);
+    });
+    const zref::render::RenderResult r = rend.render_frame(pkt, 0, canvas, res);
+    check(r.status == zhao_abi::ZH_ABI_OK, "sun fixture frame renders");
+    out.clear();
+    for (uint32_t y = 0; y < 240; ++y)
+      for (uint32_t x = 0; x < 384; ++x) out.push_back(rtest::px(canvas, 0, x, y, 384));
+  };
+
+  const uint8_t base = zref::sky::kLayerUnder | zref::sky::kLayerCloud | zref::sky::kLayerCap;
+  std::vector<uint16_t> without, with;
+  render_with(base, without);
+  render_with(static_cast<uint8_t>(base | zref::sky::kLayerSun), with);
+  uint32_t diff = 0;
+  for (size_t i = 0; i < with.size(); ++i)
+    if (with[i] != without[i]) ++diff;
+  std::printf("render_sky: sun pixels on canvas = %u\n", diff);
+  check(diff > 0, "the sun quad changes pixels (additive blend reaches the canvas)");
+}
+
 void test_scroll_determinism() {
   // §1.1 tick-exact scroll: T vs T+3840 byte-equal UVs (the 1-tile/64 s law)
   const zref::sky::SkySet s = test_set();
@@ -352,6 +431,8 @@ int main() {
   test_layer_census();
   test_band_geometry();
   test_cloud_vertex_alpha_law();
+  test_sun_centre_alpha();
+  test_sun_visible_on_canvas();
   test_scroll_determinism();
   test_rot_proj_validation();
   test_fallback_clear();

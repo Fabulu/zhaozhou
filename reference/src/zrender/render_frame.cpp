@@ -16,7 +16,9 @@
 //                                depth, then heightfield patches, then
 //                                DrawForm markers — painter + Q16.16 1/z)
 //                              6 translucent       (sun BEFORE cloud, the
-//                                sky spec's deterministic sub-order)
+//                                sky spec's deterministic sub-order — the
+//                                primitive list is emitted cloud-first, so
+//                                the sky raster sweeps it twice to honour it)
 //                              7 particles         (DrawPopulation, test-only)
 //                              9 resolve           (ordered dither RGB565 +
 //                                canvas CRC, resolve.cpp)
@@ -337,7 +339,16 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
       for (int a = 0; a < 4; ++a)
         for (int b = 0; b < 4; ++b) rp.m[a][b] = fx16{(&rm.m00)[a * 4 + b]};
       if (sky::rot_proj_is_rotation_only(rp)) {
+        // sky_and_beams §1 pins the pass-6 sub-order as SUN BEFORE CLOUD, but
+        // emit_layers emits the cloud sheet first (it is the §1.1 row above
+        // the sun). Rastering in emission order therefore violated the pinned
+        // order and put the cloud under the sun's additive contribution.
+        // Sweep the primitive list twice: everything except Cloud (bands,
+        // cap, under, sun — already in pass order), then Cloud.
+        for (int sweep = 0; sweep < 2; ++sweep) {
+        const bool cloud_sweep = sweep == 1;
         for (const sky::SkyPrimitive& p : prims) {
+          if ((p.layer == sky::SkyLayer::Cloud) != cloud_sweep) continue;
           ScreenV sv[3];
           bool ok = true;
           for (int k = 0; k < 3; ++k) {
@@ -419,6 +430,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
               break;
           }
           raster_tri(surf, vpp, sv[0], sv[1], sv[2], cr, cg, cb, m);
+        }
         }
       }
     }
