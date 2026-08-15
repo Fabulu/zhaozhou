@@ -39,3 +39,8 @@ captures/** -text
 # first GitHub Actions run (run 31839033681). Same byte-identity rule as
 # the W4 block above.
 compiler/tests/generated/** text eol=lf
+
+# W3.2: form frontend corpus + AST goldens (regenerated with LF, byte-diffed
+# by the corpus test; CRLF checkout would shift byte-offset spans)
+compiler/tests/frontend/corpus/positive/*.form text eol=lf
+compiler/tests/frontend/corpus/golden/*.json text eol=lf
