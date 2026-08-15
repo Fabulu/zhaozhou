@@ -47,6 +47,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # W6 fix: the CTest fast lane includes npm-workspace shims
+      # (ledger_check, tables_check, abi_staleness — plan R11), which need
+      # devDependencies on PATH. The first green-path run (31862504573)
+      # failed here with 'tsc is not recognized'.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: npm ci (CTest npm shims)
+        shell: pwsh
+        run: npm ci
+
       - name: Restore oss-cad-suite cache
         id: suite-cache
         uses: actions/cache@v4
@@ -140,6 +152,16 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+
+      # W6 fix: the nightly label carries the npm shims too (abi_staleness is
+      # fast+nightly); same node_modules requirement as the build job.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: npm ci (CTest npm shims)
+        shell: pwsh
+        run: npm ci
 
       - name: Restore oss-cad-suite cache
         id: suite-cache
