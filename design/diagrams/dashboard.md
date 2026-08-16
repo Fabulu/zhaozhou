@@ -14,7 +14,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | 1 | · | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
-| forge | 2 | · | · | · | · | · | · | · | 2 |
+| forge | 1 | 1 | · | · | · | · | · | · | 2 |
 | geometry | 11 | · | · | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 3 | · | · | · | · | · | · | · | 3 |
@@ -25,9 +25,9 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | surface | 2 | · | · | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
-| texture | 4 | · | · | · | · | · | · | · | 4 |
+| texture | 3 | 1 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 68 | 3 | 3 | 14 | · | · | · | 6 | 88 |
+| **all** | 66 | 5 | 3 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -72,6 +72,8 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.FRAMECTL | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_random.cpp |
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
+| FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
 | DEBUG.COUNTERS | UNIT_VERIFIED | 2026-08-15 | `b64afe2` | tests/debug/debug_counters_directed.cpp |
 | DEBUG.COUNTERS | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |

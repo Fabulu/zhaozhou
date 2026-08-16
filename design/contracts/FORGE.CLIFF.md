@@ -69,20 +69,35 @@ the camera (governor priority order).
 
 ## Scalar reference function
 
-`zref::ForgeCliff` — consumes the same stitched edge sets as zref's
-tessellator output; crack law shared, not re-derived.
+`zref::forge::rim_plan` (reference/src/zterrain/terrain_core.cpp, deep-keel
+wave) — enumerates one edge per SOLID cell side facing void/OUT per
+32×32-cell page, applies the §5 frozen degrade order (minimum
+contiguous-collinear merge — never bridging a notch — then greatest
+endpoint 1/w, ties by scan order), and returns spans + merged + dropped
+(dropped counts BODIES: a dropped span head takes its whole span). The
+renderer's draw_heightfield emits exactly this plan — one rim law
+(charter §29-6). Consumes the composed lattice (the tessellator's own
+edge truth), not a second derivation.
 
 ## Directed tests
 
-`tests/forge/forge_cliff_directed.cpp` (path reserved): single bite, full
-breach ring, island outer rim, checkerboard clamp + span-merge order,
-rim-edge LOD equality with the underside.
+`tests/forge/forge_cliff_directed.cpp` (deep-keel wave): hand-counted
+enumeration anchors (solid block 16, centre bite 24, checkerboard 4 per
+solid cell), the 32×32 checkerboard structural clamp (2,048 → 512, the
+TIGHT worst case — §5's 2,112 counts all adjacency edges and 64 of them
+have void owners), near-camera priority survival, merge-under-pressure
+with a partial-prefix expectation (the greedy sheds the MINIMUM),
+default-no-merge control. Rim-edge LOD equality with the underside
+remains a Phase-6 directed obligation (stitch sets do not exist at
+Phase-3 reference scope).
 
 ## Randomized differential tests
 
-`tests/forge/forge_cliff_random.cpp` (path reserved): random void masks +
-LOD vectors vs zref; assert wall/top/underside vertex-set closure (no
-cracks anywhere on the silhouette).
+`tests/forge/forge_cliff_random.cpp` (deep-keel wave): 300 random void
+masks across page boundaries vs an independent enumeration oracle, the
+per-page emission bound, the emitted-bodies + dropped == enumerated
+identity, and plan purity. LOD-vector vertex-set closure (no cracks on
+the silhouette) remains a Phase-6 obligation with the stitch sets.
 
 ## Formal properties
 

@@ -2100,19 +2100,23 @@ blocks:
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: 1 candidate pick per clock
-    reference_model: zref::Mosaic
+    reference_model: zref::terrain::mosaic_pick
     tests:
       directed: tests/texture/texture_mosaic_directed.cpp
       random: tests/texture/texture_mosaic_random.cpp
     counters: [texture_samples]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-17"
+        commit: 3bb36c1
+        evidence: tests/texture/texture_mosaic_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Determinism of the pattern is a capture-exact requirement.
+    notes: "Determinism of the pattern is a capture-exact requirement. Deep-keel wave: the 6.2 pattern + fold laws are frozen and reference-complete (mosaic_pick/mirror_texel + the raster TextureSpan path); directed + random tests green in the fast lane; terrain-orbit renders the dither."
 
   # ===========================================================================
   # PART — Myriad (fpga/rtl/particles)
@@ -2392,19 +2396,23 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 skirt vertex per clock
-    reference_model: zref::ForgeCliff
+    reference_model: zref::forge::rim_plan
     tests:
       directed: tests/forge/forge_cliff_directed.cpp
       random: tests/forge/forge_cliff_random.cpp
     counters: [triangles_submitted]
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-17"
+        commit: 3bb36c1
+        evidence: tests/forge/forge_cliff_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Skirt depth from terrain LOD delta, not a tunable. World-identity wave: also owns island rim walls and the breach silhouette (spec/terrain_rules.md §5 — 2,112-edge structural bound, clamped emission with span-merge)."
+    notes: "Skirt depth from terrain LOD delta, not a tunable. World-identity wave: also owns island rim walls and the breach silhouette (spec/terrain_rules.md §5 — 2,112-edge structural bound, clamped emission with span-merge). Deep-keel wave: zref::forge::rim_plan reference-complete with the frozen degrade order; the TIGHT checkerboard worst case is 2,048 rim edges (2,112 counts all adjacency edges, 64 with void owners); directed + random tests green; terrain-orbit/terrain-breach render the strata walls."
 
   # ===========================================================================
   # TWOD — Twin Horizons + HUD (fpga/rtl/compositor)
