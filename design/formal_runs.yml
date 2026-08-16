@@ -63,7 +63,7 @@ runs:
   - property: tests/formal/mem_guard_no_escape.sby
     status: green
     date: "2026-08-16"
-    commit: bc707dd
+    commit: 38689ef
     lane: formal_mem_guard_no_escape
     tasks: [bmc, cover]
     covers: true
@@ -73,6 +73,12 @@ runs:
       clamp fails the proof again. Scope guard a_scope_single_map_window
       added (V19): the frame-constant region-map modelling is pinned to the
       proven 30-cycle window; observed RED at depth 40, green at 30.
+
+      RE-RUN at 38689ef (W2.7 FB-slot bank split): the map became two
+      DISJOINT regions and the harness/assertions moved to per-slot
+      containment (the old contiguous form would have admitted reads
+      from the new hole); bmc + cover green via
+      formal_mem_guard_no_escape, all cover traces produced.
 
   - property: tests/formal/mem_sdram_refresh_bound.sby
     status: banked
