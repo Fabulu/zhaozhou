@@ -2577,7 +2577,16 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). Counter set = the counter_catalog of this file (V12).
+    notes: >-
+      Contract filled (Phase-1-active). Counter set = the counter_catalog of
+      this file (V12). Capture timing corrected 2026-08-16 (V20 prose-claim
+      audit): the module sampled provider channels AT the frame_tick pulse
+      while every real provider presents its latched shadow one cycle AFTER
+      it — composed in the shell, nothing would ever have been captured. The
+      original directed test hid this by driving valid combinationally at
+      the tick (a provider no real block implements); the capture now
+      samples the presentation cycle and the test models the real provider
+      timing (it fails against the pre-fix RTL — verified).
 
   - id: DEBUG.CRC
     name: Tile/frame CRC

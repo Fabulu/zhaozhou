@@ -42,11 +42,19 @@ plain registers in its own clock domain.
    block's counters into local SHADOW registers (same domain as the counter
    — the shadow set is stable for the whole frame). Domain crossings to the
    debug read side are per-block gray-coded toggles (SYS.CDC law).
-3. **Read:** DEBUG.COUNTERS aggregates the shadow set through a small
-   time-multiplexed read-mux window during VBLANK (the shadows are stable
-   there by construction): one `(counter_id, u64 value)` pair per read
-   beat, addressed by counter_id, ready/valid. Reading NEVER affects the
-   live counters.
+   **Presentation timing (clarified 2026-08-16):** because the shadow latch
+   is registered, a provider presents its freshly latched value on its
+   snap channel with a ONE-CYCLE `valid` pulse on the cycle AFTER the
+   tick — never during the tick pulse cycle itself. All wave-2 providers
+   (CMD.SCHEDULER, CMD.DMA, AUDIO.FIFO) implement exactly this.
+3. **Read:** DEBUG.COUNTERS captures the presented shadow set into its bank
+   ONE CYCLE AFTER the tick pulse — the providers' presentation cycle
+   (sampling at the pulse cycle finds every registered `valid` still low
+   and captures nothing; that composition defect was found and corrected
+   2026-08-16) — then streams it through a small time-multiplexed read-mux
+   window during VBLANK (the shadows are stable there by construction):
+   one `(counter_id, u64 value)` pair per read beat, addressed by
+   counter_id, ready/valid. Reading NEVER affects the live counters.
 4. **Record:** a capture's COUNTERS section (capture_format.md §4.2) is
    `u32 count` + count × `{u16 counter_id; u16 rsv; u64 expected_value}` —
    the shadow values AT THE FRAME the section is attached to. Ordering is

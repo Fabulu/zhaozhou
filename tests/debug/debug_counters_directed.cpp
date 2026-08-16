@@ -1,8 +1,14 @@
 // debug_counters_directed.cpp — DEBUG.COUNTERS directed vectors (plan W2.6 /
 // design/contracts/DEBUG.COUNTERS.md "Directed tests" / spec/counters.md).
 //
-//   1. snapshot protocol: provider values capture at frame_tick; the sweep
-//      streams every catalog id ASCENDING; ownerless ids read 0
+//   1. snapshot protocol: providers LATCH at frame_tick and present a
+//      one-cycle valid pulse the cycle AFTER it (the real scheduler/dma/
+//      fifo timing — this harness models it faithfully; the original
+//      harness drove valid combinationally AT the tick, a phantom provider
+//      no real block implements, which hid the capture-timing defect
+//      corrected 2026-08-16); the capture samples that presentation
+//      cycle; the sweep streams every catalog id ASCENDING; ownerless ids
+//      read 0
 //   2. catalog indices: provider ids are the blocks.yml catalog positions
 //      (0 frame_cycles, 1 deadline_faults, 2 commands, 31 audio_underruns)
 //   3. read window: ready/valid backpressure; a tick mid-sweep RESTARTS the
@@ -58,21 +64,32 @@ class Dev {
 
   void park() {
     for (int p = 0; p < kProvN; ++p) {
+      live_[p] = Prov{};
+      latched_[p] = Prov{};
       top_->prov_i[p][0] = 0;
       top_->prov_i[p][1] = 0;
       top_->prov_i[p][2] = 0;  // valid = 0
     }
+    present_ = false;
     top_->frame_tick_i = 0;
     top_->snap_ready_i = 1;
   }
 
+  // set a provider's LIVE state (its own counter registers). The provider
+  // model below latches it at the tick edge and presents it — valid pulse
+  // + freshly latched value — on the following cycle, exactly like the
+  // real scheduler/dma/fifo shadow logic.
   void provide(int p, bool valid, uint16_t id, uint64_t value) {
-    top_->prov_i[p][2] = (valid ? 0x10000u : 0u) | id;
-    top_->prov_i[p][0] = static_cast<uint32_t>(value);
-    top_->prov_i[p][1] = static_cast<uint32_t>(value >> 32);
+    live_[p] = Prov{valid, id, value};
   }
 
   void cycle(bool tick, bool snap_ready = true) {
+    for (int p = 0; p < kProvN; ++p) {
+      const bool v = present_ && latched_[p].valid;
+      top_->prov_i[p][2] = (v ? 0x10000u : 0u) | latched_[p].id;
+      top_->prov_i[p][0] = static_cast<uint32_t>(latched_[p].value);
+      top_->prov_i[p][1] = static_cast<uint32_t>(latched_[p].value >> 32);
+    }
     top_->frame_tick_i = tickWord(tick);
     top_->snap_ready_i = snap_ready ? 1 : 0;
     top_->eval();
@@ -83,6 +100,22 @@ class Dev {
       swept_.push_back(Snap{id, v});
     }
     edge();
+    // provider model: latch at the tick edge, present next cycle only
+    if (tick) {
+      for (int p = 0; p < kProvN; ++p) latched_[p] = live_[p];
+      present_ = true;
+    } else {
+      present_ = false;
+    }
+  }
+
+  // a frame boundary as the composed system produces it: the tick pulse
+  // cycle, then the presentation/capture cycle (providers pulse valid, the
+  // DUT captures). After this call the window is open with 0 beats consumed
+  // — the same post-tick state the pre-fix tests started from.
+  void tick_boundary() {
+    cycle(true);
+    cycle(false);
   }
 
   // drain the whole sweep (with an optional mid-sweep stall pattern)
@@ -107,6 +140,14 @@ class Dev {
   std::vector<Snap> swept_;
 
  private:
+  struct Prov {
+    bool valid = false;
+    uint16_t id = 0;
+    uint64_t value = 0;
+  };
+  Prov live_[kProvN];     // the provider's own (live) counter state
+  Prov latched_[kProvN];  // shadow latched at the last tick edge
+  bool present_ = false;  // presentation cycle: valid pulses this cycle
   void edge() {
     top_->clk = 0;
     top_->eval();
@@ -162,7 +203,7 @@ static int runRandom(uint32_t frames, uint64_t seed) {
       t.provide(p, v, id, val);
       if (v) orc.provide(id, val);
     }
-    t.cycle(true);
+    t.tick_boundary();
     orc.tick();
     const std::vector<Snap> got = t.sweep();
     check(got.size() == kCatalog, "rand: full sweep", kCatalog, got.size());
@@ -205,7 +246,7 @@ int main(int argc, char** argv) {
     orc.provide(31, 9);
 
     t.cycle(false);
-    t.cycle(true);  // THE tick: shadows latch, window opens
+    t.tick_boundary();  // THE tick: shadows latch, window opens
     orc.tick();
 
     std::vector<Snap> got = t.sweep();
@@ -237,11 +278,11 @@ int main(int argc, char** argv) {
   {
     Dev t;
     t.provide(0, true, 0, 42);
-    t.cycle(true);                       // tick: capture + window opens
+    t.tick_boundary();                       // tick: capture + window opens
     std::vector<Snap> a = t.sweep(false);
     check(a.size() == kCatalog, "window: full sweep", kCatalog, a.size());
 
-    t.cycle(true);                       // a fresh window for the stall test
+    t.tick_boundary();                       // a fresh window for the stall test
     std::vector<Snap> b = t.sweep(true); // heavy periodic backpressure
     check(b.size() == kCatalog, "window: full sweep under backpressure", kCatalog,
           b.size());
@@ -249,11 +290,11 @@ int main(int argc, char** argv) {
 
     // tick mid-sweep: restarts ascending from id 0 with the CAPTURED shadow
     t.provide(0, true, 0, 100);
-    t.cycle(true);                       // open a window
+    t.tick_boundary();                       // open a window
     for (int i = 0; i < 10; ++i) {       // consume part of it
       t.cycle(false);
     }
-    t.cycle(true);                       // mid-sweep tick: capture + restart
+    t.tick_boundary();                       // mid-sweep tick: capture + restart
     std::vector<Snap> c = t.sweep(false);
     check(c.size() == kCatalog, "window: restart sweeps the full catalog", kCatalog,
           c.size());
@@ -269,7 +310,7 @@ int main(int argc, char** argv) {
     orc.reset();
     t.provide(0, true, 0, 5);
     orc.provide(0, 5);
-    t.cycle(true);   // tick: bank[0] = 5
+    t.tick_boundary();   // tick: bank[0] = 5
     orc.tick();
     // consume only the first few beats, then change the LIVE provider value
     for (int i = 0; i < 5; ++i) t.cycle(false);
@@ -280,7 +321,7 @@ int main(int argc, char** argv) {
           rest.size());
     check(rest[0].value == 0 && rest[0].id == 5, "quiet: mid-window beats are shadow",
           5, rest[0].id);
-    t.cycle(true);   // the NEXT tick captures the new value
+    t.tick_boundary();   // the NEXT tick captures the new value
     orc.tick();
     std::vector<Snap> c = t.sweep();
     check(c.size() == kCatalog, "quiet: next sweep full", kCatalog, c.size());
@@ -294,10 +335,10 @@ int main(int argc, char** argv) {
     Dev t;
     check(!t.violation(), "viol: clean before", 0, t.violation());
     t.provide(0, true, 40, 1);  // id 40 is OUT of the 40-entry catalog
-    t.cycle(true);
+    t.tick_boundary();
     check(t.violation(), "viol: flagged (sticky)", 1, t.violation());
     t.provide(0, true, 0, 1);
-    t.cycle(true);
+    t.tick_boundary();
     check(t.violation(), "viol: sticky until reset", 1, t.violation());
   }
 
