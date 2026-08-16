@@ -59,8 +59,12 @@ void check(bool ok, const char* what) {
 //     this synthetic frame moves (D56BB9F4 -> 2BCCF8FB), and the cap fan
 //     re-pitched to the drum's 48 yawed columns closes the rim slivers
 //     (2BCCF8FB -> 41C51A73).
-constexpr uint32_t kGoldenCanvasCrc = 0x41C51A73u;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0x6FA1B0C0u;  // [w3.5-golden]
+//   resolve white-rail fix (2026-08-16, found by the star compositor): the
+//     green dither overflowed the 6-bit field for g >= 252 at Bayer >= 8,
+//     wrapping full white to magenta on half the phases; the white spark
+//     particles in this frame carried the wrap (41C51A73 -> 47893F4C).
+constexpr uint32_t kGoldenCanvasCrc = 0x47893F4Cu;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0xC3ED350Fu;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

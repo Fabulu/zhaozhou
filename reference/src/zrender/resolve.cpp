@@ -23,10 +23,21 @@
 //
 // Channel quantization law (deterministic floor division — the resolve is a
 // formatting step, not an fx lane; no SatLedger involvement):
-//   r5 = (r*31 + (B*16 + 8)) / 255      g6 = (g*63 + (B*32 + 16)) / 255
-//   b5 = (b*31 + (B*16 + 8)) / 255
-// i.e. the dither threshold t = (B+0.5)/16 of one quantization step. Worst
-// case r=255: (255*31+248)/255 = 31 — exact, no clamp needed.
+//   r5 = min(31, (r*31 + (B*16 + 8)) / 255)
+//   g6 = min(63, (g*63 + (B*32 + 16)) / 255)
+//   b5 = min(31, (b*31 + (B*16 + 8)) / 255)
+// i.e. the dither threshold t = (B+0.5)/16 of one quantization step.
+//
+// DEFECT FIXED 2026-08-16 (found by the star compositor, the first producer
+// of saturated pure white): the original law had NO clamp, arguing "worst
+// case r=255: (255*31+248)/255 = 31 — exact". True for the 5-bit channels,
+// FALSE for green: its dither amplitude doubles (32 vs 16) while its
+// quantization headroom halves, so g in [252,255] at Bayer phases B >= 8
+// gave g6 = 64, which WRAPPED to 0 in the 6-bit field — full white resolved
+// to a white/magenta (0xFFFF/0xF81F) pixel checkerboard. The same
+// wrap-at-the-rail family as the sun-alpha 256->0 defect (unit8_from_fx16);
+// the clamp is the §2-style rail. Pinned by render_directed
+// test_resolve_white_rail (every Bayer phase of full white must be 0xFFFF).
 
 #include "internal.hpp"
 
@@ -49,9 +60,12 @@ void resolve_rgb565(const uint8_t* rgb888, uint32_t width, uint32_t height, uint
       const uint8_t r = rgb888[i * 3 + 0];
       const uint8_t g = rgb888[i * 3 + 1];
       const uint8_t bl = rgb888[i * 3 + 2];
-      const uint32_t r5 = (static_cast<uint32_t>(r) * 31 + b * 16 + 8) / 255;
-      const uint32_t g6 = (static_cast<uint32_t>(g) * 63 + b * 32 + 16) / 255;
-      const uint32_t b5 = (static_cast<uint32_t>(bl) * 31 + b * 16 + 8) / 255;
+      const uint32_t r5q = (static_cast<uint32_t>(r) * 31 + b * 16 + 8) / 255;
+      const uint32_t g6q = (static_cast<uint32_t>(g) * 63 + b * 32 + 16) / 255;
+      const uint32_t b5q = (static_cast<uint32_t>(bl) * 31 + b * 16 + 8) / 255;
+      const uint32_t r5 = r5q > 31 ? 31 : r5q;
+      const uint32_t g6 = g6q > 63 ? 63 : g6q;  // the white rail (see header)
+      const uint32_t b5 = b5q > 31 ? 31 : b5q;
       const uint16_t px = static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
       out565[i * 2 + 0] = static_cast<uint8_t>(px & 0xFF);
       out565[i * 2 + 1] = static_cast<uint8_t>(px >> 8);

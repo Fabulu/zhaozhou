@@ -598,6 +598,39 @@ void test_resolve_and_crc() {
   check(crc == c_disp, "displayed CRC law recomputed by hand matches");
 }
 
+// ---- 6b. resolve white rail (defect fixed 2026-08-16) ----------------------
+// The green dither amplitude (32) is double red/blue's while its headroom is
+// half, so g in [252,255] at Bayer phases B >= 8 computed g6 = 64, which
+// wrapped to 0 in the 6-bit field: full white resolved to a white/magenta
+// (0xFFFF/0xF81F) checkerboard. Nothing produced saturated white until the
+// star compositor did; the clamp is the rail. Every Bayer phase of every
+// near-white green must stay on the 63 rail.
+void test_resolve_white_rail() {
+  uint8_t rgb[16 * 3];
+  uint8_t out[16 * 2];
+  for (int g = 250; g <= 255; ++g) {
+    for (int i = 0; i < 16; ++i) {
+      rgb[i * 3 + 0] = 255;
+      rgb[i * 3 + 1] = static_cast<uint8_t>(g);
+      rgb[i * 3 + 2] = 255;
+    }
+    // 4 rows x 4 cols = every Bayer phase
+    for (int row = 0; row < 4; ++row) {
+      zref::render::resolve_rgb565(rgb, 4, 1, out);  // row 0 phases
+    }
+    zref::render::resolve_rgb565(rgb, 4, 4, out);  // all 16 phases
+    for (int i = 0; i < 16; ++i) {
+      const uint16_t pxv = static_cast<uint16_t>(out[i * 2] | (out[i * 2 + 1] << 8));
+      const uint32_t g6 = (pxv >> 5) & 0x3F;
+      // the un-clamped law gives 64 -> 0 for g >= 252 at B >= 8; with the
+      // rail it must be 63 wherever the quotient reached the rail, and
+      // NEVER wrap low
+      check(g6 >= 62, "near-white green never wraps at the 6-bit rail");
+      if (g == 255) check(pxv == 0xFFFF, "full white resolves to 0xFFFF at every Bayer phase");
+    }
+  }
+}
+
 // ---- 7. mode latch law (video_rules §1.1) ----------------------------------
 void test_mode_latch() {
   zref::render::FormPattern form;
@@ -803,6 +836,7 @@ int main() {
   test_draw_population();
   test_audio_events();
   test_resolve_and_crc();
+  test_resolve_white_rail();
   test_mode_latch();
   test_duo_packed_layout();
   test_no_float_audit();

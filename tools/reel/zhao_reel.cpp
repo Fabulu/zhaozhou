@@ -1145,7 +1145,7 @@ SceneSubject subject_starboil() {
       "S03 red giant at 1.5 radii; granulation is a 63-entry palette "
       "rotation, zero texels rewritten per frame; corona reads through the "
       "same ramp; starfield from the sector hash";
-  s.expect_seq_crc = 0xB72B78CCu;  // pinned 2026-08-16 (first render)
+  s.expect_seq_crc = 0xAF10A2D1u;  // re-pinned 2026-08-16: resolve white-rail fix
   return s;
 }
 
@@ -1163,7 +1163,7 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst at the light, ghosts at -26/-77/-230 Q8.8 of "
       "the axis, quarter-res glow splats, class-colour tint; the flare dims "
       "over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0x2F6B7CDDu;  // pinned 2026-08-16 (first render)
+  s.expect_seq_crc = 0x9448C485u;  // re-pinned 2026-08-16: resolve white-rail fix
   return s;
 }
 
@@ -1180,7 +1180,7 @@ SceneSubject subject_pulsar() {
       "S11 pulsar at 40 radii; the flare strobes on the S2 duty law "
       "(spin_phase < 0x4000, one quarter of each rotation); fade counters "
       "keep the visibility transitions stepped at 17 alpha per frame";
-  s.expect_seq_crc = 0x5232A5E8u;  // pinned 2026-08-16 (first render)
+  s.expect_seq_crc = 0x6E58C05Cu;  // re-pinned 2026-08-16: resolve white-rail fix
   return s;
 }
 
@@ -1209,7 +1209,7 @@ SceneSubject subject_flareocclusion() {
       "S00 sun at 30 radii crossing behind the island; the effect-tag probe "
       "gates the flare and a 4-bit counter fades it 15 frames each way; "
       "halo_atmo variant (atmosphere = one bake parameter)";
-  s.expect_seq_crc = 0x6D12B48Eu;  // pinned 2026-08-16 (first render)
+  s.expect_seq_crc = 0x9AB5AC21u;  // re-pinned 2026-08-16: resolve white-rail fix
   return s;
 }
 
