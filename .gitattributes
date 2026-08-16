@@ -1,6 +1,18 @@
 # Byte-exact text artifacts: the ledger staleness check and fixgen byte-identity
 # check regenerate these and diff against the working tree, so checkouts must
-# never translate line endings on them (repo has core.autocrlf=true locally).
+# never translate line endings on them.
+#
+# ENFORCED-BY: this file. The rules below are the enforcement; they hold for any
+# value of core.autocrlf, which is why they are stated per-path rather than
+# relying on a git config. An earlier version of this comment asserted "repo has
+# core.autocrlf=true locally" — that was an environment assumption nothing
+# enforced, and it stopped being true (2026-08-16: autocrlf unset locally and
+# globally after a worktree checkout produced 164 phantom CRLF modifications,
+# `git diff --ignore-cr-at-eol` empty). Unset means no translation at all, which
+# is strictly safer for byte-exact artifacts than autocrlf=true was. Do not
+# reintroduce a claim about a developer's git config here: if a path must not be
+# translated, list it below. Verified green under autocrlf unset:
+# `ledger:check`, `abi:check`, `tables:check`.
 
 # W2: ledger artifacts (regenerated with LF, byte-diffed by ledger:check)
 design/blocks.yml text eol=lf
