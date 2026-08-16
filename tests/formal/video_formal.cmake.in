@@ -1,0 +1,21 @@
+# video_formal.cmake — CTest wrapper for one W2.2 VIDEO SBY property
+# (the formal_lane SKIP-if-absent pattern, plan W2.2 "formal-label wrappers").
+# Runs SymbiYosys in a build-local workdir; SKIPs when sby is absent so
+# `ctest -L formal` stays green on machines without oss-cad-suite.
+
+if("@ZHAO_SBY_BIN@" STREQUAL "")
+  message(STATUS "sby not found — @SBY_NAME@ formal SKIPPED")
+  return()
+endif()
+
+execute_process(
+  COMMAND "@ZHAO_SBY_BIN@" -f -d "@SBY_WORK@" "@SBY_FILE@"
+  WORKING_DIRECTORY "@SBY_DIR@"
+  RESULT_VARIABLE _rc
+  OUTPUT_VARIABLE _out
+  ERROR_VARIABLE _err
+)
+if(NOT _rc EQUAL 0)
+  message(FATAL_ERROR "@SBY_NAME@ formal FAILED (rc=${_rc}):\n${_out}\n${_err}")
+endif()
+message(STATUS "@SBY_NAME@ formal OK")

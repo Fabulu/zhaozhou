@@ -1,0 +1,30 @@
+# video_framectl_one_fence.sby — VIDEO.FRAMECTL formal properties (plan
+# W2.2 §4; spec/video_rules.md §8: exactly one completion fence per
+# displayed frame, tick rate one per frame period, reset-idle).
+#
+# The raster is ABSTRACTED in the harness (a small-period vswap_dec /
+# frame_start generator with the same ordering law as the real raster:
+# frame_start follows each dec; decs spaced >= 40 cycles) so the fence
+# counting is provable within BMC depth. The real-raster timing equality is
+# proven cycle-exactly by the differential tests. The two clock domains are
+# TIED here (gpu_clk = vid_clk): the toggle+2FF crossing degenerates to a
+# fixed delay and the fence-count law is unaffected.
+
+[options]
+mode prove
+depth 30
+
+[engines]
+abc pdr
+
+[script]
+
+plugin -i slang
+read_slang --top video_framectl_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_video_framectl.sv video_framectl_fv.sv
+prep -top video_framectl_fv
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/video/zhao_video_framectl.sv
+video_framectl_fv.sv

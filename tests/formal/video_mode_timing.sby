@@ -1,0 +1,27 @@
+# video_mode_timing.sby — VIDEO.MODE formal properties (plan W2.2 §4;
+# spec/video_rules.md §8: raster bounds, exactly one frame_start per period,
+# reset-idle, mode changes only at frame_start).
+#
+# Full-frame periodicity (one frame_start per v_total*h_total vid cycles)
+# is proven cycle-exactly by the 3-frames-per-mode differential; the BMC
+# depth here covers multiple line wraps (the y-increment law) plus the
+# inductive invariants (bounds, latch law, reset-idle).
+
+[options]
+mode prove
+depth 30
+
+[engines]
+abc pdr
+
+[script]
+
+plugin -i slang
+read_slang --top video_mode_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_video_mode.sv video_mode_fv.sv
+prep -top video_mode_fv
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/video/zhao_video_mode.sv
+video_mode_fv.sv
