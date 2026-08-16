@@ -135,7 +135,7 @@ runs:
   - property: tests/formal/cmd_dma_crc_gate.sby
     status: green
     date: "2026-08-16"
-    commit: 3ca4661
+    commit: bb13352
     lane: formal_cmd_dma_crc_gate
     tasks: [bmc, cover]
     covers: true
@@ -153,6 +153,11 @@ runs:
       re-run green 2026-08-16): pins depth 24 to the 40/64-B staging
       shrink it depends on. Observed RED at depth 32 with the CEX at
       k = 25 — exactly one step past the proven bound.
+      RE-RUN at bb13352 (W2.7 write-data seam fix, state M_BLIT_DATA in
+      the cone): bmc + cover green via formal_cmd_dma_crc_gate, 7/7 cover
+      traces produced at depth 24 — the beat stream fits the window
+      because the shrunk FORMAL_BLIT_LEN=64 blit streams its 8 beats
+      inside the same commit episode the old single-cycle advance used.
 
   - property: tests/formal/audio_fifo_bounds.sby
     status: green
