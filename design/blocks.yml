@@ -942,6 +942,7 @@ blocks:
     backpressure: none
     latency: fixed:1
     target_throughput: 1 timing tick per video clock
+    implementation: fpga/rtl/video/zhao_video_mode.sv
     reference_model: zref::VideoMode
     tests:
       directed: tests/video/video_mode_directed.cpp
@@ -949,8 +950,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-16"
+        commit: "0b8c71c"
+        evidence: reference/include/zref/zref_video.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -972,6 +977,7 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: 1 pixel per video clock
+    implementation: fpga/rtl/video/zhao_video_scanout.sv
     reference_model: zref::Scanout
     tests:
       directed: tests/video/video_scanout_directed.cpp
@@ -980,8 +986,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-16"
+        commit: "0b8c71c"
+        evidence: reference/include/zref/zref_video.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1003,6 +1013,7 @@ blocks:
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: 1 pixel per video clock
+    implementation: fpga/rtl/video/zhao_video_scaler.sv
     reference_model: zref::ScalerFeed
     tests:
       directed: tests/video/video_scaler_directed.cpp
@@ -1010,8 +1021,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-16"
+        commit: "0b8c71c"
+        evidence: reference/include/zref/zref_video.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1033,6 +1048,7 @@ blocks:
     backpressure: none
     latency: fixed:1
     target_throughput: 1 handshake per frame
+    implementation: fpga/rtl/video/zhao_video_framectl.sv
     reference_model: zref::FrameCtl
     tests:
       directed: tests/video/video_framectl_directed.cpp
@@ -1041,8 +1057,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-16"
+        commit: "0b8c71c"
+        evidence: reference/include/zref/zref_video.hpp
     deferred: false
     cut_order: null
     superseded_by: null
