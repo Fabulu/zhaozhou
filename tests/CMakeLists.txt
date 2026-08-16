@@ -334,7 +334,7 @@ set_tests_properties(input_snapshot_atomic PROPERTIES
   LABELS "formal;nightly"
   RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                    # provers blew the 1800 s wrapper budget on runs that pass
-                   # solo — wall time must approximate solo time (2026-08-16)
+                   # solo ï¿½ wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal SKIPPED")
 # ---- W2.4: audio (plan W2.4; spec/audio_rules.md, contracts AUDIO.FIFO ----
 # ---- + SW.MIXER) ------------------------------------------------------------
@@ -408,7 +408,7 @@ set_tests_properties(formal_audio_fifo PROPERTIES
   LABELS "formal;nightly"
   RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                    # provers blew the 1800 s wrapper budget on runs that pass
-                   # solo — wall time must approximate solo time (2026-08-16)
+                   # solo ï¿½ wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 # ---- W2.5: memory -----------------------------------------------------------
 # Plan W2.5: synthesizable modules lint individually (charter 21 step 8);
@@ -592,7 +592,7 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo — wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -780,7 +780,7 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo — wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -922,8 +922,116 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo — wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
 endif()
+
+# ---- W2.7: console shell + Duo marker demo (plan W2.7; the Phase-2 gate) ----
+# zhao_shell_top composes the whole Phase-2 machine; tb_zhao_shell adds the
+# behavioural SDRAM model (testbench-only, D2). The harness C++ is the HPS
+# (D10): tests/shell/shell_harness.hpp. The gate test is the executable
+# demos/wound_lab/duo_markers.cpp (600 capture-exact Duo marker frames).
+set(ZHAO_SHELL_RTL
+    ${ZHAO_ABI_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_fetch.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_linebuf.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_serializer.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scanout.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_scheduler.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_counters.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/input/zhao_input_snapshot.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/input/zhao_input_rumble.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/audio/zhao_audio_fifo.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_ctrl.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_vram_arbiter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
+
+# synthesizable-cone lint (the model/tb are excluded by construction)
+add_test(NAME lint_shell_top
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_shell_top
+                 ${ZHAO_SHELL_RTL})
+set_tests_properties(lint_shell_top PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(demo_duo_markers
+               ${CMAKE_SOURCE_DIR}/demos/wound_lab/duo_markers.cpp)
+target_link_libraries(demo_duo_markers PRIVATE zhao_harness zhao_zref)
+target_include_directories(demo_duo_markers PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell)
+target_compile_definitions(demo_duo_markers PRIVATE
+  ZHAO_GOLDEN_ZCAP="${CMAKE_SOURCE_DIR}/captures/golden/wave2/duo_markers.zcap")
+verilate(demo_duo_markers
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+
+# THE PHASE-2 GATE: two controllers move independent 2D markers in Duo,
+# 600 capture-exact marker frames (1,202 displayed frames at the machine's
+# sustainable cadence) on the full machine â€” an executable ctest. ~30 min
+# wall, so the full gate carries the gate+nightly labels and a 40-marker
+# cut of the SAME binary and assertions guards every commit in fast.
+add_test(NAME shell_duo_markers COMMAND demo_duo_markers)
+set_tests_properties(shell_duo_markers PROPERTIES
+  LABELS "gate;nightly" TIMEOUT 5400)
+add_test(NAME shell_duo_markers_fast COMMAND demo_duo_markers --frames 40)
+set_tests_properties(shell_duo_markers_fast PROPERTIES
+  LABELS "fast" TIMEOUT 1800)
+
+# nightly soak: 10,000 DISPLAYED frames (5,000 marker packets) with PCG
+# jitter on publish timing, pads and rumble at the stress corners â€” the
+# scaled Verilator surrogate of the 8-hour hardware stress (hardware lane)
+add_test(NAME shell_duo_markers_soak COMMAND demo_duo_markers --soak 5000)
+set_tests_properties(shell_duo_markers_soak PROPERTIES
+  LABELS "nightly" TIMEOUT 28800)
+
+# bring-up probe (diagnostic binary; NOT a ctest)
+add_executable(shell_probe ${CMAKE_CURRENT_SOURCE_DIR}/shell/shell_probe.cpp)
+target_link_libraries(shell_probe PRIVATE zhao_harness zhao_zref)
+target_include_directories(shell_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shell)
+verilate(shell_probe
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+
+# per-mode 10-packet golden captures (capture_format.md 6.1): generator +
+# byte-identity verifier against the committed .zcap files
+add_executable(shell_golden ${CMAKE_CURRENT_SOURCE_DIR}/shell/shell_golden.cpp)
+target_link_libraries(shell_golden PRIVATE zhao_harness zhao_zref)
+target_include_directories(shell_golden PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shell)
+target_compile_definitions(shell_golden PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/captures/golden/wave2")
+verilate(shell_golden
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_golden_replay COMMAND shell_golden)
+set_tests_properties(shell_golden_replay PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 1200)
