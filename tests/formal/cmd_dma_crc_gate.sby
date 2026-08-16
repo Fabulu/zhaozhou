@@ -1,0 +1,46 @@
+# cmd_dma_crc_gate.sby — CMD.DMA CRC gate formal (plan W2.6 / plan 4 /
+# capture_format.md 3.2 / memory_rules.md 4.3).
+#
+#   (a) no verified-packet byte is offered before the header CRC passed
+#       (hdr_gate) AND the payload CRC + record walk passed (pay_gate)
+#   (b) no VRAM write is offered before the blit payload CRC passed
+#       (blit_gate)
+#   (c) reset leaves no partial handoff
+#
+# The properties live in the DUT under `ifdef FORMAL (read with -DFORMAL);
+# this harness file (cmd_dma_crc_gate_harness.sv) shrinks the staging
+# buffers to 40 B / 64 B for BMC tractability (header-only packets; the
+# staging bound forces command_bytes = 0). All DUT inputs — including
+# every bridge response beat — are FREE: the gate must hold under arbitrary
+# adversarial beat patterns, not just the D10 sim profile.
+#
+# Frontend: read_slang (the slang plugin) reading the REAL frozen
+# zhao_pkg.sv and the REAL generated zhao_abi_pkg.sv — no stubs, no
+# mechanical copies (W2.3's lane choice; see cmd_scheduler_slot_fsm.sby).
+# BMC depth 24 covers: fetch request -> arbitrary header beats -> header
+# check ladder -> payload-CRC/walk -> stream -> blit paths. Engine: btormc
+# (boolector-based model checking; the plain smtbmc+boolector unrolling of
+# the 32-byte CRC chain costs ~1 h/step here, btormc handles it in seconds).
+#
+# Run via `ctest -L formal` (test cmd_dma_crc_gate; wrapper
+# tests/formal/cmd_formal_lane.cmake.in, SKIP when sby is absent) or by
+# hand from a workdir exactly two levels below the repo root:
+#   sby -f -d bmc tests/formal/cmd_dma_crc_gate.sby
+
+[options]
+mode bmc
+depth 24
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --top zhao_cmd_dma_crc_gate_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_cmd_dma.sv cmd_dma_crc_gate_harness.sv
+prep -top zhao_cmd_dma_crc_gate_harness
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/command/zhao_cmd_dma.sv
+cmd_dma_crc_gate_harness.sv

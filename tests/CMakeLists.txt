@@ -631,3 +631,145 @@ target_include_directories(test_render_budget PRIVATE
   ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
 add_test(NAME render_budget COMMAND test_render_budget)
 set_tests_properties(render_budget PROPERTIES LABELS "fast;nightly")
+# ---- W2.6: command + debug (plan W2.6; spec/counters.md D9, contracts ------
+# ---- CMD.SCHEDULER / CMD.DMA / DEBUG.COUNTERS / DEBUG.CRC) ------------------
+# CMD.SCHEDULER: directed + PCG differential vs zref::CmdScheduler (the
+# oracle and the Verilated module share one cycle() driver, cmd_sim.hpp).
+set(ZHAO_CMD_INCLUDES ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                      ${CMAKE_SOURCE_DIR}/fpga/rtl/generated)
+set(ZHAO_CMD_SCHEDULER_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_scheduler.sv)
+set(ZHAO_CMD_DMA_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv)
+set(ZHAO_DEBUG_COUNTERS_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_counters.sv)
+set(ZHAO_DEBUG_CRC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv)
+
+add_executable(test_cmd_scheduler_directed command/cmd_scheduler_directed.cpp)
+target_link_libraries(test_cmd_scheduler_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_cmd_scheduler_directed
+  PREFIX Vzhao_cmd_scheduler
+  TOP_MODULE zhao_cmd_scheduler
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_CMD_SCHEDULER_SV})
+add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
+set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
+
+# CMD.DMA: directed vectors with the harness-as-HPS bridge responder (D10)
+add_executable(test_cmd_dma_directed command/cmd_dma_directed.cpp)
+target_link_libraries(test_cmd_dma_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_cmd_dma_directed
+  PREFIX Vzhao_cmd_dma
+  TOP_MODULE zhao_cmd_dma
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_CMD_DMA_SV})
+add_test(NAME cmd_dma_directed COMMAND test_cmd_dma_directed)
+set_tests_properties(cmd_dma_directed PROPERTIES LABELS "fast;nightly")
+# random lane of the same binary: PCG packet timelines with predicted
+# verdicts (fail-safe order) + the CRC gate on every error path
+add_test(NAME cmd_dma_random COMMAND test_cmd_dma_directed --random 400)
+set_tests_properties(cmd_dma_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME cmd_dma_random_nightly COMMAND test_cmd_dma_directed --random 5000)
+set_tests_properties(cmd_dma_random_nightly PROPERTIES LABELS "nightly")
+
+# PCG claim/seal timelines: 1k fast / 100k nightly soak (same binary)
+add_executable(test_cmd_random command/cmd_random.cpp)
+target_link_libraries(test_cmd_random PRIVATE zhao_harness zhao_zref)
+verilate(test_cmd_random
+  PREFIX Vzhao_cmd_scheduler
+  TOP_MODULE zhao_cmd_scheduler
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_CMD_SCHEDULER_SV})
+add_test(NAME cmd_random COMMAND test_cmd_random)
+set_tests_properties(cmd_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME cmd_random_soak COMMAND test_cmd_random --frames 100000)
+set_tests_properties(cmd_random_soak PROPERTIES LABELS "nightly")
+
+# DEBUG.COUNTERS: D9 snapshot protocol + read window vs zref::DebugCounters
+add_executable(test_debug_counters_directed debug/debug_counters_directed.cpp)
+target_link_libraries(test_debug_counters_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_debug_counters_directed
+  PREFIX Vzhao_debug_counters
+  TOP_MODULE zhao_debug_counters
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_DEBUG_COUNTERS_SV})
+add_test(NAME debug_counters_directed COMMAND test_debug_counters_directed)
+set_tests_properties(debug_counters_directed PROPERTIES LABELS "fast;nightly")
+add_test(NAME debug_counters_random COMMAND test_debug_counters_directed --random 200)
+set_tests_properties(debug_counters_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME debug_counters_random_nightly COMMAND test_debug_counters_directed --random 2000)
+set_tests_properties(debug_counters_random_nightly PROPERTIES LABELS "nightly")
+
+# DEBUG.CRC: known vectors + full-canvas modes vs the ABI CRC machine
+add_executable(test_debug_crc_directed debug/debug_crc_directed.cpp)
+target_link_libraries(test_debug_crc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_debug_crc_directed
+  PREFIX Vzhao_debug_crc
+  TOP_MODULE zhao_debug_crc
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_DEBUG_CRC_SV})
+add_test(NAME debug_crc_directed COMMAND test_debug_crc_directed)
+set_tests_properties(debug_crc_directed PROPERTIES LABELS "fast;nightly")
+add_test(NAME debug_crc_random COMMAND test_debug_crc_directed --random 300)
+set_tests_properties(debug_crc_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME debug_crc_random_nightly COMMAND test_debug_crc_directed --random 3000)
+set_tests_properties(debug_crc_random_nightly PROPERTIES LABELS "nightly")
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_cmd_scheduler
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_cmd_scheduler
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_CMD_SCHEDULER_SV})
+set_tests_properties(lint_cmd_scheduler PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_cmd_dma
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_cmd_dma
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_CMD_DMA_SV})
+set_tests_properties(lint_cmd_dma PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_debug_counters
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_debug_counters
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_DEBUG_COUNTERS_SV})
+set_tests_properties(lint_debug_counters PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_debug_crc
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_debug_crc
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_DEBUG_CRC_SV})
+set_tests_properties(lint_debug_crc PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: slot FSM + DMA CRC gate (plan 4) — SKIP only when sby (or the
+# slang plugin) is absent; anything else is FATAL. Both properties use the
+# read_slang frontend against the REAL packages (the W2.3 lane choice; no
+# ABI stub, no mechanical copies — see the .sby headers). Both carry TWO
+# tasks (bmc AND cover): every assertion in zhao_cmd_dma is an implication
+# on pkt_valid_o / guard_req_o.valid, and the scheduler's fence property is
+# guarded by a RUN->DONE transition — without the cover task each bmc could
+# pass with those preconditions unreachable (the MEM.GUARD vacuity shape).
+# Reuses the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for
+# multi-task) rather than a parallel cmd-specific template.
+if(ZHAO_SBY_BIN)
+  foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate)
+    set(PROP "${sby_prop}")
+    set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+    set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+    configure_file(formal/mem_formal_lane.cmake.in
+                   formal/${sby_prop}_lane.cmake @ONLY)
+    set(zhao_formal_script "${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake")
+    string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+    add_test(NAME formal_${sby_prop}
+             COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+    set_tests_properties(formal_${sby_prop} PROPERTIES
+      LABELS "formal;nightly"
+      TIMEOUT 2100
+      SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+  endforeach()
+endif()
