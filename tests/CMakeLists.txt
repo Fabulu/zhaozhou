@@ -138,6 +138,13 @@ add_test(NAME capture_cli_verify
          COMMAND zhao-capture verify ${CMAKE_SOURCE_DIR}/tests/abi/golden/zcap_minimal.zcap)
 set_tests_properties(capture_cli_verify PROPERTIES LABELS "fast;nightly")
 
+# Animation stability (PLAN deformation-reel Tier 1): renders every reel
+# subject through zref::render and fails on any sequence-CRC drift. Drift,
+# popping and frame-to-frame instability are invisible in a single golden
+# frame and obvious across 240; this is the cheap lane that catches them.
+add_test(NAME reel_sequence_crc COMMAND zhao-reel --check)
+set_tests_properties(reel_sequence_crc PROPERTIES LABELS "fast;nightly")
+
 # npm staleness shim (R11): regenerates all abi outputs and diffs them.
 # npm must be the Windows launcher (npm.cmd), not the bundled sh script
 unset(ZHAO_NPM_BIN CACHE)
