@@ -14,6 +14,7 @@
 //     documented pad->hps async bridge: a double buffer + gray-coded pointer
 //     swap at the tick (the readable copy is stable for a full frame by
 //     construction — contract "Backpressure rules").
+//     ENFORCED-BY: tests/formal/input_snapshot_atomic.sby
 //
 // Clocking: single gpu_clk domain in the Verilator profile (the harness tick
 // scheduler models the pad polling domain; plan R1). The pad->HPS crossing
@@ -25,6 +26,7 @@
 // synchronous latch that condition is structurally impossible (both sides of
 // the comparator come from the same incrementer); the formal property proves
 // the counter stays 0 forever, which IS the "no gaps by construction" proof.
+// ENFORCED-BY: tests/formal/input_snapshot_atomic.sby
 //
 // Conservative SystemVerilog subset only (charter 2).
 // Lint: clean under `verilator_bin --lint-only -Wall`.
@@ -175,6 +177,7 @@ module zhao_input_snapshot
   //   (b) sequence increments exactly once per tick while present,
   //       freezes while absent, and never moves without a tick,
   //   (c) the gap counter stays 0 (gaps impossible by construction).
+  //   ENFORCED-BY: tests/formal/input_snapshot_atomic.sby
 `ifdef FORMAL
   logic f_past_valid = 1'b0;  // declared init: the free-init step 0 never enters $past checks
   always_ff @(posedge clk) f_past_valid <= 1'b1;

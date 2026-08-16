@@ -176,6 +176,9 @@ module zhao_vram_arbiter
   // change ctrl_req between the acceptance edge and the grant pulse — the
   // controller would execute one burst while the bookkeeping decremented
   // another. The offer latch closes that window by construction.
+  // ENFORCED-BY: tests/memory/mem_random.cpp:VramArbiter
+  // (a torn offer diverges the grant order / per-client byte counts from
+  // the zref::VramArbiter oracle in the three-way random differential)
   logic        offer_valid;
   logic        offer_write;
   logic [2:0]  offer_client;

@@ -200,6 +200,7 @@ module zhao_cmd_scheduler
   // default. mode_act is 0..2 by construction: the SetPresentationContract
   // latch below REFUSES out-of-range bytes (they are NOT validated upstream
   // in Phase 2 — CMD.DMA's structural walk skips enum-range check 7).
+  // ENFORCED-BY: tests/formal/cmd_scheduler_slot_fsm.sby:a_mode_act_in_range
   function automatic logic [31:0] frame_period(input logic [7:0] m);
     frame_period = zhao_pkg::ZHAO_TIMING[int'(m)].frame_gpu_cycles;
   endfunction
@@ -521,6 +522,17 @@ module zhao_cmd_scheduler
       c_deadline:   cover (fence_valid_o
                            && (fence_status_o == STATUS_DEADLINE));
     end
+  end
+
+  // ---- mode range law (rule V20 enforcement) ------------------------------
+  // frame_period() indexes ZHAO_TIMING[mode_act] — the exact shape of the
+  // W2.6 lawless-mode-byte defect (an OOB index into the timing table).
+  // The header comment claims mode_act is 0..2 because the latch refuses
+  // out-of-range bytes; this assertion is the enforcer that claim cites.
+  // Mutation-verified: removing the latch's <= 2 refusal fails this
+  // assertion (probe 2026-08-16).
+  always_ff @(posedge clk) begin
+    a_mode_act_in_range : assert (mode_act <= 8'd2);
   end
 
   // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter

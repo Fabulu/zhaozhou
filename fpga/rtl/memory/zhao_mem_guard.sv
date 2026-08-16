@@ -7,6 +7,7 @@
 //   FB slot 0 : [0x0000_0000, 0x0003_C000)   245,760 B
 //   FB slot 1 : [0x0003_C000, 0x0007_8000)   245,760 B
 //   everything else: unmapped — violation by construction.
+//   ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
 // Ownership law:
 //   * SCANOUT owns BOTH slots, READ-ONLY (a write is a violation).
@@ -15,8 +16,10 @@
 //     written by CMD.SCHEDULER at frame grant. Writes only (Phase-2 blit
 //     never reads VRAM: a read is a violation by construction).
 //     map_valid=0 (no grant this frame) => deny-all.
+//     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //   * ENGINE0/ENGINE1/DEBUG own nothing in Phase 2 (reserved ports) —
 //     violation by construction.
+//     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
 // Request law: len 1..64 bytes; byte_enable must be the FULL contiguous mask
 // over [addr, addr+len) (Phase-2 clients issue whole spans; partial-word
@@ -90,7 +93,9 @@ module zhao_mem_guard
   // wrap 32 bits, and a wrapped window admitted writes far outside the map —
   // an escape, in the one block whose entire contract is that no escape
   // exists. Clamping keeps every legal request legal (they never exceed the
-  // slot) and closes the wrap by construction.
+  // slot) and closes the wrap by construction. Removing the clamp fails
+  // the proof again (design/formal_runs.yml notes).
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
   logic [31:0] blit_base, blit_end, blit_span_eff;
   assign blit_base     = blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
   assign blit_span_eff = (blit_span > ZHAO_FB_SLOT_SPAN) ? ZHAO_FB_SLOT_SPAN : blit_span;

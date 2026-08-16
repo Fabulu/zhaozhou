@@ -157,6 +157,7 @@ module zhao_video_framectl
   // note: swap_ack is accepted any cycle it is high within vblank (SCANOUT
   // acks one cycle after swap_req by construction); FRAMECTL does not wait
   // for it — if SCANOUT cannot ack, the fail-safe is the next-frame repeat.
+  // ENFORCED-BY: fpga/rtl/video/zhao_video_scanout.sv:swap_ack
   // The raw raster inputs (x, y, vblank) are carried for the contract
   // surface (VIDEO.FRAMECTL "Input and output packet layouts"); the decision
   // itself decodes the pre-pulsed vswap_dec/frame_start from VIDEO.MODE.
@@ -178,6 +179,7 @@ module zhao_video_framectl
   // Data (frame id / slot / repeated) is a vid register that only changes
   // at the toggle edge and is captured on the gpu side when the pulse is
   // seen — stable-by-construction, no gray coding needed beyond the toggle.
+  // ENFORCED-BY: tests/formal/video_framectl_one_fence.sby:a_cdc_data_stable_unless_toggle
   logic       tog_s1, tog_s2, tog_s2q;
   logic [0:0] slot_s1, slot_s2;
 

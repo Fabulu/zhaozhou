@@ -5,6 +5,7 @@
 // 2 x 512 x RGB565 ping-pong line buffers (one full line of margin by
 // construction: prefetch line N+1 while line N displays), organized as
 // 2 x 128 words of 64 b (4 pixels per word = one beat of the fetch client).
+// ENFORCED-BY: tests/formal/video_scanout_linebuf.sby
 // The WRITE port lives in the gpu domain (zhao_scanout_fetch), the READ
 // port in the vid domain (zhao_scanout_serializer); the storage itself is
 // the documented asynchronous bridge between the two (ratio 2:1 frozen,
@@ -17,8 +18,9 @@
 //     ^  <---- fill_abort ----/    |                     |
 //     |------------------------------------------------| credit
 //
-// Handshake law (gray-coded toggles, one bit each way per buffer — a single
-// bit toggling is gray by construction):
+// Handshake law (gray-coded toggles, one bit each way per buffer — a
+// single-bit code is gray by definition, there is no multi-bit skew to
+// encode away):
 //
 //   full path   (gpu->vid): completing a fill XORs full_toggle[i]; the vid
 //               side 2-flop-synchronizes it. A buffer is FRESH for display
@@ -36,6 +38,7 @@
 //     stable from fill_line_done until its consumption completes;
 //   * fill_abort returns a FILLING buffer to EMPTY without ever toggling
 //     full — partial data is unobservable by construction.
+//     ENFORCED-BY: tests/formal/video_scanout_linebuf.sby
 //
 // KNOWN CDC HAZARD, enforced by SYSTEM timing, not by this module (found
 // 2026-08-16 when the formal stimulus became genuinely free; an earlier
@@ -45,6 +48,7 @@
 // sampled by the vid-side 2FF chain as a stale buf_fresh for up to ~2 vid
 // cycles while this side already holds the buffer EMPTY (and the fetch may
 // refill it): a torn read IF a freshness decision lands in that window.
+// ENFORCED-BY: fpga/rtl/video/zhao_scanout_fetch.sv:fill_abort
 // The ENFORCER is zhao_scanout_fetch's abort schedule: fill_abort of a
 // FULL buffer fires only at the vswap_dec frame re-arm or the frame_start
 // mode flush — both in/at vblank, with the serializer's next freshness

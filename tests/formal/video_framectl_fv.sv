@@ -141,6 +141,27 @@ module video_framectl_fv
     end
   end
 
+  // ---- CDC data-stability law (rule V20 enforcement) --------------------
+  // The DUT's vid->gpu crossing carries frame_id_q / cur_repeated /
+  // cur_slot next to the tick toggle, with NO gray coding beyond the
+  // toggle — lawful ONLY because those registers change exclusively at the
+  // toggle edge (all their writes sit under `if (vswap_dec)`, the same
+  // edge that flips tick_tog). The DUT header used to state that as
+  // "stable-by-construction" prose; this assertion is the enforcer the
+  // prose now cites (ENFORCED-BY discipline). Clocks are tied in this
+  // harness, but the register-discipline half of the claim — data moves
+  // only when the toggle moves — is exactly what it checks.
+  always @(posedge clk) begin
+    if (f_past_valid && rst_n && $past(rst_n)) begin
+      if (dut.tick_tog == $past(dut.tick_tog)) begin
+        a_cdc_data_stable_unless_toggle: assert(
+             dut.frame_id_q   == $past(dut.frame_id_q)
+          && dut.cur_repeated == $past(dut.cur_repeated)
+          && dut.cur_slot     == $past(dut.cur_slot));
+      end
+    end
+  end
+
   // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
   // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
   // The bmc task is BOUNDED at depth 60, which admits AT MOST five
