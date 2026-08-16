@@ -529,10 +529,17 @@ int main(int argc, char** argv) {
           uint16_t id;
           uint64_t v;
         };
+        // the shadow values AT the last VERIFIED tick (2F+1): frame_cycles
+        // = 2F+1 and deadline_faults = 1 + floor((2F+1)/2) = F+1 — the
+        // half-rate closed form the demo pins every tick. (An earlier
+        // revision recorded the abandoned 60 Hz model's constants here;
+        // byte-identity could never catch that, since the writer and the
+        // committed file agreed — found by decoding the capture with an
+        // independent reader.)
         const Ent ents[] = {
-            {0, frames + 1},              // the last verified tick (601)
-            {1, 1},                       // the pinned startup constant
-            {30, starve_baseline},        // boot line-0 constant
+            {0, 2ull * frames + 1},       // frame_cycles at tick 2F+1
+            {1, uint64_t(frames) + 1},    // deadline_faults = F+1
+            {30, starve_baseline},        // boot constant (0 for Duo)
             {31, 0},
             {35, 0},
             {36, 0},
