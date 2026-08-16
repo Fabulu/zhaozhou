@@ -1,7 +1,9 @@
 // video_harness.hpp — shared driver for the W2.2 VIDEO differential tests.
 //
-// Drives the Verilated zhao_video_tb (whole subsystem) and the zref::VideoSys
-// mirror on ONE unified gpu-cycle timeline with a FIXED clock phase (plan
+// Drives the Verilated zhao_video_tb (whole subsystem) and the zref::Scanout
+// mirror (formerly VideoSys — renamed at 0b8c71c; this comment was the last
+// place the phantom name survived, found by rule V17's first run)
+// on ONE unified gpu-cycle timeline with a FIXED clock phase (plan
 // risk R1): gpu_clk posedges every step, vid_clk = gpu_clk/2 with coincident
 // posedges on ODD steps (both clocks rise in the same eval, so cross-domain
 // synchronizers sample pre-edge values exactly like the mirror assumes).

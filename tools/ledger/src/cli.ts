@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadLedger, loadYaml } from './load';
-import { checkAll } from './rules';
+import { checkAll, type RtlFile, type SbyTask } from './rules';
 import type { FormalRunsDoc } from './types';
 import { readPrevBlocks } from './git';
 import { renderArchitecture } from './gen/architecture';
@@ -37,6 +37,78 @@ function formalTasksOnDisk(): string[] {
     .sort();
 }
 
+/**
+ * Every `.sby` under tests/formal with its own text and the texts of the
+ * committed sources its [files] section stages (rule V19: the scope guard
+ * must live somewhere in the proof's cone). Each [files] line is either a
+ * single path or a `dest src` staging pair — the LAST token is the real
+ * source, relative to tests/formal. Build-staged copies that do not exist
+ * pre-build are skipped (guards live in committed harnesses).
+ */
+function sbyTasksWithSources(): SbyTask[] {
+  const dir = path.join(REPO_ROOT, 'tests', 'formal');
+  return formalTasksOnDisk().map((rel) => {
+    const text = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+    const sources: string[] = [];
+    let inFiles = false;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      const section = /^\[([^\]]+)\]$/.exec(line);
+      if (section) {
+        inFiles = section[1] === 'files';
+        continue;
+      }
+      if (!inFiles || line === '' || line.startsWith('#')) continue;
+      const tokens = line.split(/\s+/);
+      const src = path.resolve(dir, tokens[tokens.length - 1]);
+      if (fs.existsSync(src)) sources.push(fs.readFileSync(src, 'utf8'));
+    }
+    return { path: rel, text, sources };
+  });
+}
+
+/** Every RTL source under fpga/rtl (rule V20: prose-claim lint). */
+function rtlFilesOnDisk(): RtlFile[] {
+  const root = path.join(REPO_ROOT, 'fpga', 'rtl');
+  const out: RtlFile[] = [];
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(sv|svh)$/.test(entry.name)) {
+        out.push({
+          path: path.relative(REPO_ROOT, full).replace(/\\/g, '/'),
+          text: fs.readFileSync(full, 'utf8'),
+        });
+      }
+    }
+  };
+  walk(root);
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** Concatenated reference/ sources (rule V17: cited symbols must be defined). */
+function referenceTextOnDisk(): string {
+  const root = path.join(REPO_ROOT, 'reference');
+  const parts: string[] = [];
+  const walk = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(hpp|cpp|h|cc)$/.test(entry.name)) parts.push(fs.readFileSync(full, 'utf8'));
+    }
+  };
+  walk(root);
+  return parts.join('\n');
+}
+
+function readRepoText(p: string): string | null {
+  const full = path.isAbsolute(p) ? p : path.join(REPO_ROOT, p);
+  return fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : null;
+}
+
 function cmdCheck(): number {
   const { blocks, ops } = loadLedger(DESIGN_DIR);
   const errors: string[] = [...blocks.schemaErrors, ...ops.schemaErrors];
@@ -53,7 +125,15 @@ function cmdCheck(): number {
       ...checkAll(
         blocks.doc,
         ops.doc,
-        { prevBlocks: prev.doc, exists: repoRelativeExists, formalTasksOnDisk: formalTasksOnDisk() },
+        {
+          prevBlocks: prev.doc,
+          exists: repoRelativeExists,
+          formalTasksOnDisk: formalTasksOnDisk(),
+          sbyTasks: sbyTasksWithSources(),
+          rtlFiles: rtlFilesOnDisk(),
+          readText: readRepoText,
+          referenceText: referenceTextOnDisk(),
+        },
         formalDoc
       )
     );
@@ -85,7 +165,7 @@ function cmdCheck(): number {
     return 1;
   }
   const blocked = blocks.doc.blocks.filter((b) => b.blocked_on === 'hardware').length;
-  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V16 + staleness green`);
+  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V17 + V19–V20 + staleness green (V18 reserved: sim-lane run registry)`);
   return 0;
 }
 

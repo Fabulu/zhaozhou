@@ -2,7 +2,8 @@
 // spec/video_rules.md §8; contract VIDEO.MODE "Randomized differential
 // tests"): PCG mode-switch timelines at random cycle offsets; the per-cycle
 // trace (x, y, syncs, blanks, frame boundaries, mode latch) must equal the
-// zref oracle exactly.
+// zref::VideoMode oracle (embedded in the composed zref::Scanout mirror
+// that video_harness.hpp drives) exactly.
 //
 //   fast:    1,000 mode-write events
 //   nightly: 100,000 events  (--full)

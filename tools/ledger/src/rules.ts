@@ -28,6 +28,31 @@ export interface RuleOptions {
   exists?: (p: string) => boolean;
   /** Repo-relative paths of every `.sby` found under tests/formal (rule V16). */
   formalTasksOnDisk?: string[];
+  /** Every `.sby` with its text + staged source texts (rule V19). */
+  sbyTasks?: SbyTask[];
+  /** Every RTL source under fpga/rtl with its text (rule V20). */
+  rtlFiles?: RtlFile[];
+  /** Text reader for ENFORCED-BY symbol resolution (repo-root-relative). */
+  readText?: (p: string) => string | null;
+  /** Concatenated text of every source under reference/ (rule V17). */
+  referenceText?: string;
+}
+
+/** One RTL source file (rule V20). */
+export interface RtlFile {
+  /** repo-relative path */
+  path: string;
+  text: string;
+}
+
+/** One `.sby` property with the texts of the sources it stages (rule V19). */
+export interface SbyTask {
+  /** repo-relative path of the .sby */
+  path: string;
+  /** raw text of the .sby */
+  text: string;
+  /** raw texts of the committed sources its [files] section stages (resolved; missing/generated staging paths omitted) */
+  sources: string[];
 }
 
 const LADDER_INDEX: ReadonlyMap<Maturity, number> = new Map(
@@ -364,6 +389,247 @@ export function checkFormalRuns(
   return errors;
 }
 
+/**
+ * V19: every BOUNDED formal proof carries a self-asserting scope guard.
+ *
+ * A bounded (bmc) proof states its laws only up to its depth, and the depth's
+ * MEANING rests on structural facts of the harness (a refresh-free horizon, a
+ * frame-constant map, a shrunk buffer, an abstract raster period). Twice this
+ * repo watched a bounded number quietly outlive the facts that made it true
+ * (the frozen B = 40; the "both gates in the cone" harness header). The cure
+ * that worked is the arbiter's `a_horizon_is_refresh_free` / the linebuf's
+ * `a_scope_four_sessions`: an assertion IN THE PROOF'S OWN CONE that states
+ * the scope and FIRES if anyone raises the depth past what was actually
+ * proven — silent scope drift becomes a red run.
+ *
+ * Rule: a `.sby` with a `mode bmc` task must have an `a_scope_*` or
+ * `a_horizon_*` assertion somewhere in its staged sources (or the .sby
+ * itself), or carry an explicit `# SCOPE-TOTAL: <reason>` header waiver
+ * asserting the bound covers the full reachable state space. Unbounded
+ * (`mode prove`) tasks are exempt — their scope IS total.
+ */
+export function checkScopeGuards(sbys: SbyTask[]): string[] {
+  const errors: string[] = [];
+  for (const s of sbys) {
+    const bounded = /^\s*(?:[\w-]+\s*:\s*)?mode\s+bmc\b/m.test(s.text);
+    if (!bounded) continue;
+    const waived = /SCOPE-TOTAL:/.test(s.text);
+    const guarded = [s.text, ...s.sources].some((t) => /\ba_(?:scope|horizon)_\w+\s*:/.test(t));
+    if (!guarded && !waived) {
+      errors.push(
+        `V19: ${s.path} has a bounded (mode bmc) task but no self-asserting scope guard — ` +
+        'a bounded proof must carry an a_scope_* / a_horizon_* assertion in its cone that FIRES ' +
+        'if the depth is raised past what was proven (the a_horizon_is_refresh_free pattern), ' +
+        'or an explicit "# SCOPE-TOTAL: <reason>" waiver in the .sby'
+      );
+    }
+  }
+  return errors;
+}
+
+/**
+ * V17: citation coherence — cited symbols must be DEFINED, contract-cited
+ * artifacts must EXIST, and the cited test must actually be ABOUT its oracle.
+ *
+ * The phantom-pointer incident this closes (W2.6): `zref::CmdDma` and
+ * `zref::Crc32c` were cited as reference_model with NO such symbol defined
+ * anywhere; `zref::framePixelCrc` plus FOUR test files were cited in
+ * design/contracts/*.md — free text V6 never reads — and none existed.
+ * V6 already existence-gates the `blocks.yml` test paths, so this rule
+ * deliberately does NOT re-check those (charter §29-6: one enforcer per
+ * semantic); it checks the surfaces V6 cannot see:
+ *
+ *   a. a block at >= REFERENCE_COMPLETE citing `reference_model` must have
+ *      that symbol's last segment DEFINED under reference/ (class/struct
+ *      declaration or function definition hit);
+ *   b. the contract's "## Scalar reference function" backticked zref symbol
+ *      must EQUAL the ledger's reference_model (drift between contract and
+ *      ledger is how zref::framePixelCrc survived; zref::VideoSys was
+ *      renamed to Scanout for exactly this — a class by any other name is a
+ *      phantom citation);
+ *   c. every `tests/...` path cited in the contract of a block past
+ *      SPECIFIED must exist on disk (the four W2.6 phantom files);
+ *   d. ANTI-ALIAS TIE: the files at tests.directed / tests.random of an rtl
+ *      block past SPECIFIED must textually reference the reference_model's
+ *      last segment. Existence alone is satisfiable by a file about
+ *      something else — MEM.HPS.BRIDGE's tests.random pointed at a real
+ *      file that never instantiated the bridge. This is the part with teeth.
+ */
+export function checkCitations(blocksDoc: BlocksDoc, opts: RuleOptions = {}): string[] {
+  const exists = opts.exists ?? (() => true);
+  const readText = opts.readText ?? (() => null);
+  const refText = opts.referenceText ?? null;
+  const errors: string[] = [];
+  const refComplete = rank('REFERENCE_COMPLETE');
+
+  for (const b of blocksDoc.blocks) {
+    const lastSeg = b.reference_model ? b.reference_model.split('::').pop()! : null;
+
+    // (a) cited oracle symbol is defined under reference/
+    if (refText !== null && lastSeg && rank(b.maturity) >= refComplete) {
+      const esc = lastSeg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const defined = new RegExp(`(class|struct)\\s+${esc}\\b|\\b${esc}\\s*\\(`).test(refText);
+      if (!defined) {
+        errors.push(
+          `V17: ${b.id} is ${b.maturity} citing reference_model "${b.reference_model}" but no definition of ` +
+          `"${lastSeg}" exists under reference/ — a symbol nobody defined is a phantom citation (the zref::CmdDma failure)`
+        );
+      }
+    }
+
+    // (b)+(c): contract coherence
+    const contractText = b.contract ? readText(b.contract) : null;
+    if (contractText !== null) {
+      const section = /##\s*Scalar reference function\s*\n([\s\S]*?)(?=\n##\s|$)/.exec(contractText);
+      const cited = section ? /`(zref::[A-Za-z0-9_:]+)`/.exec(section[1]) : null;
+      if (cited && b.reference_model && cited[1] !== b.reference_model) {
+        errors.push(
+          `V17: ${b.id} contract ${b.contract} cites scalar reference "${cited[1]}" but the ledger says ` +
+          `"${b.reference_model}" — contract and ledger have drifted (the zref::framePixelCrc failure)`
+        );
+      }
+      if (!cited && b.kind === 'rtl' && rank(b.maturity) >= refComplete) {
+        errors.push(
+          `V17: ${b.id} is ${b.maturity} but its contract ${b.contract} names no backticked zref:: symbol ` +
+          'under "## Scalar reference function"'
+        );
+      }
+      if (b.maturity !== 'SPECIFIED') {
+        const seen = new Set<string>();
+        // lookbehind: "tests/..." must start the path — a workspace-rooted
+        // citation like compiler/tests/foo.test.ts is NOT a repo-root
+        // tests/ path (first real run of this rule false-positived on
+        // exactly that; the fix is the rule's, not the contract's)
+        const pathRe = /(?<![A-Za-z0-9_/.-])tests\/[A-Za-z0-9_\-./]*[A-Za-z0-9_]\.[a-z]{1,4}\b/g;
+        for (const m of contractText.matchAll(pathRe)) {
+          const p = m[0];
+          if (seen.has(p)) continue;
+          seen.add(p);
+          if (!exists(p)) {
+            errors.push(
+              `V17: ${b.id} (${b.maturity}) contract ${b.contract} cites "${p}" which does not exist — ` +
+              'a contract-cited test that was never written is a phantom citation (the W2.6 four-file failure)'
+            );
+          }
+        }
+      }
+    }
+
+    // (d) anti-alias tie: the cited test must be ABOUT the cited oracle
+    if (b.kind === 'rtl' && lastSeg && b.maturity !== 'SPECIFIED') {
+      for (const p of [b.tests?.directed, b.tests?.random]) {
+        if (!p || !exists(p)) continue; // V6 owns existence
+        const text = readText(p);
+        if (text !== null && !text.includes(lastSeg)) {
+          errors.push(
+            `V17: ${b.id} (${b.maturity}) test "${p}" never mentions its oracle "${lastSeg}" — ` +
+            'an existing file that is not about the cited reference model is an alias, not evidence (the MEM.HPS.BRIDGE failure)'
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * V20: a prose invariant claim must name its enforcer, machine-resolvably.
+ *
+ * Both false claims this project has found in RTL prose — "validated
+ * upstream" on a mode byte nothing validated (the ZHAO_TIMING OOB index)
+ * and "toggle-free by construction" false for the FULL case (a real CDC
+ * hazard) — were found by asking one question: WHO ENFORCES THIS SENTENCE?
+ * This rule asks it mechanically, forever. Any RTL comment line matching a
+ * claim phrase (`by construction`, `by-construction`, wrapped across a
+ * comment line break, `validated upstream`, `guaranteed by`, `cannot
+ * happen`, `never occurs`) must be followed within WINDOW lines by
+ *
+ *     ENFORCED-BY: <repo-relative path>[:<symbol>]
+ *
+ * and the pointer must RESOLVE: the path exists; a `.sby` path must be a
+ * property registered in design/formal_runs.yml (transitivity with V16 —
+ * an enforcer that never ran is not an enforcer); a `:symbol` suffix must
+ * occur in the named file's text. A claim that is really an ASSUMPTION on
+ * another block is not annotated — it is REWRITTEN as an explicit
+ * assumption naming who upholds it (and then no longer matches a claim
+ * phrase), because pointing prose at prose enforces nothing.
+ */
+const V20_CLAIM = /(by[ -]construction|validated upstream|guaranteed by|cannot happen|never occurs)/i;
+const V20_WINDOW = 10;
+const V20_ANNOTATION = /ENFORCED-BY:\s*([^\s`")\]]+)/;
+
+export function checkProseClaims(
+  files: RtlFile[],
+  opts: RuleOptions = {},
+  formalDoc?: FormalRunsDoc
+): string[] {
+  const exists = opts.exists ?? (() => true);
+  const readText = opts.readText ?? (() => null);
+  const registered = new Set((formalDoc?.runs ?? []).map((r) => r.property));
+  const errors: string[] = [];
+
+  for (const f of files) {
+    const lines = f.text.split(/\r?\n/);
+    // A line is a claim if it matches alone, or joined with the start of the
+    // next comment line (the wrapped "by\n//   construction" case).
+    const isClaim = (i: number): boolean => {
+      if (V20_CLAIM.test(lines[i])) return true;
+      if (i + 1 < lines.length) {
+        const next = lines[i + 1].replace(/^\s*(\/\/|\*)?\s*/, '');
+        return V20_CLAIM.test(`${lines[i]} ${next.slice(0, 24)}`) && !V20_CLAIM.test(` ${next.slice(0, 24)}`);
+      }
+      return false;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      // every annotation must resolve, wherever it appears
+      const ann = V20_ANNOTATION.exec(lines[i]);
+      if (ann) {
+        const ref = ann[1];
+        const colon = ref.indexOf(':');
+        const p = colon >= 0 ? ref.slice(0, colon) : ref;
+        const sym = colon >= 0 ? ref.slice(colon + 1) : null;
+        if (!exists(p)) {
+          errors.push(`V20: ${f.path}:${i + 1} ENFORCED-BY "${ref}" — path "${p}" does not exist`);
+        } else if (p.endsWith('.sby') && !registered.has(p)) {
+          errors.push(
+            `V20: ${f.path}:${i + 1} ENFORCED-BY "${ref}" — "${p}" is not registered in design/formal_runs.yml (an enforcer that never ran is not an enforcer)`
+          );
+        } else if (sym) {
+          // a `.sby:symbol` resolves against the property's whole cone (the
+          // .sby text plus its staged sources — assertions live in harness
+          // or DUT files, not in the .sby itself)
+          let hay: string | null = null;
+          if (p.endsWith('.sby')) {
+            const task = (opts.sbyTasks ?? []).find((s) => s.path === p);
+            if (task) hay = [task.text, ...task.sources].join('\n');
+          }
+          if (hay === null) hay = readText(p);
+          if (hay === null || !hay.includes(sym)) {
+            errors.push(`V20: ${f.path}:${i + 1} ENFORCED-BY "${ref}" — symbol "${sym}" not found in ${p} (or its staged cone)`);
+          }
+        }
+      }
+
+      if (!isClaim(i)) continue;
+      let annotated = false;
+      for (let j = i; j <= Math.min(i + V20_WINDOW, lines.length - 1); j++) {
+        if (V20_ANNOTATION.test(lines[j])) {
+          annotated = true;
+          break;
+        }
+      }
+      if (!annotated) {
+        errors.push(
+          `V20: ${f.path}:${i + 1} states an invariant claim with no ENFORCED-BY: <path[:symbol]> within ${V20_WINDOW} lines — ` +
+          'name the enforcer machine-resolvably, add the missing enforcement, or rewrite the claim as an explicit assumption naming who upholds it'
+        );
+      }
+    }
+  }
+  return errors;
+}
+
 export function checkOps(
   opsDoc: OpsDoc,
   blocksDoc: BlocksDoc,
@@ -446,5 +712,8 @@ export function checkAll(
     ...checkBlocks(blocksDoc, opts),
     ...checkOps(opsDoc, blocksDoc, opts),
     ...(formalDoc ? checkFormalRuns(blocksDoc, formalDoc, opts) : []),
+    ...checkCitations(blocksDoc, opts),
+    ...(opts.sbyTasks ? checkScopeGuards(opts.sbyTasks) : []),
+    ...(opts.rtlFiles ? checkProseClaims(opts.rtlFiles, opts, formalDoc) : []),
   ];
 }

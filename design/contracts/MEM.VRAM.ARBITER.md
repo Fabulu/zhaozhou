@@ -1,6 +1,6 @@
 # Contract — MEM.VRAM.ARBITER (VRAM arbiter)
 
-> Ledger: `design/blocks.yml` · owner ZH-026 · phase 2 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-026 · phase 2 · maturity RTL_VERIFIED
 
 ## Purpose and exclusions
 
@@ -30,7 +30,7 @@ Unsigned integer byte/word counts only.
 
 ## Latency (fixed or variable)
 
-Variable, formally bounded: every guaranteed client granted within `B = G·MAX_BURST + REFRESH_OVERHEAD` sdram cycles (Phase-2 worst case 40 cycles; derivation frozen in spec/memory_rules.md §2).
+Variable, formally bounded: every guaranteed client's first burst served within the proven-tight bounds — scanout 34 refresh-free / 47 operational, RR class 52 refresh-free / 65 operational sdram cycles (derivation `spec/memory_rules.md` §2.1; see "Formal properties" below). The old formula `B = G·MAX_BURST + REFRESH_OVERHEAD = 40` was disproven 2026-08-16 — this line quoted it for a further wave after the correction below landed, which is exactly the prose-drift failure rules V17/V20 now police.
 
 ## Target throughput
 

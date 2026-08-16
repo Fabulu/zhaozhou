@@ -1,8 +1,9 @@
 // vram_arbiter_directed.cpp — MEM.VRAM.ARBITER directed test (plan W2.5).
 //
 // Contract: design/contracts/MEM.VRAM.ARBITER.md; law: spec/memory_rules.md
-// §2 (D3). Through the chain harness (RTL arbiter+ctrl+model vs the zref
-// oracles, every cycle):
+// §2 (D3). Through the chain harness (RTL arbiter+ctrl+model vs the
+// zref::VramArbiter + zref::SdramController oracles instantiated by
+// zhao_mem_chain.hpp, every cycle):
 //   1. scanout PREEMPTS AT A BURST BOUNDARY (never mid-burst)
 //   2. strict scanout priority: zero scanout_preempted under mixed load
 //   3. RR fairness among {blit, engine0, engine1}

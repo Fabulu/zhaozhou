@@ -5,7 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkAll } from '../rules';
+import { checkAll, checkCitations, checkProseClaims, checkScopeGuards, type RtlFile, type SbyTask } from '../rules';
 import type { Block, BlocksDoc, OpsDoc, Op, FormalRunsDoc, FormalRunEntry } from '../types';
 
 const exists = (p: string) => p.startsWith('tests/') || p.startsWith('design/');
@@ -309,6 +309,255 @@ test('V16: a .sby on disk with no registry entry is rejected', () => {
     formalDoc()
   );
   assert.ok(errors.some((e) => /V16.*orphan\.sby.*HARD FAILURE/.test(e)), errors.join('\n'));
+});
+
+// ---------------------------------------------------------------------------
+// V19 — every bounded (mode bmc) proof carries a self-asserting scope guard
+// in its cone, or an explicit SCOPE-TOTAL waiver. Encodes the census this
+// rule was built from: six bounded harnesses whose scope lived only in
+// comments, where it could drift without a red.
+// ---------------------------------------------------------------------------
+
+function sby(over: Partial<SbyTask> = {}): SbyTask {
+  return {
+    path: 'tests/formal/example.sby',
+    text: '[options]\nmode bmc\ndepth 30\n\n[files]\nharness.sv\n',
+    sources: ['module h;\n  a_scope_window: assert(f_cyc <= 30);\nendmodule\n'],
+    ...over,
+  };
+}
+
+test('V19: a guarded bounded proof passes', () => {
+  assert.deepEqual(checkScopeGuards([sby()]), []);
+});
+
+test('V19: a bounded proof with no scope guard anywhere in its cone is rejected', () => {
+  const errors = checkScopeGuards([sby({ sources: ['module h;\nendmodule\n'] })]);
+  assert.ok(errors.some((e) => e.startsWith('V19:') && e.includes('example.sby')), errors.join('\n'));
+});
+
+test('V19: task-prefixed bmc mode lines (bmc: mode bmc) are recognised as bounded', () => {
+  const errors = checkScopeGuards([
+    sby({
+      text: '[tasks]\nbmc\ncover\n\n[options]\nbmc: mode bmc\nbmc: depth 24\ncover: mode cover\n',
+      sources: ['module h;\nendmodule\n'],
+    }),
+  ]);
+  assert.ok(errors.some((e) => e.startsWith('V19:')), errors.join('\n'));
+});
+
+test('V19: an unbounded (mode prove) proof needs no guard — its scope IS total', () => {
+  const errors = checkScopeGuards([
+    sby({
+      text: '[tasks]\nprove\ncover\n\n[options]\nprove: mode prove\ncover: mode cover\n',
+      sources: ['module h;\nendmodule\n'],
+    }),
+  ]);
+  assert.deepEqual(errors, []);
+});
+
+test('V19: an explicit SCOPE-TOTAL waiver in the .sby is accepted', () => {
+  const errors = checkScopeGuards([
+    sby({
+      text: '# SCOPE-TOTAL: depth 12 exceeds the 9-state FSM diameter (exhaustive).\n[options]\nmode bmc\ndepth 12\n',
+      sources: ['module h;\nendmodule\n'],
+    }),
+  ]);
+  assert.deepEqual(errors, []);
+});
+
+test('V19: the arbiter a_horizon_* guard naming is accepted', () => {
+  const errors = checkScopeGuards([
+    sby({ sources: ['module h;\n  a_horizon_is_refresh_free: assert(cnt < LIMIT);\nendmodule\n'] }),
+  ]);
+  assert.deepEqual(errors, []);
+});
+
+// ---------------------------------------------------------------------------
+// V17 — citation coherence. Encodes the W2.6 phantom-pointer incident: cited
+// oracle symbols nobody defined, contract-cited test files that never
+// existed, and the MEM.HPS.BRIDGE alias (a real file about something else).
+// ---------------------------------------------------------------------------
+
+const V17_REFERENCE = 'namespace zref {\nclass CmdDecoder {\n public: void step();\n};\nuint32_t crc32c(const uint8_t*);\n}\n';
+
+function v17Block(over: Partial<Block> = {}): Block {
+  return rtlBlock({
+    maturity: 'REFERENCE_COMPLETE',
+    maturity_log: [
+      { state: 'REFERENCE_COMPLETE', date: '2026-08-16', commit: 'abc1234', evidence: 'tests/command/cmd_decoder_directed.cpp' },
+    ],
+    ...over,
+  });
+}
+
+function v17opts(over: Partial<Parameters<typeof checkCitations>[1]> = {}) {
+  return {
+    exists,
+    referenceText: V17_REFERENCE,
+    readText: (p: string): string | null => {
+      if (p === 'design/contracts/CMD.DECODER.md') {
+        return '# Contract\n## Scalar reference function\n\n`zref::CmdDecoder` — decode oracle.\n\n## Directed tests\n\n`tests/command/cmd_decoder_directed.cpp`\n';
+      }
+      if (p.startsWith('tests/command/cmd_decoder_')) return '#include "zref.hpp"\n// differential vs zref::CmdDecoder\n';
+      return null;
+    },
+    ...over,
+  };
+}
+
+test('V17: a defined symbol, coherent contract and oracle-naming tests pass', () => {
+  const doc = blocksDoc([v17Block()]);
+  assert.deepEqual(checkCitations(doc, v17opts()), []);
+});
+
+test('V17a: a REFERENCE_COMPLETE block citing an undefined oracle symbol is rejected', () => {
+  const doc = blocksDoc([v17Block({ reference_model: 'zref::CmdDma' })]);
+  const errors = checkCitations(doc, v17opts());
+  assert.ok(errors.some((e) => /V17.*phantom citation.*zref::CmdDma/s.test(e) || (e.includes('V17') && e.includes('CmdDma'))), errors.join('\n'));
+});
+
+test('V17a: a SPECIFIED block may cite a not-yet-written oracle', () => {
+  const doc = blocksDoc([rtlBlock({ reference_model: 'zref::CmdDma' })]);
+  // contract not written yet either (readText null) — nothing to drift against
+  assert.deepEqual(checkCitations(doc, v17opts({ readText: () => null })), []);
+});
+
+test('V17b: contract scalar-reference drift from the ledger is rejected at ANY maturity', () => {
+  const doc = blocksDoc([rtlBlock({ reference_model: 'zref::CmdDecoderV2' })]);
+  const errors = checkCitations(doc, v17opts());
+  assert.ok(errors.some((e) => e.includes('V17') && e.includes('drifted')), errors.join('\n'));
+});
+
+test('V17c: a contract-cited tests/ path that does not exist is rejected past SPECIFIED', () => {
+  const doc = blocksDoc([v17Block()]);
+  const errors = checkCitations(
+    doc,
+    v17opts({
+      readText: (p: string): string | null => {
+        if (p === 'design/contracts/CMD.DECODER.md') {
+          return '## Scalar reference function\n\n`zref::CmdDecoder`\n\n## Randomized differential tests\n\ntests/command/cmd_decoder_phantom_soak.cpp\n';
+        }
+        if (p.startsWith('tests/command/cmd_decoder_')) return 'zref::CmdDecoder differential';
+        return null;
+      },
+      exists: (p: string) => exists(p) && !p.includes('phantom'),
+    })
+  );
+  assert.ok(errors.some((e) => e.includes('V17') && e.includes('phantom_soak')), errors.join('\n'));
+});
+
+test('V17c: the same phantom contract citation is LEGAL while the block is SPECIFIED', () => {
+  const doc = blocksDoc([rtlBlock()]);
+  const errors = checkCitations(
+    doc,
+    v17opts({
+      readText: (p: string): string | null =>
+        p === 'design/contracts/CMD.DECODER.md'
+          ? '## Scalar reference function\n\n`zref::CmdDecoder`\n\ntests/command/cmd_decoder_phantom_soak.cpp\n'
+          : null,
+      exists: (p: string) => exists(p) && !p.includes('phantom'),
+    })
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('V17d: an existing test file that never names its oracle is an alias, rejected', () => {
+  const doc = blocksDoc([v17Block()]);
+  const errors = checkCitations(
+    doc,
+    v17opts({
+      readText: (p: string): string | null => {
+        if (p === 'design/contracts/CMD.DECODER.md') return '## Scalar reference function\n\n`zref::CmdDecoder`\n';
+        if (p === 'tests/command/cmd_decoder_random.cpp') return '// random soak of something else entirely\n';
+        if (p.startsWith('tests/command/cmd_decoder_')) return 'zref::CmdDecoder';
+        return null;
+      },
+    })
+  );
+  assert.ok(errors.some((e) => e.includes('V17') && e.includes('alias') && e.includes('cmd_decoder_random.cpp')), errors.join('\n'));
+});
+
+// ---------------------------------------------------------------------------
+// V20 — prose invariant claims must carry a machine-resolvable ENFORCED-BY.
+// Encodes the two claims that turned out FALSE ("validated upstream",
+// "toggle-free by construction") as the shapes the lint must catch.
+// ---------------------------------------------------------------------------
+
+function rtl(text: string, p = 'fpga/rtl/x/zhao_x.sv'): RtlFile[] {
+  return [{ path: p, text }];
+}
+const v20opts = {
+  exists: (p: string) => p.startsWith('tests/') || p.startsWith('fpga/') || p.startsWith('spec/'),
+  readText: (p: string) => (p === 'fpga/rtl/video/zhao_video_scanout.sv' ? 'swap_ack <= swap_req;' : ''),
+};
+const v20formal = (): FormalRunsDoc => formalDoc();
+
+test('V20: an annotated claim with a resolvable path passes', () => {
+  const errors = checkProseClaims(
+    rtl('// gaps impossible by construction\n// ENFORCED-BY: tests/formal/cmd_decoder_safe.sby\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('V20: a claim with no ENFORCED-BY in the window is rejected', () => {
+  const errors = checkProseClaims(rtl('// this is validated upstream, trust us\n'), v20opts, v20formal());
+  assert.ok(errors.some((e) => e.startsWith('V20:') && e.includes(':1 ')), errors.join('\n'));
+});
+
+test('V20: hyphenated and line-wrapped claim phrasings are caught', () => {
+  const hyphen = checkProseClaims(rtl('// stable-by-construction, no gray coding\n'), v20opts, v20formal());
+  assert.equal(hyphen.length, 1, hyphen.join('\n'));
+  const wrapped = checkProseClaims(
+    rtl('//     swap at the tick (the copy is stable for a full frame by\n//     construction — contract law).\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.equal(wrapped.length, 1, wrapped.join('\n'));
+});
+
+test('V20: an ENFORCED-BY pointing at a nonexistent path is rejected', () => {
+  const errors = checkProseClaims(
+    rtl('// cannot happen by construction\n// ENFORCED-BY: tests/ghost/nothing.cpp\n'),
+    { ...v20opts, exists: () => false },
+    v20formal()
+  );
+  assert.ok(errors.some((e) => /V20.*does not exist/.test(e)), errors.join('\n'));
+});
+
+test('V20: an ENFORCED-BY naming an UNREGISTERED .sby is rejected (V16 transitivity)', () => {
+  const errors = checkProseClaims(
+    rtl('// never occurs, by construction\n// ENFORCED-BY: tests/formal/never_ran_thing.sby\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.ok(errors.some((e) => /V20.*not registered in design\/formal_runs\.yml/.test(e)), errors.join('\n'));
+});
+
+test('V20: a file:symbol annotation resolves the symbol in the named file', () => {
+  const good = checkProseClaims(
+    rtl('// acked one cycle later by construction\n// ENFORCED-BY: fpga/rtl/video/zhao_video_scanout.sv:swap_ack\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.deepEqual(good, []);
+  const bad = checkProseClaims(
+    rtl('// acked one cycle later by construction\n// ENFORCED-BY: fpga/rtl/video/zhao_video_scanout.sv:no_such_signal\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.ok(bad.some((e) => /V20.*symbol "no_such_signal" not found/.test(e)), bad.join('\n'));
+});
+
+test('V20: prose without claim phrases is not flagged (no false alarms on ordinary comments)', () => {
+  const errors = checkProseClaims(
+    rtl('// strict-priority guaranteed client round-robin\n// the offer is registered and held stable\n'),
+    v20opts,
+    v20formal()
+  );
+  assert.deepEqual(errors, []);
 });
 
 test('V16: a SPECIFIED block may cite a formal property that does not exist yet', () => {
