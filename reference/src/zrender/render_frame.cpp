@@ -83,6 +83,7 @@ const FormTransform* RenderResources::transform(uint32_t h) const { return find(
 const Population* RenderResources::population(uint32_t h) const { return find(populations, h); }
 const sky::SkySet* RenderResources::sky_set(uint32_t h) const { return find(sky_sets, h); }
 const ToneBankEntry* RenderResources::tone(uint32_t h) const { return find(tones, h); }
+const Tileset* RenderResources::tileset(uint32_t h) const { return find(tilesets, h); }
 
 // ------------------------------------------------------------ renderer state
 
@@ -144,6 +145,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     uint32_t patch_handle;
     ZhTransform2fx xform;
     const Material* mat;
+    const Tileset* tileset;  // null = untextured (legacy flat path)
   };
   std::vector<TerrainInst> terrain;
   struct FormDraw {
@@ -251,7 +253,17 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           rr.resource_misses += (patch == nullptr) + (mat == nullptr);
           break;
         }
-        terrain.push_back(TerrainInst{patch, c.payload.program, c.payload.transform, mat});
+        // the island's tileset (§2.1 tileset_id): an id that resolves to
+        // nothing counts a miss but keeps the geometry (fail-safe: a missing
+        // asset never changes geometry that did draw — the patch renders
+        // untextured, observably)
+        const Tileset* ts = nullptr;
+        if (patch->tileset_id != 0) {
+          ts = res.tileset(patch->tileset_id);
+          if (ts == nullptr) ++rr.resource_misses;
+        }
+        terrain.push_back(
+            TerrainInst{patch, c.payload.program, c.payload.transform, mat, ts});
         break;
       }
       case zhao_abi::ZHAO_OP_DRAW_FORM: {
@@ -456,7 +468,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
       for (const auto& e : sheets_)
         if (e.first == t.patch_handle) sheet = &e.second;
       draw_heightfield(surf, vpp, vp, *t.patch, t.xform, *t.mat, sheet, fields, tick,
-                       velocity_recorded ? nullptr : &rr.terrain_velocity, &rr.sat);
+                       velocity_recorded ? nullptr : &rr.terrain_velocity, &rr.sat, t.tileset);
     }
     velocity_recorded = true;
 

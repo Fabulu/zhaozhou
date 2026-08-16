@@ -73,6 +73,8 @@ struct ScreenV {
   int32_t x = 0, y = 0;  // S 12.8 canvas pixels (§8)
   int32_t d = 0;         // Q16.16 1/w depth (D7)
   int32_t a = 0;         // Q16.16 interpolated attribute (vertex alpha)
+  int32_t u = 0, v = 0;  // Q16.16 TILE units (terrain texturing, §6.2);
+                         // read only when raster_tri carries a TextureSpan
 };
 
 struct ProjOut {
@@ -111,6 +113,25 @@ struct TriMode {
 };
 
 /**
+ * The terrain texturing span (terrain_rules §6 + charter §15 "texture x
+ * vertex light"): one primary CLUT8 sample per fragment, modulated by a
+ * per-primitive Q16.16 colour factor (flat shade x layer-H tint x sheet
+ * strength — composed ONCE per primitive, one rounding, before the raster).
+ * mosaic = true picks between tile_a/tile_b per texel with the stable
+ * world-space pattern (zref::terrain::mosaic_pick, §6.2 frozen constants);
+ * the sample index uses the mirrored-repeat fold (zref::terrain::
+ * mirror_texel). mod_* are Q16.16 in [0, 0x10000]; 0x10000 is EXACT unity
+ * (no darkening at full shade/tint — the sheet-tint lesson, terrain.cpp).
+ */
+struct TextureSpan {
+  const Tileset* ts = nullptr;
+  uint8_t tile_a = 0, tile_b = 0, weight = 0;
+  bool mosaic = false;
+  int32_t mod_r = 1 << 16, mod_g = 1 << 16, mod_b = 1 << 16;
+};
+
+
+/**
  * Rasterize one triangle with the §8 law: s64 edge setup (subpixel^2),
  * E' = E0 >> 8 at pixel centres, D3D top-left bias, exact incremental
  * stepping, affine plane-equation interpolation of depth/alpha (ONE
@@ -133,7 +154,9 @@ struct TriMode {
  * no-op refinement there; under ortho it is the only correct reading.
  */
 void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A, const ScreenV& B,
-                const ScreenV& C, uint8_t r, uint8_t g, uint8_t b, const TriMode& m);
+                const ScreenV& C, uint8_t r, uint8_t g, uint8_t b, const TriMode& m,
+                const TextureSpan* tex = nullptr);
+
 
 // ---- shared constants -------------------------------------------------------
 
@@ -187,16 +210,26 @@ terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTran
  * (exact fx16 cross products -> §7.4-style normalize -> single-rounded
  * lambert dot), tint by the surface sheet, raster with depth. Dual patches
  * (terrain_rules §3) additionally emit the underside (bottom lattice, same
- * §4.3 diagonal, inverted winding, SOLID cells only) and rim walls (one quad
- * per SOLID<->void/OUT edge, top edge at the composed top, bottom edge at the
- * MODELLED bottom — true local thickness, not the donor's fixed -50 m
+ * §4.3 diagonal, inverted winding, SOLID cells only) and rim walls (the
+ * zref::forge::rim_plan quads: top edge at the composed top, bottom edge at
+ * the MODELLED bottom — true local thickness, not the donor's fixed -50 m
  * curtain); void cells emit no surface at all (the breach shows sky).
+ *
+ * [deep-keel wave] Near-plane rejection is PER PRIMITIVE: a cell (or wall
+ * quad) whose corner vertices include one behind the eye is dropped, the
+ * rest of the patch still draws — the documented Phase-3 clip model
+ * ("whole-primitive near-plane rejection", sky_and_beams.md §1.2 projection
+ * corollary); the old whole-PATCH abort made a near camera erase the whole
+ * island. A patch with a resolvable tileset AND layer E textures every
+ * emitted polygon: tops via per-texel Mosaic picks, walls strata (tile
+ * 240), underside tile 241 (terrain_rules §5/§6); the modulation is flat
+ * shade x layer-H tint x sheet strength, quantised to the palette ladder.
  */
 void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                       const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,
                       const SurfaceSheet* sheet, const std::vector<FieldApp>& fields,
                       uint32_t frame_tick, std::vector<TerrainVelocitySample>* velocity_out,
-                      SatLedger* L);
+                      SatLedger* L, const Tileset* tileset = nullptr);
 
 // ---- sprites.cpp ------------------------------------------------------------
 

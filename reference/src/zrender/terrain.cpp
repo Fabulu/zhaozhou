@@ -281,7 +281,7 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                       const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,
                       const SurfaceSheet* sheet, const std::vector<FieldApp>& fields,
                       uint32_t frame_tick, std::vector<TerrainVelocitySample>* velocity_out,
-                      SatLedger* L) {
+                      SatLedger* L, const Tileset* tileset) {
   const int w = patch.width;
   const int h = patch.height;
   if (w < 2 || h < 2) return;  // a degenerate patch draws nothing
@@ -294,48 +294,58 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   const std::vector<int32_t>& y = lat.top;
   const bool dual = lat.dual;
 
+  // the texture lane (terrain_rules §6): active only when the island brings
+  // its tileset AND layer E candidates — otherwise every path below is the
+  // byte-identical legacy flat shading (golden CRC law)
+  const bool textured = tileset != nullptr && patch.textured();
+  const bool has_tint = textured && patch.tint.size() == static_cast<size_t>(w) * h;
+
   // project the grid once per view call (top, and the bottom lattice when
-  // the patch models an underside)
+  // the patch models an underside). [deep-keel wave] Near-plane rejection
+  // is PER PRIMITIVE — the documented Phase-3 clip model ("whole-primitive
+  // near-plane rejection", sky_and_beams.md §1.2 projection corollary; the
+  // sky under-plane subdivides its grid for exactly this reason). The old
+  // whole-PATCH abort made a near camera erase the island; now a cell (or
+  // wall/underside quad) whose corner vertices include one behind the eye
+  // is dropped and the rest draws. Deterministic either way.
   std::vector<ScreenV> sv(static_cast<size_t>(w) * h);
+  std::vector<uint8_t> vis(static_cast<size_t>(w) * h, 0);
   std::vector<ScreenV> svb;
   if (dual) svb.resize(static_cast<size_t>(w) * h);
   for (int j = 0; j < h; ++j) {
     for (int i = 0; i < w; ++i) {
       const size_t idx = static_cast<size_t>(j) * w + i;
       const ProjOut p = project_vertex(vp, vpp, fx16{wx[i]}, fx16{y[idx]}, fx16{wz[j]}, L);
-      if (!p.in) {
-        // Phase-3 near-plane law: ANY off-screen-behind vertex rejects the
-        // whole patch (the island sits inside the frustum in the demo; the
-        // clipper is Phase 4/5 charter §8 work). Deterministic either way.
-        return;
-      }
+      if (!p.in) continue;  // behind the eye: prims touching this vertex drop
       sv[idx] = p.s;
+      vis[idx] = 1;
       if (dual) {
         const ProjOut pb =
             project_vertex(vp, vpp, fx16{wx[i]}, fx16{lat.bottom[idx]}, fx16{wz[j]}, L);
-        if (!pb.in) return;  // same Phase-3 near-plane law, bottom lattice
+        if (!pb.in) continue;
         svb[idx] = pb.s;
+        vis[idx] = 2;  // both surfaces of this vertex project
       }
     }
   }
+  const uint8_t vis_need = dual ? 2 : 1;
+  const auto cell_visible = [&](size_t a, size_t b, size_t c, size_t d) {
+    return vis[a] == vis_need && vis[b] == vis_need && vis[c] == vis_need && vis[d] == vis_need;
+  };
 
   // painter's order: far primitives first (small 1/w), ties by kind then
   // index (D7; legacy pages carry a single kind, so the order is exactly the
   // pre-migration cell order). Kinds: 0 = top surface cell, 1 = underside
-  // cell, 2 = rim wall (index = cell*4 + side).
+  // cell, 2 = rim wall (index/index2 = the wall's two top-edge vertices).
   struct Prim {
     int32_t depth;
     uint8_t kind;
     uint32_t index;
+    uint32_t index2 = 0;   // wall: the second top-edge vertex
+    int32_t u0 = 0, u1 = 0;  // wall strata U at index/index2 (Q16.16, §5)
   };
   std::vector<Prim> prims;
   prims.reserve(static_cast<size_t>(w - 1) * static_cast<size_t>(h - 1));
-  // substance of the neighbour across a cell edge; outside the patch = OUT
-  // (absent patch = open sky, terrain_rules §3.2)
-  const auto neighbour_solid = [&](int ci, int cj) {
-    if (ci < 0 || cj < 0 || ci >= w - 1 || cj >= h - 1) return false;
-    return lat.substance(ci, cj) == terrain::kSolid;
-  };
   for (int j = 0; j + 1 < h; ++j) {
     for (int i = 0; i + 1 < w; ++i) {
       if (dual && lat.substance(i, j) != terrain::kSolid) continue;  // void: no surface
@@ -343,28 +353,57 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       const size_t i10 = i00 + 1;
       const size_t i01 = i00 + w;
       const size_t i11 = i01 + 1;
+      if (!cell_visible(i00, i10, i01, i11)) continue;  // near-plane rejection
       const int32_t d = (sv[i00].d + sv[i10].d + sv[i01].d + sv[i11].d) / 4;
       prims.push_back(Prim{d, 0, static_cast<uint32_t>(i00)});
       if (!dual) continue;
       const int32_t db = (svb[i00].d + svb[i10].d + svb[i01].d + svb[i11].d) / 4;
       prims.push_back(Prim{db, 1, static_cast<uint32_t>(i00)});
-      // rim walls (FORGE.CLIFF law, terrain_rules §5): one quad per edge
-      // against a void/OUT neighbour, top at the composed top, bottom at the
-      // MODELLED underside. Sides: 0 = -z, 1 = +z, 2 = -x, 3 = +x.
-      const size_t edge_v[4][2] = {{i00, i10}, {i11, i01}, {i01, i00}, {i10, i11}};
-      const int noff[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-      for (int s = 0; s < 4; ++s) {
-        if (neighbour_solid(i + noff[s][0], j + noff[s][1])) continue;
-        const size_t va = edge_v[s][0], vb = edge_v[s][1];
-        const int32_t dw = (sv[va].d + sv[vb].d + svb[va].d + svb[vb].d) / 4;
-        prims.push_back(Prim{dw, 2, static_cast<uint32_t>(i00) * 4u + static_cast<uint32_t>(s)});
+    }
+  }
+
+  // rim walls (FORGE.CLIFF law, terrain_rules §5): THE one rim plan —
+  // enumeration, per-32x32-page budget, contiguous-collinear span merge,
+  // near-camera priority clamp (zref::forge::rim_plan; charter §29-6: the
+  // renderer emits exactly the plan, never a second enumeration)
+  if (dual) {
+    std::vector<int32_t> vdist(static_cast<size_t>(w) * h, 0);
+    for (size_t k = 0; k < vdist.size(); ++k) {
+      if (vis[k] == 0) continue;
+      int32_t d = sv[k].d;
+      if (vis[k] == 2 && svb[k].d > d) d = svb[k].d;
+      vdist[k] = d;
+    }
+    const forge::RimPlan plan = forge::rim_plan(lat, vdist.data());
+    // strata U accumulation (§5): rim length in the plan's scan order, 8 m
+    // STRATA_M period -> exact >>3 (§1.3's power-of-two shift law)
+    int64_t acc = 0;
+    const int32_t pitch_raw = wx[1] - wx[0];
+    for (const forge::RimEdge& e : plan.edges) {
+      // wall endpoints on the lattice: sides 0/1 run along +x on rows
+      // cj/cj+1, sides 2/3 along +z on columns ci/ci+1; vertex order keeps
+      // the flat-shade normal pointing OUT of the solid cell (as before)
+      const size_t base = static_cast<size_t>(e.cj) * w + e.ci;
+      size_t va, vb;
+      switch (e.side) {
+        case 0: va = base; vb = base + e.span; break;          // -z, left to right
+        case 1: va = base + w + e.span; vb = base + w; break;  // +z, right to left
+        case 2: va = base + static_cast<size_t>(e.span) * w; vb = base; break;  // -x, far to near
+        default: va = base + 1; vb = base + static_cast<size_t>(e.span) * w + 1; break;  // +x
       }
+      const int32_t u0 = static_cast<int32_t>(acc >> 3);
+      acc += static_cast<int64_t>(e.span) * pitch_raw;
+      const int32_t u1 = static_cast<int32_t>(acc >> 3);
+      if (vis[va] != 2 || vis[vb] != 2) continue;  // near-plane rejection
+      const int32_t dw = (sv[va].d + sv[vb].d + svb[va].d + svb[vb].d) / 4;
+      prims.push_back(Prim{dw, 2, static_cast<uint32_t>(va), static_cast<uint32_t>(vb), u0, u1});
     }
   }
   std::stable_sort(prims.begin(), prims.end(), [](const Prim& a, const Prim& b) {
     if (a.depth != b.depth) return a.depth < b.depth;
     if (a.kind != b.kind) return a.kind < b.kind;
-    return a.index < b.index;
+    if (a.index != b.index) return a.index < b.index;
+    return a.index2 < b.index2;
   });
 
   // Terrain raster law (internal.hpp PAINTER/DEPTH LAW, D7): the painter
@@ -381,31 +420,110 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
 
   // flat shading per triangle: the ONE shared law (shade_flat_tri above —
   // hoisted 2026-08-16 for the creature lane; arithmetic verbatim).
-  // Returns the lambert weight in Q16.16 (0..0x10000), NOT u8 — the colour
-  // modulation consumes it as a 16.16 factor below.
-  const auto shade_points = [&](const int32_t ax, const int32_t ay, const int32_t az,
-                                const int32_t bx, const int32_t by, const int32_t bz,
-                                const int32_t cx, const int32_t cy, const int32_t cz) -> int32_t {
+  const auto shade_points = [&](int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
+                                int32_t bz, int32_t cx, int32_t cy, int32_t cz) -> int32_t {
     return shade_flat_tri(ax, ay, az, bx, by, bz, cx, cy, cz, L);
   };
-  // top-surface shading — the pre-migration arithmetic verbatim (shade_points
-  // receives exactly the values the old closure read from the same arrays)
-  const auto shade_tri = [&](const size_t ia, const size_t ib, const size_t ic) -> int32_t {
-    return shade_points(wx[ia % w], y[ia], wz[ia / w], wx[ib % w], y[ib], wz[ib / w], wx[ic % w],
-                        y[ic], wz[ic / w]);
+  // top-surface shading — the pre-migration arithmetic verbatim
+  const auto shade_tri = [&](const std::vector<int32_t>& hgt, size_t ia, size_t ib,
+                             size_t ic) -> int32_t {
+    return shade_points(wx[ia % w], hgt[ia], wz[ia / w], wx[ib % w], hgt[ib], wz[ib / w],
+                        wx[ic % w], hgt[ic], wz[ic / w]);
   };
   // walls and undersides get an ambient floor (0.25 + 0.75*lambert): the
   // renderer's ONE light is high (1,2,1)/sqrt(6), so a raw lambert leaves a
-  // down-facing keel pitch-black. Applies ONLY to the new dual-format
-  // geometry — top-surface shading is untouched (golden CRC law). Recorded
-  // as the Phase-3 software stand-in for the strata/underside TEXTURE lane
-  // (terrain_rules §5/§6 — texturing is explicitly out of this wave).
+  // down-facing keel pitch-black. Applies ONLY to the dual-format geometry
+  // — top-surface shading is untouched (golden CRC law).
   const auto ambient = [](int32_t shade) -> int32_t {
     return 16384 + static_cast<int32_t>((static_cast<int64_t>(shade) * 49152 + 32768) >> 16);
   };
+
+  // ---- the texture lane (terrain_rules §5/§6; active only when `textured`)
+  //
+  // UV law, all exact shifts (§1.3: power-of-two periods keep addressing
+  // division-free):
+  //   top cells:  u = wx / pitch, v = wz / pitch  (one tile per cell, §6.2;
+  //               the mirrored fold makes same-id neighbours seamless)
+  //   underside:  u = wx / 8, v = wz / 8          (planar world, §5)
+  //   walls:      u = accumulated rim length / 8 (the plan walk above),
+  //               v = (top - y) / 8 per vertex    (§5: V spans true thickness)
+  // The palette ladder: the flat-shade weight is quantised to 2 bits
+  // ((shade + 8191) >> 14) BEFORE modulation so the modulated palette stays
+  // inside the 256-colour capture law; the modulation is ONE round-half-up
+  // over the s128 product shade x tint x sheet, and all-unity is EXACT
+  // unity (the sheet-tint lesson at the top of this file).
+  int top_shift = 0;
+  {
+    const int32_t pr0 = wx[1] - wx[0];
+    int32_t pr = pr0 > 0 ? pr0 : (1 << 16);
+    int sh = 0;
+    while ((pr & 1) == 0 && sh < 30) {
+      pr >>= 1;
+      ++sh;
+    }
+    if (pr == 1) top_shift = sh - 16;  // pitch = 2^k metres -> u = wx >> k
+    if (top_shift < 0) top_shift = 0;
+  }
+  const size_t nlattice = static_cast<size_t>(w) * h;
+  std::vector<int32_t> u_top, v_top, u_und, v_und;
+  if (textured) {
+    u_top.resize(nlattice);
+    v_top.resize(nlattice);
+    u_und.resize(nlattice);
+    v_und.resize(nlattice);
+    for (int j = 0; j < h; ++j) {
+      const int32_t vv = wz[static_cast<size_t>(j)];
+      const int32_t vu = vv >> 3;
+      const int32_t vt = vv >> top_shift;
+      for (int i = 0; i < w; ++i) {
+        const size_t k = static_cast<size_t>(j) * w + i;
+        u_top[k] = wx[static_cast<size_t>(i)] >> top_shift;
+        u_und[k] = wx[static_cast<size_t>(i)] >> 3;
+        v_top[k] = vt;
+        v_und[k] = vu;
+      }
+    }
+  }
+  // layer-H tint per cell: the FLAT stand-in for the Gouraud tint — the
+  // average of the four corner RGB565 values, ONE rounding per channel over
+  // the 4-corner sum (factor = rhu(SUM x 65536, 4 x (2^b - 1))); a uniform
+  // full-field tint is exact unity. The per-vertex ride is the Phase 4/5
+  // Gouraud path (charter §8).
+  const auto cell_tint = [&](size_t a, int32_t* tr, int32_t* tg, int32_t* tb) {
+    const size_t corners[4] = {a, a + 1, a + w, a + w + 1};
+    int32_t sr = 0, sg = 0, sb = 0;
+    for (size_t q : corners) {
+      const uint16_t t = patch.tint.empty() ? 0xFFFF : patch.tint[q];
+      sr += (t >> 11) & 0x1F;
+      sg += (t >> 5) & 0x3F;
+      sb += t & 0x1F;
+    }
+    *tr = static_cast<int32_t>(div_rhu_s128(static_cast<__int128>(sr) * 65536, 124));
+    *tg = static_cast<int32_t>(div_rhu_s128(static_cast<__int128>(sg) * 65536, 252));
+    *tb = static_cast<int32_t>(div_rhu_s128(static_cast<__int128>(sb) * 65536, 124));
+  };
+  // the composed modulation: ONE rounding over shade_q x tint x sheet (s128);
+  // walls/underside pass sheet_q = unity (no sheet lane below the top)
+  const auto mod_of = [&](int32_t shade, int32_t tint_q, int32_t sheet_q) -> int32_t {
+    const int32_t shade_q = (shade + 8191) >> 14;  // the palette ladder (0..4)
+    const __int128 prod = static_cast<__int128>(shade_q << 14) * tint_q * sheet_q;
+    return static_cast<int32_t>(div_rhu_s128(prod, static_cast<__int128>(1) << 32));
+  };
+  const auto sheet_factor = [&](uint8_t strength) -> int32_t {
+    if (sheet == nullptr) return 65536;
+    return (255 - (strength >> 1)) << 8;  // the §12 tint law verbatim
+  };
+  const auto sheet_at = [&](int i, int j) -> uint8_t {
+    if (sheet == nullptr) return 0;
+    const int64_t cwxc = (static_cast<int64_t>(wx[i]) + wx[i + 1]) / 2;
+    const int64_t cwzc = (static_cast<int64_t>(wz[j]) + wz[j + 1]) / 2;
+    return sample_sheet(*sheet, patch, fx16{static_cast<int32_t>(cwxc)},
+                        fx16{static_cast<int32_t>(cwzc)});
+  };
+
   // strata/underside placeholder colours derived from the patch material
-  // (deterministic integer scales; the tileset-reserved strata tiles land
-  // with TEXTURE.MOSAIC)
+  // (deterministic integer scales; the untextured stand-in — the reserved
+  // strata tiles carry the look when the island brings its tileset)
   const uint8_t wall_r = static_cast<uint8_t>((mat.r * 200 + 128) >> 8);
   const uint8_t wall_g = static_cast<uint8_t>((mat.g * 200 + 128) >> 8);
   const uint8_t wall_b = static_cast<uint8_t>((mat.b * 200 + 128) >> 8);
@@ -414,7 +532,48 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   const uint8_t under_b = static_cast<uint8_t>((mat.b * 140 + 128) >> 8);
 
   for (const Prim& prim : prims) {
-    const uint32_t cell = prim.kind == 2 ? prim.index / 4 : prim.index;
+    if (prim.kind == 2) {
+      // ---- rim wall quad (FORGE.CLIFF law): top edge on the composed top,
+      // bottom edge on the modelled underside; vertex order per side keeps
+      // the flat-shade normal pointing OUT of the solid cell ----
+      const size_t va = prim.index;
+      const size_t vb = prim.index2;
+      const int32_t ax = wx[va % w], az = wz[va / w];
+      const int32_t bx = wx[vb % w], bz = wz[vb / w];
+      const int32_t shade =
+          ambient(shade_points(ax, y[va], az, bx, y[vb], bz, bx, lat.bottom[vb], bz));
+      if (textured) {
+        TextureSpan span;
+        span.ts = tileset;
+        span.tile_a = 240;  // the rim strata tile (§6.6 frozen assignment)
+        span.mosaic = false;
+        // unity tint on walls/underside: the Phase-3 flat LMAP stand-in
+        // rides the TOP surface only (palette law - a second tint family
+        // here doubled the modulated colour count past 256)
+        span.mod_r = mod_of(shade, 65536, 65536);
+        span.mod_g = mod_of(shade, 65536, 65536);
+        span.mod_b = mod_of(shade, 65536, 65536);
+        // U spans the accumulated rim length (prim.u0/u1); V = (top-y)/8 per
+        // vertex: 0 at the top edge, thickness/8 at the modelled bottom —
+        // mirrored repeat turns the strata tile into geology (§5)
+        ScreenV ta = sv[va], tb = sv[vb], ba = svb[va], bb = svb[vb];
+        ta.u = prim.u0; ta.v = 0;
+        tb.u = prim.u1; tb.v = 0;
+        ba.u = prim.u0; ba.v = (y[va] - lat.bottom[va]) >> 3;
+        bb.u = prim.u1; bb.v = (y[vb] - lat.bottom[vb]) >> 3;
+        raster_tri(surf, vpp, ta, tb, bb, 0, 0, 0, mode, &span);
+        raster_tri(surf, vpp, ta, bb, ba, 0, 0, 0, mode, &span);
+        continue;
+      }
+      const auto lit = [shade](uint8_t base) {
+        return static_cast<uint8_t>((static_cast<int32_t>(base) * shade + 32768) >> 16);
+      };
+      const uint8_t r = lit(wall_r), g = lit(wall_g), b = lit(wall_b);
+      raster_tri(surf, vpp, sv[va], sv[vb], svb[vb], r, g, b, mode);
+      raster_tri(surf, vpp, sv[va], svb[vb], svb[va], r, g, b, mode);
+      continue;
+    }
+    const uint32_t cell = prim.index;
     const int i = static_cast<int>(cell) % w;
     const int j = static_cast<int>(cell) / w;
     const size_t i00 = cell;
@@ -423,18 +582,39 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
     const size_t i11 = i01 + 1;
 
     if (prim.kind == 0) {
-      // ---- top surface cell (the pre-migration path, byte-identical) ----
-      // sheet tint at the cell centre (charter §12 Phase-3 reading)
+      // ---- top surface cell (the pre-migration path, byte-identical when
+      // untextured) ---- sheet tint at the cell centre (charter §12)
       int32_t tint = 255;
-      if (sheet != nullptr) {
-        const int64_t cwxc = (static_cast<int64_t>(wx[i]) + wx[i + 1]) / 2;
-        const int64_t cwzc = (static_cast<int64_t>(wz[j]) + wz[j + 1]) / 2;
-        const uint8_t strength = sample_sheet(*sheet, patch, fx16{static_cast<int32_t>(cwxc)},
-                                              fx16{static_cast<int32_t>(cwzc)});
-        tint = 255 - (strength >> 1);
+      if (sheet != nullptr) tint = 255 - (sheet_at(i, j) >> 1);
+      const TextureSpan* spanp = nullptr;
+      TextureSpan span;
+      if (textured) {
+        const size_t c = static_cast<size_t>(j) * (w - 1) + i;
+        span.ts = tileset;
+        span.tile_a = patch.mat_a[c];
+        span.tile_b = patch.mat_b[c];
+        span.weight = patch.mat_w[c];
+        span.mosaic = true;  // the per-texel pick (§6.2)
+        int32_t tr = 65536, tg = 65536, tb = 65536;
+        if (has_tint) cell_tint(i00, &tr, &tg, &tb);
+        const int32_t sq = sheet_factor(sheet_at(i, j));
+        const int32_t shade = shade_tri(y, i00, i11, i10);
+        span.mod_r = mod_of(shade, tr, sq);
+        span.mod_g = mod_of(shade, tg, sq);
+        span.mod_b = mod_of(shade, tb, sq);
+        spanp = &span;
+        tint = 255;  // the sheet rides span.mod_* on the textured path
       }
       const auto emit = [&](const size_t ia, const size_t ib, const size_t ic) {
-        const int32_t shade = shade_tri(ia, ib, ic);
+        if (spanp != nullptr) {
+          ScreenV a = sv[ia], b = sv[ib], c = sv[ic];
+          a.u = u_top[ia]; a.v = v_top[ia];
+          b.u = u_top[ib]; b.v = v_top[ib];
+          c.u = u_top[ic]; c.v = v_top[ic];
+          raster_tri(surf, vpp, a, b, c, 0, 0, 0, mode, spanp);
+          return;
+        }
+        const int32_t shade = shade_tri(y, ia, ib, ic);
         // tint only when a sheet exists: even t = 255 would darken by ~0.4%
         // ((v*255+128)>>8 < v for v >= 129), shifting every unstamped colour
         const auto tinted = [tint, shade, sheet](uint8_t base) {
@@ -447,18 +627,38 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
         const uint8_t b = tinted(mat.b);
         raster_tri(surf, vpp, sv[ia], sv[ib], sv[ic], r, g, b, mode);
       };
-      // y-up winding: e1 x e2 = +Y for a flat cell (checked by hand:
-      // (x+z) x x = z x x = +y, z x (x+z) = z x x = +y) — the flat-shade
-      // normal points UP, so the island top lights up (kLightY term).
+      // y-up winding: e1 x e2 = +Y for a flat cell — the flat-shade normal
+      // points UP, so the island top lights up (kLightY term).
       emit(i00, i11, i10);
       emit(i00, i01, i11);
-    } else if (prim.kind == 1) {
+    } else {
       // ---- underside cell (bottom lattice, same §4.3 diagonal, inverted
       // winding: TERRAIN.TESS law) ----
+      const TextureSpan* spanp = nullptr;
+      TextureSpan span;
+      if (textured) {
+        span.ts = tileset;
+        span.tile_a = 241;  // the underside tile (§6.6 frozen assignment)
+        span.mosaic = false;
+        const int32_t shade = ambient(shade_tri(lat.bottom, i00, i10, i11));
+        span.mod_r = mod_of(shade, 65536, 65536);
+        span.mod_g = mod_of(shade, 65536, 65536);
+        span.mod_b = mod_of(shade, 65536, 65536);
+        spanp = &span;
+      }
       const auto emit_b = [&](const size_t ia, const size_t ib, const size_t ic) {
+        if (spanp != nullptr) {
+          ScreenV a = svb[ia], b = svb[ib], c = svb[ic];
+          a.u = u_und[ia]; a.v = v_und[ia];
+          b.u = u_und[ib]; b.v = v_und[ib];
+          c.u = u_und[ic]; c.v = v_und[ic];
+          raster_tri(surf, vpp, a, b, c, 0, 0, 0, mode, spanp);
+          return;
+        }
         const int32_t shade =
-            ambient(shade_points(wx[ia % w], lat.bottom[ia], wz[ia / w], wx[ib % w], lat.bottom[ib],
-                                 wz[ib / w], wx[ic % w], lat.bottom[ic], wz[ic / w]));
+            ambient(shade_points(wx[ia % w], lat.bottom[ia], wz[ia / w], wx[ib % w],
+                                 lat.bottom[ib], wz[ib / w], wx[ic % w], lat.bottom[ic],
+                                 wz[ic / w]));
         const auto lit = [shade](uint8_t base) {
           return static_cast<uint8_t>((static_cast<int32_t>(base) * shade + 32768) >> 16);
         };
@@ -467,23 +667,6 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       };
       emit_b(i00, i10, i11);  // inverted relative to the top: normal points DOWN
       emit_b(i00, i11, i01);
-    } else {
-      // ---- rim wall quad (FORGE.CLIFF law): top edge on the composed top,
-      // bottom edge on the modelled underside; vertex order per side keeps
-      // the flat-shade normal pointing OUT of the solid cell ----
-      const int side = static_cast<int>(prim.index & 3u);
-      const size_t order[4][2] = {{i00, i10}, {i11, i01}, {i01, i00}, {i10, i11}};
-      const size_t va = order[side][0], vb = order[side][1];
-      const int32_t ax = wx[va % w], az = wz[va / w];
-      const int32_t bx = wx[vb % w], bz = wz[vb / w];
-      const int32_t shade =
-          ambient(shade_points(ax, y[va], az, bx, y[vb], bz, bx, lat.bottom[vb], bz));
-      const auto lit = [shade](uint8_t base) {
-        return static_cast<uint8_t>((static_cast<int32_t>(base) * shade + 32768) >> 16);
-      };
-      const uint8_t r = lit(wall_r), g = lit(wall_g), b = lit(wall_b);
-      raster_tri(surf, vpp, sv[va], sv[vb], svb[vb], r, g, b, mode);
-      raster_tri(surf, vpp, sv[va], svb[vb], svb[va], r, g, b, mode);
     }
   }
 }

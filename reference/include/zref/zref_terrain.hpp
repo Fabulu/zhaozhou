@@ -11,7 +11,9 @@
 // Law (in citation order):
 //   spec/terrain_rules.md §2 (patch layers A/B/C/D), §3.2 (column law),
 //     §3.3 (cell state byte), §3.4 (height composition + breach law),
-//     §4.2 (composed lattice), §4.3 (triangulation + point query),
+//     §3.7 (keel depth default), §4.2 (composed lattice), §4.3
+//     (triangulation + point query), §5 (rim geometry + the frozen degrade
+//     order — zref::forge), §6.2 (Mosaic pattern + mirrored fold),
 //     §9 (incremental stamp scaling — applyDMapDelta heir)
 //   spec/qformats.md §2/§9 (height16 <-> fx16, exact raw << 8), §3
 //     (saturating fx16 ops), §4 (round-half-up division)
@@ -163,5 +165,94 @@ struct BreachEvent {
  */
 std::vector<BreachEvent> apply_breach_law(render::TerrainPatch& patch);
 
+// ---- keel default (terrain_rules.md §3.7, frozen 2026-08-16) ----------------
+
+inline constexpr int32_t kKeelFloorM = 50;  // the donor's fixed mapDepth (sacmap.d:106)
+
+struct KeelProfile {
+  int32_t radius_m = 0;   // R: max SOLID cell-centre distance, floored
+  int32_t peak_m = 0;     // authored top peak
+  int32_t depth_m = 0;    // KEEL_DEPTH = min(max(50, R/2), 126 - max(0, peak))
+  int32_t depth_raw = 0;  // the same on the height16 grid
+};
+
+/** Measure R and the top peak, derive KEEL_DEPTH per §3.7 (pure function). */
+KeelProfile keel_profile(const render::TerrainPatch& patch, int32_t heart_x, int32_t heart_z);
+
+/**
+ * Write layer C (the bottom surface) from the authored base heights using
+ * the §3.7 bitten-apple profile: thickness(v) = KEEL_DEPTH x (0.4 + 0.6 x
+ * (1 - (d/R)^2)), one rounding, bottom = base - thickness on the height16
+ * grid. Requires cell_state (the SOLID mask defines R); returns false and
+ * writes nothing without it. shallow_override_raw (height16, may be 0) is
+ * the DELIBERATE authoring choice §3.7 permits: when set and smaller than
+ * the lawful depth it replaces the depth (a recorded slab, never a default).
+ */
+bool generate_bottom(render::TerrainPatch& patch, int32_t heart_x, int32_t heart_z,
+                     int32_t shallow_override_raw = 0);
+
+// ---- TEXTURE.MOSAIC reference (terrain_rules.md §6.2, frozen 2026-08-16) ----
+
+/**
+ * The mirrored-repeat texel fold (§6.2): u is Q16.16 TILE units; returns the
+ * 0..63 texel index. m = floor(u*64) (arithmetic shift), per = floored
+ * m mod 128, texel = per < 64 ? per : 127 - per. Adjacent same-texture
+ * cells mirror into each other — the donor's seam-free trick in integer law.
+ */
+inline int32_t mirror_texel(int32_t u_raw) {
+  const int32_t m = u_raw >> 10;
+  int32_t per = m % 128;
+  if (per < 0) per += 128;
+  return per < 64 ? per : 127 - per;
+}
+
+/**
+ * The stable world-space pick (§6.2): tx/ty are the UNFOLDED world texel
+ * indices; h = (tx*73856093) ^ (ty*19349663), p = h mod 255, and the winner
+ * is matA iff p < weight (0 -> always B, 255 -> always A, 128 dithers
+ * ~50/255 — the zero-blend transition). The constants are frozen: changing
+ * one changes every capture's pixels.
+ */
+inline uint8_t mosaic_pick(uint8_t mat_a, uint8_t mat_b, uint8_t weight, int32_t tx, int32_t ty) {
+  const uint32_t h = (static_cast<uint32_t>(tx) * 73856093u) ^
+                     (static_cast<uint32_t>(ty) * 19349663u);
+  return (h % 255u) < static_cast<uint32_t>(weight) ? mat_a : mat_b;
+}
+
 }  // namespace terrain
+
+// ---- FORGE.CLIFF reference (terrain_rules.md §5, frozen degrade order) ------
+
+namespace forge {
+
+/** Per-page rim emission budget (terrain_rules §5, provisional 512). */
+inline constexpr uint32_t kRimBudgetPerPage = 512;
+
+struct RimEdge {
+  uint16_t ci = 0, cj = 0;  // the SOLID cell owning the wall
+  uint8_t side = 0;         // 0 = -z, 1 = +z, 2 = -x, 3 = +x
+  uint16_t span = 1;        // merged contiguous-collinear continuation
+};
+
+struct RimPlan {
+  std::vector<RimEdge> edges;  // scan order (z-then-x, side 0..3), per page
+  uint32_t merged = 0;         // edges absorbed into spans (degrade step 1)
+  uint32_t dropped = 0;        // edges beyond budget after merge (the counter)
+};
+
+/**
+ * Enumerate the rim edges of a composed lattice (§5): one edge per SOLID
+ * cell side facing a void/OUT neighbour, budgeted per 32x32-cell PAGE block
+ * (the Phase-3 envelope patch carries many pages; the hardware budget is
+ * per Island-Patch page). Degrade order per page (§5, frozen): (1) merge
+ * contiguous collinear edges (same side, same lattice line, sharing a
+ * vertex — a merge never bridges a notch) longest-run-first until inside
+ * budget; (2) still over: keep the edges whose endpoint vdist is GREATEST
+ * (vdist = per-vertex nearness, Q16.16 1/w from the renderer; null = keep
+ * scan order), ties by scan order, count the drop. THE one rim law —
+ * zrender's draw_heightfield emits exactly this plan (charter §29-6).
+ */
+RimPlan rim_plan(const terrain::ComposedLattice& lat, const int32_t* vdist);
+
+}  // namespace forge
 }  // namespace zref

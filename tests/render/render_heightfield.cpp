@@ -23,6 +23,7 @@
 //      charter §12 (sheet tint — the stamped variant darkens by the sheet).
 
 #include "render_helpers.hpp"
+#include "zref/zref_terrain.hpp"
 
 #include <cstdio>
 #include <vector>
@@ -316,6 +317,87 @@ void test_submetre_shading() {
   check(lit2 > (total * 9) / 10, "1.0 m spacing control is lit too");
 }
 
+// ---- near-plane per-primitive rejection (deep-keel wave) --------------------
+//
+// The documented Phase-3 clip model is WHOLE-PRIMITIVE near-plane rejection
+// (sky_and_beams.md 1.2 projection corollary: the under-plane subdivides
+// "so behind-camera cells cull without deleting the plane"). draw_heightfield
+// used to reject the whole PATCH when ANY lattice vertex had w <= 0 - a near
+// camera inside the envelope erased the island (found by the creature lane,
+// terrain.cpp:310). The fix applies the same law at primitive granularity:
+// cells (and wall quads) whose corners include a behind-eye vertex drop,
+// the rest draw. This test could not have been green before the fix - the
+// old code drew NOTHING for this camera.
+void test_near_camera_keeps_island() {
+  // 9x9 dual slab, env +-8 m, top 4 m, bottom 0
+  zref::render::TerrainPatch patch;
+  patch.width = patch.height = 9;
+  patch.env_x0 = patch.env_z0 = -(8 << 16);
+  patch.env_x1 = patch.env_z1 = (8 << 16);
+  patch.heights.assign(81, 1024);
+  patch.bottom.assign(81, 0);
+  patch.scar.assign(81, 0);
+  patch.cell_state.assign(64, zref::terrain::kSolid);
+
+  // perspective with w = z: vertices at z < 0 are behind the eye. The
+  // island spans z in [-8, 8]: the near half's vertices are behind, the far
+  // half's are in front.
+  const int32_t m[16] = {2048, 0, 0, 0,          //
+                         0, -2048, 0, 0,         //
+                         0, 0, 1 << 16, 0,       //
+                         0, 0, 1 << 16, 0};
+  zref::render::Material mat{200, 180, 160};
+  zref::render::RenderResources res;
+  res.terrain_patches.push_back({44, &patch});
+  res.materials.push_back({45, mat});
+  zref::render::SoftwareRenderer rend;
+  zref::render::RenderCanvas canvas;
+  const auto shoot = [&](zref::render::RenderCanvas& c) {
+    const auto body = [&](zhao::ZhaoFrameBuilder& b) {
+      auto sv = zhao_abi::zhao_sample_set_view();
+      sv.payload.view_id = 0;
+      sv.payload.view_projection = rtest::mat(m);
+      std::vector<uint8_t> v1;
+      zhao_abi::zhao_pack_set_view(sv, v1);
+      b.append_record(v1);
+      auto dp = zhao_abi::zhao_sample_draw_procedural();
+      dp.payload.program = 44;
+      dp.payload.material = 45;
+      dp.payload.transform = rtest::xform_identity();
+      dp.payload.screen_error = 1 << 16;
+      dp.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;
+      std::vector<uint8_t> v2;
+      zhao_abi::zhao_pack_draw_procedural(dp, v2);
+      b.append_record(v2);
+    };
+    return rend.render_frame(rtest::seal_frame(1, body), 0, c, res);
+  };
+  const zref::render::RenderResult r = shoot(canvas);
+  check(r.status == 0, "near-camera frame renders");
+
+  // census: the far half (z in (0, 8]) must paint; with w = z the far cells
+  // project around screen centre (ndc = (x/32)/z). The old whole-patch law
+  // painted NOTHING here.
+  uint32_t lit = 0;
+  for (uint32_t y = 60; y < 180; ++y)
+    for (uint32_t x = 60; x < 320; ++x) {
+      const uint16_t p = rtest::px(canvas, 0, x, y, 384);
+      if ((p >> 11) + ((p >> 5) & 63) + (p & 31) > 6) ++lit;
+    }
+  std::printf("  near-camera: %u lit px (the far half of the island)\n", lit);
+  check(lit > 200, "the island does NOT vanish: far-half cells draw");
+  check(lit < 20000, "the behind-eye half is dropped (not the whole canvas)");
+
+  // determinism: the same shoot twice is byte-identical
+  zref::render::RenderCanvas canvas2;
+  shoot(canvas2);
+  bool same = canvas.slot[0].size() == canvas2.slot[0].size();
+  if (same)
+    for (size_t k = 0; k < canvas.slot[0].size(); ++k)
+      if (canvas.slot[0][k] != canvas2.slot[0][k]) same = false;
+  check(same, "near-camera rejection is deterministic");
+}
+
 }  // namespace
 
 int main() {
@@ -323,6 +405,7 @@ int main() {
   test_surface_sheet_tint();
   test_ring_stamp();
   test_submetre_shading();
+  test_near_camera_keeps_island();
   if (failures == 0) std::printf("render_heightfield: all green\n");
   return failures == 0 ? 0 : 1;
 }

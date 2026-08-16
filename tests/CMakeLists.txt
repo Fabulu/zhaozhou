@@ -664,6 +664,37 @@ target_include_directories(test_terrain_dual PRIVATE
 add_test(NAME terrain_dual COMMAND test_terrain_dual)
 set_tests_properties(terrain_dual PROPERTIES LABELS "fast;nightly")
 
+# ---- deep-keel wave: the 3.7 keel default (spec/terrain_rules.md) -----------
+# R from SOLID cells, the 50 m donor floor, R/2, the height16 headroom cap,
+# hand-computed bottom anchors, the deliberate-shallow override, and the
+# breach-needs-depth integration.
+add_executable(test_terrain_keel terrain/terrain_keel.cpp)
+target_link_libraries(test_terrain_keel PRIVATE zhao_zref)
+target_include_directories(test_terrain_keel PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)
+add_test(NAME terrain_keel COMMAND test_terrain_keel)
+set_tests_properties(terrain_keel PROPERTIES LABELS "fast;nightly")
+
+# ---- deep-keel wave: FORGE.CLIFF reference (terrain_rules.md 5) -------------
+# rim enumeration anchors, the checkerboard structural clamp (2,048 -> 512,
+# the TIGHT worst case), near-camera priority, and merge-under-pressure.
+add_executable(test_forge_cliff_directed forge/forge_cliff_directed.cpp)
+target_link_libraries(test_forge_cliff_directed PRIVATE zhao_zref)
+add_test(NAME forge_cliff_directed COMMAND test_forge_cliff_directed)
+set_tests_properties(forge_cliff_directed PROPERTIES LABELS "fast;nightly")
+
+# ---- deep-keel wave: TEXTURE.MOSAIC reference (terrain_rules.md 6.2) --------
+# the mirrored-repeat fold at wrap boundaries, the frozen pick constants,
+# and the rendered dither + exact modulation through the replicated resolve.
+add_executable(test_texture_mosaic_directed texture/texture_mosaic_directed.cpp)
+target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_zref)
+target_include_directories(test_texture_mosaic_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)
+add_test(NAME texture_mosaic_directed COMMAND test_texture_mosaic_directed)
+set_tests_properties(texture_mosaic_directed PROPERTIES LABELS "fast;nightly")
+
 # ---- world-identity wave: creature/character reference lane -------------------
 # (spec/creature_rules.md 1-4; the ZREF oracle for the future Phase 8-9 GEOM
 # blocks — confers no block promotion: GEOM.POSE stays SPECIFIED until the

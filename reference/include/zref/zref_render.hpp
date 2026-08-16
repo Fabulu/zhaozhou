@@ -142,7 +142,30 @@ struct TerrainPatch {
   std::vector<int16_t> scar;        // layer B: persistent bake delta (height16); empty = zero
   std::vector<int16_t> bottom;      // layer C: the island underside (height16); empty = legacy
   std::vector<uint8_t> cell_state;  // layer D: (width-1)*(height-1) substance+flags bytes
+  // [deep-keel wave] the texturing layers (terrain_rules §2 E/H + §6):
+  // mat_a/mat_b/mat_w per cell ((width-1)*(height-1)); tint per vertex
+  // (width*height, RGB565 LE). ALL EMPTY = the Phase-3 legacy flat path,
+  // pixel-identical to the pre-texturing renderer (goldens pin it).
+  std::vector<uint8_t> mat_a;      // layer E candidate A (tile id)
+  std::vector<uint8_t> mat_b;      // layer E candidate B (tile id)
+  std::vector<uint8_t> mat_w;      // layer E weight (unit8; 255 = pure A)
+  std::vector<uint16_t> tint;      // layer H per-vertex RGB565 (LMAP heir)
+  uint32_t tileset_id = 0;         // §2.1 header field; 0 = no tileset
   bool dual() const { return bottom.size() == static_cast<size_t>(width) * height; }
+  bool textured() const {
+    return tileset_id != 0 && mat_a.size() == static_cast<size_t>(width - 1) * (height - 1);
+  }
+};
+
+/**
+ * A terrain tileset (terrain_rules §6.1): 256 CLUT8 tiles of 64x64 + one
+ * shared RGB565 palette. Ids 240 (rim strata) and 241 (underside) are the
+ * frozen reserved assignments (§6.6). Reference-side asset container; the
+ * VRAM layout/swizzle is Phase-6 TEXTURE.CACHE work.
+ */
+struct Tileset {
+  uint16_t palette[256] = {};          // RGB565 LE halfwords
+  uint8_t tiles[256][64 * 64] = {};    // CLUT8 indices per tile
 };
 
 /** DrawProcedural material page (Phase-3 subset: a flat base colour). */
@@ -203,6 +226,7 @@ struct RenderResources {
   std::vector<std::pair<uint32_t, Population>> populations;
   std::vector<std::pair<uint32_t, sky::SkySet>> sky_sets;
   std::vector<std::pair<uint32_t, ToneBankEntry>> tones;
+  std::vector<std::pair<uint32_t, Tileset>> tilesets;
 
   const zfield::Decoded* field_program(uint32_t h) const;
   const TerrainPatch* terrain_patch(uint32_t h) const;
@@ -212,6 +236,7 @@ struct RenderResources {
   const Population* population(uint32_t h) const;
   const sky::SkySet* sky_set(uint32_t h) const;
   const ToneBankEntry* tone(uint32_t h) const;
+  const Tileset* tileset(uint32_t h) const;
 };
 
 // ----------------------------------------------------------- surface sheet --

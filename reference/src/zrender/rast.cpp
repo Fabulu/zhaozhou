@@ -78,7 +78,8 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 }  // namespace
 
 void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const ScreenV& B0,
-                const ScreenV& C0, uint8_t r, uint8_t g, uint8_t b, const TriMode& m) {
+                const ScreenV& C0, uint8_t r, uint8_t g, uint8_t b, const TriMode& m,
+                const TextureSpan* tex) {
   ScreenV A = A0, B = B0, C = C0;
   int64_t area = orient(A, B, C.x, C.y);  // 2A in subpixel^2 (s64 setup, §8)
   if (area == 0) return;
@@ -150,6 +151,21 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                          static_cast<__int128>(dw2_dx) * C.a,
                      area);
   }
+  // affine UV gradients (terrain texturing, terrain_rules §6.2): the SAME
+  // one-rounding plane setup as depth/alpha; Phase-5 brings the
+  // perspective-correct divide (charter §8 build order 7 — affine within a
+  // 2 m cell is the documented Phase-3 stand-in)
+  int32_t u_grad_x = 0, v_grad_x = 0;
+  if (tex != nullptr) {
+    u_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.u + static_cast<__int128>(dw1_dx) * B.u +
+                         static_cast<__int128>(dw2_dx) * C.u,
+                     area);
+    v_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.v + static_cast<__int128>(dw1_dx) * B.v +
+                         static_cast<__int128>(dw2_dx) * C.v,
+                     area);
+  }
 
   for (int32_t py = min_y; py <= max_y; ++py) {
     const int64_t cy = (static_cast<int64_t>(py) << 8) + 128;  // pixel centre
@@ -159,7 +175,15 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
     int64_t w2 = orient(A, B, cx0, cy);
     // row-start interpolated values: full bary eval (one §4 division each),
     // then exact s32 steps (d/alpha are affine; w_i step exactly per pixel)
-    int32_t d = 0, a = 0;
+    int32_t d = 0, a = 0, u = 0, v = 0;
+    if (tex != nullptr) {
+      u = div_rhu_s128(static_cast<__int128>(w0) * A.u + static_cast<__int128>(w1) * B.u +
+                           static_cast<__int128>(w2) * C.u,
+                       area);
+      v = div_rhu_s128(static_cast<__int128>(w0) * A.v + static_cast<__int128>(w1) * B.v +
+                           static_cast<__int128>(w2) * C.v,
+                       area);
+    }
     if (!m.use_fixed_depth) {
       d = div_rhu_s128(static_cast<__int128>(w0) * A.d + static_cast<__int128>(w1) * B.d +
                            static_cast<__int128>(w2) * C.d,
@@ -199,9 +223,31 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
           uint8_t* dst = &s.rgb[idx * 3];
           switch (m.blend) {
             case BlendMode::kOpaque:
-              dst[0] = r;
-              dst[1] = g;
-              dst[2] = b;
+              if (tex != nullptr && tex->ts != nullptr) {
+                // ONE primary sample (charter §15/§26): mirrored-repeat fold
+                // to the texel (zref::terrain::mirror_texel — the §6.2 frozen
+                // law), optional per-texel Mosaic pick between the cell's two
+                // candidates, then the per-primitive modulation with ONE
+                // rounding per channel
+                const int32_t tx = terrain::mirror_texel(u);
+                const int32_t ty = terrain::mirror_texel(v);
+                const uint8_t tile =
+                    tex->mosaic ? terrain::mosaic_pick(tex->tile_a, tex->tile_b, tex->weight,
+                                                       u >> 10, v >> 10)
+                                : tex->tile_a;
+                const uint8_t ci8 = tex->ts->tiles[tile][(static_cast<size_t>(ty) << 6) +
+                                                         static_cast<size_t>(tx)];
+                const uint16_t c565 = tex->ts->palette[ci8];
+                const uint32_t r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F,
+                               b5 = c565 & 0x1F;
+                dst[0] = sat_u8((((r5 * 255 + 15) / 31) * tex->mod_r + 32768) >> 16);
+                dst[1] = sat_u8((((g6 * 255 + 31) / 63) * tex->mod_g + 32768) >> 16);
+                dst[2] = sat_u8((((b5 * 255 + 15) / 31) * tex->mod_b + 32768) >> 16);
+              } else {
+                dst[0] = r;
+                dst[1] = g;
+                dst[2] = b;
+              }
               break;
             case BlendMode::kAlpha: {
               // sky_cloud_fade (sky_and_beams.md §1.1):
@@ -228,6 +274,10 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
       w2 += dw2_dx;
       d += d_grad_x;
       a += a_grad_x;
+      if (tex != nullptr) {
+        u += u_grad_x;
+        v += v_grad_x;
+      }
     }
   }
 }
