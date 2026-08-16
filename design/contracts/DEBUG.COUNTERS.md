@@ -54,7 +54,7 @@ The composition itself is traceable: the harness compares every composed snapsho
 
 ## Randomized differential tests
 
-`tests/debug/debug_counters_random.cpp` — PCG event streams across blocks vs `zref::DebugCounters`, bit-exact sections.
+`tests/debug/debug_counters_directed.cpp --random N` (CTest `debug_counters_random` / `debug_counters_random_nightly`) — PCG event streams across blocks vs `zref::DebugCounters`, bit-exact sections.
 
 ## Formal properties
 

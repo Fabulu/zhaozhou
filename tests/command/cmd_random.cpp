@@ -188,9 +188,14 @@ uint64_t runTimeline(uint32_t frames, uint64_t seed) {
       const zref::SchedObs b = orc.cycle(e);
       const char* where = nullptr;
       if (!zhao_cmd::obsEqual(a, b, &where)) {
-        char what[96];
-        std::snprintf(what, sizeof(what), "random: RTL != oracle (%s) @%llu", where,
-                      static_cast<unsigned long long>(cycle));
+        char what[160];
+        std::snprintf(what, sizeof(what),
+                      "random: RTL != oracle (%s) @%llu [mode r=%u o=%u pend_o=%u rec=%u op=%04x w0=%08x]",
+                      where, static_cast<unsigned long long>(cycle),
+                      static_cast<unsigned>(a.mode), static_cast<unsigned>(b.mode),
+                      static_cast<unsigned>(b.mode_pending),
+                      e.rec_valid ? 1u : 0u, static_cast<unsigned>(e.opcode),
+                      e.w0);
         check(false, what, 1, 0);
       }
       // fence bookkeeping + law

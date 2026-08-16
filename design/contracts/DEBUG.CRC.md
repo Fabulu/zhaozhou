@@ -46,7 +46,7 @@ None possible: the byte stream is raster-lawful by construction; the CRC registe
 
 ## Scalar reference function
 
-`zref::framePixelCrc` — byte-exact displayed-frame CRC oracle: given the canvas bytes and mode (incl. Duo border law), the identical CRC-32C value; the repeat law oracle asserts repeated frames CRC-equal.
+`zref::Crc32c` (reference/include/zref/zref_cmd2.hpp) — the displayed-stream device oracle: sof/eof framing, publish-only-on-exact-size, size_err on a mis-sized stream or a stray byte. Delegates the CRC arithmetic to the generated `zhao_abi::zhao_crc32c` (one CRC machine repo-wide, charter 19/29-6); the repeat-law test asserts repeated frames CRC-equal.
 
 ## Directed tests
 
@@ -54,7 +54,7 @@ None possible: the byte stream is raster-lawful by construction; the CRC registe
 
 ## Randomized differential tests
 
-`tests/debug/debug_crc_random.cpp` — PCG canvases vs `zref::framePixelCrc`, bit-exact, 1k/100k frames.
+`tests/debug/debug_crc_directed.cpp --random N` (CTest `debug_crc_random` / `debug_crc_random_nightly`) — PCG displayed streams vs `zref::Crc32c` (which delegates to the generated `zhao_abi::zhao_crc32c`), bit-exact.
 
 ## Formal properties
 

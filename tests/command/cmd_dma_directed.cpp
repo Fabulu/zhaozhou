@@ -345,81 +345,17 @@ struct Pcg32 {
 
 
 // The fail-safe order (capture_format.md 3.2) as the packet-level oracle:
-// given the (possibly corrupted) bytes, the descriptor length and the
-// current epoch, the verdict is fixed in advance. Record-semantic checks
-// (6/7/8) are decoder-side (wave 3) and intentionally absent here too.
+// zref::CmdDma::verdict (reference/include/zref/zref_cmd2.hpp) — given the
+// (possibly corrupted) bytes, the descriptor length and the current epoch,
+// the verdict, bytes_consumed and walked-record count are fixed in advance.
+// Record-semantic checks (6/7/8) are decoder-side (wave 3) and intentionally
+// absent there too.
 using zhao_abi::ZHAO_OP_BEGIN_FRAME;
 using zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT;
 using zhao_abi::ZHAO_OP_DEBUG_RUMBLE;
 using zhao_abi::ZHAO_OP_END_FRAME;
 using zhao_abi::ZHAO_OP_NOP;
 using zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
-
-
-static uint8_t predictVerdict(const std::vector<uint8_t>& p, uint32_t f_len,
-                              uint32_t f_epoch) {
-  auto get16 = [&](uint32_t o) {
-    return static_cast<uint16_t>(p[o] | (p[o + 1] << 8));
-  };
-  auto get32 = [&](uint32_t o) {
-    uint32_t v = 0;
-    for (int i = 0; i < 4; ++i) v |= static_cast<uint32_t>(p[o + i]) << (8 * i);
-    return v;
-  };
-  if (f_len < 36) return zhao_abi::ZH_ABI_BAD_LENGTH;
-  if (get32(0) != 0x314B505Au) return zhao_abi::ZH_ABI_BAD_MAGIC;
-  if (get16(4) != 2) return zhao_abi::ZH_ABI_BAD_ABI_VERSION;
-  if ((get16(6) & 0xFFFE) != 0) return zhao_abi::ZH_ABI_RESERVED_FLAG;
-  const uint32_t cb = get32(28);
-  const uint32_t cc = get32(24);
-  if ((cb & 15) != 0) return zhao_abi::ZH_ABI_BAD_LENGTH;
-  if (cc > (cb >> 4)) return zhao_abi::ZH_ABI_BAD_LENGTH;
-  if (40 + cb > f_len) return zhao_abi::ZH_ABI_BAD_LENGTH;
-  if (zhao_abi::zhao_crc32c(0, p.data(), 32) != get32(32)) {
-    return zhao_abi::ZH_ABI_BAD_HEADER_CRC;
-  }
-  if (get32(16) != f_epoch) return zref::ZHAO_DMA_EPOCH_MISMATCH;
-  if (zhao_abi::zhao_crc32c(0, p.data() + 36, cb) != get32(36 + cb)) {
-    return zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC;
-  }
-  uint32_t off = 0;
-  uint32_t walked = 0;
-  while (off < cb) {
-    const uint16_t op = get16(36 + off);
-    const uint16_t rb = get16(36 + off + 2);
-    uint16_t size;
-    switch (op) {
-      case ZHAO_OP_NOP: size = 16; break;
-      case ZHAO_OP_BEGIN_FRAME: size = 32; break;
-      case ZHAO_OP_END_FRAME: size = 32; break;
-      case zhao_abi::ZHAO_OP_SET_VIEW: size = 96; break;
-      case ZHAO_OP_SET_PRESENTATION_CONTRACT: size = 48; break;
-      case zhao_abi::ZHAO_OP_TERRAIN_FIELD: size = 112; break;
-      case zhao_abi::ZHAO_OP_SURFACE_STAMP: size = 64; break;
-      case zhao_abi::ZHAO_OP_DRAW_FORM: size = 32; break;
-      case zhao_abi::ZHAO_OP_DRAW_POPULATION: size = 32; break;
-      case zhao_abi::ZHAO_OP_DRAW_PROCEDURAL: size = 64; break;
-      case zhao_abi::ZHAO_OP_DRAW_SKY: size = 176; break;
-      case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT: size = 32; break;
-      case zhao_abi::ZHAO_OP_DEBUG_BOOTSTRAP: size = 64; break;
-      case ZHAO_OP_DEBUG_FRAME_BLIT: size = 48; break;
-      case ZHAO_OP_DEBUG_RUMBLE: size = 32; break;
-      default: size = 0; break;
-    }
-    if ((rb & 15) != 0 || rb < 16) return zhao_abi::ZH_ABI_BAD_LENGTH;
-    if (size == 0) return zhao_abi::ZH_ABI_UNKNOWN_OPCODE;
-    if (size != rb) return zhao_abi::ZH_ABI_BAD_LENGTH;
-    if (off + rb > cb) return zhao_abi::ZH_ABI_TRUNCATED;
-    if (op >= 0xF000 && op <= 0xF0FF && (get16(6) & 1) == 0) {
-      return zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED;
-    }
-    off += rb;
-    ++walked;
-  }
-  if (walked != cc) return zhao_abi::ZH_ABI_COUNT_MISMATCH;
-  return 0;
-}
-
 int runRandom(uint32_t packets, uint64_t seed) {
   Pcg32 rng{seed, (seed << 1) | 1u};
   DmaBench t;
@@ -464,8 +400,8 @@ int runRandom(uint32_t packets, uint64_t seed) {
     } else if (corrupt == 4) {
       fetch_epoch = 1;  // epoch mismatch: drop before the first payload byte
     }
-    const uint8_t expect =
-        predictVerdict(pkt, static_cast<uint32_t>(pkt.size()), fetch_epoch);
+    const zref::CmdDma::Verdict expect = zref::CmdDma::verdict(
+        pkt, static_cast<uint32_t>(pkt.size()), fetch_epoch);
     if (corrupt == 5 && cb > 0) {
       // descriptor truncated to the header: the bound 40+N > byte_len fires
       t.load(kSlotBody0, pkt);
@@ -483,17 +419,17 @@ int runRandom(uint32_t packets, uint64_t seed) {
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), fetch_epoch);
     zhao::check(t.verdicts_.size() == 1, "rand: one verdict", 1, t.verdicts_.size());
     if (t.verdicts_.size() == 1) {
-      zhao::check(t.verdicts_[0].status == expect, "rand: predicted verdict", expect,
-                  t.verdicts_[0].status);
-      const uint32_t want_bytes =
-          (expect == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC ||
-           expect == zhao_abi::ZH_ABI_COUNT_MISMATCH ||
-           expect == zhao_abi::ZH_ABI_TRUNCATED || expect == 0)
-              ? static_cast<uint32_t>(pkt.size())
-              : 36;
-      zhao::check(t.verdicts_[0].bytes == want_bytes, "rand: bytes_consumed law",
-                  want_bytes, t.verdicts_[0].bytes);
-      if (expect != 0) {
+      zhao::check(t.verdicts_[0].status == expect.status, "rand: predicted verdict",
+                  expect.status, t.verdicts_[0].status);
+      zhao::check(t.verdicts_[0].bytes == expect.bytes_consumed,
+                  "rand: bytes_consumed law", expect.bytes_consumed,
+                  t.verdicts_[0].bytes);
+      if (expect.status == 0) {
+        zhao::check(t.verdicts_[0].cmds == expect.cmds_walked,
+                    "rand: cmds_consumed law", expect.cmds_walked,
+                    t.verdicts_[0].cmds);
+      }
+      if (expect.status != 0) {
         zhao::check(t.pkt_bytes_.empty(), "rand: ZERO bytes downstream on error", 0,
                     t.pkt_bytes_.size());
       }
@@ -647,6 +583,15 @@ int main(int argc, char** argv) {
       check(t.verdicts_[0].status == zhao_abi::ZH_ABI_UNKNOWN_OPCODE, "walk: UNKNOWN_OPCODE",
             zhao_abi::ZH_ABI_UNKNOWN_OPCODE, t.verdicts_[0].status);
       check(t.pkt_bytes_.empty(), "walk: no bytes", 0, t.pkt_bytes_.size());
+      const zref::CmdDma::Verdict ov =
+          zref::CmdDma::verdict(pkt, static_cast<uint32_t>(pkt.size()), 0);
+      check(t.verdicts_[0].status == ov.status, "walk: oracle status", ov.status,
+            t.verdicts_[0].status);
+      check(t.verdicts_[0].bytes == ov.bytes_consumed,
+            "walk: oracle bytes_consumed (walk abort consumes 40+N)",
+            ov.bytes_consumed, t.verdicts_[0].bytes);
+      check(t.verdicts_[0].cmds == ov.cmds_walked, "walk: oracle cmds_walked",
+            ov.cmds_walked, t.verdicts_[0].cmds);
     }
     // count mismatch: records sum exactly to cb (2 x 48 B = 96), count says
     // 3 (3*16 = 48 <= 96, so the fail-safe bounds pass; intact CRCs)
@@ -669,6 +614,12 @@ int main(int argc, char** argv) {
             t.verdicts_[0].status);
       check(t.verdicts_[0].cmds == 2, "walk: 2 records walked before abort", 2,
             t.verdicts_[0].cmds);
+      const zref::CmdDma::Verdict ov =
+          zref::CmdDma::verdict(p, static_cast<uint32_t>(p.size()), 0);
+      check(ov.status == zhao_abi::ZH_ABI_COUNT_MISMATCH && ov.cmds_walked == 2 &&
+                t.verdicts_[0].bytes == ov.bytes_consumed,
+            "walk: oracle agrees (status/cmds/bytes)", ov.bytes_consumed,
+            t.verdicts_[0].bytes);
       check(t.pkt_bytes_.empty(), "walk: no bytes (count mismatch)", 0,
             t.pkt_bytes_.size());
     }

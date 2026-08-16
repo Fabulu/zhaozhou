@@ -197,8 +197,9 @@ module zhao_cmd_scheduler
 
   // ------------------------------------------------- pre-edge helpers ------
   // the active mode's frame period (spec/video_rules.md 1): the deadline
-  // default. mode_act is 0..2 by construction (latched from the ABI enum
-  // byte of SetPresentationContract, members 0-2 only — validated upstream).
+  // default. mode_act is 0..2 by construction: the SetPresentationContract
+  // latch below REFUSES out-of-range bytes (they are NOT validated upstream
+  // in Phase 2 — CMD.DMA's structural walk skips enum-range check 7).
   function automatic logic [31:0] frame_period(input logic [7:0] m);
     frame_period = zhao_pkg::ZHAO_TIMING[int'(m)].frame_gpu_cycles;
   endfunction
@@ -358,7 +359,14 @@ module zhao_cmd_scheduler
           end
           epoch_r <= rec_w1_i;
         end else if (rec_opcode_i == zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT) begin
-          mode_pend <= rec_w0_i[7:0];
+          // video_mode declares members 0-2 ONLY. Rejecting an out-of-range
+          // byte is decoder law (capture_format.md 3.2 step 7, BAD_VALUE —
+          // wave 3); the Phase-2 structural walk in CMD.DMA deliberately
+          // does not perform step 7, so an unlawful byte CAN arrive here.
+          // The latch refuses it: adopting it would index ZHAO_TIMING out
+          // of bounds in frame_period() and collapse through the 2-bit
+          // mode_o conversion. Found by cmd_random_soak (100k frames).
+          if (rec_w0_i[7:0] <= 8'd2) mode_pend <= rec_w0_i[7:0];
         end else if (rec_opcode_i == zhao_abi_pkg::ZHAO_OP_DEBUG_FRAME_BLIT) begin
           blit_v   <= 1'b1;
           blit_dst <= rec_w0_i[7:0];

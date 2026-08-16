@@ -46,7 +46,7 @@ Fail-safe order per capture_format.md §3.2 — never emits a byte of a packet w
 
 ## Scalar reference function
 
-`zref::CmdDma` — fetch/verify oracle: given ring state and slot contents (incl. corrupted variants), the exact verdict, byte counts and slot transitions.
+`zref::CmdDma` (reference/include/zref/zref_cmd2.hpp) — fetch/verify oracle: given the slot contents (incl. corrupted variants), the descriptor length and the current epoch, the exact verdict, bytes_consumed (structural 36-vs-40+N law) and walked-record count. Record sizes come from the generated `sizeof(zhao_abi::ZhRecord*)` layouts, not a hand table.
 
 ## Directed tests
 
@@ -54,7 +54,7 @@ Fail-safe order per capture_format.md §3.2 — never emits a byte of a packet w
 
 ## Randomized differential tests
 
-`tests/command/cmd_dma_random.cpp` — fuzz corpus replay (the committed abi_corpus.zcorpus error set) + PCG ring timelines vs `zref::CmdDma`.
+`tests/command/cmd_dma_directed.cpp --random N` (CTest `cmd_dma_random` / `cmd_dma_random_nightly`) — PCG packet timelines, one deterministic corruption per packet, verdict/bytes/cmds vs `zref::CmdDma::verdict` and the zero-bytes-downstream gate on every error path.
 
 ## Formal properties
 

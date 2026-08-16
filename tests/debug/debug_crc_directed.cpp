@@ -21,6 +21,7 @@
 
 #include "zhao_sim.hpp"
 #include "zref/zref.hpp"
+#include "zref/zref_cmd2.hpp"
 
 using zhao::check;
 
@@ -127,6 +128,10 @@ static int runRandom(uint32_t frames, uint64_t seed) {
     const CrcDev::Result r = t.stream(bytes, n);
     check(r.valid && !r.err, "rand: valid frame", 1, r.valid);
     check(r.crc == want, "rand: oracle bit-exact", want, r.crc);
+    zref::Crc32c model;
+    const zref::Crc32c::Result m = model.frame(bytes, n);
+    check(m.valid && !m.size_err && m.crc == r.crc,
+          "rand: zref::Crc32c device oracle agrees", m.crc, r.crc);
   }
   std::printf("debug_crc random: %u frames\n", frames);
   return 0;
@@ -178,6 +183,12 @@ int main(int argc, char** argv) {
           zhao_abi::zhao_crc32c(0, v.bytes.data(), v.bytes.size());
       check(r.crc == orc, std::string(v.name).append(" (== oracle)").c_str(), orc,
             r.crc);
+      zref::Crc32c model;
+      const zref::Crc32c::Result m =
+          model.frame(v.bytes, static_cast<uint32_t>(v.bytes.size()));
+      check(m.valid && m.crc == r.crc,
+            std::string(v.name).append(" (== zref::Crc32c)").c_str(), m.crc,
+            r.crc);
     }
   }
 
@@ -203,6 +214,11 @@ int main(int argc, char** argv) {
             r.valid);
       check(r.crc == want, std::string(m.name).append(": oracle bit-exact").c_str(),
             want, r.crc);
+      zref::Crc32c model;
+      const zref::Crc32c::Result mr = model.frame(canvas, m.bytes);
+      check(mr.valid && mr.crc == r.crc,
+            std::string(m.name).append(": zref::Crc32c agrees").c_str(), mr.crc,
+            r.crc);
     }
   }
 
@@ -234,6 +250,11 @@ int main(int argc, char** argv) {
                                 1024);
     check(r.err, "size: mis-sized stream flagged", 1, r.err);
     check(!r.valid, "size: CRC not published", 0, r.valid);
+    zref::Crc32c model;
+    const zref::Crc32c::Result m = model.frame(
+        std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
+    check(m.size_err && !m.valid, "size: zref::Crc32c agrees (err, no publish)",
+          1, m.size_err);
 
     // a byte outside any frame (no sof since idle): raster violation
     t.park();

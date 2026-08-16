@@ -54,7 +54,7 @@ A slot that misses its deadline faults (`deadline_faults++`), the video side rep
 
 ## Randomized differential tests
 
-`tests/command/cmd_scheduler_random.cpp` — PCG ring/deadline timelines vs `zref::CmdScheduler`, 1k/100k.
+`tests/command/cmd_random.cpp` (CTest `cmd_random` / `cmd_random_soak`) — PCG ring/deadline timelines vs `zref::CmdScheduler`, 1k/100k.
 
 ## Formal properties
 

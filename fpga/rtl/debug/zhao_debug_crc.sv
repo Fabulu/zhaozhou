@@ -75,6 +75,22 @@ module zhao_debug_crc (
           running <= 1'b1;
           n_bytes <= 32'd1;
           expect_n <= expect_bytes_i;
+          if (in_eof_i) begin
+            // single-byte frame (sof && eof on the same byte): the publish
+            // law applies unchanged — publish iff the stream length (1)
+            // matches, else the mis-sized violation. The original code
+            // ignored eof here and silently dropped the frame (neither
+            // published nor flagged); found by debug_crc_random_nightly.
+            if (expect_bytes_i == 32'd1) begin
+              fin_crc <= ~(zhao_abi_pkg::zhao_crc32c_step(32'hFFFF_FFFF,
+                                                          in_byte_i));
+              fin_v <= 1'b1;
+            end else begin
+              err_v <= 1'b1;
+            end
+            running <= 1'b0;
+            n_bytes <= 32'd0;
+          end
         end else if (running) begin
           crc_r <= zhao_abi_pkg::zhao_crc32c_step(crc_r, in_byte_i);
           n_bytes <= n_bytes + 32'd1;

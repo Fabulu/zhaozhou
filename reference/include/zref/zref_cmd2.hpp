@@ -313,7 +313,10 @@ class CmdScheduler {
           epoch_ = e.w1;
           break;
         case zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT:
-          mode_pend_ = e.w0 & 0xFF;
+          // members 0-2 only — the latch refuses an out-of-range byte
+          // (mirrors the RTL guard; decoder-law step 7 rejects such records
+          // from wave 3 on, but Phase 2's structural walk cannot)
+          if ((e.w0 & 0xFF) <= 2) mode_pend_ = e.w0 & 0xFF;
           break;
         case zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT:
           blit_v_ = true;
@@ -494,6 +497,221 @@ class DebugCounters {
   std::vector<uint64_t> live_;
   std::vector<uint64_t> shadow_;
   bool violation_ = false;
+};
+
+// ===========================================================================
+// CmdDma — the CMD.DMA fetch/verify verdict oracle
+// ===========================================================================
+
+/**
+ * The packet-level fail-safe ladder (capture_format.md 3.2) as CMD.DMA
+ * consumes it, plus the two DMA-level checks the spec ladder does not have:
+ * the descriptor bound (byte_len must hold the whole sealed packet) and the
+ * resource-epoch match (CMD.DMA.md; module-local status 15).
+ *
+ * Record-semantic checks (3.2 steps 6/7/8) are decoder-side and deliberately
+ * ABSENT here, exactly as in the RTL: the DMA's walk is structural
+ * (sizes/opcodes/bounds/debug-flag), the decoder's is semantic.
+ *
+ * bytes_consumed is STRUCTURAL, not status-mapped (capture_format.md 3.2
+ * tail): a header-level abort (checks 1-3 + the epoch check, which the RTL
+ * performs before fetching any payload byte) consumes exactly 36; every
+ * later verdict — payload CRC, walk error, OK — consumes the whole 40+N,
+ * which is what zhao_cmd_dma reports as done_bytes (= need_total).
+ *
+ * Sizes come from the GENERATED record layouts (sizeof(ZhRecord*), each
+ * static_asserted against the .zidl math) — no hand size table (charter 19,
+ * 29-6: one layout law machine-wide).
+ */
+class CmdDma {
+ public:
+  struct Verdict {
+    uint8_t status;           // zhao_abi_error, or module-local 15
+    uint32_t bytes_consumed;  // 36 on header-level abort, else 40+N
+    uint32_t cmds_walked;     // records accepted before the verdict
+  };
+
+  /** record_bytes for a known opcode, 0 for unknown (generated layouts). */
+  static uint16_t recordSize(uint16_t opcode) {
+    switch (opcode) {
+      case zhao_abi::ZHAO_OP_NOP: return sizeof(zhao_abi::ZhRecordNop);
+      case zhao_abi::ZHAO_OP_BEGIN_FRAME: return sizeof(zhao_abi::ZhRecordBeginFrame);
+      case zhao_abi::ZHAO_OP_END_FRAME: return sizeof(zhao_abi::ZhRecordEndFrame);
+      case zhao_abi::ZHAO_OP_SET_VIEW: return sizeof(zhao_abi::ZhRecordSetView);
+      case zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT:
+        return sizeof(zhao_abi::ZhRecordSetPresentationContract);
+      case zhao_abi::ZHAO_OP_TERRAIN_FIELD: return sizeof(zhao_abi::ZhRecordTerrainField);
+      case zhao_abi::ZHAO_OP_SURFACE_STAMP: return sizeof(zhao_abi::ZhRecordSurfaceStamp);
+      case zhao_abi::ZHAO_OP_DRAW_FORM: return sizeof(zhao_abi::ZhRecordDrawForm);
+      case zhao_abi::ZHAO_OP_DRAW_POPULATION: return sizeof(zhao_abi::ZhRecordDrawPopulation);
+      case zhao_abi::ZHAO_OP_DRAW_PROCEDURAL: return sizeof(zhao_abi::ZhRecordDrawProcedural);
+      case zhao_abi::ZHAO_OP_DRAW_SKY: return sizeof(zhao_abi::ZhRecordDrawSky);
+      case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT: return sizeof(zhao_abi::ZhRecordEmitAudioEvent);
+      case zhao_abi::ZHAO_OP_DEBUG_BOOTSTRAP: return sizeof(zhao_abi::ZhRecordDebugBootstrap);
+      case zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT: return sizeof(zhao_abi::ZhRecordDebugFrameBlit);
+      case zhao_abi::ZHAO_OP_DEBUG_RUMBLE: return sizeof(zhao_abi::ZhRecordDebugRumble);
+      default: return 0;
+    }
+  }
+
+  /**
+   * The verdict for one slot fetch: packet bytes p (as stored in HPS DDR),
+   * the FRAME_RING descriptor byte_len, and the scheduler's current
+   * resource epoch. Mirrors zhao_cmd_dma's ladder order exactly.
+   */
+  static Verdict verdict(const std::vector<uint8_t>& p, uint32_t descriptor_len,
+                         uint32_t fetch_epoch,
+                         uint32_t slot_buf_bytes = 4096 /* RTL SLOT_BUF_BYTES */) {
+    auto get16 = [&p](uint32_t o) {
+      return static_cast<uint16_t>(p[o] | (p[o + 1] << 8));
+    };
+    auto get32 = [&p](uint32_t o) {
+      uint32_t v = 0;
+      for (int i = 0; i < 4; ++i) v |= static_cast<uint32_t>(p[o + i]) << (8 * i);
+      return v;
+    };
+    // ---- header-level ladder (checks 1-3 + epoch): abort consumes 36 -----
+    if (descriptor_len < 36) return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};
+    if (get32(0) != zhao_abi::ZHAO_FRAME_MAGIC) {
+      return {zhao_abi::ZH_ABI_BAD_MAGIC, 36, 0};
+    }
+    if (get16(4) != zhao_abi::ZHAO_ABI_VERSION) {
+      return {zhao_abi::ZH_ABI_BAD_ABI_VERSION, 36, 0};
+    }
+    if ((get16(6) & 0xFFFE) != 0) return {zhao_abi::ZH_ABI_RESERVED_FLAG, 36, 0};
+    const uint32_t cb = get32(28);
+    const uint32_t cc = get32(24);
+    if ((cb & 15) != 0) return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};
+    if (cc > (cb >> 4)) return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};
+    if (40 + cb > descriptor_len) return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};
+    if (40 + cb > slot_buf_bytes) {
+      return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};  // staging bound (RTL param)
+    }
+    if (40 + cb > zhao_abi::FRAME_SLOT_BYTES) {
+      return {zhao_abi::ZH_ABI_BAD_LENGTH, 36, 0};
+    }
+    if (zhao_abi::zhao_crc32c(0, p.data(), 32) != get32(32)) {
+      return {zhao_abi::ZH_ABI_BAD_HEADER_CRC, 36, 0};
+    }
+    if (get32(16) != fetch_epoch) return {ZHAO_DMA_EPOCH_MISMATCH, 36, 0};
+    // ---- payload fetched from here on: every verdict consumes 40+N -------
+    const uint32_t total = 40 + cb;
+    if (zhao_abi::zhao_crc32c(0, p.data() + 36, cb) != get32(36 + cb)) {
+      return {zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, total, 0};
+    }
+    // ---- the structural record walk (checks 5/9/10) ----------------------
+    uint32_t off = 0;
+    uint32_t walked = 0;
+    while (off < cb) {
+      const uint16_t op = get16(36 + off);
+      const uint16_t rb = get16(36 + off + 2);
+      if ((rb & 15) != 0 || rb < 16) {
+        return {zhao_abi::ZH_ABI_BAD_LENGTH, total, walked};
+      }
+      const uint16_t size = recordSize(op);
+      if (size == 0) return {zhao_abi::ZH_ABI_UNKNOWN_OPCODE, total, walked};
+      if (size != rb) return {zhao_abi::ZH_ABI_BAD_LENGTH, total, walked};
+      if (off + rb > cb) return {zhao_abi::ZH_ABI_TRUNCATED, total, walked};
+      // debug umbrella 0xF000-0xF0FF requires frame flags bit0
+      // (capture_format.md 1.2)
+      if (op >= 0xF000 && op <= 0xF0FF && (get16(6) & 1) == 0) {
+        return {zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED, total, walked};
+      }
+      off += rb;
+      ++walked;
+    }
+    if (walked != cc) return {zhao_abi::ZH_ABI_COUNT_MISMATCH, total, walked};
+    return {zhao_abi::ZH_ABI_OK, total, walked};
+  }
+};
+
+// ===========================================================================
+// Crc32c — the DEBUG.CRC displayed-stream device oracle
+// ===========================================================================
+
+/**
+ * The DEBUG.CRC lane law (design/contracts/DEBUG.CRC.md, video_rules.md 4):
+ * a displayed byte stream framed by sof/eof, CRC-32C published ONLY when the
+ * stream length equals the expected canvas bytes latched at sof; a mis-sized
+ * stream or a byte outside any frame is a size_err event and the CRC is not
+ * published. Mirrors zhao_debug_crc.sv branch-for-branch.
+ *
+ * The CRC arithmetic DELEGATES to zhao_abi::zhao_crc32c — the one generated
+ * CRC machine (charter 19 / 29-6); this class adds only the device's
+ * publish/violation law, which is what the RTL implements around the same
+ * generated step function.
+ */
+class Crc32c {
+ public:
+  struct Result {
+    uint32_t crc = 0;
+    bool valid = false;   // published (stream length matched)
+    bool size_err = false;
+  };
+
+  void reset() {
+    running_ = false;
+    crc_ = 0;
+    n_ = 0;
+    expect_ = 0;
+  }
+
+  /** One stream byte. sof restarts (latching expect_bytes); eof finalizes.
+   *  Returns the event the RTL pulses one cycle later. */
+  Result byte(uint8_t b, bool sof, bool eof, uint32_t expect_bytes) {
+    Result r;
+    if (sof) {
+      crc_ = zhao_abi::zhao_crc32c(0, &b, 1);
+      running_ = true;
+      n_ = 1;
+      expect_ = expect_bytes;
+      if (eof) {
+        // single-byte frame: publish iff expect == 1 (mirrors the RTL)
+        if (expect_bytes == 1) {
+          r.crc = crc_;
+          r.valid = true;
+        } else {
+          r.size_err = true;
+        }
+        running_ = false;
+        n_ = 0;
+      }
+    } else if (running_) {
+      crc_ = zhao_abi::zhao_crc32c(crc_, &b, 1);
+      ++n_;
+      if (eof) {
+        if (n_ == expect_) {
+          r.crc = crc_;
+          r.valid = true;
+        } else {
+          r.size_err = true;
+        }
+        running_ = false;
+        n_ = 0;
+      }
+    } else {
+      r.size_err = true;  // byte outside any frame: raster violation
+    }
+    return r;
+  }
+
+  /** A whole displayed frame against an expected byte count. */
+  Result frame(const std::vector<uint8_t>& bytes, uint32_t expect_bytes) {
+    Result out;
+    for (size_t i = 0; i < bytes.size(); ++i) {
+      const Result r = byte(bytes[i], i == 0, i + 1 == bytes.size(),
+                            expect_bytes);
+      if (r.valid) out = r;
+      if (r.size_err) out.size_err = true;
+    }
+    return out;
+  }
+
+ private:
+  bool running_ = false;
+  uint32_t crc_ = 0;
+  uint32_t n_ = 0;
+  uint32_t expect_ = 0;
 };
 
 }  // namespace zref
