@@ -191,6 +191,17 @@ bit  2    no_bake     protected cell: bakes clamp so the cell can never breach
 bits 7:3  reserved 0
 ```
 
+**no_bake corner shadow (clarified 2026-08-16, implementation evidence
+`tests/terrain/terrain_dual.cpp`):** the bake clamp is necessarily
+VERTEX-level (TERRAIN.BAKE holds `base + scar ≥ bottom + 1 LSB` on every
+corner vertex of a protected cell — the breach equality is tested at
+vertices), and corner vertices are shared. A no_bake cell therefore also
+prevents breach in every cell sharing a corner vertex with it — the
+protection footprint is one cell wider than the marked cell in each
+direction. This is deduced from frozen law, not new law; it matches the
+donor's own behaviour ("the ground does not fall away near structures",
+S5 §3.2) and content authors should size plinth masks knowing the halo.
+
 ### 3.4 Height composition and the breach law
 
 All compose math is fx16 with qformats §3 saturating ops; height16 ↔ fx16
