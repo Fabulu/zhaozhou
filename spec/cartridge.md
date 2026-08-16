@@ -58,6 +58,8 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x0007 | SKY_SET | sky asset set page (§4) |
 | 0x0008 | TONE_BANK | tone bank page (§4) |
 | 0x0009 | COSTS | `costs.zcost` body verbatim (spec/form/cost-model.md §2) |
+| 0x000A | TERRAIN_ISLAND | island patch page v1 (§4; format law spec/terrain_rules.md §2) |
+| 0x000B | ISLAND_TABLE | island directory (§4; spec/terrain_rules.md §1.5) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -88,8 +90,11 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 3 | sky set | SKY_SET | per spec/sky_and_beams.md asset set (bands/cap/under/clouds/sun) |
 | 4 | terrain patch | TERRAIN_PATCH | authored heightfield patch (§4) |
 | 5 | tone bank | TONE_BANK | wave-2 mixer tone set (spec/audio_rules.md lane) |
+| 6 | island patch | TERRAIN_ISLAND | Island Patch v1 page (spec/terrain_rules.md §2 — layered top/bottom/state/material/sheet/tint) |
+| 7 | island table | ISLAND_TABLE | island directory: datum, pitch_log2, grid extent, tileset, sparse patch map (spec/terrain_rules.md §1.5) |
 
-Kinds 6-255 reserved; a reader that meets an unknown kind skips the page
+~~Kinds 6-255 reserved~~ Kinds 8-255 reserved (world-identity wave,
+RUN-20260816-0046, added kinds 6/7); a reader that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
 constant against this table at pack time (FORM-E-830/831,
 language-semantics §8).
@@ -118,6 +123,21 @@ language-semantics §8).
   rounding law) in ascending z-then-x order. Patch dimensions are bounded by
   the terrain patch budget line when Phase 0 pins it; the packer rejects an
   odd-sized or empty patch deterministically.
+  **[world-identity wave] Kind 4 is the Phase-3 bootstrap page (single
+  surface, no rim topology) and stays valid for existing captures/demos; new
+  Phase-6+ world content ships as kind 6 below. Kind 4 gains no new
+  features.**
+- **Island patch (kind 6):** one Island Patch v1 page, byte layout normative
+  in `spec/terrain_rules.md` §2 (64-B header + layers A–H, 21,320 B body;
+  the VRAM stride pad is a residency artifact and is NOT stored). Ascending
+  z-then-x within every lattice/cell plane, same as kind 4. The packer
+  asserts header/envelope redundancy and the page CRC (terrain_rules §2.1).
+- **Island table (kind 7):** island directory per `spec/terrain_rules.md`
+  §1.5: `{u32 island_count}` + records `{u32 island_id; fx16 origin_x,
+  origin_y_datum, origin_z; i8 pitch_log2; u8 rsv[3]; u16 grid_w, grid_h;
+  u32 tileset_id}` followed by each island's sparse patch map
+  `{u32 entry_count} + entry_count × {i16 ix; i16 iz; u32 page_id}` (page_id
+  names a kind-6 page). One table per cartridge.
 - **Tone bank (kind 5):** the wave-2 mixer tone set the EmitAudioEvent path
   consumes (MixerTone records; spec/audio_rules.md): one header
   `{u32 tone_count}` + tone records `{u32 event_id; u16 gain; i16 pan;
@@ -127,10 +147,14 @@ language-semantics §8).
 
 ## 5. Packing discipline (tools/pack, W3.6)
 
-- **Deterministic:** sections are written in a fixed order (ABI_INFO, then
+- **Deterministic:** sections are written in a fixed order (~~ABI_INFO, then
   PROGRAM pages in source-ID order, SOURCE_MAP, CODE_MANIFEST, SKY_SET,
   TERRAIN_PATCH pages in page-id order, TONE_BANK, COSTS, RESOURCE_PAGES
-  last), bodies written sequentially, table and header backpatched — the
+  last~~ ABI_INFO, then PROGRAM pages in source-ID order, SOURCE_MAP,
+  CODE_MANIFEST, SKY_SET, TERRAIN_PATCH pages in page-id order,
+  ISLAND_TABLE, TERRAIN_ISLAND pages in page-id order, TONE_BANK, COSTS,
+  RESOURCE_PAGES last — world-identity wave insertion, additive), bodies
+  written sequentially, table and header backpatched — the
   .zcap writer discipline (capture_format §4.4). Two packs of one build are
   byte-identical (`pack:check` staleness gate; same law as abi:check).
 - **Round-trip:** pack → load must reproduce the identical program bytes,
