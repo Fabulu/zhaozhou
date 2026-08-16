@@ -291,7 +291,7 @@ effects:
     crc_pin: 0x2BFA652A
     crc_note: "pinned 2026-08-17 on first textured render"
     frames: 64
-    gif_bytes: 0
+    gif_bytes: 509282
   - id: terrain-breach
     class: terrain
     program: dual-heightfield
@@ -304,7 +304,7 @@ effects:
     crc_pin: 0xF908CFA1
     crc_note: "RE-PINNED 2026-08-17: deep keel + texturing changed every pixel. Lineage: 0x47D4D163 pre-kBandRows (shipped gif), 0x839E117F post-fix flat, now deep-keel textured"
     frames: 64
-    gif_bytes: 110404
+    gif_bytes: 188623
     implemented: true
     tags: [terrain, breach, dual-heightfield, world-identity]
 
@@ -339,7 +339,7 @@ effects:
     crc_pin: 0x4F9E90DE
     crc_note: "re-pinned 2026-08-17: the deep keel changed the silhouette the sun crosses (was 0x4382E5C8)"
     frames: 64
-    gif_bytes: 103633
+    gif_bytes: 104434
     implemented: true
     tags: [celestial, flare, occlusion, fade]
 

@@ -486,3 +486,46 @@ the lint_* tests went green again.
 - terrain-wave/impact/scars, creature shots, stars: BYTE-IDENTICAL
   (verified by --check across the whole reel - the legacy flat path is
   untouched).
+
+### Maturity + site (same session, close-out)
+
+- The random differentials forced one more real fix: the rim clamp's
+  `dropped` counter counted EDGES, so dropping a merged span's head lost
+  its bodies from the account. It counts BODIES now; the identity
+  emitted-bodies + dropped == enumerated holds across 300 random masks.
+- TEXTURE.MOSAIC (ZH-030) and FORGE.CLIFF (ZH-067) promoted to
+  REFERENCE_COMPLETE, pinned to 3bb36c1 with on-disk evidence. V17's
+  anti-phantom rule caught the stale ledger symbols (zref::Mosaic /
+  zref::ForgeCliff never existed); reference_model now names the real
+  symbols. Ledger check OK, 88 blocks.
+- Site: full reel regenerated through reel.ps1 (every GIF decode-verified
+  byte-exact; terrain-orbit 509,282 B at 185 colours, terrain-breach
+  188,623 B at 180, flare-occlusion 104,434 B at 107). Orbit figure added
+  with new copy; breach copy rewritten for the deep keel; copycheck clean;
+  deployed. The flat-island era is preserved in renders/diary/ (the diary
+  VIEW on the site is future site-lane work - the policy's own view does
+  not exist yet).
+- Fast lane at close: 87 total, 86 pass / 1 skip (format_check, absent
+  tool) / 0 fail. Full reel --check green through the CMake binary.
+
+### Findings for the architect
+
+1. 5's "2,112 structural worst case" is the LOOSE bound (all cell-adjacency
+   edges). The TIGHT checkerboard rim count is 2,048: 64 border edges have
+   VOID owners and emit nothing. The 512 budget is unaffected; the spec
+   now carries the tight number with the derivation.
+2. The D7 painter law makes ortho top-down views of DUAL islands paint the
+   underside over the top (equal depths tie by kind). Harmless for the
+   perspective reel subjects and the existing tests, but any future ortho
+   tooling (map views, editors) will want either a depth tiebreak or an
+   explicit view mode. Not a bug - a documented degenerate case worth
+   knowing.
+3. The palette law is now the binding constraint on terrain lookdev: the
+   flat LMAP tint family cannot ship beside the texture families at 240p
+   capture budgets (measured 267 with a warm half vs 185 shipped). The
+   Phase 4/5 Gouraud ride needs a locality story (tint gradients within a
+   quantisation step) or the palette must grow.
+4. Tileset containers are 1 MiB and Windows stacks are 1 MiB: any test or
+   tool that builds one on the stack dies silently (exit 127, no output -
+   buffered stdout is lost on the fault). Heap-allocate Tilesets
+   everywhere; two separate build paths hit this.
