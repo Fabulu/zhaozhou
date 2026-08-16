@@ -205,7 +205,7 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
@@ -215,6 +215,10 @@ blocks:
         date: "2026-08-15"
         commit: "b64afe2"
         evidence: tests/command/cmd_dma_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "4f76d2e"
+        evidence: demos/wound_lab/duo_markers.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -286,7 +290,7 @@ blocks:
     counters: [frame_cycles, deadline_faults, commands]
     source_ids: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -296,6 +300,10 @@ blocks:
         date: "2026-08-16"
         commit: "768ce1a"
         evidence: tests/command/cmd_scheduler_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "4f76d2e"
+        evidence: demos/wound_lab/duo_markers.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2564,7 +2572,7 @@ blocks:
     counters: [frame_cycles]
     source_ids: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-15"
@@ -2574,6 +2582,10 @@ blocks:
         date: "2026-08-15"
         commit: "b64afe2"
         evidence: tests/debug/debug_counters_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "4f76d2e"
+        evidence: demos/wound_lab/duo_markers.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2611,7 +2623,7 @@ blocks:
     counters: [tile_references]
     source_ids: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
@@ -2621,6 +2633,10 @@ blocks:
         date: "2026-08-16"
         commit: "768ce1a"
         evidence: tests/debug/debug_crc_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "4f76d2e"
+        evidence: demos/wound_lab/duo_markers.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2691,7 +2707,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Wave-3 scope = the deterministic core cross target (plan W3.8/D9) - devkitA64 freestanding compile+archive (CTest arm-cross, SKIP-if-absent) and optional ARM64-native CI run of the sim-hash golden; same generated code as desktop (D5 cross-target equality by construction). The real HPS run is the hardware lane - nothing unexecuted is claimed. Maturity target REFERENCE_COMPLETE at the wave-3 gate (plan D12); HARDWARE_PROVEN stays blocked_on hardware. Game content itself is excluded from the ledger."
+    notes: "Wave-3 scope = the deterministic core cross target (plan W3.8/D9) - devkitA64 freestanding compile+archive (CTest arm-cross, SKIP-if-absent) and optional ARM64-native CI run of the sim-hash golden; same generated code as desktop (D5 cross-target equality by construction). The real HPS run is the hardware lane - nothing unexecuted is claimed. Maturity target REFERENCE_COMPLETE at the wave-3 gate (plan D12); HARDWARE_PROVEN stays blocked_on hardware. Game content itself is excluded from the ledger. W2.7: the shell harness (tests/shell/shell_harness.hpp + demos/wound_lab/duo_markers.cpp) implements this block's D10 sim role end to end - frame-packet issuance on the FRAME_RING protocol, pad consumption, rumble commands, mixer feed - and is the protocol reference for the real HPS runtime; maturity stays SPECIFIED (the harness is the testbench side of the seam, not the product)."
 
   - id: SW.MIXER
     name: Fixed-point audio mixer

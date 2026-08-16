@@ -10,9 +10,9 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | subsystem | SPECIFIED | REFERENCE_COMPLETE | UNIT_VERIFIED | RTL_VERIFIED | SYNTHESIZED | INTEGRATED | HARDWARE_PROVEN | blocked | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | audio | · | · | · | 1 | · | · | · | · | 1 |
-| command | 1 | · | 2 | · | · | · | · | · | 3 |
+| command | 1 | · | · | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
-| debug | 1 | · | 2 | · | · | · | · | · | 3 |
+| debug | 1 | · | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 2 | · | · | · | · | · | · | · | 2 |
 | geometry | 11 | · | · | · | · | · | · | · | 11 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 68 | 3 | 7 | 10 | · | · | · | 6 | 88 |
+| **all** | 68 | 3 | 3 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -35,8 +35,10 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 |---|---|---|---|---|
 | CMD.DMA | REFERENCE_COMPLETE | 2026-08-16 | `768ce1a` | reference/include/zref/zref_cmd2.hpp |
 | CMD.DMA | UNIT_VERIFIED | 2026-08-15 | `b64afe2` | tests/command/cmd_dma_directed.cpp |
+| CMD.DMA | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | CMD.SCHEDULER | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
 | CMD.SCHEDULER | UNIT_VERIFIED | 2026-08-16 | `768ce1a` | tests/command/cmd_scheduler_directed.cpp |
+| CMD.SCHEDULER | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | MEM.SDRAM | SPECIFIED | 2026-08-15 | `6bcc4e9` | BANKED (blocked_on: hardware — never advances from SPECIFIED, plan D2): synthesizable core zhao_sdram_ctrl.sv + behavioural model sim/models/zhao_sdram_model.sv verified against the frozen sim profile — ctest mem_sdram_directed (exact grant-to-grant spans, refresh steals = 12 per preempted refresh, DQM-masked partial bursts, bank-conflict accounting, model timing-clean) and the three-way differential mem_random (1k/100k, oracle mismatches 0); verilator -Wall lint clean; formal mem_sdram_refresh_bound ready (SKIPped on the oss-cad-suite yosys SV-frontend gap, see tests/formal/mem_formal_lane.cmake.in). ZH-004 obligations unfreeze the profile via zhao_sdram_params_pkg.sv. |
 | MEM.VRAM.ARBITER | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.VRAM.ARBITER | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
@@ -72,8 +74,10 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
 | DEBUG.COUNTERS | UNIT_VERIFIED | 2026-08-15 | `b64afe2` | tests/debug/debug_counters_directed.cpp |
+| DEBUG.COUNTERS | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | DEBUG.CRC | REFERENCE_COMPLETE | 2026-08-16 | `768ce1a` | reference/include/zref/zref_cmd2.hpp |
 | DEBUG.CRC | UNIT_VERIFIED | 2026-08-16 | `768ce1a` | tests/debug/debug_crc_directed.cpp |
+| DEBUG.CRC | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | SW.MIXER | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | tests/audio/mixer_tone_directed.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |
