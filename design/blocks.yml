@@ -1946,7 +1946,11 @@ blocks:
       Z-test off, blend off, effect-tag init), sky_cloud_fade (a = tex.a x
       vertex.a, alpha blend), sun_additive (additive + optional glow tag),
       beam_additive_fade (tex.RGB x vertex.RGB, dst = sat(dst + src);
-      bilinear TMU mandatory).
+      bilinear TMU mandatory). Star recipes per spec/stars_and_flares.md:
+      star_disc_masked (CLUT8 nearest, alpha-test index 0, Z-test on /
+      Z-write off, glow-tag write with strength = the texel's CLUT
+      intensity) and star_halo_additive (same sampling, dst = sat(dst+src));
+      the effect-tag byte is never dithered at resolve.
   - id: RASTER.RESOLVE
     name: Tile resolve
     kind: rtl
@@ -2009,7 +2013,12 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Sample modes are spec constants; secondary decal modes are cut-order 7 (§26).
+    notes: >-
+      Sample modes are spec constants; secondary decal modes are cut-order 7
+      (§26). Star ramp discipline (spec/stars_and_flares.md §1): one 64-entry
+      CLUT palette page per active near star (max 2) is ARM-rebuilt and
+      re-uploaded every frame (max 512 B, resource-epoch ordered before pass
+      6); nearest sampling mandatory — bilinear must never touch a palette.
 
   - id: TEXTURE.AUX
     name: Restricted auxiliary source
@@ -2069,7 +2078,11 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: M10K budget per §7.3; capacity frozen post-Phase-0.
+    notes: >-
+      M10K budget per §7.3; capacity frozen post-Phase-0. The per-frame star
+      ramp pages (spec/stars_and_flares.md §1) are hot palette entries: a
+      palette-page invalidate per upload, never a stale-frame paint (the
+      palette-ordering capture tests are the tripwire).
 
   - id: TEXTURE.MOSAIC
     name: Terrain Mosaic selector
@@ -2315,7 +2328,11 @@ blocks:
     superseded_by: null
     notes: >-
       Soft sprite endpoint; also the beam ladder rung for projected width 2-6 px
-      (spec/sky_and_beams.md).
+      (spec/sky_and_beams.md). The glint rung also serves stars
+      (spec/stars_and_flares.md §6/§7): far glints and the procedural
+      starfield ride PART.SOFT as additive 1-2 px points with glow-tag write,
+      Z-tested against the sky far constant (occlusion for free); cap 2744
+      glints/view.
   - id: FORGE.PRIM
     name: Procedural primitives
     kind: rtl
@@ -2354,6 +2371,10 @@ blocks:
       generation. beam_cone: circumferential-U radial-fade mapping with
       back-placed seam, V-to-axis-height, vertex fade band, base ring at
       ARM-supplied canonical ground height; ladder 16-24/12/4/2/0 tris.
+      star_quad kind (spec/stars_and_flares.md §3): screen-space masked /
+      additive billboard quads for star discs and coronas, pass 6, depth =
+      sky-prefill far + 1, halo submitted before disc; star_triangles <= 8
+      per view.
 
   - id: FORGE.CLIFF
     name: Terrain cliffs and skirts
@@ -2484,13 +2505,17 @@ blocks:
     notes: >-
       Sun quad and tagged horizon/sky texels write the glow effect tag; gather
       path unchanged — the sky is the dominant natural glow source
-      (spec/sky_and_beams.md).
+      (spec/sky_and_beams.md). Flare occlusion probe
+      (spec/stars_and_flares.md §5): latches the effect-tag byte at up to 4
+      probe pixels during the existing sweep (4 comparators + 4 byte
+      registers); visibility = tag channel GLOW. Reads a latch, never the
+      framebuffer.
   - id: POST.COMPOSITE
     name: Compositor
     kind: rtl
     subsystem: compositor
     clock_domain: gpu
-    purpose: Bloom, haze, shockwave, refraction, grading, palette and flash composition of 3D frame + planes + sprites into the scanout framebuffer. Plus radial_decay sun-shaft mode of the glow path (spec/sky_and_beams.md; frozen constants 96x60 Z60 / 2x64x48 Duo, 12 taps, decay 61/64 Q0.16 table, guard clamp, saturating u16 accumulate).
+    purpose: Bloom, haze, shockwave, refraction, grading, palette and flash composition of 3D frame + planes + sprites into the scanout framebuffer. Plus radial_decay sun-shaft mode of the glow path (spec/sky_and_beams.md; frozen constants 96x60 Z60 / 2x64x48 Duo, 12 taps, decay 61/64 Q0.16 table, guard clamp, saturating u16 accumulate) and the flare_splat mode beside it (spec/stars_and_flares.md par.5; bounded frozen-table sprite splats into the quarter-res glow plane, flare_texels <= 16384/view, over-budget splats dropped whole, tint at the existing upscale composite).
     contract: design/contracts/POST.COMPOSITE.md
     phase: 11
     owner_issue: ZH-070
@@ -2765,7 +2790,13 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Contract filled (Phase-1-active). Types from compiler/src/generated/abi.ts only — no hand-written records.
+    notes: >-
+      Contract filled (Phase-1-active). Types from
+      compiler/src/generated/abi.ts only — no hand-written records. Celestial
+      module (spec/stars_and_flares.md §9): star identity / ramp rebuild +
+      slew / LOD projection / flare k,b run ARM-side in WIDE integers
+      (interstellar distances exceed fx16 by law); only screen-space
+      quantities cross to the FPGA via the reserved SetCelestials 0x0320.
 
   - id: SW.CPUCOLL
     name: CPU-side collision and canonical scars
