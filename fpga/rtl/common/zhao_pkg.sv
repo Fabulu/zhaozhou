@@ -85,12 +85,27 @@ package zhao_pkg;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_VID_CYCLES_PER_GPU = 2;
 
-  // Canvas geometry (spec/video_rules.md §1/§3) — both FB slots are sized
-  // for the largest canvas; a mode switch never moves a slot.
+  // Canvas geometry (spec/video_rules.md §1/§3): ALLOCATION is not
+  // OCCUPANCY. Both FB slots are always ALLOCATED ZHAO_FB_SLOT_SPAN =
+  // 0x3C000 B (the largest canvas) so a mode switch never moves a slot;
+  // ZHAO_CANVAS_BYTES_* is what a frame actually STORES — for Duo that is
+  // the two packed 256x192 view blocks (0x30000, §3.1), NOT the 0x3C000
+  // allocation and NOT the 512x240x2 displayed stream (which coincidental-
+  // ly also equals 245,760 — see ZHAO_DISPLAYED_BYTES_* below). CMD.DMA's
+  // blit-length law (`byte_len == zhao_canvas_bytes(mode)`) rides on these:
+  // a Duo DebugFrameBlit carries exactly the stored frame, never the
+  // allocation tail the spec declares untouched.
   localparam logic [31:0] ZHAO_CANVAS_BYTES_Z60   = 32'd184_320; // 384*240*2
   localparam logic [31:0] ZHAO_CANVAS_BYTES_STORM = 32'd153_600; // 320*240*2
-  localparam logic [31:0] ZHAO_CANVAS_BYTES_DUO   = 32'd245_760; // 512*240*2
-  localparam logic [31:0] ZHAO_CANVAS_BYTES_MAX   = 32'd245_760;
+  localparam logic [31:0] ZHAO_CANVAS_BYTES_DUO   = 32'd196_608; // 2*256*192*2 packed (§3.1)
+  localparam logic [31:0] ZHAO_CANVAS_BYTES_MAX   = 32'd245_760; // largest DISPLAYED canvas = the slot allocation
+  // Displayed-stream bytes per frame (spec/video_rules.md §4 Displayed-CRC
+  // law: 2 * h_active * 240, border rows INCLUDED in Duo). This is what
+  // DEBUG.CRC's expect_bytes_i wants — wiring zhao_canvas_bytes there would
+  // be a silent Duo bug (196,608 stored vs 245,760 displayed).
+  localparam logic [31:0] ZHAO_DISPLAYED_BYTES_Z60   = 32'd184_320; // 384*240*2
+  localparam logic [31:0] ZHAO_DISPLAYED_BYTES_STORM = 32'd153_600; // 320*240*2
+  localparam logic [31:0] ZHAO_DISPLAYED_BYTES_DUO   = 32'd245_760; // 512*240*2
   /* verilator lint_on UNUSEDPARAM */
   // Region-map constants (spec/memory_rules.md 5) are consumed by MEM.GUARD
   // and the tests; kept here as the single frozen definition.
@@ -112,6 +127,13 @@ package zhao_pkg;
     zhao_canvas_bytes = (m == ZHAO_MODE_Z60)   ? ZHAO_CANVAS_BYTES_Z60
                       : (m == ZHAO_MODE_STORM) ? ZHAO_CANVAS_BYTES_STORM
                                                : ZHAO_CANVAS_BYTES_DUO;
+  endfunction
+
+  // displayed-stream bytes per frame (§4 law; NOT the stored occupancy)
+  function automatic logic [31:0] zhao_displayed_bytes(input zhao_mode_e m);
+    zhao_displayed_bytes = (m == ZHAO_MODE_Z60)   ? ZHAO_DISPLAYED_BYTES_Z60
+                         : (m == ZHAO_MODE_STORM) ? ZHAO_DISPLAYED_BYTES_STORM
+                                                  : ZHAO_DISPLAYED_BYTES_DUO;
   endfunction
 
   function automatic logic [15:0] zhao_active_width(input zhao_mode_e m);

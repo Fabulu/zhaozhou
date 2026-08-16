@@ -721,5 +721,57 @@ int main(int argc, char** argv) {
           t.guard_writes_.size());
   }
 
+  // ---- 8d. Duo blit: OCCUPANCY, not allocation (video_rules.md 1/3.1) ----
+  // A Duo frame stores exactly 0x30000 = 196,608 packed view bytes of its
+  // 0x3C000 slot; the blit-length law follows zhao_pkg::zhao_canvas_bytes.
+  // The 245,760 ALLOCATION — the pre-split Duo value, and coincidentally
+  // the Duo DISPLAYED-stream size — must now be REJECTED: the spec declares
+  // the slot tail untouched, and a blit of it would touch it.
+  {
+    DmaBench t;
+    const uint32_t kDuoBytes = 196608;  // zhao_pkg::ZHAO_CANVAS_BYTES_DUO
+    std::vector<uint8_t> canvas(kDuoBytes);
+    for (uint32_t i = 0; i < canvas.size(); ++i) {
+      canvas[i] = static_cast<uint8_t>((i * 13u + 5u) & 0xFF);
+    }
+    const uint32_t want_crc =
+        zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+    t.load(kBlitSrc, canvas);
+
+    // occupancy length commits, covering exactly [slot0, slot0+0x30000)
+    t.blit(0, 2 /*VIDEO_DUO*/, kBlitSrc, kDuoBytes, want_crc);
+    check(t.blit_results_.size() == 1, "duo blit: one completion", 1,
+          t.blit_results_.size());
+    check(t.blit_results_[0] == 0, "duo blit: committed (status 0)", 0,
+          t.blit_results_[0]);
+    uint32_t got_bytes = 0;
+    bool data_ok = true;
+    uint32_t off = 0;
+    for (const auto& g : t.guard_writes_) {
+      check(g.addr == off, "duo blit: guard addr exact (slot-0 region)", off,
+            g.addr);
+      for (int b = 0; b < 8; ++b) {
+        const uint8_t want = canvas[off + static_cast<uint32_t>(b)];
+        const uint8_t got = static_cast<uint8_t>((g.data >> (8 * b)) & 0xFF);
+        if (want != got) data_ok = false;
+      }
+      got_bytes += g.len;
+      off += 64;
+    }
+    check(got_bytes == kDuoBytes, "duo blit: exactly the 0x30000 occupancy",
+          kDuoBytes, got_bytes);
+    check(data_ok, "duo blit: committed bytes bit-exact", 1, data_ok);
+
+    // the allocation length (the pre-split value) is now a length fault
+    t.blit(0, 2, kBlitSrc, 245760, want_crc);
+    check(t.blit_results_[0] == 18,
+          "duo blit-alloc-len: 245,760 rejected (status 18)", 18,
+          t.blit_results_[0]);
+    check(t.bursts_.empty(), "duo blit-alloc-len: no fetch", 0,
+          t.bursts_.size());
+    check(t.guard_writes_.empty(), "duo blit-alloc-len: zero writes", 0,
+          t.guard_writes_.size());
+  }
+
   return zhao::report_and_exit("cmd_dma_directed");
 }

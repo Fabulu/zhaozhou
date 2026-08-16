@@ -88,7 +88,11 @@ enum zhao_abi_error : u32 {
 enum video_mode : u8 {
   VIDEO_Z60 = 0;    // 384x240, canvas 184,320 B RGB565
   VIDEO_STORM = 1;  // 320x240, canvas 153,600 B RGB565
-  VIDEO_DUO = 2;   // 512x240 (2 x 256x192), canvas 245,760 B RGB565
+  VIDEO_DUO = 2;   // 512x240 (2 x 256x192); STORES 196,608 B (0x30000,
+                   // two packed view blocks — video_rules.md 1/3.1: the
+                   // 0x3C000 slot ALLOCATION and the 245,760-B DISPLAYED
+                   // stream are different numbers; DebugFrameBlit.byte_len
+                   // carries the 196,608 occupancy)
 }
 
 // [w3/D7] Primitive Forge kind for DrawProcedural. Member 0 is deliberately
