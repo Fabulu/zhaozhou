@@ -142,12 +142,25 @@ class DmaBench {
       }
       ++burst_beat_;
     }
-    // observe the guard port (the MEM.GUARD seam)
+    // observe the guard port (the MEM.GUARD seam): a request cycle first,
+    // then ceil(len/8) guard_wvalid_o data beats (the W2.7 seam law — the
+    // pre-fix sideband only ever carried the request's FIRST 8 bytes, and
+    // this test only ever checked those; now every byte is captured)
     if (guardValid()) {
       const uint32_t gaddr = guardAddr();
       const uint8_t glen = guardLen();
-      const uint64_t gdata = top_->guard_wdata_o;
-      guard_writes_.push_back(GuardWrite{gaddr, glen, gdata});
+      guard_writes_.push_back(GuardWrite{gaddr, glen, {}});
+    }
+    if (top_->guard_wvalid_o) {
+      if (guard_writes_.empty()) {
+        ++stray_wbeats_;  // data beat with no request: protocol violation
+      } else {
+        const uint64_t d = top_->guard_wdata_o;
+        for (int b = 0; b < 8; ++b) {
+          guard_writes_.back().data.push_back(
+              static_cast<uint8_t>((d >> (8 * b)) & 0xFF));
+        }
+      }
     }
     // capture the verdict pulse + packet stream
     if (top_->dma_done_o) {
@@ -238,7 +251,7 @@ class DmaBench {
   struct GuardWrite {
     uint32_t addr;
     uint8_t len;
-    uint64_t data;
+    std::vector<uint8_t> data;  // guard_wvalid_o beats, 8 B each, in order
   };
 
   Vzhao_cmd_dma* top_;
@@ -248,6 +261,7 @@ class DmaBench {
   std::vector<ReqView> bursts_;
   std::vector<GuardWrite> guard_writes_;
   std::vector<uint8_t> blit_results_;
+  uint32_t stray_wbeats_ = 0;
   bool force_err_ = false;
 
  private:
@@ -685,24 +699,28 @@ int main(int argc, char** argv) {
           t.blit_results_[0]);
     uint32_t got_bytes = 0;
     bool data_ok = true;
+    bool beats_ok = true;
     uint32_t off = 0;
     for (const auto& g : t.guard_writes_) {
       check(g.addr == (0x0003C000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg) */ + off),
             "blit: guard addr exact (slot-1 region)", 0x0003C000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg) */ + off,
             g.addr);
-      check(g.len == 64, "blit: 64-B beats", 64, g.len);
-      for (int b = 0; b < 8; ++b) {
-        const uint8_t want = canvas[off + static_cast<uint32_t>(b)];
-        const uint8_t got =
-            static_cast<uint8_t>((g.data >> (8 * b)) & 0xFF);
-        if (want != got) data_ok = false;
+      check(g.len == 64, "blit: 64-B requests", 64, g.len);
+      // ALL len bytes must have streamed (8 beats x 8 B), in order
+      if (g.data.size() != g.len) beats_ok = false;
+      for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
+        if (g.data[b] != canvas[off + b]) data_ok = false;
       }
       got_bytes += g.len;
       off += 64;
     }
     check(got_bytes == 184320, "blit: exactly canvas bytes committed", 184320,
           got_bytes);
-    check(data_ok, "blit: committed bytes bit-exact", 1, data_ok);
+    check(beats_ok, "blit: every request streamed all len bytes", 1, beats_ok);
+    check(data_ok, "blit: committed bytes bit-exact (ALL 64 per request)", 1,
+          data_ok);
+    check(t.stray_wbeats_ == 0, "blit: no stray data beats", 0,
+          t.stray_wbeats_);
 
     // 8b. corrupt blit CRC: ZERO guard writes (the gate)
     t.blit(0, 0, kBlitSrc, 184320, want_crc ^ 1);
@@ -746,21 +764,24 @@ int main(int argc, char** argv) {
           t.blit_results_[0]);
     uint32_t got_bytes = 0;
     bool data_ok = true;
+    bool beats_ok = true;
     uint32_t off = 0;
     for (const auto& g : t.guard_writes_) {
       check(g.addr == off, "duo blit: guard addr exact (slot-0 region)", off,
             g.addr);
-      for (int b = 0; b < 8; ++b) {
-        const uint8_t want = canvas[off + static_cast<uint32_t>(b)];
-        const uint8_t got = static_cast<uint8_t>((g.data >> (8 * b)) & 0xFF);
-        if (want != got) data_ok = false;
+      if (g.data.size() != g.len) beats_ok = false;
+      for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
+        if (g.data[b] != canvas[off + b]) data_ok = false;
       }
       got_bytes += g.len;
       off += 64;
     }
     check(got_bytes == kDuoBytes, "duo blit: exactly the 0x30000 occupancy",
           kDuoBytes, got_bytes);
-    check(data_ok, "duo blit: committed bytes bit-exact", 1, data_ok);
+    check(beats_ok, "duo blit: every request streamed all len bytes", 1,
+          beats_ok);
+    check(data_ok, "duo blit: committed bytes bit-exact (ALL 64 per request)",
+          1, data_ok);
 
     // the allocation length (the pre-split value) is now a length fault
     t.blit(0, 2, kBlitSrc, 245760, want_crc);

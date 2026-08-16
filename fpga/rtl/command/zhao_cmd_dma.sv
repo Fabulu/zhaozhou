@@ -44,11 +44,19 @@
 // the reserved engine RR slot): packet fetch = ZHAO_CLIENT_ENGINE0,
 // blit = ZHAO_CLIENT_BLIT_DMA (both feed hps_ddr_bytes_by_client).
 //
-// VRAM write-data seam: the frozen zhao_guard_req_t carries the
-// transaction {client, write, addr, len, be} but no data lane; the 64-bit
-// write data rides this module's guard_wdata_o sideband, valid on the same
-// cycle as an accepted guard_req_o write. W2.5's guard owns the write port
-// shape; this seam is recorded in the contract notes.
+// VRAM write-data seam (CORRECTED for W2.7 shell composition): the frozen
+// zhao_guard_req_t carries the transaction {client, write, addr, len, be}
+// but no data lane. As shipped by W2.6 the guard_wdata_o sideband carried
+// ONLY the first 8 bytes of each 64-byte write request — the other 56 bytes
+// existed in blit_buf and on no wire, and cmd_dma_directed's "bit-exact"
+// check only ever compared those first 8 bytes. Composing the real SDRAM
+// datapath exposed the gap. The seam is now a BEAT STREAM: after the guard
+// accepts a write request (guard_rsp_i.ready with guard_req_o.valid), this
+// module streams ceil(len/8) beats of guard_wdata_o, one per cycle, marked
+// by guard_wvalid_o — beat k carries bytes [k*8, k*8+8) of the request.
+// The shell's write-data queue consumes exactly these beats and feeds the
+// SDRAM controller's wr_beat pace. W2.5's guard owns the request-path
+// shape; this data seam is recorded in the contract notes.
 //
 // Conservative SystemVerilog subset only (charter 2).
 // Lint: clean under `verilator_bin --lint-only -Wall` (lint_cmd_dma).
@@ -117,8 +125,10 @@ module zhao_cmd_dma
   /* verilator lint_off UNUSEDSIGNAL */
   input  zhao_pkg::zhao_guard_rsp_t guard_rsp_i,
   /* verilator lint_on UNUSEDSIGNAL */
-  // write-data sideband (see header: the frozen req struct has no data lane)
+  // write-data beat stream (see header: the frozen req struct has no data
+  // lane; ceil(len/8) beats per accepted write request, one per cycle)
   output logic [63:0] guard_wdata_o,
+  output logic        guard_wvalid_o,
 
   // ---- frame boundary (D9 shadow latch) ------------------------------------
   /* verilator lint_off UNUSEDSIGNAL */
@@ -193,7 +203,7 @@ module zhao_cmd_dma
     M_WALK,
     M_PKT_DONE, M_STREAM,
     M_BLIT_CHK,
-    M_BLIT_REQ, M_BLIT_WAIT, M_BLIT_COMMIT
+    M_BLIT_REQ, M_BLIT_WAIT, M_BLIT_COMMIT, M_BLIT_DATA
   } dma_state_e;
 
   /* verilator lint_off PROCASSINIT */
@@ -245,6 +255,10 @@ module zhao_cmd_dma
   logic [31:0] b_commit = 32'd0;
   logic        blit_done_v = 1'b0;
   logic [7:0]  blit_status_r = 8'd0;
+  // write-data beat streaming (M_BLIT_DATA): beat index + the accepted
+  // request's length, latched at the guard acceptance edge
+  logic [2:0]  wbeat = 3'd0;
+  logic [6:0]  glen_q = 7'd0;
 
   // bridge request registers
   logic        hps_req_v = 1'b0;
@@ -320,7 +334,8 @@ module zhao_cmd_dma
     hps_req_o.len    = hps_len;
   end
 
-  // VRAM commit beats: one guard write per 64 B (tail masked by len)
+  // VRAM commit requests: one guard write per 64 B (tail carried by len);
+  // the request's DATA follows as guard_wvalid_o beats (M_BLIT_DATA)
   logic [31:0] g_base;
   logic [31:0] g_left;
   assign g_base = (b_dst == 8'd0) ? zhao_pkg::ZHAO_FB_SLOT0_BASE
@@ -335,11 +350,18 @@ module zhao_cmd_dma
     guard_req_o.be     = 64'hFFFF_FFFF_FFFF_FFFF;
   end
 
+  // write-data beat stream: beat `wbeat` of the accepted request during
+  // M_BLIT_DATA (the acceptance-cycle view shows beat 0; consumers must
+  // sample on guard_wvalid_o beats only)
+  logic [31:0] wdata_off;
+  assign wdata_off = b_commit
+                   + ((m == M_BLIT_DATA) ? ({29'd0, wbeat} << 3) : 32'd0);
   always_comb begin
     for (int i = 0; i < 8; i++) begin
-      guard_wdata_o[8*i +: 8] = blit_buf[b_commit + 32'(i)];
+      guard_wdata_o[8*i +: 8] = blit_buf[wdata_off + 32'(i)];
     end
   end
+  assign guard_wvalid_o = (m == M_BLIT_DATA);
 
   assign pkt_valid_o = pkt_v;
   assign pkt_byte_o = slot_buf[rd_off];
@@ -368,6 +390,7 @@ module zhao_cmd_dma
       b_dst <= 8'd0; b_mode <= 8'd0; b_src <= 32'd0; b_len <= 32'd0;
       b_crc <= 32'd0; b_fetched <= 32'd0; b_commit <= 32'd0;
       blit_done_v <= 1'b0; blit_status_r <= 8'd0;
+      wbeat <= 3'd0; glen_q <= 7'd0;
       hps_req_v <= 1'b0; hps_addr <= 32'd0; hps_len <= 7'd0; hps_blit <= 1'b0;
       hdr_gate <= 1'b0; pay_gate <= 1'b0; blit_gate <= 1'b0;
       live_cmds <= 64'd0; live_bytes <= 64'd0; live_drops <= 64'd0;
@@ -697,13 +720,29 @@ module zhao_cmd_dma
           end else if (!blit_gate) begin
             blit_gate <= 1'b1;  // CRC passed: commit may start next cycle
           end else if (guard_rsp_i.ready) begin
-            if ((b_commit + 32'd64) >= b_len) begin
+            // request accepted: stream its ceil(len/8) data beats before
+            // advancing (the write-data seam law, header note)
+            glen_q <= guard_req_o.len;
+            wbeat  <= 3'd0;
+            m      <= M_BLIT_DATA;
+          end
+        end
+
+        M_BLIT_DATA: begin
+          // one guard_wdata_o beat per cycle (guard_wvalid_o high);
+          // beats = ceil(glen_q / 8), glen_q is 8..64 here (canvas bytes
+          // are 64-B multiples; the tail guard keeps the general law)
+          if ((4'(wbeat) + 4'd1) >= 4'((glen_q + 7'd7) >> 3)) begin
+            if ((b_commit + {25'd0, glen_q}) >= b_len) begin
               blit_done_v <= 1'b1;
               blit_status_r <= ST_OK;
               m <= M_IDLE;
             end else begin
-              b_commit <= b_commit + 32'd64;
+              b_commit <= b_commit + {25'd0, glen_q};
+              m <= M_BLIT_COMMIT;
             end
+          end else begin
+            wbeat <= wbeat + 3'd1;
           end
         end
 

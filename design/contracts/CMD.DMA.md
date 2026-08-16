@@ -1,6 +1,6 @@
 # Contract — CMD.DMA (Command DMA)
 
-> Ledger: `design/blocks.yml` · owner ZH-007 · phase 2 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-007 · phase 2 · maturity UNIT_VERIFIED
 
 ## Purpose and exclusions
 
@@ -22,7 +22,7 @@ Input: FRAME_RING descriptors + slot bytes via MEM.HPS.BRIDGE bursts (`zhao_hps_
 
 ## Memory ownership
 
-Read-only on FRAME_RING slots and descriptors EXCEPT the single `state` word transition READY→FPGA_RUNNING it performs on claim (the only word both sides ever write, never simultaneously — spec/memory_rules.md §4.1). No VRAM writes.
+Read-only on FRAME_RING slots and descriptors EXCEPT the single `state` word transition READY→FPGA_RUNNING it performs on claim (the only word both sides ever write, never simultaneously — spec/memory_rules.md §4.1). The DEBUG-BLIT ENGINE (plan D8 dispatch sink, shipped in this block) is the ONE Phase-2 VRAM writer: it commits a CRC-verified pixel arena into exactly the granted FB slot window through MEM.GUARD as client `BLIT_DMA` — `byte_len == canvas_bytes(mode)`, any other length rejected before the first byte (spec/memory_rules.md §5). An earlier revision of this section said “No VRAM writes”, which was written before the blit engine landed and was FALSE for the shipped RTL; corrected 2026-08-16 during W2.7 composition. Write-data seam (corrected 2026-08-16): the frozen `zhao_guard_req_t` has no data lane; after the guard accepts a write request the module streams ceil(len/8) beats of `guard_wdata_o` marked by `guard_wvalid_o` — beat k carries request bytes [k*8, k*8+8). The W2.6 sideband carried only the FIRST 8 bytes of each 64-byte request (and the directed test compared only those); the shell’s SDRAM write-data queue consumes the corrected beat stream. ENFORCED-BY: tests/command/cmd_dma_directed.cpp
 
 ## Q formats and rounding
 
