@@ -950,8 +950,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_mode_directed.cpp
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
         commit: "0b8c71c"
@@ -986,8 +990,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_scanout_directed.cpp
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
         commit: "0b8c71c"
@@ -1021,8 +1029,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_scaler_directed.cpp
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
         commit: "0b8c71c"
@@ -1057,8 +1069,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_framectl_directed.cpp
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
         commit: "0b8c71c"
