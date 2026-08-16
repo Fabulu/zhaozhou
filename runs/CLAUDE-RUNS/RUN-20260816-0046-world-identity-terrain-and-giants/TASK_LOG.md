@@ -285,3 +285,112 @@ carries both CRCs (shipped artifact + current renderer).
 - Destination amendment folded in: fabricated silicon is the goal, the
   MiSTer FPGA core is the proving ground; one Steam clause in the what-for
   list. Deployed via deploy.ps1.
+
+---
+
+## Creature/Character Reference Lane Session (2026-08-16, implementation agent)
+
+The lane with complete specification and zero implementation now has its
+oracle. Commits bd1c733, 905e4c9, 13c1df0 (+ the TASK_LOG commit).
+
+### What was built (charter 21 order: reference BEFORE RTL)
+
+- `reference/include/zref/zref_creature.hpp` + `reference/src/zcreature/`:
+  ring-cylinder meshlet builder (integer zig-zag zipper with the
+  i*m <= j*n arc-fraction walk, CLOSE_TOP/BOT fan caps, 8-bit angular
+  alignment -> U texcoord, exact quarter-turn part orientations, seam-ring
+  duplication on meshlet splits), <=32-bone skeleton with translation-only
+  rest inverses (EXACT integers), the 8 B/bone/frame clip format (S 1.0.14
+  PROPOSED lane, hemisphere-canonical quantization, 9-product decode with
+  ONE rescale(.,11) per element, NO renormalization), PoseBank
+  decode-on-fetch per creature_rules 2.2 (128-tuple LRU,
+  referenced-this-frame never evicted, clamped inserts counted, bad ids ->
+  identity bind pose), 2-weight skinning with the A3b exact s128 sum and a
+  single rescale(.,22), the 3->2 clamp gate (renormalize round-half-up,
+  force-to-64 on the largest, exact per-frame drop error, warn 1% /
+  reject 3%), the hard-cut anim clock with event tags (fires on ENTERING a
+  tagged frame), rotateOnGround (two column_query taps, slope-space
+  rate-limited tilt, none/sideways/completely), bulk inflation (one root
+  scalar, exponential integer smoothing), tick-skip (4^n modulo), the
+  mesh -> micro -> splat -> glint ladder (screen-space error, coarsest
+  legal rung, 10% hysteresis + 15-tick hold), gib bursts (noise2_hash
+  velocities), and the compositor preview riding the pre-resolve hook
+  through zrender's own raster + flat-shade law.
+- `shade_flat_tri` hoisted verbatim from the terrain lambda into
+  zrender/internal.hpp: ONE flat-shade law for terrain and creatures
+  (29-6). render_golden / render_sky / terrain_dual all stayed green: the
+  hoist is address-only.
+- tests/geometry/creature_core.cpp: 15 sections, hand-computed anchors
+  (house style). MEASURED (the qformats amendment's candidate numbers):
+  quat decode element error <= 0.50 LSB (exactly the single-rounding
+  bound), column-norm drift <= 15.86 LSB (~2.4e-4 relative, the no-renorm
+  scale error), end-to-end column angle error <= 0.0156 deg over a
+  3600-rotation sweep.
+- Reel subjects: creature-wave-walk (96 frames, 186 colours, CRC
+  0x33782CB8) and creature-bulk-pop (72 frames, 130 colours, CRC
+  0x00889F52). Both GIFs togif-verified byte-exact, published on the site
+  with provenance blocks; zhao-reel --check green for all 17 subjects
+  (ctest reel_sequence_crc included).
+
+### What the tests caught (a green that could not have been red is not evidence)
+
+- THREE wrong first-draft anchors in my own tests: the 90 deg hand
+  division (11585^2/2048 = 65533.3, not 65534), the meshlet split count
+  (5 meshlets / 384 tris, not 3/448; the cap vertex rides the flush
+  check), and the S = A * B^-1 skin anchor (the rest offset is ROTATED:
+  S_1 = RotZ90 | (3,-2,0), not (1,0,0)).
+- ONE real implementation bug: tilt_matrix's Rodrigues term needed
+  rescale(.,32), not 16 (k is Q16.16, the axis products are Q32.32). The
+  orthogonality anchor caught it.
+- TWO harness bugs in the sweep itself (3x4 vs 3x3 layout misalignment;
+  a unit-scale oracle divided by an fx16-scale norm), and one in the
+  authoring turn computation (full angle where the half angle belonged).
+- One real bug found by telemetry, not tests: the compositor's projected
+  radius was missing the <<16 raw-product scale fold, so the LOD ladder
+  NEVER collapsed (rung 0 at 300 m). Fixed; rung transitions verified.
+
+### Findings recorded for the architect (the valuable part)
+
+1. BRIEF vs SPEC: my instructions said "baked to fixed-point matrices at
+   load (runtime pose = table lookup)". creature_rules 2.2 REJECTS
+   bake-at-load (x6 memory) in favour of decode-on-fetch + cache. I
+   implemented the spec. The cache gives the same runtime property (hit =
+   lookup, no per-frame math); the GEOM.POSE contract Notes already carry
+   the fallback (bake the ACTIVE clip set) if the miss economy fails.
+2. GEOM.POSE contract wording: "identity/90 deg quats exact" is
+   unachievable in ANY power-of-two quat lane (sqrt(2)/2 is irrational);
+   90 deg about Y is exact to 3 LSB in S 1.0.14 (measured; identity and
+   180 deg ARE exact). The directed-test wording needs "identity/180 deg
+   exact, 90 deg within the declared bound".
+3. FINDINGS-S2 (sacengine creatures) and FINDINGS-S6 (lighting
+   architecture) DO NOT EXIST in the repo - the run directory carries
+   only TASK_LOG.md and FINAL_REPORT.md. Every donor claim I needed was
+   re-derivable from creature_rules.md itself (the spec is self-sufficient
+   here), but the file:line cites the lane brief references are gone.
+4. Colour lane (the S6 5.8 question, encountered as specified): the
+   meshlet vertex carries NO colour lane; the reference shades flat from
+   the exact cross-product normal + per-part material colour, the same
+   law terrain uses. PROPOSAL (not frozen): lighting computed at render
+   (GEOM.PROJECT family) from normal + material, no format extension for
+   v1; the question returns only if per-vertex colour (blush, scars,
+   team stripes) is wanted - then a CLUT8 page per part (creature_rules
+   1.2) covers it without a vertex lane either.
+5. Phase-3 interaction worth knowing: draw_heightfield returns silently
+   when ANY lattice vertex is behind the eye (terrain.cpp 310) - a near
+   camera inside the patch envelope makes the whole island vanish. The
+   creature subjects author around it (6 m bump envelope, camera
+   outside). Phase 4/5 clipping removes the constraint.
+
+### Test state
+
+fast lane: 81 pass / 1 skip (format_check, absent tool) / 0 fail, plus
+reel_sequence_crc green through the CMake-built binary.
+
+### Deferred (honest list)
+
+- 64-slot clip vocabulary demo (the bank supports it; the fixtures carry
+  2 clips), reparent verbs + epoch safety test (LOOM lane), body-patch
+  giant seam (PROTOTYPE-BEFORE-SILICON, untouched as ordered), hitboxes,
+  attachment points, the microform validation-at-target-projected-sizes
+  pass, pose-cache bit-exactness vs RTL (blocked on the qformats
+  amendment freezing the quat lane, as the contract states).

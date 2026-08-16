@@ -13,4 +13,5 @@ add_executable(zhao-reel reel/zhao_reel.cpp)
 target_link_libraries(zhao-reel PRIVATE zhao_zref)
 target_include_directories(zhao-reel PRIVATE
   ${CMAKE_SOURCE_DIR}/tests/render
-  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp (creature sim lattice)
