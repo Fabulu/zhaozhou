@@ -472,6 +472,15 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     }
   }
 
+  // [phase3-preview] celestial pre-resolve hook (zref_render.hpp): the
+  // compositor preview draws into the working tile store here, after every
+  // pass, before resolve — stars_and_flares.md §9 places the celestial
+  // quads in pass 6 and the flare in POST; at Phase 3 both ride this
+  // single point (deviation recorded in the header doc).
+  if (pre_resolve_ != nullptr) {
+    pre_resolve_(pre_ctx_, surf.rgb.data(), surf.depth.data(), surf.w, surf.h, tick);
+  }
+
   // pass 9: resolve (charter §8: ordered dither on the RGB565 resolve) + CRC
   uint8_t* out = canvas.slot[dst_slot].data();
   resolve_rgb565(surf.rgb.data(), surf.w, surf.h, out);

@@ -13,9 +13,10 @@
 // PALETTE LAW (QUEUE-animated-gifs-and-site.md): a shipped GIF must be
 // palette-exact — encoded against the frame set's OWN <=256-colour palette
 // with dithering off, never palettegen. The scenes here are AUTHORED into
-// that budget (flat-band sky, no gradient cloud/sun layers) and this tool
-// ENFORCES it: a subject whose frame set exceeds 256 unique colours fails
-// the run with exit 3. Never weaken this into a quantisation step.
+// that budget (C0 gradient-row sky, palette-permutation star boil, white
+// glints that saturate under additive glow, silhouette materials) and this
+// tool ENFORCES it: a subject whose frame set exceeds 256 unique colours
+// fails the run with exit 3. Never weaken this into a quantisation step.
 //
 // Determinism: the render path is integer-only (zref); the per-frame
 // parameter authoring below is integer/fixed-point arithmetic on constants
@@ -37,6 +38,9 @@
 //       reference/src/zrender/render_frame.cpp reference/src/zrender/rast.cpp \
 //       reference/src/zrender/terrain.cpp reference/src/zrender/sprites.cpp \
 //       reference/src/zrender/resolve.cpp reference/src/zsky/emit_layers.cpp \
+//       reference/src/zsky/star_gamut.cpp reference/src/zsky/star_bake.cpp \
+//       reference/src/zsky/star_flare.cpp reference/src/zsky/star_field.cpp \
+//       reference/src/zsky/star_compose.cpp reference/src/zterrain/terrain_core.cpp \
 //       -Ireference/include -Iruntime/include -Itests/render \
 //       -Icompiler/tests/generated
 
@@ -45,6 +49,7 @@
 #include "impact_wave.hpp"  // compiler/tests/generated (TS-generated)
 #include "wave_pool.hpp"    // compiler/tests/generated (TS-generated)
 #include "zfield/zfield.hpp"
+#include "zref/zref_star.hpp"     // celestial compositor preview (stars_and_flares.md)
 #include "zref/zref_terrain.hpp"  // dual-heightfield bake/breach reference
 
 #include <cmath>
@@ -137,7 +142,7 @@ struct PaletteSet {
 // elliptical outlines. Gradient rows cost 16 flat colours (8 per band), well
 // inside the 256-colour palette law; cloud/sun layers stay off (the additive
 // sun is superseded by the star compositor subjects).
-zref::sky::SkySet dusk_sky() {
+zref::sky::SkySet dusk_sky(int variant = 0) {
   zref::sky::SkySet s;
   s.background = {24, 26, 70};
   s.under = {214, 116, 82};               // == band_lower_horizon (S1.2 rule 1)
@@ -146,8 +151,15 @@ zref::sky::SkySet dusk_sky() {
   s.band_upper_bottom = {150, 92, 118};
   s.band_upper_top = {56, 48, 110};  // zenith
   s.cap = {56, 48, 110};             // == band_upper_top (rule 3)
-  s.cloud = {255, 216, 196};         // unused (layer not requested)
-  s.sun = {255, 206, 130};           // unused (layer not requested)
+  if (variant == 1) {
+    // flat upper band (bottom == top == cap): still C0 under S1.2 — the
+    // additive sun/corona/flare then sums against ONE colour, which keeps
+    // an animated subject inside the 256-colour palette law
+    s.band_upper_top = {150, 92, 118};
+    s.cap = {150, 92, 118};
+  }
+  s.cloud = {255, 216, 196};  // unused (layer not requested)
+  s.sun = {255, 206, 130};    // unused (layer not requested)
   s.cloud_max_alpha = zref::fx16{0};
   s.sun_energy = zref::fx16{0};
   s.sun_dir_x = zref::fx16{22938};
@@ -219,6 +231,128 @@ zhao_abi::ZhMat4fx cam_pitch(int32_t k, int32_t eye_m, int32_t dist_m, int32_t p
                          wz,
                          w_w};
   return rtest::mat(m);
+}
+
+// ------------------------------------------------------------- celestial ---
+//
+// The star subjects ride the renderer's [phase3-preview] pre-resolve hook:
+// every LAW (ramps, boil, corona, flare chain, fade, budget) lives in
+// zref::star / zref::flare / zref::post (stars_and_flares.md §12 — never
+// re-implemented here); this block is pure AUTHORING: which class, where on
+// screen, what distance. All integers (charter §29-7).
+
+// display expansion for tints/glints (stars_and_flares.md §2 D2 law)
+constexpr uint8_t c8(uint8_t c6) { return static_cast<uint8_t>((c6 << 2) | (c6 >> 4)); }
+
+struct CelAssets {
+  zref::star::Sprite8 face;         // starface for the subject's class
+  zref::star::Sprite8 corona;       // corona variant
+  uint8_t ramp[64][3];              // built ramp (slew state at targets)
+  std::vector<zref::star::GlintPoint> glints;
+};
+
+struct SceneSubject;  // defined below (the celestial fns follow it)
+
+struct CelCtx {
+  const SceneSubject* sub = nullptr;
+  uint32_t frame = 0;
+  CelAssets* assets = nullptr;
+  zref::star::FlareSlots slots;  // persists across the loop (the fade)
+};
+
+// Starfield backdrop: the §7 sector hash over the ±4 cube around sector
+// (0,0,0), camera at the origin looking +Z, fixed integer projection
+// (f = 300 px). Glints inside `excl` rects are dropped (they would sit
+// under a halo/flare and add palette colours; the near star outshines
+// them — an authoring cull, not a law).
+struct Rect {
+  int32_t x0, y0, x1, y1;
+};
+std::vector<zref::star::GlintPoint> make_glints(bool white, const std::vector<Rect>& excl) {
+  std::vector<zref::star::GlintPoint> out;
+  for (int kx = -4; kx <= 4; ++kx) {
+    for (int ky = -4; ky <= 4; ++ky) {
+      for (int kz = -4; kz <= 4; ++kz) {
+        if (zref::sky::starfield_rarity_skip(kx, ky, kz)) continue;
+        const zref::sky::SectorStar s = zref::sky::starfield(kx, ky, kz);
+        if (s.no_star != 0) continue;
+        if (s.z < 30000) continue;  // behind / too close to the eye plane
+        const int32_t px = 192 + static_cast<int32_t>((300LL * s.x) / s.z);
+        const int32_t py = 120 - static_cast<int32_t>((300LL * s.y) / s.z);
+        if (px < 2 || px >= 382 || py < 2 || py >= 238) continue;
+        bool excluded = false;
+        for (const Rect& r : excl)
+          if (px >= r.x0 && px < r.x1 && py >= r.y0 && py < r.y1) excluded = true;
+        if (excluded) continue;
+        const uint8_t i6 = zref::sky::starfield_intensity6(s.z);
+        if (i6 == 0) continue;
+        zref::star::GlintPoint g;
+        g.x_px = px;
+        g.y_px = py;
+        g.size_px = i6 >= 58 ? 2 : 1;
+        g.intensity6 = i6;
+        if (white) {
+          // flare subjects: saturated white — additive overlap with the
+          // glow plane saturates back to white, no new palette colours
+          g.rgb[0] = g.rgb[1] = g.rgb[2] = 255;
+        } else {
+          const uint8_t v = c8(i6);
+          g.rgb[0] = g.rgb[1] = g.rgb[2] = v;
+        }
+        out.push_back(g);
+      }
+    }
+  }
+  return out;
+}
+
+// identity for a subject: a fixed sector + seed, class forced to the
+// subject's star (the identity schedule stays the source of the seeds)
+zref::star::StarIdentity cel_identity(uint8_t cls, uint32_t seed) {
+  zref::star::StarIdentity id = zref::star::identity(7, 3, -2, seed);
+  id.cls = cls;
+  const zref::star::StarClass& c = zref::star::kGamut[cls];
+  if (cls != 9)
+    for (int ch = 0; ch < 3; ++ch) id.under6[ch] = c.under6[ch];
+  return id;
+}
+
+void cel_build_assets(int celestial, CelAssets& a) {
+  uint8_t cls = 0;
+  uint8_t core16 = 5;  // halo_space
+  switch (celestial) {
+    case 1:
+      cls = 3;  // S03 red giant, close: the boiling disc
+      break;
+    case 2:
+      cls = 0;  // S00 yellow star: the classic flare
+      break;
+    case 3:
+      cls = 11;   // S11 pulsar
+      core16 = 8; // halo_airless: hard core + short skirt — few ring
+                  // colours under the strobing burst (palette law), and a
+                  // crisp look that suits a compact object
+      break;
+    case 4:
+      cls = 0;
+      core16 = 0;  // halo_atmo: surface sun with atmosphere (§4)
+      break;
+  }
+  const zref::star::StarClass& c = zref::star::kGamut[cls];
+  const zref::star::StarIdentity id = cel_identity(cls, 0xA11CE5u);
+  zref::star::RampState rs;
+  zref::star::ramp_retarget(rs, id);  // snap: reel ramps sit at targets
+  zref::star::ramp_build(rs.cur, a.ramp);
+  a.face = zref::star::starface(id.texture_seed, c.smooth);
+  a.corona = zref::star::corona_sprite(core16);
+  // glints: space subjects only; exclusion rects sized per subject below
+  if (celestial == 1) {
+    a.glints = make_glints(false, {{44, 12, 340, 220}});  // giant + halo box
+  } else if (celestial == 2 || celestial == 3) {
+    // the sweep + ghost lanes cover most of the frame; white glints
+    // saturate under additive overlap and add no palette colours
+    a.glints = make_glints(true, {});
+  }
 }
 
 // Q16.16 raw from milli-units (integer authoring, charter §29-7)
@@ -344,6 +478,17 @@ struct SceneSubject {
   // continuity demo: the cap and under rims must cross the frame invisibly
   bool sky_sweep = false;
   int32_t sweep_pitch0 = 0, sweep_pitch1 = 0;
+  // terrain material (per-subject: the dusk-silhouette scenes darken it)
+  uint8_t mat_r = 104, mat_g = 122, mat_b = 78;
+  // celestial subjects (stars_and_flares.md, zref::star compositor preview):
+  //   0 none; 1 star-boil (close S03 giant, CLUT boil + corona + glints);
+  //   2 noctis-flare (S00 sweep, white-washed disc + corona + the full
+  //     ghost chain); 3 pulsar (S11 duty strobe + glints);
+  //   4 flare-occlusion (surface dusk: the sun crosses behind the island,
+  //     the probe fade Noctis lacked)
+  int celestial = 0;
+  bool space = false;  // no DrawSky (fallback black), no terrain
+  int sky_variant = 0;  // dusk_sky variant (1 = flat upper band, still C0)
   const char* note = "";
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
@@ -351,14 +496,128 @@ struct SceneSubject {
   uint32_t expect_seq_crc = 0;
 };
 
+// per-frame celestial compose — the ONE hook target (set on the renderer's
+// [phase3-preview] pre-resolve point). Authoring only; every law call goes
+// through zref::star / zref::flare / zref::post.
+void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, uint32_t tick) {
+  CelCtx& ctx = *static_cast<CelCtx*>(vctx);
+  const SceneSubject& sub = *ctx.sub;
+  CelAssets& a = *ctx.assets;
+  const uint32_t f = ctx.frame;
+  const uint32_t half = sub.frames / 2;
+  const uint32_t ph = f < half ? f : (sub.frames - 1 - f);  // ping-pong
+
+  zref::star::ComposeLight L;
+  L.ramp = a.ramp;
+  L.face = &a.face;
+  L.corona = &a.corona;
+  int n_lights = 1;
+
+  switch (sub.celestial) {
+    case 1: {  // star-boil: fixed close S03 giant; the CLUT rotation IS the
+               // animation (63 frames × rot step 2 = one full revolution)
+      L.x_px = 192;
+      L.y_px = 116;
+      L.disc_r_px = 48;
+      L.halo_r_px = 120;
+      L.d_milli = 3 * zref::star::kGamut[3].ray_milli / 2;  // d = 1.5r
+      L.r_milli = zref::star::kGamut[3].ray_milli;
+      L.flare_mode = 0;  // d < 5r: outside the §5 window — no flare
+      L.probe_x = 192;
+      L.probe_y = 116;
+      break;
+    }
+    case 2: {  // noctis-flare: S00 sweeping, washed white disc + corona +
+               // the full ghost chain; border fade at the sweep ends
+      L.x_px = 8 + static_cast<int32_t>((368 * ph) / (half - 1));
+      L.y_px = 150;
+      L.disc_r_px = 8;
+      L.halo_r_px = 16;
+      L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
+      L.r_milli = zref::star::kGamut[0].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(63);
+      L.tint[1] = c8(58);
+      L.tint[2] = c8(40);  // the class colour as display tint (D2 law)
+      L.probe_x = L.x_px;
+      L.probe_y = L.y_px;
+      break;
+    }
+    case 3: {  // pulsar: tiny cyan core, §2 duty strobe on the flare
+      L.x_px = 240;
+      L.y_px = 110;
+      L.disc_r_px = 4;
+      L.halo_r_px = 14;  // small: the burst overlaps the halo, and every
+                         // distinct halo ring colour times every glow level
+                         // is a palette entry (395 colours at r 36)
+      L.d_milli = 40LL * zref::star::kGamut[11].ray_milli;
+      L.r_milli = zref::star::kGamut[11].ray_milli;
+      L.flare_mode = 2;
+      // lawful spin: rate = SPIN_K·13 = 715 angle16/tick (h2 mod 30 == 12);
+      // the loop restart is the sequence replaying (scars precedent)
+      L.spin_phase = static_cast<uint16_t>(tick * 715u);
+      L.tint[0] = c8(0);
+      L.tint[1] = c8(63);
+      L.tint[2] = c8(63);
+      L.probe_x = 240;
+      L.probe_y = 110;
+      break;
+    }
+    case 4: {  // flare-occlusion: a DISTANT sun (d = 600r) crosses behind
+               // the island — the §6 far-glint rung plus the §5 b=7 streak,
+               // the iconic anamorphic line. The terrain depth kills the
+               // probe and the streak FADES over 15 frames (±1/frame, the
+               // pop Noctis had and this spec removes). A near sun's full
+               // burst was tried first and is unpublishable under the
+               // palette law (every glow level × every lambert shade of the
+               // island; 257–309 colours at k 12–30) — the far streak is
+               // both the signature look and the one that fits.
+      L.x_px = 24 + static_cast<int32_t>((336 * ph) / (half - 1));
+      L.y_px = 102;     // grazes the island's raised heart: occluded only
+                        // mid-sweep, so the fade has room to breathe
+      L.disc_r_px = 0;  // <1.5 px projected: glint rung (below)
+      L.halo_r_px = 0;
+      L.d_milli = 600LL * zref::star::kGamut[0].ray_milli;  // streak, k=384
+      L.r_milli = zref::star::kGamut[0].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(63);
+      L.tint[1] = c8(58);
+      L.tint[2] = c8(40);
+      L.probe_x = L.x_px;
+      L.probe_y = L.y_px;
+      break;
+    }
+    default:
+      n_lights = 0;
+      break;
+  }
+
+  // the light's own far glint (§6 rung: the star IS a 2–3 px point when the
+  // disc rung is off) — white saturates under the additive streak, and it
+  // carries the glow tag the occlusion probe latches
+  std::vector<zref::star::GlintPoint> pts(a.glints);
+  if (n_lights == 1 && L.disc_r_px == 0 && L.halo_r_px == 0) {
+    zref::star::GlintPoint g;
+    g.x_px = L.x_px;
+    g.y_px = L.y_px;
+    g.size_px = 3;
+    g.intensity6 = zref::star::glint_intensity6(L.d_milli, L.r_milli);
+    g.rgb[0] = g.rgb[1] = g.rgb[2] = 255;
+    pts.push_back(g);
+  }
+  zref::star::compose_view(rgb, depth, w, h, 0, 0, w, h, tick, &L, n_lights,
+                           pts.empty() ? nullptr : pts.data(), static_cast<int>(pts.size()),
+                           ctx.slots, nullptr);
+}
+
 // ------------------------------------------------------------ scene render --
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, 12, 8);
-  zref::render::Material mat{104, 122, 78};
-  zref::sky::SkySet sky = dusk_sky();
+  zref::render::Material mat{sub.mat_r, sub.mat_g, sub.mat_b};
+  zref::sky::SkySet sky = dusk_sky(sub.sky_variant);
 
   const zfield::DecodeResult wave = zfield::decode(zfield_gen::wave_pool::kProgramBytes.data(),
                                                    zfield_gen::wave_pool::kProgramBytesLen);
@@ -385,6 +644,22 @@ int render_scene(const SceneSubject& sub) {
   std::vector<uint32_t> frame_crcs;
   uint32_t seq_crc = 0;
 
+  // celestial subjects: assets baked once, fade slots persist across the
+  // loop, the compositor rides the pre-resolve hook (stars_and_flares.md)
+  CelAssets cel_assets;
+  CelCtx cel_ctx;
+  if (sub.celestial != 0) {
+    cel_build_assets(sub.celestial, cel_assets);
+    cel_ctx.sub = &sub;
+    cel_ctx.assets = &cel_assets;
+    // the pulsar subject starts with the fade already up: its subject IS
+    // the §2 duty strobe, and the 15-frame fade-in would multiply every
+    // glow level by 15 alpha steps (the palette law; the fade-in itself is
+    // the flare-occlusion subject's show)
+    if (sub.celestial == 3 || sub.celestial == 4) cel_ctx.slots.fade_ctr[0] = 15;
+    rend.set_pre_resolve(&cel_hook, &cel_ctx);
+  }
+
   const std::string dir = g_out + "/" + sub.name;
   if (g_write) {
     ZHAO_MKDIR(g_out.c_str());
@@ -394,6 +669,7 @@ int render_scene(const SceneSubject& sub) {
   uint32_t breach_total = 0;
   for (uint32_t f = 0; f < sub.frames; ++f) {
     const uint32_t tick = f * sub.step;
+    cel_ctx.frame = f;  // the hook reads the authored per-frame positions
 
     // deterministic bake steps for this frame (TERRAIN.BAKE reference:
     // bake writes scar layer B, the breach law flips cell-state layer D;
@@ -470,18 +746,20 @@ int render_scene(const SceneSubject& sub) {
         sky_pc = zref::fx_cos(zref::angle16{static_cast<uint16_t>(th)}).raw;
         sky_bias = 0;
       }
-      auto sk = zhao_abi::zhao_sample_draw_sky();
-      sk.payload.sky_set = 2;
-      sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
-      sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
-      sk.payload.drum_yaw = 0x0C00;
-      sk.payload.cloud_scroll_u = 0;
-      sk.payload.cloud_scroll_v = 0;
-      sk.payload.viewport_mask = 1;
-      sk.payload.flags = zref::sky::kLayerUnder | zref::sky::kLayerCap;  // flat bands only
-      std::vector<uint8_t> v2;
-      zhao_abi::zhao_pack_draw_sky(sk, v2);
-      b.append_record(v2);
+      if (!sub.space) {  // space subjects: fallback black clear, no sky
+        auto sk = zhao_abi::zhao_sample_draw_sky();
+        sk.payload.sky_set = 2;
+        sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
+        sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
+        sk.payload.drum_yaw = 0x0C00;
+        sk.payload.cloud_scroll_u = 0;
+        sk.payload.cloud_scroll_v = 0;
+        sk.payload.viewport_mask = 1;
+        sk.payload.flags = zref::sky::kLayerUnder | zref::sky::kLayerCap;
+        std::vector<uint8_t> v2;
+        zhao_abi::zhao_pack_draw_sky(sk, v2);
+        b.append_record(v2);
+      }
 
       for (const FieldSpec& fs : sub.fields) {
         auto tf = zhao_abi::zhao_sample_terrain_field();
@@ -515,7 +793,7 @@ int render_scene(const SceneSubject& sub) {
         b.append_record(v4);
       }
 
-      if (!sub.sky_sweep) {
+      if (!sub.sky_sweep && !sub.space) {
         auto dp = zhao_abi::zhao_sample_draw_procedural();
         dp.payload.program = 44;
         dp.payload.material = 45;
@@ -851,6 +1129,90 @@ SceneSubject subject_skysweep() {
   return s;
 }
 
+// 6. star-boil — a red giant at 1.5 radii: the boiling CLUT rotation, the
+// space corona, and a graded starfield behind it. 63 frames at rot step 2
+// per frame = exactly one full palette revolution, so the boil loops with
+// no restart jump. No flare: d < 5r is outside the S5 window (the law, not
+// an omission).
+SceneSubject subject_starboil() {
+  SceneSubject s;
+  s.name = "star-boil";
+  s.frames = 63;
+  s.step = 6;  // rot = (tick/3) mod 63 = 2f mod 63 -> f=63 wraps to 0
+  s.celestial = 1;
+  s.space = true;
+  s.note =
+      "S03 red giant at 1.5 radii; granulation is a 63-entry palette "
+      "rotation, zero texels rewritten per frame; corona reads through the "
+      "same ramp; starfield from the sector hash";
+  s.expect_seq_crc = 0xB72B78CCu;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
+// 7. noctis-flare — the S00 yellow star at 40 radii sweeping the frame:
+// washed-white disc, corona, and the full lens chain (12-spoke burst +
+// three mirrored ghosts on the lens axis), border fade at the edges.
+SceneSubject subject_noctisflare() {
+  SceneSubject s;
+  s.name = "noctis-flare";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 2;
+  s.space = true;
+  s.note =
+      "S00 at 40 radii; burst at the light, ghosts at -26/-77/-230 Q8.8 of "
+      "the axis, quarter-res glow splats, class-colour tint; the flare dims "
+      "over the outer 16 px instead of cutting";
+  s.expect_seq_crc = 0x2F6B7CDDu;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
+// 8. pulsar — S11: 250 km-class core, spin 715 angle16/tick, flare only
+// while spin_phase < 0x4000 (the exact quarter-turn duty law).
+SceneSubject subject_pulsar() {
+  SceneSubject s;
+  s.name = "pulsar";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 3;
+  s.space = true;
+  s.note =
+      "S11 pulsar at 40 radii; the flare strobes on the S2 duty law "
+      "(spin_phase < 0x4000, one quarter of each rotation); fade counters "
+      "keep the visibility transitions stepped at 17 alpha per frame";
+  s.expect_seq_crc = 0x5232A5E8u;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
+// 9. flare-occlusion — the surface case: a dusk sun crosses behind the
+// island; the 1-byte probe stops reading GLOW and the flare fades out over
+// 15 frames, then back in on the far side. Noctis popped here; the fade
+// counter is the improvement the spec adds.
+SceneSubject subject_flareocclusion() {
+  SceneSubject s;
+  s.name = "flare-occlusion";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 4;
+  s.sky_variant = 1;  // flat upper band (still C0): additive headroom
+  s.island = true;    // the dual-heightfield island, framed from afar
+  s.cam_k = 112000;
+  s.cam_eye = 140;
+  s.cam_dist = 300;
+  s.cam_bias = 5243;
+  // dusk silhouette: a dark material compresses the lambert range (the
+  // island against the sunset) and with it the glow-over-terrain sums
+  s.mat_r = 44;
+  s.mat_g = 48;
+  s.mat_b = 42;
+  s.note =
+      "S00 sun at 30 radii crossing behind the island; the effect-tag probe "
+      "gates the flare and a 4-bit counter fades it 15 frames each way; "
+      "halo_atmo variant (atmosphere = one bake parameter)";
+  s.expect_seq_crc = 0x6D12B48Eu;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -865,6 +1227,10 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_scars());
     rc |= render_scene(subject_breach());
     rc |= render_scene(subject_skysweep());
+    rc |= render_scene(subject_starboil());
+    rc |= render_scene(subject_noctisflare());
+    rc |= render_scene(subject_pulsar());
+    rc |= render_scene(subject_flareocclusion());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
@@ -885,5 +1251,9 @@ int main(int argc, char** argv) {
   if (wanted("terrain-scars")) rc |= render_scene(subject_scars());
   if (wanted("terrain-breach")) rc |= render_scene(subject_breach());
   if (wanted("sky-sweep")) rc |= render_scene(subject_skysweep());
+  if (wanted("star-boil")) rc |= render_scene(subject_starboil());
+  if (wanted("noctis-flare")) rc |= render_scene(subject_noctisflare());
+  if (wanted("pulsar")) rc |= render_scene(subject_pulsar());
+  if (wanted("flare-occlusion")) rc |= render_scene(subject_flareocclusion());
   return rc;
 }

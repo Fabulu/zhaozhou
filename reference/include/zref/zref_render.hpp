@@ -285,6 +285,24 @@ class SoftwareRenderer {
   /** Clear persistent state (sheets, latched mode -> VIDEO_Z60 reset, §1.1). */
   void reset();
 
+  /**
+   * [phase3-preview] pre-resolve hook (spec/stars_and_flares.md §9/§12):
+   * invoked once per frame after every pass, immediately before the §8
+   * resolve, with the RGB888 working canvas + Q16.16 1/w depth plane
+   * (charter §8 tile store) and the frame tick. The celestial compositor
+   * preview (zref::star::compose_view) rides this until the reserved
+   * `SetCelestials 0x0320` lands in spec/commands.zidl. Plain function
+   * pointer + context (no std::function: charter §20.1 flat-C style).
+   * fn == nullptr (the default) disables it — nothing changes for any
+   * existing consumer or golden.
+   */
+  using PreResolveFn = void (*)(void* ctx, uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h,
+                                uint32_t tick);
+  void set_pre_resolve(PreResolveFn fn, void* ctx) {
+    pre_resolve_ = fn;
+    pre_ctx_ = ctx;
+  }
+
   zhao_abi::video_mode latched_mode() const { return mode_latched_; }
 
   /** Persistent scar state (charter §12) — test/inspection hook. */
@@ -297,6 +315,8 @@ class SoftwareRenderer {
   // mode_latched_ first, then the walk may rewrite it for the next frame.
   zhao_abi::video_mode mode_latched_ = zhao_abi::VIDEO_Z60;
   std::vector<std::pair<uint32_t, SurfaceSheet>> sheets_;
+  PreResolveFn pre_resolve_ = nullptr;  // [phase3-preview] celestial hook
+  void* pre_ctx_ = nullptr;
 };
 
 // ------------------------------------------------------- resolve + CRC laws --
