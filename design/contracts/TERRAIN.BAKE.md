@@ -36,6 +36,14 @@ writes (bake commits per dirty-rectangle, double-buffered then flipped).
 ## Backpressure rules
 
 ready/valid; bakes are strictly ordered (command order — replay law).
+Cadence budget (frozen 2026-08-16, terrain_rules §9.2): at most
+**BAKE_PATCH_BUDGET = 64** patch-bakes drained per frame; the remainder
+defers to the head of the next frame's window, FIFO — never dropped, never
+reordered (charter §11.4's reject arm applies to live cosmetic fields, not
+to persistent scars). Deferral is state-exact by the incremental-scaling
+identity (`from→mid` then `mid→to` ≡ `from→to`); breach/heal timing under
+deferral is a deterministic function of (command stream, budget constant),
+so replays are exact and a budget retune is a recorded semantic change.
 
 ## Memory ownership
 
@@ -55,7 +63,15 @@ Variable per stamp footprint; bounded by footprint ≤ patch.
 
 ## Target throughput
 
-1 bake texel (lattice vertex) per clock.
+1 bake texel (lattice vertex) per clock. At the frozen cadence budget
+(64 patch-bakes/frame, terrain_rules §9.2) that is 64 × 1,089 = 69,696
+cycles/frame ≈ 4.2% of a 1.67 M-cycle frame (100 MHz placeholder — Phase 0
+freezes the clock); the sustained sizing case (worst-aligned donor Volcano,
+7×7 = 49 patches every frame of the cast) is 53,361 ≈ 3.2%. VRAM traffic
+≈ 10.5 KiB per patch-bake (B RMW + A/C breach-test reads + D RMW) ≈
+41.3 MB/s at the cap — affordability against board bandwidth is explicitly
+NOT COSTED until ZH-004's sustained-bandwidth measurement and the Phase-6/7
+frame-scheduler cycle ledger exist (terrain_rules §9.2).
 
 ## Overflow and malformed-input behaviour
 
@@ -79,7 +95,9 @@ FPGA-vs-sim bit equality of layers B and D after arbitrary bake sequences.
 
 `tests/terrain/terrain_bake_directed.cpp`: incremental-scaling identities
 (apply a→b→a = identity), interruption un-apply, residual decay, breach
-birth at exactly-four-corner equality, heal round-trip, no_bake clamp.
+birth at exactly-four-corner equality, heal round-trip, no_bake clamp,
+cadence-deferral identity (throttled at BAKE_PATCH_BUDGET ≡ unthrottled
+final B/D layers; breach-frame determinism — terrain_rules §10.8).
 
 ## Randomized differential tests
 

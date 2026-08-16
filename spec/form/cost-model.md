@@ -102,6 +102,13 @@ verbatim when a build asserts it. Wave-3 entries:
 - Field program ceilings — field-ir.md §7.3 (earth 32 / flow 48 / global
   64): enforced at admission (language-semantics §6.1), reported per program
   in `programs[]`.
+- `terrain_live_fields_per_patch ≤ 16` — MAX_PATCH_FIELDS, spec/
+  terrain_rules.md §9.1 (enforced by TERRAIN.PATCH intake, command-order
+  tail reject; runtime mirror `programs_rejected`).
+- `terrain_bake_patches_per_frame ≤ 64` — BAKE_PATCH_BUDGET, spec/
+  terrain_rules.md §9.2 (enforced by TERRAIN.BAKE ordered deferral; the
+  bandwidth affordability behind it is explicitly not costed until ZH-004
+  board truth — the row asserts the cadence cap only).
 
 Hardware-absolute budgets (frame cycles, ALM/DSP/M10K) remain Phase-0 lane
 (board truth); when they land, rows are added here, never edited in place.

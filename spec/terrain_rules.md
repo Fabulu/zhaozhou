@@ -400,15 +400,142 @@ retains 3 MiB for Phase-7+ growth (larger live sets, deeper mips).
 
 - Transient analytic waves (Erupt/Quake grammar, S1 §4) are ordinary earth
   programs with hard finite footprints — raised-cosine + polynomial
-  envelopes need one sin LUT (qformats §7.1) and fit the earth ceiling (32
-  ops, field-ir §"ceilings").
+  envelopes need one sin LUT (qformats §7.1) ~~and fit the earth ceiling (32
+  ops, field-ir §"ceilings")~~. **Corrected 2026-08-16 (S5 §1.7):** a
+  faithful *single-program* Erupt sketch-counts at ~36–38 instructions —
+  over the earth ceiling of 32. The ceiling stays 32; composite effects
+  **phase-split** into per-phase programs that each fit it (grow ~10 ops,
+  wave ≤ 32 ops), per the blessed idiom in field-ir §7.4. Quake and
+  single-phase waves fit 32 directly (existence proofs: `impact_wave`
+  30 instrs, `wave_pool` 27, committed under `compiler/tests/generated/`).
 - Persistent stamps use incremental scaling (`applyDMapDelta(from,to)` heir):
   the bake applies `(to − from) × stencil` so an interrupted cast un-applies
   cleanly and permanence decays to a residual fraction — one stamp record,
   no per-frame rewrites. Stamp stencils are small integer assets (the donor's
   33×33 ubyte volcano stencil is the existence proof).
 - Bounded lists per patch with bake/compose/reject on overflow: charter
-  §11.4 verbatim; TERRAIN.PATCH enforces.
+  §11.4 verbatim; TERRAIN.PATCH enforces. The bound's numeric value and the
+  exact overflow law are frozen in §9.1; the bake cadence budget in §9.2.
+
+### 9.1 The live-field list bound — frozen (2026-08-16)
+
+Charter §11.4 and this file promised "bounded lists per patch" without a
+number; S4 §3 and S5 §2 both flagged the gap. Frozen here with the donor
+worst case as the sizing floor. Footprint→patch counting throughout uses
+closed intervals over the shared 33×33 vertex lattice — a footprint that
+touches a patch-border vertex bins to BOTH adjacent patches (border vertices
+are physically shared), which is why every worst case below carries a +1
+column over the naive `ceil(extent / 64 m)`.
+
+**`MAX_PATCH_FIELDS = 16`** — live earth programs composed per patch per
+frame (4-bit lane index). Derivation, the 8-wizard donor scenario:
+
+| Contributor | lanes | derivation |
+|---|---:|---|
+| 8 wizards × 1 held Erupt each | 8 | Erupt wave footprint radius 90 m (`state.d:3022`) ⇒ 180 m across ⇒ 3×3 (aligned) to 4×4 (worst) patches per Erupt; all 8 footprints can contain the same patch — overlap is the normal case. Under the phase-split idiom (field-ir §7.4) an Erupt is exactly ONE program at any instant (grow or wave, never both), so 8 Erupts = 8 lanes |
+| Quakes | 8 | radius 50 m (`state.d:4802-4838`), 0.5 s duration ⇒ 2×2–3×3 patches each. The donor engine never bounds concurrent quake-capable creatures, so a bound must be imposed; rated at one active Quake per wizard's forces over the same ground at the same instant. Stacking more inside overlapping 0.5 s windows on one spot is beyond anything donor pacing produces |
+| Volcano | 0 | NOT a live field: the rise is an incremental bake sequence (stamp records, §9 / S5 §2) — it pressures the §9.2 bake budget, never this list. Load-bearing distinction |
+| TestDisplacement | 0 | donor debug rig (`state.d:4926-4932`), not shipped content |
+| **Total** | **16** | donor-shaped worst case met exactly; the internal headroom is that 8 simultaneous co-located Quakes is already beyond donor pacing |
+
+Consistency check against §4.2: 8 Erupts × ≤16 patches = ≤128 live-field
+patches, inside the 256-patch composed-cache budget with a 2× margin.
+
+**Cost coupling (stated, deliberately not certified):** the worst legal
+patch costs 16 programs × 1,089 vertices × ≤32 instrs = **557,568 field
+instructions for ONE patch** — ~33% of a 1.67 M-cycle frame at the
+cost-model's 100 MHz placeholder clock and 1 instr/cycle. MAX_PATCH_FIELDS
+is therefore an *intake correctness bound*, not a per-frame affordability
+certificate. The frame-level evaluation budget (Σ over touched patches of
+programs × vertices × instrs) is **not costed** — it needs FIELD.SEQ.EARTH's
+throughput pinned (that contract is still a stub) and the Phase-0 clock;
+until then the runtime mirror is the `field_instructions_by_profile` counter
+and the §11.4 valves are the governor's degrade path.
+
+**Overflow law (exact, deterministic — TERRAIN.PATCH enforces):**
+
+1. The sim bins TerrainField records (commands.zidl 0x0200) to patches by
+   footprint ∩ envelope, closed-interval rule above.
+2. Per patch, records append **in command order**. Records beyond
+   MAX_PATCH_FIELDS are **rejected**: not composed, counted in
+   `programs_rejected`, and emitted as a trace event
+   {patch_id, program_hash, command index}. Nothing already listed is ever
+   evicted: the first 16 in command order win, every run, identically.
+3. Determinism: list membership and composition order are pure functions of
+   the command stream, so accept/reject decisions are capture-replay exact
+   by construction — no run can silently drop a different effect than
+   another run.
+4. Priority lives ABOVE the seam (charter §11.4 assigns it to software):
+   the CPU orders per-patch emissions so droppable cosmetic fields sort
+   after gameplay-relevant fields in the command stream, and applies the
+   three §11.4 valves (bake old fields early / pre-compose compatible
+   fields / degrade cosmetics) *before* emission. The hardware rule stays
+   order-only; TerrainField 0x0200 gains no priority field and the wire is
+   unchanged.
+
+### 9.2 Bake cadence budget — frozen (2026-08-16)
+
+S5 §2 identified the missing bound: a donor-scale Volcano is an incremental
+bake touching its whole footprint **every frame** for the cast duration
+(`applyDMapDelta` per frame, `state.d:21032-21034`), and TERRAIN.BAKE had no
+patches-per-frame bound at all.
+
+**Footprint arithmetic (corrects S5 §2):** the Volcano footprint is a
+~330 m square (33×33 donor cells at 10 m stencil; flatten to Chebyshev
+164 m = 328 m). Over 64 m patches that is **6×6 = 36 patches at best
+alignment and 7×7 = 49 at worst** (closed-interval rule, §9.1). S5's
+"6×6 = 36" is the *minimum*, not the worst, and its "(5×5 if aligned)"
+aside is arithmetically impossible — 5 × 64 m = 320 m < 328 m. The budget
+below covers 49.
+
+**`BAKE_PATCH_BUDGET = 64`** — patch-bakes drained per frame (a patch-bake
+= one stamp record applied to one patch's dirty rectangle). Sizing: 49
+(worst-aligned Volcano, sustained every frame of the cast) + 15 slack for
+concurrent one-shot bakes (an expiring 4×4-patch Erupt scar, Bombardment
+dents); a same-frame excess simply defers (law below).
+
+Derived costs at the frozen budget, at the contract's 1 bake texel
+(lattice vertex) per clock:
+
+- **Engine cycles:** 64 × 1,089 = 69,696 cycles/frame ≈ 4.2% of a
+  1.67 M-cycle frame (100 MHz placeholder — Phase 0 freezes the clock);
+  the sustained Volcano worst case is 49 × 1,089 = 53,361 ≈ 3.2%.
+- **VRAM traffic per patch-bake:** read+write scar B (2 × 2,178 B) + read
+  A and C for the breach-law compose test (2 × 2,178 B) + read+write cell
+  state D (2 × 1,024 B) = **10,760 B ≈ 10.5 KiB** (the 33×33 u8 stencil
+  asset ≈ 1.1 KiB is fetched once per bake event and cached across the
+  footprint — negligible). At the 64-patch cap: ≈ 673 KiB/frame ≈
+  **41.3 MB/s at 60 Hz**; at the 49-patch sustained case ≈ 515 KiB/frame ≈
+  31.6 MB/s.
+- **Affordability: NOT COSTED.** `spec/memory_rules.md` contains no
+  ratified total-bandwidth number (its SDRAM figures are conservative sim
+  constants, board truth pending), and 41 MB/s is coincidentally the same
+  order as §7's *also-provisional* streaming worst case. What settles it:
+  (a) ZH-004's sustained + strided bandwidth measurement from the board
+  probe, and (b) the Phase-6/7 frame-scheduler cycle ledger apportioning
+  the arbiter's engine-class share between bake, streaming, and scanout.
+  Until both exist, BAKE_PATCH_BUDGET is a *cadence cap the contract
+  enforces*, not a claim that the bandwidth is free.
+
+**Deferral law (exact, deterministic — TERRAIN.BAKE enforces):**
+
+1. `stamp_results` records form ONE strictly command-ordered queue. Bake
+   entries are **never dropped and never reordered** — scars are persistent
+   state, so charter §11.4's *reject* arm does not apply here (it applies
+   to live cosmetic fields, §9.1).
+2. Per frame the engine drains at most BAKE_PATCH_BUDGET patch-bakes; the
+   remainder carries to the head of the next frame's window, ahead of newly
+   issued bakes (FIFO).
+3. Deferral is **state-exact by the incremental-scaling identity**:
+   applying `from→mid` then `mid→to` ≡ `from→to`, so a deferred patch takes
+   one larger step at its next bake — the Volcano's rise loses no height,
+   only an intermediate frame. The donor's own mechanism makes the cadence
+   cap safe.
+4. Breach/heal event *timing* under deferral is a deterministic function of
+   (command stream, BAKE_PATCH_BUDGET). The constant is therefore
+   replay-semantics-affecting: captures replay under the constant that was
+   law when they were recorded, and a retune is a semantic change to be
+   recorded like a profile version, never a silent tweak.
 
 ## 10. Test plan (obligations for Phase 6/7 owners)
 
@@ -426,6 +553,15 @@ retains 3 MiB for Phase-7+ growth (larger live sets, deeper mips).
    rides the frame-ownership law.
 6. Budget assertions: §8 sums recomputed by the ledger/report tooling once
    Phase 6 allocators exist.
+7. Overflow-reject determinism (§9.1): a command stream carrying
+   > MAX_PATCH_FIELDS fields on one patch rejects the same tail records on
+   every run and replay; `programs_rejected` and the trace events match
+   capture-exactly; composition of the accepted 16 is command-order stable.
+8. Bake deferral identity (§9.2): a stamp sequence throttled to
+   BAKE_PATCH_BUDGET produces bit-identical final B/D layers to the same
+   sequence drained unthrottled (incremental-scaling identity), and
+   breach-event frames are a deterministic function of the budget constant
+   (replay-exact at the same constant).
 
 ## 11. Explicitly not decided here (and what it blocks)
 

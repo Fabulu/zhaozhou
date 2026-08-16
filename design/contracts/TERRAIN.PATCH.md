@@ -48,9 +48,17 @@ the zref reference; the lattice element formats are already frozen
 ## Backpressure rules
 
 ready/valid on all ports. The field intake is bounded per patch (charter
-§11.4): when a patch's per-frame field list would overflow, the block
-REJECTS the lowest-priority cosmetic fields (sets `programs_rejected`) and
-never stalls the frame — reject, never silently drop, never overrun.
+§11.4): **MAX_PATCH_FIELDS = 16** live programs per patch per frame, frozen
+with derivation in terrain_rules §9.1. ~~When a patch's per-frame field list
+would overflow, the block REJECTS the lowest-priority cosmetic fields~~
+(superseded 2026-08-16 — the hardware has no priority notion): on overflow
+the block rejects the incoming record — the first 16 in command order win,
+counted in `programs_rejected` plus a trace event, nothing listed is ever
+evicted, and the frame never stalls. Priority ordering is the SIM's job
+above the seam (it emits droppable cosmetics last per patch and applies the
+§11.4 bake/compose/degrade valves before emission). Reject, never silently
+drop, never overrun — and rejects are capture-replay exact because they are
+a pure function of the command stream.
 
 ## Memory ownership
 
@@ -70,8 +78,12 @@ TERRAIN.BAKE, not here). No other rounding exists in this block.
 ## Latency (fixed or variable)
 
 Variable: proportional to touched patches × live fields. Bounded by the
-per-patch field ceiling and the 1,024-patch residency; the frame scheduler
-sees it as an ordinary engine with a deadline.
+per-patch field ceiling (MAX_PATCH_FIELDS = 16, terrain_rules §9.1) and the
+1,024-patch residency; the frame scheduler sees it as an ordinary engine
+with a deadline. Note the §9.1 cost-coupling honesty line: a worst-legal
+patch is 16 × 1,089 × 32 ≈ 557k field instructions — the intake bound is
+not a frame-affordability certificate; the frame-level budget is NOT COSTED
+until FIELD.SEQ.EARTH's throughput is pinned.
 
 ## Target throughput
 
@@ -114,9 +126,9 @@ reject order.
 
 ## Formal properties
 
-Bounded intake: the per-patch field list never exceeds its ceiling; the
-composed-cache write pointer never leaves the granted region (rides
-`mem_guard_no_escape` at integration).
+Bounded intake: the per-patch field list never exceeds MAX_PATCH_FIELDS
+(16, terrain_rules §9.1); the composed-cache write pointer never leaves the
+granted region (rides `mem_guard_no_escape` at integration).
 
 ## Synthesis / resource ceiling
 
