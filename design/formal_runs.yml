@@ -136,3 +136,63 @@ runs:
       tests.formal, so V16 does not (yet) reject it; the moment AUDIO.FIFO
       pins its maturity to this property, V16 will demand a cover task, which
       is the intended ratchet.
+
+  - property: tests/formal/video_mode_timing.sby
+    status: green
+    date: "2026-08-16"
+    commit: dabd46a
+    lane: formal_video_mode_timing
+    tasks: [prove, cover]
+    covers: true
+    notes: >-
+      VIDEO.MODE raster invariants, UNBOUNDED (abc pdr) over the whole
+      raster ring, ~9 s. The salvaged harness had a reset-idle assertion
+      nested inside `if (rst_n)` — structurally unreachable, vacuous by
+      construction — and no covers at all; both fixed before the first
+      recorded run. Reaching frame_start from the true reset takes ~6,700
+      vid cycles, so the DUT carries an `ifdef FORMAL reset override
+      starting the autonomous ring 4 cycles before the wrap (the W2.6
+      FORMAL_BLIT_LEN precedent); the true reset position is pinned by
+      video_mode_directed. All 5 covers reached at steps 3..13.
+
+  - property: tests/formal/video_framectl_one_fence.sby
+    status: green
+    date: "2026-08-16"
+    commit: 9f3725a
+    lane: formal_video_framectl_one_fence
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      Fence/tick/fault counting laws, bmc depth 60 (~4 abstract frame
+      periods, boolector, ~50 s solo) + all 6 covers (both decision
+      polarities, the in-flight fence window) at steps 6..20. An UNBOUNDED
+      abc-pdr prove of the same assertions was observed to complete green
+      once (2026-08-16, logfile in the run records) but costs 45+ min with
+      large run-to-run variance (pdr vs the 64-bit counter registers) and
+      twice blew the 1800 s lane budget — a flaky-green, so the recorded
+      lane task is the bounded one. Formal tests are now RUN_SERIAL so
+      wall time approximates solo time.
+
+  - property: tests/formal/video_scanout_linebuf.sby
+    status: green
+    date: "2026-08-16"
+    commit: a4ea5d9
+    lane: formal_video_scanout_linebuf
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      Never-torn law, bmc BOUNDED AT DEPTH 8 with a self-asserting scope
+      guard (a_scope_four_sessions fires if the depth is raised past what
+      was proven — the arbiter a_horizon_is_refresh_free pattern); scope
+      and cost stated in spec/video_rules.md 8.1 and the .sby header. This
+      property earned its keep before its first recorded run: its cover
+      task exposed that the salvaged harness's free stimulus was NOT free
+      (read_slang ties undriven locals to 1'x and prep's opt folds those
+      branches before setundef -anyseq — the anyseq-on-locals trap
+      generalised; fill_buf_q was never even assigned, buffer 1 unfillable,
+      half the property vacuous, the earlier PASS void), and once the
+      stimulus became ports the bmc found a REAL contract violation:
+      aborting a FULL buffer un-does its completion toggle and the blip
+      crosses the 2FF chain as stale freshness — a torn read. Fenced by
+      the documented SYSTEM spacing law (vblank-only aborts), header
+      rewritten to name that true enforcer. 6 covers, all reached by step 8.
