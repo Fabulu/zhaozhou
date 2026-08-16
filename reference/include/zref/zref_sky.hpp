@@ -51,13 +51,16 @@ namespace sky {
 
 // ---- §1.1 layer table constants (frozen by the spec, restated verbatim) ----
 
-inline constexpr int kDrumCols = 48;                         // sky_drum band columns
-inline constexpr int kDrumMirrorRepeats = 8;                 // u-mirror repeats per band
-inline constexpr int kBandRows = 8;                          // rows per band (spec: 8 mirrored
-                                                             // repeats over the circumference;
-                                                             // the vertical subdivision is the
-                                                             // software stand-in for the 128-tex
-                                                             // v axis, [w3.5-software])
+inline constexpr int kDrumCols = 48;          // sky_drum band columns
+inline constexpr int kDrumMirrorRepeats = 8;  // u-mirror repeats per band
+inline constexpr int kBandRows = 16;          // rows per band — the software
+// stand-in for the 128-texel v axis ([w3.5-software]): each row renders one
+// flat colour, so the row count IS the gradient's quantisation until the
+// drum textures exist. Raised 8 -> 16 (2026-08-16): at 8 the per-row colour
+// delta (~8/255) exceeded one RGB565 step and the S1.2 elevation ramp read
+// as discrete bands; at 16 the delta sits at the 565 quantum and the
+// resolve's ordered dither absorbs it. Phase-6 drum textures supersede the
+// rows entirely.
 inline constexpr int32_t kSkyMinY = -INT32_C(2560) * 65536;  // fx16 raw
 inline constexpr int32_t kSkyMidY = 0;
 inline constexpr int32_t kSkyMaxY = INT32_C(2560) * 65536;
