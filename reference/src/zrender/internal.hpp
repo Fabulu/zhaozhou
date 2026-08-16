@@ -144,6 +144,17 @@ inline constexpr int32_t kLightX = 26758;
 inline constexpr int32_t kLightY = 53521;
 inline constexpr int32_t kLightZ = 26758;
 
+/**
+ * The ONE flat-shade law (terrain top-surface verbatim; the creature lane
+ * composes against the same light): exact s64 cross product of the fx16
+ * edge vectors -> ONE rescale(.,16) per lane -> single-rounded lambert dot
+ * via div_rhu_s128 over isqrt_u64 of the squared norm. Returns the Q16.16
+ * weight in [0, 0x10000]; a zero-area triangle returns 0. Defined once in
+ * zrender/terrain.cpp, shared per charter 29-6.
+ */
+int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
+                       int32_t cx, int32_t cy, int32_t cz, SatLedger* L);
+
 // ---- terrain.cpp ------------------------------------------------------------
 
 /** SurfaceStamp into a sheet over the patch envelope (charter §12). */

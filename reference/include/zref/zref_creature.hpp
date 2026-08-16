@@ -1,0 +1,657 @@
+// zref_creature.hpp — creature/character reference core (world-identity wave,
+// the creature/character LOD + deformation lane).
+//
+// The ORACLE the Phase 8-9 GEOM blocks (VDECODE/POSE/SKIN/MESHFETCH) will be
+// verified against — charter 21 order: reference BEFORE RTL. Nothing here is
+// RTL and nothing here may promote a block past what its evidence supports.
+//
+// Law (in citation order):
+//   spec/creature_rules.md  1.1/1.2 ring-cylinder parts -> meshlets (<=64
+//                             unique verts, <=126 tris, one material per
+//                             part), <=32 bones HARD, <=2 influences with
+//                             weights in 1/64 quanta
+//                           2.1 clip bank: root displacement 3 x fx16 +
+//                             8 B/bone/frame quantized quats, keys at 30 Hz
+//                             shown 2 sim ticks, HARD-CUT transitions,
+//                             keyframe event tags {frame u16, event u8,
+//                             param u8} <=4/frame
+//                           2.2 pose pipeline: decode-on-fetch into a shared
+//                             decoded-pose cache (bake-everything-at-load was
+//                             REJECTED — x6 memory; this header implements
+//                             the decision, and the cache makes the runtime
+//                             pose a table lookup on hit)
+//                           3    the 3->2 weight clamp gate (warn 1%,
+//                             reject 3% of bound radius)
+//                           4.2  rotateOnGround slope tilt, bulk inflation,
+//                             tick-skip slow-motion
+//   spec/qformats.md        2 fx16 S 1.15.16, unit8, angle16 turns
+//                           3 single-rounding law (A3b) — every multiply
+//                             chain below computes the EXACT wide-integer
+//                             expression then rounds ONCE
+//                           4 rescale(): the one rounding primitive
+//                           7.5 noise2_hash for deterministic gib velocities
+//   charter                 9 The Measure: screen-error LOD, hysteresis,
+//                             minimum hold (the ladder here: mesh ->
+//                             micro-mesh -> splat -> glint)
+//                           10 meshlet unit + two-weight skinning
+//                          29-6 one semantics (terrain taps reuse
+//                             zref::terrain::column_query; the flat-shade
+//                             law is zrender's shade_points, shared)
+//                          29-7 no host floats in deterministic paths —
+//                             everything below is integer-only
+//
+// QUATERNION LANE FORMAT (PROPOSED, NOT FROZEN — flags the qformats 13
+// change control): S 1.0.14 per lane, i.e. raw = round_half_up(q * 2^14),
+// |raw| <= 16384, packed s16[4] = the 8 B/bone/frame of creature_rules 2.1.
+// Decode = the 9-product quat->matrix formula, ONE rescale(.,11) per
+// element, NO renormalization (GEOM.POSE contract). The measured worst-case
+// error is asserted in tests/geometry/creature_core.cpp and must be
+// re-stated with any lane change.
+
+#pragma once
+
+#include "zref/zref_fixp.hpp"
+#include "zref/zref_sat.hpp"
+#include "zref/zref_terrain.hpp"
+
+#include <array>
+#include <cstdint>
+#include <vector>
+
+namespace zref {
+namespace creature {
+
+// ---------------------------------------------------------------- formats --
+
+/** Quantized unit quaternion: s16[4] (w, x, y, z), each lane S 1.0.14. */
+struct quat16 {
+  int16_t q[4];
+};
+
+/** Lane scale: 1.0 == 16384 (S 1.0.14). */
+inline constexpr int32_t kQuatOne = 16384;
+
+/** The identity rotation (w=1). */
+inline constexpr quat16 quat16_identity() { return quat16{{kQuatOne, 0, 0, 0}}; }
+
+/**
+ * Quantize a unit quaternion given as fx16 lanes. Hemisphere-canonical
+ * (negate all when w < 0, or w == 0 and x < 0, or w == x == 0 and y < 0 ...)
+ * so (q and -q) quantize IDENTICALLY — clip compression must not care which
+ * hemisphere the author exported. Each lane round-half-up to 2^14, saturate
+ * s16. Integer-only.
+ */
+quat16 quat16_quantize(fx16 w, fx16 x, fx16 y, fx16 z);
+
+/**
+ * Axis-angle authoring: unit axis (fx16) + half-angle sin/cos (fx16, from
+ * the fx_sin table) -> quat16. cos is the w lane; the vector lanes are
+ * axis * sin, each single-rounded (fx_mul). Deterministic authoring path
+ * for tests and reel fixtures.
+ */
+quat16 quat16_axis_angle(fx16 ax, fx16 ay, fx16 az, fx16 half_sin, fx16 half_cos);
+
+/** 3x4 affine matrix, row-major fx16: rows m00 m01 m02 tx / m10.. ty / m20.. tz. */
+struct mat3x4fx {
+  int32_t m[12];
+};
+
+/** The identity affine. */
+inline constexpr mat3x4fx mat3x4_identity() {
+  return mat3x4fx{{1 << 16, 0, 0, 0, 0, 1 << 16, 0, 0, 0, 0, 1 << 16, 0}};
+}
+
+/**
+ * quat16 -> rotation matrix (GEOM.POSE decode core). The 9-product formula:
+ * with lanes Qw..Qz (S 1.0.14 raw),
+ *   diag_ijj = 2^16 - rescale(Qa^2 + Qb^2, 11)
+ *   off_ij   = rescale(Qa*Qb +- Qc*Qd, 11)
+ * Each element: exact s64 products, ONE round-half-up rescale, saturate.
+ * NO renormalization (creature_rules 2.2 decision; the quantization scale
+ * error bound is measured in the tests and rides the future qformats
+ * amendment). Translation column zero.
+ */
+void quat16_to_mat3(const quat16& q, mat3x4fx& out, SatLedger* L);
+
+/**
+ * Affine product out = a * b. Per element: exact s128 sum of the (up to
+ * three) 32x32 products (+ the translation term), then ONE rescale(.,16) +
+ * saturate — the qformats 2 mat4fx x vec4 rule applied to 3x4 (A3b).
+ */
+void mat3x4_mul(const mat3x4fx& a, const mat3x4fx& b, mat3x4fx& out, SatLedger* L);
+
+/**
+ * Rigid inverse: transpose the 3x3 (exact), t' = -R^T t (one rounding per
+ * component). Correct for rotation-only inputs; used at bake time on rest
+ * transforms whose 3x3 is EXACTLY a rotation or identity.
+ */
+void mat3x4_invert_rigid(const mat3x4fx& in, mat3x4fx& out, SatLedger* L);
+
+// -------------------------------------------------------------- skeleton ---
+
+/** Hard donor law: <=32 bones per creature (creature_rules 1.2). */
+inline constexpr int kMaxBones = 32;
+
+/**
+ * One bone: parent index (parent-before-child order REQUIRED, validated at
+ * bake) and the rest LOCAL translation (fx16). Rest rotations are identity
+ * — the bind convention of the ring format: rings are authored in rest
+ * orientation, so B_rest is a pure translation chain and its inverse is
+ * EXACT (translate(-world_rest_pos), zero rounding).
+ */
+struct Bone {
+  uint8_t parent;
+  int32_t tx, ty, tz;  // fx16
+};
+
+struct Skeleton {
+  uint8_t bone_count = 0;
+  std::array<Bone, kMaxBones> bones{};
+};
+
+/**
+ * Load-time bake of the skeleton (the one place rest inverses are computed):
+ * inv_rest[b] = B_rest_b^{-1}, exact because rest rotations are identity.
+ * Also caches world_rest[b] (fx16) for attachment-point math.
+ */
+struct SkeletonBake {
+  std::array<mat3x4fx, kMaxBones> inv_rest{};
+  std::array<int32_t, kMaxBones> world_x{}, world_y{}, world_z{};  // fx16
+};
+
+/** Validate (parent-before-child, no cycles by construction, count <= 32). */
+bool bake_skeleton(const Skeleton& sk, SkeletonBake& out);
+
+// -------------------------------------------------------------- clip bank --
+
+/** Keyframe event tag (creature_rules 2.1): {frame u16, event u8, param u8}. */
+struct ClipEvent {
+  uint16_t frame;
+  uint8_t event;
+  uint8_t param;
+};
+
+/** Event vocabulary (the sim consumes these; hardware never emits them). */
+enum EventKind : uint8_t {
+  kEvAttack = 1,
+  kEvShoot = 2,
+  kEvLoad = 3,
+  kEvCast = 4,
+  kEvGrab = 5,
+  kEvFoot = 6,
+  kEvSound = 7,
+};
+
+/**
+ * One clip: slot id, frame_count keys, per-frame root displacement (3 x fx16)
+ * and bone_count quantized quats (8 B/bone/frame as authored), plus the
+ * event tags. Frames loop (the donor's walk/idle cycles); events replay with
+ * the loop. <=4 events per frame is VALIDATED at compile (compile_creature).
+ */
+struct Clip {
+  uint16_t slot_id = 0;
+  uint16_t frame_count = 0;
+  std::vector<int32_t> root;      // 3 * frame_count fx16 (x, y, z per frame)
+  std::vector<quat16> quats;      // frame_count * bone_count
+  std::vector<ClipEvent> events;  // frame-sorted
+};
+
+/** The 64-slot clip bank (creature_rules 2.1; slot ids need not be dense). */
+struct ClipBank {
+  uint8_t bone_count = 0;
+  std::vector<Clip> clips;
+};
+
+/** Byte size of one frame as shipped: 12 + 8 * bone_count (creature_rules 2.1). */
+inline constexpr uint32_t clip_frame_bytes(uint8_t bone_count) {
+  return 12u + 8u * bone_count;
+}
+
+// ----------------------------------------------------- pose bank (GEOM.POSE) —
+
+struct CreatureType;  // defined below (compile product)
+
+/**
+ * The decoded-pose cache (creature_rules 2.2 DECISION: decode-on-fetch).
+ * (type, clip, frame) tuples decode on miss into <=32 skinning matrices
+ * and stay resident; instances of one type playing one clip at one tick
+ * SHARE the palette (the type-grouped army economy). On hit the runtime
+ * pose is a table lookup — no per-frame math, which is the property the
+ * hardware needs and the reason the cache exists at all.
+ *
+ * Cache law (GEOM.POSE contract): 128 tuples; LRU eviction NEVER touches a
+ * tuple referenced this frame (begin_frame clears the marks); a frame whose
+ * distinct-tuple demand exceeds capacity is a content-tier violation —
+ * counted (clamped_inserts) and clamped deterministically (decode without
+ * insert). Bad clip/frame ids: identity bind pose + bad_ids counter, never
+ * a wild read.
+ *
+ * Determinism: the decoded CONTENT of a tuple never depends on request
+ * order; palettes are pure functions of (type, clip, frame). Asserted by
+ * the tests over shuffled request orders.
+ */
+class PoseBank {
+ public:
+  static constexpr size_t kCacheTuples = 128;
+
+  struct Counters {
+    uint32_t hits = 0;
+    uint32_t misses = 0;
+    uint32_t bad_ids = 0;
+    uint32_t clamped_inserts = 0;
+  };
+
+  /** Clear the referenced-this-frame marks (call at frame start). */
+  void begin_frame();
+
+  /**
+   * Palette for (type, slot, frame): pointer to 32 mat3x4fx (bones past
+   * bone_count are identity). Never nullptr. On a bad slot/frame id the
+   * pointer targets the static identity bind pose and bad_ids increments.
+   */
+  const mat3x4fx* acquire(const CreatureType& type, uint16_t slot, uint16_t frame);
+
+  const Counters& counters() const { return ctr_; }
+  size_t resident() const { return resident_; }
+
+ private:
+  struct Slot {
+    bool valid = false;
+    uint16_t type = 0, clip = 0, frame = 0;
+    uint64_t lru = 0;
+    bool this_frame = false;
+    std::array<mat3x4fx, kMaxBones> pose{};
+  };
+  std::array<Slot, kCacheTuples> slots_{};
+  size_t resident_ = 0;
+  uint64_t lru_ctr_ = 0;
+  Counters ctr_{};
+  std::array<mat3x4fx, kMaxBones> scratch_{};  // clamped-insert decode target
+};
+
+// ------------------------------------------------------------- skinning ----
+
+/**
+ * The compiled skin vertex (meshlet payload). Position fx16 in bind space;
+ * <=2 influences with w0 in 1/64 quanta (w1 = 64 - w0; rigid = w0 64 /
+ * b1 == b0); u/v 8-bit texcoords (the ring builder's U-from-angular-
+ * alignment and V-along-rings lanes). NO colour lane — see the colour-lane
+ * finding recorded in the run FINDINGS: lighting is computed at render from
+ * the flat normal + part material, exactly like terrain.
+ */
+struct SkinVertex {
+  int32_t x, y, z;  // fx16
+  uint8_t b0 = 0, b1 = 0;
+  uint8_t w0 = 64;  // 1/64 quanta; 64 == rigid
+  uint8_t u = 0, v = 0;
+};
+
+/**
+ * Skin one vertex against a decoded palette. Single-rounding law: the FULL
+ * expression w0*(Sa v) + w1*(Sb v) is evaluated exactly in s128 (products
+ * are 64x64 -> 128) and rounded ONCE with rescale(., 22) (16 fraction bits
+ * of the matrix product + 6 of the 1/64 weight scale) — no double rounding
+ * between skin and blend (qformats 3, A3b). Rigid vertices take the
+ * rescale(.,16) path.
+ */
+void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int32_t& oy,
+                 int32_t& oz, SatLedger* L);
+
+// -------------------------------------------------------------- meshlets ---
+
+inline constexpr int kMeshletMaxVerts = 64;   // charter 10
+inline constexpr int kMeshletMaxTris = 126;   // charter 10 (96..126 band)
+
+/** One compiled meshlet (charter 10): <=64 verts, <=126 tris, one material. */
+struct Meshlet {
+  std::vector<SkinVertex> verts;
+  std::vector<uint8_t> idx;  // 3 * tri_count vertex indices
+  uint8_t r = 128, g = 128, b = 128;  // part material (the CLUT8 page stand-in)
+};
+
+// ----------------------------------------------------------- ring builder --
+
+/** One ring of a generalized cylinder: centre height + radius (fx16). */
+struct RingSpec {
+  int32_t y;       // fx16 along the part axis
+  int32_t radius;  // fx16
+  uint8_t segments;
+};
+
+inline constexpr uint8_t kCapTop = 1;  // fan cap closing the +Y end
+inline constexpr uint8_t kCapBot = 2;  // fan cap closing the -Y end
+
+/**
+ * A body part in the AUTHORING (tool-side) ring format (creature_rules 1.1).
+ * Rings stack along local +Y; each ring has `segments` vertices around it.
+ * `align` is the 8-bit angular alignment (the donor's per-entry rotation):
+ * vertex k of ring 0 sits at angle (k * 256 / segments + align)/256 turns,
+ * and U = that angle's high byte — the -> U texcoord law.
+ */
+struct RingPart {
+  std::vector<RingSpec> rings;
+  uint8_t caps = 0;
+  uint8_t align = 0;
+  uint8_t bone = 0;         // rigid part: one bone per part (donor law)
+  uint8_t r = 128, g = 128, b = 128;
+};
+
+/**
+ * Expand rings into meshlets (the asset compiler's job, done here in
+ * reference form): consecutive rings are zig-zag stitched — equal segment
+ * counts alternate the quad diagonal (the zig-zag); unequal counts take the
+ * integer zipper walk (advance the side whose fractional position lags),
+ * which is the donor's ring-merge. Caps are fans from the ring centre.
+ * Parts larger than a meshlet split at ring boundaries (creature_rules 1.2).
+ * All-integer by construction.
+ */
+std::vector<Meshlet> build_ring_part(const RingPart& part);
+
+/**
+ * Triangle-count law (the hand-computable anchor): equal-segment rings give
+ * (ring_count - 1) * 2 * segments side triangles plus `segments` per closed
+ * cap.
+ */
+inline constexpr int ring_side_tris(int ring_count, int segments) {
+  return (ring_count - 1) * 2 * segments;
+}
+
+// ------------------------------------------------------------- creature ----
+
+/**
+ * The compiled creature type: skeleton + bake, the mesh/micro meshlet lists,
+ * and the LOD ladder's compiler-generated geometric errors (charter 9: LOD
+ * is compiler-generated screen-space-error collapse, never artist faces —
+ * creature_rules 7). Errors are world-space fx16:
+ *   mesh  = 0 (reference)
+ *   micro = measured max vertex deviation of the decimated rings (computed)
+ *   splat = bound_radius / 2 (a splat cluster replaces the form by its
+ *           bound disc: worst silhouette error is the radius itself; half
+ *           is the accepted authored constant, recorded here)
+ *   glint = bound_radius (a point has no interior)
+ */
+struct CreatureType {
+  uint16_t type_id = 0;  // pose-cache tuple key lane (index into the type table)
+  Skeleton skeleton;
+  SkeletonBake baked;
+  ClipBank bank;
+  std::vector<Meshlet> mesh;   // rung 0
+  std::vector<Meshlet> micro;  // rung 1 (compiler-decimated)
+  int32_t bound_radius = 0;    // fx16, max |bind vertex| (isqrt, exact floor)
+  int32_t micro_error = 0;     // fx16, measured
+  int32_t splat_error = 0;     // fx16, bound_radius / 2
+  int32_t glint_error = 0;     // fx16, == bound_radius
+};
+
+/**
+ * Compile: bake the skeleton, expand + gather all parts' meshlets, measure
+ * the bound radius, build the micro rung (every 2nd ring, segments halved,
+ * min 3 — the decimation constants recorded here) and MEASURE its geometric
+ * error against the full surface, validate clips (bone_count match, <=4
+ * events/frame, frame-sorted events). Returns false + reason on a malformed
+ * input (fail-safe: nothing compiled).
+ */
+bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
+                      CreatureType& out, const char** reason);
+
+/**
+ * The decode itself (pure, order-independent): the per-bone chain
+ *   R   = quat16_to_mat3(quats[frame][b])
+ *   LR  = R with translation (rest tx,ty,tz) + root displacement at b == 0
+ *   A_b = (b == 0) ? LR : A_parent * LR
+ *   S_b = A_b * inv_rest[b]
+ * Two matrix multiplies per bone (miss-only cost — the cache exists so this
+ * is not per-frame-per-instance). Also the clamp gate's oracle.
+ */
+void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
+                 std::array<mat3x4fx, kMaxBones>& out, SatLedger* L);
+
+// ------------------------------------------------- the 3->2 weight clamp ----
+
+/** Source vertex carrying 3 influences (the authoring rig's export). */
+struct SourceVertex {
+  int32_t x, y, z;           // fx16 bind position
+  uint8_t b0 = 0, b1 = 0, b2 = 0;
+  uint8_t w0 = 0, w1 = 0, w2 = 0;  // 1/64 quanta, w0+w1+w2 == 64 (validated)
+};
+
+struct ClampVerdict {
+  uint32_t worst_vertex = 0;
+  uint32_t worst_frame = 0;
+  int32_t worst_err = 0;  // fx16 — w2 * |p3(f) - p12(f)| at the worst frame
+  bool warn = false;      //   > 1% of bound radius
+  bool reject = false;    //   > 3% of bound radius (author must re-rig)
+  uint32_t renorm_adjusted = 0;  // vertices whose largest weight got the
+                                 // force-to-64 adjustment
+};
+
+/**
+ * The compile gate (creature_rules 3, the CORRECTED claim — the drop error
+ * is NOT sub-quantum; worst legal case ~13 mm). For every source vertex:
+ * renormalize the top-2 weights into 1/64 quanta (round-half-up, sum forced
+ * to exactly 64 by adjusting the LARGEST weight), then over EVERY frame of
+ * EVERY clip compute the exact drop error
+ *   err(f) = w2 * | p3(f) - p12(f) |
+ * where p3 = T_b2 applied to the bind vertex and p12 = the renormalized
+ * 1-2 blend (the metric the spec names; with exact renormalization it
+ * equals |v - v'|, asserted in the tests). Distance via isqrt_u64 on the
+ * exact s64 squared norm (one floor sqrt; report form). Warn above 1% of
+ * the bound radius, REJECT above 3%. `out` (optional) receives the clamped
+ * SkinVertices (the compiled payload) on success.
+ */
+ClampVerdict clamp_3to2(const std::vector<SourceVertex>& src, const Skeleton& sk,
+                        const SkeletonBake& baked, const ClipBank& bank, int32_t bound_radius,
+                        std::vector<SkinVertex>* out);
+
+// ------------------------------------------------------------ anim player --
+
+/**
+ * The sim-side clip clock (creature_rules 2.1): keys at 30 Hz, each key
+ * shown 2 sim ticks — `sub` is the intra-key tick. Hard cuts only: cut()
+ * lands the new slot at frame 0 with no blend, ever. Events fire when the
+ * displayed frame ENTERS a frame that carries tags (the sim consumes them;
+ * the impact chain of creature_rules 4.2 starts here).
+ */
+struct AnimPlayer {
+  uint16_t slot = 0;
+  uint16_t frame = 0;
+  uint8_t sub = 0;
+  bool frozen = false;  // petrify: the clip clock stops (4.2)
+
+  void cut(uint16_t new_slot) {
+    slot = new_slot;
+    frame = 0;
+    sub = 0;
+  }
+};
+
+/**
+ * Advance one sim tick. Returns the events fired THIS tick (view into the
+ * clip; valid until the next advance) — fires on the 1->0 sub wrap that
+ * enters a tagged frame. A frozen player advances nothing.
+ */
+void anim_advance(AnimPlayer& a, const ClipBank& bank, const ClipEvent** fired,
+                  uint8_t& fired_count);
+
+// -------------------------------------------------------- alive laws (4.2) --
+
+enum class TiltMode : uint8_t {
+  kNone = 0,        // bipeds stay upright
+  kSideways = 1,    // side slope only (roll)
+  kCompletely = 2,  // facing + side slope (pitch and roll)
+};
+
+/**
+ * rotateOnGround state: the current forward/side slopes (fx16, tan of the
+ * pitch/roll angles). Rate-limited toward the tap-derived target by
+ * max_step per tick (the integer stand-in for the donor's rate-limited
+ * slerp — slope space, stated honestly).
+ */
+struct GroundTilt {
+  int32_t slope_f = 0;  // fx16
+  int32_t slope_s = 0;  // fx16
+};
+
+/**
+ * Two column_query taps along facing + side (creature_rules 4.2: THE
+ * cheapest alive trick — 2 taps + a clamp per creature tick). Finite
+ * difference over +-tap_dist gives the target slopes; each axis clamps its
+ * per-tick change to max_step. kOut/kVoid columns hold the slope (a
+ * creature stepping off the island does not snap flat).
+ */
+void ground_tilt_update(GroundTilt& t, TiltMode mode, angle16 facing,
+                        const terrain::ComposedLattice& lat, fx16 x, fx16 z, fx16 tap_dist,
+                        fx16 max_step);
+
+/**
+ * The tilt rotation: Rodrigues rotation of +Y onto normalize(-sf, 1, -ss)
+ * (the ground normal under the slopes). Built in fx16 from the shared
+ * normalize (qformats 7.4) + one field_rcp for 1/(1 + n.y); ~30 multiplies,
+ * once per creature per frame. Deterministic, integer-only.
+ */
+mat3x4fx tilt_matrix(const GroundTilt& t, SatLedger* L);
+
+/**
+ * Bulk inflation (4.2): one scalar at the root, exponential smoothing
+ * toward the target — scale += (target - scale) >> rate_shift per tick
+ * (integer exponential; the hand anchor is in the tests). Crossing a
+ * species' pop threshold gibs the creature (bulk_popped).
+ */
+struct BulkState {
+  int32_t scale = 1 << 16;   // fx16
+  int32_t target = 1 << 16;  // fx16
+};
+
+void bulk_update(BulkState& b, uint8_t rate_shift);
+inline bool bulk_popped(const BulkState& b, int32_t threshold_fx) {
+  return b.scale >= threshold_fx;
+}
+
+/**
+ * Tick-skip slow-motion (4.2): the entity's sim update runs every 4^n ticks
+ * — a modulo counter. n = shift (interval 1 << (2 * shift)); 0 = every tick.
+ */
+inline bool tick_skip_due(uint32_t tick, uint8_t shift) {
+  const uint32_t mask = (1u << (2u * shift)) - 1u;
+  return (tick & mask) == 0;
+}
+
+// ------------------------------------------------------------- LOD ladder --
+
+enum class LodRung : uint8_t {
+  kMesh = 0,
+  kMicro = 1,
+  kSplat = 2,
+  kGlint = 3,
+};
+
+/** Charter 9 stability: minimum hold before any rung switch (15 ticks —
+ *  the star ladder's precedent, stars_and_flares 6/9). */
+inline constexpr uint16_t kLodHoldTicks = 15;
+
+/**
+ * Screen-space error law (The Measure, reference form): with the projected
+ * bound radius in S12.8 px and rung geometric error e_r (fx16 world),
+ *   err_px(S12.8) = round_half_up(proj_radius_q8 * e_r / bound_radius)
+ * A rung is LEGAL when err_px <= threshold (the per-camera pixel-error
+ * threshold, S12.8). The raw selection takes the COARSEST legal rung
+ * (fewest pixels that still meets the error budget).
+ */
+LodRung lod_raw(int32_t proj_radius_q8, int32_t thresh_q8, const CreatureType& type);
+
+/** Ladder state: current rung + ticks held there. */
+struct LodState {
+  LodRung rung = LodRung::kMesh;
+  uint16_t hold = 0;
+};
+
+/**
+ * The hysteresised step (charter 9: hysteresis + minimum hold; the star
+ * ladder's 10%/15-tick law): a switch requires (a) the current rung held
+ * >= 15 ticks and (b) the projected radius 10% PAST the boundary between
+ * the current and target rung in the target's direction (coarsening is
+ * eager, refinement is lazy — rungs do not flip at the seam).
+ */
+LodRung lod_update(LodState& st, int32_t proj_radius_q8, int32_t thresh_q8,
+                   const CreatureType& type);
+
+// ----------------------------------------------------------------- gibs ----
+
+/** A gib particle (the PART.SPAWN burst payload — DrawPopulation shape). */
+struct Gib {
+  int32_t x, y, z;      // fx16 spawn position (world)
+  int32_t vx, vy, vz;   // fx16 per-tick velocity
+  uint8_t size;         // U 0.4.4 px
+  uint8_t r, g, b;
+};
+
+/**
+ * Gib-to-particles (creature_rules 4.2: bulk crossing the pop threshold ->
+ * mesh removed, particle burst). One gib per meshlet vertex (capped at 64),
+ * velocity from noise2_hash (qformats 7.5 — the deterministic integer
+ * pattern; no RNG state), colour from the vertex's meshlet material
+ * darkened one step. Deterministic: same pose + seed -> same burst.
+ */
+void spawn_gibs(const CreatureType& type, const mat3x4fx* palette, fx16 wx, fx16 wy, fx16 wz,
+                uint32_t seed, std::vector<Gib>& out);
+
+/**
+ * The sim tick (the one place the alive laws compose): tick-skip gate
+ * (slow-motion: the entity updates every 4^n ticks — a modulo counter),
+ * then anim clock advance (fires the frame's event tags), rotateOnGround
+ * tilt (two column_query taps against the composed lattice — the caller
+ * passes the SAME lattice the renderer tessellates; nullptr holds tilt),
+ * bulk smoothing. Returns whether the update ran this tick (the skip
+ * gate). Pop handling stays with the caller: bulk_popped() + spawn_gibs()
+ * are the pieces (the sim owns gameplay truth, charter 29-8).
+ */
+struct SimParams {
+  uint8_t skip_shift = 0;  // update every 4^n ticks (0 = every tick)
+  fx16 tap_dist{2 << 14};  // rotateOnGround tap half-distance (0.5 m)
+  fx16 tilt_step{1 << 13}; // per-tick slope rate limit (0.125)
+};
+
+struct CreatureInstance;  // defined below (compositor section)
+
+bool creature_update(CreatureInstance& inst, const SimParams& sp,
+                     const terrain::ComposedLattice* lat, uint32_t tick);
+
+// ---------------------------------------------------- instance + compositor --
+
+/**
+ * One creature instance: sim state (anim clock, tilt, bulk, LOD) + world
+ * placement. The pose is NOT stored — it is shared through the PoseBank
+ * (that sharing IS the creature_rules 2.2 economy).
+ */
+struct CreatureInstance {
+  const CreatureType* type = nullptr;
+  int32_t x = 0, y = 0, z = 0;  // fx16 world root
+  angle16 facing{0};
+  GroundTilt tilt;
+  TiltMode tilt_mode = TiltMode::kCompletely;
+  BulkState bulk;
+  AnimPlayer anim;
+  LodState lod;
+  bool visible = true;
+};
+
+/**
+ * The reference compositor preview ([phase3-preview], the same station the
+ * celestial compositor holds): draws creatures into the working RGB888 +
+ * Q16.16-depth planes AFTER the opaque passes, depth-tested against what is
+ * already there (terrain occludes creatures correctly). Mesh/micro rungs
+ * skin + project + flat-shade through zrender's own raster (the 8 law —
+ * never reimplemented); splat is a billboard quad at the projected bound;
+ * glint is a 2 px point. Bulk scale multiplies the world transform at the
+ * root (one scalar). Integer-only; doubles appear nowhere.
+ *
+ * This is the ORACLE surface for the Phase 8-9 render path, not a shipping
+ * ABI command — the DrawCreature-class opcode question lands with the ABI
+ * owner when the block contracts fill.
+ */
+void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, const mat4fx& vp,
+                       CreatureInstance* const* instances, size_t count, PoseBank& poses,
+                       SatLedger* L);
+
+}  // namespace creature
+}  // namespace zref

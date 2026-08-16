@@ -6,6 +6,8 @@
 #     mirrors; the displayed-stream CRC lives in zrender/resolve.cpp).
 # W2.4 adds the audio subsystem (MixerTone tone subset + AudioFifo oracle).
 # W3.5 adds the software renderer (zrender/) + the sky emitter (zsky/).
+# World-identity wave adds the creature/character reference core
+#     (zcreature/: ring meshlets, pose bank, skinning, alive laws, LOD).
 
 add_library(zhao_zref STATIC
   src/zref_frame.cpp
@@ -25,7 +27,9 @@ add_library(zhao_zref STATIC
   src/zsky/star_bake.cpp
   src/zsky/star_flare.cpp
   src/zsky/star_field.cpp
-  src/zsky/star_compose.cpp)
+  src/zsky/star_compose.cpp
+  src/zcreature/creature_core.cpp
+  src/zcreature/creature_sim.cpp)
 target_include_directories(zhao_zref PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/runtime/include)  # generated zhao_abi.h

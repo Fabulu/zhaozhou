@@ -664,6 +664,20 @@ target_include_directories(test_terrain_dual PRIVATE
 add_test(NAME terrain_dual COMMAND test_terrain_dual)
 set_tests_properties(terrain_dual PROPERTIES LABELS "fast;nightly")
 
+# ---- world-identity wave: creature/character reference lane -------------------
+# (spec/creature_rules.md 1-4; the ZREF oracle for the future Phase 8-9 GEOM
+# blocks — confers no block promotion: GEOM.POSE stays SPECIFIED until the
+# qformats quat-lane amendment freezes the decode numerics).
+# Hand-computed anchors: ring stitch counts, quat lane exactness, the 3->2
+# clamp gate's analytic bound, pose-cache eviction law, LOD hysteresis.
+add_executable(test_creature_core geometry/creature_core.cpp)
+target_link_libraries(test_creature_core PRIVATE zhao_zref)
+target_include_directories(test_creature_core PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+add_test(NAME creature_core COMMAND test_creature_core)
+set_tests_properties(creature_core PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_render_budget render/render_budget.cpp)
 target_link_libraries(test_render_budget PRIVATE zhao_zref)
 target_include_directories(test_render_budget PRIVATE
