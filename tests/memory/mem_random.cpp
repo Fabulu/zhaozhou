@@ -158,5 +158,5 @@ int main(int argc, char** argv) {
                 "grants %zu)\n",
                 nreq, failures ? "FAIL" : "PASS", failures, h.mismatches,
                 h.rtl_grants.size());
-    return failures ? 1 : 0;
+    zhao::exit_hard(failures ? 1 : 0);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

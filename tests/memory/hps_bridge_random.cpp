@@ -222,5 +222,5 @@ int main(int argc, char** argv) {
                 "%u malformed; first-beat latency %lld)\n",
                 nburst, failures ? "FAIL" : "PASS", failures, reads_checked, writes_checked,
                 oracle_malformed, latency);
-    return failures ? 1 : 0;
+    zhao::exit_hard(failures ? 1 : 0);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

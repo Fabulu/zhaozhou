@@ -118,8 +118,8 @@ int main(int argc, char** argv) {
   if (fails == 0) {
     std::printf("audio_fifo_random: %u iterations bit-exact (%s)\n", iterations,
                 nightly ? "nightly" : "fast");
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::fprintf(stderr, "audio_fifo_random: %u failing iteration(s)\n", fails);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

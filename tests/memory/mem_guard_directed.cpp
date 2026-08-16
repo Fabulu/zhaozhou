@@ -290,5 +290,5 @@ int main(int argc, char** argv) {
     h.top.final();
     std::printf("mem_guard_directed: %s (%d failures)\n",
                 failures ? "FAIL" : "PASS", failures);
-    return failures ? 1 : 0;
+    zhao::exit_hard(failures ? 1 : 0);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

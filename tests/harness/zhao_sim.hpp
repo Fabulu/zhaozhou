@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>   // std::_Exit (exit_hard)
 #include <string>
 #include <vector>
 
@@ -27,6 +28,25 @@ namespace zhao {
 int check_failures();
 void check(bool cond, const char* what, uint64_t expected, uint64_t actual);
 int report_and_exit(const char* suite_name);  // prints summary, returns exit code
+
+// Hard process exit AFTER the verdict is printed — the shared tail for
+// Verilated test mains that do not use report_and_exit. WORKAROUND, not a
+// fix: Verilator 5.051 + winlibs libwinpthread intermittently deadlocks in
+// VlThreadPool::~VlThreadPool() during exit-time static destruction of the
+// default VerilatedContext (hang with ~0 CPU in WaitForSingleObject). First
+// observed on mem_hps_bridge_directed (2026-08-15, worked around inline);
+// second strike 2026-08-16: mem_bandwidth_budget hung a whole fast lane for
+// 28 minutes AFTER passing every check (verdict lost in the unflushed pipe
+// buffer), and the previous session's log shows mem_sdram_directed dying
+// the same way — the lock is systemic to every Verilated exe on this
+// toolchain, so every Verilated main must end through here (or
+// report_and_exit, which does the same). A hung test is neither a pass nor
+// a skip; this makes process exit deterministic once all observable side
+// effects are flushed.
+[[noreturn]] inline void exit_hard(int rc) {
+  std::fflush(nullptr);
+  std::_Exit(rc);
+}
 
 // ------------------------------------------------------- failing vectors --
 // Charter 29-17: every minimal failing vector is saved, not just printed.

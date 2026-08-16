@@ -188,8 +188,8 @@ int main() {
 
   if (g_fail == 0) {
     std::printf("video_mode_directed: OK\n");
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_mode_directed: %d FAILURES\n", g_fail);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

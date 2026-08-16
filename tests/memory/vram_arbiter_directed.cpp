@@ -212,5 +212,5 @@ int main(int argc, char** argv) {
     h.top.final();
     std::printf("vram_arbiter_directed: %s (%d failures, oracle mismatches %u)\n",
                 failures ? "FAIL" : "PASS", failures, h.mismatches);
-    return failures ? 1 : 0;
+    zhao::exit_hard(failures ? 1 : 0);  // teardown-deadlock workaround (zhao_sim.hpp)
 }
