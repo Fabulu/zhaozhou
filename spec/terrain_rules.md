@@ -258,6 +258,45 @@ the patch format needs nothing further now, and that is why option (d) was
 refused.** The Wound plug format itself is NOT decided here (blocks nothing
 until a Wound is scheduled; it is a Phase-11+ hero feature).
 
+### 3.7 Keel depth default — frozen (2026-08-16, deep-keel wave)
+
+The bottom-surface generator produces a **deep keel by default**; a shallow
+bottom is a deliberate authoring choice recorded as such, never a default.
+The derivation (all integer, height16 grid):
+
+- **`KEEL_FLOOR = 50 m`** — the donor's fixed curtain depth (`sacmap.d:106`,
+  `mapDepth = 50`). Any island, however small, drops at least as far as the
+  donor's islands did: parity is the floor, not the target.
+- **`R`** — the island's effective radius: the largest distance from the
+  island heart (world origin of the island datum, per §1.5) to any SOLID
+  cell centre, floored to whole metres (`isqrt` of the squared distance).
+- **`KEEL_DEPTH = min( max(KEEL_FLOOR, R/2), 126 m − max(0, top peak) )`**,
+  floored to the 0.25 m authoring grid. Two bounds bracket it:
+  - *R/2 above the floor:* an island as deep as half its radius reads as
+    rock; shallower reads as a slab. On the 320 m demo island (R ≈ 151 m)
+    this gives a 75 m keel — thickness-to-width ≈ 1:4.3 at the heart and
+    1:10.7 at the rim, the rim matching the donor's edge ratio on a
+    comparable island while the heart runs ~1.5× deeper (the modelled
+    advance over the donor's constant curtain).
+  - *headroom cap:* height16 rails at ±128 m of island datum (§1.2); the
+    cap leaves 2 m of margin below the authored top peak. A large island
+    (R > ~250 m) saturates here — keels deeper than the format's ±128 m
+    local relief are not expressible at ANY pitch, stated honestly.
+- **Profile (the bitten-apple keel):** with `d` = |vertex − heart| clamped
+  to R and `q = round((d/R)²)` in Q16,
+  `thickness(v) = KEEL_DEPTH × (0.4 + 0.6 × (1 − q))`, one rounding,
+  `bottom(v) = base(v) − thickness(v)` on the height16 grid. The rim keeps
+  40% of the keel (the "long dropoff" the owner asked for at the silhouette);
+  the heart carries it all.
+
+A generator MAY take an explicit shallow override (an authored slab, a
+thin lip §3.6); the override is an authoring decision recorded with the
+island, and `KEEL_FLOOR` still bounds every island that does not ask.
+Breaches over a default keel must dig through tens of metres — the keel is
+what makes a hole read as a hole through a *world*, not a scratch in a
+sheet (the pre-freeze authoring dug 30 m through ~22 m on a 320 m island,
+a 1:15 thickness-to-width ratio: paper, and the reason this law exists).
+
 ## 4. The lattice law — one evaluation, every consumer
 
 This is the anti-drift law. Sacrifice evaluated its deformation twice — once
@@ -344,7 +383,14 @@ vertices (TERRAIN.VELOCITY), interpolated by the same §4.3 rule.
   (checkerboard breach). Typical convex rim through a patch ≈ 32–64 edges.
   FORGE.CLIFF must clamp emission to a declared per-patch budget
   (provisional 512 quads) and degrade by merging collinear spans — the
-  governor sees wall quads as ordinary triangles_submitted.
+  governor sees wall quads as ordinary triangles_submitted. **Degrade order
+  (frozen 2026-08-16, reference-tested):** (1) merge CONTIGUOUS collinear
+  rim edges (same side, same lattice line, sharing a vertex) into single
+  spans until inside budget — a merge never bridges a notch, so the
+  silhouette keeps every hole; (2) if still over budget, keep the edges
+  with the greatest max-vertex 1/w (nearest the camera; ties by scan
+  order), count the dropped edges in the clamp counter. Reference:
+  `zref::forge::rim_plan`.
 - Diagonal (45°) rim smoothing at corner-void configurations is **not in
   v1** — deliberately: the sim column query and the tessellator must adopt
   any diagonal rule *together* (lattice law §4.1), so it ships as a later
@@ -363,6 +409,21 @@ ever (S1 §3: the donor shipped a AAA look with zero blending).
    TEXTURE.MOSAIC picks A or B per texel with the stable world-space pattern
    (charter §12) — one id wins, one sample happens. Cell UV = (0,0)–(1,1)
    mirrored repeat, the donor's seam-free trick, native to our TMU.
+   **Pattern + fold laws (frozen 2026-08-16, deep-keel wave — capture-exact):**
+   - *Mirrored-repeat texel fold.* With `u` in Q16.16 tile units (one tile
+     period per cell on tops, per STRATA_M on walls/underside), the sampled
+     texel index is `m = floor(u × 64)` (arithmetic shift `u_raw >> 10`),
+     `per = m mod 128` (floored), `texel = per < 64 ? per : 127 − per`.
+     Adjacent same-texture cells mirror into each other, so no seam appears
+     anywhere a tile id is constant — the donor's trick, in integer law.
+   - *Stable world-space pick.* With `tx, ty` the UNFOLDED world texel
+     indices (`floor(u × 64)`, `floor(v × 64)` — the pattern lives in world
+     space, immune to cell borders and LOD):
+     `h = (u32(tx) · 73856093) XOR (u32(ty) · 19349663)`, `p = h mod 255`,
+     `pick = (p < weight) ? matA : matB`. Weight 0 selects matB everywhere,
+     255 selects matA everywhere, 128 dithers ~50/255 — the zero-blend
+     "transition" the TMU budget buys. The constants are frozen: changing
+     one changes every capture's pixels.
 3. **Transition groups (MAPG heir):** per tileset ≤16 authored groups
    {member_count u8, detail_id u8, members u8[14]} = 256 B; authored
    transition tiles and Mosaic composition are complementary (S1 §3) —
@@ -375,7 +436,13 @@ ever (S1 §3: the donor shipped a AAA look with zero blending).
    aux list) for tag/strength effects — the aux budget holds: ONE aux
    consumer on terrain fragments, because tint moved to vertices.
 6. **Strata/underside tiles:** tileset ids 240–255 reserved by convention
-   (packer-enforced), so cliffs match their island's palette.
+   (packer-enforced), so cliffs match their island's palette. **Frozen
+   assignments (2026-08-16):** id **240 = the rim strata tile**, id
+   **241 = the underside tile**; 242–255 stay reserved for strata variants.
+   Wall U accumulates rim length in lattice scan order (z-then-x, side order
+   −z, +z, −x, +x), reset per 32×32-cell page; V = (top − y)/STRATA_M per
+   vertex, so the bands follow the modelled bottom. The underside samples
+   planar world UV (wx/STRATA_M, wz/STRATA_M) with the same mirrored fold.
 7. **Palette zoning (identity rule):** island tilesets own the loud
    Sacrifice-lineage CLUTs; sky/void assets own the disciplined Noctis
    CLUTs. The contrast is the look. CLUT id ranges are partitioned by the
