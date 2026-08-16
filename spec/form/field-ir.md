@@ -538,7 +538,85 @@ earth 32, warp 48, flow 48, formation 64, stamp 32; **global hard ceiling 64**
 a ceiling change is a spec-constant edit, never an encoding change — golden
 vectors are unaffected.
 
-## 8. PC→source map
+**Ruled 2026-08-16: the earth ceiling stays 32.** The first donor-faithful
+composite to press it (single-program Erupt, ~36–38 sketch-counted
+instructions, S5 §1.7) is resolved by the phase-split idiom (§7.4), not by a
+retune. The ceilings remain provisional per the paragraph above — a future
+retune stays a spec-constant edit — but it is no longer *needed* for donor
+fidelity, and §7.4 records why it was refused this time.
+
+### 7.4 Composite effects: the phase-split idiom (ratified 2026-08-16)
+
+A donor-faithful composite terrain effect (Erupt: 4.2 s growing mound +
+0.15 s collapse + rebound dip + travelling ring) sketch-counts at **~36–38
+instructions and wants 4–5 PWL envelope tables** (recon S5 §1.7) — over the
+earth instruction ceiling (32) and at the V5 table limit (4) with zero
+headroom (it fits 4 tables only by computing the width envelope `w(p)`
+arithmetically). Two resolutions lay inside existing change control:
+(a) split the effect into per-phase programs swapped by the command stream,
+(b) retune the earth ceiling (§7.3 spec-constant edit).
+
+**Ruling: (a) — phase-split is THE composite-effect idiom.** Reasons, in
+order of weight:
+
+1. **V5 is the binding constraint, and only the split relieves it.** A
+   ceiling retune would leave the single-program composite at 4 tables with
+   zero headroom, and raising V5 itself is a *validator-rule* change — a
+   FIELD_IR_VERSION bump regenerating every golden vector (§13), the most
+   expensive edit this spec has. Phase-split needs ~2 tables in the grow
+   program and ~3 in the wave program — headroom on both sides, no bump.
+2. **Worst-case bounds stay certified.** The earth ceiling multiplies into
+   every terrain worst case (per-patch cost = MAX_PATCH_FIELDS × 1,089
+   vertices × ceiling, terrain_rules §9.1) and into program-cache line
+   sizing. Retuning 32 → ~40 inflates all of them ~25% to buy convenience
+   for one program shape.
+3. **Donor-faithful.** The donor's own Erupt update branches by phase
+   (grow vs collapse/wave are separate code paths gated on t vs growDur,
+   `state.d:3034-3057`); the split mirrors the source's structure.
+4. **Existence proof.** The committed wave-phase-class programs fit today:
+   `impact_wave` — 30 instructions, hash 0x82F5F4E4; `wave_pool` — 27,
+   0x8BDCEB63 (`compiler/tests/generated/*.hpp`).
+
+**The idiom, precisely** (so a future author knows when and how to split):
+
+- **Split condition:** a composite splits when a faithful single program
+  would exceed the profile instruction ceiling OR the V5 table limit.
+  Nothing smaller splits — one program per effect is the default.
+- **Split axis: temporal only.** Split at the effect's phase boundaries
+  (the donor's own branch points). Each phase is a complete, self-contained
+  program over the effect's full footprint. Spatial splitting (two programs
+  covering different radii of one effect) is forbidden: it double-counts
+  per-patch field lanes and manufactures spatial seams.
+- **Lane accounting:** the effect occupies exactly ONE per-patch field lane
+  at every instant (terrain_rules §9.1) — grow-phase or wave-phase, never
+  both in one frame.
+- **Swap mechanics:** the sim stops emitting the phase-N TerrainField
+  record and starts emitting phase N+1's at the boundary tick (records
+  carry start_tick/duration_ticks, so the phase input lane is exact).
+  Frame field-list membership is a pure function of the command stream, so
+  the swap is capture-replay exact by construction; no hardware notion of
+  "phase" exists and no encoding changes.
+- **Boundary obligation:** either the composed height is continuous at the
+  swap (phase N's end state equals phase N+1's start state at every lattice
+  vertex), or the boundary must coincide with a masking impact event —
+  the same law terrain_rules §3.4 already imposes on breach births. The
+  donor's own Erupt takes the second branch: by S5 §1.1's formulas, at
+  t = growDur⁺ the ring term contributes ≈ +6 m near the centre atop the
+  still-full 15 m dome — a multi-metre same-frame step the donor masks with
+  the simultaneous eruptExplosion theatre (debris, 200 particles, shake,
+  `state.d:17262-17313`). Phase-split seams are bounded by what the donor
+  already shipped.
+
+**V5 (≤ 4 tables per program) — recorded as the binding constraint;
+watch-item, no action now.** S5 §1.7 is right that a donor-grade composite
+hits V5 before it hits any instruction ceiling. No action, because (i) under
+phase-split every known donor-faithful program sits at ≤ 3 tables with
+headroom, and (ii) the escape routes short of a version bump — phase-split,
+or computing one envelope arithmetically (the `w(p)` trick) — are not yet
+exhausted by any known program. The trigger for action: a program that
+cannot phase-split further and cannot trade a table for arithmetic. If that
+program appears, raising V5 is a FIELD_IR_VERSION bump (§13) and must be
+priced as one.
 
 Per-instruction source spans, stored in the map section (§5.3), in PC order:
 ```
