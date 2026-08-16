@@ -45,7 +45,9 @@
 #include "impact_wave.hpp"  // compiler/tests/generated (TS-generated)
 #include "wave_pool.hpp"    // compiler/tests/generated (TS-generated)
 #include "zfield/zfield.hpp"
+#include "zref/zref_terrain.hpp"  // dual-heightfield bake/breach reference
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -203,6 +205,71 @@ void put_param(uint8_t* blob, int lane, int32_t raw) {
   for (int b = 0; b < 4; ++b) blob[lane * 4 + b] = static_cast<uint8_t>(raw >> (8 * b));
 }
 
+// ---- dual-heightfield island (terrain_rules.md, world-identity wave) -------
+//
+// A 161x161 lattice over ±160 m: 160x160 cells at the CANONICAL 2.0 m pitch
+// (terrain_rules §1.3) — a 320 m island, the area of 25 Island-Patch pages
+// (5x5 of 32x32 cells), carried as one Phase-3 envelope patch (the kind-6
+// page split / sparse directory is Phase-6 loader work; stated honestly in
+// meta.txt). Doubles below are ASSET AUTHORING ONLY (the bump_patch rule);
+// heights quantize to 0.25 m steps so the flat-shade palette stays inside
+// the 256-colour law. Top: coastal plateau rising to a ~15 m heart with
+// gentle swells. Bottom: a keel — 5 m rim thickness growing to ~27 m at the
+// centre (the bitten-apple profile the donor could never model). Coastline:
+// R(theta) wobbles 116..151 m, cells outside are VOID_AUTHORED.
+zref::render::TerrainPatch dual_island_patch() {
+  const int W = 161;
+  zref::render::TerrainPatch p;
+  p.width = p.height = W;
+  p.env_x0 = p.env_z0 = -(160 << 16);
+  p.env_x1 = p.env_z1 = (160 << 16);
+  p.heights.resize(static_cast<size_t>(W) * W);
+  p.scar.assign(static_cast<size_t>(W) * W, 0);
+  p.bottom.resize(static_cast<size_t>(W) * W);
+  p.cell_state.assign(160 * 160, zref::terrain::kVoidAuthored);
+  const auto coast_r = [](double x, double z) {
+    const double th = std::atan2(z, x);
+    return 130.0 + 14.0 * std::sin(3.0 * th + 1.0) + 7.0 * std::sin(7.0 * th + 2.0);
+  };
+  const auto q025 = [](double m) {  // quantize to 0.25 m height16 steps
+    return static_cast<int16_t>(std::lround(m * 4.0) * 64);
+  };
+  for (int j = 0; j < W; ++j) {
+    for (int i = 0; i < W; ++i) {
+      const double x = (i - 80) * 2.0, z = (j - 80) * 2.0;
+      const double r = std::sqrt(x * x + z * z);
+      double t = r / coast_r(x, z);
+      if (t > 1.0) t = 1.0;
+      const double dome = 1.0 - t * t;
+      const double top = 6.0 + 9.0 * dome + 1.5 * std::sin(x * 0.11) * std::cos(z * 0.09);
+      const double thick = 5.0 + 22.0 * dome;
+      const size_t k = static_cast<size_t>(j) * W + i;
+      p.heights[k] = q025(top);
+      p.bottom[k] = q025(top - thick);
+    }
+  }
+  for (int cj = 0; cj < 160; ++cj) {
+    for (int ci = 0; ci < 160; ++ci) {
+      bool solid = true;  // a cell is ground iff ALL FOUR corners are inside
+      for (int dz = 0; dz <= 1 && solid; ++dz)
+        for (int dx = 0; dx <= 1 && solid; ++dx) {
+          const double x = (ci + dx - 80) * 2.0, z = (cj + dz - 80) * 2.0;
+          if (std::sqrt(x * x + z * z) > coast_r(x, z)) solid = false;
+        }
+      if (solid) p.cell_state[static_cast<size_t>(cj) * 160 + ci] = zref::terrain::kSolid;
+    }
+  }
+  return p;
+}
+
+// One deterministic bake step: dig depth from->to (milli-metres) at a frame
+// (TERRAIN.BAKE reference; the renderer just reads the layers it wrote).
+struct BakeStep {
+  uint32_t frame;
+  int32_t cx, cz, radius;  // fx16 raw
+  int32_t from_milli, to_milli;
+};
+
 // One field application: program handle + centre/params (all Q16.16 raw)
 struct FieldSpec {
   uint32_t program;
@@ -231,9 +298,18 @@ struct SceneSubject {
   uint32_t step;  // ticks per frame
   std::vector<FieldSpec> fields;
   std::vector<StampSpec> stamps;
+  // world-identity wave: dual-heightfield island + deterministic bake ramp
+  bool island = false;          // true: dual_island_patch (320 m, 2 m pitch)
+  std::vector<BakeStep> bakes;  // applied at frame start, in order
+  // camera (defaults = the wave-2 reel constants; island scenes override)
+  int32_t cam_k = 127000, cam_eye = 14, cam_dist = 33, cam_bias = 14000;
   // debris: spawned at spawn_frame, integer gravity fxm per frame^2
   uint32_t debris_spawn_frame = 0;
-  int32_t debris_gravity = 0;  // fx raw per frame^2 (subtracted from vy)
+  int32_t debris_gravity = 0;      // fx raw per frame^2 (subtracted from vy)
+  int32_t debris_y0 = 2 << 16;     // launch height (fx raw)
+  int32_t debris_floor = 1 << 15;  // despawn line (fx raw) — a breach scene
+                                   // sets this BELOW the island so debris
+                                   // visibly falls through the hole
   std::vector<Debris> debris;
   // screen shake: raw Y offsets per frame, starting at shake_frame
   uint32_t shake_frame = 0;
@@ -249,14 +325,15 @@ struct SceneSubject {
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
-  zref::render::TerrainPatch patch = rtest::bump_patch(161, 161, 12, 8);
+  zref::render::TerrainPatch patch =
+      sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, 12, 8);
   zref::render::Material mat{104, 122, 78};
   zref::sky::SkySet sky = flat_dusk_sky();
 
-  const zfield::DecodeResult wave = zfield::decode(
-      zfield_gen::wave_pool::kProgramBytes.data(), zfield_gen::wave_pool::kProgramBytesLen);
-  const zfield::DecodeResult impact = zfield::decode(
-      zfield_gen::impact_wave::kProgramBytes.data(), zfield_gen::impact_wave::kProgramBytesLen);
+  const zfield::DecodeResult wave = zfield::decode(zfield_gen::wave_pool::kProgramBytes.data(),
+                                                   zfield_gen::wave_pool::kProgramBytesLen);
+  const zfield::DecodeResult impact = zfield::decode(zfield_gen::impact_wave::kProgramBytes.data(),
+                                                     zfield_gen::impact_wave::kProgramBytesLen);
   if (wave.error != zfield::DecodeError::kOk || impact.error != zfield::DecodeError::kOk) {
     std::fprintf(stderr, "%s: field program decode failed\n", sub.name);
     return 2;
@@ -284,8 +361,25 @@ int render_scene(const SceneSubject& sub) {
     ZHAO_MKDIR(dir.c_str());
   }
 
+  uint32_t breach_total = 0;
   for (uint32_t f = 0; f < sub.frames; ++f) {
     const uint32_t tick = f * sub.step;
+
+    // deterministic bake steps for this frame (TERRAIN.BAKE reference:
+    // bake writes scar layer B, the breach law flips cell-state layer D;
+    // integer-only — the doubles above were authoring, this is the run)
+    for (const BakeStep& bs : sub.bakes) {
+      if (bs.frame != f) continue;
+      const zref::terrain::DigStamp dig{bs.cx, bs.cz, bs.radius};
+      zref::terrain::bake_dig(patch, dig, zref::fx16{fxm(bs.from_milli)},
+                              zref::fx16{fxm(bs.to_milli)}, nullptr);
+      const std::vector<zref::terrain::BreachEvent> ev = zref::terrain::apply_breach_law(patch);
+      if (!ev.empty()) {
+        breach_total += static_cast<uint32_t>(ev.size());
+        std::printf("%s frame %u: %zu cell(s) breached (total %u)\n", sub.name, f, ev.size(),
+                    breach_total);
+      }
+    }
 
     // debris population for this frame (integer ballistics)
     zref::render::Population* pop = nullptr;
@@ -295,13 +389,13 @@ int render_scene(const SceneSubject& sub) {
     if (!sub.debris.empty() && f >= sub.debris_spawn_frame) {
       const int32_t t = static_cast<int32_t>(f - sub.debris_spawn_frame);
       for (const Debris& d : sub.debris) {
-        // y = vy*t - g*t*(t-1)/2 ; alive while above the ground line
+        // y = vy*t - g*t*(t-1)/2 ; alive while above the despawn line
         const int64_t rise = static_cast<int64_t>(d.vy) * t;
         const int64_t fall = static_cast<int64_t>(sub.debris_gravity) * t * (t - 1) / 2;
-        const int64_t y = (2 << 16) + rise - fall;  // launch from ~2 m
-        if (y < (1 << 15)) continue;                // landed (below 0.5 m)
-        pop->parts.push_back({d.x0 + d.vx * t, static_cast<int32_t>(y), d.z0 + d.vz * t, d.size,
-                              d.r, d.g, d.b});
+        const int64_t y = sub.debris_y0 + rise - fall;
+        if (y < sub.debris_floor) continue;  // landed / fell out of the world
+        pop->parts.push_back(
+            {d.x0 + d.vx * t, static_cast<int32_t>(y), d.z0 + d.vz * t, d.size, d.r, d.g, d.b});
       }
     }
 
@@ -321,9 +415,10 @@ int render_scene(const SceneSubject& sub) {
       auto sv = zhao_abi::zhao_sample_set_view();
       sv.payload.view_id = 0;
       // pitch ~26 deg down: sin 28732, cos 58903 (hand Q16.16 constants);
-      // sunlit-side camera (zsign −1), bias +0.25 NDC recentres the island
-      sv.payload.view_projection =
-          cam_pitch(127000, 14, 33, 28732, 58903, 14000, -1, shake_raw);
+      // sunlit-side camera (zsign −1), bias recentres the island; k/eye/dist
+      // are per-subject (the island scenes stand much further back)
+      sv.payload.view_projection = cam_pitch(sub.cam_k, sub.cam_eye, sub.cam_dist, 28732, 58903,
+                                             sub.cam_bias, -1, shake_raw);
       std::vector<uint8_t> v1;
       zhao_abi::zhao_pack_set_view(sv, v1);
       b.append_record(v1);
@@ -434,8 +529,8 @@ int render_scene(const SceneSubject& sub) {
   }
 
   if (!g_write) {
-    std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name,
-                sub.frames, pal.count(), seq_crc);
+    std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name, sub.frames,
+                pal.count(), seq_crc);
     if (sub.expect_seq_crc != 0 && seq_crc != sub.expect_seq_crc) {
       std::fprintf(stderr,
                    "%s: sequence_crc32c 0x%08X != expected 0x%08X — the reel drifted. Either a "
@@ -488,7 +583,7 @@ SceneSubject subject_wave() {
   s.frames = 64;
   s.step = 8;  // duration = frames*step so phase = f/frames
   FieldSpec fs;
-  fs.program = 6;  // wave_pool
+  fs.program = 6;        // wave_pool
   fs.p[0] = fxm(-1500);  // centre x  -1.5 m (off-centre reads better)
   fs.p[1] = fxm(1000);   // centre z   1.0 m
   fs.p[2] = fxm(180);    // k = 0.18 turns/m  (wavelength ~5.6 m)
@@ -517,7 +612,7 @@ SceneSubject subject_impact() {
   s.frames = 80;
   s.step = 8;
   FieldSpec fs;
-  fs.program = 7;  // impact_wave
+  fs.program = 7;        // impact_wave
   fs.p[0] = fxm(-500);   // centre x
   fs.p[1] = fxm(1500);   // centre z (sunlit camera side)
   fs.p[2] = fxm(14000);  // wave speed: front reaches 14 m at phase 1
@@ -534,8 +629,8 @@ SceneSubject subject_impact() {
 
   // erupt-style garnish: debris flung from the impact, screen shake at the
   // strike. Two flat colours; opaque point/tri sprites (palette-cheap).
-  s.debris_spawn_frame = 4;             // the strike lands at phase ~0.05
-  s.debris_gravity = fxm(45);           // per frame^2
+  s.debris_spawn_frame = 4;    // the strike lands at phase ~0.05
+  s.debris_gravity = fxm(45);  // per frame^2
   const int32_t cx = fxm(-500), cz = fxm(1500);
   struct D0 {
     int32_t dx, dz, vx, vy, vz;
@@ -554,15 +649,15 @@ SceneSubject subject_impact() {
   int i = 0;
   for (const D0& d : d0) {
     const bool charred = (i++ % 2) == 0;
-    s.debris.push_back({cx + d.dx, cz + d.dz, d.vx, d.vy, d.vz, d.sz,
-                        static_cast<uint8_t>(charred ? 54 : 154),
-                        static_cast<uint8_t>(charred ? 44 : 122),
-                        static_cast<uint8_t>(charred ? 40 : 78)});
+    s.debris.push_back(
+        {cx + d.dx, cz + d.dz, d.vx, d.vy, d.vz, d.sz, static_cast<uint8_t>(charred ? 54 : 154),
+         static_cast<uint8_t>(charred ? 44 : 122), static_cast<uint8_t>(charred ? 40 : 78)});
   }
   s.shake_frame = 4;
   s.shake = {26000, -42000, 34000, -26000, 18000, -12000, 8000, -4000, 2000, 0};
-  s.note = "strike -> expanding annular wave -> centre rebound -> settle; "
-           "debris + screen shake (erupt-style garnish); starts and ends at rest";
+  s.note =
+      "strike -> expanding annular wave -> centre rebound -> settle; "
+      "debris + screen shake (erupt-style garnish); starts and ends at rest";
   s.expect_seq_crc = 0xD846D69Cu;
   return s;
 }
@@ -607,9 +702,77 @@ SceneSubject subject_scars() {
     s.stamps.push_back({h.frame, h.cx, h.cz, fxm(3600), fxm(1800), 0xC000});
     s.stamps.push_back({h.frame, h.cx, h.cz, fxm(1300), 0, 0xC000});
   }
-  s.note = "three strikes in sequence; surface-sheet scars persist and accrue "
-           "(the loop restart is the sequence replaying)";
+  s.note =
+      "three strikes in sequence; surface-sheet scars persist and accrue "
+      "(the loop restart is the sequence replaying)";
   s.expect_seq_crc = 0x67FA0C1Fu;
+  return s;
+}
+
+// 4. terrain-breach — the world-identity capture: a 320 m dual-heightfield
+// island (2.0 m pitch, modelled keel) holds for a beat, then a bake ramp
+// digs a 30 m pit through ~22 m of local thickness; cells cross the §3.4
+// breach law corner-first (neighbours sag toward the hole before dropping —
+// the S5 corner-coupling look), the rim clothes itself down to the MODELLED
+// bottom, and the dusk sky shows clean through the island. Debris + shake
+// land at the first breach frame (the bake event the impact FX masks, §3.4).
+SceneSubject subject_breach() {
+  SceneSubject s;
+  s.name = "terrain-breach";
+  s.frames = 64;
+  s.step = 8;
+  s.island = true;
+  // camera: far shot — eye 140 m, dist 300 m, same 26° pitch, sunlit side
+  s.cam_k = 112000;
+  s.cam_eye = 140;
+  s.cam_dist = 300;
+  s.cam_bias = 5243;  // +0.08 NDC
+  // the dig: centre (28, 52) m — 59 m from the island heart, local thickness
+  // ~22 m, top ~13 m; radius 34 m, final depth 30 m -> a ~17 m-radius hole
+  // punched clean through. Ramp: frames 8..43 in 36 equal bake steps
+  // (incremental from->to per frame — the applyDMapDelta cadence).
+  const int32_t cx = fxm(28000), cz = fxm(52000), rad = fxm(34000);
+  for (uint32_t f = 8; f <= 43; ++f) {
+    const int32_t from = static_cast<int32_t>((static_cast<int64_t>(f - 8) * 30000) / 36);
+    const int32_t to = static_cast<int32_t>((static_cast<int64_t>(f - 7) * 30000) / 36);
+    s.bakes.push_back(BakeStep{f, cx, cz, rad, from, to});
+  }
+  // debris + screen shake at the first breach frame (frame 32 in the
+  // printed deterministic breach schedule; re-pin if the ramp is re-authored)
+  const uint32_t first_breach = 32;
+  s.debris_spawn_frame = first_breach;
+  s.debris_gravity = fxm(380);
+  s.debris_y0 = fxm(11000);      // launch near the failing surface (~11 m)
+  s.debris_floor = -fxm(80000);  // fall THROUGH the breach, out of the world
+  struct D0 {
+    int32_t dx, dz, vx, vy, vz;
+    uint8_t sz;
+  };
+  const D0 d0[] = {
+      {fxm(2000), fxm(-1500), fxm(900), fxm(1600), fxm(-700), 96},
+      {fxm(-2600), fxm(900), fxm(-1100), fxm(2200), fxm(500), 128},
+      {fxm(700), fxm(2800), fxm(300), fxm(1200), fxm(1200), 80},
+      {fxm(-1400), fxm(-2400), fxm(-500), fxm(1900), fxm(-1000), 96},
+      {fxm(3100), fxm(1700), fxm(1300), fxm(900), fxm(600), 80},
+      {fxm(-700), fxm(-700), fxm(-300), fxm(2400), fxm(-300), 128},
+      {fxm(1700), fxm(-3100), fxm(600), fxm(1400), fxm(-1300), 80},
+      {fxm(-2400), fxm(2400), fxm(-900), fxm(1100), fxm(900), 96},
+  };
+  int i = 0;
+  for (const D0& d : d0) {
+    const bool charred = (i++ % 2) == 0;
+    s.debris.push_back(
+        {cx + d.dx, cz + d.dz, d.vx, d.vy, d.vz, d.sz, static_cast<uint8_t>(charred ? 54 : 154),
+         static_cast<uint8_t>(charred ? 44 : 122), static_cast<uint8_t>(charred ? 40 : 78)});
+  }
+  s.shake_frame = first_breach;
+  s.shake = {200000, -340000, 270000, -200000, 140000, -90000, 60000, -30000, 15000, 0};
+  s.note =
+      "320 m dual-heightfield island (2.0 m pitch = 25 Island-Patch pages of ground, "
+      "one Phase-3 envelope patch), modelled keel 5..27 m thick; 36-step bake ramp digs "
+      "a 30 m pit; cells breach corner-coupled; rim walls run to the MODELLED bottom; "
+      "sky visible through the island; debris falls through the hole";
+  s.expect_seq_crc = 0x482E273Cu;  // pinned 2026-08-16 (first render of the subject)
   return s;
 }
 
@@ -625,8 +788,8 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_wave());
     rc |= render_scene(subject_impact());
     rc |= render_scene(subject_scars());
-    std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n"
-                        : "reel --check: FAILED\n");
+    rc |= render_scene(subject_breach());
+    std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
   g_out = argc > 1 ? argv[1] : ".";
@@ -644,5 +807,6 @@ int main(int argc, char** argv) {
   if (wanted("terrain-wave")) rc |= render_scene(subject_wave());
   if (wanted("terrain-impact")) rc |= render_scene(subject_impact());
   if (wanted("terrain-scars")) rc |= render_scene(subject_scars());
+  if (wanted("terrain-breach")) rc |= render_scene(subject_breach());
   return rc;
 }
