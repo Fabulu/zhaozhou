@@ -29,3 +29,6 @@ desktop.ini
 
 # TS build output (fixgen tsc -> dist/, never committed)
 # TS build outputs (tools/abi-gen, compiler): npm scripts rebuild on demand
+
+# built binaries never committed
+*.exe
