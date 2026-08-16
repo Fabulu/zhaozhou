@@ -429,6 +429,38 @@ effects:
     implemented: true
     tags: [lod, glint, minimum-brightness]
 
+  # ============================================================================
+  # CREATURE / CHARACTER LANE (spec/creature_rules.md) - world-identity wave
+  # ============================================================================
+
+  - id: creature-wave-walk
+    class: creature
+    program: wave_pool
+    name: "Creature wave walk"
+    short_name: "Wave walk"
+    description: "Ring-mesh quadruped, 7 bones and 6 parts, walks east at 0.022 m per frame. A 0.5 m wave crosses under it; two column_query taps per tick tilt it through the crest. Frames 48 on pull the camera back 8 m to 300 m and the LOD ladder walks it down mesh, micro-mesh, splat, glint with 10 percent hysteresis and a 15-tick hold."
+    reel_subject: creature-wave-walk
+    render_path: renders/creature-wave-walk.gif
+    program_hash: 0x8BDCEB63
+    crc_pin: 0x33782CB8
+    frames: 96
+    gif_bytes: 1223213
+    implemented: true
+    tags: [creature, ring-mesh, rotate-on-ground, lod, hysteresis, glint]
+
+  - id: creature-bulk-pop
+    class: creature
+    name: "Bulk inflate and pop"
+    short_name: "Bulk pop"
+    description: "The same watchdog idles on a hilltop (32-key breathing clip, hard-cut clock) while bulk inflation scales the root 1.0 to 2.3 as one scalar. Crossing the 2.2 species threshold removes the mesh and bursts up to 64 gibs with noise2-derived velocities and integer ballistics."
+    reel_subject: creature-bulk-pop
+    render_path: renders/creature-bulk-pop.gif
+    crc_pin: 0x00889F52
+    frames: 72
+    gif_bytes: 30748
+    implemented: true
+    tags: [creature, bulk, gib, scale, pop]
+
   - id: lod-point
     class: lod
     rung: 4

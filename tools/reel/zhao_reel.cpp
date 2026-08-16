@@ -49,8 +49,10 @@
 #include "impact_wave.hpp"  // compiler/tests/generated (TS-generated)
 #include "wave_pool.hpp"    // compiler/tests/generated (TS-generated)
 #include "zfield/zfield.hpp"
+#include "zref/zref_creature.hpp"  // creature reference core (creature_rules.md)
 #include "zref/zref_star.hpp"     // celestial compositor preview (stars_and_flares.md)
 #include "zref/zref_terrain.hpp"  // dual-heightfield bake/breach reference
+#include "zrender/internal.hpp"   // compose_lattice for the sim-side tilt taps
 
 #include <cmath>
 #include <cstdint>
@@ -480,8 +482,13 @@ struct SceneSubject {
   // world-identity wave: dual-heightfield island + deterministic bake ramp
   bool island = false;          // true: dual_island_patch (320 m, 2 m pitch)
   std::vector<BakeStep> bakes;  // applied at frame start, in order
-  // camera (defaults = the wave-2 reel constants; island scenes override)
+  // camera (defaults = the wave-2 reel constants; island scenes override).
+  // cam_pull: lerp cam -> cam2 over [cam_pull0, frames) — the LOD ladder's
+  // pull-back shot walks the creature down mesh -> micro -> splat -> glint.
   int32_t cam_k = 127000, cam_eye = 14, cam_dist = 33, cam_bias = 14000;
+  bool cam_pull = false;
+  uint32_t cam_pull0 = 0;
+  int32_t cam2_eye = 0, cam2_dist = 0, cam2_bias = 0;  // (cam2_k == cam_k)
   // debris: spawned at spawn_frame, integer gravity fxm per frame^2
   uint32_t debris_spawn_frame = 0;
   int32_t debris_gravity = 0;      // fx raw per frame^2 (subtracted from vy)
@@ -509,6 +516,13 @@ struct SceneSubject {
   int celestial = 0;
   bool space = false;  // no DrawSky (fallback black), no terrain
   int sky_variant = 0;  // dusk_sky variant (1 = flat upper band, still C0)
+  // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
+  // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
+  int creature = 0;
+  int32_t bump_ext = 12;  // bump_patch half-extent (creature shots: 6 m so the
+                          // near camera at dist 8 stands OUTSIDE the envelope —
+                          // Phase-3 culls the whole patch when any lattice
+                          // vertex lands behind the eye, terrain.cpp 310)
   const char* note = "";
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
@@ -767,12 +781,184 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
                            ctx.slots, nullptr);
 }
 
+// ------------------------------------------------------------ creature -----
+//
+// The creature subjects ride the renderer's pre-resolve hook exactly like
+// the celestial compositor preview does: every LAW (ring build, pose decode
+// + cache, skinning, tilt, bulk, LOD ladder) lives in zref::creature
+// (creature_rules.md — never re-implemented here); this block is pure
+// AUTHORING: which creature, where, what camera. All integers (29-7).
+
+namespace zc = zref::creature;
+
+// The demo subject: a watchdog quadruped. Ring parts are rigid per bone
+// (donor law); the body lies along Z via an EXACT quarter turn (pitch_q=1).
+// 7 bones, 6 parts, authored in integer constants only.
+const zc::CreatureType& watchdog_type() {
+  static const zc::CreatureType t = [] {
+    zc::Skeleton sk;
+    sk.bone_count = 7;
+    sk.bones[0] = zc::Bone{0, 0, fxm(520), 0};
+    sk.bones[1] = zc::Bone{0, 0, fxm(120), fxm(420)};
+    sk.bones[2] = zc::Bone{0, -fxm(180), -fxm(50), fxm(260)};
+    sk.bones[3] = zc::Bone{0, fxm(180), -fxm(50), fxm(260)};
+    sk.bones[4] = zc::Bone{0, -fxm(180), -fxm(50), -fxm(260)};
+    sk.bones[5] = zc::Bone{0, fxm(180), -fxm(50), -fxm(260)};
+
+    std::vector<zc::RingPart> parts;
+    zc::RingPart body;
+    body.rings = {{-fxm(280), fxm(200), 10}, {-fxm(140), fxm(265), 10}, {0, fxm(280), 10},
+                  {fxm(140), fxm(265), 10}, {fxm(280), fxm(200), 10}};
+    body.caps = zc::kCapTop | zc::kCapBot;
+    body.pitch_q = 1;  // exact quarter turn: stack along +Z (the facing axis)
+    body.bone = 0;
+    body.r = 198; body.g = 108; body.b = 58;
+    parts.push_back(body);
+
+    zc::RingPart head;
+    head.rings = {{0, fxm(125), 8}, {fxm(150), fxm(115), 8}, {fxm(300), fxm(80), 8}};
+    head.caps = zc::kCapTop | zc::kCapBot;
+    head.pitch_q = 1;
+    head.bone = 1;
+    head.r = 232; head.g = 168; head.b = 96;
+    parts.push_back(head);
+
+    for (int leg = 0; leg < 4; ++leg) {
+      zc::RingPart lp;
+      lp.rings = {{0, fxm(60), 6}, {-fxm(250), fxm(55), 6}, {-fxm(500), fxm(45), 6}};
+      lp.caps = zc::kCapTop | zc::kCapBot;
+      lp.bone = static_cast<uint8_t>(2 + leg);
+      lp.r = 122; lp.g = 74; lp.b = 52;
+      parts.push_back(lp);
+    }
+
+    // clip bank: slot 1 idle (breathing bob), slot 2 walk (16 keys).
+    // Authored through the fx trig tables — the integer path.
+    zc::ClipBank bank;
+    bank.bone_count = 7;
+    zc::Clip idle;
+    idle.slot_id = 1;
+    idle.frame_count = 32;
+    idle.root.assign(32 * 3, 0);
+    idle.quats.assign(static_cast<size_t>(32) * 7, zc::quat16_identity());
+    for (uint16_t f = 0; f < 32; ++f) {
+      const zref::angle16 breathe{static_cast<uint16_t>(f * (65536u / 32u))};
+      idle.root[f * 3 + 1] = (zref::fx_sin(breathe).raw * 520) >> 16;  // +-8 mm
+    }
+    bank.clips.push_back(std::move(idle));
+
+    zc::Clip walk;
+    walk.slot_id = 2;
+    walk.frame_count = 16;
+    walk.root.assign(16 * 3, 0);
+    walk.quats.assign(static_cast<size_t>(16) * 7, zc::quat16_identity());
+    // swing: legs +-0.30 rad about X, diagonal pairs in antiphase; head
+    // nods; root bobs at double frequency. Half-angle as angle16 via a
+    // linear map of the table sine (all integer).
+    for (uint16_t f = 0; f < 16; ++f) {
+      const zref::angle16 ph{static_cast<uint16_t>(f * (65536u / 16u))};
+      const int32_t s1 = zref::fx_sin(ph).raw;
+      const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph.raw * 2)}).raw;
+      for (int b = 2; b <= 5; ++b) {
+        const bool diagonalA = (b == 2 || b == 5);
+        const int32_t swing = (diagonalA ? s1 : -s1) * 1565 >> 16;  // 0.15 rad half
+        const zref::angle16 half{static_cast<uint16_t>(swing & 0xFFFF)};
+        walk.quats[static_cast<size_t>(f) * 7 + b] =
+            zc::quat16_axis_angle(zref::fx16{1 << 16}, zref::fx16{0}, zref::fx16{0}, zref::fx_sin(half),
+                                  zref::fx_cos(half));
+      }
+      const int32_t nod = (s2 * 400) >> 16;
+      const zref::angle16 halfh{static_cast<uint16_t>(nod & 0xFFFF)};
+      walk.quats[static_cast<size_t>(f) * 7 + 1] =
+          zc::quat16_axis_angle(zref::fx16{1 << 16}, zref::fx16{0}, zref::fx16{0}, zref::fx_sin(halfh),
+                                zref::fx_cos(halfh));
+      walk.root[f * 3 + 1] = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph.raw * 2 + 0x4000)})
+                                  .raw *
+                              1640) >>
+                             16;  // +-25 mm bob
+    }
+    walk.events = {{0, zc::kEvFoot, 0}, {8, zc::kEvFoot, 1}};
+    bank.clips.push_back(std::move(walk));
+
+    zc::CreatureType type;
+    type.type_id = 1;
+    const char* reason = "";
+    if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
+      std::fprintf(stderr, "watchdog_type: compile failed: %s\n", reason);
+    }
+    return type;
+  }();
+  return t;
+}
+
+struct CreatureReelCtx {
+  zc::CreatureInstance* inst = nullptr;
+  zc::PoseBank* poses = nullptr;
+  zref::mat4fx vp;
+  std::vector<zc::Gib>* gibs = nullptr;
+};
+
+void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
+                   uint32_t /*tick*/) {
+  CreatureReelCtx& c = *static_cast<CreatureReelCtx*>(vctx);
+#ifdef ZHAO_CREATURE_DEBUG
+  {
+    // telemetry: rung, projected radius, screen bbox of the skinned mesh
+    const zc::CreatureType& T = *c.inst->type;
+    const zref::vec4fx clip = zref::mat4_vec4(
+        c.vp, zref::vec4fx{zref::fx16{c.inst->x}, zref::fx16{c.inst->y}, zref::fx16{c.inst->z},
+                           zref::fx16{1 << 16}},
+        nullptr);
+    const zref::render::Viewport vpp{0, 0, w, h};
+    const zref::render::ProjOut pc = zref::render::project_vertex(
+        c.vp, vpp, zref::fx16{c.inst->x}, zref::fx16{c.inst->y}, zref::fx16{c.inst->z}, nullptr);
+    int32_t minx = 1 << 30, maxx = -(1 << 30), miny = 1 << 30, maxy = -(1 << 30);
+    if (pc.in) {
+      minx = maxx = pc.s.x;
+      miny = maxy = pc.s.y;
+    }
+    std::fprintf(stderr, "creature: rung=%d vis=%d in=%d centre=(%d,%d) w_raw=%d\n",
+                 static_cast<int>(c.inst->lod.rung), c.inst->visible ? 1 : 0, pc.in ? 1 : 0,
+                 pc.in ? pc.s.x >> 8 : -1, pc.in ? pc.s.y >> 8 : -1, clip.w.raw);
+  }
+#endif
+  zc::compose_creatures(rgb, depth, w, h, c.vp, &c.inst, 1, *c.poses, nullptr);
+  if (c.gibs == nullptr || c.gibs->empty()) return;
+  // gib particles: projected squares at fixed depth (the PART.SPAWN burst
+  // stand-in; DrawPopulation draws the shipping version)
+  zref::render::WorkSurface surf;
+  surf.w = w;
+  surf.h = h;
+  surf.rgb.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
+  surf.depth.assign(depth, depth + static_cast<size_t>(w) * h);
+  const zref::render::Viewport vpp{0, 0, w, h};
+  for (const zc::Gib& g : *c.gibs) {
+    const zref::render::ProjOut pc =
+        zref::render::project_vertex(c.vp, vpp, zref::fx16{g.x}, zref::fx16{g.y}, zref::fx16{g.z},
+                                     nullptr);
+    if (!pc.in) continue;
+    const int32_t r8 = static_cast<int32_t>(g.size) * 16;  // U 0.4.4 px -> S12.8
+    zref::render::ScreenV a = pc.s, b = pc.s, d = pc.s, e = pc.s;
+    a.x = pc.s.x - r8; a.y = pc.s.y - r8;
+    b.x = pc.s.x + r8; b.y = pc.s.y - r8;
+    d.x = pc.s.x + r8; d.y = pc.s.y + r8;
+    e.x = pc.s.x - r8; e.y = pc.s.y + r8;
+    zref::render::TriMode tm;
+    tm.use_fixed_depth = true;
+    tm.fixed_depth = pc.s.d;
+    zref::render::raster_tri(surf, vpp, a, b, d, g.r, g.g, g.b, tm);
+    zref::render::raster_tri(surf, vpp, a, d, e, g.r, g.g, g.b, tm);
+  }
+  std::memcpy(rgb, surf.rgb.data(), surf.rgb.size());
+  std::memcpy(depth, surf.depth.data(), surf.depth.size() * sizeof(int32_t));
+}
+
 // ------------------------------------------------------------ scene render --
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
   zref::render::TerrainPatch patch =
-      sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, 12, 8);
+      sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, sub.bump_ext, 8);
   zref::render::Material mat{sub.mat_r, sub.mat_g, sub.mat_b};
   zref::sky::SkySet sky = dusk_sky(sub.sky_variant);
 
@@ -823,6 +1009,27 @@ int render_scene(const SceneSubject& sub) {
     ZHAO_MKDIR(dir.c_str());
   }
 
+  // creature subject state (zref::creature — the laws live there)
+  const zc::CreatureType* dog = nullptr;
+  zc::CreatureInstance dog_inst;
+  zc::PoseBank dog_poses;
+  std::vector<zc::Gib> gibs;
+  CreatureReelCtx cr_ctx;
+  int32_t pop_threshold = 0;
+  int32_t gib_gravity = 0;
+  if (sub.creature != 0) {
+    dog = &watchdog_type();
+    dog_inst.type = dog;
+    dog_inst.tilt_mode = zc::TiltMode::kCompletely;
+    dog_inst.anim.cut(sub.creature == 1 ? 2 : 1);  // walk / idle
+    cr_ctx.inst = &dog_inst;
+    cr_ctx.poses = &dog_poses;
+    cr_ctx.gibs = &gibs;
+    pop_threshold = 22 * (1 << 16) / 10;  // bulk 2.2 pops (species constant)
+    gib_gravity = fxm(18);                // per frame^2
+    rend.set_pre_resolve(&creature_hook, &cr_ctx);
+  }
+
   uint32_t breach_total = 0;
   for (uint32_t f = 0; f < sub.frames; ++f) {
     const uint32_t tick = f * sub.step;
@@ -867,6 +1074,96 @@ int render_scene(const SceneSubject& sub) {
     if (!sub.shake.empty() && f >= sub.shake_frame && f < sub.shake_frame + sub.shake.size())
       shake_raw = sub.shake[f - sub.shake_frame];
 
+    // ---- creature sim (the driver composes the tick cadence; the laws are
+    // zref::creature's). One lattice compose per frame feeds the tilt taps —
+    // the SAME compose_lattice the renderer's DrawProcedural runs inside
+    // (physics equals pixels, terrain_rules 4.1).
+    int32_t cam_eye = sub.cam_eye, cam_dist = sub.cam_dist, cam_bias = sub.cam_bias;
+    if (dog != nullptr) {
+      if (sub.cam_pull && f >= sub.cam_pull0) {
+        const int64_t n = sub.frames - sub.cam_pull0;
+        const int64_t k = f - sub.cam_pull0;
+        cam_eye = static_cast<int32_t>(sub.cam_eye + (k * (sub.cam2_eye - sub.cam_eye) + n / 2) / n);
+        cam_dist = static_cast<int32_t>(sub.cam_dist + (k * (sub.cam2_dist - sub.cam_dist) + n / 2) / n);
+        cam_bias = static_cast<int32_t>(sub.cam_bias + (k * (sub.cam2_bias - sub.cam_bias) + n / 2) / n);
+      }
+      std::vector<zref::render::FieldApp> fapps;
+      for (const FieldSpec& fs : sub.fields) {
+        zref::render::FieldApp fa;
+        fa.prog = fs.program == 6 ? &wave.prog : &impact.prog;
+        fa.cmd.program = fs.program;
+        fa.cmd.footprint.x0 = fs.fx0;
+        fa.cmd.footprint.y0 = fs.fz0;
+        fa.cmd.footprint.x1 = fs.fx1;
+        fa.cmd.footprint.y1 = fs.fz1;
+        fa.cmd.start_tick = fs.start_tick;
+        fa.cmd.duration_ticks = fs.duration;
+        for (int kk = 0; kk < 8; ++kk) put_param(fa.cmd.parameters, kk, fs.p[kk]);
+        fapps.push_back(fa);
+      }
+      const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
+          patch, rtest::xform_identity(), fapps, tick, nullptr, nullptr);
+
+      if (sub.creature == 1) {
+        // walk: root motion + ground snap, 8 anim ticks per frame
+        dog_inst.x += fxm(22);
+        dog_inst.facing = zref::angle16{0};
+        for (int t = 0; t < 8; ++t) {
+          const zc::ClipEvent* fired = nullptr;
+          uint8_t nf = 0;
+          zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+        }
+        zc::ground_tilt_update(dog_inst.tilt, dog_inst.tilt_mode, dog_inst.facing, lat,
+                               zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z}, zref::fx16{fxm(40)},
+                               zref::fx16{fxm(20)});
+      } else {
+        for (int t = 0; t < 8; ++t) {
+          const zc::ClipEvent* fired = nullptr;
+          uint8_t nf = 0;
+          zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+        }
+        // bulk inflation: target ramps from frame 16; crossing the species
+        // pop threshold gibs the creature (mesh removed, burst spawned)
+        dog_inst.bulk.target = f < 16 ? (1 << 16)
+                                   : static_cast<int32_t>(65536 + (f - 16) * (65536 * 14 / 10) / 24);
+        for (int t = 0; t < 8; ++t) zc::bulk_update(dog_inst.bulk, 4);
+        if (dog_inst.visible && zc::bulk_popped(dog_inst.bulk, pop_threshold)) {
+          dog_inst.visible = false;
+          std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+          const zc::Clip* clip = nullptr;
+          for (const zc::Clip& cc : dog->bank.clips)
+            if (cc.slot_id == dog_inst.anim.slot) clip = &cc;
+          zc::decode_pose(*dog, *clip, dog_inst.anim.frame, pose, nullptr);
+          const int32_t bs = dog_inst.bulk.scale;
+          for (int b = 0; b < dog->bank.bone_count; ++b) {
+            for (int i = 0; i < 3; ++i)
+              for (int j = 0; j < 3; ++j)
+                pose[b].m[i * 4 + j] = zref::rescale_s32(
+                    static_cast<int64_t>(pose[b].m[i * 4 + j]) * bs, 16, nullptr);
+          }
+          zc::spawn_gibs(*dog, pose.data(), zref::fx16{dog_inst.x}, zref::fx16{dog_inst.y},
+                         zref::fx16{dog_inst.z}, 0x600DF00Du, gibs);
+        }
+      }
+      // ground snap (root sits on the leg length; the skeleton carries 0.52)
+      const zref::terrain::ColumnResult col =
+          zref::terrain::column_query(lat, zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z});
+      if (col.cls == zref::terrain::ColumnClass::kSolid) dog_inst.y = col.top.raw;
+      // gib ballistics (integer)
+      for (auto it = gibs.begin(); it != gibs.end();) {
+        it->x += it->vx * 8;
+        it->y += it->vy * 8;
+        it->z += it->vz * 8;
+        it->vy -= gib_gravity;
+        if (it->y < dog_inst.y - (2 << 16)) {
+          it = gibs.erase(it);
+        } else {
+          ++it;
+        }
+      }
+      dog_poses.begin_frame();
+    }
+
     const auto pkt = rtest::seal_frame(tick, [&](zhao::ZhaoFrameBuilder& b) {
       auto spc = zhao_abi::zhao_sample_set_presentation_contract();
       spc.payload.mode = zhao_abi::VIDEO_Z60;
@@ -879,9 +1176,16 @@ int render_scene(const SceneSubject& sub) {
       sv.payload.view_id = 0;
       // pitch ~26 deg down: sin 28732, cos 58903 (hand Q16.16 constants);
       // sunlit-side camera (zsign −1), bias recentres the island; k/eye/dist
-      // are per-subject (the island scenes stand much further back)
-      sv.payload.view_projection = cam_pitch(sub.cam_k, sub.cam_eye, sub.cam_dist, 28732, 58903,
-                                             sub.cam_bias, -1, shake_raw);
+      // are per-subject (the island scenes stand much further back; creature
+      // subjects lerp them for the LOD pull-back)
+      sv.payload.view_projection = cam_pitch(sub.cam_k, cam_eye, cam_dist, 28732, 58903,
+                                             cam_bias, -1, shake_raw);
+      if (dog != nullptr) {
+        // the creature hook consumes the SAME matrix (16 raws, ABI -> zref)
+        const int32_t* mm = &sv.payload.view_projection.m00;
+        for (int i = 0; i < 4; ++i)
+          for (int j = 0; j < 4; ++j) cr_ctx.vp.m[i][j] = zref::fx16{mm[i * 4 + j]};
+      }
       std::vector<uint8_t> v1;
       zhao_abi::zhao_pack_set_view(sv, v1);
       b.append_record(v1);
@@ -890,7 +1194,7 @@ int render_scene(const SceneSubject& sub) {
       // zsign -1) so the sky horizon and the terrain horizon agree; in
       // sky-sweep mode the pitch ping-pongs pitch0 -> pitch1 -> pitch0
       // across the loop (integer lerp on angle16 turns, table sin/cos)
-      int32_t sky_ps = 28732, sky_pc = 58903, sky_bias = sub.cam_bias;
+      int32_t sky_ps = 28732, sky_pc = 58903, sky_bias = cam_bias;
       if (sub.sky_sweep) {
         const uint32_t half = sub.frames / 2;
         const uint32_t ph = f < half ? f : (sub.frames - 1 - f);
@@ -1466,6 +1770,87 @@ SceneSubject subject_flareocclusion() {
   return s;
 }
 
+// 16. creature-wave-walk — the creature-lane identity shot: the watchdog
+// walks the island while a travelling wave passes UNDER it; two
+// column_query taps per tick tilt it through the wave (rotateOnGround);
+// then the camera pulls back and the LOD ladder walks it down
+// mesh -> micro-mesh -> splat -> glint with 10%/15-tick hysteresis.
+SceneSubject subject_creaturewalk() {
+  SceneSubject s;
+  s.name = "creature-wave-walk";
+  s.frames = 96;
+  s.step = 8;
+  s.creature = 1;
+  // near phase: camera aims AT the creature (aim y = eye - 0.4877*dist =
+  // 8 m, the bump-patch crown it walks on); focal 3.36 puts the ~1 m
+  // watchdog at ~70 px (the legibility rule)
+  s.bump_ext = 6;
+  s.cam_k = 320000;
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  // pull-back phase (frames 48..95): dist 8 -> 300 m walks the ladder
+  // (micro ~17 m, splat ~155 m, glint ~310 m with hysteresis; the last
+  // frames hold the glint rung)
+  s.cam_pull = true;
+  s.cam_pull0 = 48;
+  s.cam2_eye = 150;
+  s.cam2_dist = 300;
+  s.cam2_bias = 0;
+  FieldSpec fs;
+  fs.program = 6;        // wave_pool
+  fs.p[0] = fxm(500);    // centre x 0.5 m (on the walking line)
+  fs.p[1] = fxm(1000);   // centre z 1.0 m
+  fs.p[2] = fxm(180);    // k = 0.18 turns/m (wavelength ~5.6 m)
+  fs.p[3] = fxm(3000);   // n = 3 cycles per loop
+  fs.p[4] = fxm(500);    // amplitude 0.5 m (focal 4.88: +-55 px bob at the
+                         // near camera; crest slope 0.56 tilts it ~29 deg)
+  fs.p[5] = fxm(5500);   // envelope: full inside 5.5 m
+  fs.p[6] = fxm(12200);  // fades to zero at the island rim
+  fs.p[7] = 0;
+  fs.fx0 = fxm(-12000);
+  fs.fz0 = fxm(-12000);
+  fs.fx1 = fxm(12000);
+  fs.fz1 = fxm(12000);
+  fs.start_tick = 0;
+  fs.duration = s.frames * s.step;
+  s.fields.push_back(fs);
+  s.note =
+      "watchdog quadruped (7 bones, 6 ring parts) walks east at 0.022 m/frame; "
+      "a 1.2 m wave crosses under it and two column_query taps per tick tilt "
+      "it through the crest; frames 48+ pull the camera back 9 m -> 320 m and "
+      "the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
+      "(screen-space error, 10% hysteresis, 15-tick hold)";
+  s.expect_seq_crc = 0x33782CB8u;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
+// 17. creature-bulk-pop — bulk inflation then the gib burst: the watchdog
+// idles while its root SCALE inflates 1.0 -> ~2.3; crossing the species pop
+// threshold (2.2) removes the mesh and spawns the PART.SPAWN burst
+// (deterministic noise2 velocities, integer ballistics).
+SceneSubject subject_creaturepop() {
+  SceneSubject s;
+  s.name = "creature-bulk-pop";
+  s.frames = 72;
+  s.step = 8;
+  s.creature = 2;
+  // fixed camera on the bump-patch crown (aim y = 8.1 m; the inflated 2.3x
+  // creature reaches ~135 px before the pop)
+  s.bump_ext = 6;
+  s.cam_k = 220000;
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  s.note =
+      "watchdog idles (32-key breathing clip) while bulk inflates the root "
+      "scale 1.0 -> 2.3 (exponential smoothing, one scalar); crossing the "
+      "2.2 pop threshold removes the mesh and bursts 64 gibs with "
+      "noise2-derived velocities and integer ballistics";
+  s.expect_seq_crc = 0x00889F52u;  // pinned 2026-08-16 (first render)
+  return s;
+}
+
 }  // namespace
 
 // Library catalogue for --list
@@ -1495,6 +1880,12 @@ constexpr LibraryEntry kLibrary[] = {
   {"star-s07-blue-dwarf", "Blue dwarf", "Compact hot star 2k radius, fast spin", true},
   {"star-s08-multiple", "Multiple", "Binary star system 4k radius", true},
   {"star-s09-infant", "Infant star", "Young protostar with variable undertone", true},
+
+  // Creature/character lane (spec/creature_rules.md)
+  {"creature-wave-walk", "Creature wave walk",
+   "Ring-mesh quadruped tilts through a wave, LOD ladder to glints", true},
+  {"creature-bulk-pop", "Bulk inflate and pop",
+   "Root-scale bulk inflation crossing the pop threshold into gibs", true},
 
   // Dead classes (no flare capability, stub entries only)
   {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -1571,5 +1962,7 @@ int main(int argc, char** argv) {
   if (wanted("blue-dwarf")) rc |= render_scene(subject_bluedwarf());
   if (wanted("multiple")) rc |= render_scene(subject_multiple());
   if (wanted("infant")) rc |= render_scene(subject_infant());
+  if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
+  if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
   return rc;
 }

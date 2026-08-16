@@ -292,6 +292,35 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
   if (part.rings.size() < 2) return out;
   const int n_rings = static_cast<int>(part.rings.size());
 
+  // exact quarter-turn orientation (entries in {0, +-65536}: no rounding)
+  const std::array<int32_t, 9> rot = [pq = part.pitch_q, yq = part.yaw_q] {
+    // Ry(yq * 90) * Rx(pq * 90), quarter indices mod 4
+    const auto rx = [](int q, int32_t* m) {
+      q &= 3;
+      const int32_t c[4] = {65536, 0, -65536, 0}, s[4] = {0, 65536, 0, -65536};
+      const int32_t t[9] = {65536, 0, 0, 0, c[q], -s[q], 0, s[q], c[q]};
+      for (int i = 0; i < 9; ++i) m[i] = t[i];
+    };
+    const auto ry = [](int q, int32_t* m) {
+      q &= 3;
+      const int32_t c[4] = {65536, 0, -65536, 0}, s[4] = {0, 65536, 0, -65536};
+      const int32_t t[9] = {c[q], 0, s[q], 0, 65536, 0, -s[q], 0, c[q]};
+      for (int i = 0; i < 9; ++i) m[i] = t[i];
+    };
+    int32_t X[9], Y[9];
+    rx(pq, X);
+    ry(yq, Y);
+    std::array<int32_t, 9> R{};
+    // X entries are 0 or +-65536, so X/65536 is the exact integer {-1,0,1};
+    // each R row is +-one row of Y (a quarter turn has one nonzero per row),
+    // so R stays in {0, +-65536} — fx16 raw scale, zero rounding anywhere.
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j)
+        R[i * 3 + j] = X[i * 3 + 0] / 65536 * Y[0 * 3 + j] + X[i * 3 + 1] / 65536 * Y[1 * 3 + j] +
+                        X[i * 3 + 2] / 65536 * Y[2 * 3 + j];
+    return R;
+  }();
+
   Meshlet cur;
   std::vector<std::vector<BuiltVert>> ring_cache;  // rings emitted into `cur`
 
@@ -299,8 +328,17 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     return static_cast<uint8_t>((static_cast<int64_t>(ri) * 255 + (n_rings - 1) / 2) /
                                 (n_rings - 1));
   };
+  const auto orient = [&](int32_t& x, int32_t& y, int32_t& z) {
+    const int32_t nx = rot[0] / 65536 * x + rot[1] / 65536 * y + rot[2] / 65536 * z;
+    const int32_t ny = rot[3] / 65536 * x + rot[4] / 65536 * y + rot[5] / 65536 * z;
+    const int32_t nz = rot[6] / 65536 * x + rot[7] / 65536 * y + rot[8] / 65536 * z;
+    x = nx;
+    y = ny;
+    z = nz;
+  };
   const auto add_ring = [&](int ri) -> uint32_t {
     ring_cache.push_back(build_ring(part.rings[ri], part.align, v_lane_of(ri)));
+    for (BuiltVert& bv : ring_cache.back()) orient(bv.x, bv.y, bv.z);
     const uint32_t base = static_cast<uint32_t>(cur.verts.size());
     for (const BuiltVert& bv : ring_cache.back()) {
       cur.verts.push_back(SkinVertex{bv.x, bv.y, bv.z, part.bone, part.bone, 64, bv.u, bv.v});
@@ -349,7 +387,9 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     }
     if (bottom_cap) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
-      cur.verts.push_back(SkinVertex{0, part.rings[0].y, 0, part.bone, part.bone, 64,
+      int32_t ax0 = 0, ay0 = part.rings[0].y, az0 = 0;
+      orient(ax0, ay0, az0);
+      cur.verts.push_back(SkinVertex{ax0, ay0, az0, part.bone, part.bone, 64,
                                      static_cast<uint8_t>(part.align), 0});
       for (int k = 0; k < n; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(lo + k));
@@ -359,7 +399,9 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     }
     if (top_cap) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
-      cur.verts.push_back(SkinVertex{0, part.rings[n_rings - 1].y, 0, part.bone, part.bone, 64,
+      int32_t ax1 = 0, ay1 = part.rings[n_rings - 1].y, az1 = 0;
+      orient(ax1, ay1, az1);
+      cur.verts.push_back(SkinVertex{ax1, ay1, az1, part.bone, part.bone, 64,
                                      static_cast<uint8_t>(part.align), 255});
       for (int k = 0; k < m; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(hi + k));

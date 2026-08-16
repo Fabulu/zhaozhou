@@ -327,12 +327,19 @@ inline constexpr uint8_t kCapBot = 2;  // fan cap closing the -Y end
  * `align` is the 8-bit angular alignment (the donor's per-entry rotation):
  * vertex k of ring 0 sits at angle (k * 256 / segments + align)/256 turns,
  * and U = that angle's high byte — the -> U texcoord law.
+ *
+ * `pitch_q`/`yaw_q` orient the part in bind space by EXACT quarter turns
+ * (matrices with entries in {0, +-65536} — zero rounding, the all-integer
+ * construction preserved): a lying body cylinder is rings stacked along +Y
+ * with pitch_q = 1 (+Y -> +Z), legs stay upright, heads tilt by quarters.
  */
 struct RingPart {
   std::vector<RingSpec> rings;
   uint8_t caps = 0;
   uint8_t align = 0;
   uint8_t bone = 0;         // rigid part: one bone per part (donor law)
+  uint8_t pitch_q = 0;      // quarter turns about X applied at build
+  uint8_t yaw_q = 0;        // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;
 };
 

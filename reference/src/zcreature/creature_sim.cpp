@@ -318,14 +318,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     if (!ci.visible || ci.type == nullptr) continue;
     const CreatureType& T = *ci.type;
 
-    // ---- projected bound radius (S12.8 px): ndc_r = kx*R/w, px = ndc_r * (w/2)
+    // ---- projected bound radius (S12.8 px): clip.x = kx*x/2^16, so
+    // ndc_r = kx*R/(2^16*w); the viewport maps ndc -> px with half-extent
+    // W/2 (project_vertex, rast.cpp), so
+    //   radius_q8 = kx*R*W*128 / (w << 16)   — ONE round_half_up division.
     const vec4fx clip = mat4_vec4(vp, vec4fx{fx16{ci.x}, fx16{ci.y}, fx16{ci.z}, fx16{1 << 16}}, L);
     if (clip.w.raw <= 0) continue;  // behind the eye: whole creature
     const int32_t kx = std::max(std::max(std::abs(vp.m[0][0].raw), std::abs(vp.m[0][1].raw)),
                                 std::abs(vp.m[0][2].raw));
-    // radius_q8 = rhu(kx * R * W, w << 9)  (derivation: 7.4-normalized)
-    const __int128 rnum = static_cast<__int128>(kx) * T.bound_radius * w;
-    const __int128 rden = static_cast<__int128>(clip.w.raw) << 9;
+    const __int128 rnum = static_cast<__int128>(kx) * T.bound_radius * w * 128;
+    const __int128 rden = static_cast<__int128>(clip.w.raw) << 16;
     const int32_t radius_q8 = static_cast<int32_t>((rnum + rden / 2) / rden);
 
     lod_update(ci.lod, radius_q8, thresh_q8, T);
