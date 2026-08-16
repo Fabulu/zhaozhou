@@ -121,7 +121,7 @@ package zhao_pkg;
   // the frozen wave-2 interface carries its sign-off reference
   // (arbiter-bound precedent):
   // runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/
-  // RATIFICATION-REQUEST-fb-slot-bank-split.md (2026-08-16).
+  // RATIFICATION-fb-slot-bank-split.md (RATIFIED) (2026-08-16).
   localparam logic [31:0] ZHAO_FB_SLOT1_BASE      = 32'h0200_0000;
   localparam logic [31:0] ZHAO_FB_SLOT_SPAN       = 32'h0003_C000; // 245,760
 

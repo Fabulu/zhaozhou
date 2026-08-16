@@ -63,7 +63,7 @@ row-thrash that bank: measured ~82 of 192 Duo lines starved per frame
 (41,984 starved vid cycles), display shredded. Fix: the FB-slot BANK SPLIT
 (`ZHAO_FB_SLOT1_BASE → 0x0200_0000`, bank 1) — a frozen-interface edit
 carrying its sign-off reference
-(`RATIFICATION-REQUEST-fb-slot-bank-split.md`, arbiter-bound precedent),
+(`RATIFICATION-fb-slot-bank-split.md` — GRANTED 2026-08-16 with the ZH-004 bank-mapping condition),
 with the guard/oracle/harness/test/spec shadow updated to the DISJOINT
 two-region map and `mem_guard_no_escape` re-elaborated green.
 
@@ -101,13 +101,22 @@ and/or pipelined bridge bursts; a streaming blit CRC (forbidden today by
 the ratified buffer-then-release gate, `cmd_dma_crc_gate` (b)); decoupling
 the claim window from the tick so the fetch phase stops eating vblank.
 
-**The adopted operating point** is the machine's true sustainable cadence:
-one fresh frame per two displayed. Packet P_f publishes at tick 2f−1,
-displays FRESH at raster frame 2f+1, and frame 2f+2 lawfully REPEATS it
-with an IDENTICAL displayed CRC — the 60 Hz repeat law, mechanically
-proven 600 times by the gate demo. The deterministic consequences
-(deadline_faults = 1 + floor(k/2); every fence STATUS_DEADLINE) are PINNED
-exactly by the demo, never tolerated.
+**The adopted operating point** is the machine's true sustainable cadence
+for FULL-CANVAS DEBUG BLITS: one fresh blit per two displayed frames. To
+be precise about what this does and does not mean: **the console runs at
+60 Hz** — the raster, the tick, pad latching, audio pacing and the
+displayed-CRC law all run at full frame rate throughout; what cannot
+complete inside one frame is the `DebugFrameBlit` TRANSPORT (HPS fetch +
+CRC gate + paced VRAM commit of a whole canvas). This is a debug-blit
+cost, not a rendering cost — the Phase-3+ render path (RASTER.RESOLVE
+writing tiles it produces on-fabric) is not shaped like a 196,608-byte
+host-to-VRAM copy and inherits no 30 Hz ceiling from this finding.
+Packet P_f publishes at tick 2f−1, displays FRESH at raster frame 2f+1,
+and frame 2f+2 lawfully REPEATS it with an IDENTICAL displayed CRC — the
+60 Hz repeat law, mechanically proven 600 times by the gate demo. The
+deterministic consequences (deadline_faults = 1 + floor(k/2); every fence
+STATUS_DEADLINE) are PINNED exactly by the demo — asserted as the
+expected values every tick, never tolerated as drift.
 
 **D6. Smaller composition corrections.** (i) The CMD.DMA contract said "No
 VRAM writes" — written before the blit engine existed and false for the
