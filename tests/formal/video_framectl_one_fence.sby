@@ -4,23 +4,39 @@
 #
 # The raster is ABSTRACTED in the harness (a small-period vswap_dec /
 # frame_start generator with the same ordering law as the real raster:
-# frame_start follows each dec; decs spaced >= 40 cycles) so the fence
-# counting is provable within BMC depth. The real-raster timing equality is
-# proven cycle-exactly by the differential tests. The two clock domains are
-# TIED here (gpu_clk = vid_clk): the toggle+2FF crossing degenerates to a
-# fixed delay and the fence-count law is unaffected.
+# frame_start follows each dec). slot_ready / deadline_cycles are FREE
+# (adversarial flapping included); the DUT's free-running counters are
+# assumption-bounded to a 32-frame window (documented in the harness — the
+# unbounded counters are exercised by the random lanes). The two clock
+# domains are TIED (gpu_clk = vid_clk): the toggle+2FF crossing degenerates
+# to a fixed delay and the fence-count law is unaffected.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   prove — the counting laws hold over every reachable state (abc pdr).
+#   cover — fence / tick / repeat / commit-swap / two-frame antecedents all
+#           reachable (the salvaged harness had NO covers).
+#
+# Run via `ctest -L formal` (shared hardened wrapper) or by hand:
+#   sby -f --prefix <workdir> video_framectl_one_fence.sby
+
+[tasks]
+prove
+cover
 
 [options]
-mode prove
-depth 30
+prove: mode prove
+prove: depth 30
+cover: mode cover
+cover: depth 40
+expect pass
 
 [engines]
-abc pdr
+prove: abc pdr
+cover: smtbmc boolector
 
 [script]
-
 plugin -i slang
-read_slang --top video_framectl_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_video_framectl.sv video_framectl_fv.sv
+read_slang --top video_framectl_fv -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_video_framectl.sv video_framectl_fv.sv
 prep -top video_framectl_fv
 
 [files]

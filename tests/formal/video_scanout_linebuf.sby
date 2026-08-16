@@ -1,6 +1,7 @@
 # video_scanout_linebuf.sby — VIDEO.SCANOUT line-buffer formal properties
 # (plan W2.2 §4; spec/video_rules.md §8: the serializer never overtakes the
-# fill, swap only in vblank (re-arm law), never torn).
+# fill — a FRESH buffer's read port returns exactly its last completed
+# fill; never torn).
 #
 # The linebuf module is checked in ISOLATION with the FETCH and DISPLAY
 # protocol as assumptions (an abstract adversarial driver respecting the
@@ -8,18 +9,36 @@
 # line_done; consume only FRESH buffers) — the full-system vblank-swap law
 # is proven cycle-exactly by the differential tests. Clocks tied
 # (gpu_clk = vid_clk): the crossing degenerates to a fixed delay.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the never-torn shadow equivalence to depth 40 (the 16-Kbit
+#           buffer storage makes unbounded pdr impractical; the bounded
+#           window covers multiple full fill/consume/credit/abort rounds
+#           of the abstract 2-beat lines).
+#   cover — buf_fresh[rd_buf] (THE assertion antecedent), ping-pong overlap,
+#           the credit round-trip, the abort-discard path (the salvaged
+#           harness had NO covers — freshness could simply never rise).
+#
+# Run via `ctest -L formal` (shared hardened wrapper) or by hand:
+#   sby -f --prefix <workdir> video_scanout_linebuf.sby
+
+[tasks]
+bmc
+cover
 
 [options]
-mode prove
-depth 30
+bmc:   mode bmc
+bmc:   depth 40
+cover: mode cover
+cover: depth 40
+expect pass
 
 [engines]
-abc pdr
+smtbmc boolector
 
 [script]
-
 plugin -i slang
-read_slang --top video_linebuf_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_scanout_linebuf.sv video_linebuf_fv.sv
+read_slang --top video_linebuf_fv -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_scanout_linebuf.sv video_linebuf_fv.sv
 prep -top video_linebuf_fv
 
 [files]

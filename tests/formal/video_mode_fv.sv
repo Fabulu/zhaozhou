@@ -67,15 +67,35 @@ module video_mode_fv
           assert(x == $past(x) + 16'd1);
           assert(y == $past(y));
         end
-        // reset-idle: under reset the raster holds the pre-active position
-        if (!rst_n) begin
-          assert(x == ZHAO_TIMING[ZHAO_MODE_Z60].h_active +
-                              ZHAO_TIMING[ZHAO_MODE_Z60].h_front +
-                              ZHAO_TIMING[ZHAO_MODE_Z60].h_sync);
-          assert(y == ZHAO_TIMING[ZHAO_MODE_Z60].v_total -
-                              ZHAO_TIMING[ZHAO_MODE_Z60].v_back);
-        end
       end
+    end else if (f_past_valid) begin
+      // reset-idle: under (held) reset the raster holds the FORMAL-override
+      // reset position and the mode is the spec 1.1 reset value.
+      // MERGE FIX: the salvaged harness had this check nested INSIDE
+      // `if (rst_n)` — structurally unreachable, vacuous by construction
+      // (the exact defect class V16 exists to catch). It now checks the
+      // ifdef-FORMAL reset ring position; the TRUE (synthesis) reset
+      // position is pinned by video_mode_directed.cpp. Guarded by
+      // f_past_valid: the step-0 model state is free-init until the
+      // modeled async reset has applied at one clock edge (the W2.3
+      // phantom-gap trap).
+      assert(x == ZHAO_TIMING[ZHAO_MODE_Z60].h_total - 16'd4);
+      assert(y == ZHAO_TIMING[ZHAO_MODE_Z60].v_total - 16'd1);
+      assert(mode_out == ZHAO_MODE_Z60);
+      assert(!frame_start);
+    end
+  end
+
+  // ---- covers: every guarded assertion's antecedent is reachable ---------
+  // (ledger rule V16: a proof without reachability witnesses is not green)
+  always @(posedge vid_clk) begin
+    if (f_past_valid && rst_n && $past(rst_n)) begin
+      c_frame_start:  cover(frame_start);
+      c_mode_change:  cover(mode_out != $past(mode_out)); // latch fired
+      c_mode_pending: cover(mode_next != mode_out);       // a write landed
+      c_rogue_held:   cover($past(mode_we) && $past(mode_in) == 2'd3
+                            && mode_next == $past(mode_next)); // rogue holds
+      c_mid_line:     cover(x == 16'd7 && y == 16'd0);    // active walk
     end
   end
 

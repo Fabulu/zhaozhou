@@ -1,23 +1,40 @@
 # video_mode_timing.sby — VIDEO.MODE formal properties (plan W2.2 §4;
-# spec/video_rules.md §8: raster bounds, exactly one frame_start per period,
-# reset-idle, mode changes only at frame_start).
+# spec/video_rules.md §8: raster bounds, frame_start == raster origin,
+# reset-idle, mode changes only at frame_start, one-pixel-per-cycle advance).
 #
-# Full-frame periodicity (one frame_start per v_total*h_total vid cycles)
-# is proven cycle-exactly by the 3-frames-per-mode differential; the BMC
-# depth here covers multiple line wraps (the y-increment law) plus the
-# inductive invariants (bounds, latch law, reset-idle).
+# TWO TASKS, both required (ledger rule V16):
+#   prove — unbounded (abc pdr): the invariants hold over EVERY reachable
+#           raster state, all three mode tables — not just a bounded window.
+#   cover — the guarded assertions' antecedents are REACHABLE: frame_start,
+#           a latched mode CHANGE, a pending write, the rogue-value hold.
+#           The true reset position is ~6,700 vid cycles from the wrap, so
+#           the DUT carries an `ifdef FORMAL reset override starting the
+#           autonomous ring 4 cycles before it (the W2.6 FORMAL_BLIT_LEN
+#           precedent; the true reset position is pinned cycle-exactly by
+#           tests/video/video_mode_directed.cpp).
+#
+# Run via `ctest -L formal` (shared hardened wrapper mem_formal_lane.cmake.in)
+# or by hand with cwd = tests/formal:
+#   sby -f --prefix <workdir> video_mode_timing.sby
+
+[tasks]
+prove
+cover
 
 [options]
-mode prove
-depth 30
+prove: mode prove
+prove: depth 30
+cover: mode cover
+cover: depth 40
+expect pass
 
 [engines]
-abc pdr
+prove: abc pdr
+cover: smtbmc boolector
 
 [script]
-
 plugin -i slang
-read_slang --top video_mode_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_video_mode.sv video_mode_fv.sv
+read_slang --top video_mode_fv -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_video_mode.sv video_mode_fv.sv
 prep -top video_mode_fv
 
 [files]

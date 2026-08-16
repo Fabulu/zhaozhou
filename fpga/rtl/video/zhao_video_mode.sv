@@ -94,13 +94,32 @@ module zhao_video_mode
   logic entering_frame_start;
   assign entering_frame_start = frame_wrap;
 
+`ifdef FORMAL
+  // FORMAL-ONLY reset raster override (the W2.6 FORMAL_BLIT_LEN precedent:
+  // structurally absent outside `ifdef FORMAL). The true reset position is
+  // ~6,700 vid cycles from the frame wrap — beyond any tractable BMC/cover
+  // depth — so the bounded tasks start the ring 4 cycles before the wrap
+  // instead. The raster is an autonomous closed ring, so every raster state
+  // stays reachable and no invariant weakens; the TRUE reset position is
+  // pinned cycle-exactly by tests/video/video_mode_directed.cpp.
+  localparam logic [15:0] FORMAL_RESET_X =
+      ZHAO_TIMING[ZHAO_MODE_Z60].h_total - 16'd4;
+  localparam logic [15:0] FORMAL_RESET_Y =
+      ZHAO_TIMING[ZHAO_MODE_Z60].v_total - 16'd1;
+`endif
+
   always_ff @(posedge vid_clk or negedge rst_n) begin
     if (!rst_n) begin
+`ifdef FORMAL
+      x        <= FORMAL_RESET_X;
+      y        <= FORMAL_RESET_Y;
+`else
       x        <= ZHAO_TIMING[ZHAO_MODE_Z60].h_active
                 + ZHAO_TIMING[ZHAO_MODE_Z60].h_front
                 + ZHAO_TIMING[ZHAO_MODE_Z60].h_sync;  // start of H back porch
       y        <= ZHAO_TIMING[ZHAO_MODE_Z60].v_total
                 - ZHAO_TIMING[ZHAO_MODE_Z60].v_back;  // start of V back porch
+`endif
       mode_cur <= ZHAO_MODE_Z60;                       // reset value (spec §1.1)
       mode_pend<= ZHAO_MODE_Z60;
     end else begin

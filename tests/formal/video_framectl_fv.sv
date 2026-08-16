@@ -77,8 +77,10 @@ module video_framectl_fv
       if (gpu_tick.pulse) fence_count <= fence_count + 8'd1;
       if (frame_tick) tick_count <= tick_count + 8'd1;
       if (frame_repeated) fault_count <= fault_count + 8'd1;
-    end else begin
-      // reset-idle: counters (and the DUT outputs) stay quiet under reset
+    end else if (f_past_valid) begin
+      // reset-idle: counters (and the DUT outputs) stay quiet under (held)
+      // reset. Guarded by f_past_valid — step 0 is free-init until the
+      // modeled async reset has applied at one edge (W2.3 phantom trap).
       assert(!frame_tick);
       assert(!gpu_tick.pulse);
       assert(!swap_req);
@@ -122,6 +124,20 @@ module video_framectl_fv
       assert(tick_count == dec_count || tick_count + 8'd1 == dec_count);
       // deadline faults only accompany a repeated (missed) frame
       assert(fault_count <= dec_count);
+    end
+  end
+
+  // ---- covers: the counting laws are exercised, not vacuous --------------
+  // (ledger rule V16; added at the merge — the salvaged harness had none)
+  always @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      c_fence:    cover(gpu_tick.pulse);            // a fence crossed
+      c_tick:     cover(frame_tick);                // a tick pulsed
+      c_repeat:   cover(frame_repeated);            // the repeat half
+      c_commit:   cover(swap_req);                  // the swap half (needs a
+                                                    // READY inside the window)
+      c_two_decs: cover(dec_count == 8'd2);         // multiple frame periods
+      c_lag:      cover(fence_count + 8'd1 == dec_count); // in-flight window
     end
   end
 

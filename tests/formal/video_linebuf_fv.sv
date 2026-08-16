@@ -123,4 +123,20 @@ module video_linebuf_fv
     end
   end
 
+  // ---- covers: the never-torn assertion's antecedent is reachable --------
+  // (ledger rule V16; added at the merge — the salvaged harness had none.
+  //  Without c_read_fresh the whole property could pass with freshness
+  //  simply never rising: fill_line_done gated behind assumptions.)
+  always @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      c_read_fresh:  cover(buf_fresh[rd_buf]);          // THE antecedent
+      c_fresh_both:  cover(buf_fresh[0] && buf_fresh[1]); // ping-pong overlap
+      c_consumed:    cover(buf_fresh[0] && consume_start[0]); // display took it
+      c_credit:      cover($past(consume_done[0], 4) && buf_empty[0]
+                           && !buf_fresh[0]);           // full credit loop
+      c_abort_full:  cover($past(fill_abort[0]) && !buf_fresh[0]
+                           && buf_empty[0]);            // discard un-toggles
+    end
+  end
+
 endmodule : video_linebuf_fv
