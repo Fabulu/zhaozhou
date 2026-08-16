@@ -623,9 +623,9 @@ void test_resolve_white_rail() {
       const uint16_t pxv = static_cast<uint16_t>(out[i * 2] | (out[i * 2 + 1] << 8));
       const uint32_t g6 = (pxv >> 5) & 0x3F;
       // the un-clamped law gives 64 -> 0 for g >= 252 at B >= 8; with the
-      // rail it must be 63 wherever the quotient reached the rail, and
-      // NEVER wrap low
-      check(g6 >= 62, "near-white green never wraps at the 6-bit rail");
+      // rail it must saturate, NEVER wrap low. Hand floor of the clamped
+      // law over g in [250,255]: g=250, B=0 -> (250*63+16)/255 = 61.
+      check(g6 >= 61, "near-white green never wraps at the 6-bit rail");
       if (g == 255) check(pxv == 0xFFFF, "full white resolves to 0xFFFF at every Bayer phase");
     }
   }
