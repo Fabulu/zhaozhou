@@ -232,6 +232,9 @@ struct RimEdge {
   uint16_t ci = 0, cj = 0;  // the SOLID cell owning the wall
   uint8_t side = 0;         // 0 = -z, 1 = +z, 2 = -x, 3 = +x
   uint16_t span = 1;        // merged contiguous-collinear continuation
+  bool operator==(const RimEdge& o) const {
+    return ci == o.ci && cj == o.cj && side == o.side && span == o.span;
+  }
 };
 
 struct RimPlan {

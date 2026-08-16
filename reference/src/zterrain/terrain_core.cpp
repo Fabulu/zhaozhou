@@ -398,9 +398,12 @@ RimPlan rim_plan(const terrain::ComposedLattice& lat, const int32_t* vdist) {
             if (es[k].alive) order.push_back(k);
           std::stable_sort(order.begin(), order.end(),
                            [&](size_t a, size_t b) { return prio(a) > prio(b); });
-          for (size_t k = forge::kRimBudgetPerPage; k < order.size(); ++k)
+          // dropped counts BODIES (a dropped merged span takes its whole
+          // span with it), so emitted-bodies + dropped == enumerated, always
+          for (size_t k = forge::kRimBudgetPerPage; k < order.size(); ++k) {
+            plan.dropped += es[order[k]].e.span;
             es[order[k]].alive = false;
-          plan.dropped += static_cast<uint32_t>(order.size() - forge::kRimBudgetPerPage);
+          }
         }
       }
       for (const WorkEdge& e : es)

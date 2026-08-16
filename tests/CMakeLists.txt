@@ -684,6 +684,13 @@ target_link_libraries(test_forge_cliff_directed PRIVATE zhao_zref)
 add_test(NAME forge_cliff_directed COMMAND test_forge_cliff_directed)
 set_tests_properties(forge_cliff_directed PROPERTIES LABELS "fast;nightly")
 
+# randomized rim differential: 300 random void masks vs an independent
+# enumeration oracle + the emitted+dropped==enumerated body identity
+add_executable(test_forge_cliff_random forge/forge_cliff_random.cpp)
+target_link_libraries(test_forge_cliff_random PRIVATE zhao_zref)
+add_test(NAME forge_cliff_random COMMAND test_forge_cliff_random)
+set_tests_properties(forge_cliff_random PROPERTIES LABELS "fast;nightly")
+
 # ---- deep-keel wave: TEXTURE.MOSAIC reference (terrain_rules.md 6.2) --------
 # the mirrored-repeat fold at wrap boundaries, the frozen pick constants,
 # and the rendered dither + exact modulation through the replicated resolve.
@@ -694,6 +701,12 @@ target_include_directories(test_texture_mosaic_directed PRIVATE
   ${CMAKE_SOURCE_DIR}/reference/src)
 add_test(NAME texture_mosaic_directed COMMAND test_texture_mosaic_directed)
 set_tests_properties(texture_mosaic_directed PROPERTIES LABELS "fast;nightly")
+
+# randomized pick/fold differential: 100k samples vs the wrapped-u64 oracle
+add_executable(test_texture_mosaic_random texture/texture_mosaic_random.cpp)
+target_link_libraries(test_texture_mosaic_random PRIVATE zhao_zref)
+add_test(NAME texture_mosaic_random COMMAND test_texture_mosaic_random)
+set_tests_properties(texture_mosaic_random PROPERTIES LABELS "fast;nightly")
 
 # ---- world-identity wave: creature/character reference lane -------------------
 # (spec/creature_rules.md 1-4; the ZREF oracle for the future Phase 8-9 GEOM
