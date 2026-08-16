@@ -522,6 +522,24 @@ module zhao_cmd_scheduler
                            && (fence_status_o == STATUS_DEADLINE));
     end
   end
+
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // The slot-FSM laws are proven at bmc depth 40 — multi-slot charter
+  // cycles under free HPS words, with the deadline path reachable ONLY
+  // through a small BeginFrame.deadline_cycles override (the mode-period
+  // default of >= 217,984 cycles is beyond every tractable depth, see the
+  // cover note above). This guard PINS that proven window: raising `depth`
+  // makes it FIRE, so the bound cannot silently change meaning — a deeper
+  // proof must re-justify the depth/deadline-override pairing (and the
+  // solver budget), not merely re-run with a bigger number.
+  logic [6:0] f_scope_cyc = 7'd0;
+  always_ff @(posedge clk) begin
+    if (f_scope_cyc != 7'h7F) f_scope_cyc <= f_scope_cyc + 7'd1;
+  end
+  always_comb begin
+    a_scope_bmc_window : assert (f_scope_cyc <= 7'd40);
+  end
 `endif
 
 endmodule : zhao_cmd_scheduler

@@ -224,6 +224,24 @@ module zhao_input_snapshot
       c_pad_absent:    cover (frame_tick.pulse && !pad_present[0]);
     end
   end
+
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // The atomicity/sequence laws are proven at bmc depth 30 — at most ~30
+  // tick/no-tick interleavings of the double-buffer gray-pointer swap.
+  // IN PARTICULAR the u16 sequence wrap (65,536 ticks away) is far outside
+  // this horizon: the "+1 mod 2^16" law is asserted but its wrap case is
+  // NOT exercised by this proof (it is by tests/input/ lanes). This guard
+  // PINS the proven window: raising `depth` makes it FIRE, so the number
+  // cannot silently change meaning — a deeper proof must re-state its own
+  // scope (and still will not reach the wrap), not merely re-run.
+  logic [5:0] f_scope_cyc = 6'd0;
+  always_ff @(posedge clk) begin
+    if (f_scope_cyc != 6'h3F) f_scope_cyc <= f_scope_cyc + 6'd1;
+  end
+  always_comb begin
+    a_scope_bmc_window : assert (f_scope_cyc <= 6'd30);
+  end
 `endif
 
 endmodule : zhao_input_snapshot

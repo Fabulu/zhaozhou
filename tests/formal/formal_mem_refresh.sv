@@ -104,4 +104,24 @@ module formal_mem_refresh
     end
   end
 
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // The depth-900 window covers ONE steady-state refresh interval: the
+  // recorded cover run reached a real AUTO_REFRESH at step 812, and the
+  // next one falls ~780 cycles later, outside the window. So even when the
+  // banked bmc task is eventually established, it will have witnessed the
+  // bound across a SINGLE post-init refresh, not the steady-state train.
+  // This guard PINS the window: raising `depth` makes it FIRE, forcing the
+  // scope (and the solver budget — the bmc already does not finish at 900)
+  // to be re-derived rather than silently re-labelled. NB the registry
+  // records this property as `banked`; the guard keeps that honesty
+  // machine-checked if anyone promotes it later.
+  logic [10:0] f_scope_cyc = 11'd0;
+  always_ff @(posedge clk) begin
+    if (f_scope_cyc != 11'h7FF) f_scope_cyc <= f_scope_cyc + 11'd1;
+  end
+  always_comb begin
+    a_scope_one_refresh_interval : assert (f_scope_cyc <= 11'd900);
+  end
+
 endmodule

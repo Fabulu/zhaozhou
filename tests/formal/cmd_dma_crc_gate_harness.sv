@@ -96,4 +96,23 @@ module zhao_cmd_dma_crc_gate_harness (
     .snap_drops_o      ()
   );
 
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // The gate assertions are proven at bmc depth 24 UNDER THE STAGING
+  // SHRINK above (40-B slot => header-only packets with command_bytes = 0;
+  // 64-B blit via FORMAL_BLIT_LEN). Those two facts scope each other: 24
+  // steps suffice BECAUSE the packets are minimal. Raising `depth` does
+  // NOT extend the proof to multi-record packets or lawful full-size blit
+  // lengths — the buffer parameters have to be re-derived together with
+  // the depth — so this guard PINS the proven window and FIRES the moment
+  // the depth is raised, forcing that re-derivation instead of a silent
+  // re-scope of what "PASS" means.
+  logic [5:0] f_steps = 6'd0;
+  always_ff @(posedge clk) begin
+    if (f_steps != 6'h3F) f_steps <= f_steps + 6'd1;
+  end
+  always_comb begin
+    a_scope_header_only_window : assert (f_steps <= 6'd24);
+  end
+
 endmodule : zhao_cmd_dma_crc_gate_harness

@@ -128,4 +128,27 @@ module zhao_audio_fifo_bounds (
     end
   end
 
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // MEASURED, not assumed: this .sby runs `multiclock on`, where one clk
+  // POSEDGE costs ~2 SMT steps (clk is solver-driven; a rise needs a 0->1
+  // step pair). So the depth-32 window admits AT MOST ~16 clk posedges =
+  // FOUR audio-domain pop opportunities (div_cnt == 3) — HALF a drain of
+  // the shrunk DEPTH-8 geometry, and half of what a naive steps-as-cycles
+  // reading of "depth 32" suggests. (Discovered by this guard's own
+  // negative probe, 2026-08-16: a <= 8 tick guard would not fire even at
+  // depth 48.) The FIFO can still FILL inside the window — the wr_ready=1
+  // mutation note above produced a real full-state CEX — but the guard
+  // below pins the window at the number that was actually proven. If
+  // anyone raises `depth`, a FIFTH pop opportunity becomes reachable and
+  // this FIRES: re-derive the DEPTH/ratio shrink and the multiclock step
+  // budget together, do not merely re-run.
+  logic [4:0] f_aticks = 5'd0;
+  always_ff @(posedge clk) begin
+    if ((div_cnt == 2'd3) && (f_aticks != 5'h1F)) f_aticks <= f_aticks + 5'd1;
+  end
+  always_comb begin
+    a_scope_half_drain_window : assert (f_aticks <= 5'd4);
+  end
+
 endmodule : zhao_audio_fifo_bounds

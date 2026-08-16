@@ -27,6 +27,20 @@
 #
 # `tasks` lists the sby tasks that were run; `covers: true` asserts at least
 # one of them is a cover task. `commit` pins the evidence, like maturity_log.
+#
+# SCOPE GUARDS (ledger rule V19). A bounded (mode bmc) proof states its laws
+# only up to its depth, and the depth's MEANING rests on structural facts of
+# the harness (refresh-free horizon, frame-constant map, shrunk buffers, an
+# abstract raster period). Every `.sby` with a bmc task must therefore carry
+# a SELF-ASSERTING scope guard — an `a_scope_*` / `a_horizon_*` assertion in
+# the proof's own cone that states that structural fact and FIRES if anyone
+# raises the depth past what was actually proven (the pattern that worked:
+# the arbiter's a_horizon_is_refresh_free, the linebuf's
+# a_scope_four_sessions) — or an explicit `# SCOPE-TOTAL: <reason>` waiver
+# in the .sby asserting the bound covers the full reachable state space.
+# Unbounded (mode prove) tasks are exempt. Enforced by `npm run
+# ledger:check` (rule V19; V17 = citation coherence, V18 is reserved for
+# the sim-lane run registry).
 
 version: 1
 

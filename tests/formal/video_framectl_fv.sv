@@ -141,4 +141,22 @@ module video_framectl_fv
     end
   end
 
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // The bmc task is BOUNDED at depth 60, which admits AT MOST five
+  // vswap_dec pulses of the 14-cycle abstract raster (earliest reset
+  // release puts the decs near steps 4, 18, 32, 46, 60): the counting laws
+  // are proven over FOUR complete abstract frame periods, exactly the
+  // ".sby header's ~4 periods" — previously only a comment. If anyone
+  // raises the depth past what was actually proven, a SIXTH dec becomes
+  // reachable and this guard FIRES: the run fails loudly instead of
+  // silently re-scoping what "PASS" means, and the depth/period trade-off
+  // must be re-derived (note the 8-bit harness counters additionally wrap
+  // at 256 decs ≈ depth 3600 — a re-derivation must widen them first).
+  always @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      a_scope_four_frame_periods: assert(dec_count <= 8'd5);
+    end
+  end
+
 endmodule : video_framectl_fv

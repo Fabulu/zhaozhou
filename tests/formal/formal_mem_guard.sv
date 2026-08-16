@@ -172,4 +172,25 @@ module formal_mem_guard
     end
   end
 
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19; the arbiter
+  // a_horizon_is_refresh_free / linebuf a_scope_four_sessions pattern) ----
+  // This proof is scoped to ONE frame-constant region map: env_map_valid /
+  // env_blit_slot / env_blit_span are latched at cycle 0 and held, which
+  // mirrors their real lifetime ONLY within a single frame grant —
+  // CMD.SCHEDULER rewrites the map at every grant. The bmc depth (30)
+  // sits far inside any frame period (>= 217,984 gpu cycles), so the
+  // constant-map modelling is honest at this bound; the guard below PINS
+  // the proven window. If anyone raises `depth` past it, the guard FIRES:
+  // the run fails loudly instead of silently pretending the single-map
+  // model still covers a horizon in which the map would really change —
+  // a longer proof must MODEL map rewrites at grant boundaries, not
+  // merely re-run.
+  logic [5:0] f_steps = 6'd0;
+  always_ff @(posedge clk) begin
+    if (f_steps != 6'h3F) f_steps <= f_steps + 6'd1;
+  end
+  always_comb begin
+    a_scope_single_map_window: assert (f_steps <= 6'd30);
+  end
+
 endmodule
