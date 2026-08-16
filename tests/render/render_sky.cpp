@@ -68,7 +68,8 @@ zref::sky::SkySet test_set() {
 }
 
 void test_layer_census() {
-  // §1.1 layer table: 2 bands x 48 cols x 8 rows x 2 tris = 1536 (always),
+  // §1.1 layer table: 2 bands x 48 cols x 16 rows x 2 tris = 3072 (always;
+  // kBandRows 8 -> 16, dcb32ff 2026-08-16: the banding fix),
   // + cap 16 + under 128 (8x8 grid since the §1.2 perspective amendment —
   // behind-camera cells must cull without deleting the plane) + cloud 128 +
   // sun 4 (flag-gated)
@@ -76,12 +77,12 @@ void test_layer_census() {
   const uint8_t all =
       zref::sky::kLayerUnder | zref::sky::kLayerCloud | zref::sky::kLayerSun | zref::sky::kLayerCap;
   const auto prims = zref::sky::emit_layers(s, 0, zref::angle16{0}, all);
-  check(prims.size() == 1536 + 48 + 128 + 128 + 4, "all-layers emission = 1844 primitives");
+  check(prims.size() == 3072 + 48 + 128 + 128 + 4, "all-layers emission = 3380 primitives");
   const auto bands_only = zref::sky::emit_layers(s, 0, zref::angle16{0}, 0);
-  check(bands_only.size() == 1536, "bands are the always-on backdrop (1536)");
+  check(bands_only.size() == 3072, "bands are the always-on backdrop (3072)");
   size_t per_layer[6] = {0, 0, 0, 0, 0, 0};
   for (const auto& p : prims) ++per_layer[static_cast<int>(p.layer)];
-  check(per_layer[0] == 768 && per_layer[1] == 768, "48x8x2 per band");
+  check(per_layer[0] == 1536 && per_layer[1] == 1536, "48x16x2 per band");
   check(per_layer[2] == 48 && per_layer[3] == 128 && per_layer[4] == 128 && per_layer[5] == 4,
         "cap 48 (drum-pitch fan, S1.2) / under 128 / cloud 128 / sun 4");
 
@@ -113,13 +114,13 @@ void test_layer_census() {
 // fx16 turn fraction in [0,65536), which IS the angle16 u16-turns container
 // (qformats §2). A conversion that collapses `a` to 0 makes every column
 // share one angle: the drum degenerates to a vertical line, every triangle
-// has zero screen area, and `raster_tri` drops all 1536 of them — the 360°
+// has zero screen area, and `raster_tri` drops all 3072 of them — the 360°
 // skybox silently ceases to exist while every census/UV/scroll test stays
 // green. These assertions pin the geometry itself.
 void test_band_geometry() {
   const zref::sky::SkySet s = test_set();
   const auto prims = zref::sky::emit_layers(s, 0, zref::angle16{0}, 0);
-  check(prims.size() == 1536, "bands-only emission");
+  check(prims.size() == 3072, "bands-only emission");
 
   // 1. the columns occupy MANY distinct world positions, not one.
   // 48 evenly spaced angles + the per-row radius lerp: cos/sin take on well
