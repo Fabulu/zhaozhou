@@ -63,19 +63,21 @@ export interface ImpactWaveBuild {
 export function buildImpactWave(): ImpactWaveBuild {
   const b = new FieldBuilder('earth', IMPACT_WAVE_SOURCE_ID, earthInputs());
 
-  // The travelling ring's radial cross-section over front ∈ [−6, +1.5] m:
-  // crest at the front, leading toe, damped trailing ripples. End knots are
-  // 0 — CURVE clamps outside the span, so the wave is naturally local.
+  // The travelling ring's radial cross-section over front ∈ [−4.5, +1.8] m:
+  // ONE raised-cosine-like crest at the front with a single trailing
+  // undershoot, per the donor recon (S5): Erupt is one travelling crest over
+  // one rebound dip — a ground point sees ~1.5–2 excursions, NOT damped
+  // ringing. End knots are 0 — CURVE clamps outside the span, so the wave
+  // is naturally local.
   const waveletTbl = b.addTable('curve', [
-    { x: fx(-6.0), y: 0 },
-    { x: fx(-4.8), y: fx(0.06) },
-    { x: fx(-3.6), y: fx(-0.14) },
-    { x: fx(-2.5), y: fx(0.3) },
-    { x: fx(-1.6), y: fx(-0.42) },
-    { x: fx(-0.9), y: fx(0.4) },
+    { x: fx(-4.5), y: 0 },
+    { x: fx(-3.4), y: fx(-0.14) },
+    { x: fx(-2.4), y: fx(-0.25) },
+    { x: fx(-1.6), y: fx(-0.1) },
+    { x: fx(-1.0), y: fx(0.35) },
     { x: fx(-0.3), y: fx(1.0) },
-    { x: fx(0.3), y: fx(0.8) },
-    { x: fx(1.0), y: fx(0.2) },
+    { x: fx(0.4), y: fx(0.55) },
+    { x: fx(1.1), y: fx(0.15) },
     { x: fx(1.8), y: 0 },
   ]);
 
@@ -93,18 +95,17 @@ export function buildImpactWave(): ImpactWaveBuild {
     { x: fx(1.0), y: 0 },
   ]);
 
-  // the impact point: sharp depression, damped rebound oscillation, rest
-  // (the rebound overshoot peaks as the ring departs the dome)
+  // the impact point, donor-faithful (S5): the ground overshoots DOWNWARD
+  // (the −4 m dip class), rebounds up once past rest, dips shallowly, and
+  // settles — about 1.75 excursions, not a ring-down
   const bounceTbl = b.addTable('curve', [
     { x: 0, y: 0 },
-    { x: fx(0.06), y: fx(-1.0) },
-    { x: fx(0.18), y: fx(0.6) },
-    { x: fx(0.3), y: fx(-0.36) },
-    { x: fx(0.42), y: fx(0.22) },
-    { x: fx(0.54), y: fx(-0.12) },
-    { x: fx(0.66), y: fx(0.06) },
-    { x: fx(0.78), y: fx(-0.02) },
-    { x: fx(0.9), y: 0 },
+    { x: fx(0.07), y: fx(-1.0) },
+    { x: fx(0.16), y: fx(-0.55) },
+    { x: fx(0.28), y: fx(0.45) },
+    { x: fx(0.42), y: fx(-0.14) },
+    { x: fx(0.58), y: fx(0.04) },
+    { x: fx(0.75), y: 0 },
     { x: fx(1.0), y: 0 },
   ]);
 
