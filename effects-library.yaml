@@ -1,0 +1,378 @@
+# Zhaozhou Effects Library Catalogue
+# Version 1 - Single source of truth for all renderable effects
+# Owner charter: "Make sure these become a readily available library."
+#
+# LEGIBILITY RULE (2026-08-16 owner mandate):
+# A reel subject must be legible at gallery scale, not merely correct.
+# A catalogue entry is not complete until its screen communicates its
+# subject to someone who does not know what they are looking at.
+# Terrain subjects work because deformation reads from any distance.
+# A 4-pixel strobe does not. When in doubt, ask whether a stranger
+# could name what the loop is showing. If not, re-shoot or cut it.
+
+version: 1
+last_updated: "2026-08-16"
+
+effects:
+  # ==============================================================================
+  # STAR/SUN CLASSES (spec/stars_and_flares.md)
+  # ==============================================================================
+
+  - id: star-s00-yellow
+    class: star
+    spec_class: S00
+    name: "Yellow star"
+    short_name: "Yellow star"
+    description: "Classic main sequence star with full lens flare chain. Sweeps frame at 40 radii showing burst sprite and three ghosts."
+    reel_subject: noctis-flare
+    render_path: renders/noctis-flare.gif
+    program_hash: null
+    crc_pin: 0x9448C485
+    implemented: true
+    tags: [star, flare, on-planet]
+
+  - id: star-s01-blue-giant
+    class: star
+    spec_class: S01
+    name: "Blue giant"
+    short_name: "Blue giant"
+    description: "Large hot star 15k radius, bright blue-white. Class colour (30,50,63) VGA 6-bit."
+    reel_subject: blue-giant
+    render_path: renders/blue-giant.gif
+    program_hash: null
+    crc_pin: 0x00000000  # to be pinned on first render
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s02-white-dwarf
+    class: star
+    spec_class: S02
+    name: "White dwarf"
+    short_name: "White dwarf"
+    description: "Compact hot star 300 radius, fast spin (55*(1+h mod 4)). Pure white (63,63,63)."
+    reel_subject: white-dwarf
+    render_path: renders/white-dwarf.gif
+    program_hash: null
+    crc_pin: 0x00000000
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s03-red-giant
+    class: star
+    spec_class: S03
+    name: "Red giant"
+    short_name: "Red giant"
+    description: "Large cool star 20k radius with visible CLUT boil rotation. Red-orange (63,30,20). Enlarged to 80 px radius for gallery legibility."
+    reel_subject: star-boil
+    render_path: renders/star-boil.gif
+    program_hash: null
+    crc_pin: 0x00000000  # RE-PIN after 2026-08-16 scale fix
+    implemented: true
+    tags: [star, boil, off-planet, fixed-2026-08-16]
+
+  - id: star-s04-orange-giant
+    class: star
+    spec_class: S04
+    name: "Orange giant"
+    short_name: "Orange giant"
+    description: "Warm giant 15k radius, golden orange (63,55,32). Between red and yellow stars."
+    reel_subject: orange-giant
+    render_path: renders/orange-giant.gif
+    program_hash: null
+    crc_pin: 0x00000000
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s05-brown-dwarf
+    class: star
+    spec_class: S05
+    name: "Brown dwarf"
+    short_name: "Brown dwarf"
+    description: "Dim substellar object 1k radius, no flare capability. Dark brown (32,16,10). Dead class."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [star, dead-class, stub]
+
+  - id: star-s06-grey-giant
+    class: star
+    spec_class: S06
+    name: "Grey giant"
+    short_name: "Grey giant"
+    description: "Low luminosity giant 3k radius, no flare. Neutral grey (32,28,24). Dead class."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [star, dead-class, stub]
+
+  - id: star-s07-blue-dwarf
+    class: star
+    spec_class: S07
+    name: "Blue dwarf"
+    short_name: "Blue dwarf"
+    description: "Compact hot star 2k radius, fast spin. Deep blue (10,20,63) with bright undertone."
+    reel_subject: blue-dwarf
+    render_path: renders/blue-dwarf.gif
+    program_hash: null
+    crc_pin: 0x00000000
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s08-multiple
+    class: star
+    spec_class: S08
+    name: "Multiple"
+    short_name: "Multiple"
+    description: "Binary star system 4k radius. Orange-yellow primary (63,32,16) with warm companion."
+    reel_subject: multiple
+    render_path: renders/multiple.gif
+    program_hash: null
+    crc_pin: 0x00000000
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s09-infant
+    class: star
+    spec_class: S09
+    name: "Infant star"
+    short_name: "Infant star"
+    description: "Young protostar 1.5k radius with variable undertone. Purple (48,32,63)."
+    reel_subject: infant
+    render_path: renders/infant.gif
+    program_hash: null
+    crc_pin: 0x00000000
+    implemented: true
+    tags: [star, off-planet]
+
+  - id: star-s10-runaway
+    class: star
+    spec_class: S10
+    name: "Runaway"
+    short_name: "Runaway"
+    description: "High-velocity star 30k radius, no flare. Dark red (40,10,10). Dead class."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [star, dead-class, stub]
+
+  - id: star-s11-pulsar
+    class: star
+    spec_class: S11
+    name: "Pulsar"
+    short_name: "Pulsar"
+    description: "Compact neutron star 250 radius with duty-cycle strobe. Cyan (0,63,63). Enlarged to 28 px radius for legibility (was 4 px, illegible)."
+    reel_subject: pulsar
+    render_path: renders/pulsar.gif
+    program_hash: null
+    crc_pin: 0x00000000  # RE-PIN after 2026-08-16 scale fix
+    implemented: true
+    tags: [star, pulsar, off-planet, fixed-2026-08-16]
+
+  # ==============================================================================
+  # TERRAIN EFFECTS (spec/terrain_rules.md)
+  # ==============================================================================
+
+  - id: terrain-wave
+    class: terrain
+    program: wave_pool
+    name: "Wave pool"
+    short_name: "Wave pool"
+    description: "Travelling radial wave crossing terrain. Two full cycles per loop, seamless wrap."
+    reel_subject: terrain-wave
+    render_path: renders/terrain-wave.gif
+    program_hash: 0x8BDCEB63
+    crc_pin: 0x0222090B
+    implemented: true
+    tags: [terrain, wave, deformation]
+
+  - id: terrain-impact
+    class: terrain
+    program: impact_wave
+    name: "Impact wave"
+    short_name: "Impact wave"
+    description: "Expanding annular wave from strike point. Debris, screen shake, settle to rest."
+    reel_subject: terrain-impact
+    render_path: renders/terrain-impact.gif
+    program_hash: 0x82F5F4E4
+    crc_pin: 0x4F97AD9B
+    implemented: true
+    tags: [terrain, wave, impact, debris]
+
+  - id: terrain-crater
+    class: terrain
+    program: crater_ring
+    name: "Crater ring"
+    short_name: "Crater ring"
+    description: "Static crater with charred core and cracked ring. Base terrain deformation test."
+    reel_subject: field-crater
+    render_path: renders/field-crater.png
+    program_hash: null
+    crc_pin: null
+    implemented: true
+    tags: [terrain, crater, static]
+
+  - id: terrain-scars
+    class: terrain
+    program: impact_wave
+    name: "Scars accumulation"
+    short_name: "Scars"
+    description: "Three strikes in sequence. Surface-sheet scars persist and accrue over time."
+    reel_subject: terrain-scars
+    render_path: renders/terrain-scars.gif
+    program_hash: 0x82F5F4E4
+    crc_pin: 0x86069EA1
+    implemented: true
+    tags: [terrain, scar, persistent]
+
+  - id: terrain-breach
+    class: terrain
+    program: dual-heightfield
+    name: "Breach"
+    short_name: "Breach"
+    description: "320 m dual-heightfield island. Bake ramp digs pit through 22 m thickness. Sky visible through hole."
+    reel_subject: terrain-breach
+    render_path: renders/terrain-breach.gif
+    program_hash: null
+    crc_pin: 0x47D4D163
+    implemented: true
+    tags: [terrain, breach, dual-heightfield, world-identity]
+
+  # ==============================================================================
+  # CELESTIAL EFFECTS (sky, atmosphere, lens effects)
+  # ==============================================================================
+
+  - id: celestial-sky-sweep
+    class: celestial
+    program: sky-ramp
+    name: "Sky sweep"
+    short_name: "Sky sweep"
+    description: "Camera pitch sweeps horizon to zenith. One elevation ramp drives all layers, joins invisible."
+    reel_subject: sky-sweep
+    render_path: renders/sky-sweep.gif
+    program_hash: null
+    crc_pin: 0x740FEBB2
+    implemented: true
+    tags: [sky, gradient, continuity]
+
+  - id: celestial-flare-occlusion
+    class: celestial
+    program: occlusion-probe
+    name: "Flare occlusion"
+    short_name: "Occlusion"
+    description: "Sun crosses behind island. Effect-tag probe gates flare, 15-frame fade each way."
+    reel_subject: flare-occlusion
+    render_path: renders/flare-occlusion.gif
+    program_hash: null
+    crc_pin: 0x9AB5AC21
+    implemented: true
+    tags: [celestial, flare, occlusion, fade]
+
+  - id: celestial-starfield
+    class: celestial
+    program: starfield
+    name: "Starfield backdrop"
+    short_name: "Starfield"
+    description: "Procedural starfield via sector hash. Visible in space scenes, adds depth."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [celestial, starfield, procedural]
+
+  # ==============================================================================
+  # CORONA VARIANTS (spec/stars_and_flares.md D4)
+  # ==============================================================================
+
+  - id: corona-atmo
+    class: corona
+    variant: halo_atmo
+    name: "Atmospheric corona"
+    short_name: "Atmo corona"
+    description: "Surface sun with atmosphere. Pure glow ball, 4x radius scale."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [corona, atmosphere, surface]
+
+  - id: corona-space
+    class: corona
+    variant: halo_space
+    name: "Space corona"
+    short_name: "Space corona"
+    description: "Space corona with hard core. Linear falloff from 5/16 core fraction."
+    reel_subject: star-boil
+    render_path: renders/star-boil.gif
+    program_hash: null
+    crc_pin: 0xAF10A2D1
+    implemented: true
+    tags: [corona, space]
+
+  - id: corona-airless
+    class: corona
+    variant: halo_airless
+    name: "Airless corona"
+    short_name: "Airless"
+    description: "Airless surface sun. Hard core (8/16) with short skirt, crisp edges."
+    reel_subject: null
+    render_path: null
+    program_hash: null
+    crc_pin: null
+    implemented: false
+    tags: [corona, airless, surface]
+
+  # ==============================================================================
+  # DISTANCE LOD RUNGS (spec/stars_and_flares.md D6)
+  # ==============================================================================
+
+  - id: lod-disc
+    class: lod
+    rung: 1
+    name: "Textured disc"
+    short_name: "Disc LOD"
+    description: "Full star disc with corona and flare. Projected radius 6 px or more."
+    reel_subject: noctis-flare
+    render_path: renders/noctis-flare.gif
+    implemented: true
+    tags: [lod, disc, corona, flare]
+
+  - id: lod-corona
+    class: lod
+    rung: 2
+    name: "Corona sprite"
+    short_name: "Corona LOD"
+    description: "Corona only, no disc. 1.5 to 6 px projected radius."
+    reel_subject: null
+    render_path: null
+    implemented: false
+    tags: [lod, corona]
+
+  - id: lod-glint
+    class: lod
+    rung: 3
+    name: "Far glint"
+    short_name: "Glint LOD"
+    description: "Minimum brightness clamp. Under 1.5 px, 75 to 100 percent intensity."
+    reel_subject: flare-occlusion
+    render_path: renders/flare-occlusion.gif
+    implemented: true
+    tags: [lod, glint, minimum-brightness]
+
+  - id: lod-point
+    class: lod
+    rung: 4
+    name: "Starfield point"
+    short_name: "Point LOD"
+    description: "Procedural starfield only. Beyond 1550 radii distance."
+    reel_subject: null
+    render_path: null
+    implemented: false
+    tags: [lod, starfield, point]
