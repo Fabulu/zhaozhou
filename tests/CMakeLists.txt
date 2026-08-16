@@ -640,6 +640,18 @@ target_include_directories(test_render_golden PRIVATE
 add_test(NAME render_golden COMMAND test_render_golden)
 set_tests_properties(render_golden PROPERTIES LABELS "fast;nightly")
 
+# ---- world-identity wave: dual-heightfield terrain (spec/terrain_rules.md) --
+# column_query directed + the physics-equals-pixels differential (§10.1),
+# breach/heal/no_bake law (§10.2 at reference scope), the §9.2 bake deferral
+# identity, and the renderer's breach/rim semantics with a legacy control.
+add_executable(test_terrain_dual terrain/terrain_dual.cpp)
+target_link_libraries(test_terrain_dual PRIVATE zhao_zref)
+target_include_directories(test_terrain_dual PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+add_test(NAME terrain_dual COMMAND test_terrain_dual)
+set_tests_properties(terrain_dual PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_render_budget render/render_budget.cpp)
 target_link_libraries(test_render_budget PRIVATE zhao_zref)
 target_include_directories(test_render_budget PRIVATE

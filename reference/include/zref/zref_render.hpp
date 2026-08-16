@@ -123,12 +123,26 @@ struct RenderCanvas {
  * Authored heightfield patch — the terrain-patch page body (spec/cartridge.md
  * §4 kind 4): header extents + width x height height16 samples. Heights are
  * s16 S 1.7.8 raw (qformats §9); world positions come from the envelope.
+ *
+ * [world-identity wave] The Island Patch v1 layers (spec/terrain_rules.md §2)
+ * ride along in-memory: scar (B), bottom (C), cell_state (D). All three empty
+ * = the Phase-3 legacy single-surface page (terrain_rules §3.1 option (a),
+ * kept as the degenerate case): every cell SOLID, no underside, no rim walls,
+ * pixel-identical to the pre-migration renderer. `dual()` requires bottom to
+ * match the lattice extent; a mismatched layer is ignored (fail-safe: a
+ * malformed page never changes geometry that did draw). The kind-6 page BYTE
+ * layout / pitch_log2 addressing / sparse island directory are Phase-6
+ * loader work — this struct is the envelope-based Phase-3 resource.
  */
 struct TerrainPatch {
   uint16_t width = 0;
   uint16_t height = 0;
   int32_t env_x0 = 0, env_z0 = 0, env_x1 = 0, env_z1 = 0;  // rectfx raw fx16
   std::vector<int16_t> heights;                            // ascending z-then-x (cartridge.md §4)
+  std::vector<int16_t> scar;        // layer B: persistent bake delta (height16); empty = zero
+  std::vector<int16_t> bottom;      // layer C: the island underside (height16); empty = legacy
+  std::vector<uint8_t> cell_state;  // layer D: (width-1)*(height-1) substance+flags bytes
+  bool dual() const { return bottom.size() == static_cast<size_t>(width) * height; }
 };
 
 /** DrawProcedural material page (Phase-3 subset: a flat base colour). */

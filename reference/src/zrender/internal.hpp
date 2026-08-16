@@ -12,6 +12,7 @@
 #pragma once
 
 #include "zref/zref_render.hpp"
+#include "zref/zref_terrain.hpp"
 
 namespace zref {
 namespace render {
@@ -157,11 +158,28 @@ struct FieldApp {
 };
 
 /**
- * DrawProcedural (forge_kind heightfield_patch): build the world grid
- * (envelope + authored height16 + TerrainField deltas via the ONE zfield
- * interpreter), project, painter-sort far-to-near by centroid Q16.16 1/z
- * (D7), flat-shade (exact fx16 cross products -> §7.4-style normalize ->
- * single-rounded lambert dot), tint by the surface sheet, raster with depth.
+ * THE one per-frame lattice evaluation (terrain_rules.md §4.1/§4.2): placed
+ * grid (envelope lerp + transform2fx), composed top per §3.4 (base + scar
+ * clamped at bottom, live TerrainField lanes in command order via the ONE
+ * zfield interpreter, clamped at bottom), the bottom plane and the cell-state
+ * copy. draw_heightfield tessellates it; zref::terrain::column_query
+ * interpolates it; tests difference the two — nothing evaluates twice.
+ */
+terrain::ComposedLattice compose_lattice(const TerrainPatch& patch, const ZhTransform2fx& xform,
+                                         const std::vector<FieldApp>& fields, uint32_t frame_tick,
+                                         std::vector<TerrainVelocitySample>* velocity_out,
+                                         SatLedger* L);
+
+/**
+ * DrawProcedural (forge_kind heightfield_patch): compose the lattice (above),
+ * project, painter-sort far-to-near by centroid Q16.16 1/z (D7), flat-shade
+ * (exact fx16 cross products -> §7.4-style normalize -> single-rounded
+ * lambert dot), tint by the surface sheet, raster with depth. Dual patches
+ * (terrain_rules §3) additionally emit the underside (bottom lattice, same
+ * §4.3 diagonal, inverted winding, SOLID cells only) and rim walls (one quad
+ * per SOLID<->void/OUT edge, top edge at the composed top, bottom edge at the
+ * MODELLED bottom — true local thickness, not the donor's fixed -50 m
+ * curtain); void cells emit no surface at all (the breach shows sky).
  */
 void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                       const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,

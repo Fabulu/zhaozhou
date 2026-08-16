@@ -14,6 +14,7 @@ add_library(zhao_zref STATIC
   src/zref_video.cpp
   src/zfield/zfield_decode.cpp
   src/zfield/zfield_interpret.cpp
+  src/zterrain/terrain_core.cpp
   src/zrender/render_frame.cpp
   src/zrender/rast.cpp
   src/zrender/terrain.cpp
