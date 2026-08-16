@@ -22,14 +22,29 @@
 # (boolector-based model checking; the plain smtbmc+boolector unrolling of
 # the 32-byte CRC chain costs ~1 h/step here, btormc handles it in seconds).
 #
-# Run via `ctest -L formal` (test cmd_dma_crc_gate; wrapper
-# tests/formal/cmd_formal_lane.cmake.in, SKIP when sby is absent) or by
-# hand from a workdir exactly two levels below the repo root:
-#   sby -f -d bmc tests/formal/cmd_dma_crc_gate.sby
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the gate assertions hold to the depth below.
+#   cover — the antecedents are REACHABLE: both assertions are implications
+#           (pkt_valid_o -> gates, guard_req_o.valid -> blit_gate), so a
+#           model that never raises them is green while proving nothing.
+#           The guard/blit covers are reachable only because the harness
+#           sets FORMAL_BLIT_LEN = 64 (see the harness) — without it the
+#           blit CRC gate never opened in the cone and (b) was VACUOUS.
+#
+# Run via `ctest -L formal` (test formal_cmd_dma_crc_gate; shared wrapper
+# tests/formal/mem_formal_lane.cmake.in, narrow SKIP only when the slang
+# frontend is absent) or by hand with cwd = tests/formal:
+#   sby -f --prefix <workdir> cmd_dma_crc_gate.sby
+
+[tasks]
+bmc
+cover
 
 [options]
-mode bmc
-depth 24
+bmc:   mode bmc
+bmc:   depth 24
+cover: mode cover
+cover: depth 24
 expect pass
 
 [engines]

@@ -61,6 +61,17 @@ module zhao_cmd_dma
   // canvas, Duo 245,760 B — the M10K mapping is the synthesis lane).
   parameter int unsigned SLOT_BUF_BYTES = 4096,
   parameter int unsigned BLIT_BUF_BYTES = 245760
+`ifdef FORMAL
+  // FORMAL-ONLY (structurally absent outside `ifdef FORMAL, so synthesis
+  // and the Verilator ctest lane always run the law): a nonzero value
+  // overrides the blit-length law `byte_len == canvas_bytes(mode)` so the
+  // blit path fits a tractable BMC depth. Without it the blit CRC gate is
+  // UNREACHABLE in the shrunk formal harness — the smallest lawful canvas
+  // is 153,600 B (≈19,200 fetch cycles), so assertion (b) below was
+  // vacuous while the harness header claimed both gates were in the cone.
+  // The full-size length law itself is exercised by cmd_dma_directed.
+  , parameter int unsigned FORMAL_BLIT_LEN = 0
+`endif
 ) (
   input  logic clk,
   input  logic rst_n,
@@ -160,6 +171,18 @@ module zhao_cmd_dma
 
   function automatic logic [31:0] canvas_bytes(input logic [7:0] m);
     canvas_bytes = zhao_pkg::zhao_canvas_bytes(zhao_pkg::zhao_mode_from_abi(m));
+  endfunction
+
+  // the mode's lawful blit length. Under `ifdef FORMAL the harness may
+  // override it downward (FORMAL_BLIT_LEN != 0) so the blit CRC gate is
+  // reachable within the BMC depth; everywhere else this IS canvas_bytes.
+  function automatic logic [31:0] blit_law_len(input logic [7:0] m);
+`ifdef FORMAL
+    blit_law_len = (FORMAL_BLIT_LEN != 0) ? 32'(FORMAL_BLIT_LEN)
+                                          : canvas_bytes(m);
+`else
+    blit_law_len = canvas_bytes(m);
+`endif
   endfunction
 
   // ------------------------------------------------------------ state -----
@@ -616,7 +639,8 @@ module zhao_cmd_dma
         M_BLIT_CHK: begin
           // memory_rules.md 5: byte_len must equal canvas_bytes(mode) and
           // dst_slot must be 0/1 — anything else rejected BEFORE any byte
-          if ((b_dst > 8'd1) || (b_len != canvas_bytes(b_mode))
+          // (blit_law_len == canvas_bytes outside `ifdef FORMAL)
+          if ((b_dst > 8'd1) || (b_len != blit_law_len(b_mode))
               || (b_len == 32'd0) || (b_len > BLIT_BUF_BYTES)) begin
             blit_done_v <= 1'b1;
             blit_status_r <= ST_BLIT_REJECT;
@@ -739,6 +763,26 @@ module zhao_cmd_dma
       if (guard_req_o.valid) begin
         assert(blit_gate);
       end
+    end
+  end
+
+  // ---- non-vacuity covers (V16: covers must prove the antecedents) --------
+  // Both assertions above are implications; a model that cannot raise
+  // pkt_valid_o or guard_req_o.valid satisfies them while proving nothing
+  // (the MEM.GUARD failure shape). c_guard is reachable ONLY because the
+  // harness sets FORMAL_BLIT_LEN — see the parameter note; without it the
+  // blit gate never opened in the formal cone and (b) was vacuous.
+  always_ff @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      c_pkt:      cover (pkt_valid_o);                 // (a) antecedent
+      c_gates:    cover (hdr_gate && pay_gate);
+      c_guard:    cover (guard_req_o.valid);           // (b) antecedent
+      c_blitgate: cover (blit_gate);
+      c_hdr_bad:  cover (dma_done_o
+                         && (dma_status_o == ST_BAD_HEADER_CRC));
+      c_blit_ok:  cover (blit_done_o && (blit_status_o == ST_OK));
+      c_blit_bad: cover (blit_done_o
+                         && (blit_status_o == ST_BAD_PAYLOAD_CRC));
     end
   end
 `endif

@@ -503,6 +503,25 @@ module zhao_cmd_scheduler
       end
     end
   end
+
+  // ---- non-vacuity covers (V16: covers must prove the antecedents) --------
+  // (c) is guarded by a FREE-entering transition and (e) by a RUN -> DONE
+  // transition; a model where no slot ever completes a frame satisfies both
+  // vacuously (the MEM.GUARD failure shape). These witness the full charter
+  // cycle FREE -> ARM -> READY -> RUN -> DONE -> FREE, a fence of each
+  // polarity, and the deadline path (reachable at depth 40 only through a
+  // small BeginFrame.deadline_cycles override — the mode-period default is
+  // >= 217,984 cycles).
+  always_ff @(posedge clk) begin
+    if (f_past_valid && rst_n && $past(rst_n)) begin
+      c_run:        cover (state[0] == S_RUN);
+      c_fence_ok:   cover (fence_valid_o && fence_ok_o);
+      c_fence_bad:  cover (fence_valid_o && !fence_ok_o);
+      c_done2free:  cover ((state[0] == S_FREE) && ($past(state[0]) == S_DONE));
+      c_deadline:   cover (fence_valid_o
+                           && (fence_status_o == STATUS_DEADLINE));
+    end
+  end
 `endif
 
 endmodule : zhao_cmd_scheduler

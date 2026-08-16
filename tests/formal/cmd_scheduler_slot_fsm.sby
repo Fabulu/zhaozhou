@@ -19,14 +19,30 @@
 # BMC depth 40 covers multi-slot interleavings: seal/claim/run/DONE->FREE
 # across at least two frame windows under free harness-as-HPS word inputs.
 #
-# Run via `ctest -L formal` (test cmd_scheduler_slot_fsm; wrapper
-# tests/formal/cmd_formal_lane.cmake.in, SKIP when sby is absent) or by
-# hand from a workdir exactly two levels below the repo root:
-#   sby -f -d bmc tests/formal/cmd_scheduler_slot_fsm.sby
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the slot-FSM assertions hold to the depth below.
+#   cover — the antecedents are REACHABLE: (c) fires only on a
+#           FREE-entering transition and (e) only on RUN -> DONE, so a
+#           model where no slot ever completes a frame satisfies both
+#           vacuously. The covers witness the full charter cycle, a fence
+#           of each polarity, and the deadline path (via a small
+#           BeginFrame.deadline_cycles override — the mode-period default
+#           of >= 217,984 cycles is far beyond any BMC depth).
+#
+# Run via `ctest -L formal` (test formal_cmd_scheduler_slot_fsm; shared
+# wrapper tests/formal/mem_formal_lane.cmake.in, narrow SKIP only when the
+# slang frontend is absent) or by hand with cwd = tests/formal:
+#   sby -f --prefix <workdir> cmd_scheduler_slot_fsm.sby
+
+[tasks]
+bmc
+cover
 
 [options]
-mode bmc
-depth 40
+bmc:   mode bmc
+bmc:   depth 40
+cover: mode cover
+cover: depth 40
 expect pass
 
 [engines]

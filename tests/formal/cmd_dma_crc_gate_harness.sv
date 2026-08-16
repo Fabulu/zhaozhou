@@ -5,9 +5,11 @@
 // The harness instantiates the REAL zhao_cmd_dma with SHRUNK staging
 // buffers (40 B slot / 64 B blit — a minimal header-only packet: the
 // staging bound forces command_bytes = 0, the smallest packet the ABI
-// allows, while every FSM state and BOTH CRC gates stay in the cone; the
-// committed 4096/245,760 defaults are exercised by the ctest lane
-// cmd_dma_directed). Every DUT input is a free formal input —
+// allows) and FORMAL_BLIT_LEN = 64 so the blit path — and with it the
+// blit CRC gate of assertion (b) — is genuinely in the cone (see the
+// parameter note at the instantiation; the committed 4096/245,760
+// defaults and the full-size blit-length law are exercised by the ctest
+// lane cmd_dma_directed). Every DUT input is a free formal input —
 // in particular the bridge response beats are ARBITRARY, which is exactly
 // the adversarial model for the gate: can ANY beat pattern push a byte
 // downstream before the CRC gates open?
@@ -48,7 +50,14 @@ module zhao_cmd_dma_crc_gate_harness (
 
   zhao_cmd_dma #(
     .SLOT_BUF_BYTES (40),
-    .BLIT_BUF_BYTES (64)
+    .BLIT_BUF_BYTES (64),
+    // FORMAL-ONLY override of the blit-length law (byte_len ==
+    // canvas_bytes(mode)): the smallest lawful canvas is 153,600 B, which
+    // no tractable BMC depth can fetch — without this the blit CRC gate
+    // NEVER opened in the formal cone and assertion (b) was vacuous (the
+    // original header's claim that both gates were in the cone was wrong).
+    // The full-size length law is exercised by the ctest lane instead.
+    .FORMAL_BLIT_LEN (64)
   ) dut (
     .clk               (clk),
     .rst_n             (rst_n),
