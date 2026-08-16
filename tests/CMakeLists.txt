@@ -332,6 +332,9 @@ add_test(NAME input_snapshot_atomic
                  ${CMAKE_CURRENT_BINARY_DIR}/formal/input_snapshot_atomic.cmake)
 set_tests_properties(input_snapshot_atomic PROPERTIES
   LABELS "formal;nightly"
+  RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
+                   # provers blew the 1800 s wrapper budget on runs that pass
+                   # solo — wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal SKIPPED")
 # ---- W2.4: audio (plan W2.4; spec/audio_rules.md, contracts AUDIO.FIFO ----
 # ---- + SW.MIXER) ------------------------------------------------------------
@@ -403,6 +406,9 @@ add_test(NAME formal_audio_fifo
                  ${CMAKE_CURRENT_BINARY_DIR}/formal/audio_formal_lane.cmake)
 set_tests_properties(formal_audio_fifo PROPERTIES
   LABELS "formal;nightly"
+  RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
+                   # provers blew the 1800 s wrapper budget on runs that pass
+                   # solo — wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 # ---- W2.5: memory -----------------------------------------------------------
 # Plan W2.5: synthesizable modules lint individually (charter 21 step 8);
@@ -584,6 +590,9 @@ if(ZHAO_SBY_BIN)
     # with a readable sby message before CTest kills it from outside.
     set_tests_properties(formal_${sby_prop} PROPERTIES
       LABELS "formal;nightly"
+      RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
+                       # provers blew the 1800 s wrapper budget on runs that pass
+                       # solo — wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -769,6 +778,9 @@ if(ZHAO_SBY_BIN)
              COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
     set_tests_properties(formal_${sby_prop} PROPERTIES
       LABELS "formal;nightly"
+      RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
+                       # provers blew the 1800 s wrapper budget on runs that pass
+                       # solo — wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -908,6 +920,9 @@ if(ZHAO_SBY_BIN)
              COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
     set_tests_properties(formal_${sby_prop} PROPERTIES
       LABELS "formal;nightly"
+      RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
+                       # provers blew the 1800 s wrapper budget on runs that pass
+                       # solo — wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
