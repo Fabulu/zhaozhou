@@ -24,7 +24,8 @@ using zhao_video::VideoTb;
 static bool g_full = false;
 static uint32_t event_spacing() { return g_full ? 40u : 2000u; }
 
-static uint64_t scenario(uint64_t seed, uint64_t events) {
+// MERGE FIX: tb.failures now reaches the exit code (see video_mode_random).
+static uint64_t scenario(uint64_t seed, uint64_t events, int* fails) {
   VideoTb tb;
   tb.reset();
   Rng rng(seed);
@@ -65,6 +66,7 @@ static uint64_t scenario(uint64_t seed, uint64_t events) {
     tb.step();
     --countdown;
   }
+  *fails += tb.failures;
   return tb.trace.h;
 }
 
@@ -75,20 +77,26 @@ int main(int argc, char** argv) {
   int fail = 0;
   const uint64_t seeds = g_full ? 2 : 2;
   for (uint64_t seed = 1; seed <= seeds; ++seed) {
-    const uint64_t h1 = scenario(seed, events);
-    const uint64_t h2 = scenario(seed, events);
+    int diff = 0;
+    const uint64_t h1 = scenario(seed, events, &diff);
+    const uint64_t h2 = scenario(seed, events, &diff);
     if (h1 != h2) {
       ++fail;
       std::printf("FAIL scanout_random seed %llu: run-twice hash mismatch\n",
                   (unsigned long long)seed);
+    }
+    if (diff != 0) {
+      ++fail;
+      std::printf("FAIL scanout_random seed %llu: %d differential mismatches\n",
+                  (unsigned long long)seed, diff);
     }
   }
   if (fail == 0) {
     std::printf("video_scanout_random: OK (%s, %llu events x %llu x 2)\n",
                 g_full ? "full" : "fast", (unsigned long long)events,
                 (unsigned long long)seeds);
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_scanout_random: %d FAILURES\n", fail);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

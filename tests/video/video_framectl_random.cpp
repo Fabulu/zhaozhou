@@ -20,8 +20,9 @@ using zhao_video::VideoTb;
 static bool g_full = false;
 static uint32_t event_spacing() { return g_full ? 40u : 1500u; }
 
+// MERGE FIX: tb.failures now reaches the exit code (see video_mode_random).
 static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences,
-                         uint64_t* ticks, uint64_t* fault_frames) {
+                         uint64_t* ticks, uint64_t* fault_frames, int* fails) {
   VideoTb tb;
   tb.reset();
   Rng rng(seed);
@@ -52,6 +53,7 @@ static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences,
     }
     --countdown;
   }
+  *fails += tb.failures;
   return tb.trace.h;
 }
 
@@ -62,8 +64,14 @@ int main(int argc, char** argv) {
   int fail = 0;
   for (uint64_t seed = 1; seed <= 2; ++seed) {
     uint64_t f1, t1, r1, f2, t2, r2;
-    const uint64_t h1 = scenario(seed, events, &f1, &t1, &r1);
-    const uint64_t h2 = scenario(seed, events, &f2, &t2, &r2);
+    int diff = 0;
+    const uint64_t h1 = scenario(seed, events, &f1, &t1, &r1, &diff);
+    const uint64_t h2 = scenario(seed, events, &f2, &t2, &r2, &diff);
+    if (diff != 0) {
+      ++fail;
+      std::printf("FAIL framectl_random seed %llu: %d differential mismatches\n",
+                  (unsigned long long)seed, diff);
+    }
     if (h1 != h2) {
       ++fail;
       std::printf("FAIL framectl_random seed %llu: hash mismatch\n",
@@ -83,8 +91,8 @@ int main(int argc, char** argv) {
   if (fail == 0) {
     std::printf("video_framectl_random: OK (%s, %llu events x 2 seeds x 2)\n",
                 g_full ? "full" : "fast", (unsigned long long)events);
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_framectl_random: %d FAILURES\n", fail);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

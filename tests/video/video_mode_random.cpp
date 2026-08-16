@@ -17,7 +17,11 @@ using namespace zref;
 using zhao_video::Rng;
 using zhao_video::VideoTb;
 
-static uint64_t scenario(uint64_t seed, uint64_t events) {
+// MERGE FIX: the salvaged version returned only the trace hash and IGNORED
+// tb.failures — an RTL/oracle mismatch diverges identically on both runs,
+// so the run-twice hash still matched and the differential half of this
+// lane was vacuous. The per-cycle mismatch count now reaches the exit code.
+static uint64_t scenario(uint64_t seed, uint64_t events, int* fails) {
   VideoTb tb;
   tb.reset();
   Rng rng(seed);
@@ -46,6 +50,7 @@ static uint64_t scenario(uint64_t seed, uint64_t events) {
     tb.step();
     --countdown;
   }
+  *fails += tb.failures;
   return tb.trace.h;
 }
 
@@ -56,20 +61,26 @@ int main(int argc, char** argv) {
   int fail = 0;
   const uint64_t seeds = full ? 3 : 2;
   for (uint64_t seed = 1; seed <= seeds; ++seed) {
-    const uint64_t h1 = scenario(seed, events);
-    const uint64_t h2 = scenario(seed, events);
+    int diff = 0;
+    const uint64_t h1 = scenario(seed, events, &diff);
+    const uint64_t h2 = scenario(seed, events, &diff);
     if (h1 != h2) {
       ++fail;
       std::printf("FAIL mode_random seed %llu: run-twice hash mismatch\n",
                   (unsigned long long)seed);
+    }
+    if (diff != 0) {
+      ++fail;
+      std::printf("FAIL mode_random seed %llu: %d differential mismatches\n",
+                  (unsigned long long)seed, diff);
     }
   }
   if (fail == 0) {
     std::printf("video_mode_random: OK (%s, %llu events x %llu seeds x 2)\n",
                 full ? "full" : "fast", (unsigned long long)events,
                 (unsigned long long)seeds);
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_mode_random: %d FAILURES\n", fail);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }
