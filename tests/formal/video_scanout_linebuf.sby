@@ -1,0 +1,29 @@
+# video_scanout_linebuf.sby — VIDEO.SCANOUT line-buffer formal properties
+# (plan W2.2 §4; spec/video_rules.md §8: the serializer never overtakes the
+# fill, swap only in vblank (re-arm law), never torn).
+#
+# The linebuf module is checked in ISOLATION with the FETCH and DISPLAY
+# protocol as assumptions (an abstract adversarial driver respecting the
+# handshake: fill only EMPTY buffers, one line at a time, complete before
+# line_done; consume only FRESH buffers) — the full-system vblank-swap law
+# is proven cycle-exactly by the differential tests. Clocks tied
+# (gpu_clk = vid_clk): the crossing degenerates to a fixed delay.
+
+[options]
+mode prove
+depth 30
+
+[engines]
+abc pdr
+
+[script]
+
+plugin -i slang
+read_slang --top video_linebuf_fv zhao_abi_pkg.sv zhao_pkg.sv zhao_scanout_linebuf.sv video_linebuf_fv.sv
+prep -top video_linebuf_fv
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/video/zhao_scanout_linebuf.sv
+video_linebuf_fv.sv

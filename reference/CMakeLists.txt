@@ -2,6 +2,8 @@
 # W3: fixed-point core is header-only constexpr (zref_fixp/rcp/trig/sat +
 #     generated tables). W4 adds the frame packet + .zcap container
 #     (zref_frame) and sha256; W6 adds the shell loop (zref.cpp).
+# W2.2 adds the video subsystem (zref_video: mode/framectl/scanout/scaler
+#     mirrors; the displayed-stream CRC lives in zrender/resolve.cpp).
 # W2.4 adds the audio subsystem (MixerTone tone subset + AudioFifo oracle).
 # W3.5 adds the software renderer (zrender/) + the sky emitter (zsky/).
 
@@ -9,6 +11,7 @@ add_library(zhao_zref STATIC
   src/zref_frame.cpp
   src/zref.cpp
   src/zref_audio.cpp
+  src/zref_video.cpp
   src/zfield/zfield_decode.cpp
   src/zfield/zfield_interpret.cpp
   src/zrender/render_frame.cpp

@@ -773,3 +773,142 @@ if(ZHAO_SBY_BIN)
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
 endif()
+
+# ---- W2.2: video -------------------------------------------------------------
+# Plan W2.2 (VIDEO subsystem: mode/scanout/scaler/framectl). Banner-append
+# block (merge rule, plan §3): everything W2.2 adds lands here, at the end.
+# Shared driver: tests/video/video_harness.hpp drives the Verilated
+# zhao_video_tb (whole subsystem, tests/video/zhao_video_tb.sv) and the
+# zref::Scanout mirror on one gpu-cycle timeline (vid posedges on odd
+# steps — the frozen 2:1 phase, plan R1).
+
+set(ZHAO_VIDEO_RTL ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_fetch.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_linebuf.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_serializer.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scanout.sv)
+
+function(zhao_video_test NAME SRC)
+  add_executable(${NAME} ${SRC})
+  target_link_libraries(${NAME} PRIVATE zhao_harness zhao_zref)
+  target_include_directories(${NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/video)
+  verilate(${NAME}
+    PREFIX Vzhao_video_tb
+    TOP_MODULE zhao_video_tb
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+                 ${CMAKE_CURRENT_SOURCE_DIR}/video
+    SOURCES ${ZHAO_ABI_PKG}
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+            ${ZHAO_VIDEO_RTL}
+            ${CMAKE_CURRENT_SOURCE_DIR}/video/zhao_video_tb.sv)
+  add_test(NAME ${NAME} COMMAND ${NAME})
+  set_tests_properties(${NAME} PROPERTIES LABELS "fast;nightly")
+endfunction()
+
+zhao_video_test(test_video_mode_directed video/video_mode_directed.cpp)
+zhao_video_test(test_video_scanout_directed video/video_scanout_directed.cpp)
+zhao_video_test(test_video_framectl_directed video/video_framectl_directed.cpp)
+zhao_video_test(test_video_mode_random video/video_mode_random.cpp)
+zhao_video_test(test_video_scanout_random video/video_scanout_random.cpp)
+zhao_video_test(test_video_framectl_random video/video_framectl_random.cpp)
+
+# nightly --full modes of the same binaries (the --rcp-full pattern of W3)
+add_test(NAME video_mode_random_full COMMAND test_video_mode_random --full)
+set_tests_properties(video_mode_random_full PROPERTIES LABELS "nightly")
+add_test(NAME video_scanout_random_full COMMAND test_video_scanout_random --full)
+set_tests_properties(video_scanout_random_full PROPERTIES LABELS "nightly")
+add_test(NAME video_framectl_random_full COMMAND test_video_framectl_random --full)
+set_tests_properties(video_framectl_random_full PROPERTIES LABELS "nightly")
+
+# scaler: own small top (isolated stream tests)
+add_executable(test_video_scaler_directed video/video_scaler_directed.cpp)
+target_link_libraries(test_video_scaler_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_video_scaler_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/video)
+verilate(test_video_scaler_directed
+  PREFIX Vzhao_scaler_tb
+  TOP_MODULE zhao_scaler_tb
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_CURRENT_SOURCE_DIR}/video
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/video/zhao_scaler_tb.sv)
+add_test(NAME video_scaler_directed COMMAND test_video_scaler_directed)
+set_tests_properties(video_scaler_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_video_scaler_random video/video_scaler_random.cpp)
+target_link_libraries(test_video_scaler_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_video_scaler_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/video)
+verilate(test_video_scaler_random
+  PREFIX Vzhao_scaler_tb
+  TOP_MODULE zhao_scaler_tb
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_CURRENT_SOURCE_DIR}/video
+  SOURCES ${ZHAO_ABI_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/video/zhao_scaler_tb.sv)
+add_test(NAME video_scaler_random COMMAND test_video_scaler_random)
+set_tests_properties(video_scaler_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME video_scaler_random_full COMMAND test_video_scaler_random --full)
+set_tests_properties(video_scaler_random_full PROPERTIES LABELS "nightly")
+
+# per-module lint (charter 21 step 8, pattern of lint_zhao_pkg)
+foreach(zhao_video_mod IN ITEMS
+     zhao_video_mode zhao_video_framectl zhao_video_scaler
+     zhao_scanout_fetch zhao_scanout_linebuf zhao_scanout_serializer)
+  add_test(NAME lint_${zhao_video_mod}
+           COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                   --top-module ${zhao_video_mod}
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/${zhao_video_mod}.sv)
+  set_tests_properties(lint_${zhao_video_mod} PROPERTIES
+    LABELS "lint;fast"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
+
+# whole-subsystem lint cone (top + submodules + the tb wrapper)
+add_test(NAME lint_zhao_video_scanout
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_video_tb
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${ZHAO_VIDEO_RTL}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/video/zhao_video_tb.sv)
+set_tests_properties(lint_zhao_video_scanout PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the three W2.2 VIDEO properties. MERGE RESOLUTION NOTE: the
+# branch shipped its own wrapper (tests/formal/video_formal.cmake.in) with
+# no PATH hardening (the 0xC0000139 DLL-shadowing trap) and a broad
+# fail-on-rc contract; it was DROPPED in favour of the shared hardened
+# mem_formal_lane.cmake.in (narrow SKIP only when the slang frontend is
+# absent, --prefix for the multi-task bmc+cover pairs V16 requires) — the
+# same resolution the W2.6 merge made for the CMD wrappers.
+if(ZHAO_SBY_BIN)
+  foreach(sby_prop IN ITEMS video_mode_timing video_scanout_linebuf
+                            video_framectl_one_fence)
+    set(PROP "${sby_prop}")
+    set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+    set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+    configure_file(formal/mem_formal_lane.cmake.in
+                   formal/${sby_prop}_lane.cmake @ONLY)
+    set(zhao_formal_script "${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake")
+    string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+    add_test(NAME formal_${sby_prop}
+             COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+    set_tests_properties(formal_${sby_prop} PROPERTIES
+      LABELS "formal;nightly"
+      TIMEOUT 2100
+      SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+  endforeach()
+endif()
