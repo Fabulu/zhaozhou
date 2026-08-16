@@ -239,3 +239,49 @@ effects:
 **Next Step:** Complete motion trails integration, then render all subjects for CRC pinning and deployment.
 
 
+
+
+---
+
+## Completion Session (2026-08-16, successor agent)
+
+The first session died on context before rendering anything. This session
+finished the job and CORRECTED the record. Commits 8670c7e, 6cb4e54, 27ab1a1.
+
+### What was actually true at handover (vs the first report)
+- The 6 new star subjects existed in code and compiled, but NOTHING had been
+  rendered, no CRC was pinned, and 8 of the 19 "READY" entries had neither
+  render nor pin.
+- The fast lane was RED at HEAD, inherited: dcb32ff (kBandRows 8->16) moved
+  render_sky's census anchors and render_golden's CRCs and shipped with only
+  an fsyntax-only check. Fixed by re-pinning (8670c7e).
+- Every sky-bearing reel CRC had drifted the same way; the four terrain gifs
+  on the site are pre-fix artifacts (proven by reverting kBandRows in a
+  scratch build: terrain-wave rendered the shipped 0x0222090B exactly).
+
+### Motion trails (spec §15, amendment v1.1)
+- Ring of 8 light positions per star, 34 B, serialized: celestial_state
+  168 -> 236 B. Replay by capture (star_trail_replay).
+- Two draft ghost laws DIED ON MEASUREMENT before the final one: alpha-scaled
+  ghosts (~63 ring colours x 8 alphas) and graded level-capped ghosts
+  (prefix skirts overlap-sum to 744 colours in one subject). Final law: FLAT
+  ghost palette (one ramp entry per ghost), levels 63-4g (59..31, the bright
+  half), halo-skip circle, static-skip. All trailed subjects <= 243 colours.
+- noctis-flare re-shot with its smear; the six class subjects authored as
+  drifting portraits; S08 rendered as a real binary (two bodies orbiting,
+  curved trails).
+
+### Renders (all deterministic, 3 runs byte-identical, gifs decode-verified)
+11 subjects shot from 6cb4e54: star-boil(63f), noctis-flare(64f), pulsar(64f),
+sky-sweep(64f), flare-occlusion(64f), blue-giant, white-dwarf, orange-giant,
+blue-dwarf, multiple, infant (64f each). Sizes 18,688 B (pulsar) to 586,248 B
+(star-boil). Terrain four NOT re-rendered per owner instruction; catalogue
+carries both CRCs (shipped artifact + current renderer).
+
+### Site
+- Star catalogue section GENERATED from effects-library.yaml (gamut table
+  with class swatches + 6 figures with provenance). assemble.py extended;
+  copy gate hard-stops as before (it caught one em dash in my own copy).
+- Destination amendment folded in: fabricated silicon is the goal, the
+  MiSTer FPGA core is the proving ground; one Steam clause in the what-for
+  list. Deployed via deploy.ps1.
