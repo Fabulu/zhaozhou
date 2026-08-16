@@ -87,6 +87,41 @@ runs:
       three vacuous, the same hole as MEM.GUARD. Five covers added to the
       RTL's `ifdef FORMAL block and a cover task to the .sby; both run green.
 
+  - property: tests/formal/cmd_scheduler_slot_fsm.sby
+    status: green
+    date: "2026-08-16"
+    commit: 3ca4661
+    lane: formal_cmd_scheduler_slot_fsm
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      CMD.SCHEDULER slot-FSM: state legality, single owner, DONE-precedes-
+      FREE, reset-idle, fence-exactly-once (both directions). Written
+      pre-V16 as a lone bmc task with NO cover — properties (c)/(e) are
+      transition-guarded and were provable vacuously by a model where no
+      slot ever completes. Five covers added (full charter cycle, both
+      fence polarities, the deadline-miss path); all reached at steps 4-6
+      of depth 40. First elaboration of this property was at the W2.6
+      merge, exactly as V16 was built to force.
+
+  - property: tests/formal/cmd_dma_crc_gate.sby
+    status: green
+    date: "2026-08-16"
+    commit: 3ca4661
+    lane: formal_cmd_dma_crc_gate
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      CMD.DMA CRC gates: no verified-packet byte before header+payload CRC,
+      no VRAM write before the blit CRC, clean reset. Written pre-V16 with
+      NO cover — and assertion (b) WAS VACUOUS as shipped: the blit-length
+      law (byte_len == canvas_bytes >= 153,600 B) could never pass the
+      64-B harness buffer, so the blit gate never opened in the cone while
+      the harness header claimed it did. Fixed with the FORMAL-ONLY
+      FORMAL_BLIT_LEN DUT parameter (absent outside `ifdef FORMAL); seven
+      covers (pkt_valid_o, both gates, guard_req_o.valid, header-CRC fail,
+      blit OK/bad-CRC) all reached at k = 9..14 of depth 24 (btormc).
+
   - property: tests/formal/audio_fifo_bounds.sby
     status: green
     date: "2026-08-15"

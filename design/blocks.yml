@@ -200,6 +200,7 @@ blocks:
     tests:
       directed: tests/command/cmd_dma_directed.cpp
       random: tests/command/cmd_dma_directed.cpp
+      formal: tests/formal/cmd_dma_crc_gate.sby
     counters: [commands, hps_ddr_bytes_by_client, deadline_faults]
     source_ids: true
     async_bridge: true
@@ -207,8 +208,8 @@ blocks:
     maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
-        date: "2026-08-15"
-        commit: "38f9b96"
+        date: "2026-08-16"
+        commit: "768ce1a"
         evidence: reference/include/zref/zref_cmd2.hpp
       - state: UNIT_VERIFIED
         date: "2026-08-15"
@@ -217,7 +218,13 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Fail-safe order per capture_format.md §3.3 — never emits a byte of a packet whose header CRC failed.
+    notes: >-
+      Fail-safe order per capture_format.md §3.3 — never emits a byte of a
+      packet whose header CRC failed. REFERENCE_COMPLETE re-pinned at the
+      W2.6 merge: the original 38f9b96 evidence named zref::CmdDma, which
+      did not exist there (the verdict oracle was a static function inside
+      the directed test); 768ce1a is the commit where the named symbol
+      became real in zref_cmd2.hpp.
 
   - id: CMD.DECODER
     name: Command decoder
@@ -286,17 +293,20 @@ blocks:
         commit: "38f9b96"
         evidence: reference/include/zref/zref_cmd2.hpp
       - state: UNIT_VERIFIED
-        date: "2026-08-15"
-        commit: "b64afe2"
+        date: "2026-08-16"
+        commit: "768ce1a"
         evidence: tests/command/cmd_scheduler_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
     notes: >-
       Contract filled (Phase-1-active). The dispatch fan-out mirrors charter
-      §5's CMD → engines edges. Dashboard note (W6) — stays SPECIFIED by
-      design; the wave-1 stub models no slot FSM, and this block's RTL (with
-      the formal slot-FSM property) is later-phase scope with the decoder.
+      §5's CMD → engines edges. UNIT_VERIFIED re-pinned at the W2.6 merge:
+      the b64afe2 evidence predates a genuine RTL defect that
+      cmd_random_soak (100k frames — never run on the branch) exposed: the
+      SetPresentationContract latch adopted out-of-range mode bytes,
+      indexing ZHAO_TIMING out of bounds. Fixed (latch refuses non-members)
+      and the soak observed green at 768ce1a: 13,884,383 checks, 0 failed.
 
   # ===========================================================================
   # MEM — memory system (fpga/rtl/memory)
@@ -2543,17 +2553,26 @@ blocks:
     maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
-        date: "2026-08-15"
-        commit: "38f9b96"
+        date: "2026-08-16"
+        commit: "768ce1a"
         evidence: reference/include/zref/zref_cmd2.hpp
       - state: UNIT_VERIFIED
-        date: "2026-08-15"
-        commit: "b64afe2"
+        date: "2026-08-16"
+        commit: "768ce1a"
         evidence: tests/debug/debug_crc_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: CRC-32C identical to the ABI/frame CRC (A3d) — one polynomial machine-wide.
+    notes: >-
+      CRC-32C identical to the ABI/frame CRC (A3d) — one polynomial
+      machine-wide. Both entries re-pinned at the W2.6 merge: the named
+      reference model zref::Crc32c did not exist at 38f9b96 (the tests
+      called the generated CRC directly and re-modelled the device law ad
+      hoc), and debug_crc_random_nightly — never run on the branch — found
+      a real device defect at b64afe2 (a single-byte sof&&eof frame was
+      silently dropped: neither published nor flagged). Oracle made real,
+      defect fixed, nightly observed green at 768ce1a (9,000 checks, 0
+      failed).
 
   - id: DEBUG.TRACE
     name: Trace ring and source IDs
