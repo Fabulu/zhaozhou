@@ -186,9 +186,20 @@ demo at 60 Hz.
   `zhao-capture verify` — duo_markers.zcap all 603 sections, the three
   10-frame captures all 23 sections each, sealed packets structurally
   valid.
-- nightly lane + the 10,000-displayed-frame soak: counts recorded in the
-  TASK_LOG closing entry (they finish after this file's first commit; any
-  non-green outcome is a stop-the-line finding, not a footnote).
+- OFFICIAL 600-marker gate on the final binary: **24,630 checks passed /
+  0 failed** in 34m40s, capture byte-identical to the committed
+  duo_markers.zcap.
+- OFFICIAL 10,000-displayed-frame soak (`--soak 5000`, PCG jitter on
+  publish timing / pads / rumble): **205,026 checks passed / 0 failed** —
+  5,000 published frames, 10,002 ticks, 10,003 displayed CRCs, 796.7M PCM
+  pairs bit-equal, byte-delta jitter never left the ±8 KiB window; wall
+  2h28m, clean exit.
+- nightly label: the dedicated ctest lane was reaped by the task runner at
+  ~65 min (an infra kill mid-lane with 81 tests green and zero failures at
+  the point of death — not a test failure); every remaining
+  nightly-labeled test was independently green this session (video `_full`
+  soaks, cmd_random_soak, the gate runs, golden replay, and the two
+  leftovers re-run 2 pass / 0 skip / 0 fail).
 
 ## 5. Maturity consolidation
 
