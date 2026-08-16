@@ -390,12 +390,28 @@ int main(int argc, char** argv) {
         // one packet (232 B) + one blit (196,608 B) over the bridge
         if ((sk & 1u) == 0 && sk >= 8) {
           if (prev_sweep_28) {
-            check(sw.bank[28] - prev_28 == 589824,
-                  "vram bytes 2-tick delta (2 reads + 1 blit)", 589824,
-                  sw.bank[28] - prev_28);
-            check(sw.bank[29] - prev_29 == 196840,
-                  "hps bytes 2-tick delta (packet + blit)", 196840,
-                  sw.bank[29] - prev_29);
+            const uint64_t d28 = sw.bank[28] - prev_28;
+            const uint64_t d29 = sw.bank[29] - prev_29;
+            if (!soak) {
+              // deterministic cadence: the deltas are EXACT
+              check(d28 == 589824,
+                    "vram bytes 2-tick delta (2 reads + 1 blit)", 589824,
+                    d28);
+              check(d29 == 196840,
+                    "hps bytes 2-tick delta (packet + blit)", 196840, d29);
+            } else {
+              // jittered publishes shift which side of the shadow latch a
+              // handful of blit bursts land on: the per-period delta may
+              // wobble by a few bursts, but never by more than one line's
+              // worth — and the wobble must cancel over the run (the
+              // cumulative totals are asserted at the end)
+              const bool ok28 = d28 >= 589824 - 8192 && d28 <= 589824 + 8192;
+              const bool ok29 = d29 >= 196840 - 8192 && d29 <= 196840 + 8192;
+              check(ok28, "vram bytes 2-tick delta within jitter window",
+                    589824, d28);
+              check(ok29, "hps bytes 2-tick delta within jitter window",
+                    196840, d29);
+            }
           }
           prev_28 = sw.bank[28];
           prev_29 = sw.bank[29];
