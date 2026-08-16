@@ -7,25 +7,41 @@
 // memory written exactly on the accepted fill beats proves the NEVER-TORN
 // law: a fresh buffer's read port returns exactly its last completed fill.
 
+// FREE STIMULUS MUST BE PORTS (soundness, found 2026-08-16 by the cover
+// task): the salvaged harness declared the fetch/display stimulus as
+// UNDRIVEN INTERNAL logic. read_slang ties undriven locals to 1'x, and
+// yosys `prep`'s opt constant-folds `if (x)` branches away BEFORE sby's
+// setundef can turn the leftovers into anyseq — so parts of the harness
+// (and its assumptions) were silently deleted and the "free" stimulus was
+// only free where optimization happened to keep it. Same failure mode as
+// the recorded `(* anyseq *)`-on-locals trap (W2.5 ratification note),
+// wearing plainer clothes. Top-level INPUT PORTS are genuinely free in
+// this flow — the mode and framectl harnesses already did it this way.
 module video_linebuf_fv
   import zhao_pkg::*;
 (
   input logic clk,
-  input logic rst_n
+  input logic rst_n,
+  // free (constrained) fetch-side stimulus
+  input logic        fill_we,
+  input logic [6:0]  fill_addr,
+  input logic [63:0] fill_data,
+  input logic        fill_line_done,
+  input logic [1:0]  fill_abort,
+  // free (constrained) display-side stimulus
+  input logic [1:0]  consume_start,
+  input logic [1:0]  consume_done,
+  input logic        rd_buf,
+  input logic [6:0]  rd_addr,
+  // symbolic WATCH ADDRESS for the never-torn law: a free input HELD
+  // CONSTANT by assumption (the anyconst idiom, but as a port � the
+  // recorded frontend trap ties attribute-carrying LOCALS to constants/x,
+  // so the symbolic constant must enter through the port list too)
+  input logic [6:0]  f_addr
 );
 
-  // ---- free (constrained) stimulus --------------------------------------
-  logic        fill_we;
   reg          fill_buf_q = 1'b0;   // fetch-side ping-pong select
   reg          filling_q = 1'b0;    // a fill session is open
-  logic [6:0]  fill_addr;
-  logic [63:0] fill_data;
-  logic        fill_line_done;
-  logic [1:0]  fill_abort;
-  logic [1:0]  consume_start;
-  logic [1:0]  consume_done;
-  logic        rd_buf;
-  logic [6:0]  rd_addr;
   logic [1:0]  buf_fresh;
   logic [1:0]  buf_empty;
   logic [63:0] rd_word;
@@ -79,6 +95,17 @@ module video_linebuf_fv
     else if (fill_we && !filling_q) filling_q <= 1'b1;
   end
 
+  // MERGE FIX (found by the c_fresh_both cover): the salvaged harness
+  // declared fill_buf_q with init 0 and NEVER ASSIGNED it — the abstract
+  // fetch driver could only ever fill buffer 0, so buffer 1's half of the
+  // never-torn assertion was VACUOUS (buf_fresh[1] unreachable). Mirror
+  // the real fetch alternation: the select toggles on line completion and
+  // holds for a retry after an abort of the filling buffer.
+  always @(posedge clk) begin
+    if (!rst_n) fill_buf_q <= 1'b0;
+    else if (fill_line_done) fill_buf_q <= ~fill_buf_q;
+  end
+
   // the display protocol (ASSUMED; zhao_scanout_serializer guarantees it):
   // consume_start only on a FRESH buffer, consume_done only after its start
   reg [1:0] started = 2'b00;
@@ -101,41 +128,120 @@ module video_linebuf_fv
     end
   end
 
-  // ---- NEVER-TORN: shadow memory written on accepted fill beats --------
-  reg [63:0] shadow [0:1][0:127];
-  integer i, j;
-  initial begin
-    for (i = 0; i < 2; i = i + 1)
-      for (j = 0; j < 128; j = j + 1) shadow[i][j] = 64'd0;
+  // ---- SYSTEM spacing law: no freshness decision inside the abort window --
+  // Found 2026-08-16 by this property once the stimulus was genuinely free:
+  // aborting a FULL buffer "un-does" its completion toggle, and an un-toggle
+  // IS a toggle — a pulse the vid-side 2FF chain can sample as a stale
+  // buf_fresh for ~2 vid cycles while the gpu side already holds the buffer
+  // EMPTY and may be refilling it (a real torn-read CEX at depth 6). The
+  // MODULE does not enforce safety here; the SYSTEM does: fill_abort fires
+  // only at the frame re-arm / vblank mode flush (zhao_scanout_fetch), and
+  // the serializer's next freshness decision (consume_start) is a full
+  // raster line away — orders of magnitude beyond the 2FF window. That
+  // spacing is assumed here (4 cycles covers the crossing), documented in
+  // the zhao_scanout_linebuf.sv header, and MUST be re-established by any
+  // future integration that aborts outside vblank.
+  reg [2:0] abort_cooldown = 3'd0;
+  always @(posedge clk) begin
+    if (!rst_n)                     abort_cooldown <= 3'd0;
+    else if (fill_abort != 2'b00)   abort_cooldown <= 3'd4;
+    else if (abort_cooldown != 3'd0) abort_cooldown <= abort_cooldown - 3'd1;
   end
   always @(posedge clk) begin
-    if (rst_n && fill_we && (buf_empty[fill_buf_q] || filling_q)) begin
-      shadow[fill_buf_q][fill_addr] <= fill_data;
+    if (rst_n) begin
+      assume(!(consume_start != 2'b00 &&
+               (fill_abort != 2'b00 || abort_cooldown != 3'd0)));
+      // ...and an abort never lands inside an OPEN consumption: aborts fire
+      // at the vblank re-arm/mode flush; consume_done for the last real
+      // line retired at that line's own end, one-plus cycles earlier.
+      assume(!(fill_abort != 2'b00 && started != 2'b00));
     end
   end
 
-  // reading a FRESH buffer always returns the shadow content of its last
-  // completed fill (no mid-refill word can ever surface: a fresh buffer is
-  // never written — the serializer never overtakes the fill)
+  // ---- NEVER-TORN: symbolic-address shadow of the accepted fill beats ----
+  // The watch's write gate MIRRORS the DUT's acceptance gate exactly
+  // (hierarchical bstate view) — the salvaged harness approximated it with
+  // its own session tracker, so shadow and mem could legally diverge and
+  // the comparison meant less than it claimed.
+  // Symbolic-address watch (replaces a full shadow memory + 128-bit written
+  // mask whose barrel
+  // shifter made the solver crawl: minutes per BMC step). f_addr is a free
+  // constant; proving the law at ONE arbitrary address proves it at all.
+  // The storage has NO reset (16-Kbit M10K; canonical-0 reads are a
+  // Verilator-profile artefact � in formal it is anyinit garbage), so
+  // equality is only claimable for addresses the fill session actually
+  // WROTE; the every-word-written guarantee belongs to zhao_scanout_fetch
+  // (seg_reqs x 8 beats per line, differential-verified), not here.
   always @(posedge clk) begin
-    if (rst_n && buf_fresh[rd_buf]) begin
-      assert(rd_word == shadow[rd_buf][rd_addr]);
+    if (f_past_valid) assume(f_addr == $past(f_addr));  // held constant
+  end
+
+  reg [63:0] f_shadow [0:1];
+  reg [1:0]  f_written = 2'b00;
+  always @(posedge clk) begin
+    if (!rst_n) begin
+      f_written <= 2'b00;
+    end else if (fill_we && (dut.bstate[fill_buf_q] == 2'd0 ||
+                             dut.bstate[fill_buf_q] == 2'd1)) begin
+      if (dut.bstate[fill_buf_q] == 2'd0) begin
+        // first beat of a NEW session: previous session's words are stale
+        f_written[fill_buf_q] <= (fill_addr == f_addr);
+      end else if (fill_addr == f_addr) begin
+        f_written[fill_buf_q] <= 1'b1;
+      end
+      if (fill_addr == f_addr) f_shadow[fill_buf_q] <= fill_data;
+    end
+  end
+
+  // THE never-torn law, scoped to what the serializer actually does: from
+  // consume_start (freshness taken) to consume_done, every read of an
+  // address the completed fill WROTE returns exactly that fill's data — no
+  // mid-refill word can ever surface into a line being DISPLAYED. (A
+  // blip-window read WITHOUT a taken freshness is benign: the serializer
+  // ignores rd_word unless it took the line's freshness — the abort-blip
+  // hazard on buf_fresh itself is documented in the module header and
+  // excluded by the spacing assumptions above, which mirror the system's
+  // vblank-only aborts.)
+  always @(posedge clk) begin
+    if (rst_n && started[rd_buf] && rd_addr == f_addr && f_written[rd_buf]) begin
+      assert(rd_word == f_shadow[rd_buf]);
     end
   end
 
   // ---- covers: the never-torn assertion's antecedent is reachable --------
   // (ledger rule V16; added at the merge — the salvaged harness had none.
   //  Without c_read_fresh the whole property could pass with freshness
-  //  simply never rising: fill_line_done gated behind assumptions.)
+  //  simply never rising: fill_line_done gated behind assumptions. The
+  //  first cover run then caught c_fresh_both UNREACHABLE — the undriven
+  //  fill_buf_q hole above.)
+  // Trackers, not $past-of-free-inputs: $past(free_input, N) before step N
+  // is unconstrained, so a cover written on it is satisfiable by garbage
+  // and witnesses nothing.
+  reg saw_done0 = 1'b0, saw_abort0 = 1'b0;
+  always @(posedge clk) begin
+    if (!rst_n) begin
+      saw_done0  <= 1'b0;
+      saw_abort0 <= 1'b0;
+    end else begin
+      if (consume_done[0] && started[0]) saw_done0 <= 1'b1;
+      if (fill_abort[0])                 saw_abort0 <= 1'b1;
+    end
+  end
   always @(posedge clk) begin
     if (f_past_valid && rst_n) begin
       c_read_fresh:  cover(buf_fresh[rd_buf]);          // THE antecedent
       c_fresh_both:  cover(buf_fresh[0] && buf_fresh[1]); // ping-pong overlap
       c_consumed:    cover(buf_fresh[0] && consume_start[0]); // display took it
-      c_credit:      cover($past(consume_done[0], 4) && buf_empty[0]
+      c_credit:      cover(saw_done0 && buf_empty[0]
                            && !buf_fresh[0]);           // full credit loop
-      c_abort_full:  cover($past(fill_abort[0]) && !buf_fresh[0]
-                           && buf_empty[0]);            // discard un-toggles
+      c_abort_seen:  cover(saw_abort0 && buf_empty[0]
+                           && !buf_fresh[0]);           // discard path
+      c_consume_after_abort: cover(saw_abort0 &&        // the spacing law
+                           consume_start != 2'b00);     // still admits
+                                                        // consumption
+      c_read_written: cover(started[rd_buf] &&          // THE assert's full
+                           rd_addr == f_addr &&
+                           f_written[rd_buf]);          // antecedent
     end
   end
 

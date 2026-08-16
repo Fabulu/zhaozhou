@@ -34,9 +34,25 @@
 //     so the serializer never sees a torn line;
 //   * FRESH rises only on fill_line_done, and a fresh buffer's content is
 //     stable from fill_line_done until its consumption completes;
-//   * fill_abort returns a FILLING (or FULL) buffer to EMPTY WITHOUT ever
-//     toggling full — partial data is unobservable by construction (the
-//     frame re-arm / mode-flush path).
+//   * fill_abort returns a FILLING buffer to EMPTY without ever toggling
+//     full — partial data is unobservable by construction.
+//
+// KNOWN CDC HAZARD, enforced by SYSTEM timing, not by this module (found
+// 2026-08-16 when the formal stimulus became genuinely free; an earlier
+// header claimed the abort was toggle-free "by construction", which was
+// FALSE for the FULL case): aborting a FULL buffer un-does its completion
+// toggle, and an un-toggle IS a toggle — the resulting pulse can be
+// sampled by the vid-side 2FF chain as a stale buf_fresh for up to ~2 vid
+// cycles while this side already holds the buffer EMPTY (and the fetch may
+// refill it): a torn read IF a freshness decision lands in that window.
+// The ENFORCER is zhao_scanout_fetch's abort schedule: fill_abort of a
+// FULL buffer fires only at the vswap_dec frame re-arm or the frame_start
+// mode flush — both in/at vblank, with the serializer's next freshness
+// decision (consume_start, taken at line-end edges only) at least a full
+// raster line away, orders of magnitude beyond the 2FF window. The formal
+// harness assumes exactly that spacing (video_linebuf_fv.sv, 4-cycle
+// cooldown); any future integration that aborts OUTSIDE vblank must
+// re-establish it or redesign this crossing.
 //
 // Conservative SystemVerilog subset only (charter §2). Storage reads as 0
 // before its first fill on the Verilator profile (canonical black) — the
