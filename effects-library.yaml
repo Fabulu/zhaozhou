@@ -279,17 +279,30 @@ effects:
     implemented: true
     tags: [terrain, scar, persistent]
 
+  - id: terrain-orbit
+    class: terrain
+    program: mosaic-textured-island
+    name: "Orbit"
+    short_name: "Orbit"
+    description: "Textured deep-keel island, one exact 360-degree orbit. Strata walls, 75 m keel, sky below the rim."
+    reel_subject: terrain-orbit
+    render_path: renders/terrain-orbit.gif
+    program_hash: null
+    crc_pin: 0x2BFA652A
+    crc_note: "pinned 2026-08-17 on first textured render"
+    frames: 64
+    gif_bytes: 0
   - id: terrain-breach
     class: terrain
     program: dual-heightfield
     name: "Breach"
     short_name: "Breach"
-    description: "320 m dual-heightfield island. Bake ramp digs pit through 22 m thickness. Sky visible through hole."
+    description: "Textured deep-keel island. 84 m bake ramp punches through the 75 m keel. Sky through the world."
     reel_subject: terrain-breach
     render_path: renders/terrain-breach.gif
     program_hash: null
-    crc_pin: 0x47D4D163
-    crc_note: "shipped pre-kBandRows-fix (CRC computed from the shipped frames); current renderer 0x839E117F"
+    crc_pin: 0xF908CFA1
+    crc_note: "RE-PINNED 2026-08-17: deep keel + texturing changed every pixel. Lineage: 0x47D4D163 pre-kBandRows (shipped gif), 0x839E117F post-fix flat, now deep-keel textured"
     frames: 64
     gif_bytes: 110404
     implemented: true
@@ -323,7 +336,8 @@ effects:
     reel_subject: flare-occlusion
     render_path: renders/flare-occlusion.gif
     program_hash: null
-    crc_pin: 0x4382E5C8
+    crc_pin: 0x4F9E90DE
+    crc_note: "re-pinned 2026-08-17: the deep keel changed the silhouette the sun crosses (was 0x4382E5C8)"
     frames: 64
     gif_bytes: 103633
     implemented: true
@@ -424,8 +438,8 @@ effects:
     description: "Minimum brightness clamp. Under 1.5 px, 75 to 100 percent intensity."
     reel_subject: flare-occlusion
     render_path: renders/flare-occlusion.gif
-    crc_pin: 0x4382E5C8
-    crc_note: "alias entry: the far-glint rung is the flare-occlusion subject"
+    crc_pin: 0x4F9E90DE
+    crc_note: "alias entry: the far-glint rung is the flare-occlusion subject (re-pinned 2026-08-17 with the deep keel)"
     implemented: true
     tags: [lod, glint, minimum-brightness]
 

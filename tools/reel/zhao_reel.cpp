@@ -56,6 +56,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -194,6 +195,34 @@ zhao_abi::ZhMat4fx sky_rot_for_cam(int32_t k, int32_t ps, int32_t pc, int32_t bi
                          0,
                          0,
                          1 << 16};
+  return rtest::mat(m);
+}
+
+// fx16 4x4 matrix product (row-major, points as columns): each element is
+// the exact s128 sum of four 32x32 products with ONE >>16 rescale - the
+// qformats 2 arithmetic, applied to whole matrices instead of vectors.
+zhao_abi::ZhMat4fx mat4_mul(const zhao_abi::ZhMat4fx& a, const zhao_abi::ZhMat4fx& b) {
+  const int32_t* A = &a.m00;
+  const int32_t* B = &b.m00;
+  zhao_abi::ZhMat4fx r;
+  int32_t* R = &r.m00;
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j) {
+      __int128 sum = 0;
+      for (int k = 0; k < 4; ++k)
+        sum += static_cast<__int128>(A[i * 4 + k]) * B[k * 4 + j];
+      R[i * 4 + j] = static_cast<int32_t>(sum >> 16);
+    }
+  return r;
+}
+
+// World yaw for the orbit camera: rotate the world by -theta about Y so the
+// pitched camera (which sits at azimuth 0, +D on the sunlit -z side) sees
+// the island from azimuth theta. Integer sin/cos from the ONE trig tables.
+zhao_abi::ZhMat4fx rot_world_yaw(uint16_t theta_turns) {
+  const int32_t c = zref::fx_cos(zref::angle16{theta_turns}).raw;
+  const int32_t sn = zref::fx_sin(zref::angle16{theta_turns}).raw;
+  const int32_t m[16] = {c, 0, -sn, 0, 0, 1 << 16, 0, 0, sn, 0, c, 0, 0, 0, 0, 1 << 16};
   return rtest::mat(m);
 }
 
@@ -386,18 +415,101 @@ void put_param(uint8_t* blob, int lane, int32_t raw) {
   for (int b = 0; b < 4; ++b) blob[lane * 4 + b] = static_cast<uint8_t>(raw >> (8 * b));
 }
 
-// ---- dual-heightfield island (terrain_rules.md, world-identity wave) -------
+// ---- dual-heightfield island (terrain_rules.md; deep-keel wave) -----------
 //
-// A 161x161 lattice over ±160 m: 160x160 cells at the CANONICAL 2.0 m pitch
-// (terrain_rules §1.3) — a 320 m island, the area of 25 Island-Patch pages
+// A 161x161 lattice over +-160 m: 160x160 cells at the CANONICAL 2.0 m pitch
+// (terrain_rules 1.3) - a 320 m island, the area of 25 Island-Patch pages
 // (5x5 of 32x32 cells), carried as one Phase-3 envelope patch (the kind-6
 // page split / sparse directory is Phase-6 loader work; stated honestly in
 // meta.txt). Doubles below are ASSET AUTHORING ONLY (the bump_patch rule);
-// heights quantize to 0.25 m steps so the flat-shade palette stays inside
-// the 256-colour law. Top: coastal plateau rising to a ~15 m heart with
-// gentle swells. Bottom: a keel — 5 m rim thickness growing to ~27 m at the
-// centre (the bitten-apple profile the donor could never model). Coastline:
-// R(theta) wobbles 116..151 m, cells outside are VOID_AUTHORED.
+// heights quantize to 0.25 m steps so shading ladders stay inside the
+// 256-colour law.
+//
+// [deep-keel wave] The bottom is no longer authored inline: the 3.7 keel
+// default writes it (R = 151 m -> KEEL_DEPTH = 75 m at the heart, 30 m at
+// the rim - the donor 50 m curtain was the FLOOR, not the target). The
+// island also carries its TEXTURE layers now: layer E candidates (grass
+// heart, rock coast, dithered weight ring, sand lip) and layer H tint (one
+// warm variant on the sunward half - the LMAP heir at Phase-3 flat scope),
+// plus the tileset id. Top: coastal plateau rising to a ~15 m heart with
+// gentle swells. Coastline: R(theta) wobbles 116..151 m, outside =
+// VOID_AUTHORED.
+
+// The island tileset (terrain_rules 6.1): 256 CLUT8 64x64 tiles + one RGB565
+// palette, generated with integer LCG noise - the "simple automatically
+// made texture that looked like rock" the owner asked for, no authored art.
+// Layout: 0..7 grass speckle, 16..23 rock, 32 sand shore, 240 STRATA (rim
+// wall banding, 6.6 frozen id), 241 UNDERSIDE blotch (6.6 frozen id).
+// returns a HEAP tileset: the 1 MiB container must never touch the stack
+// (the Windows default stack is 1 MiB - measured the hard way)
+std::unique_ptr<zref::render::Tileset> island_tileset() {
+  auto tsp = std::make_unique<zref::render::Tileset>();
+  zref::render::Tileset& ts = *tsp;
+  // palette: 17 authored RGB565 entries (grass 0..3, rock 4..7, sand 8..9,
+  // strata 10..14, underside 15..16) - small on purpose: the palette law
+  // counts texel x shade x tint products, and 256 is the ceiling
+  const uint8_t rgb888[][3] = {
+      {86, 138, 60},    {104, 156, 70},  {122, 172, 78},  {140, 186, 88},   // grass
+      {128, 116, 98},   {110, 99, 84},   {146, 133, 112}, {96, 86, 73},     // rock
+      {176, 160, 118},  {192, 176, 132},                                     // sand
+      {122, 100, 78},   {104, 84, 64},   {140, 118, 92},  {88, 70, 54},
+      {150, 130, 104},                                                       // strata
+      {92, 80, 66},     {76, 66, 54},                                         // under
+  };
+  const int NPAL = static_cast<int>(sizeof(rgb888) / sizeof(rgb888[0]));
+  for (int k = 0; k < NPAL; ++k) {
+    const uint8_t r = rgb888[k][0], g = rgb888[k][1], b = rgb888[k][2];
+    ts.palette[k] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+  }
+  // integer LCG (deterministic; the constants are authoring, not law)
+  uint32_t rng = 0x5EED01u;
+  const auto next7 = [&rng]() {
+    rng = rng * 1103515245u + 12345u;
+    return (rng >> 13) & 127u;
+  };
+  // grass/rock/sand tiles: two-tone speckle at two scales (clumps + grain)
+  for (int t = 0; t < 8; ++t) {
+    const uint8_t base = static_cast<uint8_t>(t & 3);           // grass family
+    const uint8_t alt = static_cast<uint8_t>((t & 3) + 1 & 3);  // neighbour tone
+    for (int ty = 0; ty < 64; ++ty)
+      for (int tx = 0; tx < 64; ++tx) {
+        const uint32_t n = next7();
+        const bool grain = n < 40;
+        const bool clump = ((tx >> 3) + (ty >> 3) + t) % 3 == 0;
+        ts.tiles[t][ty * 64 + tx] = (grain != clump) ? alt : base;
+      }
+  }
+  for (int t = 16; t < 24; ++t) {
+    const uint8_t base = static_cast<uint8_t>(4 + (t & 3));
+    const uint8_t alt = static_cast<uint8_t>(4 + ((t & 3) + 1 & 3));
+    for (int ty = 0; ty < 64; ++ty)
+      for (int tx = 0; tx < 64; ++tx) {
+        const uint32_t n = next7();
+        ts.tiles[t][ty * 64 + tx] = (n < 52) ? alt : base;
+      }
+  }
+  for (int ty = 0; ty < 64; ++ty)
+    for (int tx = 0; tx < 64; ++tx) ts.tiles[32][ty * 64 + tx] = (next7() < 48) ? 9 : 8;
+  // 240 STRATA: horizontal rock bands with per-column wobble - mirrored
+  // repeat stacks the bands into geology on the wall V axis (terrain_rules 5)
+  {
+    int wobble[64];
+    for (int tx = 0; tx < 64; ++tx) wobble[tx] = static_cast<int>(next7() % 5) - 2;
+    for (int ty = 0; ty < 64; ++ty)
+      for (int tx = 0; tx < 64; ++tx) {
+        const int band = ((ty + wobble[tx]) >> 3) % 5;  // 8-texel bands
+        ts.tiles[240][ty * 64 + tx] = static_cast<uint8_t>(10 + band);
+      }
+  }
+  // 241 UNDERSIDE: coarse blotches of the two under tones
+  for (int ty = 0; ty < 64; ++ty)
+    for (int tx = 0; tx < 64; ++tx) {
+      const uint32_t n = next7();
+      ts.tiles[241][ty * 64 + tx] = (n < 30) ? 16 : 15;
+    }
+  return tsp;
+}
+
 zref::render::TerrainPatch dual_island_patch() {
   const int W = 161;
   zref::render::TerrainPatch p;
@@ -406,7 +518,6 @@ zref::render::TerrainPatch dual_island_patch() {
   p.env_x1 = p.env_z1 = (160 << 16);
   p.heights.resize(static_cast<size_t>(W) * W);
   p.scar.assign(static_cast<size_t>(W) * W, 0);
-  p.bottom.resize(static_cast<size_t>(W) * W);
   p.cell_state.assign(160 * 160, zref::terrain::kVoidAuthored);
   const auto coast_r = [](double x, double z) {
     const double th = std::atan2(z, x);
@@ -423,10 +534,8 @@ zref::render::TerrainPatch dual_island_patch() {
       if (t > 1.0) t = 1.0;
       const double dome = 1.0 - t * t;
       const double top = 6.0 + 9.0 * dome + 1.5 * std::sin(x * 0.11) * std::cos(z * 0.09);
-      const double thick = 5.0 + 22.0 * dome;
       const size_t k = static_cast<size_t>(j) * W + i;
       p.heights[k] = q025(top);
-      p.bottom[k] = q025(top - thick);
     }
   }
   for (int cj = 0; cj < 160; ++cj) {
@@ -440,6 +549,51 @@ zref::render::TerrainPatch dual_island_patch() {
       if (solid) p.cell_state[static_cast<size_t>(cj) * 160 + ci] = zref::terrain::kSolid;
     }
   }
+  // THE keel default (terrain_rules 3.7): the generator writes layer C.
+  // 320 m island, R = 151 -> KEEL_DEPTH = 75 m heart / 30 m rim.
+  zref::terrain::generate_bottom(p, 0, 0);
+
+  // ---- texture layers: E candidates + H tint (asset authoring) ----
+  p.tileset_id = 90;
+  p.mat_a.assign(160 * 160, 0);
+  p.mat_b.assign(160 * 160, 0);
+  p.mat_w.assign(160 * 160, 0);
+  uint32_t rng = 0xC0FFEEu;
+  const auto next15 = [&rng]() {
+    rng = rng * 1103515245u + 12345u;
+    return (rng >> 17) & 15u;
+  };
+  for (int cj = 0; cj < 160; ++cj) {
+    for (int ci = 0; ci < 160; ++ci) {
+      const size_t c = static_cast<size_t>(cj) * 160 + ci;
+      if ((p.cell_state[c] & zref::terrain::kSubstanceMask) != zref::terrain::kSolid) continue;
+      const double x = (ci - 79.5) * 2.0, z = (cj - 79.5) * 2.0;
+      const double r = std::sqrt(x * x + z * z);
+      const double t = r / coast_r(x, z);  // 0 heart .. 1 rim
+      // candidates: grass family in the heart, rock family at the coast;
+      // the weight dithers the ring between them (Mosaic, 6.2)
+      p.mat_a[c] = static_cast<uint8_t>(next15() & 7);        // grass 0..7
+      p.mat_b[c] = static_cast<uint8_t>(16 + (next15() & 7)); // rock 16..23
+      int w = 0;
+      if (t < 0.62) w = 255;
+      else if (t < 0.82) w = 160;
+      else if (t < 0.92) w = 96;
+      else if (t < 0.985) w = 32;
+      p.mat_w[c] = static_cast<uint8_t>(w);
+      // sand collar right at the lip (the beach reads the coastline)
+      if (t >= 0.92 && next15() < 3) {
+        p.mat_a[c] = 32;
+        p.mat_b[c] = 32;
+        p.mat_w[c] = 255;
+      }
+    }
+  }
+  // layer H tint: authored UNITY in this fixture, deliberately - a second
+  // tint family multiplies every texel x shade product past the 256-colour
+  // capture law (measured: 267 unique with a warm half; 5-bit-tint maths is
+  // pinned instead by tests/texture/texture_mosaic_directed.cpp). The lane
+  // is wired end to end; a Gouraud ride with locality lands in Phase 4/5.
+  p.tint.assign(static_cast<size_t>(W) * W, 0xFFFF);
   return p;
 }
 
@@ -481,11 +635,23 @@ struct SceneSubject {
   std::vector<StampSpec> stamps;
   // world-identity wave: dual-heightfield island + deterministic bake ramp
   bool island = false;          // true: dual_island_patch (320 m, 2 m pitch)
+  bool island_flat = false;     // strip the texture layers (tileset_id 0):
+                                // flare-stack subjects exceed the palette
+                                // law when the island texture lane is also
+                                // live - their subject is the flare, not
+                                // the rock (measured: 325 unique otherwise)
   std::vector<BakeStep> bakes;  // applied at frame start, in order
   // camera (defaults = the wave-2 reel constants; island scenes override).
   // cam_pull: lerp cam -> cam2 over [cam_pull0, frames) — the LOD ladder's
   // pull-back shot walks the creature down mesh -> micro -> splat -> glint.
   int32_t cam_k = 127000, cam_eye = 14, cam_dist = 33, cam_bias = 14000;
+  // per-subject pitch (defaults = the wave-2 reel constants 26 deg down);
+  // low-pitch island shots read the keel against the sky below the rim
+  int32_t cam_ps = 28732, cam_pc = 58903;
+  // orbit: yaw the world by f * (65536/frames) per frame - one exact turn
+  // per loop when frames divides 65536 (the integer step keeps the loop
+  // seamless); the sky rotates with it so the world-fixed sun sweeps round
+  bool orbit = false;
   bool cam_pull = false;
   uint32_t cam_pull0 = 0;
   int32_t cam2_eye = 0, cam2_dist = 0, cam2_bias = 0;  // (cam2_k == cam_k)
@@ -959,6 +1125,13 @@ int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, sub.bump_ext, 8);
+  if (sub.island_flat) {  // keep the deep keel, drop the texture lane
+    patch.tileset_id = 0;
+    patch.mat_a.clear();
+    patch.mat_b.clear();
+    patch.mat_w.clear();
+    patch.tint.clear();
+  }
   zref::render::Material mat{sub.mat_r, sub.mat_g, sub.mat_b};
   zref::sky::SkySet sky = dusk_sky(sub.sky_variant);
 
@@ -976,6 +1149,8 @@ int render_scene(const SceneSubject& sub) {
   res.field_programs.push_back({7, &impact.prog});
   res.terrain_patches.push_back({44, &patch});
   res.materials.push_back({45, mat});
+  // the island tileset (terrain_rules 6; the patch carries tileset_id 90)
+  if (sub.island) res.tilesets.push_back({90, *island_tileset()});
   zref::render::Population debris_pop;  // rebuilt per frame
   res.populations.push_back({3, debris_pop});
 
@@ -1178,8 +1353,14 @@ int render_scene(const SceneSubject& sub) {
       // sunlit-side camera (zsign −1), bias recentres the island; k/eye/dist
       // are per-subject (the island scenes stand much further back; creature
       // subjects lerp them for the LOD pull-back)
-      sv.payload.view_projection = cam_pitch(sub.cam_k, cam_eye, cam_dist, 28732, 58903,
-                                             cam_bias, -1, shake_raw);
+      sv.payload.view_projection = cam_pitch(sub.cam_k, cam_eye, cam_dist, sub.cam_ps,
+                                             sub.cam_pc, cam_bias, -1, shake_raw);
+      if (sub.orbit) {
+        // one exact turn per loop: theta = f * 65536 / frames (integer)
+        const uint16_t theta = static_cast<uint16_t>(
+            (static_cast<uint64_t>(f) * 65536u) / (sub.frames > 0 ? sub.frames : 1));
+        sv.payload.view_projection = mat4_mul(sv.payload.view_projection, rot_world_yaw(theta));
+      }
       if (dog != nullptr) {
         // the creature hook consumes the SAME matrix (16 raws, ABI -> zref)
         const int32_t* mm = &sv.payload.view_projection.m00;
@@ -1194,7 +1375,7 @@ int render_scene(const SceneSubject& sub) {
       // zsign -1) so the sky horizon and the terrain horizon agree; in
       // sky-sweep mode the pitch ping-pongs pitch0 -> pitch1 -> pitch0
       // across the loop (integer lerp on angle16 turns, table sin/cos)
-      int32_t sky_ps = 28732, sky_pc = 58903, sky_bias = cam_bias;
+      int32_t sky_ps = sub.cam_ps, sky_pc = sub.cam_pc, sky_bias = cam_bias;
       if (sub.sky_sweep) {
         const uint32_t half = sub.frames / 2;
         const uint32_t ph = f < half ? f : (sub.frames - 1 - f);
@@ -1211,6 +1392,11 @@ int render_scene(const SceneSubject& sub) {
         auto sk = zhao_abi::zhao_sample_draw_sky();
         sk.payload.sky_set = 2;
         sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
+        if (sub.orbit) {
+          const uint16_t theta = static_cast<uint16_t>(
+              (static_cast<uint64_t>(f) * 65536u) / (sub.frames > 0 ? sub.frames : 1));
+          sk.payload.rot_proj[0] = mat4_mul(sk.payload.rot_proj[0], rot_world_yaw(theta));
+        }
         sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
         sk.payload.drum_yaw = 0x0C00;
         sk.payload.cloud_scroll_u = 0;
@@ -1502,6 +1688,38 @@ SceneSubject subject_scars() {
   return s;
 }
 
+// 3b. terrain-orbit — THE deep-keel payoff: one exact 360 deg orbit of the
+// textured island at a low sunward pitch. The camera circles OUTSIDE the
+// envelope (340 m vs the 160 m half-width) so no cell sits behind the eye;
+// the per-primitive near-plane rejection would keep the island on screen
+// even if it did (terrain.cpp, sky 1.2 precedent). Reads: textured top
+// (Mosaic dither grass/rock/sand), strata banded walls, the 75 m modelled
+// keel, dusk sky below the rim, and the world-fixed sun sweeping round as
+// the sky rotates with the yaw.
+SceneSubject subject_orbit() {
+  SceneSubject s;
+  s.name = "terrain-orbit";
+  s.frames = 64;  // 64 x 1024 angle16 = one exact turn, loop-seamless
+  s.step = 8;
+  s.island = true;
+  s.orbit = true;
+  // low pitch (10 deg down) from a raised eye: the keel dome and the rim
+  // walls carry the frame; the under-sky shows below the silhouette
+  s.cam_ps = zref::fx_sin(zref::angle16{0x071C}).raw;   // 10.0 deg (1820 turns)
+  s.cam_pc = zref::fx_cos(zref::angle16{0x071C}).raw;
+  s.cam_k = 96000;
+  s.cam_eye = 34;
+  s.cam_dist = 340;
+  s.cam_bias = 5900;  // +0.09 NDC, keeps the whole island in frame
+  s.note =
+      "one exact 360-degree orbit per loop: textured top (per-texel Mosaic dither of "
+      "grass/rock/sand), strata-banded rim walls, 75 m modelled keel (3.7 default: "
+      "R/2 over the 50 m donor floor), dusk sky below the rim, sun sweeping with "
+      "the world-fixed sky";
+  s.expect_seq_crc = 0x2BFA652Au;  // pinned 2026-08-17 (first textured render)
+  return s;
+}
+
 // 4. terrain-breach — the world-identity capture: a 320 m dual-heightfield
 // island (2.0 m pitch, modelled keel) holds for a beat, then a bake ramp
 // digs a 30 m pit through ~22 m of local thickness; cells cross the §3.4
@@ -1515,19 +1733,21 @@ SceneSubject subject_breach() {
   s.frames = 64;
   s.step = 8;
   s.island = true;
-  // camera: far shot — eye 140 m, dist 300 m, same 26° pitch, sunlit side
+  // camera: far shot — eye 120 m, dist 320 m, 26° pitch, sunlit side
   s.cam_k = 112000;
-  s.cam_eye = 140;
-  s.cam_dist = 300;
+  s.cam_eye = 120;
+  s.cam_dist = 320;
   s.cam_bias = 5243;  // +0.08 NDC
-  // the dig: centre (28, 52) m — 59 m from the island heart, local thickness
-  // ~22 m, top ~13 m; radius 34 m, final depth 30 m -> a ~17 m-radius hole
-  // punched clean through. Ramp: frames 8..43 in 36 equal bake steps
-  // (incremental from->to per frame — the applyDMapDelta cadence).
-  const int32_t cx = fxm(28000), cz = fxm(52000), rad = fxm(34000);
+  // the dig: centre (28, 52) m — 59 m from the island heart. Under the 3.7
+  // keel default the local thickness there is ~65 m (q = (59/151)^2 = 0.153
+  // -> 75 x (0.4 + 0.6 x 0.847)); radius 36 m, final depth 84 m -> a hole
+  // ~15 m in radius punched clean THROUGH the deep keel. Ramp: frames 8..43
+  // in 36 equal bake steps (incremental from->to per frame — the
+  // applyDMapDelta cadence).
+  const int32_t cx = fxm(28000), cz = fxm(52000), rad = fxm(36000);
   for (uint32_t f = 8; f <= 43; ++f) {
-    const int32_t from = static_cast<int32_t>((static_cast<int64_t>(f - 8) * 30000) / 36);
-    const int32_t to = static_cast<int32_t>((static_cast<int64_t>(f - 7) * 30000) / 36);
+    const int32_t from = static_cast<int32_t>((static_cast<int64_t>(f - 8) * 84000) / 36);
+    const int32_t to = static_cast<int32_t>((static_cast<int64_t>(f - 7) * 84000) / 36);
     s.bakes.push_back(BakeStep{f, cx, cz, rad, from, to});
   }
   // debris + screen shake at the first breach frame (frame 32 in the
@@ -1535,8 +1755,8 @@ SceneSubject subject_breach() {
   const uint32_t first_breach = 32;
   s.debris_spawn_frame = first_breach;
   s.debris_gravity = fxm(380);
-  s.debris_y0 = fxm(11000);      // launch near the failing surface (~11 m)
-  s.debris_floor = -fxm(80000);  // fall THROUGH the breach, out of the world
+  s.debris_y0 = fxm(11000);       // launch near the failing surface (~11 m)
+  s.debris_floor = -fxm(120000);  // fall THROUGH the deep-keel breach, out of the world
   struct D0 {
     int32_t dx, dz, vx, vy, vz;
     uint8_t sz;
@@ -1561,11 +1781,14 @@ SceneSubject subject_breach() {
   s.shake_frame = first_breach;
   s.shake = {200000, -340000, 270000, -200000, 140000, -90000, 60000, -30000, 15000, 0};
   s.note =
-      "320 m dual-heightfield island (2.0 m pitch = 25 Island-Patch pages of ground, "
-      "one Phase-3 envelope patch), modelled keel 5..27 m thick; 36-step bake ramp digs "
-      "a 30 m pit; cells breach corner-coupled; rim walls run to the MODELLED bottom; "
-      "sky visible through the island; debris falls through the hole";
-  s.expect_seq_crc = 0x839E117Fu;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x47D4D163)
+      "320 m textured dual-heightfield island (2.0 m pitch, 3.7 deep-keel default: "
+      "75 m heart / 30 m rim); 36-step bake ramp digs an 84 m pit THROUGH the keel; "
+      "cells breach corner-coupled; strata rim walls run to the MODELLED bottom; "
+      "sky visible through the island; debris falls through the world";
+  s.expect_seq_crc = 0xF908CFA1u;  // RE-PINNED 2026-08-17, loudly: the deep
+  // keel + texturing changed every pixel. Lineage: pre-kBandRows 0x47D4D163
+  // (the shipped gif), post-fix flat 0x839E117F, now the deep-keel textured
+  // island with the 84 m dig
   return s;
 }
 
@@ -1751,7 +1974,8 @@ SceneSubject subject_flareocclusion() {
   s.step = 8;
   s.celestial = 4;
   s.sky_variant = 1;  // flat upper band (still C0): additive headroom
-  s.island = true;    // the dual-heightfield island, framed from afar
+  s.island = true;     // the dual-heightfield island, framed from afar
+  s.island_flat = true;  // palette law: the flare chain owns the colour budget
   s.cam_k = 112000;
   s.cam_eye = 140;
   s.cam_dist = 300;
@@ -1765,7 +1989,10 @@ SceneSubject subject_flareocclusion() {
       "S00 sun at 30 radii crossing behind the island; the effect-tag probe "
       "gates the flare and a 4-bit counter fades it 15 frames each way; "
       "halo_atmo variant (atmosphere = one bake parameter)";
-  s.expect_seq_crc = 0x4382E5C8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff)
+  s.expect_seq_crc = 0x4F9E90DEu;  // re-pinned 2026-08-17: the deep keel
+  // changed the island silhouette the sun crosses behind (was 0x4382E5C8
+  // after the kBandRows fix; flat island by the palette law - the flare
+  // chain owns that subject's colour budget)
   // — re-shot; trails do not apply at the glint rung (see cel_hook)
   return s;
 }
@@ -1869,7 +2096,8 @@ constexpr LibraryEntry kLibrary[] = {
   {"terrain-impact", "Impact wave", "Expanding annular wave with debris and screen shake", true},
   {"terrain-crater", "Crater ring", "Static crater with charred core and cracked ring", true},
   {"terrain-scars", "Scars accumulation", "Three strikes with persistent surface-sheet scars", true},
-  {"terrain-breach", "Breach", "Dual-heightfield island with pit through 22 m thickness", true},
+  {"terrain-orbit", "Orbit", "Textured deep-keel island, one 360-degree orbit", true},
+    {"terrain-breach", "Breach", "Textured deep-keel island, 84 m pit punched through", true},
   {"celestial-sky-sweep", "Sky sweep", "Camera pitch sweep horizon to zenith", true},
   {"celestial-flare-occlusion", "Flare occlusion", "Sun crosses behind island with 15-frame fade", true},
 
@@ -1949,6 +2177,7 @@ int main(int argc, char** argv) {
   if (wanted("terrain-wave")) rc |= render_scene(subject_wave());
   if (wanted("terrain-impact")) rc |= render_scene(subject_impact());
   if (wanted("terrain-scars")) rc |= render_scene(subject_scars());
+  if (wanted("terrain-orbit")) rc |= render_scene(subject_orbit());
   if (wanted("terrain-breach")) rc |= render_scene(subject_breach());
   if (wanted("sky-sweep")) rc |= render_scene(subject_skysweep());
   if (wanted("star-boil")) rc |= render_scene(subject_starboil());

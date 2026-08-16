@@ -394,3 +394,95 @@ reel_sequence_crc green through the CMake-built binary.
   attachment points, the microform validation-at-target-projected-sizes
   pass, pose-cache bit-exactness vs RTL (blocked on the qformats
   amendment freezing the quat lane, as the contract states).
+
+---
+
+## Deep keel + terrain texturing session (2026-08-17, implementation agent)
+
+The wave that makes islands read as rock, not paper. Owner asks served:
+"Long dropoff. Made the terrain look solid instead of a flimsy sheet" and
+"We also need it all textured. Our polygons require texturing."
+
+### What was frozen (spec/terrain_rules.md amendments)
+
+- **3.7 Keel depth default**: KEEL_DEPTH = min(max(50, R/2), 126 - peak),
+  R = max SOLID cell-centre distance (isqrt, floored); profile
+  t(v) = K*(0.4 + 0.6*(1-q)), q = round((d/R)^2). The donor's 50 m curtain
+  (sacmap.d:106) is the FLOOR; the 320 m demo island gets 75 m heart / 30 m
+  rim (1:4.3 heart, 1:10.7 rim - rim matches the donor's edge ratio, the
+  heart runs deeper because we MODEL it). Shallow is a recorded override.
+- **6.2 pattern + fold laws**: the mirrored-repeat texel fold
+  (m = floor(u*64), per = floored mod 128, texel = per<64 ? per : 127-per)
+  and the stable world-space pick (h = tx*73856093 ^ ty*19349663 mod 255,
+  pick A iff p < weight). Constants frozen - capture-exact.
+- **6.6 tile ids**: 240 = rim strata, 241 = underside (frozen assignments).
+- **5 degrade order**: (1) merge CONTIGUOUS collinear edges (never bridge a
+  notch) longest-run-first until inside the 512/page budget, (2) keep the
+  greatest endpoint 1/w (nearest camera), ties by scan order.
+
+### What was built
+
+- `zref::terrain::keel_profile` + `generate_bottom` (the 3.7 law, one
+  rounding per vertex), `zref::forge::rim_plan` (enumeration + budget +
+  merge + priority clamp - THE one rim law, the renderer consumes it),
+  `mosaic_pick` + `mirror_texel` inlines (frozen laws).
+- The renderer texture lane: `Tileset` (256x CLUT8 64x64 + RGB565 palette),
+  patch layers E/H + tileset_id, affine UV plane interpolation in
+  raster_tri (TextureSpan; per-texel Mosaic pick, mirrored fold, ONE
+  primary sample, modulation = quantised shade x layer-H tint x sheet with
+  one s128 rounding; unity is exact unity). Tops = per-cell Mosaic dither,
+  walls = strata tile 240 (U = accumulated rim length/8, V spans true
+  thickness), underside = tile 241 planar world UV. EVERY polygon textured.
+- **The cull fix**: draw_heightfield near-plane rejection is now PER
+  PRIMITIVE (the documented Phase-3 model, sky_and_beams.md 1.2 projection
+  corollary - "whole-primitive near-plane rejection"; the old whole-PATCH
+  abort at terrain.cpp:310 made a near camera erase the island). Mutation-
+  verified: restoring the old abort turns the new test red.
+- Reel: `island_tileset()` (17-entry palette, LCG speckle grass/rock/sand,
+  8-texel wobbled strata bands - the "simple automatically made texture"),
+  the island fixture rewritten on generate_bottom + layers E/H, orbit
+  camera machinery (mat4_mul, rot_world_yaw, sky yaw-matched so the
+  world-fixed sun sweeps), `terrain-orbit` subject (64 frames, one exact
+  1024-turns/frame turn), `terrain-breach` re-authored (84 m dig through
+  the 75 m keel), `island_flat` flag (flare-occlusion keeps the flat
+  island: the flare chain owns its palette budget - measured 325 unique
+  with textures on).
+
+### What the tests caught (green that could have been red)
+
+- The rim-plan greedy merges the MINIMUM (a 13-edge prefix of the second
+  run, not the whole run) - my test expectation of full-run merging was
+  wrong, the LAW is right (shed only what's needed).
+- The priority vertex mapping for sides 2/3 used the wrong corner - the
+  forge test caught it (the marked edge did not survive).
+- My boundary "pin" weights were inverted (p < weight means p itself
+  selects B) - the ctest run caught what my manual run had not exercised.
+- My palette halfword comment lied (0x295F is (5,10,31) not (5,42,31)) -
+  the blue output exposed it immediately.
+- Mutation matrix (all verified red, then restored): fold off-by-one,
+  pick constant +1 LSB, keel divisor 10x, budget 512->513, whole-patch
+  abort restored.
+
+### Palette-law tradeoffs (measured)
+
+- orbit first render: 281 unique (>256). Scoping the flat LMAP tint to
+  tops only: 267. Authoring layer H at unity: 185 (shipped). The tint lane
+  is wired end-to-end and unit-tested at non-unity; a Gouraud ride with
+  locality is Phase 4/5.
+- flare-occlusion + textured island: 325. Flat island by flag: 107.
+
+### Environment repair (pre-existing, not this wave's change)
+
+The build dir was configured with VERILATOR_ROOT pointing at a
+non-existent in-repo .tools path (the real install is at
+C:/Programmieren/zencrifice/.tools). Reconfigured with the correct root;
+the lint_* tests went green again.
+
+### CRC re-pins (LOUD - every island pixel changed)
+
+- terrain-breach: 0x839E117F -> 0xF908CFA1 (deep keel + texturing).
+- flare-occlusion: 0x4382E5C8 -> 0x4F9E90DE (silhouette the sun crosses).
+- terrain-orbit: NEW, 0x2BFA652A.
+- terrain-wave/impact/scars, creature shots, stars: BYTE-IDENTICAL
+  (verified by --check across the whole reel - the legacy flat path is
+  untouched).
