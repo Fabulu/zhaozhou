@@ -52,8 +52,15 @@ void check(bool ok, const char* what) {
 //     scanout, and view 1's marker (wall-clamped with viewport-relative
 //     bounds and then scissored) becomes VISIBLE for the first time
 //     (803958B5 -> D56BB9F4).
-constexpr uint32_t kGoldenCanvasCrc = 0xD56BB9F4u;     // [w3.5-golden]
-constexpr uint32_t kGoldenDisplayedCrc = 0x8614BB64u;  // [w3.5-golden]
+//   sky §1.2 perspective amendment (2026-08-16, owner report "ovals, not
+//     sky"): the sky path now projects with w = the rotation's z row instead
+//     of w = 1, so the behind-camera drum half culls instead of overpainting
+//     the far half, and the under-plane is an 8x8 grid. Every sky pixel of
+//     this synthetic frame moves (D56BB9F4 -> 2BCCF8FB), and the cap fan
+//     re-pitched to the drum's 48 yawed columns closes the rim slivers
+//     (2BCCF8FB -> 41C51A73).
+constexpr uint32_t kGoldenCanvasCrc = 0x41C51A73u;     // [w3.5-golden]
+constexpr uint32_t kGoldenDisplayedCrc = 0x6FA1B0C0u;  // [w3.5-golden]
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

@@ -23,6 +23,34 @@ void check(bool ok, const char* what) {
   }
 }
 
+// Sky rot_proj authoring under the §1.2 perspective law (w = row 2): a
+// pitched rotation with focal scale f baked into rows 0-1 only — the FOV is
+// the ratio rows0,1 : row2. look_neg_z mirrors the view down the -Z axis.
+// All-integer authoring: s64 products, >>16, hand-verified in comments where
+// used (charter §29-7 — tests author in integers too).
+zhao_abi::ZhMat4fx sky_pitch_mat(int32_t f_raw, int32_t sin_raw, int32_t cos_raw, bool look_neg_z) {
+  const auto mul16 = [](int64_t a, int64_t b) { return static_cast<int32_t>((a * b) >> 16); };
+  const int32_t zs = look_neg_z ? -1 : 1;
+  // y_view = cos*y - zs*sin*z ; z_view = sin*y + zs*cos*z ; screen y-down
+  const int32_t m[16] = {f_raw,
+                         0,
+                         0,
+                         0,
+                         0,
+                         -mul16(f_raw, cos_raw),
+                         zs * mul16(f_raw, sin_raw),
+                         0,
+                         0,
+                         sin_raw,
+                         zs * cos_raw,
+                         0,
+                         0,
+                         0,
+                         0,
+                         1 << 16};
+  return rtest::mat(m);
+}
+
 zref::sky::SkySet test_set() {
   zref::sky::SkySet s;
   s.background = {4, 8, 16};
@@ -41,19 +69,43 @@ zref::sky::SkySet test_set() {
 
 void test_layer_census() {
   // §1.1 layer table: 2 bands x 48 cols x 8 rows x 2 tris = 1536 (always),
-  // + cap 16 + under 2 + cloud 128 + sun 4 (flag-gated)
+  // + cap 16 + under 128 (8x8 grid since the §1.2 perspective amendment —
+  // behind-camera cells must cull without deleting the plane) + cloud 128 +
+  // sun 4 (flag-gated)
   const zref::sky::SkySet s = test_set();
   const uint8_t all =
       zref::sky::kLayerUnder | zref::sky::kLayerCloud | zref::sky::kLayerSun | zref::sky::kLayerCap;
   const auto prims = zref::sky::emit_layers(s, 0, zref::angle16{0}, all);
-  check(prims.size() == 1536 + 16 + 2 + 128 + 4, "all-layers emission = 1686 primitives");
+  check(prims.size() == 1536 + 48 + 128 + 128 + 4, "all-layers emission = 1844 primitives");
   const auto bands_only = zref::sky::emit_layers(s, 0, zref::angle16{0}, 0);
   check(bands_only.size() == 1536, "bands are the always-on backdrop (1536)");
   size_t per_layer[6] = {0, 0, 0, 0, 0, 0};
   for (const auto& p : prims) ++per_layer[static_cast<int>(p.layer)];
   check(per_layer[0] == 768 && per_layer[1] == 768, "48x8x2 per band");
-  check(per_layer[2] == 16 && per_layer[3] == 2 && per_layer[4] == 128 && per_layer[5] == 4,
-        "cap 16 / under 2 / cloud 128 / sun 4");
+  check(per_layer[2] == 48 && per_layer[3] == 128 && per_layer[4] == 128 && per_layer[5] == 4,
+        "cap 48 (drum-pitch fan, S1.2) / under 128 / cloud 128 / sun 4");
+
+  // §1.2 cap-fan corollary: every cap rim chord must coincide with a drum
+  // top edge BIT-EXACTLY (same angle16 raws -> identical vertex words); a
+  // 16-gon or unyawed fan leaves background slivers at the join.
+  const auto yawed = zref::sky::emit_layers(s, 0, zref::angle16{0x0C00}, zref::sky::kLayerCap);
+  size_t cap_rim_matched = 0;
+  for (const auto& p : yawed) {
+    if (p.layer != zref::sky::SkyLayer::Cap) continue;
+    // v[1]/v[2] are the rim pair; find a band-upper top-row vertex equal to v[1]
+    for (const auto& q : zref::sky::emit_layers(s, 0, zref::angle16{0x0C00}, 0)) {
+      if (q.layer != zref::sky::SkyLayer::BandUpper) continue;
+      for (int k = 0; k < 3; ++k)
+        if (q.v[k].x.raw == p.v[1].x.raw && q.v[k].z.raw == p.v[1].z.raw &&
+            q.v[k].y.raw == p.v[1].y.raw) {
+          ++cap_rim_matched;
+          k = 3;
+        }
+      if (cap_rim_matched > 0) break;
+    }
+    break;  // one chord suffices: the angles derive from the same formula
+  }
+  check(cap_rim_matched > 0, "cap rim vertex coincides bit-exactly with a drum top-edge vertex");
 }
 
 // §1.1 rows 1-2: the drum bands are a REAL 48-column cylinder. The column
@@ -184,7 +236,12 @@ void test_sun_visible_on_canvas() {
   const zref::sky::SkySet s = test_set();
   zref::render::RenderResources res;
   res.sky_sets.push_back({2, s});
-  const int32_t m[16] = {12, 0, 0, 0, 0, 9, -9, 0, 0, 9, 9, 0, 0, 0, 0, 1 << 16};
+  // §1.2 perspective authoring: sun_dir defaults to -Z (anchor y 2048,
+  // z -4096, elevation 26.6 deg); camera looks -Z pitched up 25 deg
+  // (sin 27697, cos 59404), f = 1.4 (91750). Hand check: y_view =
+  // 0.9063*2048 + 0.4226*(-4096) = 125, z_view = 0.4226*2048 + 0.9063*4096
+  // = 4577 -> ndc_y = -1.4*125/4577 = -0.038 — the sun sits near centre.
+  const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 27697, 59404, true);
 
   auto render_with = [&](uint8_t flags, std::vector<uint16_t>& out) {
     zref::render::SoftwareRenderer rend;
@@ -198,8 +255,8 @@ void test_sun_visible_on_canvas() {
       b.append_record(v1);
       auto sk = zhao_abi::zhao_sample_draw_sky();
       sk.payload.sky_set = 2;
-      sk.payload.rot_proj[0] = rtest::mat(m);
-      sk.payload.rot_proj[1] = rtest::mat(m);
+      sk.payload.rot_proj[0] = m;
+      sk.payload.rot_proj[1] = m;
       sk.payload.drum_yaw = 0;
       sk.payload.viewport_mask = 1;
       sk.payload.flags = flags;
@@ -235,23 +292,25 @@ void test_sun_visible_on_canvas() {
 // the layer census, the UV laws, scroll determinism and "some cap pixels
 // exist", never which way is up.
 //
-// The fixture below is the canonically-authored matrix — a downward tilt with
-// the y-down screen convention applied:
-//   clip.x = 13*wx                      (+-5120 world -> about +-1 ndc)
-//   clip.y = -26*wy + 10*wz             (w = 1: rotation-only)
-// Cap (wy = +2560): ndc_y in [-117760, -15360] -> strictly NEGATIVE -> upper
-// half. Under-plane (wy = -2560): ndc_y in [+15360, +117760] -> strictly
-// POSITIVE -> lower half. Flip any sign in that chain — the matrix, the
-// viewport map, or the sky's Y constants — and this test fires.
+// The fixture below is the canonically-authored §1.2 perspective matrix — a
+// 5-degree upward pitch (sin 5714, cos 65287), f = 1.4 (91750), looking +Z.
+// Hand checks (w = z_view = sin*y + cos*z):
+//   cap front rim (y +2560, z +5120): ndc_y = -1.4*(0.9962*2560 -
+//     0.0872*5120)/(0.0872*2560 + 0.9962*5120) = -1.4*2104/5323 = -0.55 ->
+//     row ~54: strictly the UPPER half (the fan centre projects far above).
+//   under-plane far edge (y -2560, z +5120): ndc_y = +1.4*2996/4877 = +0.86
+//     -> row ~223: strictly the LOWER half.
+// Flip any sign in that chain — the matrix, the viewport map, or the sky's
+// Y constants — and this test fires.
 void test_sky_orientation() {
   const zref::sky::SkySet s = test_set();
   zref::render::RenderResources res;
   res.sky_sets.push_back({2, s});
-  const int32_t m[16] = {13, 0, 0, 0, 0, -26, 10, 0, 0, 0, 13, 0, 0, 0, 0, 1 << 16};
+  const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 5714, 65287, false);
   {
     zref::mat4fx rp;
     for (int a = 0; a < 4; ++a)
-      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{m[a * 4 + b]};
+      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{(&m.m00)[a * 4 + b]};
     check(zref::sky::rot_proj_is_rotation_only(rp), "orientation fixture is rotation-only (§1)");
   }
 
@@ -267,8 +326,8 @@ void test_sky_orientation() {
       b.append_record(v1);
       auto sk = zhao_abi::zhao_sample_draw_sky();
       sk.payload.sky_set = 2;
-      sk.payload.rot_proj[0] = rtest::mat(m);
-      sk.payload.rot_proj[1] = rtest::mat(m);
+      sk.payload.rot_proj[0] = m;
+      sk.payload.rot_proj[1] = m;
       sk.payload.drum_yaw = 0;
       sk.payload.viewport_mask = 1;
       sk.payload.flags = flags;
@@ -380,14 +439,10 @@ void test_fallback_clear() {
   zref::render::RenderResources res;
   res.sky_sets.push_back({2, s});
 
-  // a rotation-only projection that maps the drum into view: pitch 45 deg
-  // about X composed with scale 1/5120 (the validation law checks the ZERO
-  // pattern — translation column and bottom row — scale stays legal). A
-  // pure uniform scale would put the horizontal cap/under planes edge-on
-  // (degenerate), so the tilt is load-bearing for the fixture.
-  // raw entries: value 12 ~ 65536/5120, value 9 ~ 12*0.7071 (one 45-deg
-  // factor folded in, hand-rounded to integer raws)
-  const int32_t m[16] = {12, 0, 0, 0, 0, 9, -9, 0, 0, 9, 9, 0, 0, 0, 0, 1 << 16};
+  // §1.2 perspective fixture: the orientation matrix (pitch up 5 deg,
+  // f = 1.4) — cap, under-plane AND band rows all reach the canvas under it
+  // (hand projections at test_sky_orientation).
+  const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 5714, 65287, false);
 
   const auto sky_pkt = [&](zhao_abi::ZhMat4fx rot, uint32_t set_handle) {
     return rtest::seal_frame(9, [&](zhao::ZhaoFrameBuilder& b) {
@@ -436,7 +491,7 @@ void test_fallback_clear() {
 
   // 2. a translated rot_proj violates §1 -> fallback to the set background
   {
-    zhao_abi::ZhMat4fx bad = rtest::mat(m);
+    zhao_abi::ZhMat4fx bad = m;
     bad.m03 = 1 << 16;  // translation sneaks in
     zref::render::SoftwareRenderer rend;
     zref::render::RenderCanvas canvas;
@@ -463,8 +518,7 @@ void test_fallback_clear() {
   {
     zref::render::SoftwareRenderer rend;
     zref::render::RenderCanvas canvas;
-    const zref::render::RenderResult r =
-        rend.render_frame(sky_pkt(rtest::mat(m), 2), 0, canvas, res);
+    const zref::render::RenderResult r = rend.render_frame(sky_pkt(m, 2), 0, canvas, res);
     check(r.status == zhao_abi::ZH_ABI_OK, "legal sky frame renders");
     const auto flat565 = [](uint8_t cr, uint8_t cg, uint8_t cb, uint8_t B) {
       const uint32_t r5 = (static_cast<uint32_t>(cr) * 31 + B * 16 + 8) / 255;
@@ -511,6 +565,121 @@ void test_fallback_clear() {
   }
 }
 
+// ---- §1.2 elevation-ramp continuity (spec amendment, 2026-08-16) -----------
+//
+// The defect this pins: a sky whose layers carry unrelated colours renders
+// the three layer joins — under rim, band equator, cap rim — as hard
+// elliptical outlines ("an oval on top, an oval at the bottom"; the owner's
+// report). §1.2 makes C0-across-joins a property of a LEGAL sky set:
+//   under == band_lower_horizon,  band_lower_top == band_upper_bottom,
+//   cap == band_upper_top.
+// The test renders a pitch-spanning frame twice — once with a conforming
+// set, once with a deliberately violating one — and walks every canvas
+// column vertically measuring the largest adjacent-pixel colour step
+// (RGB888-expanded, max channel). A conforming sky's largest step must stay
+// within the gradient banding quantum (+ dither allowance); the violating
+// sky MUST exceed it — proving this assertion can fire at all.
+void test_seam_continuity() {
+  // conforming: one dusk elevation ramp sampled at the join elevations
+  zref::sky::SkySet good;
+  good.background = {24, 26, 70};
+  good.under = {228, 130, 88};              // == band_lower_horizon (§1.2 rule 1)
+  good.band_lower_horizon = {228, 130, 88}; // warm horizon
+  good.band_lower_top = {150, 92, 118};     // == band_upper_bottom (rule 2)
+  good.band_upper_bottom = {150, 92, 118};
+  good.band_upper_top = {56, 48, 110};      // zenith
+  good.cap = {56, 48, 110};  // == band_upper_top (rule 3)
+  good.cloud = {255, 255, 255};  // unused (layers not requested below)
+  good.sun = {255, 255, 255};
+  good.cloud_max_alpha = zref::fx16{0};
+  good.sun_energy = zref::fx16{0};
+
+  // violating: the pre-amendment flat-oval authoring (each layer its own)
+  zref::sky::SkySet bad = good;
+  bad.band_lower_horizon = bad.band_lower_top = {214, 116, 82};
+  bad.band_upper_bottom = bad.band_upper_top = {88, 62, 110};
+  bad.cap = {26, 28, 74};
+  bad.under = {38, 25, 29};
+
+  zref::render::RenderResources res;
+  res.sky_sets.push_back({2, good});
+  res.sky_sets.push_back({3, bad});
+  // the orientation fixture's pitch matrix: cap in the upper half, under in
+  // the lower half — one column crosses all three joins
+  const int32_t m[16] = {13, 0, 0, 0, 0, -26, 10, 0, 0, 0, 13, 0, 0, 0, 0, 1 << 16};
+
+  auto max_vstep = [&](uint32_t set_handle) {
+    zref::render::SoftwareRenderer rend;
+    zref::render::RenderCanvas canvas;
+    const auto pkt = rtest::seal_frame(13, [&](zhao::ZhaoFrameBuilder& b) {
+      auto sv = zhao_abi::zhao_sample_set_view();
+      sv.payload.view_id = 0;
+      sv.payload.view_projection = rtest::ortho_topdown(2048);
+      std::vector<uint8_t> v1;
+      zhao_abi::zhao_pack_set_view(sv, v1);
+      b.append_record(v1);
+      auto sk = zhao_abi::zhao_sample_draw_sky();
+      sk.payload.sky_set = set_handle;
+      sk.payload.rot_proj[0] = rtest::mat(m);
+      sk.payload.rot_proj[1] = rtest::mat(m);
+      sk.payload.drum_yaw = 0;
+      sk.payload.viewport_mask = 1;
+      sk.payload.flags = zref::sky::kLayerUnder | zref::sky::kLayerCap;
+      std::vector<uint8_t> v2;
+      zhao_abi::zhao_pack_draw_sky(sk, v2);
+      b.append_record(v2);
+    });
+    check(rend.render_frame(pkt, 0, canvas, res).status == zhao_abi::ZH_ABI_OK,
+          "continuity fixture frame renders");
+    // expand 565 back to 888 (the reel's unpack law) and measure vertical steps
+    auto ch = [&](uint32_t x, uint32_t y, int c) {
+      const uint16_t p = rtest::px(canvas, 0, x, y, 384);
+      const uint32_t r5 = (p >> 11) & 0x1F, g6 = (p >> 5) & 0x3F, b5 = p & 0x1F;
+      const uint32_t v[3] = {(r5 * 255 + 15) / 31, (g6 * 255 + 31) / 63, (b5 * 255 + 15) / 31};
+      return static_cast<int32_t>(v[c]);
+    };
+    // §1: an uncovered direction legally falls back to the flat background
+    // clear — steps against the background are the fallback boundary, not a
+    // layer join. Exclude pixel pairs touching the dithered background.
+    const zref::sky::SkySet& set = set_handle == 2 ? good : bad;
+    auto is_bg = [&](uint32_t x, uint32_t y) {
+      const uint8_t B = kBayerRow(y, x);
+      const uint32_t r5 = (static_cast<uint32_t>(set.background.r) * 31 + B * 16 + 8) / 255;
+      const uint32_t g6 = (static_cast<uint32_t>(set.background.g) * 63 + B * 32 + 16) / 255;
+      const uint32_t b5 = (static_cast<uint32_t>(set.background.b) * 31 + B * 16 + 8) / 255;
+      return rtest::px(canvas, 0, x, y, 384) == static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
+    };
+    int32_t worst = 0;
+    uint32_t wx = 0, wy = 0;
+    for (uint32_t x = 0; x < 384; x += 8) {
+      for (uint32_t y = 1; y < 240; ++y) {
+        if (is_bg(x, y) || is_bg(x, y - 1)) continue;
+        for (int c = 0; c < 3; ++c) {
+          int32_t d = ch(x, y, c) - ch(x, y - 1, c);
+          if (d < 0) d = -d;
+          if (d > worst) {
+            worst = d;
+            wx = x;
+            wy = y;
+          }
+        }
+      }
+    }
+    std::printf("render_sky: seam scan set %u worst %d at (%u,%u)\n", set_handle, worst, wx, wy);
+    return worst;
+  };
+
+  const int32_t good_step = max_vstep(2);
+  const int32_t bad_step = max_vstep(3);
+  std::printf("render_sky: seam continuity — conforming max step %d, violating %d\n", good_step,
+              bad_step);
+  // banding quantum of the conforming ramp: <= ceil(78/8) = 10 per row step in
+  // 888, plus the 565 quantisation + ordered dither allowance (~17 for a 5-bit
+  // channel). 32 is the ceiling that separates "gradient banding" from "seam".
+  check(good_step <= 32, "conforming sky: no join step exceeds the banding quantum (S1.2)");
+  check(bad_step > 32, "violating sky: the oval seam IS detected (the assertion can fire)");
+}
+
 }  // namespace
 
 int main() {
@@ -523,6 +692,7 @@ int main() {
   test_scroll_determinism();
   test_rot_proj_validation();
   test_fallback_clear();
+  test_seam_continuity();
   if (failures == 0) std::printf("render_sky: all green\n");
   return failures == 0 ? 0 : 1;
 }

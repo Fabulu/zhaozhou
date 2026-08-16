@@ -112,10 +112,21 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
   }
 
   // ---- pass 1: zenith cap (§1.1 row 3; gated by kLayerCap) ---------------
+  //
+  // [sky §1.2 amendment, 2026-08-16] Was a 16-tri fan at fixed angles. A
+  // 16-gon rim inside the 48-column drum leaves background slivers between
+  // its chords and the drum's top edge, and unyawed rim vertices detach
+  // from the yawed drum columns — both showed as thin dark arcs once the
+  // perspective projection stopped double-painting the drum over them. The
+  // fan now uses the drum's own 48 yawed column angles, so every rim chord
+  // coincides with a drum top edge exactly (same angle16 raws -> the same
+  // fx_cos/fx_sin words -> identical vertices).
   if (layer_flags & kLayerCap) {
-    for (int k = 0; k < 16; ++k) {
-      const angle16 a0 = angle16{static_cast<uint16_t>((k * 65536u) / 16u)};
-      const angle16 a1 = angle16{static_cast<uint16_t>(((k + 1) * 65536u) / 16u)};
+    for (int k = 0; k < kDrumCols; ++k) {
+      const angle16 a0 =
+          angle16{static_cast<uint16_t>(drum_yaw.raw + (k << 16) / kDrumCols)};
+      const angle16 a1 =
+          angle16{static_cast<uint16_t>(drum_yaw.raw + ((k + 1) << 16) / kDrumCols)};
       // planar UV over the 64x64 clamp texture: direction/2 + 1/2
       const fx16 u0 = lerp_fx(fx_cos(a0), fx16{0}, fx16{1 << 16});
       const fx16 u1 = lerp_fx(fx_cos(a1), fx16{0}, fx16{1 << 16});
@@ -132,20 +143,48 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
     }
   }
 
-  // ---- pass 3: under-plane (§1.1 row 4; 10240x10240 quad, 2 tris) --------
+  // ---- pass 3: under-plane (§1.1 row 4; 10240x10240, 8x8 cells = 128 tris)
+  //
+  // [sky §1.2 amendment, 2026-08-16] Was a single 2-triangle quad. Under the
+  // perspective sky projection (render_frame.cpp: w = the rotation's z row)
+  // the Phase-3 near-plane rejection culls a primitive whose ANY vertex has
+  // w <= 0 — a camera standing over the plane always has the near corners
+  // behind it, so the single quad vanished wholesale. Subdivided 8x8 (the
+  // cloud sheet's own grid density) the behind-camera cells cull cleanly and
+  // every on-screen cell survives. UV stays the planar 0..1 clamp map.
   if (layer_flags & kLayerUnder) {
-    const fx16 x0 = fx_sub(cx, fx16{kUnderHalf}, nullptr);
-    const fx16 x1 = fx_add(cx, fx16{kUnderHalf}, nullptr);
-    const fx16 z0 = fx_sub(cz, fx16{kUnderHalf}, nullptr);
-    const fx16 z1 = fx_add(cz, fx16{kUnderHalf}, nullptr);
+    constexpr int n = 8;
     const fx16 y = fx16{kSkyMinY};
-    // clamp-texture UV: 0..1 across the quad (512x512 texels Phase-3-untextured)
-    const SkyVertex v00{x0, y, z0, fx16{0}, fx16{0}, 0xFF};
-    const SkyVertex v10{x1, y, z0, fx16{1 << 16}, fx16{0}, 0xFF};
-    const SkyVertex v11{x1, y, z1, fx16{1 << 16}, fx16{1 << 16}, 0xFF};
-    const SkyVertex v01{x0, y, z1, fx16{0}, fx16{1 << 16}, 0xFF};
-    out.push_back(SkyPrimitive{SkyLayer::Under, 0, {v00, v10, v11}});
-    out.push_back(SkyPrimitive{SkyLayer::Under, 0, {v00, v11, v01}});
+    SkyVertex grid[(n + 1) * (n + 1)];
+    for (int j = 0; j <= n; ++j) {
+      for (int i = 0; i <= n; ++i) {
+        const fx16 x = fx_sub(
+            fx_add(cx, fx16{static_cast<int32_t>((static_cast<int64_t>(i) * 2 * kUnderHalf) / n)},
+                   nullptr),
+            fx16{kUnderHalf}, nullptr);
+        const fx16 z = fx_sub(
+            fx_add(cz, fx16{static_cast<int32_t>((static_cast<int64_t>(j) * 2 * kUnderHalf) / n)},
+                   nullptr),
+            fx16{kUnderHalf}, nullptr);
+        grid[j * (n + 1) + i] =
+            SkyVertex{x,
+                      y,
+                      z,
+                      fx16{(static_cast<int32_t>(i) << 16) / n},
+                      fx16{(static_cast<int32_t>(j) << 16) / n},
+                      0xFF};
+      }
+    }
+    for (int j = 0; j < n; ++j) {
+      for (int i = 0; i < n; ++i) {
+        const SkyVertex& v00 = grid[j * (n + 1) + i];
+        const SkyVertex& v10 = grid[j * (n + 1) + i + 1];
+        const SkyVertex& v11 = grid[(j + 1) * (n + 1) + i + 1];
+        const SkyVertex& v01 = grid[(j + 1) * (n + 1) + i];
+        out.push_back(SkyPrimitive{SkyLayer::Under, 0, {v00, v10, v11}});
+        out.push_back(SkyPrimitive{SkyLayer::Under, 0, {v00, v11, v01}});
+      }
+    }
   }
 
   // ---- pass 6: cloud sheet (§1.1 row 5; 8x8 cells = 128 tris) ------------

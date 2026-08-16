@@ -339,6 +339,20 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
       for (int a = 0; a < 4; ++a)
         for (int b = 0; b < 4; ++b) rp.m[a][b] = fx16{(&rm.m00)[a * 4 + b]};
       if (sky::rot_proj_is_rotation_only(rp)) {
+        // [sky §1.2 amendment, 2026-08-16] PERSPECTIVE sky projection: the
+        // AUTHORED matrix stays rotation-only (validated above, §1), and the
+        // renderer projects with w = the rotation's z row — ndc = xy/z, the
+        // real dome projection the hardware GEOM path gives the sky for
+        // free. The previous w = 1 linear reading painted BOTH sides of the
+        // drum onto the screen (the inside-facing far side AND the
+        // behind-camera near side, later columns overwriting earlier), so
+        // every layer join rimmed against arbitrary rows and the sky read
+        // as flat ovals — the defect §1.2 records. With w = z the
+        // behind-camera half culls through the ONE w<=0 near-plane
+        // rejection (project_vertex), each direction is painted once, and
+        // the authored FOV is the scale RATIO rows0,1 : row2.
+        mat4fx rpp = rp;
+        for (int b = 0; b < 4; ++b) rpp.m[3][b] = rp.m[2][b];
         // sky_and_beams §1 pins the pass-6 sub-order as SUN BEFORE CLOUD, but
         // emit_layers emits the cloud sheet first (it is the §1.1 row above
         // the sun). Rastering in emission order therefore violated the pinned
@@ -352,7 +366,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           ScreenV sv[3];
           bool ok = true;
           for (int k = 0; k < 3; ++k) {
-            const ProjOut o = project_vertex(rp, vpp, p.v[k].x, p.v[k].y, p.v[k].z, &rr.sat);
+            const ProjOut o = project_vertex(rpp, vpp, p.v[k].x, p.v[k].y, p.v[k].z, &rr.sat);
             if (!o.in) {
               ok = false;
               break;

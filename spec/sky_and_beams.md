@@ -1,6 +1,6 @@
 # Sky and Beams Specification (Sacrifice-style 360° sky + god beams)
 
-**Status:** RATIFIED v1 (2026-08-14) — architecture addendum from run RUN-20260814-2015 (evidence: reverse-engineered Sacrifice engine structure + architecture-fit recons; see `runs/CLAUDE-RUNS/RUN-20260814-2015-sacrifice-sky-and-beams/`).
+**Status:** RATIFIED v1 (2026-08-14) — architecture addendum from run RUN-20260814-2015 (evidence: reverse-engineered Sacrifice engine structure + architecture-fit recons; see `runs/CLAUDE-RUNS/RUN-20260814-2015-sacrifice-sky-and-beams/`). **v1.1 (2026-08-16): §1.2 elevation-ramp continuity law added** — closes the layer-join colour-discontinuity spec gap the project owner reported ("ovals, not sky").
 **Authority:** this file owns sky/beam semantics. Charter §8 pass 1 ("terrain/backdrop prefill") admits the sky prefill without charter amendment. ABI reservation: `0x0310..0x031F` (`DrawSky 0x0310` + extensions; lands in `spec/commands.zidl` post-W4). Version this file on any semantic change.
 **Cross-references:** `spec/qformats.md` (fx16/angle16/rounding law), charter §8 (pass order), §9 (Measure/hysteresis), §14 (Forge), §15 (textures/recipes), §16 (Mirror Gate), §25 (counters), §26 (refusals — none touched).
 
@@ -28,6 +28,24 @@ Hybrid pass placement, proven pixel-equivalent to Sacrifice's late-drawn sky for
 | Sun `sun_` (z +2560, world-fixed, NOT billboarded) | plain quad generated with the sky set | 6 | Z-test on, Z-write off, additive `sun_additive`: `dst = sat(dst + src·tex.a)`, glow effect-tag write on | 64×64 ARGB4444, alpha pre-baked to `min(3·lum,1)` at asset compile; optional halo baked to inverse `min(1,96r²)` | none; energy per set |
 
 Sun punch-through: **approximated** — no runtime cloud-alpha modification; the additive sun/halo reads through the cloud (revisit hook: ARM per-tick sub-grid vertex-alpha update if Wound Lab footage demands hard burn-through — remains capture-exact).
+
+### 1.2 Elevation-ramp continuity law (amendment, 2026-08-16)
+
+**Defect this closes (spec gap, not an emitter bug):** v1 of this file assigned each layer its own colour source and never required continuity across the layer joins. Rendered from any normal perspective camera the three geometric seams — under-plane rim → lower band horizon, band equator (z = 0), upper band top → cap rim — then read as **hard elliptical outlines** ("an oval on top, an oval at the bottom"; project owner, 2026-08-16). The seams are geometric and unavoidable; they are *visible* only when colour jumps across them.
+
+**The law:** the whole sky is one **elevation-indexed colour ramp**; the layers are geometry that samples it. A legal sky set is **C0 across every layer join**, to within one gradient banding step:
+
+1. `under` == `band_lower_horizon` (the under-plane meets the lower band's inner edge);
+2. `band_lower_top` == `band_upper_bottom` (the band equator at z = 0);
+3. `cap` == `band_upper_top` (the cap rim meets the drum's top edge; the cap covers elevations above ≈ atan(2560/5120) ≈ 26.6° from the anchor, so `band_upper_top` IS the zenith colour).
+
+For the textured layers (Phase 6+ assets) the same law binds the v-edge texel rows of adjacent layers: the asset compiler MUST reject a sky set whose adjacent edge rows differ. For the Phase-3 flat-colour stand-in it binds the `SkySet` colour fields as written above. A violating set renders with visible rims — that is an asset defect, not a renderer defect, and the enforcement lives where the colours are authored.
+
+**Cap-fan pitch corollary (same amendment):** the zenith cap fan is emitted at the **drum's own column pitch (48 segments) and yawed column angles**, superseding §1.1 row 3's fixed 16-tri fan: a 16-gon rim inside the 48-gon drum leaves background slivers between its chords and the drum's top edge, and an unyawed rim detaches from a yawed drum — both render as thin dark arcs at the cap join. Using the identical `angle16` raws makes rim and drum-edge vertices bit-identical, so the join is exact.
+
+**Projection corollary (same amendment):** the Phase-3 software renderer previously projected sky vertices with `w = 1` (a linear map). That painted *both* sides of the inside-facing drum onto the screen — the behind-camera half over the far half — so layer joins rimmed against arbitrary band rows and no colour law could hide them. The corrected stand-in projects with **`w` = the rotation's z row** (true perspective, `ndc = xy/z`): the behind-camera half culls through the one `w ≤ 0` near-plane rejection, each sky direction is painted exactly once, and the authored field of view is the scale ratio of rows 0–1 to row 2. This mirrors what the hardware sky gets for free by riding the ordinary GEOM projection path with a rotation-only model transform; `rot_proj` itself remains rotation-only and validated exactly as §1 states. The under-plane is emitted as an 8×8 cell grid (128 triangles, the cloud sheet's own density) so behind-camera cells cull without deleting the plane (whole-primitive near-plane rejection is the documented Phase-3 clip model).
+
+ENFORCED-BY: `tests/render/render_sky.cpp` `test_seam_continuity` (renders a pitch-spanning column through all three joins and asserts no join step exceeds the largest in-band gradient step).
 
 **Costs (cost-model lines)**: `sky_triangles ≤ 352` total (192 drum + 16 cap + 2 under + 128 cloud + 2 sun + margin), ×2 Duo views; `sky_fragments ≤ 92,160` (the clear it replaces) + cloud ≤ ~45K blended; VRAM ≈ 0.9 MB (~1.9% of the texture pool), shared between Duo views. Measure-**exempt** with these declared budget lines; fully counted in §25 counters; carries the DrawSky source ID.
 

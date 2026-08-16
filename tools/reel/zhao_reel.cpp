@@ -129,23 +129,25 @@ struct PaletteSet {
 
 // -------------------------------------------------------- shared fixtures ---
 
-// The flat-band dusk sky: the gallery's dusk identity, authored into a
-// handful of exact colours so an animated frame set stays inside the 256-
-// colour palette law. Gradient bands, the cloud sheet and the additive sun
-// are the palette hogs of the still gallery (sky-dusk alone: 449 unique
-// colours) — here each band is ONE colour (gradient endpoints equal) and
-// cloud/sun layers are not requested.
-zref::sky::SkySet flat_dusk_sky() {
+// The dusk sky under the sky_and_beams §1.2 elevation-ramp continuity law
+// (2026-08-16): ONE ramp from warm horizon to deep zenith, C0 across every
+// layer join — under == band_lower_horizon, band_lower_top ==
+// band_upper_bottom, cap == band_upper_top. The pre-amendment authoring
+// (each layer its own flat colour) rendered the cap and under rims as hard
+// elliptical outlines. Gradient rows cost 16 flat colours (8 per band), well
+// inside the 256-colour palette law; cloud/sun layers stay off (the additive
+// sun is superseded by the star compositor subjects).
+zref::sky::SkySet dusk_sky() {
   zref::sky::SkySet s;
   s.background = {24, 26, 70};
-  s.band_lower_horizon = {214, 116, 82};  // flat: both endpoints equal
-  s.band_lower_top = {214, 116, 82};
-  s.band_upper_bottom = {88, 62, 110};
-  s.band_upper_top = {88, 62, 110};
-  s.cap = {26, 28, 74};
-  s.under = {38, 25, 29};
-  s.cloud = {255, 216, 196};  // unused (layer not requested)
-  s.sun = {255, 206, 130};    // unused (layer not requested)
+  s.under = {214, 116, 82};               // == band_lower_horizon (S1.2 rule 1)
+  s.band_lower_horizon = {214, 116, 82};  // warm dusk horizon
+  s.band_lower_top = {150, 92, 118};      // == band_upper_bottom (rule 2)
+  s.band_upper_bottom = {150, 92, 118};
+  s.band_upper_top = {56, 48, 110};  // zenith
+  s.cap = {56, 48, 110};             // == band_upper_top (rule 3)
+  s.cloud = {255, 216, 196};         // unused (layer not requested)
+  s.sun = {255, 206, 130};           // unused (layer not requested)
   s.cloud_max_alpha = zref::fx16{0};
   s.sun_energy = zref::fx16{0};
   s.sun_dir_x = zref::fx16{22938};
@@ -153,8 +155,31 @@ zref::sky::SkySet flat_dusk_sky() {
   return s;
 }
 
-zhao_abi::ZhMat4fx rot_only(int32_t s, int32_t c, int32_t sn) {
-  const int32_t m[16] = {s, 0, 0, 0, 0, -c, sn, 0, 0, sn, c, 0, 0, 0, 0, 1 << 16};
+// Sky rot_proj matched to cam_pitch (below): the SAME rotation rows with the
+// translation dropped, so the sky horizon sits exactly where the terrain
+// camera's horizon sits. Under the §1.2 perspective law the renderer takes
+// w from row 2, so these are true camera-direction rows; the screen-centre
+// bias folds in as row1 += bias*row2 (still rotation-only: translation
+// column and bottom row stay zero).
+zhao_abi::ZhMat4fx sky_rot_for_cam(int32_t k, int32_t ps, int32_t pc, int32_t bias, int32_t zsign) {
+  const auto mul16 = [](int64_t a, int64_t b) { return static_cast<int32_t>((a * b) >> 16); };
+  const int32_t wz = pc * zsign;  // Q16.16 unit-scale z row
+  const int32_t m[16] = {k,
+                         0,
+                         0,
+                         0,
+                         0,
+                         -mul16(k, pc) + mul16(bias, -ps),
+                         -mul16(k, ps) * zsign + mul16(bias, wz),
+                         0,
+                         0,
+                         -ps,
+                         wz,
+                         0,
+                         0,
+                         0,
+                         0,
+                         1 << 16};
   return rtest::mat(m);
 }
 
@@ -314,6 +339,11 @@ struct SceneSubject {
   // screen shake: raw Y offsets per frame, starting at shake_frame
   uint32_t shake_frame = 0;
   std::vector<int32_t> shake;
+  // sky-sweep mode: no terrain, camera pitch ping-pongs from pitch0 to
+  // pitch1 (angle16 turns, pitch-down positive) across the loop — the §1.2
+  // continuity demo: the cap and under rims must cross the frame invisibly
+  bool sky_sweep = false;
+  int32_t sweep_pitch0 = 0, sweep_pitch1 = 0;
   const char* note = "";
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
@@ -328,7 +358,7 @@ int render_scene(const SceneSubject& sub) {
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, 12, 8);
   zref::render::Material mat{104, 122, 78};
-  zref::sky::SkySet sky = flat_dusk_sky();
+  zref::sky::SkySet sky = dusk_sky();
 
   const zfield::DecodeResult wave = zfield::decode(zfield_gen::wave_pool::kProgramBytes.data(),
                                                    zfield_gen::wave_pool::kProgramBytesLen);
@@ -423,10 +453,27 @@ int render_scene(const SceneSubject& sub) {
       zhao_abi::zhao_pack_set_view(sv, v1);
       b.append_record(v1);
 
+      // sky rotation: the terrain camera's own rows (pitch 26 deg down,
+      // zsign -1) so the sky horizon and the terrain horizon agree; in
+      // sky-sweep mode the pitch ping-pongs pitch0 -> pitch1 -> pitch0
+      // across the loop (integer lerp on angle16 turns, table sin/cos)
+      int32_t sky_ps = 28732, sky_pc = 58903, sky_bias = sub.cam_bias;
+      if (sub.sky_sweep) {
+        const uint32_t half = sub.frames / 2;
+        const uint32_t ph = f < half ? f : (sub.frames - 1 - f);
+        const int32_t th =
+            sub.sweep_pitch0 + static_cast<int32_t>((static_cast<int64_t>(sub.sweep_pitch1 -
+                                                                          sub.sweep_pitch0) *
+                                                     ph) /
+                                                    (half - 1));
+        sky_ps = zref::fx_sin(zref::angle16{static_cast<uint16_t>(th)}).raw;
+        sky_pc = zref::fx_cos(zref::angle16{static_cast<uint16_t>(th)}).raw;
+        sky_bias = 0;
+      }
       auto sk = zhao_abi::zhao_sample_draw_sky();
       sk.payload.sky_set = 2;
-      sk.payload.rot_proj[0] = rot_only(14, 13, 5);
-      sk.payload.rot_proj[1] = rot_only(14, 13, 5);
+      sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
+      sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
       sk.payload.drum_yaw = 0x0C00;
       sk.payload.cloud_scroll_u = 0;
       sk.payload.cloud_scroll_v = 0;
@@ -468,15 +515,17 @@ int render_scene(const SceneSubject& sub) {
         b.append_record(v4);
       }
 
-      auto dp = zhao_abi::zhao_sample_draw_procedural();
-      dp.payload.program = 44;
-      dp.payload.material = 45;
-      dp.payload.transform = rtest::xform_identity();
-      dp.payload.screen_error = 1 << 16;
-      dp.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;
-      std::vector<uint8_t> v5;
-      zhao_abi::zhao_pack_draw_procedural(dp, v5);
-      b.append_record(v5);
+      if (!sub.sky_sweep) {
+        auto dp = zhao_abi::zhao_sample_draw_procedural();
+        dp.payload.program = 44;
+        dp.payload.material = 45;
+        dp.payload.transform = rtest::xform_identity();
+        dp.payload.screen_error = 1 << 16;
+        dp.payload.kind = zhao_abi::FORGE_HEIGHTFIELD_PATCH;
+        std::vector<uint8_t> v5;
+        zhao_abi::zhao_pack_draw_procedural(dp, v5);
+        b.append_record(v5);
+      }
 
       if (!pop->parts.empty()) {
         auto dpop = zhao_abi::zhao_sample_draw_population();
@@ -599,8 +648,10 @@ SceneSubject subject_wave() {
   fs.start_tick = 0;
   fs.duration = s.frames * s.step;
   s.fields.push_back(fs);
-  s.note = "travelling radial wave, n=2 integer cycles: the loop closes seamlessly";
-  s.expect_seq_crc = 0xDAA6AE41u;
+  // note text is published on the site; it must pass the copy gate
+  // (zhaozhou-site/tools/copycheck.py: no em dashes, no banned phrases)
+  s.note = "travelling radial wave, n=2 whole cycles per loop: frame 63 steps straight back to frame 0";
+  s.expect_seq_crc = 0x0222090Bu;  // re-pinned 2026-08-16: sky S1.2 amendment (perspective + C0 dusk ramp)
   return s;
 }
 
@@ -658,7 +709,7 @@ SceneSubject subject_impact() {
   s.note =
       "strike -> expanding annular wave -> centre rebound -> settle; "
       "debris + screen shake (erupt-style garnish); starts and ends at rest";
-  s.expect_seq_crc = 0xD846D69Cu;
+  s.expect_seq_crc = 0x4F97AD9Bu;  // re-pinned 2026-08-16: sky S1.2 amendment
   return s;
 }
 
@@ -705,7 +756,7 @@ SceneSubject subject_scars() {
   s.note =
       "three strikes in sequence; surface-sheet scars persist and accrue "
       "(the loop restart is the sequence replaying)";
-  s.expect_seq_crc = 0x67FA0C1Fu;
+  s.expect_seq_crc = 0x86069EA1u;  // re-pinned 2026-08-16: sky S1.2 amendment
   return s;
 }
 
@@ -772,7 +823,31 @@ SceneSubject subject_breach() {
       "one Phase-3 envelope patch), modelled keel 5..27 m thick; 36-step bake ramp digs "
       "a 30 m pit; cells breach corner-coupled; rim walls run to the MODELLED bottom; "
       "sky visible through the island; debris falls through the hole";
-  s.expect_seq_crc = 0x482E273Cu;  // pinned 2026-08-16 (first render of the subject)
+  s.expect_seq_crc = 0x47D4D163u;  // re-pinned 2026-08-16: sky S1.2 amendment (was 482E273C)
+  return s;
+}
+
+// 5. sky-sweep — the §1.2 continuity demo: no terrain, the camera pitch
+// ping-pongs from 2 deg above the horizon to the zenith and back. The cap
+// rim (elevation ~26.6 deg) and the band gradient cross the whole frame;
+// under the elevation-ramp law no layer join is visible at any pitch. The
+// pre-amendment sky failed this exact motion (hard elliptical rims).
+SceneSubject subject_skysweep() {
+  SceneSubject s;
+  s.name = "sky-sweep";
+  s.frames = 64;
+  s.step = 8;
+  s.sky_sweep = true;
+  // pitch-down angle16 turns: -2 deg = -364 (2 deg above horizon, the
+  // under-plane rim sits at the bottom frame edge), -90 deg = -16384
+  // (zenith). Ping-pong over 32 frames each way.
+  s.sweep_pitch0 = -364;
+  s.sweep_pitch1 = -16384;
+  s.note =
+      "camera pitch sweep, horizon to zenith and back; one elevation ramp "
+      "drives under-plane, both drum bands and the zenith cap, so the layer "
+      "joins cross the frame without a visible edge";
+  s.expect_seq_crc = 0x740FEBB2u;  // pinned 2026-08-16 (first render, 48-seg cap fan)
   return s;
 }
 
@@ -789,6 +864,7 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_impact());
     rc |= render_scene(subject_scars());
     rc |= render_scene(subject_breach());
+    rc |= render_scene(subject_skysweep());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
@@ -808,5 +884,6 @@ int main(int argc, char** argv) {
   if (wanted("terrain-impact")) rc |= render_scene(subject_impact());
   if (wanted("terrain-scars")) rc |= render_scene(subject_scars());
   if (wanted("terrain-breach")) rc |= render_scene(subject_breach());
+  if (wanted("sky-sweep")) rc |= render_scene(subject_skysweep());
   return rc;
 }
