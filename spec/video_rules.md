@@ -230,3 +230,29 @@ no scaling, latency 2 vid cycles.
 - Formal: `video_mode_timing` (bounds, one frame_start per period,
   reset-idle), `video_scanout_linebuf` (never overtake, vblank-only swap,
   never torn), `video_framectl_one_fence`.
+
+### 8.1 Formal scope, stated plainly (2026-08-16)
+
+- `video_mode_timing`: UNBOUNDED prove (abc pdr) over the whole raster
+  ring, plus reachability covers.
+- `video_framectl_one_fence`: BMC to depth 60 (~4 abstract frame periods)
+  plus covers. One unbounded pdr pass was observed to complete green but
+  costs ~45+ min with run-to-run variance — recorded as a note, not the
+  lane contract.
+- `video_scanout_linebuf`: BMC to depth 8 — up to FOUR completed fill
+  sessions, which contains every counterexample class the property has
+  produced (the abort-blip torn read at step 6, the credit round-trip and
+  both-buffers-fresh at step 8). It does NOT cover interleavings needing a
+  fifth completion; the harness carries a self-asserting scope guard
+  (`a_scope_four_sessions`) that FIRES if the depth is raised past what
+  was proven, and the unbounded law stays covered cycle-exactly by the
+  scanout differential lanes. Cost measurement behind the bound: each BMC
+  step past 7 ≈ 10 solver-minutes (boolector and yices alike).
+- **CDC hazard, fenced not fixed** (found by this property once its
+  stimulus was made genuinely free): aborting a FULL line buffer un-does
+  its completion toggle, and an un-toggle IS a toggle — a pulse the
+  vid-side 2FF chain can sample as stale freshness for ~2 vid cycles. The
+  enforcer is SYSTEM timing (aborts only at the vswap_dec re-arm / mode
+  flush, freshness decisions line-edge-spaced); any future integration
+  that aborts outside vblank must re-establish that spacing or redesign
+  the crossing. Details: zhao_scanout_linebuf.sv header.

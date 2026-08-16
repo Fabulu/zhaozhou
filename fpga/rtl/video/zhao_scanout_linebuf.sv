@@ -91,6 +91,24 @@ module zhao_scanout_linebuf
   // before first fill on the Verilator profile.
   logic [63:0] mem [0:1][0:127];
 
+`ifdef FORMAL
+  // FORMAL-ONLY storage init, matching the documented Verilator-profile
+  // semantics above (canonical 0 before first fill). The silicon M10K
+  // powers up undefined — which is why the formal harness ALSO tracks
+  // written-ness and only claims equality for addresses the fill wrote —
+  // but without this init the solver reasons about a fully symbolic
+  // 16-Kbit initial array and the never-torn BMC stalls for tens of
+  // minutes per step (boolector AND yices, measured 2026-08-16).
+  // Structurally absent outside `ifdef FORMAL (the W2.6 precedent).
+  initial begin
+    for (int unsigned fi = 0; fi < 2; fi++) begin
+      for (int unsigned fj = 0; fj < 128; fj++) begin
+        mem[fi][fj] = 64'd0;
+      end
+    end
+  end
+`endif
+
   // per-buffer state, gpu domain: 0=EMPTY 1=FILLING 2=FULL
   localparam logic [1:0] LB_EMPTY   = 2'd0;
   localparam logic [1:0] LB_FILLING = 2'd1;

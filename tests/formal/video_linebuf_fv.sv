@@ -87,6 +87,18 @@ module video_linebuf_fv
       assume(!(fill_line_done && beats_of_line == 2'd0));
       // abort and line_done never together
       assume(!(fill_abort != 2'b00 && fill_line_done));
+      // WIDTH-REDUCTION ABSTRACTION (measured 2026-08-16): with all 64 data
+      // bits free, boolector AND yices stall 15-45 min on a single BMC
+      // assert query from step 8 on (solo box, zero-init storage — the cost
+      // is the symbolic store/select chains x 64-bit equality). The
+      // never-torn law is HANDSHAKE/ADDRESS-level: the datapath is a pure
+      // 64-bit bus with no arithmetic, so any structurally torn read
+      // returns a DIFFERENT word, and ONE free data bit suffices for the
+      // solver to exhibit any such difference (it chooses distinguishing
+      // values). Scope stated plainly: data equality is proven for the
+      // 1-effective-bit alphabet; the bus carries the other 63 bits
+      // untouched by construction (assign-through, no logic).
+      assume(fill_data[63:1] == 63'd0);
     end
   end
   always @(posedge clk) begin   // harness tracker: synchronous reset
@@ -205,6 +217,29 @@ module video_linebuf_fv
   always @(posedge clk) begin
     if (rst_n && started[rd_buf] && rd_addr == f_addr && f_written[rd_buf]) begin
       assert(rd_word == f_shadow[rd_buf]);
+    end
+  end
+
+  // ---- SELF-ASSERTING SCOPE GUARD (the arbiter a_horizon_is_refresh_free
+  // pattern): the bmc task is bounded at depth 8, which admits AT MOST four
+  // completed fill sessions (a session needs >= 2 cycles: a beat, then
+  // line_done; the first can complete at step 2, then 4, 6, 8). Every CEX
+  // class this property has ever produced lies inside that window (the
+  // abort-blip torn read at step 6; the credit round-trip and both-fresh
+  // at step 8). If anyone raises the depth past what was actually proven,
+  // a FIFTH completion becomes reachable and this guard FIRES — the run
+  // then fails loudly instead of silently re-scoping what "PASS" means,
+  // and the depth/cost trade-off must be re-derived (measured 2026-08-16:
+  // each step past 7 costs ~10 solver-minutes, solo box, boolector AND
+  // yices; the killed-at-timeout history is in the run records).
+  reg [3:0] f_sessions = 4'd0;
+  always @(posedge clk) begin
+    if (!rst_n) f_sessions <= 4'd0;
+    else if (fill_line_done) f_sessions <= f_sessions + 4'd1;
+  end
+  always @(posedge clk) begin
+    if (rst_n) begin
+      a_scope_four_sessions: assert(f_sessions <= 4'd4);
     end
   end
 

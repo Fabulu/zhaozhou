@@ -11,10 +11,20 @@
 # (gpu_clk = vid_clk): the crossing degenerates to a fixed delay.
 #
 # TWO TASKS, both required (ledger rule V16):
-#   bmc   — the never-torn symbolic-address equivalence to depth 30 (the 16-Kbit
-#           buffer storage makes unbounded pdr impractical; the bounded
-#           window covers multiple full fill/consume/credit/abort rounds
-#           of the abstract 2-beat lines).
+#   bmc   — the never-torn symbolic-address equivalence, BOUNDED AT DEPTH 8
+#           and self-asserting about it (a_scope_four_sessions in the
+#           harness fires if the depth is ever raised past what this run
+#           proved — the arbiter a_horizon_is_refresh_free pattern).
+#           COVERS: up to four completed fill sessions = every CEX class
+#           this property has produced (the abort-blip torn read at step
+#           6 — a REAL contract violation, now fenced by the documented
+#           system spacing law; the credit round-trip and simultaneous
+#           both-buffers-fresh at step 8).
+#           DOES NOT COVER: interleavings needing a fifth completion.
+#           WHY BOUNDED: each BMC step past 7 costs ~10 solver-minutes
+#           (solo box, boolector AND yices, zero-init storage, 1-bit data
+#           alphabet) — depth 30 is hours, not a lane task. The unbounded
+#           law stays covered cycle-exactly by the scanout differentials.
 #   cover — buf_fresh[rd_buf] (THE assertion antecedent), ping-pong overlap,
 #           the credit round-trip, the abort-discard path (the salvaged
 #           harness had NO covers — freshness could simply never rise).
@@ -28,7 +38,7 @@ cover
 
 [options]
 bmc:   mode bmc
-bmc:   depth 30
+bmc:   depth 8
 cover: mode cover
 cover: depth 40
 expect pass
