@@ -10,8 +10,17 @@
 # A 4-pixel strobe does not. When in doubt, ask whether a stranger
 # could name what the loop is showing. If not, re-shoot or cut it.
 
-version: 1
+version: 2
 last_updated: "2026-08-16"
+
+# CRC DISCIPLINE (2026-08-16, v2): crc_pin is the sequence CRC-32C of the
+# artifact AT render_path, byte-verified by the encode pipeline (togif.py
+# decodes the gif back and compares every frame). Two eras exist on this
+# page: the kBandRows 8->16 sky fix (dcb32ff) landed after the four terrain
+# gifs were shot; those four are kept as shipped by owner instruction and
+# carry crc_note with the CURRENT renderer's CRC (what zhao-reel --check
+# pins). Every other entry was rendered from commit 6cb4e54 and re-derives
+# byte-identically. frames/gif_bytes state the shipped artifact.
 
 effects:
   # ==============================================================================
@@ -27,20 +36,24 @@ effects:
     reel_subject: noctis-flare
     render_path: renders/noctis-flare.gif
     program_hash: null
-    crc_pin: 0x9448C485
+    crc_pin: 0xD20023CD
+    frames: 64
+    gif_bytes: 207623
     implemented: true
-    tags: [star, flare, on-planet]
+    tags: [star, flare, on-planet, trailed]
 
   - id: star-s01-blue-giant
     class: star
     spec_class: S01
     name: "Blue giant"
     short_name: "Blue giant"
-    description: "Large hot star 15k radius, bright blue-white. Class colour (30,50,63) VGA 6-bit."
+    description: "Large hot star, bright blue-white (30,50,63). Drifts with a smear: white-hot streak, blue fringe."
     reel_subject: blue-giant
     render_path: renders/blue-giant.gif
     program_hash: null
-    crc_pin: 0x00000000  # to be pinned on first render
+    crc_pin: 0xDFAFCD70
+    frames: 64
+    gif_bytes: 172778
     implemented: true
     tags: [star, off-planet]
 
@@ -49,11 +62,13 @@ effects:
     spec_class: S02
     name: "White dwarf"
     short_name: "White dwarf"
-    description: "Compact hot star 300 radius, fast spin (55*(1+h mod 4)). Pure white (63,63,63)."
+    description: "Compact white star (63,63,63), rapid spin, fine granulation. Small star, long smear."
     reel_subject: white-dwarf
     render_path: renders/white-dwarf.gif
     program_hash: null
-    crc_pin: 0x00000000
+    crc_pin: 0x048AB345
+    frames: 64
+    gif_bytes: 44856
     implemented: true
     tags: [star, off-planet]
 
@@ -62,11 +77,13 @@ effects:
     spec_class: S03
     name: "Red giant"
     short_name: "Red giant"
-    description: "Large cool star 20k radius with visible CLUT boil rotation. Red-orange (63,30,20). Enlarged to 80 px radius for gallery legibility."
+    description: "Large cool star with visible CLUT boil rotation, red-orange (63,30,20). Enlarged to 80 px radius for gallery legibility."
     reel_subject: star-boil
     render_path: renders/star-boil.gif
     program_hash: null
-    crc_pin: 0x00000000  # RE-PIN after 2026-08-16 scale fix
+    crc_pin: 0xADC6EB7C
+    frames: 63
+    gif_bytes: 586248
     implemented: true
     tags: [star, boil, off-planet, fixed-2026-08-16]
 
@@ -75,11 +92,13 @@ effects:
     spec_class: S04
     name: "Orange giant"
     short_name: "Orange giant"
-    description: "Warm giant 15k radius, golden orange (63,55,32). Between red and yellow stars."
+    description: "Warm giant, golden orange (63,55,32). Drifts with a white-hot smear fading to orange at the fringe."
     reel_subject: orange-giant
     render_path: renders/orange-giant.gif
     program_hash: null
-    crc_pin: 0x00000000
+    crc_pin: 0x66299B68
+    frames: 64
+    gif_bytes: 191326
     implemented: true
     tags: [star, off-planet]
 
@@ -114,11 +133,13 @@ effects:
     spec_class: S07
     name: "Blue dwarf"
     short_name: "Blue dwarf"
-    description: "Compact hot star 2k radius, fast spin. Deep blue (10,20,63) with bright undertone."
+    description: "Compact deep blue star (10,20,63). The drift smear grades white to deep blue along the tail."
     reel_subject: blue-dwarf
     render_path: renders/blue-dwarf.gif
     program_hash: null
-    crc_pin: 0x00000000
+    crc_pin: 0xD3355069
+    frames: 64
+    gif_bytes: 71704
     implemented: true
     tags: [star, off-planet]
 
@@ -127,11 +148,13 @@ effects:
     spec_class: S08
     name: "Multiple"
     short_name: "Multiple"
-    description: "Binary star system 4k radius. Orange-yellow primary (63,32,16) with warm companion."
+    description: "Binary system: two bodies of one class orbit the barycentre once per loop, curved trails on both."
     reel_subject: multiple
     render_path: renders/multiple.gif
     program_hash: null
-    crc_pin: 0x00000000
+    crc_pin: 0xCA637ABD
+    frames: 64
+    gif_bytes: 179555
     implemented: true
     tags: [star, off-planet]
 
@@ -140,11 +163,13 @@ effects:
     spec_class: S09
     name: "Infant star"
     short_name: "Infant star"
-    description: "Young protostar 1.5k radius with variable undertone. Purple (48,32,63)."
+    description: "Young protostar, purple (48,32,63), per-identity undertone. Drifts with a purple smear."
     reel_subject: infant
     render_path: renders/infant.gif
     program_hash: null
-    crc_pin: 0x00000000
+    crc_pin: 0x5FBE7C1B
+    frames: 64
+    gif_bytes: 115812
     implemented: true
     tags: [star, off-planet]
 
@@ -166,11 +191,13 @@ effects:
     spec_class: S11
     name: "Pulsar"
     short_name: "Pulsar"
-    description: "Compact neutron star 250 radius with duty-cycle strobe. Cyan (0,63,63). Enlarged to 28 px radius for legibility (was 4 px, illegible)."
+    description: "Compact neutron star with duty-cycle strobe, cyan (0,63,63). Enlarged to 28 px radius for legibility (was 4 px, illegible)."
     reel_subject: pulsar
     render_path: renders/pulsar.gif
     program_hash: null
-    crc_pin: 0x00000000  # RE-PIN after 2026-08-16 scale fix
+    crc_pin: 0x6F2A61FC
+    frames: 64
+    gif_bytes: 18688
     implemented: true
     tags: [star, pulsar, off-planet, fixed-2026-08-16]
 
@@ -188,6 +215,9 @@ effects:
     render_path: renders/terrain-wave.gif
     program_hash: 0x8BDCEB63
     crc_pin: 0x0222090B
+    crc_note: "shipped pre-kBandRows-fix; current renderer 0xE89BB76B (zhao-reel --check)"
+    frames: 64
+    gif_bytes: 467446
     implemented: true
     tags: [terrain, wave, deformation]
 
@@ -201,6 +231,9 @@ effects:
     render_path: renders/terrain-impact.gif
     program_hash: 0x82F5F4E4
     crc_pin: 0x4F97AD9B
+    crc_note: "shipped pre-kBandRows-fix; current renderer 0x7E07D08A"
+    frames: 80
+    gif_bytes: 297670
     implemented: true
     tags: [terrain, wave, impact, debris]
 
@@ -214,6 +247,7 @@ effects:
     render_path: renders/field-crater.png
     program_hash: null
     crc_pin: null
+    crc_note: "static PNG still (no frame sequence to pin)"
     implemented: true
     tags: [terrain, crater, static]
 
@@ -227,6 +261,9 @@ effects:
     render_path: renders/terrain-scars.gif
     program_hash: 0x82F5F4E4
     crc_pin: 0x86069EA1
+    crc_note: "shipped pre-kBandRows-fix; current renderer 0x106B4DE8"
+    frames: 96
+    gif_bytes: 300753
     implemented: true
     tags: [terrain, scar, persistent]
 
@@ -240,6 +277,9 @@ effects:
     render_path: renders/terrain-breach.gif
     program_hash: null
     crc_pin: 0x47D4D163
+    crc_note: "shipped pre-kBandRows-fix (CRC computed from the shipped frames); current renderer 0x839E117F"
+    frames: 64
+    gif_bytes: 110404
     implemented: true
     tags: [terrain, breach, dual-heightfield, world-identity]
 
@@ -256,7 +296,9 @@ effects:
     reel_subject: sky-sweep
     render_path: renders/sky-sweep.gif
     program_hash: null
-    crc_pin: 0x740FEBB2
+    crc_pin: 0x074B5DCA
+    frames: 64
+    gif_bytes: 240155
     implemented: true
     tags: [sky, gradient, continuity]
 
@@ -269,7 +311,9 @@ effects:
     reel_subject: flare-occlusion
     render_path: renders/flare-occlusion.gif
     program_hash: null
-    crc_pin: 0x9AB5AC21
+    crc_pin: 0x4382E5C8
+    frames: 64
+    gif_bytes: 103633
     implemented: true
     tags: [celestial, flare, occlusion, fade]
 
@@ -312,7 +356,10 @@ effects:
     reel_subject: star-boil
     render_path: renders/star-boil.gif
     program_hash: null
-    crc_pin: 0xAF10A2D1
+    crc_pin: 0xADC6EB7C
+    crc_note: "alias entry: the corona bake is shown inside the star-boil subject"
+    frames: 63
+    gif_bytes: 586248
     implemented: true
     tags: [corona, space]
 
@@ -341,6 +388,8 @@ effects:
     description: "Full star disc with corona and flare. Projected radius 6 px or more."
     reel_subject: noctis-flare
     render_path: renders/noctis-flare.gif
+    crc_pin: 0xD20023CD
+    crc_note: "alias entry: the disc rung is the noctis-flare subject"
     implemented: true
     tags: [lod, disc, corona, flare]
 
@@ -363,6 +412,8 @@ effects:
     description: "Minimum brightness clamp. Under 1.5 px, 75 to 100 percent intensity."
     reel_subject: flare-occlusion
     render_path: renders/flare-occlusion.gif
+    crc_pin: 0x4382E5C8
+    crc_note: "alias entry: the far-glint rung is the flare-occlusion subject"
     implemented: true
     tags: [lod, glint, minimum-brightness]
 
