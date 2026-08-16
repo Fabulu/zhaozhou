@@ -632,6 +632,18 @@ target_include_directories(test_render_sky PRIVATE
 add_test(NAME render_sky COMMAND test_render_sky)
 set_tests_properties(render_sky PROPERTIES LABELS "fast;nightly")
 
+# stars_and_flares.md §13 anchors: hand-computed ramp/boil/corona/ghost/
+# fade/LOD/glint values, the starfield harness-equivalence gate (byte-exact
+# vs tests/golden/starfield/oracle.bin BEFORE any rendering test), the
+# celestial_state round-trip, the compositor determinism + §5 texel budget,
+# and the CRC-locked 12-class gamut sheet.
+add_executable(test_render_star render/render_star.cpp)
+target_link_libraries(test_render_star PRIVATE zhao_zref)
+target_compile_definitions(test_render_star
+  PRIVATE ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/golden/starfield")
+add_test(NAME render_star COMMAND test_render_star)
+set_tests_properties(render_star PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_render_golden render/render_golden.cpp)
 target_link_libraries(test_render_golden PRIVATE zhao_zref)
 target_include_directories(test_render_golden PRIVATE

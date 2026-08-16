@@ -20,7 +20,12 @@ add_library(zhao_zref STATIC
   src/zrender/terrain.cpp
   src/zrender/sprites.cpp
   src/zrender/resolve.cpp
-  src/zsky/emit_layers.cpp)
+  src/zsky/emit_layers.cpp
+  src/zsky/star_gamut.cpp
+  src/zsky/star_bake.cpp
+  src/zsky/star_flare.cpp
+  src/zsky/star_field.cpp
+  src/zsky/star_compose.cpp)
 target_include_directories(zhao_zref PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/runtime/include)  # generated zhao_abi.h
