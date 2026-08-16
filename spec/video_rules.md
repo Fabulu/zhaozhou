@@ -100,9 +100,9 @@ repeated (§4), and the raster keeps ticking.
 - RGB565 bit layout in the 16-bit halfword: `[15:11] R[4:0], [10:5] G[5:0],
   [4:0] B[4:0]`. Stored little-endian (low byte first).
 - Slot base addresses (guard region map, spec/memory_rules.md §5):
-  `FB_SLOT0 = 0x0000_0000`, `FB_SLOT1 = 0x0003_C000` (both slots are always
-  sized for the LARGEST canvas, 0x3C000 = 245,760 B, so a mode switch never
-  moves a slot).
+  `FB_SLOT0 = 0x0000_0000`, `FB_SLOT1 = 0x0200_0000` (distinct DRAM banks —
+  the W2.7 bank split, memory_rules §5; both slots are always sized for the
+  LARGEST canvas, 0x3C000 = 245,760 B, so a mode switch never moves a slot).
 - Phase 2 writes to a slot come exclusively from `DebugFrameBlit` DMA; the
   resolved-tile path (RASTER.RESOLVE) lands in later phases and must respect
   the same layout.

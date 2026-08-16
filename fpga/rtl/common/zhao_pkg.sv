@@ -111,7 +111,18 @@ package zhao_pkg;
   // and the tests; kept here as the single frozen definition.
   /* verilator lint_off UNUSEDPARAM */
   localparam logic [31:0] ZHAO_FB_SLOT0_BASE      = 32'h0000_0000;
-  localparam logic [31:0] ZHAO_FB_SLOT1_BASE      = 32'h0003_C000;
+  // FB slot 1 lives in DRAM BANK 1 (byte-address bit 25 -> ctrl bank bit 0;
+  // the frozen ctrl mapping takes banks from byte addr [26:25]). It was
+  // 0x0003_C000 — the SAME bank as slot 0 — until W2.7 composed the real
+  // scanout-read + blit-write streams and measured the row thrash: ~82 of
+  // 192 Duo lines starved per frame, and no mode could ever fence a
+  // full-canvas DebugFrameBlit inside its D8 deadline. Distinct banks keep
+  // each stream's row open; the thrash is gone structurally. This edit to
+  // the frozen wave-2 interface carries its sign-off reference
+  // (arbiter-bound precedent):
+  // runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/
+  // RATIFICATION-REQUEST-fb-slot-bank-split.md (2026-08-16).
+  localparam logic [31:0] ZHAO_FB_SLOT1_BASE      = 32'h0200_0000;
   localparam logic [31:0] ZHAO_FB_SLOT_SPAN       = 32'h0003_C000; // 245,760
 
   // Duo canvas map (spec/video_rules.md §3.1): two 256x192 views vertically

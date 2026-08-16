@@ -195,15 +195,20 @@ int main(int argc, char** argv) {
 
     // ---- scanout law -----------------------------------------------------------
     {
-        // read both slots: accepted
+        // read both slots: accepted (slot 1 sits in DRAM bank 1 since the
+        // W2.7 bank split — zhao_pkg ZHAO_FB_SLOT1_BASE)
         h.request(MemoryGuard::Req{true, false, MemoryGuard::SCANOUT, 0x0000, 64,
                                    full_be(64)},
                   map);
+        h.request(MemoryGuard::Req{true, false, MemoryGuard::SCANOUT, 0x02000000, 64,
+                                   full_be(64)},
+                  map);
+        // the OLD slot-1 window is now the unmapped hole: rejected
         h.request(MemoryGuard::Req{true, false, MemoryGuard::SCANOUT, 0x0003C000, 64,
                                    full_be(64)},
                   map);
-        // scanout read beyond the slots: rejected
-        h.request(MemoryGuard::Req{true, false, MemoryGuard::SCANOUT, 0x00078000, 64,
+        // scanout read beyond slot 1: rejected
+        h.request(MemoryGuard::Req{true, false, MemoryGuard::SCANOUT, 0x0203C000, 64,
                                    full_be(64)},
                   map);
         // scanout WRITE: rejected (read-only law)
@@ -250,10 +255,12 @@ int main(int argc, char** argv) {
         // addresses concentrated near the region boundaries (0, span ends,
         // slot bases, the unmapped tail) plus wild addresses
         const uint32_t anchors[] = {0x00000000, 0x0003BFC0, 0x0003C000,
-                                    0x00077FC0, 0x00078000, 0x0007FFFF};
+                                    0x00077FC0, 0x00078000, 0x0007FFFF,
+                                    0x01FFFFC0, 0x02000000, 0x0203BFC0,
+                                    0x0203C000};
         const unsigned NFUZZ = 2000;
         for (unsigned i = 0; i < NFUZZ; i++) {
-            const uint32_t base = anchors[pcg.range(6)];
+            const uint32_t base = anchors[pcg.range(10)];
             const uint32_t addr = base + pcg.range(200) - 100;   // signed-ish jitter
             GuardMap m;
             m.valid = pcg.range(4) != 0;

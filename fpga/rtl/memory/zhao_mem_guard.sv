@@ -4,8 +4,9 @@
 //
 // Phase-2 region map (mode-independent — both slots are sized for the
 // LARGEST canvas, so a mode switch never moves a slot):
-//   FB slot 0 : [0x0000_0000, 0x0003_C000)   245,760 B
-//   FB slot 1 : [0x0003_C000, 0x0007_8000)   245,760 B
+//   FB slot 0 : [0x0000_0000, 0x0003_C000)   245,760 B  (DRAM bank 0)
+//   FB slot 1 : [0x0200_0000, 0x0203_C000)   245,760 B  (DRAM bank 1 —
+//               the W2.7 bank split; see zhao_pkg ZHAO_FB_SLOT1_BASE)
 //   everything else: unmapped — violation by construction.
 //   ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
@@ -83,8 +84,16 @@ module zhao_mem_guard
   assign be_ok    = (req.be == mask_of(req.len));
   assign shape_ok = len_ok && be_ok;
 
-  // scanout: read-only, within the two FB slots [0, 0x78000)
-  assign scan_ok = !req.write && (end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN);
+  // scanout: read-only, within EITHER FB slot. The slots are DISJOINT
+  // regions since the bank split (zhao_pkg ZHAO_FB_SLOT1_BASE note): the
+  // old single-comparison form (end <= SLOT1+SPAN) relied on the slots
+  // being contiguous and would have admitted reads from the hole between
+  // them. A <=64-B request can never bridge from slot 0 into slot 1, so
+  // per-slot containment is exact.
+  assign scan_ok = !req.write
+                 && ((end32 <= ZHAO_FB_SLOT0_BASE + ZHAO_FB_SLOT_SPAN)
+                     || ((addr32 >= ZHAO_FB_SLOT1_BASE)
+                         && (end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN)));
 
   // blit: write-only, within the granted slot window.
   // blit_span is clamped to the slot's own span before use. CMD.SCHEDULER is

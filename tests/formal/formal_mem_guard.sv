@@ -3,7 +3,8 @@
 // PROPERTIES (spec/memory_rules.md §5, contract MEM.GUARD):
 //   A1 no escape: whenever the guard forwards a request to the arbiter port,
 //      that request lies fully inside its client's OWNED region (the Phase-2
-//      map: scanout read-only within [0, 0x78000); blit write-only inside the
+//      map: scanout read-only within either FB slot (disjoint since the
+//      W2.7 bank split); blit write-only inside the
 //      CMD-granted slot window).
 //   A2 no partial/malformed forward: a forwarded request has a legal length
 //      (1..64 bytes) and the full contiguous byte mask.
@@ -120,6 +121,10 @@ module formal_mem_guard
       (env_blit_span > ZHAO_FB_SLOT_SPAN) ? ZHAO_FB_SLOT_SPAN : env_blit_span;
   wire [31:0] fwd_addr32 = {5'b0, arb_req.addr};
   wire [31:0] fwd_end32  = fwd_addr32 + {25'b0, arb_req.len};
+  // disjoint-slot containment (bank split: a <=64-B request cannot bridge)
+  wire fwd_in_slot0 = (fwd_end32 <= ZHAO_FB_SLOT0_BASE + ZHAO_FB_SLOT_SPAN);
+  wire fwd_in_slot1 = (fwd_addr32 >= ZHAO_FB_SLOT1_BASE)
+                   && (fwd_end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN);
 
   // --------------------------------------------------------- A1 + A2 + A3 --
   always_ff @(posedge clk) begin
@@ -130,7 +135,7 @@ module formal_mem_guard
       // A1 region: exactly one of the two Phase-2 ownership laws
       a1_region: assert (
            (arb_req.client == ZHAO_CLIENT_SCANOUT && !arb_req.write
-            && (fwd_end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN))
+            && (fwd_in_slot0 || fwd_in_slot1))
         || (arb_req.client == ZHAO_CLIENT_BLIT_DMA && arb_req.write
             && env_map_valid
             && (fwd_addr32 >= blit_base)
@@ -141,7 +146,7 @@ module formal_mem_guard
                       || arb_req.client == ZHAO_CLIENT_BLIT_DMA);
 
       // a forward NEVER escapes the two frame-buffer slots, whatever the map
-      a1_map: assert (fwd_end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN);
+      a1_map: assert (fwd_in_slot0 || fwd_in_slot1);
     end
 
     // A3: the forwarding stage powers up empty

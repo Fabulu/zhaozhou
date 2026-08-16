@@ -243,7 +243,12 @@ VramResponder::Out VramResponder::step(bool req_valid, uint32_t req_addr,
   if (busy_ && beat_countdown_ == 0 && beats_left_ > 0) {
     o.beat_valid = true;
     const size_t served = 8u - beats_left_;
-    const size_t off = (size_t)burst_base_ + served * 8u;
+    // bus address -> internal 2-slot layout (slot 1 sits in DRAM bank 1 on
+    // the bus since the W2.7 bank split; internally the slots stay packed)
+    const uint32_t kSlot1 = 0x02000000u;
+    uint32_t base_int = burst_base_;
+    if (burst_base_ >= kSlot1) base_int = burst_base_ - kSlot1 + 0x3C000u;
+    const size_t off = (size_t)base_int + served * 8u;
     uint64_t w = 0;
     for (uint32_t b = 0; b < 8; ++b) {
       const size_t ib = off + b;
@@ -287,7 +292,7 @@ struct SegGeom {
 SegGeom seg_geometry(uint32_t mode, uint32_t slot, uint32_t line,
                      uint32_t seg) {
   SegGeom g{0, 0, true, false, 0};
-  const uint32_t base = slot ? 0x3C000u : 0u;
+  const uint32_t base = slot ? 0x02000000u : 0u;   // bank split (zhao_pkg)
   switch (mode) {
     case 0:
       g.addr = base + line * 768u;

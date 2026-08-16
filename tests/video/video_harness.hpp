@@ -87,7 +87,9 @@ class VideoTb {
     const bool rv = top.o_req_valid != 0;
     const uint32_t ra = top.o_req_addr;
     const uint32_t rl = top.o_req_len;
-    if (rv && ra + 64u > 0x78000u) {
+    const bool in_slot0 = (ra + 64u <= 0x0003C000u);
+    const bool in_slot1 = (ra >= 0x02000000u) && (ra + 64u <= 0x0203C000u);
+    if (rv && !(in_slot0 || in_slot1)) {
       // invariant: the fetch only ever addresses the two FB slots
       // (region map, spec/memory_rules.md §5)
       ++failures;

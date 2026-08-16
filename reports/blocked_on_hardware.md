@@ -58,7 +58,7 @@ Blocks: `SW.TOOLS.BOARDPROBE`, `MEM.SDRAM` (SPECIFIED, `blocked_on: hardware`).
 | Issue | Probe | Unblocks |
 |---|---|---|
 | ZH-003 | SDRAM memtest + timings probe | MEM.SDRAM timing constants (currently "cycle-approximate until board_truth.json exists", ledger note) |
-| ZH-004 | local SDRAM bandwidth (sequential/strided) + burst latency vs length | memory arbitration policy + §25 budget reality |
+| ZH-004 | local SDRAM bandwidth (sequential/strided) + burst latency vs length, **and the device's bank-address mapping** | memory arbitration policy + §25 budget reality; **the W2.7 FB-slot bank split assumes byte-address bit 25 selects the DRAM bank** (`ZHAO_FB_SLOT1_BASE = 0x0200_0000` — spec/memory_rules.md §5, RATIFICATION-REQUEST-fb-slot-bank-split.md). If the board maps banks differently, the slot-1 base is the single retune knob |
 | ZH-005 | clock tree / stable graphics clock | CDC + video timing choices |
 | ZH-006 | input latency probe | INPUT.* latency contracts |
 

@@ -702,8 +702,8 @@ int main(int argc, char** argv) {
     bool beats_ok = true;
     uint32_t off = 0;
     for (const auto& g : t.guard_writes_) {
-      check(g.addr == (0x0003C000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg) */ + off),
-            "blit: guard addr exact (slot-1 region)", 0x0003C000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg) */ + off,
+      check(g.addr == (0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off),
+            "blit: guard addr exact (slot-1 region)", 0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off,
             g.addr);
       check(g.len == 64, "blit: 64-B requests", 64, g.len);
       // ALL len bytes must have streamed (8 beats x 8 B), in order

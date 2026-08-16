@@ -530,7 +530,7 @@ blocks:
     notes: >-
       All VRAM traffic flows through the guard; the schematic draws the
       major clients only. Phase-2 region map (spec/memory_rules.md 5): FB
-      slot 0 @ 0x0000_0000 and slot 1 @ 0x0003_C000, each 0x3C000 B
+      slot 0 @ 0x0000_0000 (bank 0) and slot 1 @ 0x0200_0000 (bank 1, W2.7 bank split), each 0x3C000 B
       (largest canvas); everything else is a violation by construction.
       W2.5: verified through the full chain (nothing-written proven against
       the model's memory).

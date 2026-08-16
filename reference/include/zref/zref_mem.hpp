@@ -592,7 +592,8 @@ struct GuardMap {
 };
 
 constexpr uint32_t kFbSlot0Base = 0x00000000u;
-constexpr uint32_t kFbSlot1Base = 0x0003C000u;
+// bank split (W2.7): slot 1 lives in DRAM bank 1 — zhao_pkg ZHAO_FB_SLOT1_BASE
+constexpr uint32_t kFbSlot1Base = 0x02000000u;
 constexpr uint32_t kFbSlotSpan = 0x0003C000u;
 
 struct MemoryGuard {
@@ -616,7 +617,11 @@ struct MemoryGuard {
         const uint32_t end = r.addr + r.len;   // 32-bit: cannot wrap the map
         switch (r.client) {
             case SCANOUT:
-                return !r.write && end <= kFbSlot1Base + kFbSlotSpan;
+                // disjoint slots since the bank split (a <=64-B request
+                // cannot bridge from slot 0 into slot 1)
+                return !r.write &&
+                       (end <= kFbSlot0Base + kFbSlotSpan ||
+                        (r.addr >= kFbSlot1Base && end <= kFbSlot1Base + kFbSlotSpan));
             case BLIT_DMA: {
                 if (!r.write || !m.valid) return false;
                 const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;

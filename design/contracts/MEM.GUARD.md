@@ -22,7 +22,7 @@ Client side: `zhao_guard_req_t {valid, write, client, addr[26:0], len, byte_enab
 
 ## Memory ownership
 
-The map owner: FB slot 0 @ 0x0000_0000, FB slot 1 @ 0x0003_C000, each 0x3C000 B (largest canvas — a mode switch never moves a slot); everything else unmapped = violation by construction. Blit DMA writes exactly its granted slot and exactly `canvas_bytes(mode)` bytes (any other `DebugFrameBlit.byte_len` is rejected BEFORE the first byte); scanout owns both slots read-only.
+The map owner: FB slot 0 @ 0x0000_0000 (bank 0), FB slot 1 @ 0x0200_0000 (bank 1 — the W2.7 bank split, spec/memory_rules.md §5), each 0x3C000 B (largest canvas — a mode switch never moves a slot); everything else — including the hole between the slots — unmapped = violation by construction. Blit DMA writes exactly its granted slot and exactly `canvas_bytes(mode)` bytes (any other `DebugFrameBlit.byte_len` is rejected BEFORE the first byte); scanout owns both slots read-only.
 
 ## Q formats and rounding
 

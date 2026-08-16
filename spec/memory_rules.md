@@ -247,9 +247,20 @@ VRAM byte addresses (u32), 8-B granule. Phase 2 allocates exactly:
 
 | Region | Base | Size (bytes) | Owner |
 |---|---|---|---|
-| FB slot 0 | `0x0000_0000` | `0x0003_C000` (245,760) | frame display slot 0 |
-| FB slot 1 | `0x0003_C000` | `0x0003_C000` (245,760) | frame display slot 1 |
-| (unmapped) | `0x0007_8000` … | — | any access = violation |
+| FB slot 0 | `0x0000_0000` | `0x0003_C000` (245,760) | frame display slot 0 (DRAM bank 0) |
+| FB slot 1 | `0x0200_0000` | `0x0003_C000` (245,760) | frame display slot 1 (DRAM bank 1) |
+| (unmapped) | everything else | — | any access = violation |
+
+**Bank split (ratified-edit request, W2.7 2026-08-16).** Slot 1 originally sat
+at `0x0003_C000` — the SAME DRAM bank as slot 0 (the controller takes banks
+from byte-address bits [26:25]). Composing the real scanout-read + blit-write
+streams for the first time measured ~82 of 192 Duo lines starved per frame
+from read↔write row thrash, and no mode could fence a full-canvas
+`DebugFrameBlit` inside its D8 deadline. Placing slot 1 in bank 1 removes the
+thrash structurally (each stream keeps its row open). The two slots are now
+DISJOINT regions: the guard checks per-slot containment, and the hole between
+them is a violation. Reference:
+`runs/CLAUDE-RUNS/RUN-20260814-2154-wave2-phase2-console-shell/RATIFICATION-REQUEST-fb-slot-bank-split.md`.
 
 - Both slots are sized for the LARGEST canvas (Duo) regardless of the
   active mode: a mode switch never moves a slot (spec/video_rules.md §3).
