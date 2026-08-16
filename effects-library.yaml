@@ -28,6 +28,7 @@ effects:
   # ==============================================================================
 
   - id: star-s00-yellow
+    class_rgb: [63,58,40]
     class: star
     spec_class: S00
     name: "Yellow star"
@@ -43,6 +44,7 @@ effects:
     tags: [star, flare, on-planet, trailed]
 
   - id: star-s01-blue-giant
+    class_rgb: [30,50,63]
     class: star
     spec_class: S01
     name: "Blue giant"
@@ -58,6 +60,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s02-white-dwarf
+    class_rgb: [63,63,63]
     class: star
     spec_class: S02
     name: "White dwarf"
@@ -73,6 +76,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s03-red-giant
+    class_rgb: [63,30,20]
     class: star
     spec_class: S03
     name: "Red giant"
@@ -88,6 +92,7 @@ effects:
     tags: [star, boil, off-planet, fixed-2026-08-16]
 
   - id: star-s04-orange-giant
+    class_rgb: [63,55,32]
     class: star
     spec_class: S04
     name: "Orange giant"
@@ -103,6 +108,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s05-brown-dwarf
+    class_rgb: [32,16,10]
     class: star
     spec_class: S05
     name: "Brown dwarf"
@@ -116,6 +122,7 @@ effects:
     tags: [star, dead-class, stub]
 
   - id: star-s06-grey-giant
+    class_rgb: [32,28,24]
     class: star
     spec_class: S06
     name: "Grey giant"
@@ -129,6 +136,7 @@ effects:
     tags: [star, dead-class, stub]
 
   - id: star-s07-blue-dwarf
+    class_rgb: [10,20,63]
     class: star
     spec_class: S07
     name: "Blue dwarf"
@@ -144,6 +152,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s08-multiple
+    class_rgb: [63,32,16]
     class: star
     spec_class: S08
     name: "Multiple"
@@ -159,6 +168,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s09-infant
+    class_rgb: [48,32,63]
     class: star
     spec_class: S09
     name: "Infant star"
@@ -174,6 +184,7 @@ effects:
     tags: [star, off-planet]
 
   - id: star-s10-runaway
+    class_rgb: [40,10,10]
     class: star
     spec_class: S10
     name: "Runaway"
@@ -187,6 +198,7 @@ effects:
     tags: [star, dead-class, stub]
 
   - id: star-s11-pulsar
+    class_rgb: [0,63,63]
     class: star
     spec_class: S11
     name: "Pulsar"
