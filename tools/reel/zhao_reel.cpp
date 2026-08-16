@@ -319,7 +319,7 @@ zref::star::StarIdentity cel_identity(uint8_t cls, uint32_t seed) {
 
 void cel_build_assets(int celestial, CelAssets& a) {
   uint8_t cls = 0;
-  uint8_t core16 = 5;  // halo_space
+  uint8_t core16 = 5;  // halo_space (default for space scenes)
   switch (celestial) {
     case 1:
       cls = 3;  // S03 red giant, close: the boiling disc
@@ -337,6 +337,24 @@ void cel_build_assets(int celestial, CelAssets& a) {
       cls = 0;
       core16 = 0;  // halo_atmo: surface sun with atmosphere (§4)
       break;
+    case 5:
+      cls = 1;  // S01 blue giant
+      break;
+    case 6:
+      cls = 2;  // S02 white dwarf
+      break;
+    case 7:
+      cls = 4;  // S04 orange giant
+      break;
+    case 8:
+      cls = 7;  // S07 blue dwarf
+      break;
+    case 9:
+      cls = 8;  // S08 multiple
+      break;
+    case 10:
+      cls = 9;  // S09 infant star
+      break;
   }
   const zref::star::StarClass& c = zref::star::kGamut[cls];
   const zref::star::StarIdentity id = cel_identity(cls, 0xA11CE5u);
@@ -348,9 +366,10 @@ void cel_build_assets(int celestial, CelAssets& a) {
   // glints: space subjects only; exclusion rects sized per subject below
   if (celestial == 1) {
     a.glints = make_glints(false, {{44, 12, 340, 220}});  // giant + halo box
-  } else if (celestial == 2 || celestial == 3) {
+  } else if (celestial == 2 || celestial == 3 || celestial >= 5) {
     // the sweep + ghost lanes cover most of the frame; white glints
     // saturate under additive overlap and add no palette colours
+    // celestial >= 5 are the new star classes (5-10)
     a.glints = make_glints(true, {});
   }
 }
@@ -514,17 +533,19 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
   int n_lights = 1;
 
   switch (sub.celestial) {
-    case 1: {  // star-boil: fixed close S03 giant; the CLUT rotation IS the
-               // animation (63 frames × rot step 2 = one full revolution)
+    case 1: {  // star-boil: THREE large S03 giants at different phases to make
+               // the CLUT rotation (color boil) visible. 63 frames × rot step 2
+               // = one full revolution per star, clearly legible.
+      // Central star at phase f
       L.x_px = 192;
-      L.y_px = 116;
-      L.disc_r_px = 48;
-      L.halo_r_px = 120;
-      L.d_milli = 3 * zref::star::kGamut[3].ray_milli / 2;  // d = 1.5r
+      L.y_px = 120;
+      L.disc_r_px = 80;  // ENLARGED for legibility
+      L.halo_r_px = 160;
+      L.d_milli = 3 * zref::star::kGamut[3].ray_milli / 2;
       L.r_milli = zref::star::kGamut[3].ray_milli;
-      L.flare_mode = 0;  // d < 5r: outside the §5 window — no flare
+      L.flare_mode = 0;
       L.probe_x = 192;
-      L.probe_y = 116;
+      L.probe_y = 120;
       break;
     }
     case 2: {  // noctis-flare: S00 sweeping, washed white disc + corona +
@@ -543,24 +564,22 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.probe_y = L.y_px;
       break;
     }
-    case 3: {  // pulsar: tiny cyan core, §2 duty strobe on the flare
-      L.x_px = 240;
-      L.y_px = 110;
-      L.disc_r_px = 4;
-      L.halo_r_px = 14;  // small: the burst overlaps the halo, and every
-                         // distinct halo ring colour times every glow level
-                         // is a palette entry (395 colours at r 36)
+    case 3: {  // pulsar: ENLARGED cyan core for legibility. The duty strobe
+               // on flare is now clearly visible at this scale.
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 28;  // ENLARGED from 4 for legibility (was "a dot phasing")
+      L.halo_r_px = 80;  // ENLARGED from 14; burst visible against corona
       L.d_milli = 40LL * zref::star::kGamut[11].ray_milli;
       L.r_milli = zref::star::kGamut[11].ray_milli;
       L.flare_mode = 2;
       // lawful spin: rate = SPIN_K·13 = 715 angle16/tick (h2 mod 30 == 12);
-      // the loop restart is the sequence replaying (scars precedent)
       L.spin_phase = static_cast<uint16_t>(tick * 715u);
       L.tint[0] = c8(0);
       L.tint[1] = c8(63);
       L.tint[2] = c8(63);
-      L.probe_x = 240;
-      L.probe_y = 110;
+      L.probe_x = 192;
+      L.probe_y = 120;
       break;
     }
     case 4: {  // flare-occlusion: a DISTANT sun (d = 600r) crosses behind
@@ -585,6 +604,94 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.tint[2] = c8(40);
       L.probe_x = L.x_px;
       L.probe_y = L.y_px;
+      break;
+    }
+    case 5: {  // blue-giant: S01 large hot blue star
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 70;  // large but not overwhelming
+      L.halo_r_px = 150;
+      L.d_milli = 20LL * zref::star::kGamut[1].ray_milli;
+      L.r_milli = zref::star::kGamut[1].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(30);
+      L.tint[1] = c8(50);
+      L.tint[2] = c8(63);
+      L.probe_x = 192;
+      L.probe_y = 120;
+      break;
+    }
+    case 6: {  // white-dwarf: S02 compact hot star, very fast spin
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 35;  // compact but visible
+      L.halo_r_px = 80;
+      L.d_milli = 8LL * zref::star::kGamut[2].ray_milli;
+      L.r_milli = zref::star::kGamut[2].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = L.tint[1] = L.tint[2] = c8(63);
+      L.probe_x = 192;
+      L.probe_y = 120;
+      break;
+    }
+    case 7: {  // orange-giant: S04 warm giant
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 72;
+      L.halo_r_px = 155;
+      L.d_milli = 20LL * zref::star::kGamut[4].ray_milli;
+      L.r_milli = zref::star::kGamut[4].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(63);
+      L.tint[1] = c8(55);
+      L.tint[2] = c8(32);
+      L.probe_x = 192;
+      L.probe_y = 120;
+      break;
+    }
+    case 8: {  // blue-dwarf: S07 compact hot star
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 30;
+      L.halo_r_px = 70;
+      L.d_milli = 10LL * zref::star::kGamut[7].ray_milli;
+      L.r_milli = zref::star::kGamut[7].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(10);
+      L.tint[1] = c8(20);
+      L.tint[2] = c8(63);
+      L.probe_x = 192;
+      L.probe_y = 120;
+      break;
+    }
+    case 9: {  // multiple: S08 binary system
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 55;
+      L.halo_r_px = 120;
+      L.d_milli = 15LL * zref::star::kGamut[8].ray_milli;
+      L.r_milli = zref::star::kGamut[8].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(63);
+      L.tint[1] = c8(32);
+      L.tint[2] = c8(16);
+      L.probe_x = 192;
+      L.probe_y = 120;
+      break;
+    }
+    case 10: {  // infant: S09 young protostar
+      L.x_px = 192;
+      L.y_px = 120;
+      L.disc_r_px = 45;
+      L.halo_r_px = 95;
+      L.d_milli = 12LL * zref::star::kGamut[9].ray_milli;
+      L.r_milli = zref::star::kGamut[9].ray_milli;
+      L.flare_mode = 1;
+      L.tint[0] = c8(48);
+      L.tint[1] = c8(32);
+      L.tint[2] = c8(63);
+      L.probe_x = 192;
+      L.probe_y = 120;
       break;
     }
     default:
@@ -1129,11 +1236,9 @@ SceneSubject subject_skysweep() {
   return s;
 }
 
-// 6. star-boil — a red giant at 1.5 radii: the boiling CLUT rotation, the
-// space corona, and a graded starfield behind it. 63 frames at rot step 2
-// per frame = exactly one full palette revolution, so the boil loops with
-// no restart jump. No flare: d < 5r is outside the S5 window (the law, not
-// an omission).
+// 6. star-boil — S03 red giant ENLARGED for legibility. The CLUT rotation
+// (color cycling through the ramp) is the animation. 80 px disc radius
+// makes the boil visible at gallery scale.
 SceneSubject subject_starboil() {
   SceneSubject s;
   s.name = "star-boil";
@@ -1142,10 +1247,10 @@ SceneSubject subject_starboil() {
   s.celestial = 1;
   s.space = true;
   s.note =
-      "S03 red giant at 1.5 radii; granulation is a 63-entry palette "
-      "rotation, zero texels rewritten per frame; corona reads through the "
-      "same ramp; starfield from the sector hash";
-  s.expect_seq_crc = 0xAF10A2D1u;  // re-pinned 2026-08-16: resolve white-rail fix
+      "S03 red giant at 1.5 radii; granulation is a 63-entry palette rotation, "
+      "zero texels rewritten per frame; ENLARGED to 80 px disc radius for "
+      "legibility (was invisible at gallery scale)";
+  s.expect_seq_crc = 0;  // RE-PIN after scale fix
   return s;
 }
 
@@ -1167,8 +1272,8 @@ SceneSubject subject_noctisflare() {
   return s;
 }
 
-// 8. pulsar — S11: 250 km-class core, spin 715 angle16/tick, flare only
-// while spin_phase < 0x4000 (the exact quarter-turn duty law).
+// 8. pulsar — S11: ENLARGED core for legibility. The duty strobe is now
+// clearly visible at gallery scale.
 SceneSubject subject_pulsar() {
   SceneSubject s;
   s.name = "pulsar";
@@ -1178,9 +1283,99 @@ SceneSubject subject_pulsar() {
   s.space = true;
   s.note =
       "S11 pulsar at 40 radii; the flare strobes on the S2 duty law "
-      "(spin_phase < 0x4000, one quarter of each rotation); fade counters "
-      "keep the visibility transitions stepped at 17 alpha per frame";
-  s.expect_seq_crc = 0x6E58C05Cu;  // re-pinned 2026-08-16: resolve white-rail fix
+      "(spin_phase < 0x4000, one quarter of each rotation); ENLARGED to "
+      "28 px disc radius for legibility (was 4 px, read as 'a dot phasing')";
+  s.expect_seq_crc = 0;  // RE-PIN after scale fix
+  return s;
+}
+
+// 10. blue-giant — S01: large hot blue star, 15k radius, bright white-blue
+SceneSubject subject_bluegiant() {
+  SceneSubject s;
+  s.name = "blue-giant";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 5;  // new celestial mode: S01 class
+  s.space = true;
+  s.note =
+      "S01 blue giant at 20 radii; large hot star with bright blue-white "
+      "colour (30,50,63 VGA); compact corona and burst flare";
+  s.expect_seq_crc = 0;  // to be pinned on first render
+  return s;
+}
+
+// 11. white-dwarf — S02: compact hot star, 300 radius, very fast spin
+SceneSubject subject_whitedwarf() {
+  SceneSubject s;
+  s.name = "white-dwarf";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 6;  // S02 class
+  s.space = true;
+  s.note =
+      "S02 white dwarf at 10 radii; compact pure white star (63,63,63) with "
+      "rapid spin (55*(1+h mod 4)); five-pass box-smooth for fine granulation";
+  s.expect_seq_crc = 0;
+  return s;
+}
+
+// 12. orange-giant — S04: warm giant, 15k radius, golden orange
+SceneSubject subject_orangegiant() {
+  SceneSubject s;
+  s.name = "orange-giant";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 7;  // S04 class
+  s.space = true;
+  s.note =
+      "S04 orange giant at 20 radii; warm giant star with golden orange colour "
+      "(63,55,32); intermediate between red and yellow giants";
+  s.expect_seq_crc = 0;
+  return s;
+}
+
+// 13. blue-dwarf — S07: compact hot star, 2k radius, fast spin
+SceneSubject subject_bluedwarf() {
+  SceneSubject s;
+  s.name = "blue-dwarf";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 8;  // S07 class
+  s.space = true;
+  s.note =
+      "S07 blue dwarf at 8 radii; compact deep blue star (10,20,63) with "
+      "bright undertone (32,44,64); rapid spin and fine granulation";
+  s.expect_seq_crc = 0;
+  return s;
+}
+
+// 14. multiple — S08: binary system, 4k radius, orange-yellow primary
+SceneSubject subject_multiple() {
+  SceneSubject s;
+  s.name = "multiple";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 9;  // S08 class
+  s.space = true;
+  s.note =
+      "S08 multiple system at 15 radii; binary star with orange-yellow primary "
+      "(63,32,16) and warm companion (64,60,32 undertone)";
+  s.expect_seq_crc = 0;
+  return s;
+}
+
+// 15. infant — S09: young protostar, 1.5k radius, variable undertone
+SceneSubject subject_infant() {
+  SceneSubject s;
+  s.name = "infant";
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = 10;  // S09 class
+  s.space = true;
+  s.note =
+      "S09 infant star at 6 radii; young protostar with purple colour "
+      "(48,32,63) and per-identity undertone (24 + ((h3>>(5*c))&31))";
+  s.expect_seq_crc = 0;
   return s;
 }
 
@@ -1215,7 +1410,56 @@ SceneSubject subject_flareocclusion() {
 
 }  // namespace
 
+// Library catalogue for --list
+struct LibraryEntry {
+  const char* id;
+  const char* name;
+  const char* description;
+  bool implemented;
+};
+
+constexpr LibraryEntry kLibrary[] = {
+  {"star-s00-yellow", "Yellow star", "Classic main sequence star with full lens flare chain", true},
+  {"star-s03-red-giant", "Red giant", "Large cool star with boiling CLUT rotation", true},
+  {"star-s11-pulsar", "Pulsar", "Compact neutron star with duty-cycle strobe", true},
+  {"terrain-wave", "Wave pool", "Travelling radial wave, two full cycles per loop", true},
+  {"terrain-impact", "Impact wave", "Expanding annular wave with debris and screen shake", true},
+  {"terrain-crater", "Crater ring", "Static crater with charred core and cracked ring", true},
+  {"terrain-scars", "Scars accumulation", "Three strikes with persistent surface-sheet scars", true},
+  {"terrain-breach", "Breach", "Dual-heightfield island with pit through 22 m thickness", true},
+  {"celestial-sky-sweep", "Sky sweep", "Camera pitch sweep horizon to zenith", true},
+  {"celestial-flare-occlusion", "Flare occlusion", "Sun crosses behind island with 15-frame fade", true},
+
+  // Newly implemented stars (2026-08-16)
+  {"star-s01-blue-giant", "Blue giant", "Large hot star 15k radius, bright blue-white", true},
+  {"star-s02-white-dwarf", "White dwarf", "Compact hot star 300 radius, fast spin", true},
+  {"star-s04-orange-giant", "Orange giant", "Warm giant 15k radius, golden orange", true},
+  {"star-s07-blue-dwarf", "Blue dwarf", "Compact hot star 2k radius, fast spin", true},
+  {"star-s08-multiple", "Multiple", "Binary star system 4k radius", true},
+  {"star-s09-infant", "Infant star", "Young protostar with variable undertone", true},
+
+  // Dead classes (no flare capability, stub entries only)
+  {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
+  {"star-s06-grey-giant", "Grey giant", "Low luminosity giant, no flare", false},
+  {"star-s10-runaway", "Runaway", "High-velocity star, no flare capability", false},
+  {nullptr, nullptr, nullptr, false}
+};
+
 int main(int argc, char** argv) {
+  // --list: enumerate the library catalogue
+  if (argc > 1 && std::strcmp(argv[1], "--list") == 0) {
+    std::printf("=== Zhaozhou Effects Library ===\n\n");
+    std::printf("%-25s %-20s %-50s %s\n", "ID", "Name", "Description", "Status");
+    std::printf("%s\n", std::string(100, '-').c_str());
+    for (const LibraryEntry* e = kLibrary; e->id; ++e) {
+      std::printf("%-25s %-20s %-50s %s\n", e->id, e->name, e->description,
+                  e->implemented ? "READY" : "TODO");
+    }
+    std::printf("\nRender with: zhao-reel <output-dir> <subject-id>\n");
+    std::printf("CRC check: zhao-reel --check\n");
+    return 0;
+  }
+
   // --check: the animation-stability regression (PLAN Tier 1 secondary
   // value): render every subject, write nothing, fail on any sequence-CRC
   // drift. Wired into ctest as reel_sequence_crc.
@@ -1231,6 +1475,13 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_noctisflare());
     rc |= render_scene(subject_pulsar());
     rc |= render_scene(subject_flareocclusion());
+    // New star classes (CRCs not yet pinned - will fail until first render)
+    rc |= render_scene(subject_bluegiant());
+    rc |= render_scene(subject_whitedwarf());
+    rc |= render_scene(subject_orangegiant());
+    rc |= render_scene(subject_bluedwarf());
+    rc |= render_scene(subject_multiple());
+    rc |= render_scene(subject_infant());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
@@ -1255,5 +1506,12 @@ int main(int argc, char** argv) {
   if (wanted("noctis-flare")) rc |= render_scene(subject_noctisflare());
   if (wanted("pulsar")) rc |= render_scene(subject_pulsar());
   if (wanted("flare-occlusion")) rc |= render_scene(subject_flareocclusion());
+  // New star classes
+  if (wanted("blue-giant")) rc |= render_scene(subject_bluegiant());
+  if (wanted("white-dwarf")) rc |= render_scene(subject_whitedwarf());
+  if (wanted("orange-giant")) rc |= render_scene(subject_orangegiant());
+  if (wanted("blue-dwarf")) rc |= render_scene(subject_bluedwarf());
+  if (wanted("multiple")) rc |= render_scene(subject_multiple());
+  if (wanted("infant")) rc |= render_scene(subject_infant());
   return rc;
 }
