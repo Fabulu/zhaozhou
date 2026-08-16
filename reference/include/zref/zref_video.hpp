@@ -6,15 +6,17 @@
 //   zref::FrameCtl    swap/repeat/tick/fence decision     (spec/video_rules.md
 //                     oracle — commit law, deadline window, 60 Hz law §4-§5)
 //   zref::Scanout     full scanout pipeline mirror        (spec/video_rules.md
-//   (= VideoSys)      §3-§4: fetch order, ping-pong line buffers, serializer,
+//                     §3-§4: fetch order, ping-pong line buffers, serializer,
 //                     swap execution, starvation law)
 //   zref::ScalerFeed  pass-through identity, 2-cycle delay (spec §6)
 //   zref::VramResponder  deterministic guard/memory responder (harness side:
 //                     fixed-latency admission + 8-beat bursts + injectable
 //                     starvation; the frozen sim profile, memory_rules.md §1)
-//   zref::framePixelCrc   displayed-stream CRC-32C over a canvas (spec
-//                     video_rules.md §4 "Displayed-CRC law"; reuses
-//                     zhao_crc32c — never a second CRC implementation)
+//   zref::frame_pixel_crc  displayed-stream CRC-32C over a canvas — a thin
+//                     vector adapter DELEGATING to the one composer,
+//                     zref::render::displayed_crc32c (charter §29-6: the
+//                     branch's own re-implementation was removed at the
+//                     merge; the law is implemented exactly once)
 //
 // The mirror classes reproduce the RTL register semantics EXACTLY (the RTL
 // is fpga/rtl/video/*.sv; every mirror field names its RTL counterpart).
@@ -48,12 +50,17 @@ struct VidTiming {
 
 const VidTiming& vid_timing(uint32_t mode);   // mode 0/1/2
 
-uint32_t canvas_bytes(uint32_t mode);         // spec/video_rules.md §1
+// Bytes a frame OCCUPIES per mode (spec/video_rules.md §1 "Allocation is
+// not occupancy": Duo stores 0x30000 packed view bytes of its 0x3C000
+// slot). Delegates to zref::render::canvas_bytes — the one C++ definition.
+uint32_t canvas_bytes(uint32_t mode);
 uint32_t active_width(uint32_t mode);
 
 // displayed-stream composition + CRC (spec §4 Displayed-CRC law):
-// Z60/Storm: the canvas bytes as-is; Duo: 512-wide raster with the 48
-// border rows black and the two 256x192 views side by side (spec §3.1).
+// Z60/Storm: the canvas bytes as-is; Duo: 512-wide raster AS SCANNED OUT —
+// 48 border rows black, each row 24..215 the concatenation of view-0's and
+// view-1's row from the two contiguous stored blocks (spec §3.1).
+// DELEGATES to zref::render::displayed_crc32c (charter §29-6).
 uint32_t frame_pixel_crc(uint32_t mode, const std::vector<uint8_t>& canvas);
 
 // per-mode line geometry used by fetch and the frame composer
@@ -213,6 +220,9 @@ class VramResponder {
 // steps (the frozen 2:1 phase). Every field names its RTL counterpart in
 // fpga/rtl/video/*.sv — the class is the contract-faithful oracle for the
 // random differentials (fetch order + displayed stream + swap/repeat).
+// Named `Scanout` because that is the symbol design/blocks.yml and the
+// VIDEO.SCANOUT contract cite (the branch's `VideoSys` name would have
+// been a phantom citation; `VideoSys` remains as an alias below).
 
 struct VideoSysIn {
   bool mode_we = false;
@@ -246,7 +256,7 @@ struct VideoSysOut {
   uint64_t starvation = 0;
 };
 
-class VideoSys {
+class Scanout {
  public:
   void reset();
 
@@ -339,5 +349,7 @@ class VideoSys {
   bool gpu_tick_repeated_q_ = false;
   uint32_t gpu_complete_slot_q_ = 0;
 };
+
+using VideoSys = Scanout;   // transitional alias (harness code)
 
 }  // namespace zref

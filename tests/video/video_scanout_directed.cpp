@@ -3,7 +3,7 @@
 //
 // Coverage:
 //   * 3 clean single-colour frames: swap at vblank; the displayed stream
-//     CRC-32C equals zref::framePixelCrc over the displayed slot's canvas
+//     CRC-32C equals zref::frame_pixel_crc over the displayed slot's canvas
 //     (the Displayed-CRC law, spec §4).
 //   * FORCED MISSED DEADLINE: slot READY lands with the deadline window
 //     closed -> previous complete frame repeats, deadline_faults++,
@@ -329,8 +329,8 @@ int main() {
 
   if (g_fail == 0) {
     std::printf("video_scanout_directed: OK\n");
-    return 0;
+    zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_scanout_directed: %d FAILURES\n", g_fail);
-  return 1;
+  zhao::exit_hard(1);  // teardown-deadlock workaround (zhao_sim.hpp)
 }

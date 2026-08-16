@@ -6,6 +6,9 @@
 
 #include "zref/zref_video.hpp"
 
+#include "zref/zref_render.hpp"  // canvas_bytes / displayed_crc32c (the one
+                                 // C++ definition of both laws, charter 29-6)
+
 #include <cstring>
 
 namespace zref {
@@ -25,7 +28,13 @@ const VidTiming& vid_timing(uint32_t mode) {
 }
 
 uint32_t canvas_bytes(uint32_t mode) {
-  return (mode == 0) ? 184320u : (mode == 1) ? 153600u : 245760u;
+  // Occupancy, not allocation (spec/video_rules.md §1): Z60 184,320 /
+  // Storm 153,600 / Duo 196,608 (= 0x30000 packed view blocks, §3.1).
+  // The branch's original returned the 0x3C000 Duo ALLOCATION — written
+  // before the allocation/occupancy split was ratified — and would have
+  // silently disagreed with zref::render::canvas_bytes after the merge.
+  // One definition per language (charter 29-6): delegate.
+  return render::canvas_bytes(static_cast<zhao_abi::video_mode>(mode));
 }
 
 uint32_t active_width(uint32_t mode) { return vid_timing(mode).h_active; }
@@ -37,30 +46,11 @@ bool duo_border_line(uint32_t display_y) {
 uint32_t duo_source_row(uint32_t display_y) { return display_y - 24; }
 
 uint32_t frame_pixel_crc(uint32_t mode, const std::vector<uint8_t>& canvas) {
-  // displayed-stream composition (spec §4 Displayed-CRC law): raster order,
-  // 2 * active_width * 240 bytes, border rows included in Duo.
-  const uint32_t w = active_width(mode);
-  uint32_t crc = 0;
-  if (mode != 2) {
-    crc = zhao_abi::zhao_crc32c(crc, canvas.data(), 2u * w * 240u);
-    return crc;
-  }
-  const uint8_t black[2] = {0, 0};
-  for (uint32_t y = 0; y < 240; ++y) {
-    if (duo_border_line(y)) {
-      // the border rows are part of the displayed stream: 2 * w bytes of
-      // black per row (spec §3.1)
-      for (uint32_t i = 0; i < w; ++i)
-        crc = zhao_abi::zhao_crc32c(crc, black, 2);
-    } else {
-      const uint32_t r = duo_source_row(y);
-      const size_t v0 = 2u * 256u * r;              // view0 row bytes
-      const size_t v1 = 0x18000u + 2u * 256u * r;   // view1 row bytes
-      crc = zhao_abi::zhao_crc32c(crc, canvas.data() + v0, 2u * 256u);
-      crc = zhao_abi::zhao_crc32c(crc, canvas.data() + v1, 2u * 256u);
-    }
-  }
-  return crc;
+  // Thin vector adapter over the ONE displayed-stream composer (charter
+  // 29-6): zref::render::displayed_crc32c implements the spec §4 law (for
+  // Duo it needs the full 0x30000 stored occupancy behind the pointer).
+  return render::displayed_crc32c(static_cast<zhao_abi::video_mode>(mode),
+                                  canvas.data());
 }
 
 // ------------------------------------------------------------- VideoMode ---
@@ -327,7 +317,7 @@ SegGeom seg_geometry(uint32_t mode, uint32_t slot, uint32_t line,
 }
 }  // namespace
 
-void VideoSys::reset() {
+void Scanout::reset() {
   gpu_steps_ = 0;
   vid_steps_ = 0;
 
@@ -386,7 +376,7 @@ void VideoSys::reset() {
   gpu_complete_slot_q_ = 0;
 }
 
-void VideoSys::step(const VideoSysIn& in) {
+void Scanout::step(const VideoSysIn& in) {
   ++gpu_steps_;
   const bool vid_edge = (gpu_steps_ & 1ull) == 1ull;
 
@@ -412,7 +402,7 @@ void VideoSys::step(const VideoSysIn& in) {
 }
 
 // -------------------------------------------------------------- vid side --
-void VideoSys::vid_step_(const VideoSysIn& in, bool s_full_tog0,
+void Scanout::vid_step_(const VideoSysIn& in, bool s_full_tog0,
                          bool s_full_tog1) {
   // raster decodes of the CURRENT cycle (pre-edge mode registers)
   const RasterView cur = raster_;
@@ -526,7 +516,7 @@ void VideoSys::vid_step_(const VideoSysIn& in, bool s_full_tog0,
   ser_px_ = decode_px_();
 }
 
-PxStream VideoSys::decode_px_() const {
+PxStream Scanout::decode_px_() const {
   // combinational serializer output of the post-edge state
   const RasterView& cur = raster_;
   const VidTiming& t = vid_timing(cur.mode);
@@ -548,7 +538,7 @@ PxStream VideoSys::decode_px_() const {
   return p;
 }
 
-uint32_t VideoSys::lane_pixel_(uint32_t x) const {
+uint32_t Scanout::lane_pixel_(uint32_t x) const {
   const uint64_t word = mem_[display_buf_ ? 1 : 0][(x >> 2) & 127u];
   switch (x & 3u) {
     case 0:  return (uint32_t)(word & 0xFFFFull);
@@ -559,7 +549,7 @@ uint32_t VideoSys::lane_pixel_(uint32_t x) const {
 }
 
 // -------------------------------------------------------------- gpu side --
-void VideoSys::gpu_step_(const VideoSysIn& in, bool s_dec_tog, bool s_fs_tog,
+void Scanout::gpu_step_(const VideoSysIn& in, bool s_dec_tog, bool s_fs_tog,
                          uint32_t s_slot, uint32_t s_mnext, uint32_t s_mode,
                          bool s_cons_tog0, bool s_cons_tog1, bool s_ftog,
                          uint32_t s_fslot, bool s_frep, uint32_t s_ffid) {
@@ -757,7 +747,7 @@ void VideoSys::gpu_step_(const VideoSysIn& in, bool s_dec_tog, bool s_fs_tog,
 }
 
 // ------------------------------------------------------------- observables -
-VideoSysOut VideoSys::out() const {
+VideoSysOut Scanout::out() const {
   VideoSysOut o;
   o.raster = raster_;
 

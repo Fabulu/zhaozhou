@@ -32,7 +32,7 @@ class VideoTb {
  public:
   Vzhao_video_tb top;
   zref::VramResponder resp{4};   // fixed sim profile latency (gpu cycles)
-  zref::VideoSys oracle;
+  zref::Scanout oracle;
 
   // per-cycle stimulus (set by the scenario before step())
   bool mode_we = false;
