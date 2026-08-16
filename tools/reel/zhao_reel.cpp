@@ -64,6 +64,7 @@
 namespace {
 
 std::string g_out;
+bool g_write = true;  // --check: render + verify CRCs only, write nothing
 
 // ---------------------------------------------------------------- output ----
 
@@ -238,6 +239,10 @@ struct SceneSubject {
   uint32_t shake_frame = 0;
   std::vector<int32_t> shake;
   const char* note = "";
+  // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
+  // Moves whenever the renderer, the field programs or the authoring here
+  // legitimately change — update it in the same commit and say so.
+  uint32_t expect_seq_crc = 0;
 };
 
 // ------------------------------------------------------------ scene render --
@@ -274,8 +279,10 @@ int render_scene(const SceneSubject& sub) {
   uint32_t seq_crc = 0;
 
   const std::string dir = g_out + "/" + sub.name;
-  ZHAO_MKDIR(g_out.c_str());
-  ZHAO_MKDIR(dir.c_str());
+  if (g_write) {
+    ZHAO_MKDIR(g_out.c_str());
+    ZHAO_MKDIR(dir.c_str());
+  }
 
   for (uint32_t f = 0; f < sub.frames; ++f) {
     const uint32_t tick = f * sub.step;
@@ -399,9 +406,11 @@ int render_scene(const SceneSubject& sub) {
     frame_crcs.push_back(zhao_abi::zhao_crc32c(0, rgb.data(), rgb.size()));
     seq_crc = zhao_abi::zhao_crc32c(seq_crc, rgb.data(), rgb.size());
 
-    char fp[600];
-    std::snprintf(fp, sizeof(fp), "%s/%04u.rgb", dir.c_str(), f);
-    if (!write_rgb(fp, W, H, rgb)) return 2;
+    if (g_write) {
+      char fp[600];
+      std::snprintf(fp, sizeof(fp), "%s/%04u.rgb", dir.c_str(), f);
+      if (!write_rgb(fp, W, H, rgb)) return 2;
+    }
   }
 
   // ---- the palette law: a shipped GIF must be palette-exact ----
@@ -413,7 +422,7 @@ int render_scene(const SceneSubject& sub) {
     return 3;
   }
 
-  {
+  if (g_write) {
     std::vector<uint8_t> pl(4);
     const uint32_t n = static_cast<uint32_t>(pal.count());
     for (int i = 0; i < 4; ++i) pl[i] = static_cast<uint8_t>(n >> (8 * i));
@@ -422,6 +431,20 @@ int render_scene(const SceneSubject& sub) {
     if (!f) return 2;
     fwrite(pl.data(), 1, pl.size(), f);
     fclose(f);
+  }
+
+  if (!g_write) {
+    std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name,
+                sub.frames, pal.count(), seq_crc);
+    if (sub.expect_seq_crc != 0 && seq_crc != sub.expect_seq_crc) {
+      std::fprintf(stderr,
+                   "%s: sequence_crc32c 0x%08X != expected 0x%08X — the reel drifted. Either a "
+                   "renderer/field change moved it legitimately (regenerate the reel, update the "
+                   "constant, and say so) or something is nondeterministic (report it loudly).\n",
+                   sub.name, seq_crc, sub.expect_seq_crc);
+      return 4;
+    }
+    return 0;
   }
 
   // ---- provenance ----
@@ -482,6 +505,7 @@ SceneSubject subject_wave() {
   fs.duration = s.frames * s.step;
   s.fields.push_back(fs);
   s.note = "travelling radial wave, n=2 integer cycles: the loop closes seamlessly";
+  s.expect_seq_crc = 0xDAA6AE41u;
   return s;
 }
 
@@ -539,6 +563,7 @@ SceneSubject subject_impact() {
   s.shake = {26000, -42000, 34000, -26000, 18000, -12000, 8000, -4000, 2000, 0};
   s.note = "strike -> expanding annular wave -> centre rebound -> settle; "
            "debris + screen shake (erupt-style garnish); starts and ends at rest";
+  s.expect_seq_crc = 0xD846D69Cu;
   return s;
 }
 
@@ -584,12 +609,26 @@ SceneSubject subject_scars() {
   }
   s.note = "three strikes in sequence; surface-sheet scars persist and accrue "
            "(the loop restart is the sequence replaying)";
+  s.expect_seq_crc = 0x67FA0C1Fu;
   return s;
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+  // --check: the animation-stability regression (PLAN Tier 1 secondary
+  // value): render every subject, write nothing, fail on any sequence-CRC
+  // drift. Wired into ctest as reel_sequence_crc.
+  if (argc > 1 && std::strcmp(argv[1], "--check") == 0) {
+    g_write = false;
+    int rc = 0;
+    rc |= render_scene(subject_wave());
+    rc |= render_scene(subject_impact());
+    rc |= render_scene(subject_scars());
+    std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n"
+                        : "reel --check: FAILED\n");
+    return rc;
+  }
   g_out = argc > 1 ? argv[1] : ".";
   std::vector<std::string> want;
   for (int i = 2; i < argc; ++i) want.push_back(argv[i]);
