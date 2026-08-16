@@ -62,15 +62,17 @@ runs:
 
   - property: tests/formal/mem_guard_no_escape.sby
     status: green
-    date: "2026-08-15"
-    commit: 1b4b273
+    date: "2026-08-16"
+    commit: bc707dd
     lane: formal_mem_guard_no_escape
     tasks: [bmc, cover]
     covers: true
     notes: >-
       No write outside an assigned region. First real elaboration found a
       genuine escape (unclamped blit_span wrapping 32 bits); removing the
-      clamp fails the proof again.
+      clamp fails the proof again. Scope guard a_scope_single_map_window
+      added (V19): the frame-constant region-map modelling is pinned to the
+      proven 30-cycle window; observed RED at depth 40, green at 30.
 
   - property: tests/formal/mem_sdram_refresh_bound.sby
     status: banked
@@ -85,6 +87,11 @@ runs:
       rather than manufacturing a timeout that would look like a pass.
       MEM.SDRAM is SPECIFIED / blocked_on: hardware, so nothing cites this as
       maturity evidence — which is exactly why `banked` may not back a claim.
+      Scope guard a_scope_one_refresh_interval added (V19, commit bc707dd):
+      the 900-step window witnesses ONE post-init AUTO_REFRESH (cover hit at
+      step 812; the next falls ~780 later, outside). Cover task re-run green
+      with the guard 2026-08-16; the bmc task remains unestablished, so the
+      guard has not been observed red on this property — recorded honestly.
 
   - property: tests/formal/input_snapshot_atomic.sby
     status: green
@@ -100,11 +107,14 @@ runs:
       $past(frame_tick.pulse), so an unreachable tick would have made all
       three vacuous, the same hole as MEM.GUARD. Five covers added to the
       RTL's `ifdef FORMAL block and a cover task to the .sby; both run green.
+      Scope guard a_scope_bmc_window added (V19, commit bc707dd,
+      re-run green 2026-08-16): pins the 30-cycle window; the u16 sequence
+      wrap stays outside every tractable horizon. Observed RED at depth 38.
 
   - property: tests/formal/cmd_scheduler_slot_fsm.sby
     status: green
     date: "2026-08-16"
-    commit: 3ca4661
+    commit: e60ba85
     lane: formal_cmd_scheduler_slot_fsm
     tasks: [bmc, cover]
     covers: true
@@ -116,7 +126,11 @@ runs:
       slot ever completes. Five covers added (full charter cycle, both
       fence polarities, the deadline-miss path); all reached at steps 4-6
       of depth 40. First elaboration of this property was at the W2.6
-      merge, exactly as V16 was built to force.
+      merge, exactly as V16 was built to force. 2026-08-16: scope guard
+      a_scope_bmc_window added (V19; observed RED at depth 48) and
+      a_mode_act_in_range added (V20 enforcement of the mode_act 0..2
+      claim — mutation-verified: removing the latch's <= 2 refusal fails
+      the bmc at exactly this assertion); bmc + cover re-run green.
 
   - property: tests/formal/cmd_dma_crc_gate.sby
     status: green
@@ -135,11 +149,15 @@ runs:
       FORMAL_BLIT_LEN DUT parameter (absent outside `ifdef FORMAL); seven
       covers (pkt_valid_o, both gates, guard_req_o.valid, header-CRC fail,
       blit OK/bad-CRC) all reached at k = 9..14 of depth 24 (btormc).
+      Scope guard a_scope_header_only_window added (V19, commit bc707dd,
+      re-run green 2026-08-16): pins depth 24 to the 40/64-B staging
+      shrink it depends on. Observed RED at depth 32 with the CEX at
+      k = 25 — exactly one step past the proven bound.
 
   - property: tests/formal/audio_fifo_bounds.sby
     status: green
-    date: "2026-08-15"
-    commit: 1b4b273
+    date: "2026-08-16"
+    commit: bc707dd
     lane: formal_audio_fifo
     tasks: [bmc]
     covers: false
@@ -149,7 +167,12 @@ runs:
       honestly rather than counted as fully green. No block cites it under
       tests.formal, so V16 does not (yet) reject it; the moment AUDIO.FIFO
       pins its maturity to this property, V16 will demand a cover task, which
-      is the intended ratchet.
+      is the intended ratchet. Scope guard a_scope_half_drain_window added
+      (V19): MEASURED that under `multiclock on` one posedge costs ~2 SMT
+      steps, so depth 32 is ~16 gpu cycles = FOUR audio pop opportunities —
+      half a drain of the shrunk DEPTH-8, and half what steps-as-cycles
+      suggests (a first <= 8-tick guard could not fire even at depth 48;
+      corrected before landing). Observed RED at depth 48, green at 32.
 
   - property: tests/formal/video_mode_timing.sby
     status: green
@@ -172,7 +195,7 @@ runs:
   - property: tests/formal/video_framectl_one_fence.sby
     status: green
     date: "2026-08-16"
-    commit: 9f3725a
+    commit: e60ba85
     lane: formal_video_framectl_one_fence
     tasks: [bmc, cover]
     covers: true
@@ -185,7 +208,12 @@ runs:
       large run-to-run variance (pdr vs the 64-bit counter registers) and
       twice blew the 1800 s lane budget — a flaky-green, so the recorded
       lane task is the bounded one. Formal tests are now RUN_SERIAL so
-      wall time approximates solo time.
+      wall time approximates solo time. 2026-08-16: scope guard
+      a_scope_four_frame_periods added (V19; observed RED at depth 80)
+      and a_cdc_data_stable_unless_toggle added (V20 enforcement of the
+      DUT's stable-by-construction crossing claim — mutation-verified:
+      an unconditional cur_slot flip fails the bmc at exactly this
+      assertion); bmc + cover re-run green.
 
   - property: tests/formal/video_scanout_linebuf.sby
     status: green
