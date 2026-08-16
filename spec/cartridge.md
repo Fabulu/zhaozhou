@@ -60,6 +60,8 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x0009 | COSTS | `costs.zcost` body verbatim (spec/form/cost-model.md §2) |
 | 0x000A | TERRAIN_ISLAND | island patch page v1 (§4; format law spec/terrain_rules.md §2) |
 | 0x000B | ISLAND_TABLE | island directory (§4; spec/terrain_rules.md §1.5) |
+| 0x000C | CREATURE_FORM | compiled creature form page (§4; spec/creature_rules.md §5 kind 8) |
+| 0x000D | CLIP_BANK | animation clip bank page (§4; spec/creature_rules.md §5 kind 9) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -92,9 +94,12 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 5 | tone bank | TONE_BANK | wave-2 mixer tone set (spec/audio_rules.md lane) |
 | 6 | island patch | TERRAIN_ISLAND | Island Patch v1 page (spec/terrain_rules.md §2 — layered top/bottom/state/material/sheet/tint) |
 | 7 | island table | ISLAND_TABLE | island directory: datum, pitch_log2, grid extent, tileset, sparse patch map (spec/terrain_rules.md §1.5) |
+| 8 | creature form | CREATURE_FORM | compiled parts→meshlets, bones ≤32, attachments, hitboxes, ladder refs (spec/creature_rules.md §5) |
+| 9 | clip bank | CLIP_BANK | 30 Hz quantized-quat clips + keyframe event tags (spec/creature_rules.md §2.1) |
 
-~~Kinds 6-255 reserved~~ Kinds 8-255 reserved (world-identity wave,
-RUN-20260816-0046, added kinds 6/7); a reader that meets an unknown kind skips the page
+~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ Kinds 10-255 reserved
+(world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
+that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
 constant against this table at pack time (FORM-E-830/831,
 language-semantics §8).
@@ -138,6 +143,13 @@ language-semantics §8).
   u32 tileset_id}` followed by each island's sparse patch map
   `{u32 entry_count} + entry_count × {i16 ix; i16 iz; u32 page_id}` (page_id
   names a kind-6 page). One table per cartridge.
+- **Creature form (kind 8) / clip bank (kind 9):** semantic contents per
+  `spec/creature_rules.md` §5 (form: parts→meshlet ids, bone hierarchy,
+  attachments, hitboxes, ladder refs; bank: clip directory + 30 Hz frames of
+  root fx16[3] + s16[4] quantized quats + event tags). Byte-exact layouts
+  freeze with SW.TOOLS.ASSET at Phase-12 entry (creature_rules §9); until
+  then the packer refuses to emit them (deterministic refusal, never a
+  guessed layout).
 - **Tone bank (kind 5):** the wave-2 mixer tone set the EmitAudioEvent path
   consumes (MixerTone records; spec/audio_rules.md): one header
   `{u32 tone_count}` + tone records `{u32 event_id; u16 gain; i16 pan;

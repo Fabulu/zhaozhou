@@ -6,7 +6,9 @@
 # GENERATED from this file (tools/ledger, `npm run ledger:gen`); never edit the
 # generated files by hand.
 #
-# Counts: 87 blocks = 72 FPGA (kind: rtl) + 15 software (kind: software).
+# Counts: 88 blocks = 73 FPGA (kind: rtl) + 15 software (kind: software).
+# (World-identity wave RUN-20260816-0046 added GEOM.POSE — GEOM is now 11.
+# The paragraph below records the original P2 bring-up arithmetic verbatim.)
 # ARITHMETIC NOTE: P2's headline said "83 = 69 FPGA + 14 SW", but P2's own
 # §1 group enumeration sums to 72 FPGA (SYS3 CMD3 MEM4 FIELD6 INPUT3 AUDIO1
 # VIDEO4 MEASURE3 TERRAIN7 SURFACE2 GEOM10 RASTER5 TEXTURE4 PART7 FORGE2
@@ -469,7 +471,7 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT]
     downstream: [MEM.VRAM.ARBITER]
     backpressure: ready_valid
     latency: fixed:1
@@ -1147,7 +1149,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Overflow policy is reject, never silently drop (§11.4).
+    notes: "Overflow policy is reject, never silently drop (§11.4). Format law: spec/terrain_rules.md (Island Patch v1 — dual heightfield + void mask + breach law, world-identity wave)."
 
   - id: TERRAIN.TESS
     name: Crack-safe tessellator
@@ -1409,7 +1411,7 @@ blocks:
     inputs: [dispatch, lod_targets]
     outputs: [meshlet_stream]
     upstream: [CMD.SCHEDULER, MEASURE.GOVERNOR]
-    downstream: [GEOM.VDECODE, MEM.GUARD]
+    downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 meshlet descriptor per clock
@@ -1457,6 +1459,36 @@ blocks:
     superseded_by: null
     notes: Compression format owned by SW.TOOLS.ASSET (pack side) — one spec, two ends.
 
+  - id: GEOM.POSE
+    name: Pose bank decoder and cache
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Decode compressed clip-bank frames (8 B/bone quantized quaternions) into <=32 bone-matrix palettes on demand and cache decoded poses shared by type-grouped instances; bake-everything-at-load rejected by derivation (x6 memory, spec/creature_rules.md 2.2).
+    contract: design/contracts/GEOM.POSE.md
+    phase: 9
+    owner_issue: ZH-081
+    inputs: [pose_requests, clip_pages]
+    outputs: [bone_matrices]
+    upstream: [GEOM.MESHFETCH]
+    downstream: [GEOM.SKIN, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 decoded bone per clock on miss; 1 palette handle per request on hit
+    reference_model: zref::PoseBank
+    tests:
+      directed: tests/geometry/geom_pose_directed.cpp
+      random: tests/geometry/geom_pose_random.cpp
+    counters: [cache_hits, cache_misses]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "World-identity wave (RUN-20260816-0046). Quantized-quat lane format and decode rounding require a spec/qformats.md amendment (QFMT_VERSION 13) before REFERENCE_COMPLETE — flagged in the contract."
+
   - id: GEOM.SKIN
     name: Skinning stage
     kind: rtl
@@ -1468,7 +1500,7 @@ blocks:
     owner_issue: ZH-054
     inputs: [vertex_batch, bone_palette]
     outputs: [skinned_vertices]
-    upstream: [GEOM.VDECODE]
+    upstream: [GEOM.VDECODE, GEOM.POSE]
     downstream: [GEOM.LOOM, GEOM.WCACHE]
     backpressure: ready_valid
     latency: variable
@@ -2265,7 +2297,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Skirt depth from terrain LOD delta, not a tunable.
+    notes: "Skirt depth from terrain LOD delta, not a tunable. World-identity wave: also owns island rim walls and the breach silhouette (spec/terrain_rules.md §5 — 2,112-edge structural bound, clamped emission with span-merge)."
 
   # ===========================================================================
   # TWOD — Twin Horizons + HUD (fpga/rtl/compositor)
