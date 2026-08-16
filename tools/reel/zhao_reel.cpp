@@ -257,7 +257,8 @@ struct CelCtx {
   const SceneSubject* sub = nullptr;
   uint32_t frame = 0;
   CelAssets* assets = nullptr;
-  zref::star::FlareSlots slots;  // persists across the loop (the fade)
+  zref::star::FlareSlots slots;         // persists across the loop (the fade)
+  zref::star::TrailHistory trails[2];   // §15 rings, persist across the loop
 };
 
 // Starfield backdrop: the §7 sector hash over the ±4 cube around sector
@@ -518,6 +519,15 @@ struct SceneSubject {
 // per-frame celestial compose — the ONE hook target (set on the renderer's
 // [phase3-preview] pre-resolve point). Authoring only; every law call goes
 // through zref::star / zref::flare / zref::post.
+//
+// TRAIL AUTHORING (§15, the palette cost stated up front): ghosts draw
+// through the LEVEL-CAPPED halo palette, so each ghost's colours are ramp
+// entries — NOT ring-colour × alpha products. An alpha-scaled chain would
+// cost ~63 ring colours × 8 ghost alphas ≈ 504 entries before the starfield
+// greys, far over the 256-colour law (the same multiplication the pulsar
+// subject avoids with halo_airless). What trails DO add is additive overlap
+// sums along the path (contiguous ghost sums, quickly clamped); the tool's
+// palette counter is the arbiter and ghost_r_px is the knob.
 void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, uint32_t tick) {
   CelCtx& ctx = *static_cast<CelCtx*>(vctx);
   const SceneSubject& sub = *ctx.sub;
@@ -530,13 +540,27 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
   L.ramp = a.ramp;
   L.face = &a.face;
   L.corona = &a.corona;
+  L.trail = &ctx.trails[0];  // §15: history persists across the loop; the
+                             // static-skip law keeps resting subjects clean
+  zref::star::ComposeLight L2;  // the S08 multiple system's companion body
+  L2.ramp = a.ramp;
+  L2.face = &a.face;
+  L2.corona = &a.corona;
+  L2.trail = &ctx.trails[1];
   int n_lights = 1;
+  // ping-pong drift for the class portraits: +-150 px about the centre,
+  // ~9.7 px/frame. The speed is a PALETTE-LAW choice, not just an aesthetic
+  // one: ghost radius sits at/below the per-frame spacing, so a trail pixel
+  // sums at most ~2 ghost falloffs (contiguous-sum pairs) instead of all 8
+  // (the 400+-colour blow-up the tool refuses to ship).
+  const int32_t drift_x = 42 + static_cast<int32_t>((300 * ph) / (half - 1));
 
   switch (sub.celestial) {
-    case 1: {  // star-boil: THREE large S03 giants at different phases to make
-               // the CLUT rotation (color boil) visible. 63 frames × rot step 2
-               // = one full revolution per star, clearly legible.
-      // Central star at phase f
+    case 1: {  // star-boil: one close S03 giant, the CLUT rotation (colour
+               // boil) is the subject. 63 frames × rot step 2 = one full
+               // palette revolution. The star is AT REST — no trail (and the
+               // §15 static-skip law would render none anyway).
+      L.trail = nullptr;
       L.x_px = 192;
       L.y_px = 120;
       L.disc_r_px = 80;  // ENLARGED for legibility
@@ -549,11 +573,14 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       break;
     }
     case 2: {  // noctis-flare: S00 sweeping, washed white disc + corona +
-               // the full ghost chain; border fade at the sweep ends
+               // the full ghost chain; border fade at the sweep ends.
+               // TRAILED (§15): the sweep leaves the smear — the moving sun
+               // the owner asked to look Noctis.
       L.x_px = 8 + static_cast<int32_t>((368 * ph) / (half - 1));
       L.y_px = 150;
       L.disc_r_px = 8;
       L.halo_r_px = 16;
+      L.ghost_r_px = 12;  // at the ~12 px/frame sweep the chain just touches
       L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
@@ -565,7 +592,9 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       break;
     }
     case 3: {  // pulsar: ENLARGED cyan core for legibility. The duty strobe
-               // on flare is now clearly visible at this scale.
+               // on flare is now clearly visible at this scale. AT REST — no
+               // trail (the strobe is the subject; §15 static-skip).
+      L.trail = nullptr;
       L.x_px = 192;
       L.y_px = 120;
       L.disc_r_px = 28;  // ENLARGED from 4 for legibility (was "a dot phasing")
@@ -591,6 +620,9 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
                // palette law (every glow level × every lambert shade of the
                // island; 257–309 colours at k 12–30) — the far streak is
                // both the signature look and the one that fits.
+               // NOT trailed: the sun sits at the glint rung (no disc or
+               // halo); at this scale the streak IS the smear.
+      L.trail = nullptr;
       L.x_px = 24 + static_cast<int32_t>((336 * ph) / (half - 1));
       L.y_px = 102;     // grazes the island's raised heart: occluded only
                         // mid-sweep, so the fade has room to breathe
@@ -606,91 +638,108 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.probe_y = L.y_px;
       break;
     }
-    case 5: {  // blue-giant: S01 large hot blue star
-      L.x_px = 192;
+    case 5: {  // blue-giant: S01, drift + smear. Close (2.5r) so the disc
+               // keeps its colour (SATUR 30, not the white wash of 20r);
+               // flare OFF for class portraits (the flare chain is the
+               // noctis-flare subject's job) and the disc sized so the
+               // 78 px tail extends well past disc + halo.
+      L.x_px = drift_x;
       L.y_px = 120;
-      L.disc_r_px = 70;  // large but not overwhelming
-      L.halo_r_px = 150;
-      L.d_milli = 20LL * zref::star::kGamut[1].ray_milli;
+      L.disc_r_px = 40;
+      L.halo_r_px = 26;
+      L.ghost_r_px = 15;
+      L.d_milli = 5LL * zref::star::kGamut[1].ray_milli / 2;
       L.r_milli = zref::star::kGamut[1].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = c8(30);
-      L.tint[1] = c8(50);
-      L.tint[2] = c8(63);
-      L.probe_x = 192;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
       L.probe_y = 120;
       break;
     }
-    case 6: {  // white-dwarf: S02 compact hot star, very fast spin
-      L.x_px = 192;
+    case 6: {  // white-dwarf: S02 compact hot star. Small disc (the class
+               // IS compact), 2r so the white stays graded, flare off, the
+               // tail dominates: a small fast star with a long smear.
+      L.x_px = drift_x;
       L.y_px = 120;
-      L.disc_r_px = 35;  // compact but visible
-      L.halo_r_px = 80;
-      L.d_milli = 8LL * zref::star::kGamut[2].ray_milli;
+      L.disc_r_px = 16;
+      L.halo_r_px = 14;
+      L.ghost_r_px = 11;
+      L.d_milli = 2LL * zref::star::kGamut[2].ray_milli;
       L.r_milli = zref::star::kGamut[2].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = L.tint[1] = L.tint[2] = c8(63);
-      L.probe_x = 192;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
       L.probe_y = 120;
       break;
     }
-    case 7: {  // orange-giant: S04 warm giant
-      L.x_px = 192;
+    case 7: {  // orange-giant: S04 warm giant, close (2.5r) so the golden
+               // colour fills the disc; flare off; tail past disc + halo.
+      L.x_px = drift_x;
       L.y_px = 120;
-      L.disc_r_px = 72;
-      L.halo_r_px = 155;
-      L.d_milli = 20LL * zref::star::kGamut[4].ray_milli;
+      L.disc_r_px = 42;
+      L.halo_r_px = 28;
+      L.ghost_r_px = 15;
+      L.d_milli = 5LL * zref::star::kGamut[4].ray_milli / 2;
       L.r_milli = zref::star::kGamut[4].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = c8(63);
-      L.tint[1] = c8(55);
-      L.tint[2] = c8(32);
-      L.probe_x = 192;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
       L.probe_y = 120;
       break;
     }
-    case 8: {  // blue-dwarf: S07 compact hot star
-      L.x_px = 192;
+    case 8: {  // blue-dwarf: S07 compact deep-blue star; small disc, 2r,
+               // flare off; the deep blue smear is the read.
+      L.x_px = drift_x;
       L.y_px = 120;
-      L.disc_r_px = 30;
-      L.halo_r_px = 70;
-      L.d_milli = 10LL * zref::star::kGamut[7].ray_milli;
+      L.disc_r_px = 14;
+      L.halo_r_px = 12;
+      L.ghost_r_px = 10;
+      L.d_milli = 2LL * zref::star::kGamut[7].ray_milli;
       L.r_milli = zref::star::kGamut[7].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = c8(10);
-      L.tint[1] = c8(20);
-      L.tint[2] = c8(63);
-      L.probe_x = 192;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
       L.probe_y = 120;
       break;
     }
-    case 9: {  // multiple: S08 binary system
-      L.x_px = 192;
-      L.y_px = 120;
-      L.disc_r_px = 55;
-      L.halo_r_px = 120;
-      L.d_milli = 15LL * zref::star::kGamut[8].ray_milli;
+    case 9: {  // multiple: S08 as it actually is — TWO bodies. One class
+               // (one ramp, one colour family; a second ramp would double
+               // the palette cost), primary and companion orbiting the
+               // barycentre once per loop: curved trails, the §15 showpiece.
+               // Integer orbit: angle = f·(65536/64) per frame, table cos/sin.
+      const int32_t ang = static_cast<int32_t>(f * (65536u / 64u));
+      const int32_t co = zref::fx_cos(zref::angle16{static_cast<uint16_t>(ang)}).raw;
+      const int32_t si = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ang)}).raw;
+      L.x_px = 192 + ((90 * co) >> 16);
+      L.y_px = 120 - ((90 * si) >> 16);
+      L.disc_r_px = 26;
+      L.halo_r_px = 18;
+      L.ghost_r_px = 12;
+      L.d_milli = 5LL * zref::star::kGamut[8].ray_milli / 2;
       L.r_milli = zref::star::kGamut[8].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = c8(63);
-      L.tint[1] = c8(32);
-      L.tint[2] = c8(16);
-      L.probe_x = 192;
-      L.probe_y = 120;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
+      L.probe_y = L.y_px;
+      L2.x_px = 192 - ((90 * co) >> 16);
+      L2.y_px = 120 + ((90 * si) >> 16);
+      L2.disc_r_px = 16;  // the companion: smaller, no flare of its own
+      L2.halo_r_px = 12;
+      L2.ghost_r_px = 9;
+      L2.d_milli = 15LL * zref::star::kGamut[8].ray_milli;
+      L2.r_milli = zref::star::kGamut[8].ray_milli;
+      L2.flare_mode = 0;
+      L2.probe_x = L2.x_px;
+      L2.probe_y = L2.y_px;
+      n_lights = 2;
       break;
     }
-    case 10: {  // infant: S09 young protostar
-      L.x_px = 192;
+    case 10: {  // infant: S09 young protostar; 2r keeps the per-identity
+                // undertone visible in the disc; flare off.
+      L.x_px = drift_x;
       L.y_px = 120;
-      L.disc_r_px = 45;
-      L.halo_r_px = 95;
-      L.d_milli = 12LL * zref::star::kGamut[9].ray_milli;
+      L.disc_r_px = 24;
+      L.halo_r_px = 18;
+      L.ghost_r_px = 12;
+      L.d_milli = 2LL * zref::star::kGamut[9].ray_milli;
       L.r_milli = zref::star::kGamut[9].ray_milli;
-      L.flare_mode = 1;
-      L.tint[0] = c8(48);
-      L.tint[1] = c8(32);
-      L.tint[2] = c8(63);
-      L.probe_x = 192;
+      L.flare_mode = 0;
+      L.probe_x = L.x_px;
       L.probe_y = 120;
       break;
     }
@@ -712,7 +761,8 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
     g.rgb[0] = g.rgb[1] = g.rgb[2] = 255;
     pts.push_back(g);
   }
-  zref::star::compose_view(rgb, depth, w, h, 0, 0, w, h, tick, &L, n_lights,
+  zref::star::ComposeLight ls[2] = {L, L2};  // L2 only used by the S08 pair
+  zref::star::compose_view(rgb, depth, w, h, 0, 0, w, h, tick, ls, n_lights,
                            pts.empty() ? nullptr : pts.data(), static_cast<int>(pts.size()),
                            ctx.slots, nullptr);
 }
@@ -1036,7 +1086,10 @@ SceneSubject subject_wave() {
   // note text is published on the site; it must pass the copy gate
   // (zhaozhou-site/tools/copycheck.py: no em dashes, no banned phrases)
   s.note = "travelling radial wave, n=2 whole cycles per loop: frame 63 steps straight back to frame 0";
-  s.expect_seq_crc = 0x0222090Bu;  // re-pinned 2026-08-16: sky S1.2 amendment (perspective + C0 dusk ramp)
+  s.expect_seq_crc = 0xE89BB76Bu;  // re-pinned 2026-08-16: kBandRows 8->16
+  // (dcb32ff, the banding fix). The SHIPPED gif is the pre-fix capture
+  // (sequence_crc32c=0x0222090B, provenance in zhaozhou-site/scratch-reel)
+  // kept by owner instruction; this constant tracks the current renderer.
   return s;
 }
 
@@ -1094,7 +1147,7 @@ SceneSubject subject_impact() {
   s.note =
       "strike -> expanding annular wave -> centre rebound -> settle; "
       "debris + screen shake (erupt-style garnish); starts and ends at rest";
-  s.expect_seq_crc = 0x4F97AD9Bu;  // re-pinned 2026-08-16: sky S1.2 amendment
+  s.expect_seq_crc = 0x7E07D08Au;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x4F97AD9B)
   return s;
 }
 
@@ -1141,7 +1194,7 @@ SceneSubject subject_scars() {
   s.note =
       "three strikes in sequence; surface-sheet scars persist and accrue "
       "(the loop restart is the sequence replaying)";
-  s.expect_seq_crc = 0x86069EA1u;  // re-pinned 2026-08-16: sky S1.2 amendment
+  s.expect_seq_crc = 0x106B4DE8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x86069EA1)
   return s;
 }
 
@@ -1208,7 +1261,7 @@ SceneSubject subject_breach() {
       "one Phase-3 envelope patch), modelled keel 5..27 m thick; 36-step bake ramp digs "
       "a 30 m pit; cells breach corner-coupled; rim walls run to the MODELLED bottom; "
       "sky visible through the island; debris falls through the hole";
-  s.expect_seq_crc = 0x47D4D163u;  // re-pinned 2026-08-16: sky S1.2 amendment (was 482E273C)
+  s.expect_seq_crc = 0x839E117Fu;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x47D4D163)
   return s;
 }
 
@@ -1232,7 +1285,8 @@ SceneSubject subject_skysweep() {
       "camera pitch sweep, horizon to zenith and back; one elevation ramp "
       "drives under-plane, both drum bands and the zenith cap, so the layer "
       "joins cross the frame without a visible edge";
-  s.expect_seq_crc = 0x740FEBB2u;  // pinned 2026-08-16 (first render, 48-seg cap fan)
+  s.expect_seq_crc = 0x074B5DCAu;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff)
+  // — this subject IS the banding demo, so the gif was re-shot with the fix
   return s;
 }
 
@@ -1250,7 +1304,8 @@ SceneSubject subject_starboil() {
       "S03 red giant at 1.5 radii; granulation is a 63-entry palette rotation, "
       "zero texels rewritten per frame; ENLARGED to 80 px disc radius for "
       "legibility (was invisible at gallery scale)";
-  s.expect_seq_crc = 0;  // RE-PIN after scale fix
+  s.expect_seq_crc = 0xADC6EB7Cu;  // pinned 2026-08-16 (80 px legibility scale;
+  // identical before/after trails — the star is at rest, static-skip emits nothing)
   return s;
 }
 
@@ -1268,7 +1323,8 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst at the light, ghosts at -26/-77/-230 Q8.8 of "
       "the axis, quarter-res glow splats, class-colour tint; the flare dims "
       "over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0x9448C485u;  // re-pinned 2026-08-16: resolve white-rail fix
+  s.expect_seq_crc = 0xD20023CDu;  // re-pinned 2026-08-16: §15 trail (the smear
+  // the owner asked for; was 0x9448C485 before trails)
   return s;
 }
 
@@ -1285,7 +1341,8 @@ SceneSubject subject_pulsar() {
       "S11 pulsar at 40 radii; the flare strobes on the S2 duty law "
       "(spin_phase < 0x4000, one quarter of each rotation); ENLARGED to "
       "28 px disc radius for legibility (was 4 px, read as 'a dot phasing')";
-  s.expect_seq_crc = 0;  // RE-PIN after scale fix
+  s.expect_seq_crc = 0x6F2A61FCu;  // pinned 2026-08-16 (28 px legibility scale;
+  // §15 static: the strobe is the subject, no trail)
   return s;
 }
 
@@ -1300,7 +1357,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0;  // to be pinned on first render
+  s.expect_seq_crc = 0xDFAFCD70u;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1313,9 +1370,9 @@ SceneSubject subject_whitedwarf() {
   s.celestial = 6;  // S02 class
   s.space = true;
   s.note =
-      "S02 white dwarf at 10 radii; compact pure white star (63,63,63) with "
-      "rapid spin (55*(1+h mod 4)); five-pass box-smooth for fine granulation";
-  s.expect_seq_crc = 0;
+      "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
+      "spin; five-pass box-smooth granulation; drifts with a long smear";
+  s.expect_seq_crc = 0x048AB345u;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1328,9 +1385,9 @@ SceneSubject subject_orangegiant() {
   s.celestial = 7;  // S04 class
   s.space = true;
   s.note =
-      "S04 orange giant at 20 radii; warm giant star with golden orange colour "
-      "(63,55,32); intermediate between red and yellow giants";
-  s.expect_seq_crc = 0;
+      "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
+      "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
+  s.expect_seq_crc = 0x66299B68u;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1343,9 +1400,9 @@ SceneSubject subject_bluedwarf() {
   s.celestial = 8;  // S07 class
   s.space = true;
   s.note =
-      "S07 blue dwarf at 8 radii; compact deep blue star (10,20,63) with "
-      "bright undertone (32,44,64); rapid spin and fine granulation";
-  s.expect_seq_crc = 0;
+      "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
+      "smear grades white to deep blue along the tail";
+  s.expect_seq_crc = 0xD3355069u;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1358,9 +1415,9 @@ SceneSubject subject_multiple() {
   s.celestial = 9;  // S08 class
   s.space = true;
   s.note =
-      "S08 multiple system at 15 radii; binary star with orange-yellow primary "
-      "(63,32,16) and warm companion (64,60,32 undertone)";
-  s.expect_seq_crc = 0;
+      "S08 multiple system: two bodies of one class orbiting the barycentre, "
+      "one revolution per loop, each with a curved trail (the §15 showpiece)";
+  s.expect_seq_crc = 0xCA637ABDu;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1373,9 +1430,9 @@ SceneSubject subject_infant() {
   s.celestial = 10;  // S09 class
   s.space = true;
   s.note =
-      "S09 infant star at 6 radii; young protostar with purple colour "
-      "(48,32,63) and per-identity undertone (24 + ((h3>>(5*c))&31))";
-  s.expect_seq_crc = 0;
+      "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
+      "per-identity undertone; drifts with a purple smear";
+  s.expect_seq_crc = 0x5FBE7C1Bu;  // pinned 2026-08-16 (first render, trailed)
   return s;
 }
 
@@ -1404,7 +1461,8 @@ SceneSubject subject_flareocclusion() {
       "S00 sun at 30 radii crossing behind the island; the effect-tag probe "
       "gates the flare and a 4-bit counter fades it 15 frames each way; "
       "halo_atmo variant (atmosphere = one bake parameter)";
-  s.expect_seq_crc = 0x9AB5AC21u;  // re-pinned 2026-08-16: resolve white-rail fix
+  s.expect_seq_crc = 0x4382E5C8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff)
+  // — re-shot; trails do not apply at the glint rung (see cel_hook)
   return s;
 }
 

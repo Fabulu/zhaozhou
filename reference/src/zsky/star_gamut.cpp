@@ -262,6 +262,13 @@ void celestial_state_serialize(const CelestialState& st, uint8_t out[kCelestialS
   }
   put32(p, st.galaxy_seed);
   for (int i = 0; i < 3; ++i) put32(p, static_cast<uint32_t>(st.cam_sector[i]));
+  for (int i = 0; i < 2; ++i) {  // §15 trail rings, 34 B each (appended; the
+    // v1 168 B prefix is unchanged so old captures parse to the same prefix)
+    for (uint32_t k = 0; k < kTrailN; ++k) put16(p, st.trails[i].x_px[k]);
+    for (uint32_t k = 0; k < kTrailN; ++k) put16(p, st.trails[i].y_px[k]);
+    *p++ = st.trails[i].head;
+    *p++ = st.trails[i].length;
+  }
 }
 
 void celestial_state_deserialize(const uint8_t in[kCelestialStateBytes], CelestialState& st) {
@@ -286,6 +293,12 @@ void celestial_state_deserialize(const uint8_t in[kCelestialStateBytes], Celesti
   }
   st.galaxy_seed = take32(p);
   for (int i = 0; i < 3; ++i) st.cam_sector[i] = static_cast<int32_t>(take32(p));
+  for (int i = 0; i < 2; ++i) {  // §15 trail rings (v1.1 amendment tail)
+    for (uint32_t k = 0; k < kTrailN; ++k) st.trails[i].x_px[k] = take16(p);
+    for (uint32_t k = 0; k < kTrailN; ++k) st.trails[i].y_px[k] = take16(p);
+    st.trails[i].head = *p++;
+    st.trails[i].length = *p++;
+  }
 }
 
 }  // namespace star

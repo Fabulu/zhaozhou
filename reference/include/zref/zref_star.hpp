@@ -30,6 +30,10 @@
 //     §9  placement: bakes are ARM/compile-time, splats are bounded POST —
 //         nothing here needs a fragment shader, render-to-texture or a
 //         second TMU (charter §26 refusals untouched)
+//     §15 motion trails (amendment v1.1): the TrailHistory ring, the ghost
+//         chain (corona sprite through the FLAT ghost palette — one ramp
+//         entry per ghost), level(g) = 63−4g, the static-skip and
+//         halo-skip laws, capture-in-state
 //   spec/qformats.md §3/§4 single-rounding arithmetic + round_half_up,
 //         §7.1 the ONE 257-entry sin table (asin16 below is its inverse by
 //         binary search — no second trig law), §7.2 isqrt, §7.5 noise2_hash
@@ -366,6 +370,49 @@ uint8_t starfield_intensity6(int64_t rz);
 
 namespace star {
 
+// ---- §15 motion trails (D12, amendment v1.1) — state + laws ----------------
+// (declared here, ahead of ComposeLight: a light carries its ring)
+
+/** Ring of the last N light screen positions (§15). head = next-write index;
+ *  the entry of age g (1 = most recent past position) lives at slot
+ *  (head − g + N) mod N. 34 B, serialized into celestial_state. */
+inline constexpr uint32_t kTrailN = 8;
+
+struct TrailHistory {
+  uint16_t x_px[kTrailN] = {};
+  uint16_t y_px[kTrailN] = {};
+  uint8_t head = 0;    // next-write slot
+  uint8_t length = 0;  // valid entries, 0..kTrailN
+};
+
+/** §15 level law (frozen, v2 after measurement): level(g) = 63 − 4·g for
+ *  age g = 1..8 → 59, 55, 51, 47, 43, 39, 35, 31. The ghost chain decays in
+ *  the ramp's BRIGHT half only: over black space a dim tail is invisible,
+ *  and bright additive sums clamp and collide, which is what keeps the
+ *  chain inside the 256-colour capture law. (v1 was (9−g)·7 → 56..7: the
+ *  lower half of the chain rendered black-on-black and the graded skirts
+ *  summed to 744 colours in one subject — measured, then replaced.) */
+inline constexpr uint8_t trail_level(uint32_t age) {
+  const int32_t v = 63 - 4 * static_cast<int32_t>(age > kTrailN ? kTrailN : age);
+  return static_cast<uint8_t>(v < 1 ? 1 : v);
+}
+
+/** §15 push: ghosts render BEFORE the push; this records the current
+ *  position as the newest history entry (overwrite evicts past N). */
+inline void trail_push(TrailHistory& t, uint16_t x, uint16_t y) {
+  t.x_px[t.head] = x;
+  t.y_px[t.head] = y;
+  t.head = static_cast<uint8_t>((t.head + 1) % kTrailN);
+  if (t.length < kTrailN) ++t.length;
+}
+
+/** §15 position of the entry of age g (1..length). */
+inline void trail_at(const TrailHistory& t, uint32_t g, uint16_t& x, uint16_t& y) {
+  const uint32_t idx = (t.head + kTrailN - (g % kTrailN ? g % kTrailN : kTrailN)) % kTrailN;
+  x = t.x_px[idx];
+  y = t.y_px[idx];
+}
+
 /** A starfield glint / far glint, screen-space (caller projects wide-int). */
 struct GlintPoint {
   int32_t x_px = 0, y_px = 0;
@@ -381,6 +428,9 @@ struct ComposeLight {
   int32_t x_px = 0, y_px = 0;   // light centre (canvas px, integer)
   int32_t disc_r_px = 0;        // projected disc radius (0 = no disc)
   int32_t halo_r_px = 0;        // halo half-size (0 = no halo)
+  TrailHistory* trail = nullptr;   // §15: ring of past positions (persistent
+                                   // across frames; pushed by compose_view)
+  int32_t ghost_r_px = 0;          // §15: ghost radius (0 = trail off)
   uint8_t halo_core16 = 5;      // §4 variant: 0 atmo / 5 space / 8 airless
   int64_t d_milli = 0;          // distance (wide int)
   int64_t r_milli = 1;          // star radius (wide int)
@@ -430,11 +480,13 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
 
 // ---- §8 celestial_state capture chunk ---------------------------------------
 
-/** The three temporal-state families of §8, fixed little-endian layout:
+/** The four temporal-state families of §8, fixed little-endian layout:
  *  2 ramps × 56 B (12×s16 cur + 12×s16 tgt + init + 7 reserved) +
  *  4 flare slots × 4 B (light_id u16, fade_ctr u8, latched_tag u8) +
  *  2 stars × 12 B (class u8, pad u8, spin_phase u16, radius_milli s32,
- *  texture_seed u32) + galaxy_seed u32 + camera sector 3×s32 = 168 B. */
+ *  texture_seed u32) + galaxy_seed u32 + camera sector 3×s32 = 168 B
+ *  (the v1 layout) + 2 trail rings × 34 B (8×u16 x, 8×u16 y, head, length)
+ *  = 236 B since amendment v1.1 (§15). */
 struct CelestialState {
   RampState ramp[2];
   FlareSlots slots;
@@ -446,9 +498,11 @@ struct CelestialState {
   } stars[2];
   uint32_t galaxy_seed = 0;
   int32_t cam_sector[3] = {0, 0, 0};
+  TrailHistory trails[2];  // §15 motion-trail rings (per near star)
 };
 
-inline constexpr size_t kCelestialStateBytes = 2 * 56 + 4 * 4 + 2 * 12 + 4 + 12;  // 168
+inline constexpr size_t kCelestialStateBytes =
+    2 * 56 + 4 * 4 + 2 * 12 + 4 + 12 + 2 * 34;  // 236 (168 + 68 since v1.1)
 
 void celestial_state_serialize(const CelestialState& st, uint8_t out[kCelestialStateBytes]);
 void celestial_state_deserialize(const uint8_t in[kCelestialStateBytes], CelestialState& st);

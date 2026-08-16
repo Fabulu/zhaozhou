@@ -7,12 +7,14 @@
 // build/slew, boil, SATUR), §4 (corona bake), §5 (flare law, ghosts, fade,
 // border, budget), §6 (LOD ladder, glint clamp), §7 (starfield hash — the
 // imported harness goldens are the oracle, README in tests/golden/
-// starfield/), §8 (celestial_state round-trip), §13 (this plan).
+// starfield/), §8 (celestial_state round-trip), §13 (this plan), §15
+// (motion trails: ring, level law, static-skip, replay-exactness).
 
 #include "zref/zref_star.hpp"
 
 #include "zhao_abi.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -338,6 +340,17 @@ void test_state_roundtrip() {
   a.galaxy_seed = 0x5EED5EEDu;
   a.cam_sector[0] = -100;
   a.cam_sector[2] = 4000;
+  // §15 trail rings (v1.1): one filling, one full with a mid-ring head
+  for (uint32_t k = 0; k < star::kTrailN; ++k) {
+    a.trails[0].x_px[k] = static_cast<uint16_t>(1000 + k);
+    a.trails[0].y_px[k] = static_cast<uint16_t>(2000 + k * 7);
+    a.trails[1].x_px[k] = static_cast<uint16_t>(k * 511);
+    a.trails[1].y_px[k] = static_cast<uint16_t>(65000 - k);
+  }
+  a.trails[0].head = 0;
+  a.trails[0].length = 3;
+  a.trails[1].head = 5;
+  a.trails[1].length = star::kTrailN;
 
   uint8_t buf[star::kCelestialStateBytes];
   star::celestial_state_serialize(a, buf);
@@ -354,7 +367,10 @@ void test_state_roundtrip() {
             b.stars[1].texture_seed == 42,
         "star slots survive");
   check(b.galaxy_seed == 0x5EED5EEDu && b.cam_sector[2] == 4000, "seed + camera sector survive");
-  check(star::kCelestialStateBytes == 168, "the §8 layout is 168 bytes");
+  check(b.trails[0].length == 3 && b.trails[1].head == 5 && b.trails[0].x_px[7] == 1007 &&
+            b.trails[1].y_px[2] == 64998,
+        "trail rings survive (§15, including unwritten slots of a filling ring)");
+  check(star::kCelestialStateBytes == 236, "the §8 layout is 236 bytes since v1.1 (168 + 2×34)");
 }
 
 // ---- §7 identity schedule --------------------------------------------------
@@ -502,6 +518,216 @@ void test_compose() {
               fstats.splats_dropped);
 }
 
+// ---- §13 star_trail_anchor (§15) --------------------------------------------
+// Hand computations:
+//   level law: level(g) = 63−4g → g=1: 59, g=2: 55, g=8: 31 (the bright
+//   half of the ramp; the flat ghost colour is ramp[level(g)]).
+//   Ring: push (10,20) then (30,40) → age 1 = (30,40) (newest), age 2 = (10,20).
+//   After 8 pushes length == 8 and head wraps to 0; the 9th push evicts the
+//   oldest, so age 8 becomes (30,40) and length stays 8.
+//   Ghost pixels: corona centre intensity 63, capped at level(g), additive
+//   on black → the ghost's centre pixel == ramp[level(g)] EXACTLY (spacings
+//   chosen > 2·ghost_r so ghosts never overlap).
+void test_trail_anchor() {
+  check(star::trail_level(1) == 59 && star::trail_level(2) == 55 && star::trail_level(8) == 31,
+        "level law 63−4g → 59, 55 (spot), 31 — the §15 anchor");
+  check(star::trail_level(9) == 31, "levels clamp at the floor past N");
+
+  star::TrailHistory t;
+  star::trail_push(t, 10, 20);
+  star::trail_push(t, 30, 40);
+  uint16_t x, y;
+  star::trail_at(t, 1, x, y);
+  check(x == 30 && y == 40, "age 1 is the newest past position");
+  star::trail_at(t, 2, x, y);
+  check(x == 10 && y == 20, "age 2 is the older one");
+  check(t.length == 2, "length counts valid entries");
+  for (uint32_t k = 0; k < 6; ++k) star::trail_push(t, 50 + k, 60 + k);
+  check(t.length == star::kTrailN && t.head == 0, "8 fills the ring, head wraps to 0");
+  star::trail_push(t, 90, 90);
+  star::trail_at(t, 1, x, y);
+  check(x == 90 && y == 90, "the 9th push is the newest");
+  star::trail_at(t, star::kTrailN, x, y);
+  check(x == 30 && y == 40, "the 9th push evicted (10,20): oldest is now (30,40)");
+  check(t.length == star::kTrailN, "length saturates at N");
+
+  // ---- the rendered chain ------------------------------------------------
+  const uint32_t W = 384, H = 240;
+  int16_t pts[12];
+  star::ramp_points(s00_identity(), pts);
+  uint8_t ramp[64][3];
+  star::ramp_build(pts, ramp);
+  const star::Sprite8 corona = star::corona_sprite(5);
+  check(corona.pix[63 * 128 + 63] == 63, "corona centre is 63 (the cap always bites)");
+
+  star::TrailHistory tr;
+  star::FlareSlots slots;
+  star::ComposeLight L;
+  L.ramp = ramp;
+  L.corona = &corona;
+  L.trail = &tr;
+  L.ghost_r_px = 16;  // spacing 40 > 2·16: ghosts never overlap
+  L.flare_mode = 0;
+
+  std::vector<uint8_t> rgb(W * H * 3, 0);
+  std::vector<int32_t> depth(W * H, 0);
+  const auto px = [&](uint32_t X, uint32_t Y, int ch) {
+    return rgb[(Y * W + X) * 3 + ch];
+  };
+  const auto is_ramp = [&](uint32_t X, uint32_t Y, uint8_t idx) {
+    return px(X, Y, 0) == ramp[idx][0] && px(X, Y, 1) == ramp[idx][1] &&
+           px(X, Y, 2) == ramp[idx][2];
+  };
+
+  // frame 0 at (100,120): no history yet — nothing but the push happens.
+  // Each frame renders onto a FRESH canvas + depth plane, exactly as the
+  // renderer re-renders per frame (celestial pixels are never persistent).
+  L.x_px = 100;
+  L.y_px = 120;
+  std::fill(rgb.begin(), rgb.end(), 0);
+  std::fill(depth.begin(), depth.end(), 0);
+  star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, 0, &L, 1, nullptr, 0, slots,
+                     nullptr);
+  bool black = true;
+  for (uint32_t i = 0; i < W * H * 3; ++i)
+    if (rgb[i]) black = false;
+  check(black, "frame 0: no history, no ghosts, nothing drawn");
+
+  // frame 1 at (140,120): one ghost at (100,120), age 1 → level 56
+  L.x_px = 140;
+  std::fill(rgb.begin(), rgb.end(), 0);
+  std::fill(depth.begin(), depth.end(), 0);
+  star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, 8, &L, 1, nullptr, 0, slots,
+                     nullptr);
+  check(is_ramp(100, 120, 59), "age-1 ghost centre == ramp[59] — the §15 pixel anchor");
+
+  // frame 2 at (180,120): ghosts at (140,120) age 1 and (100,120) age 2
+  L.x_px = 180;
+  std::fill(rgb.begin(), rgb.end(), 0);
+  std::fill(depth.begin(), depth.end(), 0);
+  star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, 16, &L, 1, nullptr, 0, slots,
+                     nullptr);
+  check(is_ramp(100, 120, 55), "the older ghost decayed to ramp[level(2)] = ramp[55]");
+  check(is_ramp(140, 120, 59), "the newest ghost sits at ramp[59]");
+  check(is_ramp(180, 120, 0), "the star's own position stays black (no disc/halo authored)");
+
+  // frame 3 STATIC at (180,120): the static-skip law drops the age-1 ghost
+  // (== current); the older ghosts persist and age (decay by eviction, the
+  // Noctis smear behaviour while a star rests)
+  std::fill(rgb.begin(), rgb.end(), 0);
+  std::fill(depth.begin(), depth.end(), 0);
+  star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, 24, &L, 1, nullptr, 0, slots,
+                     nullptr);
+  check(is_ramp(100, 120, 51), "while resting the old ghost keeps aging: ramp[level(3)] = ramp[51]");
+  check(is_ramp(140, 120, 55), "the (140,120) ghost aged to ramp[55]");
+  check(is_ramp(180, 120, 0), "still nothing at the star itself (static-skip)");
+
+  // ---- longest visible tail: 8 ghosts, the 9th-oldest evicted -------------
+  star::TrailHistory tr2;
+  star::FlareSlots slots2;
+  star::ComposeLight M = L;
+  M.trail = &tr2;
+  std::vector<uint8_t> last(W * H * 3, 0);
+  std::vector<int32_t> depth2(W * H, 0);
+  for (uint32_t f = 0; f < 10; ++f) {  // positions x = 60, 100, ..., 420 (clipped)
+    M.x_px = 60 + 40 * f;
+    std::fill(last.begin(), last.end(), 0);
+    star::compose_view(last.data(), depth2.data(), W, H, 0, 0, W, H, f * 8, &M, 1, nullptr, 0,
+                       slots2, nullptr);
+  }
+  const uint8_t* q = &last[(120 * W + 60) * 3];  // the very first position
+  check(q[0] == 0 && q[1] == 0 && q[2] == 0, "the 9 frames back position is evicted (black)");
+  int tails = 0;
+  for (uint32_t f = 1; f <= 8; ++f) {  // ages 8..1 at x = 100..380
+    const size_t o = (120 * W + (60 + 40 * f)) * 3;
+    const uint8_t want = star::trail_level(9 - f);  // age at the last frame
+    if (last[o] == ramp[want][0] && last[o + 1] == ramp[want][1] && last[o + 2] == ramp[want][2])
+      ++tails;
+  }
+  check(tails == 8, "the longest visible tail is exactly 8 ghosts — the §15 anchor");
+
+  // ---- static star with trails == trails off, byte for byte ---------------
+  std::vector<uint8_t> a1(W * H * 3, 0), b1(W * H * 3, 0);
+  std::vector<int32_t> d1(W * H, 0);
+  star::TrailHistory tr3;
+  star::FlareSlots sa, sb;
+  star::ComposeLight S = L;
+  S.trail = nullptr;  // trails OFF is the control
+  S.x_px = 192;
+  S.y_px = 120;
+  S.disc_r_px = 24;
+  S.halo_r_px = 48;
+  S.face = nullptr;  // disc off keeps it simple; halo on
+  star::ComposeLight S2 = S;
+  S2.trail = &tr3;  // trails ON, fresh history
+  for (uint32_t f = 0; f < 6; ++f) {
+    std::fill(a1.begin(), a1.end(), 0);
+    std::fill(b1.begin(), b1.end(), 0);
+    star::compose_view(a1.data(), d1.data(), W, H, 0, 0, W, H, f * 8, &S, 1, nullptr, 0, sa,
+                       nullptr);
+    star::compose_view(b1.data(), d1.data(), W, H, 0, 0, W, H, f * 8, &S2, 1, nullptr, 0, sb,
+                       nullptr);
+    check(a1 == b1, "a star at rest with trails enabled is byte-identical to trails off");
+  }
+}
+
+// ---- §13 star_trail_replay (§15: capture, not warm-up) ----------------------
+void test_trail_replay() {
+  const uint32_t W = 384, H = 240;
+  int16_t pts[12];
+  star::ramp_points(s00_identity(), pts);
+  uint8_t ramp[64][3];
+  star::ramp_build(pts, ramp);
+  const star::Sprite8 corona = star::corona_sprite(5);
+
+  const uint32_t kCut = 5, kKeep = 4;  // capture after frame 5, replay 4 more
+  const uint32_t x0 = 60, step = 24, y0 = 120;
+
+  // Run A: straight through; capture the chunk after frame kCut-1 and record
+  // frames kCut..kCut+kKeep
+  star::TrailHistory trA;
+  star::FlareSlots slA;
+  star::ComposeLight A;
+  A.ramp = ramp;
+  A.corona = &corona;
+  A.trail = &trA;
+  A.ghost_r_px = 20;
+  A.y_px = y0;
+  std::vector<std::vector<uint8_t>> ran;
+  uint8_t buf[star::kCelestialStateBytes];
+  bool captured = false;
+  for (uint32_t f = 0; f < kCut + kKeep; ++f) {
+    A.x_px = x0 + step * f;
+    std::vector<uint8_t> rgb(W * H * 3, 0);
+    std::vector<int32_t> depth(W * H, 0);
+    star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, f * 8, &A, 1, nullptr, 0, slA,
+                       nullptr);
+    if (f >= kCut) ran.push_back(rgb);
+    if (f == kCut - 1) {  // the chunk the spec freezes, right after the frame
+      star::CelestialState st;
+      st.slots = slA;
+      st.trails[0] = trA;
+      star::celestial_state_serialize(st, buf);
+      captured = true;
+    }
+  }
+  check(captured, "replay capture taken after frame kCut-1");
+  star::CelestialState rst;
+  star::celestial_state_deserialize(buf, rst);
+
+  // Run B: fresh process state, deserialized chunk, same authored lights
+  star::ComposeLight B = A;
+  B.trail = &rst.trails[0];
+  for (uint32_t f = kCut; f < kCut + kKeep; ++f) {
+    B.x_px = x0 + step * f;
+    std::vector<uint8_t> rgb(W * H * 3, 0);
+    std::vector<int32_t> depth(W * H, 0);
+    star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, f * 8, &B, 1, nullptr, 0,
+                       rst.slots, nullptr);
+    check(ran[f - kCut] == rgb, "replay from the captured chunk is byte-exact (frame)");
+  }
+}
+
 // ---- §13 star_gamut_sheet: 12 classes × rungs, CRC-locked ------------------
 // Regenerate by deleting the constant and rerunning once; any change to the
 // bake/ramp/compose laws moves this and MUST be justified in the commit.
@@ -582,6 +808,8 @@ int main() {
   test_starfield_rarity();
   test_lod_ladder();
   test_state_roundtrip();
+  test_trail_anchor();
+  test_trail_replay();
   test_identity();
   test_starface();
   test_compose();
