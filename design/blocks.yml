@@ -950,8 +950,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_mode_random.cpp
       - state: UNIT_VERIFIED
         date: "2026-08-16"
         commit: "a4ea5d9"
@@ -990,8 +994,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_scanout_random.cpp
       - state: UNIT_VERIFIED
         date: "2026-08-16"
         commit: "a4ea5d9"
@@ -1029,8 +1037,12 @@ blocks:
     counters: [scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_scaler_random.cpp
       - state: UNIT_VERIFIED
         date: "2026-08-16"
         commit: "a4ea5d9"
@@ -1069,8 +1081,12 @@ blocks:
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
+      - state: RTL_VERIFIED
+        date: "2026-08-16"
+        commit: "a4ea5d9"
+        evidence: tests/video/video_framectl_random.cpp
       - state: UNIT_VERIFIED
         date: "2026-08-16"
         commit: "a4ea5d9"

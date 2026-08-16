@@ -26,8 +26,8 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 4 | · | · | · | · | · | · | · | 4 |
-| video | · | · | 4 | · | · | · | · | · | 4 |
-| **all** | 68 | 3 | 11 | 6 | · | · | · | 6 | 88 |
+| video | · | · | · | 4 | · | · | · | · | 4 |
+| **all** | 68 | 3 | 7 | 10 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -58,12 +58,16 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | AUDIO.FIFO | UNIT_VERIFIED | 2026-08-15 | `a3cd94a` | tests/audio/audio_fifo_directed.cpp |
 | AUDIO.FIFO | RTL_VERIFIED | 2026-08-15 | `a3cd94a` | tests/audio/audio_fifo_random.cpp |
 | AUDIO.FIFO | RTL_VERIFIED | 2026-08-15 | `a3cd94a` | tests/formal/audio_fifo_bounds.sby |
+| VIDEO.MODE | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_mode_random.cpp |
 | VIDEO.MODE | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_mode_directed.cpp |
 | VIDEO.MODE | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| VIDEO.SCANOUT | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scanout_random.cpp |
 | VIDEO.SCANOUT | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scanout_directed.cpp |
 | VIDEO.SCANOUT | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| VIDEO.SCALER | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scaler_random.cpp |
 | VIDEO.SCALER | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scaler_directed.cpp |
 | VIDEO.SCALER | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| VIDEO.FRAMECTL | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_random.cpp |
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
