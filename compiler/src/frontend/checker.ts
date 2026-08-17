@@ -441,7 +441,11 @@ class Checker {
       this.sink.warning('FORM-W-001', d.span,
         `const '${d.name}' is not SCREAMING_SNAKE_CASE (convention; warnings never affect semantics)`);
     }
-    this.checkExpr(this.ctxFor(ms, 'fn'), d.init, ty);
+    const actual = this.checkExpr(this.ctxFor(ms, 'fn'), d.init, ty);
+    if (!tAgree(actual, ty) && !tAgree(actual, T.unknown)) {
+      this.sink.error('FORM-E-300', d.init.span,
+        `const '${d.name}' is declared ${typeName(ty)} but its initializer is ${typeName(actual)}`);
+    }
   }
 
   private checkGlobal(ms: ModuleSym, d: GlobalDecl): void {
@@ -450,7 +454,11 @@ class Checker {
       this.sink.error('FORM-E-210', d.init.span,
         'global initializer must be a constant expression (explicit persistent state starts known)');
     }
-    this.checkExpr(this.ctxFor(ms, 'fn'), d.init, ty);
+    const actual = this.checkExpr(this.ctxFor(ms, 'fn'), d.init, ty);
+    if (!tAgree(actual, ty) && !tAgree(actual, T.unknown)) {
+      this.sink.error('FORM-E-300', d.init.span,
+        `global '${d.name}' is declared ${typeName(ty)} but its initializer is ${typeName(actual)}`);
+    }
   }
 
   private checkEnum(ms: ModuleSym, d: EnumDecl): void {
@@ -1816,7 +1824,11 @@ class Checker {
       seen.add(rf.name);
       const f = struct.fields.find((x) => x.name === rf.name)!;
       const want = this.resolveType(mod, f.type);
-      this.checkExpr(ctx, rf.value, want);
+      const actual = this.checkExpr(ctx, rf.value, want);
+      if (!tAgree(actual, want) && !tAgree(actual, T.unknown)) {
+        this.sink.error('FORM-E-300', rf.value.span,
+          `field '${rf.name}' of '${struct.name}' requires ${typeName(want)}, got ${typeName(actual)}`);
+      }
     }
     for (const f of struct.fields) {
       if (!seen.has(f.name)) {
@@ -1850,7 +1862,11 @@ class Checker {
         }
         if (seen.has(f.name)) this.sink.error('FORM-E-106', f.span, `duplicate component '${f.name}' (FORM-E-106)`);
         seen.add(f.name);
-        this.checkExpr(ctx, f.value, vec.elem);
+        const actual = this.checkExpr(ctx, f.value, vec.elem);
+        if (!tAgree(actual, vec.elem) && !tAgree(actual, T.unknown)) {
+          this.sink.error('FORM-E-300', f.value.span,
+            `component '${f.name}' of '${rec.typeName}' requires ${typeName(vec.elem)}, got ${typeName(actual)}`);
+        }
       }
       for (const name of vec.fields) {
         if (!seen.has(name)) {
@@ -1865,7 +1881,7 @@ class Checker {
       ? (r.sym.decl as unknown as StructDecl) : null;
     if (struct) {
       this.checkRecordLit(ctx, rec, struct, r!.mod);
-      return { t: 'struct', name: rec.typeName, owner: r!.mod.ast.name };
+      return { t: 'struct', name: struct.name, owner: r!.mod.ast.name };
     }
     this.sink.error('FORM-E-301', rec.span, `record literal of unknown struct '${rec.typeName}'`);
     for (const rf of rec.fields) this.checkExpr(ctx, rf.value, null);
@@ -1940,6 +1956,10 @@ class Checker {
         // literal) is itself a constant expression.
         return this.isConstExpr(ms, e.obj, active);
       }
+      case 'index':
+        return this.isConstExpr(ms, e.obj, active)
+          && this.isConstExpr(ms, e.index, active)
+          && this.constEval(ms, e.index) !== null;
       default:
         return false;
     }
@@ -1966,8 +1986,24 @@ class Checker {
         };
       },
       enumMember: (owner, expression) => this.constEnumMember(owner, expression),
+      memberType: (owner, aggregate, field) => this.constAggregateMemberType(owner, aggregate as Type, field),
+      elementType: (_owner, aggregate) => (aggregate as Type).t === 'array'
+        ? (aggregate as Extract<Type, { t: 'array' }>).elem : null,
     };
     return evaluateExactConstant(ms, e, expected ?? this.constKnownType(ms, e), bindings);
+  }
+
+  private constAggregateMemberType(ms: ModuleSym, aggregate: Type, field: string): Type | null {
+    if (aggregate.t === 'world2' || aggregate.t === 'world3' || aggregate.t === 'velocity3') {
+      return field === 'x' || field === 'y' || (field === 'z' && aggregate.t !== 'world2') ? T.fx24 : null;
+    }
+    if (aggregate.t !== 'struct') return null;
+    const owner = aggregate.owner ? this.byName.get(aggregate.owner) : ms;
+    const symbol = owner?.table.get(aggregate.name);
+    if (!owner || symbol?.kind !== 'struct') return null;
+    const declaration = symbol.decl as unknown as StructDecl;
+    const member = declaration.fields.find((candidate) => candidate.name === field);
+    return member ? this.resolveType(owner, member.type) : null;
   }
 
   /** Known authored type without producing diagnostics or recording effects. */
@@ -2002,7 +2038,19 @@ class Checker {
           return this.resolveType(resolved.mod, (resolved.sym.decl as unknown as ConstDecl).type);
         }
       }
-      return null;
+      const objectType = this.constKnownType(ms, e.obj);
+      return objectType ? this.constAggregateMemberType(ms, objectType, e.field) : null;
+    }
+    if (e.kind === 'index') {
+      const objectType = this.constKnownType(ms, e.obj);
+      return objectType?.t === 'array' ? objectType.elem : null;
+    }
+    if (e.kind === 'record') {
+      if (Checker.VECTOR_SHAPE[e.typeName]) return { t: e.typeName as 'world2' | 'world3' | 'velocity3' };
+      const resolved = this.resolveName(ms, e.typeName);
+      if (!resolved || resolved.ambiguous === true || resolved.sym.kind !== 'struct') return null;
+      const declaration = resolved.sym.decl as unknown as StructDecl;
+      return { t: 'struct', name: declaration.name, owner: resolved.mod.ast.name };
     }
     if (e.kind === 'unary') return e.op === '!' ? T.bool : this.constKnownType(ms, e.operand);
     if (e.kind === 'binary') {

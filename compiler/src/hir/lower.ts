@@ -238,7 +238,13 @@ class HirLowerer {
   }
 
   private field(module: number, order: number, decl: FieldDecl): HirField {
-    const raw = decl.footprint.kind === 'none' ? [] : decl.footprint.args.map((a) => this.raw(module, a, T.fx16) ?? 0n);
+    const raw = decl.footprint.kind === 'none' ? [] : decl.footprint.args.map((argument) => {
+      const value = this.raw(module, argument, T.fx16);
+      if (value === null) {
+        throw new Error('internal HIR footprint argument did not reduce after frontend acceptance');
+      }
+      return value;
+    });
     let rect: [bigint, bigint, bigint, bigint] = [0n, 0n, 0n, 0n];
     if (decl.footprint.kind === 'rect' && raw.length >= 4) rect = [raw[0]!, raw[1]!, raw[2]!, raw[3]!];
     if (decl.footprint.kind === 'circle' && raw.length >= 3) rect = [raw[0]! - raw[2]!, raw[1]! - raw[2]!, raw[0]! + raw[2]!, raw[1]! + raw[2]!];
@@ -613,13 +619,16 @@ class HirLowerer {
         };
       },
       enumMember: (owner, expression) => this.constantEnumMember(owner, expression),
+      memberType: (_owner, aggregate, field) => this.memberType(aggregate as Type, field),
+      elementType: (_owner, aggregate) => (aggregate as Type).t === 'array'
+        ? (aggregate as Extract<Type, { t: 'array' }>).elem : null,
     };
     return evaluateExactConstant(module, ast, type, bindings);
   }
 
   private constantType(module: number, ast: Expr): Type | null {
     const checked = this.expressionTypes.get(ast);
-    if (checked && checked.t !== 'unknown') return checked;
+    if (checked && checked.t !== 'unknown') return this.qualifyCheckedType(module, checked);
     if (ast.kind === 'literal') {
       if (ast.lit === 'bool') return T.bool;
       if (ast.lit === 'colour') return T.colour8;
@@ -644,7 +653,18 @@ class HirLowerer {
         const symbol = this.qualifiedMember(module, ast.obj.name, ast.field);
         if (symbol?.decl.kind === 'Const') return this.type(symbol.module, symbol.decl.type);
       }
-      return null;
+      const objectType = this.constantType(module, ast.obj);
+      return objectType ? this.memberType(objectType, ast.field) : null;
+    }
+    if (ast.kind === 'index') {
+      const objectType = this.constantType(module, ast.obj);
+      return objectType?.t === 'array' ? objectType.elem : null;
+    }
+    if (ast.kind === 'record') {
+      const builtin = builtinType(ast.typeName);
+      if (builtin && (builtin.t === 'world2' || builtin.t === 'world3' || builtin.t === 'velocity3')) return builtin;
+      const symbol = this.resolve(module, ast.typeName);
+      return symbol?.decl.kind === 'Struct' ? { t: 'struct', name: qname(symbol.module, symbol.name) } : null;
     }
     if (ast.kind === 'unary') return ast.op === '!' ? T.bool : this.constantType(module, ast.operand);
     if (ast.kind === 'binary') {

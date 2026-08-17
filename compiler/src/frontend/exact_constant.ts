@@ -18,10 +18,29 @@ export interface ExactEnumMember {
   readonly value: bigint;
 }
 
+export interface ExactRecordValue {
+  readonly kind: 'record';
+  readonly fields: ReadonlyMap<string, ExactConstantValue>;
+}
+
+export interface ExactArrayValue {
+  readonly kind: 'array';
+  readonly elements: readonly ExactConstantValue[];
+}
+
+/** Internal exact value domain. Public declaration bounds still require a scalar. */
+export type ExactConstantValue = bigint | ExactRecordValue | ExactArrayValue;
+
 export interface ExactConstantBindings<C> {
   typeOf(context: C, expression: Expr): ExactConstantType | null;
   constant(context: C, expression: Expr): ExactConstantReference<C> | null;
   enumMember(context: C, expression: Expr): ExactEnumMember | null;
+  /** Exact declared field type, resolved in the aggregate declaration's owner. */
+  memberType?(context: C, aggregate: ExactConstantType, field: string): ExactConstantType | null;
+  /** Exact element type for a fixed array. */
+  elementType?(context: C, aggregate: ExactConstantType): ExactConstantType | null;
+  /** Optional compiler-owned aggregate source (there is no authored array literal in L1). */
+  aggregateValue?(context: C, expression: Expr): ExactRecordValue | ExactArrayValue | null;
 }
 
 /**
@@ -38,11 +57,27 @@ export function evaluateExactConstant<C>(
   bindings: ExactConstantBindings<C>,
   active: Set<string> = new Set(),
 ): bigint | null {
+  const value = evaluateExactConstantValue(context, expression, expected, bindings, active);
+  return typeof value === 'bigint' ? value : null;
+}
+
+/**
+ * Shared exact reducer for scalar and aggregate constant values. Record fields
+ * retain authored names, and member/index projection never substitutes a value
+ * when the aggregate, field, index, or dependency cannot be reduced exactly.
+ */
+export function evaluateExactConstantValue<C>(
+  context: C,
+  expression: Expr,
+  expected: ExactConstantType | null,
+  bindings: ExactConstantBindings<C>,
+  active: Set<string> = new Set(),
+): ExactConstantValue | null {
   const reference = bindings.constant(context, expression);
   if (reference !== null) {
     if (active.has(reference.key)) return null;
     active.add(reference.key);
-    const value = evaluateExactConstant(
+    const value = evaluateExactConstantValue(
       reference.context,
       reference.expression,
       reference.type,
@@ -50,21 +85,27 @@ export function evaluateExactConstant<C>(
       active,
     );
     active.delete(reference.key);
-    return value === null ? null : normalizeExactConstant(value, reference.type);
+    return value === null ? null : normalizeExactValue(reference.context, value, reference.type, bindings);
   }
 
   const enumMember = bindings.enumMember(context, expression);
   if (enumMember !== null) return normalizeExactConstant(enumMember.value, enumMember.type);
 
   const expressionType = bindings.typeOf(context, expression) ?? expected;
+  const aggregate = bindings.aggregateValue?.(context, expression) ?? null;
+  if (aggregate !== null) {
+    return expressionType === null
+      ? aggregate : normalizeExactValue(context, aggregate, expressionType, bindings);
+  }
+
   switch (expression.kind) {
     case 'literal':
       return exactLiteral(expression, expressionType);
     case 'unary': {
       const operandType = bindings.typeOf(context, expression.operand)
         ?? (expression.op === '!' ? { t: 'bool' } : expressionType);
-      const operand = evaluateExactConstant(context, expression.operand, operandType, bindings, active);
-      if (operand === null) return null;
+      const operand = evaluateExactConstantValue(context, expression.operand, operandType, bindings, active);
+      if (typeof operand !== 'bigint') return null;
       if (expression.op === '!') return operand === 0n ? 1n : 0n;
       if (expression.op === '-') {
         return expressionType === null ? -operand : normalizeExactConstant(-operand, expressionType);
@@ -81,14 +122,65 @@ export function evaluateExactConstant<C>(
       const knownRight = bindings.typeOf(context, expression.r);
       const operandType = knownLeft ?? knownRight
         ?? (logical ? { t: 'bool' } : comparison ? { t: 'i32' } : expressionType);
-      const left = evaluateExactConstant(context, expression.l, operandType, bindings, active);
-      const right = evaluateExactConstant(context, expression.r, operandType, bindings, active);
-      if (left === null || right === null) return null;
+      const left = evaluateExactConstantValue(context, expression.l, operandType, bindings, active);
+      const right = evaluateExactConstantValue(context, expression.r, operandType, bindings, active);
+      if (typeof left !== 'bigint' || typeof right !== 'bigint') return null;
       return exactBinary(expression.op, left, right, operandType, expressionType);
+    }
+    case 'record': {
+      const fields = new Map<string, ExactConstantValue>();
+      for (const field of expression.fields) {
+        const fieldType = expressionType === null
+          ? bindings.typeOf(context, field.value)
+          : bindings.memberType?.(context, expressionType, field.name)
+            ?? bindings.typeOf(context, field.value);
+        const value = evaluateExactConstantValue(context, field.value, fieldType, bindings, active);
+        if (value === null) return null;
+        fields.set(field.name, value);
+      }
+      return { kind: 'record', fields };
+    }
+    case 'member': {
+      const objectType = bindings.typeOf(context, expression.obj);
+      const value = evaluateExactConstantValue(context, expression.obj, objectType, bindings, active);
+      if (value === null || typeof value === 'bigint' || value.kind !== 'record') return null;
+      return value.fields.get(expression.field) ?? null;
+    }
+    case 'index': {
+      const objectType = bindings.typeOf(context, expression.obj);
+      const value = evaluateExactConstantValue(context, expression.obj, objectType, bindings, active);
+      const index = evaluateExactConstantValue(context, expression.index, { t: 'u32' }, bindings, active);
+      if (value === null || typeof value === 'bigint' || value.kind !== 'array'
+          || typeof index !== 'bigint' || index < 0n || index >= BigInt(value.elements.length)) return null;
+      return value.elements[Number(index)] ?? null;
     }
     default:
       return null;
   }
+}
+
+function normalizeExactValue<C>(
+  context: C,
+  value: ExactConstantValue,
+  type: ExactConstantType,
+  bindings: ExactConstantBindings<C>,
+): ExactConstantValue {
+  if (typeof value === 'bigint') return normalizeExactConstant(value, type);
+  if (value.kind === 'record') {
+    const fields = new Map<string, ExactConstantValue>();
+    for (const [name, field] of value.fields) {
+      const fieldType = bindings.memberType?.(context, type, name) ?? null;
+      fields.set(name, fieldType === null ? field : normalizeExactValue(context, field, fieldType, bindings));
+    }
+    return { kind: 'record', fields };
+  }
+  const elementType = bindings.elementType?.(context, type) ?? null;
+  return {
+    kind: 'array',
+    elements: elementType === null
+      ? value.elements
+      : value.elements.map((element) => normalizeExactValue(context, element, elementType, bindings)),
+  };
 }
 
 function exactLiteral(

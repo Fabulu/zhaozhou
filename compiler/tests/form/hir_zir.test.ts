@@ -144,6 +144,40 @@ test('HIR uses the frontend exact reducer for required bounds and width-normaliz
   assert.equal(lowerHir(refused), null);
 });
 
+test('HIR shares exact nested aggregate projection with checker bounds without fallback values', () => {
+  const frontend = compileFrontend({
+    'a_owner.form': `module owner {
+      struct leaf { cap: u32; }
+      struct metadata { nested: leaf; }
+      const META: metadata = metadata { nested = leaf { cap = 5 } };
+    }\n`,
+    'b_aggregate.form': `module aggregate {
+      import owner;
+      struct leaf { cap: u32; }
+      struct metadata { nested: leaf; }
+      const FORWARD: u32 = LATER.nested.cap;
+      const LATER: metadata = metadata { nested = leaf { cap = 3 } };
+      const DIRECT: u32 = (metadata { nested = leaf { cap = 4 } }).nested.cap;
+      const IMPORTED: u32 = owner.META.nested.cap;
+      const CAP: u32 = FORWARD + DIRECT + IMPORTED;
+      struct row { values: u32[CAP]; }
+      pool rows: row[CAP];
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const constants = new Map(declarationsOf(hir, 'const')
+    .filter((item) => item.module === 1)
+    .map((item) => [item.name, item.raw]));
+  assert.deepEqual(constants, new Map<string, bigint | null>([
+    ['FORWARD', 3n], ['LATER', null], ['DIRECT', 4n], ['IMPORTED', 5n], ['CAP', 12n],
+  ]));
+  assert.equal(declarationsOf(hir, 'pool').find((item) => item.module === 1)?.capacity, 12);
+  const row = declarationsOf(hir, 'struct').find((item) => item.module === 1 && item.name === 'row')!;
+  assert.equal(row.fields[0]!.type.t === 'array' ? row.fields[0]!.type.len : null, 12);
+});
+
 test('qualified flow calls retain owner identity and canonical pool effects in HIR', () => {
   const frontend = compileFrontend({
     'a_flowlib.form': `module flowlib {

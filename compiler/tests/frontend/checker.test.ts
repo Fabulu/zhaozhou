@@ -8,8 +8,9 @@ import assert from 'node:assert/strict';
 
 import { compile } from './helpers.js';
 import { checkModules } from '../../src/frontend/checker.js';
+import { evaluateExactConstant, type ExactConstantBindings } from '../../src/frontend/exact_constant.js';
 import { DiagnosticSink } from '../../src/frontend/diagnostics.js';
-import type { ModuleAst, PresentationItem, TopDecl } from '../../src/frontend/ast.js';
+import type { Expr, ModuleAst, PresentationItem, TopDecl } from '../../src/frontend/ast.js';
 import type { SourceSpan } from '../../src/frontend/span.js';
 
 const MOD = (body: string): string => `module m {\n${body}\n}\n`;
@@ -479,6 +480,102 @@ test('exact bound reduction handles unary width operations and diagnoses irreduc
   `));
   assert.ok(refused.codes.includes('FORM-E-800'));
   assert.ok(refused.codes.includes('FORM-E-801'));
+});
+
+test('exact aggregate projections feed bounds across nesting, forward references, and owners', () => {
+  const local = compile(MOD(`
+    struct leaf { cap: u32; }
+    struct metadata { nested: leaf; }
+    const FORWARD: u32 = LATER.nested.cap;
+    const LATER: metadata = metadata { nested = leaf { cap = 3 } };
+    const DIRECT: u32 = (metadata { nested = leaf { cap = 4 } }).nested.cap;
+    const CAP: u32 = FORWARD + DIRECT;
+    struct row { values: u32[CAP]; }
+    pool rows: row[CAP];
+  `));
+  assert.deepEqual(local.codes, [], local.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+
+  const qualified = compile({
+    'owner.form': `module owner {
+      struct leaf { cap: u32; }
+      struct metadata { nested: leaf; }
+      const META: metadata = metadata { nested = leaf { cap = 5 } };
+    }\n`,
+    'consumer.form': `module consumer {
+      import owner;
+      const CAP: u32 = owner.META.nested.cap;
+      struct row { values: u32[CAP]; }
+      pool rows: row[CAP];
+    }\n`,
+  });
+  assert.deepEqual(qualified.codes, [], qualified.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+});
+
+test('shared exact reducer projects nested fixed-array records and refuses invalid indices', () => {
+  const span: SourceSpan = { file: 'exact.form', start: 0, end: 1 };
+  const values: Expr = { kind: 'ident', name: 'VALUES', span };
+  const projection = (index: bigint): Expr => ({
+    kind: 'member', field: 'cap', fieldSpan: span, span,
+    obj: {
+      kind: 'index', obj: values, span,
+      index: { kind: 'literal', lit: 'int', text: index.toString(), intVal: index, span },
+    },
+  });
+  const arrayType = { t: 'array' };
+  const rowType = { t: 'record' };
+  const u32Type = { t: 'u32' };
+  const bindings: ExactConstantBindings<number> = {
+    typeOf: (_context, expression) => expression === values ? arrayType
+      : expression.kind === 'index' ? rowType
+        : expression.kind === 'member' || expression.kind === 'literal' ? u32Type : null,
+    constant: () => null,
+    enumMember: () => null,
+    memberType: (_context, aggregate, field) => aggregate.t === 'record' && field === 'cap' ? u32Type : null,
+    elementType: (_context, aggregate) => aggregate.t === 'array' ? rowType : null,
+    aggregateValue: (_context, expression) => expression === values ? {
+      kind: 'array',
+      elements: [
+        { kind: 'record', fields: new Map([['cap', 3n]]) },
+        { kind: 'record', fields: new Map([['cap', 7n]]) },
+      ],
+    } : null,
+  };
+  assert.equal(evaluateExactConstant(0, projection(1n), u32Type, bindings), 7n);
+  assert.equal(evaluateExactConstant(0, projection(2n), u32Type, bindings), null);
+  assert.equal(evaluateExactConstant(0, projection(-1n), u32Type, bindings), null);
+});
+
+test('aggregate bounds diagnose cycles, missing members, and field-type drift', () => {
+  const cyclic = compile(MOD(`
+    struct metadata { cap: u32; }
+    struct row { value: u32; }
+    const META: metadata = metadata { cap = CAP };
+    const CAP: u32 = META.cap;
+    pool rows: row[CAP];
+  `));
+  assert.ok(cyclic.codes.includes('FORM-E-210'));
+  assert.ok(cyclic.codes.includes('FORM-E-800'));
+
+  const missing = compile(MOD(`
+    struct metadata { cap: u32; }
+    struct row { value: u32; }
+    const META: metadata = metadata { cap = 3 };
+    const CAP: u32 = META.missing;
+    pool rows: row[CAP];
+  `));
+  assert.ok(missing.codes.includes('FORM-E-306'));
+  assert.ok(missing.codes.includes('FORM-E-800'));
+
+  const wrongType = compile(MOD(`
+    struct metadata { cap: fx16; }
+    struct row { value: u32; }
+    const META: metadata = metadata { cap = 3m };
+    const CAP: u32 = META.cap;
+    pool rows: row[CAP];
+  `));
+  assert.ok(wrongType.codes.includes('FORM-E-300'));
+  assert.equal(wrongType.codes.includes('FORM-E-800'), false,
+    'the declaration-type error, not an invented bound value, owns this refusal');
 });
 
 test('whole-module-qualified flow calls share selective-call admission and pool effects', () => {
