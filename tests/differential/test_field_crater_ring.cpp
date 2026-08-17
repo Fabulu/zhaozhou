@@ -245,15 +245,23 @@ int main() {
   {
     const std::string zcapPath = ZHAO_CAPTURE_DIR "/golden/field/crater_ring_roundtrip.zcap";
     zhao::ZhaoZcapWriter w(zcapPath);
-    std::vector<zhao::ZhaoSourceMapEntry> sm;
+    zhao::ZhaoSourceMap sm;
+    sm.files = {"<module-0>", "spells/upheaval.form"};
     zhao::ZhaoSourceMapEntry e;
     e.source_id = dec.prog.source_id;
+    e.module_id = 1;
+    e.file_index = 1;
     e.kind = 3;  // field program (capture_format.md §5)
-    e.line = kRING_Span.line;
+    e.flags = 1;
+    e.span_begin = kRING_Span.line;
+    e.span_end = kRING_Span.line;
     e.name = "crater_ring";
-    e.file = "spells/upheaval.form";
-    sm.push_back(e);
-    w.add_section(zhao::ZHAO_ZCAP_SOURCE_MAP, 1, zhao::zhao_zcap_build_source_map(sm));
+    e.file = sm.files[1];
+    e.program_hash = dec.prog.program_hash;
+    sm.entries.push_back(e);
+    const zhao::ZhaoSourceMapBuildResult built = zhao::zhao_zcap_build_source_map(sm);
+    CHECK(built.ok(), "gate 5: canonical SOURCE_MAP built");
+    w.add_section(zhao::ZHAO_ZCAP_SOURCE_MAP, 1, built.bytes);
     std::vector<zhao::ZhaoResourcePage> pages;
     zhao::ZhaoResourcePage pg;
     pg.kind = 3;  // field program page
@@ -272,11 +280,12 @@ int main() {
     CHECK(smSec != nullptr, "gate 5: SOURCE_MAP section present");
     std::vector<uint8_t> body;
     bool ok = smSec && r.read_body(*smSec, body);
-    const std::vector<zhao::ZhaoSourceMapEntry> back =
-        zhao::zhao_zcap_parse_source_map(body.data(), body.size());
-    ok = ok && back.size() == 1 && back[0].source_id == dec.prog.source_id &&
-         back[0].name == "crater_ring";
-    CHECK(ok, "gate 5: source ID survives the round-trip");
+    const zhao::ZhaoSourceMapParseResult back = zhao::zhao_zcap_parse_source_map(body);
+    ok = ok && back.ok() && back.map.entries.size() == 1
+         && back.map.entries[0].source_id == dec.prog.source_id
+         && back.map.entries[0].name == "crater_ring"
+         && back.map.entries[0].program_hash == dec.prog.program_hash;
+    CHECK(ok, "gate 5: source ID and program hash survive the round-trip");
     const zhao::ZhaoZcapSectionInfo* pgSec = r.find(zhao::ZHAO_ZCAP_RESOURCE_PAGES);
     std::vector<uint8_t> pbody;
     ok = pgSec && r.read_body(*pgSec, pbody);

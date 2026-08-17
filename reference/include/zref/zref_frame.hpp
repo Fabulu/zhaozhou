@@ -15,6 +15,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -223,19 +224,90 @@ struct ZhaoZcapAbiInfo {
 std::vector<uint8_t> zhao_zcap_build_abi_info();  // from generated constants
 ZhaoZcapAbiInfo zhao_zcap_parse_abi_info(const uint8_t* body, size_t n);
 
-/** SOURCE_MAP entry (spec 5): source IDs survive capture round-trips. */
+/** Canonical ZSMP v1 SOURCE_MAP (capture_format.md §7). */
+constexpr uint32_t ZHAO_ZMAP_MAGIC = 0x504D535Au;
+constexpr uint16_t ZHAO_ZMAP_VERSION = 1u;
+constexpr size_t ZHAO_ZMAP_HEADER_BYTES = 32u;
+constexpr size_t ZHAO_ZMAP_ENTRY_BYTES = 24u;
+constexpr size_t ZHAO_ZMAP_FILE_BYTES = 8u;
+constexpr size_t ZHAO_ZMAP_MAX_BYTES = 128u * 1024u * 1024u;
+
 struct ZhaoSourceMapEntry {
   uint32_t source_id = 0;
   uint16_t module_id = 0;
+  uint16_t file_index = 0;
   uint8_t kind = 0;
   uint8_t flags = 0;
-  uint32_t line = 0;
+  uint32_t span_begin = 0;
+  uint32_t span_end = 0;
   std::string name;
   std::string file;
+  std::optional<uint32_t> program_hash;
 };
 
-std::vector<uint8_t> zhao_zcap_build_source_map(const std::vector<ZhaoSourceMapEntry>& entries);
-std::vector<ZhaoSourceMapEntry> zhao_zcap_parse_source_map(const uint8_t* body, size_t n);
+struct ZhaoSourceMap {
+  uint16_t flags = 0;
+  std::vector<ZhaoSourceMapEntry> entries;
+  std::vector<std::string> files;
+};
+
+enum class ZhaoSourceMapError {
+  kOk,
+  kNullBody,
+  kTooLarge,
+  kTruncatedHeader,
+  kBadMagic,
+  kUnsupportedVersion,
+  kReservedFlags,
+  kReservedHeader,
+  kInconsistentLengths,
+  kBodyCrcMismatch,
+  kEntriesNotAscending,
+  kKindMismatch,
+  kFileIndexOutsideTable,
+  kModuleFileMismatch,
+  kReservedEntryBits,
+  kReversedSpan,
+  kHashWithoutFlag,
+  kProgramHashHeaderMismatch,
+  kNonzeroFileReserved,
+  kStringOffsetOutsideBlob,
+  kUnterminatedString,
+  kInvalidUtf8,
+  kInvalidInput,
+  kSizeOverflow,
+};
+
+struct ZhaoSourceMapSizeResult {
+  ZhaoSourceMapError error = ZhaoSourceMapError::kOk;
+  uint64_t bytes = 0;
+  bool ok() const { return error == ZhaoSourceMapError::kOk; }
+};
+
+/** Non-allocating, wide v1 layout arithmetic and global byte admission. */
+ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
+    uint64_t entry_count, uint64_t file_count, uint64_t string_blob_bytes);
+ZhaoSourceMapError zhao_source_map_v1_admit_byte_length(uint64_t bytes);
+
+struct ZhaoSourceMapParseResult {
+  ZhaoSourceMapError error = ZhaoSourceMapError::kOk;
+  std::string diagnostic;
+  ZhaoSourceMap map;
+  bool ok() const { return error == ZhaoSourceMapError::kOk; }
+};
+
+struct ZhaoSourceMapBuildResult {
+  ZhaoSourceMapError error = ZhaoSourceMapError::kOk;
+  std::string diagnostic;
+  std::vector<uint8_t> bytes;
+  bool ok() const { return error == ZhaoSourceMapError::kOk; }
+};
+
+ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map);
+ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t n);
+inline ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const std::vector<uint8_t>& body) {
+  return zhao_zcap_parse_source_map(body.data(), body.size());
+}
 
 /** RESOURCE_PAGES entry (spec 4.2): page references + program hashes. */
 struct ZhaoResourcePage {

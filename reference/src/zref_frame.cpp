@@ -5,7 +5,10 @@
 
 #include "zref/zref_frame.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <limits>
+#include <unordered_map>
 
 namespace zhao {
 
@@ -456,66 +459,407 @@ ZhaoZcapAbiInfo zhao_zcap_parse_abi_info(const uint8_t* body, size_t n) {
   return info;
 }
 
-std::vector<uint8_t> zhao_zcap_build_source_map(const std::vector<ZhaoSourceMapEntry>& entries) {
-  std::vector<uint8_t> blob;
-  struct Off {
-    uint16_t name, file;
-  };
-  std::vector<Off> offs;
-  const auto put = [&](const std::string& s) -> uint16_t {
-    const uint16_t off = static_cast<uint16_t>(blob.size());
-    blob.insert(blob.end(), s.begin(), s.end());
-    blob.push_back(0);
-    return off;
-  };
-  for (const auto& e : entries) {
-    Off o{put(e.name), put(e.file)};
-    offs.push_back(o);
-  }
+namespace {
 
-  std::vector<uint8_t> body(4 + entries.size() * 16 + blob.size(), 0);
-  wr32(body, 0, static_cast<uint32_t>(entries.size()));
-  uint32_t off = 4;
-  for (size_t i = 0; i < entries.size(); i++) {
-    const auto& e = entries[i];
-    wr32(body, off + 0, e.source_id);
-    wr16(body, off + 4, e.module_id);
-    body[off + 6] = e.kind;
-    body[off + 7] = e.flags;
-    wr32(body, off + 8, e.line);
-    wr16(body, off + 12, offs[i].name);
-    wr16(body, off + 14, offs[i].file);
-    off += 16;
+bool zmap_utf8(const uint8_t* bytes, size_t size) {
+  size_t i = 0;
+  while (i < size) {
+    const uint8_t first = bytes[i++];
+    if (first <= 0x7Fu) continue;
+    if (first >= 0xC2u && first <= 0xDFu) {
+      if (i >= size || (bytes[i++] & 0xC0u) != 0x80u) return false;
+      continue;
+    }
+    if (first >= 0xE0u && first <= 0xEFu) {
+      if (i + 1u >= size) return false;
+      const uint8_t second = bytes[i++];
+      const uint8_t third = bytes[i++];
+      if ((third & 0xC0u) != 0x80u) return false;
+      if (first == 0xE0u) {
+        if (second < 0xA0u || second > 0xBFu) return false;
+      } else if (first == 0xEDu) {
+        if (second < 0x80u || second > 0x9Fu) return false;
+      } else if ((second & 0xC0u) != 0x80u) {
+        return false;
+      }
+      continue;
+    }
+    if (first >= 0xF0u && first <= 0xF4u) {
+      if (i + 2u >= size) return false;
+      const uint8_t second = bytes[i++];
+      const uint8_t third = bytes[i++];
+      const uint8_t fourth = bytes[i++];
+      if ((third & 0xC0u) != 0x80u || (fourth & 0xC0u) != 0x80u) return false;
+      if (first == 0xF0u) {
+        if (second < 0x90u || second > 0xBFu) return false;
+      } else if (first == 0xF4u) {
+        if (second < 0x80u || second > 0x8Fu) return false;
+      } else if ((second & 0xC0u) != 0x80u) {
+        return false;
+      }
+      continue;
+    }
+    return false;
   }
-  std::memcpy(body.data() + off, blob.data(), blob.size());
-  return body;
+  return true;
 }
 
-std::vector<ZhaoSourceMapEntry> zhao_zcap_parse_source_map(const uint8_t* body, size_t n) {
-  std::vector<ZhaoSourceMapEntry> out;
-  if (n < 4) return out;
-  const uint32_t count = rd32(body);
-  const uint32_t blob_start = 4 + count * 16;
-  if (blob_start > n) return out;
-  const auto read_str = [&](uint16_t rel) {
-    size_t p = blob_start + rel;
-    std::string s;
-    while (p < n && body[p] != 0) s.push_back(char(body[p++]));
-    return s;
-  };
-  for (uint32_t i = 0; i < count; i++) {
-    const uint8_t* e = body + 4 + i * 16;
-    ZhaoSourceMapEntry entry;
-    entry.source_id = rd32(e);
-    entry.module_id = rd16(e + 4);
-    entry.kind = e[6];
-    entry.flags = e[7];
-    entry.line = rd32(e + 8);
-    entry.name = read_str(rd16(e + 12));
-    entry.file = read_str(rd16(e + 14));
-    out.push_back(std::move(entry));
+bool zmap_text_ok(const std::string& text) {
+  return text.find('\0') == std::string::npos
+      && zmap_utf8(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+}
+
+ZhaoSourceMapBuildResult zmap_build_fail(ZhaoSourceMapError error, const char* diagnostic) {
+  ZhaoSourceMapBuildResult result;
+  result.error = error;
+  result.diagnostic = diagnostic;
+  return result;
+}
+
+ZhaoSourceMapParseResult zmap_parse_fail(ZhaoSourceMapError error, const char* diagnostic) {
+  ZhaoSourceMapParseResult result;
+  result.error = error;
+  result.diagnostic = diagnostic;
+  return result;
+}
+
+}  // namespace
+
+ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
+    uint64_t entry_count, uint64_t file_count, uint64_t string_blob_bytes) {
+  ZhaoSourceMapSizeResult result;
+  constexpr uint64_t kU32Max = std::numeric_limits<uint32_t>::max();
+  if (entry_count > kU32Max || file_count > kU32Max || string_blob_bytes > kU32Max) {
+    result.error = ZhaoSourceMapError::kSizeOverflow;
+    return result;
   }
-  return out;
+  const uint64_t body_bytes = entry_count * ZHAO_ZMAP_ENTRY_BYTES
+                            + file_count * ZHAO_ZMAP_FILE_BYTES
+                            + string_blob_bytes;
+  if (body_bytes > kU32Max) {
+    result.error = ZhaoSourceMapError::kSizeOverflow;
+    return result;
+  }
+  result.bytes = ZHAO_ZMAP_HEADER_BYTES + body_bytes;
+  return result;
+}
+
+ZhaoSourceMapError zhao_source_map_v1_admit_byte_length(uint64_t bytes) {
+  return bytes > ZHAO_ZMAP_MAX_BYTES ? ZhaoSourceMapError::kTooLarge
+                                     : ZhaoSourceMapError::kOk;
+}
+
+ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
+  if (map.entries.size() > std::numeric_limits<uint32_t>::max()
+      || map.files.size() > std::numeric_limits<uint32_t>::max()) {
+    return zmap_build_fail(ZhaoSourceMapError::kSizeOverflow,
+                           "sourceids.zmap exceeds v1 u32 size limits");
+  }
+  if (map.files.size() > 0x1000u) {
+    return zmap_build_fail(ZhaoSourceMapError::kInvalidInput,
+                           "sourceids.zmap: file count exceeds module range");
+  }
+
+  std::vector<ZhaoSourceMapEntry> entries = map.entries;
+  std::sort(entries.begin(), entries.end(), [](const ZhaoSourceMapEntry& a,
+                                                const ZhaoSourceMapEntry& b) {
+    return a.source_id < b.source_id;
+  });
+  bool any_hash = false;
+  uint32_t previous = 0;
+  bool have_previous = false;
+  for (const auto& entry : entries) {
+    if (have_previous && entry.source_id == previous) {
+      return zmap_build_fail(ZhaoSourceMapError::kEntriesNotAscending,
+                             "sourceids.zmap: duplicate source id");
+    }
+    have_previous = true;
+    previous = entry.source_id;
+    const uint16_t module = static_cast<uint16_t>((entry.source_id >> 16) & 0x0FFFu);
+    if ((entry.source_id >> 28) != entry.kind) {
+      return zmap_build_fail(ZhaoSourceMapError::kKindMismatch,
+                             "sourceids.zmap: denormalized kind mismatch");
+    }
+    if (entry.module_id != module || entry.file_index != entry.module_id
+        || entry.file_index >= map.files.size()) {
+      return zmap_build_fail(ZhaoSourceMapError::kModuleFileMismatch,
+                             "sourceids.zmap: denormalized module/file");
+    }
+    if (entry.file != map.files[entry.file_index]) {
+      return zmap_build_fail(ZhaoSourceMapError::kModuleFileMismatch,
+                             "sourceids.zmap: entry file does not match file table");
+    }
+    const uint8_t expected_flags = entry.program_hash.has_value() ? 1u : 0u;
+    if (entry.flags != expected_flags) {
+      return zmap_build_fail(ZhaoSourceMapError::kReservedEntryBits,
+                             "sourceids.zmap: denormalized program-hash flags");
+    }
+    if (entry.span_end < entry.span_begin) {
+      return zmap_build_fail(ZhaoSourceMapError::kReversedSpan,
+                             "sourceids.zmap: reversed span");
+    }
+    if (!zmap_text_ok(entry.name) || !zmap_text_ok(entry.file)) {
+      return zmap_build_fail(ZhaoSourceMapError::kInvalidUtf8,
+                             "sourceids.zmap: strings must be NUL-free UTF-8");
+    }
+    any_hash = any_hash || entry.program_hash.has_value();
+  }
+  for (const auto& file : map.files) {
+    if (!zmap_text_ok(file)) {
+      return zmap_build_fail(ZhaoSourceMapError::kInvalidUtf8,
+                             "sourceids.zmap: strings must be NUL-free UTF-8");
+    }
+  }
+
+  std::unordered_map<std::string, uint32_t> interned;
+  std::vector<std::string> strings;
+  uint64_t blob_bytes = 0;
+  const auto intern = [&](const std::string& text, uint32_t& offset) -> bool {
+    const auto found = interned.find(text);
+    if (found != interned.end()) {
+      offset = found->second;
+      return true;
+    }
+    if (text.size() > std::numeric_limits<uint32_t>::max()
+        || blob_bytes + static_cast<uint64_t>(text.size()) + 1u
+            > std::numeric_limits<uint32_t>::max()) {
+      return false;
+    }
+    offset = static_cast<uint32_t>(blob_bytes);
+    blob_bytes += static_cast<uint64_t>(text.size()) + 1u;
+    interned.emplace(text, offset);
+    strings.push_back(text);
+    return true;
+  };
+
+  std::vector<uint32_t> file_offsets(map.files.size());
+  std::vector<uint32_t> name_offsets(entries.size());
+  for (size_t i = 0; i < map.files.size(); ++i) {
+    if (!intern(map.files[i], file_offsets[i])) {
+      return zmap_build_fail(ZhaoSourceMapError::kSizeOverflow,
+                             "sourceids.zmap exceeds v1 u32 size limits");
+    }
+  }
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (!intern(entries[i].name, name_offsets[i])) {
+      return zmap_build_fail(ZhaoSourceMapError::kSizeOverflow,
+                             "sourceids.zmap exceeds v1 u32 size limits");
+    }
+  }
+
+  const auto layout = zhao_source_map_v1_byte_length(entries.size(), map.files.size(), blob_bytes);
+  if (!layout.ok()) {
+    return zmap_build_fail(layout.error, "sourceids.zmap exceeds v1 u32 size limits");
+  }
+  if (zhao_source_map_v1_admit_byte_length(layout.bytes) != ZhaoSourceMapError::kOk) {
+    return zmap_build_fail(ZhaoSourceMapError::kTooLarge,
+                           "sourceids.zmap exceeds v1 128 MiB global byte limit");
+  }
+
+  ZhaoSourceMapBuildResult result;
+  result.bytes.assign(static_cast<size_t>(layout.bytes), 0u);
+  auto& out = result.bytes;
+  wr32(out, 0, ZHAO_ZMAP_MAGIC);
+  wr16(out, 4, ZHAO_ZMAP_VERSION);
+  wr16(out, 6, any_hash ? 1u : 0u);
+  wr32(out, 8, static_cast<uint32_t>(entries.size()));
+  wr32(out, 12, static_cast<uint32_t>(map.files.size()));
+  wr32(out, 16, static_cast<uint32_t>(blob_bytes));
+  wr64(out, 24, 0u);
+
+  size_t offset = ZHAO_ZMAP_HEADER_BYTES;
+  for (size_t i = 0; i < entries.size(); ++i) {
+    const auto& entry = entries[i];
+    wr32(out, static_cast<uint32_t>(offset + 0u), entry.source_id);
+    wr16(out, static_cast<uint32_t>(offset + 4u), entry.file_index);
+    out[offset + 6u] = entry.kind;
+    out[offset + 7u] = entry.flags;
+    wr32(out, static_cast<uint32_t>(offset + 8u), entry.span_begin);
+    wr32(out, static_cast<uint32_t>(offset + 12u), entry.span_end);
+    wr32(out, static_cast<uint32_t>(offset + 16u), name_offsets[i]);
+    wr32(out, static_cast<uint32_t>(offset + 20u), entry.program_hash.value_or(0u));
+    offset += ZHAO_ZMAP_ENTRY_BYTES;
+  }
+  for (size_t i = 0; i < map.files.size(); ++i) {
+    wr32(out, static_cast<uint32_t>(offset), file_offsets[i]);
+    wr32(out, static_cast<uint32_t>(offset + 4u), 0u);
+    offset += ZHAO_ZMAP_FILE_BYTES;
+  }
+  for (const auto& text : strings) {
+    std::memcpy(out.data() + offset, text.data(), text.size());
+    offset += text.size() + 1u;
+  }
+  wr32(out, 20, zhao_crc32c(0, out.data() + ZHAO_ZMAP_HEADER_BYTES,
+                            out.size() - ZHAO_ZMAP_HEADER_BYTES));
+  return result;
+}
+
+ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t n) {
+  if (zhao_source_map_v1_admit_byte_length(n) != ZhaoSourceMapError::kOk) {
+    return zmap_parse_fail(ZhaoSourceMapError::kTooLarge,
+                           "sourceids.zmap exceeds v1 128 MiB global byte limit");
+  }
+  if (body == nullptr && n != 0u) {
+    return zmap_parse_fail(ZhaoSourceMapError::kNullBody, "sourceids.zmap: null body");
+  }
+  if (n < ZHAO_ZMAP_HEADER_BYTES) {
+    return zmap_parse_fail(ZhaoSourceMapError::kTruncatedHeader,
+                           "sourceids.zmap: truncated header");
+  }
+  if (rd32(body) != ZHAO_ZMAP_MAGIC) {
+    return zmap_parse_fail(ZhaoSourceMapError::kBadMagic, "sourceids.zmap: bad magic");
+  }
+  if (rd16(body + 4u) != ZHAO_ZMAP_VERSION) {
+    return zmap_parse_fail(ZhaoSourceMapError::kUnsupportedVersion,
+                           "sourceids.zmap: unsupported version");
+  }
+  const uint16_t header_flags = rd16(body + 6u);
+  if ((header_flags & ~1u) != 0u) {
+    return zmap_parse_fail(ZhaoSourceMapError::kReservedFlags,
+                           "sourceids.zmap: reserved flags");
+  }
+  uint64_t reserved = 0;
+  for (size_t i = 0; i < 8u; ++i) reserved |= static_cast<uint64_t>(body[24u + i]) << (8u * i);
+  if (reserved != 0u) {
+    return zmap_parse_fail(ZhaoSourceMapError::kReservedHeader,
+                           "sourceids.zmap: nonzero reserved header");
+  }
+
+  const uint32_t entry_count = rd32(body + 8u);
+  const uint32_t file_count = rd32(body + 12u);
+  const uint32_t blob_bytes = rd32(body + 16u);
+  const auto layout = zhao_source_map_v1_byte_length(entry_count, file_count, blob_bytes);
+  if (!layout.ok() || layout.bytes != n) {
+    return zmap_parse_fail(ZhaoSourceMapError::kInconsistentLengths,
+                           "sourceids.zmap: inconsistent lengths");
+  }
+  const uint64_t entry_bytes = static_cast<uint64_t>(entry_count) * ZHAO_ZMAP_ENTRY_BYTES;
+  const uint64_t file_bytes = static_cast<uint64_t>(file_count) * ZHAO_ZMAP_FILE_BYTES;
+  if (zhao_crc32c(0, body + ZHAO_ZMAP_HEADER_BYTES,
+                  n - ZHAO_ZMAP_HEADER_BYTES) != rd32(body + 20u)) {
+    return zmap_parse_fail(ZhaoSourceMapError::kBodyCrcMismatch,
+                           "sourceids.zmap: body CRC mismatch");
+  }
+
+  ZhaoSourceMap parsed;
+  parsed.flags = header_flags;
+  parsed.entries.reserve(entry_count);
+  std::vector<uint32_t> name_offsets;
+  name_offsets.reserve(entry_count);
+  size_t offset = ZHAO_ZMAP_HEADER_BYTES;
+  uint32_t previous = 0;
+  bool have_previous = false;
+  bool any_hash = false;
+  for (uint32_t i = 0; i < entry_count; ++i) {
+    ZhaoSourceMapEntry entry;
+    entry.source_id = rd32(body + offset);
+    entry.file_index = rd16(body + offset + 4u);
+    entry.kind = body[offset + 6u];
+    entry.flags = body[offset + 7u];
+    entry.span_begin = rd32(body + offset + 8u);
+    entry.span_end = rd32(body + offset + 12u);
+    const uint32_t name_offset = rd32(body + offset + 16u);
+    const uint32_t hash = rd32(body + offset + 20u);
+    entry.module_id = static_cast<uint16_t>((entry.source_id >> 16) & 0x0FFFu);
+    if (have_previous && entry.source_id <= previous) {
+      return zmap_parse_fail(ZhaoSourceMapError::kEntriesNotAscending,
+                             "sourceids.zmap: entries not strictly ascending");
+    }
+    have_previous = true;
+    previous = entry.source_id;
+    if ((entry.source_id >> 28) != entry.kind) {
+      return zmap_parse_fail(ZhaoSourceMapError::kKindMismatch,
+                             "sourceids.zmap: denormalized kind mismatch");
+    }
+    if (entry.file_index >= file_count) {
+      return zmap_parse_fail(ZhaoSourceMapError::kFileIndexOutsideTable,
+                             "sourceids.zmap: file index outside table");
+    }
+    if (entry.module_id != entry.file_index) {
+      return zmap_parse_fail(ZhaoSourceMapError::kModuleFileMismatch,
+                             "sourceids.zmap: module/file index mismatch");
+    }
+    if ((entry.flags & ~1u) != 0u) {
+      return zmap_parse_fail(ZhaoSourceMapError::kReservedEntryBits,
+                             "sourceids.zmap: reserved entry bits");
+    }
+    if (entry.span_end < entry.span_begin) {
+      return zmap_parse_fail(ZhaoSourceMapError::kReversedSpan,
+                             "sourceids.zmap: reversed span");
+    }
+    if ((entry.flags & 1u) == 0u && hash != 0u) {
+      return zmap_parse_fail(ZhaoSourceMapError::kHashWithoutFlag,
+                             "sourceids.zmap: hash without flag");
+    }
+    if ((entry.flags & 1u) != 0u) entry.program_hash = hash;
+    any_hash = any_hash || entry.program_hash.has_value();
+    parsed.entries.push_back(std::move(entry));
+    name_offsets.push_back(name_offset);
+    offset += ZHAO_ZMAP_ENTRY_BYTES;
+  }
+  if (((header_flags & 1u) != 0u) != any_hash) {
+    return zmap_parse_fail(ZhaoSourceMapError::kProgramHashHeaderMismatch,
+                           "sourceids.zmap: program-hash header flag mismatch");
+  }
+
+  const size_t blob_start = ZHAO_ZMAP_HEADER_BYTES + static_cast<size_t>(entry_bytes + file_bytes);
+  const auto read_string = [&](uint32_t relative, std::string& text,
+                               ZhaoSourceMapError& error, const char*& diagnostic) -> bool {
+    if (relative >= blob_bytes) {
+      error = ZhaoSourceMapError::kStringOffsetOutsideBlob;
+      diagnostic = "sourceids.zmap: string offset outside blob";
+      return false;
+    }
+    const size_t begin = blob_start + relative;
+    size_t end = begin;
+    while (end < n && body[end] != 0u) ++end;
+    if (end == n) {
+      error = ZhaoSourceMapError::kUnterminatedString;
+      diagnostic = "sourceids.zmap: unterminated string";
+      return false;
+    }
+    if (!zmap_utf8(body + begin, end - begin)) {
+      error = ZhaoSourceMapError::kInvalidUtf8;
+      diagnostic = "sourceids.zmap: invalid UTF-8 string";
+      return false;
+    }
+    text.assign(reinterpret_cast<const char*>(body + begin), end - begin);
+    return true;
+  };
+
+  std::vector<uint32_t> path_offsets;
+  path_offsets.reserve(file_count);
+  for (uint32_t i = 0; i < file_count; ++i) {
+    path_offsets.push_back(rd32(body + offset));
+    if (rd32(body + offset + 4u) != 0u) {
+      return zmap_parse_fail(ZhaoSourceMapError::kNonzeroFileReserved,
+                             "sourceids.zmap: nonzero file reserved word");
+    }
+    offset += ZHAO_ZMAP_FILE_BYTES;
+  }
+  parsed.files.reserve(file_count);
+  for (const uint32_t path_offset : path_offsets) {
+    std::string file;
+    ZhaoSourceMapError error = ZhaoSourceMapError::kOk;
+    const char* diagnostic = "";
+    if (!read_string(path_offset, file, error, diagnostic)) {
+      return zmap_parse_fail(error, diagnostic);
+    }
+    parsed.files.push_back(std::move(file));
+  }
+  for (size_t i = 0; i < parsed.entries.size(); ++i) {
+    auto& entry = parsed.entries[i];
+    ZhaoSourceMapError error = ZhaoSourceMapError::kOk;
+    const char* diagnostic = "";
+    if (!read_string(name_offsets[i], entry.name, error, diagnostic)) {
+      return zmap_parse_fail(error, diagnostic);
+    }
+    entry.file = parsed.files[entry.file_index];
+  }
+
+  ZhaoSourceMapParseResult result;
+  result.map = std::move(parsed);
+  return result;
 }
 
 std::vector<uint8_t> zhao_zcap_build_resource_pages(const std::vector<ZhaoResourcePage>& pages) {

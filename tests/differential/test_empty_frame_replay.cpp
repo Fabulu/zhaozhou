@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -206,13 +207,27 @@ int main(int argc, char** argv) {
       w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_ABI_INFO, 1, zhao::zhao_zcap_build_abi_info());
       w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_FRAME_PACKET, 1, frame);
       w.add_section(zhao::ZhaoZcapSection::ZHAO_ZCAP_SOURCE_MAP, 1, [&] {
-        std::vector<zhao::ZhaoSourceMapEntry> entries;
-        entries.push_back(
-            {zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"});
-        entries.push_back({zhao::zhao_source_id(5, 1, 0), 1, 5, 0, 20, "nop", "demo_form.zf"});
-        entries.push_back(
-            {zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"});
-        return zhao::zhao_zcap_build_source_map(entries);
+        zhao::ZhaoSourceMap map;
+        map.files = {"<module-0>", "demo_form.zf"};
+        const auto add = [&](uint32_t index, uint32_t span, const char* name) {
+          zhao::ZhaoSourceMapEntry entry;
+          entry.source_id = zhao::zhao_source_id(5, 1, index);
+          entry.module_id = 1;
+          entry.file_index = 1;
+          entry.kind = 5;
+          entry.span_begin = span;
+          entry.span_end = span;
+          entry.name = name;
+          entry.file = map.files[1];
+          map.entries.push_back(std::move(entry));
+        };
+        add(1, 10, "begin_frame");
+        add(0, 20, "nop");
+        add(2, 30, "end_frame");
+        const auto built = zhao::zhao_zcap_build_source_map(map);
+        zhao::check(built.ok(), "replay canonical SOURCE_MAP builds", 0,
+                    static_cast<int>(built.error));
+        return built.bytes;
       }());
       zhao::ZhaoResourcePage page;
       page.kind = 3;
@@ -232,9 +247,10 @@ int main(int argc, char** argv) {
     // source-map resolution: every command source_id in the frame resolves
     zhao::check(r.read_body(*r.find(zhao::ZhaoZcapSection::ZHAO_ZCAP_SOURCE_MAP), body),
                 "replay SOURCE_MAP", 1, 0);
-    const auto entries = zhao::zhao_zcap_parse_source_map(body.data(), body.size());
+    const auto parsed = zhao::zhao_zcap_parse_source_map(body);
+    zhao::check(parsed.ok(), "replay SOURCE_MAP parses", 0, static_cast<int>(parsed.error));
     std::vector<uint32_t> resolved;
-    for (const auto& e : entries) resolved.push_back(e.source_id);
+    for (const auto& e : parsed.map.entries) resolved.push_back(e.source_id);
     const uint32_t want_ids[3] = {zhao::zhao_source_id(5, 1, 1), zhao::zhao_source_id(5, 1, 0),
                                   zhao::zhao_source_id(5, 1, 2)};
     for (uint32_t want : want_ids) {

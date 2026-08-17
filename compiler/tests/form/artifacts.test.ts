@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -238,6 +240,250 @@ test('sourceids.zmap rejects CRC and denormalized metadata corruption', () => {
   new DataView(offsetFault.buffer).setUint32(ZMAP_HEADER_BYTES + 16, 0xffff_ffff, true);
   new DataView(offsetFault.buffer).setUint32(20, crc32c(0, offsetFault, ZMAP_HEADER_BYTES), true);
   assert.throws(() => decodeSourceMap(offsetFault), /string offset outside blob/);
+});
+
+test('canonical SOURCE_MAP interoperates with native C++ and rejects one shared malformed corpus', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+
+  const { hir } = compileFixture();
+  const compilerBytes = emitSourceMap(hir);
+  const rows = [...hir.sourceIds].sort((a, b) => a.sourceId - b.sourceId);
+  const files = [...hir.modules].sort((a, b) => a.index - b.index).map((module) => module.file);
+  const q = (text: string) => JSON.stringify(text);
+  const expectedFiles = files.map((file, index) =>
+    `if (parsed.map.files[${index}u] != ${q(file)}) return 10;`).join('\n');
+  const expectedRows = rows.map((row, index) => {
+    const hashPresent = row.programHash !== null;
+    return `{
+      const auto& entry = parsed.map.entries[${index}u];
+      if (entry.source_id != ${row.sourceId}u || entry.module_id != ${row.module}u
+          || entry.file_index != ${row.module}u || entry.kind != ${row.kind}u
+          || entry.flags != ${hashPresent ? 1 : 0}u || entry.span_begin != ${row.span.start}u
+          || entry.span_end != ${row.span.end}u || entry.name != ${q(row.name)}
+          || entry.file != ${q(row.file)}
+          || entry.program_hash.has_value() != ${hashPresent ? 'true' : 'false'}${hashPresent ? `
+          || entry.program_hash.value() != ${row.programHash}u` : ''}) return 11;
+    }`;
+  }).join('\n');
+
+  const bridgeSource = `
+#include "zref/zref_frame.hpp"
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <string>
+#include <vector>
+
+namespace {
+int nibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+std::vector<uint8_t> unhex(const std::string& text) {
+  if ((text.size() & 1u) != 0u) return {};
+  std::vector<uint8_t> out;
+  out.reserve(text.size() / 2u);
+  for (size_t i = 0; i < text.size(); i += 2u) {
+    const int high = nibble(text[i]);
+    const int low = nibble(text[i + 1u]);
+    if (high < 0 || low < 0) return {};
+    out.push_back(static_cast<uint8_t>((high << 4) | low));
+  }
+  return out;
+}
+void print_hex(const std::vector<uint8_t>& bytes) {
+  for (uint8_t byte : bytes) {
+    std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(byte);
+  }
+  std::cout << '\\n';
+}
+}  // namespace
+
+int main() {
+  using namespace zhao;
+  const auto maximum = zhao_source_map_v1_byte_length(
+      0u, 0u, ZHAO_ZMAP_MAX_BYTES - ZHAO_ZMAP_HEADER_BYTES);
+  const auto over = zhao_source_map_v1_byte_length(
+      0u, 0u, ZHAO_ZMAP_MAX_BYTES - ZHAO_ZMAP_HEADER_BYTES + 1u);
+  const auto overflow = zhao_source_map_v1_byte_length(
+      std::numeric_limits<uint32_t>::max(), 1u, 0u);
+  uint8_t sentinel = 0;
+  const auto too_large = zhao_zcap_parse_source_map(&sentinel, ZHAO_ZMAP_MAX_BYTES + 1u);
+  if (!maximum.ok() || maximum.bytes != ZHAO_ZMAP_MAX_BYTES
+      || zhao_source_map_v1_admit_byte_length(maximum.bytes) != ZhaoSourceMapError::kOk
+      || !over.ok() || over.bytes != ZHAO_ZMAP_MAX_BYTES + 1u
+      || zhao_source_map_v1_admit_byte_length(over.bytes) != ZhaoSourceMapError::kTooLarge
+      || overflow.error != ZhaoSourceMapError::kSizeOverflow
+      || too_large.error != ZhaoSourceMapError::kTooLarge
+      || !too_large.map.entries.empty() || !too_large.map.files.empty()) return 2;
+
+  ZhaoSourceMap invalid_text;
+  invalid_text.files.emplace_back("\\xC0", 1u);
+  if (zhao_zcap_build_source_map(invalid_text).error != ZhaoSourceMapError::kInvalidUtf8) return 3;
+  invalid_text.files[0] = std::string("a\\0b", 3u);
+  if (zhao_zcap_build_source_map(invalid_text).error != ZhaoSourceMapError::kInvalidUtf8) return 4;
+
+  std::string line;
+  if (!std::getline(std::cin, line)) return 5;
+  const auto compiler_map = unhex(line);
+  const auto parsed = zhao_zcap_parse_source_map(compiler_map);
+  if (!parsed.ok() || parsed.map.flags != ${rows.some((row) => row.programHash !== null) ? 1 : 0}u
+      || parsed.map.files.size() != ${files.length}u
+      || parsed.map.entries.size() != ${rows.length}u) return 6;
+  ${expectedFiles}
+  ${expectedRows}
+
+  ZhaoSourceMap native_map;
+  native_map.files = {"base.form", "terrain.form"};
+  ZhaoSourceMapEntry field;
+  field.source_id = zhao_source_id(3u, 1u, 9u);
+  field.module_id = 1u;
+  field.file_index = 1u;
+  field.kind = 3u;
+  field.flags = 1u;
+  field.span_begin = 7u;
+  field.span_end = 11u;
+  field.name = "ridge";
+  field.file = native_map.files[1];
+  field.program_hash = 0xDEADBEEFu;
+  native_map.entries.push_back(field);
+  ZhaoSourceMapEntry command;
+  command.source_id = zhao_source_id(5u, 0u, 2u);
+  command.module_id = 0u;
+  command.file_index = 0u;
+  command.kind = 5u;
+  command.span_begin = 20u;
+  command.span_end = 23u;
+  command.name = "nop";
+  command.file = native_map.files[0];
+  native_map.entries.push_back(command);
+  const auto built = zhao_zcap_build_source_map(native_map);
+  if (!built.ok()) return 7;
+  print_hex(built.bytes);
+
+  while (std::getline(std::cin, line)) {
+    const auto bytes = unhex(line);
+    const auto result = zhao_zcap_parse_source_map(bytes);
+    if (!result.ok() && (!result.map.entries.empty() || !result.map.files.empty())) return 8;
+    std::cout << (result.ok() ? '1' : '0') << '\\n';
+  }
+  return 0;
+}
+`;
+
+  const base = buildSourceMap([
+    {
+      sourceId: 0x3000_0001, moduleId: 0, kind: 3, flags: 1,
+      spanBegin: 2, spanEnd: 5, name: 'alpha', file: 'alpha.form', programHash: 0x1234_5678,
+    },
+    {
+      sourceId: 0x3001_0001, moduleId: 1, kind: 3, flags: 0,
+      spanBegin: 8, spanEnd: 13, name: 'beta', file: 'beta.form', programHash: null,
+    },
+  ], ['alpha.form', 'beta.form']);
+  const empty = buildSourceMap([]);
+  const bodyCrc = (bytes: Uint8Array) => {
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(
+      20, crc32c(0, bytes, ZMAP_HEADER_BYTES), true,
+    );
+    return bytes;
+  };
+  const changed = (edit: (bytes: Uint8Array, view: DataView) => void, crc = true) => {
+    const bytes = base.slice();
+    edit(bytes, new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+    return crc ? bodyCrc(bytes) : bytes;
+  };
+  const fileTable = ZMAP_HEADER_BYTES + 2 * ZMAP_ENTRY_BYTES;
+  const blobStart = fileTable + 2 * ZMAP_FILE_BYTES;
+  const corpus: Array<{ name: string; bytes: Uint8Array }> = [
+    { name: 'compiler emitted valid', bytes: compilerBytes },
+    { name: 'generated builder valid', bytes: base },
+    { name: 'empty valid', bytes: empty },
+    { name: 'truncated header', bytes: base.subarray(0, ZMAP_HEADER_BYTES - 1) },
+    { name: 'bad magic', bytes: changed((_bytes, view) => view.setUint32(0, 0, true), false) },
+    { name: 'unsupported version', bytes: changed((_bytes, view) => view.setUint16(4, 2, true), false) },
+    { name: 'reserved header flags', bytes: changed((_bytes, view) => view.setUint16(6, 2, true), false) },
+    { name: 'reserved header word', bytes: changed((_bytes, view) => view.setUint32(24, 1, true), false) },
+    { name: 'impossible count', bytes: changed((_bytes, view) => view.setUint32(8, 0xffff_ffff, true), false) },
+    { name: 'trailing byte', bytes: Uint8Array.from([...base, 0]) },
+    { name: 'body crc', bytes: changed((bytes) => { bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1; }, false) },
+    { name: 'duplicate id', bytes: changed((_bytes, view) => view.setUint32(ZMAP_HEADER_BYTES + ZMAP_ENTRY_BYTES, 0x3000_0001, true)) },
+    { name: 'kind mismatch', bytes: changed((bytes) => { bytes[ZMAP_HEADER_BYTES + 6] = 4; }) },
+    { name: 'file outside table', bytes: changed((_bytes, view) => view.setUint16(ZMAP_HEADER_BYTES + 4, 2, true)) },
+    { name: 'module file mismatch', bytes: changed((_bytes, view) => view.setUint16(ZMAP_HEADER_BYTES + 4, 1, true)) },
+    { name: 'reserved entry bits', bytes: changed((bytes) => { bytes[ZMAP_HEADER_BYTES + 7] = 3; }) },
+    { name: 'reversed span', bytes: changed((_bytes, view) => view.setUint32(ZMAP_HEADER_BYTES + 12, 1, true)) },
+    { name: 'hash without flag', bytes: changed((bytes) => { bytes[ZMAP_HEADER_BYTES + 7] = 0; }) },
+    { name: 'hash header mismatch', bytes: changed((bytes, view) => {
+      bytes[ZMAP_HEADER_BYTES + 7] = 0;
+      view.setUint32(ZMAP_HEADER_BYTES + 20, 0, true);
+    }) },
+    { name: 'file reserved word', bytes: changed((_bytes, view) => view.setUint32(fileTable + 4, 1, true)) },
+    { name: 'name offset outside blob', bytes: changed((_bytes, view) => view.setUint32(ZMAP_HEADER_BYTES + 16, 0xffff_ffff, true)) },
+    { name: 'unterminated string', bytes: changed((bytes) => { bytes[bytes.length - 1] = 0x41; }) },
+    { name: 'invalid utf8', bytes: changed((bytes, view) => {
+      const nameOffset = view.getUint32(ZMAP_HEADER_BYTES + 16, true);
+      bytes[blobStart + nameOffset] = 0xc0;
+    }) },
+  ];
+
+  const root = mkdtempSync(path.join(tmpdir(), 'zmap-native-'));
+  try {
+    const source = path.join(root, 'source_map_bridge.cpp');
+    const executable = path.join(root, 'source_map_bridge.exe');
+    writeFileSync(source, bridgeSource, 'utf8');
+    const repo = repoRoot();
+    const build = spawnSync(compiler, [
+      '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror', '-static',
+      `-I${path.join(repo, 'runtime', 'include')}`,
+      `-I${path.join(repo, 'reference', 'include')}`,
+      path.join(repo, 'reference', 'src', 'zref_frame.cpp'), source, '-o', executable,
+    ], { encoding: 'utf8', windowsHide: true });
+    assert.equal(build.status, 0, `${build.stdout}\n${build.stderr}`);
+
+    const input = [compilerBytes, ...corpus.map((item) => item.bytes)]
+      .map((bytes) => Buffer.from(bytes).toString('hex')).join('\n');
+    const run = spawnSync(executable, [], {
+      encoding: 'utf8', input: `${input}\n`, maxBuffer: 16 * 1024 * 1024, windowsHide: true,
+    });
+    assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+    const lines = run.stdout.trim().split(/\r?\n/);
+    const nativeEmitted = Uint8Array.from(Buffer.from(lines[0]!, 'hex'));
+    assert.deepEqual(parseSourceMap(nativeEmitted), [
+      {
+        sourceId: 0x3001_0009, moduleId: 1, fileIndex: 1, kind: 3, flags: 1,
+        spanBegin: 7, spanEnd: 11, name: 'ridge', file: 'terrain.form', programHash: 0xdead_beef,
+      },
+      {
+        sourceId: 0x5000_0002, moduleId: 0, fileIndex: 0, kind: 5, flags: 0,
+        spanBegin: 20, spanEnd: 23, name: 'nop', file: 'base.form', programHash: null,
+      },
+    ]);
+
+    const nativeAcceptance = lines.slice(1).map((line) => line === '1');
+    const tsAcceptance = corpus.map(({ bytes }) => {
+      try {
+        parseSourceMap(bytes);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    assert.equal(nativeAcceptance.length, corpus.length);
+    assert.deepEqual(nativeAcceptance, tsAcceptance,
+      corpus.map((item, index) => `${item.name}: native=${nativeAcceptance[index]} ts=${tsAcceptance[index]}`).join('\n'));
+    assert.deepEqual(tsAcceptance.slice(0, 3), [true, true, true]);
+    assert.ok(tsAcceptance.slice(3).every((accepted) => !accepted));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('costs.zcost is complete canonical integer JSON and deterministic', () => {

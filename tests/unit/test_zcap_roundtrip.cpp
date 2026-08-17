@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -52,12 +53,26 @@ std::vector<uint8_t> minimal_frame() {
   return fb.seal(1, 0, 1, 0, 0);
 }
 
-std::vector<zhao::ZhaoSourceMapEntry> minimal_source_map() {
-  return {
-      {zhao::zhao_source_id(5, 1, 1), 1, 5, 0, 10, "begin_frame", "demo_form.zf"},
-      {zhao::zhao_source_id(5, 1, 0), 1, 5, 0, 20, "nop", "demo_form.zf"},
-      {zhao::zhao_source_id(5, 1, 2), 1, 5, 0, 30, "end_frame", "demo_form.zf"},
+zhao::ZhaoSourceMap minimal_source_map() {
+  zhao::ZhaoSourceMap map;
+  map.files = {"demo_form.zf"};
+  const auto add = [&](uint32_t index, uint32_t span_begin, uint32_t span_end,
+                       const char* name) {
+    zhao::ZhaoSourceMapEntry entry;
+    entry.source_id = zhao::zhao_source_id(5, 0, index);
+    entry.module_id = 0;
+    entry.file_index = 0;
+    entry.kind = 5;
+    entry.span_begin = span_begin;
+    entry.span_end = span_end;
+    entry.name = name;
+    entry.file = map.files[0];
+    map.entries.push_back(std::move(entry));
   };
+  add(0, 20, 23, "nop");
+  add(1, 10, 19, "begin_frame");
+  add(2, 30, 39, "end_frame");
+  return map;
 }
 
 }  // namespace
@@ -86,7 +101,10 @@ int main() {
     // tool-namespace private section: readers MUST skip it
     w.add_section(0x8001, 1, std::vector<uint8_t>{1, 2, 3, 4});
     w.add_section(ZHAO_ZCAP_FRAME_PACKET, 1, minimal_frame());
-    w.add_section(ZHAO_ZCAP_SOURCE_MAP, 1, zhao_zcap_build_source_map(minimal_source_map()));
+    const auto source_map = zhao_zcap_build_source_map(minimal_source_map());
+    zhao::check(source_map.ok(), "canonical SOURCE_MAP builds", 0,
+                static_cast<int>(source_map.error));
+    w.add_section(ZHAO_ZCAP_SOURCE_MAP, 1, source_map.bytes);
     if (!w.close()) {
       zhao::check(false, "zcap writer close", 0, 1);
     }
@@ -110,17 +128,22 @@ int main() {
     // source IDs + program hashes survive
     std::vector<uint8_t> body;
     zhao::check(r.read_body(*r.find(ZHAO_ZCAP_SOURCE_MAP), body), "SOURCE_MAP body", 1, 0);
-    const auto entries = zhao_zcap_parse_source_map(body.data(), body.size());
+    const auto parsed = zhao_zcap_parse_source_map(body);
+    zhao::check(parsed.ok(), "SOURCE_MAP parses", 0, static_cast<int>(parsed.error));
+    const auto& entries = parsed.map.entries;
     zhao::check(entries.size() == 3, "SOURCE_MAP entries", 3, entries.size());
     const auto want = minimal_source_map();
-    for (size_t i = 0; i < entries.size() && i < want.size(); i++) {
-      zhao::check(entries[i].source_id == want[i].source_id, "source id survives",
-                  want[i].source_id, entries[i].source_id);
-      zhao::check(entries[i].name == want[i].name, "source name survives", 0,
-                  entries[i].name == want[i].name ? 0 : 1);
+    for (size_t i = 0; i < entries.size() && i < want.entries.size(); i++) {
+      zhao::check(entries[i].source_id == want.entries[i].source_id, "source id survives",
+                  want.entries[i].source_id, entries[i].source_id);
+      zhao::check(entries[i].name == want.entries[i].name, "source name survives", 0,
+                  entries[i].name == want.entries[i].name ? 0 : 1);
+      zhao::check(entries[i].span_begin == want.entries[i].span_begin
+                      && entries[i].span_end == want.entries[i].span_end,
+                  "source span survives", want.entries[i].span_begin, entries[i].span_begin);
       uint32_t kind = 0, module = 0, index = 0;
       zhao_source_id_decode(entries[i].source_id, kind, module, index);
-      zhao::check(kind == 5 && module == 1, "source id decodes {kind,module}", 5, kind);
+      zhao::check(kind == 5 && module == 0, "source id decodes {kind,module}", 5, kind);
     }
 
     zhao::check(r.read_body(*r.find(ZHAO_ZCAP_RESOURCE_PAGES), body), "RESOURCE_PAGES body", 1, 0);
@@ -155,7 +178,10 @@ int main() {
       ZhaoZcapWriter w(p2);
       w.add_section(ZHAO_ZCAP_ABI_INFO, 1, zhao_zcap_build_abi_info());
       w.add_section(ZHAO_ZCAP_FRAME_PACKET, 1, minimal_frame());
-      w.add_section(ZHAO_ZCAP_SOURCE_MAP, 1, zhao_zcap_build_source_map(minimal_source_map()));
+      const auto source_map = zhao_zcap_build_source_map(minimal_source_map());
+    zhao::check(source_map.ok(), "canonical SOURCE_MAP builds", 0,
+                static_cast<int>(source_map.error));
+    w.add_section(ZHAO_ZCAP_SOURCE_MAP, 1, source_map.bytes);
       zhao::check(w.close(), "minimal zcap write", 0, 1);
     }
     const auto got = read_file(p2);
