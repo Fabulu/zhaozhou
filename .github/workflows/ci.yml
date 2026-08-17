@@ -21,9 +21,10 @@
 # "oss-cad-suite-windows-x64-20260814.exe" which is actually a gzip tar
 # (verified locally); extract with tar -xzf. The suite ships no g++, so the
 # compiler comes from the runner image (MinGW on PATH or C:\msys64\mingw64).
-# The suite also ships NO clang-format and NO cppcheck — that gap is why the
-# format tier lives in its own ubuntu job with a version-pinned npm package
-# (runner-distro clang-format drifts across LLVM majors).
+# The suite's current clang-format is not the project-pinned major and its
+# cppcheck.exe lacks the cfg/ payload. That gap is why the authoritative format
+# tier lives in its own ubuntu job; the Windows CTest shims below install and
+# receive exact paths to complete pinned tools as well.
 
 name: ci
 
@@ -69,6 +70,26 @@ jobs:
       - name: npm ci (CTest npm shims)
         shell: pwsh
         run: npm ci
+
+      # The suite currently exposes a clang-format newer than the project law
+      # and a cppcheck.exe without its cfg/ directory. Do not let CMake
+      # accidentally discover either incomplete tool: install known-complete,
+      # pinned lint tools and pass their exact paths to the CTest wrappers.
+      - name: Install pinned CTest lint tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lintRoot = Join-Path $env:RUNNER_TEMP 'zhao-lint'
+          npm install --prefix $lintRoot --no-save --no-package-lock clang-format@1.8.0
+          $clangFormat = Join-Path $lintRoot 'node_modules\clang-format\bin\win32\clang-format.exe'
+          choco install cppcheck --version=2.19.0 --no-progress --yes
+          $cppcheck = Join-Path $env:SystemDrive 'Program Files\Cppcheck\cppcheck.exe'
+          if (-not (Test-Path $clangFormat)) { throw "missing pinned clang-format: $clangFormat" }
+          if (-not (Test-Path $cppcheck)) { throw "missing pinned cppcheck: $cppcheck" }
+          & $clangFormat --version
+          & $cppcheck --version
+          Add-Content $env:GITHUB_ENV "ZHAO_CLANG_FORMAT_BIN=$clangFormat"
+          Add-Content $env:GITHUB_ENV "ZHAO_CPPCHECK_BIN=$cppcheck"
 
       - name: Restore oss-cad-suite cache
         id: suite-cache
@@ -131,14 +152,16 @@ jobs:
       - name: Configure + build + test (fast)
         shell: pwsh
         run: |
-          cmake --preset windows-ci
+          cmake --preset windows-ci `
+            -DZHAO_CLANG_FORMAT_BIN="$env:ZHAO_CLANG_FORMAT_BIN" `
+            -DZHAO_CPPCHECK_BIN="$env:ZHAO_CPPCHECK_BIN"
           cmake --build build
           ctest --test-dir build -L fast --output-on-failure
 
   format:
     name: format + static analysis (charter 27)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
