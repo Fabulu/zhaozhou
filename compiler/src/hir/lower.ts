@@ -3,7 +3,7 @@
 // second checker. It resolves the already-admitted names/types for lowering.
 
 import type {
-  Expr, FieldDecl, ModuleAst, RecordLit, ScenarioItem, Stmt, SystemDecl,
+  Access, Expr, FieldDecl, ModuleAst, RecordLit, ScenarioItem, Stmt, SystemDecl,
   TopDecl, TypeExpr,
 } from '../frontend/ast.js';
 import { serializeAst } from '../frontend/ast.js';
@@ -52,6 +52,7 @@ export function lowerHir(frontend: FrontendResult): HirProgram | null {
     frontend.modules,
     frontend.check.schedule,
     frontend.check.expressionTypes,
+    frontend.check.accessKeys,
   ).run();
 }
 
@@ -69,6 +70,7 @@ class HirLowerer {
     private readonly asts: ModuleAst[],
     private readonly schedule: NonNullable<FrontendResult['check']>['schedule'] & {},
     private readonly expressionTypes: ReadonlyMap<Expr, Type>,
+    private readonly accessKeys: ReadonlyMap<Access, string>,
   ) {}
 
   run(): HirProgram {
@@ -91,6 +93,7 @@ class HirLowerer {
         if (decl.kind !== 'BadDecl') this.declarations.push(this.declaration(mod.index, order++, decl));
       }
     }
+    this.validateSourceIds();
     this.sourceIds.sort((a, b) => a.sourceId - b.sourceId);
     const modules: HirModule[] = this.modules.map((m) => ({
       index: m.index,
@@ -143,8 +146,9 @@ class HirLowerer {
       case 'Pool': {
         const sym = this.require(module, decl.structName);
         const capacity = decl.capacity?.kind === 'int'
-          ? Number(decl.capacity.value)
-          : Number(this.intConst(module, decl.capacity?.name ?? '') ?? 0n);
+          ? this.u32Number(decl.capacity.value, `pool '${decl.name}' capacity`, true)
+          : this.u32Number(this.intConst(module, decl.capacity?.name ?? '') ?? 0n,
+            `pool '${decl.name}' capacity`, true);
         const elementType: Type = { t: 'struct', name: qname(sym.module, sym.name) };
         return {
           kind: 'pool', domain: 'state', module, order, name: decl.name,
@@ -178,10 +182,12 @@ class HirLowerer {
         const stagger = decl.staggerPool === null ? null : this.require(module, decl.staggerPool);
         return {
           kind: 'system', domain: 'sim', module, order, name: decl.name,
-          every: Number(decl.every), staggerRate: decl.staggerPool === null ? null : Number(decl.staggerRate ?? decl.every),
+          every: this.u32Number(decl.every, `system '${decl.name}' rate`, true),
+          staggerRate: decl.staggerPool === null ? null
+            : this.u32Number(decl.staggerRate ?? decl.every, `system '${decl.name}' stagger rate`, true),
           staggerPool: stagger ? { module: stagger.module, name: stagger.name } : null,
-          reads: decl.reads.map((a) => a.parts.join('.')),
-          writes: decl.writes.map((a) => a.parts.join('.')),
+          reads: decl.reads.map((access) => this.requireAccessKey(access)),
+          writes: decl.writes.map((access) => this.requireAccessKey(access)),
           body: this.stmts(module, decl.body, new Map(), 'sim'),
           sourceId: this.sourceId(SOURCE_KIND_SYSTEM, module, decl.name, decl.span), span: decl.span,
         };
@@ -243,7 +249,8 @@ class HirLowerer {
       kind: 'field', domain: 'field', module, order, name: decl.name,
       profile: decl.profile === 'flow' ? 'flow' : 'earth',
       params: paramsSym ? { module: paramsSym.module, name: paramsSym.name } : null,
-      footprint: { kind: decl.footprint.kind, raw, rect }, maxOps: Number(decl.maxOps),
+      footprint: { kind: decl.footprint.kind, raw, rect },
+      maxOps: this.u32Number(decl.maxOps, `field '${decl.name}' max_ops`),
       body: decl.body.map((s) => {
         const expressions = s.kind === 'field_let'
           ? [this.expr(module, s.value, null, env)]
@@ -307,10 +314,17 @@ class HirLowerer {
     });
   }
 
-  private expr(module: number, ast: Expr, expected: Type | null, env: LocalEnv): HirExpr {
+  private expr(
+    module: number,
+    ast: Expr,
+    expected: Type | null,
+    env: LocalEnv,
+    forcePoolColumn = false,
+  ): HirExpr {
     const children: HirExpr[] = [];
     let type: Type = T.unknown;
     let symbol: HirSymbolRef | null = null;
+    let poolColumn: HirExpr['poolColumn'] = null;
     switch (ast.kind) {
       case 'literal': type = this.literalType(ast, expected); break;
       case 'string': type = T.unknown; break;
@@ -323,44 +337,57 @@ class HirLowerer {
         break;
       }
       case 'member': {
-        const qualified = ast.obj.kind === 'ident' ? this.qualifiedMember(ast.obj.name, ast.field) : null;
+        const enumMember = this.enumMember(module, ast, env);
+        if (enumMember) {
+          type = { t: 'enum', name: qname(enumMember.module, enumMember.name) };
+          symbol = { kind: 'enum', module: enumMember.module, name: `${enumMember.name}.${ast.field}` };
+          break;
+        }
+        const pool = this.directPoolRoot(module, ast.obj, env);
+        if (pool?.decl.kind === 'Pool') {
+          const struct = this.require(pool.module, pool.decl.structName);
+          const authored = struct.decl.kind === 'Struct'
+            && struct.decl.fields.some((field) => field.name === ast.field);
+          if (ast.field === 'count' && !forcePoolColumn) {
+            type = T.u32;
+            symbol = { kind: 'pool', module: pool.module, name: pool.name };
+          } else if (authored) {
+            type = this.structFieldType(struct, ast.field);
+            poolColumn = { module: pool.module, pool: pool.name, field: ast.field };
+          }
+          break;
+        }
+        const qualified = ast.obj.kind === 'ident' && !env.has(ast.obj.name)
+          ? this.qualifiedMember(module, ast.obj.name, ast.field)
+          : null;
         if (qualified) {
           type = this.symbolType(qualified);
           symbol = this.symbolRef(qualified);
           break;
         }
-        const baseSym = ast.obj.kind === 'ident' ? this.resolve(module, ast.obj.name) : null;
-        if (baseSym?.decl.kind === 'Enum') {
-          type = { t: 'enum', name: qname(baseSym.module, baseSym.name) };
-          symbol = { kind: 'enum', module: baseSym.module, name: `${baseSym.name}.${ast.field}` };
-        } else if (baseSym?.decl.kind === 'Pool' && ast.field === 'count') {
-          type = T.u32; symbol = { kind: 'pool', module: baseSym.module, name: baseSym.name };
-        } else if (baseSym?.decl.kind === 'Pool') {
-          const struct = this.require(baseSym.module, baseSym.decl.structName);
-          type = this.structFieldType(struct, ast.field); symbol = { kind: 'pool', module: baseSym.module, name: baseSym.name };
-        } else {
-          children.push(this.expr(module, ast.obj, null, env));
-          type = this.memberType(children[0]!.type, ast.field);
-          symbol = children[0]!.symbol;
-        }
+        children.push(this.expr(module, ast.obj, null, env));
+        type = this.memberType(children[0]!.type, ast.field);
         break;
       }
       case 'index': {
-        children.push(this.expr(module, ast.obj, null, env), this.expr(module, ast.index, T.u32, env));
+        const directColumn = this.directPoolColumn(module, ast.obj, env) !== null;
+        children.push(
+          this.expr(module, ast.obj, null, env, directColumn),
+          this.expr(module, ast.index, T.u32, env),
+        );
         type = children[0]!.type.t === 'array' ? children[0]!.type.elem : children[0]!.type;
-        symbol = children[0]!.symbol;
         break;
       }
       case 'call': {
         const calleeName = callName(ast.callee);
-        const fnSym = ast.callee.kind === 'ident' ? this.resolve(module, ast.callee.name) : null;
-        children.push(...ast.args.map((a) => this.expr(module, a, null, env)));
-        if (fnSym?.decl.kind === 'Fn') {
-          type = this.type(fnSym.module, fnSym.decl.ret); symbol = this.symbolRef(fnSym);
-        } else if (fnSym?.decl.kind === 'Field') {
-          type = T.void; symbol = this.symbolRef(fnSym);
-        } else if (fnSym?.decl.kind === 'System') {
-          type = T.void; symbol = this.symbolRef(fnSym);
+        const callee = this.directDeclaration(module, ast.callee, env);
+        children.push(...ast.args.map((argument) => this.expr(module, argument, null, env)));
+        if (callee?.decl.kind === 'Fn') {
+          type = this.type(callee.module, callee.decl.ret);
+          symbol = this.symbolRef(callee);
+        } else if (callee?.decl.kind === 'Field' || callee?.decl.kind === 'System') {
+          type = T.void;
+          symbol = this.symbolRef(callee);
         } else {
           type = intrinsicType(calleeName, children, expected);
           symbol = { kind: 'intrinsic', module: null, name: calleeName };
@@ -382,7 +409,7 @@ class HirLowerer {
       case 'record': {
         const sym = this.resolve(module, ast.typeName);
         type = vectorType(ast.typeName) ?? (sym ? { t: 'struct', name: qname(sym.module, sym.name) } : T.unknown);
-        children.push(...ast.fields.map((f) => this.expr(module, f.value, this.memberType(type, f.name), env)));
+        children.push(...ast.fields.map((field) => this.expr(module, field.value, this.memberType(type, field.name), env)));
         symbol = sym ? this.symbolRef(sym) : null;
         break;
       }
@@ -405,7 +432,44 @@ class HirLowerer {
     const rngSlot = symbol?.kind === 'intrinsic' && symbol.name === 'random.stream'
       ? this.nextRngSlot++
       : null;
-    return { ast, type, symbol, rngSlot, children, span: ast.span };
+    return { ast, type, symbol, poolColumn, rngSlot, children, span: ast.span };
+  }
+
+  private directDeclaration(module: number, expression: Expr, env: LocalEnv): SymbolInfo | null {
+    if (expression.kind === 'ident') return env.has(expression.name) ? null : this.resolve(module, expression.name);
+    if (expression.kind === 'member' && expression.obj.kind === 'ident' && !env.has(expression.obj.name)) {
+      return this.qualifiedMember(module, expression.obj.name, expression.field);
+    }
+    return null;
+  }
+
+  private directPoolRoot(module: number, expression: Expr, env: LocalEnv): SymbolInfo | null {
+    const symbol = this.directDeclaration(module, expression, env);
+    return symbol?.decl.kind === 'Pool' ? symbol : null;
+  }
+
+  private directPoolColumn(module: number, expression: Expr, env: LocalEnv): {
+    pool: SymbolInfo;
+    field: string;
+  } | null {
+    if (expression.kind !== 'member') return null;
+    const pool = this.directPoolRoot(module, expression.obj, env);
+    if (!pool || pool.decl.kind !== 'Pool') return null;
+    const struct = this.require(pool.module, pool.decl.structName);
+    if (struct.decl.kind !== 'Struct'
+        || !struct.decl.fields.some((field) => field.name === expression.field)) return null;
+    return { pool, field: expression.field };
+  }
+
+  private enumMember(
+    module: number,
+    expression: Extract<Expr, { kind: 'member' }>,
+    env: LocalEnv,
+  ): SymbolInfo | null {
+    const owner = this.directDeclaration(module, expression.obj, env);
+    if (owner?.decl.kind !== 'Enum'
+        || !owner.decl.members.some((member) => member.name === expression.field)) return null;
+    return owner;
   }
 
   private scenarioExpressions(module: number, item: ScenarioItem): HirExpr[] {
@@ -461,7 +525,8 @@ class HirLowerer {
 
   private type(module: number, ast: TypeExpr): Type {
     if (ast.kind === 'array') {
-      const len = ast.len.kind === 'int' ? Number(ast.len.value) : Number(this.intConst(module, ast.len.name) ?? 0n);
+      const value = ast.len.kind === 'int' ? ast.len.value : this.intConst(module, ast.len.name) ?? 0n;
+      const len = this.u32Number(value, 'array length', true);
       return { t: 'array', elem: this.type(module, ast.elem), len };
     }
     const builtin = builtinType(ast.name);
@@ -554,15 +619,18 @@ class HirLowerer {
       const sym = this.resolve(module, ast.name);
       if (sym?.decl.kind === 'Const') return this.raw(sym.module, sym.decl.init, this.type(sym.module, sym.decl.type));
     }
-    if (ast.kind === 'member' && ast.obj.kind === 'ident') {
-      const sym = this.resolve(module, ast.obj.name);
-      if (sym?.decl.kind === 'Enum') {
-        let next = 0n;
-        for (const member of sym.decl.members) {
-          const value = member.value ?? next;
-          next = value + 1n;
-          if (member.name === ast.field) return value;
+    if (ast.kind === 'member') {
+      if (ast.obj.kind === 'ident') {
+        const qualified = this.qualifiedMember(module, ast.obj.name, ast.field);
+        if (qualified?.decl.kind === 'Const') {
+          return this.raw(qualified.module, qualified.decl.init, this.type(qualified.module, qualified.decl.type));
         }
+        const symbol = this.resolve(module, ast.obj.name);
+        if (symbol?.decl.kind === 'Enum') return this.enumRaw(symbol, ast.field);
+      }
+      if (ast.obj.kind === 'member' && ast.obj.obj.kind === 'ident') {
+        const symbol = this.qualifiedMember(module, ast.obj.obj.name, ast.obj.field);
+        if (symbol?.decl.kind === 'Enum') return this.enumRaw(symbol, ast.field);
       }
     }
     if (ast.kind === 'binary') {
@@ -582,12 +650,26 @@ class HirLowerer {
     return null;
   }
 
+  private enumRaw(symbol: SymbolInfo, name: string): bigint | null {
+    if (symbol.decl.kind !== 'Enum') return null;
+    let next = 0n;
+    for (const member of symbol.decl.members) {
+      const value = member.value ?? next;
+      next = value + 1n;
+      if (member.name === name) return value;
+    }
+    return null;
+  }
+
   private intConst(module: number, name: string): bigint | null {
     const sym = this.resolve(module, name);
     return sym?.decl.kind === 'Const' ? this.raw(sym.module, sym.decl.init, this.type(sym.module, sym.decl.type)) : null;
   }
 
   private resolve(module: number, name: string): SymbolInfo | null {
+    const parts = name.split('.');
+    if (parts.length === 2) return this.qualifiedMember(module, parts[0]!, parts[1]!);
+    if (parts.length !== 1) return null;
     const own = this.modules[module]!.table.get(name);
     if (own) return own;
     for (const imp of this.modules[module]!.ast.imports) {
@@ -605,9 +687,12 @@ class HirLowerer {
     return sym;
   }
 
-  private qualifiedMember(moduleName: string, member: string): SymbolInfo | null {
+  private qualifiedMember(requester: number, moduleName: string, member: string): SymbolInfo | null {
     const module = this.moduleByName.get(moduleName);
-    return module === undefined ? null : this.modules[module]!.table.get(member) ?? null;
+    if (module === undefined) return null;
+    const importedWhole = module === requester
+      || this.modules[requester]!.ast.imports.some((item) => item.module === moduleName && item.names.length === 0);
+    return importedWhole ? this.modules[module]!.table.get(member) ?? null : null;
   }
 
   private symbolRef(sym: SymbolInfo): HirSymbolRef {
@@ -615,16 +700,58 @@ class HirLowerer {
   }
 
   private sourceId(kind: number, module: number, name: string, span: SourceSpan): number {
-    const index = (this.sourceIndex.get(module) ?? 0) + 1;
-    this.sourceIndex.set(module, index);
-    const sourceId = (((kind & 0xf) << 28) | ((module & 0xfff) << 16) | index) >>> 0;
+    const index = this.sourceIndex.get(module) ?? 0;
+    if (!Number.isInteger(kind) || kind < 0 || kind > 0xf) {
+      throw new Error(`internal source-ID kind ${kind} is outside 4-bit range`);
+    }
+    if (!Number.isInteger(module) || module < 0 || module > 0xfff) {
+      throw new Error(`internal source-ID module ${module} is outside 12-bit range`);
+    }
+    if (index > 0xffff) {
+      throw new Error(`internal source-ID local index ${index} is outside 16-bit range in module ${module}`);
+    }
+    this.sourceIndex.set(module, index + 1);
+    const sourceId = ((kind << 28) | (module << 16) | index) >>> 0;
     this.sourceIds.push({ sourceId, kind, module, file: span.file, span, name, programHash: null });
     return sourceId;
   }
 
+  private validateSourceIds(): void {
+    const seen = new Map<number, HirSourceRow>();
+    for (const row of this.sourceIds) {
+      const kind = row.sourceId >>> 28;
+      const module = (row.sourceId >>> 16) & 0xfff;
+      const index = row.sourceId & 0xffff;
+      if (kind !== row.kind || module !== row.module
+          || !Number.isInteger(row.kind) || row.kind < 0 || row.kind > 0xf
+          || !Number.isInteger(row.module) || row.module < 0 || row.module > 0xfff
+          || index >= (this.sourceIndex.get(row.module) ?? 0)) {
+        throw new Error(`internal malformed source ID 0x${row.sourceId.toString(16).padStart(8, '0')} for '${row.name}'`);
+      }
+      const prior = seen.get(row.sourceId);
+      if (prior) {
+        throw new Error(`internal duplicate source ID 0x${row.sourceId.toString(16).padStart(8, '0')} for '${prior.name}' and '${row.name}'`);
+      }
+      seen.set(row.sourceId, row);
+    }
+  }
+
+  private requireAccessKey(access: Access): string {
+    const key = this.accessKeys.get(access);
+    if (key === undefined) throw new Error(`internal HIR access key missing for '${access.parts.join('.')}'`);
+    return key;
+  }
+
+  private u32Number(value: bigint, label: string, positive = false): number {
+    if (value < (positive ? 1n : 0n) || value > 0xffffffffn) {
+      throw new Error(`internal HIR ${label} ${value} is outside ${positive ? 'positive ' : ''}u32 range`);
+    }
+    return Number(value);
+  }
+
   private syntheticPoolCount(span: SourceSpan, sym: SymbolInfo): HirExpr {
     const ast: Expr = { kind: 'member', obj: { kind: 'ident', name: sym.name, span }, field: 'count', fieldSpan: span, span };
-    return { ast, type: T.u32, symbol: { kind: 'pool', module: sym.module, name: sym.name }, rngSlot: null, children: [], span };
+    return { ast, type: T.u32, symbol: { kind: 'pool', module: sym.module, name: sym.name }, poolColumn: null, rngSlot: null, children: [], span };
   }
 
   private literalType(ast: Extract<Expr, { kind: 'literal' }>, expected: Type | null): Type {

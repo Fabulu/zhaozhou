@@ -259,7 +259,36 @@ distinct types; `+` refuses mixed operands; the field dialect uses fx16 lanes
 only, and its `sample.x/z` are fx16 (Field IR lanes are Q16.16 everywhere —
 field-ir.md §7.1/Q2).
 
-### 3.3 Effect-free by construction outside systems
+### 3.3 Comparison admission matrix
+
+Operands must have the exact same type; literal target-typing does not create
+an implicit conversion. The complete L1 matrix is:
+
+| Operand category | `==`, `!=` | `<`, `<=`, `>`, `>=` |
+|---|---:|---:|
+| `fx16`, `fx24`, `angle16`, `unit8`, `i32`, `u32` | yes | yes |
+| `bool` | yes | no |
+| `colour8` | yes | no |
+| same nominal enum declaration (same owner and name) | yes | yes |
+| different enum declarations | no | no |
+| `world2`, `world3`, `velocity3` | no | no |
+| structs and arrays | no | no |
+| pools, sounds, streams, pad frames and other runtime handles | no | no |
+
+There is no aggregate, lexicographic, component-wise, handle-identity, or
+cross-enum comparison. Any matrix cell marked `no` is FORM-E-300.
+
+### 3.4 Exact declaration-number bounds
+
+All bounds are checked in exact integer space before conversion to a host
+number. Enum values, fixed-array lengths and pool capacities fit unsigned u32
+(`0..4294967295`); array lengths and pool capacities are additionally positive.
+System `every` and stagger divisors fit positive u32 (`1..4294967295`). Scenario
+seeds, scheduled ticks and capture frame numbers fit u32 (`0..4294967295`). A
+value outside its row is rejected; it is never rounded, truncated or aliased by
+a JavaScript `Number` conversion.
+
+### 3.5 Effect-free by construction outside systems
 
 `fn` bodies are pure: no pool/global writes, no spawn/kill, no input reads
 (FORM-E-450 when violated). Systems are the only writers. Presentation blocks
@@ -293,8 +322,14 @@ memory law FORM §6).
 (FORM §21-9; capacity literal or `u32` const; `0` refused FORM-E-810).
 Pool element must be a struct (FORM-E-811). Pools are SoA-laid-out in the
 generated `FormState` (D4); iteration is ascending over `0..count`
-(§5, deterministic-scheduling.md). Pool intrinsics: `.count` (u32),
-`alive(pool, i)`, `spawn(pool, value) -> u32`, `kill(pool, i)` (§4.5).
+(§5, deterministic-scheduling.md). Runtime membership count/capacity metadata
+and authored SoA columns occupy disjoint generated-name classes. Every authored
+field name is encoded injectively for its column, so fields named `count`,
+`capacity`, or strings resembling backend internals cannot collide with
+membership metadata. Pool intrinsics: `.count` (u32), `alive(pool, i)`,
+`spawn(pool, value) -> u32`, `kill(pool, i)` (§4.5). When the element struct
+itself declares a field named `count`, bare `pool.count` is membership metadata
+and indexed `pool.count[i]` is the authored column.
 
 `global` is explicit persistent truth state (FORM §6 "explicit persistent
 state"; required by D4 `FormState` and the D5 sim-hash serialization).

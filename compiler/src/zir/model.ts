@@ -1,7 +1,7 @@
 // model.ts — domain-partitioned ZIR (W3.3, D3/D6).
 
 import type {
-  HirEmit, HirExpr, HirField, HirGlobal, HirPool, HirScenario, HirStmt,
+  HirEmit, HirExpr, HirField, HirGlobal, HirPool, HirStmt,
 } from '../hir/model.js';
 import type { SourceSpan } from '../frontend/span.js';
 
@@ -59,9 +59,26 @@ export interface PresentZir {
   perFrameEstimateBytes: number;
 }
 
+export type TestZirOperation =
+  | { kind: 'seed'; value: number; span: SourceSpan }
+  | { kind: 'load'; module: number; name: string; span: SourceSpan }
+  | { kind: 'spawn_player'; player: number; placement: { module: number; global: string }; span: SourceSpan }
+  | { kind: 'at'; tick: number; system: { module: number; name: string; sourceId: number }; span: SourceSpan }
+  | { kind: 'assert'; expression: HirExpr; tolerance: HirExpr | null; span: SourceSpan }
+  | { kind: 'capture'; frame: number; name: string; span: SourceSpan }
+  | { kind: 'assert_budget'; presentation: { module: number; name: string }; span: SourceSpan };
+
+export interface TestZirScenario {
+  module: number;
+  name: string;
+  sourceId: number;
+  operations: TestZirOperation[];
+  span: SourceSpan;
+}
+
 export interface TestZir {
   kind: 'TestZIR';
-  scenarios: HirScenario[];
+  scenarios: TestZirScenario[];
 }
 
 export interface ZirProgram {

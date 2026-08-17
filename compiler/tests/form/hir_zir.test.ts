@@ -104,6 +104,118 @@ test('HIR preserves exact contextual types through every L1 target context', () 
   assert.deepEqual(globalAssign.expressions[1]!.children.map((child) => child.type.t), ['u32', 'u32']);
 });
 
+test('HIR keeps ordinary composition recursive, marks only direct pool columns, and starts source rows at zero', () => {
+  const frontend = compileFrontend({
+    'composition.form': `module composition {
+  const TWO: u32 = 2;
+  struct inner { value: u32; }
+  struct outer { payload: inner; }
+  struct row { count: u32; lanes: u32[TWO]; }
+  global box: outer = outer { payload = inner { value = 7 } };
+  global observed: u32 = 0;
+  pool items: row[3];
+  system inspect every 1 ticks reads box, items writes observed {
+    let nested = box.payload.value;
+    let membership = items.count;
+    let authored_count = items.count[0];
+    let nested_index = items.lanes[0][1];
+    observed = nested + membership + authored_count + nested_index;
+  }
+}\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const pool = declarationsOf(hir, 'pool')[0]!;
+  const system = declarationsOf(hir, 'system')[0]!;
+  assert.equal(pool.sourceId, (SOURCE_KIND_POOL << 28) >>> 0);
+  assert.equal(system.sourceId, ((SOURCE_KIND_SYSTEM << 28) | 1) >>> 0);
+  assert.deepEqual(hir.sourceIds.map((row) => row.sourceId & 0xffff).sort((a, b) => a - b), [0, 1]);
+  assert.deepEqual(system.reads, ['composition\0box', 'composition\0items']);
+  assert.deepEqual(system.writes, ['composition\0observed']);
+
+  const nested = system.body[0]!.expressions[0]!;
+  assert.equal(nested.ast.kind, 'member');
+  assert.equal(nested.symbol, null);
+  assert.equal(nested.poolColumn, null);
+  assert.equal(nested.children[0]!.symbol, null);
+  assert.deepEqual(nested.children[0]!.children[0]!.symbol, { kind: 'global', module: 0, name: 'box' });
+
+  const membership = system.body[1]!.expressions[0]!;
+  assert.deepEqual(membership.symbol, { kind: 'pool', module: 0, name: 'items' });
+  assert.equal(membership.poolColumn, null);
+
+  const authoredCount = system.body[2]!.expressions[0]!;
+  assert.equal(authoredCount.ast.kind, 'index');
+  assert.equal(authoredCount.symbol, null);
+  assert.deepEqual(authoredCount.children[0]!.poolColumn, { module: 0, pool: 'items', field: 'count' });
+  assert.equal(authoredCount.children[0]!.symbol, null);
+
+  const nestedIndex = system.body[3]!.expressions[0]!;
+  assert.equal(nestedIndex.ast.kind, 'index');
+  assert.equal(nestedIndex.children[0]!.ast.kind, 'index');
+  assert.deepEqual(nestedIndex.children[0]!.children[0]!.poolColumn,
+    { module: 0, pool: 'items', field: 'lanes' });
+  assert.equal(nestedIndex.poolColumn, null);
+});
+
+test('TestZIR explicitly lowers every scenario operation with resolved owner identity', () => {
+  const frontend = compileFrontend({
+    'scenario_ops.form': `module scenario_ops {
+  global origin: world3 = world3 { x = 1w, y = 2w, z = 3w };
+  global counter: u32 = 0;
+  system step every 1 ticks reads counter writes counter { counter = counter + 1; }
+  presentation limits { view 0 from origin budget 100%; }
+  scenario all_operations {
+    seed 42;
+    load scenario_ops;
+    spawn player 2 at origin;
+    at 5 ticks step();
+    assert counter == 1 within 0.25;
+    capture frame 9 as "snapshot";
+    assert_budget limits;
+  }
+}\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const zir = lowerZir(hir);
+  assert.equal(zir.test.scenarios.length, 1);
+  const scenario = zir.test.scenarios[0]!;
+  assert.deepEqual(scenario.operations.map((operation) => operation.kind),
+    ['seed', 'load', 'spawn_player', 'at', 'assert', 'capture', 'assert_budget']);
+  assert.deepEqual(scenario.operations[0], {
+    kind: 'seed', value: 42, span: scenario.operations[0]!.span,
+  });
+  assert.deepEqual(scenario.operations[1], {
+    kind: 'load', module: 0, name: 'scenario_ops', span: scenario.operations[1]!.span,
+  });
+  assert.deepEqual(scenario.operations[2], {
+    kind: 'spawn_player', player: 2, placement: { module: 0, global: 'origin' },
+    span: scenario.operations[2]!.span,
+  });
+  const at = scenario.operations[3]!;
+  assert.equal(at.kind, 'at');
+  if (at.kind === 'at') {
+    assert.equal(at.tick, 5);
+    assert.deepEqual(at.system, { module: 0, name: 'step', sourceId: declarationsOf(hir, 'system')[0]!.sourceId });
+  }
+  const assertion = scenario.operations[4]!;
+  assert.equal(assertion.kind, 'assert');
+  if (assertion.kind === 'assert') {
+    assert.equal(assertion.expression.type.t, 'bool');
+    assert.equal(assertion.tolerance?.type.t, 'fx16');
+  }
+  assert.deepEqual(scenario.operations[5], {
+    kind: 'capture', frame: 9, name: 'snapshot', span: scenario.operations[5]!.span,
+  });
+  assert.deepEqual(scenario.operations[6], {
+    kind: 'assert_budget', presentation: { module: 0, name: 'limits' },
+    span: scenario.operations[6]!.span,
+  });
+});
+
 test('imported nominal types retain their defining owner without importing the type name', () => {
   const frontend = compileFrontend({
     'a_owner.form': `module owner {

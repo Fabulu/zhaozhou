@@ -357,7 +357,7 @@ export class Parser {
     const kw = this.expectKw('pool');
     const name = this.expectName('pool name');
     this.expectPunct(':');
-    const structName = this.expectName('pool struct type').text;
+    const structName = this.parseQualifiedName('pool struct type');
     this.expectPunct('[');
     let capacity: CapacityExpr = null;
     if (this.atPunct(']')) {
@@ -368,8 +368,9 @@ export class Parser {
       const capTok = this.expectInt('capacity');
       capacity = { kind: 'int', value: capTok.value, span: capTok.span };
     } else if (this.atIdent()) {
-      const n = this.expectName('capacity const name');
-      capacity = { kind: 'name', name: n.text, span: n.span };
+      const start = this.peek().span;
+      const qualified = this.parseQualifiedName('capacity const name');
+      capacity = { kind: 'name', name: qualified, span: start };
     } else {
       this.error('FORM-E-800', this.peek().span,
         `pool capacity must be an integer or a u32 const, found '${this.peek().text}'`);
@@ -429,7 +430,7 @@ export class Parser {
       staggerSpan = this.next().span;
       if (this.peek().kind === 'int') staggerRate = this.expectInt('stagger rate').value;
       this.expectKw('over');
-      staggerPool = this.expectName('stagger pool').text;
+      staggerPool = this.parseQualifiedName('stagger pool');
     }
     this.expectKw('reads');
     const reads = this.parseAccessList('writes');
@@ -472,6 +473,15 @@ export class Parser {
     return list;
   }
 
+  private parseQualifiedName(label: string): string {
+    let name = this.expectName(label).text;
+    while (this.atPunct('.')) {
+      this.next();
+      name += `.${this.expectName(label, true).text}`;
+    }
+    return name;
+  }
+
   private parseType(): TypeExpr {
     const t = this.peek();
     if (t.kind === 'kw' && RESERVED_KW_CODE.has(t.text)) {
@@ -485,6 +495,11 @@ export class Parser {
       throw ParseError;
     }
     const nameTok = this.next();
+    let name = nameTok.text;
+    while (this.atPunct('.')) {
+      this.next();
+      name += `.${this.expectName('qualified type name', true).text}`;
+    }
     if (this.atPunct('<')) {
       this.error('FORM-E-702', this.peek().span,
         "generics beyond pool capacity literals are refused in L1 (FORM-E-702; '<T>' syntax)");
@@ -497,7 +512,7 @@ export class Parser {
       if (this.peek().kind === 'int') {
         len = { kind: 'int', value: this.expectInt('array length').value };
       } else if (this.atIdent()) {
-        len = { kind: 'name', name: this.expectName('array length const').text };
+        len = { kind: 'name', name: this.parseQualifiedName('array length const') };
       } else {
         this.error('FORM-E-719', this.peek().span,
           `array length must be a constant, found '${this.peek().text}' (dynamic-length collections are refused, FORM §6)`);
@@ -505,9 +520,9 @@ export class Parser {
         throw ParseError;
       }
       this.expectPunct(']');
-      return { kind: 'array', elem: { kind: 'named', name: nameTok.text, span: nameTok.span }, len, span: nameTok.span };
+      return { kind: 'array', elem: { kind: 'named', name, span: nameTok.span }, len, span: nameTok.span };
     }
-    return { kind: 'named', name: nameTok.text, span: nameTok.span };
+    return { kind: 'named', name, span: nameTok.span };
   }
 
   // -- field declarations (@earth/@flow, §6) --------------------------------
@@ -541,7 +556,7 @@ export class Parser {
     if (this.atKw('params')) {
       paramsSpan = this.next().span;
       this.expectPunct(':');
-      paramsStruct = this.expectName('params struct type').text;
+      paramsStruct = this.parseQualifiedName('params struct type');
     }
     this.expectPunct(')');
     this.expectPunct('->');
@@ -754,9 +769,9 @@ export class Parser {
           this.expectKw('player');
           const index = this.expectInt('player index').value;
           this.expectKw('at');
-          const at = this.expectName('spawn position global');
+          const at = this.parseQualifiedName('spawn position global');
           this.expectPunct(';');
-          items.push({ kind: 'spawn_player', index, at: at.text, span: t.span });
+          items.push({ kind: 'spawn_player', index, at, span: t.span });
           continue;
         }
         if (t.kind === 'kw' && t.text === 'at') {
@@ -803,9 +818,9 @@ export class Parser {
         }
         if (t.kind === 'ident' && t.text === 'assert_budget') {
           this.next();
-          const set = this.expectName('budget set name');
+          const set = this.parseQualifiedName('budget set name');
           this.expectPunct(';');
-          items.push({ kind: 'assert_budget', budgetSet: set.text, span: t.span });
+          items.push({ kind: 'assert_budget', budgetSet: set, span: t.span });
           continue;
         }
         // anything else: a statement in a scenario body
@@ -973,9 +988,11 @@ export class Parser {
     const varName = this.expectName('loop variable').text;
     this.expectKw('in');
     let range: { kind: 'range'; lo: Expr; hi: Expr } | { kind: 'pool'; pool: string; poolSpan: SourceSpan };
-    if (this.atIdent() && this.atPunct('{', 1)) {
-      const poolTok = this.next();
-      range = { kind: 'pool', pool: poolTok.text, poolSpan: poolTok.span };
+    if ((this.atIdent() && this.atPunct('{', 1))
+        || (this.atIdent() && this.atPunct('.', 1) && this.atIdent(undefined, 2) && this.atPunct('{', 3))) {
+      const poolSpan = this.peek().span;
+      const pool = this.parseQualifiedName('pool name');
+      range = { kind: 'pool', pool, poolSpan };
     } else {
       const lo = this.parseExpr({ allowRange: true, recordLits: false });
       if (lo.kind !== 'range') {
@@ -1007,30 +1024,31 @@ export class Parser {
   private parseSpawnCall(): Stmt {
     const kw = this.expectKw('spawn');
     this.expectPunct('(');
-    const pool = this.expectName('pool name');
+    const pool = this.parseQualifiedName('pool name');
     this.expectPunct(',');
     const value = this.parseRecordLitRequired('spawn value');
     this.expectPunct(')');
     this.expectPunct(';');
-    return { kind: 'spawn', pool: pool.text, value, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
+    return { kind: 'spawn', pool, value, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
   }
 
   private parseKill(): Stmt {
     const kw = this.peek();
     this.next(); // 'kill'
     this.expectPunct('(');
-    const pool = this.expectName('pool name');
+    const pool = this.parseQualifiedName('pool name');
     this.expectPunct(',');
     const index = this.parseExpr();
     this.expectPunct(')');
     this.expectPunct(';');
-    return { kind: 'kill', pool: pool.text, index, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
+    return { kind: 'kill', pool, index, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
   }
 
   private parseApply(context: 'system' | 'fn' | 'present' | 'scenario'): Stmt {
     const kw = this.next(); // 'apply'
     const kindTok = this.next(); // 'terrain_field' | 'flow'
-    const program = this.expectName('field program name');
+    const programSpan = this.peek().span;
+    const program = this.parseQualifiedName('field program name');
     const args: EmitArg[] = [];
     this.expectPunct('(');
     while (!this.atPunct(')') && this.peek().kind !== 'eof') {
@@ -1051,7 +1069,7 @@ export class Parser {
     const duration = this.parseExpr();
     this.expectPunct(';');
     const s: ApplyStmt = {
-      kind: 'apply', applyKind: kindTok.text, program: program.text, programSpan: program.span,
+      kind: 'apply', applyKind: kindTok.text, program, programSpan,
       args, duration, span: join(kw.span, this.tokens[this.idx - 1]!.span),
     };
     if (context !== 'system') {
@@ -1244,6 +1262,12 @@ export class Parser {
             && this.atPunct('=', 3);
           if (isField) return this.parseRecordLit();
         }
+        if (opts.recordLits && this.atPunct('.', 1) && this.atIdent(undefined, 2) && this.atPunct('{', 3)) {
+          const after = this.peek(4);
+          const isField = (after.kind === 'ident' || (after.kind === 'kw' && SOFT_KEYWORDS.has(after.text)))
+            && this.atPunct('=', 5);
+          if (isField) return this.parseRecordLit();
+        }
         this.next();
         return { kind: 'ident', name: t.text, span: t.span };
       }
@@ -1291,9 +1315,10 @@ export class Parser {
   }
 
   private parseRecordLit(): RecordLit {
-    const nameTok = this.next(); // ident
+    const firstSpan = this.peek().span;
+    const typeName = this.parseQualifiedName('record type');
     const fields = this.parseRecordFields();
-    return { kind: 'record', typeName: nameTok.text, fields, span: join(nameTok.span, this.tokens[this.idx - 1]!.span) };
+    return { kind: 'record', typeName, fields, span: join(firstSpan, this.tokens[this.idx - 1]!.span) };
   }
 
   /** Parses `{ f = e, ... }` including both braces. */

@@ -111,9 +111,8 @@ for (const c of NEGATIVE_CORPUS) {
   });
 }
 
-test('negative corpus: the E-832 registry-overflow case is exercised (generated)', () => {
-  // generated separately to keep the manifest readable (65537 declarations)
-  const decls = Array.from({ length: 65537 }, (_, i) => `const K${i}: u32 = ${i % 97};`).join('\n');
-  const r = compile(`module big {\n${decls}\n}\n`);
-  assert.deepEqual(r.codes, ['FORM-E-832']);
+test('source-ID registry ignores declarations that allocate no source row', () => {
+  const decls = Array.from({ length: 257 }, (_, i) => `const K${i}: u32 = ${i % 97};`).join('\n');
+  const r = compile(`module many_constants {\n${decls}\n}\n`);
+  assert.ok(!r.codes.includes('FORM-E-832'));
 });

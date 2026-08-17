@@ -7,6 +7,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compile } from './helpers.js';
+import { checkModules } from '../../src/frontend/checker.js';
+import { DiagnosticSink } from '../../src/frontend/diagnostics.js';
+import type { ModuleAst, PresentationItem, TopDecl } from '../../src/frontend/ast.js';
+import type { SourceSpan } from '../../src/frontend/span.js';
 
 const MOD = (body: string): string => `module m {\n${body}\n}\n`;
 
@@ -138,11 +142,38 @@ test('stagger retains pure expressions around and inside its selected loop', () 
   assert.deepEqual(result.codes, [], result.diagnostics.map((d) => d.message).join('\n'));
 });
 
-test('E-832: > 65536 declarations in one module trips the source-ID registry gate', () => {
-  const decls = Array.from({ length: 65537 }, (_, i) => `  const K${i}: u32 = ${i % 100};`).join('\n');
-  const r = compile(MOD(decls));
-  assert.deepEqual(r.codes, ['FORM-E-832']);
-  assert.ok(!r.ok);
+test('E-832: source-ID admission counts rows, not declarations, at exact boundaries', () => {
+  const span: SourceSpan = { file: 'generated.form', start: 0, end: 0 };
+  const moduleWithRows = (rows: number): ModuleAst => ({
+    kind: 'Module', name: 'rows', imports: [], span,
+    decls: [{
+      kind: 'Presentation', name: 'p', span,
+      // Unknown emit kinds are assumed parser-diagnosed; this isolates registry admission.
+      items: Array.from({ length: rows }, (): PresentationItem => ({
+        kind: 'emit', emitKind: '<registry-probe>', args: [], span,
+      })),
+    }],
+  });
+  const codes = (modules: ModuleAst[]): string[] => {
+    const sink = new DiagnosticSink();
+    checkModules(modules, sink);
+    return sink.diagnostics.filter((d) => d.severity === 'error').map((d) => d.code);
+  };
+
+  assert.ok(!codes([moduleWithRows(65536)]).includes('FORM-E-832'));
+  assert.ok(codes([moduleWithRows(65537)]).includes('FORM-E-832'));
+
+  const declarations: TopDecl[] = Array.from({ length: 70000 }, (_, index) => ({
+    kind: 'BadDecl' as const, text: `ignored${index}`, span,
+  }));
+  assert.ok(!codes([{ kind: 'Module', name: 'declarations', imports: [], decls: declarations, span }]).includes('FORM-E-832'));
+
+  const modules = Array.from({ length: 4097 }, (_, index): ModuleAst => ({
+    kind: 'Module', name: `m${index}`, imports: [], decls: [],
+    span: { file: `m${index}.form`, start: 0, end: 0 },
+  }));
+  assert.ok(!codes(modules.slice(0, 4096)).includes('FORM-E-832'));
+  assert.ok(codes(modules).includes('FORM-E-832'));
 });
 
 test('const admission follows only genuine constant expressions recursively', () => {
@@ -298,4 +329,147 @@ test('one-writer analysis feeds W3.3: the schedule shape is committed data', () 
   assert.deepEqual(r.codes, [], r.diagnostics.map((d) => d.code + ' ' + d.message).join('\n'));
   const names = r.check!.schedule!.phases.map((ph) => ph.systems.map((s) => s.name));
   assert.deepEqual(names, [['latch'], ['spawner'], ['mover']]);
+});
+
+test('compositional member/index typing preserves ordinary aggregates and pool columns', () => {
+  const result = compile(MOD(`
+    struct inner { values: u32[2]; }
+    struct bag { nested: inner; values: u32[2]; vector: world3; }
+    pool things: bag[4];
+    global origin: world3 = world3 { x = 1, y = 2, z = 3 };
+    global answer: u32 = 0;
+    fn pick(item: bag) -> u32 {
+      return item.values[0] + item.nested.values[1];
+    }
+    system compose every 1 ticks reads origin, things.vector, things.values writes answer {
+      let x = origin.x;
+      let px = things.vector[0].x;
+      let value = things.values[0][1];
+      answer = value;
+    }
+  `));
+  assert.deepEqual(result.codes, [], result.diagnostics.map((d) => d.message).join('\n'));
+});
+
+test('owner-qualified scheduler keys separate unrelated state and converge imports', () => {
+  const independent = compile({
+    'a.form': `module a {
+      global state: u32 = 0;
+      system write_a every 1 ticks reads writes state { state = 1; }
+    }\n`,
+    'b.form': `module b {
+      global state: u32 = 0;
+      system write_b every 1 ticks reads writes state { state = 2; }
+    }\n`,
+  });
+  assert.deepEqual(independent.codes, [], independent.diagnostics.map((d) => d.message).join('\n'));
+  assert.deepEqual(independent.check!.schedule!.phases[0]!.systems.map((s) => s.name), ['write_a', 'write_b']);
+
+  const imported = compile({
+    'a.form': `module a {
+      global state: u32 = 0;
+      system write_a every 1 ticks reads writes state { state = 1; }
+    }\n`,
+    'b.form': `module b {
+      import a;
+      global seen: u32 = 0;
+      system read_a every 1 ticks reads a.state writes seen { seen = a.state; }
+    }\n`,
+  });
+  assert.deepEqual(imported.codes, [], imported.diagnostics.map((d) => d.message).join('\n'));
+  assert.deepEqual(imported.check!.schedule!.phases.map((p) => p.systems.map((s) => s.name)), [['write_a'], ['read_a']]);
+
+  const conflict = compile({
+    'a.form': `module a { global state: u32 = 0; }\n`,
+    'b.form': `module b {
+      import a;
+      system first every 1 ticks reads writes a.state { a.state = 1; }
+      system second every 1 ticks reads writes a.state { a.state = 2; }
+    }\n`,
+  });
+  assert.ok(conflict.codes.includes('FORM-E-500'));
+});
+
+test('whole-module qualification is shared by types, values, enums, calls, pools and accesses', () => {
+  const result = compile({
+    'owner.form': `module owner {
+      enum mode { idle = 0, ready = 1 }
+      struct item { count: u32; capacity: u32; value: u32; }
+      const LIMIT: u32 = 4;
+      global marker: u32 = 1;
+      pool items: item[LIMIT];
+      fn inc(value: u32) -> u32 { return value + 1; }
+    }\n`,
+    'consumer.form': `module consumer {
+      import owner;
+      global output: u32 = 0;
+      fn classify(value: owner.item, state: owner.mode) -> u32 {
+        if state == owner.mode.ready { return owner.inc(value.value); }
+        else { return owner.LIMIT; }
+      }
+      system use every 1 ticks reads owner.marker, owner.items.count writes output, owner.items.value {
+        let created = owner.item { value = owner.marker, count = 0, capacity = owner.LIMIT };
+        let selected = classify(created, owner.mode.ready);
+        let authored_count = owner.items.count[0];
+        owner.items.value[0] = authored_count;
+        output = selected;
+      }
+    }\n`,
+  });
+  assert.deepEqual(result.codes, [], result.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+});
+
+test('qualified global reads still violate pure-function effects', () => {
+  const result = compile({
+    'owner.form': `module owner { global leaked: u32 = 1; }\n`,
+    'consumer.form': `module consumer {
+      import owner;
+      fn leak() -> u32 { return owner.leaked; }
+    }\n`,
+  });
+  assert.ok(result.codes.includes('FORM-E-402'));
+});
+
+test('definite return requires every path and never trusts an ordinary loop', () => {
+  assert.deepEqual(compile(MOD(`
+    fn complete(flag: bool, other: bool) -> u32 {
+      if flag { if other { return 1; } else { return 2; } }
+      else { return 3; }
+    }
+  `)).codes, []);
+  assert.ok(compile(MOD(`
+    fn falls_through(flag: bool) -> u32 { if flag { return 1; } }
+  `)).codes.includes('FORM-E-310'));
+  assert.ok(compile(MOD(`
+    fn loop_only() -> u32 { for i in 0..1 { return i; } }
+  `)).codes.includes('FORM-E-310'));
+});
+
+test('declaration numeric bounds reject overflow before Number conversion', () => {
+  assert.deepEqual(compile(MOD(`
+    struct item { x: u32; }
+    const MAX: u32 = 4294967295;
+    struct arrays { values: u32[MAX]; }
+    pool maximal: item[MAX];
+    enum edge { zero = 0, top = 4294967295 }
+  `)).codes.filter((code) => ['FORM-E-007', 'FORM-E-800', 'FORM-E-801'].includes(code)), []);
+  assert.ok(compile(MOD(`struct item { x: u32; } pool too_large: item[4294967296];`)).codes.includes('FORM-E-800'));
+  assert.ok(compile(MOD(`enum overflow { value = 4294967296 }`)).codes.includes('FORM-E-007'));
+  assert.ok(compile(MOD(`global values: u32[4294967296] = 0;`)).codes.includes('FORM-E-801'));
+  assert.ok(compile(MOD(`system huge every 4294967296 ticks reads writes { }`)).codes.includes('FORM-E-506'));
+});
+
+test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
+  const accepted = compile(MOD(`
+    enum mode { low = 0, high = 1 }
+    fn all(a: fx16, b: fx24, c: angle16, d: unit8, i: i32, u: u32,
+           flag: bool, colour: colour8, left: mode, right: mode) -> bool {
+      return a < a && b <= b && c > c && d >= d && i < i && u < u
+        && flag == flag && colour != colour && left < right;
+    }
+  `));
+  assert.deepEqual(accepted.codes, [], accepted.diagnostics.map((d) => d.message).join('\n'));
+  assert.ok(compile(MOD(`fn bad(a: world3) -> bool { return a == a; }`)).codes.includes('FORM-E-300'));
+  assert.ok(compile(MOD(`struct pair { x: u32; } fn bad(a: pair) -> bool { return a < a; }`)).codes.includes('FORM-E-300'));
+  assert.ok(compile(MOD(`fn bad(s: bool) -> bool { return s < s; }`)).codes.includes('FORM-E-300'));
 });

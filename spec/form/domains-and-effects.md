@@ -19,7 +19,7 @@ C++/RTL/board byte-identically.
 L1 restates the law at language level: **truth is deterministic gameplay
 state; form is its presentation; presentation may never mutate truth**
 (FORM §1). The compiler enforces it structurally — presentation blocks have
-no path to a write (language-semantics §3.3, FORM-E-405/400).
+no path to a write (language-semantics §3.5, FORM-E-405/400).
 
 ## 2. The L1 domains and their effect contracts
 
@@ -81,8 +81,13 @@ Consequences (each compiler-checked; FORM §13):
 
 Scenario blocks are desktop/CI-time drivers (FORM §16): they synthesize pad
 streams, drive ticks, and assert on truth (terrain height, state), captures
-(frame N) and budgets. Scenarios never ship in the cartridge's executed
-content — they compile to test-executable entries and golden manifests
+(frame N) and budgets. TestZIR contains an explicit operation for every
+admitted scenario item — `seed`, `load`, `spawn_player`, scheduled `at`,
+`assert` (including optional tolerance), `capture`, and `assert_budget` — in
+authored order. The C++ backend emits immutable operation arrays plus a native
+`run_scenario_script` driver surface; no item is represented only as an
+initialize-only stub. Scenarios never ship in the cartridge's executed
+content — the generated arrays are test-executable entries and golden manifests
 (sim-hash chains D5, canvas CRCs). A scenario that changes truth outside the
 driven systems (there is no construct for it) is unrepresentable; the only
 "writes" are to test-local expectations.

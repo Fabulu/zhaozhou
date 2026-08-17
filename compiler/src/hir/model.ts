@@ -27,11 +27,20 @@ export interface HirSymbolRef {
   name: string;
 }
 
+export interface HirPoolColumnRef {
+  module: number;
+  pool: string;
+  field: string;
+}
+
 /** A checked expression plus its resolved type/name references. */
 export interface HirExpr {
   ast: Expr;
   type: Type;
+  /** Exact declaration/intrinsic/local roots only; never propagated through composition. */
   symbol: HirSymbolRef | null;
+  /** Present only on a direct authored SoA column selection (`pool.field`). */
+  poolColumn: HirPoolColumnRef | null;
   /** Stable canonical slot owned by a random.stream call site. */
   rngSlot: number | null;
   children: HirExpr[];
