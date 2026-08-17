@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <zref/zref_frame.hpp>
 #include <zref/zref_input.hpp>
+#include <zref/zref_trig.hpp>
 
 namespace zref { using FrameBuilder = zhao::ZhaoFrameBuilder; }
 
@@ -30,12 +31,59 @@ struct World2 { Fx24 x{}; Fx24 y{}; };
 struct World3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Velocity3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Stream { std::uint64_t state{}; std::uint64_t increment{}; };
+struct PresentationResources {
+  void* user{};
+  void (*form_transform)(void*, u32, World3, Fx16){};
+  void (*population)(void*, u32, u32, u32, u32, const void*){};
+  void (*audio_position)(void*, u32, World3){};
+  void publish_form_transform(u32 handle, World3 at, Fx16 size) const { if (form_transform) form_transform(user, handle, at, size); }
+  void publish_population(u32 handle, u32 module, u32 index, u32 count, const void* pool) const { if (population) population(user, handle, module, index, count, pool); }
+  void publish_audio_position(u32 source_id, World3 at) const { if (audio_position) audio_position(user, source_id, at); }
+};
 
+[[noreturn]] inline void form_abort(u32 code) { (void)code; std::abort(); }
 inline i32 sat_i32(i64 value) {
   if (value > std::numeric_limits<i32>::max()) return std::numeric_limits<i32>::max();
   if (value < std::numeric_limits<i32>::min()) return std::numeric_limits<i32>::min();
   return static_cast<i32>(value);
 }
+inline i64 sat_i64(__int128 value) {
+  if (value > std::numeric_limits<i64>::max()) return std::numeric_limits<i64>::max();
+  if (value < std::numeric_limits<i64>::min()) return std::numeric_limits<i64>::min();
+  return static_cast<i64>(value);
+}
+inline i16 sat_i16(i32 value) { return value > 32767 ? 32767 : value < -32768 ? -32768 : static_cast<i16>(value); }
+inline u32 resource_handle(u32 page_id) { return 0x01000000u | (page_id & 0x00ffffffu); }
+inline u32 transient_handle(u32 source_id, u32 salt) {
+  u32 index = (source_id ^ (salt * 0x9e3779b9u)) & 0x00ffffffu;
+  if (index == 0u) index = salt + 1u;
+  return 0x01000000u | index;
+}
+inline i32 i32_from_bits(u32 value) { return value <= 0x7fffffffu ? static_cast<i32>(value) : -1 - static_cast<i32>(~value); }
+inline i32 i32_add(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) + static_cast<u32>(b)); }
+inline i32 i32_sub(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) - static_cast<u32>(b)); }
+inline i32 i32_mul(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) * static_cast<u32>(b)); }
+inline i32 i32_neg(i32 value) { return i32_from_bits(0u - static_cast<u32>(value)); }
+inline i32 i32_div(i32 a, i32 b) {
+  if (b == 0) form_abort(823u);
+  if (a == std::numeric_limits<i32>::min() && b == -1) return std::numeric_limits<i32>::min();
+  return a / b;
+}
+inline i32 i32_mod(i32 a, i32 b) {
+  if (b == 0) form_abort(823u);
+  if (a == std::numeric_limits<i32>::min() && b == -1) return 0;
+  return a % b;
+}
+inline u32 shift_count(u32 value) { return value & 31u; }
+inline i32 i32_shl(i32 a, u32 b) { return i32_from_bits(static_cast<u32>(a) << shift_count(b)); }
+inline i32 i32_shr(i32 a, u32 b) {
+  const u32 shift = shift_count(b);
+  if (shift == 0u) return a;
+  const u32 bits = static_cast<u32>(a);
+  return i32_from_bits(a >= 0 ? bits >> shift : (bits >> shift) | (~0u << (32u - shift)));
+}
+inline u32 u32_div(u32 a, u32 b) { if (b == 0u) form_abort(823u); return a / b; }
+inline u32 u32_mod(u32 a, u32 b) { if (b == 0u) form_abort(823u); return a % b; }
 inline Fx16 fx16_add(Fx16 a, Fx16 b) { return sat_i32(static_cast<i64>(a) + b); }
 inline Fx16 fx16_sub(Fx16 a, Fx16 b) { return sat_i32(static_cast<i64>(a) - b); }
 inline Fx16 fx16_mul(Fx16 a, Fx16 b) {
@@ -43,38 +91,53 @@ inline Fx16 fx16_mul(Fx16 a, Fx16 b) {
   const i64 scaled = biased >= 0 ? biased / 0x10000 : -(((-biased) + 0xffff) / 0x10000);
   return sat_i32(scaled);
 }
-inline Fx24 fx24_add(Fx24 a, Fx24 b) {
-  if (b > 0 && a > std::numeric_limits<Fx24>::max() - b) return std::numeric_limits<Fx24>::max();
-  if (b < 0 && a < std::numeric_limits<Fx24>::min() - b) return std::numeric_limits<Fx24>::min();
-  return a + b;
+inline __int128 floor_div_s128(__int128 numerator, __int128 denominator) {
+  __int128 quotient = numerator / denominator;
+  if (numerator % denominator < 0) --quotient;
+  return quotient;
 }
-inline Fx24 fx24_sub(Fx24 a, Fx24 b) {
-  if (b < 0 && a > std::numeric_limits<Fx24>::max() + b) return std::numeric_limits<Fx24>::max();
-  if (b > 0 && a < std::numeric_limits<Fx24>::min() + b) return std::numeric_limits<Fx24>::min();
-  return a - b;
+inline __int128 round_half_up_s128(__int128 numerator, __int128 denominator) {
+  if (denominator < 0) { numerator = -numerator; denominator = -denominator; }
+  return floor_div_s128(numerator + denominator / 2, denominator);
 }
+inline Fx16 fx16_div(Fx16 a, Fx16 b) {
+  if (b == 0) return a < 0 ? std::numeric_limits<Fx16>::min() : std::numeric_limits<Fx16>::max();
+  return sat_i32(static_cast<i64>(round_half_up_s128(static_cast<__int128>(a) * 0x10000, b)));
+}
+inline Fx16 fx16_mod(Fx16 a, Fx16 b) { return i32_mod(a, b); }
+inline Fx24 fx24_add(Fx24 a, Fx24 b) { return sat_i64(static_cast<__int128>(a) + b); }
+inline Fx24 fx24_sub(Fx24 a, Fx24 b) { return sat_i64(static_cast<__int128>(a) - b); }
 inline Fx24 fx24_mul(Fx24 a, Fx24 b) {
-  const __int128 biased = static_cast<__int128>(a) * b + 0x800000;
-  const __int128 scaled = biased >= 0 ? biased / 0x1000000 : -(((-biased) + 0xffffff) / 0x1000000);
-  if (scaled > std::numeric_limits<Fx24>::max()) return std::numeric_limits<Fx24>::max();
-  if (scaled < std::numeric_limits<Fx24>::min()) return std::numeric_limits<Fx24>::min();
-  return static_cast<Fx24>(scaled);
+  return sat_i64(round_half_up_s128(static_cast<__int128>(a) * b, 0x1000000));
 }
-inline Fx16 fx16_from_fx24(Fx24 value) {
-  i64 rounded = value / 0x100;
-  const i64 remainder = value % 0x100;
-  if (remainder >= 0x80) ++rounded;
-  else if (remainder < -0x80) --rounded;
-  return sat_i32(rounded);
+inline Fx24 fx24_div(Fx24 a, Fx24 b) {
+  if (b == 0) return a < 0 ? std::numeric_limits<Fx24>::min() : std::numeric_limits<Fx24>::max();
+  return sat_i64(round_half_up_s128(static_cast<__int128>(a) * 0x1000000, b));
 }
-template <class T> inline T select_value(Bool condition, T yes, T no) { return condition ? yes : no; }
+inline Fx24 fx24_mod(Fx24 a, Fx24 b) {
+  if (b == 0) form_abort(823u);
+  if (a == std::numeric_limits<Fx24>::min() && b == -1) return 0;
+  return a % b;
+}
+inline Fx16 fx16_from_fx24(Fx24 value) { return sat_i32(static_cast<i64>(round_half_up_s128(value, 0x100))); }
+inline Fx24 fx24_from_fx16(Fx16 value) { return static_cast<Fx24>(value) * 0x100; }
+inline Fx16 fx16_from_angle(Angle16 value) { return static_cast<Fx16>(value); }
+inline Fx16 fx16_from_unit(Unit8 value) { return static_cast<Fx16>(value) * 0x100; }
+inline Unit8 unit_from_fx16(Fx16 value) {
+  if (value <= 0) return 0u;
+  if (value >= 0xffff) return 255u;
+  const u32 rounded = (static_cast<u32>(value) + 0x80u) >> 8u;
+  return static_cast<Unit8>(rounded > 255u ? 255u : rounded);
+}
+inline Angle16 angle_from_fx16(Fx16 value) { return static_cast<Angle16>(static_cast<u32>(value) & 0xffffu); }
 template <class T> inline T min_value(T a, T b) { return a < b ? a : b; }
 template <class T> inline T max_value(T a, T b) { return a > b ? a : b; }
 template <class T> inline T clamp_value(T value, T lo, T hi) { return min_value(max_value(value, lo), hi); }
 inline i32 abs_value(i32 value) { return value == std::numeric_limits<i32>::min() ? std::numeric_limits<i32>::max() : (value < 0 ? -value : value); }
 inline i64 abs_value(i64 value) { return value == std::numeric_limits<i64>::min() ? std::numeric_limits<i64>::max() : (value < 0 ? -value : value); }
-inline Unit8 unit_add(Unit8 a, Unit8 b) { const u32 sum = static_cast<u32>(a) + b; return static_cast<Unit8>(sum > 255u ? 255u : sum); }
-inline Unit8 unit_sub(Unit8 a, Unit8 b) { return static_cast<Unit8>(a < b ? 0u : static_cast<u32>(a) - b); }
+inline u32 abs_value(u32 value) { return value; }
+inline u16 abs_value(u16 value) { return value; }
+inline u8 abs_value(u8 value) { return value; }
 inline Unit8 unit_mul(Unit8 a, Unit8 b) { const u32 product = static_cast<u32>(a) * b + 128u; return static_cast<Unit8>(product > 0xff00u ? 255u : product >> 8u); }
 inline World2 world2_add(World2 a, World2 b) { return World2{fx24_add(a.x, b.x), fx24_add(a.y, b.y)}; }
 inline World2 world2_sub(World2 a, World2 b) { return World2{fx24_sub(a.x, b.x), fx24_sub(a.y, b.y)}; }
@@ -82,7 +145,6 @@ inline World3 world3_add(World3 a, World3 b) { return World3{fx24_add(a.x, b.x),
 inline World3 world3_sub(World3 a, World3 b) { return World3{fx24_sub(a.x, b.x), fx24_sub(a.y, b.y), fx24_sub(a.z, b.z)}; }
 inline Velocity3 velocity3_add(Velocity3 a, Velocity3 b) { return Velocity3{fx24_add(a.x, b.x), fx24_add(a.y, b.y), fx24_add(a.z, b.z)}; }
 inline Velocity3 velocity3_sub(Velocity3 a, Velocity3 b) { return Velocity3{fx24_sub(a.x, b.x), fx24_sub(a.y, b.y), fx24_sub(a.z, b.z)}; }
-[[noreturn]] inline void form_abort(u32 code) { (void)code; std::abort(); }
 template <class T, std::size_t N> inline T& checked_index(std::array<T, N>& values, u32 index, u32 limit) {
   if (index >= limit || index >= N) form_abort(822u);
   return values[index];
@@ -92,18 +154,89 @@ template <class T, std::size_t N> inline const T& checked_index(const std::array
   return values[index];
 }
 inline Bool input_held(const PadFrame& pad, u32 bit) { return static_cast<Bool>((pad.buttons >> (bit & 31u)) & 1u); }
-inline Stream random_stream(u32 seed, u32 id0 = 0u, u32 id1 = 0u, u32 id2 = 0u) {
+template <class... Ids> inline Stream random_stream(u32 seed, Ids... ids) {
   std::uint64_t mixed = 0x853c49e6748fea9bULL ^ seed;
-  mixed = (mixed ^ id0) * 0xda942042e4dd58b5ULL;
-  mixed = (mixed ^ id1) * 0xda942042e4dd58b5ULL;
-  mixed = (mixed ^ id2) * 0xda942042e4dd58b5ULL;
+  ((mixed = (mixed ^ static_cast<u32>(ids)) * 0xda942042e4dd58b5ULL), ...);
   return Stream{mixed, (mixed << 1u) | 1u};
+}
+template <class... Ids> inline Stream& random_slot(Stream& slot, u32 seed, Ids... ids) {
+  if (slot.increment == 0u) slot = random_stream(seed, ids...);
+  return slot;
 }
 inline u32 random_u32(Stream& stream) {
   const std::uint64_t old = stream.state;
   stream.state = old * 6364136223846793005ULL + stream.increment;
-  const u32 shift = static_cast<u32>(((old >> 18u) ^ old) >> 27u);
+  const u32 shifted = static_cast<u32>(((old >> 18u) ^ old) >> 27u);
   const u32 rotate = static_cast<u32>(old >> 59u);
-  return (shift >> rotate) | (shift << ((0u - rotate) & 31u));
+  return (shifted >> rotate) | (shifted << ((0u - rotate) & 31u));
 }
+inline i32 random_i32(Stream& stream) { return i32_from_bits(random_u32(stream)); }
+inline Unit8 random_unit8(Stream& stream) { return static_cast<Unit8>(random_u32(stream) >> 24u); }
+inline Angle16 random_angle16(Stream& stream) { return static_cast<Angle16>(random_u32(stream) >> 16u); }
+inline Fx16 random_fx16(Stream& stream, Fx16 lo, Fx16 hi) {
+  const __int128 span = static_cast<i64>(hi) - lo;
+  const __int128 offset = floor_div_s128(span * random_u32(stream), static_cast<__int128>(1) << 32u);
+  return sat_i32(static_cast<i64>(static_cast<__int128>(lo) + offset));
+}
+inline Fx16 trig_sin(Angle16 value) { return zref::fx_sin(zref::angle16{value}).raw; }
+inline Fx16 trig_cos(Angle16 value) { return zref::fx_cos(zref::angle16{value}).raw; }
+inline Fx16 sqrt_approx_value(Fx16 value) {
+  if (value <= 0) return 0;
+  return sat_i32(static_cast<i64>(zref::isqrt_u64(static_cast<std::uint64_t>(static_cast<u32>(value)) << 16u)));
+}
+inline u32 magnitude_i32(i32 value) { return value < 0 ? 0u - static_cast<u32>(value) : static_cast<u32>(value); }
+inline Angle16 atan2_approx_value(Fx16 y, Fx16 x) {
+  if (x == 0 && y == 0) return 0u;
+  const u32 ax = magnitude_i32(x), ay = magnitude_i32(y);
+  u32 lo = 0u, hi = 0x4000u;
+  for (u32 step = 0u; step < 15u; ++step) {
+    const u32 mid = (lo + hi + 1u) >> 1u;
+    const i64 lhs = static_cast<i64>(ay) * trig_cos(static_cast<Angle16>(mid));
+    const i64 rhs = static_cast<i64>(ax) * trig_sin(static_cast<Angle16>(mid));
+    if (lhs >= rhs) lo = mid; else hi = mid - 1u;
+  }
+  if (x >= 0 && y >= 0) return static_cast<Angle16>(lo);
+  if (x < 0 && y >= 0) return static_cast<Angle16>(0x8000u - lo);
+  if (x < 0 && y < 0) return static_cast<Angle16>(0x8000u + lo);
+  return static_cast<Angle16>(0u - lo);
+}
+inline Fx24 dot_rescale(__int128 sum) { return sat_i64(round_half_up_s128(sum, 0x1000000)); }
+inline Fx24 dot2_value(World2 a, World2 b) { return dot_rescale(static_cast<__int128>(a.x) * b.x + static_cast<__int128>(a.y) * b.y); }
+inline Fx24 dot2_value(World3 a, World3 b) { return dot_rescale(static_cast<__int128>(a.x) * b.x + static_cast<__int128>(a.y) * b.y); }
+inline Fx24 dot2_value(Velocity3 a, Velocity3 b) { return dot_rescale(static_cast<__int128>(a.x) * b.x + static_cast<__int128>(a.y) * b.y); }
+inline Fx24 dot3_value(World2 a, World2 b) { return dot2_value(a, b); }
+inline Fx24 dot3_value(World3 a, World3 b) { return dot_rescale(static_cast<__int128>(a.x) * b.x + static_cast<__int128>(a.y) * b.y + static_cast<__int128>(a.z) * b.z); }
+inline Fx24 dot3_value(Velocity3 a, Velocity3 b) { return dot_rescale(static_cast<__int128>(a.x) * b.x + static_cast<__int128>(a.y) * b.y + static_cast<__int128>(a.z) * b.z); }
+inline unsigned __int128 square_i64(i64 value) {
+  const unsigned __int128 magnitude = value < 0 ? static_cast<unsigned __int128>(-static_cast<__int128>(value)) : static_cast<unsigned __int128>(value);
+  return magnitude * magnitude;
+}
+inline std::uint64_t isqrt_u128(unsigned __int128 value) {
+  unsigned __int128 result = 0u;
+  unsigned __int128 bit = static_cast<unsigned __int128>(1) << 126u;
+  for (u32 step = 0u; step < 64u; ++step) {
+    if (value >= result + bit) { value -= result + bit; result = (result >> 1u) + bit; } else { result >>= 1u; }
+    bit >>= 2u;
+  }
+  return static_cast<std::uint64_t>(result);
+}
+inline Fx16 length_from_sq(unsigned __int128 sum) {
+  const unsigned __int128 rounded = (static_cast<unsigned __int128>(isqrt_u128(sum)) + 0x80u) >> 8u;
+  return rounded > static_cast<unsigned __int128>(std::numeric_limits<Fx16>::max()) ? std::numeric_limits<Fx16>::max() : static_cast<Fx16>(rounded);
+}
+inline Fx16 length_value(World2 value) { return length_from_sq(square_i64(value.x) + square_i64(value.y)); }
+inline Fx16 length_value(World3 value) { return length_from_sq(square_i64(value.x) + square_i64(value.y) + square_i64(value.z)); }
+inline Fx16 length_value(Velocity3 value) { return length_from_sq(square_i64(value.x) + square_i64(value.y) + square_i64(value.z)); }
+inline Fx24 normalize_lane(Fx24 value, std::uint64_t length) { return length == 0u ? 0 : sat_i64(round_half_up_s128(static_cast<__int128>(value) * 0x1000000, length)); }
+inline World2 normalize_value(World2 value) { const std::uint64_t len = isqrt_u128(square_i64(value.x) + square_i64(value.y)); return World2{normalize_lane(value.x, len), normalize_lane(value.y, len)}; }
+inline World3 normalize_value(World3 value) { const std::uint64_t len = isqrt_u128(square_i64(value.x) + square_i64(value.y) + square_i64(value.z)); return World3{normalize_lane(value.x, len), normalize_lane(value.y, len), normalize_lane(value.z, len)}; }
+inline Velocity3 normalize_value(Velocity3 value) { const std::uint64_t len = isqrt_u128(square_i64(value.x) + square_i64(value.y) + square_i64(value.z)); return Velocity3{normalize_lane(value.x, len), normalize_lane(value.y, len), normalize_lane(value.z, len)}; }
+inline i32 mix_value(i32 a, i32 b, Unit8 weight) { return sat_i32(static_cast<i64>(round_half_up_s128(static_cast<__int128>(a) * (256u - weight) + static_cast<__int128>(b) * weight, 256))); }
+inline i64 mix_value(i64 a, i64 b, Unit8 weight) { return sat_i64(round_half_up_s128(static_cast<__int128>(a) * (256u - weight) + static_cast<__int128>(b) * weight, 256)); }
+inline u32 mix_value(u32 a, u32 b, Unit8 weight) { return static_cast<u32>((static_cast<std::uint64_t>(a) * (256u - weight) + static_cast<std::uint64_t>(b) * weight + 128u) >> 8u); }
+inline u16 mix_value(u16 a, u16 b, Unit8 weight) { return static_cast<u16>((static_cast<u32>(a) * (256u - weight) + static_cast<u32>(b) * weight + 128u) >> 8u); }
+inline u8 mix_value(u8 a, u8 b, Unit8 weight) { return static_cast<u8>((static_cast<u32>(a) * (256u - weight) + static_cast<u32>(b) * weight + 128u) >> 8u); }
+inline World2 mix_value(World2 a, World2 b, Unit8 weight) { return World2{mix_value(a.x, b.x, weight), mix_value(a.y, b.y, weight)}; }
+inline World3 mix_value(World3 a, World3 b, Unit8 weight) { return World3{mix_value(a.x, b.x, weight), mix_value(a.y, b.y, weight), mix_value(a.z, b.z, weight)}; }
+inline Velocity3 mix_value(Velocity3 a, Velocity3 b, Unit8 weight) { return Velocity3{mix_value(a.x, b.x, weight), mix_value(a.y, b.y, weight), mix_value(a.z, b.z, weight)}; }
 }  // namespace form

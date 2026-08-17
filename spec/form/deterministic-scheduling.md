@@ -7,6 +7,13 @@ admission). The Phase-1 frozen content below is retained verbatim in §1 —
 the Field IR has no scheduler and needs none; this document governs the
 *system* level above it.
 
+## Ratification note — rate versus stagger (2026-08-17)
+
+W3.3 ratifies two mutually exclusive lowerings: ordinary `every N` systems use
+an outer `tick % N == 0` guard; staggered `every N` systems run every tick and
+partition their one admitted entity iteration by residue. An implementation
+must never apply both guards.
+
 ## 1. What was frozen in Phase 1 (unchanged)
 
 - Evaluation order is the serialized PC order — there is no scheduler freedom
@@ -69,33 +76,39 @@ stable iteration order (FORM §5) — not a borrow checker.
 
 ## 4. Multi-rate systems: `every N ticks`
 
-A system declared `every N ticks` (N ≥ 1, FORM-E-506) executes iff
-`tick % N == 0`. Semantics: the *state* function is defined on executed
-ticks only; non-executed ticks leave the system's written components
+A **non-staggered** system declared `every N ticks` (N ≥ 1, FORM-E-506)
+executes iff `tick % N == 0`. Semantics: the *state* function is defined on
+executed ticks only; non-executed ticks leave the system's written components
 untouched. Scheduling consequences:
 
 - Rate is part of the schedule: a slow writer and a fast reader of the same
   component interact only through phase order, unchanged.
 - The emitted call list is guarded by compile-time constants
-  (`if (tick % N == 0) sys_locomotion(...)`); no runtime decision exists.
+  (`if (tick % N == 0) sys_locomotion(...)`). A staggered system is the
+  explicit exception in §5 and has no outer rate guard.
 
 ## 5. Stagger: `stagger over pool`
 
-A slow system iterating a large pool may stagger to avoid workload spikes
-(FORM §5): `system update_shards every 4 ticks stagger over shards` executes
-per element iff
+A system iterating a large pool may stagger to avoid workload spikes
+(FORM §5): `system update_shards every 4 ticks stagger over shards` is invoked
+on **every tick**, with no outer `tick % N == 0` guard. Its one admitted
+per-entity iteration executes an element iff
 
 ```
 entity_index % N == tick % N        (N = the system's every-rate)
 ```
 
-Laws: stagger requires exactly one iteration pool (FORM-E-504); the stagger
-rate must equal the system rate (FORM-E-507); the per-element predicate is
-evaluated in ascending index order; spawn/kill interplay obeys the pool laws
-(language-semantics §4.5 — staggered systems see the same dense snapshot at
-entry, membership changes resolve at system end via stable compaction).
-Stagger never changes the tick predicate (`tick % N == 0` gates the system;
-the entity predicate spreads the *elements* inside it).
+Thus each entity is selected exactly once in every complete N-tick cycle. For
+pool capacity C, any tick selects at most `ceil(C / N)` entities; all residues,
+including an incomplete final group, retain ascending index order.
+
+Laws: stagger requires exactly one selected-entity iteration or one recognized
+flow application (FORM-E-504); the stagger rate must equal the system rate
+(FORM-E-507); the per-element predicate is evaluated in ascending index order.
+A staggered body may write only the selected pool element inside that admitted
+iteration. Global writes, writes before or after the iteration, extra loops,
+and membership changes are refused (FORM-E-504). The selected iteration's
+pool laws otherwise follow language-semantics §4.5.
 
 ## 6. Iteration order (always ascending)
 
@@ -113,8 +126,9 @@ relative order.
    two compiles of the same source yield identical phase lists (golden).
 2. Conflicting writes rejected with both spans (one negative test per
    conflict shape: same pool field, same global, terrain).
-3. Multi-rate + stagger goldens: 600-tick run hash chain identical across
-   desktop/ARM (D5 `H_t` law) — stagger shifts work, never results.
+3. Multi-rate + stagger evidence covers ordinary non-staggered cadence, every
+   stagger residue, complete N-tick cycles, the `ceil(capacity/N)` peak bound,
+   and a 600-tick hash-chain anchor. Stagger shifts work, never results.
 4. `sim_tick` emission is byte-stable (fixed order, no timestamps, LF,
    version banner — D4) and contains no runtime scheduling code.
 5. Emitted phase guard constants match the declared rates (no drift between

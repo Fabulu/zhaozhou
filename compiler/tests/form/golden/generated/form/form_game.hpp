@@ -9,18 +9,21 @@
 namespace form {
 inline constexpr u32 kProgramManifestCrc32c = 0x11ecb4e7u;
 inline constexpr std::size_t kCanonicalStateMaxBytes = 152u;
+using TerrainHeightSampler = Fx16 (*)(World2);
 
 struct FormState {
   arena::State arena{};
   audit::State audit{};
   std::array<Stream, 0> rng{};
+  TerrainHeightSampler terrain_height_sampler{};  // runtime binding; terrain truth hashes in its owner
 };
+inline Fx16 terrain_height(const FormState& state, World2 at) { return state.terrain_height_sampler ? state.terrain_height_sampler(at) : 0; }
 
 inline void initialize(FormState& state, u32 cartridge_hash) {
   state = FormState{};
   (void)cartridge_hash;
   state.arena.counter = 1u;
-  state.arena.origin = World3{0LL, 0LL, 0LL};
+  state.arena.origin = ([&]() -> World3 { auto&& _form_value_0 = 0LL; auto&& _form_value_1 = 0LL; auto&& _form_value_2 = 0LL; return World3{_form_value_0, _form_value_1, _form_value_2}; }());
   state.audit.observed = 0u;
 }
 
@@ -80,15 +83,25 @@ inline u32 sim_hash(u32 previous, const FormState& state) {
 }
 
 inline void sim_tick(FormState& state, const PadFrame pads[4], u32 tick) {
+  (void)state;
+  (void)pads;
+  (void)tick;
   // schedule phase 0
   if ((tick % 2u) == 0u) arena::system_seed_wave(state, pads, tick);
   audit::system_observe(state, pads, tick);
   // schedule phase 1
-  if ((tick % 4u) == 0u) arena::system_advance(state, pads, tick);
+  arena::system_advance(state, pads, tick);
 }
 
+inline void present_frame(const FormState& state, zref::FrameBuilder& builder, const PresentationResources& resources) {
+  (void)state;
+  (void)builder;
+  (void)resources;
+  arena::present_main_view(state, builder, resources);
+}
 inline void present_frame(const FormState& state, zref::FrameBuilder& builder) {
-  arena::present_main_view(state, builder);
+  const PresentationResources resources{};
+  present_frame(state, builder, resources);
 }
 
 using ScenarioEntryFn = void (*)(FormState&, u32);

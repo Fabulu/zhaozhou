@@ -87,6 +87,7 @@
         }
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1272,
         "file": "a_arena.form",

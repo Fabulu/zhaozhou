@@ -119,9 +119,9 @@ test('costs.zcost is complete canonical integer JSON and deterministic', () => {
   assert.deepEqual(report.modules, [{ index: 0, name: 'arena' }, { index: 1, name: 'audit' }]);
   assert.deepEqual(report.pools, [{ capacity: 4, element_bytes: 29, module: 0, name: 'particles' }]);
   assert.deepEqual(report.rates, [
-    { every: 2, module: 0, name: 'seed_wave', phase: 0, stagger: false },
-    { every: 4, module: 0, name: 'advance', phase: 1, stagger: true },
-    { every: 1, module: 1, name: 'observe', phase: 0, stagger: false },
+    { every: 2, invocation_every: 2, module: 0, name: 'seed_wave', phase: 0, selected_peak: 0, stagger: false },
+    { every: 4, invocation_every: 1, module: 0, name: 'advance', phase: 1, selected_peak: 1, stagger: true },
+    { every: 1, invocation_every: 1, module: 1, name: 'observe', phase: 0, selected_peak: 0, stagger: false },
   ]);
   assert.equal(report.command_memory.per_frame_estimate_bytes, 208);
   assert.deepEqual(report.particle_bandwidth, { bytes_per_element: 0, peak_elements: 0, bytes_per_tick: 0, pools: [] });

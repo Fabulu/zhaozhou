@@ -210,11 +210,11 @@ intrinsic     = "input" "." "player" "(" expr ")"
               | builtin_call ;                          (* §4.6 table *)
 ```
 
-`if` is the **select-expression** (D1): both branches are always evaluated
-(no short-circuit — branchless lowering, identical cost both sides);
-`&&`/`||` likewise evaluate both operands. This is the language-level mirror
-of the Field IR SELECT/CMP pair and removes all conditional-timing
-nondeterminism.
+`if` is the **select-expression** (D1): condition, then value, and else value
+are evaluated eagerly in source order, left-to-right (no short-circuit —
+branchless lowering, identical cost both sides). `&&`/`||` likewise evaluate
+both operands left-to-right. Function arguments, record fields and operator
+operands use the same deterministic source order.
 
 ---
 
@@ -318,6 +318,21 @@ Mutating pool membership (spawn/kill) inside a pool-sugar loop is refused
 (FORM-E-503); explicit-index loops may spawn (appends are beyond the
 snapshot bound) but not kill (§4.5).
 
+#### 4.4.1 Rate and stagger execution
+
+For an ordinary `system ... every N ticks`, the whole system executes only when
+`tick % N == 0`. For `system ... every N ticks stagger over pool`, the system
+instead executes on every tick and its one admitted entity iteration selects
+exactly those indices satisfying `index % N == tick % N`. There is no outer
+rate guard on a staggered system. Every entity is therefore selected exactly
+once per N-tick cycle and peak selected work is at most
+`ceil(pool.capacity / N)`.
+
+Stagger admission is intentionally narrow (FORM-E-504): the body contains
+exactly one selected-pool loop or recognized flow application. Writes outside
+that iteration, global writes, extra loops, spawn and kill are refused, so
+partitioning cannot accidentally repeat or defer unrelated state effects.
+
 ### 4.5 Pool membership laws (deterministic)
 
 - `spawn` appends at `count`; `count == capacity` at spawn is a deterministic
@@ -337,8 +352,8 @@ snapshot bound) but not kill (§4.5).
 |---|---|---|---|
 | `input.player(n) -> PadFrame` | sim | n: u32 0..3 | the ABI `PadFrame` (commands.zidl); absent pads per input_rules §2.2 |
 | `input.held(p, b) -> bool` | sim | b: u32 bit index | `(p.buttons >> b) & 1`; button names via `input_rules` §4 bits (`BTN_UP`..`BTN_START` built-in consts) |
-| `random.stream(seed, id...) -> stream` | sim, present, test | ids: u32 | derived RNG (FORM §5); PCG per qformats §7.5; no global generator |
-| `random.u32(s) -> u32` (also `i32`, `fx16(lo,hi)`, `unit8`, `angle16`) | sim, present, test | s: stream | each draw advances `s`; streams are values |
+| `random.stream(seed, id...) -> stream` | sim, present, test | ids: u32 | derived PCG stream (qformats §7.5), owned by a stable canonical HIR call-site slot; first evaluation derives from the authored seed/ids, never from host state |
+| `random.u32(s) -> u32` (also `i32`, `fx16(lo,hi)`, `unit8`, `angle16`) | sim, present, test | s: stream | each draw mutates that slot and advances it; repeated evaluation resumes rather than replaying the first sample |
 | `abs/min/max/clamp(x…) -> T` | all | numeric | saturating per qformats §2 |
 | `sin(a)/cos(a) -> fx16` | all | a: angle16 | qformats §7.1 table |
 | `atan2_approx(y,x) -> angle16` | sim | fx16 operands | qformats §7 |

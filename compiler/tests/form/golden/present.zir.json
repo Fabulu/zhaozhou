@@ -20,6 +20,7 @@
        }
       },
       "children": [],
+      "rngSlot": null,
       "span": {
        "end": 1039,
        "file": "a_arena.form",
@@ -63,6 +64,7 @@
         }
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1115,
         "file": "a_arena.form",
@@ -74,7 +76,7 @@
         "name": "particles"
        },
        "type": {
-        "name": "particles",
+        "name": "0::particles",
         "struct": "0::particle",
         "t": "pool"
        }
@@ -100,6 +102,7 @@
         "text": "1"
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1129,
         "file": "a_arena.form",
@@ -107,7 +110,7 @@
        },
        "symbol": null,
        "type": {
-        "t": "i32"
+        "t": "u32"
        }
       }
      },
@@ -135,6 +138,7 @@
         "text": "100%"
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1143,
         "file": "a_arena.form",
@@ -182,6 +186,7 @@
         }
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1173,
         "file": "a_arena.form",
@@ -215,6 +220,7 @@
         }
        },
        "children": [],
+       "rngSlot": null,
        "span": {
         "end": 1185,
         "file": "a_arena.form",

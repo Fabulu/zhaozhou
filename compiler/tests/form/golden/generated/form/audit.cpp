@@ -7,9 +7,14 @@
 namespace form::audit {
 
 void system_observe(FormState& state, const PadFrame pads[4], u32 tick) {
+  (void)state;
   (void)pads;
   (void)tick;
-  state.audit.observed = state.arena.counter;
+  {
+    auto&& _form_assign_target = state.audit.observed;
+    auto&& _form_assign_value = state.arena.counter;
+    _form_assign_target = _form_assign_value;
+  }
 }
 
 }  // namespace form::audit

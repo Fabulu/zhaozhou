@@ -33,7 +33,7 @@ struct State {
 
 void system_seed_wave(FormState& state, const PadFrame pads[4], u32 tick);
 void system_advance(FormState& state, const PadFrame pads[4], u32 tick);
-void present_main_view(const FormState& state, zref::FrameBuilder& builder);
+void present_main_view(const FormState& state, zref::FrameBuilder& builder, const PresentationResources& resources);
 void scenario_replay(FormState& state, u32 cartridge_hash);
 
 }  // namespace form::arena

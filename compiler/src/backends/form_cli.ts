@@ -7,9 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileFrontend } from '../frontend/index.js';
-import { declarationsOf, lowerHir, serializeHir } from '../hir/index.js';
+import { lowerHir, serializeHir } from '../hir/index.js';
 import { lowerZir } from '../zir/index.js';
-import { emitCostReport } from './cost_report.js';
 import { emitCpp } from './cpp/index.js';
 import { emitSourceMap } from './source_map.js';
 
@@ -35,26 +34,8 @@ function expectedArtifacts(): Map<string, Uint8Array> {
   files.set('test.zir.json', encoder.encode(serializeHir(zir.test)));
   files.set('sourceids.zmap', emitSourceMap(hir));
 
-  // W3.4 supplies physical FieldProgram records to production builds. This
-  // one-END fixture record isolates W3.3 cost schema/canonicality goldens.
-  const fieldPrograms = declarationsOf(hir, 'field').map((field) => ({
-    profile: field.profile,
-    sourceId: field.sourceId,
-    outputs: [] as [],
-    cost: {
-      instrCount: 1,
-      byClass: { ALU: 1, MUL: 0, TABLE: 0, NOISE: 0, SPECIAL: 0 },
-      cycles: 1,
-      dsp: 0,
-      tableBytes: 0,
-      regHighWater: 0,
-    },
-  }));
-  files.set('costs.zcost', emitCostReport(hir, zir, {
-    abiVersion: 2,
-    commandMemoryCeilingBytes: 1_048_576,
-    fieldPrograms,
-  }));
+  // costs.zcost is emitted only when W3.4 supplies genuine physical
+  // FieldProgram metadata. W3.3 must not manufacture instruction counts.
   for (const file of emitCpp(hir, zir).files) files.set(file.path, encoder.encode(file.content));
   return files;
 }

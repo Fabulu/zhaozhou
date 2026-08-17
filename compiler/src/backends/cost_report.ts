@@ -56,7 +56,15 @@ export interface CostReport {
     source_id: number;
     table_bytes: number;
   }[];
-  rates: { every: number; module: number; name: string; phase: number; stagger: boolean }[];
+  rates: {
+    every: number;
+    invocation_every: number;
+    module: number;
+    name: string;
+    phase: number;
+    selected_peak: number;
+    stagger: boolean;
+  }[];
   scenario_asserts: { lines: string[]; module: number; name: string }[];
   source_attribution: 'sourceids.zmap';
 }
@@ -137,14 +145,25 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
   for (const phase of zir.sim.phases) {
     for (const system of phase.systems) phaseBySystem.set(`${system.module}\0${system.name}`, phase.index);
   }
+  const poolByKey = new Map(pools.map((pool) => [`${pool.module}\0${pool.name}`, pool]));
   const rates = declarationsOf(hir, 'system').map((system) => {
     const phase = phaseBySystem.get(`${system.module}\0${system.name}`);
     if (phase === undefined) throw new Error(`costs.zcost system missing from schedule: ${system.module}.${system.name}`);
+    const staggerPool = system.staggerPool
+      ? poolByKey.get(`${system.staggerPool.module}\0${system.staggerPool.name}`)
+      : null;
+    if (system.staggerPool && !staggerPool) {
+      throw new Error(`costs.zcost stagger pool missing from HIR: ${system.staggerPool.module}.${system.staggerPool.name}`);
+    }
     return {
       every: uint(system.every, 'rates[].every'),
+      invocation_every: system.staggerPool ? 1 : uint(system.every, 'rates[].invocation_every'),
       module: uint(system.module, 'rates[].module', 0xfff),
       name: system.name,
       phase: uint(phase, 'rates[].phase'),
+      selected_peak: staggerPool
+        ? uint(Math.ceil(staggerPool.capacity / system.every), 'rates[].selected_peak')
+        : 0,
       stagger: system.staggerPool !== null,
     };
   });
@@ -281,8 +300,15 @@ function assertReportShape(report: Record<string, unknown>): void {
     footprint.forEach((item, itemIndex) => integer(item, `${path}.footprint_rect[${itemIndex}]`, false));
   }
   for (const [index, value] of array(report.rates, '$.rates').entries()) {
-    const path = `$.rates[${index}]`; const row = object(value, path); requireKeys(row, ['every', 'module', 'name', 'phase', 'stagger'], path);
-    integer(row.every, `${path}.every`); integer(row.module, `${path}.module`); string(row.name, `${path}.name`); integer(row.phase, `${path}.phase`); bool(row.stagger, `${path}.stagger`);
+    const path = `$.rates[${index}]`; const row = object(value, path);
+    requireKeys(row, ['every', 'invocation_every', 'module', 'name', 'phase', 'selected_peak', 'stagger'], path);
+    integer(row.every, `${path}.every`); integer(row.invocation_every, `${path}.invocation_every`);
+    integer(row.module, `${path}.module`); string(row.name, `${path}.name`);
+    integer(row.phase, `${path}.phase`); integer(row.selected_peak, `${path}.selected_peak`);
+    bool(row.stagger, `${path}.stagger`);
+    if (row.stagger === true && row.invocation_every !== 1) throw new Error(`costs.zcost ${path} stagger must run every tick`);
+    if (row.stagger === false && row.invocation_every !== row.every) throw new Error(`costs.zcost ${path} non-stagger cadence mismatch`);
+    if (row.stagger === false && row.selected_peak !== 0) throw new Error(`costs.zcost ${path} non-stagger selected_peak must be zero`);
   }
   for (const [index, value] of array(report.scenario_asserts, '$.scenario_asserts').entries()) {
     const path = `$.scenario_asserts[${index}]`; const row = object(value, path); requireKeys(row, ['lines', 'module', 'name'], path);

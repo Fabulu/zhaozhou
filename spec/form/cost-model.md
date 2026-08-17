@@ -50,7 +50,7 @@ optional; `$schema` names this file):
               "kind":"field","max_ops":16,"module":0,"name":"rising_ridge",
               "profile":"earth","register_hwm":7,"source_id":50331649,
               "table_bytes":40}],
- "rates":[{"every":4,"module":0,"name":"update_shards","phase":2,"stagger":true}],
+ "rates":[{"every":4,"invocation_every":1,"module":0,"name":"update_shards","phase":2,"selected_peak":2048,"stagger":true}],
  "scenario_asserts":[{"lines":["Duo"],"module":0,"name":"opposing_waves"}],
  "source_attribution":"sourceids.zmap"}
 ```
@@ -62,7 +62,7 @@ Member law (each row of FORM §14's list maps to a member):
 | `$schema` | string | fixed sentinel above; version-bumps only with this file |
 | `abi_version` | u32 | the .zidl ABI version the build targets (pin/repro) |
 | `pools[]` | array | one per pool: capacity (source-visible maximum population, FORM §14), element bytes (SoA sum), module index, name — capacities law FORM §21-9 |
-| `rates[]` | array | one per system: `every` N, assigned `phase`, `stagger` flag — the compile-time schedule (deterministic-scheduling §3) |
+| `rates[]` | array | one per system: authored `every` N, actual `invocation_every` cadence, assigned `phase`, `stagger` flag, and `selected_peak` entity count — the compile-time schedule (deterministic-scheduling §3/§5) |
 | `programs[]` | array | one per field program: profile, `max_ops` declared, `instr_count` lowered (must satisfy `instr_count ≤ max_ops ≤` field-ir §7.3 ceiling), per-class counts, estimated cycles, DSP demand, table bytes, register high-water mark (all per field-ir §9), footprint rect (earth only; `[0,0,0,0]` for flow), source_id (kind 3) |
 | `command_memory` | object | ceiling = `FRAME_SLOT_BYTES` (commands.zidl) and the per-frame estimate from the PresentZIR template census (W3.3) — FORM §14 "maximum command memory" |
 | `particle_bandwidth` | object | bytes per live element per tick summed over flow-attached pools at capacity — FORM §14 "particle-state bandwidth" |
@@ -80,6 +80,16 @@ one is a schema-constant edit, and readers MUST ignore unknown members
 
 The scenario `assert_budget` construct itself is L3 (FORM-E-720); wave-3
 budget assertions are e2e tests reading this file (W3.7).
+
+### 2.2 Rate and stagger accounting
+
+For non-staggered `every N`, `invocation_every = N` and `selected_peak = 0`
+(the row costs the whole system on its execution ticks). For staggered
+`every N over pool`, `invocation_every = 1` because the system is called every
+tick, and `selected_peak = ceil(pool.capacity / N)`. Cost tooling must use that
+peak rather than multiplying it by an outer `1/N` rate: no such outer guard
+exists. These fields derive only from HIR/ZIR schedule and declared pool
+capacity; they do not claim Field IR instructions or any W3.4 physical cost.
 
 ## 3. Budget-line registry
 
