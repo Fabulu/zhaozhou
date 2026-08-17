@@ -1891,7 +1891,11 @@ class Checker {
       } else if (tAgree(target, T.fx16)) {
         if (v < -32768n || v >= 32768n) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds fx16 range (±32768)`);
       } else if (tAgree(target, T.fx24)) {
-        if (v < -8192n || v >= 8192n) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds fx24 range (±8192)`);
+        const rail = 1n << 39n;
+        if (v < -rail || v >= rail) {
+          this.sink.error('FORM-E-007', e.span,
+            `integer ${shown} exceeds fx24 range [-549755813888, 549755813888)`);
+        }
       }
       return target;
     }
@@ -1912,7 +1916,7 @@ class Checker {
           this.sink.error('FORM-E-313', e.span,
             `fx24 literal '${e.text}' where ${typeName(expected!)} is expected (FORM-E-313)`);
         }
-        this.checkFracExact(e, 24n, -8192n, 8192n, sign);
+        this.checkFracExact(e, 24n, -(1n << 39n), 1n << 39n, sign);
         return T.fx24;
       }
       case 'turn': case 'deg': {

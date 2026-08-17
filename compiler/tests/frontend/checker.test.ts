@@ -298,8 +298,11 @@ test('Q-format rails and huge fractions use exact rational comparisons', () => {
     const F16_LO: fx16 = -32768m;
     const F16_HI: fx16 = 32767.9999847412109375m;
     const F16_STEP: fx16 = 0.0000152587890625m;
-    const F24_LO: fx24 = -8192w;
-    const F24_HI: fx24 = 8191.999999940395355224609375w;
+    const F24_FAR: fx24 = 10000w;
+    const F24_INT_LO: fx24 = -549755813888;
+    const F24_INT_HI: fx24 = 549755813887;
+    const F24_LO: fx24 = -549755813888w;
+    const F24_HI: fx24 = 549755813887.999999940395355224609375w;
     const F24_STEP: fx24 = 0.000000059604644775390625w;
     const HUGE_ONE: fx16 = 1.${hugeDenominator}m;
     const HUGE_ZERO: fx24 = 0.${hugeDenominator}w;
@@ -309,8 +312,12 @@ test('Q-format rails and huge fractions use exact rational comparisons', () => {
   for (const declaration of [
     `const BAD: fx16 = 32768.${huge}m;`,
     'const BAD: fx16 = -32768.0000152587890625m;',
-    `const BAD: fx24 = 8192.${huge}w;`,
-    'const BAD: fx24 = -8192.000000059604644775390625w;',
+    `const BAD: fx24 = 549755813888.${huge}w;`,
+    'const BAD: fx24 = -549755813888.000000059604644775390625w;',
+    'const BAD: fx24 = 549755813888;',
+    'const BAD: fx24 = -549755813889;',
+    `const BAD: fx24 = ${'9'.repeat(400)}w;`,
+    `const BAD: fx24 = -${'9'.repeat(400)}w;`,
   ]) {
     assert.ok(compile(MOD(declaration)).codes.includes('FORM-E-007'), declaration);
   }
