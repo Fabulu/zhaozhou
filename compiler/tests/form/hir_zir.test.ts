@@ -44,6 +44,46 @@ test('HIR is resolved, typed, domain-tagged, source-attributed', () => {
   assert.deepEqual(hir.sourceIds.map((row) => row.kind).sort((a, b) => a - b), [3, 8, 8, 8, 9, 9, 10, 11]);
 });
 
+test('HIR preserves exact contextual types through every L1 target context', () => {
+  const frontend = compileFrontend({
+    'types.form': `module types {
+  struct packet { si: i32; ui: u32; q16: fx16; q24: fx24; turn: angle16; weight: unit8; yes: bool; }
+  pool packets: packet[2];
+  global initial: packet = packet { si = -1, ui = 1, q16 = 2, q24 = 3, turn = 90deg, weight = 50%, yes = true };
+  global position: world3 = world3 { x = 1, y = 2, z = 3 };
+  global total: u32 = 0;
+  fn select_u(flag: bool, a: u32, b: u32) -> u32 { return if flag { 1 } else { a + b }; }
+  system update every 1 ticks reads packets, total writes packets.ui, total {
+    for i in 0..packets.count { packets.ui[i] = select_u(true, 1, 2); }
+    total = total + 1;
+  }
+}\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+
+  const initial = declarationsOf(hir, 'global').find((item) => item.name === 'initial')!;
+  assert.deepEqual(initial.init.children.map((child) => child.type.t),
+    ['i32', 'u32', 'fx16', 'fx24', 'angle16', 'unit8', 'bool']);
+  const position = declarationsOf(hir, 'global').find((item) => item.name === 'position')!;
+  assert.deepEqual(position.init.children.map((child) => child.type.t), ['fx24', 'fx24', 'fx24']);
+
+  const select = declarationsOf(hir, 'fn').find((item) => item.name === 'select_u')!;
+  const selectExpr = select.body[0]!.expressions[0]!;
+  assert.equal(selectExpr.type.t, 'u32');
+  assert.deepEqual(selectExpr.children.map((child) => child.type.t), ['bool', 'u32', 'u32']);
+  assert.deepEqual(selectExpr.children[2]!.children.map((child) => child.type.t), ['u32', 'u32']);
+
+  const update = declarationsOf(hir, 'system').find((item) => item.name === 'update')!;
+  const poolAssign = update.body[0]!.body[0]!;
+  assert.deepEqual(poolAssign.expressions.map((expr) => expr.type.t), ['u32', 'u32']);
+  assert.deepEqual(poolAssign.expressions[1]!.children.map((child) => child.type.t), ['bool', 'u32', 'u32']);
+  const globalAssign = update.body[1]!;
+  assert.deepEqual(globalAssign.expressions.map((expr) => expr.type.t), ['u32', 'u32']);
+  assert.deepEqual(globalAssign.expressions[1]!.children.map((child) => child.type.t), ['u32', 'u32']);
+});
+
 test('HIR refuses to exist after frontend diagnostics', () => {
   const result = compileFrontend({
     'bad.form': 'module bad { global x: u32 = 0; system broken every 0 ticks reads writes x { x = 1; } }\n',
@@ -71,7 +111,7 @@ test('multi-rate and stagger lower to compile-time ZIR constants', () => {
   const seed = zir.sim.callList.find((system) => system.name === 'seed_wave')!;
   const advance = zir.sim.callList.find((system) => system.name === 'advance')!;
   assert.deepEqual(seed.rateGuard, { divisor: 2, remainder: 0 });
-  assert.deepEqual(advance.rateGuard, { divisor: 4, remainder: 0 });
+  assert.equal(advance.rateGuard, null);
   assert.deepEqual(advance.stagger, { module: 0, pool: 'particles', divisor: 4 });
   assert.equal(7 % advance.stagger.divisor, 15 % advance.stagger.divisor);
   assert.deepEqual(zir.present.layouts.map((layout) => ({

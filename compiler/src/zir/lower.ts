@@ -64,7 +64,7 @@ function lowerSim(hir: HirProgram): SimZir {
     fields: declarationsOf(hir, 'field'),
     phases,
     callList: phases.flatMap((phase) => phase.systems),
-    rngStateCount: countRandomStreams(phases.flatMap((phase) => phase.systems)),
+    rngStateCount: hir.rngSlotCount,
   };
 }
 
@@ -110,7 +110,9 @@ function scheduleSystem(system: HirSystem, phase: number, declarationOrder: numb
     phase,
     declarationOrder,
     every: system.every,
-    rateGuard: system.every === 1 ? null : { divisor: system.every, remainder: 0 },
+    rateGuard: system.staggerPool || system.every === 1
+      ? null
+      : { divisor: system.every, remainder: 0 },
     stagger: system.staggerPool ? {
       module: system.staggerPool.module,
       pool: system.staggerPool.name,
@@ -122,21 +124,6 @@ function scheduleSystem(system: HirSystem, phase: number, declarationOrder: numb
     sourceId: system.sourceId,
     span: system.span,
   };
-}
-
-function countRandomStreams(systems: ZirSystem[]): number {
-  let count = 0;
-  const visitExpr = (expr: import('../hir/model.js').HirExpr): void => {
-    if (expr.symbol?.kind === 'intrinsic' && expr.symbol.name === 'random.stream') count++;
-    for (const child of expr.children) visitExpr(child);
-  };
-  const visitStmt = (stmt: import('../hir/model.js').HirStmt): void => {
-    for (const expr of stmt.expressions) visitExpr(expr);
-    for (const child of stmt.body) visitStmt(child);
-    for (const child of stmt.elseBody) visitStmt(child);
-  };
-  for (const system of systems) for (const stmt of system.body) visitStmt(stmt);
-  return count;
 }
 
 function key(module: number, name: string): string { return `${module}\0${name}`; }

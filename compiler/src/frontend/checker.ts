@@ -136,6 +136,8 @@ export interface Schedule {
 
 export interface CheckResult {
   schedule: Schedule | null;
+  /** Exact type of every expression admitted by the checker, keyed by AST identity. */
+  expressionTypes: ReadonlyMap<Expr, Type>;
 }
 
 export function checkModules(modules: ModuleAst[], sink: DiagnosticSink): CheckResult {
@@ -152,6 +154,8 @@ class Checker {
   private readonly byName = new Map<string, ModuleSym>();
   /** fn call graph: module::fn -> edges [{to, span}] */
   private readonly fnEdges = new Map<string, { to: string; span: SourceSpan }[]>();
+  /** Successful type-check result for each source expression (AST object identity). */
+  private readonly expressionTypes = new Map<Expr, Type>();
 
   constructor(private readonly modules: ModuleAst[], private readonly sink: DiagnosticSink) {}
 
@@ -191,7 +195,7 @@ class Checker {
 
     // pass 6: schedule (E-500/407/505) — the D6 analysis feeding W3.3
     const schedule = this.computeSchedule();
-    return { schedule };
+    return { schedule, expressionTypes: this.expressionTypes };
   }
 
   // -- pass 1: symbols -----------------------------------------------------
@@ -572,6 +576,7 @@ class Checker {
       const name = target.name;
       const local = ctx.locals.get(name);
       if (local) {
+        this.expressionTypes.set(target, local.type);
         this.sink.error('FORM-E-302', span,
           `'${name}' is let-bound and may not be re-assigned (single-assignment law)`);
         this.checkExpr(ctx, value, local.type);
@@ -580,11 +585,14 @@ class Checker {
       const r = this.resolveUnqualified(ctx.mod, name);
       if (r && r.ambiguous !== true) {
         if (r.sym.kind === 'const') {
+          this.expressionTypes.set(target, this.resolveType(r.mod, (r.sym.decl as unknown as ConstDecl).type));
           this.sink.error('FORM-E-333', span, `const '${name}' is not writable`);
           return;
         }
         if (r.sym.kind === 'global') {
-          this.checkExpr(ctx, value, this.resolveType(r.mod, (r.sym.decl as unknown as GlobalDecl).type));
+          const targetType = this.resolveType(r.mod, (r.sym.decl as unknown as GlobalDecl).type);
+          this.expressionTypes.set(target, targetType);
+          this.checkExpr(ctx, value, targetType);
           this.writeComponent(ctx, name, span);
           return;
         }
@@ -605,7 +613,8 @@ class Checker {
     // pool component write: pool.field[index] = value / pool.field = value
     const comp = this.poolComponentOf(ctx, target);
     if (comp) {
-      this.checkExpr(ctx, value, null);
+      const targetType = this.recordPoolLvalue(ctx, target, comp.pool, comp.fieldType);
+      this.checkExpr(ctx, value, targetType);
       this.writeComponent(ctx, comp.component, span);
       return;
     }
@@ -626,27 +635,50 @@ class Checker {
     this.checkExpr(ctx, value, null);
   }
 
-  /** If `e` addresses a pool component, return {pool, component, fieldType}. */
-  private poolComponentOf(ctx: Ctx, e: Expr): { pool: string; component: string } | null {
-    if (e.kind === 'index') return this.poolComponentOf(ctx, e.obj);
-    if (e.kind !== 'member') return null;
+  /** If `e` addresses a pool component, return its owning column and type. */
+  private poolComponentOf(ctx: Ctx, e: Expr): { pool: string; component: string; fieldType: Type } | null {
     const root = this.rootIdentOf(e);
     if (!root) return null;
     const r = this.resolveUnqualified(ctx.mod, root.name);
     if (!r || r.ambiguous === true || r.sym.kind !== 'pool') return null;
-    // e must be (member root field) — one level of field
-    if (!(e.obj.kind === 'ident')) return this.poolComponentOfMember(ctx, e, root.name);
-    return { pool: root.name, component: `${root.name}.${e.field}` };
+    const field = firstMemberAfterRoot(e, root.name);
+    if (field === null) return null;
+    const struct = this.structOf(r);
+    const decl = struct?.fields.find((item) => item.name === field);
+    if (!decl) return null;
+    return {
+      pool: root.name,
+      component: `${root.name}.${field}`,
+      fieldType: this.resolveType(r.mod, decl.type),
+    };
   }
 
-  private poolComponentOfMember(ctx: Ctx, e: Expr, pool: string): { pool: string; component: string } | null {
-    if (e.kind === 'member' && e.obj.kind === 'member' && e.obj.obj.kind === 'ident') {
-      return { pool, component: `${pool}.${e.obj.field}` };
+  /** Record an lvalue's exact types without turning a write into a state read. */
+  private recordPoolLvalue(ctx: Ctx, e: Expr, pool: string, columnType: Type): Type {
+    let type: Type;
+    if (e.kind === 'ident') {
+      const r = this.resolveUnqualified(ctx.mod, pool);
+      const pd = r && r.ambiguous !== true && r.sym.kind === 'pool'
+        ? r.sym.decl as unknown as PoolDecl : null;
+      type = pd ? { t: 'pool', name: pool, struct: pd.structName } : T.unknown;
+    } else if (e.kind === 'member') {
+      const base = this.recordPoolLvalue(ctx, e.obj, pool, columnType);
+      type = e.obj.kind === 'ident' && e.obj.name === pool
+        ? columnType
+        : this.memberType(ctx, base, e);
+    } else if (e.kind === 'index') {
+      const base = this.recordPoolLvalue(ctx, e.obj, pool, columnType);
+      const index = this.checkExpr(ctx, e.index, T.u32);
+      if (!tAgree(index, T.u32) && !tAgree(index, T.i32) && !tAgree(index, T.unknown)) {
+        this.sink.error('FORM-E-305', e.index.span, `pool index must be u32/i32, got ${typeName(index)}`);
+      }
+      this.checkConstBounds(ctx, e, base);
+      type = base.t === 'array' ? base.elem : base;
+    } else {
+      type = T.unknown;
     }
-    if (e.kind === 'index' && e.obj.kind === 'member' && e.obj.obj.kind === 'ident') {
-      return { pool, component: `${pool}.${e.obj.field}` };
-    }
-    return null;
+    this.expressionTypes.set(e, type);
+    return type;
   }
 
   private rootIdentOf(e: Expr): { name: string } | null {
@@ -773,7 +805,7 @@ class Checker {
 
   /** `p.count` of a declared pool is a legal dynamic bound (§4.4). */
   private isPoolCount(ctx: Ctx, e: Expr): boolean {
-    return e.kind === 'member' && e.obj.kind === 'ident'
+    return e.kind === 'member' && e.field === 'count' && e.obj.kind === 'ident'
       ? (() => {
           const r = this.resolveUnqualified(ctx.mod, e.obj.name);
           return !!r && r.ambiguous !== true && r.sym.kind === 'pool';
@@ -834,8 +866,15 @@ class Checker {
       if (!poolArg || poolArg.value.kind !== 'ident') {
         this.sink.error('FORM-E-667', span, "'apply flow' requires a pool: argument naming its mapped pool");
       } else {
-        this.checkFlowPoolMapping(ctx, poolArg.value.name, poolArg.value.span);
-        this.writeComponent(ctx, poolArg.value.name, poolArg.value.span);
+        const poolName = poolArg.value.name;
+        const pool = this.resolveUnqualified(ctx.mod, poolName);
+        const pd = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+          ? pool.sym.decl as unknown as PoolDecl : null;
+        this.expressionTypes.set(poolArg.value, pd
+          ? { t: 'pool', name: poolName, struct: pd.structName }
+          : T.unknown);
+        this.checkFlowPoolMapping(ctx, poolName, poolArg.value.span);
+        this.writeComponent(ctx, poolName, poolArg.value.span);
       }
     }
     // required arguments
@@ -859,6 +898,10 @@ class Checker {
       this.sink.error('FORM-E-308', duration.span, 'apply duration must be a constant tick count');
     } else if (dur <= 0n) {
       this.sink.error('FORM-E-463', duration.span, `apply duration must be positive (got ${dur})`);
+    }
+    const durationType = this.checkExpr(ctx, duration, T.u32);
+    if (!tAgree(durationType, T.u32) && !tAgree(durationType, T.i32) && !tAgree(durationType, T.unknown)) {
+      this.sink.error('FORM-E-300', duration.span, `apply duration must be u32 ticks, got ${typeName(durationType)}`);
     }
     // applying terrain is a terrain write
     if (applyKind === 'terrain_field') this.writeComponent(ctx, 'terrain', span);
@@ -940,6 +983,12 @@ class Checker {
   // -- expressions ---------------------------------------------------------------
 
   private checkExpr(ctx: Ctx, e: Expr, expected: Type | null): Type {
+    const type = this.checkExprInner(ctx, e, expected);
+    this.expressionTypes.set(e, type);
+    return type;
+  }
+
+  private checkExprInner(ctx: Ctx, e: Expr, expected: Type | null): Type {
     switch (e.kind) {
       case 'literal':
         return this.checkLiteral(ctx, e, expected);
@@ -964,8 +1013,15 @@ class Checker {
         if (!tAgree(ct, T.bool) && !tAgree(ct, T.unknown)) {
           this.sink.error('FORM-E-312', e.cond.span, `if condition must be bool, got ${typeName(ct)}`);
         }
-        const a = this.checkExpr(ctx, e.then, expected);
-        const b = this.checkExpr(ctx, e.else, expected);
+        let a = this.checkExpr(ctx, e.then, expected);
+        let b = this.checkExpr(ctx, e.else, expected);
+        if (expected === null) {
+          if (isBareInt(e.then) && adoptableLiteralType(b)) {
+            a = this.checkExpr(ctx, e.then, b);
+          } else if (isBareInt(e.else) && adoptableLiteralType(a)) {
+            b = this.checkExpr(ctx, e.else, a);
+          }
+        }
         if (!tAgree(a, b) && !tAgree(a, T.unknown) && !tAgree(b, T.unknown)) {
           this.sink.error('FORM-E-311', e.span,
             `if select-expression branches have different types (${typeName(a)} vs ${typeName(b)})`);
@@ -1262,23 +1318,23 @@ class Checker {
     }
   }
 
-  private checkBinary(ctx: Ctx, e: Extract<Expr, { kind: 'binary' }>, _expected: Type | null): Type {
+  private checkBinary(ctx: Ctx, e: Extract<Expr, { kind: 'binary' }>, expected: Type | null): Type {
     const op = e.op;
     // dialect refusals first (E-665): / % bitwise && || in field bodies
     if (ctx.domain === 'field' && ['/', '%', '&', '|', '^', '<<', '>>', '&&', '||'].includes(op)) {
       this.sink.error('FORM-E-665', e.span,
         `operator '${op}' is not admitted in the field dialect (§6.3 surface; use rcp, comparisons feed SELECT)`);
     }
-    let l = this.checkExpr(ctx, e.l, null);
-    let r = this.checkExpr(ctx, e.r, null);
+    const cmp = ['<', '<=', '>', '>=', '==', '!='].includes(op);
+    const operandExpected = op === '&&' || op === '||' ? T.bool : cmp ? null : expected;
+    let l = this.checkExpr(ctx, e.l, isBareInt(e.l) ? operandExpected : null);
+    let r = this.checkExpr(ctx, e.r, isBareInt(e.r) ? operandExpected : null);
     // target-typing: a bare int literal adopts the other operand's type
     // (§1.2 literals are typed by context; no implicit conversions otherwise)
-    const adoptable = (t: Type): boolean =>
-      t.t === 'u32' || t.t === 'fx16' || t.t === 'fx24' || t.t === 'angle16' || t.t === 'unit8';
-    if (e.l.kind === 'literal' && e.l.lit === 'int' && adoptable(r)) {
-      l = r;
-    } else if (e.r.kind === 'literal' && e.r.lit === 'int' && adoptable(l)) {
-      r = l;
+    if (isBareInt(e.l) && adoptableLiteralType(r)) {
+      l = this.checkExpr(ctx, e.l, r);
+    } else if (isBareInt(e.r) && adoptableLiteralType(l)) {
+      r = this.checkExpr(ctx, e.r, l);
     }
 
     // space-typing (E-330) and mixed precision (E-331)
@@ -1309,7 +1365,6 @@ class Checker {
       return T.unknown;
     }
 
-    const cmp = ['<', '<=', '>', '>=', '==', '!='].includes(op);
     if (cmp) {
       if (!tAgree(l, r) && !tAgree(l, T.unknown) && !tAgree(r, T.unknown)) {
         this.sink.error('FORM-E-300', e.span,
@@ -1450,6 +1505,7 @@ class Checker {
   // -- record literals ------------------------------------------------------------
 
   private checkRecordLit(ctx: Ctx, rec: RecordLit, struct: StructDecl, mod: ModuleSym): void {
+    this.expressionTypes.set(rec, { t: 'struct', name: struct.name });
     const seen = new Set<string>();
     for (const rf of rec.fields) {
       if (!struct.fields.some((f) => f.name === rf.name)) {
@@ -1608,6 +1664,7 @@ class Checker {
           `stagger requires exactly one iteration pool — '${d.staggerPool}' is not a declared pool (FORM-E-504)`);
       }
       void rate;
+      this.checkStaggerShape(ms, d);
     }
     const reads = new Set<string>();
     const writes = new Set<string>();
@@ -1622,6 +1679,124 @@ class Checker {
     ctx.writes = writes;
     ctx.laterLets = collectLetNames(d.body);
     this.checkStmts(ctx, d.body);
+  }
+
+  /**
+   * Stagger is a per-entity partition, not a system-rate guard.  Admission must
+   * identify exactly one iteration/apply site so lowering cannot accidentally
+   * stagger unrelated state effects.
+   */
+  private checkStaggerShape(ms: ModuleSym, d: SystemDecl): void {
+    const pool = d.staggerPool!;
+    const loops: Extract<Stmt, { kind: 'for' }>[] = [];
+    const flowCalls: Extract<Stmt, { kind: 'call_stmt' }>[] = [];
+    const walk = (stmts: Stmt[]): void => {
+      for (const stmt of stmts) {
+        if (stmt.kind === 'for') {
+          loops.push(stmt);
+          walk(stmt.body);
+        } else if (stmt.kind === 'if') {
+          walk(stmt.then);
+          if (Array.isArray(stmt.else)) walk(stmt.else);
+          else if (stmt.else) walk([stmt.else]);
+        } else if (stmt.kind === 'call_stmt' && this.isFlowCallFor(ms, stmt.call, pool)) {
+          flowCalls.push(stmt);
+        }
+      }
+    };
+    walk(d.body);
+
+    const topLoops = d.body.filter((stmt): stmt is Extract<Stmt, { kind: 'for' }> =>
+      stmt.kind === 'for' && this.isExactStaggerLoop(ms, stmt, pool));
+    const topFlows = d.body.filter((stmt): stmt is Extract<Stmt, { kind: 'call_stmt' }> =>
+      stmt.kind === 'call_stmt' && this.isFlowCallFor(ms, stmt.call, pool));
+    const candidates: Stmt[] = [...topLoops, ...topFlows];
+    const reasons: string[] = [];
+    if (candidates.length !== 1) {
+      reasons.push(`expected one top-level iteration/application over '${pool}', found ${candidates.length}`);
+    }
+
+    const selected = candidates.length === 1 ? candidates[0]! : null;
+    if (selected?.kind === 'for') {
+      if (loops.length !== 1) reasons.push('a staggered explicit system may contain only its selected pool loop');
+      if (flowCalls.length !== 0) reasons.push('a staggered explicit loop may not also apply a flow program');
+    } else if (selected?.kind === 'call_stmt') {
+      if (loops.length !== 0) reasons.push('an implicit staggered flow application may not contain another loop');
+      if (flowCalls.length !== 1) reasons.push('an implicit staggered system must contain exactly one flow application');
+    }
+
+    if (d.writes.some((access) => access.parts[0] !== pool)) {
+      reasons.push(`writes outside stagger pool '${pool}' are not admitted`);
+    }
+
+    const checkEffects = (stmts: Stmt[], insideSelected: boolean): void => {
+      for (const stmt of stmts) {
+        if (stmt.kind === 'for') {
+          checkEffects(stmt.body, stmt === selected);
+        } else if (stmt.kind === 'if') {
+          checkEffects(stmt.then, insideSelected);
+          if (Array.isArray(stmt.else)) checkEffects(stmt.else, insideSelected);
+          else if (stmt.else) checkEffects([stmt.else], insideSelected);
+        } else if (stmt.kind === 'assign') {
+          if (selected?.kind !== 'for' || !insideSelected || !this.isSelectedStaggerTarget(stmt.target, selected, pool)) {
+            reasons.push('every state write must target the selected entity inside the stagger loop');
+          }
+        } else if (stmt.kind === 'spawn' || stmt.kind === 'kill' || stmt.kind === 'apply') {
+          reasons.push(`${stmt.kind} is not admitted in a staggered system`);
+        } else if (stmt.kind === 'call_stmt' && this.isAnyFlowCall(ms, stmt.call) && stmt !== selected) {
+          reasons.push('only the selected flow application may mutate a staggered pool');
+        }
+      }
+    };
+    checkEffects(d.body, false);
+
+    if (reasons.length !== 0) {
+      this.sink.error('FORM-E-504', d.staggerSpan ?? d.span,
+        `stagger over '${pool}' is not a single isolated entity iteration: ${[...new Set(reasons)].join('; ')} (FORM-E-504)`);
+    }
+  }
+
+  private isExactStaggerLoop(ms: ModuleSym, stmt: Extract<Stmt, { kind: 'for' }>, pool: string): boolean {
+    if (stmt.range.kind === 'pool') return stmt.range.pool === pool;
+    const lo = this.constEval(ms, stmt.range.lo);
+    const hi = stmt.range.hi;
+    return lo === 0n
+      && hi.kind === 'member'
+      && hi.field === 'count'
+      && hi.obj.kind === 'ident'
+      && hi.obj.name === pool;
+  }
+
+  private isFlowCallFor(ms: ModuleSym, expr: Expr, pool: string): boolean {
+    return this.isAnyFlowCall(ms, expr)
+      && expr.kind === 'call'
+      && expr.args[0]?.kind === 'ident'
+      && expr.args[0].name === pool;
+  }
+
+  private isAnyFlowCall(ms: ModuleSym, expr: Expr): boolean {
+    if (expr.kind !== 'call' || expr.callee.kind !== 'ident') return false;
+    const resolved = this.resolveUnqualified(ms, expr.callee.name);
+    return !!resolved && resolved.ambiguous !== true && resolved.sym.kind === 'field'
+      && (resolved.sym.decl as unknown as FieldDecl).profile === 'flow';
+  }
+
+  private isSelectedStaggerTarget(
+    target: Expr,
+    loop: Extract<Stmt, { kind: 'for' }>,
+    pool: string,
+  ): boolean {
+    const root = this.rootIdentOf(target)?.name;
+    if (loop.range.kind === 'pool') return root === loop.varName;
+    if (root !== pool) return false;
+    let current: Expr = target;
+    while (current.kind === 'member' || current.kind === 'index') {
+      if (current.kind === 'index'
+          && current.index.kind === 'ident'
+          && current.index.name === loop.varName) return true;
+      current = current.obj;
+    }
+    return false;
   }
 
   /** An access is pool[.field] | global | terrain | input. */
@@ -1915,6 +2090,7 @@ class Checker {
       seen.add(arg.name);
       switch (kind) {
         case 'u32const': {
+          this.checkExpr(ctx, arg.value, T.u32);
           const v = this.constEval(ms, arg.value);
           if (v === null) {
             this.sink.error('FORM-E-610', arg.value.span,
@@ -1931,8 +2107,12 @@ class Checker {
           }
           const r = this.resolveUnqualified(ms, arg.value.name);
           if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
+            this.expressionTypes.set(arg.value, T.unknown);
             this.sink.error('FORM-E-608', arg.value.span,
               `draw_population names '${arg.value.name}' which is not a pool (FORM-E-608)`);
+          } else {
+            const pd = r.sym.decl as unknown as PoolDecl;
+            this.expressionTypes.set(arg.value, { t: 'pool', name: arg.value.name, struct: pd.structName });
           }
           break;
         }
@@ -1943,11 +2123,15 @@ class Checker {
           }
           const r = this.resolveUnqualified(ms, arg.value.name);
           if (!r || r.ambiguous === true || r.sym.kind !== 'sound') {
+            this.expressionTypes.set(arg.value, T.unknown);
             this.sink.error('FORM-E-609', arg.value.span,
               `audio names '${arg.value.name}' which is not a declared sound (FORM-E-609)`);
-          } else if (this.findLaterSound(ms, arg.value.name, pres)) {
-            this.sink.error('FORM-E-408', arg.value.span,
-              `sound '${arg.value.name}' is referenced before its declaration — sounds are declaration-ordered (FORM-E-408)`);
+          } else {
+            this.expressionTypes.set(arg.value, T.sound);
+            if (this.findLaterSound(ms, arg.value.name, pres)) {
+              this.sink.error('FORM-E-408', arg.value.span,
+                `sound '${arg.value.name}' is referenced before its declaration — sounds are declaration-ordered (FORM-E-408)`);
+            }
           }
           break;
         }
@@ -2007,8 +2191,15 @@ class Checker {
           if (item.action.kind === 'call' && item.action.callee.kind === 'ident') {
             const r = this.resolveUnqualified(ms, item.action.callee.name);
             if (!r || r.ambiguous === true || r.sym.kind !== 'system') {
+              this.expressionTypes.set(item.action, T.unknown);
               this.sink.error('FORM-E-904', item.action.span,
                 `scenario action '${item.action.callee.name}' is not a declared system entry (FORM-E-904)`);
+            } else {
+              this.expressionTypes.set(item.action, T.void);
+              if (item.action.args.length !== 0) {
+                this.sink.error('FORM-E-304', item.action.span, 'scenario system entries take no arguments');
+              }
+              for (const arg of item.action.args) this.checkExpr(ctx, arg, null);
             }
           } else {
             this.sink.error('FORM-E-904', item.action.span,
@@ -2109,13 +2300,13 @@ class Checker {
   // fn calls + intrinsics
   // ---------------------------------------------------------------------------
 
-  private checkCall(ctx: Ctx, e: Extract<Expr, { kind: 'call' }>, _expected: Type | null): Type {
+  private checkCall(ctx: Ctx, e: Extract<Expr, { kind: 'call' }>, expected: Type | null): Type {
     // dotted intrinsics: input.*, random.*, terrain.*
     if (e.callee.kind === 'member' && e.callee.obj.kind === 'ident') {
       const base = e.callee.obj.name;
       const fn = e.callee.field;
       if (base === 'input' || base === 'random' || base === 'terrain') {
-        return this.checkIntrinsicCall(ctx, e, `${base}.${fn}`);
+        return this.checkIntrinsicCall(ctx, e, `${base}.${fn}`, expected);
       }
     }
     // plain fn call
@@ -2123,7 +2314,7 @@ class Checker {
       const name = e.callee.name;
       // bare-name built-ins (§4.6) — the builtin table wins over user names
       if (BARE_INTRINSICS.has(name)) {
-        return this.checkIntrinsicCall(ctx, e, name);
+        return this.checkIntrinsicCall(ctx, e, name, expected);
       }
       const r = this.resolveUnqualified(ctx.mod, name);
       if (r && r.ambiguous !== true) {
@@ -2160,11 +2351,19 @@ class Checker {
               this.sink.error('FORM-E-667', e.span,
                 `flow program '${name}' is applied per element: first argument is its mapped pool (FORM-E-667)`);
             } else {
-              this.checkFlowPoolMapping(ctx, e.args[0]!.name, e.args[0]!.span);
-              this.writeComponent(ctx, e.args[0]!.name, e.args[0]!.span);
-              this.readComponent(ctx, e.args[0]!.name, e.args[0]!.span);
+              const poolName = e.args[0]!.name;
+              const pool = this.resolveUnqualified(ctx.mod, poolName);
+              const pd = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+                ? pool.sym.decl as unknown as PoolDecl : null;
+              this.expressionTypes.set(e.args[0]!, pd
+                ? { t: 'pool', name: poolName, struct: pd.structName }
+                : T.unknown);
+              this.checkFlowPoolMapping(ctx, poolName, e.args[0]!.span);
+              this.writeComponent(ctx, poolName, e.args[0]!.span);
+              this.readComponent(ctx, poolName, e.args[0]!.span);
             }
-            for (let i = 1; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, null);
+            const paramsType = fd.paramsStruct ? { t: 'struct', name: fd.paramsStruct } as Type : null;
+            for (let i = 1; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, i === 1 ? paramsType : null);
             return T.void;
           }
           this.sink.error('FORM-E-462', e.span,
@@ -2190,9 +2389,25 @@ class Checker {
     return T.unknown;
   }
 
-  private checkIntrinsicCall(ctx: Ctx, e: Extract<Expr, { kind: 'call' }>, name: string): Type {
+  private checkIntrinsicCall(
+    ctx: Ctx,
+    e: Extract<Expr, { kind: 'call' }>,
+    name: string,
+    expected: Type | null,
+  ): Type {
     const args = e.args;
-    const argT = (): Type[] => args.map((a) => this.checkExpr(ctx, a, null));
+    const argT = (want: Type | null = null): Type[] => args.map((a) => this.checkExpr(ctx, a, want));
+    const sameNumericArgs = (): Type[] => {
+      const contextual = expected && NUMERIC.has(expected.t) ? expected : null;
+      const types = argT(contextual);
+      const adopted = contextual ?? types.find((type, index) => !isBareInt(args[index]!) && adoptableLiteralType(type));
+      if (adopted) {
+        for (let index = 0; index < args.length; index++) {
+          if (isBareInt(args[index]!)) types[index] = this.checkExpr(ctx, args[index]!, adopted);
+        }
+      }
+      return types;
+    };
     const demand = (allowed: Domain[], span: SourceSpan): boolean => {
       if (ctx.domain === 'field' && !allowed.includes('field')) {
         if (name === 'random.stream') {
@@ -2217,7 +2432,7 @@ class Checker {
       return false;
     };
     const sameNumeric = (ts: Type[], span: SourceSpan): Type => {
-      const first = ts[0]!;
+      const first = ts[0] ?? T.unknown;
       if (!NUMERIC.has(first.t) && first.t !== 'unknown') {
         this.sink.error('FORM-E-300', span, `${name} expects numeric arguments, got ${typeName(first)}`);
         return T.unknown;
@@ -2234,8 +2449,13 @@ class Checker {
     switch (name) {
       case 'input.player': {
         demand(['sim', 'scenario'], e.span);
-        const n = this.constEval(ctx.mod, args[0] ?? none(e.span));
+        const argument = args[0] ?? none(e.span);
+        const argType = this.checkExpr(ctx, argument, T.u32);
+        const n = this.constEval(ctx.mod, argument);
         if (args.length !== 1) this.sink.error('FORM-E-304', e.span, 'input.player(n) takes one u32 argument');
+        if (!tAgree(argType, T.u32) && !tAgree(argType, T.i32) && !tAgree(argType, T.unknown)) {
+          this.sink.error('FORM-E-300', argument.span, `input.player index must be u32, got ${typeName(argType)}`);
+        }
         if (n !== null && (n < 0n || n > 3n)) {
           this.sink.error('FORM-E-300', e.span, `input.player(${n}) — pad index must be 0..3`);
         }
@@ -2244,10 +2464,14 @@ class Checker {
       }
       case 'input.held': {
         demand(['sim', 'scenario'], e.span);
-        const ts = argT();
+        const pad = this.checkExpr(ctx, args[0] ?? none(e.span), T.padframe);
+        const button = this.checkExpr(ctx, args[1] ?? none(e.span), T.u32);
         if (args.length !== 2) this.sink.error('FORM-E-304', e.span, 'input.held(p, b) takes two arguments');
-        if (!tAgree(ts[0] ?? T.unknown, T.padframe) && ts[0] && !tAgree(ts[0], T.unknown)) {
-          this.sink.error('FORM-E-300', args[0]!.span, `input.held expects a PadFrame, got ${typeName(ts[0]!)}`);
+        if (!tAgree(pad, T.padframe) && !tAgree(pad, T.unknown)) {
+          this.sink.error('FORM-E-300', (args[0] ?? e).span, `input.held expects a PadFrame, got ${typeName(pad)}`);
+        }
+        if (!tAgree(button, T.u32) && !tAgree(button, T.i32) && !tAgree(button, T.unknown)) {
+          this.sink.error('FORM-E-300', (args[1] ?? e).span, `input.held button must be u32, got ${typeName(button)}`);
         }
         return T.bool;
       }
@@ -2274,8 +2498,17 @@ class Checker {
       case 'random.fx16': {
         demand(['sim', 'present', 'scenario'], e.span);
         if (args.length !== 3) this.sink.error('FORM-E-304', e.span, 'random.fx16(s, lo, hi) takes three arguments');
-        const ts = argT();
-        if (!tAgree(ts[0] ?? T.unknown, T.stream)) this.sink.error('FORM-E-334', e.span, 'random.fx16 expects a stream first');
+        const stream = this.checkExpr(ctx, args[0] ?? none(e.span), T.stream);
+        const lo = this.checkExpr(ctx, args[1] ?? none(e.span), T.fx16);
+        const hi = this.checkExpr(ctx, args[2] ?? none(e.span), T.fx16);
+        if (!tAgree(stream, T.stream) && !tAgree(stream, T.unknown)) {
+          this.sink.error('FORM-E-334', e.span, 'random.fx16 expects a stream first');
+        }
+        for (const [arg, type] of [[args[1], lo], [args[2], hi]] as const) {
+          if (arg && !tAgree(type, T.fx16) && !tAgree(type, T.unknown)) {
+            this.sink.error('FORM-E-300', arg.span, `random.fx16 bounds must be fx16, got ${typeName(type)}`);
+          }
+        }
         return T.fx16;
       }
       case 'terrain.height': {
@@ -2292,12 +2525,12 @@ class Checker {
         demand(['sim', 'fn', 'present', 'scenario', 'field'], e.span);
         if (name !== 'abs' && args.length !== 2) this.sink.error('FORM-E-304', e.span, `${name}(a, b) takes two arguments`);
         if (name === 'abs' && args.length !== 1) this.sink.error('FORM-E-304', e.span, 'abs(x) takes one argument');
-        return sameNumeric(argT(), e.span);
+        return sameNumeric(sameNumericArgs(), e.span);
       }
       case 'clamp': {
         demand(['sim', 'fn', 'present', 'scenario', 'field'], e.span);
         if (args.length !== 3) this.sink.error('FORM-E-304', e.span, 'clamp(x, lo, hi) takes three arguments');
-        return sameNumeric(argT(), e.span);
+        return sameNumeric(sameNumericArgs(), e.span);
       }
       case 'sin': case 'cos': {
         demand(['sim', 'fn', 'present', 'scenario', 'field'], e.span);
@@ -2345,8 +2578,12 @@ class Checker {
         return { t: name.slice(3) } as Type;
       }
       case 'dot2': case 'dot3': case 'length': case 'normalize': {
+        const arity = name === 'dot2' || name === 'dot3' ? 2 : 1;
+        if (args.length !== arity) {
+          this.sink.error('FORM-E-304', e.span, `${name} takes ${arity === 1 ? 'one argument' : 'two arguments'}`);
+        }
         if (ctx.domain === 'field') {
-          // dialect form (§6.3): fx16 scalar components, one builder op
+          // dialect form (§6.3): fx16 builder lanes, one builder op
           for (const a of args) {
             const t = this.checkExpr(ctx, a, T.fx16);
             if (!tAgree(t, T.fx16) && !tAgree(t, T.unknown)) {
@@ -2358,12 +2595,11 @@ class Checker {
         }
         demand(['sim', 'scenario', 'fn'], e.span);
         const ts = argT();
-        const vecOk = (t: Type): boolean => VECTORS.has(t.t);
-        if (!ts.every(vecOk) && !ts.every((t) => tAgree(t, T.unknown))) {
+        if (!ts.every((t) => VECTORS.has(t.t) || tAgree(t, T.unknown))) {
           this.sink.error('FORM-E-300', e.span, `${name} expects vector arguments, got ${ts.map(typeName).join(', ')}`);
           return name === 'normalize' ? T.unknown : T.fx24;
         }
-        if (!ts.every((t) => tAgree(t, ts[0] ?? T.unknown))) {
+        if (ts.length > 1 && !ts.every((t) => tAgree(t, ts[0] ?? T.unknown))) {
           this.sink.error('FORM-E-330', e.span, `${name} on mixed vector types (${ts.map(typeName).join(', ')})`);
         }
         if (name === 'normalize') return ts[0] ?? T.unknown;
@@ -2373,12 +2609,22 @@ class Checker {
       case 'mix': {
         demand(['sim', 'present', 'scenario'], e.span);
         if (args.length !== 3) this.sink.error('FORM-E-304', e.span, 'mix(a, b, t) takes three arguments');
-        const ts = argT();
-        const t3 = ts[2] ?? T.unknown;
-        if (!tAgree(t3, T.unit8) && !tAgree(t3, T.unknown)) {
-          this.sink.error('FORM-E-300', args[2]!.span, `mix weight must be unit8, got ${typeName(t3)}`);
+        const contextual = expected && (NUMERIC.has(expected.t) || VECTORS.has(expected.t)) ? expected : null;
+        let a = this.checkExpr(ctx, args[0] ?? none(e.span), contextual);
+        let b = this.checkExpr(ctx, args[1] ?? none(e.span), contextual);
+        if (isBareInt(args[0]) && adoptableLiteralType(b)) a = this.checkExpr(ctx, args[0]!, b);
+        if (isBareInt(args[1]) && adoptableLiteralType(a)) b = this.checkExpr(ctx, args[1]!, a);
+        const weight = this.checkExpr(ctx, args[2] ?? none(e.span), T.unit8);
+        if (!tAgree(a, b) && !tAgree(a, T.unknown) && !tAgree(b, T.unknown)) {
+          this.sink.error('FORM-E-300', e.span, `mix values must share one type (${typeName(a)} vs ${typeName(b)})`);
         }
-        return ts[0] ?? T.unknown;
+        if (!NUMERIC.has(a.t) && !VECTORS.has(a.t) && !tAgree(a, T.unknown)) {
+          this.sink.error('FORM-E-300', e.span, `mix does not admit ${typeName(a)}`);
+        }
+        if (!tAgree(weight, T.unit8) && !tAgree(weight, T.unknown)) {
+          this.sink.error('FORM-E-300', (args[2] ?? e).span, `mix weight must be unit8, got ${typeName(weight)}`);
+        }
+        return tAgree(a, T.unknown) ? b : a;
       }
       default:
         break;
@@ -2740,6 +2986,24 @@ const BARE_INTRINSICS = new Set([
 /** Sentinel expression for missing arguments (keeps messages anchored). */
 function none(span: SourceSpan): Expr {
   return { kind: 'literal', lit: 'int', text: '<missing>', intVal: 0n, span };
+}
+
+function isBareInt(expr: Expr | undefined): expr is Extract<Expr, { kind: 'literal' }> {
+  return expr?.kind === 'literal' && expr.lit === 'int';
+}
+
+function adoptableLiteralType(type: Type): boolean {
+  return type.t === 'u32' || type.t === 'fx16' || type.t === 'fx24'
+    || type.t === 'angle16' || type.t === 'unit8';
+}
+
+function firstMemberAfterRoot(expr: Expr, root: string): string | null {
+  if (expr.kind === 'member') {
+    if (expr.obj.kind === 'ident' && expr.obj.name === root) return expr.field;
+    return firstMemberAfterRoot(expr.obj, root);
+  }
+  if (expr.kind === 'index') return firstMemberAfterRoot(expr.obj, root);
+  return null;
 }
 
 /** The enclosing fn name for call-graph edges (threaded via ctx by checkFn). */

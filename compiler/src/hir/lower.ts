@@ -48,7 +48,11 @@ const BUTTONS = new Map<string, bigint>([
 /** Returns null rather than emitting any partial IR after frontend errors. */
 export function lowerHir(frontend: FrontendResult): HirProgram | null {
   if (!frontend.ok || frontend.check?.schedule === null || frontend.check === null) return null;
-  return new HirLowerer(frontend.modules, frontend.check.schedule).run();
+  return new HirLowerer(
+    frontend.modules,
+    frontend.check.schedule,
+    frontend.check.expressionTypes,
+  ).run();
 }
 
 class HirLowerer {
@@ -59,10 +63,12 @@ class HirLowerer {
   private readonly sourceIndex = new Map<number, number>();
   private populationIndex = 0;
   private soundIndex = 0;
+  private nextRngSlot = 0;
 
   constructor(
     private readonly asts: ModuleAst[],
     private readonly schedule: NonNullable<FrontendResult['check']>['schedule'] & {},
+    private readonly expressionTypes: ReadonlyMap<Expr, Type>,
   ) {}
 
   run(): HirProgram {
@@ -101,6 +107,7 @@ class HirLowerer {
       declarations: this.declarations,
       schedule: this.schedule,
       sourceIds: this.sourceIds,
+      rngSlotCount: this.nextRngSlot,
       manifestCrc32c: crc32c(0, manifest),
     };
   }
@@ -316,9 +323,12 @@ class HirLowerer {
         break;
       }
       case 'member': {
-        children.push(this.expr(module, ast.obj, null, env));
         const qualified = ast.obj.kind === 'ident' ? this.qualifiedMember(ast.obj.name, ast.field) : null;
-        if (qualified) { type = this.symbolType(qualified); symbol = this.symbolRef(qualified); break; }
+        if (qualified) {
+          type = this.symbolType(qualified);
+          symbol = this.symbolRef(qualified);
+          break;
+        }
         const baseSym = ast.obj.kind === 'ident' ? this.resolve(module, ast.obj.name) : null;
         if (baseSym?.decl.kind === 'Enum') {
           type = { t: 'enum', name: qname(baseSym.module, baseSym.name) };
@@ -329,6 +339,7 @@ class HirLowerer {
           const struct = this.require(baseSym.module, baseSym.decl.structName);
           type = this.structFieldType(struct, ast.field); symbol = { kind: 'pool', module: baseSym.module, name: baseSym.name };
         } else {
+          children.push(this.expr(module, ast.obj, null, env));
           type = this.memberType(children[0]!.type, ast.field);
           symbol = children[0]!.symbol;
         }
@@ -380,13 +391,48 @@ class HirLowerer {
         type = T.unknown;
         break;
     }
-    return { ast, type, symbol, children, span: ast.span };
+    const checked = this.expressionTypes.get(ast);
+    if (!checked) {
+      throw new Error(`internal HIR exact-type failure: checker did not type expression at ${ast.span.file}:${ast.span.start}`);
+    }
+    if (checked.t === 'unknown') {
+      throw new Error(`internal HIR exact-type failure: unresolved expression at ${ast.span.file}:${ast.span.start}`);
+    }
+    type = this.qualifyCheckedType(module, checked);
+    const rngSlot = symbol?.kind === 'intrinsic' && symbol.name === 'random.stream'
+      ? this.nextRngSlot++
+      : null;
+    return { ast, type, symbol, rngSlot, children, span: ast.span };
   }
 
   private scenarioExpressions(module: number, item: ScenarioItem): HirExpr[] {
     if (item.kind === 'at') return [this.expr(module, item.action, null, new Map())];
     if (item.kind === 'assert') return [this.expr(module, item.expr, T.bool, new Map()), ...(item.tolerance ? [this.expr(module, item.tolerance, T.fx16, new Map())] : [])];
     return [];
+  }
+
+  private qualifyCheckedType(module: number, type: Type): Type {
+    if (type.t === 'array') {
+      return { t: 'array', elem: this.qualifyCheckedType(module, type.elem), len: type.len };
+    }
+    if (type.t === 'struct' || type.t === 'enum') {
+      if (type.name.startsWith('__') || type.name.includes('::')) return type;
+      const symbol = this.resolve(module, type.name);
+      if (!symbol || (type.t === 'struct' && symbol.decl.kind !== 'Struct')
+          || (type.t === 'enum' && symbol.decl.kind !== 'Enum')) {
+        throw new Error(`internal HIR exact-type failure: cannot qualify ${type.t} '${type.name}'`);
+      }
+      return { t: type.t, name: qname(symbol.module, symbol.name) };
+    }
+    if (type.t === 'pool') {
+      const symbol = this.resolve(module, type.name);
+      if (!symbol || symbol.decl.kind !== 'Pool') {
+        throw new Error(`internal HIR exact-type failure: cannot qualify pool '${type.name}'`);
+      }
+      const struct = this.require(symbol.module, symbol.decl.structName);
+      return { t: 'pool', name: qname(symbol.module, symbol.name), struct: qname(struct.module, struct.name) };
+    }
+    return type;
   }
 
   private type(module: number, ast: TypeExpr): Type {
@@ -554,7 +600,7 @@ class HirLowerer {
 
   private syntheticPoolCount(span: SourceSpan, sym: SymbolInfo): HirExpr {
     const ast: Expr = { kind: 'member', obj: { kind: 'ident', name: sym.name, span }, field: 'count', fieldSpan: span, span };
-    return { ast, type: T.u32, symbol: { kind: 'pool', module: sym.module, name: sym.name }, children: [], span };
+    return { ast, type: T.u32, symbol: { kind: 'pool', module: sym.module, name: sym.name }, rngSlot: null, children: [], span };
   }
 
   private literalType(ast: Extract<Expr, { kind: 'literal' }>, expected: Type | null): Type {

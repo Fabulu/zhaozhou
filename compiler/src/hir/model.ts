@@ -31,6 +31,8 @@ export interface HirExpr {
   ast: Expr;
   type: Type;
   symbol: HirSymbolRef | null;
+  /** Stable canonical slot owned by a random.stream call site. */
+  rngSlot: number | null;
   children: HirExpr[];
   span: SourceSpan;
 }
@@ -207,6 +209,8 @@ export interface HirProgram {
   declarations: HirDeclaration[];
   schedule: Schedule;
   sourceIds: HirSourceRow[];
+  /** Number of stable random.stream call-site slots across all domains. */
+  rngSlotCount: number;
   manifestCrc32c: number;
 }
 

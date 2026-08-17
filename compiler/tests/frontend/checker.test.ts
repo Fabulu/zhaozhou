@@ -62,14 +62,39 @@ test('schedule: multi-rate writer and fast reader interact through phase order o
   assert.equal(phases.length, 2);
 });
 
-test('schedule: stagger pins the per-element rate to the every-rate', () => {
+test('schedule: stagger pins one isolated per-entity iteration to every-rate', () => {
   const r = compile(MOD(`
+    struct s { x: fx16; }
+    pool p: s[16];
+    system staggered every 4 ticks stagger over p reads p writes p.x {
+      for i in 0..p.count { p.x[i] = p.x[i] + 1m; }
+    }
+  `));
+  assert.deepEqual(r.codes, []);
+  assert.equal(r.check!.schedule!.phases[0]!.systems[0]!.every, 4n);
+});
+
+test('stagger refuses missing iteration, extra loops, and off-loop/global writes', () => {
+  const missing = compile(MOD(`
     struct s { x: fx16; }
     pool p: s[16];
     system staggered every 4 ticks stagger over p reads p writes p { }
   `));
-  assert.deepEqual(r.codes, []);
-  assert.equal(r.check!.schedule!.phases[0]!.systems[0]!.every, 4n);
+  assert.deepEqual(missing.codes, ['FORM-E-504']);
+
+  const leaking = compile(MOD(`
+    struct s { x: fx16; }
+    pool p: s[16];
+    global g: fx16 = 0m;
+    system staggered every 4 ticks stagger over p reads p writes p.x, g {
+      g = 1m;
+      for i in 0..p.count {
+        p.x[i] = p.x[i] + 1m;
+        for j in 0..p.count { p.x[j] = p.x[j] + 1m; }
+      }
+    }
+  `));
+  assert.ok(leaking.codes.includes('FORM-E-504'));
 });
 
 test('E-832: > 65536 declarations in one module trips the source-ID registry gate', () => {
