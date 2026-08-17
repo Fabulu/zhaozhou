@@ -36,8 +36,10 @@ struct CanonicalWriter {
 
 inline std::size_t serialize_canonical_state(const FormState& state, u8* out, std::size_t capacity) {
   CanonicalWriter writer{out, capacity, 0u};
-  writer.u32le(state.arena.particles.count);
-  for (u32 _pool0 = 0u; _pool0 < state.arena.particles.count; ++_pool0) {
+  const u32 _pool0_count = state.arena.particles.count;
+  if (_pool0_count > arena::particles_pool::capacity) form_abort(822u);
+  writer.u32le(_pool0_count);
+  for (u32 _pool0 = 0u; _pool0 < _pool0_count; ++_pool0) {
     writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].x));
     writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].y));
     writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].z));

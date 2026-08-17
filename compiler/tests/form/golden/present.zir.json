@@ -1,6 +1,46 @@
 {
  "kind": "PresentZIR",
- "perFrameEstimateBytes": 64,
+ "layouts": [
+  {
+   "contractRecordBytes": 48,
+   "module": 0,
+   "presentation": "main_view",
+   "sharedBudgetPct": 20,
+   "views": [
+    {
+     "budgetPct": 80,
+     "camera": {
+      "ast": {
+       "kind": "ident",
+       "name": "origin",
+       "span": {
+        "end": 1039,
+        "file": "a_arena.form",
+        "start": 1033
+       }
+      },
+      "children": [],
+      "span": {
+       "end": 1039,
+       "file": "a_arena.form",
+       "start": 1033
+      },
+      "symbol": {
+       "kind": "global",
+       "module": 0,
+       "name": "origin"
+      },
+      "type": {
+       "t": "world3"
+      }
+     },
+     "id": 0,
+     "recordBytes": 96
+    }
+   ]
+  }
+ ],
+ "perFrameEstimateBytes": 208,
  "templates": [
   {
    "command": {

@@ -60,6 +60,13 @@ inline Fx24 fx24_mul(Fx24 a, Fx24 b) {
   if (scaled < std::numeric_limits<Fx24>::min()) return std::numeric_limits<Fx24>::min();
   return static_cast<Fx24>(scaled);
 }
+inline Fx16 fx16_from_fx24(Fx24 value) {
+  i64 rounded = value / 0x100;
+  const i64 remainder = value % 0x100;
+  if (remainder >= 0x80) ++rounded;
+  else if (remainder < -0x80) --rounded;
+  return sat_i32(rounded);
+}
 template <class T> inline T select_value(Bool condition, T yes, T no) { return condition ? yes : no; }
 template <class T> inline T min_value(T a, T b) { return a < b ? a : b; }
 template <class T> inline T max_value(T a, T b) { return a > b ? a : b; }

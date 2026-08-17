@@ -123,7 +123,7 @@ test('costs.zcost is complete canonical integer JSON and deterministic', () => {
     { every: 4, module: 0, name: 'advance', phase: 1, stagger: true },
     { every: 1, module: 1, name: 'observe', phase: 0, stagger: false },
   ]);
-  assert.equal(report.command_memory.per_frame_estimate_bytes, 64);
+  assert.equal(report.command_memory.per_frame_estimate_bytes, 208);
   assert.deepEqual(report.particle_bandwidth, { bytes_per_element: 0, peak_elements: 0, bytes_per_tick: 0, pools: [] });
   assert.deepEqual(report.programs[0]!.class_counts, { ALU: 3, MUL: 1, NOISE: 0, SPECIAL: 0, TABLE: 0 });
   assert.equal(report.programs[0]!.instr_count, 4);

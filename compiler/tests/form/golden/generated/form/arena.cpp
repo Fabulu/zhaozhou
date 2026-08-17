@@ -33,6 +33,42 @@ void system_advance(FormState& state, const PadFrame pads[4], u32 tick) {
 void present_main_view(const FormState& state, zref::FrameBuilder& builder) {
   (void)state;
   {
+    zhao_abi::ZhRecordSetPresentationContract record{};
+    record.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
+    record.hdr.record_bytes = 48u;
+    record.hdr.source_id = 0u;
+    record.payload.mode = zhao_abi::VIDEO_Z60;
+    record.payload.view_count = 1u;
+    record.payload.geometry_tokens[0u] = 80u;
+    record.payload.fragment_tokens[0u] = 80u;
+    record.payload.shared_tokens = 20u;
+    std::vector<u8> bytes;
+    zhao_abi::zhao_pack_set_presentation_contract(record, bytes);
+    builder.append_record(bytes);
+  }
+  {
+    const World3 _view_camera_0 = state.arena.origin;
+    zhao_abi::ZhRecordSetView record{};
+    record.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
+    record.hdr.record_bytes = 96u;
+    record.hdr.source_id = 0u;
+    record.payload.view_id = 0u;
+    record.payload.viewport_id = 0u;
+    record.payload.view_projection.m00 = 0x10000;
+    record.payload.view_projection.m11 = 0x10000;
+    record.payload.view_projection.m22 = 0x10000;
+    record.payload.view_projection.m33 = 0x10000;
+    record.payload.view_projection.m03 = fx16_sub(0, fx16_from_fx24(_view_camera_0.x));
+    record.payload.view_projection.m13 = fx16_sub(0, fx16_from_fx24(_view_camera_0.y));
+    record.payload.view_projection.m23 = fx16_sub(0, fx16_from_fx24(_view_camera_0.z));
+    record.payload.pixel_error = 0x10000;
+    record.payload.geometry_tokens = 80u;
+    record.payload.fragment_tokens = 80u;
+    std::vector<u8> bytes;
+    zhao_abi::zhao_pack_set_view(record, bytes);
+    builder.append_record(bytes);
+  }
+  {
     zhao_abi::ZhRecordDrawPopulation record{};
     record.hdr.opcode = zhao_abi::ZHAO_OP_DRAW_POPULATION;
     record.hdr.record_bytes = 32u;

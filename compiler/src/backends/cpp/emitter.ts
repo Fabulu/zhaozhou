@@ -7,7 +7,7 @@ import type {
   HirPool, HirPresentation, HirProgram, HirScenario, HirSound, HirStmt, HirStruct,
 } from '../../hir/model.js';
 import { declarationsOf } from '../../hir/model.js';
-import type { ZirProgram, ZirSystem } from '../../zir/model.js';
+import type { ZirProgram, ZirSystem, ZirViewLayout } from '../../zir/model.js';
 import { FORM_CPP_BACKEND_VERSION, type CppGeneratedFile, type CppOutput } from './model.js';
 
 const CPP_KEYWORDS = new Set([
@@ -173,6 +173,13 @@ class CppEmitter {
     o.line('  if (scaled > std::numeric_limits<Fx24>::max()) return std::numeric_limits<Fx24>::max();');
     o.line('  if (scaled < std::numeric_limits<Fx24>::min()) return std::numeric_limits<Fx24>::min();');
     o.line('  return static_cast<Fx24>(scaled);');
+    o.line('}');
+    o.line('inline Fx16 fx16_from_fx24(Fx24 value) {');
+    o.line('  i64 rounded = value / 0x100;');
+    o.line('  const i64 remainder = value % 0x100;');
+    o.line('  if (remainder >= 0x80) ++rounded;');
+    o.line('  else if (remainder < -0x80) --rounded;');
+    o.line('  return sat_i32(rounded);');
     o.line('}');
     o.line('template <class T> inline T select_value(Bool condition, T yes, T no) { return condition ? yes : no; }');
     o.line('template <class T> inline T min_value(T a, T b) { return a < b ? a : b; }');
@@ -499,10 +506,60 @@ class CppEmitter {
   private emitPresentation(o: Lines, presentation: HirPresentation): void {
     o.line(`void present_${ident(presentation.name)}(const FormState& state, zref::FrameBuilder& builder) {`);
     o.line('  (void)state;');
+    const layout = this.zir.present.layouts.find(
+      (item) => item.module === presentation.module && item.presentation === presentation.name,
+    );
+    if (layout) this.emitViewLayout(o, layout, 1);
     const templates = this.zir.present.templates.filter((template) => template.module === presentation.module && template.presentation === presentation.name);
     for (const template of templates) this.emitCommand(o, template.command, 1);
     o.line('}');
     o.line();
+  }
+
+  private emitViewLayout(o: Lines, layout: ZirViewLayout, depth: number): void {
+    const pad = '  '.repeat(depth);
+    const mode = layout.views.some((view) => view.id === 1) ? 'VIDEO_DUO' : 'VIDEO_Z60';
+    o.line(`${pad}{`);
+    o.line(`${pad}  zhao_abi::ZhRecordSetPresentationContract record{};`);
+    o.line(`${pad}  record.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;`);
+    o.line(`${pad}  record.hdr.record_bytes = 48u;`);
+    o.line(`${pad}  record.hdr.source_id = 0u;`);
+    o.line(`${pad}  record.payload.mode = zhao_abi::${mode};`);
+    o.line(`${pad}  record.payload.view_count = ${layout.views.length}u;`);
+    for (const view of layout.views) {
+      o.line(`${pad}  record.payload.geometry_tokens[${view.id}u] = ${view.budgetPct}u;`);
+      o.line(`${pad}  record.payload.fragment_tokens[${view.id}u] = ${view.budgetPct}u;`);
+    }
+    o.line(`${pad}  record.payload.shared_tokens = ${layout.sharedBudgetPct}u;`);
+    o.line(`${pad}  std::vector<u8> bytes;`);
+    o.line(`${pad}  zhao_abi::zhao_pack_set_presentation_contract(record, bytes);`);
+    o.line(`${pad}  builder.append_record(bytes);`);
+    o.line(`${pad}}`);
+    for (const view of layout.views) {
+      const camera = `_view_camera_${view.id}`;
+      o.line(`${pad}{`);
+      o.line(`${pad}  const World3 ${camera} = ${this.expr(view.camera, { state: 'state', pads: 'pads', tick: 'tick' })};`);
+      o.line(`${pad}  zhao_abi::ZhRecordSetView record{};`);
+      o.line(`${pad}  record.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;`);
+      o.line(`${pad}  record.hdr.record_bytes = 96u;`);
+      o.line(`${pad}  record.hdr.source_id = 0u;`);
+      o.line(`${pad}  record.payload.view_id = ${view.id}u;`);
+      o.line(`${pad}  record.payload.viewport_id = ${view.id}u;`);
+      o.line(`${pad}  record.payload.view_projection.m00 = 0x10000;`);
+      o.line(`${pad}  record.payload.view_projection.m11 = 0x10000;`);
+      o.line(`${pad}  record.payload.view_projection.m22 = 0x10000;`);
+      o.line(`${pad}  record.payload.view_projection.m33 = 0x10000;`);
+      o.line(`${pad}  record.payload.view_projection.m03 = fx16_sub(0, fx16_from_fx24(${camera}.x));`);
+      o.line(`${pad}  record.payload.view_projection.m13 = fx16_sub(0, fx16_from_fx24(${camera}.y));`);
+      o.line(`${pad}  record.payload.view_projection.m23 = fx16_sub(0, fx16_from_fx24(${camera}.z));`);
+      o.line(`${pad}  record.payload.pixel_error = 0x10000;`);
+      o.line(`${pad}  record.payload.geometry_tokens = ${view.budgetPct}u;`);
+      o.line(`${pad}  record.payload.fragment_tokens = ${view.budgetPct}u;`);
+      o.line(`${pad}  std::vector<u8> bytes;`);
+      o.line(`${pad}  zhao_abi::zhao_pack_set_view(record, bytes);`);
+      o.line(`${pad}  builder.append_record(bytes);`);
+      o.line(`${pad}}`);
+    }
   }
 
   private emitCommand(o: Lines, emit: HirPresentation['emits'][number], depth: number): void {
@@ -653,8 +710,11 @@ class CppEmitter {
           const poolExpr = this.stateMember(decl.module, decl.name, 'state');
           const struct = this.structs.get(key(decl.structModule, decl.structName))!;
           const index = `_pool${unique++}`;
-          o.line(`  writer.u32le(${poolExpr}.count);`);
-          o.line(`  for (u32 ${index} = 0u; ${index} < ${poolExpr}.count; ++${index}) {`);
+          const count = `${index}_count`;
+          o.line(`  const u32 ${count} = ${poolExpr}.count;`);
+          o.line(`  if (${count} > ${this.moduleName(decl.module)}::${ident(decl.name)}_pool::capacity) form_abort(822u);`);
+          o.line(`  writer.u32le(${count});`);
+          o.line(`  for (u32 ${index} = 0u; ${index} < ${count}; ++${index}) {`);
           for (const field of struct.fields) {
             for (const line of this.serializeType(field.type, `${poolExpr}.${ident(field.name)}[${index}]`, 'writer', () => `_s${unique++}`)) o.line(`    ${line}`);
           }

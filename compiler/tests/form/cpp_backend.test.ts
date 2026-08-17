@@ -48,6 +48,14 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
   assert.match(arena, /namespace form::arena \{/);
   assert.match(arena, /std::array<World3, capacity> position/);
   assert.match(arena, /std::array<u32, capacity> age/);
+  const arenaSource = byPath(first, 'arena.cpp');
+  const contract = arenaSource.indexOf('ZHAO_OP_SET_PRESENTATION_CONTRACT');
+  const view = arenaSource.indexOf('ZHAO_OP_SET_VIEW');
+  const draw = arenaSource.indexOf('ZHAO_OP_DRAW_POPULATION');
+  assert.ok(contract >= 0 && contract < view && view < draw);
+  assert.match(arenaSource, /record\.payload\.geometry_tokens\[0u\] = 80u/);
+  assert.match(arenaSource, /record\.payload\.shared_tokens = 20u/);
+  assert.match(arenaSource, /view_projection\.m03 = fx16_sub\(0, fx16_from_fx24\(_view_camera_0\.x\)\)/);
   const game = byPath(first, 'form_game.hpp');
   assert.match(game, /struct FormState \{/);
   assert.match(game, /inline void sim_tick\(FormState& state, const PadFrame pads\[4\], u32 tick\)/);
@@ -125,6 +133,11 @@ int main() {
     form::sim_tick(state, pads, tick);
     chain = form::sim_hash(chain, state);
   }
+  const form::u32 present_before = form::sim_hash(0x10203040u, state);
+  zhao::ZhaoFrameBuilder builder;
+  form::present_frame(state, builder);
+  const form::u32 present_after = form::sim_hash(0x10203040u, state);
+  if (present_before != present_after || builder.command_count() != 4u || builder.command_bytes() != 208u) return 4;
   const form::u32 before = form::sim_hash(0x2468ace0u, state);
   state.audit.observed += 1u;
   const form::u32 after = form::sim_hash(0x2468ace0u, state);
@@ -137,7 +150,7 @@ int main() {
     const executable = path.join(root, 'smoke.exe');
     const repo = repoRoot();
     const args = [
-      '-std=c++17', '-O2', '-Wall', '-Wextra',
+      '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
       `-I${generated}`,
       `-I${path.join(repo, 'runtime', 'include')}`,
       `-I${path.join(repo, 'reference', 'include')}`,

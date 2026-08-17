@@ -69,8 +69,21 @@ function lowerSim(hir: HirProgram): SimZir {
 }
 
 function lowerPresent(hir: HirProgram): PresentZir {
-  const templates = [];
+  const layouts: PresentZir['layouts'] = [];
+  const templates: PresentZir['templates'] = [];
   for (const presentation of declarationsOf(hir, 'presentation')) {
+    if (presentation.views.length > 0 || presentation.sharedBudgetPct > 0) {
+      layouts.push({
+        module: presentation.module,
+        presentation: presentation.name,
+        views: presentation.views.map((view) => {
+          if (!view.camera) throw new Error(`internal ZIR presentation '${presentation.name}' has an unbound view`);
+          return { id: view.id, camera: view.camera, budgetPct: view.budgetPct, recordBytes: 96 as const };
+        }),
+        sharedBudgetPct: presentation.sharedBudgetPct,
+        contractRecordBytes: 48,
+      });
+    }
     let ordinal = 0;
     for (const command of presentation.emits) {
       const recordBytes = COMMAND_BYTES[command.emitKind];
@@ -78,10 +91,15 @@ function lowerPresent(hir: HirProgram): PresentZir {
       templates.push({ module: presentation.module, presentation: presentation.name, ordinal: ordinal++, command, recordBytes });
     }
   }
+  const layoutBytes = layouts.reduce(
+    (sum, layout) => sum + layout.contractRecordBytes + layout.views.reduce((viewSum, view) => viewSum + view.recordBytes, 0),
+    0,
+  );
   return {
     kind: 'PresentZIR',
+    layouts,
     templates,
-    perFrameEstimateBytes: templates.reduce((sum, template) => sum + template.recordBytes, 0),
+    perFrameEstimateBytes: layoutBytes + templates.reduce((sum, template) => sum + template.recordBytes, 0),
   };
 }
 

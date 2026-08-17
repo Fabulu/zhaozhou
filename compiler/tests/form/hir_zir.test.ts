@@ -74,7 +74,14 @@ test('multi-rate and stagger lower to compile-time ZIR constants', () => {
   assert.deepEqual(advance.rateGuard, { divisor: 4, remainder: 0 });
   assert.deepEqual(advance.stagger, { module: 0, pool: 'particles', divisor: 4 });
   assert.equal(7 % advance.stagger.divisor, 15 % advance.stagger.divisor);
-  assert.equal(zir.present.perFrameEstimateBytes, 64);
+  assert.deepEqual(zir.present.layouts.map((layout) => ({
+    module: layout.module,
+    presentation: layout.presentation,
+    viewIds: layout.views.map((view) => view.id),
+    budgets: layout.views.map((view) => view.budgetPct),
+    shared: layout.sharedBudgetPct,
+  })), [{ module: 0, presentation: 'main_view', viewIds: [0], budgets: [80], shared: 20 }]);
+  assert.equal(zir.present.perFrameEstimateBytes, 208);
 });
 
 test('conflicting writer diagnostic cites both declaration spans through W3.2 contract', () => {
