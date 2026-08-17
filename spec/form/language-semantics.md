@@ -382,7 +382,8 @@ read truth state and emit semantic commands; they never mutate truth
 (FORM §13). A presentation block has two parts: optional **view layout**
 (the Duo contract, FORM §12) and a sequence of **emit statements**, each of
 which becomes exactly one ABI v3 command template in PresentZIR (D3) with the
-emit site's source ID (kind 6, capture_format.md §5):
+emit site's source ID (kind **9**; the registry in `capture_format.md` §5 is
+authoritative):
 
 ```ebnf
 emit_kind      = "draw_form" | "draw_population" | "draw_procedural"

@@ -138,8 +138,9 @@ software console executes it in the terrain stage of the frame
 renderer's clear path emits layers per spec/sky_and_beams.md — not an L1
 statement).
 
-Every emit site receives source ID kind 6 (presentation emit site);
-systems are kind 5; pools kind 7; scenarios kind 8 (capture_format.md §5).
+The authoritative source-kind registry is `capture_format.md` §5: every emit
+site is kind **9** (presentation emit site), systems are kind **8**, pools are
+kind **10**, and scenarios are kind **11**.
 
 ## 5. Interaction with TerrainField/SurfaceStamp records (Phase-1 stub §3, resolved)
 

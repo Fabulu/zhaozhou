@@ -5,6 +5,9 @@ import test from 'node:test';
 
 import { compileFrontend } from '../../src/frontend/index.js';
 import { declarationsOf, lowerHir } from '../../src/hir/index.js';
+import {
+  SOURCE_KIND_EMIT, SOURCE_KIND_POOL, SOURCE_KIND_SCENARIO, SOURCE_KIND_SYSTEM,
+} from '../../src/hir/lower.js';
 import type { HirExpr, HirStmt } from '../../src/hir/model.js';
 import { lowerZir } from '../../src/zir/index.js';
 import { repoRoot } from '../helpers.js';
@@ -43,6 +46,22 @@ test('HIR is resolved, typed, domain-tagged, source-attributed', () => {
   assert.equal(assignment.expressions[1]!.type.t, 'u32');
   assert.ok(hir.sourceIds.every((row) => row.span.end > row.span.start));
   assert.deepEqual(hir.sourceIds.map((row) => row.kind).sort((a, b) => a - b), [3, 8, 8, 8, 9, 9, 10, 11]);
+});
+
+test('Form source-kind references match the authoritative capture-format registry', () => {
+  const capture = readFileSync(path.join(repoRoot(), 'spec', 'capture_format.md'), 'utf8');
+  const semantics = readFileSync(path.join(repoRoot(), 'spec', 'form', 'language-semantics.md'), 'utf8');
+  const domains = readFileSync(path.join(repoRoot(), 'spec', 'form', 'domains-and-effects.md'), 'utf8');
+  const authoritative = capture.match(
+    /\*\*\[w3\]\*\* (\d+) system, (\d+) presentation emit site, (\d+) pool, (\d+) scenario/,
+  );
+  assert.ok(authoritative, 'capture_format.md §5 must carry the source-kind registry');
+  assert.deepEqual(authoritative.slice(1).map(Number), [
+    SOURCE_KIND_SYSTEM, SOURCE_KIND_EMIT, SOURCE_KIND_POOL, SOURCE_KIND_SCENARIO,
+  ]);
+  assert.match(semantics, /source ID \(kind \*\*9\*\*; the registry in `capture_format\.md` §5 is\s+authoritative\)/);
+  assert.match(domains, /authoritative source-kind registry is `capture_format\.md` §5:[\s\S]*kind \*\*9\*\*[\s\S]*kind \*\*8\*\*[\s\S]*kind \*\*10\*\*[\s\S]*kind \*\*11\*\*/);
+  assert.doesNotMatch(semantics + domains, /emit site[^\n]*kind 6|systems are kind 5|pools kind 7|scenarios kind 8/);
 });
 
 test('HIR preserves exact contextual types through every L1 target context', () => {
