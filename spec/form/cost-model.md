@@ -6,6 +6,17 @@ The Phase-1 mechanics below are retained; this file now fixes (a) the
 canonical `costs.zcost` artifact schema, (b) the budget-line registry, and
 (c) the per-field cost records the compiler emits.
 
+## Ratification note — mandatory pre-W3.4 reports (2026-08-17)
+
+W3.3 always emits `costs.zcost`; absence of linked Field IR is not grounds to
+omit D11's report. `programs[]` contains only physical programs for which W3.4
+has supplied validated Field IR metadata. Every declared field not yet linked
+appears instead in `unlinked_programs[]` with its source ID, profile,
+`max_ops`, and authored footprint, but no instruction, cycle, DSP, table, or
+register figures. Linking moves the same source ID from `unlinked_programs[]`
+to `programs[]`; a source ID may never appear in both. This preserves every
+nonphysical fact already known in W3.3 without manufacturing W3.4 costs.
+
 ## 1. Field IR costs (frozen v1 mechanics, provisional numbers)
 
 Per-op classes and provisional cycle/DSP estimates live in
@@ -40,19 +51,20 @@ optional; `$schema` names this file):
 {"$schema":"zhaozhou/spec/form/cost-model.md#2.1",
  "abi_version":2,
  "budgets":[{"line":"sky_triangles","limit":352,"owner":"spec/sky_and_beams.md"}],
- "command_memory":{"ceiling_bytes":1048576,"per_frame_estimate_bytes":0},
+ "command_memory":{"ceiling_bytes":1048576,"per_frame_estimate_bytes":32},
+ "command_templates":[{"command":"draw_population","module":0,"ordinal":0,
+                       "presentation":"main","record_bytes":32,"source_id":2415919105}],
  "modules":[{"index":0,"name":"wound_lab"}],
  "particle_bandwidth":{"bytes_per_element":48,"peak_elements":8192,
                        "bytes_per_tick":393216,"pools":["shards"]},
  "pools":[{"capacity":8192,"element_bytes":48,"module":0,"name":"shards"}],
- "programs":[{"attr0_writes":0,"class_counts":{"ALU":9,"MUL":3,"NOISE":1,"SPECIAL":2,"TABLE":1},
-              "cycles_est":21,"dsp":3,"footprint_rect":[0,0,0,0],"instr_count":16,
-              "kind":"field","max_ops":16,"module":0,"name":"rising_ridge",
-              "profile":"earth","register_hwm":7,"source_id":50331649,
-              "table_bytes":40}],
+ "programs":[],
  "rates":[{"every":4,"invocation_every":1,"module":0,"name":"update_shards","phase":2,"selected_peak":2048,"stagger":true}],
  "scenario_asserts":[{"lines":["Duo"],"module":0,"name":"opposing_waves"}],
- "source_attribution":"sourceids.zmap"}
+ "source_attribution":"sourceids.zmap",
+ "unlinked_programs":[{"footprint_rect":[0,0,0,0],"kind":"field","max_ops":16,
+                       "module":0,"name":"rising_ridge","profile":"earth",
+                       "source_id":50331649}]}
 ```
 
 Member law (each row of FORM §14's list maps to a member):
@@ -63,8 +75,10 @@ Member law (each row of FORM §14's list maps to a member):
 | `abi_version` | u32 | the .zidl ABI version the build targets (pin/repro) |
 | `pools[]` | array | one per pool: capacity (source-visible maximum population, FORM §14), element bytes (SoA sum), module index, name — capacities law FORM §21-9 |
 | `rates[]` | array | one per system: authored `every` N, actual `invocation_every` cadence, assigned `phase`, `stagger` flag, and `selected_peak` entity count — the compile-time schedule (deterministic-scheduling §3/§5) |
-| `programs[]` | array | one per field program: profile, `max_ops` declared, `instr_count` lowered (must satisfy `instr_count ≤ max_ops ≤` field-ir §7.3 ceiling), per-class counts, estimated cycles, DSP demand, table bytes, register high-water mark (all per field-ir §9), footprint rect (earth only; `[0,0,0,0]` for flow), source_id (kind 3) |
-| `command_memory` | object | ceiling = `FRAME_SLOT_BYTES` (commands.zidl) and the per-frame estimate from the PresentZIR template census (W3.3) — FORM §14 "maximum command memory" |
+| `programs[]` | array | one per **linked and validated** field program: profile, `max_ops` declared, `instr_count` lowered (must satisfy `instr_count ≤ max_ops ≤` field-ir §7.3 ceiling), per-class counts, estimated cycles, DSP demand, table bytes, register high-water mark (all per field-ir §9), footprint rect (earth only; `[0,0,0,0]` for flow), source_id (kind 3) |
+| `unlinked_programs[]` | array | one per declared field program lacking validated physical Field IR: `kind`, profile, `max_ops`, module/name, authored footprint rect, and source_id only. Cost-like members are forbidden because none are known yet. A source ID is in exactly one of `programs[]` or `unlinked_programs[]` |
+| `command_memory` | object | ceiling = `FRAME_SLOT_BYTES` (commands.zidl) and the per-frame estimate from the complete PresentZIR census (view contracts, views, and command templates) — FORM §14 "maximum command memory" |
+| `command_templates[]` | array | deterministic PresentZIR command-template census: command kind, module/presentation, declaration ordinal, ABI record bytes, and source ID. The rows explain the command-template contribution to `command_memory.per_frame_estimate_bytes` |
 | `particle_bandwidth` | object | bytes per live element per tick summed over flow-attached pools at capacity — FORM §14 "particle-state bandwidth" |
 | `budgets[]` | array | the budget-line registry rows this build asserts (§3 below; values copied verbatim) |
 | `scenario_asserts[]` | array | scenario `assert_budget` names carried into the release gate (FORM §14 build modes) |
@@ -123,21 +137,26 @@ verbatim when a build asserts it. Wave-3 entries:
 Hardware-absolute budgets (frame cycles, ALM/DSP/M10K) remain Phase-0 lane
 (board truth); when they land, rows are added here, never edited in place.
 
-## 4. Per-field instruction counts (report + enforcement)
+## 4. Per-field linkage and instruction counts (report + enforcement)
 
-For every admitted field program the compiler records (field-ir §9
-mechanics): `instr_count` (lowered, post-macro-expansion — SMOOTHSTEP counts
-its expansion), per-class counts, `cycles_est`, `dsp`, `table_bytes`,
-`register_hwm`, and the admission triple
-`instr_count ≤ max_ops ≤ ceiling`. Enforcement points:
+For every admitted field declaration W3.3 records the nonphysical declaration
+facts in `unlinked_programs[]`. Once validated Field IR exists, the compiler
+moves that source ID to `programs[]` and records (field-ir §9 mechanics):
+`instr_count` (lowered, post-macro-expansion — SMOOTHSTEP counts its expansion),
+per-class counts, `cycles_est`, `dsp`, `table_bytes`, `register_hwm`, and the
+admission triple `instr_count ≤ max_ops ≤ ceiling`. Enforcement points:
 
-1. **Admission** (compile): the triple above; violation is FORM-E-654/655.
-2. **Report** (`costs.zcost.programs[]`): the numbers travel with the
-   cartridge so tools and the runtime Measure can consume compiler metadata
-   rather than infer (FORM §19.5).
-3. **Source attribution**: each program row carries its `source_id` (kind 3,
-   field program); runtime counter overruns resolve back to the declaring
-   span through `sourceids.zmap` (FORM §17; capture_format §5/§7).
+1. **Declaration admission** (W3.3): profile, `max_ops`, footprint, and source
+   identity are checked and emitted in `unlinked_programs[]`; no physical cost
+   is inferred.
+2. **Physical admission** (W3.4): the triple above is checked and a validated
+   row replaces the corresponding unlinked row.
+3. **Report** (`costs.zcost.programs[]`): linked numbers travel with the
+   cartridge so tools and runtime Measure consume compiler metadata rather
+   than infer (FORM §19.5).
+4. **Source attribution**: every linked or unlinked row carries its `source_id`
+   (kind 3); runtime counter overruns resolve back to the declaring span through
+   `sourceids.zmap` (FORM §17; capture_format §5/§7).
 
 Static estimates do not replace runtime counters (FORM §14): the §25 counter
 `field_instructions_by_profile` is the runtime mirror of the static

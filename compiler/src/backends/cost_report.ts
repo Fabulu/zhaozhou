@@ -32,6 +32,14 @@ export interface CostReport {
   abi_version: number;
   budgets: BudgetLine[];
   command_memory: { ceiling_bytes: number; per_frame_estimate_bytes: number };
+  command_templates: {
+    command: string;
+    module: number;
+    ordinal: number;
+    presentation: string;
+    record_bytes: number;
+    source_id: number;
+  }[];
   modules: { index: number; name: string }[];
   particle_bandwidth: {
     bytes_per_element: number;
@@ -55,6 +63,15 @@ export interface CostReport {
     register_hwm: number;
     source_id: number;
     table_bytes: number;
+  }[];
+  unlinked_programs: {
+    footprint_rect: [number, number, number, number];
+    kind: 'field';
+    max_ops: number;
+    module: number;
+    name: string;
+    profile: 'earth' | 'flow';
+    source_id: number;
   }[];
   rates: {
     every: number;
@@ -101,14 +118,27 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
   if (physicalById.size !== options.fieldPrograms.length) throw new Error('costs.zcost duplicate field program source_id');
 
   const fields = declarationsOf(hir, 'field');
-  const programs: CostReport['programs'] = fields.map((field) => {
+  const programs: CostReport['programs'] = [];
+  const unlinkedPrograms: CostReport['unlinked_programs'] = [];
+  for (const field of fields) {
     const physical = physicalById.get(field.sourceId);
-    if (!physical) throw new Error(`costs.zcost missing physical Field IR for ${field.module}.${field.name}`);
+    if (!physical) {
+      unlinkedPrograms.push({
+        footprint_rect: field.footprint.rect.map((value) => fixed(value, 'unlinked_programs[].footprint_rect')) as [number, number, number, number],
+        kind: 'field',
+        max_ops: uint(field.maxOps, 'unlinked_programs[].max_ops'),
+        module: uint(field.module, 'unlinked_programs[].module', 0xfff),
+        name: field.name,
+        profile: field.profile,
+        source_id: uint(field.sourceId, 'unlinked_programs[].source_id', 0xffff_ffff),
+      });
+      continue;
+    }
     if (physical.profile !== field.profile) throw new Error(`costs.zcost profile mismatch for ${field.module}.${field.name}`);
     if (physical.cost.instrCount > field.maxOps) throw new Error(`costs.zcost instr_count exceeds max_ops for ${field.module}.${field.name}`);
     physicalById.delete(field.sourceId);
     const count = physical.cost.byClass;
-    return {
+    programs.push({
       attr0_writes: physical.outputs.some((lane) => lane.name === 'attr0') ? 1 : 0,
       class_counts: {
         ALU: uint(count.ALU, 'programs[].class_counts.ALU'),
@@ -129,8 +159,8 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
       register_hwm: uint(physical.cost.regHighWater, 'programs[].register_hwm'),
       source_id: uint(field.sourceId, 'programs[].source_id', 0xffff_ffff),
       table_bytes: uint(physical.cost.tableBytes, 'programs[].table_bytes'),
-    };
-  });
+    });
+  }
   if (physicalById.size !== 0) throw new Error('costs.zcost contains Field IR with no HIR declaration');
 
   const pools = declarationsOf(hir, 'pool');
@@ -168,6 +198,15 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
     };
   });
 
+  const commandTemplates: CostReport['command_templates'] = zir.present.templates.map((template) => ({
+    command: template.command.emitKind,
+    module: uint(template.module, 'command_templates[].module', 0xfff),
+    ordinal: uint(template.ordinal, 'command_templates[].ordinal'),
+    presentation: template.presentation,
+    record_bytes: uint(template.recordBytes, 'command_templates[].record_bytes'),
+    source_id: uint(template.command.sourceId, 'command_templates[].source_id', 0xffff_ffff),
+  }));
+
   const scenarioAsserts: CostReport['scenario_asserts'] = [];
   for (const scenario of declarationsOf(hir, 'scenario')) {
     const lines = scenario.items
@@ -188,6 +227,7 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
       ceiling_bytes: ceiling,
       per_frame_estimate_bytes: uint(zir.present.perFrameEstimateBytes, 'command_memory.per_frame_estimate_bytes'),
     },
+    command_templates: commandTemplates,
     modules: [...hir.modules].sort((a, b) => a.index - b.index).map((module) => ({ index: module.index, name: module.name })),
     particle_bandwidth: {
       bytes_per_element: uint(bytesPerElement, 'particle_bandwidth.bytes_per_element'),
@@ -202,6 +242,7 @@ export function buildCostReport(hir: HirProgram, zir: ZirProgram, options: CostR
       name: pool.name,
     })),
     programs,
+    unlinked_programs: unlinkedPrograms,
     rates,
     scenario_asserts: scenarioAsserts,
     source_attribution: 'sourceids.zmap',
@@ -236,7 +277,7 @@ export function validateCostReport(bytes: Uint8Array): CostReport {
 }
 
 function assertReportShape(report: Record<string, unknown>): void {
-  const required = ['$schema', 'abi_version', 'budgets', 'command_memory', 'modules', 'particle_bandwidth', 'pools', 'programs', 'rates', 'scenario_asserts', 'source_attribution'];
+  const required = ['$schema', 'abi_version', 'budgets', 'command_memory', 'command_templates', 'modules', 'particle_bandwidth', 'pools', 'programs', 'rates', 'scenario_asserts', 'source_attribution', 'unlinked_programs'];
   for (const key of required) if (!(key in report)) throw new Error(`costs.zcost missing '${key}'`);
   if (report.$schema !== COST_SCHEMA || report.source_attribution !== 'sourceids.zmap') throw new Error('costs.zcost sentinel mismatch');
 
@@ -263,6 +304,13 @@ function assertReportShape(report: Record<string, unknown>): void {
   const requireKeys = (row: Record<string, unknown>, keys: readonly string[], path: string): void => {
     for (const key of keys) if (!(key in row)) throw new Error(`costs.zcost ${path} missing '${key}'`);
   };
+  const requireExactKeys = (row: Record<string, unknown>, keys: readonly string[], path: string): void => {
+    requireKeys(row, keys, path);
+    const admitted = new Set(keys);
+    for (const key of Object.keys(row)) {
+      if (!admitted.has(key)) throw new Error(`costs.zcost ${path} contains forbidden '${key}'`);
+    }
+  };
 
   integer(report.abi_version, '$.abi_version');
   for (const [index, value] of array(report.budgets, '$.budgets').entries()) {
@@ -273,6 +321,13 @@ function assertReportShape(report: Record<string, unknown>): void {
   const command = object(report.command_memory, '$.command_memory');
   requireKeys(command, ['ceiling_bytes', 'per_frame_estimate_bytes'], '$.command_memory');
   integer(command.ceiling_bytes, '$.command_memory.ceiling_bytes'); integer(command.per_frame_estimate_bytes, '$.command_memory.per_frame_estimate_bytes');
+  for (const [index, value] of array(report.command_templates, '$.command_templates').entries()) {
+    const path = `$.command_templates[${index}]`; const row = object(value, path);
+    requireKeys(row, ['command', 'module', 'ordinal', 'presentation', 'record_bytes', 'source_id'], path);
+    string(row.command, `${path}.command`); integer(row.module, `${path}.module`);
+    integer(row.ordinal, `${path}.ordinal`); string(row.presentation, `${path}.presentation`);
+    integer(row.record_bytes, `${path}.record_bytes`); integer(row.source_id, `${path}.source_id`);
+  }
 
   for (const [index, value] of array(report.modules, '$.modules').entries()) {
     const row = object(value, `$.modules[${index}]`); requireKeys(row, ['index', 'name'], `$.modules[${index}]`);
@@ -298,6 +353,29 @@ function assertReportShape(report: Record<string, unknown>): void {
     const footprint = array(row.footprint_rect, `${path}.footprint_rect`);
     if (footprint.length !== 4) throw new Error(`costs.zcost ${path}.footprint_rect must contain four integers`);
     footprint.forEach((item, itemIndex) => integer(item, `${path}.footprint_rect[${itemIndex}]`, false));
+  }
+  for (const [index, value] of array(report.unlinked_programs, '$.unlinked_programs').entries()) {
+    const path = `$.unlinked_programs[${index}]`; const row = object(value, path);
+    requireExactKeys(row, ['footprint_rect', 'kind', 'max_ops', 'module', 'name', 'profile', 'source_id'], path);
+    if (row.kind !== 'field' || (row.profile !== 'earth' && row.profile !== 'flow')) throw new Error(`costs.zcost ${path} field sentinel mismatch`);
+    integer(row.max_ops, `${path}.max_ops`); integer(row.module, `${path}.module`);
+    string(row.name, `${path}.name`); integer(row.source_id, `${path}.source_id`);
+    const footprint = array(row.footprint_rect, `${path}.footprint_rect`);
+    if (footprint.length !== 4) throw new Error(`costs.zcost ${path}.footprint_rect must contain four integers`);
+    footprint.forEach((item, itemIndex) => integer(item, `${path}.footprint_rect[${itemIndex}]`, false));
+  }
+  const linkedIds = new Set<number>();
+  for (const [index, value] of array(report.programs, '$.programs').entries()) {
+    const sourceId = integer(object(value, `$.programs[${index}]`).source_id, `$.programs[${index}].source_id`);
+    if (linkedIds.has(sourceId)) throw new Error(`costs.zcost duplicate linked program source_id ${sourceId}`);
+    linkedIds.add(sourceId);
+  }
+  const unlinkedIds = new Set<number>();
+  for (const [index, value] of array(report.unlinked_programs, '$.unlinked_programs').entries()) {
+    const sourceId = integer(object(value, `$.unlinked_programs[${index}]`).source_id, `$.unlinked_programs[${index}].source_id`);
+    if (linkedIds.has(sourceId)) throw new Error(`costs.zcost source_id ${sourceId} appears in linked and unlinked programs`);
+    if (unlinkedIds.has(sourceId)) throw new Error(`costs.zcost duplicate unlinked program source_id ${sourceId}`);
+    unlinkedIds.add(sourceId);
   }
   for (const [index, value] of array(report.rates, '$.rates').entries()) {
     const path = `$.rates[${index}]`; const row = object(value, path);

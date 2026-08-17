@@ -124,10 +124,18 @@ test('costs.zcost is complete canonical integer JSON and deterministic', () => {
     { every: 1, invocation_every: 1, module: 1, name: 'observe', phase: 0, selected_peak: 0, stagger: false },
   ]);
   assert.equal(report.command_memory.per_frame_estimate_bytes, 208);
+  assert.deepEqual(report.command_templates.map((row) => ({
+    command: row.command, module: row.module, ordinal: row.ordinal,
+    presentation: row.presentation, record_bytes: row.record_bytes,
+  })), [
+    { command: 'draw_population', module: 0, ordinal: 0, presentation: 'main_view', record_bytes: 32 },
+    { command: 'audio', module: 0, ordinal: 1, presentation: 'main_view', record_bytes: 32 },
+  ]);
   assert.deepEqual(report.particle_bandwidth, { bytes_per_element: 0, peak_elements: 0, bytes_per_tick: 0, pools: [] });
   assert.deepEqual(report.programs[0]!.class_counts, { ALU: 3, MUL: 1, NOISE: 0, SPECIAL: 0, TABLE: 0 });
   assert.equal(report.programs[0]!.instr_count, 4);
   assert.deepEqual(report.programs[0]!.footprint_rect, declarationsOf(first.hir, 'field')[0]!.footprint.rect.map(Number));
+  assert.deepEqual(report.unlinked_programs, []);
 });
 
 test('costs.zcost validator refuses noncanonical and nonschema bytes', () => {
@@ -141,8 +149,43 @@ test('costs.zcost validator refuses noncanonical and nonschema bytes', () => {
   const fractional = new TextEncoder().encode(`${JSON.stringify(report)}\n`);
   assert.throws(() => validateCostReport(fractional), /unsigned integer/);
 
+  const unlinkedText = new TextDecoder().decode(emitCostReport(hir, zir, { ...costOptions(hir), fieldPrograms: [] }));
+  const fabricated = new TextEncoder().encode(unlinkedText.replace(
+    '"kind":"field"',
+    '"instr_count":1,"kind":"field"',
+  ));
+  assert.throws(() => validateCostReport(fabricated), /forbidden 'instr_count'/);
+
+  const duplicate = JSON.parse(unlinkedText) as { unlinked_programs: unknown[] };
+  duplicate.unlinked_programs.push(duplicate.unlinked_programs[0]);
   assert.throws(
-    () => emitCostReport(hir, zir, { ...costOptions(hir), fieldPrograms: [] }),
-    /missing physical Field IR/,
+    () => validateCostReport(new TextEncoder().encode(`${JSON.stringify(duplicate)}\n`)),
+    /duplicate unlinked program source_id/,
   );
+});
+
+test('costs.zcost moves fields from truthful unlinked rows to validated linked programs', () => {
+  const { hir, zir } = compileFixture();
+  const unlinkedBytes = emitCostReport(hir, zir, { ...costOptions(hir), fieldPrograms: [] });
+  const unlinked = validateCostReport(unlinkedBytes);
+  assert.deepEqual(unlinked.programs, []);
+  assert.equal(unlinked.unlinked_programs.length, 1);
+  const field = declarationsOf(hir, 'field')[0]!;
+  assert.deepEqual(unlinked.unlinked_programs[0], {
+    footprint_rect: field.footprint.rect.map(Number),
+    kind: 'field',
+    max_ops: field.maxOps,
+    module: field.module,
+    name: field.name,
+    profile: field.profile,
+    source_id: field.sourceId,
+  });
+  for (const fake of ['instr_count', 'cycles_est', 'class_counts', 'dsp', 'table_bytes', 'register_hwm']) {
+    assert.equal(fake in unlinked.unlinked_programs[0]!, false, fake);
+  }
+
+  const linked = validateCostReport(emitCostReport(hir, zir, costOptions(hir)));
+  assert.equal(linked.programs.length, 1);
+  assert.deepEqual(linked.unlinked_programs, []);
+  assert.equal(linked.programs[0]!.source_id, unlinked.unlinked_programs[0]!.source_id);
 });

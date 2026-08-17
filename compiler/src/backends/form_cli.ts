@@ -10,6 +10,7 @@ import { compileFrontend } from '../frontend/index.js';
 import { lowerHir, serializeHir } from '../hir/index.js';
 import { lowerZir } from '../zir/index.js';
 import { emitCpp } from './cpp/index.js';
+import { emitCostReport } from './cost_report.js';
 import { emitSourceMap } from './source_map.js';
 
 const compilerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -33,9 +34,16 @@ function expectedArtifacts(): Map<string, Uint8Array> {
   files.set('present.zir.json', encoder.encode(serializeHir(zir.present)));
   files.set('test.zir.json', encoder.encode(serializeHir(zir.test)));
   files.set('sourceids.zmap', emitSourceMap(hir));
+  files.set('costs.zcost', emitCostReport(hir, zir, {
+    abiVersion: 2,
+    commandMemoryCeilingBytes: 1_048_576,
+    fieldPrograms: [],
+    budgets: [{ line: 'frame_slot_bytes', limit: 1_048_576, owner: 'spec/commands.zidl' }],
+  }));
 
-  // costs.zcost is emitted only when W3.4 supplies genuine physical
-  // FieldProgram metadata. W3.3 must not manufacture instruction counts.
+  // Until W3.4 supplies validated physical FieldProgram metadata, declared
+  // fields remain explicit in costs.zcost.unlinked_programs without invented
+  // instruction, cycle, table, DSP, or register numbers.
   for (const file of emitCpp(hir, zir).files) files.set(file.path, encoder.encode(file.content));
   return files;
 }
