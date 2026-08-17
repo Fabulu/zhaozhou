@@ -144,6 +144,30 @@ test('HIR uses the frontend exact reducer for required bounds and width-normaliz
   assert.equal(lowerHir(refused), null);
 });
 
+test('HIR preserves exact positive and negative Q-format rails without pre-negation saturation', () => {
+  const hugeDenominator = '0'.repeat(400);
+  const frontend = compileFrontend({
+    'rails.form': `module rails {
+      const F16_LO: fx16 = -32768m;
+      const F16_HI: fx16 = 32767.9999847412109375m;
+      const F16_STEP: fx16 = 0.0000152587890625m;
+      const F24_LO: fx24 = -8192w;
+      const F24_HI: fx24 = 8191.999999940395355224609375w;
+      const F24_STEP: fx24 = 0.000000059604644775390625w;
+      const HUGE_ONE: fx16 = 1.${hugeDenominator}m;
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  assert.deepEqual(new Map(declarationsOf(hir, 'const').map((item) => [item.name, item.raw])),
+    new Map<string, bigint | null>([
+      ['F16_LO', -2147483648n], ['F16_HI', 2147483647n], ['F16_STEP', 1n],
+      ['F24_LO', -137438953472n], ['F24_HI', 137438953471n], ['F24_STEP', 1n],
+      ['HUGE_ONE', 65536n],
+    ]));
+});
+
 test('HIR shares exact nested aggregate projection with checker bounds without fallback values', () => {
   const frontend = compileFrontend({
     'a_owner.form': `module owner {

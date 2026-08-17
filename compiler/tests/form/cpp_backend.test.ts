@@ -276,6 +276,10 @@ test('strict native C++ uses exactly reduced unary and width-normalized capaciti
       const CAP: u32 = MASK >> 30;
       const WRAPPED: u32 = 4294967295 + 2;
       const SIGNED: i32 = ~0;
+      const F16_LO: fx16 = -32768m;
+      const F16_HI: fx16 = 32767.9999847412109375m;
+      const F24_LO: fx24 = -8192w;
+      const F24_HI: fx24 = 8191.999999940395355224609375w;
       struct row { value: u32; }
       pool rows: row[CAP];
     }\n`,
@@ -285,6 +289,10 @@ test('strict native C++ uses exactly reduced unary and width-normalized capaciti
 static_assert(form::capacity::CAP == 3u);
 static_assert(form::capacity::WRAPPED == 1u);
 static_assert(form::capacity::SIGNED == -1);
+static_assert(form::capacity::F16_LO == std::numeric_limits<form::i32>::min());
+static_assert(form::capacity::F16_HI == std::numeric_limits<form::i32>::max());
+static_assert(form::capacity::F24_LO == -137438953472LL);
+static_assert(form::capacity::F24_HI == 137438953471LL);
 static_assert(form::capacity::rows_pool::_form_pool_capacity == 3u);
 int main() {
   form::FormState state{};

@@ -195,16 +195,16 @@ function exactLiteral(
   }
   if (literal.lit === 'int' || literal.lit === 'tick') {
     const value = literal.intVal ?? 0n;
-    if (type?.t === 'fx16') return normalizeExactConstant(value << 16n, type);
-    if (type?.t === 'fx24') return normalizeExactConstant(value << 24n, type);
+    if (type?.t === 'fx16') return value << 16n;
+    if (type?.t === 'fx24') return value << 24n;
     return type === null ? value : normalizeExactConstant(value, type);
   }
   const fraction = literal.frac;
   if (!fraction) return null;
   const numerator = BigInt(fraction.intDigits + fraction.fracDigits);
   const denominator = 10n ** BigInt(fraction.fracDigits.length);
-  if (type?.t === 'fx16') return normalizeExactConstant((numerator << 16n) / denominator, type);
-  if (type?.t === 'fx24') return normalizeExactConstant((numerator << 24n) / denominator, type);
+  if (type?.t === 'fx16') return (numerator << 16n) / denominator;
+  if (type?.t === 'fx24') return (numerator << 24n) / denominator;
   if (type?.t === 'angle16') {
     const turns = denominator * (fraction.suffix === 'deg' ? 360n : 1n);
     return normalizeExactConstant((numerator << 16n) / turns, type);

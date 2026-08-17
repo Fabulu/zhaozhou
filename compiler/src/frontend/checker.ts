@@ -1580,13 +1580,21 @@ class Checker {
   }
 
   private checkUnary(ctx: Ctx, e: Extract<Expr, { kind: 'unary' }>, expected: Type | null): Type {
-    // negative literal to u32 (E-320)
+    // A leading '-' is part of the mathematical literal for exact rail checks,
+    // but remains an AST unary node for runtime/evaluation semantics.
     if (e.op === '-' && e.operand.kind === 'literal' && e.operand.lit === 'int'
         && expected && tAgree(expected, T.u32)) {
       this.sink.error('FORM-E-320', e.span, 'negative literal assigned to u32 (FORM-E-320)');
       return T.u32;
     }
-    const t = this.checkExpr(ctx, e.operand, e.op === '-' ? expected : null);
+    let t: Type;
+    if (e.op === '-' && e.operand.kind === 'literal'
+        && (e.operand.lit === 'int' || e.operand.lit === 'frac')) {
+      t = this.checkLiteral(ctx, e.operand, expected, -1n);
+      this.expressionTypes.set(e.operand, t);
+    } else {
+      t = this.checkExpr(ctx, e.operand, e.op === '-' ? expected : null);
+    }
     if (tAgree(t, T.unknown)) return T.unknown;
     switch (e.op) {
       case '-':
@@ -1703,7 +1711,12 @@ class Checker {
 
   // -- literals (target-typed, §1.2) -------------------------------------------
 
-  private checkLiteral(ctx: Ctx, e: Extract<Expr, { kind: 'literal' }>, expected: Type | null): Type {
+  private checkLiteral(
+    ctx: Ctx,
+    e: Extract<Expr, { kind: 'literal' }>,
+    expected: Type | null,
+    sign: 1n | -1n = 1n,
+  ): Type {
     ctxInTolerance = ctx.inTolerance === true;
     if (e.lit === 'bool') return T.bool;
     if (e.lit === 'colour') {
@@ -1723,19 +1736,20 @@ class Checker {
       return T.u32;
     }
     if (e.lit === 'int') {
-      const v = e.intVal!;
+      const v = sign * e.intVal!;
+      const shown = sign < 0n ? `-${e.text}` : e.text;
       const target = expected && (tAgree(expected, T.i32) || tAgree(expected, T.u32)) ? expected
-        : expected && (tAgree(expected, T.fx16) || tAgree(expected, T.fx24)) ? expected : null;
-      if (target && tAgree(target, T.u32)) {
-        if (v > 0xffffffffn) this.sink.error('FORM-E-007', e.span, `integer ${v} exceeds u32`);
-      } else if (target && tAgree(target, T.i32)) {
-        if (v > 0x7fffffffn) this.sink.error('FORM-E-007', e.span, `integer ${v} exceeds i32`);
-      } else if (target && tAgree(target, T.fx16)) {
-        if (v >= 32768n) this.sink.error('FORM-E-007', e.span, `integer ${v} exceeds fx16 range (±32768)`);
-      } else if (target && tAgree(target, T.fx24)) {
-        if (v >= 8192n) this.sink.error('FORM-E-007', e.span, `integer ${v} exceeds fx24 range (±8192)`);
+        : expected && (tAgree(expected, T.fx16) || tAgree(expected, T.fx24)) ? expected : T.i32;
+      if (tAgree(target, T.u32)) {
+        if (v < 0n || v > 0xffffffffn) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds u32`);
+      } else if (tAgree(target, T.i32)) {
+        if (v < -0x80000000n || v > 0x7fffffffn) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds i32`);
+      } else if (tAgree(target, T.fx16)) {
+        if (v < -32768n || v >= 32768n) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds fx16 range (±32768)`);
+      } else if (tAgree(target, T.fx24)) {
+        if (v < -8192n || v >= 8192n) this.sink.error('FORM-E-007', e.span, `integer ${shown} exceeds fx24 range (±8192)`);
       }
-      return target ?? T.i32;
+      return target;
     }
     // fractional
     const f = e.frac!;
@@ -1746,7 +1760,7 @@ class Checker {
           this.sink.error('FORM-E-313', e.span,
             `fx16 literal '${e.text}' where ${typeName(expected!)} is expected (FORM-E-313)`);
         }
-        this.checkFracExact(e, 16n, -32768n, 32768n);
+        this.checkFracExact(e, 16n, -32768n, 32768n, sign);
         return T.fx16;
       }
       case 'w': {
@@ -1754,7 +1768,7 @@ class Checker {
           this.sink.error('FORM-E-313', e.span,
             `fx24 literal '${e.text}' where ${typeName(expected!)} is expected (FORM-E-313)`);
         }
-        this.checkFracExact(e, 24n, -8192n, 8192n);
+        this.checkFracExact(e, 24n, -8192n, 8192n, sign);
         return T.fx24;
       }
       case 'turn': case 'deg': {
@@ -1776,8 +1790,8 @@ class Checker {
           this.sink.error('FORM-E-313', e.span,
             `unit8 literal '${e.text}' where ${typeName(expected!)} is expected (FORM-E-313)`);
         }
-        const pct = BigInt(f.intDigits);
-        if (pct < 0n) this.sink.error('FORM-E-007', e.span, `negative percent '${e.text}'`);
+        const pct = BigInt(f.intDigits + (f.fracDigits ? f.fracDigits : ''));
+        if (sign < 0n && pct !== 0n) this.sink.error('FORM-E-007', e.span, `negative percent '-${e.text}'`);
         return T.unit8;
       }
     }
@@ -1785,12 +1799,17 @@ class Checker {
   }
 
   /** Q-format exactness + range (§1.2; E-007/E-008). */
-  private checkFracExact(e: Extract<Expr, { kind: 'literal' }>, bits: bigint, lo: bigint, hi: bigint): void {
+  private checkFracExact(
+    e: Extract<Expr, { kind: 'literal' }>,
+    bits: bigint,
+    lo: bigint,
+    hi: bigint,
+    sign: 1n | -1n,
+  ): void {
     const f = e.frac!;
-    const num = BigInt(f.intDigits + (f.fracDigits ? f.fracDigits : ''));
+    const magnitude = BigInt(f.intDigits + (f.fracDigits ? f.fracDigits : ''));
     const den = 10n ** BigInt(f.fracDigits.length || 0);
-    const raw = (num << bits) / den; // for the range check
-    const exact = (num << bits) % den === 0n;
+    const exact = (magnitude << bits) % den === 0n;
     if (!exact) {
       this.sink.error(ctxInTolerance ? 'FORM-E-907' : 'FORM-E-008', e.span,
         ctxInTolerance
@@ -1798,11 +1817,11 @@ class Checker {
           : `'${e.text}' is not exactly representable in this Q format (2^-${bits} steps; FORM-E-008)`);
       return;
     }
-    const value = Number(num) / Number(den);
-    if (value <= lo || value >= hi) {
-      void raw;
+    const numerator = sign * magnitude;
+    if (numerator < lo * den || numerator >= hi * den) {
+      const shown = sign < 0n ? `-${e.text}` : e.text;
       this.sink.error('FORM-E-007', e.span,
-        `'${e.text}' exceeds the Q format range [${lo}, ${hi}) (FORM-E-007)`);
+        `'${shown}' exceeds the Q format range [${lo}, ${hi}) (FORM-E-007)`);
     }
   }
 
