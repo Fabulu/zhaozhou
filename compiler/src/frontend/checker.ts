@@ -25,7 +25,7 @@ export type Type =
   | { t: 'fx16' } | { t: 'fx24' } | { t: 'angle16' } | { t: 'unit8' }
   | { t: 'i32' } | { t: 'u32' } | { t: 'bool' } | { t: 'world2' }
   | { t: 'world3' } | { t: 'velocity3' } | { t: 'colour8' } | { t: 'padframe' }
-  | { t: 'stream' } | { t: 'void' } | { t: 'unknown' } | { t: 'sound' }
+  | { t: 'stream' } | { t: 'field_table' } | { t: 'void' } | { t: 'unknown' } | { t: 'sound' }
   | { t: 'enum'; name: string }
   | { t: 'struct'; name: string }
   | { t: 'array'; elem: Type; len: number }
@@ -38,6 +38,7 @@ export const T = {
   world2: { t: 'world2' } as Type, world3: { t: 'world3' } as Type,
   velocity3: { t: 'velocity3' } as Type, colour8: { t: 'colour8' } as Type,
   padframe: { t: 'padframe' } as Type, stream: { t: 'stream' } as Type,
+  fieldTable: { t: 'field_table' } as Type,
   void: { t: 'void' } as Type, unknown: { t: 'unknown' } as Type,
   sound: { t: 'sound' } as Type,
 };
@@ -622,7 +623,9 @@ class Checker {
     // array element write (globals with array type)
     if (target.kind === 'index') {
       const baseT = this.checkExprRootType(ctx, target.obj);
-      this.checkExpr(ctx, value, baseT.t === 'array' ? baseT.elem : null);
+      const targetType = baseT.t === 'array' ? baseT.elem : baseT;
+      this.expressionTypes.set(target, targetType);
+      this.checkExpr(ctx, value, targetType);
       const idxT = this.checkExpr(ctx, target.index, T.u32);
       if (!tAgree(idxT, T.u32) && !tAgree(idxT, T.i32) && !tAgree(idxT, T.unknown)) {
         this.sink.error('FORM-E-305', target.index.span, `array index must be u32/i32, got ${typeName(idxT)}`);
@@ -929,8 +932,10 @@ class Checker {
     if (r.sym.kind === 'struct') return r.sym.decl as unknown as StructDecl;
     if (r.sym.kind === 'pool') {
       const pd = r.sym.decl as unknown as PoolDecl;
-      const s = r.mod.table.get(pd.structName);
-      return s && s.kind === 'struct' ? (s.decl as unknown as StructDecl) : null;
+      const resolved = this.resolveUnqualified(r.mod, pd.structName);
+      return resolved && resolved.ambiguous !== true && resolved.sym.kind === 'struct'
+        ? (resolved.sym.decl as unknown as StructDecl)
+        : null;
     }
     return null;
   }
@@ -2644,7 +2649,16 @@ class Checker {
       const isTable = name === 'curve' || name === 'spline' || name === 'dcurve';
       const seedLast = name === 'noise2' || name === 'ridge'; // imm seed: u32 lane
       args.forEach((a, i) => {
-        if (isTable && i === 0) return; // table name: no L1 binding form (spec-issue note)
+        if (isTable && i === 0) {
+          if (a.kind !== 'ident') {
+            this.sink.error('FORM-E-658', a.span,
+              'curve/spline table operand must be a symbolic table name (FORM-E-658)');
+          }
+          // Table operands are Field-IR metadata, not runtime values. Record the
+          // exact non-runtime category without inventing an L1 value binding.
+          this.expressionTypes.set(a, T.fieldTable);
+          return;
+        }
         const want = seedLast && i === args.length - 1 ? T.u32 : T.fx16;
         const t = this.checkExpr(ctx, a, want);
         if (!tAgree(t, want) && !tAgree(t, T.angle16) && !tAgree(t, T.unknown)) {

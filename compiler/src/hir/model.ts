@@ -10,7 +10,8 @@ import type { SourceSpan } from '../frontend/span.js';
 export type HirDomain = 'constant' | 'state' | 'pure' | 'sim' | 'field' | 'present' | 'test';
 export type HirSymbolKind =
   | 'const' | 'enum' | 'struct' | 'pool' | 'global' | 'fn' | 'system'
-  | 'field' | 'presentation' | 'scenario' | 'sound' | 'local' | 'intrinsic';
+  | 'field' | 'presentation' | 'scenario' | 'sound' | 'local' | 'intrinsic'
+  | 'field_table';
 
 export interface HirModule {
   index: number;

@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import { compileFrontend } from '../../src/frontend/index.js';
 import { declarationsOf, lowerHir } from '../../src/hir/index.js';
+import type { HirExpr, HirStmt } from '../../src/hir/model.js';
 import { lowerZir } from '../../src/zir/index.js';
 import { repoRoot } from '../helpers.js';
 
@@ -84,6 +85,32 @@ test('HIR preserves exact contextual types through every L1 target context', () 
   assert.deepEqual(globalAssign.expressions[1]!.children.map((child) => child.type.t), ['u32', 'u32']);
 });
 
+test('field-table operands retain an exact symbolic non-runtime category', () => {
+  const frontend = compileFrontend({
+    'tables.form': `module tables {
+  @flow field sample_curve() -> flow_update footprint none; max_ops 16 {
+    let shaped = spline(swing_table, p.dt);
+    return flow_update {
+      x = p.x, y = p.y, z = p.z,
+      vx = p.vx, vy = p.vy, vz = p.vz, attr0 = shaped,
+    };
+  }
+}
+`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const field = declarationsOf(hir, 'field')[0]!;
+  const spline = field.body[0]!.expressions[0]!;
+  assert.equal(spline.symbol?.name, 'spline');
+  assert.equal(spline.type.t, 'fx16');
+  assert.equal(spline.children[0]!.type.t, 'field_table');
+  assert.deepEqual(spline.children[0]!.symbol, {
+    kind: 'field_table', module: null, name: 'swing_table',
+  });
+});
+
 test('HIR refuses to exist after frontend diagnostics', () => {
   const result = compileFrontend({
     'bad.form': 'module bad { global x: u32 = 0; system broken every 0 ticks reads writes x { x = 1; } }\n',
@@ -122,6 +149,52 @@ test('multi-rate and stagger lower to compile-time ZIR constants', () => {
     shared: layout.sharedBudgetPct,
   })), [{ module: 0, presentation: 'main_view', viewIds: [0], budgets: [80], shared: 20 }]);
   assert.equal(zir.present.perFrameEstimateBytes, 208);
+});
+
+test('RNG call sites receive stable canonical HIR slots carried into SimZIR', () => {
+  const sources = {
+    'rng.form': `module rng {
+  global result: u32 = 0;
+  system draw_rng every 1 ticks reads writes result {
+    let first = random.stream(11, 1);
+    let second = random.stream(22, 2);
+    result = random.u32(first) ^ random.u32(second);
+  }
+}
+`,
+  };
+  const compile = () => {
+    const frontend = compileFrontend(sources);
+    assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+    const hir = lowerHir(frontend);
+    assert.ok(hir);
+    return { hir, zir: lowerZir(hir) };
+  };
+  const first = compile();
+  const second = compile();
+  const slots = (program: typeof first.hir): number[] => {
+    const found: number[] = [];
+    const expression = (value: HirExpr): void => {
+      if (value.rngSlot !== null) found.push(value.rngSlot);
+      for (const child of value.children) expression(child);
+    };
+    for (const system of declarationsOf(program, 'system')) {
+      const statements = (items: HirStmt[]): void => {
+        for (const statement of items) {
+          for (const value of statement.expressions) expression(value);
+          statements(statement.body);
+          statements(statement.elseBody);
+        }
+      };
+      statements(system.body);
+    }
+    return found;
+  };
+  assert.deepEqual(slots(first.hir), [0, 1]);
+  assert.deepEqual(slots(second.hir), [0, 1]);
+  assert.equal(first.hir.rngSlotCount, 2);
+  assert.equal(first.zir.sim.rngStateCount, 2);
+  assert.equal(second.zir.sim.rngStateCount, 2);
 });
 
 test('conflicting writer diagnostic cites both declaration spans through W3.2 contract', () => {

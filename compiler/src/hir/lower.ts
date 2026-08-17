@@ -399,6 +399,9 @@ class HirLowerer {
       throw new Error(`internal HIR exact-type failure: unresolved expression at ${ast.span.file}:${ast.span.start}`);
     }
     type = this.qualifyCheckedType(module, checked);
+    if (checked.t === 'field_table' && ast.kind === 'ident') {
+      symbol = { kind: 'field_table', module: null, name: ast.name };
+    }
     const rngSlot = symbol?.kind === 'intrinsic' && symbol.name === 'random.stream'
       ? this.nextRngSlot++
       : null;
