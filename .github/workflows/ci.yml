@@ -10,7 +10,8 @@
 #   format (push/PR) : charter-27 tiers — clang-format --dry-run --Werror
 #                      (pinned npm clang-format = LLVM 15) + cppcheck
 #                      --enable=warning over the tracked C/C++ set
-#   npm (push/PR)    : npm ci -> ledger:check -> abi:check -> test
+#   npm (push/PR)    : npm ci -> ledger:check -> abi:check -> hardware-tooling
+#                      tests (Nanquan language/compiler CI is external)
 #   nightly (sched)  : ctest -L nightly (fuzz + formal lane)
 #
 # Hardware synthesis lanes are BLOCKED-on-hardware (ZH-002..006): no Quartus,
@@ -175,7 +176,7 @@ jobs:
             --platform=unix64 $files
 
   npm:
-    name: npm workspaces (ledger/abi/test)
+    name: npm tooling (ledger/fixgen/abi)
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -188,9 +189,8 @@ jobs:
         shell: pwsh
         run: |
           npm ci
-          # W1: placeholder scripts succeed with a message. From W2/W4 these
-          # enforce ledger validity and generated-ABI staleness (byte-identity
-          # across C++/TS/SV is hashed and compared by abi:check).
+          # Nanquan owns language/compiler CI externally. The root npm test
+          # script intentionally runs only Zhaozhou-owned tooling workspaces.
           npm run ledger:check
           npm run abi:check
           npm test
