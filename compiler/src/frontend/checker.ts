@@ -940,10 +940,22 @@ class Checker {
     return target && visible ? target : null;
   }
 
+  /** Lexical names, including a body-reserved future let, own every rooted path. */
+  private lexicalRootReserved(ctx: Ctx, name: string): boolean {
+    return ctx.locals.has(name) || ctx.laterLets?.has(name) === true;
+  }
+
   /** A whole-module qualifier is considered only after lexical/unqualified names. */
   private qualifierModule(ctx: Ctx, name: string): ModuleSym | null {
-    if (ctx.locals.has(name) || ctx.laterLets?.has(name)) return null;
+    if (this.lexicalRootReserved(ctx, name)) return null;
     return this.unshadowedQualifierModule(ctx.mod, name);
+  }
+
+  /** An intrinsic namespace is fallback-only, after every ordinary root binding. */
+  private intrinsicNamespaceAvailable(ctx: Ctx, name: string): boolean {
+    return !this.lexicalRootReserved(ctx, name)
+      && this.resolveUnqualified(ctx.mod, name) === null
+      && this.unshadowedQualifierModule(ctx.mod, name) === null;
   }
 
   private resolveRootSymbol(
@@ -951,7 +963,7 @@ class Checker {
     expression: Expr,
   ): { sym: Sym; mod: ModuleSym; name: string } | null {
     if (expression.kind === 'ident') {
-      if (ctx.locals.has(expression.name)) return null;
+      if (this.lexicalRootReserved(ctx, expression.name)) return null;
       const resolved = this.resolveUnqualified(ctx.mod, expression.name);
       return resolved && !resolved.ambiguous
         ? { sym: resolved.sym, mod: resolved.mod, name: (resolved.sym.decl.name as string) ?? expression.name }
@@ -1428,8 +1440,8 @@ class Checker {
         return { t: 'enum', name: e.obj.field, owner: target.ast.name };
       }
     }
-    // enum member
-    if (e.obj.kind === 'ident' && !ctx.locals.has(e.obj.name)) {
+    // enum member. A lexical root (including a future let) owns the whole path.
+    if (e.obj.kind === 'ident' && !this.lexicalRootReserved(ctx, e.obj.name)) {
       const r = this.resolveUnqualified(ctx.mod, e.obj.name);
       if (r && r.ambiguous !== true && r.sym.kind === 'enum') {
         const ed = r.sym.decl as unknown as EnumDecl;
@@ -1448,8 +1460,9 @@ class Checker {
       this.readComponent(ctx, this.stateKey(poolRoot.mod, poolRoot.name, '#members'), e.span);
       return T.u32;
     }
-    // terrain.height
-    if (e.obj.kind === 'ident' && e.obj.name === 'terrain' && e.field === 'height') {
+    // terrain.height, only when no ordinary root binding owns `terrain`.
+    if (e.obj.kind === 'ident' && e.obj.name === 'terrain' && e.field === 'height'
+        && this.intrinsicNamespaceAvailable(ctx, 'terrain')) {
       this.sink.error('FORM-E-110', e.span,
         "terrain.height is an intrinsic call — write terrain.height(world2)");
       return T.unknown;
@@ -2905,15 +2918,8 @@ class Checker {
   // ---------------------------------------------------------------------------
 
   private checkCall(ctx: Ctx, e: Extract<Expr, { kind: 'call' }>, expected: Type | null): Type {
-    // dotted intrinsics: input.*, random.*, terrain.*
-    if (e.callee.kind === 'member' && e.callee.obj.kind === 'ident') {
-      const base = e.callee.obj.name;
-      const fn = e.callee.field;
-      if (base === 'input' || base === 'random' || base === 'terrain') {
-        return this.checkIntrinsicCall(ctx, e, `${base}.${fn}`, expected);
-      }
-    }
-    // whole-module-qualified callable: import m; m.name(...)
+    // Whole-module-qualified callables resolve before intrinsic namespace
+    // fallback, including modules whose names resemble intrinsic namespaces.
     const qualified = this.resolveRootSymbol(ctx, e.callee);
     if (e.callee.kind === 'member' && qualified) {
       const result = this.checkResolvedCall(
@@ -2923,6 +2929,16 @@ class Checker {
         `${qualified.mod.ast.name}.${qualified.name}`,
       );
       if (result !== null) return result;
+    }
+    // Dotted intrinsics are fallback-only after lexical, declaration, import,
+    // and whole-module qualifier roots have all declined the base name.
+    if (e.callee.kind === 'member' && e.callee.obj.kind === 'ident') {
+      const base = e.callee.obj.name;
+      const fn = e.callee.field;
+      if ((base === 'input' || base === 'random' || base === 'terrain')
+          && this.intrinsicNamespaceAvailable(ctx, base)) {
+        return this.checkIntrinsicCall(ctx, e, `${base}.${fn}`, expected);
+      }
     }
     // plain callable
     if (e.callee.kind === 'ident') {
@@ -2940,10 +2956,8 @@ class Checker {
         for (const argument of e.args) this.checkExpr(ctx, argument, null);
         return T.unknown;
       }
-      // Bare-name built-ins (§4.6) are considered after lexical bindings.
-      if (BARE_INTRINSICS.has(name)) {
-        return this.checkIntrinsicCall(ctx, e, name, expected);
-      }
+      // Ordinary current-module and selective-import bindings own the spelling.
+      // Intrinsics are considered only when canonical name resolution finds none.
       const r = this.resolveUnqualified(ctx.mod, name);
       if (r?.ambiguous === true) {
         this.sink.error('FORM-E-205', e.span, `ambiguous unqualified callable '${name}' (FORM-E-205)`);
@@ -2963,6 +2977,9 @@ class Checker {
         this.sink.error('FORM-E-110', e.span,
           `call target '${name}' resolves to a non-callable ${r.sym.kind}`);
         return T.unknown;
+      }
+      if (BARE_INTRINSICS.has(name)) {
+        return this.checkIntrinsicCall(ctx, e, name, expected);
       }
       // unknown callee
       const code = ctx.inAssert ? 'FORM-E-906' : 'FORM-E-203';
@@ -3659,7 +3676,7 @@ const BUILTIN_CONSTS: ReadonlyMap<string, bigint> = new Map([
   ['BTN_L3', 12n], ['BTN_R3', 13n], ['BTN_SELECT', 14n], ['BTN_START', 15n],
 ]);
 
-/** §4.6 intrinsics invoked by bare name (the builtin table wins over user fns). */
+/** §4.6 bare intrinsic fallbacks (ordinary declarations and imports win). */
 const BARE_INTRINSICS = new Set([
   'abs', 'min', 'max', 'clamp', 'sin', 'cos', 'atan2_approx', 'sqrt_approx',
   'to_fx16', 'to_fx24', 'to_unit8', 'to_angle16',

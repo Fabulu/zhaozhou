@@ -1386,6 +1386,24 @@ int main() {
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
+test('WinLibs executes authored intrinsic-name collisions through canonical call targets', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'app.form': `module app {
+      fn min(a: u32, b: u32) -> u32 { return a + b; }
+      fn probe() -> u32 { return min(2, 3); }
+    }\n`,
+  });
+  const run = runGeneratedNative(output, `#include "form_game.hpp"
+int main() { return form::app::probe() == 5u ? 0 : 1; }
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
 test('WinLibs matches independent fixed-point, intrinsic, eager-order, and RNG oracles', (t) => {
   const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
   if (!existsSync(compiler)) {

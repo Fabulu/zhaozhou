@@ -739,6 +739,116 @@ test('non-callable declarations shadow selectively imported bare callables', () 
   }
 });
 
+test('every bare intrinsic spelling yields to a current-module function', () => {
+  const names = [...new Set([
+    'abs', 'min', 'max', 'clamp', 'sin', 'cos', 'atan2_approx', 'sqrt_approx',
+    'to_fx16', 'to_fx24', 'to_unit8', 'to_angle16', 'dot2', 'dot3', 'length',
+    'normalize', 'mix', 'dist', 'length2', 'length3', 'normalize2', 'normalize3',
+    'rcp', 'curve', 'spline', 'dcurve', 'noise2', 'ridge', 'ring', 'rot2',
+    'rot3', 'smoothstep',
+  ])];
+  const result = compile(MOD(`
+    ${names.map((name) => `fn ${name}() -> u32 { return 5; }`).join('\n')}
+    fn probe() -> u32 { return ${names.map((name) => `${name}()`).join(' + ')}; }
+  `));
+  assert.deepEqual(result.codes, [], result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const targets = [...result.check!.callTargets.values()];
+  assert.equal(targets.length, names.length);
+  assert.deepEqual(targets.map((target) => target.kind), names.map(() => 'fn'));
+  assert.deepEqual(targets.map((target) => target.kind === 'intrinsic' ? target.name : target.name), names);
+});
+
+test('ordinary imports, ambiguities, and non-callables precede intrinsic fallback', () => {
+  const selective = compile({
+    'a.form': `module a { fn min(a: u32, b: u32) -> u32 { return a + b; } }\n`,
+    'b.form': `module b { import a { min }; fn probe() -> u32 { return min(2, 3); } }\n`,
+  });
+  assert.deepEqual(selective.codes, [], selective.diagnostics.map((item) => item.message).join('\n'));
+  assert.deepEqual([...selective.check!.callTargets.values()], [{
+    kind: 'fn', module: 'a', name: 'min', flowPool: null,
+  }]);
+
+  const nonCallable = compile(MOD(`
+    const min: u32 = 0;
+    fn probe() -> u32 { return min(2, 3); }
+  `));
+  assert.ok(nonCallable.codes.includes('FORM-E-110'));
+  assert.deepEqual([...nonCallable.check!.callTargets.values()], []);
+
+  const ambiguous = compile({
+    'a.form': `module a { fn min(a: u32, b: u32) -> u32 { return a; } }\n`,
+    'b.form': `module b { fn min(a: u32, b: u32) -> u32 { return b; } }\n`,
+    'c.form': `module c { import a { min }; import b { min }; fn probe() -> u32 { return min(2, 3); } }\n`,
+  });
+  assert.ok(ambiguous.codes.includes('FORM-E-205'));
+  assert.deepEqual([...ambiguous.check!.callTargets.values()], []);
+});
+
+test('module-qualified intrinsic-like member names remain ordinary callable identities', () => {
+  const result = compile({
+    'a_library.form': `module library {
+      fn min() -> u32 { return 2; }
+      fn abs() -> u32 { return 3; }
+    }\n`,
+    'b_app.form': `module app {
+      import library;
+      fn probe() -> u32 { return library.min() + library.abs(); }
+    }\n`,
+  });
+  assert.deepEqual(result.codes, [], result.diagnostics.map((item) => item.message).join('\n'));
+  assert.deepEqual([...result.check!.callTargets.values()], [
+    { kind: 'fn', module: 'library', name: 'min', flowPool: null },
+    { kind: 'fn', module: 'library', name: 'abs', flowPool: null },
+  ]);
+});
+
+test('future lets reserve enum, pool, aggregate, nested, and call-qualifier roots', () => {
+  const result = compile({
+    'a_owner.form': `module owner { fn value() -> u32 { return 7; } }\n`,
+    'b_app.form': `module app {
+      import owner;
+      enum mode { ready = 1 }
+      struct inner { value: u32; }
+      struct row { field: u32; nested: inner; }
+      pool items: row[2];
+      global box: row = row { field = 1, nested = inner { value = 2 } };
+      fn enum_root() -> bool {
+        let before: bool = mode.ready == mode.ready;
+        let mode: u32 = 0;
+        return before;
+      }
+      fn pool_metadata() -> u32 {
+        let before: u32 = items.count;
+        let items: u32 = 0;
+        return before;
+      }
+      fn pool_field() -> u32 {
+        let before: u32 = items.field[0];
+        let items: u32 = 0;
+        return before;
+      }
+      fn aggregate_root() -> u32 {
+        let before: u32 = box.field;
+        let box: u32 = 0;
+        return before;
+      }
+      fn nested_root() -> u32 {
+        let before: u32 = box.nested.value;
+        let box: u32 = 0;
+        return before;
+      }
+      fn call_qualifier() -> u32 {
+        let before: u32 = owner.value();
+        let owner: u32 = 0;
+        return before;
+      }
+    }\n`,
+  });
+  assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 7,
+    result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...result.check!.callTargets.values()], []);
+});
+
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
   const accepted = compile(MOD(`
     enum mode { low = 0, high = 1 }

@@ -302,6 +302,55 @@ test('qualifier-shaped locals are rejected before HIR can reinterpret a call', (
   assert.equal(lowerHir(frontend), null);
 });
 
+test('checker-owned intrinsic collisions lower as authored functions', () => {
+  const frontend = compileFrontend({
+    'app.form': `module app {
+      fn min(a: u32, b: u32) -> u32 { return a + b; }
+      fn probe() -> u32 { return min(2, 3); }
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...frontend.check!.callTargets.values()], [{
+    kind: 'fn', module: 'app', name: 'min', flowPool: null,
+  }]);
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const probe = declarationsOf(hir, 'fn').find((item) => item.name === 'probe')!;
+  assert.deepEqual(probe.body[0]!.expressions[0]!.symbol, { kind: 'fn', module: 0, name: 'min' });
+});
+
+test('future-let member roots are rejected before HIR lowering', () => {
+  const frontend = compileFrontend({
+    'a_owner.form': `module owner { fn value() -> u32 { return 7; } }\n`,
+    'b_app.form': `module app {
+      import owner;
+      enum mode { ready = 1 }
+      struct row { field: u32; }
+      pool items: row[2];
+      fn enum_root() -> bool {
+        let before: bool = mode.ready == mode.ready;
+        let mode: u32 = 0;
+        return before;
+      }
+      fn pool_root() -> u32 {
+        let before: u32 = items.count;
+        let items: u32 = 0;
+        return before;
+      }
+      fn qualifier_root() -> u32 {
+        let before: u32 = owner.value();
+        let owner: u32 = 0;
+        return before;
+      }
+    }\n`,
+  });
+  assert.equal(frontend.ok, false);
+  assert.equal(frontend.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 4,
+    frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...frontend.check!.callTargets.values()], []);
+  assert.equal(lowerHir(frontend), null);
+});
+
 test('HIR keeps ordinary composition recursive, marks only direct pool columns, and starts source rows at zero', () => {
   const frontend = compileFrontend({
     'composition.form': `module composition {
