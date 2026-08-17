@@ -3000,9 +3000,9 @@ class Checker {
         const poolArg = e.args[0];
         const pool = poolArg ? this.resolveRootSymbol(ctx, poolArg) : null;
         if (!poolArg || !pool || pool.sym.kind !== 'pool') {
-          if (poolArg) this.checkExpr(ctx, poolArg, null);
           this.sink.error('FORM-E-667', e.span,
             `flow program '${displayName}' is applied per element: first argument is its mapped pool (FORM-E-667)`);
+          if (poolArg) this.checkExpr(ctx, poolArg, null);
         } else {
           this.expressionTypes.set(poolArg,
             this.poolValueType({ sym: pool.sym, mod: pool.mod, ambiguous: false }));
