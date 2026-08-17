@@ -1,0 +1,61 @@
+module arena {
+  struct particle {
+    position: world3;
+    age: u32;
+    energy: unit8;
+  }
+  struct pulse_params { height: fx16; }
+
+  pool particles: particle[4];
+  global counter: u32 = 1;
+  global origin: world3 = world3 { x = 0w, y = 0w, z = 0w };
+
+  system seed_wave every 2 ticks
+    reads counter, origin
+    writes particles
+  {
+    spawn(particles, particle {
+      position = origin,
+      age = 0,
+      energy = 100%,
+    });
+  }
+
+  system advance every 4 ticks stagger over particles
+    reads particles
+    writes particles.age
+  {
+    for i in 0..particles.count {
+      particles.age[i] = particles.age[i] + 1;
+    }
+  }
+
+  @earth field pulse(params: pulse_params) -> terrain_delta
+    footprint circle(0m, 0m, 2m);
+    max_ops 16
+  {
+    let shaped = max(0m, params.height - abs(sample.x));
+    return terrain_delta { height = shaped, velocity = 0m, material = 0, nav_cost = 0m };
+  }
+
+  sound chime {
+    sample "tone/chime";
+    gain 50%;
+    pitch 1m;
+    pan 0;
+  }
+
+  presentation main_view {
+    view 0 from origin budget 80%;
+    shared budget 20%;
+    emit draw_population(pool: particles, view_mask: 1, weight: 100%);
+    emit audio(sound: chime, at: origin);
+  }
+
+  scenario replay {
+    seed 0x5A17;
+    load arena;
+    at 2 ticks seed_wave();
+    capture frame 3 as "anchor";
+  }
+}

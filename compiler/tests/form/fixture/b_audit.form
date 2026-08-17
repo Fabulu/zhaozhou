@@ -1,0 +1,12 @@
+module audit {
+  import arena { counter };
+
+  global observed: u32 = 0;
+
+  system observe every 1 ticks
+    reads counter
+    writes observed
+  {
+    observed = counter;
+  }
+}
