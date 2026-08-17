@@ -288,6 +288,26 @@ seeds, scheduled ticks and capture frame numbers fit u32 (`0..4294967295`). A
 value outside its row is rejected; it is never rounded, truncated or aliased by
 a JavaScript `Number` conversion.
 
+#### 3.4.1 Source rows and authored-resource identity
+
+The capture source-ID layout is exactly 4 kind bits, 12 module bits and 16
+zero-based local-row bits. Module IDs are `0..4095`, and each module admits
+exactly 65536 source-producing rows (`0..65535`). Pools, systems, field
+programs, every presentation `emit` statement and scenarios consume rows;
+constants, enums, structs, globals, functions, sounds and presentation
+containers do not. A 4097th module or 65537th source-producing row is rejected
+before HIR lowering, and generated IDs are checked for kind/module/index
+validity and uniqueness before backend emission.
+
+Authored page/resource IDs retain their full u32 identity. Build preflight maps
+`(semantic resource role, full u32 ID)` deterministically to a collision-free,
+nonzero 24-bit handle index; low-bit masking is not an identity function. Thus
+same-role IDs 1 and 16777217 remain distinct, and the same number in different
+roles (form page, procedural patch page, surface-stamp brush page, population,
+or sound) also remains distinct. Duplicate or exhausted mappings are rejected,
+and transient handle allocation begins only after every authored index is
+reserved.
+
 ### 3.5 Effect-free by construction outside systems
 
 `fn` bodies are pure: no pool/global writes, no spawn/kill, no input reads
@@ -771,7 +791,7 @@ goldens); codes are frozen once W3.2 ships — new rules get new codes.
 | FORM-E-822 | pool/array index out of bounds at runtime (deterministic runtime abort) |
 | FORM-E-830 | cartridge page-id const unresolved at pack time (spec/cartridge.md §5) |
 | FORM-E-831 | cartridge kind mismatch for a page id (e.g. non-patch used by `draw_procedural`) |
-| FORM-E-832 | two emit sites share one source-ID slot (registry overflow: > 65536 declarations per module) |
+| FORM-E-832 | two source-producing sites share one source-ID slot (registry overflow: > 65536 rows per module) |
 
 ### FORM-E-900..919 — scenarios
 
