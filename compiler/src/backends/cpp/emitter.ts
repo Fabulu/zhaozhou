@@ -48,6 +48,22 @@ interface ExprContext {
   rng: string;
 }
 
+export type AuthoredResourceRole =
+  | 'form_page'
+  | 'procedural_patch_page'
+  | 'surface_stamp_brush_page'
+  | 'population'
+  | 'sound';
+
+export interface AuthoredResourceSite {
+  resourceId: number;
+  role: AuthoredResourceRole;
+}
+
+export interface AuthoredResourceBinding extends AuthoredResourceSite {
+  handle: number;
+}
+
 export type TransientResourceRole = 'draw_form_transform' | 'surface_stamp_terrain_patch';
 
 export interface TransientResourceSite {
@@ -62,6 +78,74 @@ export interface TransientResourceBinding extends TransientResourceSite {
 
 const MAX_RESOURCE_INDEX = 0x00ffffff;
 const RESOURCE_GENERATION = 1;
+
+function authoredRoleOrder(role: AuthoredResourceRole): number {
+  switch (role) {
+    case 'form_page': return 1;
+    case 'procedural_patch_page': return 2;
+    case 'surface_stamp_brush_page': return 3;
+    case 'population': return 4;
+    case 'sound': return 5;
+  }
+}
+
+function authoredResourceKey(resourceId: number, role: AuthoredResourceRole): string {
+  return `${authoredRoleOrder(role)}\0${resourceId >>> 0}`;
+}
+
+/**
+ * Maps full-u32 authored identities and their semantic roles into the ABI's
+ * collision-free 24-bit handle-index space.  Low 24 bits are only a preferred
+ * slot; the full identity remains the lookup key and aliases probe elsewhere.
+ */
+export function allocateAuthoredResourceIndices(
+  authoredSites: readonly AuthoredResourceSite[],
+  maxIndex = MAX_RESOURCE_INDEX,
+): AuthoredResourceBinding[] {
+  if (!Number.isSafeInteger(maxIndex) || maxIndex < 1 || maxIndex > MAX_RESOURCE_INDEX) {
+    throw new Error(`C++ resource preflight received invalid maximum resource index ${maxIndex}`);
+  }
+  const unique = new Map<string, AuthoredResourceSite>();
+  for (const site of authoredSites) {
+    if (!Number.isSafeInteger(site.resourceId) || site.resourceId < 0 || site.resourceId > 0xffffffff) {
+      throw new Error(`C++ resource preflight received out-of-range authored resource ID ${site.resourceId}`);
+    }
+    const resourceId = site.resourceId >>> 0;
+    const mappingKey = authoredResourceKey(resourceId, site.role);
+    const prior = unique.get(mappingKey);
+    if (prior && (prior.resourceId >>> 0) !== resourceId) {
+      throw new Error(`C++ resource preflight found conflicting authored mapping for ${site.role} ${resourceId}`);
+    }
+    unique.set(mappingKey, { resourceId, role: site.role });
+  }
+  const sites = [...unique.values()].sort((left, right) =>
+    authoredRoleOrder(left.role) - authoredRoleOrder(right.role)
+      || (left.resourceId >>> 0) - (right.resourceId >>> 0));
+  if (sites.length > maxIndex) {
+    throw new Error(
+      `C++ resource preflight exhausted the 24-bit handle index space (${sites.length} authored resources)`,
+    );
+  }
+  const used = new Set<number>([0]);
+  let nextFree = 1;
+  const bindings: AuthoredResourceBinding[] = [];
+  for (const site of sites) {
+    let index = site.resourceId & MAX_RESOURCE_INDEX;
+    if (index === 0 || index > maxIndex || used.has(index)) {
+      while (nextFree <= maxIndex && used.has(nextFree)) ++nextFree;
+      if (nextFree > maxIndex) {
+        throw new Error('C++ resource preflight exhausted the 24-bit handle index space before emission');
+      }
+      index = nextFree;
+    }
+    if (used.has(index)) {
+      throw new Error(`C++ resource preflight produced duplicate authored handle index ${index}`);
+    }
+    used.add(index);
+    bindings.push({ ...site, handle: ((RESOURCE_GENERATION << 24) | index) >>> 0 });
+  }
+  return bindings;
+}
 
 export function allocateTransientResourceIndices(
   authoredSites: readonly TransientResourceSite[],
@@ -123,6 +207,8 @@ class CppEmitter {
   private readonly structs = new Map<string, HirStruct>();
   private readonly pools = new Map<string, HirPool>();
   private readonly sounds = new Map<string, HirSound>();
+  private readonly authoredHandles = new Map<string, number>();
+  private authoredBindings: readonly AuthoredResourceBinding[] = [];
   private readonly transientHandles = new Map<string, number>();
   private transientBindings: readonly TransientResourceBinding[] = [];
   private loopOrdinal = 0;
@@ -207,14 +293,16 @@ class CppEmitter {
   }
 
   private assignPresentationResourceIndices(): void {
+    this.authoredHandles.clear();
     this.transientHandles.clear();
     const seenSourceIds = new Map<number, string>();
-    const reservedIndices = new Set<number>([0]);
-    const sites: Omit<TransientResourceBinding, 'handle'>[] = [];
-    const reserveExpression = (
+    const authoredSites = new Map<string, AuthoredResourceSite>();
+    const transientSites: Omit<TransientResourceBinding, 'handle'>[] = [];
+    const authoredExpression = (
       emit: HirPresentation['emits'][number],
       argument: string,
-    ): void => {
+      role: AuthoredResourceRole,
+    ): number => {
       const value = emit.args.find((item) => item.name === argument)?.value;
       if (!value) {
         throw new Error(`internal C++ resource preflight cannot find '${argument}' at ${emit.span.file}:${emit.span.start}`);
@@ -223,9 +311,18 @@ class CppEmitter {
       if (raw === null || raw < 0n || raw > 0xffffffffn) {
         throw new Error(`C++ resource preflight requires a u32 constant '${argument}' at ${emit.span.file}:${emit.span.start}`);
       }
-      // Authored page handles retain their ABI-defined low-24-bit index.  The
-      // transient allocator must skip that index so both classes cannot alias.
-      reservedIndices.add(Number(raw & BigInt(MAX_RESOURCE_INDEX)));
+      const resourceId = Number(raw);
+      authoredSites.set(authoredResourceKey(resourceId, role), { resourceId, role });
+      return resourceId;
+    };
+    const authoredDeclaration = (resourceId: number, role: AuthoredResourceRole): void => {
+      if (!Number.isSafeInteger(resourceId) || resourceId < 0 || resourceId > 0xffffffff) {
+        throw new Error(`internal C++ resource preflight received invalid ${role} ID ${resourceId}`);
+      }
+      authoredSites.set(
+        authoredResourceKey(resourceId, role),
+        { resourceId: resourceId >>> 0, role },
+      );
     };
     for (const presentation of declarationsOf(this.hir, 'presentation')) {
       for (const emit of presentation.emits) {
@@ -248,8 +345,8 @@ class CppEmitter {
         }
         switch (emit.emitKind) {
           case 'draw_form':
-            reserveExpression(emit, 'form');
-            sites.push({ module: presentation.module, sourceId, role: 'draw_form_transform' });
+            authoredExpression(emit, 'form', 'form_page');
+            transientSites.push({ module: presentation.module, sourceId, role: 'draw_form_transform' });
             break;
           case 'draw_population': {
             const poolArg = emit.args.find((item) => item.name === 'pool')?.value;
@@ -258,15 +355,15 @@ class CppEmitter {
             if (!pool) {
               throw new Error(`internal C++ resource preflight cannot resolve population at ${emit.span.file}:${emit.span.start}`);
             }
-            reservedIndices.add((pool.populationIndex + 1) & MAX_RESOURCE_INDEX);
+            authoredDeclaration(pool.populationIndex + 1, 'population');
             break;
           }
           case 'draw_procedural':
-            reserveExpression(emit, 'patch');
+            authoredExpression(emit, 'patch', 'procedural_patch_page');
             break;
           case 'surface_stamp':
-            reserveExpression(emit, 'brush');
-            sites.push({ module: presentation.module, sourceId, role: 'surface_stamp_terrain_patch' });
+            authoredExpression(emit, 'brush', 'surface_stamp_brush_page');
+            transientSites.push({ module: presentation.module, sourceId, role: 'surface_stamp_terrain_patch' });
             break;
           case 'audio': {
             const soundArg = emit.args.find((item) => item.name === 'sound')?.value;
@@ -275,7 +372,7 @@ class CppEmitter {
             if (!sound) {
               throw new Error(`internal C++ resource preflight cannot resolve sound at ${emit.span.file}:${emit.span.start}`);
             }
-            reservedIndices.add((sound.eventIndex + 1) & MAX_RESOURCE_INDEX);
+            authoredDeclaration(sound.eventIndex + 1, 'sound');
             break;
           }
           default:
@@ -283,14 +380,45 @@ class CppEmitter {
         }
       }
     }
-    const bindings = allocateTransientResourceIndices(sites, reservedIndices);
-    for (const binding of bindings) {
+    const authoredBindings = allocateAuthoredResourceIndices([...authoredSites.values()]);
+    const reservedIndices = new Set<number>([0]);
+    for (const binding of authoredBindings) {
+      const mappingKey = authoredResourceKey(binding.resourceId, binding.role);
+      if (this.authoredHandles.has(mappingKey)) {
+        throw new Error(`C++ resource preflight found duplicate authored mapping for ${binding.role} ${binding.resourceId}`);
+      }
+      if (reservedIndices.has(binding.handle & MAX_RESOURCE_INDEX)) {
+        throw new Error(`C++ resource preflight found duplicate authored handle ${binding.handle}`);
+      }
+      this.authoredHandles.set(mappingKey, binding.handle);
+      reservedIndices.add(binding.handle & MAX_RESOURCE_INDEX);
+    }
+    this.authoredBindings = authoredBindings;
+    const transientBindings = allocateTransientResourceIndices(transientSites, reservedIndices);
+    for (const binding of transientBindings) {
       this.transientHandles.set(
         transientResourceKey(binding.sourceId, binding.role),
         binding.handle,
       );
     }
-    this.transientBindings = bindings;
+    this.transientBindings = transientBindings;
+  }
+
+  private authoredHandle(resourceId: number, role: AuthoredResourceRole): number {
+    const handle = this.authoredHandles.get(authoredResourceKey(resourceId, role));
+    if (handle === undefined) {
+      throw new Error(`internal C++ resource mapping is missing ${role} ${resourceId >>> 0}`);
+    }
+    return handle;
+  }
+
+  private authoredExpressionId(emit: HirPresentation['emits'][number], argument: string): number {
+    const value = emit.args.find((item) => item.name === argument)?.value;
+    const raw = value ? this.constantRaw(value, new Set()) : null;
+    if (raw === null || raw < 0n || raw > 0xffffffffn) {
+      throw new Error(`internal C++ resource mapping cannot resolve '${argument}' at ${emit.span.file}:${emit.span.start}`);
+    }
+    return Number(raw);
   }
 
   private transientHandle(sourceId: number, role: TransientResourceRole): number {
@@ -340,6 +468,29 @@ class CppEmitter {
     o.line('struct World3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };');
     o.line('struct Velocity3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };');
     o.line('struct Stream { u64 state{}; u64 increment{}; };'.replace(/u64/g, 'std::uint64_t'));
+    o.line('enum class AuthoredResourceRole : u8 { FormPage = 1u, ProceduralPatchPage = 2u, SurfaceStampBrushPage = 3u, Population = 4u, Sound = 5u };');
+    o.line('struct AuthoredResourceBinding { u32 resource_id{}; AuthoredResourceRole role{}; u32 handle{}; };');
+    o.line(`inline constexpr std::array<AuthoredResourceBinding, ${this.authoredBindings.length}> kAuthoredResourceBindings{{`);
+    for (const binding of this.authoredBindings) {
+      const role = (() => {
+        switch (binding.role) {
+          case 'form_page': return 'AuthoredResourceRole::FormPage';
+          case 'procedural_patch_page': return 'AuthoredResourceRole::ProceduralPatchPage';
+          case 'surface_stamp_brush_page': return 'AuthoredResourceRole::SurfaceStampBrushPage';
+          case 'population': return 'AuthoredResourceRole::Population';
+          case 'sound': return 'AuthoredResourceRole::Sound';
+        }
+      })();
+      o.line(`  AuthoredResourceBinding{${binding.resourceId}u, ${role}, ${binding.handle}u},`);
+    }
+    o.line('}};');
+    o.line('[[noreturn]] inline void form_abort(u32 code);');
+    o.line('inline u32 authored_resource_handle(AuthoredResourceRole role, u32 resource_id) {');
+    o.line('  for (const auto& binding : kAuthoredResourceBindings) {');
+    o.line('    if (binding.role == role && binding.resource_id == resource_id) return binding.handle;');
+    o.line('  }');
+    o.line('  form_abort(824u);');
+    o.line('}');
     o.line('enum class PresentationResourceRole : u8 { DrawFormTransform = 1u, SurfaceStampTerrainPatch = 2u };');
     o.line('struct PresentationResourceBinding { u16 module{}; u32 source_id{}; PresentationResourceRole role{}; u32 handle{}; };');
     o.line(`inline constexpr std::array<PresentationResourceBinding, ${this.transientBindings.length}> kPresentationResourceBindings{{`);
@@ -374,7 +525,6 @@ class CppEmitter {
     o.line('  return static_cast<i64>(value);');
     o.line('}');
     o.line('inline i16 sat_i16(i32 value) { return value > 32767 ? 32767 : value < -32768 ? -32768 : static_cast<i16>(value); }');
-    o.line('inline u32 resource_handle(u32 page_id) { return 0x01000000u | (page_id & 0x00ffffffu); }');
     o.line('inline i32 i32_from_bits(u32 value) { return value <= 0x7fffffffu ? static_cast<i32>(value) : -1 - static_cast<i32>(~value); }');
     o.line('inline i32 i32_add(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) + static_cast<u32>(b)); }');
     o.line('inline i32 i32_sub(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) - static_cast<u32>(b)); }');
@@ -576,15 +726,24 @@ class CppEmitter {
     o.line(`namespace form::${ns} {`);
     o.line();
 
-    for (const decl of declarations) {
-      if (decl.kind === 'enum') this.emitEnum(o, decl);
-      if (decl.kind === 'struct') this.emitStruct(o, decl);
+    for (const decl of declarations.filter((decl): decl is HirEnum => decl.kind === 'enum')) {
+      this.emitEnum(o, decl);
     }
-    for (const decl of declarations) if (decl.kind === 'const') {
+    for (const decl of this.dependencyOrder(
+      declarations.filter((item): item is HirStruct => item.kind === 'struct'),
+      (item) => this.localStructDependencies(item),
+      'struct',
+    )) this.emitStruct(o, decl);
+    const constants = this.dependencyOrder(
+      declarations.filter((item): item is Extract<HirDeclaration, { kind: 'const' }> => item.kind === 'const'),
+      (item) => this.localConstDependencies(item),
+      'constant',
+    );
+    for (const decl of constants) {
       const value = this.constexprExpr(decl.init);
       o.line(`inline constexpr ${this.cppType(decl.type)} ${ident(decl.name)} = ${value};`);
     }
-    if (declarations.some((decl) => decl.kind === 'const')) o.line();
+    if (constants.length > 0) o.line();
     for (const pool of declarations.filter((decl): decl is HirPool => decl.kind === 'pool')) this.emitPool(o, pool);
 
     o.line('struct State {');
@@ -629,13 +788,81 @@ class CppEmitter {
     o.line();
   }
 
+  private dependencyOrder<T extends { module: number; order: number; name: string }>(
+    declarations: readonly T[],
+    dependencies: (declaration: T) => ReadonlySet<string>,
+    label: string,
+  ): T[] {
+    const byName = new Map(declarations.map((declaration) => [declaration.name, declaration] as const));
+    const remaining = new Map<string, number>();
+    const dependents = new Map<string, string[]>();
+    for (const declaration of declarations) {
+      const local = [...dependencies(declaration)].filter((name) => byName.has(name));
+      remaining.set(declaration.name, local.length);
+      for (const dependency of local) {
+        const rows = dependents.get(dependency) ?? [];
+        rows.push(declaration.name);
+        dependents.set(dependency, rows);
+      }
+    }
+    const ready = declarations.filter((declaration) => remaining.get(declaration.name) === 0)
+      .sort((left, right) => left.order - right.order);
+    const result: T[] = [];
+    while (ready.length > 0) {
+      const declaration = ready.shift()!;
+      result.push(declaration);
+      for (const dependentName of dependents.get(declaration.name) ?? []) {
+        const count = remaining.get(dependentName)! - 1;
+        remaining.set(dependentName, count);
+        if (count === 0) {
+          ready.push(byName.get(dependentName)!);
+          ready.sort((left, right) => left.order - right.order);
+        }
+      }
+    }
+    if (result.length !== declarations.length) {
+      const cycle = declarations.filter((declaration) => remaining.get(declaration.name)! > 0)
+        .sort((left, right) => left.order - right.order)
+        .map((declaration) => declaration.name);
+      throw new Error(`C++ emitter found cyclic local ${label} dependencies: ${cycle.join(', ')}`);
+    }
+    return result;
+  }
+
+  private localStructDependencies(declaration: HirStruct): ReadonlySet<string> {
+    const dependencies = new Set<string>();
+    const visit = (type: Type): void => {
+      if (type.t === 'array') visit(type.elem);
+      if (type.t === 'struct') {
+        const [module, name] = splitTypeName(type.name);
+        if (module === declaration.module) dependencies.add(name);
+      }
+    };
+    for (const field of declaration.fields) visit(field.type);
+    return dependencies;
+  }
+
+  private localConstDependencies(declaration: Extract<HirDeclaration, { kind: 'const' }>): ReadonlySet<string> {
+    const dependencies = new Set<string>();
+    const visit = (expression: HirExpr): void => {
+      if (expression.symbol?.kind === 'const' && expression.symbol.module === declaration.module) {
+        dependencies.add(expression.symbol.name);
+      }
+      for (const child of expression.children) visit(child);
+    };
+    visit(declaration.init);
+    return dependencies;
+  }
+
   private emitPool(o: Lines, pool: HirPool): void {
     const struct = this.structs.get(key(pool.structModule, pool.structName));
     if (!struct) throw new Error(`C++ emitter cannot find pool struct ${pool.structModule}.${pool.structName}`);
     o.line(`struct ${ident(pool.name)}_pool {`);
-    o.line(`  static constexpr u32 capacity = ${pool.capacity}u;`);
-    o.line('  u32 count{};');
-    for (const field of struct.fields) o.line(`  std::array<${this.cppType(field.type)}, capacity> ${ident(field.name)}{};`);
+    o.line(`  static constexpr u32 ${this.poolCapacity()} = ${pool.capacity}u;`);
+    o.line(`  u32 ${this.poolCount()}{};`);
+    for (const field of struct.fields) {
+      o.line(`  std::array<${this.cppType(field.type)}, ${this.poolCapacity()}> ${this.poolColumn(field.name)}{};`);
+    }
     o.line('};');
     o.line();
   }
@@ -677,7 +904,7 @@ class CppEmitter {
     o.line('  (void)tick;');
     const killedPools = this.killedPools(system.body);
     for (const pool of killedPools) {
-      o.line(`  std::array<Bool, form::${this.moduleName(pool.module)}::${ident(pool.name)}_pool::capacity> ${this.killFlags(pool)}{};`);
+      o.line(`  std::array<Bool, form::${this.moduleName(pool.module)}::${ident(pool.name)}_pool::${this.poolCapacity()}> ${this.killFlags(pool)}{};`);
     }
     this.emitStatements(o, system.body, 1, system);
     for (const pool of killedPools) this.emitStableCompaction(o, pool, 1);
@@ -770,13 +997,13 @@ class CppEmitter {
     const ordinal = this.loopOrdinal++;
     const index = `_${variable}_index_${ordinal}`;
     const end = `_pool_end_${ordinal}`;
-    o.line(`${pad}const u32 ${end} = ${poolExpr}.count;`);
+    o.line(`${pad}const u32 ${end} = ${poolExpr}.${this.poolCount()};`);
     o.line(`${pad}for (u32 ${index} = 0u; ${index} < ${end}; ++${index}) {`);
     const inner = system?.staggerPool ? depth + 2 : depth + 1;
     if (system?.staggerPool) o.line(`${pad}  if ((${index} % ${system.staggerRate ?? system.every}u) == (tick % ${system.staggerRate ?? system.every}u)) {`);
-    o.line(`${'  '.repeat(inner)}${this.cppStructName(pool.structModule, pool.structName)} ${variable}{${struct.fields.map((field) => `${poolExpr}.${ident(field.name)}[${index}]`).join(', ')}};`);
+    o.line(`${'  '.repeat(inner)}${this.cppStructName(pool.structModule, pool.structName)} ${variable}{${struct.fields.map((field) => `${poolExpr}.${this.poolColumn(field.name)}[${index}]`).join(', ')}};`);
     this.emitStatements(o, statement.body, inner, system);
-    for (const field of struct.fields) o.line(`${'  '.repeat(inner)}${poolExpr}.${ident(field.name)}[${index}] = ${variable}.${ident(field.name)};`);
+    for (const field of struct.fields) o.line(`${'  '.repeat(inner)}${poolExpr}.${this.poolColumn(field.name)}[${index}] = ${variable}.${ident(field.name)};`);
     if (system?.staggerPool) o.line(`${pad}  }`);
     o.line(`${pad}}`);
   }
@@ -796,9 +1023,9 @@ class CppEmitter {
       variables.set(field.name, variable);
       o.line(`${pad}  auto&& ${variable} = ${this.expr(record.children[index]!, { state: 'state', pads: 'pads', tick: 'tick', rng: 'state.rng' })};`);
     });
-    o.line(`${pad}  if (${poolExpr}.count >= form::${this.moduleName(pool.module)}::${ident(pool.name)}_pool::capacity) form_abort(821u);`);
-    o.line(`${pad}  const u32 _spawn_index = ${poolExpr}.count++;`);
-    for (const field of struct.fields) o.line(`${pad}  ${poolExpr}.${ident(field.name)}[_spawn_index] = ${variables.get(field.name) ?? '{}'};`);
+    o.line(`${pad}  if (${poolExpr}.${this.poolCount()} >= form::${this.moduleName(pool.module)}::${ident(pool.name)}_pool::${this.poolCapacity()}) form_abort(821u);`);
+    o.line(`${pad}  const u32 _spawn_index = ${poolExpr}.${this.poolCount()}++;`);
+    for (const field of struct.fields) o.line(`${pad}  ${poolExpr}.${this.poolColumn(field.name)}[_spawn_index] = ${variables.get(field.name) ?? '{}'};`);
     o.line(`${pad}}`);
   }
 
@@ -811,7 +1038,7 @@ class CppEmitter {
     const indexExpr = this.expr(statement.expressions[0]!, { state: 'state', pads: 'pads', tick: 'tick', rng: 'state.rng' });
     o.line(`${pad}{`);
     o.line(`${pad}  const u32 _kill_index = static_cast<u32>(${indexExpr});`);
-    o.line(`${pad}  if (_kill_index >= ${poolExpr}.count) form_abort(822u);`);
+    o.line(`${pad}  if (_kill_index >= ${poolExpr}.${this.poolCount()}) form_abort(822u);`);
     o.line(`${pad}  ${this.killFlags(pool)}[_kill_index] = 1u;`);
     o.line(`${pad}}`);
   }
@@ -841,15 +1068,15 @@ class CppEmitter {
     const struct = this.structs.get(key(pool.structModule, pool.structName))!;
     const suffix = `${pool.module}_${ident(pool.name)}`;
     o.line(`${pad}u32 _write_${suffix} = 0u;`);
-    o.line(`${pad}for (u32 _read_${suffix} = 0u; _read_${suffix} < ${poolExpr}.count; ++_read_${suffix}) {`);
+    o.line(`${pad}for (u32 _read_${suffix} = 0u; _read_${suffix} < ${poolExpr}.${this.poolCount()}; ++_read_${suffix}) {`);
     o.line(`${pad}  if (!${this.killFlags(pool)}[_read_${suffix}]) {`);
     for (const field of struct.fields) {
-      o.line(`${pad}    ${poolExpr}.${ident(field.name)}[_write_${suffix}] = ${poolExpr}.${ident(field.name)}[_read_${suffix}];`);
+      o.line(`${pad}    ${poolExpr}.${this.poolColumn(field.name)}[_write_${suffix}] = ${poolExpr}.${this.poolColumn(field.name)}[_read_${suffix}];`);
     }
     o.line(`${pad}    ++_write_${suffix};`);
     o.line(`${pad}  }`);
     o.line(`${pad}}`);
-    o.line(`${pad}${poolExpr}.count = _write_${suffix};`);
+    o.line(`${pad}${poolExpr}.${this.poolCount()} = _write_${suffix};`);
   }
 
   private emitPresentation(o: Lines, presentation: HirPresentation): void {
@@ -949,20 +1176,21 @@ class CppEmitter {
         const pool = poolArg?.symbol?.kind === 'pool' && poolArg.symbol.module !== null
           ? this.pools.get(key(poolArg.symbol.module, poolArg.symbol.name)) : null;
         if (!pool) throw new Error(`internal C++ presentation cannot resolve draw_population pool at ${emit.span.file}:${emit.span.start}`);
-        const handle = `resource_handle(${pool.populationIndex + 1}u)`;
+        const handle = `${this.authoredHandle(pool.populationIndex + 1, 'population')}u`;
         const poolState = this.stateMember(pool.module, pool.name, 'state');
         o.line(`${pad}  record.payload.population = ${handle};`);
         o.line(`${pad}  record.payload.viewport_mask = static_cast<u8>(${value('view_mask')});`);
         o.line(`${pad}  record.payload.semantic_weight = static_cast<u8>(${value('weight')});`);
         o.line(`${pad}  record.payload.flags = 1u;  // point sprites`);
-        o.line(`${pad}  resources.publish_population(record.payload.population, ${pool.module}u, ${pool.populationIndex}u, ${poolState}.count, &${poolState});`);
+        o.line(`${pad}  resources.publish_population(record.payload.population, ${pool.module}u, ${pool.populationIndex}u, ${poolState}.${this.poolCount()}, &${poolState});`);
         end('draw_population');
         break;
       }
       case 'draw_form': {
         begin('DrawForm', 'DRAW_FORM', 32);
         const position = value('transform');
-        o.line(`${pad}  record.payload.form = resource_handle(static_cast<u32>(${value('form')}));`);
+        const formId = this.authoredExpressionId(emit, 'form');
+        o.line(`${pad}  record.payload.form = ${this.authoredHandle(formId, 'form_page')}u;`);
         o.line(`${pad}  record.payload.material_set = record.payload.form;`);
         o.line(`${pad}  record.payload.transform = ${this.transientHandle(emit.sourceId, 'draw_form_transform')}u;`);
         o.line(`${pad}  record.payload.viewport_mask = static_cast<u8>(${value('view_mask')});`);
@@ -974,7 +1202,8 @@ class CppEmitter {
       }
       case 'draw_procedural': {
         begin('DrawProcedural', 'DRAW_PROCEDURAL', 64);
-        o.line(`${pad}  record.payload.program = resource_handle(static_cast<u32>(${value('patch')}));`);
+        const patchId = this.authoredExpressionId(emit, 'patch');
+        o.line(`${pad}  record.payload.program = ${this.authoredHandle(patchId, 'procedural_patch_page')}u;`);
         o.line(`${pad}  record.payload.material = record.payload.program;`);
         transform2(value('transform'));
         o.line(`${pad}  record.payload.screen_error = static_cast<i32>(${value('screen_error')});`);
@@ -984,7 +1213,8 @@ class CppEmitter {
       }
       case 'surface_stamp': {
         begin('SurfaceStamp', 'SURFACE_STAMP', 64);
-        o.line(`${pad}  record.payload.brush = resource_handle(static_cast<u32>(${value('brush')}));`);
+        const brushId = this.authoredExpressionId(emit, 'brush');
+        o.line(`${pad}  record.payload.brush = ${this.authoredHandle(brushId, 'surface_stamp_brush_page')}u;`);
         o.line(`${pad}  record.payload.patch = ${this.transientHandle(emit.sourceId, 'surface_stamp_terrain_patch')}u;`);
         o.line(`${pad}  record.payload.operation = 0u;`);
         o.line(`${pad}  record.payload.tag = static_cast<u8>(${value('tag')});`);
@@ -1003,7 +1233,7 @@ class CppEmitter {
           ? this.sounds.get(key(soundArg.symbol.module, soundArg.symbol.name)) : null;
         if (!sound) throw new Error(`internal C++ presentation cannot resolve audio sound at ${emit.span.file}:${emit.span.start}`);
         o.line(`${pad}  record.payload.event_id = ${sound.eventIndex}u;`);
-        o.line(`${pad}  record.payload.sample_handle = resource_handle(${sound.eventIndex + 1}u);`);
+        o.line(`${pad}  record.payload.sample_handle = ${this.authoredHandle(sound.eventIndex + 1, 'sound')}u;`);
         const gain = sound.params.find((item) => item.kind === 'gain');
         const pan = sound.params.find((item) => item.kind === 'pan');
         if (gain) o.line(`${pad}  record.payload.gain = static_cast<u16>(static_cast<u32>(${this.expr(gain.value, ctx)}) * 257u);`);
@@ -1019,10 +1249,13 @@ class CppEmitter {
   }
 
   private emitScenario(o: Lines, scenario: HirScenario): void {
+    const index = this.zir.test.scenarios.findIndex(
+      (candidate) => candidate.module === scenario.module && candidate.name === scenario.name,
+    );
+    if (index < 0) throw new Error(`internal C++ TestZIR is missing scenario ${scenario.module}.${scenario.name}`);
     o.line(`void scenario_${ident(scenario.name)}(FormState& state, u32 cartridge_hash) {`);
-    o.line('  initialize(state, cartridge_hash);');
-    // RNG slots stay zero until their authored random.stream(seed, id...)
-    // call site runs. Pre-seeding here would silently discard those operands.
+    o.line('  const PadFrame pads[4]{};');
+    o.line(`  form::run_scenario_script(form::kScenarioScripts[${index}u], state, cartridge_hash, form::ScenarioDriver{}, pads);`);
     o.line('}');
     o.line();
   }
@@ -1094,12 +1327,12 @@ class CppEmitter {
           const struct = this.structs.get(key(decl.structModule, decl.structName))!;
           const index = `_pool${unique++}`;
           const count = `${index}_count`;
-          o.line(`  const u32 ${count} = ${poolExpr}.count;`);
-          o.line(`  if (${count} > ${this.moduleName(decl.module)}::${ident(decl.name)}_pool::capacity) form_abort(822u);`);
+          o.line(`  const u32 ${count} = ${poolExpr}.${this.poolCount()};`);
+          o.line(`  if (${count} > ${this.moduleName(decl.module)}::${ident(decl.name)}_pool::${this.poolCapacity()}) form_abort(822u);`);
           o.line(`  writer.u32le(${count});`);
           o.line(`  for (u32 ${index} = 0u; ${index} < ${count}; ++${index}) {`);
           for (const field of struct.fields) {
-            for (const line of this.serializeType(field.type, `${poolExpr}.${ident(field.name)}[${index}]`, 'writer', () => `_s${unique++}`)) o.line(`    ${line}`);
+            for (const line of this.serializeType(field.type, `${poolExpr}.${this.poolColumn(field.name)}[${index}]`, 'writer', () => `_s${unique++}`)) o.line(`    ${line}`);
           }
           o.line('  }');
         }
@@ -1202,14 +1435,104 @@ class CppEmitter {
   }
 
   private emitScenarioTable(o: Lines): void {
-    const scenarios = declarationsOf(this.hir, 'scenario');
-    o.line('using ScenarioEntryFn = void (*)(FormState&, u32);');
-    o.line('struct ScenarioEntry { const char* name; u32 module; u32 source_id; ScenarioEntryFn enter; };');
-    o.line(`inline constexpr std::array<ScenarioEntry, ${scenarios.length}> kScenarioEntries{{`);
-    for (const scenario of scenarios) {
-      o.line(`  ScenarioEntry{"${escapeCpp(scenario.name)}", ${scenario.module}u, ${scenario.sourceId}u, &${this.moduleName(scenario.module)}::scenario_${ident(scenario.name)}},`);
-    }
+    const scenarios = this.zir.test.scenarios;
+    o.line('enum class ScenarioOperationKind : u8 { Seed = 1u, Load = 2u, SpawnPlayer = 3u, At = 4u, Assert = 5u, Capture = 6u, AssertBudget = 7u };');
+    o.line('using ScenarioSystemFn = void (*)(FormState&, const PadFrame[4], u32);');
+    o.line('using ScenarioPlacementFn = World3 (*)(const FormState&);');
+    o.line('using ScenarioAssertFn = Bool (*)(FormState&);');
+    o.line('using ScenarioToleranceFn = Fx16 (*)(FormState&);');
+    o.line('struct ScenarioOperation {');
+    o.line('  ScenarioOperationKind kind{}; u32 value{}; u32 module{}; u32 source_id{}; const char* name{};');
+    o.line('  ScenarioSystemFn system{}; ScenarioPlacementFn placement{}; ScenarioAssertFn assertion{}; ScenarioToleranceFn tolerance{};');
+    o.line('};');
+    o.line('struct ScenarioScript { const char* name; u32 module; u32 source_id; const ScenarioOperation* operations; std::size_t operation_count; };');
+    o.line('struct ScenarioDriver {');
+    o.line('  void* user{};');
+    o.line('  void (*seed)(void*, u32){};');
+    o.line('  void (*load)(void*, u32, const char*){};');
+    o.line('  void (*spawn_player)(void*, u32, World3){};');
+    o.line('  void (*assert_result)(void*, u32, Bool, Fx16, Bool){};');
+    o.line('  void (*capture)(void*, u32, const char*){};');
+    o.line('  void (*assert_budget)(void*, u32, const char*){};');
+    o.line('};');
+    o.line();
+
+    scenarios.forEach((scenario, scenarioIndex) => {
+      scenario.operations.forEach((operation, operationIndex) => {
+        const stem = `_scenario_${scenarioIndex}_${operationIndex}`;
+        if (operation.kind === 'spawn_player') {
+          o.line(`inline World3 ${stem}_placement(const FormState& state) { return ${this.stateMember(operation.placement.module, operation.placement.global, 'state')}; }`);
+        }
+        if (operation.kind === 'assert') {
+          const ctx: ExprContext = { state: 'state', pads: 'pads', tick: 'tick', rng: 'state.rng' };
+          o.line(`inline Bool ${stem}_assert(FormState& state) {`);
+          o.line('  const PadFrame pads[4]{}; const u32 tick = 0u; (void)state; (void)pads; (void)tick;');
+          o.line(`  return static_cast<Bool>(${this.expr(operation.expression, ctx)});`);
+          o.line('}');
+          if (operation.tolerance) {
+            o.line(`inline Fx16 ${stem}_tolerance(FormState& state) {`);
+            o.line('  const PadFrame pads[4]{}; const u32 tick = 0u; (void)state; (void)pads; (void)tick;');
+            o.line(`  return static_cast<Fx16>(${this.expr(operation.tolerance, ctx)});`);
+            o.line('}');
+          }
+        }
+      });
+      o.line(`inline constexpr std::array<ScenarioOperation, ${scenario.operations.length}> _scenario_operations_${scenarioIndex}{{`);
+      scenario.operations.forEach((operation, operationIndex) => {
+        const stem = `_scenario_${scenarioIndex}_${operationIndex}`;
+        switch (operation.kind) {
+          case 'seed':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::Seed, ${operation.value}u, 0u, 0u, nullptr, nullptr, nullptr, nullptr, nullptr},`);
+            break;
+          case 'load':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::Load, 0u, ${operation.module}u, 0u, "${escapeCpp(operation.name)}", nullptr, nullptr, nullptr, nullptr},`);
+            break;
+          case 'spawn_player':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::SpawnPlayer, ${operation.player}u, ${operation.placement.module}u, 0u, "${escapeCpp(operation.placement.global)}", nullptr, &${stem}_placement, nullptr, nullptr},`);
+            break;
+          case 'at':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::At, ${operation.tick}u, ${operation.system.module}u, ${operation.system.sourceId}u, "${escapeCpp(operation.system.name)}", &${this.moduleName(operation.system.module)}::system_${ident(operation.system.name)}, nullptr, nullptr, nullptr},`);
+            break;
+          case 'assert':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::Assert, ${operation.tolerance ? 1 : 0}u, 0u, 0u, nullptr, nullptr, nullptr, &${stem}_assert, ${operation.tolerance ? `&${stem}_tolerance` : 'nullptr'}},`);
+            break;
+          case 'capture':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::Capture, ${operation.frame}u, 0u, 0u, "${escapeCpp(operation.name)}", nullptr, nullptr, nullptr, nullptr},`);
+            break;
+          case 'assert_budget':
+            o.line(`  ScenarioOperation{ScenarioOperationKind::AssertBudget, 0u, ${operation.presentation.module}u, 0u, "${escapeCpp(operation.presentation.name)}", nullptr, nullptr, nullptr, nullptr},`);
+            break;
+        }
+      });
+      o.line('}};');
+    });
+    o.line(`inline constexpr std::array<ScenarioScript, ${scenarios.length}> kScenarioScripts{{`);
+    scenarios.forEach((scenario, index) => {
+      o.line(`  ScenarioScript{"${escapeCpp(scenario.name)}", ${scenario.module}u, ${scenario.sourceId}u, _scenario_operations_${index}.data(), _scenario_operations_${index}.size()},`);
+    });
     o.line('}};');
+    o.line('inline void run_scenario_script(const ScenarioScript& script, FormState& state, u32 cartridge_hash, const ScenarioDriver& driver, const PadFrame pads[4]) {');
+    o.line('  initialize(state, cartridge_hash);');
+    o.line('  for (std::size_t index = 0u; index < script.operation_count; ++index) {');
+    o.line('    const ScenarioOperation& operation = script.operations[index];');
+    o.line('    switch (operation.kind) {');
+    o.line('      case ScenarioOperationKind::Seed: if (driver.seed) driver.seed(driver.user, operation.value); break;');
+    o.line('      case ScenarioOperationKind::Load: if (driver.load) driver.load(driver.user, operation.module, operation.name); break;');
+    o.line('      case ScenarioOperationKind::SpawnPlayer: if (driver.spawn_player && operation.placement) driver.spawn_player(driver.user, operation.value, operation.placement(state)); break;');
+    o.line('      case ScenarioOperationKind::At: if (!operation.system) form_abort(902u); else operation.system(state, pads, operation.value); break;');
+    o.line('      case ScenarioOperationKind::Assert: {');
+    o.line('        if (!operation.assertion) form_abort(902u);');
+    o.line('        const Bool passed = operation.assertion(state);');
+    o.line('        const Fx16 tolerance = operation.tolerance ? operation.tolerance(state) : 0;');
+    o.line('        if (driver.assert_result) driver.assert_result(driver.user, static_cast<u32>(index), passed, tolerance, static_cast<Bool>(operation.tolerance != nullptr));');
+    o.line('        else if (!passed) form_abort(902u);');
+    o.line('        break;');
+    o.line('      }');
+    o.line('      case ScenarioOperationKind::Capture: if (driver.capture) driver.capture(driver.user, operation.value, operation.name); break;');
+    o.line('      case ScenarioOperationKind::AssertBudget: if (driver.assert_budget) driver.assert_budget(driver.user, operation.module, operation.name); break;');
+    o.line('    }');
+    o.line('  }');
+    o.line('}');
     o.line();
   }
 
@@ -1435,6 +1758,10 @@ class CppEmitter {
       case 'string': return `"${escapeCpp(ast.value)}"`;
       case 'ident': return this.identExpr(expression, ast.name, ctx);
       case 'member': {
+        if (expression.poolColumn) {
+          const pool = this.stateMember(expression.poolColumn.module, expression.poolColumn.pool, ctx.state);
+          return `${pool}.${this.poolColumn(expression.poolColumn.field)}`;
+        }
         if (expression.symbol?.kind === 'const' && expression.symbol.module !== null) {
           return `${this.moduleName(expression.symbol.module)}::${ident(expression.symbol.name)}`;
         }
@@ -1447,17 +1774,16 @@ class CppEmitter {
           return `${this.cppStructName(expression.symbol.module, enumName!)}::${ident(member!)}`;
         }
         if (expression.symbol?.kind === 'pool' && expression.symbol.module !== null) {
-          const pool = this.stateMember(expression.symbol.module, expression.symbol.name, ctx.state);
-          return ast.field === 'count' ? `${pool}.count` : `${pool}.${ident(ast.field)}`;
+          return `${this.stateMember(expression.symbol.module, expression.symbol.name, ctx.state)}.${this.poolCount()}`;
         }
         return `(${this.expr(expression.children[0]!, ctx)}).${ident(ast.field)}`;
       }
       case 'index': {
         const values = this.expr(expression.children[0]!, ctx);
         const index = this.expr(expression.children[1]!, ctx);
-        const symbol = expression.children[0]!.symbol;
-        const limit = symbol?.kind === 'pool' && symbol.module !== null
-          ? `${this.stateMember(symbol.module, symbol.name, ctx.state)}.count`
+        const column = expression.children[0]!.poolColumn;
+        const limit = column
+          ? `${this.stateMember(column.module, column.pool, ctx.state)}.${this.poolCount()}`
           : 'static_cast<u32>(_form_index_values.size())';
         return `([&]() -> decltype(auto) { auto&& _form_index_values = ${values}; auto&& _form_index_value = ${index}; return checked_index(_form_index_values, static_cast<u32>(_form_index_value), ${limit}); }())`;
       }
@@ -1480,7 +1806,10 @@ class CppEmitter {
       case 'binary': return this.binaryExpr(expression, ast.op, ctx);
       case 'if_expr': {
         const children = expression.children.map((child) => this.expr(child, ctx));
-        return this.eagerValue(expression.type, children, ([condition, yes, no]) => `(${condition} != 0u ? ${yes} : ${no})`);
+        const selected = ([condition, yes, no]: string[]): string => `(${condition} != 0u ? ${yes} : ${no})`;
+        return expression.type.t === 'stream'
+          ? this.eagerReference(children, selected)
+          : this.eagerValue(expression.type, children, selected);
       }
       case 'record': return this.recordExpr(expression, ast, ctx);
       case 'range': throw new Error('C++ emitter received range as value expression');
@@ -1632,21 +1961,37 @@ class CppEmitter {
     }
   }
 
+  private poolCapacity(): string { return '_form_pool_capacity'; }
+  private poolCount(): string { return '_form_pool_count'; }
+  private poolColumn(field: string): string {
+    return `_form_pool_column_${Buffer.from(field, 'utf8').toString('hex')}`;
+  }
+
   private cppStructName(module: number, name: string): string { return `form::${this.moduleName(module)}::${ident(name)}`; }
   private moduleName(module: number): string { const name = this.moduleNames.get(module); if (!name) throw new Error(`unknown HIR module ${module}`); return name; }
   private stateMember(module: number, name: string, state: string): string { return `${state}.${this.moduleName(module)}.${ident(name)}`; }
   private moduleForSpan(file: string): number { return this.hir.modules.find((module) => module.file === file)?.index ?? 0; }
   private resolveDeclaration(moduleIndex: number, name: string): HirDeclaration | null {
+    const parts = name.split('.');
+    if (parts.length === 2) {
+      const owner = this.hir.modules.find((module) => module.name === parts[0]);
+      const requester = this.modules.get(moduleIndex);
+      const visible = owner && requester && (owner.index === moduleIndex
+        || requester.imports.some((item) => item.module === owner.index && item.names.length === 0));
+      return visible && owner ? this.declByKey.get(key(owner.index, parts[1]!)) ?? null : null;
+    }
+    if (parts.length !== 1) return null;
     const own = this.declByKey.get(key(moduleIndex, name));
     if (own) return own;
     const module = this.modules.get(moduleIndex);
     if (!module) return null;
+    const found: HirDeclaration[] = [];
     for (const imported of module.imports) {
       if (!imported.names.includes(name)) continue;
-      const found = this.declByKey.get(key(imported.module, name));
-      if (found) return found;
+      const declaration = this.declByKey.get(key(imported.module, name));
+      if (declaration) found.push(declaration);
     }
-    return null;
+    return found.length === 1 ? found[0]! : null;
   }
 
   private canonicalMaxBytes(): number {

@@ -6,7 +6,9 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { emitCpp } from '../../src/backends/index.js';
-import { allocateTransientResourceIndices } from '../../src/backends/cpp/emitter.js';
+import {
+  allocateAuthoredResourceIndices, allocateTransientResourceIndices,
+} from '../../src/backends/cpp/emitter.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { lowerHir } from '../../src/hir/index.js';
 import { lowerZir } from '../../src/zir/index.js';
@@ -133,8 +135,8 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
 
   const arena = byPath(first, 'arena.hpp');
   assert.match(arena, /namespace form::arena \{/);
-  assert.match(arena, /std::array<World3, capacity> position/);
-  assert.match(arena, /std::array<u32, capacity> age/);
+  assert.match(arena, /std::array<World3, _form_pool_capacity> _form_pool_column_706f736974696f6e/);
+  assert.match(arena, /std::array<u32, _form_pool_capacity> _form_pool_column_616765/);
   const arenaSource = byPath(first, 'arena.cpp');
   const contract = arenaSource.indexOf('ZHAO_OP_SET_PRESENTATION_CONTRACT');
   const view = arenaSource.indexOf('ZHAO_OP_SET_VIEW');
@@ -208,6 +210,93 @@ test('transient resource allocator rejects duplicate sites and bounded-index exh
     () => emitCpp(hir, lowerZir(hir)),
     /duplicate presentation source_id/,
   );
+});
+
+test('authored resources preserve full-u32 identity and role without 24-bit aliases', () => {
+  assert.deepEqual(
+    allocateAuthoredResourceIndices([
+      { resourceId: 16777217, role: 'form_page' },
+      { resourceId: 1, role: 'form_page' },
+      { resourceId: 1, role: 'form_page' },
+      { resourceId: 1, role: 'sound' },
+    ], 4),
+    [
+      { resourceId: 1, role: 'form_page', handle: 0x01000001 },
+      { resourceId: 16777217, role: 'form_page', handle: 0x01000002 },
+      { resourceId: 1, role: 'sound', handle: 0x01000003 },
+    ],
+  );
+  assert.throws(
+    () => allocateAuthoredResourceIndices([
+      { resourceId: 1, role: 'form_page' },
+      { resourceId: 2, role: 'form_page' },
+      { resourceId: 3, role: 'form_page' },
+    ], 2),
+    /exhausted the 24-bit handle index space/,
+  );
+  assert.throws(
+    () => allocateAuthoredResourceIndices([{ resourceId: 0x100000000, role: 'form_page' }]),
+    /out-of-range authored resource ID/,
+  );
+});
+
+test('native authored-resource table publishes page IDs 1 and 16777217 separately', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'pages.form': `module pages {
+  const LOW: u32 = 1;
+  const HIGH: u32 = 16777217;
+  global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
+  presentation showcase {
+    view 0 from camera budget 100%;
+    emit draw_form(form: LOW, transform: camera, view_mask: 1, weight: 100%);
+    emit draw_form(form: HIGH, transform: camera, view_mask: 1, weight: 100%);
+  }
+}\n`,
+  });
+  const types = byPath(output, 'form_types.hpp');
+  assert.match(types, /AuthoredResourceBinding\{1u, AuthoredResourceRole::FormPage, 16777217u\}/);
+  assert.match(types, /AuthoredResourceBinding\{16777217u, AuthoredResourceRole::FormPage, 16777218u\}/);
+  assert.doesNotMatch(types, /page_id\s*&\s*0x00ffffff/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+#include <zhao_abi.h>
+int main() {
+  form::FormState state{};
+  form::initialize(state, 7u);
+  zhao::ZhaoFrameBuilder builder;
+  builder.begin_frame(1u, 1u, 0u, 0u);
+  form::present_frame(state, builder, {});
+  builder.end_frame(zhao_abi::ZHAO_COMPL_DONE);
+  const auto packet = builder.seal(1u, 1u, 1u);
+  form::u32 handles[2]{};
+  form::u32 found = 0u;
+  for (std::size_t off = zhao_abi::ZHAO_FRAME_HEADER_BYTES;
+       off + 8u <= packet.size();) {
+    const form::u16 opcode = static_cast<form::u16>(packet[off]) |
+      static_cast<form::u16>(static_cast<form::u16>(packet[off + 1u]) << 8u);
+    const form::u16 bytes = static_cast<form::u16>(packet[off + 2u]) |
+      static_cast<form::u16>(static_cast<form::u16>(packet[off + 3u]) << 8u);
+    if (bytes == 0u || off + bytes > packet.size()) return 10;
+    if (opcode == zhao_abi::ZHAO_OP_DRAW_FORM) {
+      zhao_abi::ZhReader reader(packet.data() + off, bytes);
+      zhao_abi::ZhRecordDrawForm record{};
+      if (!zhao_abi::zhao_unpack_draw_form(reader, record) || found >= 2u) return 11;
+      handles[found++] = record.payload.form;
+    }
+    off += bytes;
+  }
+  if (found != 2u || handles[0] == handles[1]) return 12;
+  if (handles[0] != form::authored_resource_handle(form::AuthoredResourceRole::FormPage, 1u)) return 13;
+  if (handles[1] != form::authored_resource_handle(form::AuthoredResourceRole::FormPage, 16777217u)) return 14;
+  return 0;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
 test('emitted deterministic source has no forbidden numeric or host-clock surface', () => {
@@ -302,8 +391,54 @@ test('imported pool spawn uses its owner-qualified capacity', () => {
 `,
   });
   const source = byPath(output, 'user.cpp');
-  assert.match(source, /state\.owner\.remote\.count >= form::owner::remote_pool::capacity/);
-  assert.doesNotMatch(source, /state\.owner\.remote\.count >= form::user::remote_pool::capacity/);
+  assert.match(source, /state\.owner\.remote\._form_pool_count >= form::owner::remote_pool::_form_pool_capacity/);
+  assert.doesNotMatch(source, /state\.owner\.remote\._form_pool_count >= form::user::remote_pool::_form_pool_capacity/);
+});
+
+test('WinLibs consumes whole-module qualification across backend declarations and pool operations', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'a_owner.form': `module owner {
+  const BASE: u32 = 5;
+  enum mode { ready = 1, done = 2 }
+  struct item { value: u32; }
+  pool items: item[3];
+  global marker: u32 = 7;
+  fn echo(value: u32) -> u32 { return value; }
+}\n`,
+    'b_user.form': `module user {
+  import owner;
+  global observed: u32 = 0;
+  system qualified every 1 ticks reads owner.marker, owner.items writes owner.items, observed {
+    spawn(owner.items, owner.item { value = owner.BASE });
+    let selected = owner.mode.ready;
+    observed = owner.echo(owner.marker) + owner.BASE;
+    kill(owner.items, 0);
+  }
+}\n`,
+  });
+  const source = byPath(output, 'user.cpp');
+  assert.match(source, /state\.owner\.items\._form_pool_count/);
+  assert.match(source, /form::owner::item/);
+  assert.match(source, /owner::echo\(_form_value_0\)/);
+  assert.match(source, /_form_value_0 = state\.owner\.marker/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  const form::PadFrame pads[4]{};
+  form::sim_tick(state, pads, 0u);
+  if (state.user.observed != 12u) return 1;
+  if (state.owner.items._form_pool_count != 0u) return 2;
+  return 0;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
 test('WinLibs compiles imported nominal values without direct type imports', (t) => {
@@ -338,8 +473,8 @@ test('WinLibs compiles imported nominal values without direct type imports', (t)
 int main() {
   form::FormState state{};
   form::initialize(state, 1u);
-  state.owner.entries.count = 1u;
-  state.owner.entries.value[0] = 99u;
+  state.owner.entries._form_pool_count = 1u;
+  state.owner.entries._form_pool_column_76616c7565[0] = 99u;
   form::PadFrame pads[4]{};
   form::sim_tick(state, pads, 0u);
   return state.owner.payload_state.value == 7u ? 0 : 1;
@@ -415,6 +550,114 @@ int main() {
   form::initialize(state, 1u);
   return state.consumer.initial.position.y == 0x5000000LL
       && state.consumer.initial.imported.point.x == 0x1000000LL ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('C++ declaration order follows enum, struct, and constant dependencies', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'ordered.form': `module ordered {
+  const DERIVED: u32 = BASE + 1;
+  struct outer { payload: inner; selected: mode; }
+  const BASE: u32 = 7;
+  struct inner { value: u32; }
+  enum mode { ready = 1, done = 2 }
+  const RECORD: outer = outer { payload = inner { value = DERIVED }, selected = mode.ready };
+  global state_value: outer = RECORD;
+}\n`,
+  });
+  const header = byPath(output, 'ordered.hpp');
+  const mode = header.indexOf('enum class mode');
+  const inner = header.indexOf('struct inner');
+  const outer = header.indexOf('struct outer');
+  const base = header.indexOf(' BASE =');
+  const derived = header.indexOf(' DERIVED =');
+  const record = header.indexOf(' RECORD =');
+  assert.ok(mode >= 0 && mode < inner && inner < outer);
+  assert.ok(base >= 0 && base < derived && derived < record);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+static_assert(form::ordered::BASE == 7u);
+static_assert(form::ordered::DERIVED == 8u);
+static_assert(form::ordered::RECORD.payload.value == 8u);
+static_assert(form::ordered::RECORD.selected == form::ordered::mode::ready);
+int main() { form::FormState state{}; form::initialize(state, 1u); return state.ordered.state_value.payload.value == 8u ? 0 : 1; }
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('native composition preserves nested members and indices while pool layout names cannot collide', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'composition.form': `module composition {
+  const TWO: u32 = 2;
+  struct inner { value: u32; }
+  struct outer { payload: inner; }
+  struct row { count: u32; capacity: u32; _form_pool_count: u32; lanes: u32[TWO]; }
+  const BASE: outer = outer { payload = inner { value = 7 } };
+  const FROM_NESTED: u32 = BASE.payload.value;
+  global box: outer = BASE;
+  global observed: u32 = 0;
+  pool items: row[3];
+  fn inspect(item: outer) -> u32 { return item.payload.value; }
+  system mutate every 1 ticks
+    reads box, items, items.count, items.capacity, items._form_pool_count, items.lanes
+    writes observed, items, items.count, items.capacity, items._form_pool_count, items.lanes
+  {
+    for i in 0..items.count {
+      items.count[i] = items.count[i] + 1;
+      items.capacity[i] = items.capacity[i] + 2;
+      items._form_pool_count[i] = items._form_pool_count[i] + 3;
+      items.lanes[i][1] = items.lanes[i][1] + 4;
+    }
+    observed = inspect(box);
+    kill(items, 0);
+  }
+}\n`,
+  });
+  const header = byPath(output, 'composition.hpp');
+  assert.match(header, /u32 _form_pool_count\{\}/);
+  assert.match(header, /_form_pool_column_636f756e74/);
+  assert.match(header, /_form_pool_column_6361706163697479/);
+  assert.match(header, /_form_pool_column_5f666f726d5f706f6f6c5f636f756e74/);
+  assert.doesNotMatch(header, /std::array<u32, _form_pool_capacity> (?:count|capacity|_form_pool_count)\{/);
+  const source = byPath(output, 'composition.cpp');
+  assert.match(source, /_form_pool_column_6c616e6573.*checked_index/s);
+  assert.match(source, /_form_index_values\.size\(\)/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  auto& pool = state.composition.items;
+  pool._form_pool_count = 2u;
+  pool._form_pool_column_636f756e74[0] = 10u;
+  pool._form_pool_column_636f756e74[1] = 20u;
+  pool._form_pool_column_6361706163697479[0] = 30u;
+  pool._form_pool_column_6361706163697479[1] = 40u;
+  pool._form_pool_column_5f666f726d5f706f6f6c5f636f756e74[0] = 50u;
+  pool._form_pool_column_5f666f726d5f706f6f6c5f636f756e74[1] = 60u;
+  pool._form_pool_column_6c616e6573[0][1] = 70u;
+  pool._form_pool_column_6c616e6573[1][1] = 80u;
+  const form::PadFrame pads[4]{};
+  form::sim_tick(state, pads, 0u);
+  if (form::composition::FROM_NESTED != 7u || state.composition.observed != 7u) return 1;
+  if (pool._form_pool_count != 1u) return 2;
+  if (pool._form_pool_column_636f756e74[0] != 21u ||
+      pool._form_pool_column_6361706163697479[0] != 42u ||
+      pool._form_pool_column_5f666f726d5f706f6f6c5f636f756e74[0] != 63u ||
+      pool._form_pool_column_6c616e6573[0][1] != 84u) return 3;
+  return 0;
 }
 `);
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
@@ -560,7 +803,7 @@ static form::u16 read16(const form::u8* p) { return static_cast<form::u16>(p[0])
 int main() {
   form::FormState state{};
   form::initialize(state, 0x1234u);
-  state.gallery.motes.count = 1u;
+  state.gallery.motes._form_pool_count = 1u;
   Bound bound{};
   zref::render::FormPattern pattern{};
   for (form::u32 i = 0u; i < 64u; ++i) {
@@ -638,7 +881,7 @@ int main() {
       zhao_abi::ZhRecordEmitAudioEvent r{};
       if (!zhao_abi::zhao_unpack_emit_audio_event(reader, r) || r.payload.event_id != 0u ||
           r.payload.pan_fx != -123 || r.payload.gain != 49344u ||
-          r.payload.sample_handle != 0x01000001u || r.payload.timestamp != 0u) return 38;
+          r.payload.sample_handle != form::authored_resource_handle(form::AuthoredResourceRole::Sound, 1u) || r.payload.timestamp != 0u) return 38;
       seen |= 16u;
     }
     off += bytes;
@@ -1034,13 +1277,13 @@ int main() {
   pads[2].buttons = 1u << 4u;
   oracle::scenario_seeded_run(state, 0x12345678u);
   state.terrain_height_sampler = &terrain;
-  state.oracle.cells.count = 2u;
+  state.oracle.cells._form_pool_count = 2u;
   for (u32 tick = 0u; tick < 3u; ++tick) {
     sim_tick(state, pads, tick);
     std::printf("%u,%d,%u,%u,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%d,%d,%u,%llu,%llu,%llu,%llu\\n",
       state.oracle.ru, state.oracle.ri, static_cast<u32>(state.oracle.runit), static_cast<u32>(state.oracle.rangle), state.oracle.rfx,
       state.oracle.ordered, static_cast<u32>(state.oracle.eager_and), static_cast<u32>(state.oracle.eager_or), state.oracle.selected,
-      state.oracle.called, state.oracle.record_first, state.oracle.record_second, state.oracle.cells.value[0], state.oracle.cells.value[1],
+      state.oracle.called, state.oracle.record_first, state.oracle.record_second, state.oracle.cells._form_pool_column_76616c7565[0], state.oracle.cells._form_pool_column_76616c7565[1],
       state.oracle.other_stream, static_cast<u32>(state.oracle.held), static_cast<u32>(state.rng.size()), state.oracle.terrain_sample,
       state.oracle.mixed, static_cast<u32>(state.rng[0].state),
       static_cast<unsigned long long>(state.rng[0].state), static_cast<unsigned long long>(state.rng[0].increment),
@@ -1050,7 +1293,7 @@ int main() {
   FormState repeat{};
   oracle::scenario_seeded_run(repeat, 0x12345678u);
   repeat.terrain_height_sampler = &terrain;
-  repeat.oracle.cells.count = 2u;
+  repeat.oracle.cells._form_pool_count = 2u;
   for (u32 tick = 0u; tick < 3u; ++tick) sim_tick(repeat, pads, tick);
   if (sim_hash(0u, state) != sim_hash(0u, repeat)) return 22;
   FormState changed = state;
@@ -1060,7 +1303,7 @@ int main() {
   if (sim_hash(0u, state) == sim_hash(0u, changed)) return 23;
   FormState flat{};
   initialize(flat, 1u);
-  flat.oracle.cells.count = 2u;
+  flat.oracle.cells._form_pool_count = 2u;
   sim_tick(flat, pads, 0u);
   if (flat.oracle.terrain_sample != 0) return 24;
   return 0;
@@ -1107,6 +1350,131 @@ int main() {
   assert.deepEqual(lines.slice(2), expectedRows);
 });
 
+test('native scenario driver consumes all seven explicit TestZIR operation kinds', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'scenario_ops.form': `module scenario_ops {
+  global origin: world3 = world3 { x = 1w, y = 2w, z = 3w };
+  global counter: u32 = 0;
+  system step every 1 ticks reads counter writes counter { counter = counter + 1; }
+  presentation limits { view 0 from origin budget 100%; }
+  scenario all_operations {
+    seed 42;
+    load scenario_ops;
+    spawn player 2 at origin;
+    at 5 ticks step();
+    assert counter == 1 within 0.25;
+    capture frame 9 as "snapshot";
+    assert_budget limits;
+  }
+}\n`,
+  });
+  const game = byPath(output, 'form_game.hpp');
+  for (const kind of ['Seed', 'Load', 'SpawnPlayer', 'At', 'Assert', 'Capture', 'AssertBudget']) {
+    assert.match(game, new RegExp(`ScenarioOperationKind::${kind}`));
+  }
+  assert.match(game, /std::array<ScenarioOperation, 7>/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+#include <cstring>
+struct Results {
+  form::u32 seed{}; form::u32 loads{}; form::u32 spawns{}; form::u32 assertions{};
+  form::u32 captures{}; form::u32 budgets{}; form::u32 player{}; form::u32 assertion_index{};
+  form::World3 placement{}; form::Fx16 tolerance{}; form::Bool passed{}; form::Bool has_tolerance{};
+};
+static void on_seed(void* raw, form::u32 value) { static_cast<Results*>(raw)->seed = value; }
+static void on_load(void* raw, form::u32 module, const char* name) {
+  auto& out = *static_cast<Results*>(raw); if (module == 0u && std::strcmp(name, "scenario_ops") == 0) ++out.loads;
+}
+static void on_spawn(void* raw, form::u32 player, form::World3 placement) {
+  auto& out = *static_cast<Results*>(raw); ++out.spawns; out.player = player; out.placement = placement;
+}
+static void on_assert(void* raw, form::u32 index, form::Bool passed, form::Fx16 tolerance, form::Bool has_tolerance) {
+  auto& out = *static_cast<Results*>(raw); ++out.assertions; out.assertion_index = index;
+  out.passed = passed; out.tolerance = tolerance; out.has_tolerance = has_tolerance;
+}
+static void on_capture(void* raw, form::u32 frame, const char* name) {
+  auto& out = *static_cast<Results*>(raw); if (frame == 9u && std::strcmp(name, "snapshot") == 0) ++out.captures;
+}
+static void on_budget(void* raw, form::u32 module, const char* name) {
+  auto& out = *static_cast<Results*>(raw); if (module == 0u && std::strcmp(name, "limits") == 0) ++out.budgets;
+}
+int main() {
+  if (form::kScenarioScripts.size() != 1u || form::kScenarioScripts[0].operation_count != 7u) return 1;
+  Results results{};
+  const form::ScenarioDriver driver{&results, &on_seed, &on_load, &on_spawn, &on_assert, &on_capture, &on_budget};
+  const form::PadFrame pads[4]{};
+  form::FormState state{};
+  form::run_scenario_script(form::kScenarioScripts[0], state, 99u, driver, pads);
+  if (results.seed != 42u || results.loads != 1u || results.spawns != 1u || results.player != 2u) return 2;
+  if (results.placement.x != 0x1000000LL || results.placement.y != 0x2000000LL || results.placement.z != 0x3000000LL) return 3;
+  if (state.scenario_ops.counter != 1u) return 4;
+  if (results.assertions != 1u || results.assertion_index != 4u || !results.passed ||
+      results.tolerance != 0x4000 || !results.has_tolerance) return 5;
+  if (results.captures != 1u || results.budgets != 1u) return 6;
+  return 0;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('stream-valued eager select advances the selected persistent slot by reference', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const leftInitial = oracleStream(11n, 1n);
+  const leftAdvanced = { ...leftInitial };
+  const leftValue = oracleDraw(leftAdvanced);
+  const rightInitial = oracleStream(22n, 2n);
+  const rightAdvanced = { ...rightInitial };
+  const rightValue = oracleDraw(rightAdvanced);
+  const output = compileSources({
+    'streams.form': `module streams {
+  global choose_left: bool = true;
+  global result: u32 = 0;
+  system select_stream every 1 ticks reads choose_left writes result {
+    let selected = if choose_left { random.stream(11, 1) } else { random.stream(22, 2) };
+    result = random.u32(selected);
+  }
+}\n`,
+  });
+  const source = byPath(output, 'streams.cpp');
+  assert.match(source, /\(\[&\]\(\) -> decltype\(auto\).*\? _form_ref_value_1 : _form_ref_value_2/s);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+int main() {
+  const form::PadFrame pads[4]{};
+  form::FormState left{};
+  form::initialize(left, 1u);
+  form::sim_tick(left, pads, 0u);
+  if (left.streams.result != ${leftValue}u) return 1;
+  if (left.rng[0].state != ${leftAdvanced.state}ULL || left.rng[0].increment != ${leftAdvanced.increment}ULL) return 2;
+  if (left.rng[1].state != ${rightInitial.state}ULL || left.rng[1].increment != ${rightInitial.increment}ULL) return 3;
+
+  form::FormState right{};
+  form::initialize(right, 1u);
+  right.streams.choose_left = 0u;
+  form::sim_tick(right, pads, 0u);
+  if (right.streams.result != ${rightValue}u) return 4;
+  if (right.rng[0].state != ${leftInitial.state}ULL || right.rng[0].increment != ${leftInitial.increment}ULL) return 5;
+  if (right.rng[1].state != ${rightAdvanced.state}ULL || right.rng[1].increment != ${rightAdvanced.increment}ULL) return 6;
+  std::array<form::u8, form::kCanonicalStateMaxBytes> left_bytes{};
+  std::array<form::u8, form::kCanonicalStateMaxBytes> right_bytes{};
+  const auto left_size = form::serialize_canonical_state(left, left_bytes.data(), left_bytes.size());
+  const auto right_size = form::serialize_canonical_state(right, right_bytes.data(), right_bytes.size());
+  if (left_size == 0u || left_size != right_size || left_bytes == right_bytes) return 7;
+  return 0;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
 test('WinLibs proves every stagger residue, peak bound, 600 ticks, and ordinary cadence', (t) => {
   const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
   if (!existsSync(compiler)) {
@@ -1134,26 +1502,26 @@ int main() {
   form::PadFrame pads[4]{};
   constexpr form::u32 cartridge = 0x4d3c2b1au;
   form::initialize(a, cartridge);
-  a.cadence.particles.count = 10u;
+  a.cadence.particles._form_pool_count = 10u;
   b = a;
   form::u32 chain_a = form::sim_hash_initial(cartridge);
   form::u32 chain_b = chain_a;
   for (form::u32 tick = 0u; tick < 600u; ++tick) {
     form::u32 before = 0u;
-    for (form::u32 i = 0u; i < 10u; ++i) before += a.cadence.particles.hits[i];
+    for (form::u32 i = 0u; i < 10u; ++i) before += a.cadence.particles._form_pool_column_68697473[i];
     form::sim_tick(a, pads, tick);
     form::sim_tick(b, pads, tick);
     form::u32 after = 0u;
-    for (form::u32 i = 0u; i < 10u; ++i) after += a.cadence.particles.hits[i];
+    for (form::u32 i = 0u; i < 10u; ++i) after += a.cadence.particles._form_pool_column_68697473[i];
     const form::u32 expected_peak[4] = {3u, 3u, 2u, 2u};
     if (after - before != expected_peak[tick % 4u]) return 10;
-    if (tick == 3u) for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles.hits[i] != 1u) return 11;
-    if (tick == 7u) for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles.hits[i] != 2u) return 12;
+    if (tick == 3u) for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles._form_pool_column_68697473[i] != 1u) return 11;
+    if (tick == 7u) for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles._form_pool_column_68697473[i] != 2u) return 12;
     chain_a = form::sim_hash(chain_a, a);
     chain_b = form::sim_hash(chain_b, b);
   }
   if (a.cadence.slow_calls != 150u) return 13;
-  for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles.hits[i] != 150u) return 14;
+  for (form::u32 i = 0u; i < 10u; ++i) if (a.cadence.particles._form_pool_column_68697473[i] != 150u) return 14;
   if (chain_a != chain_b || form::sim_hash(0u, a) != form::sim_hash(0u, b)) return 15;
   std::printf("%08x\\n", chain_a);
   return 0;
@@ -1190,7 +1558,7 @@ int main() {
   const form::u32 before = form::sim_hash(0x2468ace0u, state);
   state.audit.observed += 1u;
   const form::u32 after = form::sim_hash(0x2468ace0u, state);
-  if (state.arena.particles.count != 4u || state.arena.particles.age[0] != 2u) return 2;
+  if (state.arena.particles._form_pool_count != 4u || state.arena.particles._form_pool_column_616765[0] != 2u) return 2;
   if (state.arena.counter != 1u || state.audit.observed != 2u || before == after) return 3;
   std::printf("%08x %08x %08x\\n", chain, before, after);
   return 0;
