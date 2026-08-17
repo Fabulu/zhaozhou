@@ -226,6 +226,23 @@ test('aggregate constants shadow same-spelled whole-module qualifiers exactly', 
   assert.equal(declarationsOf(hir, 'pool').find((item) => item.module === 1)?.capacity, 4);
 });
 
+test('flow mappings reject missing and mistyped lanes before HIR', () => {
+  const frontend = compileFrontend({
+    'app.form': `module app {
+      struct particle { position: u32; velocity: fx16; age: world3; representation: u32; }
+      pool particles: particle[4];
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+      system move every 1 ticks reads particles writes particles { drift(particles); }
+    }\n`,
+  });
+  assert.equal(frontend.ok, false);
+  assert.equal(frontend.diagnostics.filter((item) => item.code === 'FORM-E-664').length, 4,
+    frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.equal(lowerHir(frontend), null);
+});
+
 test('checker-owned whole/selective call targets retain owners and qualified pools in HIR', () => {
   const compile = (whole: boolean) => compileFrontend({
     'a_data.form': `module data {

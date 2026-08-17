@@ -613,6 +613,48 @@ test('aggregate bounds diagnose cycles, missing members, and field-type drift', 
     'the declaration-type error, not an invented bound value, owns this refusal');
 });
 
+test('flow pool mappings require exact lane types including optional representation', () => {
+  const flow = `@flow field drift() -> flow_update footprint none; max_ops 48 {
+    return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+  }`;
+  const validFields = [
+    'position: world3;',
+    'velocity: velocity3;',
+    'age: u32;',
+    'representation: fx16;',
+  ];
+  const invalid = [
+    validFields.filter((field) => !field.startsWith('position:')),
+    validFields.filter((field) => !field.startsWith('velocity:')),
+    validFields.filter((field) => !field.startsWith('age:')),
+    ['position: u32;', ...validFields.slice(1)],
+    [validFields[0]!, 'velocity: fx16;', ...validFields.slice(2)],
+    [...validFields.slice(0, 2), 'age: world3;', validFields[3]!],
+    [...validFields.slice(0, 3), 'representation: u32;'],
+  ];
+  for (const fields of invalid) {
+    const result = compile(MOD(`
+      struct particle { ${fields.join(' ')} }
+      pool particles: particle[4];
+      ${flow}
+      system move every 1 ticks reads particles writes particles { drift(particles); }
+    `));
+    assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-664').length, 1,
+      result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  }
+
+  for (const fields of [validFields, validFields.slice(0, 3)]) {
+    const result = compile(MOD(`
+      struct particle { ${fields.join(' ')} }
+      pool particles: particle[4];
+      ${flow}
+      system move every 1 ticks reads particles writes particles { drift(particles); }
+    `));
+    assert.deepEqual(result.codes, [],
+      result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  }
+});
+
 test('whole-module-qualified flow calls share selective targets and qualified pool effects', () => {
   const source = (whole: boolean): Record<string, string> => ({
     'a_data.form': `module data {

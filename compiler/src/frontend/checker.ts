@@ -1318,11 +1318,26 @@ class Checker {
     }
     const struct = this.structOf({ sym: pool.sym, mod: pool.mod, ambiguous: false });
     if (!struct) return;
-    const has = (n: string) => struct.decl.fields.some((f) => f.name === n);
-    const ok = has('position') && has('velocity') && has('age');
-    if (!ok) {
-      this.sink.error('FORM-E-664', span,
-        `pool '${displayName}' struct '${struct.decl.name}' does not match the flow lane mapping (needs position: world3, velocity: velocity3, age: u32)`);
+    const expected = new Map<string, Type>([
+      ['position', T.world3],
+      ['velocity', T.velocity3],
+      ['age', T.u32],
+      ['representation', T.fx16],
+    ]);
+    for (const [name, requiredType] of expected) {
+      const field = struct.decl.fields.find((candidate) => candidate.name === name);
+      if (!field) {
+        if (name !== 'representation') {
+          this.sink.error('FORM-E-664', span,
+            `pool '${displayName}' struct '${struct.decl.name}' is missing required flow lane '${name}: ${typeName(requiredType)}' (FORM-E-664)`);
+        }
+        continue;
+      }
+      const actualType = this.resolveType(struct.mod, field.type);
+      if (!tAgree(actualType, requiredType)) {
+        this.sink.error('FORM-E-664', field.span,
+          `pool '${displayName}' flow lane '${name}' must be ${typeName(requiredType)}, got ${typeName(actualType)} (FORM-E-664)`);
+      }
     }
   }
 
