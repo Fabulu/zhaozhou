@@ -71,6 +71,31 @@ test('emitted deterministic source has no forbidden numeric or host-clock surfac
   }
 });
 
+test('C++ backend refuses field applications until W3.4 supplies the physical wrapper', () => {
+  const frontend = compileFrontend({
+    'field_user.form': `module field_user {
+  @earth field lift_ground() -> terrain_delta
+    footprint circle(0m, 0m, 4m);
+    max_ops 16
+  {
+    let d = dist(sample.x, sample.z, 0m, 0m);
+    return terrain_delta { height = d, velocity = 0m, material = 0, nav_cost = 0m };
+  }
+  system apply_earth every 1 ticks reads writes terrain {
+    apply terrain_field lift_ground(origin: world2 { x = 0w, y = 0w }) duration 45t;
+  }
+}
+`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  assert.throws(
+    () => emitCpp(hir, lowerZir(hir)),
+    /cannot emit terrain_field application 'lift_ground'.*W3\.4 supplies its validated physical Field IR wrapper/,
+  );
+});
+
 test('WinLibs compiles and runs generated C++17 state/hash smoke', (t) => {
   const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
   if (!existsSync(compiler)) {

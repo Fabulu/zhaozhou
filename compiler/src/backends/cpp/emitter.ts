@@ -73,6 +73,7 @@ class CppEmitter {
   }
 
   run(): CppOutput {
+    this.refuseUnlinkedFieldApplications();
     const files: CppGeneratedFile[] = [{ path: 'generated/form/form_types.hpp', content: this.typesHeader() }];
     for (const module of [...this.hir.modules].sort((a, b) => a.index - b.index)) {
       files.push({ path: `generated/form/${module.name}.hpp`, content: this.moduleHeader(module) });
@@ -84,6 +85,25 @@ class CppEmitter {
       if (file.content.includes('\r') || !file.content.endsWith('\n')) throw new Error(`C++ emitter violated LF law for ${file.path}`);
     }
     return { files, manifestCrc32c: this.hir.manifestCrc32c };
+  }
+
+  private refuseUnlinkedFieldApplications(): void {
+    const visit = (statements: readonly HirStmt[]): void => {
+      for (const statement of statements) {
+        if (statement.ast.kind === 'apply') {
+          const { file, start, end } = statement.span;
+          throw new Error(
+            `C++ backend cannot emit terrain_field application '${statement.ast.program}' at ${file}:${start}-${end} `
+            + 'until W3.4 supplies its validated physical Field IR wrapper',
+          );
+        }
+        visit(statement.body);
+        visit(statement.elseBody);
+      }
+    };
+    for (const declaration of this.hir.declarations) {
+      if (declaration.kind === 'system' || declaration.kind === 'fn') visit(declaration.body);
+    }
   }
 
   private banner(): string {
@@ -363,8 +383,7 @@ class CppEmitter {
           o.line(`${pad}return${statement.expressions.length ? ` ${this.expr(statement.expressions[0]!, ctx)}` : ''};`);
           break;
         case 'apply':
-          o.line(`${pad}// Field application is linked through the W3.4 generated wrapper.`);
-          break;
+          throw new Error('unlinked terrain_field application reached C++ statement emission');
         case 'bad_stmt':
           throw new Error('C++ emitter received recovered bad statement');
       }
