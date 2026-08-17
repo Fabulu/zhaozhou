@@ -309,9 +309,7 @@ void test_sky_orientation() {
   res.sky_sets.push_back({2, s});
   const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 5714, 65287, false);
   {
-    zref::mat4fx rp;
-    for (int a = 0; a < 4; ++a)
-      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{(&m.m00)[a * 4 + b]};
+    const zref::mat4fx rp = rtest::to_zref(m);
     check(zref::sky::rot_proj_is_rotation_only(rp), "orientation fixture is rotation-only (§1)");
   }
 

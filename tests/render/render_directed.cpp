@@ -36,14 +36,6 @@ fs::path repo_root() {
   return dir;
 }
 
-zref::mat4fx to_zref(const zhao_abi::ZhMat4fx& m) {
-  zref::mat4fx r;
-  const int32_t* p = &m.m00;
-  for (int a = 0; a < 4; ++a)
-    for (int b = 0; b < 4; ++b) r.m[a][b] = zref::fx16{p[a * 4 + b]};
-  return r;
-}
-
 // ---- 1. hand-computed projection (qformats §2/§3/§8) -----------------------
 //
 // vp = [[2,0,0,0],[0,2,0,0],[0,0,1,0],[0,0,1,0]] (fx16), world (0.75,
@@ -60,7 +52,7 @@ zref::mat4fx to_zref(const zhao_abi::ZhMat4fx& m) {
 //            -> >>16 = 84<<16 -> S12.8 = 84<<8 = 21504         (exact)
 //   depth   = round(65536*65536/196608) = round(21845.33) = 21845 (§4 rhu)
 void test_projection_hand_computed() {
-  const zref::mat4fx vp = to_zref(rtest::persp2x());
+  const zref::mat4fx vp = rtest::to_zref(rtest::persp2x());
   const zref::render::Viewport vpp{0, 0, 256, 192};
   const zref::render::ProjOut p = zref::render::project_vertex(
       vp, vpp, zref::fx16{49152}, zref::fx16{-12288}, zref::fx16{196608}, nullptr);
@@ -110,7 +102,7 @@ void test_marker_perspective_sizing() {
   // perspective: x*2, y*-2, w = z + 32
   const int32_t mm[16] = {2 << 16, 0, 0,       0, 0, -2 << 16, 0,       0,
                           0,       0, 1 << 16, 0, 0, 0,        1 << 16, 32 << 16};
-  const zref::mat4fx vp = to_zref(rtest::mat(mm));
+  const zref::mat4fx vp = rtest::to_zref(rtest::mat(mm));
   const Viewport vpp{0, 0, kDim, kDim};
 
   FormPattern solid;
@@ -351,7 +343,7 @@ void test_no_seam_cracks_terrain() {
   // frame, so every pixel is inside some cell.
   const TerrainPatch patch = rtest::bump_patch(33, 33, 8, 6);
   const Material mat{96, 128, 72};
-  const zref::mat4fx vpm = to_zref(rtest::ortho_topdown(16384));  // +-4 m fills
+  const zref::mat4fx vpm = rtest::to_zref(rtest::ortho_topdown(16384));  // +-4 m fills
   WorkSurface surf;
   const zref::sky::SkyColor bgc{214, 117, 90};  // sentinel (warm)
   surf.reset(kW, kH, bgc);

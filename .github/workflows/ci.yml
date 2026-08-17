@@ -160,9 +160,9 @@ jobs:
           echo "$files" | wc -l
           npx -y clang-format@1.8.0 --dry-run --Werror $files
       # M1: the "static analysis" tier. tsc already gates every TS change in
-      # the npm job; cppcheck covers the C++ side. Verified clean against
-      # cppcheck 2.20.0 locally with this exact flag set; the runner's apt
-      # build may be older (fewer checks — never silently more).
+      # the npm job; cppcheck covers the C++ side. The runner's distro version
+      # may differ from local cppcheck; the source must pass this exact gate
+      # under both.
       - name: cppcheck --enable=warning
         shell: bash
         run: |

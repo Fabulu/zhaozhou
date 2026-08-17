@@ -103,12 +103,17 @@ inline std::vector<uint8_t> seal_frame(uint32_t frame_id,
   return b.seal(frame_id, frame_id, 1);
 }
 
-// row-major fx16 matrix from 16 raws
+// row-major fx16 matrix from 16 raws; ZhMat4fx has named fields, not an array
 inline zhao_abi::ZhMat4fx mat(const int32_t m[16]) {
-  zhao_abi::ZhMat4fx r;
-  int32_t* p = &r.m00;
-  for (int i = 0; i < 16; ++i) p[i] = m[i];
-  return r;
+  return {m[0], m[1], m[2],  m[3],  m[4],  m[5],  m[6],  m[7],
+          m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]};
+}
+
+inline zref::mat4fx to_zref(const zhao_abi::ZhMat4fx& src) {
+  return {{{zref::fx16{src.m00}, zref::fx16{src.m01}, zref::fx16{src.m02}, zref::fx16{src.m03}},
+           {zref::fx16{src.m10}, zref::fx16{src.m11}, zref::fx16{src.m12}, zref::fx16{src.m13}},
+           {zref::fx16{src.m20}, zref::fx16{src.m21}, zref::fx16{src.m22}, zref::fx16{src.m23}},
+           {zref::fx16{src.m30}, zref::fx16{src.m31}, zref::fx16{src.m32}, zref::fx16{src.m33}}}};
 }
 
 // ortho top-down "camera": screen x <- world x, screen y <- world Z, w = 1

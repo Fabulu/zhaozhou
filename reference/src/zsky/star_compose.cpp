@@ -71,15 +71,15 @@ void draw_clut_quad(Plane& p, const Sprite8& spr, const uint8_t pal[64][3], int3
       const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * spr.w) / wq);
       const uint8_t t = spr.pix[static_cast<size_t>(sy) * spr.w + sx];
       if (t == 0) continue;  // alpha-test index 0 / additive identity
-      uint8_t* dst = &p.rgb[idx * 3];
+      const size_t rgb_idx = idx * 3;
       if (additive) {
-        dst[0] = sat_add_u8(dst[0], pal[t][0]);
-        dst[1] = sat_add_u8(dst[1], pal[t][1]);
-        dst[2] = sat_add_u8(dst[2], pal[t][2]);
+        p.rgb[rgb_idx] = sat_add_u8(p.rgb[rgb_idx], pal[t][0]);
+        p.rgb[rgb_idx + 1] = sat_add_u8(p.rgb[rgb_idx + 1], pal[t][1]);
+        p.rgb[rgb_idx + 2] = sat_add_u8(p.rgb[rgb_idx + 2], pal[t][2]);
       } else {
-        dst[0] = pal[t][0];
-        dst[1] = pal[t][1];
-        dst[2] = pal[t][2];
+        p.rgb[rgb_idx] = pal[t][0];
+        p.rgb[rgb_idx + 1] = pal[t][1];
+        p.rgb[rgb_idx + 2] = pal[t][2];
       }
       p.tag[idx] = glow_tag(t < tag_cap ? t : tag_cap);  // strength as drawn
       if (frags) ++(*frags);
@@ -188,10 +188,10 @@ void composite_trail(Plane& p, const std::vector<uint8_t>& intensity, const uint
       const size_t idx = static_cast<size_t>(y) * p.w + x;
       const uint8_t v = intensity[idx];
       if (v == 0 || !(kStarDepth > p.depth[idx])) continue;
-      uint8_t* out = &p.rgb[idx * 3];
-      out[0] = sat_add_u8(out[0], ramp[v][0]);
-      out[1] = sat_add_u8(out[1], ramp[v][1]);
-      out[2] = sat_add_u8(out[2], ramp[v][2]);
+      const size_t rgb_idx = idx * 3;
+      p.rgb[rgb_idx] = sat_add_u8(p.rgb[rgb_idx], ramp[v][0]);
+      p.rgb[rgb_idx + 1] = sat_add_u8(p.rgb[rgb_idx + 1], ramp[v][1]);
+      p.rgb[rgb_idx + 2] = sat_add_u8(p.rgb[rgb_idx + 2], ramp[v][2]);
       p.tag[idx] = glow_tag(v);
       if (frags) ++(*frags);
     }

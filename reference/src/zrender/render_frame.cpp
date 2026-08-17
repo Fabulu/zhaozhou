@@ -69,6 +69,14 @@ T find_ptr(const std::vector<std::pair<uint32_t, T>>& tab, uint32_t h) {
     if (e.first == h) return e.second;
   return nullptr;
 }
+
+// ZhMat4fx has named ABI fields, not an array; never index across its members.
+mat4fx from_abi_mat4(const zhao_abi::ZhMat4fx& src) {
+  return {{{fx16{src.m00}, fx16{src.m01}, fx16{src.m02}, fx16{src.m03}},
+           {fx16{src.m10}, fx16{src.m11}, fx16{src.m12}, fx16{src.m13}},
+           {fx16{src.m20}, fx16{src.m21}, fx16{src.m22}, fx16{src.m23}},
+           {fx16{src.m30}, fx16{src.m31}, fx16{src.m32}, fx16{src.m33}}}};
+}
 }  // namespace
 
 const zfield::Decoded* RenderResources::field_program(uint32_t h) const {
@@ -136,7 +144,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
   // ---- per-frame draw state ----------------------------------------------
   struct ViewSt {
     bool active = false;
-    mat4fx vp;
+    mat4fx vp{};
     int32_t pixel_error = 0;
   } views[2];
   std::vector<FieldApp> fields;
@@ -209,10 +217,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
         zhao_unpack_set_view(r, c);
         if (c.payload.view_id < 2) {
           views[c.payload.view_id].active = true;
-          for (int a = 0; a < 4; ++a)
-            for (int b = 0; b < 4; ++b)
-              views[c.payload.view_id].vp.m[a][b] =
-                  fx16{(&c.payload.view_projection.m00)[a * 4 + b]};
+          views[c.payload.view_id].vp = from_abi_mat4(c.payload.view_projection);
           views[c.payload.view_id].pixel_error = c.payload.pixel_error;
         }
         break;
@@ -346,9 +351,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     // pass 1 + 6: sky (viewport_mask gates the view; rotation-only law §1)
     if (has_sky && (sky.cmd.payload.viewport_mask & (1u << view))) {
       const zhao_abi::ZhMat4fx& rm = sky.cmd.payload.rot_proj[view];
-      mat4fx rp;
-      for (int a = 0; a < 4; ++a)
-        for (int b = 0; b < 4; ++b) rp.m[a][b] = fx16{(&rm.m00)[a * 4 + b]};
+      const mat4fx rp = from_abi_mat4(rm);
       if (sky::rot_proj_is_rotation_only(rp)) {
         // [sky §1.2 amendment, 2026-08-16] PERSPECTIVE sky projection: the
         // AUTHORED matrix stays rotation-only (validated above, §1), and the

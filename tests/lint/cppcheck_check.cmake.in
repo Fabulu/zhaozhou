@@ -43,7 +43,8 @@ execute_process(
   OUTPUT_VARIABLE _out
   ERROR_VARIABLE _err)
 if(NOT _rc EQUAL 0)
-  message(FATAL_ERROR "static analysis tier: cppcheck findings (rc=${_rc}):\n${_err}")
+  message(FATAL_ERROR
+          "static analysis tier: cppcheck findings (rc=${_rc}):\nstdout:\n${_out}\nstderr:\n${_err}")
 endif()
 list(LENGTH _files _n)
 message(STATUS "static analysis tier OK: ${_n} files, zero warnings")
