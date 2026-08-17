@@ -7,6 +7,7 @@ import type {
   TopDecl, TypeExpr,
 } from '../frontend/ast.js';
 import { serializeAst } from '../frontend/ast.js';
+import { evaluateExactConstant, type ExactConstantBindings } from '../frontend/exact_constant.js';
 import type { FrontendResult } from '../frontend/index.js';
 import { T, typeName, type Type } from '../frontend/checker.js';
 import type { SourceSpan } from '../frontend/span.js';
@@ -147,8 +148,11 @@ class HirLowerer {
         const sym = this.require(module, decl.structName);
         const capacity = decl.capacity?.kind === 'int'
           ? this.u32Number(decl.capacity.value, `pool '${decl.name}' capacity`, true)
-          : this.u32Number(this.intConst(module, decl.capacity?.name ?? '') ?? 0n,
-            `pool '${decl.name}' capacity`, true);
+          : this.u32Number(
+            this.requiredIntConst(module, decl.capacity?.name ?? '', `pool '${decl.name}' capacity`),
+            `pool '${decl.name}' capacity`,
+            true,
+          );
         const elementType: Type = { t: 'struct', name: qname(sym.module, sym.name) };
         return {
           kind: 'pool', domain: 'state', module, order, name: decl.name,
@@ -525,7 +529,9 @@ class HirLowerer {
 
   private type(module: number, ast: TypeExpr): Type {
     if (ast.kind === 'array') {
-      const value = ast.len.kind === 'int' ? ast.len.value : this.intConst(module, ast.len.name) ?? 0n;
+      const value = ast.len.kind === 'int'
+        ? ast.len.value
+        : this.requiredIntConst(module, ast.len.name, 'array length');
       const len = this.u32Number(value, 'array length', true);
       return { t: 'array', elem: this.type(module, ast.elem), len };
     }
@@ -589,65 +595,84 @@ class HirLowerer {
   }
 
   private raw(module: number, ast: Expr, type: Type): bigint | null {
-    if (ast.kind === 'unary' && ast.op === '-') {
-      const value = this.raw(module, ast.operand, type);
-      return value === null ? null : -value;
-    }
+    const bindings: ExactConstantBindings<number> = {
+      typeOf: (owner, expression) => this.constantType(owner, expression),
+      constant: (owner, expression) => {
+        let symbol: SymbolInfo | null = null;
+        if (expression.kind === 'ident') {
+          symbol = this.resolve(owner, expression.name);
+        } else if (expression.kind === 'member' && expression.obj.kind === 'ident') {
+          symbol = this.qualifiedMember(owner, expression.obj.name, expression.field);
+        }
+        if (symbol?.decl.kind !== 'Const') return null;
+        return {
+          context: symbol.module,
+          expression: symbol.decl.init,
+          type: this.type(symbol.module, symbol.decl.type),
+          key: JSON.stringify([symbol.module, symbol.name]),
+        };
+      },
+      enumMember: (owner, expression) => this.constantEnumMember(owner, expression),
+    };
+    return evaluateExactConstant(module, ast, type, bindings);
+  }
+
+  private constantType(module: number, ast: Expr): Type | null {
+    const checked = this.expressionTypes.get(ast);
+    if (checked && checked.t !== 'unknown') return checked;
     if (ast.kind === 'literal') {
-      if (ast.lit === 'bool') return ast.text === 'true' ? 1n : 0n;
-      if (ast.lit === 'colour') {
-        const digits = ast.text.startsWith('#') ? ast.text.slice(1) : ast.text;
-        const rgb = BigInt(`0x${digits}`);
-        return digits.length === 6 ? 0xff000000n | rgb : rgb;
-      }
-      if (ast.lit === 'int' || ast.lit === 'tick') {
-        const value = ast.intVal ?? 0n;
-        return type.t === 'fx16' ? value << 16n : type.t === 'fx24' ? value << 24n : value;
-      }
+      if (ast.lit === 'bool') return T.bool;
+      if (ast.lit === 'colour') return T.colour8;
+      if (ast.lit === 'tick') return T.u32;
       if (ast.lit === 'frac') {
-        const frac = ast.frac!;
-        const numerator = BigInt(frac.intDigits + frac.fracDigits);
-        const denominator = 10n ** BigInt(frac.fracDigits.length);
-        if (type.t === 'fx16') return (numerator << 16n) / denominator;
-        if (type.t === 'fx24') return (numerator << 24n) / denominator;
-        if (type.t === 'angle16') return ((numerator << 16n) / (denominator * (frac.suffix === 'deg' ? 360n : 1n))) & 0xffffn;
-        if (type.t === 'unit8') return min(255n, (numerator * 256n + denominator * 50n) / (denominator * 100n));
+        if (ast.frac?.suffix === 'w') return T.fx24;
+        if (ast.frac?.suffix === 'turn' || ast.frac?.suffix === 'deg') return T.angle16;
+        if (ast.frac?.suffix === '%') return T.unit8;
+        return T.fx16;
       }
+      return null;
     }
     if (ast.kind === 'ident') {
-      if (BUTTONS.has(ast.name)) return BUTTONS.get(ast.name)!;
-      const sym = this.resolve(module, ast.name);
-      if (sym?.decl.kind === 'Const') return this.raw(sym.module, sym.decl.init, this.type(sym.module, sym.decl.type));
+      if (BUTTONS.has(ast.name)) return T.u32;
+      const symbol = this.resolve(module, ast.name);
+      return symbol?.decl.kind === 'Const' ? this.type(symbol.module, symbol.decl.type) : null;
     }
     if (ast.kind === 'member') {
+      const member = this.constantEnumMember(module, ast);
+      if (member) return member.type as Type;
       if (ast.obj.kind === 'ident') {
-        const qualified = this.qualifiedMember(module, ast.obj.name, ast.field);
-        if (qualified?.decl.kind === 'Const') {
-          return this.raw(qualified.module, qualified.decl.init, this.type(qualified.module, qualified.decl.type));
-        }
-        const symbol = this.resolve(module, ast.obj.name);
-        if (symbol?.decl.kind === 'Enum') return this.enumRaw(symbol, ast.field);
+        const symbol = this.qualifiedMember(module, ast.obj.name, ast.field);
+        if (symbol?.decl.kind === 'Const') return this.type(symbol.module, symbol.decl.type);
       }
-      if (ast.obj.kind === 'member' && ast.obj.obj.kind === 'ident') {
-        const symbol = this.qualifiedMember(module, ast.obj.obj.name, ast.obj.field);
-        if (symbol?.decl.kind === 'Enum') return this.enumRaw(symbol, ast.field);
-      }
+      return null;
     }
+    if (ast.kind === 'unary') return ast.op === '!' ? T.bool : this.constantType(module, ast.operand);
     if (ast.kind === 'binary') {
-      const l = this.raw(module, ast.l, type);
-      const r = this.raw(module, ast.r, type);
-      if (l === null || r === null) return null;
-      if (ast.op === '+') return l + r;
-      if (ast.op === '-') return l - r;
-      if (ast.op === '*') return type.t === 'fx16' ? ((l * r + 0x8000n) >> 16n) : type.t === 'fx24' ? ((l * r + 0x800000n) >> 24n) : l * r;
-      if (ast.op === '/' && r !== 0n) return l / r;
-      if (ast.op === '<<') return l << r;
-      if (ast.op === '>>') return l >> r;
-      if (ast.op === '&') return l & r;
-      if (ast.op === '|') return l | r;
-      if (ast.op === '^') return l ^ r;
+      if (['<', '<=', '>', '>=', '==', '!=', '&&', '||'].includes(ast.op)) return T.bool;
+      return this.constantType(module, ast.l) ?? this.constantType(module, ast.r);
     }
     return null;
+  }
+
+  private constantEnumMember(module: number, ast: Expr): { type: Type; value: bigint } | null {
+    if (ast.kind === 'ident' && BUTTONS.has(ast.name)) {
+      return { type: T.u32, value: BUTTONS.get(ast.name)! };
+    }
+    let symbol: SymbolInfo | null = null;
+    let name = '';
+    if (ast.kind === 'member' && ast.obj.kind === 'ident') {
+      symbol = this.resolve(module, ast.obj.name);
+      name = ast.field;
+    } else if (ast.kind === 'member' && ast.obj.kind === 'member'
+        && ast.obj.obj.kind === 'ident') {
+      symbol = this.qualifiedMember(module, ast.obj.obj.name, ast.obj.field);
+      name = ast.field;
+    }
+    if (symbol?.decl.kind !== 'Enum') return null;
+    const value = this.enumRaw(symbol, name);
+    return value === null
+      ? null
+      : { type: { t: 'enum', name: qname(symbol.module, symbol.name) }, value };
   }
 
   private enumRaw(symbol: SymbolInfo, name: string): bigint | null {
@@ -664,6 +689,14 @@ class HirLowerer {
   private intConst(module: number, name: string): bigint | null {
     const sym = this.resolve(module, name);
     return sym?.decl.kind === 'Const' ? this.raw(sym.module, sym.decl.init, this.type(sym.module, sym.decl.type)) : null;
+  }
+
+  private requiredIntConst(module: number, name: string, label: string): bigint {
+    const value = this.intConst(module, name);
+    if (value === null) {
+      throw new Error(`internal HIR ${label} '${name}' did not reduce after frontend acceptance`);
+    }
+    return value;
   }
 
   private resolve(module: number, name: string): SymbolInfo | null {

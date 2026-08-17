@@ -104,6 +104,71 @@ test('HIR preserves exact contextual types through every L1 target context', () 
   assert.deepEqual(globalAssign.expressions[1]!.children.map((child) => child.type.t), ['u32', 'u32']);
 });
 
+test('HIR uses the frontend exact reducer for required bounds and width-normalized constants', () => {
+  const frontend = compileFrontend({
+    'capacity.form': `module capacity {
+      const ZERO: u32 = 0;
+      const MASK: u32 = ~ZERO;
+      const CAP: u32 = MASK >> 30;
+      const WRAPPED: u32 = 4294967295 + 2;
+      const SIGNED: i32 = ~0;
+      const TRUTH: bool = !false;
+      struct row { values: u32[CAP]; }
+      pool rows: row[CAP];
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const constants = new Map(declarationsOf(hir, 'const').map((item) => [item.name, item.raw]));
+  assert.deepEqual(constants, new Map<string, bigint | null>([
+    ['ZERO', 0n], ['MASK', 0xffffffffn], ['CAP', 3n],
+    ['WRAPPED', 1n], ['SIGNED', -1n], ['TRUTH', 1n],
+  ]));
+  assert.equal(declarationsOf(hir, 'pool')[0]!.capacity, 3);
+  const row = declarationsOf(hir, 'struct')[0]!;
+  assert.equal(row.fields[0]!.type.t, 'array');
+  assert.equal(row.fields[0]!.type.t === 'array' ? row.fields[0]!.type.len : null, 3);
+
+  const refused = compileFrontend({
+    'irreducible.form': `module irreducible {
+      const ZERO: u32 = 0;
+      const BAD: u32 = 1 / ZERO;
+      struct row { values: u32[BAD]; }
+      pool rows: row[BAD];
+    }\n`,
+  });
+  assert.equal(refused.ok, false);
+  assert.ok(refused.diagnostics.some((item) => item.code === 'FORM-E-800'));
+  assert.ok(refused.diagnostics.some((item) => item.code === 'FORM-E-801'));
+  assert.equal(lowerHir(refused), null);
+});
+
+test('qualified flow calls retain owner identity and canonical pool effects in HIR', () => {
+  const frontend = compileFrontend({
+    'a_flowlib.form': `module flowlib {
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+    }\n`,
+    'b_consumer.form': `module consumer {
+      import flowlib;
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+      system move every 1 ticks reads motes writes motes { flowlib.drift(motes); }
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const system = declarationsOf(hir, 'system')[0]!;
+  assert.deepEqual(system.reads, ['consumer\0motes']);
+  assert.deepEqual(system.writes, ['consumer\0motes']);
+  assert.deepEqual(system.body[0]!.expressions[0]!.symbol, { kind: 'field', module: 0, name: 'drift' });
+  assert.deepEqual(system.body[0]!.expressions[0]!.children[0]!.symbol,
+    { kind: 'pool', module: 1, name: 'motes' });
+});
+
 test('HIR keeps ordinary composition recursive, marks only direct pool columns, and starts source rows at zero', () => {
   const frontend = compileFrontend({
     'composition.form': `module composition {

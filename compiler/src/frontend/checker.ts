@@ -12,6 +12,7 @@ import {
   Stmt, StructDecl, SystemDecl, TypeExpr,
 } from './ast.js';
 import { DiagnosticSink } from './diagnostics.js';
+import { evaluateExactConstant, type ExactConstantBindings } from './exact_constant.js';
 import { SourceSpan } from './span.js';
 
 // ---------------------------------------------------------------------------
@@ -379,14 +380,15 @@ class Checker {
       const value = te.len.kind === 'int'
         ? te.len.value
         : this.constEval(ms, { kind: 'ident', name: te.len.name, span: te.span } as Expr);
-      let len = 0;
-      if (value !== null) {
-        if (value <= 0n || value > 0xffffffffn || value > BigInt(Number.MAX_SAFE_INTEGER)) {
-          this.sink.error('FORM-E-801', te.span,
-            `array length ${value} is outside the backend-representable range 1..4294967295`);
-        } else {
-          len = Number(value);
-        }
+      let len = 1;
+      if (value === null) {
+        this.sink.error('FORM-E-801', te.span,
+          'array length must reduce to an exact positive u32 constant');
+      } else if (value <= 0n || value > 0xffffffffn || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        this.sink.error('FORM-E-801', te.span,
+          `array length ${value} is outside the backend-representable range 1..4294967295`);
+      } else {
+        len = Number(value);
       }
       return { t: 'array', elem, len };
     }
@@ -566,7 +568,11 @@ class Checker {
           this.sink.error('FORM-E-800', d.capacity.span,
             `pool capacity const '${d.capacity.name}' must be u32`);
         }
-        cap = this.constEval(r.mod, cd.init);
+        cap = this.constEval(r.mod, cd.init, cty);
+        if (cap === null) {
+          this.sink.error('FORM-E-800', d.capacity.span,
+            `pool capacity const '${d.capacity.name}' must reduce to an exact positive u32 value`);
+        }
       }
     }
     if (cap !== null && (cap <= 0n || cap > 0xffffffffn)) {
@@ -1939,104 +1945,103 @@ class Checker {
     }
   }
 
-  /** Integer constant evaluation; null when not a known constant. */
-  private constEval(ms: ModuleSym, e: Expr, active: Set<string> = new Set()): bigint | null {
-    switch (e.kind) {
-      case 'literal': {
-        if (e.lit === 'int' || e.lit === 'tick') return e.intVal ?? null;
-        if (e.lit === 'bool') return e.text === 'true' ? 1n : 0n;
-        if (e.lit === 'colour') {
-          const digits = e.text.startsWith('#') ? e.text.slice(1) : e.text;
-          return BigInt(`0x${digits}`);
+  /** Typed exact integer reduction; null when the expression is irreducible. */
+  private constEval(ms: ModuleSym, e: Expr, expected: Type | null = null): bigint | null {
+    const bindings: ExactConstantBindings<ModuleSym> = {
+      typeOf: (owner, expression) => this.constKnownType(owner, expression),
+      constant: (owner, expression) => {
+        let resolved: ReturnType<Checker['resolveName']> = null;
+        if (expression.kind === 'ident') {
+          resolved = this.resolveName(owner, expression.name);
+        } else if (expression.kind === 'member' && expression.obj.kind === 'ident') {
+          resolved = this.resolveName(owner, `${expression.obj.name}.${expression.field}`);
         }
-        if (e.lit === 'frac') {
-          const numerator = BigInt(e.frac!.intDigits + e.frac!.fracDigits);
-          // constEval has an integer result contract.  A fractional literal can
-          // participate only when zero is representation-independent; treating
-          // nonzero decimal numerators as integers would make expressions with
-          // different decimal scales compare incorrectly.
-          return numerator === 0n ? 0n : null;
-        }
-        return null;
+        if (!resolved || resolved.ambiguous === true || resolved.sym.kind !== 'const') return null;
+        const declaration = resolved.sym.decl as unknown as ConstDecl;
+        return {
+          context: resolved.mod,
+          expression: declaration.init,
+          type: this.resolveType(resolved.mod, declaration.type),
+          key: JSON.stringify([resolved.mod.ast.name, declaration.name]),
+        };
+      },
+      enumMember: (owner, expression) => this.constEnumMember(owner, expression),
+    };
+    return evaluateExactConstant(ms, e, expected ?? this.constKnownType(ms, e), bindings);
+  }
+
+  /** Known authored type without producing diagnostics or recording effects. */
+  private constKnownType(ms: ModuleSym, e: Expr): Type | null {
+    const checked = this.expressionTypes.get(e);
+    if (checked && checked.t !== 'unknown') return checked;
+    if (e.kind === 'literal') {
+      if (e.lit === 'bool') return T.bool;
+      if (e.lit === 'colour') return T.colour8;
+      if (e.lit === 'tick') return T.u32;
+      if (e.lit === 'frac') {
+        if (e.frac?.suffix === 'w') return T.fx24;
+        if (e.frac?.suffix === 'turn' || e.frac?.suffix === 'deg') return T.angle16;
+        if (e.frac?.suffix === '%') return T.unit8;
+        return T.fx16;
       }
-      case 'unary': {
-        if (e.op !== '-') return null;
-        const v = this.constEval(ms, e.operand, active);
-        return v === null ? null : -v;
-      }
-      case 'binary': {
-        const l = this.constEval(ms, e.l, active);
-        const r = this.constEval(ms, e.r, active);
-        if (l === null || r === null) return null;
-        switch (e.op) {
-          case '+': return l + r;
-          case '-': return l - r;
-          case '*': return l * r;
-          case '/': return r === 0n ? null : l / r;
-          case '<<': return l << r;
-          case '>>': return l >> r;
-          case '&': return l & r;
-          case '|': return l | r;
-          case '^': return l ^ r;
-          default: return null;
-        }
-      }
-      case 'ident': {
-        const res = this.resolveName(ms, e.name);
-        if (!res || res.ambiguous === true || res.sym.kind !== 'const') return null;
-        const cd = res.sym.decl as unknown as ConstDecl;
-        const currentKey = JSON.stringify([res.mod.ast.name, cd.name]);
-        if (active.has(currentKey)) return null;
-        active.add(currentKey);
-        const v = this.constEval(res.mod, cd.init, active);
-        active.delete(currentKey);
-        return v;
-      }
-      case 'member': {
-        if (e.obj.kind === 'ident') {
-          const moduleName = e.obj.name;
-          const target = ms.ast.imports.some((imp) => imp.module === moduleName && imp.names.length === 0)
-            ? this.byName.get(moduleName) : undefined;
-          const qualified = target?.table.get(e.field);
-          if (target && qualified?.kind === 'const') {
-            const declaration = qualified.decl as unknown as ConstDecl;
-            const currentKey = JSON.stringify([target.ast.name, declaration.name]);
-            if (active.has(currentKey)) return null;
-            active.add(currentKey);
-            const value = this.constEval(target, declaration.init, active);
-            active.delete(currentKey);
-            return value;
-          }
-          const res = this.resolveUnqualified(ms, e.obj.name);
-          if (!res || res.ambiguous === true || res.sym.kind !== 'enum') return null;
-          const ed = res.sym.decl as unknown as EnumDecl;
-          let next = 0n;
-          for (const m of ed.members) {
-            const val = m.value ?? next;
-            next = val + 1n;
-            if (m.name === e.field) return val;
-          }
-          return null;
-        }
-        if (e.obj.kind === 'member' && e.obj.obj.kind === 'ident') {
-          const moduleName = e.obj.obj.name;
-          const target = ms.ast.imports.some((imp) => imp.module === moduleName && imp.names.length === 0)
-            ? this.byName.get(moduleName) : undefined;
-          const symbol = target?.table.get(e.obj.field);
-          if (symbol?.kind === 'enum') {
-            let next = 0n;
-            for (const member of (symbol.decl as unknown as EnumDecl).members) {
-              const value = member.value ?? next;
-              next = value + 1n;
-              if (member.name === e.field) return value;
-            }
-          }
-        }
-        return null;
-      }
-      default:
-        return null;
+      return null; // bare integers are target-typed by their enclosing expression
     }
+    if (e.kind === 'ident') {
+      const resolved = this.resolveName(ms, e.name);
+      if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'const') {
+        return this.resolveType(resolved.mod, (resolved.sym.decl as unknown as ConstDecl).type);
+      }
+      return null;
+    }
+    if (e.kind === 'member') {
+      const member = this.constEnumMember(ms, e);
+      if (member) return member.type as Type;
+      if (e.obj.kind === 'ident') {
+        const resolved = this.resolveName(ms, `${e.obj.name}.${e.field}`);
+        if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'const') {
+          return this.resolveType(resolved.mod, (resolved.sym.decl as unknown as ConstDecl).type);
+        }
+      }
+      return null;
+    }
+    if (e.kind === 'unary') return e.op === '!' ? T.bool : this.constKnownType(ms, e.operand);
+    if (e.kind === 'binary') {
+      if (['<', '<=', '>', '>=', '==', '!=', '&&', '||'].includes(e.op)) return T.bool;
+      return this.constKnownType(ms, e.l) ?? this.constKnownType(ms, e.r);
+    }
+    return null;
+  }
+
+  private constEnumMember(ms: ModuleSym, e: Expr): { type: Type; value: bigint } | null {
+    let declaration: EnumDecl | null = null;
+    let owner: ModuleSym | null = null;
+    let memberName = '';
+    if (e.kind === 'member' && e.obj.kind === 'ident') {
+      const resolved = this.resolveUnqualified(ms, e.obj.name);
+      if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'enum') {
+        declaration = resolved.sym.decl as unknown as EnumDecl;
+        owner = resolved.mod;
+        memberName = e.field;
+      }
+    } else if (e.kind === 'member' && e.obj.kind === 'member'
+        && e.obj.obj.kind === 'ident') {
+      const resolved = this.resolveName(ms, `${e.obj.obj.name}.${e.obj.field}`);
+      if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'enum') {
+        declaration = resolved.sym.decl as unknown as EnumDecl;
+        owner = resolved.mod;
+        memberName = e.field;
+      }
+    }
+    if (!declaration || !owner) return null;
+    let next = 0n;
+    for (const member of declaration.members) {
+      const value = member.value ?? next;
+      next = value + 1n;
+      if (member.name === memberName) {
+        return { type: { t: 'enum', name: declaration.name, owner: owner.ast.name }, value };
+      }
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -2801,27 +2806,18 @@ class Checker {
         return this.checkIntrinsicCall(ctx, e, `${base}.${fn}`, expected);
       }
     }
-    // whole-module-qualified function call: import m; m.inc(...)
+    // whole-module-qualified callable: import m; m.name(...)
     const qualified = this.resolveRootSymbol(ctx, e.callee);
-    if (e.callee.kind === 'member' && qualified?.sym.kind === 'fn') {
-      if (ctx.domain === 'field') {
-        this.sink.error('FORM-E-652', e.span,
-          `call to fn '${qualified.mod.ast.name}.${qualified.name}' inside a field body (FORM-E-652)`);
-        return T.unknown;
-      }
-      const declaration = qualified.sym.decl as unknown as FnDecl;
-      this.recordFnEdge(currentFn(ctx), `${qualified.mod.ast.name}::${qualified.name}`, e.span);
-      if (declaration.params.length !== e.args.length) {
-        this.sink.error('FORM-E-304', e.span,
-          `wrong argument count in call to '${qualified.mod.ast.name}.${qualified.name}' (${e.args.length} for ${declaration.params.length})`);
-      }
-      for (let index = 0; index < e.args.length; ++index) {
-        const parameter = declaration.params[index];
-        this.checkExpr(ctx, e.args[index]!, parameter ? this.resolveType(qualified.mod, parameter.type) : null);
-      }
-      return this.resolveType(qualified.mod, declaration.ret);
+    if (e.callee.kind === 'member' && qualified) {
+      const result = this.checkResolvedCall(
+        ctx,
+        e,
+        qualified,
+        `${qualified.mod.ast.name}.${qualified.name}`,
+      );
+      if (result !== null) return result;
     }
-    // plain fn call
+    // plain callable
     if (e.callee.kind === 'ident') {
       const name = e.callee.name;
       // bare-name built-ins (§4.6) — the builtin table wins over user names
@@ -2830,66 +2826,13 @@ class Checker {
       }
       const r = this.resolveUnqualified(ctx.mod, name);
       if (r && r.ambiguous !== true) {
-        if (r.sym.kind === 'fn') {
-          if (ctx.domain === 'field') {
-            this.sink.error('FORM-E-652', e.span,
-              `call to fn '${name}' inside a field body — not even pure fns (branchless law, FORM-E-652)`);
-            return T.unknown;
-          }
-          const fd = r.sym.decl as unknown as FnDecl;
-          this.recordFnEdge(currentFn(ctx), `${r.mod.ast.name}::${name}`, e.span);
-          if (fd.params.length !== e.args.length) {
-            this.sink.error('FORM-E-304', e.span,
-              `wrong argument count in call to '${name}' (${e.args.length} for ${fd.params.length})`);
-          }
-          // arguments evaluate in the CALLER's scope (params are not in scope)
-          for (let i = 0; i < fd.params.length && i < e.args.length; i++) {
-            const want = this.resolveType(r.mod, fd.params[i]!.type);
-            this.checkExpr(ctx, e.args[i]!, want);
-          }
-          for (let i = fd.params.length; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, null);
-          return this.resolveType(r.mod, fd.ret);
-        }
-        if (r.sym.kind === 'field') {
-          const fd = r.sym.decl as unknown as FieldDecl;
-          if (ctx.domain === 'field') {
-            this.sink.error('FORM-E-652', e.span,
-              `call inside a field body — not even pure fns or field programs (FORM-E-652)`);
-            return T.unknown;
-          }
-          if (fd.profile === 'flow' && ctx.domain === 'sim') {
-            // per-element flow application: prog(pool, params)
-            if (e.args.length < 1 || e.args[0]!.kind !== 'ident') {
-              this.sink.error('FORM-E-667', e.span,
-                `flow program '${name}' is applied per element: first argument is its mapped pool (FORM-E-667)`);
-            } else {
-              const poolName = e.args[0]!.name;
-              const pool = this.resolveName(ctx.mod, poolName);
-              this.expressionTypes.set(e.args[0]!, pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-                ? this.poolValueType(pool)
-                : T.unknown);
-              this.checkFlowPoolMapping(ctx, poolName, e.args[0]!.span);
-              const canonicalPool = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-                ? this.stateKey(pool.mod, (pool.sym.decl.name as string) ?? poolName)
-                : poolName;
-              this.writeComponent(ctx, canonicalPool, e.args[0]!.span);
-              this.readComponent(ctx, canonicalPool, e.args[0]!.span);
-            }
-            const paramsType = fd.paramsStruct
-              ? this.resolveType(r.mod, { kind: 'named', name: fd.paramsStruct, span: fd.span })
-              : null;
-            for (let i = 1; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, i === 1 ? paramsType : null);
-            return T.void;
-          }
-          this.sink.error('FORM-E-462', e.span,
-            `field program '${name}' is applied with 'apply terrain_field ...' / per-element for flow, not called (FORM-E-462)`);
-          return T.void;
-        }
-        if (r.sym.kind === 'system') {
-          this.sink.error('FORM-E-904', e.span,
-            `system '${name}' runs on the compile-time schedule — it is not callable (scenario actions name systems)`);
-          return T.void;
-        }
+        const result = this.checkResolvedCall(
+          ctx,
+          e,
+          { sym: r.sym, mod: r.mod, name: (r.sym.decl.name as string) ?? name },
+          name,
+        );
+        if (result !== null) return result;
       }
       // unknown callee
       const code = ctx.inAssert ? 'FORM-E-906' : 'FORM-E-203';
@@ -2902,6 +2845,75 @@ class Checker {
     for (const a of e.args) this.checkExpr(ctx, a, null);
     this.sink.error('FORM-E-110', e.span, 'call target is not a function name');
     return T.unknown;
+  }
+
+  private checkResolvedCall(
+    ctx: Ctx,
+    e: Extract<Expr, { kind: 'call' }>,
+    resolved: { sym: Sym; mod: ModuleSym; name: string },
+    displayName: string,
+  ): Type | null {
+    if (resolved.sym.kind === 'fn') {
+      if (ctx.domain === 'field') {
+        this.sink.error('FORM-E-652', e.span,
+          `call to fn '${displayName}' inside a field body — not even pure fns (branchless law, FORM-E-652)`);
+        return T.unknown;
+      }
+      const fd = resolved.sym.decl as unknown as FnDecl;
+      this.recordFnEdge(currentFn(ctx), `${resolved.mod.ast.name}::${resolved.name}`, e.span);
+      if (fd.params.length !== e.args.length) {
+        this.sink.error('FORM-E-304', e.span,
+          `wrong argument count in call to '${displayName}' (${e.args.length} for ${fd.params.length})`);
+      }
+      // Arguments evaluate in the caller's scope; callee params are not in scope.
+      for (let i = 0; i < fd.params.length && i < e.args.length; i++) {
+        const want = this.resolveType(resolved.mod, fd.params[i]!.type);
+        this.checkExpr(ctx, e.args[i]!, want);
+      }
+      for (let i = fd.params.length; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, null);
+      return this.resolveType(resolved.mod, fd.ret);
+    }
+    if (resolved.sym.kind === 'field') {
+      const fd = resolved.sym.decl as unknown as FieldDecl;
+      if (ctx.domain === 'field') {
+        this.sink.error('FORM-E-652', e.span,
+          'call inside a field body — not even pure fns or field programs (FORM-E-652)');
+        return T.unknown;
+      }
+      if (fd.profile === 'flow' && ctx.domain === 'sim') {
+        // Per-element flow application: program(pool, params).
+        if (e.args.length < 1 || e.args[0]!.kind !== 'ident') {
+          this.sink.error('FORM-E-667', e.span,
+            `flow program '${displayName}' is applied per element: first argument is its mapped pool (FORM-E-667)`);
+        } else {
+          const poolName = e.args[0]!.name;
+          const pool = this.resolveName(ctx.mod, poolName);
+          this.expressionTypes.set(e.args[0]!, pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+            ? this.poolValueType(pool)
+            : T.unknown);
+          this.checkFlowPoolMapping(ctx, poolName, e.args[0]!.span);
+          const canonicalPool = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+            ? this.stateKey(pool.mod, (pool.sym.decl.name as string) ?? poolName)
+            : poolName;
+          this.writeComponent(ctx, canonicalPool, e.args[0]!.span);
+          this.readComponent(ctx, canonicalPool, e.args[0]!.span);
+        }
+        const paramsType = fd.paramsStruct
+          ? this.resolveType(resolved.mod, { kind: 'named', name: fd.paramsStruct, span: fd.span })
+          : null;
+        for (let i = 1; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, i === 1 ? paramsType : null);
+        return T.void;
+      }
+      this.sink.error('FORM-E-462', e.span,
+        `field program '${displayName}' is applied with 'apply terrain_field ...' / per-element for flow, not called (FORM-E-462)`);
+      return T.void;
+    }
+    if (resolved.sym.kind === 'system') {
+      this.sink.error('FORM-E-904', e.span,
+        `system '${displayName}' runs on the compile-time schedule — it is not callable (scenario actions name systems)`);
+      return T.void;
+    }
+    return null;
   }
 
   private checkIntrinsicCall(
@@ -3468,14 +3480,7 @@ class Checker {
 
   /** fx-valued constant eval (for footprint args); returns raw fx16 int or null. */
   private constEvalFx(ms: ModuleSym, e: Expr): bigint | null {
-    if (e.kind === 'literal' && e.lit === 'frac') {
-      const f = e.frac!;
-      const num = BigInt(f.intDigits + (f.fracDigits || ''));
-      const den = 10n ** BigInt(f.fracDigits.length || 0);
-      const raw = (num << 16n) / den;
-      return (num << 16n) % den === 0n ? raw : null;
-    }
-    return this.constEval(ms, e) === null ? null : (this.constEval(ms, e)! << 16n);
+    return this.constEval(ms, e, T.fx16);
   }
 }
 

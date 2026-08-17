@@ -459,6 +459,57 @@ test('declaration numeric bounds reject overflow before Number conversion', () =
   assert.ok(compile(MOD(`system huge every 4294967296 ticks reads writes { }`)).codes.includes('FORM-E-506'));
 });
 
+test('exact bound reduction handles unary width operations and diagnoses irreducible bounds', () => {
+  const accepted = compile(MOD(`
+    const ZERO: u32 = 0;
+    const MASK: u32 = ~ZERO;
+    const CAP: u32 = MASK >> 30;
+    const WRAPPED: u32 = 4294967295 + 2;
+    const SIGNED: i32 = ~0;
+    struct row { values: u32[CAP]; }
+    pool rows: row[CAP];
+  `));
+  assert.deepEqual(accepted.codes, [], accepted.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+
+  const refused = compile(MOD(`
+    const ZERO: u32 = 0;
+    const BAD: u32 = 1 / ZERO;
+    struct row { values: u32[BAD]; }
+    pool rows: row[BAD];
+  `));
+  assert.ok(refused.codes.includes('FORM-E-800'));
+  assert.ok(refused.codes.includes('FORM-E-801'));
+});
+
+test('whole-module-qualified flow calls share selective-call admission and pool effects', () => {
+  const source = (whole: boolean): Record<string, string> => ({
+    'a_flowlib.form': `module flowlib {
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+    }\n`,
+    'b_consumer.form': `module consumer {
+      import flowlib${whole ? '' : ' { drift }'};
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+      system move every 1 ticks reads motes writes motes {
+        ${whole ? 'flowlib.drift' : 'drift'}(motes);
+      }
+    }\n`,
+  });
+  const qualified = compile(source(true));
+  const selective = compile(source(false));
+  assert.deepEqual(qualified.codes, [], qualified.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  assert.deepEqual(selective.codes, [], selective.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const scheduled = (result: typeof qualified): unknown => {
+    const system = result.check!.schedule!.phases
+      .flatMap((phase) => phase.systems)
+      .find((item) => item.name === 'move')!;
+    return { name: system.name, module: system.module, every: system.every };
+  };
+  assert.deepEqual(scheduled(qualified), scheduled(selective));
+});
+
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
   const accepted = compile(MOD(`
     enum mode { low = 0, high = 1 }
