@@ -194,68 +194,166 @@ export function buildAbiInfo(
   return out;
 }
 
-// ---- SOURCE_MAP (capture_format.md 5) ----------------------------------------
+// ---- SOURCE_MAP (capture_format.md §7) ---------------------------------------
+
+export const ZMAP_MAGIC = 0x504d535a; // 'Z','S','M','P' little-endian u32
+export const ZMAP_VERSION = 1;
+export const ZMAP_HEADER_BYTES = 32;
+export const ZMAP_ENTRY_BYTES = 24;
+export const ZMAP_FILE_BYTES = 8;
 
 export interface ZcapSourceMapEntry {
   sourceId: number;
   moduleId: number;
+  fileIndex: number;
   kind: number;
   flags: number;
-  line: number;
+  spanBegin: number;
+  spanEnd: number;
   name: string;
   file: string;
+  programHash: number | null;
 }
 
+/** Parse the canonical sourceids.zmap bytes embedded verbatim in SOURCE_MAP. */
 export function parseSourceMap(body: Uint8Array): readonly ZcapSourceMapEntry[] {
+  if (body.length < ZMAP_HEADER_BYTES) throw new Error('sourceids.zmap: truncated header');
   const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
-  const count = dv.getUint32(0, true);
-  const blobStart = 4 + count * 16;
-  const readStr = (off: number): string => {
-    let end = blobStart + off;
-    while (end < body.length && body[end] !== 0) end++;
-    return new TextDecoder().decode(body.subarray(blobStart + off, end));
-  };
-  const out: ZcapSourceMapEntry[] = [];
-  for (let i = 0; i < count; i++) {
-    const e = 4 + i * 16;
-    out.push({
-      sourceId: dv.getUint32(e + 0, true),
-      moduleId: dv.getUint16(e + 4, true),
-      kind: body[e + 6]!,
-      flags: body[e + 7]!,
-      line: dv.getUint32(e + 8, true),
-      name: readStr(dv.getUint16(e + 12, true)),
-      file: readStr(dv.getUint16(e + 14, true)),
-    });
+  if (dv.getUint32(0, true) !== ZMAP_MAGIC) throw new Error('sourceids.zmap: bad magic');
+  if (dv.getUint16(4, true) !== ZMAP_VERSION) throw new Error('sourceids.zmap: unsupported version');
+  const headerFlags = dv.getUint16(6, true);
+  if ((headerFlags & ~1) !== 0) throw new Error('sourceids.zmap: reserved flags');
+  if (dv.getBigUint64(24, true) !== 0n) throw new Error('sourceids.zmap: nonzero reserved header');
+  const entryCount = dv.getUint32(8, true);
+  const fileCount = dv.getUint32(12, true);
+  const blobBytes = dv.getUint32(16, true);
+  const tableBytes = entryCount * ZMAP_ENTRY_BYTES + fileCount * ZMAP_FILE_BYTES;
+  if (ZMAP_HEADER_BYTES + tableBytes + blobBytes !== body.length) {
+    throw new Error('sourceids.zmap: inconsistent lengths');
   }
-  return out;
+  if (crc32c(0, body, ZMAP_HEADER_BYTES) !== dv.getUint32(20, true)) {
+    throw new Error('sourceids.zmap: body CRC mismatch');
+  }
+  const blobStart = ZMAP_HEADER_BYTES + tableBytes;
+  const readString = (offset: number): string => {
+    if (offset < 0 || offset >= blobBytes) throw new Error('sourceids.zmap: string offset outside blob');
+    let end = blobStart + offset;
+    while (end < body.length && body[end] !== 0) end++;
+    if (end === body.length) throw new Error('sourceids.zmap: unterminated string');
+    return new TextDecoder('utf-8', { fatal: true }).decode(body.subarray(blobStart + offset, end));
+  };
+  const raw: Array<Omit<ZcapSourceMapEntry, 'name' | 'file'> & { nameOff: number }> = [];
+  let offset = ZMAP_HEADER_BYTES;
+  let previous = -1;
+  for (let i = 0; i < entryCount; i++) {
+    const sourceId = dv.getUint32(offset + 0, true);
+    const fileIndex = dv.getUint16(offset + 4, true);
+    const kind = dv.getUint8(offset + 6);
+    const flags = dv.getUint8(offset + 7);
+    const spanBegin = dv.getUint32(offset + 8, true);
+    const spanEnd = dv.getUint32(offset + 12, true);
+    const nameOff = dv.getUint32(offset + 16, true);
+    const hash = dv.getUint32(offset + 20, true);
+    const moduleId = (sourceId >>> 16) & 0xfff;
+    if (sourceId <= previous) throw new Error('sourceids.zmap: entries not strictly ascending');
+    if ((sourceId >>> 28) !== kind) throw new Error('sourceids.zmap: denormalized kind mismatch');
+    if (fileIndex >= fileCount) throw new Error('sourceids.zmap: file index outside table');
+    if (moduleId !== fileIndex) throw new Error('sourceids.zmap: module/file index mismatch');
+    if ((flags & ~1) !== 0) throw new Error('sourceids.zmap: reserved entry bits');
+    if (spanEnd < spanBegin) throw new Error('sourceids.zmap: reversed span');
+    if ((flags & 1) === 0 && hash !== 0) throw new Error('sourceids.zmap: hash without flag');
+    raw.push({
+      sourceId, moduleId, fileIndex, kind, flags, spanBegin, spanEnd, nameOff,
+      programHash: (flags & 1) !== 0 ? hash : null,
+    });
+    previous = sourceId;
+    offset += ZMAP_ENTRY_BYTES;
+  }
+  if (((headerFlags & 1) !== 0) !== raw.some((entry) => entry.programHash !== null)) {
+    throw new Error('sourceids.zmap: program-hash header flag mismatch');
+  }
+  const files: string[] = [];
+  for (let i = 0; i < fileCount; i++) {
+    const pathOff = dv.getUint32(offset + 0, true);
+    if (dv.getUint32(offset + 4, true) !== 0) throw new Error('sourceids.zmap: nonzero file reserved word');
+    files.push(readString(pathOff));
+    offset += ZMAP_FILE_BYTES;
+  }
+  return raw.map(({ nameOff, ...entry }) => ({
+    ...entry,
+    name: readString(nameOff),
+    file: files[entry.fileIndex]!,
+  }));
 }
 
-export function buildSourceMap(entries: readonly ZcapSourceMapEntry[]): Uint8Array {
+/** Canonical test/golden builder; production embeds compiler emitSourceMap bytes. */
+export function buildSourceMap(
+  entries: readonly Omit<ZcapSourceMapEntry, 'fileIndex'>[],
+  moduleFiles?: readonly string[],
+): Uint8Array {
+  const rows = [...entries].sort((a, b) => a.sourceId - b.sourceId);
+  const inferredCount = rows.reduce((count, row) => Math.max(count, row.moduleId + 1), 0);
+  const files = moduleFiles ? [...moduleFiles] : Array.from({ length: inferredCount }, (_, moduleId) => {
+    const names = new Set(rows.filter((row) => row.moduleId === moduleId).map((row) => row.file));
+    if (names.size !== 1) throw new Error(`sourceids.zmap: module ${moduleId} needs exactly one file`);
+    return [...names][0]!;
+  });
+  if (files.length > 0x1000) throw new Error('sourceids.zmap: file count exceeds module range');
   const blob: number[] = [];
-  const put = (s: string): number => {
-    const off = blob.length;
-    for (const b of new TextEncoder().encode(s)) blob.push(b);
+  const offsets = new Map<string, number>();
+  const put = (text: string): number => {
+    const prior = offsets.get(text);
+    if (prior !== undefined) return prior;
+    const offset = blob.length;
+    for (const byte of new TextEncoder().encode(text)) blob.push(byte);
     blob.push(0);
-    return off;
+    offsets.set(text, offset);
+    return offset;
   };
-  const metas = entries.map((e) => ({ e, nameOff: put(e.name), fileOff: put(e.file) }));
-  const body = new Uint8Array(4 + entries.length * 16 + blob.length);
-  const dv = new DataView(body.buffer);
-  dv.setUint32(0, entries.length, true);
-  let off = 4;
-  for (const { e, nameOff, fileOff } of metas) {
-    dv.setUint32(off + 0, e.sourceId, true);
-    dv.setUint16(off + 4, e.moduleId, true);
-    body[off + 6] = e.kind;
-    body[off + 7] = e.flags;
-    dv.setUint32(off + 8, e.line, true);
-    dv.setUint16(off + 12, nameOff, true);
-    dv.setUint16(off + 14, fileOff, true);
-    off += 16;
+  const fileOffsets = files.map(put);
+  const nameOffsets = rows.map((row) => put(row.name));
+  const bodyBytes = rows.length * ZMAP_ENTRY_BYTES + files.length * ZMAP_FILE_BYTES + blob.length;
+  if (rows.length > 0xffff_ffff || blob.length > 0xffff_ffff || bodyBytes > 0xffff_ffff) {
+    throw new Error('sourceids.zmap exceeds v1 u32 size limits');
   }
-  body.set(blob, off);
-  return body;
+  const out = new Uint8Array(ZMAP_HEADER_BYTES + bodyBytes);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, ZMAP_MAGIC, true);
+  dv.setUint16(4, ZMAP_VERSION, true);
+  const headerFlags = rows.some((row) => row.programHash !== null) ? 1 : 0;
+  dv.setUint16(6, headerFlags, true);
+  dv.setUint32(8, rows.length, true);
+  dv.setUint32(12, files.length, true);
+  dv.setUint32(16, blob.length, true);
+  dv.setBigUint64(24, 0n, true);
+  let offset = ZMAP_HEADER_BYTES;
+  rows.forEach((row, index) => {
+    const moduleId = (row.sourceId >>> 16) & 0xfff;
+    if (row.moduleId !== moduleId || row.moduleId >= files.length || row.file !== files[row.moduleId]) {
+      throw new Error(`sourceids.zmap: denormalized module/file for 0x${row.sourceId.toString(16)}`);
+    }
+    if ((row.sourceId >>> 28) !== row.kind) throw new Error('sourceids.zmap: denormalized kind');
+    const flags = row.programHash === null ? 0 : 1;
+    if (row.flags !== flags) throw new Error('sourceids.zmap: denormalized program-hash flags');
+    if (row.spanEnd < row.spanBegin) throw new Error('sourceids.zmap: reversed span');
+    dv.setUint32(offset + 0, row.sourceId, true);
+    dv.setUint16(offset + 4, row.moduleId, true);
+    dv.setUint8(offset + 6, row.kind);
+    dv.setUint8(offset + 7, flags);
+    dv.setUint32(offset + 8, row.spanBegin, true);
+    dv.setUint32(offset + 12, row.spanEnd, true);
+    dv.setUint32(offset + 16, nameOffsets[index]!, true);
+    dv.setUint32(offset + 20, row.programHash ?? 0, true);
+    offset += ZMAP_ENTRY_BYTES;
+  });
+  for (const pathOff of fileOffsets) {
+    dv.setUint32(offset + 0, pathOff, true);
+    dv.setUint32(offset + 4, 0, true);
+    offset += ZMAP_FILE_BYTES;
+  }
+  out.set(blob, offset);
+  dv.setUint32(20, crc32c(0, out, ZMAP_HEADER_BYTES), true);
+  return out;
 }
 
 // ---- RESOURCE_PAGES (capture_format.md 4.2; program hashes) -------------------

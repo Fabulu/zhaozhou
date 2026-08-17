@@ -143,9 +143,9 @@ test('byte-identity: TS zcap writer reproduces zcap_minimal.zcap', () => {
     { type: ZCAP_SECTION.ABI_INFO, version: 1, body: buildAbiInfo(ZHAO_ABI_VERSION, ZHAO_GENERATOR_NAME, Uint8Array.from(ZHAO_GENERATOR_SHA256), Uint8Array.from(ZHAO_ZIDL_SHA256), ZHAO_ZCAP_SCHEMA_VERSION) },
     { type: ZCAP_SECTION.FRAME_PACKET, version: 1, body: new Uint8Array(frame) },
     { type: ZCAP_SECTION.SOURCE_MAP, version: 1, body: buildSourceMap([
-      { sourceId: (5 << 28) | (1 << 16) | 1, moduleId: 1, kind: 5, flags: 0, line: 10, name: 'begin_frame', file: 'demo_form.zf' },
-      { sourceId: (5 << 28) | (1 << 16) | 0, moduleId: 1, kind: 5, flags: 0, line: 20, name: 'nop', file: 'demo_form.zf' },
-      { sourceId: (5 << 28) | (1 << 16) | 2, moduleId: 1, kind: 5, flags: 0, line: 30, name: 'end_frame', file: 'demo_form.zf' },
+      { sourceId: (5 << 28) | 0, moduleId: 0, kind: 5, flags: 0, spanBegin: 20, spanEnd: 23, name: 'nop', file: 'demo_form.zf', programHash: null },
+      { sourceId: (5 << 28) | 1, moduleId: 0, kind: 5, flags: 0, spanBegin: 10, spanEnd: 19, name: 'begin_frame', file: 'demo_form.zf', programHash: null },
+      { sourceId: (5 << 28) | 2, moduleId: 0, kind: 5, flags: 0, spanBegin: 30, spanEnd: 39, name: 'end_frame', file: 'demo_form.zf', programHash: null },
     ]) },
   ]);
   const want = readFileSync(path.join(goldenDir(), 'zcap_minimal.zcap'));
@@ -174,10 +174,12 @@ test('zcap reader: golden parses, verifies, and round-trips source IDs', () => {
   const names = entries.map((e) => e.name).sort();
   assert.deepEqual(names, ['begin_frame', 'end_frame', 'nop']);
   for (const e of entries) {
-    // §5 scheme round-trip: kind 5, module 1, index = table position
+    // §5 scheme round-trip: kind 5, module 0, exact canonical spans.
     assert.equal(e.kind, 5);
-    assert.equal(e.moduleId, 1);
+    assert.equal(e.moduleId, 0);
     assert.equal(e.sourceId >>> 28, 5);
+    assert.equal(e.file, 'demo_form.zf');
+    assert.equal(e.programHash, null);
   }
 });
 

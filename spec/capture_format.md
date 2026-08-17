@@ -467,7 +467,10 @@ one ABI command template — the record `source_id` of an emitted command
 points here), 10 = `pool` declarations (capacity/bandwidth rows), 11 =
 `scenario` blocks (golden capture provenance).
 
-SOURCE_MAP body: `u32 count` + count × `{u32 source_id; u16 module_id; u8 kind; u8 flags; u32 line; u16 name_off; u16 file_off}` + UTF-8 string blob (`name_off`/`file_off` are byte offsets into the blob, each string NUL-terminated).
+SOURCE_MAP body: the complete `sourceids.zmap` byte sequence from §7, beginning
+with its 32-byte ZSMP header and followed by 24-byte entries, the file table,
+and its u32-addressed UTF-8 string blob. Writers embed these bytes verbatim;
+consumers run the same §7 validation and never reinterpret a second layout.
 
 Resolution order (inspector/tools): embedded SOURCE_MAP → sidecar for live
 builds → raw hex display. Never a wrong guess.
@@ -543,8 +546,7 @@ Offset  Size  Field                Notes
                             a corrupt map)
 +8  u32  span_begin         byte offset in the file (lexer law, language-semantics §1)
 +12 u32  span_end           byte offset, exclusive; span_end >= span_begin
-+16 u16  name_off           byte offset into the string blob
-+18 u16  rsv                0
++16 u32  name_off           byte offset into the string blob
 +20 u32  program_hash       CRC-32C over code+tables (field-ir §5.4);
                             0 unless flags bit0
 ```
@@ -575,6 +577,9 @@ ordering equals module-id ordering.
 - **Integrity:** `body_crc32c` covers bytes [32, EOF); a mismatch refuses
   the whole map — never a partial resolution. The magic/version check comes
   first (fail-safe order, §3.2 discipline).
+- **Capacity:** both `name_off` and file-table `path_off` address the complete
+  string blob as u32 byte offsets. A legal 65536-row module is not constrained
+  by a 64-KiB name table; only the explicit u32 file-size fields limit v1.
 - **Resolution order** (inspector/tools, §5): embedded SOURCE_MAP → this
   sidecar for live builds → raw hex display. Never a wrong guess.
 - **Phase-1 JSON compat:** the JSON sidecar remains readable by tools for

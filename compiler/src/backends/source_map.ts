@@ -34,9 +34,6 @@ export function emitSourceMap(hir: HirProgram): Uint8Array {
   };
   const fileOffsets = files.map(intern);
   const nameOffsets = rows.map((row) => intern(row.name));
-  for (const offset of nameOffsets) {
-    if (offset > 0xffff) throw new Error(`sourceids.zmap name offset ${offset} exceeds u16`);
-  }
   const bodyBytes = rows.length * ZMAP_ENTRY_BYTES + files.length * ZMAP_FILE_BYTES + blob.length;
   if (rows.length > 0xffff_ffff || files.length > 0xffff_ffff || blob.length > 0xffff_ffff || bodyBytes > 0xffff_ffff) {
     throw new Error('sourceids.zmap exceeds v1 u32 size limits');
@@ -65,8 +62,7 @@ export function emitSourceMap(hir: HirProgram): Uint8Array {
     view.setUint8(offset + 7, row.programHash === null ? 0 : 1);
     view.setUint32(offset + 8, row.span.start, true);
     view.setUint32(offset + 12, row.span.end, true);
-    view.setUint16(offset + 16, nameOffsets[index]!, true);
-    view.setUint16(offset + 18, 0, true);
+    view.setUint32(offset + 16, nameOffsets[index]!, true);
     view.setUint32(offset + 20, row.programHash ?? 0, true);
     offset += ZMAP_ENTRY_BYTES;
   });
@@ -114,14 +110,13 @@ export function decodeSourceMap(bytes: Uint8Array): DecodedSourceMap {
     const entryFlags = view.getUint8(offset + 7);
     const spanStart = view.getUint32(offset + 8, true);
     const spanEnd = view.getUint32(offset + 12, true);
-    const nameOff = view.getUint16(offset + 16, true);
-    const reserved = view.getUint16(offset + 18, true);
+    const nameOff = view.getUint32(offset + 16, true);
     const hash = view.getUint32(offset + 20, true);
     if (sourceId <= previous) throw new Error('sourceids.zmap: entries not strictly ascending');
     if ((sourceId >>> 28) !== kind) throw new Error('sourceids.zmap: denormalized kind mismatch');
     if (fileIndex >= fileCount) throw new Error('sourceids.zmap: file index outside table');
     if (((sourceId >>> 16) & 0xfff) !== fileIndex) throw new Error('sourceids.zmap: module/file index mismatch');
-    if ((entryFlags & ~1) !== 0 || reserved !== 0) throw new Error('sourceids.zmap: reserved entry bits');
+    if ((entryFlags & ~1) !== 0) throw new Error('sourceids.zmap: reserved entry bits');
     if (spanEnd < spanStart) throw new Error('sourceids.zmap: reversed span');
     if ((entryFlags & 1) === 0 && hash !== 0) throw new Error('sourceids.zmap: hash without flag');
     rawEntries.push({ sourceId, fileIndex, kind, spanStart, spanEnd, nameOff, hash: entryFlags & 1 ? hash : null });

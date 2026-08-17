@@ -17,6 +17,7 @@ import {
 } from '../../src/backends/index.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { crc32c } from '../../src/generated/abi.js';
+import { parseSourceMap } from '../../src/generated/zcap.js';
 import { declarationsOf, lowerHir } from '../../src/hir/index.js';
 import { lowerZir } from '../../src/zir/index.js';
 import { repoRoot } from '../helpers.js';
@@ -83,6 +84,64 @@ test('sourceids.zmap has exact v1 layout, ordering, and body CRC', () => {
   assert.deepEqual(decoded.files, ['a_arena.form', 'b_audit.form']);
   assert.deepEqual(decoded.entries, [...hir.sourceIds].sort((a, b) => a.sourceId - b.sourceId));
   assert.ok(decoded.entries.every((row, index, rows) => index === 0 || rows[index - 1]!.sourceId < row.sourceId));
+
+  const consumed = parseSourceMap(first);
+  assert.deepEqual(consumed.map((row) => ({
+    sourceId: row.sourceId,
+    kind: row.kind,
+    module: row.moduleId,
+    file: row.file,
+    span: { file: row.file, start: row.spanBegin, end: row.spanEnd },
+    name: row.name,
+    programHash: row.programHash,
+  })), decoded.entries);
+});
+
+test('sourceids.zmap carries all 65536 module rows with a multi-megabyte name table', () => {
+  const { hir } = compileFixture();
+  const file = hir.modules[0]!.file;
+  const rows = Array.from({ length: 0x1_0000 }, (_, index) => ({
+    sourceId: 0xa000_0000 + index,
+    kind: 10,
+    module: 0,
+    file,
+    span: { file, start: index * 2, end: index * 2 + 1 },
+    name: `pool_${index.toString(16).padStart(4, '0')}_${'n'.repeat(52)}`,
+    programHash: null,
+  }));
+  const bytes = emitSourceMap({ ...hir, modules: [hir.modules[0]!], sourceIds: rows });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  assert.equal(view.getUint32(8, true), 0x1_0000);
+  assert.ok(view.getUint32(16, true) > 0xffff, 'string blob must exceed the old u16 offset ceiling');
+  assert.ok(view.getUint32(ZMAP_HEADER_BYTES + (rows.length - 1) * ZMAP_ENTRY_BYTES + 16, true) > 0xffff);
+
+  const consumed = parseSourceMap(bytes);
+  assert.equal(consumed.length, rows.length);
+  assert.equal(consumed[0]!.name, rows[0]!.name);
+  assert.equal(consumed.at(-1)!.name, rows.at(-1)!.name);
+  assert.equal(consumed.at(-1)!.sourceId, 0xa000_ffff);
+});
+
+test('sourceids.zmap consumers refuse malformed boundaries before any invalid read', () => {
+  const { hir } = compileFixture();
+  const valid = emitSourceMap(hir);
+  for (const parse of [decodeSourceMap, parseSourceMap] as const) {
+    assert.throws(() => parse(valid.subarray(0, ZMAP_HEADER_BYTES - 1)), /truncated header/);
+
+    const impossibleCount = valid.slice();
+    new DataView(impossibleCount.buffer).setUint32(8, 0xffff_ffff, true);
+    assert.throws(() => parse(impossibleCount), /inconsistent lengths/);
+
+    const outsideName = valid.slice();
+    new DataView(outsideName.buffer).setUint32(ZMAP_HEADER_BYTES + 16, 0xffff_ffff, true);
+    new DataView(outsideName.buffer).setUint32(20, crc32c(0, outsideName, ZMAP_HEADER_BYTES), true);
+    assert.throws(() => parse(outsideName), /string offset outside blob/);
+
+    const unterminated = valid.slice();
+    unterminated[unterminated.length - 1] = 0x41;
+    new DataView(unterminated.buffer).setUint32(20, crc32c(0, unterminated, ZMAP_HEADER_BYTES), true);
+    assert.throws(() => parse(unterminated), /unterminated string/);
+  }
 });
 
 test('sourceids.zmap rejects CRC and denormalized metadata corruption', () => {
@@ -98,7 +157,7 @@ test('sourceids.zmap rejects CRC and denormalized metadata corruption', () => {
   assert.throws(() => decodeSourceMap(kindFault), /kind mismatch/);
 
   const offsetFault = valid.slice();
-  new DataView(offsetFault.buffer).setUint16(ZMAP_HEADER_BYTES + 16, 0xffff, true);
+  new DataView(offsetFault.buffer).setUint32(ZMAP_HEADER_BYTES + 16, 0xffff_ffff, true);
   new DataView(offsetFault.buffer).setUint32(20, crc32c(0, offsetFault, ZMAP_HEADER_BYTES), true);
   assert.throws(() => decodeSourceMap(offsetFault), /string offset outside blob/);
 });

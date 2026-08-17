@@ -105,36 +105,79 @@ export interface SourceMapEntry {
   readonly moduleId: number;
   readonly kind: number;
   readonly flags: number;
-  readonly line: number;
+  readonly spanBegin: number;
+  readonly spanEnd: number;
   readonly name: string;
   readonly file: string;
+  readonly programHash: number | null;
 }
 
-/** SOURCE_MAP section body: count + entries + NUL-terminated string blob. */
+/** Canonical sourceids.zmap file embedded verbatim as the SOURCE_MAP body. */
 export function buildSourceMap(entries: readonly SourceMapEntry[]): Uint8Array {
-  const enc = new TextEncoder();
+  const rows = [...entries].sort((a, b) => a.sourceId - b.sourceId);
+  const fileCount = rows.reduce((count, row) => Math.max(count, row.moduleId + 1), 0);
+  const files = Array.from({ length: fileCount }, (_, moduleId) => {
+    const names = new Set(rows.filter((row) => row.moduleId === moduleId).map((row) => row.file));
+    if (names.size !== 1) throw new Error(`sourceids.zmap: module ${moduleId} needs exactly one file`);
+    return [...names][0]!;
+  });
+  if (files.length > 0x1000) throw new Error('sourceids.zmap: file count exceeds module range');
   const blob: number[] = [];
-  const put = (s: string): number => {
-    const off = blob.length;
-    for (const b of enc.encode(s)) blob.push(b);
+  const offsets = new Map<string, number>();
+  const put = (text: string): number => {
+    const prior = offsets.get(text);
+    if (prior !== undefined) return prior;
+    const offset = blob.length;
+    for (const byte of new TextEncoder().encode(text)) blob.push(byte);
     blob.push(0);
-    return off;
+    offsets.set(text, offset);
+    return offset;
   };
-  const metas = entries.map((e) => ({ e, nameOff: put(e.name), fileOff: put(e.file) }));
-  const body = new Uint8Array(4 + entries.length * 16 + blob.length);
-  const dv = new DataView(body.buffer);
-  dv.setUint32(0, entries.length, true);
-  let off = 4;
-  for (const { e, nameOff, fileOff } of metas) {
-    dv.setUint32(off + 0, e.sourceId, true);
-    dv.setUint16(off + 4, e.moduleId, true);
-    dv.setUint8(off + 6, e.kind);
-    dv.setUint8(off + 7, e.flags);
-    dv.setUint32(off + 8, e.line, true);
-    dv.setUint16(off + 12, nameOff, true);
-    dv.setUint16(off + 14, fileOff, true);
-    off += 16;
+  const fileOffsets = files.map(put);
+  const nameOffsets = rows.map((row) => put(row.name));
+  const headerBytes = 32;
+  const entryBytes = 24;
+  const fileBytes = 8;
+  const bodyBytes = rows.length * entryBytes + files.length * fileBytes + blob.length;
+  if (rows.length > 0xffff_ffff || blob.length > 0xffff_ffff || bodyBytes > 0xffff_ffff) {
+    throw new Error('sourceids.zmap exceeds v1 u32 size limits');
   }
-  body.set(blob, off);
-  return body;
+  const out = new Uint8Array(headerBytes + bodyBytes);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x504d535a, true);
+  dv.setUint16(4, 1, true);
+  const headerFlags = rows.some((row) => row.programHash !== null) ? 1 : 0;
+  dv.setUint16(6, headerFlags, true);
+  dv.setUint32(8, rows.length, true);
+  dv.setUint32(12, files.length, true);
+  dv.setUint32(16, blob.length, true);
+  dv.setBigUint64(24, 0n, true);
+  let offset = headerBytes;
+  rows.forEach((row, index) => {
+    const moduleId = (row.sourceId >>> 16) & 0xfff;
+    if (row.moduleId !== moduleId || row.file !== files[row.moduleId]) {
+      throw new Error(`sourceids.zmap: denormalized module/file for 0x${row.sourceId.toString(16)}`);
+    }
+    if ((row.sourceId >>> 28) !== row.kind) throw new Error('sourceids.zmap: denormalized kind');
+    const flags = row.programHash === null ? 0 : 1;
+    if (row.flags !== flags) throw new Error('sourceids.zmap: denormalized program-hash flags');
+    if (row.spanEnd < row.spanBegin) throw new Error('sourceids.zmap: reversed span');
+    dv.setUint32(offset + 0, row.sourceId, true);
+    dv.setUint16(offset + 4, row.moduleId, true);
+    dv.setUint8(offset + 6, row.kind);
+    dv.setUint8(offset + 7, flags);
+    dv.setUint32(offset + 8, row.spanBegin, true);
+    dv.setUint32(offset + 12, row.spanEnd, true);
+    dv.setUint32(offset + 16, nameOffsets[index]!, true);
+    dv.setUint32(offset + 20, row.programHash ?? 0, true);
+    offset += entryBytes;
+  });
+  for (const pathOff of fileOffsets) {
+    dv.setUint32(offset + 0, pathOff, true);
+    dv.setUint32(offset + 4, 0, true);
+    offset += fileBytes;
+  }
+  out.set(blob, offset);
+  dv.setUint32(20, crc32c(0, out, headerBytes), true);
+  return out;
 }

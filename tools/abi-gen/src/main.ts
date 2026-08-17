@@ -105,9 +105,9 @@ export function generateAll(): readonly GeneratedFile[] {
     Number.parseInt(zidlSha256.slice(i * 2, i * 2 + 2), 16));
   const abiInfo = buildAbiInfo(ir.abi.version, 1, 'zhaozhou-abi-gen', generatorSha, zidlSha);
   const sourceMap = buildSourceMap([
-    { sourceId: (5 << 28) | (1 << 16) | 1, moduleId: 1, kind: 5, flags: 0, line: 10, name: 'begin_frame', file: 'demo_form.zf' },
-    { sourceId: (5 << 28) | (1 << 16) | 0, moduleId: 1, kind: 5, flags: 0, line: 20, name: 'nop', file: 'demo_form.zf' },
-    { sourceId: (5 << 28) | (1 << 16) | 2, moduleId: 1, kind: 5, flags: 0, line: 30, name: 'end_frame', file: 'demo_form.zf' },
+    { sourceId: (5 << 28) | 0, moduleId: 0, kind: 5, flags: 0, spanBegin: 20, spanEnd: 23, name: 'nop', file: 'demo_form.zf', programHash: null },
+    { sourceId: (5 << 28) | 1, moduleId: 0, kind: 5, flags: 0, spanBegin: 10, spanEnd: 19, name: 'begin_frame', file: 'demo_form.zf', programHash: null },
+    { sourceId: (5 << 28) | 2, moduleId: 0, kind: 5, flags: 0, spanBegin: 30, spanEnd: 39, name: 'end_frame', file: 'demo_form.zf', programHash: null },
   ]);
   const zcapMinimal = buildZcap([
     { type: 0x0001, version: 1, body: abiInfo },
