@@ -2072,9 +2072,11 @@ function encodeAuthoredIdentifier(value: string): string {
  */
 export function cppAuthoredIdentifier(value: string): string {
   const generatedFamily = LOCAL_GENERATED_PREFIXES.some((prefix) => value.startsWith(prefix))
+    || FORM_SCOPE_PREFIXES.some((prefix) => value.startsWith(prefix))
     || value.endsWith('_pool');
   return authoredIdentifierMustEncode(value)
       || LOCAL_GENERATED_EXACT_IDENTIFIERS.has(value)
+      || FORM_SCOPE_EXACT_IDENTIFIERS.has(value)
       || generatedFamily
     ? encodeAuthoredIdentifier(value)
     : value;

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-import { emitCpp } from '../../src/backends/index.js';
+import { decodeSourceMap, emitCpp, emitSourceMap } from '../../src/backends/index.js';
 import {
   allocateAuthoredResourceIndices, allocateTransientResourceIndices, cppAuthoredIdentifier,
 } from '../../src/backends/cpp/emitter.js';
@@ -164,13 +164,15 @@ test('authored C++ spellings are injective and disjoint from generated symbol fa
   const authored = [
     'row', 'class', 'form_class', 'entries_pool', '_form_value_0',
     'system_move', 'present_view', 'scenario_case', 'State',
+    'fx16_add', 'fx24_div', 'World2', 'Bool', 'random_u32', 'checked_index',
+    'serialize_canonical_state', 'FormState', 'PresentationResources', 'u32',
+    'crc32c_update', 'floor_div_s128',
     'form_authored_x726f77',
   ];
   const encoded = authored.map(cppAuthoredIdentifier);
   assert.equal(new Set(encoded).size, authored.length);
   assert.equal(cppAuthoredIdentifier('row'), 'row');
-  assert.equal(cppAuthoredIdentifier('form_class'), 'form_class');
-  for (const value of authored.filter((item) => item !== 'row' && item !== 'form_class')) {
+  for (const value of authored.filter((item) => item !== 'row')) {
     assert.notEqual(cppAuthoredIdentifier(value), value,
       `collision-prone authored identifier '${value}' must move out of generated namespaces`);
   }
@@ -214,6 +216,48 @@ int main() {
   const form::PadFrame pads[4]{};
   form::sim_tick(state, pads, 0u);
   return state.clash.result == 7u ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('strict native C++ keeps authored fx16_add from hiding generated arithmetic', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const sources = {
+    'clash.form': `module clash {
+      global result: fx16 = 0m;
+      fn fx16_add(a: fx16, b: fx16) -> fx16 { return 0m; }
+      fn sum(a: fx16, b: fx16) -> fx16 { return a + b; }
+      system run every 1 ticks reads writes result { result = sum(1m, 2m); }
+    }\n`,
+    'identity.form': `module identity {
+      global sink: u32 = 0;
+      system fx16_add every 1 ticks reads writes sink { sink = 0; }
+    }\n`,
+  };
+  const frontend = compileFrontend(sources);
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const output = emitCpp(hir, lowerZir(hir));
+  const mapped = decodeSourceMap(emitSourceMap(hir)).entries.find((entry) => entry.name === 'fx16_add');
+  assert.ok(mapped, 'source identity map must retain the authored spelling');
+  assert.equal(mapped.name, 'fx16_add');
+  const source = byPath(output, 'clash.cpp');
+  assert.match(source, /form_authored_x667831365f616464\(Fx16 a, Fx16 b\)/);
+  assert.match(source, /fx16_add\(_form_value_0, _form_value_1\)/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  const form::PadFrame pads[4]{};
+  form::sim_tick(state, pads, 0u);
+  return state.clash.result == (3 * 65536) ? 0 : 1;
 }
 `);
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
@@ -1378,7 +1422,7 @@ int main() {
       oracle::choose_clamp(4 << 16, 1 << 16, 3 << 16) != (3 << 16) ||
       oracle::magnitude(std::numeric_limits<i32>::min()) != std::numeric_limits<i32>::max() ||
       oracle::sine(0x4000u) != (1 << 16) || oracle::cosine(0x4000u) != 0 ||
-      oracle::angle_of(1 << 16, 0) != 0x4000u || oracle::root(4 << 16) != (2 << 16) ||
+      oracle::${cppAuthoredIdentifier('angle_of')}(1 << 16, 0) != 0x4000u || oracle::root(4 << 16) != (2 << 16) ||
       oracle::narrow(384) != 2 || oracle::narrow(-384) != -1 ||
       oracle::widen(3) != 768 || oracle::unit(0x7f80) != 128u ||
       oracle::angle(-1) != 0xffffu || oracle::scalar_angle(0x1234u) != 0x1234 ||
