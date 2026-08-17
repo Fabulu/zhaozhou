@@ -8,6 +8,49 @@ export const ZMAP_VERSION = 1;
 export const ZMAP_HEADER_BYTES = 32;
 export const ZMAP_ENTRY_BYTES = 24;
 export const ZMAP_FILE_BYTES = 8;
+/** Portable v1 admission ceiling: no source map may exceed the console's 128 MiB local memory. */
+export const ZMAP_MAX_BYTES = 128 * 1024 * 1024;
+const U32_MAX = 0xffff_ffffn;
+
+type StructuralCount = number | bigint;
+
+function structuralCount(value: StructuralCount, label: string): bigint {
+  if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new Error(`sourceids.zmap: invalid ${label}`);
+  }
+  const count = BigInt(value);
+  if (count < 0n || count > U32_MAX) throw new Error('sourceids.zmap exceeds v1 u32 size limits');
+  return count;
+}
+
+/** Non-allocating v1 layout arithmetic over the three u32 count fields. */
+export function sourceMapV1ByteLength(
+  entryCount: StructuralCount,
+  fileCount: StructuralCount,
+  stringBlobBytes: StructuralCount,
+): bigint {
+  const entries = structuralCount(entryCount, 'entry count');
+  const files = structuralCount(fileCount, 'file count');
+  const blob = structuralCount(stringBlobBytes, 'string blob size');
+  const body = entries * BigInt(ZMAP_ENTRY_BYTES) + files * BigInt(ZMAP_FILE_BYTES) + blob;
+  if (body > U32_MAX) throw new Error('sourceids.zmap exceeds v1 u32 size limits');
+  return BigInt(ZMAP_HEADER_BYTES) + body;
+}
+
+/** Enforce the one global v1 source-map byte law before allocation or embedding. */
+export function assertSourceMapV1ByteLength(byteLength: StructuralCount): number {
+  const bytes = typeof byteLength === 'bigint' ? byteLength : (() => {
+    if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+      throw new Error('sourceids.zmap: invalid byte length');
+    }
+    return BigInt(byteLength);
+  })();
+  if (bytes < 0n) throw new Error('sourceids.zmap: invalid byte length');
+  if (bytes > BigInt(ZMAP_MAX_BYTES)) {
+    throw new Error('sourceids.zmap exceeds v1 128 MiB global byte limit');
+  }
+  return Number(bytes);
+}
 
 export interface DecodedSourceMap {
   entries: HirSourceRow[];
@@ -20,25 +63,25 @@ export function emitSourceMap(hir: HirProgram): Uint8Array {
   const files = [...hir.modules].sort((a, b) => a.index - b.index).map((module) => module.file);
   if (files.length > 0x1000) throw new Error('sourceids.zmap file count exceeds 12-bit module range');
   const fileIndices = new Map(files.map((file, index) => [file, index]));
-  const blob: number[] = [];
+  const chunks: Uint8Array[] = [];
   const offsets = new Map<string, number>();
+  let blobBytes = 0;
   const intern = (text: string): number => {
     const prior = offsets.get(text);
     if (prior !== undefined) return prior;
     const bytes = new TextEncoder().encode(text);
-    const offset = blob.length;
-    for (const byte of bytes) blob.push(byte);
-    blob.push(0);
+    const offset = blobBytes;
+    blobBytes += bytes.length + 1;
     offsets.set(text, offset);
+    chunks.push(bytes);
     return offset;
   };
   const fileOffsets = files.map(intern);
   const nameOffsets = rows.map((row) => intern(row.name));
-  const bodyBytes = rows.length * ZMAP_ENTRY_BYTES + files.length * ZMAP_FILE_BYTES + blob.length;
-  if (rows.length > 0xffff_ffff || files.length > 0xffff_ffff || blob.length > 0xffff_ffff || bodyBytes > 0xffff_ffff) {
-    throw new Error('sourceids.zmap exceeds v1 u32 size limits');
-  }
-  const out = new Uint8Array(ZMAP_HEADER_BYTES + bodyBytes);
+  const totalBytes = assertSourceMapV1ByteLength(
+    sourceMapV1ByteLength(rows.length, files.length, blobBytes),
+  );
+  const out = new Uint8Array(totalBytes);
   const view = new DataView(out.buffer);
   view.setUint32(0, ZMAP_MAGIC, true);
   view.setUint16(4, ZMAP_VERSION, true);
@@ -46,7 +89,7 @@ export function emitSourceMap(hir: HirProgram): Uint8Array {
   view.setUint16(6, flags, true);
   view.setUint32(8, rows.length, true);
   view.setUint32(12, files.length, true);
-  view.setUint32(16, blob.length, true);
+  view.setUint32(16, blobBytes, true);
   view.setBigUint64(24, 0n, true);
   let offset = ZMAP_HEADER_BYTES;
   rows.forEach((row, index) => {
@@ -71,13 +114,17 @@ export function emitSourceMap(hir: HirProgram): Uint8Array {
     view.setUint32(offset + 4, 0, true);
     offset += ZMAP_FILE_BYTES;
   }
-  out.set(blob, offset);
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length + 1;
+  }
   view.setUint32(20, crc32c(0, out, ZMAP_HEADER_BYTES), true);
   return out;
 }
 
 /** Strict decoder used by tests/tools; any integrity/layout fault refuses all. */
 export function decodeSourceMap(bytes: Uint8Array): DecodedSourceMap {
+  assertSourceMapV1ByteLength(bytes.length);
   if (bytes.length < ZMAP_HEADER_BYTES) throw new Error('sourceids.zmap: truncated header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== ZMAP_MAGIC) throw new Error('sourceids.zmap: bad magic');
@@ -88,8 +135,14 @@ export function decodeSourceMap(bytes: Uint8Array): DecodedSourceMap {
   const entryCount = view.getUint32(8, true);
   const fileCount = view.getUint32(12, true);
   const blobBytes = view.getUint32(16, true);
+  let expectedBytes: bigint;
+  try {
+    expectedBytes = sourceMapV1ByteLength(entryCount, fileCount, blobBytes);
+  } catch {
+    throw new Error('sourceids.zmap: inconsistent lengths');
+  }
+  if (expectedBytes !== BigInt(bytes.length)) throw new Error('sourceids.zmap: inconsistent lengths');
   const tableBytes = entryCount * ZMAP_ENTRY_BYTES + fileCount * ZMAP_FILE_BYTES;
-  if (ZMAP_HEADER_BYTES + tableBytes + blobBytes !== bytes.length) throw new Error('sourceids.zmap: inconsistent lengths');
   const expectedCrc = view.getUint32(20, true);
   if (crc32c(0, bytes, ZMAP_HEADER_BYTES) !== expectedCrc) throw new Error('sourceids.zmap: body CRC mismatch');
   const blobStart = ZMAP_HEADER_BYTES + tableBytes;

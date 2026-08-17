@@ -10,6 +10,49 @@ export const ZCAP_HEADER_BYTES = 32;
 export const ZCAP_SECTION_ENTRY_BYTES = 32;
 export const ZCAP_FLAG_LITTLE_ENDIAN = 0x0001;
 export const ZCAP_SECTION_CRC_PRESENT = 0x0001;
+export const ZMAP_HEADER_BYTES = 32;
+export const ZMAP_ENTRY_BYTES = 24;
+export const ZMAP_FILE_BYTES = 8;
+export const ZMAP_MAX_BYTES = 128 * 1024 * 1024;
+const ZMAP_U32_MAX = 0xffff_ffffn;
+
+type ZmapStructuralCount = number | bigint;
+
+function zmapStructuralCount(value: ZmapStructuralCount, label: string): bigint {
+  if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new Error(`sourceids.zmap: invalid ${label}`);
+  }
+  const count = BigInt(value);
+  if (count < 0n || count > ZMAP_U32_MAX) throw new Error('sourceids.zmap exceeds v1 u32 size limits');
+  return count;
+}
+
+export function sourceMapV1ByteLength(
+  entryCount: ZmapStructuralCount,
+  fileCount: ZmapStructuralCount,
+  stringBlobBytes: ZmapStructuralCount,
+): bigint {
+  const entries = zmapStructuralCount(entryCount, 'entry count');
+  const files = zmapStructuralCount(fileCount, 'file count');
+  const blob = zmapStructuralCount(stringBlobBytes, 'string blob size');
+  const body = entries * BigInt(ZMAP_ENTRY_BYTES) + files * BigInt(ZMAP_FILE_BYTES) + blob;
+  if (body > ZMAP_U32_MAX) throw new Error('sourceids.zmap exceeds v1 u32 size limits');
+  return BigInt(ZMAP_HEADER_BYTES) + body;
+}
+
+export function assertSourceMapV1ByteLength(byteLength: ZmapStructuralCount): number {
+  const bytes = typeof byteLength === 'bigint' ? byteLength : (() => {
+    if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+      throw new Error('sourceids.zmap: invalid byte length');
+    }
+    return BigInt(byteLength);
+  })();
+  if (bytes < 0n) throw new Error('sourceids.zmap: invalid byte length');
+  if (bytes > BigInt(ZMAP_MAX_BYTES)) {
+    throw new Error('sourceids.zmap exceeds v1 128 MiB global byte limit');
+  }
+  return Number(bytes);
+}
 
 export const ZCAP_SECTION = {
   ABI_INFO: 0x0001,
@@ -33,10 +76,20 @@ export interface ZcapSectionInput {
 
 export function buildZcap(sections: readonly ZcapSectionInput[]): Uint8Array {
   if (sections.length === 0) throw new Error('.zcap needs at least one section');
-  const tableBytes = sections.length * ZCAP_SECTION_ENTRY_BYTES;
-  let bodyTotal = 0;
-  for (const s of sections) bodyTotal += s.body.length;
-  const total = ZCAP_HEADER_BYTES + tableBytes + bodyTotal;
+  if (sections.length > 0xffff_ffff) throw new Error('.zcap section count exceeds u32');
+  for (const section of sections) {
+    if (section.type === ZCAP_SECTION.SOURCE_MAP) {
+      assertSourceMapV1ByteLength(section.body.length);
+    }
+  }
+  const tableBytesBig = BigInt(sections.length) * BigInt(ZCAP_SECTION_ENTRY_BYTES);
+  const bodyTotalBig = sections.reduce((total, section) => total + BigInt(section.body.length), 0n);
+  const totalBig = BigInt(ZCAP_HEADER_BYTES) + tableBytesBig + bodyTotalBig;
+  if (totalBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error('.zcap in-memory build exceeds JavaScript safe integer range');
+  }
+  const tableBytes = Number(tableBytesBig);
+  const total = Number(totalBig);
 
   const out = new Uint8Array(total);
   const dv = new DataView(out.buffer);
@@ -122,27 +175,25 @@ export function buildSourceMap(entries: readonly SourceMapEntry[]): Uint8Array {
     return [...names][0]!;
   });
   if (files.length > 0x1000) throw new Error('sourceids.zmap: file count exceeds module range');
-  const blob: number[] = [];
+  const chunks: Uint8Array[] = [];
   const offsets = new Map<string, number>();
+  let blobBytes = 0;
   const put = (text: string): number => {
     const prior = offsets.get(text);
     if (prior !== undefined) return prior;
-    const offset = blob.length;
-    for (const byte of new TextEncoder().encode(text)) blob.push(byte);
-    blob.push(0);
+    const bytes = new TextEncoder().encode(text);
+    const offset = blobBytes;
+    blobBytes += bytes.length + 1;
     offsets.set(text, offset);
+    chunks.push(bytes);
     return offset;
   };
   const fileOffsets = files.map(put);
   const nameOffsets = rows.map((row) => put(row.name));
-  const headerBytes = 32;
-  const entryBytes = 24;
-  const fileBytes = 8;
-  const bodyBytes = rows.length * entryBytes + files.length * fileBytes + blob.length;
-  if (rows.length > 0xffff_ffff || blob.length > 0xffff_ffff || bodyBytes > 0xffff_ffff) {
-    throw new Error('sourceids.zmap exceeds v1 u32 size limits');
-  }
-  const out = new Uint8Array(headerBytes + bodyBytes);
+  const totalBytes = assertSourceMapV1ByteLength(
+    sourceMapV1ByteLength(rows.length, files.length, blobBytes),
+  );
+  const out = new Uint8Array(totalBytes);
   const dv = new DataView(out.buffer);
   dv.setUint32(0, 0x504d535a, true);
   dv.setUint16(4, 1, true);
@@ -150,9 +201,9 @@ export function buildSourceMap(entries: readonly SourceMapEntry[]): Uint8Array {
   dv.setUint16(6, headerFlags, true);
   dv.setUint32(8, rows.length, true);
   dv.setUint32(12, files.length, true);
-  dv.setUint32(16, blob.length, true);
+  dv.setUint32(16, blobBytes, true);
   dv.setBigUint64(24, 0n, true);
-  let offset = headerBytes;
+  let offset = ZMAP_HEADER_BYTES;
   rows.forEach((row, index) => {
     const moduleId = (row.sourceId >>> 16) & 0xfff;
     if (row.moduleId !== moduleId || row.file !== files[row.moduleId]) {
@@ -170,14 +221,17 @@ export function buildSourceMap(entries: readonly SourceMapEntry[]): Uint8Array {
     dv.setUint32(offset + 12, row.spanEnd, true);
     dv.setUint32(offset + 16, nameOffsets[index]!, true);
     dv.setUint32(offset + 20, row.programHash ?? 0, true);
-    offset += entryBytes;
+    offset += ZMAP_ENTRY_BYTES;
   });
   for (const pathOff of fileOffsets) {
     dv.setUint32(offset + 0, pathOff, true);
     dv.setUint32(offset + 4, 0, true);
-    offset += fileBytes;
+    offset += ZMAP_FILE_BYTES;
   }
-  out.set(blob, offset);
-  dv.setUint32(20, crc32c(0, out, headerBytes), true);
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length + 1;
+  }
+  dv.setUint32(20, crc32c(0, out, ZMAP_HEADER_BYTES), true);
   return out;
 }

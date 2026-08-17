@@ -292,7 +292,10 @@ a JavaScript `Number` conversion.
 
 The capture source-ID layout is exactly 4 kind bits, 12 module bits and 16
 zero-based local-row bits. Module IDs are `0..4095`, and each module admits
-exactly 65536 source-producing rows (`0..65535`). Pools, systems, field
+exactly 65536 source-producing row addresses (`0..65535`). These bit ranges do
+not promise that their full Cartesian product can coexist in one build: the
+complete binary map also obeys capture_format §7.4's inclusive 128-MiB v1
+ceiling. Pools, systems, field
 programs, every presentation `emit` statement and scenarios consume rows;
 constants, enums, structs, globals, functions, sounds and presentation
 containers do not. A 4097th module or 65537th source-producing row is rejected

@@ -4,20 +4,34 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  assertSourceMapV1ByteLength,
   COST_SCHEMA,
   decodeSourceMap,
   emitCostReport,
   emitSourceMap,
+  sourceMapV1ByteLength,
   validateCostReport,
   ZMAP_ENTRY_BYTES,
   ZMAP_FILE_BYTES,
   ZMAP_HEADER_BYTES,
   ZMAP_MAGIC,
+  ZMAP_MAX_BYTES,
   ZMAP_VERSION,
 } from '../../src/backends/index.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { crc32c } from '../../src/generated/abi.js';
-import { parseSourceMap } from '../../src/generated/zcap.js';
+import {
+  assertSourceMapV1ByteLength as assertGeneratedSourceMapV1ByteLength,
+  buildSourceMap,
+  buildZcap,
+  parseSourceMap,
+  readZcap,
+  sourceMapV1ByteLength as generatedSourceMapV1ByteLength,
+  ZCAP_HEADER_BYTES,
+  ZCAP_SECTION,
+  ZCAP_SECTION_ENTRY_BYTES,
+  ZMAP_MAX_BYTES as GENERATED_ZMAP_MAX_BYTES,
+} from '../../src/generated/zcap.js';
 import { declarationsOf, lowerHir } from '../../src/hir/index.js';
 import { lowerZir } from '../../src/zir/index.js';
 import { repoRoot } from '../helpers.js';
@@ -95,6 +109,70 @@ test('sourceids.zmap has exact v1 layout, ordering, and body CRC', () => {
     name: row.name,
     programHash: row.programHash,
   })), decoded.entries);
+});
+
+test('sourceids.zmap applies one exact 128 MiB size law without large allocation', () => {
+  assert.equal(ZMAP_MAX_BYTES, 128 * 1024 * 1024);
+  assert.equal(GENERATED_ZMAP_MAX_BYTES, ZMAP_MAX_BYTES);
+  const maximumBlobBytes = BigInt(ZMAP_MAX_BYTES - ZMAP_HEADER_BYTES);
+  const maximumLength = sourceMapV1ByteLength(0n, 0n, maximumBlobBytes);
+  assert.equal(maximumLength, BigInt(ZMAP_MAX_BYTES));
+  assert.equal(assertSourceMapV1ByteLength(maximumLength), ZMAP_MAX_BYTES);
+  assert.equal(
+    generatedSourceMapV1ByteLength(0n, 0n, maximumBlobBytes),
+    maximumLength,
+  );
+  assert.equal(assertGeneratedSourceMapV1ByteLength(maximumLength), ZMAP_MAX_BYTES);
+
+  const overLimit = sourceMapV1ByteLength(0n, 0n, maximumBlobBytes + 1n);
+  for (const assertLength of [
+    assertSourceMapV1ByteLength,
+    assertGeneratedSourceMapV1ByteLength,
+  ] as const) {
+    assert.throws(() => assertLength(overLimit), /128 MiB global byte limit/);
+    assert.throws(() => assertLength(-1n), /invalid byte length/);
+  }
+  for (const byteLength of [sourceMapV1ByteLength, generatedSourceMapV1ByteLength] as const) {
+    assert.throws(() => byteLength(0x1_0000_0000n, 0n, 0n), /u32 size limits/);
+    assert.throws(() => byteLength(0xffff_ffffn, 1n, 0n), /u32 size limits/);
+  }
+});
+
+test('SOURCE_MAP capture admission rejects oversized and imprecise u64 layouts', () => {
+  const oversizedBody = { length: ZMAP_MAX_BYTES + 1 } as unknown as Uint8Array;
+  assert.throws(
+    () => buildZcap([{ type: ZCAP_SECTION.SOURCE_MAP, version: 1, body: oversizedBody }]),
+    /128 MiB global byte limit/,
+  );
+
+  const valid = buildZcap([{
+    type: ZCAP_SECTION.SOURCE_MAP,
+    version: 1,
+    body: buildSourceMap([]),
+  }]);
+  assert.equal(readZcap(valid).error, 'OK');
+  const sectionOffset = ZCAP_HEADER_BYTES;
+
+  const oversizedSource = valid.slice();
+  new DataView(oversizedSource.buffer).setBigUint64(
+    sectionOffset + 16,
+    BigInt(ZMAP_MAX_BYTES) + 1n,
+    true,
+  );
+  assert.equal(readZcap(oversizedSource).error, 'BAD_TABLE');
+
+  const unsafeOffset = valid.slice();
+  new DataView(unsafeOffset.buffer).setBigUint64(
+    sectionOffset + 8,
+    (1n << 53n) + 1n,
+    true,
+  );
+  assert.equal(readZcap(unsafeOffset).error, 'BAD_TABLE');
+
+  const unsafeTotal = valid.slice();
+  new DataView(unsafeTotal.buffer).setBigUint64(24, (1n << 53n) + 1n, true);
+  assert.equal(readZcap(unsafeTotal).error, 'BAD_TABLE');
+  assert.equal(valid.length, ZCAP_HEADER_BYTES + ZCAP_SECTION_ENTRY_BYTES + ZMAP_HEADER_BYTES);
 });
 
 test('sourceids.zmap carries all 65536 module rows with a multi-megabyte name table', () => {

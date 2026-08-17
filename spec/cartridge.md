@@ -111,7 +111,10 @@ language-semantics §8).
   (CRC-32C over code+tables, field-ir §5.4) is recorded in the CODE_MANIFEST
   so a load can refuse a program whose bytes drifted.
 - **sourceids.zmap (kind 1):** the binary source map, format per
-  capture_format §7 (magic ZSMP). One per cartridge; page_id fixed at 1.
+  capture_format §7 (magic ZSMP). One per cartridge; page_id fixed at 1. Its
+  complete body is subject to capture_format §7.4's inclusive 134,217,728-byte
+  (128-MiB) v1 ceiling. The `.zpak` section table's u64 body length does not
+  widen that source-map law.
 - **Generated-code manifest (kind 2):** canonical JSON (the cost-model §2
   canonicalization law) listing the generated C++ artifacts with SHA-256
   per file: `{"abi_version":2,"files":[{"name":"form_game.hpp","sha256":"…"},
@@ -174,6 +177,9 @@ language-semantics §8).
 - **Integrity:** every section carries CRC-32C; page entries additionally
   carry SHA-256; the loader verifies per-section CRC before trusting any
   body, and CODE_MANIFEST hashes before executing generated entry points.
+  Packers and loaders apply the source-map structural/u32/128-MiB checks of
+  capture_format §7.4 before allocating its complete body or narrowing any
+  u64 container offset or length to a host index.
 - **`abi_version` pinning:** ABI_INFO carries the ABI version; a loader
   built against a different `version` refuses the cartridge
   (`ZH_ABI_BAD_ABI_VERSION` semantics at cartridge level) rather than

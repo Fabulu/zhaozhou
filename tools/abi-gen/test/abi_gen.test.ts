@@ -15,6 +15,14 @@ import { generateAll } from '../src/main.js';
 import { validateFrame, buildFrame } from '../src/oracle.js';
 import { buildCorpus } from '../src/fuzz.js';
 import { sampleCommand, sampleRecordBytes } from '../src/sample.js';
+import {
+  assertSourceMapV1ByteLength,
+  buildZcap,
+  sourceMapV1ByteLength,
+  ZCAP_SECTION,
+  ZMAP_HEADER_BYTES,
+  ZMAP_MAX_BYTES,
+} from '../src/zcap_build.js';
 import { repoRoot, goldenDir } from './helpers.js';
 
 // Normalize CRLF -> LF: the mutation anchors below embed \n, and a Windows
@@ -114,6 +122,28 @@ test('layout law: struct array stride must keep members aligned (rule 3)', () =>
   // u16 rsv would close PadFrame at 18 B — not a multiple of the 4-B cap
   const bad = zidlSource().replace('u32 rsv;        // reserved', 'u16 rsv;        // reserved');
   assert.throws(() => parseAndLayout(bad), /not a multiple of its alignment cap/i);
+});
+
+test('source-map builders enforce the exact v1 size law before allocation', () => {
+  const maximumBlobBytes = BigInt(ZMAP_MAX_BYTES - ZMAP_HEADER_BYTES);
+  const maximum = sourceMapV1ByteLength(0n, 0n, maximumBlobBytes);
+  assert.equal(maximum, BigInt(ZMAP_MAX_BYTES));
+  assert.equal(assertSourceMapV1ByteLength(maximum), ZMAP_MAX_BYTES);
+  assert.throws(
+    () => assertSourceMapV1ByteLength(
+      sourceMapV1ByteLength(0n, 0n, maximumBlobBytes + 1n),
+    ),
+    /128 MiB global byte limit/,
+  );
+  assert.throws(
+    () => sourceMapV1ByteLength(0x1_0000_0000n, 0n, 0n),
+    /u32 size limits/,
+  );
+  const oversizedBody = { length: ZMAP_MAX_BYTES + 1 } as unknown as Uint8Array;
+  assert.throws(
+    () => buildZcap([{ type: ZCAP_SECTION.SOURCE_MAP, version: 1, body: oversizedBody }]),
+    /128 MiB global byte limit/,
+  );
 });
 
 test('CRC-32C vectors (capture_format.md 2.1 — normative)', () => {

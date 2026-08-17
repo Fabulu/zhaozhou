@@ -423,7 +423,10 @@ computation that produced its tables.
   Non-seekable (stdout) two-pass writing is deferred.
 - **Reader**: open → validate magic/flags/header_crc32c → load section table
   → random access by type (no full-file scan) → per-section CRC verified on
-  demand; iteration is streaming/chunked.
+  demand; iteration is streaming/chunked. Bounds checks add u64 offsets and
+  lengths in an exact wide-integer domain against the actual file length;
+  conversion to a host index occurs only after that proof. A SOURCE_MAP
+  section additionally obeys §7.4's 128-MiB ceiling.
 
 ---
 
@@ -435,8 +438,11 @@ computation that produced its tables.
   program, 4 material, 5 command site, 6 audio event, 7 stamp operation;
   **[w3]** 8 system, 9 presentation emit site, 10 pool, 11 scenario.
 - 4096 modules (module IDs `0..4095`), with exactly 65536 source-producing
-  rows available per module (local indices `0..65535`). The local index is
-  **zero-based**: the first source-producing row in a module has index 0.
+  row addresses available per module (local indices `0..65535`). These bit
+  fields define address spaces, not a promise that all 4096 × 65536 possible
+  rows can coexist in one v1 map; the complete-map byte ceiling in §7.4 also
+  applies. The local index is **zero-based**: the first source-producing row
+  in a module has index 0.
   Constants, enums, structs, globals, functions, sounds and presentations as
   containers do not consume rows. Pools, systems, field programs, every
   presentation `emit` statement, and scenarios do consume one row each.
@@ -577,9 +583,22 @@ ordering equals module-id ordering.
 - **Integrity:** `body_crc32c` covers bytes [32, EOF); a mismatch refuses
   the whole map — never a partial resolution. The magic/version check comes
   first (fail-safe order, §3.2 discipline).
-- **Capacity:** both `name_off` and file-table `path_off` address the complete
-  string blob as u32 byte offsets. A legal 65536-row module is not constrained
-  by a 64-KiB name table; only the explicit u32 file-size fields limit v1.
+- **Capacity and global byte ceiling:** `entry_count`, `file_count`,
+  `string_blob_bytes`, `name_off`, and `path_off` retain their u32 wire
+  ranges; a legal 65536-row module is therefore not constrained by a 64-KiB
+  name table. Independently, the complete v1 `sourceids.zmap`, including its
+  32-byte header, MUST be no larger than **134,217,728 bytes (128 MiB)**.
+  This ceiling is inclusive and is the one admission law for standalone,
+  ZCAP-embedded, and ZPAK-embedded maps. ZCAP/ZPAK's u64 section offsets and
+  lengths do not widen it.
+- **Pre-allocation arithmetic:** producers and consumers MUST compute
+  `32 + entry_count × 24 + file_count × 8 + string_blob_bytes` with exact
+  wide-integer arithmetic. They reject an individual value outside u32, a
+  body beyond the u32 layout range, or a total beyond 128 MiB before
+  allocating the complete map or converting a container's u64 offsets and
+  lengths to a host numeric/index type. The u32 fields remain
+  representational limits even though the lower global ceiling normally
+  rejects first.
 - **Resolution order** (inspector/tools, §5): embedded SOURCE_MAP → this
   sidecar for live builds → raw hex display. Never a wrong guess.
 - **Phase-1 JSON compat:** the JSON sidecar remains readable by tools for
