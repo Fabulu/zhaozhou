@@ -606,19 +606,22 @@ test('aggregate bounds diagnose cycles, missing members, and field-type drift', 
     'the declaration-type error, not an invented bound value, owns this refusal');
 });
 
-test('whole-module-qualified flow calls share selective-call admission and pool effects', () => {
+test('whole-module-qualified flow calls share selective targets and qualified pool effects', () => {
   const source = (whole: boolean): Record<string, string> => ({
-    'a_flowlib.form': `module flowlib {
+    'a_data.form': `module data {
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+    }\n`,
+    'b_flowlib.form': `module flowlib {
       @flow field drift() -> flow_update footprint none; max_ops 48 {
         return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
       }
     }\n`,
-    'b_consumer.form': `module consumer {
+    'c_consumer.form': `module consumer {
+      import data;
       import flowlib${whole ? '' : ' { drift }'};
-      struct particle { position: world3; velocity: velocity3; age: u32; }
-      pool motes: particle[4];
-      system move every 1 ticks reads motes writes motes {
-        ${whole ? 'flowlib.drift' : 'drift'}(motes);
+      system move every 1 ticks reads data.motes writes data.motes {
+        ${whole ? 'flowlib.drift' : 'drift'}(data.motes);
       }
     }\n`,
   });
@@ -626,6 +629,14 @@ test('whole-module-qualified flow calls share selective-call admission and pool 
   const selective = compile(source(false));
   assert.deepEqual(qualified.codes, [], qualified.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
   assert.deepEqual(selective.codes, [], selective.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const target = {
+    kind: 'field', module: 'flowlib', name: 'drift',
+    flowPool: { module: 'data', name: 'motes' },
+  };
+  assert.deepEqual([...qualified.check!.callTargets.values()], [target]);
+  assert.deepEqual([...selective.check!.callTargets.values()], [target]);
+  assert.deepEqual([...qualified.check!.accessKeys.values()], ['data\0motes', 'data\0motes']);
+  assert.deepEqual([...selective.check!.accessKeys.values()], ['data\0motes', 'data\0motes']);
   const scheduled = (result: typeof qualified): unknown => {
     const system = result.check!.schedule!.phases
       .flatMap((phase) => phase.systems)
@@ -633,6 +644,50 @@ test('whole-module-qualified flow calls share selective-call admission and pool 
     return { name: system.name, module: system.module, every: system.every };
   };
   assert.deepEqual(scheduled(qualified), scheduled(selective));
+});
+
+test('lexical qualifier shadows and selective ambiguity never become canonical calls', () => {
+  const shadowed = compile({
+    'a_data.form': `module data {
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+    }\n`,
+    'b_flowlib.form': `module flowlib {
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+    }\n`,
+    'c_consumer.form': `module consumer {
+      import data;
+      import flowlib;
+      system move every 1 ticks reads data.motes writes data.motes {
+        let flowlib: u32 = 0;
+        flowlib.drift(data.motes);
+      }
+    }\n`,
+  });
+  assert.ok(shadowed.codes.includes('FORM-E-306'));
+  assert.ok(shadowed.codes.includes('FORM-E-110'));
+  assert.deepEqual([...shadowed.check!.callTargets.values()], []);
+
+  const ambiguous = compile({
+    'a.form': `module a { fn drift(value: u32) -> u32 { return value; } }\n`,
+    'b.form': `module b { fn drift(value: u32) -> u32 { return value; } }\n`,
+    'c.form': `module c {
+      import a { drift };
+      import b { drift };
+      fn choose() -> u32 { return drift(1); }
+    }\n`,
+  });
+  assert.ok(ambiguous.codes.includes('FORM-E-205'));
+  assert.deepEqual([...ambiguous.check!.callTargets.values()], []);
+
+  const missing = compile({
+    'flowlib.form': `module flowlib { fn present() -> u32 { return 1; } }\n`,
+    'user.form': `module user { import flowlib; fn broken() -> u32 { return flowlib.missing(); } }\n`,
+  });
+  assert.ok(missing.codes.includes('FORM-E-203'));
+  assert.deepEqual([...missing.check!.callTargets.values()], []);
 });
 
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {

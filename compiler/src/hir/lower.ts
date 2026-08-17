@@ -3,13 +3,13 @@
 // second checker. It resolves the already-admitted names/types for lowering.
 
 import type {
-  Access, Expr, FieldDecl, ModuleAst, RecordLit, ScenarioItem, Stmt, SystemDecl,
+  Access, CallExpr, Expr, FieldDecl, ModuleAst, RecordLit, ScenarioItem, Stmt, SystemDecl,
   TopDecl, TypeExpr,
 } from '../frontend/ast.js';
 import { serializeAst } from '../frontend/ast.js';
 import { evaluateExactConstant, type ExactConstantBindings } from '../frontend/exact_constant.js';
 import type { FrontendResult } from '../frontend/index.js';
-import { T, typeName, type Type } from '../frontend/checker.js';
+import { T, typeName, type CanonicalCallTarget, type Type } from '../frontend/checker.js';
 import type { SourceSpan } from '../frontend/span.js';
 import { crc32c } from '../generated/abi.js';
 import {
@@ -54,6 +54,7 @@ export function lowerHir(frontend: FrontendResult): HirProgram | null {
     frontend.check.schedule,
     frontend.check.expressionTypes,
     frontend.check.accessKeys,
+    frontend.check.callTargets,
   ).run();
 }
 
@@ -72,6 +73,7 @@ class HirLowerer {
     private readonly schedule: NonNullable<FrontendResult['check']>['schedule'] & {},
     private readonly expressionTypes: ReadonlyMap<Expr, Type>,
     private readonly accessKeys: ReadonlyMap<Access, string>,
+    private readonly callTargets: ReadonlyMap<CallExpr, CanonicalCallTarget>,
   ) {}
 
   run(): HirProgram {
@@ -389,18 +391,21 @@ class HirLowerer {
         break;
       }
       case 'call': {
-        const calleeName = callName(ast.callee);
-        const callee = this.directDeclaration(module, ast.callee, env);
+        const target = this.callTargets.get(ast);
+        if (!target) {
+          throw new Error(`internal HIR call-target failure: checker did not resolve call at ${ast.span.file}:${ast.span.start}`);
+        }
         children.push(...ast.args.map((argument) => this.expr(module, argument, null, env)));
-        if (callee?.decl.kind === 'Fn') {
-          type = this.type(callee.module, callee.decl.ret);
-          symbol = this.symbolRef(callee);
-        } else if (callee?.decl.kind === 'Field' || callee?.decl.kind === 'System') {
-          type = T.void;
-          symbol = this.symbolRef(callee);
-        } else {
-          type = intrinsicType(calleeName, children, expected);
-          symbol = { kind: 'intrinsic', module: null, name: calleeName };
+        symbol = this.callSymbol(target);
+        if (target.kind === 'field' && target.flowPool !== null) {
+          const poolModule = this.moduleByName.get(target.flowPool.module);
+          const pool = children[0]?.symbol;
+          if (poolModule === undefined || pool?.kind !== 'pool'
+              || pool.module !== poolModule || pool.name !== target.flowPool.name) {
+            throw new Error(
+              `internal HIR flow-pool failure: checker resolved ${target.flowPool.module}.${target.flowPool.name}`,
+            );
+          }
         }
         break;
       }
@@ -748,6 +753,26 @@ class HirLowerer {
     return importedWhole ? this.modules[module]!.table.get(member) ?? null : null;
   }
 
+  private callSymbol(target: CanonicalCallTarget): HirSymbolRef {
+    if (target.kind === 'intrinsic') {
+      return { kind: 'intrinsic', module: null, name: target.name };
+    }
+    const module = this.moduleByName.get(target.module);
+    if (module === undefined) {
+      throw new Error(
+        `internal HIR call-target failure: checker resolved ${target.kind} '${target.module}.${target.name}'`,
+      );
+    }
+    const symbol = this.modules[module]!.table.get(target.name);
+    const declarationKind = target.kind === 'fn' ? 'Fn' : target.kind === 'field' ? 'Field' : 'System';
+    if (!symbol || symbol.decl.kind !== declarationKind) {
+      throw new Error(
+        `internal HIR call-target failure: checker resolved ${target.kind} '${target.module}.${target.name}'`,
+      );
+    }
+    return { kind: target.kind, module, name: target.name };
+  }
+
   private symbolRef(sym: SymbolInfo): HirSymbolRef {
     return { kind: symbolKind(sym.decl), module: sym.module, name: sym.name };
   }
@@ -856,26 +881,6 @@ function symbolKind(decl: TopDecl): HirSymbolRef['kind'] {
     : decl.kind === 'Pool' ? 'pool' : decl.kind === 'Global' ? 'global' : decl.kind === 'Fn' ? 'fn'
       : decl.kind === 'System' ? 'system' : decl.kind === 'Field' ? 'field'
         : decl.kind === 'Presentation' ? 'presentation' : decl.kind === 'Scenario' ? 'scenario' : 'sound';
-}
-
-function callName(expr: Expr): string {
-  if (expr.kind === 'ident') return expr.name;
-  if (expr.kind === 'member') return `${callName(expr.obj)}.${expr.field}`;
-  return '<call>';
-}
-
-function intrinsicType(name: string, args: HirExpr[], expected: Type | null): Type {
-  if (name === 'input.player') return T.padframe;
-  if (name === 'input.held') return T.bool;
-  if (name === 'random.stream') return T.stream;
-  if (name.startsWith('random.')) return builtinType(name.slice(7)) ?? T.unknown;
-  if (name === 'terrain.height' || name === 'sqrt_approx' || name === 'sin' || name === 'cos') return T.fx16;
-  if (name === 'atan2_approx') return T.angle16;
-  if (name.startsWith('to_')) return builtinType(name.slice(3)) ?? T.unknown;
-  if (name === 'dot2' || name === 'dot3') return T.fx24;
-  if (name === 'length') return T.fx16;
-  if (name === 'normalize' || name === 'mix' || name === 'abs' || name === 'min' || name === 'max' || name === 'clamp') return args[0]?.type ?? expected ?? T.unknown;
-  return expected ?? args[0]?.type ?? T.unknown;
 }
 
 function adoptLiteralType(ast: Extract<Expr, { kind: 'binary' }>, children: HirExpr[]): Type {

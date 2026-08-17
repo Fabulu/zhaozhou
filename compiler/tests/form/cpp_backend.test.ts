@@ -518,18 +518,21 @@ test('C++ backend reports every earth and flow site in one pre-emission refusal'
   assert.match(message, /W3\.4 must supply validated physical Field IR wrappers for every listed site/);
 });
 
-test('whole-module-qualified flow call reaches the intended W3.4 backend refusal', () => {
+test('whole-module-qualified flow call and pool reach the intended W3.4 backend refusal', () => {
   const frontend = compileFrontend({
-    'a_flowlib.form': `module flowlib {
+    'a_data.form': `module data {
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+    }\n`,
+    'b_flowlib.form': `module flowlib {
       @flow field drift() -> flow_update footprint none; max_ops 48 {
         return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
       }
     }\n`,
-    'b_consumer.form': `module consumer {
+    'c_consumer.form': `module consumer {
+      import data;
       import flowlib;
-      struct particle { position: world3; velocity: velocity3; age: u32; }
-      pool motes: particle[4];
-      system move every 1 ticks reads motes writes motes { flowlib.drift(motes); }
+      system move every 1 ticks reads data.motes writes data.motes { flowlib.drift(data.motes); }
     }\n`,
   });
   assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));

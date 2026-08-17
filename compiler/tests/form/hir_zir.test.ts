@@ -202,29 +202,80 @@ test('HIR shares exact nested aggregate projection with checker bounds without f
   assert.equal(row.fields[0]!.type.t === 'array' ? row.fields[0]!.type.len : null, 12);
 });
 
-test('qualified flow calls retain owner identity and canonical pool effects in HIR', () => {
-  const frontend = compileFrontend({
-    'a_flowlib.form': `module flowlib {
+test('checker-owned whole/selective call targets retain owners and qualified pools in HIR', () => {
+  const compile = (whole: boolean) => compileFrontend({
+    'a_data.form': `module data {
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+    }\n`,
+    'b_flowlib.form': `module flowlib {
       @flow field drift() -> flow_update footprint none; max_ops 48 {
         return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
       }
     }\n`,
-    'b_consumer.form': `module consumer {
-      import flowlib;
-      struct particle { position: world3; velocity: velocity3; age: u32; }
-      pool motes: particle[4];
-      system move every 1 ticks reads motes writes motes { flowlib.drift(motes); }
+    'c_consumer.form': `module consumer {
+      import data;
+      import flowlib${whole ? '' : ' { drift }'};
+      system move every 1 ticks reads data.motes writes data.motes {
+        ${whole ? 'flowlib.drift' : 'drift'}(data.motes);
+      }
     }\n`,
   });
-  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
-  const hir = lowerHir(frontend);
-  assert.ok(hir);
-  const system = declarationsOf(hir, 'system')[0]!;
-  assert.deepEqual(system.reads, ['consumer\0motes']);
-  assert.deepEqual(system.writes, ['consumer\0motes']);
-  assert.deepEqual(system.body[0]!.expressions[0]!.symbol, { kind: 'field', module: 0, name: 'drift' });
-  assert.deepEqual(system.body[0]!.expressions[0]!.children[0]!.symbol,
-    { kind: 'pool', module: 1, name: 'motes' });
+  const result = (whole: boolean) => {
+    const frontend = compile(whole);
+    assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+    const hir = lowerHir(frontend);
+    assert.ok(hir);
+    const system = declarationsOf(hir, 'system')[0]!;
+    const call = system.body[0]!.expressions[0]!;
+    return {
+      target: [...frontend.check!.callTargets.values()],
+      reads: system.reads,
+      writes: system.writes,
+      symbol: call.symbol,
+      poolSymbol: call.children[0]!.symbol,
+      poolType: call.children[0]!.type,
+    };
+  };
+  const expected = {
+    target: [{
+      kind: 'field', module: 'flowlib', name: 'drift',
+      flowPool: { module: 'data', name: 'motes' },
+    }],
+    reads: ['data\0motes'],
+    writes: ['data\0motes'],
+    symbol: { kind: 'field', module: 1, name: 'drift' },
+    poolSymbol: { kind: 'pool', module: 0, name: 'motes' },
+    poolType: { t: 'pool', name: '0::motes', struct: '0::particle' },
+  };
+  assert.deepEqual(result(true), expected);
+  assert.deepEqual(result(false), expected);
+});
+
+test('qualifier-shaped locals are rejected before HIR can reinterpret a call', () => {
+  const frontend = compileFrontend({
+    'a_data.form': `module data {
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+    }\n`,
+    'b_flowlib.form': `module flowlib {
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+    }\n`,
+    'c_consumer.form': `module consumer {
+      import data;
+      import flowlib;
+      system move every 1 ticks reads data.motes writes data.motes {
+        let flowlib: u32 = 0;
+        flowlib.drift(data.motes);
+      }
+    }\n`,
+  });
+  assert.equal(frontend.ok, false);
+  assert.ok(frontend.diagnostics.some((item) => item.code === 'FORM-E-306'));
+  assert.deepEqual([...frontend.check!.callTargets.values()], []);
+  assert.equal(lowerHir(frontend), null);
 });
 
 test('HIR keeps ordinary composition recursive, marks only direct pool columns, and starts source rows at zero', () => {

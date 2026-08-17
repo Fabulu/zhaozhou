@@ -7,7 +7,7 @@
 // FieldBuilder). Diagnostics are collected, never thrown.
 
 import {
-  Access, ConstDecl, EmitStmt, EnumDecl, Expr, FieldDecl, FieldStmt, FnDecl, GlobalDecl,
+  Access, CallExpr, ConstDecl, EmitStmt, EnumDecl, Expr, FieldDecl, FieldStmt, FnDecl, GlobalDecl,
   ModuleAst, PoolDecl, PresentationDecl, RecordLit, ScenarioDecl, SoundDecl,
   Stmt, StructDecl, SystemDecl, TypeExpr,
 } from './ast.js';
@@ -143,12 +143,24 @@ export interface Schedule {
   phases: { index: number; systems: ScheduledSystem[] }[];
 }
 
+export type CanonicalCallTarget =
+  | { readonly kind: 'intrinsic'; readonly name: string }
+  | {
+    readonly kind: 'fn' | 'field' | 'system';
+    readonly module: string;
+    readonly name: string;
+    /** Canonical mapped-pool identity for an admitted direct @flow call. */
+    readonly flowPool: { readonly module: string; readonly name: string } | null;
+  };
+
 export interface CheckResult {
   schedule: Schedule | null;
   /** Exact type of every expression admitted by the checker, keyed by AST identity. */
   expressionTypes: ReadonlyMap<Expr, Type>;
   /** Canonical owner-qualified scheduler key for each reads/writes AST entry. */
   accessKeys: ReadonlyMap<Access, string>;
+  /** Checker-owned callable identity; lowering never reinterprets call syntax. */
+  callTargets: ReadonlyMap<CallExpr, CanonicalCallTarget>;
 }
 
 export function checkModules(modules: ModuleAst[], sink: DiagnosticSink): CheckResult {
@@ -169,6 +181,8 @@ class Checker {
   private readonly expressionTypes = new Map<Expr, Type>();
   /** Canonical owner/declaration identity for every declared access. */
   private readonly accessKeys = new Map<Access, string>();
+  /** Canonical target for every call admitted by this checker. */
+  private readonly callTargets = new Map<CallExpr, CanonicalCallTarget>();
 
   constructor(private readonly modules: ModuleAst[], private readonly sink: DiagnosticSink) {}
 
@@ -212,7 +226,12 @@ class Checker {
 
     // pass 6: schedule (E-500/407/505) — the D6 analysis feeding W3.3
     const schedule = this.computeSchedule();
-    return { schedule, expressionTypes: this.expressionTypes, accessKeys: this.accessKeys };
+    return {
+      schedule,
+      expressionTypes: this.expressionTypes,
+      accessKeys: this.accessKeys,
+      callTargets: this.callTargets,
+    };
   }
 
   // -- pass 1: symbols -----------------------------------------------------
@@ -912,6 +931,16 @@ class Checker {
     return type;
   }
 
+  /** A whole-module qualifier is considered only after lexical/unqualified names. */
+  private qualifierModule(ctx: Ctx, name: string): ModuleSym | null {
+    if (ctx.locals.has(name) || ctx.laterLets?.has(name)
+        || this.resolveUnqualified(ctx.mod, name) !== null) return null;
+    const target = this.byName.get(name);
+    const visible = ctx.mod.ast.name === name
+      || ctx.mod.ast.imports.some((item) => item.module === name && item.names.length === 0);
+    return target && visible ? target : null;
+  }
+
   private resolveRootSymbol(
     ctx: Ctx,
     expression: Expr,
@@ -924,9 +953,7 @@ class Checker {
         : null;
     }
     if (expression.kind === 'member' && expression.obj.kind === 'ident') {
-      const moduleName = expression.obj.name;
-      const importedWhole = ctx.mod.ast.imports.some((imp) => imp.module === moduleName && imp.names.length === 0);
-      const mod = importedWhole ? this.byName.get(moduleName) : undefined;
+      const mod = this.qualifierModule(ctx, expression.obj.name);
       const sym = mod?.table.get(expression.field);
       return mod && sym ? { sym, mod, name: (sym.decl.name as string) ?? expression.field } : null;
     }
@@ -1123,10 +1150,9 @@ class Checker {
         if (poolArg) this.expressionTypes.set(poolArg.value, T.unknown);
         this.sink.error('FORM-E-667', span, "'apply flow' requires a pool: argument naming its mapped pool");
       } else {
-        const poolName = `${poolRoot.mod.ast.name}.${poolRoot.name}`;
         this.expressionTypes.set(poolArg.value,
           this.poolValueType({ sym: poolRoot.sym, mod: poolRoot.mod, ambiguous: false }));
-        this.checkFlowPoolMapping(ctx, poolName, poolArg.value.span);
+        this.checkFlowPoolMapping(poolRoot, poolArg.value.span);
         const canonicalPool = this.stateKey(poolRoot.mod, poolRoot.name);
         this.writeComponent(ctx, canonicalPool, poolArg.value.span);
       }
@@ -1164,19 +1190,23 @@ class Checker {
   }
 
   /** flow lane mapping: position/velocity/age (+ optional representation). */
-  private checkFlowPoolMapping(ctx: Ctx, pool: string, span: SourceSpan): void {
-    const r = this.resolveName(ctx.mod, pool);
-    if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
-      this.sink.error('FORM-E-667', span, `'${pool}' is not a pool (flow programs apply to their mapped pool)`);
+  private checkFlowPoolMapping(
+    pool: { sym: Sym; mod: ModuleSym; name: string },
+    span: SourceSpan,
+  ): void {
+    const displayName = `${pool.mod.ast.name}.${pool.name}`;
+    if (pool.sym.kind !== 'pool') {
+      this.sink.error('FORM-E-667', span,
+        `'${displayName}' is not a pool (flow programs apply to their mapped pool)`);
       return;
     }
-    const struct = this.structOf(r);
+    const struct = this.structOf({ sym: pool.sym, mod: pool.mod, ambiguous: false });
     if (!struct) return;
     const has = (n: string) => struct.decl.fields.some((f) => f.name === n);
     const ok = has('position') && has('velocity') && has('age');
     if (!ok) {
       this.sink.error('FORM-E-664', span,
-        `pool '${pool}' struct '${struct.decl.name}' does not match the flow lane mapping (needs position: world3, velocity: velocity3, age: u32)`);
+        `pool '${displayName}' struct '${struct.decl.name}' does not match the flow lane mapping (needs position: world3, velocity: velocity3, age: u32)`);
     }
   }
 
@@ -1369,22 +1399,19 @@ class Checker {
   private checkMember(ctx: Ctx, e: Extract<Expr, { kind: 'member' }>, _expected: Type | null): Type {
     // qualified import: m.name
     const directModule = e.obj.kind === 'ident' ? e.obj.name : null;
-    if (directModule !== null && this.byName.has(directModule) && !ctx.locals.has(directModule)
-        && ctx.mod.ast.imports.some((imp) => imp.module === directModule && imp.names.length === 0)
-        && !this.resolveUnqualified(ctx.mod, directModule)) {
-      const target = this.byName.get(directModule)!;
-      const sym = target.table.get(e.field);
+    const directTarget = directModule === null ? null : this.qualifierModule(ctx, directModule);
+    if (directModule !== null && directTarget !== null) {
+      const sym = directTarget.table.get(e.field);
       if (!sym) {
         this.sink.error('FORM-E-203', e.span, `module '${directModule}' has no name '${e.field}'`);
         return T.unknown;
       }
-      return this.symValueType(ctx, sym, target, e);
+      return this.symValueType(ctx, sym, directTarget, e);
     }
     // whole-module-qualified enum member: m.mode.ready
     if (e.obj.kind === 'member' && e.obj.obj.kind === 'ident') {
       const moduleName = e.obj.obj.name;
-      const importedWhole = ctx.mod.ast.imports.some((imp) => imp.module === moduleName && imp.names.length === 0);
-      const target = importedWhole ? this.byName.get(moduleName) : undefined;
+      const target = this.qualifierModule(ctx, moduleName);
       const sym = target?.table.get(e.obj.field);
       if (target && sym?.kind === 'enum') {
         const declaration = sym.decl as unknown as EnumDecl;
@@ -2755,6 +2782,12 @@ class Checker {
               this.sink.error('FORM-E-904', item.action.span,
                 `scenario action '${expressionPath(item.action.callee)}' is not a declared system entry (FORM-E-904)`);
             } else {
+              this.callTargets.set(item.action, {
+                kind: 'system',
+                module: entry.mod.ast.name,
+                name: entry.name,
+                flowPool: null,
+              });
               this.expressionTypes.set(item.action, T.void);
               if (item.action.args.length !== 0) {
                 this.sink.error('FORM-E-304', item.action.span, 'scenario system entries take no arguments');
@@ -2892,7 +2925,12 @@ class Checker {
         return this.checkIntrinsicCall(ctx, e, name, expected);
       }
       const r = this.resolveUnqualified(ctx.mod, name);
-      if (r && r.ambiguous !== true) {
+      if (r?.ambiguous === true) {
+        this.sink.error('FORM-E-205', e.span, `ambiguous unqualified callable '${name}' (FORM-E-205)`);
+        for (const a of e.args) this.checkExpr(ctx, a, null);
+        return T.unknown;
+      }
+      if (r) {
         const result = this.checkResolvedCall(
           ctx,
           e,
@@ -2920,6 +2958,14 @@ class Checker {
     resolved: { sym: Sym; mod: ModuleSym; name: string },
     displayName: string,
   ): Type | null {
+    if (resolved.sym.kind === 'fn' || resolved.sym.kind === 'field' || resolved.sym.kind === 'system') {
+      this.callTargets.set(e, {
+        kind: resolved.sym.kind,
+        module: resolved.mod.ast.name,
+        name: resolved.name,
+        flowPool: null,
+      });
+    }
     if (resolved.sym.kind === 'fn') {
       if (ctx.domain === 'field') {
         this.sink.error('FORM-E-652', e.span,
@@ -2948,22 +2994,28 @@ class Checker {
         return T.unknown;
       }
       if (fd.profile === 'flow' && ctx.domain === 'sim') {
-        // Per-element flow application: program(pool, params).
-        if (e.args.length < 1 || e.args[0]!.kind !== 'ident') {
+        // Per-element flow application: program(pool, params). The pool may be
+        // caller-owned, selectively imported, or whole-module qualified, but
+        // must be the same direct declaration root resolved under ordinary precedence.
+        const poolArg = e.args[0];
+        const pool = poolArg ? this.resolveRootSymbol(ctx, poolArg) : null;
+        if (!poolArg || !pool || pool.sym.kind !== 'pool') {
+          if (poolArg) this.checkExpr(ctx, poolArg, null);
           this.sink.error('FORM-E-667', e.span,
             `flow program '${displayName}' is applied per element: first argument is its mapped pool (FORM-E-667)`);
         } else {
-          const poolName = e.args[0]!.name;
-          const pool = this.resolveName(ctx.mod, poolName);
-          this.expressionTypes.set(e.args[0]!, pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-            ? this.poolValueType(pool)
-            : T.unknown);
-          this.checkFlowPoolMapping(ctx, poolName, e.args[0]!.span);
-          const canonicalPool = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-            ? this.stateKey(pool.mod, (pool.sym.decl.name as string) ?? poolName)
-            : poolName;
-          this.writeComponent(ctx, canonicalPool, e.args[0]!.span);
-          this.readComponent(ctx, canonicalPool, e.args[0]!.span);
+          this.expressionTypes.set(poolArg,
+            this.poolValueType({ sym: pool.sym, mod: pool.mod, ambiguous: false }));
+          this.checkFlowPoolMapping(pool, poolArg.span);
+          const canonicalPool = this.stateKey(pool.mod, pool.name);
+          this.writeComponent(ctx, canonicalPool, poolArg.span);
+          this.readComponent(ctx, canonicalPool, poolArg.span);
+          this.callTargets.set(e, {
+            kind: 'field',
+            module: resolved.mod.ast.name,
+            name: resolved.name,
+            flowPool: { module: pool.mod.ast.name, name: pool.name },
+          });
         }
         const paramsType = fd.paramsStruct
           ? this.resolveType(resolved.mod, { kind: 'named', name: fd.paramsStruct, span: fd.span })
@@ -2989,6 +3041,7 @@ class Checker {
     name: string,
     expected: Type | null,
   ): Type {
+    this.callTargets.set(e, { kind: 'intrinsic', name });
     const args = e.args;
     const argT = (want: Type | null = null): Type[] => args.map((a) => this.checkExpr(ctx, a, want));
     const sameNumericArgs = (): Type[] => {
