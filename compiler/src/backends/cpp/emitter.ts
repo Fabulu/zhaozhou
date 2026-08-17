@@ -216,7 +216,7 @@ class CppEmitter {
   constructor(private readonly hir: HirProgram, private readonly zir: ZirProgram) {
     for (const module of hir.modules) {
       this.modules.set(module.index, module);
-      this.moduleNames.set(module.index, ident(module.name));
+      this.moduleNames.set(module.index, cppAuthoredModuleIdentifier(module.name));
     }
     for (const decl of hir.declarations) {
       this.declByKey.set(key(decl.module, decl.name), decl);
@@ -2022,10 +2022,75 @@ class CppEmitter {
   }
 }
 
+const AUTHORED_IDENTIFIER_PREFIX = 'form_authored_x';
+
+// Identifiers introduced alongside authored declarations/locals.  Prefix and
+// suffix families cover every ordinal temporary and declaration-derived helper.
+const LOCAL_GENERATED_EXACT_IDENTIFIERS = new Set([
+  'State', 'state', 'pads', 'tick', 'builder', 'resources', 'cartridge_hash',
+]);
+const LOCAL_GENERATED_PREFIXES = ['_', 'system_', 'present_', 'scenario_'] as const;
+
+// Symbols owned directly by namespace form.  Module namespace spellings use a
+// separate collision set because nested declarations cannot collide with these.
+const FORM_SCOPE_EXACT_IDENTIFIERS = new Set([
+  'u8', 'u16', 'u32', 'i16', 'i32', 'i64', 'Fx16', 'Fx24', 'Angle16', 'Unit8',
+  'Bool', 'Colour8', 'PadFrame', 'World2', 'World3', 'Velocity3', 'Stream',
+  'AuthoredResourceRole', 'AuthoredResourceBinding', 'PresentationResourceRole',
+  'PresentationResourceBinding', 'PresentationResources', 'TerrainHeightSampler',
+  'FormState', 'CanonicalWriter', 'ScenarioOperationKind', 'ScenarioSystemFn',
+  'ScenarioPlacementFn', 'ScenarioAssertFn', 'ScenarioToleranceFn',
+  'ScenarioOperation', 'ScenarioScript', 'ScenarioDriver',
+  'kAuthoredResourceBindings', 'kPresentationResourceBindings',
+  'kProgramManifestCrc32c', 'kCanonicalStateMaxBytes', 'kScenarioScripts',
+  'terrain_height', 'initialize', 'crc32c_update', 'rng', 'terrain_height_sampler',
+]);
+const FORM_SCOPE_PREFIXES = [
+  'form_', 'sat_', 'i32_', 'u32_', 'fx16_', 'fx24_', 'unit_',
+  'world2_', 'world3_', 'velocity3_', 'random_', 'trig_', 'dot',
+  'length_', 'normalize_', 'mix_', 'input_', 'checked_', 'authored_',
+  'shift_', 'floor_', 'round_', 'angle_', 'abs_', 'min_', 'max_', 'clamp_',
+  'magnitude_', 'atan2_', 'sqrt_', 'square_', 'isqrt_', 'serialize_',
+  'sim_', 'present_', 'run_scenario_',
+] as const;
+
+function authoredIdentifierMustEncode(value: string): boolean {
+  return !/^[A-Za-z][A-Za-z0-9_]*$/.test(value)
+    || value.includes('__')
+    || value.startsWith(AUTHORED_IDENTIFIER_PREFIX)
+    || CPP_KEYWORDS.has(value);
+}
+
+function encodeAuthoredIdentifier(value: string): string {
+  return `${AUTHORED_IDENTIFIER_PREFIX}${Buffer.from(value, 'utf8').toString('hex')}`;
+}
+
+/**
+ * Deterministic injective spelling for an authored declaration/local.
+ * Ordinary safe names remain readable; backend-owned names move into a UTF-8
+ * hex namespace which is itself reserved and therefore cannot alias raw input.
+ */
+export function cppAuthoredIdentifier(value: string): string {
+  const generatedFamily = LOCAL_GENERATED_PREFIXES.some((prefix) => value.startsWith(prefix))
+    || value.endsWith('_pool');
+  return authoredIdentifierMustEncode(value)
+      || LOCAL_GENERATED_EXACT_IDENTIFIERS.has(value)
+      || generatedFamily
+    ? encodeAuthoredIdentifier(value)
+    : value;
+}
+
+function cppAuthoredModuleIdentifier(value: string): string {
+  const generatedFamily = FORM_SCOPE_PREFIXES.some((prefix) => value.startsWith(prefix));
+  return authoredIdentifierMustEncode(value)
+      || FORM_SCOPE_EXACT_IDENTIFIERS.has(value)
+      || generatedFamily
+    ? encodeAuthoredIdentifier(value)
+    : value;
+}
+
 function ident(value: string): string {
-  const clean = value.replace(/[^A-Za-z0-9_]/g, '_');
-  const prefixed = /^[0-9]/.test(clean) ? `_${clean}` : clean;
-  return CPP_KEYWORDS.has(prefixed) ? `form_${prefixed}` : prefixed;
+  return cppAuthoredIdentifier(value);
 }
 
 function key(module: number, name: string): string { return `${module}\0${name}`; }

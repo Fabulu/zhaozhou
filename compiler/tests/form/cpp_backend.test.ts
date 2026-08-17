@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import { emitCpp } from '../../src/backends/index.js';
 import {
-  allocateAuthoredResourceIndices, allocateTransientResourceIndices,
+  allocateAuthoredResourceIndices, allocateTransientResourceIndices, cppAuthoredIdentifier,
 } from '../../src/backends/cpp/emitter.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { lowerHir } from '../../src/hir/index.js';
@@ -158,6 +158,97 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
   assert.doesNotMatch(game, /if \(\(tick % 4u\) == 0u\) arena::system_advance/);
   assert.match(game, /arena::system_advance\(state, pads, tick\);/);
   assert.match(byPath(first, 'arena.cpp'), /if \(\(i % 4u\) == \(tick % 4u\)\)/);
+});
+
+test('authored C++ spellings are injective and disjoint from generated symbol families', () => {
+  const authored = [
+    'row', 'class', 'form_class', 'entries_pool', '_form_value_0',
+    'system_move', 'present_view', 'scenario_case', 'State',
+    'form_authored_x726f77',
+  ];
+  const encoded = authored.map(cppAuthoredIdentifier);
+  assert.equal(new Set(encoded).size, authored.length);
+  assert.equal(cppAuthoredIdentifier('row'), 'row');
+  assert.equal(cppAuthoredIdentifier('form_class'), 'form_class');
+  for (const value of authored.filter((item) => item !== 'row' && item !== 'form_class')) {
+    assert.notEqual(cppAuthoredIdentifier(value), value,
+      `collision-prone authored identifier '${value}' must move out of generated namespaces`);
+  }
+});
+
+test('strict native C++ accepts pool-type and eager-temporary authored-name adversaries', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'clash.form': `module clash {
+      struct row { value: u32; }
+      struct entries_pool { marker: u32; }
+      struct State { marker: u32; }
+      pool entries: row[1];
+      global result: u32 = 0;
+      fn consume(value: u32) -> u32 { return value; }
+      fn context(state: u32) -> u32 { return state; }
+      system run every 1 ticks reads writes result {
+        let _form_value_0 = 7;
+        result = context(consume(_form_value_0));
+      }
+    }\n`,
+    'u32.form': `module u32 { global value: u32 = 0; }\n`,
+  });
+  const header = byPath(output, 'clash.hpp');
+  const source = byPath(output, 'clash.cpp');
+  assert.match(header, /struct form_authored_x656e74726965735f706f6f6c \{/);
+  assert.match(header, /struct form_authored_x5374617465 \{/);
+  assert.match(header, /struct entries_pool \{/);
+  assert.match(byPath(output, 'u32.hpp'), /namespace form::form_authored_x753332 \{/);
+  assert.match(source, /form_authored_x5f666f726d5f76616c75655f30 = 7;/);
+  assert.match(source, /auto&& _form_value_0 = form_authored_x5f666f726d5f76616c75655f30/);
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  const form::PadFrame pads[4]{};
+  form::sim_tick(state, pads, 0u);
+  return state.clash.result == 7u ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('strict native C++ uses exactly reduced unary and width-normalized capacities', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'capacity.form': `module capacity {
+      const ZERO: u32 = 0;
+      const MASK: u32 = ~ZERO;
+      const CAP: u32 = MASK >> 30;
+      const WRAPPED: u32 = 4294967295 + 2;
+      const SIGNED: i32 = ~0;
+      struct row { value: u32; }
+      pool rows: row[CAP];
+    }\n`,
+  });
+  const run = runGeneratedNative(output, `
+#include "form_game.hpp"
+static_assert(form::capacity::CAP == 3u);
+static_assert(form::capacity::WRAPPED == 1u);
+static_assert(form::capacity::SIGNED == -1);
+static_assert(form::capacity::rows_pool::_form_pool_capacity == 3u);
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  return state.capacity.rows._form_pool_count == 0u ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
 test('transient resource allocator rejects duplicate sites and bounded-index exhaustion', () => {
@@ -373,6 +464,29 @@ test('C++ backend reports every earth and flow site in one pre-emission refusal'
   assert.match(message, /earth field 'lift_ground' \(apply statement\)/);
   assert.match(message, /flow field 'drift_on' \(direct call\)/);
   assert.match(message, /W3\.4 must supply validated physical Field IR wrappers for every listed site/);
+});
+
+test('whole-module-qualified flow call reaches the intended W3.4 backend refusal', () => {
+  const frontend = compileFrontend({
+    'a_flowlib.form': `module flowlib {
+      @flow field drift() -> flow_update footprint none; max_ops 48 {
+        return flow_update { x = p.x, y = p.y, z = p.z, vx = p.vx, vy = p.vy, vz = p.vz, attr0 = 0m };
+      }
+    }\n`,
+    'b_consumer.form': `module consumer {
+      import flowlib;
+      struct particle { position: world3; velocity: velocity3; age: u32; }
+      pool motes: particle[4];
+      system move every 1 ticks reads motes writes motes { flowlib.drift(motes); }
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  assert.throws(
+    () => emitCpp(hir, lowerZir(hir)),
+    /refused 1 unlinked physical field invocation before emission:.*flow field 'drift' \(direct call\).*W3\.4 must supply validated physical Field IR wrappers/s,
+  );
 });
 
 test('imported pool spawn uses its owner-qualified capacity', () => {
