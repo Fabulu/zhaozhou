@@ -8,7 +8,7 @@
 
 import {
   Access, CallExpr, ConstDecl, EmitStmt, EnumDecl, Expr, FieldDecl, FieldStmt, FnDecl, GlobalDecl,
-  ModuleAst, PoolDecl, PresentationDecl, RecordLit, ScenarioDecl, SoundDecl,
+  ModuleAst, PoolDecl, PresentationDecl, RecordLit, ScenarioDecl, ScenarioItem, SoundDecl,
   Stmt, StructDecl, SystemDecl, TypeExpr,
 } from './ast.js';
 import { DiagnosticSink } from './diagnostics.js';
@@ -160,9 +160,13 @@ export type CanonicalDeclarationTarget =
     readonly name: string;
     readonly element: { readonly module: string; readonly name: string };
   }
-  | { readonly kind: 'struct' | 'field'; readonly module: string; readonly name: string };
+  | {
+    readonly kind: 'struct' | 'field' | 'global' | 'system' | 'presentation' | 'module';
+    readonly module: string;
+    readonly name: string;
+  };
 
-export type CanonicalDeclarationOperand = Stmt | RecordLit;
+export type CanonicalDeclarationOperand = Stmt | RecordLit | SystemDecl | ScenarioItem;
 
 export interface CheckResult {
   schedule: Schedule | null;
@@ -372,17 +376,20 @@ class Checker {
     return found[0] ? { sym: found[0].sym, mod: found[0].mod, ambiguous: false } : null;
   }
 
-  /** Resolve `name` or a whole-module-qualified `module.name`. */
+  /**
+   * Resolve one exact declaration name. A dotted spelling is module-qualified
+   * only when its root is otherwise unbound; current-module and selective
+   * declarations own the root before whole-module qualification.
+   */
   private resolveName(ms: ModuleSym, name: string): { sym: Sym; mod: ModuleSym; ambiguous: boolean } | null {
     const split = name.split('.');
     if (split.length === 1) return this.resolveUnqualified(ms, name);
     if (split.length !== 2) return null;
-    const target = this.byName.get(split[0]!);
-    const importedWhole = ms.ast.name === split[0]
-      || ms.ast.imports.some((imp) => imp.module === split[0] && imp.names.length === 0);
-    if (!target || !importedWhole) return null;
-    const sym = target.table.get(split[1]!);
-    return sym ? { sym, mod: target, ambiguous: false } : null;
+    const rooted = this.resolveUnqualified(ms, split[0]!);
+    if (rooted !== null) return rooted.ambiguous ? rooted : null;
+    const target = this.unshadowedQualifierModule(ms, split[0]!);
+    const sym = target?.table.get(split[1]!);
+    return target && sym ? { sym, mod: target, ambiguous: false } : null;
   }
 
   /** Resolve an access root, retaining the declaration owner and suffix. */
@@ -390,17 +397,18 @@ class Checker {
     ms: ModuleSym,
     parts: readonly string[],
   ): { sym: Sym; mod: ModuleSym; name: string; suffix: string[] } | null {
+    const rooted = this.resolveUnqualified(ms, parts[0] ?? '');
+    if (rooted !== null) {
+      return rooted.ambiguous
+        ? null
+        : { sym: rooted.sym, mod: rooted.mod, name: parts[0]!, suffix: [...parts.slice(1)] };
+    }
     if (parts.length >= 2) {
-      const target = this.byName.get(parts[0]!);
-      const importedWhole = ms.ast.name === parts[0]
-        || ms.ast.imports.some((imp) => imp.module === parts[0] && imp.names.length === 0);
-      const sym = importedWhole ? target?.table.get(parts[1]!) : undefined;
+      const target = this.unshadowedQualifierModule(ms, parts[0]!);
+      const sym = target?.table.get(parts[1]!);
       if (target && sym) return { sym, mod: target, name: parts[1]!, suffix: [...parts.slice(2)] };
     }
-    const resolved = this.resolveUnqualified(ms, parts[0] ?? '');
-    return resolved && !resolved.ambiguous
-      ? { sym: resolved.sym, mod: resolved.mod, name: parts[0]!, suffix: [...parts.slice(1)] }
-      : null;
+    return null;
   }
 
   private stateKey(owner: ModuleSym, name: string, suffix = ''): string {
@@ -1008,9 +1016,9 @@ class Checker {
     ctx: Ctx,
     authored: string,
     span: SourceSpan,
-    expected: 'pool' | 'struct' | 'field',
+    expected: 'pool' | 'struct' | 'field' | 'global' | 'system' | 'presentation',
     label: string,
-    notFoundCode: 'FORM-E-203' | 'FORM-E-301' = 'FORM-E-203',
+    notFoundCode: 'FORM-E-203' | 'FORM-E-301' | 'FORM-E-504' = 'FORM-E-203',
   ): { sym: Sym; mod: ModuleSym; ambiguous: false } | null {
     const root = authored.split('.')[0] ?? authored;
     if (ctx.locals.has(root)) {
@@ -1047,7 +1055,9 @@ class Checker {
         kind: 'pool', module: resolved.mod.ast.name, name,
         element: { module: element.mod.ast.name, name: element.decl.name },
       });
-    } else if (resolved.sym.kind === 'struct' || resolved.sym.kind === 'field') {
+    } else if (resolved.sym.kind === 'struct' || resolved.sym.kind === 'field'
+        || resolved.sym.kind === 'global' || resolved.sym.kind === 'system'
+        || resolved.sym.kind === 'presentation') {
       this.declarationTargets.set(operand, {
         kind: resolved.sym.kind, module: resolved.mod.ast.name, name,
       });
@@ -2358,6 +2368,8 @@ class Checker {
       this.sink.error('FORM-E-506', d.span,
         `system '${d.name}' has every ${d.every} (rate must fit positive u32 range 1..4294967295)`);
     }
+    const ctx = this.ctxFor(ms, 'sim');
+    let staggerTarget: Extract<CanonicalDeclarationTarget, { kind: 'pool' }> | null = null;
     if (d.staggerPool !== null) {
       const rate = d.staggerRate ?? d.every;
       if (rate <= 0n || rate > 0xffffffffn) {
@@ -2368,10 +2380,13 @@ class Checker {
         this.sink.error('FORM-E-507', d.staggerSpan!,
           `stagger rate ${d.staggerRate} does not equal the system's every ${d.every} (FORM-E-507)`);
       }
-      const r = this.resolveName(ms, d.staggerPool);
-      if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
-        this.sink.error('FORM-E-504', d.staggerSpan!,
-          `stagger requires exactly one iteration pool — '${d.staggerPool}' is not a declared pool (FORM-E-504)`);
+      const resolved = this.resolveDeclarationOperand(
+        ctx, d.staggerPool, d.staggerSpan!, 'pool', 'stagger pool', 'FORM-E-504',
+      );
+      if (resolved) {
+        this.recordDeclarationTarget(d, resolved);
+        const recorded = this.declarationTargets.get(d);
+        if (recorded?.kind === 'pool') staggerTarget = recorded;
       }
       void rate;
     }
@@ -2383,11 +2398,10 @@ class Checker {
     // (read-at-entry, write-at-exit = the F(state_t) law). FORM-E-407 fires
     // only when that overlap makes the phase order unsatisfiable — reported
     // from the schedule cycle walk below.
-    const ctx = this.ctxFor(ms, 'sim');
     ctx.reads = reads;
     ctx.writes = writes;
     this.checkStmtBody(ctx, d.body);
-    if (d.staggerPool !== null) this.checkStaggerShape(ms, d);
+    if (staggerTarget !== null) this.checkStaggerShape(ms, d, staggerTarget);
   }
 
   /**
@@ -2395,12 +2409,14 @@ class Checker {
    * identify exactly one iteration/apply site so lowering cannot accidentally
    * stagger unrelated state effects.
    */
-  private checkStaggerShape(ms: ModuleSym, d: SystemDecl): void {
+  private checkStaggerShape(
+    ms: ModuleSym,
+    d: SystemDecl,
+    target: Extract<CanonicalDeclarationTarget, { kind: 'pool' }>,
+  ): void {
     const pool = d.staggerPool!;
-    const poolResolved = this.resolveName(ms, pool);
-    const poolKey = poolResolved && !poolResolved.ambiguous && poolResolved.sym.kind === 'pool'
-      ? this.stateKey(poolResolved.mod, (poolResolved.sym.decl.name as string) ?? pool)
-      : pool;
+    const owner = this.byName.get(target.module)!;
+    const poolKey = this.stateKey(owner, target.name);
     const loops: Extract<Stmt, { kind: 'for' }>[] = [];
     const flowCalls: Extract<Stmt, { kind: 'call_stmt' }>[] = [];
     const walk = (stmts: Stmt[]): void => {
@@ -2412,7 +2428,7 @@ class Checker {
           walk(stmt.then);
           if (Array.isArray(stmt.else)) walk(stmt.else);
           else if (stmt.else) walk([stmt.else]);
-        } else if (stmt.kind === 'call_stmt' && this.isFlowCallFor(ms, stmt.call, pool)) {
+        } else if (stmt.kind === 'call_stmt' && this.isFlowCallFor(stmt.call, target)) {
           flowCalls.push(stmt);
         }
       }
@@ -2420,9 +2436,9 @@ class Checker {
     walk(d.body);
 
     const topLoops = d.body.filter((stmt): stmt is Extract<Stmt, { kind: 'for' }> =>
-      stmt.kind === 'for' && this.isExactStaggerLoop(ms, stmt, pool));
+      stmt.kind === 'for' && this.isExactStaggerLoop(stmt, target));
     const topFlows = d.body.filter((stmt): stmt is Extract<Stmt, { kind: 'call_stmt' }> =>
-      stmt.kind === 'call_stmt' && this.isFlowCallFor(ms, stmt.call, pool));
+      stmt.kind === 'call_stmt' && this.isFlowCallFor(stmt.call, target));
     const candidates: Stmt[] = [...topLoops, ...topFlows];
     const reasons: string[] = [];
     if (candidates.length !== 1) {
@@ -2457,7 +2473,7 @@ class Checker {
           if (Array.isArray(stmt.else)) checkEffects(stmt.else, insideSelected);
           else if (stmt.else) checkEffects([stmt.else], insideSelected);
         } else if (stmt.kind === 'assign') {
-          if (selected?.kind !== 'for' || !insideSelected || !this.isSelectedStaggerTarget(ms, stmt.target, selected, pool)) {
+          if (selected?.kind !== 'for' || !insideSelected || !this.isSelectedStaggerTarget(ms, stmt.target, selected, target)) {
             reasons.push('every state write must target the selected entity inside the stagger loop');
           }
         } else if (stmt.kind === 'spawn' || stmt.kind === 'kill' || stmt.kind === 'apply') {
@@ -2513,14 +2529,15 @@ class Checker {
     }
   }
 
-  private isExactStaggerLoop(ms: ModuleSym, stmt: Extract<Stmt, { kind: 'for' }>, pool: string): boolean {
-    const expected = this.resolveName(ms, pool);
+  private isExactStaggerLoop(
+    stmt: Extract<Stmt, { kind: 'for' }>,
+    expected: Extract<CanonicalDeclarationTarget, { kind: 'pool' }>,
+  ): boolean {
     if (stmt.range.kind === 'pool') {
       const actual = this.declarationTargets.get(stmt);
       return actual?.kind === 'pool'
-        && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
-        && actual.module === expected.mod.ast.name
-        && actual.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
+        && actual.module === expected.module
+        && actual.name === expected.name;
     }
     const lo = this.checkedExactValues.get(stmt.range.lo);
     const hi = stmt.range.hi;
@@ -2529,19 +2546,19 @@ class Checker {
       && hi.kind === 'member'
       && hi.field === 'count'
       && actual !== undefined
-      && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
-      && actual.module === expected.mod.ast.name
-      && actual.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
+      && actual.module === expected.module
+      && actual.name === expected.name;
   }
 
-  private isFlowCallFor(ms: ModuleSym, expr: Expr, pool: string): boolean {
+  private isFlowCallFor(
+    expr: Expr,
+    expected: Extract<CanonicalDeclarationTarget, { kind: 'pool' }>,
+  ): boolean {
     if (expr.kind !== 'call') return false;
     const target = this.callTargets.get(expr);
-    const expected = this.resolveName(ms, pool);
     return target?.kind === 'field' && target.flowPool !== null
-      && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
-      && target.flowPool.module === expected.mod.ast.name
-      && target.flowPool.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
+      && target.flowPool.module === expected.module
+      && target.flowPool.name === expected.name;
   }
 
   private isAnyFlowCall(_ms: ModuleSym, expr: Expr): boolean {
@@ -2558,10 +2575,9 @@ class Checker {
     ms: ModuleSym,
     target: Expr,
     loop: Extract<Stmt, { kind: 'for' }>,
-    pool: string,
+    expected: Extract<CanonicalDeclarationTarget, { kind: 'pool' }>,
   ): boolean {
     if (loop.range.kind === 'pool') return this.rootIdentOf(target)?.name === loop.varName;
-    const expected = this.resolveName(ms, pool);
     const context = this.ctxFor(ms, 'sim');
     let rootExpr = target;
     let actual = this.resolveRootSymbol(context, rootExpr);
@@ -2569,8 +2585,8 @@ class Checker {
       rootExpr = rootExpr.obj;
       actual = this.resolveRootSymbol(context, rootExpr);
     }
-    if (!actual || !expected || expected.ambiguous
-        || actual.sym !== expected.sym || actual.mod !== expected.mod) return false;
+    if (!actual || actual.sym.kind !== 'pool'
+        || actual.mod.ast.name !== expected.module || actual.name !== expected.name) return false;
     let current: Expr = target;
     while (current.kind === 'member' || current.kind === 'index') {
       if (current.kind === 'index'
@@ -2959,9 +2975,14 @@ class Checker {
           }
           break;
         case 'load': {
-          if (!this.byName.has(item.target)) {
+          const target = this.byName.get(item.target);
+          if (!target) {
             this.sink.error('FORM-E-901', item.span,
               `load target '${item.target}' is not a module known to the cartridge (FORM-E-901)`);
+          } else {
+            this.declarationTargets.set(item, {
+              kind: 'module', module: target.ast.name, name: target.ast.name,
+            });
           }
           break;
         }
@@ -2976,6 +2997,10 @@ class Checker {
                 (placement.sym.decl as unknown as GlobalDecl).type), T.world3)) {
             this.sink.error('FORM-E-902', item.span,
               `spawn player placement '${item.at}' must name a world3 global (FORM-E-902)`);
+          } else {
+            this.recordDeclarationTarget(item, {
+              sym: placement.sym, mod: placement.mod, ambiguous: false,
+            });
           }
           break;
         }
@@ -3002,6 +3027,9 @@ class Checker {
                 module: entry.mod.ast.name,
                 name: entry.name,
                 flowPool: null,
+              });
+              this.recordDeclarationTarget(item, {
+                sym: entry.sym, mod: entry.mod, ambiguous: false,
               });
               this.expressionTypes.set(item.action, T.void);
               if (item.action.args.length !== 0) {
@@ -3049,6 +3077,8 @@ class Checker {
           if (!r || r.ambiguous === true || r.sym.kind !== 'presentation') {
             this.sink.error('FORM-E-720', item.span,
               `assert_budget names '${item.budgetSet}' which is not a declared budget set (a presentation; L3 registry, FORM-E-720)`);
+          } else {
+            this.recordDeclarationTarget(item, { sym: r.sym, mod: r.mod, ambiguous: false });
           }
           break;
         }

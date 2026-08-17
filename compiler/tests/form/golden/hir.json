@@ -2553,7 +2553,8 @@
       "end": 1221,
       "file": "a_arena.form",
       "start": 1217
-     }
+     },
+     "target": null
     },
     {
      "ast": {
@@ -2570,6 +2571,11 @@
       "end": 1238,
       "file": "a_arena.form",
       "start": 1234
+     },
+     "target": {
+      "kind": "module",
+      "module": 0,
+      "name": "arena"
      }
     },
     {
@@ -2642,6 +2648,11 @@
       "end": 1252,
       "file": "a_arena.form",
       "start": 1250
+     },
+     "target": {
+      "kind": "system",
+      "module": 0,
+      "name": "seed_wave"
      }
     },
     {
@@ -2660,7 +2671,8 @@
       "end": 1285,
       "file": "a_arena.form",
       "start": 1278
-     }
+     },
+     "target": null
     }
    ],
    "kind": "scenario",

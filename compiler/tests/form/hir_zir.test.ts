@@ -459,6 +459,55 @@ test('specialized declaration operands reject lexical qualifier roots before HIR
   }
 });
 
+test('top-level declaration roots reject specialized qualification before HIR', () => {
+  const cases: { sources: Record<string, string>; code: string }[] = [
+    {
+      sources: {
+        'data.form': `module data {
+          struct row { items: u32; }
+          pool data: row[2];
+          pool items: row[2];
+          system bad every 1 ticks reads data.items writes data.items {
+            for item in data.items { }
+          }
+        }\n`,
+      },
+      code: 'FORM-E-203',
+    },
+    {
+      sources: {
+        'data.form': `module data {
+          struct row { items: u32; }
+          pool data: row[2];
+          pool items: row[2];
+          system bad every 1 ticks stagger over data.items reads data.items writes data.items {
+            for item in data { item.items = item.items; }
+          }
+        }\n`,
+      },
+      code: 'FORM-E-504',
+    },
+    {
+      sources: {
+        'game.form': `module game {
+          global game: world3 = world3 { x = 0w, y = 0w, z = 0w };
+          global start: world3 = world3 { x = 1w, y = 2w, z = 3w };
+          presentation limits { shared budget 100%; }
+          scenario bad { seed 1; spawn player 0 at game.start; assert_budget game.limits; }
+        }\n`,
+      },
+      code: 'FORM-E-902',
+    },
+  ];
+  for (const { sources, code } of cases) {
+    const frontend = compileFrontend(sources);
+    assert.equal(frontend.ok, false);
+    assert.ok(frontend.diagnostics.some((item) => item.code === code),
+      frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+    assert.equal(lowerHir(frontend), null);
+  }
+});
+
 test('HIR carries checker-owned pool, record-type, and applied-field targets', () => {
   const frontend = compileFrontend({
     'data.form': 'module data { struct row { value: u32; } pool items: row[2]; }\n',
@@ -646,6 +695,16 @@ test('TestZIR explicitly lowers every scenario operation with resolved owner ide
   assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
   const hir = lowerHir(frontend);
   assert.ok(hir);
+  const hirScenario = declarationsOf(hir, 'scenario')[0]!;
+  assert.deepEqual(hirScenario.items.map((item) => item.target), [
+    null,
+    { kind: 'module', module: 0, name: 'scenario_ops' },
+    { kind: 'global', module: 0, name: 'origin' },
+    { kind: 'system', module: 0, name: 'step' },
+    null,
+    null,
+    { kind: 'presentation', module: 0, name: 'limits' },
+  ]);
   const zir = lowerZir(hir);
   assert.equal(zir.test.scenarios.length, 1);
   const scenario = zir.test.scenarios[0]!;
@@ -778,7 +837,9 @@ test('ZIR schedule is canonical across source-map insertion order', () => {
 });
 
 test('multi-rate and stagger lower to compile-time ZIR constants', () => {
-  const { zir } = compileFixture();
+  const { hir, zir } = compileFixture();
+  const hirAdvance = declarationsOf(hir, 'system').find((system) => system.name === 'advance')!;
+  assert.deepEqual(hirAdvance.staggerPool, { module: 0, name: 'particles' });
   const seed = zir.sim.callList.find((system) => system.name === 'seed_wave')!;
   const advance = zir.sim.callList.find((system) => system.name === 'advance')!;
   assert.deepEqual(seed.rateGuard, { divisor: 2, remainder: 0 });

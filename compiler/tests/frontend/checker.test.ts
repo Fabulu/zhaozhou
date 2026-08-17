@@ -1085,6 +1085,146 @@ test('specialized pool operands obey lexical-root precedence and record canonica
     [...legalQualified.check!.declarationTargets.values()]);
 });
 
+test('top-level and selective roots precede whole-module declaration operands', () => {
+  const poolLoop = compile({
+    'data.form': `module data {
+      struct row { items: u32; }
+      pool data: row[2];
+      pool items: row[2];
+      system bad every 1 ticks reads data.items writes data.items {
+        for item in data.items { }
+      }
+    }\n`,
+  });
+  assert.equal(poolLoop.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1,
+    poolLoop.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.match(poolLoop.diagnostics.find((item) => item.code === 'FORM-E-203')!.message,
+    /pool-sugar loop operand 'data\.items' is not a declared pool/);
+  assert.deepEqual([...poolLoop.check!.accessKeys.values()], ['data\0data.items', 'data\0data.items']);
+
+  for (const statement of [
+    'spawn(data.items, row { items = 0 });',
+    'kill(data.items, 0);',
+  ]) {
+    const specialized = compile({
+      'data.form': `module data {
+        struct row { items: u32; }
+        pool data: row[2];
+        pool items: row[2];
+        system bad every 1 ticks reads data writes data { ${statement} }
+      }\n`,
+    });
+    assert.equal(specialized.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1,
+      specialized.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  }
+
+  const recordType = compile({
+    'data.form': `module data {
+      struct row { items: u32; }
+      pool data: row[2];
+      system bad every 1 ticks reads data writes data {
+        spawn(data, data.row { items = 0 });
+      }
+    }\n`,
+  });
+  assert.equal(recordType.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1,
+    recordType.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+
+  const field = compile({
+    'fields.form': `module fields {
+      global fields: u32 = 0;
+      @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {
+        return terrain_delta { height = 1m, velocity = 0m, material = 0, nav_cost = 0m };
+      }
+      system bad every 1 ticks reads writes terrain {
+        apply terrain_field fields.lift(origin: world2 { x = 0w, y = 0w }) duration 1t;
+      }
+    }\n`,
+  });
+  assert.equal(field.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1,
+    field.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+
+  const stagger = compile({
+    'data.form': `module data {
+      struct row { items: u32; }
+      pool data: row[2];
+      pool items: row[2];
+      system bad every 1 ticks stagger over data.items reads data.items writes data.items {
+        for item in data { item.items = item.items; }
+      }
+    }\n`,
+  });
+  assert.equal(stagger.diagnostics.filter((item) => item.code === 'FORM-E-504').length, 1,
+    stagger.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const staggerDecl = stagger.modules[0]!.decls.find((decl) => decl.kind === 'System')!;
+  assert.equal(stagger.check!.declarationTargets.has(staggerDecl), false);
+
+  const scenario = compile({
+    'game.form': `module game {
+      global game: world3 = world3 { x = 0w, y = 0w, z = 0w };
+      global start: world3 = world3 { x = 1w, y = 2w, z = 3w };
+      presentation limits { shared budget 100%; }
+      system advance every 1 ticks reads writes { }
+      scenario bad {
+        seed 1;
+        spawn player 0 at game.start;
+        at 1 ticks game.advance();
+        assert_budget game.limits;
+      }
+    }\n`,
+  });
+  assert.equal(scenario.diagnostics.filter((item) => item.code === 'FORM-E-902').length, 1);
+  assert.equal(scenario.diagnostics.filter((item) => item.code === 'FORM-E-904').length, 1);
+  assert.equal(scenario.diagnostics.filter((item) => item.code === 'FORM-E-720').length, 1);
+
+  const selective = compile({
+    'data.form': `module data { struct row { value: u32; } pool items: row[2]; }\n`,
+    'root.form': `module roots { global data: u32 = 0; }\n`,
+    'app.form': `module app {
+      import data;
+      import roots { data };
+      system bad every 1 ticks reads writes { for item in data.items { } }
+    }\n`,
+  });
+  assert.equal(selective.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1,
+    selective.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.equal(selective.check!.declarationTargets.size, 0);
+});
+
+test('stagger and scenario resources retain checker-owned owner identities', () => {
+  const result = compile({
+    'world.form': `module world {
+      struct row { value: fx16; }
+      pool items: row[2];
+      global start: world3 = world3 { x = 0w, y = 0w, z = 0w };
+      system advance every 1 ticks reads writes { }
+      presentation limits { shared budget 100%; }
+    }\n`,
+    'app.form': `module app {
+      import world;
+      system staggered every 1 ticks stagger over world.items reads world.items writes world.items {
+        for i in 0..world.items.count { world.items.value[i] = world.items.value[i] + 1m; }
+      }
+      scenario operations {
+        seed 1;
+        load world;
+        spawn player 0 at world.start;
+        at 1 ticks world.advance();
+        assert_budget world.limits;
+      }
+    }\n`,
+  });
+  assert.deepEqual(result.codes, [],
+    result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...result.check!.declarationTargets.values()], [
+    { kind: 'pool', module: 'world', name: 'items', element: { module: 'world', name: 'row' } },
+    { kind: 'module', module: 'world', name: 'world' },
+    { kind: 'global', module: 'world', name: 'start' },
+    { kind: 'system', module: 'world', name: 'advance' },
+    { kind: 'presentation', module: 'world', name: 'limits' },
+  ]);
+});
+
 test('field-application declaration operands obey future-let reservation', () => {
   const field = `module fields {
     @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {

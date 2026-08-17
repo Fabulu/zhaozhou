@@ -2,7 +2,7 @@
 // Runtime receives a flat call list; all phase choices happen here.
 
 import {
-  declarationsOf, serializeHir, type HirDeclaration, type HirProgram, type HirSystem,
+  declarationsOf, serializeHir, type HirProgram, type HirSymbolKind, type HirSymbolRef, type HirSystem,
 } from '../hir/model.js';
 import type {
   PresentZir, SimZir, TestZir, TestZirOperation, ZirProgram, ZirSystem,
@@ -35,27 +35,22 @@ function lowerTest(hir: HirProgram): TestZir {
           case 'seed':
             return { kind: 'seed', value: u32(item.ast.value, 'scenario seed'), span: item.span };
           case 'load': {
-            const target = item.ast.target;
-            const module = hir.modules.find((candidate) => candidate.name === target);
-            if (!module) throw new Error(`internal TestZIR load target '${target}' is unresolved`);
-            return { kind: 'load', module: module.index, name: module.name, span: item.span };
+            const target = requireScenarioTarget(item.target, 'module', item.ast.kind);
+            return { kind: 'load', module: target.module!, name: target.name, span: item.span };
           }
           case 'spawn_player': {
-            const placement = resolveDeclaration(hir, scenario.module, item.ast.at, 'global');
+            const placement = requireScenarioTarget(item.target, 'global', item.ast.kind);
             return {
               kind: 'spawn_player', player: u32(item.ast.index, 'scenario player'),
-              placement: { module: placement.module, global: placement.name }, span: item.span,
+              placement: { module: placement.module!, global: placement.name }, span: item.span,
             };
           }
           case 'at': {
-            const action = item.expressions[0];
-            if (!action || action.symbol?.kind !== 'system' || action.symbol.module === null) {
-              throw new Error(`internal TestZIR action at ${item.ast.tick} has no resolved system`);
-            }
+            const action = requireScenarioTarget(item.target, 'system', item.ast.kind);
             const system = declarationsOf(hir, 'system').find(
-              (candidate) => candidate.module === action.symbol!.module && candidate.name === action.symbol!.name,
+              (candidate) => candidate.module === action.module && candidate.name === action.name,
             );
-            if (!system) throw new Error(`internal TestZIR system '${action.symbol.name}' is missing`);
+            if (!system) throw new Error(`internal TestZIR system '${action.name}' is missing`);
             return {
               kind: 'at', tick: u32(item.ast.tick, 'scenario action tick'),
               system: { module: system.module, name: system.name, sourceId: system.sourceId }, span: item.span,
@@ -69,8 +64,8 @@ function lowerTest(hir: HirProgram): TestZir {
           case 'capture':
             return { kind: 'capture', frame: u32(item.ast.frame, 'scenario capture frame'), name: item.ast.name, span: item.span };
           case 'assert_budget': {
-            const presentation = resolveDeclaration(hir, scenario.module, item.ast.budgetSet, 'presentation');
-            return { kind: 'assert_budget', presentation: { module: presentation.module, name: presentation.name }, span: item.span };
+            const presentation = requireScenarioTarget(item.target, 'presentation', item.ast.kind);
+            return { kind: 'assert_budget', presentation: { module: presentation.module!, name: presentation.name }, span: item.span };
           }
         }
       }),
@@ -79,41 +74,15 @@ function lowerTest(hir: HirProgram): TestZir {
   };
 }
 
-function resolveDeclaration<K extends HirDeclaration['kind']>(
-  hir: HirProgram,
-  requester: number,
-  authored: string,
+function requireScenarioTarget<K extends HirSymbolKind>(
+  target: HirSymbolRef | null,
   kind: K,
-): Extract<HirDeclaration, { kind: K }> {
-  const parts = authored.split('.');
-  let owner = requester;
-  let name = authored;
-  if (parts.length === 2) {
-    const module = hir.modules.find((candidate) => candidate.name === parts[0]);
-    const imported = module && (module.index === requester
-      || hir.modules[requester]!.imports.some((item) => item.module === module.index && item.names.length === 0));
-    if (!module || !imported) throw new Error(`internal TestZIR qualified name '${authored}' is not visible`);
-    owner = module.index;
-    name = parts[1]!;
-  } else if (parts.length === 1) {
-    const local = hir.declarations.find((declaration) => declaration.module === requester && declaration.name === name);
-    if (!local) {
-      const imports = hir.modules[requester]!.imports.filter((item) => item.names.includes(name));
-      const found = imports.map((item) => hir.declarations.find(
-        (declaration) => declaration.module === item.module && declaration.name === name,
-      )).filter((value): value is HirDeclaration => value !== undefined);
-      if (found.length !== 1) throw new Error(`internal TestZIR name '${authored}' is unresolved or ambiguous`);
-      owner = found[0]!.module;
-    }
-  } else {
-    throw new Error(`internal TestZIR malformed declaration path '${authored}'`);
+  operation: string,
+): HirSymbolRef & { kind: K; module: number } {
+  if (!target || target.kind !== kind || target.module === null) {
+    throw new Error(`internal TestZIR ${operation} has no canonical ${kind} target`);
   }
-  const declaration = hir.declarations.find(
-    (candidate): candidate is Extract<HirDeclaration, { kind: K }> =>
-      candidate.module === owner && candidate.name === name && candidate.kind === kind,
-  );
-  if (!declaration) throw new Error(`internal TestZIR '${authored}' is not a ${kind}`);
-  return declaration;
+  return target as HirSymbolRef & { kind: K; module: number };
 }
 
 function u32(value: bigint, label: string): number {

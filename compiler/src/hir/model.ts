@@ -10,7 +10,7 @@ import type { SourceSpan } from '../frontend/span.js';
 export type HirDomain = 'constant' | 'state' | 'pure' | 'sim' | 'field' | 'present' | 'test';
 export type HirSymbolKind =
   | 'const' | 'enum' | 'struct' | 'pool' | 'global' | 'fn' | 'system'
-  | 'field' | 'presentation' | 'scenario' | 'sound' | 'local' | 'intrinsic'
+  | 'field' | 'presentation' | 'scenario' | 'sound' | 'module' | 'local' | 'intrinsic'
   | 'field_table';
 
 export interface HirModule {
@@ -185,7 +185,7 @@ export interface HirScenario {
   module: number;
   order: number;
   name: string;
-  items: { ast: ScenarioItem; expressions: HirExpr[]; span: SourceSpan }[];
+  items: { ast: ScenarioItem; target: HirSymbolRef | null; expressions: HirExpr[]; span: SourceSpan }[];
   sourceId: number;
   span: SourceSpan;
 }

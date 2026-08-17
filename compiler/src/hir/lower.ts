@@ -188,7 +188,9 @@ class HirLowerer {
         return fn;
       }
       case 'System': {
-        const stagger = decl.staggerPool === null ? null : this.require(module, decl.staggerPool);
+        const staggerTarget = decl.staggerPool === null
+          ? null : this.requireDeclarationTarget(decl, 'pool');
+        const stagger = staggerTarget === null ? null : this.canonicalSymbol(staggerTarget);
         return {
           kind: 'system', domain: 'sim', module, order, name: decl.name,
           every: this.u32Number(decl.every, `system '${decl.name}' rate`, true),
@@ -229,7 +231,12 @@ class HirLowerer {
       case 'Scenario':
         return {
           kind: 'scenario', domain: 'test', module, order, name: decl.name,
-          items: decl.items.map((item) => ({ ast: item, expressions: this.scenarioExpressions(module, item), span: item.span })),
+          items: decl.items.map((item) => ({
+            ast: item,
+            target: this.scenarioTarget(item),
+            expressions: this.scenarioExpressions(module, item),
+            span: item.span,
+          })),
           sourceId: this.sourceId(SOURCE_KIND_SCENARIO, module, decl.name, decl.span), span: decl.span,
         };
       case 'Sound':
@@ -505,6 +512,16 @@ class HirLowerer {
     return owner;
   }
 
+  private scenarioTarget(item: ScenarioItem): HirSymbolRef | null {
+    switch (item.kind) {
+      case 'load': return this.canonicalReference(this.requireDeclarationTarget(item, 'module'));
+      case 'spawn_player': return this.canonicalReference(this.requireDeclarationTarget(item, 'global'));
+      case 'at': return this.canonicalReference(this.requireDeclarationTarget(item, 'system'));
+      case 'assert_budget': return this.canonicalReference(this.requireDeclarationTarget(item, 'presentation'));
+      case 'seed': case 'assert': case 'capture': return null;
+    }
+  }
+
   private scenarioExpressions(module: number, item: ScenarioItem): HirExpr[] {
     if (item.kind === 'at') return [this.expr(module, item.action, null, new Map())];
     if (item.kind === 'assert') return [this.expr(module, item.expr, T.bool, new Map()), ...(item.tolerance ? [this.expr(module, item.tolerance, T.fx16, new Map())] : [])];
@@ -748,8 +765,10 @@ class HirLowerer {
   ): Extract<CanonicalDeclarationTarget, { kind: 'pool' }>;
   private requireDeclarationTarget(
     operand: CanonicalDeclarationOperand,
-    expected: 'struct' | 'field',
-  ): Extract<CanonicalDeclarationTarget, { kind: 'struct' | 'field' }>;
+    expected: 'struct' | 'field' | 'global' | 'system' | 'presentation' | 'module',
+  ): Extract<CanonicalDeclarationTarget, {
+    kind: 'struct' | 'field' | 'global' | 'system' | 'presentation' | 'module';
+  }>;
   private requireDeclarationTarget(
     operand: CanonicalDeclarationOperand,
     expected: CanonicalDeclarationTarget['kind'],
@@ -769,10 +788,24 @@ class HirLowerer {
     return module;
   }
 
+  private canonicalReference(target: CanonicalDeclarationTarget): HirSymbolRef {
+    if (target.kind === 'module') {
+      return { kind: 'module', module: this.moduleIndex(target.module), name: target.name };
+    }
+    return this.symbolRef(this.canonicalSymbol(target));
+  }
+
   private canonicalSymbol(target: CanonicalDeclarationTarget): SymbolInfo {
+    if (target.kind === 'module') {
+      throw new Error(`internal HIR declaration-target failure: module '${target.name}' is not a declaration`);
+    }
     const module = this.moduleIndex(target.module);
     const symbol = this.modules[module]!.table.get(target.name);
-    const expected = target.kind === 'pool' ? 'Pool' : target.kind === 'struct' ? 'Struct' : 'Field';
+    const expected = target.kind === 'pool' ? 'Pool'
+      : target.kind === 'struct' ? 'Struct'
+        : target.kind === 'field' ? 'Field'
+          : target.kind === 'global' ? 'Global'
+            : target.kind === 'system' ? 'System' : 'Presentation';
     if (!symbol || symbol.decl.kind !== expected) {
       throw new Error(
         `internal HIR declaration-target failure: checker resolved ${target.kind} ${target.module}.${target.name}`,
@@ -796,8 +829,14 @@ class HirLowerer {
 
   private resolve(module: number, name: string): SymbolInfo | null {
     const parts = name.split('.');
-    if (parts.length === 2) return this.qualifiedMember(module, parts[0]!, parts[1]!);
-    if (parts.length !== 1) return null;
+    if (parts.length === 2) {
+      if (this.resolveUnqualified(module, parts[0]!) !== null) return null;
+      return this.qualifiedMember(module, parts[0]!, parts[1]!);
+    }
+    return parts.length === 1 ? this.resolveUnqualified(module, name) : null;
+  }
+
+  private resolveUnqualified(module: number, name: string): SymbolInfo | null {
     const own = this.modules[module]!.table.get(name);
     if (own) return own;
     for (const imp of this.modules[module]!.ast.imports) {
