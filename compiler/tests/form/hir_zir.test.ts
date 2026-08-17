@@ -351,6 +351,78 @@ test('future-let member roots are rejected before HIR lowering', () => {
   assert.equal(lowerHir(frontend), null);
 });
 
+test('future lets in fields and nested executable bodies reject before HIR lowering', () => {
+  const cases: Record<string, string>[] = [
+    {
+      'earth.form': 'module app { @earth field probe()->terrain_delta footprint rect(0m,0m,1m,1m); max_ops 32 { let before=min(1m,2m); let min=3m; return terrain_delta { height=before, velocity=0m, material=0, nav_cost=0m }; } }\n',
+    },
+    {
+      'flow.form': `module app {
+        @flow field probe() -> flow_update footprint none; max_ops 48 {
+          let before = max(1m, 2m);
+          let max = 3m;
+          return flow_update { x = before, y = 0m, z = 0m, vx = 0m, vy = 0m, vz = 0m, attr0 = 0m };
+        }
+      }\n`,
+    },
+    {
+      'function.form': `module app {
+        fn probe() -> u32 { let before: u32 = min(1, 2); let min: u32 = 3; return before; }
+      }\n`,
+    },
+    {
+      'system.form': `module app {
+        system probe every 1 ticks reads writes {
+          let before: u32 = min(1, 2);
+          let min: u32 = 3;
+        }
+      }\n`,
+    },
+    {
+      'nested.form': `module app {
+        fn probe(flag: bool) -> u32 {
+          for i in 0..1 { let before: u32 = min(1, 2); let min: u32 = 3; }
+          return 0;
+        }
+      }\n`,
+    },
+  ];
+
+  for (const sources of cases) {
+    const frontend = compileFrontend(sources);
+    assert.equal(frontend.ok, false);
+    assert.equal(frontend.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1,
+      frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+    assert.deepEqual([...frontend.check!.callTargets.values()], []);
+    assert.equal(lowerHir(frontend), null);
+  }
+});
+
+test('HIR keeps valid intrinsics outside unrelated nested lexical scopes', () => {
+  const frontend = compileFrontend({
+    'scopes.form': `module scopes {
+      fn probe(flag: bool) -> u32 {
+        let before: u32 = min(4, 5);
+        if flag { let min: u32 = 3; }
+        else { let branch: u32 = min(5, 6); }
+        let after: u32 = min(6, 7);
+        return max(before, after);
+      }
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...frontend.check!.callTargets.values()].map((target) =>
+    target.kind === 'intrinsic' ? target.name : `${target.module}.${target.name}`),
+  ['min', 'min', 'min', 'max']);
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const probe = declarationsOf(hir, 'fn')[0]!;
+  assert.equal(probe.body.length, 4);
+  assert.equal(probe.body[1]!.body[0]!.ast.kind, 'let');
+  assert.equal(probe.body[1]!.elseBody[0]!.expressions[0]!.symbol?.kind, 'intrinsic');
+  assert.equal(probe.body[2]!.expressions[0]!.symbol?.kind, 'intrinsic');
+});
+
 test('HIR keeps ordinary composition recursive, marks only direct pool columns, and starts source rows at zero', () => {
   const frontend = compileFrontend({
     'composition.form': `module composition {

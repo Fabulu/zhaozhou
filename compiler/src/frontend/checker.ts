@@ -622,10 +622,31 @@ class Checker {
     };
   }
 
+  /**
+   * Enter one lexical body. Direct lets reserve their names from the body's
+   * first expression; nested bodies initialize independently and inherit only
+   * enclosing bindings/reservations.
+   */
+  private bodyContext(ctx: Ctx, body: readonly { kind: string; name?: string }[]): Ctx {
+    const laterLets = new Set(ctx.laterLets);
+    for (const name of collectDirectLetNames(body)) laterLets.add(name);
+    const nested: Ctx = {
+      ...ctx,
+      locals: new Map(ctx.locals),
+      laterLets,
+    };
+    const fn = currentFn(ctx);
+    if (fn !== '<top>') setCurrentFn(nested, fn);
+    return nested;
+  }
+
+  private checkStmtBody(ctx: Ctx, body: Stmt[]): void {
+    this.checkStmts(this.bodyContext(ctx, body), body);
+  }
+
   private checkFn(ms: ModuleSym, d: FnDecl): void {
     const ctx = this.ctxFor(ms, 'fn');
     setCurrentFn(ctx, `${ms.ast.name}::${d.name}`);
-    ctx.laterLets = collectLetNames(d.body);
     ctx.fnRet = this.resolveType(ms, d.ret);
     ctx.fnHasReturn = false;
     const seen = new Set<string>();
@@ -636,7 +657,7 @@ class Checker {
       seen.add(p.name);
       ctx.locals.set(p.name, { type: this.resolveType(ms, p.type), letSpan: p.span, assigned: true, isParam: true });
     }
-    this.checkStmts(ctx, d.body);
+    this.checkStmtBody(ctx, d.body);
     if (!tAgree(ctx.fnRet!, T.void) && !this.definitelyReturns(d.body)) {
       this.sink.error('FORM-E-310', d.span,
         `fn '${d.name}' returns ${typeName(ctx.fnRet!)} but has no return on some path`);
@@ -684,10 +705,10 @@ class Checker {
           this.sink.error('FORM-E-312', s.cond.span,
             `if condition must be bool, got ${typeName(ct)}`);
         }
-        this.checkStmts(ctx, s.then);
+        this.checkStmtBody(ctx, s.then);
         if (s.else) {
-          if (Array.isArray(s.else)) this.checkStmts(ctx, s.else);
-          else this.checkStmt(ctx, s.else);
+          if (Array.isArray(s.else)) this.checkStmtBody(ctx, s.else);
+          else this.checkStmtBody(ctx, [s.else]);
         }
         break;
       }
@@ -1048,9 +1069,7 @@ class Checker {
   // -- for loops --------------------------------------------------------------
 
   private checkFor(ctx: Ctx, s: Extract<Stmt, { kind: 'for' }>): void {
-    const savedLocals = new Map(ctx.locals);
-    const savedLoopPool = ctx.loopPool;
-    const savedInLoop = ctx.inLoop;
+    const bodyCtx = this.bodyContext(ctx, s.body);
 
     if (s.range.kind === 'pool') {
       const r = this.resolveName(ctx.mod, s.range.pool);
@@ -1059,22 +1078,18 @@ class Checker {
       } else {
         const struct = this.structOf(r);
         if (struct) {
-          ctx.locals.set(s.varName, {
+          bodyCtx.locals.set(s.varName, {
             type: { t: 'struct', name: struct.decl.name, owner: struct.mod.ast.name },
             letSpan: s.span, assigned: true, isParam: false,
           });
         } else {
-          ctx.locals.set(s.varName, { type: T.unknown, letSpan: s.span, assigned: true, isParam: false });
+          bodyCtx.locals.set(s.varName, { type: T.unknown, letSpan: s.span, assigned: true, isParam: false });
         }
         this.readComponent(ctx, this.stateKey(r.mod, (r.sym.decl.name as string) ?? s.range.pool, '#members'), s.range.poolSpan);
-        ctx.loopPool = s.range.pool;
+        bodyCtx.loopPool = s.range.pool;
       }
-      ctx.inLoop = true;
-      this.checkStmts(ctx, s.body);
-      ctx.locals.clear();
-      for (const [k, v] of savedLocals) ctx.locals.set(k, v);
-      ctx.loopPool = savedLoopPool;
-      ctx.inLoop = savedInLoop;
+      bodyCtx.inLoop = true;
+      this.checkStmts(bodyCtx, s.body);
       return;
     }
 
@@ -1097,13 +1112,9 @@ class Checker {
       this.sink.error('FORM-E-502', s.range.hi.span,
         'for trip count is not statically bounded (bounds must be constants or pool.count of known capacity, FORM-E-502)');
     }
-    ctx.locals.set(s.varName, { type: T.u32, letSpan: s.span, assigned: true, isParam: false });
-    ctx.inLoop = true;
-    this.checkStmts(ctx, s.body);
-    ctx.locals.clear();
-    for (const [k, v] of savedLocals) ctx.locals.set(k, v);
-    ctx.loopPool = savedLoopPool;
-    ctx.inLoop = savedInLoop;
+    bodyCtx.locals.set(s.varName, { type: T.u32, letSpan: s.span, assigned: true, isParam: false });
+    bodyCtx.inLoop = true;
+    this.checkStmts(bodyCtx, s.body);
   }
 
   /** `p.count` of a declared pool is a legal dynamic bound (§4.4). */
@@ -2196,8 +2207,7 @@ class Checker {
     const ctx = this.ctxFor(ms, 'sim');
     ctx.reads = reads;
     ctx.writes = writes;
-    ctx.laterLets = collectLetNames(d.body);
-    this.checkStmts(ctx, d.body);
+    this.checkStmtBody(ctx, d.body);
   }
 
   /**
@@ -3416,7 +3426,7 @@ class Checker {
     }
 
     // dialect context: lanes + params bindings (§6.2)
-    const ctx = this.ctxFor(ms, 'field');
+    let ctx = this.ctxFor(ms, 'field');
     ctx.domain = 'field';
     ctx.profile = profile;
     ctx.fieldDecl = d;
@@ -3432,6 +3442,7 @@ class Checker {
         letSpan: d.span, assigned: true, isParam: true,
       });
     }
+    ctx = this.bodyContext(ctx, d.body);
 
     // body: dialect expression surface
     let opCount = 0n;
@@ -3654,17 +3665,14 @@ function expressionPath(expr: Expr): string {
   return '<expression>';
 }
 
-/** All let names in a statement tree (use-before-let detection, E-303). */
-function collectLetNames(stmts: Stmt[]): Set<string> {
+/** Direct lexical declarations in one body; child bodies initialize themselves. */
+function collectDirectLetNames(body: readonly { kind: string; name?: string }[]): Set<string> {
   const names = new Set<string>();
-  const walk = (ss: Stmt[]): void => {
-    for (const s of ss) {
-      if (s.kind === 'let') names.add(s.name);
-      else if (s.kind === 'if') { walk(s.then); if (Array.isArray(s.else)) walk(s.else); else if (s.else) walk([s.else]); }
-      else if (s.kind === 'for') walk(s.body);
+  for (const item of body) {
+    if ((item.kind === 'let' || item.kind === 'field_let') && item.name !== undefined) {
+      names.add(item.name);
     }
-  };
-  walk(stmts);
+  }
   return names;
 }
 

@@ -849,6 +849,94 @@ test('future lets reserve enum, pool, aggregate, nested, and call-qualifier root
   assert.deepEqual([...result.check!.callTargets.values()], []);
 });
 
+test('every executable lexical body reserves its own direct future lets', () => {
+  const cases: Record<string, string>[] = [
+    {
+      'earth.form': `module app {
+        @earth field probe() -> terrain_delta footprint rect(0m, 0m, 1m, 1m); max_ops 32 {
+          let before = min(1m, 2m);
+          let min = 3m;
+          return terrain_delta { height = before, velocity = 0m, material = 0, nav_cost = 0m };
+        }
+      }\n`,
+    },
+    {
+      'flow.form': `module app {
+        @flow field probe() -> flow_update footprint none; max_ops 48 {
+          let before = max(1m, 2m);
+          let max = 3m;
+          return flow_update { x = before, y = 0m, z = 0m, vx = 0m, vy = 0m, vz = 0m, attr0 = 0m };
+        }
+      }\n`,
+    },
+    {
+      'function.form': `module app {
+        fn probe() -> u32 { let before: u32 = min(1, 2); let min: u32 = 3; return before; }
+      }\n`,
+    },
+    {
+      'system.form': `module app {
+        system probe every 1 ticks reads writes {
+          let before: u32 = min(1, 2);
+          let min: u32 = 3;
+        }
+      }\n`,
+    },
+    {
+      'nested.form': `module app {
+        fn probe(flag: bool) -> u32 {
+          if flag { let before: u32 = min(1, 2); let min: u32 = 3; }
+          return 0;
+        }
+      }\n`,
+    },
+    {
+      'nested_outer.form': `module app {
+        fn probe(flag: bool) -> u32 {
+          if flag { let before: u32 = min(1, 2); }
+          let min: u32 = 3;
+          return min;
+        }
+      }\n`,
+    },
+  ];
+
+  for (const sources of cases) {
+    const result = compile(sources);
+    assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1,
+      result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+    assert.deepEqual([...result.check!.callTargets.values()], []);
+  }
+});
+
+test('nested lexical bodies neither reserve nor leak names into unrelated scopes', () => {
+  const result = compile(MOD(`
+    @earth field earth_ok() -> terrain_delta footprint rect(0m, 0m, 1m, 1m); max_ops 32 {
+      let value = min(1m, 2m);
+      return terrain_delta { height = value, velocity = 0m, material = 0, nav_cost = 0m };
+    }
+    @flow field flow_ok() -> flow_update footprint none; max_ops 48 {
+      let value = max(1m, 2m);
+      return flow_update { x = value, y = 0m, z = 0m, vx = 0m, vy = 0m, vz = 0m, attr0 = 0m };
+    }
+    fn nested(flag: bool) -> u32 {
+      let before: u32 = min(4, 5);
+      if flag { let min: u32 = 3; }
+      else { let branch: u32 = min(5, 6); }
+      let after: u32 = min(6, 7);
+      for i in 0..1 { let max: u32 = 2; }
+      let tail: u32 = max(before, after);
+      return tail;
+    }
+    system stepper every 1 ticks reads writes { let value: u32 = min(2, 3); }
+    scenario script { seed 1; assert min(2, 3) == 2; }
+  `));
+  assert.deepEqual(result.codes, [], result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...result.check!.callTargets.values()].map((target) =>
+    target.kind === 'intrinsic' ? target.name : `${target.module}.${target.name}`),
+  ['min', 'max', 'min', 'min', 'min', 'max', 'min', 'min']);
+});
+
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
   const accepted = compile(MOD(`
     enum mode { low = 0, high = 1 }
