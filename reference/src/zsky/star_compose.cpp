@@ -87,6 +87,117 @@ void draw_clut_quad(Plane& p, const Sprite8& spr, const uint8_t pal[64][3], int3
   }
 }
 
+// Stamp one CLUT8 silhouette into a six-bit scratch plane. Corona texels add;
+// face texels replace, matching the current halo-then-disc composition order.
+// floor6 carries the distance washout of a disc while preserving its texture.
+void stamp_intensity_quad(std::vector<uint8_t>& dst, const Plane& p, const Sprite8& spr, int32_t cx,
+                          int32_t cy, int32_t r, bool additive, uint8_t floor6 = 0) {
+  if (r <= 0) return;
+  const int32_t qx0 = cx - r, qy0 = cy - r;
+  int32_t x0 = qx0, y0 = qy0, x1 = cx + r, y1 = cy + r;
+  if (x0 < p.x0) x0 = p.x0;
+  if (y0 < p.y0) y0 = p.y0;
+  if (x1 > p.x1) x1 = p.x1;
+  if (y1 > p.y1) y1 = p.y1;
+  const int64_t wq = 2 * static_cast<int64_t>(r);
+  for (int32_t y = y0; y < y1; ++y) {
+    const int32_t sy = static_cast<int32_t>((static_cast<int64_t>(y - qy0) * spr.h) / wq);
+    for (int32_t x = x0; x < x1; ++x) {
+      const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * spr.w) / wq);
+      uint8_t v = spr.pix[static_cast<size_t>(sy) * spr.w + sx] & 0x3Fu;
+      if (v == 0) continue;
+      if (v < floor6) v = floor6;
+      uint8_t& d = dst[static_cast<size_t>(y) * p.w + x];
+      if (additive) {
+        const uint16_t sum = static_cast<uint16_t>(d) + v;
+        d = static_cast<uint8_t>(sum > 63 ? 63 : sum);
+      } else {
+        d = v;
+      }
+    }
+  }
+}
+
+uint8_t disc_floor6(const ComposeLight& L) {
+  if (L.r_milli <= 0 || L.d_milli <= 0) return 0;
+  if (L.d_milli >= (63 * L.r_milli + 11) / 12) return 63;
+  const int64_t v = (12 * L.d_milli) / L.r_milli;
+  return static_cast<uint8_t>(v > 63 ? 63 : v);
+}
+
+int32_t trail_disc_radius(const ComposeLight& L, int32_t corona_r) {
+  if (corona_r <= 0) return 0;
+  int32_t dr = L.disc_r_px;
+  if (dr <= 0) return 0;
+  if (dr > kDiscRMaxPx) dr = kDiscRMaxPx;
+  int32_t hr = L.halo_r_px;
+  const int32_t hmax = L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px;
+  if (hr > hmax) hr = hmax;
+  if (hr > 0) {
+    dr = static_cast<int32_t>((static_cast<int64_t>(dr) * corona_r + hr / 2) / hr);
+  } else if (dr > corona_r) {
+    dr = corona_r;
+  }
+  return dr < 1 ? 1 : dr;
+}
+
+// One authoritative Noctis source-age step. Fade strips palette-bank bits by
+// construction because this plane is six-bit. Each smoother output at (x,y)
+// averages (x,y+1), (x+1,y+1), (x,y+2), (x+1,y+2), so energy moves up/left.
+void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& work,
+                       const Plane& p) {
+  for (int32_t y = p.y0; y < p.y1; ++y)
+    for (int32_t x = p.x0; x < p.x1; ++x) {
+      uint8_t& v = intensity[static_cast<size_t>(y) * p.w + x];
+      v = trail_fade(v & 0x3Fu);
+    }
+
+  for (int pass = 0; pass < 2; ++pass) {
+    std::fill(work.begin(), work.end(), 0);
+    for (int32_t y = p.y0; y < p.y1; ++y) {
+      const bool row1 = y + 1 < p.y1;
+      const bool row2 = y + 2 < p.y1;
+      for (int32_t x = p.x0; x < p.x1; ++x) {
+        const bool col1 = x + 1 < p.x1;
+        uint16_t sum = 0;
+        if (row1) {
+          const size_t a = static_cast<size_t>(y + 1) * p.w + x;
+          sum += intensity[a];
+          if (col1) sum += intensity[a + 1];
+        }
+        if (row2) {
+          const size_t b = static_cast<size_t>(y + 2) * p.w + x;
+          sum += intensity[b];
+          if (col1) sum += intensity[b + 1];
+        }
+        work[static_cast<size_t>(y) * p.w + x] = static_cast<uint8_t>(sum >> 2);
+      }
+    }
+    intensity.swap(work);
+  }
+}
+
+void composite_trail(Plane& p, const std::vector<uint8_t>& intensity, const uint8_t ramp[64][3],
+                     int64_t skip2, int32_t scx, int32_t scy, uint32_t* frags) {
+  for (int32_t y = p.y0; y < p.y1; ++y) {
+    for (int32_t x = p.x0; x < p.x1; ++x) {
+      if (skip2 >= 0) {
+        const int64_t dx = x - scx, dy = y - scy;
+        if (dx * dx + dy * dy < skip2) continue;
+      }
+      const size_t idx = static_cast<size_t>(y) * p.w + x;
+      const uint8_t v = intensity[idx];
+      if (v == 0 || !(kStarDepth > p.depth[idx])) continue;
+      uint8_t* out = &p.rgb[idx * 3];
+      out[0] = sat_add_u8(out[0], ramp[v][0]);
+      out[1] = sat_add_u8(out[1], ramp[v][1]);
+      out[2] = sat_add_u8(out[2], ramp[v][2]);
+      p.tag[idx] = glow_tag(v);
+      if (frags) ++(*frags);
+    }
+  }
+}
+
 }  // namespace
 
 void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint32_t vx0,
@@ -129,57 +240,53 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
     }
   }
 
-  // ---- pass 6: per light, ghosts, then halo BEFORE disc (§4/§15) ---------
+  // ---- pass 6: per light, reconstructed smear, then halo before disc ------
   uint8_t pal_d[64][3];
   uint8_t pal_h[64][3];
-  uint8_t pal_g[64][3];
   for (int i = 0; i < n_lights && i < 4; ++i) {
     const ComposeLight& L = lights[i];
     if (L.ramp == nullptr) continue;
 
-    // ---- §15 the ghost chain: the smear, from captured history ------------
-    // Oldest first so brighter ghosts accumulate on top. Static-skip law: a
-    // ghost renders only when its position differs from the current position
-    // AND from the next-newer entry — a star at rest emits nothing.
-    //
-    // PALETTE LAW (measured into shape): every lit texel of a ghost draws
-    // the ONE flat colour ramp[level(g)] — the corona sprite contributes
-    // SHAPE, not intensity. A graded ghost (pal_g[e] = ramp[min(e, L)])
-    // carries its whole prefix skirt, and overlapping prefixes sum
-    // combinatorially: measured 744 unique colours for one subject (the
-    // capture tool refuses > 256). Flat ghosts in the ramp's bright half
-    // (level 59..31) clamp and collide under addition, and the halo-skip
-    // circle below keeps the additive halo's ~63 ramp values from ever
-    // multiplying against ghost values on the same pixel.
+    // ---- §15 bounded reconstruction of Noctis's retained-frame smear ------
+    // Replay the ring oldest to newest in one six-bit plane. Every historical
+    // source silhouette receives exactly one subtract-8 and two-smoother step
+    // per age. Graded corona and scaled disc texels retain radial and surface
+    // structure. One class-ramp lookup happens only after reconstruction.
     if (L.trail != nullptr && L.ghost_r_px > 0 && L.corona != nullptr) {
       int32_t gr = L.ghost_r_px;
       const int32_t gmax =
           L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px;
-      if (gr > gmax) gr = gmax;  // ghosts obey the same §4 clamp as the halo
-      // §15 halo-skip: the star's own (clamped) halo half-size; ghost pixels
-      // inside this circle around the CURRENT position are not drawn
+      if (gr > gmax) gr = gmax;
+
       int32_t hr0 = L.halo_r_px;
-      if (hr0 > (L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px))
-        hr0 = L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px;
+      if (hr0 > gmax) hr0 = gmax;
       const int64_t skip2 = hr0 > 0 ? static_cast<int64_t>(hr0) * hr0 : -1;
+      const size_t plane_size = static_cast<size_t>(w) * (vy0 + vh);
+      std::vector<uint8_t> intensity(plane_size, 0);
+      std::vector<uint8_t> work(plane_size, 0);
+      const int32_t gdr = L.face != nullptr ? trail_disc_radius(L, gr) : 0;
+      const uint8_t floor6 = disc_floor6(L);
+
       for (uint32_t g = L.trail->length; g >= 1; --g) {
         uint16_t gx, gy;
         trail_at(*L.trail, g, gx, gy);
-        uint16_t nx, ny;  // the next-newer position (age g-1; 0 = current)
+        uint16_t nx, ny;
         if (g == 1) {
           nx = static_cast<uint16_t>(L.x_px);
           ny = static_cast<uint16_t>(L.y_px);
         } else {
           trail_at(*L.trail, g - 1, nx, ny);
         }
-        if (gx == nx && gy == ny) continue;  // static-skip (§15)
-        const uint8_t lv = trail_level(g);
-        pal_g[0][0] = pal_g[0][1] = pal_g[0][2] = 0;
-        for (int e = 1; e < 64; ++e)
-          for (int ch = 0; ch < 3; ++ch) pal_g[e][ch] = L.ramp[lv][ch];
-        draw_clut_quad(p, *L.corona, pal_g, gx, gy, gr, true, &st->star_fragments, lv, skip2,
-                       L.x_px, L.y_px);
+        const bool moved =
+            !(gx == static_cast<uint16_t>(L.x_px) && gy == static_cast<uint16_t>(L.y_px)) &&
+            !(gx == nx && gy == ny);
+        if (moved) {
+          stamp_intensity_quad(intensity, p, *L.corona, gx, gy, gr, true);
+          if (gdr > 0) stamp_intensity_quad(intensity, p, *L.face, gx, gy, gdr, false, floor6);
+        }
+        trail_source_step(intensity, work, p);
       }
+      composite_trail(p, intensity, L.ramp, skip2, L.x_px, L.y_px, &st->star_fragments);
     }
     // the push happens AFTER the ghost render and BEFORE the star itself:
     // the ring holds strictly past positions (§15)

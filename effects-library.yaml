@@ -1,5 +1,5 @@
 # Zhaozhou Effects Library Catalogue
-# Version 1 - Single source of truth for all renderable effects
+# Version 3, single source of truth for all renderable effects
 # Owner charter: "Make sure these become a readily available library."
 #
 # LEGIBILITY RULE (2026-08-16 owner mandate):
@@ -10,17 +10,14 @@
 # A 4-pixel strobe does not. When in doubt, ask whether a stranger
 # could name what the loop is showing. If not, re-shoot or cut it.
 
-version: 2
-last_updated: "2026-08-16"
+version: 3
+last_updated: "2026-08-17"
 
-# CRC DISCIPLINE (2026-08-16, v2): crc_pin is the sequence CRC-32C of the
-# artifact AT render_path, byte-verified by the encode pipeline (togif.py
-# decodes the gif back and compares every frame). Two eras exist on this
-# page: the kBandRows 8->16 sky fix (dcb32ff) landed after the four terrain
-# gifs were shot; those four are kept as shipped by owner instruction and
-# carry crc_note with the CURRENT renderer's CRC (what zhao-reel --check
-# pins). Every other entry was rendered from commit 6cb4e54 and re-derives
-# byte-identically. frames/gif_bytes state the shipped artifact.
+# CRC DISCIPLINE (2026-08-17, v3): crc_pin is the current sequence CRC-32C
+# rendered at render_path. togif.py decodes every GIF and compares each frame
+# byte for byte. Star trail pins were renewed for the source-kernel smear in
+# stars_and_flares.md amendment v1.2. Historical terrain exceptions retain
+# their explicit crc_note.
 
 effects:
   # ==============================================================================
@@ -33,13 +30,13 @@ effects:
     spec_class: S00
     name: "Yellow star"
     short_name: "Yellow star"
-    description: "Classic main sequence star with full lens flare chain. Sweeps frame at 40 radii showing burst sprite and three ghosts."
+    description: "Classic main sequence star with full lens flare chain. Sweeps at 40 radii with a connected yellow retained-frame smear."
     reel_subject: noctis-flare
     render_path: renders/noctis-flare.gif
     program_hash: null
-    crc_pin: 0xD20023CD
+    crc_pin: 0xA4480FB8
     frames: 64
-    gif_bytes: 207623
+    gif_bytes: 222072
     implemented: true
     tags: [star, flare, on-planet, trailed]
 
@@ -53,9 +50,9 @@ effects:
     reel_subject: blue-giant
     render_path: renders/blue-giant.gif
     program_hash: null
-    crc_pin: 0xDFAFCD70
+    crc_pin: 0xC38E703C
     frames: 64
-    gif_bytes: 172778
+    gif_bytes: 179455
     implemented: true
     tags: [star, off-planet]
 
@@ -69,9 +66,9 @@ effects:
     reel_subject: white-dwarf
     render_path: renders/white-dwarf.gif
     program_hash: null
-    crc_pin: 0x048AB345
+    crc_pin: 0x61C32E3A
     frames: 64
-    gif_bytes: 44856
+    gif_bytes: 70468
     implemented: true
     tags: [star, off-planet]
 
@@ -97,13 +94,13 @@ effects:
     spec_class: S04
     name: "Orange giant"
     short_name: "Orange giant"
-    description: "Warm giant, golden orange (63,55,32). Drifts with a white-hot smear fading to orange at the fringe."
+    description: "Warm giant, golden orange (63,55,32). Drifts with a connected graded smear that fades to orange at the fringe."
     reel_subject: orange-giant
     render_path: renders/orange-giant.gif
     program_hash: null
-    crc_pin: 0x66299B68
+    crc_pin: 0x0C35E965
     frames: 64
-    gif_bytes: 191326
+    gif_bytes: 198878
     implemented: true
     tags: [star, off-planet]
 
@@ -141,13 +138,13 @@ effects:
     spec_class: S07
     name: "Blue dwarf"
     short_name: "Blue dwarf"
-    description: "Compact deep blue star (10,20,63). The drift smear grades white to deep blue along the tail."
+    description: "Compact deep blue star (10,20,63). The connected asymmetric smear grades into a deep blue tail."
     reel_subject: blue-dwarf
     render_path: renders/blue-dwarf.gif
     program_hash: null
-    crc_pin: 0xD3355069
+    crc_pin: 0xBA485DBA
     frames: 64
-    gif_bytes: 71704
+    gif_bytes: 74929
     implemented: true
     tags: [star, off-planet]
 
@@ -161,9 +158,9 @@ effects:
     reel_subject: multiple
     render_path: renders/multiple.gif
     program_hash: null
-    crc_pin: 0xCA637ABD
+    crc_pin: 0x1AB97077
     frames: 64
-    gif_bytes: 179555
+    gif_bytes: 238207
     implemented: true
     tags: [star, off-planet]
 
@@ -177,9 +174,9 @@ effects:
     reel_subject: infant
     render_path: renders/infant.gif
     program_hash: null
-    crc_pin: 0x5FBE7C1B
+    crc_pin: 0x24BCEDD2
     frames: 64
-    gif_bytes: 115812
+    gif_bytes: 123305
     implemented: true
     tags: [star, off-planet]
 

@@ -393,6 +393,13 @@ void cel_build_assets(int celestial, CelAssets& a) {
   zref::star::RampState rs;
   zref::star::ramp_retarget(rs, id);  // snap: reel ramps sit at targets
   zref::star::ramp_build(rs.cur, a.ramp);
+  if (celestial == 2) {
+    // The flare subject shares one global GIF palette with its ramp smear.
+    // Pair adjacent entries here, at authoring time, so the exact six-bit
+    // reconstruction remains intact while the published reel stays <= 256.
+    for (uint32_t i = 1; i < 64; i += 2)
+      for (int ch = 0; ch < 3; ++ch) a.ramp[i][ch] = a.ramp[i - 1][ch];
+  }
   a.face = zref::star::starface(id.texture_seed, c.smooth);
   a.corona = zref::star::corona_sprite(core16);
   // glints: space subjects only; exclusion rects sized per subject below
@@ -700,14 +707,11 @@ struct SceneSubject {
 // [phase3-preview] pre-resolve point). Authoring only; every law call goes
 // through zref::star / zref::flare / zref::post.
 //
-// TRAIL AUTHORING (§15, the palette cost stated up front): ghosts draw
-// through the LEVEL-CAPPED halo palette, so each ghost's colours are ramp
-// entries — NOT ring-colour × alpha products. An alpha-scaled chain would
-// cost ~63 ring colours × 8 ghost alphas ≈ 504 entries before the starfield
-// greys, far over the 256-colour law (the same multiplication the pulsar
-// subject avoids with halo_airless). What trails DO add is additive overlap
-// sums along the path (contiguous ghost sums, quickly clamped); the tool's
-// palette counter is the arbiter and ghost_r_px is the knob.
+// TRAIL AUTHORING (§15, palette cost stated up front): the compositor rebuilds
+// one six-bit intensity plane from the captured positions, applies Noctis's
+// subtract-8 and twice-smoothed source step per age, then performs one class
+// ramp lookup. ghost_r_px scales the reconstructed corona and disc silhouette.
+// The palette counter remains the arbiter for each complete reel sequence.
 void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, uint32_t tick) {
   CelCtx& ctx = *static_cast<CelCtx*>(vctx);
   const SceneSubject& sub = *ctx.sub;
@@ -752,15 +756,15 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.probe_y = 120;
       break;
     }
-    case 2: {  // noctis-flare: S00 sweeping, washed white disc + corona +
-               // the full ghost chain; border fade at the sweep ends.
-               // TRAILED (§15): the sweep leaves the smear — the moving sun
-               // the owner asked to look Noctis.
+    case 2: {  // noctis-flare: S00 sweep, washed disc, corona, flare,
+               // and the bounded retained-frame reconstruction.
+               // TRAILED (§15): the moving sun carries Noctis decay and
+               // asymmetric diffusion reconstructed from captured positions.
       L.x_px = 8 + static_cast<int32_t>((368 * ph) / (half - 1));
       L.y_px = 150;
       L.disc_r_px = 8;
       L.halo_r_px = 16;
-      L.ghost_r_px = 12;  // at the ~12 px/frame sweep the chain just touches
+      L.ghost_r_px = 12;  // bounded smear overlaps at ~12 px/frame
       L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
@@ -1847,11 +1851,10 @@ SceneSubject subject_noctisflare() {
   s.celestial = 2;
   s.space = true;
   s.note =
-      "S00 at 40 radii; burst at the light, ghosts at -26/-77/-230 Q8.8 of "
-      "the axis, quarter-res glow splats, class-colour tint; the flare dims "
-      "over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0xD20023CDu;  // re-pinned 2026-08-16: §15 trail (the smear
-  // the owner asked for; was 0x9448C485 before trails)
+      "S00 at 40 radii; burst and three lens ghosts over a graded, connected "
+      "motion smear rebuilt with subtract-8 decay and asymmetric diffusion; "
+      "the flare dims over the outer 16 px instead of cutting";
+  s.expect_seq_crc = 0xA4480FB8u;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1884,7 +1887,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0xDFAFCD70u;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0xC38E703Cu;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1899,7 +1902,7 @@ SceneSubject subject_whitedwarf() {
   s.note =
       "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
       "spin; five-pass box-smooth granulation; drifts with a long smear";
-  s.expect_seq_crc = 0x048AB345u;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0x61C32E3Au;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1914,7 +1917,7 @@ SceneSubject subject_orangegiant() {
   s.note =
       "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
       "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
-  s.expect_seq_crc = 0x66299B68u;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0x0C35E965u;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1929,7 +1932,7 @@ SceneSubject subject_bluedwarf() {
   s.note =
       "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
       "smear grades white to deep blue along the tail";
-  s.expect_seq_crc = 0xD3355069u;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0xBA485DBAu;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1944,7 +1947,7 @@ SceneSubject subject_multiple() {
   s.note =
       "S08 multiple system: two bodies of one class orbiting the barycentre, "
       "one revolution per loop, each with a curved trail (the §15 showpiece)";
-  s.expect_seq_crc = 0xCA637ABDu;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0x1AB97077u;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 
@@ -1959,7 +1962,7 @@ SceneSubject subject_infant() {
   s.note =
       "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
       "per-identity undertone; drifts with a purple smear";
-  s.expect_seq_crc = 0x5FBE7C1Bu;  // pinned 2026-08-16 (first render, trailed)
+  s.expect_seq_crc = 0x24BCEDD2u;  // re-pinned 2026-08-17: source-kernel smear
   return s;
 }
 

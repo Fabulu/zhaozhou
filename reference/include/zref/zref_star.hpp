@@ -30,9 +30,9 @@
 //     §9  placement: bakes are ARM/compile-time, splats are bounded POST —
 //         nothing here needs a fragment shader, render-to-texture or a
 //         second TMU (charter §26 refusals untouched)
-//     §15 motion trails (amendment v1.1): the TrailHistory ring, the ghost
-//         chain (corona sprite through the FLAT ghost palette — one ramp
-//         entry per ghost), level(g) = 63−4g, the static-skip and
+//     §15 motion trails (amendment v1.2): the TrailHistory ring, graded
+//         corona and disc intensity replay, subtract-8 decay, the exact
+//         asymmetric smoother twice per source-age step, static-skip and
 //         halo-skip laws, capture-in-state
 //   spec/qformats.md §3/§4 single-rounding arithmetic + round_half_up,
 //         §7.1 the ONE 257-entry sin table (asin16 below is its inverse by
@@ -385,16 +385,10 @@ struct TrailHistory {
   uint8_t length = 0;  // valid entries, 0..kTrailN
 };
 
-/** §15 level law (frozen, v2 after measurement): level(g) = 63 − 4·g for
- *  age g = 1..8 → 59, 55, 51, 47, 43, 39, 35, 31. The ghost chain decays in
- *  the ramp's BRIGHT half only: over black space a dim tail is invisible,
- *  and bright additive sums clamp and collide, which is what keeps the
- *  chain inside the 256-colour capture law. (v1 was (9−g)·7 → 56..7: the
- *  lower half of the chain rendered black-on-black and the graded skirts
- *  summed to 744 colours in one subject — measured, then replaced.) */
-inline constexpr uint8_t trail_level(uint32_t age) {
-  const int32_t v = 63 - 4 * static_cast<int32_t>(age > kTrailN ? kTrailN : age);
-  return static_cast<uint8_t>(v < 1 ? 1 : v);
+/** §15 one authoritative source-age fade step. Noctis first removes palette
+ *  bank bits, then subtracts 8 from the six-bit intensity with saturation. */
+inline constexpr uint8_t trail_fade(uint8_t intensity6) {
+  return intensity6 > 8 ? static_cast<uint8_t>(intensity6 - 8) : 0;
 }
 
 /** §15 push: ghosts render BEFORE the push; this records the current
@@ -430,7 +424,7 @@ struct ComposeLight {
   int32_t halo_r_px = 0;        // halo half-size (0 = no halo)
   TrailHistory* trail = nullptr;   // §15: ring of past positions (persistent
                                    // across frames; pushed by compose_view)
-  int32_t ghost_r_px = 0;          // §15: ghost radius (0 = trail off)
+  int32_t ghost_r_px = 0;          // §15: reconstructed corona radius (0 = off)
   uint8_t halo_core16 = 5;      // §4 variant: 0 atmo / 5 space / 8 airless
   int64_t d_milli = 0;          // distance (wide int)
   int64_t r_milli = 1;          // star radius (wide int)
