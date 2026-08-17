@@ -298,7 +298,15 @@ Offset  Size  Field          Notes
 
 `handle32` wire format: `{ index: 24 bits, generation: 8 bits }`. Consumers
 compare `generation` against the current epoch's generation and reject stale
-handles with `ZH_ABI_STALE_HANDLE`. **v2 scope:** enum range checks are LIVE —
+handles with `ZH_ABI_STALE_HANDLE`. An authored `page_id` remains a full u32
+identity; it is never converted to a handle by masking to 24 bits. Build
+preflight deterministically maps `(semantic resource role, full u32
+page/resource ID)` to a collision-free handle index, and generated metadata
+carries that mapping. Thus IDs 1 and 16777217 are distinct even though their
+low 24 bits match, and the same numeric ID in different roles (form page,
+procedural patch page, stamp brush page, population, sound) is also distinct.
+Transient handles allocate only after all authored mapping indices are
+reserved. **v2 scope:** enum range checks are LIVE —
 `SetPresentationContract.mode` and `DebugFrameBlit.mode` carry `video_mode`
 (u8, members 0-2); an out-of-range value fails with `ZH_ABI_BAD_VALUE`
 (corpus case `enum_out_of_range`). The stale-handle check remains generated
@@ -426,12 +434,21 @@ computation that produced its tables.
 - kinds: 0 NONE (bootstrap), 1 form declaration, 2 population, 3 field
   program, 4 material, 5 command site, 6 audio event, 7 stamp operation;
   **[w3]** 8 system, 9 presentation emit site, 10 pool, 11 scenario.
-- 4096 modules, 65536 declarations per module. Structure is visible in traces
-  (`0x0301AF` = kind 0, module 0x301, decl 0xAF), which hashes are not.
+- 4096 modules (module IDs `0..4095`), with exactly 65536 source-producing
+  rows available per module (local indices `0..65535`). The local index is
+  **zero-based**: the first source-producing row in a module has index 0.
+  Constants, enums, structs, globals, functions, sounds and presentations as
+  containers do not consume rows. Pools, systems, field programs, every
+  presentation `emit` statement, and scenarios do consume one row each.
+  Structure is visible in traces (`kind=9, module=0x301, index=0x00AF`), which
+  hashes are not.
 - Allocation is a sequential registry, not hashing: compiler assigns `module`
-  by canonical sort of module paths, `index` in declaration order — a rebuild
-  of unchanged sources yields identical IDs. Content identity travels
-  separately as program hashes (sha-256 in RESOURCE_PAGES / CRC-32C per 1.B-7).
+  by canonical sort of module paths and assigns the zero-based local `index`
+  in declaration/emit order across only the source-producing rows above — a
+  rebuild of unchanged sources yields identical IDs. Admission rejects a
+  4097th module or a 65537th source-producing row before lowering. Content
+  identity travels separately as program hashes (sha-256 in RESOURCE_PAGES /
+  CRC-32C per 1.B-7).
 - Compiler sidecar `sourceids.zmap` — **[w3]** binary, format §7 (was JSON in
   Phase 1; D11): one entry per ID
   `{source_id, kind, file_index, span, name}`. At capture time the
