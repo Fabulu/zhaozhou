@@ -36,9 +36,11 @@ struct PresentationResources {
   void (*form_transform)(void*, u32, World3, Fx16){};
   void (*population)(void*, u32, u32, u32, u32, const void*){};
   void (*audio_position)(void*, u32, World3){};
+  void (*terrain_patch)(void*, u32, u32, World3, Fx16){};
   void publish_form_transform(u32 handle, World3 at, Fx16 size) const { if (form_transform) form_transform(user, handle, at, size); }
   void publish_population(u32 handle, u32 module, u32 index, u32 count, const void* pool) const { if (population) population(user, handle, module, index, count, pool); }
   void publish_audio_position(u32 source_id, World3 at) const { if (audio_position) audio_position(user, source_id, at); }
+  void publish_terrain_patch(u32 handle, u32 source_id, World3 at, Fx16 radius) const { if (terrain_patch) terrain_patch(user, handle, source_id, at, radius); }
 };
 
 [[noreturn]] inline void form_abort(u32 code) { (void)code; std::abort(); }

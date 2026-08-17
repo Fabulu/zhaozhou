@@ -253,6 +253,48 @@ test('imported pool spawn uses its owner-qualified capacity', () => {
   assert.doesNotMatch(source, /state\.owner\.remote\.count >= form::user::remote_pool::capacity/);
 });
 
+test('WinLibs compiles imported nominal values without direct type imports', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const output = compileSources({
+    'a_owner.form': `module owner {
+  struct hidden_record { value: u32; }
+  enum hidden_mode { ready = 1, done = 2 }
+  global payload_state: hidden_record = hidden_record { value = 7 };
+  global current: hidden_mode = hidden_mode.ready;
+  pool entries: hidden_record[3];
+  fn echo(value: hidden_record) -> hidden_record { return value; }
+  fn echo_mode(value: hidden_mode) -> hidden_mode { return value; }
+}
+`,
+    'b_consumer.form': `module consumer {
+  import owner { payload_state, current, entries, echo, echo_mode };
+  system use_imports every 1 ticks reads payload_state, current, entries writes payload_state {
+    payload_state = echo(payload_state);
+    let selected = echo_mode(current);
+    let same = selected == current;
+    for entry in entries { let observed = entry.value; }
+  }
+}
+`,
+  });
+  const run = runGeneratedNative(output, `#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  state.owner.entries.count = 1u;
+  state.owner.entries.value[0] = 99u;
+  form::PadFrame pads[4]{};
+  form::sim_tick(state, pads, 0u);
+  return state.owner.payload_state.value == 7u ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
 test('WinLibs compiles the full W3.2 positive surface after physical sites are isolated', (t) => {
   const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
   if (!existsSync(compiler)) {
@@ -341,13 +383,19 @@ struct Bound {
   form::u32 form_calls{};
   form::u32 population_calls{};
   form::u32 audio_calls{};
+  form::u32 terrain_calls{};
   form::u32 transform_handle{};
   form::u32 population_handle{};
+  form::u32 patch_handle{};
+  form::u32 patch_source{};
   form::u32 audio_source{};
+  form::Fx16 patch_radius{};
   form::World3 form_at{};
+  form::World3 patch_at{};
   form::World3 audio_at{};
   zref::render::FormTransform transform{};
   zref::render::Population population{};
+  zref::render::TerrainPatch patch{};
   zref::render::RenderResources render{};
 };
 static void bind_form(void* raw, form::u32 handle, form::World3 at, form::Fx16 size) {
@@ -373,6 +421,16 @@ static void bind_audio(void* raw, form::u32 source, form::World3 at) {
   b.audio_source = source;
   b.audio_at = at;
 }
+static void bind_terrain(void* raw, form::u32 handle, form::u32 source,
+                         form::World3 at, form::Fx16 radius) {
+  Bound& b = *static_cast<Bound*>(raw);
+  ++b.terrain_calls;
+  b.patch_handle = handle;
+  b.patch_source = source;
+  b.patch_at = at;
+  b.patch_radius = radius;
+  b.render.terrain_patches.push_back({handle, &b.patch});
+}
 static form::u16 read16(const form::u8* p) { return static_cast<form::u16>(p[0]) | static_cast<form::u16>(p[1] << 8u); }
 int main() {
   form::FormState state{};
@@ -385,7 +443,16 @@ int main() {
     pattern.rgb[i * 3u] = 255u;
   }
   bound.render.forms.push_back({0x0100000cu, pattern});
-  const form::PresentationResources bindings{&bound, &bind_form, &bind_population, &bind_audio};
+  bound.patch.width = 2u;
+  bound.patch.height = 2u;
+  bound.patch.env_x0 = -(4 << 16);
+  bound.patch.env_z0 = -(4 << 16);
+  bound.patch.env_x1 = 4 << 16;
+  bound.patch.env_z1 = 4 << 16;
+  bound.patch.heights.assign(4u, 0);
+  bound.render.terrain_patches.push_back({0x01000003u, &bound.patch});
+  bound.render.materials.push_back({0x01000003u, zref::render::Material{96u, 128u, 160u}});
+  const form::PresentationResources bindings{&bound, &bind_form, &bind_population, &bind_audio, &bind_terrain};
   const form::u32 truth_before = form::sim_hash(0x55aa55aau, state);
   zhao::ZhaoFrameBuilder builder;
   builder.begin_frame(7u, 1u, 0u, 0u);
@@ -393,13 +460,16 @@ int main() {
   builder.end_frame(zhao_abi::ZHAO_COMPL_DONE);
   const form::u32 truth_after = form::sim_hash(0x55aa55aau, state);
   if (truth_before != truth_after || builder.command_count() != 9u || builder.command_bytes() != 432u) return 30;
-  if (bound.form_calls != 1u || bound.population_calls != 1u || bound.audio_calls != 1u) return 31;
+  if (bound.form_calls != 1u || bound.population_calls != 1u || bound.audio_calls != 1u ||
+      bound.terrain_calls != 1u) return 31;
   constexpr form::Fx24 x = 1LL << 22;
   constexpr form::Fx24 y = -(1LL << 22);
   constexpr form::Fx24 z = 1LL << 24;
   if (bound.form_at.x != x || bound.form_at.y != y || bound.form_at.z != z ||
+      bound.patch_at.x != x || bound.patch_at.y != y || bound.patch_at.z != z ||
       bound.audio_at.x != x || bound.audio_at.y != y || bound.audio_at.z != z ||
-      bound.transform_handle == 0u || bound.population_handle == 0u || bound.audio_source == 0u) return 32;
+      bound.transform_handle == 0u || bound.population_handle == 0u || bound.patch_handle == 0u ||
+      bound.patch_source == 0u || bound.patch_radius != 0x20000 || bound.audio_source == 0u) return 32;
 
   const std::vector<form::u8> packet = builder.seal(7u, 1u, 1u);
   const auto valid = zhao::zhao_frame_validate(packet);
@@ -433,7 +503,7 @@ int main() {
     } else if (opcode == zhao_abi::ZHAO_OP_SURFACE_STAMP) {
       zhao_abi::ZhRecordSurfaceStamp r{};
       if (!zhao_abi::zhao_unpack_surface_stamp(reader, r) || r.payload.brush != 0x01000007u ||
-          r.payload.patch == 0u || r.payload.operation != 0u || r.payload.tag != 5u ||
+          r.payload.patch != bound.patch_handle || r.payload.operation != 0u || r.payload.tag != 5u ||
           r.payload.strength != 52685u || r.payload.transform.tx != 0x4000 ||
           r.payload.transform.ty != 0x10000 || r.payload.transform.r00 != 0x10000 ||
           r.payload.transform.r11 != 0x10000 || r.payload.radius != 0x20000 ||
@@ -453,11 +523,17 @@ int main() {
   zref::render::SoftwareRenderer renderer;
   zref::render::RenderCanvas canvas;
   const auto rendered = renderer.render_frame(packet, 0u, canvas, bound.render);
-  if (rendered.status != zhao_abi::ZH_ABI_OK) return 40;
+  if (rendered.status != zhao_abi::ZH_ABI_OK || rendered.resource_misses != 0u) return 40;
+  if (renderer.sheets().size() != 1u || renderer.sheets()[0].first != bound.patch_handle) return 41;
+  form::u32 stamped = 0u;
+  for (form::u32 i = 0u; i < 64u * 64u; ++i) {
+    if (renderer.sheets()[0].second.tag[i] == 5u && renderer.sheets()[0].second.strength[i] != 0u) ++stamped;
+  }
+  if (stamped == 0u) return 42;
   form::u32 visible = 0u;
   for (form::u32 i = 0u; i < zref::render::canvas_bytes(zhao_abi::VIDEO_Z60); ++i)
     if (canvas.slot[0][i] != 0u) ++visible;
-  if (visible == 0u) return 41;
+  if (visible == 0u) return 43;
   std::printf("%u %08x\\n", visible, rendered.canvas_crc32c);
   return 0;
 }

@@ -183,9 +183,11 @@ class CppEmitter {
     o.line('  void (*form_transform)(void*, u32, World3, Fx16){};');
     o.line('  void (*population)(void*, u32, u32, u32, u32, const void*){};');
     o.line('  void (*audio_position)(void*, u32, World3){};');
+    o.line('  void (*terrain_patch)(void*, u32, u32, World3, Fx16){};');
     o.line('  void publish_form_transform(u32 handle, World3 at, Fx16 size) const { if (form_transform) form_transform(user, handle, at, size); }');
     o.line('  void publish_population(u32 handle, u32 module, u32 index, u32 count, const void* pool) const { if (population) population(user, handle, module, index, count, pool); }');
     o.line('  void publish_audio_position(u32 source_id, World3 at) const { if (audio_position) audio_position(user, source_id, at); }');
+    o.line('  void publish_terrain_patch(u32 handle, u32 source_id, World3 at, Fx16 radius) const { if (terrain_patch) terrain_patch(user, handle, source_id, at, radius); }');
     o.line('};');
     o.line();
     o.line('[[noreturn]] inline void form_abort(u32 code) { (void)code; std::abort(); }');
@@ -823,6 +825,7 @@ class CppEmitter {
         transform2(value('at'));
         o.line(`${pad}  record.payload.radius = static_cast<i32>(${value('radius')});`);
         o.line(`${pad}  record.payload.ring_width = static_cast<i32>(${value('ring_width')});`);
+        o.line(`${pad}  resources.publish_terrain_patch(record.payload.patch, ${emit.sourceId}u, ${value('at')}, static_cast<Fx16>(${value('radius')}));`);
         end('surface_stamp');
         break;
       }
