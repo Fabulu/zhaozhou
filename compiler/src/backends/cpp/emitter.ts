@@ -48,6 +48,70 @@ interface ExprContext {
   rng: string;
 }
 
+export type TransientResourceRole = 'draw_form_transform' | 'surface_stamp_terrain_patch';
+
+export interface TransientResourceSite {
+  module: number;
+  sourceId: number;
+  role: TransientResourceRole;
+}
+
+export interface TransientResourceBinding extends TransientResourceSite {
+  handle: number;
+}
+
+const MAX_RESOURCE_INDEX = 0x00ffffff;
+const RESOURCE_GENERATION = 1;
+
+export function allocateTransientResourceIndices(
+  authoredSites: readonly TransientResourceSite[],
+  authoredReservedIndices: ReadonlySet<number>,
+  maxIndex = MAX_RESOURCE_INDEX,
+): TransientResourceBinding[] {
+  if (!Number.isSafeInteger(maxIndex) || maxIndex < 1 || maxIndex > MAX_RESOURCE_INDEX) {
+    throw new Error(`C++ resource preflight received invalid maximum resource index ${maxIndex}`);
+  }
+  const reservedIndices = new Set<number>([0]);
+  for (const index of authoredReservedIndices) {
+    if (!Number.isSafeInteger(index) || index < 0 || index > maxIndex) {
+      throw new Error(`C++ resource preflight received out-of-range reserved index ${index}`);
+    }
+    reservedIndices.add(index);
+  }
+  const roleOrder = (role: TransientResourceRole): number =>
+    role === 'draw_form_transform' ? 1 : 2;
+  const sites = [...authoredSites].sort((left, right) => left.module - right.module
+    || (left.sourceId >>> 0) - (right.sourceId >>> 0)
+    || roleOrder(left.role) - roleOrder(right.role));
+  if (sites.length > maxIndex + 1 - reservedIndices.size) {
+    throw new Error(
+      `C++ resource preflight exhausted the 24-bit handle index space `
+        + `(${sites.length} transient sites, ${reservedIndices.size} reserved indices)`,
+    );
+  }
+  const bindings: TransientResourceBinding[] = [];
+  const seen = new Set<string>();
+  let nextIndex = 1;
+  for (const site of sites) {
+    const mappingKey = transientResourceKey(site.sourceId, site.role);
+    if (seen.has(mappingKey)) {
+      throw new Error(
+        `C++ resource preflight found duplicate transient mapping for source_id ${site.sourceId} (${site.role})`,
+      );
+    }
+    seen.add(mappingKey);
+    while (nextIndex <= maxIndex && reservedIndices.has(nextIndex)) ++nextIndex;
+    if (nextIndex > maxIndex) {
+      throw new Error('C++ resource preflight exhausted the 24-bit handle index space before emission');
+    }
+    const handle = ((RESOURCE_GENERATION << 24) | nextIndex) >>> 0;
+    bindings.push({ ...site, handle });
+    reservedIndices.add(nextIndex);
+    ++nextIndex;
+  }
+  return bindings;
+}
+
 export function emitCpp(hir: HirProgram, zir: ZirProgram): CppOutput {
   return new CppEmitter(hir, zir).run();
 }
@@ -59,6 +123,8 @@ class CppEmitter {
   private readonly structs = new Map<string, HirStruct>();
   private readonly pools = new Map<string, HirPool>();
   private readonly sounds = new Map<string, HirSound>();
+  private readonly transientHandles = new Map<string, number>();
+  private transientBindings: readonly TransientResourceBinding[] = [];
   private loopOrdinal = 0;
 
   constructor(private readonly hir: HirProgram, private readonly zir: ZirProgram) {
@@ -76,6 +142,7 @@ class CppEmitter {
 
   run(): CppOutput {
     this.refuseUnlinkedFieldApplications();
+    this.assignPresentationResourceIndices();
     const files: CppGeneratedFile[] = [{ path: 'generated/form/form_types.hpp', content: this.typesHeader() }];
     for (const module of [...this.hir.modules].sort((a, b) => a.index - b.index)) {
       files.push({ path: `generated/form/${module.name}.hpp`, content: this.moduleHeader(module) });
@@ -139,6 +206,101 @@ class CppEmitter {
     );
   }
 
+  private assignPresentationResourceIndices(): void {
+    this.transientHandles.clear();
+    const seenSourceIds = new Map<number, string>();
+    const reservedIndices = new Set<number>([0]);
+    const sites: Omit<TransientResourceBinding, 'handle'>[] = [];
+    const reserveExpression = (
+      emit: HirPresentation['emits'][number],
+      argument: string,
+    ): void => {
+      const value = emit.args.find((item) => item.name === argument)?.value;
+      if (!value) {
+        throw new Error(`internal C++ resource preflight cannot find '${argument}' at ${emit.span.file}:${emit.span.start}`);
+      }
+      const raw = this.constantRaw(value, new Set());
+      if (raw === null || raw < 0n || raw > 0xffffffffn) {
+        throw new Error(`C++ resource preflight requires a u32 constant '${argument}' at ${emit.span.file}:${emit.span.start}`);
+      }
+      // Authored page handles retain their ABI-defined low-24-bit index.  The
+      // transient allocator must skip that index so both classes cannot alias.
+      reservedIndices.add(Number(raw & BigInt(MAX_RESOURCE_INDEX)));
+    };
+    for (const presentation of declarationsOf(this.hir, 'presentation')) {
+      for (const emit of presentation.emits) {
+        const sourceId = emit.sourceId >>> 0;
+        const description = `${presentation.module}.${presentation.name}:${emit.span.file}:${emit.span.start}`;
+        const duplicate = seenSourceIds.get(sourceId);
+        if (duplicate !== undefined) {
+          throw new Error(
+            `C++ resource preflight found duplicate presentation source_id ${sourceId} at ${duplicate} and ${description}`,
+          );
+        }
+        seenSourceIds.set(sourceId, description);
+        const sourceKind = sourceId >>> 28;
+        const sourceModule = (sourceId >>> 16) & 0x0fff;
+        if (sourceKind !== 9 || sourceModule !== presentation.module) {
+          throw new Error(
+            `C++ resource preflight found malformed presentation source_id ${sourceId} `
+              + `(kind ${sourceKind}, module ${sourceModule}, owner ${presentation.module})`,
+          );
+        }
+        switch (emit.emitKind) {
+          case 'draw_form':
+            reserveExpression(emit, 'form');
+            sites.push({ module: presentation.module, sourceId, role: 'draw_form_transform' });
+            break;
+          case 'draw_population': {
+            const poolArg = emit.args.find((item) => item.name === 'pool')?.value;
+            const pool = poolArg?.symbol?.kind === 'pool' && poolArg.symbol.module !== null
+              ? this.pools.get(key(poolArg.symbol.module, poolArg.symbol.name)) : null;
+            if (!pool) {
+              throw new Error(`internal C++ resource preflight cannot resolve population at ${emit.span.file}:${emit.span.start}`);
+            }
+            reservedIndices.add((pool.populationIndex + 1) & MAX_RESOURCE_INDEX);
+            break;
+          }
+          case 'draw_procedural':
+            reserveExpression(emit, 'patch');
+            break;
+          case 'surface_stamp':
+            reserveExpression(emit, 'brush');
+            sites.push({ module: presentation.module, sourceId, role: 'surface_stamp_terrain_patch' });
+            break;
+          case 'audio': {
+            const soundArg = emit.args.find((item) => item.name === 'sound')?.value;
+            const sound = soundArg?.symbol?.kind === 'sound' && soundArg.symbol.module !== null
+              ? this.sounds.get(key(soundArg.symbol.module, soundArg.symbol.name)) : null;
+            if (!sound) {
+              throw new Error(`internal C++ resource preflight cannot resolve sound at ${emit.span.file}:${emit.span.start}`);
+            }
+            reservedIndices.add((sound.eventIndex + 1) & MAX_RESOURCE_INDEX);
+            break;
+          }
+          default:
+            throw new Error(`C++ resource preflight does not know presentation command '${emit.emitKind}'`);
+        }
+      }
+    }
+    const bindings = allocateTransientResourceIndices(sites, reservedIndices);
+    for (const binding of bindings) {
+      this.transientHandles.set(
+        transientResourceKey(binding.sourceId, binding.role),
+        binding.handle,
+      );
+    }
+    this.transientBindings = bindings;
+  }
+
+  private transientHandle(sourceId: number, role: TransientResourceRole): number {
+    const handle = this.transientHandles.get(transientResourceKey(sourceId, role));
+    if (handle === undefined) {
+      throw new Error(`internal C++ resource mapping is missing source_id ${sourceId} (${role})`);
+    }
+    return handle;
+  }
+
   private banner(): string {
     return `// Generated by Form C++ backend v${FORM_CPP_BACKEND_VERSION}; DO NOT EDIT.`;
   }
@@ -178,6 +340,16 @@ class CppEmitter {
     o.line('struct World3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };');
     o.line('struct Velocity3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };');
     o.line('struct Stream { u64 state{}; u64 increment{}; };'.replace(/u64/g, 'std::uint64_t'));
+    o.line('enum class PresentationResourceRole : u8 { DrawFormTransform = 1u, SurfaceStampTerrainPatch = 2u };');
+    o.line('struct PresentationResourceBinding { u16 module{}; u32 source_id{}; PresentationResourceRole role{}; u32 handle{}; };');
+    o.line(`inline constexpr std::array<PresentationResourceBinding, ${this.transientBindings.length}> kPresentationResourceBindings{{`);
+    for (const binding of this.transientBindings) {
+      const role = binding.role === 'draw_form_transform'
+        ? 'PresentationResourceRole::DrawFormTransform'
+        : 'PresentationResourceRole::SurfaceStampTerrainPatch';
+      o.line(`  PresentationResourceBinding{${binding.module}u, ${binding.sourceId}u, ${role}, ${binding.handle}u},`);
+    }
+    o.line('}};');
     o.line('struct PresentationResources {');
     o.line('  void* user{};');
     o.line('  void (*form_transform)(void*, u32, World3, Fx16){};');
@@ -203,11 +375,6 @@ class CppEmitter {
     o.line('}');
     o.line('inline i16 sat_i16(i32 value) { return value > 32767 ? 32767 : value < -32768 ? -32768 : static_cast<i16>(value); }');
     o.line('inline u32 resource_handle(u32 page_id) { return 0x01000000u | (page_id & 0x00ffffffu); }');
-    o.line('inline u32 transient_handle(u32 source_id, u32 salt) {');
-    o.line('  u32 index = (source_id ^ (salt * 0x9e3779b9u)) & 0x00ffffffu;');
-    o.line('  if (index == 0u) index = salt + 1u;');
-    o.line('  return 0x01000000u | index;');
-    o.line('}');
     o.line('inline i32 i32_from_bits(u32 value) { return value <= 0x7fffffffu ? static_cast<i32>(value) : -1 - static_cast<i32>(~value); }');
     o.line('inline i32 i32_add(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) + static_cast<u32>(b)); }');
     o.line('inline i32 i32_sub(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) - static_cast<u32>(b)); }');
@@ -414,7 +581,7 @@ class CppEmitter {
       if (decl.kind === 'struct') this.emitStruct(o, decl);
     }
     for (const decl of declarations) if (decl.kind === 'const') {
-      const value = decl.raw === null ? this.expr(decl.init, { state: 'state', pads: 'pads', tick: 'tick', rng: 'state.rng' }) : cppInteger(decl.raw, decl.type);
+      const value = this.constexprExpr(decl.init);
       o.line(`inline constexpr ${this.cppType(decl.type)} ${ident(decl.name)} = ${value};`);
     }
     if (declarations.some((decl) => decl.kind === 'const')) o.line();
@@ -797,7 +964,7 @@ class CppEmitter {
         const position = value('transform');
         o.line(`${pad}  record.payload.form = resource_handle(static_cast<u32>(${value('form')}));`);
         o.line(`${pad}  record.payload.material_set = record.payload.form;`);
-        o.line(`${pad}  record.payload.transform = transient_handle(${emit.sourceId}u, 1u);`);
+        o.line(`${pad}  record.payload.transform = ${this.transientHandle(emit.sourceId, 'draw_form_transform')}u;`);
         o.line(`${pad}  record.payload.viewport_mask = static_cast<u8>(${value('view_mask')});`);
         o.line(`${pad}  record.payload.semantic_weight = static_cast<u8>(${value('weight')});`);
         o.line(`${pad}  record.payload.flags = 1u;  // billboard`);
@@ -818,7 +985,7 @@ class CppEmitter {
       case 'surface_stamp': {
         begin('SurfaceStamp', 'SURFACE_STAMP', 64);
         o.line(`${pad}  record.payload.brush = resource_handle(static_cast<u32>(${value('brush')}));`);
-        o.line(`${pad}  record.payload.patch = transient_handle(${emit.sourceId}u, 2u);`);
+        o.line(`${pad}  record.payload.patch = ${this.transientHandle(emit.sourceId, 'surface_stamp_terrain_patch')}u;`);
         o.line(`${pad}  record.payload.operation = 0u;`);
         o.line(`${pad}  record.payload.tag = static_cast<u8>(${value('tag')});`);
         o.line(`${pad}  record.payload.strength = static_cast<u16>(static_cast<u32>(${value('strength')}) * 257u);`);
@@ -1046,10 +1213,225 @@ class CppEmitter {
     o.line();
   }
 
+  /** Namespace-scope constants use only direct C++17 constant expressions. */
+  private constexprExpr(expression: HirExpr): string {
+    const raw = this.constantRaw(expression, new Set());
+    if (raw !== null) return this.constantInteger(raw, expression.type);
+    const ast = expression.ast;
+    switch (ast.kind) {
+      case 'ident': {
+        const symbol = expression.symbol;
+        if (symbol?.kind === 'const' && symbol.module === null && BUTTONS.has(symbol.name)) {
+          return `${BUTTONS.get(symbol.name)}u`;
+        }
+        if (symbol?.kind !== 'const' || symbol.module === null) {
+          throw new Error(`non-constant identifier reached C++ constexpr lowering at ${expression.span.file}:${expression.span.start}`);
+        }
+        return `form::${this.moduleName(symbol.module)}::${ident(symbol.name)}`;
+      }
+      case 'member': {
+        const symbol = expression.symbol;
+        if (symbol?.kind === 'const' && symbol.module !== null && expression.children.length === 0) {
+          return `form::${this.moduleName(symbol.module)}::${ident(symbol.name)}`;
+        }
+        if (symbol?.kind === 'enum' && symbol.module !== null) {
+          const [enumName, member] = symbol.name.split('.');
+          return `${this.cppStructName(symbol.module, enumName!)}::${ident(member!)}`;
+        }
+        if (expression.children.length !== 1) {
+          throw new Error(`non-constant member reached C++ constexpr lowering at ${expression.span.file}:${expression.span.start}`);
+        }
+        return `(${this.constexprExpr(expression.children[0]!)}).${ident(ast.field)}`;
+      }
+      case 'record':
+        return this.constexprRecord(expression, ast);
+      case 'unary': {
+        const operand = this.constexprExpr(expression.children[0]!);
+        if (ast.op === '!') return `static_cast<Bool>(!(${operand}))`;
+        if (ast.op === '~') return `static_cast<${this.cppType(expression.type)}>(~(${operand}))`;
+        if (ast.op === '-') return `static_cast<${this.cppType(expression.type)}>(-(${operand}))`;
+        break;
+      }
+      case 'binary': {
+        const left = this.constexprExpr(expression.children[0]!);
+        const right = this.constexprExpr(expression.children[1]!);
+        if (['<', '<=', '>', '>=', '==', '!=', '&&', '||'].includes(ast.op)) {
+          return `static_cast<Bool>((${left}) ${ast.op} (${right}))`;
+        }
+        return `static_cast<${this.cppType(expression.type)}>((${left}) ${ast.op} (${right}))`;
+      }
+      default:
+        break;
+    }
+    throw new Error(`non-constant '${ast.kind}' expression reached C++ constexpr lowering at ${expression.span.file}:${expression.span.start}`);
+  }
+
+  private constexprRecord(expression: HirExpr, ast: RecordLit): string {
+    const byName = new Map(ast.fields.map((field, index) => [
+      field.name,
+      this.constexprExpr(expression.children[index]!),
+    ]));
+    if (expression.type.t === 'world2' || expression.type.t === 'world3'
+        || expression.type.t === 'velocity3') {
+      const fields = expression.type.t === 'world2' ? ['x', 'y'] : ['x', 'y', 'z'];
+      const type = expression.type.t === 'world2'
+        ? 'World2' : expression.type.t === 'world3' ? 'World3' : 'Velocity3';
+      return `${type}{${fields.map((field) => byName.get(field) ?? '{}').join(', ')}}`;
+    }
+    if (expression.type.t !== 'struct') {
+      throw new Error(`C++ constexpr lowering cannot construct record type '${expression.type.t}'`);
+    }
+    const [module, name] = splitTypeName(expression.type.name);
+    const struct = this.structs.get(key(module, name));
+    if (!struct) throw new Error(`C++ constexpr lowering cannot find record struct ${expression.type.name}`);
+    return `${this.cppStructName(module, name)}{${struct.fields.map(
+      (field) => byName.get(field.name) ?? '{}',
+    ).join(', ')}}`;
+  }
+
+  private constantRaw(expression: HirExpr, active: Set<string>): bigint | null {
+    const ast = expression.ast;
+    if (ast.kind === 'literal') return literalRaw(ast, expression.type);
+    if ((ast.kind === 'ident' || ast.kind === 'member')
+        && expression.symbol?.kind === 'const' && expression.symbol.module !== null) {
+      const symbolKey = key(expression.symbol.module, expression.symbol.name);
+      if (active.has(symbolKey)) return null;
+      const declaration = this.declByKey.get(symbolKey);
+      if (!declaration || declaration.kind !== 'const') return null;
+      active.add(symbolKey);
+      const result = this.constantRaw(declaration.init, active);
+      active.delete(symbolKey);
+      return result;
+    }
+    if (ast.kind === 'member' && expression.symbol?.kind === 'enum'
+        && expression.symbol.module !== null) {
+      const [enumName, memberName] = expression.symbol.name.split('.');
+      const declaration = this.declByKey.get(key(expression.symbol.module, enumName!));
+      return declaration?.kind === 'enum'
+        ? declaration.members.find((member) => member.name === memberName)?.value ?? null
+        : null;
+    }
+    if (ast.kind === 'member' && expression.children.length === 1) {
+      return this.constantMemberRaw(expression, active);
+    }
+    if (ast.kind === 'unary') {
+      const operand = this.constantRaw(expression.children[0]!, active);
+      if (operand === null) return null;
+      if (ast.op === '-') return constantNormalize(-operand, expression.type);
+      if (ast.op === '!') return operand === 0n ? 1n : 0n;
+      if (ast.op === '~') return constantNormalize(~operand, expression.type);
+      return null;
+    }
+    if (ast.kind !== 'binary') return null;
+    const left = this.constantRaw(expression.children[0]!, active);
+    const right = this.constantRaw(expression.children[1]!, active);
+    if (left === null || right === null) return null;
+    if ((ast.op === '/' || ast.op === '%') && right === 0n) {
+      throw new Error(`non-constant division by zero reached C++ constexpr lowering at ${expression.span.file}:${expression.span.start}`);
+    }
+    const operandType = expression.children[0]!.type;
+    const operandKind = operandType.t;
+    switch (ast.op) {
+      case '+': return constantNormalize(left + right, operandType);
+      case '-': return constantNormalize(left - right, operandType);
+      case '*': {
+        if (operandKind === 'fx16') {
+          return constantNormalize(constantFloorDiv(left * right + 0x8000n, 0x10000n), operandType);
+        }
+        if (operandKind === 'fx24') {
+          return constantNormalize(constantRoundHalfUp(left * right, 0x1000000n), operandType);
+        }
+        if (operandKind === 'unit8') {
+          const product = left * right + 128n;
+          return product > 0xff00n ? 255n : product >> 8n;
+        }
+        return constantNormalize(left * right, operandType);
+      }
+      case '/': {
+        if (operandKind === 'fx16') {
+          return constantNormalize(constantRoundHalfUp(left * 0x10000n, right), operandType);
+        }
+        if (operandKind === 'fx24') {
+          return constantNormalize(constantRoundHalfUp(left * 0x1000000n, right), operandType);
+        }
+        if (operandKind === 'i32' && left === -0x80000000n && right === -1n) return left;
+        return constantNormalize(left / right, operandType);
+      }
+      case '%': {
+        if ((operandKind === 'i32' || operandKind === 'fx16')
+            && left === -0x80000000n && right === -1n) return 0n;
+        if (operandKind === 'fx24'
+            && left === -0x8000000000000000n && right === -1n) return 0n;
+        return constantNormalize(left % right, operandType);
+      }
+      case '<<': {
+        const shift = Number(constantU32(right) & 31n);
+        return operandKind === 'i32'
+          ? constantI32(constantU32(left) << BigInt(shift))
+          : constantU32(left << BigInt(shift));
+      }
+      case '>>': {
+        const shift = Number(constantU32(right) & 31n);
+        return operandKind === 'i32'
+          ? constantI32(left) >> BigInt(shift)
+          : constantU32(left) >> BigInt(shift);
+      }
+      case '&': return constantNormalize(left & right, operandType);
+      case '|': return constantNormalize(left | right, operandType);
+      case '^': return constantNormalize(left ^ right, operandType);
+      case '<': return left < right ? 1n : 0n;
+      case '<=': return left <= right ? 1n : 0n;
+      case '>': return left > right ? 1n : 0n;
+      case '>=': return left >= right ? 1n : 0n;
+      case '==': return left === right ? 1n : 0n;
+      case '!=': return left !== right ? 1n : 0n;
+      case '&&': return left !== 0n && right !== 0n ? 1n : 0n;
+      case '||': return left !== 0n || right !== 0n ? 1n : 0n;
+      default: return null;
+    }
+  }
+
+  private constantMemberRaw(expression: HirExpr, active: Set<string>): bigint | null {
+    const fields: string[] = [];
+    let root = expression;
+    while (root.ast.kind === 'member' && root.children.length === 1) {
+      fields.unshift(root.ast.field);
+      root = root.children[0]!;
+    }
+    return this.constantFieldPathRaw(root, fields, active);
+  }
+
+  private constantFieldPathRaw(
+    expression: HirExpr,
+    fields: readonly string[],
+    active: Set<string>,
+  ): bigint | null {
+    if (fields.length === 0) return this.constantRaw(expression, active);
+    if ((expression.ast.kind === 'ident' || expression.ast.kind === 'member')
+        && expression.symbol?.kind === 'const' && expression.symbol.module !== null) {
+      const symbolKey = key(expression.symbol.module, expression.symbol.name);
+      if (active.has(symbolKey)) return null;
+      const declaration = this.declByKey.get(symbolKey);
+      if (!declaration || declaration.kind !== 'const') return null;
+      active.add(symbolKey);
+      const result = this.constantFieldPathRaw(declaration.init, fields, active);
+      active.delete(symbolKey);
+      return result;
+    }
+    if (expression.ast.kind !== 'record') return null;
+    const index = expression.ast.fields.findIndex((field) => field.name === fields[0]);
+    if (index < 0) return null;
+    return this.constantFieldPathRaw(expression.children[index]!, fields.slice(1), active);
+  }
+
+  private constantInteger(value: bigint, type: Type): string {
+    return cppInteger(value, type, type.t === 'enum' ? this.cppType(type) : null);
+  }
+
   private expr(expression: HirExpr, ctx: ExprContext): string {
     const ast = expression.ast;
     switch (ast.kind) {
-      case 'literal': return cppInteger(literalRaw(ast, expression.type), expression.type);
+      case 'literal': return this.constantInteger(literalRaw(ast, expression.type), expression.type);
       case 'string': return `"${escapeCpp(ast.value)}"`;
       case 'ident': return this.identExpr(expression, ast.name, ctx);
       case 'member': {
@@ -1302,6 +1684,9 @@ function ident(value: string): string {
 }
 
 function key(module: number, name: string): string { return `${module}\0${name}`; }
+function transientResourceKey(sourceId: number, role: TransientResourceRole): string {
+  return `${sourceId >>> 0}:${role}`;
+}
 function splitTypeName(name: string): [number, string] {
   const split = name.indexOf('::');
   if (split < 0) throw new Error(`unqualified HIR type '${name}'`);
@@ -1340,10 +1725,47 @@ function literalRaw(ast: Extract<Expr, { kind: 'literal' }>, type: Type): bigint
   return numerator / denominator;
 }
 
-function cppInteger(value: bigint, type: Type): string {
+function constantFloorDiv(numerator: bigint, denominator: bigint): bigint {
+  let quotient = numerator / denominator;
+  if (numerator % denominator < 0n) --quotient;
+  return quotient;
+}
+
+function constantRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
+  if (denominator < 0n) return constantRoundHalfUp(-numerator, -denominator);
+  return constantFloorDiv(numerator + denominator / 2n, denominator);
+}
+
+function constantU32(value: bigint): bigint { return BigInt.asUintN(32, value); }
+function constantI32(value: bigint): bigint { return BigInt.asIntN(32, value); }
+
+function constantSaturate(value: bigint, bits: number): bigint {
+  const width = BigInt(bits - 1);
+  const lo = -(1n << width);
+  const hi = (1n << width) - 1n;
+  return value < lo ? lo : value > hi ? hi : value;
+}
+
+function constantNormalize(value: bigint, type: Type): bigint {
+  switch (type.t) {
+    case 'fx16': return constantSaturate(value, 32);
+    case 'fx24': return constantSaturate(value, 64);
+    case 'i32': return constantI32(value);
+    case 'u32': return constantU32(value);
+    case 'angle16': return BigInt.asUintN(16, value);
+    case 'unit8': return value < 0n ? 0n : value > 255n ? 255n : value;
+    case 'bool': return value === 0n ? 0n : 1n;
+    default: return value;
+  }
+}
+
+function cppInteger(value: bigint, type: Type, enumType: string | null): string {
   if (type.t === 'fx24') return `${value.toString()}LL`;
   if (type.t === 'u32' || type.t === 'colour8') return `${value.toString()}u`;
   if (type.t === 'angle16' || type.t === 'unit8' || type.t === 'bool') return `static_cast<${type.t === 'angle16' ? 'Angle16' : type.t === 'unit8' ? 'Unit8' : 'Bool'}>(${value.toString()}u)`;
-  if (type.t === 'enum') return `static_cast<u32>(${value.toString()}u)`;
+  if (type.t === 'enum') {
+    if (enumType === null) throw new Error('C++ enum constant lowering requires an exact generated type');
+    return `static_cast<${enumType}>(${value.toString()}u)`;
+  }
   return value.toString();
 }

@@ -31,6 +31,10 @@ struct World2 { Fx24 x{}; Fx24 y{}; };
 struct World3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Velocity3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Stream { std::uint64_t state{}; std::uint64_t increment{}; };
+enum class PresentationResourceRole : u8 { DrawFormTransform = 1u, SurfaceStampTerrainPatch = 2u };
+struct PresentationResourceBinding { u16 module{}; u32 source_id{}; PresentationResourceRole role{}; u32 handle{}; };
+inline constexpr std::array<PresentationResourceBinding, 0> kPresentationResourceBindings{{
+}};
 struct PresentationResources {
   void* user{};
   void (*form_transform)(void*, u32, World3, Fx16){};
@@ -56,11 +60,6 @@ inline i64 sat_i64(__int128 value) {
 }
 inline i16 sat_i16(i32 value) { return value > 32767 ? 32767 : value < -32768 ? -32768 : static_cast<i16>(value); }
 inline u32 resource_handle(u32 page_id) { return 0x01000000u | (page_id & 0x00ffffffu); }
-inline u32 transient_handle(u32 source_id, u32 salt) {
-  u32 index = (source_id ^ (salt * 0x9e3779b9u)) & 0x00ffffffu;
-  if (index == 0u) index = salt + 1u;
-  return 0x01000000u | index;
-}
 inline i32 i32_from_bits(u32 value) { return value <= 0x7fffffffu ? static_cast<i32>(value) : -1 - static_cast<i32>(~value); }
 inline i32 i32_add(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) + static_cast<u32>(b)); }
 inline i32 i32_sub(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) - static_cast<u32>(b)); }

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { emitCpp } from '../../src/backends/index.js';
+import { allocateTransientResourceIndices } from '../../src/backends/cpp/emitter.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { lowerHir } from '../../src/hir/index.js';
 import { lowerZir } from '../../src/zir/index.js';
@@ -157,6 +158,58 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
   assert.match(byPath(first, 'arena.cpp'), /if \(\(i % 4u\) == \(tick % 4u\)\)/);
 });
 
+test('transient resource allocator rejects duplicate sites and bounded-index exhaustion', () => {
+  const site = { module: 0, sourceId: 0x90000001, role: 'draw_form_transform' as const };
+  assert.throws(
+    () => allocateTransientResourceIndices([site, site], new Set(), 4),
+    /duplicate transient mapping/,
+  );
+  assert.throws(
+    () => allocateTransientResourceIndices([
+      site,
+      { module: 1, sourceId: 0x90010001, role: 'surface_stamp_terrain_patch' },
+    ], new Set([1]), 2),
+    /exhausted the 24-bit handle index space/,
+  );
+  assert.deepEqual(
+    allocateTransientResourceIndices([
+      { module: 256, sourceId: 0x91000001, role: 'surface_stamp_terrain_patch' },
+      site,
+    ], new Set([1]), 4),
+    [
+      { ...site, handle: 0x01000002 },
+      {
+        module: 256,
+        sourceId: 0x91000001,
+        role: 'surface_stamp_terrain_patch',
+        handle: 0x01000003,
+      },
+    ],
+  );
+  const frontend = compileFrontend({
+    'duplicate.form': `module duplicate {
+  const PAGE: u32 = 3;
+  global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
+  presentation showcase {
+    view 0 from camera budget 100%;
+    emit draw_form(form: PAGE, transform: camera, view_mask: 1, weight: 100%);
+    emit draw_form(form: PAGE, transform: camera, view_mask: 1, weight: 100%);
+  }
+}\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((diagnostic) =>
+    `${diagnostic.code}: ${diagnostic.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const presentation = hir.declarations.find((decl) => decl.kind === 'presentation');
+  assert.ok(presentation?.kind === 'presentation');
+  presentation.emits[1]!.sourceId = presentation.emits[0]!.sourceId;
+  assert.throws(
+    () => emitCpp(hir, lowerZir(hir)),
+    /duplicate presentation source_id/,
+  );
+});
+
 test('emitted deterministic source has no forbidden numeric or host-clock surface', () => {
   const output = compileFixture();
   const forbidden = /\b(?:float|double)\b|<cmath>|\b(?:chrono|clock_gettime|system_clock|steady_clock|gettimeofday)\b/;
@@ -290,6 +343,78 @@ int main() {
   form::PadFrame pads[4]{};
   form::sim_tick(state, pads, 0u);
   return state.owner.payload_state.value == 7u ? 0 : 1;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+});
+
+test('WinLibs compiles namespace-safe aggregate and exact enum constants', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  // L1 has array types but no array literal or other array-valued constant
+  // expression, so there is no source-level array constant to exercise here.
+  const output = compileSources({
+    'a_owner.form': `module owner {
+  enum motion_mode { waiting = 2, moving = 7 }
+  struct imported_record { point: world2; shade: colour8; selected: motion_mode; scaled: fx16; }
+  const SELECTED: motion_mode = motion_mode.moving;
+  const IMPORTED: imported_record = imported_record {
+    selected = SELECTED,
+    scaled = 1m / (5m - 0.5m),
+    shade = #102030,
+    point = world2 { y = 2w, x = 1w },
+  };
+  const SCALE: fx16 = IMPORTED.scaled;
+}\n`,
+    'b_consumer.form': `module consumer {
+  import owner { motion_mode, imported_record, SELECTED, IMPORTED };
+  struct local_record {
+    imported: imported_record;
+    position: world3;
+    velocity: velocity3;
+    tint: colour8;
+    selected: motion_mode;
+  }
+  const LOCAL: local_record = local_record {
+    selected = SELECTED,
+    tint = #80402010,
+    velocity = velocity3 { z = -3w, x = -1w, y = -2w },
+    position = world3 { z = 6w, y = 5w, x = 4w },
+    imported = IMPORTED,
+  };
+  const COPY: local_record = LOCAL;
+  global initial: local_record = COPY;
+}\n`,
+  });
+  const ownerHeader = byPath(output, 'owner.hpp');
+  const consumerHeader = byPath(output, 'consumer.hpp');
+  assert.doesNotMatch(ownerHeader + consumerHeader, /\[&\]/);
+  assert.match(ownerHeader,
+    /inline constexpr form::owner::motion_mode SELECTED = static_cast<form::owner::motion_mode>\(7u\);/);
+  assert.match(ownerHeader,
+    /imported_record\{World2\{16777216LL, 33554432LL\}, 4279246896u, static_cast<form::owner::motion_mode>\(7u\), 14564\}/);
+  assert.match(consumerHeader,
+    /local_record\{form::owner::IMPORTED, World3\{67108864LL, 83886080LL, 100663296LL\}, Velocity3\{-16777216LL, -33554432LL, -50331648LL\}, 2151686160u, static_cast<form::owner::motion_mode>\(7u\)\}/);
+
+  const run = runGeneratedNative(output, `#include "form_game.hpp"
+static_assert(form::owner::SELECTED == form::owner::motion_mode::moving);
+static_assert(form::owner::IMPORTED.point.x == 0x1000000LL);
+static_assert(form::owner::IMPORTED.point.y == 0x2000000LL);
+static_assert(form::owner::IMPORTED.scaled == 14564);
+static_assert(form::owner::SCALE == form::owner::IMPORTED.scaled);
+static_assert(form::consumer::LOCAL.imported.shade == 0xff102030u);
+static_assert(form::consumer::LOCAL.position.z == 0x6000000LL);
+static_assert(form::consumer::LOCAL.velocity.z == -0x3000000LL);
+static_assert(form::consumer::LOCAL.tint == 0x80402010u);
+static_assert(form::consumer::COPY.selected == form::owner::motion_mode::moving);
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  return state.consumer.initial.position.y == 0x5000000LL
+      && state.consumer.initial.imported.point.x == 0x1000000LL ? 0 : 1;
 }
 `);
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
@@ -544,6 +669,240 @@ int main() {
   ]);
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
   assert.match(run.stdout.replaceAll('\r', ''), /^[1-9][0-9]* [0-9a-f]{8}\n$/);
+});
+
+test('module 0 and 256 presentation sites retain distinct persistent resources', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const sources: Record<string, string> = {};
+  for (let module = 0; module <= 256; ++module) {
+    const suffix = module.toString().padStart(3, '0');
+    const name = `m${suffix}`;
+    sources[`${suffix}_${name}.form`] = module === 0 || module === 256
+      ? `module ${name} {
+  const FORM_PAGE: u32 = 5;
+  const BRUSH_PAGE: u32 = 7;
+  global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
+  global authored: world3 = world3 { x = ${module === 0 ? '-1w' : '1w'}, y = 0w, z = 1w };
+  presentation showcase {
+    view 0 from camera budget 45%;
+    view 1 from camera budget 45%;
+    shared budget 10%;
+    emit draw_form(form: FORM_PAGE, transform: authored, view_mask: 3, weight: 100%);
+    emit surface_stamp(brush: BRUSH_PAGE, at: authored, radius: 2m, ring_width: 0.5m,
+                       tag: ${module === 0 ? 17 : 29}, strength: 80%);
+  }
+}\n`
+      : `module ${name} { }\n`;
+  }
+  const first = compileSources(sources);
+  const second = compileSources(Object.fromEntries(Object.entries(sources).reverse()));
+  assert.deepEqual(first, second);
+  const types = byPath(first, 'form_types.hpp');
+  assert.doesNotMatch(types, /transient_handle/);
+  assert.match(types, /std::array<PresentationResourceBinding, 4>/);
+  assert.match(types, /PresentationResourceBinding\{0u, [0-9]+u, PresentationResourceRole::DrawFormTransform/);
+  assert.match(types, /PresentationResourceBinding\{256u, [0-9]+u, PresentationResourceRole::SurfaceStampTerrainPatch/);
+
+  const nativeOutput: typeof first = {
+    ...first,
+    files: first.files.filter((file) => !file.path.endsWith('.cpp')
+      || file.path.endsWith('/m000.cpp') || file.path.endsWith('/m256.cpp')),
+  };
+  const repo = repoRoot();
+  const renderSources = [
+    'reference/src/zfield/zfield_decode.cpp',
+    'reference/src/zfield/zfield_interpret.cpp',
+    'reference/src/zterrain/terrain_core.cpp',
+    'reference/src/zrender/render_frame.cpp',
+    'reference/src/zrender/rast.cpp',
+    'reference/src/zrender/terrain.cpp',
+    'reference/src/zrender/sprites.cpp',
+    'reference/src/zrender/resolve.cpp',
+    'reference/src/zsky/emit_layers.cpp',
+  ].map((file) => path.join(repo, file));
+  const run = runGeneratedNative(nativeOutput, `#include "form_game.hpp"
+#include <zref/zref_render.hpp>
+#include <array>
+#include <vector>
+struct Bound {
+  bool valid{true};
+  form::u32 form_calls{};
+  form::u32 terrain_calls{};
+  std::array<form::u32, 2> transform_handles{};
+  std::array<form::u32, 2> patch_handles{};
+  std::array<form::u32, 2> patch_sources{};
+  std::array<zref::render::FormTransform, 2> transforms{};
+  std::array<zref::render::TerrainPatch, 2> patches{};
+  zref::render::RenderResources render{};
+};
+static form::u32 slot_for_position(form::World3 at) { return at.x < 0 ? 0u : 1u; }
+static form::u32 slot_for_source(form::u32 source) {
+  const form::u32 module = (source >> 16u) & 0xfffu;
+  return module == 0u ? 0u : module == 256u ? 1u : 2u;
+}
+static void bind_form(void* raw, form::u32 handle, form::World3 at, form::Fx16 size) {
+  Bound& b = *static_cast<Bound*>(raw);
+  const form::u32 slot = slot_for_position(at);
+  if (b.transform_handles[slot] != 0u && b.transform_handles[slot] != handle) b.valid = false;
+  if (b.transform_handles[slot] == 0u) {
+    b.transform_handles[slot] = handle;
+    b.transforms[slot] = {form::fx16_from_fx24(at.x), form::fx16_from_fx24(at.y),
+                          form::fx16_from_fx24(at.z), size};
+    b.render.transforms.push_back({handle, b.transforms[slot]});
+  }
+  ++b.form_calls;
+}
+static void bind_terrain(void* raw, form::u32 handle, form::u32 source,
+                         form::World3 at, form::Fx16 radius) {
+  Bound& b = *static_cast<Bound*>(raw);
+  const form::u32 slot = slot_for_source(source);
+  if (slot > 1u || slot != slot_for_position(at) || radius != 0x20000) { b.valid = false; return; }
+  if ((b.patch_handles[slot] != 0u && b.patch_handles[slot] != handle) ||
+      (b.patch_sources[slot] != 0u && b.patch_sources[slot] != source)) b.valid = false;
+  if (b.patch_handles[slot] == 0u) {
+    b.patch_handles[slot] = handle;
+    b.patch_sources[slot] = source;
+    b.render.terrain_patches.push_back({handle, &b.patches[slot]});
+  }
+  ++b.terrain_calls;
+}
+static form::u16 read16(const form::u8* p) {
+  return static_cast<form::u16>(p[0]) | static_cast<form::u16>(p[1] << 8u);
+}
+struct Decoded {
+  std::array<form::u32, 2> stamp_sources{};
+  std::array<form::u32, 2> stamp_handles{};
+  std::array<form::u32, 2> draw_sources{};
+  std::array<form::u32, 2> transform_handles{};
+  form::u32 stamps{};
+  form::u32 draws{};
+  form::u32 view_zero{};
+  form::u32 view_one{};
+};
+static bool decode(const std::vector<form::u8>& packet, Decoded& out) {
+  const auto valid = zhao::zhao_frame_validate(packet);
+  if (valid.error != zhao_abi::ZH_ABI_OK) return false;
+  const auto header = zhao::zhao_frame_parse_header(packet.data());
+  for (form::u32 off = zhao_abi::ZHAO_FRAME_HEADER_BYTES;
+       off < zhao_abi::ZHAO_FRAME_HEADER_BYTES + header.command_bytes;) {
+    const form::u16 opcode = read16(packet.data() + off);
+    const form::u16 bytes = read16(packet.data() + off + 2u);
+    zhao_abi::ZhReader reader(packet.data() + off, bytes);
+    if (opcode == zhao_abi::ZHAO_OP_SET_VIEW) {
+      zhao_abi::ZhRecordSetView record{};
+      if (!zhao_abi::zhao_unpack_set_view(reader, record)) return false;
+      if (record.payload.view_id == 0u) ++out.view_zero;
+      if (record.payload.view_id == 1u) ++out.view_one;
+    } else if (opcode == zhao_abi::ZHAO_OP_DRAW_FORM) {
+      zhao_abi::ZhRecordDrawForm record{};
+      if (!zhao_abi::zhao_unpack_draw_form(reader, record)) return false;
+      const form::u32 slot = slot_for_source(record.hdr.source_id);
+      if (slot > 1u) return false;
+      out.draw_sources[slot] = record.hdr.source_id;
+      out.transform_handles[slot] = record.payload.transform;
+      ++out.draws;
+    } else if (opcode == zhao_abi::ZHAO_OP_SURFACE_STAMP) {
+      zhao_abi::ZhRecordSurfaceStamp record{};
+      if (!zhao_abi::zhao_unpack_surface_stamp(reader, record)) return false;
+      const form::u32 slot = slot_for_source(record.hdr.source_id);
+      if (slot > 1u) return false;
+      out.stamp_sources[slot] = record.hdr.source_id;
+      out.stamp_handles[slot] = record.payload.patch;
+      ++out.stamps;
+    }
+    off += bytes;
+  }
+  return true;
+}
+static std::vector<form::u8> frame(form::FormState& state, const form::PresentationResources& resources,
+                                   form::u32 number) {
+  zhao::ZhaoFrameBuilder builder;
+  builder.begin_frame(number, 1u, 0u, 0u);
+  form::present_frame(state, builder, resources);
+  builder.end_frame(zhao_abi::ZHAO_COMPL_DONE);
+  return builder.seal(number, 1u, 1u);
+}
+int main() {
+  static_assert(form::kPresentationResourceBindings.size() == 4u);
+  form::FormState state{};
+  form::initialize(state, 0x1234u);
+  Bound bound{};
+  for (auto& patch : bound.patches) {
+    patch.width = 2u; patch.height = 2u;
+    patch.env_x0 = -(4 << 16); patch.env_z0 = -(4 << 16);
+    patch.env_x1 = 4 << 16; patch.env_z1 = 4 << 16;
+    patch.heights.assign(4u, 0);
+  }
+  zref::render::FormPattern pattern{};
+  for (form::u32 i = 0u; i < 64u; ++i) {
+    pattern.mask[i] = 1u;
+    pattern.rgb[i * 3u] = 255u;
+  }
+  bound.render.forms.push_back({0x01000005u, pattern});
+  const form::PresentationResources resources{&bound, &bind_form, nullptr, nullptr, &bind_terrain};
+  const std::vector<form::u8> first = frame(state, resources, 10u);
+  const std::vector<form::u8> second = frame(state, resources, 11u);
+  Decoded a{};
+  Decoded b{};
+  if (!decode(first, a) || !decode(second, b) || !bound.valid) return 1;
+  if (a.draws != 2u || a.stamps != 2u || a.view_zero != 2u || a.view_one != 2u) return 2;
+  if (a.draw_sources != b.draw_sources || a.stamp_sources != b.stamp_sources ||
+      a.transform_handles != b.transform_handles || a.stamp_handles != b.stamp_handles) return 3;
+  if (((a.draw_sources[0] >> 28u) != 9u) || ((a.draw_sources[1] >> 28u) != 9u) ||
+      (((a.draw_sources[0] >> 16u) & 0xfffu) != 0u) ||
+      (((a.draw_sources[1] >> 16u) & 0xfffu) != 256u) ||
+      ((a.draw_sources[0] & 0xffffu) != (a.draw_sources[1] & 0xffffu)) ||
+      ((a.stamp_sources[0] & 0xffffu) != (a.stamp_sources[1] & 0xffffu))) return 4;
+  if (a.transform_handles[0] == a.transform_handles[1] ||
+      a.stamp_handles[0] == a.stamp_handles[1] ||
+      a.transform_handles[0] == a.stamp_handles[0] ||
+      a.transform_handles[1] == a.stamp_handles[1]) return 5;
+  if (bound.form_calls != 4u || bound.terrain_calls != 4u ||
+      bound.render.transforms.size() != 2u || bound.render.terrain_patches.size() != 2u ||
+      bound.patch_handles != a.stamp_handles || bound.transform_handles != a.transform_handles) return 6;
+  std::array<bool, 4> mapped{};
+  for (const auto& binding : form::kPresentationResourceBindings) {
+    const form::u32 slot = binding.module == 0u ? 0u : binding.module == 256u ? 1u : 2u;
+    if (slot > 1u) return 7;
+    if (binding.role == form::PresentationResourceRole::DrawFormTransform) {
+      if (binding.source_id != a.draw_sources[slot] || binding.handle != a.transform_handles[slot]) return 8;
+      mapped[slot] = true;
+    } else {
+      if (binding.source_id != a.stamp_sources[slot] || binding.handle != a.stamp_handles[slot]) return 9;
+      mapped[2u + slot] = true;
+    }
+  }
+  if (!mapped[0] || !mapped[1] || !mapped[2] || !mapped[3]) return 10;
+  zref::render::SoftwareRenderer renderer;
+  zref::render::RenderCanvas canvas{};
+  const auto rendered_first = renderer.render_frame(first, 0u, canvas, bound.render);
+  if (rendered_first.status != zhao_abi::ZH_ABI_OK || rendered_first.resource_misses != 0u ||
+      renderer.sheets().size() != 2u) return 11;
+  const auto rendered_second = renderer.render_frame(second, 0u, canvas, bound.render);
+  if (rendered_second.status != zhao_abi::ZH_ABI_OK || rendered_second.resource_misses != 0u ||
+      renderer.sheets().size() != 2u) return 12;
+  std::array<bool, 2> stamped{};
+  for (const auto& sheet : renderer.sheets()) {
+    const form::u32 slot = sheet.first == bound.patch_handles[0] ? 0u
+      : sheet.first == bound.patch_handles[1] ? 1u : 2u;
+    if (slot > 1u) return 13;
+    const form::u8 tag = slot == 0u ? 17u : 29u;
+    for (form::u32 i = 0u; i < 64u * 64u; ++i) {
+      if (sheet.second.tag[i] == tag && sheet.second.strength[i] != 0u) stamped[slot] = true;
+    }
+  }
+  return stamped[0] && stamped[1] ? 0 : 14;
+}
+`, renderSources, [
+    '-Wno-error=unused-parameter',
+    '-Wno-error=unused-variable',
+    '-Wno-error=shift-negative-value',
+  ]);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
 test('WinLibs matches independent fixed-point, intrinsic, eager-order, and RNG oracles', (t) => {
