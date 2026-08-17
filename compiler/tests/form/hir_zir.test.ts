@@ -85,6 +85,53 @@ test('HIR preserves exact contextual types through every L1 target context', () 
   assert.deepEqual(globalAssign.expressions[1]!.children.map((child) => child.type.t), ['u32', 'u32']);
 });
 
+test('imported nominal types retain their defining owner without importing the type name', () => {
+  const frontend = compileFrontend({
+    'a_owner.form': `module owner {
+  struct hidden_record { value: u32; }
+  enum hidden_mode { ready = 1, done = 2 }
+  global payload_state: hidden_record = hidden_record { value = 7 };
+  global current: hidden_mode = hidden_mode.ready;
+  pool entries: hidden_record[3];
+  fn echo(value: hidden_record) -> hidden_record { return value; }
+  fn echo_mode(value: hidden_mode) -> hidden_mode { return value; }
+}
+`,
+    'b_consumer.form': `module consumer {
+  import owner { payload_state, current, entries, echo, echo_mode };
+  system use_imports every 1 ticks reads payload_state, current, entries writes payload_state {
+    payload_state = echo(payload_state);
+    let selected = echo_mode(current);
+    let same = selected == current;
+    for entry in entries { let observed = entry.value; }
+  }
+}
+`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const nominalTypes = [...frontend.check!.expressionTypes.values()].filter(
+    (type) => type.t === 'struct' || type.t === 'enum' || type.t === 'pool',
+  );
+  assert.ok(nominalTypes.length > 0);
+  for (const type of nominalTypes) {
+    assert.equal(type.owner, 'owner');
+    if (type.t === 'pool') assert.equal(type.structOwner, 'owner');
+  }
+
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const pool = declarationsOf(hir, 'pool').find((item) => item.name === 'entries')!;
+  assert.equal(pool.structModule, 0);
+  const system = declarationsOf(hir, 'system').find((item) => item.name === 'use_imports')!;
+  assert.deepEqual(system.body[0]!.expressions.map((expr) => expr.type), [
+    { t: 'struct', name: '0::hidden_record' },
+    { t: 'struct', name: '0::hidden_record' },
+  ]);
+  assert.deepEqual(system.body[1]!.expressions[0]!.type, { t: 'enum', name: '0::hidden_mode' });
+  assert.equal(system.body[2]!.expressions[0]!.type.t, 'bool');
+  assert.equal(system.body[3]!.body[0]!.expressions[0]!.type.t, 'u32');
+});
+
 test('field-table operands retain an exact symbolic non-runtime category', () => {
   const frontend = compileFrontend({
     'tables.form': `module tables {

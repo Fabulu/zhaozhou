@@ -419,20 +419,41 @@ class HirLowerer {
       return { t: 'array', elem: this.qualifyCheckedType(module, type.elem), len: type.len };
     }
     if (type.t === 'struct' || type.t === 'enum') {
-      if (type.name.startsWith('__') || type.name.includes('::')) return type;
-      const symbol = this.resolve(module, type.name);
+      if (type.name.startsWith('__') || type.name.includes('::')) return { t: type.t, name: type.name };
+      const owner = type.owner === undefined ? undefined : this.moduleByName.get(type.owner);
+      if (type.owner !== undefined && owner === undefined) {
+        throw new Error(`internal HIR exact-type failure: unknown owner '${type.owner}' for ${type.t} '${type.name}'`);
+      }
+      const symbol = owner === undefined
+        ? this.resolve(module, type.name)
+        : this.modules[owner]!.table.get(type.name) ?? null;
       if (!symbol || (type.t === 'struct' && symbol.decl.kind !== 'Struct')
           || (type.t === 'enum' && symbol.decl.kind !== 'Enum')) {
-        throw new Error(`internal HIR exact-type failure: cannot qualify ${type.t} '${type.name}'`);
+        throw new Error(`internal HIR exact-type failure: cannot qualify ${type.t} '${type.name}' from owner '${type.owner ?? '<legacy>'}'`);
       }
       return { t: type.t, name: qname(symbol.module, symbol.name) };
     }
     if (type.t === 'pool') {
-      const symbol = this.resolve(module, type.name);
-      if (!symbol || symbol.decl.kind !== 'Pool') {
-        throw new Error(`internal HIR exact-type failure: cannot qualify pool '${type.name}'`);
+      const owner = type.owner === undefined ? undefined : this.moduleByName.get(type.owner);
+      if (type.owner !== undefined && owner === undefined) {
+        throw new Error(`internal HIR exact-type failure: unknown owner '${type.owner}' for pool '${type.name}'`);
       }
-      const struct = this.require(symbol.module, symbol.decl.structName);
+      const symbol = owner === undefined
+        ? this.resolve(module, type.name)
+        : this.modules[owner]!.table.get(type.name) ?? null;
+      if (!symbol || symbol.decl.kind !== 'Pool') {
+        throw new Error(`internal HIR exact-type failure: cannot qualify pool '${type.name}' from owner '${type.owner ?? '<legacy>'}'`);
+      }
+      const structOwner = type.structOwner === undefined ? undefined : this.moduleByName.get(type.structOwner);
+      if (type.structOwner !== undefined && structOwner === undefined) {
+        throw new Error(`internal HIR exact-type failure: unknown owner '${type.structOwner}' for pool element '${type.struct}'`);
+      }
+      const struct = structOwner === undefined
+        ? this.require(symbol.module, symbol.decl.structName)
+        : this.modules[structOwner]!.table.get(type.struct) ?? null;
+      if (!struct || struct.decl.kind !== 'Struct') {
+        throw new Error(`internal HIR exact-type failure: cannot qualify pool element '${type.struct}' from owner '${type.structOwner ?? '<legacy>'}'`);
+      }
       return { t: 'pool', name: qname(symbol.module, symbol.name), struct: qname(struct.module, struct.name) };
     }
     return type;

@@ -107,8 +107,12 @@ flow application (FORM-E-504); the stagger rate must equal the system rate
 (FORM-E-507); the per-element predicate is evaluated in ascending index order.
 A staggered body may write only the selected pool element inside that admitted
 iteration. Global writes, writes before or after the iteration, extra loops,
-and membership changes are refused (FORM-E-504). The selected iteration's
-pool laws otherwise follow language-semantics §4.5.
+membership changes, and persistent RNG stream creation or draws anywhere in
+the system are refused (FORM-E-504). The RNG refusal covers expressions before,
+inside, and after the selected iteration, including nested call arguments,
+conditions, record fields, and selects: W3.3 has no ratified per-entity RNG
+state. The selected iteration's pool laws otherwise follow
+language-semantics §4.5.
 
 ## 6. Iteration order (always ascending)
 
@@ -129,6 +133,8 @@ relative order.
 3. Multi-rate + stagger evidence covers ordinary non-staggered cadence, every
    stagger residue, complete N-tick cycles, the `ceil(capacity/N)` peak bound,
    and a 600-tick hash-chain anchor. Stagger shifts work, never results.
+   Negative admission evidence places persistent RNG calls before, inside, and
+   after the selected loop; pure expressions in those positions remain legal.
 4. `sim_tick` emission is byte-stable (fixed order, no timestamps, LF,
    version banner — D4) and contains no runtime scheduling code.
 5. Emitted phase guard constants match the declared rates (no drift between

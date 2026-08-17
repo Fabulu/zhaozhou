@@ -332,6 +332,10 @@ Stagger admission is intentionally narrow (FORM-E-504): the body contains
 exactly one selected-pool loop or recognized flow application. Writes outside
 that iteration, global writes, extra loops, spawn and kill are refused, so
 partitioning cannot accidentally repeat or defer unrelated state effects.
+Persistent RNG stream creation and draws are likewise refused anywhere in a
+staggered system, including nested expressions before, inside, or after the
+selected iteration. W3.3 has no ratified per-entity RNG state; see
+deterministic-scheduling §5 for the complete stagger contract.
 
 ### 4.5 Pool membership laws (deterministic)
 

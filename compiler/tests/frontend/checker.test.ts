@@ -97,6 +97,47 @@ test('stagger refuses missing iteration, extra loops, and off-loop/global writes
   assert.ok(leaking.codes.includes('FORM-E-504'));
 });
 
+test('stagger refuses persistent RNG before, inside, and after its selected loop', () => {
+  const cases = [
+    `let draw = random.u32(random.stream(1, 10));
+     for i in 0..p.count { p.x[i] = p.x[i] + 1m; }`,
+    `for i in 0..p.count {
+       if random.u32(random.stream(2, 20)) > 0 { p.x[i] = p.x[i] + 1m; }
+       else { p.x[i] = p.x[i] + 2m; }
+     }`,
+    `for i in 0..p.count { p.x[i] = p.x[i] + 1m; }
+     let nested = box { value = random.u32(random.stream(3, 30)) };`,
+  ];
+  for (const body of cases) {
+    const result = compile(MOD(`
+      struct s { x: fx16; }
+      struct box { value: u32; }
+      pool p: s[16];
+      system staggered every 4 ticks stagger over p reads p writes p.x {
+        ${body}
+      }
+    `));
+    assert.deepEqual(result.codes, ['FORM-E-504'], result.diagnostics.map((d) => d.message).join('\n'));
+    assert.match(result.diagnostics[0]!.message, /persistent random stream creation and draws/);
+  }
+});
+
+test('stagger retains pure expressions around and inside its selected loop', () => {
+  const result = compile(MOD(`
+    struct s { x: fx16; }
+    pool p: s[16];
+    system staggered every 4 ticks stagger over p reads p writes p.x {
+      let before = min(1m, 2m);
+      for i in 0..p.count {
+        let inside = max(before, 0m);
+        p.x[i] = p.x[i] + inside;
+      }
+      let after = clamp(before, 0m, 2m);
+    }
+  `));
+  assert.deepEqual(result.codes, [], result.diagnostics.map((d) => d.message).join('\n'));
+});
+
 test('E-832: > 65536 declarations in one module trips the source-ID registry gate', () => {
   const decls = Array.from({ length: 65537 }, (_, i) => `  const K${i}: u32 = ${i % 100};`).join('\n');
   const r = compile(MOD(decls));

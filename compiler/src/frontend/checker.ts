@@ -26,10 +26,10 @@ export type Type =
   | { t: 'i32' } | { t: 'u32' } | { t: 'bool' } | { t: 'world2' }
   | { t: 'world3' } | { t: 'velocity3' } | { t: 'colour8' } | { t: 'padframe' }
   | { t: 'stream' } | { t: 'field_table' } | { t: 'void' } | { t: 'unknown' } | { t: 'sound' }
-  | { t: 'enum'; name: string }
-  | { t: 'struct'; name: string }
+  | { t: 'enum'; name: string; owner?: string }
+  | { t: 'struct'; name: string; owner?: string }
   | { t: 'array'; elem: Type; len: number }
-  | { t: 'pool'; name: string; struct: string };
+  | { t: 'pool'; name: string; owner?: string; struct: string; structOwner?: string };
 
 export const T = {
   fx16: { t: 'fx16' } as Type, fx24: { t: 'fx24' } as Type,
@@ -55,8 +55,15 @@ export function typeName(ty: Type): string {
 
 export function tAgree(a: Type, b: Type): boolean {
   if (a.t !== b.t) return false;
-  if (a.t === 'enum' || a.t === 'struct') return a.name === (b as { name: string }).name;
-  if (a.t === 'pool') return a.name === (b as { name: string }).name;
+  if (a.t === 'enum' || a.t === 'struct') {
+    const other = b as { name: string; owner?: string };
+    return a.name === other.name && a.owner === other.owner;
+  }
+  if (a.t === 'pool') {
+    const other = b as { name: string; owner?: string; struct: string; structOwner?: string };
+    return a.name === other.name && a.owner === other.owner
+      && a.struct === other.struct && a.structOwner === other.structOwner;
+  }
   if (a.t === 'array') return a.len === (b as { len: number }).len && tAgree(a.elem, (b as { elem: Type }).elem);
   return true;
 }
@@ -328,16 +335,37 @@ class Checker {
       this.sink.error('FORM-E-301', te.span, `unknown type name '${te.name}'`);
       return T.unknown;
     }
-    if (r.sym.kind === 'struct') return { t: 'struct', name: te.name };
-    if (r.sym.kind === 'enum') return { t: 'enum', name: te.name };
+    if (r.sym.kind === 'struct') return { t: 'struct', name: te.name, owner: r.mod.ast.name };
+    if (r.sym.kind === 'enum') return { t: 'enum', name: te.name, owner: r.mod.ast.name };
     if (r.sym.kind === 'pool') {
-      if (allowPool) return { t: 'pool', name: te.name, struct: (r.sym.decl as unknown as PoolDecl).structName };
+      if (allowPool) {
+        const pd = r.sym.decl as unknown as PoolDecl;
+        const element = this.resolveUnqualified(r.mod, pd.structName);
+        return {
+          t: 'pool', name: te.name, owner: r.mod.ast.name, struct: pd.structName,
+          structOwner: element && element.ambiguous !== true && element.sym.kind === 'struct'
+            ? element.mod.ast.name : r.mod.ast.name,
+        };
+      }
       this.sink.error('FORM-E-301', te.span,
         `struct field type '${te.name}' is a pool — pools are not field types (language-semantics §4.2; spec-issue: §4.2 cites FORM-E-213 which the §7 catalog does not define, so the unknown-type code carries it)`);
       return T.unknown;
     }
     this.sink.error('FORM-E-301', te.span, `'${te.name}' is not a type`);
     return T.unknown;
+  }
+
+  /** Exact owner identity for a pool value and its nominal element struct. */
+  private poolValueType(r: { sym: Sym; mod: ModuleSym; ambiguous: boolean }): Type {
+    if (r.ambiguous || r.sym.kind !== 'pool') return T.unknown;
+    const pd = r.sym.decl as unknown as PoolDecl;
+    const element = this.resolveUnqualified(r.mod, pd.structName);
+    return {
+      t: 'pool', name: (r.sym.decl.name as string | undefined) ?? pd.name,
+      owner: r.mod.ast.name, struct: pd.structName,
+      structOwner: element && element.ambiguous !== true && element.sym.kind === 'struct'
+        ? element.mod.ast.name : r.mod.ast.name,
+    };
   }
 
   private checkConst(ms: ModuleSym, d: ConstDecl): void {
@@ -647,12 +675,12 @@ class Checker {
     const field = firstMemberAfterRoot(e, root.name);
     if (field === null) return null;
     const struct = this.structOf(r);
-    const decl = struct?.fields.find((item) => item.name === field);
-    if (!decl) return null;
+    const decl = struct?.decl.fields.find((item) => item.name === field);
+    if (!decl || !struct) return null;
     return {
       pool: root.name,
       component: `${root.name}.${field}`,
-      fieldType: this.resolveType(r.mod, decl.type),
+      fieldType: this.resolveType(struct.mod, decl.type),
     };
   }
 
@@ -661,9 +689,8 @@ class Checker {
     let type: Type;
     if (e.kind === 'ident') {
       const r = this.resolveUnqualified(ctx.mod, pool);
-      const pd = r && r.ambiguous !== true && r.sym.kind === 'pool'
-        ? r.sym.decl as unknown as PoolDecl : null;
-      type = pd ? { t: 'pool', name: pool, struct: pd.structName } : T.unknown;
+      type = r && r.ambiguous !== true && r.sym.kind === 'pool'
+        ? this.poolValueType(r) : T.unknown;
     } else if (e.kind === 'member') {
       const base = this.recordPoolLvalue(ctx, e.obj, pool, columnType);
       type = e.obj.kind === 'ident' && e.obj.name === pool
@@ -718,7 +745,7 @@ class Checker {
       return;
     }
     const struct = this.structOf(r);
-    if (struct) this.checkRecordLit(ctx, value, struct, r.mod);
+    if (struct) this.checkRecordLit(ctx, value, struct.decl, struct.mod);
     else for (const rf of value.fields) this.checkExpr(ctx, rf.value, null);
     this.writeComponent(ctx, pool, span); // membership change
   }
@@ -762,7 +789,10 @@ class Checker {
       } else {
         const struct = this.structOf(r);
         if (struct) {
-          ctx.locals.set(s.varName, { type: { t: 'struct', name: struct.name }, letSpan: s.span, assigned: true, isParam: false });
+          ctx.locals.set(s.varName, {
+            type: { t: 'struct', name: struct.decl.name, owner: struct.mod.ast.name },
+            letSpan: s.span, assigned: true, isParam: false,
+          });
         } else {
           ctx.locals.set(s.varName, { type: T.unknown, letSpan: s.span, assigned: true, isParam: false });
         }
@@ -871,10 +901,8 @@ class Checker {
       } else {
         const poolName = poolArg.value.name;
         const pool = this.resolveUnqualified(ctx.mod, poolName);
-        const pd = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-          ? pool.sym.decl as unknown as PoolDecl : null;
-        this.expressionTypes.set(poolArg.value, pd
-          ? { t: 'pool', name: poolName, struct: pd.structName }
+        this.expressionTypes.set(poolArg.value, pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+          ? this.poolValueType(pool)
           : T.unknown);
         this.checkFlowPoolMapping(ctx, poolName, poolArg.value.span);
         this.writeComponent(ctx, poolName, poolArg.value.span);
@@ -890,7 +918,9 @@ class Checker {
     for (const a of args) {
       if (a.name === 'origin') this.checkExpr(ctx, a.value, T.world2);
       else if (a.name === 'params') {
-        const pt = field.paramsStruct ? { t: 'struct', name: field.paramsStruct } as Type : null;
+        const pt = field.paramsStruct
+          ? this.resolveType(r!.mod, { kind: 'named', name: field.paramsStruct, span: field.span })
+          : null;
         this.checkExpr(ctx, a.value, pt);
       } else if (a.name !== 'pool') {
         this.sink.error('FORM-E-602', a.span, `unknown apply argument '${a.name}'`);
@@ -919,22 +949,24 @@ class Checker {
     }
     const struct = this.structOf(r);
     if (!struct) return;
-    const has = (n: string) => struct.fields.some((f) => f.name === n);
+    const has = (n: string) => struct.decl.fields.some((f) => f.name === n);
     const ok = has('position') && has('velocity') && has('age');
     if (!ok) {
       this.sink.error('FORM-E-664', span,
-        `pool '${pool}' struct '${struct.name}' does not match the flow lane mapping (needs position: world3, velocity: velocity3, age: u32)`);
+        `pool '${pool}' struct '${struct.decl.name}' does not match the flow lane mapping (needs position: world3, velocity: velocity3, age: u32)`);
     }
   }
 
-  private structOf(r: { sym: Sym; mod: ModuleSym; ambiguous: boolean } | null): StructDecl | null {
+  private structOf(
+    r: { sym: Sym; mod: ModuleSym; ambiguous: boolean } | null,
+  ): { decl: StructDecl; mod: ModuleSym } | null {
     if (!r || r.ambiguous === true) return null;
-    if (r.sym.kind === 'struct') return r.sym.decl as unknown as StructDecl;
+    if (r.sym.kind === 'struct') return { decl: r.sym.decl as unknown as StructDecl, mod: r.mod };
     if (r.sym.kind === 'pool') {
       const pd = r.sym.decl as unknown as PoolDecl;
       const resolved = this.resolveUnqualified(r.mod, pd.structName);
       return resolved && resolved.ambiguous !== true && resolved.sym.kind === 'struct'
-        ? (resolved.sym.decl as unknown as StructDecl)
+        ? { decl: resolved.sym.decl as unknown as StructDecl, mod: resolved.mod }
         : null;
     }
     return null;
@@ -1075,7 +1107,7 @@ class Checker {
         // bare enum name: only legal as the object of `Enum.member`
         this.sink.error('FORM-E-307', e.span,
           `enum '${name}' used without a member (write ${name}.<member>)`);
-        return { t: 'enum', name };
+        return { t: 'enum', name, owner: mod.ast.name };
       }
       case 'struct':
         this.sink.error('FORM-E-110', e.span, `struct type '${name}' used as a value`);
@@ -1083,8 +1115,7 @@ class Checker {
       case 'pool': {
         // a bare pool value defers its read to the precise component
         // (pool.field via member/index, #members via pool sugar / spawn)
-        const pd = sym.decl as unknown as PoolDecl;
-        return { t: 'pool', name, struct: pd.structName };
+        return this.poolValueType(r);
       }
       case 'global': {
         this.readComponent(ctx, name, e.span);
@@ -1133,7 +1164,7 @@ class Checker {
           this.sink.error('FORM-E-307', e.span,
             `enum '${e.obj.name}' has no member '${e.field}'`);
         }
-        return { t: 'enum', name: e.obj.name };
+        return { t: 'enum', name: e.obj.name, owner: r.mod.ast.name };
       }
     }
     // pool.count
@@ -1157,7 +1188,7 @@ class Checker {
   private symValueType(sym: Sym, mod: ModuleSym, e: Extract<Expr, { kind: 'member' }>): Type {
     switch (sym.kind) {
       case 'const': return this.resolveType(mod, (sym.decl as unknown as ConstDecl).type);
-      case 'enum': return { t: 'enum', name: e.field };
+      case 'enum': return { t: 'enum', name: e.field, owner: mod.ast.name };
       case 'global': return this.resolveType(mod, (sym.decl as unknown as GlobalDecl).type);
       default:
         this.sink.error('FORM-E-203', e.span, `'${e.field}' is not a value`);
@@ -1194,28 +1225,28 @@ class Checker {
         }
         return lt;
       }
-      const sd = this.findStruct(ctx, objT.name);
-      if (!sd) return T.unknown;
-      const f = sd.fields.find((x) => x.name === e.field);
+      const resolved = this.findStruct(ctx, objT);
+      if (!resolved) return T.unknown;
+      const f = resolved.decl.fields.find((x) => x.name === e.field);
       if (!f) {
         this.sink.error('FORM-E-306', e.span,
           `struct '${objT.name}' has no field '${e.field}'`);
         return T.unknown;
       }
-      return this.resolveType(ctx.mod, f.type);
+      return this.resolveType(resolved.mod, f.type);
     }
     if (objT.t === 'pool') {
       // pool.field — the SoA column (used with [i])
-      const sd = this.findStructIn(ctx, objT.struct);
-      if (!sd) return T.unknown;
-      const f = sd.fields.find((x) => x.name === e.field);
+      const resolved = this.findStructIn(ctx, objT.struct, objT.structOwner);
+      if (!resolved) return T.unknown;
+      const f = resolved.decl.fields.find((x) => x.name === e.field);
       if (!f) {
         this.sink.error('FORM-E-306', e.span,
           `pool '${objT.name}' struct '${objT.struct}' has no field '${e.field}'`);
         return T.unknown;
       }
       this.readComponent(ctx, `${objT.name}.${e.field}`, e.span);
-      return this.resolveType(ctx.mod, f.type);
+      return this.resolveType(resolved.mod, f.type);
     }
     if (objT.t === 'padframe' || objT.t === 'unknown') return T.unknown;
     this.sink.error('FORM-E-306', e.span,
@@ -1223,21 +1254,23 @@ class Checker {
     return T.unknown;
   }
 
-  private findStruct(ctx: Ctx, name: string): StructDecl | null {
-    const r = this.resolveUnqualified(ctx.mod, name);
-    if (r && r.ambiguous !== true && r.sym.kind === 'struct') {
-      return r.sym.decl as unknown as StructDecl;
-    }
-    for (const m of this.mods) {
-      for (const d of m.ast.decls) {
-        if (d.kind === 'Struct' && d.name === name) return d;
-      }
-    }
-    return null;
+  private findStruct(
+    ctx: Ctx,
+    type: Extract<Type, { t: 'struct' }>,
+  ): { decl: StructDecl; mod: ModuleSym } | null {
+    const mod = type.owner ? this.byName.get(type.owner) : ctx.mod;
+    const sym = mod?.table.get(type.name);
+    return mod && sym?.kind === 'struct'
+      ? { decl: sym.decl as unknown as StructDecl, mod }
+      : null;
   }
 
-  private findStructIn(ctx: Ctx, name: string): StructDecl | null {
-    return this.findStruct(ctx, name);
+  private findStructIn(
+    ctx: Ctx,
+    name: string,
+    owner: string | undefined,
+  ): { decl: StructDecl; mod: ModuleSym } | null {
+    return this.findStruct(ctx, { t: 'struct', name, ...(owner ? { owner } : {}) });
   }
 
   private checkIndex(ctx: Ctx, e: Extract<Expr, { kind: 'index' }>, expected: Type | null): Type {
@@ -1510,7 +1543,7 @@ class Checker {
   // -- record literals ------------------------------------------------------------
 
   private checkRecordLit(ctx: Ctx, rec: RecordLit, struct: StructDecl, mod: ModuleSym): void {
-    this.expressionTypes.set(rec, { t: 'struct', name: struct.name });
+    this.expressionTypes.set(rec, { t: 'struct', name: struct.name, owner: mod.ast.name });
     const seen = new Set<string>();
     for (const rf of rec.fields) {
       if (!struct.fields.some((f) => f.name === rf.name)) {
@@ -1574,7 +1607,7 @@ class Checker {
       ? (r.sym.decl as unknown as StructDecl) : null;
     if (struct) {
       this.checkRecordLit(ctx, rec, struct, r!.mod);
-      return { t: 'struct', name: rec.typeName };
+      return { t: 'struct', name: rec.typeName, owner: r!.mod.ast.name };
     }
     this.sink.error('FORM-E-301', rec.span, `record literal of unknown struct '${rec.typeName}'`);
     for (const rf of rec.fields) this.checkExpr(ctx, rf.value, null);
@@ -1736,6 +1769,9 @@ class Checker {
 
     const checkEffects = (stmts: Stmt[], insideSelected: boolean): void => {
       for (const stmt of stmts) {
+        if (this.staggerStatementExpressions(stmt).some((expr) => this.containsPersistentRandom(expr))) {
+          reasons.push('persistent random stream creation and draws are not admitted in a staggered system');
+        }
         if (stmt.kind === 'for') {
           checkEffects(stmt.body, stmt === selected);
         } else if (stmt.kind === 'if') {
@@ -1758,6 +1794,44 @@ class Checker {
     if (reasons.length !== 0) {
       this.sink.error('FORM-E-504', d.staggerSpan ?? d.span,
         `stagger over '${pool}' is not a single isolated entity iteration: ${[...new Set(reasons)].join('; ')} (FORM-E-504)`);
+    }
+  }
+
+  private staggerStatementExpressions(stmt: Stmt): Expr[] {
+    switch (stmt.kind) {
+      case 'let': return [stmt.init];
+      case 'assign': return [stmt.target, stmt.value];
+      case 'if': return [stmt.cond];
+      case 'for': return stmt.range.kind === 'range' ? [stmt.range.lo, stmt.range.hi] : [];
+      case 'call_stmt': return [stmt.call];
+      case 'spawn': return [stmt.value];
+      case 'kill': return [stmt.index];
+      case 'return': return stmt.value ? [stmt.value] : [];
+      case 'apply': return [...stmt.args.map((arg) => arg.value), stmt.duration];
+      case 'bad_stmt': return [];
+    }
+  }
+
+  private containsPersistentRandom(expr: Expr): boolean {
+    if (expr.kind === 'call'
+        && expr.callee.kind === 'member'
+        && expr.callee.obj.kind === 'ident'
+        && expr.callee.obj.name === 'random'
+        && ['stream', 'u32', 'i32', 'unit8', 'angle16', 'fx16'].includes(expr.callee.field)) {
+      return true;
+    }
+    switch (expr.kind) {
+      case 'member': return this.containsPersistentRandom(expr.obj);
+      case 'index': return this.containsPersistentRandom(expr.obj) || this.containsPersistentRandom(expr.index);
+      case 'call': return this.containsPersistentRandom(expr.callee)
+        || expr.args.some((arg) => this.containsPersistentRandom(arg));
+      case 'unary': return this.containsPersistentRandom(expr.operand);
+      case 'binary': return this.containsPersistentRandom(expr.l) || this.containsPersistentRandom(expr.r);
+      case 'if_expr': return this.containsPersistentRandom(expr.cond)
+        || this.containsPersistentRandom(expr.then) || this.containsPersistentRandom(expr.else);
+      case 'record': return expr.fields.some((field) => this.containsPersistentRandom(field.value));
+      case 'range': return this.containsPersistentRandom(expr.lo) || this.containsPersistentRandom(expr.hi);
+      case 'literal': case 'string': case 'ident': return false;
     }
   }
 
@@ -1824,8 +1898,8 @@ class Checker {
     if (r.sym.kind === 'pool') {
       if (!second) { into.add(first!); return; }
       const pd = r.sym.decl as unknown as PoolDecl;
-      const sd = r.mod.table.get(pd.structName);
-      if (!sd || sd.kind !== 'struct' || !(sd.decl as unknown as StructDecl).fields.some((f) => f.name === second)) {
+      const resolved = this.structOf(r);
+      if (!resolved || !resolved.decl.fields.some((f) => f.name === second)) {
         this.sink.error('FORM-E-306', a.span,
           `pool '${first}' struct '${pd.structName}' has no field '${second}'`);
       }
@@ -1853,12 +1927,11 @@ class Checker {
       if (first === 'terrain' || first === 'input') return [first];
       const r = this.resolveUnqualified(mod, first!);
       if (r && r.ambiguous !== true && r.sym.kind === 'pool') {
-        const pd = r.sym.decl as unknown as PoolDecl;
-        const sd = r.mod.table.get(pd.structName);
+        const resolved = this.structOf(r);
         if (!second) {
           const comps = [`${first}#members`];
-          if (sd && sd.kind === 'struct') {
-            for (const f of (sd.decl as unknown as StructDecl).fields) comps.push(`${first}.${f.name}`);
+          if (resolved) {
+            for (const f of resolved.decl.fields) comps.push(`${first}.${f.name}`);
           }
           return comps;
         }
@@ -2116,8 +2189,7 @@ class Checker {
             this.sink.error('FORM-E-608', arg.value.span,
               `draw_population names '${arg.value.name}' which is not a pool (FORM-E-608)`);
           } else {
-            const pd = r.sym.decl as unknown as PoolDecl;
-            this.expressionTypes.set(arg.value, { t: 'pool', name: arg.value.name, struct: pd.structName });
+            this.expressionTypes.set(arg.value, this.poolValueType(r));
           }
           break;
         }
@@ -2358,16 +2430,16 @@ class Checker {
             } else {
               const poolName = e.args[0]!.name;
               const pool = this.resolveUnqualified(ctx.mod, poolName);
-              const pd = pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
-                ? pool.sym.decl as unknown as PoolDecl : null;
-              this.expressionTypes.set(e.args[0]!, pd
-                ? { t: 'pool', name: poolName, struct: pd.structName }
+              this.expressionTypes.set(e.args[0]!, pool && pool.ambiguous !== true && pool.sym.kind === 'pool'
+                ? this.poolValueType(pool)
                 : T.unknown);
               this.checkFlowPoolMapping(ctx, poolName, e.args[0]!.span);
               this.writeComponent(ctx, poolName, e.args[0]!.span);
               this.readComponent(ctx, poolName, e.args[0]!.span);
             }
-            const paramsType = fd.paramsStruct ? { t: 'struct', name: fd.paramsStruct } as Type : null;
+            const paramsType = fd.paramsStruct
+              ? this.resolveType(r.mod, { kind: 'named', name: fd.paramsStruct, span: fd.span })
+              : null;
             for (let i = 1; i < e.args.length; i++) this.checkExpr(ctx, e.args[i]!, i === 1 ? paramsType : null);
             return T.void;
           }
@@ -2708,6 +2780,7 @@ class Checker {
 
     // params struct laws (E-660/661/662)
     let paramsStruct: StructDecl | null = null;
+    let paramsModule: ModuleSym | null = null;
     if (d.paramsStruct) {
       const r = this.resolveUnqualified(ms, d.paramsStruct);
       if (!r || r.ambiguous === true || r.sym.kind !== 'struct') {
@@ -2715,6 +2788,7 @@ class Checker {
           `params binding '${d.paramsStruct}' is missing or not a struct (FORM-E-662)`);
       } else {
         paramsStruct = r.sym.decl as unknown as StructDecl;
+        paramsModule = r.mod;
         const maxFields = profile === 'earth' ? 8 : 4;
         if (paramsStruct.fields.length > maxFields) {
           this.sink.error('FORM-E-661', d.paramsSpan!,
@@ -2740,8 +2814,11 @@ class Checker {
     for (const [k, v] of Object.entries(laneStruct)) {
       ctx.locals.set(k, { type: v, letSpan: d.span, assigned: true, isParam: true });
     }
-    if (paramsStruct) {
-      ctx.locals.set('params', { type: { t: 'struct', name: paramsStruct.name }, letSpan: d.span, assigned: true, isParam: true });
+    if (paramsStruct && paramsModule) {
+      ctx.locals.set('params', {
+        type: { t: 'struct', name: paramsStruct.name, owner: paramsModule.ast.name },
+        letSpan: d.span, assigned: true, isParam: true,
+      });
     }
 
     // body: dialect expression surface
