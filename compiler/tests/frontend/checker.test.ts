@@ -690,6 +690,55 @@ test('lexical qualifier shadows and selective ambiguity never become canonical c
   assert.deepEqual([...missing.check!.callTargets.values()], []);
 });
 
+test('bare calls honor lexical shadows while explicit module qualification escapes them', () => {
+  const result = compile({
+    'a_library.form': `module library {
+      fn invoke(value: u32) -> u32 { return value; }
+    }\n`,
+    'b_consumer.form': `module consumer {
+      import library;
+      import library { invoke };
+      fn parameter(invoke: u32) -> u32 { return invoke(1); }
+      fn current() -> u32 { let invoke: u32 = 0; return invoke(1); }
+      fn future() -> u32 {
+        let result: u32 = invoke(1);
+        let invoke: u32 = 0;
+        return result;
+      }
+      fn escape(invoke: u32) -> u32 { return library.invoke(invoke); }
+    }\n`,
+  });
+  assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-110').length, 2);
+  assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1);
+  assert.equal(result.codes.includes('FORM-E-203'), false);
+  assert.deepEqual([...result.check!.callTargets.values()], [{
+    kind: 'fn', module: 'library', name: 'invoke', flowPool: null,
+  }]);
+});
+
+test('non-callable declarations shadow selectively imported bare callables', () => {
+  const declarations = [
+    'const invoke: u32 = 0;',
+    'global invoke: u32 = 0;',
+    'struct row { value: u32; } pool invoke: row[1];',
+  ];
+  for (const declaration of declarations) {
+    const result = compile({
+      'a_library.form': `module library {
+        fn invoke(value: u32) -> u32 { return value; }
+      }\n`,
+      'b_consumer.form': `module consumer {
+        import library { invoke };
+        ${declaration}
+        fn probe() -> u32 { return invoke(1); }
+      }\n`,
+    });
+    assert.ok(result.codes.includes('FORM-E-110'), declaration);
+    assert.equal(result.codes.includes('FORM-E-203'), false, declaration);
+    assert.deepEqual([...result.check!.callTargets.values()], [], declaration);
+  }
+});
+
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
   const accepted = compile(MOD(`
     enum mode { low = 0, high = 1 }

@@ -1336,14 +1336,14 @@ class Checker {
     const name = e.name;
     const local = ctx.locals.get(name);
     if (local) return local.type;
+    if (ctx.laterLets?.has(name)) {
+      this.sink.error('FORM-E-303', e.span,
+        `'${name}' is used before its let (single-assignment locals are use-after-let only, FORM-E-303)`);
+      return T.unknown;
+    }
 
     const r = this.resolveUnqualified(ctx.mod, name);
     if (r === null) {
-      if (ctx.laterLets?.has(name)) {
-        this.sink.error('FORM-E-303', e.span,
-          `'${name}' is used before its let (single-assignment locals are use-after-let only, FORM-E-303)`);
-        return T.unknown;
-      }
       const code = ctx.inAssert ? 'FORM-E-906' : 'FORM-E-203';
       this.sink.error(code, e.span,
         ctx.inAssert
@@ -2927,7 +2927,20 @@ class Checker {
     // plain callable
     if (e.callee.kind === 'ident') {
       const name = e.callee.name;
-      // bare-name built-ins (§4.6) — the builtin table wins over user names
+      const local = ctx.locals.get(name);
+      if (local) {
+        this.expressionTypes.set(e.callee, local.type);
+        for (const argument of e.args) this.checkExpr(ctx, argument, null);
+        this.sink.error('FORM-E-110', e.span,
+          `call target '${name}' is a ${local.isParam ? 'parameter' : 'let-bound local'}, not a callable`);
+        return T.unknown;
+      }
+      if (ctx.laterLets?.has(name)) {
+        this.checkExpr(ctx, e.callee, null); // emits the canonical use-before-let diagnostic
+        for (const argument of e.args) this.checkExpr(ctx, argument, null);
+        return T.unknown;
+      }
+      // Bare-name built-ins (§4.6) are considered after lexical bindings.
       if (BARE_INTRINSICS.has(name)) {
         return this.checkIntrinsicCall(ctx, e, name, expected);
       }
@@ -2945,6 +2958,11 @@ class Checker {
           name,
         );
         if (result !== null) return result;
+        this.checkExpr(ctx, e.callee, null);
+        for (const argument of e.args) this.checkExpr(ctx, argument, null);
+        this.sink.error('FORM-E-110', e.span,
+          `call target '${name}' resolves to a non-callable ${r.sym.kind}`);
+        return T.unknown;
       }
       // unknown callee
       const code = ctx.inAssert ? 'FORM-E-906' : 'FORM-E-203';

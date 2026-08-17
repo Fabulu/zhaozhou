@@ -330,6 +330,20 @@ Import cycles are refused (FORM-E-204). Duplicate top-level names in one
 module: FORM-E-201. Unknown import: FORM-E-202; unknown imported name:
 FORM-E-203.
 
+For values and bare calls, ordinary names resolve in this order: an already
+bound parameter/`let`; a later `let` (which reserves the name and emits
+FORM-E-303 use-before-let); the current module's top-level declaration; then a
+selective import. Two surviving selective imports are FORM-E-205, never a
+first-match choice. A non-callable declaration found at any winning level makes
+`name(...)` FORM-E-110; resolution does not fall through to an imported
+callable and records no canonical call target. `import m; m.name(...)` is the
+explicit callable escape when `name` is shadowed. Conversely, the root `m` of
+any qualified value, enum, call, pool, or constant-aggregate projection is
+interpreted as a module qualifier only when no lexical, future-`let`,
+top-level, or selective-import name `m` wins. Checker exact reduction and HIR
+lowering use this same precedence; neither may reinterpret an admitted
+aggregate field as `m.member` after checking.
+
 ### 4.2 Const, enum, struct
 
 `const` initializers are constant expressions: literals, consts, enum
