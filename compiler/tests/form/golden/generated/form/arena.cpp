@@ -14,11 +14,11 @@ void system_seed_wave(FormState& state, const PadFrame pads[4], u32 tick) {
     auto&& _form_spawn_value_0 = state.arena.origin;
     auto&& _form_spawn_value_1 = 0u;
     auto&& _form_spawn_value_2 = static_cast<Unit8>(255u);
-    if (state.arena.particles.count >= form::arena::particles_pool::capacity) form_abort(821u);
-    const u32 _spawn_index = state.arena.particles.count++;
-    state.arena.particles.position[_spawn_index] = _form_spawn_value_0;
-    state.arena.particles.age[_spawn_index] = _form_spawn_value_1;
-    state.arena.particles.energy[_spawn_index] = _form_spawn_value_2;
+    if (state.arena.particles._form_pool_count >= form::arena::particles_pool::_form_pool_capacity) form_abort(821u);
+    const u32 _spawn_index = state.arena.particles._form_pool_count++;
+    state.arena.particles._form_pool_column_706f736974696f6e[_spawn_index] = _form_spawn_value_0;
+    state.arena.particles._form_pool_column_616765[_spawn_index] = _form_spawn_value_1;
+    state.arena.particles._form_pool_column_656e65726779[_spawn_index] = _form_spawn_value_2;
   }
 }
 
@@ -27,12 +27,12 @@ void system_advance(FormState& state, const PadFrame pads[4], u32 tick) {
   (void)pads;
   (void)tick;
   const u32 _for_begin_0 = static_cast<u32>(0u);
-  const u32 _for_end_0 = static_cast<u32>(state.arena.particles.count);
+  const u32 _for_end_0 = static_cast<u32>(state.arena.particles._form_pool_count);
   for (u32 i = _for_begin_0; i < _for_end_0; ++i) {
     if ((i % 4u) == (tick % 4u)) {
       {
-        auto&& _form_assign_target = ([&]() -> decltype(auto) { auto&& _form_index_values = state.arena.particles.age; auto&& _form_index_value = i; return checked_index(_form_index_values, static_cast<u32>(_form_index_value), state.arena.particles.count); }());
-        auto&& _form_assign_value = ([&]() -> u32 { auto&& _form_value_0 = ([&]() -> decltype(auto) { auto&& _form_index_values = state.arena.particles.age; auto&& _form_index_value = i; return checked_index(_form_index_values, static_cast<u32>(_form_index_value), state.arena.particles.count); }()); auto&& _form_value_1 = 1u; return static_cast<u32>(_form_value_0 + _form_value_1); }());
+        auto&& _form_assign_target = ([&]() -> decltype(auto) { auto&& _form_index_values = state.arena.particles._form_pool_column_616765; auto&& _form_index_value = i; return checked_index(_form_index_values, static_cast<u32>(_form_index_value), state.arena.particles._form_pool_count); }());
+        auto&& _form_assign_value = ([&]() -> u32 { auto&& _form_value_0 = ([&]() -> decltype(auto) { auto&& _form_index_values = state.arena.particles._form_pool_column_616765; auto&& _form_index_value = i; return checked_index(_form_index_values, static_cast<u32>(_form_index_value), state.arena.particles._form_pool_count); }()); auto&& _form_value_1 = 1u; return static_cast<u32>(_form_value_0 + _form_value_1); }());
         _form_assign_target = _form_assign_value;
       }
     }
@@ -83,18 +83,18 @@ void present_main_view(const FormState& state, zref::FrameBuilder& builder, cons
     zhao_abi::ZhRecordDrawPopulation record{};
     record.hdr.opcode = zhao_abi::ZHAO_OP_DRAW_POPULATION;
     record.hdr.record_bytes = 32u;
-    record.hdr.source_id = 2415919109u;
+    record.hdr.source_id = 2415919108u;
     auto&& _form_emit_arg_0 = state.arena.particles;
     (void)_form_emit_arg_0;
     auto&& _form_emit_arg_1 = 1u;
     (void)_form_emit_arg_1;
     auto&& _form_emit_arg_2 = static_cast<Unit8>(255u);
     (void)_form_emit_arg_2;
-    record.payload.population = resource_handle(1u);
+    record.payload.population = 16777217u;
     record.payload.viewport_mask = static_cast<u8>(_form_emit_arg_1);
     record.payload.semantic_weight = static_cast<u8>(_form_emit_arg_2);
     record.payload.flags = 1u;  // point sprites
-    resources.publish_population(record.payload.population, 0u, 0u, state.arena.particles.count, &state.arena.particles);
+    resources.publish_population(record.payload.population, 0u, 0u, state.arena.particles._form_pool_count, &state.arena.particles);
     std::vector<u8> bytes;
     zhao_abi::zhao_pack_draw_population(record, bytes);
     builder.append_record(bytes);
@@ -103,17 +103,17 @@ void present_main_view(const FormState& state, zref::FrameBuilder& builder, cons
     zhao_abi::ZhRecordEmitAudioEvent record{};
     record.hdr.opcode = zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT;
     record.hdr.record_bytes = 32u;
-    record.hdr.source_id = 2415919110u;
+    record.hdr.source_id = 2415919109u;
     auto&& _form_emit_arg_0 = 0u;
     (void)_form_emit_arg_0;
     auto&& _form_emit_arg_1 = state.arena.origin;
     (void)_form_emit_arg_1;
     record.payload.event_id = 0u;
-    record.payload.sample_handle = resource_handle(1u);
+    record.payload.sample_handle = 16777218u;
     record.payload.gain = static_cast<u16>(static_cast<u32>(static_cast<Unit8>(128u)) * 257u);
     record.payload.pan_fx = sat_i16(0);
     record.payload.timestamp = 0u;
-    resources.publish_audio_position(2415919110u, _form_emit_arg_1);
+    resources.publish_audio_position(2415919109u, _form_emit_arg_1);
     std::vector<u8> bytes;
     zhao_abi::zhao_pack_emit_audio_event(record, bytes);
     builder.append_record(bytes);
@@ -121,7 +121,8 @@ void present_main_view(const FormState& state, zref::FrameBuilder& builder, cons
 }
 
 void scenario_replay(FormState& state, u32 cartridge_hash) {
-  initialize(state, cartridge_hash);
+  const PadFrame pads[4]{};
+  form::run_scenario_script(form::kScenarioScripts[0u], state, cartridge_hash, form::ScenarioDriver{}, pads);
 }
 
 }  // namespace form::arena

@@ -39,15 +39,15 @@ struct CanonicalWriter {
 
 inline std::size_t serialize_canonical_state(const FormState& state, u8* out, std::size_t capacity) {
   CanonicalWriter writer{out, capacity, 0u};
-  const u32 _pool0_count = state.arena.particles.count;
-  if (_pool0_count > arena::particles_pool::capacity) form_abort(822u);
+  const u32 _pool0_count = state.arena.particles._form_pool_count;
+  if (_pool0_count > arena::particles_pool::_form_pool_capacity) form_abort(822u);
   writer.u32le(_pool0_count);
   for (u32 _pool0 = 0u; _pool0 < _pool0_count; ++_pool0) {
-    writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].x));
-    writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].y));
-    writer.u64le(static_cast<std::uint64_t>(state.arena.particles.position[_pool0].z));
-    writer.u32le(static_cast<u32>(state.arena.particles.age[_pool0]));
-    writer.byte(static_cast<u8>(state.arena.particles.energy[_pool0]));
+    writer.u64le(static_cast<std::uint64_t>(state.arena.particles._form_pool_column_706f736974696f6e[_pool0].x));
+    writer.u64le(static_cast<std::uint64_t>(state.arena.particles._form_pool_column_706f736974696f6e[_pool0].y));
+    writer.u64le(static_cast<std::uint64_t>(state.arena.particles._form_pool_column_706f736974696f6e[_pool0].z));
+    writer.u32le(static_cast<u32>(state.arena.particles._form_pool_column_616765[_pool0]));
+    writer.byte(static_cast<u8>(state.arena.particles._form_pool_column_656e65726779[_pool0]));
   }
   writer.u32le(static_cast<u32>(state.arena.counter));
   writer.u64le(static_cast<std::uint64_t>(state.arena.origin.x));
@@ -104,10 +104,56 @@ inline void present_frame(const FormState& state, zref::FrameBuilder& builder) {
   present_frame(state, builder, resources);
 }
 
-using ScenarioEntryFn = void (*)(FormState&, u32);
-struct ScenarioEntry { const char* name; u32 module; u32 source_id; ScenarioEntryFn enter; };
-inline constexpr std::array<ScenarioEntry, 1> kScenarioEntries{{
-  ScenarioEntry{"replay", 0u, 2952790023u, &arena::scenario_replay},
+enum class ScenarioOperationKind : u8 { Seed = 1u, Load = 2u, SpawnPlayer = 3u, At = 4u, Assert = 5u, Capture = 6u, AssertBudget = 7u };
+using ScenarioSystemFn = void (*)(FormState&, const PadFrame[4], u32);
+using ScenarioPlacementFn = World3 (*)(const FormState&);
+using ScenarioAssertFn = Bool (*)(FormState&);
+using ScenarioToleranceFn = Fx16 (*)(FormState&);
+struct ScenarioOperation {
+  ScenarioOperationKind kind{}; u32 value{}; u32 module{}; u32 source_id{}; const char* name{};
+  ScenarioSystemFn system{}; ScenarioPlacementFn placement{}; ScenarioAssertFn assertion{}; ScenarioToleranceFn tolerance{};
+};
+struct ScenarioScript { const char* name; u32 module; u32 source_id; const ScenarioOperation* operations; std::size_t operation_count; };
+struct ScenarioDriver {
+  void* user{};
+  void (*seed)(void*, u32){};
+  void (*load)(void*, u32, const char*){};
+  void (*spawn_player)(void*, u32, World3){};
+  void (*assert_result)(void*, u32, Bool, Fx16, Bool){};
+  void (*capture)(void*, u32, const char*){};
+  void (*assert_budget)(void*, u32, const char*){};
+};
+
+inline constexpr std::array<ScenarioOperation, 4> _scenario_operations_0{{
+  ScenarioOperation{ScenarioOperationKind::Seed, 23063u, 0u, 0u, nullptr, nullptr, nullptr, nullptr, nullptr},
+  ScenarioOperation{ScenarioOperationKind::Load, 0u, 0u, 0u, "arena", nullptr, nullptr, nullptr, nullptr},
+  ScenarioOperation{ScenarioOperationKind::At, 2u, 0u, 2147483649u, "seed_wave", &arena::system_seed_wave, nullptr, nullptr, nullptr},
+  ScenarioOperation{ScenarioOperationKind::Capture, 3u, 0u, 0u, "anchor", nullptr, nullptr, nullptr, nullptr},
 }};
+inline constexpr std::array<ScenarioScript, 1> kScenarioScripts{{
+  ScenarioScript{"replay", 0u, 2952790022u, _scenario_operations_0.data(), _scenario_operations_0.size()},
+}};
+inline void run_scenario_script(const ScenarioScript& script, FormState& state, u32 cartridge_hash, const ScenarioDriver& driver, const PadFrame pads[4]) {
+  initialize(state, cartridge_hash);
+  for (std::size_t index = 0u; index < script.operation_count; ++index) {
+    const ScenarioOperation& operation = script.operations[index];
+    switch (operation.kind) {
+      case ScenarioOperationKind::Seed: if (driver.seed) driver.seed(driver.user, operation.value); break;
+      case ScenarioOperationKind::Load: if (driver.load) driver.load(driver.user, operation.module, operation.name); break;
+      case ScenarioOperationKind::SpawnPlayer: if (driver.spawn_player && operation.placement) driver.spawn_player(driver.user, operation.value, operation.placement(state)); break;
+      case ScenarioOperationKind::At: if (!operation.system) form_abort(902u); else operation.system(state, pads, operation.value); break;
+      case ScenarioOperationKind::Assert: {
+        if (!operation.assertion) form_abort(902u);
+        const Bool passed = operation.assertion(state);
+        const Fx16 tolerance = operation.tolerance ? operation.tolerance(state) : 0;
+        if (driver.assert_result) driver.assert_result(driver.user, static_cast<u32>(index), passed, tolerance, static_cast<Bool>(operation.tolerance != nullptr));
+        else if (!passed) form_abort(902u);
+        break;
+      }
+      case ScenarioOperationKind::Capture: if (driver.capture) driver.capture(driver.user, operation.value, operation.name); break;
+      case ScenarioOperationKind::AssertBudget: if (driver.assert_budget) driver.assert_budget(driver.user, operation.module, operation.name); break;
+    }
+  }
+}
 
 }  // namespace form

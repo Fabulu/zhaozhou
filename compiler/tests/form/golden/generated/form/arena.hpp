@@ -18,11 +18,11 @@ struct pulse_params {
 };
 
 struct particles_pool {
-  static constexpr u32 capacity = 4u;
-  u32 count{};
-  std::array<World3, capacity> position{};
-  std::array<u32, capacity> age{};
-  std::array<Unit8, capacity> energy{};
+  static constexpr u32 _form_pool_capacity = 4u;
+  u32 _form_pool_count{};
+  std::array<World3, _form_pool_capacity> _form_pool_column_706f736974696f6e{};
+  std::array<u32, _form_pool_capacity> _form_pool_column_616765{};
+  std::array<Unit8, _form_pool_capacity> _form_pool_column_656e65726779{};
 };
 
 struct State {

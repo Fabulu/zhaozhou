@@ -20,6 +20,7 @@
        }
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 1039,
@@ -64,6 +65,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1115,
@@ -102,6 +104,7 @@
         "text": "1"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1129,
@@ -138,6 +141,7 @@
         "text": "100%"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1143,
@@ -153,7 +157,7 @@
     ],
     "emitKind": "draw_population",
     "kind": "emit",
-    "sourceId": 2415919109,
+    "sourceId": 2415919108,
     "span": {
      "end": 1145,
      "file": "a_arena.form",
@@ -186,6 +190,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1173,
@@ -220,6 +225,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1185,
@@ -239,7 +245,7 @@
     ],
     "emitKind": "audio",
     "kind": "emit",
-    "sourceId": 2415919110,
+    "sourceId": 2415919109,
     "span": {
      "end": 1187,
      "file": "a_arena.form",

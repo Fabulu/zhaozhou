@@ -31,6 +31,19 @@ struct World2 { Fx24 x{}; Fx24 y{}; };
 struct World3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Velocity3 { Fx24 x{}; Fx24 y{}; Fx24 z{}; };
 struct Stream { std::uint64_t state{}; std::uint64_t increment{}; };
+enum class AuthoredResourceRole : u8 { FormPage = 1u, ProceduralPatchPage = 2u, SurfaceStampBrushPage = 3u, Population = 4u, Sound = 5u };
+struct AuthoredResourceBinding { u32 resource_id{}; AuthoredResourceRole role{}; u32 handle{}; };
+inline constexpr std::array<AuthoredResourceBinding, 2> kAuthoredResourceBindings{{
+  AuthoredResourceBinding{1u, AuthoredResourceRole::Population, 16777217u},
+  AuthoredResourceBinding{1u, AuthoredResourceRole::Sound, 16777218u},
+}};
+[[noreturn]] inline void form_abort(u32 code);
+inline u32 authored_resource_handle(AuthoredResourceRole role, u32 resource_id) {
+  for (const auto& binding : kAuthoredResourceBindings) {
+    if (binding.role == role && binding.resource_id == resource_id) return binding.handle;
+  }
+  form_abort(824u);
+}
 enum class PresentationResourceRole : u8 { DrawFormTransform = 1u, SurfaceStampTerrainPatch = 2u };
 struct PresentationResourceBinding { u16 module{}; u32 source_id{}; PresentationResourceRole role{}; u32 handle{}; };
 inline constexpr std::array<PresentationResourceBinding, 0> kPresentationResourceBindings{{
@@ -59,7 +72,6 @@ inline i64 sat_i64(__int128 value) {
   return static_cast<i64>(value);
 }
 inline i16 sat_i16(i32 value) { return value > 32767 ? 32767 : value < -32768 ? -32768 : static_cast<i16>(value); }
-inline u32 resource_handle(u32 page_id) { return 0x01000000u | (page_id & 0x00ffffffu); }
 inline i32 i32_from_bits(u32 value) { return value <= 0x7fffffffu ? static_cast<i32>(value) : -1 - static_cast<i32>(~value); }
 inline i32 i32_add(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) + static_cast<u32>(b)); }
 inline i32 i32_sub(i32 a, i32 b) { return i32_from_bits(static_cast<u32>(a) - static_cast<u32>(b)); }

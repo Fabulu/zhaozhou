@@ -2,36 +2,22 @@
  "kind": "TestZIR",
  "scenarios": [
   {
-   "domain": "test",
-   "items": [
+   "module": 0,
+   "name": "replay",
+   "operations": [
     {
-     "ast": {
-      "kind": "seed",
-      "span": {
-       "end": 1221,
-       "file": "a_arena.form",
-       "start": 1217
-      },
-      "value": "23063"
-     },
-     "expressions": [],
+     "kind": "seed",
      "span": {
       "end": 1221,
       "file": "a_arena.form",
       "start": 1217
-     }
+     },
+     "value": 23063
     },
     {
-     "ast": {
-      "kind": "load",
-      "span": {
-       "end": 1238,
-       "file": "a_arena.form",
-       "start": 1234
-      },
-      "target": "arena"
-     },
-     "expressions": [],
+     "kind": "load",
+     "module": 0,
+     "name": "arena",
      "span": {
       "end": 1238,
       "file": "a_arena.form",
@@ -39,88 +25,23 @@
      }
     },
     {
-     "ast": {
-      "action": {
-       "args": [],
-       "callee": {
-        "kind": "ident",
-        "name": "seed_wave",
-        "span": {
-         "end": 1270,
-         "file": "a_arena.form",
-         "start": 1261
-        }
-       },
-       "kind": "call",
-       "span": {
-        "end": 1272,
-        "file": "a_arena.form",
-        "start": 1261
-       }
-      },
-      "kind": "at",
-      "span": {
-       "end": 1252,
-       "file": "a_arena.form",
-       "start": 1250
-      },
-      "tick": "2"
-     },
-     "expressions": [
-      {
-       "ast": {
-        "args": [],
-        "callee": {
-         "kind": "ident",
-         "name": "seed_wave",
-         "span": {
-          "end": 1270,
-          "file": "a_arena.form",
-          "start": 1261
-         }
-        },
-        "kind": "call",
-        "span": {
-         "end": 1272,
-         "file": "a_arena.form",
-         "start": 1261
-        }
-       },
-       "children": [],
-       "rngSlot": null,
-       "span": {
-        "end": 1272,
-        "file": "a_arena.form",
-        "start": 1261
-       },
-       "symbol": {
-        "kind": "system",
-        "module": 0,
-        "name": "seed_wave"
-       },
-       "type": {
-        "t": "void"
-       }
-      }
-     ],
+     "kind": "at",
      "span": {
       "end": 1252,
       "file": "a_arena.form",
       "start": 1250
-     }
+     },
+     "system": {
+      "module": 0,
+      "name": "seed_wave",
+      "sourceId": 2147483649
+     },
+     "tick": 2
     },
     {
-     "ast": {
-      "frame": "3",
-      "kind": "capture",
-      "name": "anchor",
-      "span": {
-       "end": 1285,
-       "file": "a_arena.form",
-       "start": 1278
-      }
-     },
-     "expressions": [],
+     "frame": 3,
+     "kind": "capture",
+     "name": "anchor",
      "span": {
       "end": 1285,
       "file": "a_arena.form",
@@ -128,11 +49,7 @@
      }
     }
    ],
-   "kind": "scenario",
-   "module": 0,
-   "name": "replay",
-   "order": 10,
-   "sourceId": 2952790023,
+   "sourceId": 2952790022,
    "span": {
     "end": 1310,
     "file": "a_arena.form",

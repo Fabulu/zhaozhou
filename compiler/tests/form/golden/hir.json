@@ -81,7 +81,7 @@
    "name": "particles",
    "order": 2,
    "populationIndex": 0,
-   "sourceId": 2684354561,
+   "sourceId": 2684354560,
    "span": {
     "end": 165,
     "file": "a_arena.form",
@@ -105,6 +105,7 @@
      "text": "1"
     },
     "children": [],
+    "poolColumn": null,
     "rngSlot": null,
     "span": {
      "end": 191,
@@ -230,6 +231,7 @@
        "text": "0w"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 234,
@@ -258,6 +260,7 @@
        "text": "0w"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 242,
@@ -286,6 +289,7 @@
        "text": "0w"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 250,
@@ -298,6 +302,7 @@
       }
      }
     ],
+    "poolColumn": null,
     "rngSlot": null,
     "span": {
      "end": 252,
@@ -491,6 +496,7 @@
           }
          },
          "children": [],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 394,
@@ -519,6 +525,7 @@
           "text": "0"
          },
          "children": [],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 409,
@@ -547,6 +554,7 @@
           "text": "100%"
          },
          "children": [],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 430,
@@ -559,6 +567,7 @@
          }
         }
        ],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 437,
@@ -590,10 +599,10 @@
    "name": "seed_wave",
    "order": 5,
    "reads": [
-    "counter",
-    "origin"
+    "arena\u0000counter",
+    "arena\u0000origin"
    ],
-   "sourceId": 2147483650,
+   "sourceId": 2147483649,
    "span": {
     "end": 443,
     "file": "a_arena.form",
@@ -602,7 +611,7 @@
    "staggerPool": null,
    "staggerRate": null,
    "writes": [
-    "particles"
+    "arena\u0000particles"
    ]
   },
   {
@@ -945,17 +954,18 @@
             }
            },
            "children": [],
+           "poolColumn": {
+            "field": "age",
+            "module": 0,
+            "pool": "particles"
+           },
            "rngSlot": null,
            "span": {
             "end": 601,
             "file": "a_arena.form",
             "start": 588
            },
-           "symbol": {
-            "kind": "pool",
-            "module": 0,
-            "name": "particles"
-           },
+           "symbol": null,
            "type": {
             "t": "u32"
            }
@@ -971,6 +981,7 @@
             }
            },
            "children": [],
+           "poolColumn": null,
            "rngSlot": null,
            "span": {
             "end": 603,
@@ -987,17 +998,14 @@
            }
           }
          ],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 604,
           "file": "a_arena.form",
           "start": 588
          },
-         "symbol": {
-          "kind": "pool",
-          "module": 0,
-          "name": "particles"
-         },
+         "symbol": null,
          "type": {
           "t": "u32"
          }
@@ -1131,17 +1139,18 @@
               }
              },
              "children": [],
+             "poolColumn": {
+              "field": "age",
+              "module": 0,
+              "pool": "particles"
+             },
              "rngSlot": null,
              "span": {
               "end": 620,
               "file": "a_arena.form",
               "start": 607
              },
-             "symbol": {
-              "kind": "pool",
-              "module": 0,
-              "name": "particles"
-             },
+             "symbol": null,
              "type": {
               "t": "u32"
              }
@@ -1157,6 +1166,7 @@
               }
              },
              "children": [],
+             "poolColumn": null,
              "rngSlot": null,
              "span": {
               "end": 622,
@@ -1173,17 +1183,14 @@
              }
             }
            ],
+           "poolColumn": null,
            "rngSlot": null,
            "span": {
             "end": 623,
             "file": "a_arena.form",
             "start": 607
            },
-           "symbol": {
-            "kind": "pool",
-            "module": 0,
-            "name": "particles"
-           },
+           "symbol": null,
            "type": {
             "t": "u32"
            }
@@ -1201,6 +1208,7 @@
             "text": "1"
            },
            "children": [],
+           "poolColumn": null,
            "rngSlot": null,
            "span": {
             "end": 627,
@@ -1213,6 +1221,7 @@
            }
           }
          ],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 627,
@@ -1248,6 +1257,7 @@
         "text": "0"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 562,
@@ -1284,6 +1294,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 579,
@@ -1314,9 +1325,9 @@
    "name": "advance",
    "order": 6,
    "reads": [
-    "particles"
+    "arena\u0000particles"
    ],
-   "sourceId": 2147483651,
+   "sourceId": 2147483650,
    "span": {
     "end": 638,
     "file": "a_arena.form",
@@ -1328,7 +1339,7 @@
    },
    "staggerRate": 4,
    "writes": [
-    "particles.age"
+    "arena\u0000particles.age"
    ]
   },
   {
@@ -1579,6 +1590,7 @@
           "text": "0m"
          },
          "children": [],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 776,
@@ -1702,6 +1714,7 @@
               }
              },
              "children": [],
+             "poolColumn": null,
              "rngSlot": null,
              "span": {
               "end": 784,
@@ -1719,17 +1732,14 @@
              }
             }
            ],
+           "poolColumn": null,
            "rngSlot": null,
            "span": {
             "end": 791,
             "file": "a_arena.form",
             "start": 778
            },
-           "symbol": {
-            "kind": "local",
-            "module": null,
-            "name": "params"
-           },
+           "symbol": null,
            "type": {
             "t": "fx16"
            }
@@ -1814,6 +1824,7 @@
                 }
                },
                "children": [],
+               "poolColumn": null,
                "rngSlot": null,
                "span": {
                 "end": 804,
@@ -1831,22 +1842,20 @@
                }
               }
              ],
+             "poolColumn": null,
              "rngSlot": null,
              "span": {
               "end": 806,
               "file": "a_arena.form",
               "start": 798
              },
-             "symbol": {
-              "kind": "local",
-              "module": null,
-              "name": "sample"
-             },
+             "symbol": null,
              "type": {
               "t": "fx16"
              }
             }
            ],
+           "poolColumn": null,
            "rngSlot": null,
            "span": {
             "end": 807,
@@ -1863,6 +1872,7 @@
            }
           }
          ],
+         "poolColumn": null,
          "rngSlot": null,
          "span": {
           "end": 807,
@@ -1875,6 +1885,7 @@
          }
         }
        ],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 808,
@@ -2003,6 +2014,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 852,
@@ -2035,6 +2047,7 @@
         "text": "0m"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 867,
@@ -2059,6 +2072,7 @@
         "text": "0"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 881,
@@ -2087,6 +2101,7 @@
         "text": "0m"
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 896,
@@ -2131,7 +2146,7 @@
     "name": "pulse_params"
    },
    "profile": "earth",
-   "sourceId": 805306372,
+   "sourceId": 805306371,
    "span": {
     "end": 903,
     "file": "a_arena.form",
@@ -2170,6 +2185,7 @@
        "text": "50%"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 958,
@@ -2206,6 +2222,7 @@
        "text": "1m"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 972,
@@ -2238,6 +2255,7 @@
        "text": "0"
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 983,
@@ -2281,6 +2299,7 @@
          }
         },
         "children": [],
+        "poolColumn": null,
         "rngSlot": null,
         "span": {
          "end": 1115,
@@ -2319,6 +2338,7 @@
          "text": "1"
         },
         "children": [],
+        "poolColumn": null,
         "rngSlot": null,
         "span": {
          "end": 1129,
@@ -2355,6 +2375,7 @@
          "text": "100%"
         },
         "children": [],
+        "poolColumn": null,
         "rngSlot": null,
         "span": {
          "end": 1143,
@@ -2370,7 +2391,7 @@
      ],
      "emitKind": "draw_population",
      "kind": "emit",
-     "sourceId": 2415919109,
+     "sourceId": 2415919108,
      "span": {
       "end": 1145,
       "file": "a_arena.form",
@@ -2397,6 +2418,7 @@
          }
         },
         "children": [],
+        "poolColumn": null,
         "rngSlot": null,
         "span": {
          "end": 1173,
@@ -2431,6 +2453,7 @@
          }
         },
         "children": [],
+        "poolColumn": null,
         "rngSlot": null,
         "span": {
          "end": 1185,
@@ -2450,7 +2473,7 @@
      ],
      "emitKind": "audio",
      "kind": "emit",
-     "sourceId": 2415919110,
+     "sourceId": 2415919109,
      "span": {
       "end": 1187,
       "file": "a_arena.form",
@@ -2482,6 +2505,7 @@
        }
       },
       "children": [],
+      "poolColumn": null,
       "rngSlot": null,
       "span": {
        "end": 1039,
@@ -2592,6 +2616,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 1272,
@@ -2637,7 +2662,7 @@
    "module": 0,
    "name": "replay",
    "order": 10,
-   "sourceId": 2952790023,
+   "sourceId": 2952790022,
    "span": {
     "end": 1310,
     "file": "a_arena.form",
@@ -2659,6 +2684,7 @@
      "text": "0"
     },
     "children": [],
+    "poolColumn": null,
     "rngSlot": null,
     "span": {
      "end": 70,
@@ -2727,6 +2753,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 158,
@@ -2753,6 +2780,7 @@
         }
        },
        "children": [],
+       "poolColumn": null,
        "rngSlot": null,
        "span": {
         "end": 168,
@@ -2783,9 +2811,9 @@
    "name": "observe",
    "order": 1,
    "reads": [
-    "counter"
+    "arena\u0000counter"
    ],
-   "sourceId": 2147549185,
+   "sourceId": 2147549184,
    "span": {
     "end": 173,
     "file": "b_audit.form",
@@ -2794,7 +2822,7 @@
    "staggerPool": null,
    "staggerRate": null,
    "writes": [
-    "observed"
+    "audit\u0000observed"
    ]
   }
  ],
@@ -2887,7 +2915,7 @@
    "module": 0,
    "name": "pulse",
    "programHash": null,
-   "sourceId": 805306372,
+   "sourceId": 805306371,
    "span": {
     "end": 903,
     "file": "a_arena.form",
@@ -2900,7 +2928,7 @@
    "module": 0,
    "name": "seed_wave",
    "programHash": null,
-   "sourceId": 2147483650,
+   "sourceId": 2147483649,
    "span": {
     "end": 443,
     "file": "a_arena.form",
@@ -2913,7 +2941,7 @@
    "module": 0,
    "name": "advance",
    "programHash": null,
-   "sourceId": 2147483651,
+   "sourceId": 2147483650,
    "span": {
     "end": 638,
     "file": "a_arena.form",
@@ -2926,7 +2954,7 @@
    "module": 1,
    "name": "observe",
    "programHash": null,
-   "sourceId": 2147549185,
+   "sourceId": 2147549184,
    "span": {
     "end": 173,
     "file": "b_audit.form",
@@ -2939,7 +2967,7 @@
    "module": 0,
    "name": "main_view.draw_population",
    "programHash": null,
-   "sourceId": 2415919109,
+   "sourceId": 2415919108,
    "span": {
     "end": 1145,
     "file": "a_arena.form",
@@ -2952,7 +2980,7 @@
    "module": 0,
    "name": "main_view.audio",
    "programHash": null,
-   "sourceId": 2415919110,
+   "sourceId": 2415919109,
    "span": {
     "end": 1187,
     "file": "a_arena.form",
@@ -2965,7 +2993,7 @@
    "module": 0,
    "name": "particles",
    "programHash": null,
-   "sourceId": 2684354561,
+   "sourceId": 2684354560,
    "span": {
     "end": 165,
     "file": "a_arena.form",
@@ -2978,7 +3006,7 @@
    "module": 0,
    "name": "replay",
    "programHash": null,
-   "sourceId": 2952790023,
+   "sourceId": 2952790022,
    "span": {
     "end": 1310,
     "file": "a_arena.form",
