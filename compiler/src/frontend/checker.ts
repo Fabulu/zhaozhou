@@ -370,7 +370,7 @@ class Checker {
 
   private checkConst(ms: ModuleSym, d: ConstDecl): void {
     const ty = this.resolveType(ms, d.type);
-    if (!this.isConstExpr(d.init)) {
+    if (!this.isConstExpr(ms, d.init, new Set())) {
       this.sink.error('FORM-E-210', d.init.span,
         'const initializer must be a constant expression (literals, consts, enum members, arithmetic)');
     }
@@ -383,7 +383,7 @@ class Checker {
 
   private checkGlobal(ms: ModuleSym, d: GlobalDecl): void {
     const ty = this.resolveType(ms, d.type);
-    if (!this.isConstExpr(d.init)) {
+    if (!this.isConstExpr(ms, d.init, new Set())) {
       this.sink.error('FORM-E-210', d.init.span,
         'global initializer must be a constant expression (explicit persistent state starts known)');
     }
@@ -430,34 +430,54 @@ class Checker {
   }
 
   private checkStructRecursion(): void {
-    // DFS over struct field edges (bounded memory law, FORM §6)
-    for (const ms of this.mods) {
-      for (const d of ms.ast.decls) {
-        if (d.kind !== 'Struct') continue;
-        const stack: { name: string; span: SourceSpan }[] = [];
-        const onStack = new Set<string>();
-        const visit = (s: StructDecl): void => {
-          if (onStack.has(s.name)) {
-            const cycle = stack.slice(stack.findIndex((x) => x.name === s.name)).map((x) => x.name).join(' -> ');
-            this.sink.error('FORM-E-801', s.span,
-              `recursive struct type (${cycle || s.name}) — bounded memory law (FORM §6; carried by FORM-E-801's recursive clause, spec-issue note)`);
-            return;
-          }
-          onStack.add(s.name);
-          stack.push({ name: s.name, span: s.span });
-          for (const f of s.fields) {
-            const ft = f.type;
-            if (ft.kind === 'named') {
-              const r = this.resolveUnqualified(ms, ft.name);
-              if (r && r.ambiguous !== true && r.sym.kind === 'struct') {
-                visit(r.sym.decl as unknown as StructDecl);
-              }
-            }
-          }
-          stack.pop();
-          onStack.delete(s.name);
-        };
-        visit(d);
+    // DFS over struct field edges (bounded memory law, FORM §6).  Every edge is
+    // resolved in the module that owns the declaration containing that edge;
+    // an imported declaration must never inherit the consumer's import scope.
+    const visited = new Map<ModuleSym, Set<StructDecl>>();
+    const active = new Map<ModuleSym, Set<StructDecl>>();
+    const stack: { owner: ModuleSym; decl: StructDecl; label: string }[] = [];
+    const has = (set: Map<ModuleSym, Set<StructDecl>>, owner: ModuleSym, decl: StructDecl): boolean =>
+      set.get(owner)?.has(decl) === true;
+    const add = (set: Map<ModuleSym, Set<StructDecl>>, owner: ModuleSym, decl: StructDecl): void => {
+      const declarations = set.get(owner) ?? new Set<StructDecl>();
+      declarations.add(decl);
+      set.set(owner, declarations);
+    };
+    const remove = (set: Map<ModuleSym, Set<StructDecl>>, owner: ModuleSym, decl: StructDecl): void => {
+      const declarations = set.get(owner);
+      declarations?.delete(decl);
+      if (declarations?.size === 0) set.delete(owner);
+    };
+    const visit = (owner: ModuleSym, decl: StructDecl): void => {
+      const label = `${owner.ast.name}.${decl.name}`;
+      if (has(active, owner, decl)) {
+        const start = stack.findIndex((entry) => entry.owner === owner && entry.decl === decl);
+        const cycle = [...stack.slice(start).map((entry) => entry.label), label].join(' -> ');
+        this.sink.error('FORM-E-801', decl.span,
+          `recursive struct type (${cycle}) — bounded memory law (FORM §6; carried by FORM-E-801's recursive clause, spec-issue note)`);
+        return;
+      }
+      if (has(visited, owner, decl)) return;
+      add(active, owner, decl);
+      stack.push({ owner, decl, label });
+      const visitType = (type: TypeExpr): void => {
+        if (type.kind === 'array') {
+          visitType(type.elem);
+          return;
+        }
+        const resolved = this.resolveUnqualified(owner, type.name);
+        if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'struct') {
+          visit(resolved.mod, resolved.sym.decl as unknown as StructDecl);
+        }
+      };
+      for (const field of decl.fields) visitType(field.type);
+      stack.pop();
+      remove(active, owner, decl);
+      add(visited, owner, decl);
+    };
+    for (const owner of this.mods) {
+      for (const decl of owner.ast.decls) {
+        if (decl.kind === 'Struct') visit(owner, decl);
       }
     }
   }
@@ -1618,31 +1638,92 @@ class Checker {
   // Constant evaluation (const exprs: literals, consts, enum members, arithmetic)
   // ---------------------------------------------------------------------------
 
-  private isConstExpr(e: Expr): boolean {
+  private isConstExpr(ms: ModuleSym, e: Expr, active: Set<string>): boolean {
+    const followConst = (owner: ModuleSym, sym: Sym): boolean => {
+      if (sym.kind !== 'const') return false;
+      const decl = sym.decl as unknown as ConstDecl;
+      const currentKey = JSON.stringify([owner.ast.name, decl.name]);
+      if (active.has(currentKey)) return false;
+      active.add(currentKey);
+      const result = this.isConstExpr(owner, decl.init, active);
+      active.delete(currentKey);
+      return result;
+    };
     switch (e.kind) {
-      case 'literal': return true;
-      case 'unary': return this.isConstExpr(e.operand);
-      case 'binary': return this.isConstExpr(e.l) && this.isConstExpr(e.r);
-      case 'record': return true; // vector/struct record literal
-      case 'ident': return true; // resolution is constEval's job
-      case 'member': return true; // enum member / module const
-      default: return false;
+      case 'literal':
+        return true;
+      case 'unary':
+        return ['-', '!', '~'].includes(e.op)
+          && this.isConstExpr(ms, e.operand, active);
+      case 'binary':
+        if (![
+          '+', '-', '*', '/', '%', '<<', '>>', '&', '|', '^',
+          '<', '<=', '>', '>=', '==', '!=', '&&', '||',
+        ].includes(e.op)) return false;
+        if ((e.op === '/' || e.op === '%') && this.constEval(ms, e.r) === 0n) {
+          return false;
+        }
+        return this.isConstExpr(ms, e.l, active)
+          && this.isConstExpr(ms, e.r, active);
+      case 'record':
+        return e.fields.every((field) => this.isConstExpr(ms, field.value, active));
+      case 'ident': {
+        const resolved = this.resolveUnqualified(ms, e.name);
+        return resolved !== null && resolved.ambiguous !== true
+          && followConst(resolved.mod, resolved.sym);
+      }
+      case 'member': {
+        if (e.obj.kind === 'ident') {
+          // Qualified module constants are values; globals and every other
+          // module member remain runtime state and are refused here.
+          const target = this.byName.get(e.obj.name);
+          if (target && !this.resolveUnqualified(ms, e.obj.name)) {
+            const sym = target.table.get(e.field);
+            return sym !== undefined && followConst(target, sym);
+          }
+          const resolved = this.resolveUnqualified(ms, e.obj.name);
+          if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'enum') {
+            const decl = resolved.sym.decl as unknown as EnumDecl;
+            return decl.members.some((member) => member.name === e.field);
+          }
+        }
+        // A field selected from a constant aggregate (including a record
+        // literal) is itself a constant expression.
+        return this.isConstExpr(ms, e.obj, active);
+      }
+      default:
+        return false;
     }
   }
 
   /** Integer constant evaluation; null when not a known constant. */
-  private constEval(ms: ModuleSym, e: Expr): bigint | null {
+  private constEval(ms: ModuleSym, e: Expr, active: Set<string> = new Set()): bigint | null {
     switch (e.kind) {
-      case 'literal':
-        return e.lit === 'int' || e.lit === 'tick' ? e.intVal ?? null : null;
+      case 'literal': {
+        if (e.lit === 'int' || e.lit === 'tick') return e.intVal ?? null;
+        if (e.lit === 'bool') return e.text === 'true' ? 1n : 0n;
+        if (e.lit === 'colour') {
+          const digits = e.text.startsWith('#') ? e.text.slice(1) : e.text;
+          return BigInt(`0x${digits}`);
+        }
+        if (e.lit === 'frac') {
+          const numerator = BigInt(e.frac!.intDigits + e.frac!.fracDigits);
+          // constEval has an integer result contract.  A fractional literal can
+          // participate only when zero is representation-independent; treating
+          // nonzero decimal numerators as integers would make expressions with
+          // different decimal scales compare incorrectly.
+          return numerator === 0n ? 0n : null;
+        }
+        return null;
+      }
       case 'unary': {
         if (e.op !== '-') return null;
-        const v = this.constEval(ms, e.operand);
+        const v = this.constEval(ms, e.operand, active);
         return v === null ? null : -v;
       }
       case 'binary': {
-        const l = this.constEval(ms, e.l);
-        const r = this.constEval(ms, e.r);
+        const l = this.constEval(ms, e.l, active);
+        const r = this.constEval(ms, e.r, active);
         if (l === null || r === null) return null;
         switch (e.op) {
           case '+': return l + r;
@@ -1661,7 +1742,11 @@ class Checker {
         const res = this.resolveUnqualified(ms, e.name);
         if (!res || res.ambiguous === true || res.sym.kind !== 'const') return null;
         const cd = res.sym.decl as unknown as ConstDecl;
-        const v = this.constEval(res.mod, cd.init);
+        const currentKey = JSON.stringify([res.mod.ast.name, cd.name]);
+        if (active.has(currentKey)) return null;
+        active.add(currentKey);
+        const v = this.constEval(res.mod, cd.init, active);
+        active.delete(currentKey);
         return v;
       }
       case 'member': {

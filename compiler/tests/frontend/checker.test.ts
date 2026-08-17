@@ -145,6 +145,95 @@ test('E-832: > 65536 declarations in one module trips the source-ID registry gat
   assert.ok(!r.ok);
 });
 
+test('const admission follows only genuine constant expressions recursively', () => {
+  const result = compile(MOD(`
+    struct box { value: u32; }
+    global runtime_value: u32 = 1;
+    fn value() -> u32 { return 2; }
+    const FROM_GLOBAL: u32 = runtime_value;
+    const FROM_CALL: u32 = value();
+    const NESTED_GLOBAL: box = box { value = runtime_value };
+    const NESTED_CALL: box = box { value = value() };
+    const ZERO_DIVISOR: u32 = 1 / 0;
+    const CYCLE_A: u32 = CYCLE_B;
+    const CYCLE_B: u32 = CYCLE_A;
+    global BAD_START: u32 = runtime_value;
+  `));
+  assert.equal(result.diagnostics.filter((diagnostic) => diagnostic.code === 'FORM-E-210').length, 8,
+    result.diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`).join('\n'));
+});
+
+test('const admission accepts nested records, enum members, and imported constants', () => {
+  const result = compile({
+    'a_owner.form': `module owner {
+  enum mode { ready = 1, done = 2 }
+  struct leaf { value: u32; }
+  const LEAF: leaf = leaf { value = 3 + 4 };
+  const MODE: mode = mode.done;
+}\n`,
+    'b_consumer.form': `module consumer {
+  import owner { leaf, LEAF, mode, MODE };
+  struct wrapper { selected: mode; item: leaf; position: world3; }
+  const WRAPPED: wrapper = wrapper {
+    position = world3 { z = 3, x = 1, y = 2 },
+    item = LEAF,
+    selected = MODE,
+  };
+}\n`,
+  });
+  assert.deepEqual(result.codes, [], result.diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
+});
+
+test('struct recursion resolves imported fields in each declaration owner', () => {
+  const result = compile({
+    'a_owner.form': `module owner {
+  struct hidden_leaf { value: u32; }
+  struct hidden_record { leaf: hidden_leaf; }
+}\n`,
+    'b_consumer.form': `module consumer {
+  import owner { hidden_record };
+  struct hidden_leaf { imported: hidden_record; }
+}\n`,
+  });
+  assert.deepEqual(result.codes, [], result.diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
+});
+
+test('struct recursion uses qualified declaration identities and rejects real cycles', () => {
+  const sameName = compile({
+    'a_owner.form': `module owner {
+  struct node { value: u32; }
+  struct holder { item: node; }
+}\n`,
+    'b_consumer.form': `module consumer {
+  import owner { holder };
+  struct node { item: holder; }
+}\n`,
+  });
+  assert.deepEqual(sameName.codes, [], sameName.diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
+
+  const local = compile(MOD(`
+    struct first { next: second; }
+    struct second { next: first; }
+  `));
+  assert.ok(local.codes.includes('FORM-E-801'));
+  assert.match(local.diagnostics.find((diagnostic) => diagnostic.code === 'FORM-E-801')!.message,
+    /m\.first -> m\.second -> m\.first/);
+
+  const crossModule = compile({
+    'a.form': `module a {
+  import b { right };
+  struct left { next: right; }
+}\n`,
+    'b.form': `module b {
+  import a { left };
+  struct right { next: left; }
+}\n`,
+  });
+  assert.ok(crossModule.codes.includes('FORM-E-801'));
+  assert.match(crossModule.diagnostics.find((diagnostic) => diagnostic.code === 'FORM-E-801')!.message,
+    /a\.left -> b\.right -> a\.left|b\.right -> a\.left -> b\.right/);
+});
+
 test('exactness: fx16 steps are 2^-16 — 0.5m exact, 0.5000001m is FORM-E-008', () => {
   assert.deepEqual(compile(MOD('  const A: fx16 = 0.5m;')).codes, []);
   assert.deepEqual(compile(MOD('  const B: fx16 = 0.5000001m;')).codes, ['FORM-E-008']);
