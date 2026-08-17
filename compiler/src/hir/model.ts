@@ -120,6 +120,8 @@ export interface HirFunction {
 export interface HirStmt {
   ast: Stmt;
   domain: 'pure' | 'sim';
+  /** Canonical checker-owned declaration operand for spawn/kill/pool-for/apply. */
+  target?: HirSymbolRef;
   expressions: HirExpr[];
   body: HirStmt[];
   elseBody: HirStmt[];

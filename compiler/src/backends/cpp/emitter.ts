@@ -322,10 +322,7 @@ class CppEmitter {
     const statements = (items: readonly HirStmt[]): void => {
       for (const statement of items) {
         if (statement.ast.kind === 'apply') {
-          const resolved = this.resolveDeclaration(this.moduleForSpan(statement.span.file), statement.ast.program);
-          if (!resolved || resolved.kind !== 'field') {
-            throw new Error(`internal C++ preflight cannot resolve applied field '${statement.ast.program}'`);
-          }
+          const resolved = this.statementDeclaration(statement, 'field');
           sites.push({ profile: resolved.profile, name: resolved.name, form: 'apply statement', ...statement.span });
         }
         for (const item of statement.expressions) expression(item);
@@ -1016,10 +1013,10 @@ class CppEmitter {
           o.line(`${pad}${this.expr(statement.expressions[0]!, ctx)};`);
           break;
         case 'spawn':
-          this.emitSpawn(o, statement, ast, depth);
+          this.emitSpawn(o, statement, depth);
           break;
         case 'kill':
-          this.emitKill(o, statement, ast, depth);
+          this.emitKill(o, statement, depth);
           break;
         case 'return':
           o.line(`${pad}return${statement.expressions.length ? ` ${this.expr(statement.expressions[0]!, ctx)}` : ''};`);
@@ -1055,8 +1052,7 @@ class CppEmitter {
       o.line(`${pad}}`);
       return;
     }
-    const pool = this.pools.get(key(statement.expressions[0]!.symbol!.module!, statement.expressions[0]!.symbol!.name));
-    if (!pool) throw new Error(`C++ emitter cannot resolve loop pool ${ast.range.pool}`);
+    const pool = this.statementDeclaration(statement, 'pool');
     const poolExpr = this.stateMember(pool.module, pool.name, 'state');
     const struct = this.structs.get(key(pool.structModule, pool.structName))!;
     const ordinal = this.loopOrdinal++;
@@ -1073,12 +1069,11 @@ class CppEmitter {
     o.line(`${pad}}`);
   }
 
-  private emitSpawn(o: Lines, statement: HirStmt, ast: Extract<Stmt, { kind: 'spawn' }>, depth: number): void {
+  private emitSpawn(o: Lines, statement: HirStmt, depth: number): void {
     const pad = '  '.repeat(depth);
     const record = statement.expressions[0]!;
     const recordAst = record.ast as RecordLit;
-    const pool = this.resolveDeclaration(this.moduleForSpan(statement.span.file), ast.pool);
-    if (!pool || pool.kind !== 'pool') throw new Error(`C++ emitter cannot resolve spawn pool ${ast.pool}`);
+    const pool = this.statementDeclaration(statement, 'pool');
     const struct = this.structs.get(key(pool.structModule, pool.structName))!;
     const poolExpr = this.stateMember(pool.module, pool.name, 'state');
     const variables = new Map<string, string>();
@@ -1094,11 +1089,9 @@ class CppEmitter {
     o.line(`${pad}}`);
   }
 
-  private emitKill(o: Lines, statement: HirStmt, ast: Extract<Stmt, { kind: 'kill' }>, depth: number): void {
+  private emitKill(o: Lines, statement: HirStmt, depth: number): void {
     const pad = '  '.repeat(depth);
-    const resolved = this.resolveDeclaration(this.moduleForSpan(statement.span.file), ast.pool);
-    if (!resolved || resolved.kind !== 'pool') throw new Error(`C++ emitter cannot resolve kill pool ${ast.pool}`);
-    const pool = resolved;
+    const pool = this.statementDeclaration(statement, 'pool');
     const poolExpr = this.stateMember(pool.module, pool.name, 'state');
     const indexExpr = this.expr(statement.expressions[0]!, { state: 'state', pads: 'pads', tick: 'tick', rng: 'state.rng' });
     o.line(`${pad}{`);
@@ -1113,8 +1106,7 @@ class CppEmitter {
     const visit = (items: HirStmt[]): void => {
       for (const statement of items) {
         if (statement.ast.kind === 'kill') {
-          const decl = this.resolveDeclaration(this.moduleForSpan(statement.span.file), statement.ast.pool);
-          if (!decl || decl.kind !== 'pool') throw new Error(`C++ emitter cannot resolve kill pool ${statement.ast.pool}`);
+          const decl = this.statementDeclaration(statement, 'pool');
           found.set(key(decl.module, decl.name), decl);
         }
         visit(statement.body);
@@ -2036,28 +2028,19 @@ class CppEmitter {
   private moduleName(module: number): string { const name = this.moduleNames.get(module); if (!name) throw new Error(`unknown HIR module ${module}`); return name; }
   private moduleArtifactStem(module: number): string { const stem = this.moduleArtifactStems.get(module); if (!stem) throw new Error(`unknown HIR module artifact ${module}`); return stem; }
   private stateMember(module: number, name: string, state: string): string { return `${state}.${this.moduleName(module)}.${ident(name)}`; }
-  private moduleForSpan(file: string): number { return this.hir.modules.find((module) => module.file === file)?.index ?? 0; }
-  private resolveDeclaration(moduleIndex: number, name: string): HirDeclaration | null {
-    const parts = name.split('.');
-    if (parts.length === 2) {
-      const owner = this.hir.modules.find((module) => module.name === parts[0]);
-      const requester = this.modules.get(moduleIndex);
-      const visible = owner && requester && (owner.index === moduleIndex
-        || requester.imports.some((item) => item.module === owner.index && item.names.length === 0));
-      return visible && owner ? this.declByKey.get(key(owner.index, parts[1]!)) ?? null : null;
+  private statementDeclaration(statement: HirStmt, expected: 'pool'): HirPool;
+  private statementDeclaration(statement: HirStmt, expected: 'field'): HirField;
+  private statementDeclaration(statement: HirStmt, expected: 'pool' | 'field'): HirPool | HirField {
+    const target = statement.target;
+    const declaration = !target || target.module === null
+      ? null
+      : this.declByKey.get(key(target.module, target.name));
+    if (!declaration || declaration.kind !== expected || target?.kind !== expected) {
+      throw new Error(
+        `internal C++ canonical statement target failure: expected ${expected} at ${statement.span.file}:${statement.span.start}`,
+      );
     }
-    if (parts.length !== 1) return null;
-    const own = this.declByKey.get(key(moduleIndex, name));
-    if (own) return own;
-    const module = this.modules.get(moduleIndex);
-    if (!module) return null;
-    const found: HirDeclaration[] = [];
-    for (const imported of module.imports) {
-      if (!imported.names.includes(name)) continue;
-      const declaration = this.declByKey.get(key(imported.module, name));
-      if (declaration) found.push(declaration);
-    }
-    return found.length === 1 ? found[0]! : null;
+    return declaration as HirPool | HirField;
   }
 
   private canonicalMaxBytes(): number {

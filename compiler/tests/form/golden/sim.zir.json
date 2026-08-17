@@ -262,6 +262,11 @@
       "end": 439,
       "file": "a_arena.form",
       "start": 343
+     },
+     "target": {
+      "kind": "pool",
+      "module": 0,
+      "name": "particles"
      }
     }
    ],
@@ -2492,6 +2497,11 @@
         "end": 439,
         "file": "a_arena.form",
         "start": 343
+       },
+       "target": {
+        "kind": "pool",
+        "module": 0,
+        "name": "particles"
        }
       }
      ],

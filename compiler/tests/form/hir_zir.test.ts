@@ -398,6 +398,136 @@ test('future lets in fields and nested executable bodies reject before HIR lower
   }
 });
 
+test('specialized declaration operands reject lexical qualifier roots before HIR', () => {
+  const data = 'module data { struct row { value: u32; } pool items: row[2]; }\n';
+  const fields = `module fields {
+    @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {
+      return terrain_delta { height = 1m, velocity = 0m, material = 0, nav_cost = 0m };
+    }
+  }\n`;
+  const cases: Record<string, string>[] = [
+    {
+      'data.form': data,
+      'app.form': `module app { import data; system step every 1 ticks reads writes data.items {
+        spawn(data.items, data.row { value = 1 }); let data: u32 = 0;
+      } }\n`,
+    },
+    {
+      'data.form': data,
+      'app.form': `module app { import data; system step every 1 ticks reads writes data.items {
+        kill(data.items, 0); let data: u32 = 0;
+      } }\n`,
+    },
+    {
+      'data.form': data,
+      'app.form': `module app { import data; system step every 1 ticks reads data.items writes {
+        for item in data.items { } let data: u32 = 0;
+      } }\n`,
+    },
+    {
+      'fields.form': fields,
+      'app.form': `module app { import fields; system step every 1 ticks reads writes terrain {
+        apply terrain_field fields.lift(origin: world2 { x = 0w, y = 0w }) duration 1t;
+        let fields: u32 = 0;
+      } }\n`,
+    },
+  ];
+  for (const sources of cases) {
+    const frontend = compileFrontend(sources);
+    assert.equal(frontend.ok, false);
+    assert.equal(frontend.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1,
+      frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+    assert.equal(frontend.check!.declarationTargets.size, 0);
+    assert.equal(lowerHir(frontend), null);
+  }
+});
+
+test('HIR carries checker-owned pool, record-type, and applied-field targets', () => {
+  const frontend = compileFrontend({
+    'data.form': 'module data { struct row { value: u32; } pool items: row[2]; }\n',
+    'fields.form': `module fields {
+      @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {
+        return terrain_delta { height = 1m, velocity = 0m, material = 0, nav_cost = 0m };
+      }
+    }\n`,
+    'app.form': `module app {
+      import data;
+      import fields;
+      system pools every 1 ticks reads data.items writes data.items {
+        spawn(data.items, data.row { value = 1 });
+        for item in data.items { let copy: u32 = item.value; }
+        kill(data.items, 0);
+      }
+      system terrain_step every 1 ticks reads writes terrain {
+        apply terrain_field fields.lift(origin: world2 { x = 0w, y = 0w }) duration 1t;
+      }
+    }\n`,
+  });
+  assert.equal(frontend.ok, true,
+    frontend.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const dataModule = hir.modules.find((module) => module.name === 'data')!.index;
+  const fieldsModule = hir.modules.find((module) => module.name === 'fields')!.index;
+  const pools = declarationsOf(hir, 'system').find((system) => system.name === 'pools')!;
+  assert.deepEqual(pools.body.map((statement) => statement.target), [
+    { kind: 'pool', module: dataModule, name: 'items' },
+    { kind: 'pool', module: dataModule, name: 'items' },
+    { kind: 'pool', module: dataModule, name: 'items' },
+  ]);
+  assert.deepEqual(pools.body[0]!.expressions[0]!.symbol,
+    { kind: 'struct', module: dataModule, name: 'row' });
+  const terrain = declarationsOf(hir, 'system').find((system) => system.name === 'terrain_step')!;
+  assert.deepEqual(terrain.body[0]!.target,
+    { kind: 'field', module: fieldsModule, name: 'lift' });
+});
+
+test('lexically shadowed loop bounds reject before HIR while exact projections still lower', () => {
+  const rejected = compileFrontend({
+    'app.form': `module app {
+      const LIMIT: u32 = 1;
+      global runtime_limit: u32 = 4294967295;
+      global steps: u32 = 0;
+      system run every 1 ticks reads runtime_limit writes steps {
+        let LIMIT: u32 = runtime_limit;
+        for i in 0..LIMIT { steps = i; }
+      }
+    }\n`,
+  });
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.diagnostics.filter((item) => item.code === 'FORM-E-502').length, 1);
+  assert.equal(lowerHir(rejected), null);
+
+  const accepted = compileFrontend({
+    'defs.form': `module defs {
+      struct bounds { high: u32; }
+      const LIMIT: u32 = 2;
+      const BOUNDS: bounds = bounds { high = 3 };
+    }\n`,
+    'app.form': `module app {
+      import defs;
+      const LOCAL: u32 = 1;
+      fn probe() -> u32 {
+        for a in 0..LOCAL { }
+        for b in 0..defs.LIMIT { }
+        for c in 0..defs.BOUNDS.high { }
+        return 0;
+      }
+    }\n`,
+  });
+  assert.equal(accepted.ok, true,
+    accepted.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  const hir = lowerHir(accepted);
+  assert.ok(hir);
+  const probe = declarationsOf(hir, 'fn').find((fn) => fn.name === 'probe')!;
+  assert.deepEqual(probe.body.slice(0, 3).map((statement) => statement.expressions[1]!.symbol), [
+    { kind: 'const', module: 0, name: 'LOCAL' },
+    { kind: 'const', module: 1, name: 'LIMIT' },
+    null,
+  ]);
+  assert.equal(probe.body[2]!.expressions[1]!.children[0]!.symbol?.name, 'BOUNDS');
+});
+
 test('HIR keeps valid intrinsics outside unrelated nested lexical scopes', () => {
   const frontend = compileFrontend({
     'scopes.form': `module scopes {

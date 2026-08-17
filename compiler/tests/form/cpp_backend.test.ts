@@ -652,9 +652,9 @@ test('WinLibs consumes whole-module qualification across backend declarations an
   import owner;
   global observed: u32 = 0;
   system qualified every 1 ticks reads owner.marker, owner.items writes owner.items, observed {
-    spawn(owner.items, owner.item { value = owner.BASE });
+    spawn(owner.items, owner.item { value = owner.echo(owner.marker) + owner.BASE });
     let selected = owner.mode.ready;
-    observed = owner.echo(owner.marker) + owner.BASE;
+    for entry in owner.items { observed = entry.value; }
     kill(owner.items, 0);
   }
 }\n`,

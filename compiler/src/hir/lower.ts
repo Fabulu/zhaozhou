@@ -9,7 +9,8 @@ import type {
 import { serializeAst } from '../frontend/ast.js';
 import { evaluateExactConstant, type ExactConstantBindings } from '../frontend/exact_constant.js';
 import type { FrontendResult } from '../frontend/index.js';
-import { T, typeName, type CanonicalCallTarget, type Type } from '../frontend/checker.js';
+import { T, typeName, type CanonicalCallTarget, type CanonicalDeclarationOperand,
+  type CanonicalDeclarationTarget, type Type } from '../frontend/checker.js';
 import type { SourceSpan } from '../frontend/span.js';
 import { crc32c } from '../generated/abi.js';
 import {
@@ -55,6 +56,7 @@ export function lowerHir(frontend: FrontendResult): HirProgram | null {
     frontend.check.expressionTypes,
     frontend.check.accessKeys,
     frontend.check.callTargets,
+    frontend.check.declarationTargets,
   ).run();
 }
 
@@ -74,6 +76,7 @@ class HirLowerer {
     private readonly expressionTypes: ReadonlyMap<Expr, Type>,
     private readonly accessKeys: ReadonlyMap<Access, string>,
     private readonly callTargets: ReadonlyMap<CallExpr, CanonicalCallTarget>,
+    private readonly declarationTargets: ReadonlyMap<CanonicalDeclarationOperand, CanonicalDeclarationTarget>,
   ) {}
 
   run(): HirProgram {
@@ -278,6 +281,7 @@ class HirLowerer {
     const env = input;
     return body.map((stmt) => {
       const expressions: HirExpr[] = [];
+      let target: HirSymbolRef | null = null;
       let nested: HirStmt[] = [];
       let elseBody: HirStmt[] = [];
       switch (stmt.kind) {
@@ -302,27 +306,40 @@ class HirLowerer {
             expressions.push(this.expr(module, stmt.range.lo, T.u32, env), this.expr(module, stmt.range.hi, T.u32, env));
             loopEnv.set(stmt.varName, T.u32);
           } else {
-            const pool = this.require(module, stmt.range.pool);
+            const poolTarget = this.requireDeclarationTarget(stmt, 'pool');
+            const pool = this.canonicalSymbol(poolTarget);
+            target = this.symbolRef(pool);
             expressions.push(this.syntheticPoolCount(stmt.range.poolSpan, pool));
-            const pd = pool.decl.kind === 'Pool' ? pool.decl : null;
-            const st = pd ? this.require(pool.module, pd.structName) : pool;
-            loopEnv.set(stmt.varName, { t: 'struct', name: qname(st.module, st.name) });
+            const element = this.canonicalPoolElement(poolTarget);
+            loopEnv.set(stmt.varName, { t: 'struct', name: qname(element.module, element.name) });
           }
           nested = this.stmts(module, stmt.body, loopEnv, domain);
           break;
         }
         case 'call_stmt': expressions.push(this.expr(module, stmt.call, null, env)); break;
-        case 'spawn': expressions.push(this.expr(module, stmt.value, null, env)); break;
-        case 'kill': expressions.push(this.expr(module, stmt.index, T.u32, env)); break;
+        case 'spawn': {
+          target = this.symbolRef(this.canonicalSymbol(this.requireDeclarationTarget(stmt, 'pool')));
+          expressions.push(this.expr(module, stmt.value, null, env));
+          break;
+        }
+        case 'kill': {
+          target = this.symbolRef(this.canonicalSymbol(this.requireDeclarationTarget(stmt, 'pool')));
+          expressions.push(this.expr(module, stmt.index, T.u32, env));
+          break;
+        }
         case 'return': if (stmt.value) expressions.push(this.expr(module, stmt.value, null, env)); break;
         case 'apply': {
+          target = this.symbolRef(this.canonicalSymbol(this.requireDeclarationTarget(stmt, 'field')));
           for (const arg of stmt.args) expressions.push(this.expr(module, arg.value, null, env));
           expressions.push(this.expr(module, stmt.duration, T.u32, env));
           break;
         }
         case 'bad_stmt': break;
       }
-      return { ast: stmt, domain, expressions, body: nested, elseBody, span: stmt.span };
+      return {
+        ast: stmt, domain, ...(target ? { target } : {}),
+        expressions, body: nested, elseBody, span: stmt.span,
+      };
     });
   }
 
@@ -422,8 +439,9 @@ class HirLowerer {
         type = children[1]!.type;
         break;
       case 'record': {
-        const sym = this.resolve(module, ast.typeName);
-        type = vectorType(ast.typeName) ?? (sym ? { t: 'struct', name: qname(sym.module, sym.name) } : T.unknown);
+        const vector = vectorType(ast.typeName);
+        const sym = vector ? null : this.canonicalSymbol(this.requireDeclarationTarget(ast, 'struct'));
+        type = vector ?? (sym ? { t: 'struct', name: qname(sym.module, sym.name) } : T.unknown);
         children.push(...ast.fields.map((field) => this.expr(module, field.value, this.memberType(type, field.name), env)));
         symbol = sym ? this.symbolRef(sym) : null;
         break;
@@ -722,6 +740,58 @@ class HirLowerer {
       throw new Error(`internal HIR ${label} '${name}' did not reduce after frontend acceptance`);
     }
     return value;
+  }
+
+  private requireDeclarationTarget(
+    operand: CanonicalDeclarationOperand,
+    expected: 'pool',
+  ): Extract<CanonicalDeclarationTarget, { kind: 'pool' }>;
+  private requireDeclarationTarget(
+    operand: CanonicalDeclarationOperand,
+    expected: 'struct' | 'field',
+  ): Extract<CanonicalDeclarationTarget, { kind: 'struct' | 'field' }>;
+  private requireDeclarationTarget(
+    operand: CanonicalDeclarationOperand,
+    expected: CanonicalDeclarationTarget['kind'],
+  ): CanonicalDeclarationTarget {
+    const target = this.declarationTargets.get(operand);
+    if (!target || target.kind !== expected) {
+      throw new Error(
+        `internal HIR declaration-target failure: checker did not resolve ${expected} at ${operand.span.file}:${operand.span.start}`,
+      );
+    }
+    return target;
+  }
+
+  private moduleIndex(name: string): number {
+    const module = this.moduleByName.get(name);
+    if (module === undefined) throw new Error(`internal HIR declaration-target failure: unknown module '${name}'`);
+    return module;
+  }
+
+  private canonicalSymbol(target: CanonicalDeclarationTarget): SymbolInfo {
+    const module = this.moduleIndex(target.module);
+    const symbol = this.modules[module]!.table.get(target.name);
+    const expected = target.kind === 'pool' ? 'Pool' : target.kind === 'struct' ? 'Struct' : 'Field';
+    if (!symbol || symbol.decl.kind !== expected) {
+      throw new Error(
+        `internal HIR declaration-target failure: checker resolved ${target.kind} ${target.module}.${target.name}`,
+      );
+    }
+    return symbol;
+  }
+
+  private canonicalPoolElement(
+    target: Extract<CanonicalDeclarationTarget, { kind: 'pool' }>,
+  ): SymbolInfo {
+    const module = this.moduleIndex(target.element.module);
+    const symbol = this.modules[module]!.table.get(target.element.name);
+    if (!symbol || symbol.decl.kind !== 'Struct') {
+      throw new Error(
+        `internal HIR declaration-target failure: checker resolved pool element ${target.element.module}.${target.element.name}`,
+      );
+    }
+    return symbol;
   }
 
   private resolve(module: number, name: string): SymbolInfo | null {

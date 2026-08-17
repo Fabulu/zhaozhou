@@ -937,6 +937,268 @@ test('nested lexical bodies neither reserve nor leak names into unrelated scopes
   ['min', 'max', 'min', 'min', 'min', 'max', 'min', 'min']);
 });
 
+test('specialized pool operands obey lexical-root precedence and record canonical targets', () => {
+  const data = `module data { struct row { value: u32; } pool items: row[2]; }\n`;
+  const rejectedBodies = [
+    'spawn(data.items, data.row { value = 1 }); let data: u32 = 0;',
+    'kill(data.items, 0); let data: u32 = 0;',
+    'for item in data.items { } let data: u32 = 0;',
+    'if true { kill(data.items, 0); } let data: u32 = 0;',
+  ];
+  for (const body of rejectedBodies) {
+    const result = compile({
+      'data.form': data,
+      'app.form': `module app {
+        import data;
+        system step every 1 ticks reads writes data.items { ${body} }
+      }\n`,
+    });
+    assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1,
+      result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+    assert.equal(result.check!.declarationTargets.size, 0);
+  }
+
+  const recordRoot = compile({
+    'data.form': data,
+    'app.form': `module app {
+      import data { items, row };
+      system step every 1 ticks reads writes items {
+        spawn(items, data.row { value = 1 });
+        let data: u32 = 0;
+      }
+    }\n`,
+  });
+  assert.equal(recordRoot.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1);
+  assert.equal(recordRoot.check!.declarationTargets.size, 0);
+
+  const selectiveFuture = compile({
+    'data.form': data,
+    'app.form': `module app {
+      import data { items, row };
+      system step every 1 ticks reads writes items {
+        spawn(items, row { value = 1 });
+        let items: u32 = 0;
+      }
+    }\n`,
+  });
+  assert.equal(selectiveFuture.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1);
+  assert.equal(selectiveFuture.check!.declarationTargets.size, 0);
+
+  const localRoot = compile({
+    'data.form': data,
+    'app.form': `module app {
+      import data;
+      system step every 1 ticks reads writes data.items {
+        let data: u32 = 0;
+        kill(data.items, 0);
+      }
+    }\n`,
+  });
+  assert.equal(localRoot.diagnostics.some((item) => item.code === 'FORM-E-303'), false);
+  assert.equal(localRoot.diagnostics.filter((item) => item.code === 'FORM-E-203').length, 1);
+  assert.match(localRoot.diagnostics.find((item) => item.code === 'FORM-E-203')!.message,
+    /resolves through local 'data', not a declared pool/);
+
+  const legalQualified = compile({
+    'data.form': data,
+    'app.form': `module app {
+      import data;
+      system step every 1 ticks reads data.items writes data.items {
+        spawn(data.items, data.row { value = 1 });
+        for item in data.items { let copy: u32 = item.value; }
+        kill(data.items, 0);
+      }
+    }\n`,
+  });
+  assert.deepEqual(legalQualified.codes, [],
+    legalQualified.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...legalQualified.check!.declarationTargets.values()], [
+    { kind: 'pool', module: 'data', name: 'items', element: { module: 'data', name: 'row' } },
+    { kind: 'struct', module: 'data', name: 'row' },
+    { kind: 'pool', module: 'data', name: 'items', element: { module: 'data', name: 'row' } },
+    { kind: 'pool', module: 'data', name: 'items', element: { module: 'data', name: 'row' } },
+  ]);
+
+  const legalSelective = compile({
+    'data.form': data,
+    'app.form': `module app {
+      import data { items, row };
+      system step every 1 ticks reads items writes items {
+        spawn(items, row { value = 1 });
+        for item in items { let copy: u32 = item.value; }
+        kill(items, 0);
+      }
+    }\n`,
+  });
+  assert.deepEqual(legalSelective.codes, [],
+    legalSelective.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...legalSelective.check!.declarationTargets.values()],
+    [...legalQualified.check!.declarationTargets.values()]);
+});
+
+test('field-application declaration operands obey future-let reservation', () => {
+  const field = `module fields {
+    @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {
+      return terrain_delta { height = 1m, velocity = 0m, material = 0, nav_cost = 0m };
+    }
+  }\n`;
+  const rejected = compile({
+    'fields.form': field,
+    'app.form': `module app {
+      import fields;
+      system step every 1 ticks reads writes terrain {
+        apply terrain_field fields.lift(origin: world2 { x = 0w, y = 0w }) duration 1t;
+        let fields: u32 = 0;
+      }
+    }\n`,
+  });
+  assert.equal(rejected.diagnostics.filter((item) => item.code === 'FORM-E-303').length, 1);
+  assert.equal(rejected.check!.declarationTargets.size, 0);
+
+  const accepted = compile({
+    'fields.form': field,
+    'app.form': `module app {
+      import fields;
+      system step every 1 ticks reads writes terrain {
+        apply terrain_field fields.lift(origin: world2 { x = 0w, y = 0w }) duration 1t;
+      }
+    }\n`,
+  });
+  assert.deepEqual(accepted.codes, [],
+    accepted.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  assert.deepEqual([...accepted.check!.declarationTargets.values()], [
+    { kind: 'field', module: 'fields', name: 'lift' },
+  ]);
+});
+
+test('checked loop-bound reduction never reinterprets lexical names as constants', () => {
+  const cases: Record<string, string>[] = [
+    {
+      'local.form': `module app {
+        const LIMIT: u32 = 1;
+        global runtime_limit: u32 = 4294967295;
+        global steps: u32 = 0;
+        system run every 1 ticks reads runtime_limit writes steps {
+          let LIMIT: u32 = runtime_limit;
+          for i in 0..LIMIT { steps = i; }
+        }
+      }\n`,
+    },
+    {
+      'parameter.form': `module app {
+        const LIMIT: u32 = 1;
+        fn probe(LIMIT: u32) -> u32 { for i in 0..LIMIT { } return 0; }
+      }\n`,
+    },
+    {
+      'loop_index.form': `module app {
+        const LIMIT: u32 = 1;
+        fn probe() -> u32 { for LIMIT in 0..1 { for i in 0..LIMIT { } } return 0; }
+      }\n`,
+    },
+    {
+      'future.form': `module app {
+        const LIMIT: u32 = 1;
+        global runtime: u32 = 2;
+        system probe every 1 ticks reads runtime writes {
+          for i in 0..LIMIT { }
+          let LIMIT: u32 = runtime;
+        }
+      }\n`,
+    },
+    {
+      'global.form': `module app {
+        global runtime_limit: u32 = 4294967295;
+        system probe every 1 ticks reads runtime_limit writes { for i in 0..runtime_limit { } }
+      }\n`,
+    },
+    {
+      'defs.form': 'module defs { const LIMIT: u32 = 1; }\n',
+      'selective.form': `module app {
+        import defs { LIMIT };
+        fn probe(LIMIT: u32) -> u32 { for i in 0..LIMIT { } return 0; }
+      }\n`,
+    },
+    {
+      'defs.form': 'module defs { const LIMIT: u32 = 1; }\n',
+      'whole.form': `module app {
+        import defs;
+        fn probe(runtime: u32) -> u32 {
+          let defs: u32 = runtime;
+          for i in 0..defs.LIMIT { }
+          return 0;
+        }
+      }\n`,
+    },
+  ];
+  for (const sources of cases) {
+    const result = compile(sources);
+    assert.equal(result.diagnostics.filter((item) => item.code === 'FORM-E-502').length, 1,
+      result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+  }
+});
+
+test('context-sensitive constant probes honor checked lexical bindings outside loops', () => {
+  const duration = compile(MOD(`
+    const DURATION: u32 = 1t;
+    global runtime: u32 = 2;
+    @earth field lift() -> terrain_delta footprint circle(0m, 0m, 1m); max_ops 16 {
+      return terrain_delta { height = 1m, velocity = 0m, material = 0, nav_cost = 0m };
+    }
+    system apply_step every 1 ticks reads runtime writes terrain {
+      let DURATION: u32 = runtime;
+      apply terrain_field lift(origin: world2 { x = 0w, y = 0w }) duration DURATION;
+    }
+  `));
+  assert.equal(duration.diagnostics.filter((item) => item.code === 'FORM-E-308').length, 1,
+    duration.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+
+  const player = compile(MOD(`
+    const PLAYER: u32 = 9;
+    system sample_input every 1 ticks reads input writes {
+      let PLAYER: u32 = 0;
+      let pad = input.player(PLAYER);
+    }
+  `));
+  assert.deepEqual(player.codes, [],
+    player.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+
+  const stagger = compile(MOD(`
+    const START: u32 = 0;
+    global runtime_start: u32 = 0;
+    struct row { value: fx16; }
+    pool items: row[4];
+    system staggered every 2 ticks stagger over items reads runtime_start, items writes items.value {
+      let START: u32 = runtime_start;
+      for i in START..items.count { items.value[i] = items.value[i] + 1m; }
+    }
+  `));
+  assert.deepEqual(stagger.codes, ['FORM-E-504'],
+    stagger.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+});
+
+test('unshadowed exact constants and aggregate projections remain loop bounds', () => {
+  const result = compile({
+    'defs.form': `module defs {
+      struct bounds { high: u32; }
+      const LIMIT: u32 = 2;
+      const BOUNDS: bounds = bounds { high = 3 };
+    }\n`,
+    'app.form': `module app {
+      import defs;
+      const LOCAL: u32 = 1;
+      fn probe() -> u32 {
+        for a in 0..LOCAL { }
+        for b in 0..defs.LIMIT { }
+        for c in 0..defs.BOUNDS.high { }
+        return 0;
+      }
+    }\n`,
+  });
+  assert.deepEqual(result.codes, [],
+    result.diagnostics.map((item) => `${item.code}: ${item.message}`).join('\n'));
+});
+
 test('comparison admission matrix accepts scalars and enums, rejects aggregates and handles', () => {
   const accepted = compile(MOD(`
     enum mode { low = 0, high = 1 }

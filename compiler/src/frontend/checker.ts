@@ -153,6 +153,17 @@ export type CanonicalCallTarget =
     readonly flowPool: { readonly module: string; readonly name: string } | null;
   };
 
+export type CanonicalDeclarationTarget =
+  | {
+    readonly kind: 'pool';
+    readonly module: string;
+    readonly name: string;
+    readonly element: { readonly module: string; readonly name: string };
+  }
+  | { readonly kind: 'struct' | 'field'; readonly module: string; readonly name: string };
+
+export type CanonicalDeclarationOperand = Stmt | RecordLit;
+
 export interface CheckResult {
   schedule: Schedule | null;
   /** Exact type of every expression admitted by the checker, keyed by AST identity. */
@@ -161,6 +172,8 @@ export interface CheckResult {
   accessKeys: ReadonlyMap<Access, string>;
   /** Checker-owned callable identity; lowering never reinterprets call syntax. */
   callTargets: ReadonlyMap<CallExpr, CanonicalCallTarget>;
+  /** Checker-owned identity for non-expression declaration operands. */
+  declarationTargets: ReadonlyMap<CanonicalDeclarationOperand, CanonicalDeclarationTarget>;
 }
 
 export function checkModules(modules: ModuleAst[], sink: DiagnosticSink): CheckResult {
@@ -183,6 +196,12 @@ class Checker {
   private readonly accessKeys = new Map<Access, string>();
   /** Canonical target for every call admitted by this checker. */
   private readonly callTargets = new Map<CallExpr, CanonicalCallTarget>();
+  /** Canonical target for every admitted declaration-valued non-expression operand. */
+  private readonly declarationTargets = new Map<CanonicalDeclarationOperand, CanonicalDeclarationTarget>();
+  /** Exact values reduced under the checked expression's lexical environment. */
+  private readonly checkedExactValues = new Map<Expr, bigint>();
+  /** Canonical pool identity for checked `pool.count` bounds. */
+  private readonly checkedPoolCounts = new Map<Expr, { readonly module: string; readonly name: string }>();
 
   constructor(private readonly modules: ModuleAst[], private readonly sink: DiagnosticSink) {}
 
@@ -231,6 +250,7 @@ class Checker {
       expressionTypes: this.expressionTypes,
       accessKeys: this.accessKeys,
       callTargets: this.callTargets,
+      declarationTargets: this.declarationTargets,
     };
   }
 
@@ -719,10 +739,10 @@ class Checker {
         this.checkExpr(ctx, s.call, null);
         break;
       case 'spawn':
-        this.checkSpawn(ctx, s.pool, s.value, s.span);
+        this.checkSpawn(ctx, s);
         break;
       case 'kill':
-        this.checkKill(ctx, s.pool, s.index, s.span);
+        this.checkKill(ctx, s);
         break;
       case 'return': {
         const retT = ctx.fnRet ?? T.void;
@@ -743,7 +763,7 @@ class Checker {
         break;
       }
       case 'apply':
-        this.checkApply(ctx, s.applyKind, s.program, s.programSpan, s.args, s.duration, s.span);
+        this.checkApply(ctx, s);
         break;
       case 'bad_stmt':
         break; // parser already diagnosed
@@ -865,7 +885,7 @@ class Checker {
         this.sink.error('FORM-E-305', expression.index.span, `array index must be u32/i32, got ${typeName(index)}`);
       }
       if (base.t === 'array') {
-        const value = this.constEval(ctx.mod, expression.index);
+        const value = this.constEvalChecked(ctx, expression.index);
         if (value !== null && (value < 0n || value >= BigInt(base.len))) {
           this.sink.error('FORM-E-820', expression.span,
             `compile-time-provable out-of-bounds index ${value} (length ${base.len})`);
@@ -979,6 +999,61 @@ class Checker {
       && this.unshadowedQualifierModule(ctx.mod, name) === null;
   }
 
+  /**
+   * Resolve a declaration-valued statement operand under the same lexical-root
+   * precedence as expressions. Backends consume the recorded canonical target
+   * and never reinterpret the authored string.
+   */
+  private resolveDeclarationOperand(
+    ctx: Ctx,
+    authored: string,
+    span: SourceSpan,
+    expected: 'pool' | 'struct' | 'field',
+    label: string,
+    notFoundCode: 'FORM-E-203' | 'FORM-E-301' = 'FORM-E-203',
+  ): { sym: Sym; mod: ModuleSym; ambiguous: false } | null {
+    const root = authored.split('.')[0] ?? authored;
+    if (ctx.locals.has(root)) {
+      this.sink.error(notFoundCode, span,
+        `${label} '${authored}' resolves through local '${root}', not a declared ${expected}`);
+      return null;
+    }
+    if (ctx.laterLets?.has(root)) {
+      this.sink.error('FORM-E-303', span,
+        `'${root}' is used before its let (single-assignment locals are use-after-let only, FORM-E-303)`);
+      return null;
+    }
+    const resolved = this.resolveName(ctx.mod, authored);
+    if (resolved?.ambiguous) {
+      this.sink.error('FORM-E-205', span, `ambiguous declaration operand '${authored}' (FORM-E-205)`);
+      return null;
+    }
+    if (!resolved || resolved.sym.kind !== expected) {
+      this.sink.error(notFoundCode, span, `${label} '${authored}' is not a declared ${expected}`);
+      return null;
+    }
+    return { sym: resolved.sym, mod: resolved.mod, ambiguous: false };
+  }
+
+  private recordDeclarationTarget(
+    operand: CanonicalDeclarationOperand,
+    resolved: { sym: Sym; mod: ModuleSym; ambiguous: false },
+  ): void {
+    const name = (resolved.sym.decl.name as string | undefined) ?? '';
+    if (resolved.sym.kind === 'pool') {
+      const element = this.structOf(resolved);
+      if (!element) return;
+      this.declarationTargets.set(operand, {
+        kind: 'pool', module: resolved.mod.ast.name, name,
+        element: { module: element.mod.ast.name, name: element.decl.name },
+      });
+    } else if (resolved.sym.kind === 'struct' || resolved.sym.kind === 'field') {
+      this.declarationTargets.set(operand, {
+        kind: resolved.sym.kind, module: resolved.mod.ast.name, name,
+      });
+    }
+  }
+
   private resolveRootSymbol(
     ctx: Ctx,
     expression: Expr,
@@ -1020,7 +1095,8 @@ class Checker {
     return this.checkExpr(ctx, e, null);
   }
 
-  private checkSpawn(ctx: Ctx, pool: string, value: RecordLit, span: SourceSpan): void {
+  private checkSpawn(ctx: Ctx, stmt: Extract<Stmt, { kind: 'spawn' }>): void {
+    const { pool, value, span } = stmt;
     if (ctx.domain === 'present') {
       this.sink.error('FORM-E-405', span, 'presentation blocks never mutate: spawn is refused (present-purity law)');
     } else if (ctx.domain !== 'sim' && ctx.domain !== 'scenario') {
@@ -1030,18 +1106,32 @@ class Checker {
       this.sink.error('FORM-E-503', span,
         `spawn inside pool-sugar iteration over '${ctx.loopPool}' is refused (membership mutation, FORM-E-503)`);
     }
-    const r = this.resolveName(ctx.mod, pool);
-    if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
-      this.sink.error('FORM-E-203', span, `'${pool}' is not a declared pool`);
+    const resolvedPool = this.resolveDeclarationOperand(ctx, pool, span, 'pool', 'spawn pool');
+    if (!resolvedPool) return;
+    const struct = this.structOf(resolvedPool);
+    if (!struct) {
+      for (const rf of value.fields) this.checkExpr(ctx, rf.value, null);
       return;
     }
-    const struct = this.structOf(r);
-    if (struct) this.checkRecordLit(ctx, value, struct.decl, struct.mod);
-    else for (const rf of value.fields) this.checkExpr(ctx, rf.value, null);
-    this.writeComponent(ctx, this.stateKey(r.mod, (r.sym.decl.name as string) ?? pool, '#members'), span); // membership change
+    const resolvedType = this.resolveDeclarationOperand(ctx, value.typeName, value.span, 'struct', 'spawn record type');
+    if (!resolvedType) {
+      for (const rf of value.fields) this.checkExpr(ctx, rf.value, null);
+      return;
+    }
+    if ((resolvedType.sym.decl as object) !== (struct.decl as object)) {
+      this.sink.error('FORM-E-300', value.span,
+        `spawn into '${pool}' requires record type '${struct.mod.ast.name}.${struct.decl.name}', got '${value.typeName}'`);
+      for (const rf of value.fields) this.checkExpr(ctx, rf.value, null);
+      return;
+    }
+    this.recordDeclarationTarget(stmt, resolvedPool);
+    this.checkRecordLit(ctx, value, struct.decl, struct.mod);
+    this.writeComponent(ctx, this.stateKey(resolvedPool.mod,
+      (resolvedPool.sym.decl.name as string) ?? pool, '#members'), span);
   }
 
-  private checkKill(ctx: Ctx, pool: string, index: Expr, span: SourceSpan): void {
+  private checkKill(ctx: Ctx, stmt: Extract<Stmt, { kind: 'kill' }>): void {
+    const { pool, index, span } = stmt;
     if (ctx.domain === 'present') {
       this.sink.error('FORM-E-405', span, 'presentation blocks never mutate: kill is refused (present-purity law)');
     } else if (ctx.domain !== 'sim' && ctx.domain !== 'scenario') {
@@ -1054,16 +1144,15 @@ class Checker {
       this.sink.error('FORM-E-503', span,
         'kill inside an explicit-index loop is refused (stable compaction law, language-semantics §4.4)');
     }
-    const r = this.resolveName(ctx.mod, pool);
-    if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
-      this.sink.error('FORM-E-203', span, `'${pool}' is not a declared pool`);
-      return;
-    }
+    const resolvedPool = this.resolveDeclarationOperand(ctx, pool, span, 'pool', 'kill pool');
+    if (!resolvedPool) return;
+    this.recordDeclarationTarget(stmt, resolvedPool);
     const it = this.checkExpr(ctx, index, T.u32);
     if (!tAgree(it, T.u32) && !tAgree(it, T.i32) && !tAgree(it, T.unknown)) {
       this.sink.error('FORM-E-305', index.span, `pool index must be u32/i32, got ${typeName(it)}`);
     }
-    this.writeComponent(ctx, this.stateKey(r.mod, (r.sym.decl.name as string) ?? pool, '#members'), span);
+    this.writeComponent(ctx, this.stateKey(resolvedPool.mod,
+      (resolvedPool.sym.decl.name as string) ?? pool, '#members'), span);
   }
 
   // -- for loops --------------------------------------------------------------
@@ -1072,11 +1161,11 @@ class Checker {
     const bodyCtx = this.bodyContext(ctx, s.body);
 
     if (s.range.kind === 'pool') {
-      const r = this.resolveName(ctx.mod, s.range.pool);
-      if (!r || r.ambiguous === true || r.sym.kind !== 'pool') {
-        this.sink.error('FORM-E-203', s.range.poolSpan, `'${s.range.pool}' is not a declared pool`);
-      } else {
-        const struct = this.structOf(r);
+      const resolvedPool = this.resolveDeclarationOperand(ctx, s.range.pool, s.range.poolSpan,
+        'pool', 'pool-sugar loop operand');
+      if (resolvedPool) {
+        this.recordDeclarationTarget(s, resolvedPool);
+        const struct = this.structOf(resolvedPool);
         if (struct) {
           bodyCtx.locals.set(s.varName, {
             type: { t: 'struct', name: struct.decl.name, owner: struct.mod.ast.name },
@@ -1085,8 +1174,9 @@ class Checker {
         } else {
           bodyCtx.locals.set(s.varName, { type: T.unknown, letSpan: s.span, assigned: true, isParam: false });
         }
-        this.readComponent(ctx, this.stateKey(r.mod, (r.sym.decl.name as string) ?? s.range.pool, '#members'), s.range.poolSpan);
-        bodyCtx.loopPool = s.range.pool;
+        this.readComponent(ctx, this.stateKey(resolvedPool.mod,
+          (resolvedPool.sym.decl.name as string) ?? s.range.pool, '#members'), s.range.poolSpan);
+        bodyCtx.loopPool = `${resolvedPool.mod.ast.name}.${(resolvedPool.sym.decl.name as string) ?? s.range.pool}`;
       }
       bodyCtx.inLoop = true;
       this.checkStmts(bodyCtx, s.body);
@@ -1101,7 +1191,7 @@ class Checker {
         this.sink.error('FORM-E-300', e.span, `for range bound must be u32, got ${typeName(t)}`);
       }
     }
-    const loV = this.constEval(ctx.mod, s.range.lo);
+    const loV = this.constEvalChecked(ctx, s.range.lo);
     const hiV = this.boundEval(ctx, s.range.hi);
     if (loV !== null && hiV !== null) {
       if (loV > hiV) {
@@ -1125,11 +1215,14 @@ class Checker {
 
   /** Constant bound, or pool.count -> capacity constant. */
   private boundEval(ctx: Ctx, e: Expr): bigint | null {
-    const v = this.constEval(ctx.mod, e);
+    this.checkedPoolCounts.delete(e);
+    const v = this.constEvalChecked(ctx, e);
     if (v !== null) return v;
     if (this.isPoolCount(ctx, e) && e.kind === 'member') {
       const root = this.resolveRootSymbol(ctx, e.obj);
       if (root?.sym.kind === 'pool') {
+        const name = (root.sym.decl.name as string | undefined) ?? '';
+        this.checkedPoolCounts.set(e, { module: root.mod.ast.name, name });
         const pd = root.sym.decl as unknown as PoolDecl;
         if (pd.capacity?.kind === 'int') return pd.capacity.value;
         if (pd.capacity?.kind === 'name') {
@@ -1146,17 +1239,12 @@ class Checker {
 
   // -- apply (§6.4) -------------------------------------------------------------
 
-  private checkApply(
-    ctx: Ctx, applyKind: string, program: string, programSpan: SourceSpan,
-    args: { name: string; value: Expr; span: SourceSpan }[],
-    duration: Expr, span: SourceSpan,
-  ): void {
-    const r = this.resolveName(ctx.mod, program);
-    const field = r && r.ambiguous !== true && r.sym.kind === 'field' ? (r.sym.decl as unknown as FieldDecl) : null;
-    if (!field) {
-      this.sink.error('FORM-E-203', programSpan, `'${program}' is not a declared field program`);
-      return;
-    }
+  private checkApply(ctx: Ctx, stmt: Extract<Stmt, { kind: 'apply' }>): void {
+    const { applyKind, program, programSpan, args, duration, span } = stmt;
+    const r = this.resolveDeclarationOperand(ctx, program, programSpan, 'field', 'applied program');
+    const field = r ? (r.sym.decl as unknown as FieldDecl) : null;
+    if (!field || !r) return;
+    this.recordDeclarationTarget(stmt, r);
     if (applyKind === 'terrain_field') {
       if (field.profile !== 'earth') {
         this.sink.error('FORM-E-462', programSpan,
@@ -1203,7 +1291,7 @@ class Checker {
         this.sink.error('FORM-E-602', a.span, `unknown apply argument '${a.name}'`);
       }
     }
-    const dur = this.constEval(ctx.mod, duration);
+    const dur = this.constEvalChecked(ctx, duration);
     if (dur === null) {
       this.sink.error('FORM-E-308', duration.span, 'apply duration must be a constant tick count');
     } else if (dur <= 0n) {
@@ -1600,7 +1688,7 @@ class Checker {
       if (!tAgree(it, T.u32) && !tAgree(it, T.i32) && !tAgree(it, T.unknown)) {
         this.sink.error('FORM-E-305', e.index.span, `array index must be u32/i32, got ${typeName(it)}`);
       }
-      const idx = this.constEval(ctx.mod, e.index);
+      const idx = this.constEvalChecked(ctx, e.index);
       if (idx !== null && (idx < 0n || idx >= BigInt(objT.len))) {
         this.sink.error('FORM-E-820', e.span,
           `compile-time-provable out-of-bounds index ${idx} (length ${objT.len})`);
@@ -1619,7 +1707,7 @@ class Checker {
 
   /** E-820: constant index against pool capacity. */
   private checkConstBounds(ctx: Ctx, e: Extract<Expr, { kind: 'index' }>, colT: Type): void {
-    const idx = this.constEval(ctx.mod, e.index);
+    const idx = this.constEvalChecked(ctx, e.index);
     if (idx === null) return;
     const column = this.poolComponentOf(ctx, e.obj);
     if (!column) return;
@@ -1884,6 +1972,10 @@ class Checker {
   // -- record literals ------------------------------------------------------------
 
   private checkRecordLit(ctx: Ctx, rec: RecordLit, struct: StructDecl, mod: ModuleSym): void {
+    const symbol = mod.table.get(struct.name);
+    if (symbol?.kind === 'struct') {
+      this.recordDeclarationTarget(rec, { sym: symbol, mod, ambiguous: false });
+    }
     this.expressionTypes.set(rec, { t: 'struct', name: struct.name, owner: mod.ast.name });
     const seen = new Set<string>();
     for (const rf of rec.fields) {
@@ -1951,14 +2043,13 @@ class Checker {
       }
       return { t: rec.typeName as 'world2' | 'world3' | 'velocity3' };
     }
-    const r = this.resolveName(ctx.mod, rec.typeName);
-    const struct = r && r.ambiguous !== true && r.sym.kind === 'struct'
-      ? (r.sym.decl as unknown as StructDecl) : null;
-    if (struct) {
-      this.checkRecordLit(ctx, rec, struct, r!.mod);
-      return { t: 'struct', name: struct.name, owner: r!.mod.ast.name };
+    const r = this.resolveDeclarationOperand(ctx, rec.typeName, rec.span, 'struct',
+      'record literal type', 'FORM-E-301');
+    const struct = r ? (r.sym.decl as unknown as StructDecl) : null;
+    if (struct && r) {
+      this.checkRecordLit(ctx, rec, struct, r.mod);
+      return { t: 'struct', name: struct.name, owner: r.mod.ast.name };
     }
-    this.sink.error('FORM-E-301', rec.span, `record literal of unknown struct '${rec.typeName}'`);
     for (const rf of rec.fields) this.checkExpr(ctx, rf.value, null);
     return T.unknown;
   }
@@ -2038,13 +2129,31 @@ class Checker {
     }
   }
 
+  /** Exact reduction of a checked expression under its lexical resolution. */
+  private constEvalChecked(ctx: Ctx, e: Expr, expected: Type | null = null): bigint | null {
+    const value = this.constEval(ctx.mod, e, expected, ctx);
+    if (value === null) this.checkedExactValues.delete(e);
+    else this.checkedExactValues.set(e, value);
+    return value;
+  }
+
   /** Typed exact integer reduction; null when the expression is irreducible. */
-  private constEval(ms: ModuleSym, e: Expr, expected: Type | null = null): bigint | null {
+  private constEval(
+    ms: ModuleSym,
+    e: Expr,
+    expected: Type | null = null,
+    lexicalCtx: Ctx | null = null,
+  ): bigint | null {
+    const lexicalNodes = lexicalCtx ? this.expressionNodeSet(e) : null;
+    const isLexical = (owner: ModuleSym, expression: Expr): boolean =>
+      lexicalCtx !== null && owner === lexicalCtx.mod && lexicalNodes!.has(expression);
     const bindings: ExactConstantBindings<ModuleSym> = {
       typeOf: (owner, expression) => this.constKnownType(owner, expression),
       constant: (owner, expression) => {
         let resolved: ReturnType<Checker['resolveName']> = null;
-        if (expression.kind === 'ident') {
+        if (isLexical(owner, expression)) {
+          resolved = this.resolveExactConstantInContext(lexicalCtx!, expression);
+        } else if (expression.kind === 'ident') {
           resolved = this.resolveName(owner, expression.name);
         } else if (expression.kind === 'member' && expression.obj.kind === 'ident') {
           const target = this.unshadowedQualifierModule(owner, expression.obj.name);
@@ -2060,12 +2169,64 @@ class Checker {
           key: JSON.stringify([resolved.mod.ast.name, declaration.name]),
         };
       },
-      enumMember: (owner, expression) => this.constEnumMember(owner, expression),
+      enumMember: (owner, expression) => isLexical(owner, expression)
+        ? this.constEnumMemberInContext(lexicalCtx!, expression)
+        : this.constEnumMember(owner, expression),
       memberType: (owner, aggregate, field) => this.constAggregateMemberType(owner, aggregate as Type, field),
       elementType: (_owner, aggregate) => (aggregate as Type).t === 'array'
         ? (aggregate as Extract<Type, { t: 'array' }>).elem : null,
     };
     return evaluateExactConstant(ms, e, expected ?? this.constKnownType(ms, e), bindings);
+  }
+
+  private resolveExactConstantInContext(
+    ctx: Ctx,
+    expression: Expr,
+  ): ReturnType<Checker['resolveName']> {
+    if (expression.kind === 'ident') {
+      if (this.lexicalRootReserved(ctx, expression.name)) return null;
+      return this.resolveUnqualified(ctx.mod, expression.name);
+    }
+    if (expression.kind === 'member' && expression.obj.kind === 'ident') {
+      const target = this.qualifierModule(ctx, expression.obj.name);
+      const symbol = target?.table.get(expression.field);
+      return target && symbol ? { sym: symbol, mod: target, ambiguous: false } : null;
+    }
+    return null;
+  }
+
+  private constEnumMemberInContext(
+    ctx: Ctx,
+    expression: Expr,
+  ): { type: Type; value: bigint } | null {
+    if (expression.kind === 'member' && expression.obj.kind === 'ident') {
+      if (this.lexicalRootReserved(ctx, expression.obj.name)) return null;
+    } else if (expression.kind === 'member' && expression.obj.kind === 'member'
+        && expression.obj.obj.kind === 'ident') {
+      if (this.lexicalRootReserved(ctx, expression.obj.obj.name)) return null;
+    }
+    return this.constEnumMember(ctx.mod, expression);
+  }
+
+  private expressionNodeSet(root: Expr): Set<Expr> {
+    const nodes = new Set<Expr>();
+    const visit = (expression: Expr): void => {
+      if (nodes.has(expression)) return;
+      nodes.add(expression);
+      switch (expression.kind) {
+        case 'member': visit(expression.obj); break;
+        case 'index': visit(expression.obj); visit(expression.index); break;
+        case 'call': visit(expression.callee); for (const arg of expression.args) visit(arg); break;
+        case 'unary': visit(expression.operand); break;
+        case 'binary': visit(expression.l); visit(expression.r); break;
+        case 'if_expr': visit(expression.cond); visit(expression.then); visit(expression.else); break;
+        case 'record': for (const field of expression.fields) visit(field.value); break;
+        case 'range': visit(expression.lo); visit(expression.hi); break;
+        case 'literal': case 'ident': case 'string': break;
+      }
+    };
+    visit(root);
+    return nodes;
   }
 
   private constAggregateMemberType(ms: ModuleSym, aggregate: Type, field: string): Type | null {
@@ -2194,7 +2355,6 @@ class Checker {
           `stagger requires exactly one iteration pool — '${d.staggerPool}' is not a declared pool (FORM-E-504)`);
       }
       void rate;
-      this.checkStaggerShape(ms, d);
     }
     const reads = new Set<string>();
     const writes = new Set<string>();
@@ -2208,6 +2368,7 @@ class Checker {
     ctx.reads = reads;
     ctx.writes = writes;
     this.checkStmtBody(ctx, d.body);
+    if (d.staggerPool !== null) this.checkStaggerShape(ms, d);
   }
 
   /**
@@ -2335,38 +2496,43 @@ class Checker {
 
   private isExactStaggerLoop(ms: ModuleSym, stmt: Extract<Stmt, { kind: 'for' }>, pool: string): boolean {
     const expected = this.resolveName(ms, pool);
-    const samePool = (candidate: string): boolean => {
-      const actual = this.resolveName(ms, candidate);
-      return !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
-        && !!actual && !actual.ambiguous && actual.sym === expected.sym && actual.mod === expected.mod;
-    };
-    if (stmt.range.kind === 'pool') return samePool(stmt.range.pool);
-    const lo = this.constEval(ms, stmt.range.lo);
+    if (stmt.range.kind === 'pool') {
+      const actual = this.declarationTargets.get(stmt);
+      return actual?.kind === 'pool'
+        && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
+        && actual.module === expected.mod.ast.name
+        && actual.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
+    }
+    const lo = this.checkedExactValues.get(stmt.range.lo);
     const hi = stmt.range.hi;
-    const root = hi.kind === 'member'
-      ? this.resolveRootSymbol(this.ctxFor(ms, 'sim'), hi.obj)
-      : null;
+    const actual = this.checkedPoolCounts.get(hi);
     return lo === 0n
       && hi.kind === 'member'
       && hi.field === 'count'
-      && !!expected && !expected.ambiguous
-      && root?.sym === expected.sym && root.mod === expected.mod;
+      && actual !== undefined
+      && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
+      && actual.module === expected.mod.ast.name
+      && actual.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
   }
 
   private isFlowCallFor(ms: ModuleSym, expr: Expr, pool: string): boolean {
-    if (!this.isAnyFlowCall(ms, expr) || expr.kind !== 'call' || !expr.args[0]) return false;
-    const ctx = this.ctxFor(ms, 'sim');
-    const actual = this.resolveRootSymbol(ctx, expr.args[0]);
+    if (expr.kind !== 'call') return false;
+    const target = this.callTargets.get(expr);
     const expected = this.resolveName(ms, pool);
-    return !!actual && !!expected && !expected.ambiguous
-      && actual.sym === expected.sym && actual.mod === expected.mod;
+    return target?.kind === 'field' && target.flowPool !== null
+      && !!expected && !expected.ambiguous && expected.sym.kind === 'pool'
+      && target.flowPool.module === expected.mod.ast.name
+      && target.flowPool.name === ((expected.sym.decl.name as string | undefined) ?? pool.split('.').at(-1));
   }
 
-  private isAnyFlowCall(ms: ModuleSym, expr: Expr): boolean {
+  private isAnyFlowCall(_ms: ModuleSym, expr: Expr): boolean {
     if (expr.kind !== 'call') return false;
-    const resolved = this.resolveRootSymbol(this.ctxFor(ms, 'sim'), expr.callee);
-    return !!resolved && resolved.sym.kind === 'field'
-      && (resolved.sym.decl as unknown as FieldDecl).profile === 'flow';
+    const target = this.callTargets.get(expr);
+    if (!target || target.kind !== 'field') return false;
+    const owner = this.byName.get(target.module);
+    const declaration = owner?.table.get(target.name);
+    return declaration?.kind === 'field'
+      && (declaration.decl as unknown as FieldDecl).profile === 'flow';
   }
 
   private isSelectedStaggerTarget(
@@ -2700,7 +2866,7 @@ class Checker {
       switch (kind) {
         case 'u32const': {
           this.checkExpr(ctx, arg.value, T.u32);
-          const v = this.constEval(ms, arg.value);
+          const v = this.constEvalChecked(ctx, arg.value);
           if (v === null) {
             this.sink.error('FORM-E-610', arg.value.span,
               `resource page-id argument '${arg.name}' must be a u32 const (a page-id constant or integer; FORM-E-610)`);
@@ -3150,7 +3316,7 @@ class Checker {
         demand(['sim', 'scenario'], e.span);
         const argument = args[0] ?? none(e.span);
         const argType = this.checkExpr(ctx, argument, T.u32);
-        const n = this.constEval(ctx.mod, argument);
+        const n = this.constEvalChecked(ctx, argument);
         if (args.length !== 1) this.sink.error('FORM-E-304', e.span, 'input.player(n) takes one u32 argument');
         if (!tAgree(argType, T.u32) && !tAgree(argType, T.i32) && !tAgree(argType, T.unknown)) {
           this.sink.error('FORM-E-300', argument.span, `input.player index must be u32, got ${typeName(argType)}`);
