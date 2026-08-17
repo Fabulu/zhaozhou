@@ -59,8 +59,7 @@ struct ModeInfo {
   uint8_t views;
 };
 
-const ModeInfo kModes[3] = {
-    {"z60", 0, 384, 1}, {"storm", 1, 320, 1}, {"duo", 2, 512, 2}};
+const ModeInfo kModes[3] = {{"z60", 0, 384, 1}, {"storm", 1, 320, 1}, {"duo", 2, 512, 2}};
 
 // one mode's 10-packet replay; returns false on any check failure delta
 void run_mode(const ModeInfo& mi, bool write_golden) {
@@ -76,19 +75,18 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
   slot_mirror[1].assign(zref::render::kSlotBytes, 0);
 
   const zhao_abi::video_mode vm = zhao_abi::video_mode(mi.mode);
-  const uint32_t crc_black_z60 = zref::render::displayed_crc32c(
-      zhao_abi::VIDEO_Z60, slot_mirror[0].data());
-  const uint32_t crc_black_mode =
-      zref::render::displayed_crc32c(vm, slot_mirror[0].data());
+  const uint32_t crc_black_z60 =
+      zref::render::displayed_crc32c(zhao_abi::VIDEO_Z60, slot_mirror[0].data());
+  const uint32_t crc_black_mode = zref::render::displayed_crc32c(vm, slot_mirror[0].data());
 
   std::vector<uint32_t> expect_crc;
-  expect_crc.push_back(crc_black_z60);    // F0: Z60 boot frame
-  expect_crc.push_back(crc_black_mode);   // F1: first frame under the mode
-  expect_crc.push_back(crc_black_mode);   // F2: its repeat
+  expect_crc.push_back(crc_black_z60);   // F0: Z60 boot frame
+  expect_crc.push_back(crc_black_mode);  // F1: first frame under the mode
+  expect_crc.push_back(crc_black_mode);  // F2: its repeat
   size_t crc_checked = 0;
 
-  std::vector<std::vector<uint8_t>> packets;   // sealed bytes, in order
-  std::vector<uint32_t> fresh_crcs;            // displayed CRC per packet
+  std::vector<std::vector<uint8_t>> packets;  // sealed bytes, in order
+  std::vector<uint32_t> fresh_crcs;           // displayed CRC per packet
   std::vector<uint8_t> pad_wire_log;
 
   uint64_t starve_baseline = ~0ull;
@@ -119,11 +117,9 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
 
     // pads latched every tick; publish + oracle latch on this tick's pads
     {
-      zref::PadRawState raw[4] = {zref::absentPad(), zref::absentPad(),
-                                  zref::absentPad(), zref::absentPad()};
-      const auto stick = [](Pcg32& r) {
-        return int16_t(int32_t(r.next() & 0xFFFF) - 0x8000);
-      };
+      zref::PadRawState raw[4] = {zref::absentPad(), zref::absentPad(), zref::absentPad(),
+                                  zref::absentPad()};
+      const auto stick = [](Pcg32& r) { return int16_t(int32_t(r.next() & 0xFFFF) - 0x8000); };
       raw[0].present = true;
       raw[0].buttons = rngA.next() & 0xFFFFu;
       raw[0].lx = stick(rngA);
@@ -149,14 +145,12 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       compose_pattern(canvas, vm, f);
       const uint8_t dst = uint8_t(f & 1u);
       const uint32_t arena = (f & 1u) ? kArena1 : kArena0;
-      const uint32_t blit_crc =
-          zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+      const uint32_t blit_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
       h.mem_write(arena, canvas);
       std::memcpy(slot_mirror[dst].data(), canvas.data(), canvas.size());
-      const uint32_t dcrc =
-          zref::render::displayed_crc32c(vm, slot_mirror[dst].data());
-      expect_crc.push_back(dcrc);   // fresh F_{2f+1}
-      expect_crc.push_back(dcrc);   // repeat F_{2f+2} (60 Hz law, identical)
+      const uint32_t dcrc = zref::render::displayed_crc32c(vm, slot_mirror[dst].data());
+      expect_crc.push_back(dcrc);  // fresh F_{2f+1}
+      expect_crc.push_back(dcrc);  // repeat F_{2f+2} (60 Hz law, identical)
       fresh_crcs.push_back(dcrc);
 
       const zref::PadFrame* of = pad_oracle.frames();
@@ -182,8 +176,8 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
 
     while (crc_checked < h.crcs.size() && crc_checked < expect_crc.size()) {
       check(h.crcs[crc_checked] == expect_crc[crc_checked],
-            "golden: displayed CRC (repeats identical)",
-            expect_crc[crc_checked], h.crcs[crc_checked]);
+            "golden: displayed CRC (repeats identical)", expect_crc[crc_checked],
+            h.crcs[crc_checked]);
       ++crc_checked;
     }
 
@@ -195,8 +189,7 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       if (sw.bank.size() == 40) {
         check(sw.bank[0] == sk, "golden: frame_cycles", sk, sw.bank[0]);
         const uint64_t faults = (sk <= 1) ? sk : (1 + sk / 2);
-        check(sw.bank[1] == faults, "golden: deadline_faults", faults,
-              sw.bank[1]);
+        check(sw.bank[1] == faults, "golden: deadline_faults", faults, sw.bank[1]);
         const uint64_t cmds = 3 + 4ull * (sk / 2);
         check(sw.bank[2] == cmds, "golden: commands", cmds, sw.bank[2]);
         check(sw.bank[31] == 0, "golden: underruns", 0, sw.bank[31]);
@@ -205,25 +198,23 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
         // boot transient (mode-flush refetch) settles by tick 2
         if (starve_baseline == ~0ull && sk >= 2) {
           starve_baseline = sw.bank[30];
-          check(starve_baseline <= 1024,
-                "golden: starvation baseline <= two lines", 1,
+          check(starve_baseline <= 1024, "golden: starvation baseline <= two lines", 1,
                 starve_baseline <= 1024);
         }
         if (starve_baseline != ~0ull) {
-          check(sw.bank[30] == starve_baseline, "golden: starvation constant",
-                starve_baseline, sw.bank[30]);
+          check(sw.bank[30] == starve_baseline, "golden: starvation constant", starve_baseline,
+                sw.bank[30]);
         }
       }
     }
 
     while (fences_checked < h.fence_log.size()) {
       const size_t i = fences_checked++;
-      check(!h.fence_log[i].ok && h.fence_log[i].status == 16,
-            "golden: fence pinned deadline", 16, h.fence_log[i].status);
+      check(!h.fence_log[i].ok && h.fence_log[i].status == 16, "golden: fence pinned deadline", 16,
+            h.fence_log[i].status);
     }
 
-    check(h.sticky_errors() == 0, "golden: sticky flags clear", 0,
-          h.sticky_errors());
+    check(h.sticky_errors() == 0, "golden: sticky flags clear", 0, h.sticky_errors());
   }
 
   // drain the last frames' CRC pulses
@@ -233,17 +224,15 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       h.step();
       ++guard_steps;
       while (crc_checked < h.crcs.size() && crc_checked < expect_crc.size()) {
-        check(h.crcs[crc_checked] == expect_crc[crc_checked],
-              "golden: displayed CRC (tail)", expect_crc[crc_checked],
-              h.crcs[crc_checked]);
+        check(h.crcs[crc_checked] == expect_crc[crc_checked], "golden: displayed CRC (tail)",
+              expect_crc[crc_checked], h.crcs[crc_checked]);
         ++crc_checked;
       }
     }
-    check(crc_checked == expect_crc.size(), "golden: all frames displayed",
-          expect_crc.size(), crc_checked);
+    check(crc_checked == expect_crc.size(), "golden: all frames displayed", expect_crc.size(),
+          crc_checked);
   }
-  check(h.blit_log.size() == kPackets, "golden: one blit per packet",
-        kPackets, h.blit_log.size());
+  check(h.blit_log.size() == kPackets, "golden: one blit per packet", kPackets, h.blit_log.size());
   for (const auto& bd : h.blit_log) {
     check(bd.status == 0, "golden: blit committed", 0, bd.status);
   }
@@ -251,8 +240,7 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
   if (zhao::check_failures() != 0) return;
 
   // ---- the capture ---------------------------------------------------------
-  const std::string path =
-      std::string(ZHAO_GOLDEN_DIR) + "/" + mi.name + "_10frame.zcap";
+  const std::string path = std::string(ZHAO_GOLDEN_DIR) + "/" + mi.name + "_10frame.zcap";
   const std::string tmp = path + ".regen";
   {
     zhao::ZhaoZcapWriter w(tmp);
@@ -318,18 +306,14 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       std::fwrite(regen.data(), 1, regen.size(), f);
       std::fclose(f);
     }
-    std::printf("[shell_golden] wrote %s (%zu bytes)\n", path.c_str(),
-                regen.size());
+    std::printf("[shell_golden] wrote %s (%zu bytes)\n", path.c_str(), regen.size());
   } else {
     const std::vector<uint8_t> committed = read_file(path);
-    check(!committed.empty(), "golden: committed capture exists", 1,
-          !committed.empty());
-    check(committed == regen, "golden: byte-identical to committed", 1,
-          committed == regen);
+    check(!committed.empty(), "golden: committed capture exists", 1, !committed.empty());
+    check(committed == regen, "golden: byte-identical to committed", 1, committed == regen);
   }
   std::remove(tmp.c_str());
-  std::printf("[shell_golden] %s: ticks=%zu crcs=%zu\n", mi.name,
-              h.ticks.size(), h.crcs.size());
+  std::printf("[shell_golden] %s: ticks=%zu crcs=%zu\n", mi.name, h.ticks.size(), h.crcs.size());
 }
 
 }  // namespace
@@ -339,8 +323,10 @@ int main(int argc, char** argv) {
   bool write_golden = false;
   const char* only = nullptr;
   for (int i = 1; i < argc; ++i) {
-    if (!std::strcmp(argv[i], "--write")) write_golden = true;
-    else if (!std::strcmp(argv[i], "--mode") && i + 1 < argc) only = argv[++i];
+    if (!std::strcmp(argv[i], "--write"))
+      write_golden = true;
+    else if (!std::strcmp(argv[i], "--mode") && i + 1 < argc)
+      only = argv[++i];
   }
   for (const ModeInfo& mi : kModes) {
     if (only && std::strcmp(only, mi.name) != 0) continue;

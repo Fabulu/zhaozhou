@@ -33,8 +33,7 @@ using zhao_audio::RunResult;
 // PCG RXS-M-XS (same shape as the committed field-corpus generator — the
 // qformats.md §7.5 constants, used here as the general test PRNG pattern).
 uint32_t pcg_perm(uint32_t s) {
-  const uint32_t w = static_cast<uint32_t>(((s >> ((s >> 28) + 4)) ^ s) *
-                                           277803737u);
+  const uint32_t w = static_cast<uint32_t>(((s >> ((s >> 28) + 4)) ^ s) * 277803737u);
   return (w >> 22) ^ w;
 }
 
@@ -50,8 +49,7 @@ struct Prng {
   }
 };
 
-std::vector<uint8_t> serialize_schedule(const std::vector<Burst>& bursts,
-                                        uint32_t cycles,
+std::vector<uint8_t> serialize_schedule(const std::vector<Burst>& bursts, uint32_t cycles,
                                         const std::vector<uint32_t>& ticks) {
   std::vector<uint8_t> v;
   auto put32 = [&v](uint32_t x) {
@@ -100,10 +98,9 @@ int main(int argc, char** argv) {
     if (!zhao_audio::results_equal(r, o, &where)) {
       ++fails;
       std::fprintf(stderr, "FAIL: iteration %u: %s\n", it, where.c_str());
-      zhao::save_failing_vector(
-          "audio_fifo_random_iter" + std::to_string(it),
-          serialize_schedule(bursts, cycles, ticks),
-          "oracle: " + where, "rtl: " + where);
+      zhao::save_failing_vector("audio_fifo_random_iter" + std::to_string(it),
+                                serialize_schedule(bursts, cycles, ticks), "oracle: " + where,
+                                "rtl: " + where);
     }
     // invariant sanity on the RTL side itself (D4 bounds, every iteration)
     for (uint32_t occ : r.occupancy) {

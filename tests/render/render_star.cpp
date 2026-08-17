@@ -550,8 +550,7 @@ void test_trail_anchor() {
 
   const uint32_t W = 384, H = 240;
   uint8_t gray[64][3];
-  for (uint32_t i = 0; i < 64; ++i)
-    gray[i][0] = gray[i][1] = gray[i][2] = static_cast<uint8_t>(i);
+  for (uint32_t i = 0; i < 64; ++i) gray[i][0] = gray[i][1] = gray[i][2] = static_cast<uint8_t>(i);
   const auto sample = [&](const std::vector<uint8_t>& rgb, uint32_t sx, uint32_t sy) {
     return rgb[(sy * W + sx) * 3];
   };
@@ -573,8 +572,8 @@ void test_trail_anchor() {
   std::vector<uint8_t> irgb(W * H * 3, 0);
   std::vector<int32_t> idepth(W * H, 0);
   star::FlareSlots islots;
-  star::compose_view(irgb.data(), idepth.data(), W, H, 0, 0, W, H, 0, &I, 1, nullptr, 0,
-                     islots, nullptr);
+  star::compose_view(irgb.data(), idepth.data(), W, H, 0, 0, W, H, 0, &I, 1, nullptr, 0, islots,
+                     nullptr);
   check(sample(irgb, 99, 97) == 13,
         "one source texel peaks at 13 after subtract-8 and two smoothers");
   check(sample(irgb, 101, 97) == 0 && sample(irgb, 99, 99) == 0,
@@ -604,8 +603,7 @@ void test_trail_anchor() {
   const uint8_t newest = sample(rgb, 115, 117);
   const uint8_t oldest = sample(rgb, 76, 108);
   check(newest > oldest && oldest > 0, "newest-to-oldest trail intensity decays");
-  check(sample(rgb, 108, 116) > 0 && sample(rgb, 96, 113) > 0 &&
-            sample(rgb, 83, 110) > 0,
+  check(sample(rgb, 108, 116) > 0 && sample(rgb, 96, 113) > 0 && sample(rgb, 83, 110) > 0,
         "historical silhouettes join with lit continuity");
   const uint8_t shoulder = sample(rgb, 122, 117);
   check(shoulder > 0 && shoulder < newest && sample(rgb, 136, 117) == 0,
@@ -640,10 +638,8 @@ void test_trail_anchor() {
     std::fill(b.begin(), b.end(), 0);
     std::fill(da.begin(), da.end(), 0);
     std::fill(db.begin(), db.end(), 0);
-    star::compose_view(a.data(), da.data(), W, H, 0, 0, W, H, f, &S, 1, nullptr, 0, sa,
-                       nullptr);
-    star::compose_view(b.data(), db.data(), W, H, 0, 0, W, H, f, &ST, 1, nullptr, 0, sb,
-                       nullptr);
+    star::compose_view(a.data(), da.data(), W, H, 0, 0, W, H, f, &S, 1, nullptr, 0, sa, nullptr);
+    star::compose_view(b.data(), db.data(), W, H, 0, 0, W, H, f, &ST, 1, nullptr, 0, sb, nullptr);
     check(a == b, "a static light with trails enabled is byte-identical to trails off");
   }
   check(ts.length == star::kTrailN, "static history still obeys eight-sample eviction");
@@ -719,8 +715,7 @@ void test_gamut_sheet() {
     star::StarIdentity id = star::identity(cls * 17 + 1, cls * 5 + 2, cls * 3 + 3, 0xA5A5A5A5u);
     id.cls = static_cast<uint8_t>(cls);  // force the class; keep the seeds
     const star::StarClass& c = star::kGamut[cls];
-    for (int ch = 0; ch < 3; ++ch)
-      id.under6[ch] = cls == 9 ? id.under6[ch] : c.under6[ch];
+    for (int ch = 0; ch < 3; ++ch) id.under6[ch] = cls == 9 ? id.under6[ch] : c.under6[ch];
     int16_t pts[12];
     star::ramp_points(id, pts);
     uint8_t ramp[64][3];

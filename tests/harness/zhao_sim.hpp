@@ -16,7 +16,7 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>   // std::_Exit (exit_hard)
+#include <cstdlib>  // std::_Exit (exit_hard)
 #include <string>
 #include <vector>
 

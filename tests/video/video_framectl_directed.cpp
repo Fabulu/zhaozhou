@@ -24,12 +24,12 @@ using namespace zref;
 using zhao_video::VideoTb;
 
 static int g_fail = 0;
-#define EXPECT(cond)                                                        \
-  do {                                                                      \
-    if (!(cond)) {                                                          \
-      ++g_fail;                                                             \
-      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);           \
-    }                                                                       \
+#define EXPECT(cond)                                              \
+  do {                                                            \
+    if (!(cond)) {                                                \
+      ++g_fail;                                                   \
+      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+    }                                                             \
   } while (0)
 
 static uint64_t scenario() {
@@ -45,10 +45,10 @@ static uint64_t scenario() {
     uint64_t faults_before = 0;
     while (ticks < 5) {
       tb.step();
-      if (tb.top.o_gpu_tick) ++fences;   // gpu-domain pulse: 1 gpu cycle
+      if (tb.top.o_gpu_tick) ++fences;  // gpu-domain pulse: 1 gpu cycle
       if (tb.vid_edge() && tb.top.o_frame_tick) {
         ++ticks;
-        tb.slot_ready = (ticks == 3) ? 1u : 2u;   // keep handing off
+        tb.slot_ready = (ticks == 3) ? 1u : 2u;  // keep handing off
       }
     }
     tb.slot_ready = 0;
@@ -82,7 +82,7 @@ static uint64_t scenario() {
         if (tb.top.o_repeated) ++repeated_seen;
       }
     }
-    EXPECT(repeated_seen == 2);                        // both frames repeated
+    EXPECT(repeated_seen == 2);                             // both frames repeated
     EXPECT(tb.top.o_deadline_faults == faults_before + 2);  // once per frame
     EXPECT(tb.failures == 0);
     g_fail += tb.failures;
@@ -102,10 +102,8 @@ static uint64_t scenario() {
       tb.deadline_cycles = 1000;
       while (!(tb.vid_edge() && tb.top.o_frame_start)) tb.step();
       const uint32_t target_x = (variant == 0) ? 20u : 21u;  // k=500 / 501
-      while (!(tb.vid_edge() && tb.top.o_y == 1 &&
-               tb.top.o_x == target_x))
-        tb.step();
-      tb.slot_ready = 1;   // first high exactly at the boundary cycle
+      while (!(tb.vid_edge() && tb.top.o_y == 1 && tb.top.o_x == target_x)) tb.step();
+      tb.slot_ready = 1;  // first high exactly at the boundary cycle
       while (!(tb.vid_edge() && tb.top.o_frame_tick)) tb.step();
       const uint64_t faults_before = tb.top.o_deadline_faults;
       tb.slot_ready = 0;
@@ -135,9 +133,9 @@ static uint64_t scenario() {
     tb.step();
     tb.mode_we = false;
     while (!(tb.vid_edge() && tb.top.o_vswap_dec)) tb.step();
-    EXPECT(tb.top.o_mode == 0);           // not latched at the dec (spec 1.1)
+    EXPECT(tb.top.o_mode == 0);  // not latched at the dec (spec 1.1)
     while (!(tb.vid_edge() && tb.top.o_frame_start)) tb.step();
-    EXPECT(tb.top.o_mode == 2);           // latched exactly at frame_start
+    EXPECT(tb.top.o_mode == 2);  // latched exactly at frame_start
     EXPECT(tb.top.o_mode_next == 2);
     EXPECT(tb.failures == 0);
     g_fail += tb.failures;

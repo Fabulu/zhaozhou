@@ -77,8 +77,8 @@ void checkProgram(const std::string& name) {
   const uint8_t* p = vecBytes.data() + 32;
   for (uint32_t i = 0; i < count; ++i, p += recBytes) {
     int32_t out[8] = {0};
-    const zfield::Status st = zfield::interpret(dec.prog, reinterpret_cast<const int32_t*>(p),
-                                                inLanes, out, outLanes);
+    const zfield::Status st =
+        zfield::interpret(dec.prog, reinterpret_cast<const int32_t*>(p), inLanes, out, outLanes);
     const uint32_t actStatus = (st.sat ? 1u : 0u) | (st.rcp0 ? 2u : 0u);
     const int32_t* exp = reinterpret_cast<const int32_t*>(p + inLanes * 4);
     const uint32_t expStatus = rd32(p + inLanes * 4 + outLanes * 4);

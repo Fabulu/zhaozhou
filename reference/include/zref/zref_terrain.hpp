@@ -214,8 +214,8 @@ inline int32_t mirror_texel(int32_t u_raw) {
  * one changes every capture's pixels.
  */
 inline uint8_t mosaic_pick(uint8_t mat_a, uint8_t mat_b, uint8_t weight, int32_t tx, int32_t ty) {
-  const uint32_t h = (static_cast<uint32_t>(tx) * 73856093u) ^
-                     (static_cast<uint32_t>(ty) * 19349663u);
+  const uint32_t h =
+      (static_cast<uint32_t>(tx) * 73856093u) ^ (static_cast<uint32_t>(ty) * 19349663u);
   return (h % 255u) < static_cast<uint32_t>(weight) ? mat_a : mat_b;
 }
 

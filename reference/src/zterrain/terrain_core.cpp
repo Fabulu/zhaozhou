@@ -202,20 +202,22 @@ KeelProfile keel_profile(const render::TerrainPatch& patch, int32_t heart_x, int
           terrain::kSolid)
         continue;
       // cell centre on the envelope lerp (one lattice_lerp + half a cell)
-      const int64_t cx = (static_cast<int64_t>(lattice_lerp(patch.env_x0, patch.env_x1, ci, w - 1)) +
-                          lattice_lerp(patch.env_x0, patch.env_x1, ci + 1, w - 1)) /
-                         2;
-      const int64_t cz = (static_cast<int64_t>(lattice_lerp(patch.env_z0, patch.env_z1, cj, h - 1)) +
-                          lattice_lerp(patch.env_z0, patch.env_z1, cj + 1, h - 1)) /
-                         2;
+      const int64_t cx =
+          (static_cast<int64_t>(lattice_lerp(patch.env_x0, patch.env_x1, ci, w - 1)) +
+           lattice_lerp(patch.env_x0, patch.env_x1, ci + 1, w - 1)) /
+          2;
+      const int64_t cz =
+          (static_cast<int64_t>(lattice_lerp(patch.env_z0, patch.env_z1, cj, h - 1)) +
+           lattice_lerp(patch.env_z0, patch.env_z1, cj + 1, h - 1)) /
+          2;
       const int64_t dx = cx - heart_x, dz = cz - heart_z;
       const int64_t d2 = dx * dx + dz * dz;
       if (d2 > d2max) d2max = d2;
     }
   }
   // d2max is m^2 << 32; isqrt gives metres << 16 (fx16 raw) — floor to m
-  kp.radius_m = d2max > 0 ? static_cast<int32_t>(zref::isqrt_u64(static_cast<uint64_t>(d2max)) >> 16)
-                          : 0;
+  kp.radius_m =
+      d2max > 0 ? static_cast<int32_t>(zref::isqrt_u64(static_cast<uint64_t>(d2max)) >> 16) : 0;
   kp.peak_m = peak == INT32_MIN ? 0 : peak >> 8;  // height16 -> whole metres (floor)
 
   // KEEL_DEPTH = min(max(50, R/2), 126 - max(0, peak)), §3.7. The cap can
@@ -232,7 +234,7 @@ KeelProfile keel_profile(const render::TerrainPatch& patch, int32_t heart_x, int
 }
 
 bool generate_bottom(render::TerrainPatch& patch, int32_t heart_x, int32_t heart_z,
-                              int32_t shallow_override_raw) {
+                     int32_t shallow_override_raw) {
   const int w = patch.width, h = patch.height;
   const size_t n = static_cast<size_t>(w) * h;
   if (w < 2 || h < 2 || patch.heights.size() != n) return false;
@@ -260,8 +262,8 @@ bool generate_bottom(render::TerrainPatch& patch, int32_t heart_x, int32_t heart
         const int64_t d2 = (dx * dx + dz * dz) >> 32;  // m^2 (exact enough: R is whole metres)
         if (d2 < r2) q16 = div_rhu(static_cast<__int128>(d2) * 65536, r2);
       }
-      const __int128 num = static_cast<__int128>(depth_raw) *
-                           static_cast<int32_t>(2621440 + 60 * (65536 - q16));
+      const __int128 num =
+          static_cast<__int128>(depth_raw) * static_cast<int32_t>(2621440 + 60 * (65536 - q16));
       // divisor 100*65536: t = K x (4 + 6(1-q))/10 with the inner scaled x10
       const int32_t t_raw = static_cast<int32_t>(div_rhu(num, 6553600));
       int64_t bot = static_cast<int64_t>(patch.heights[k]) - t_raw;
@@ -314,9 +316,8 @@ void build_runs(const std::vector<WorkEdge>& es, size_t begin, size_t end,
       const WorkEdge& cur = es[j];
       if (!cur.alive || cur.e.side != es[i].e.side) break;
       const bool along_x = es[i].e.side < 2;
-      const bool cont =
-          along_x ? (cur.e.cj == es[i].e.cj && cur.e.ci == prev.e.ci + prev.e.span)
-                  : (cur.e.ci == es[i].e.ci && cur.e.cj == prev.e.cj + prev.e.span);
+      const bool cont = along_x ? (cur.e.cj == es[i].e.cj && cur.e.ci == prev.e.ci + prev.e.span)
+                                : (cur.e.ci == es[i].e.ci && cur.e.cj == prev.e.cj + prev.e.span);
       if (!cont) break;
       ++j;
     }
@@ -332,17 +333,17 @@ RimPlan rim_plan(const terrain::ComposedLattice& lat, const int32_t* vdist) {
   if (lat.w < 2 || lat.h < 2) return plan;
   const int cw = lat.w - 1, ch = lat.h - 1;
 
-  for (int pj = 0; pj < ch; pj += 32) {      // 32x32-cell PAGE blocks (the
-    for (int pi = 0; pi < cw; pi += 32) {    // hardware budget is per page)
+  for (int pj = 0; pj < ch; pj += 32) {    // 32x32-cell PAGE blocks (the
+    for (int pi = 0; pi < cw; pi += 32) {  // hardware budget is per page)
       std::vector<WorkEdge> es;
       for (int cj = pj; cj < pj + 32 && cj < ch; ++cj) {
         for (int ci = pi; ci < pi + 32 && ci < cw; ++ci) {
           for (int side = 0; side < 4; ++side)
             if (is_rim_edge(lat, ci, cj, side))
-              es.push_back(WorkEdge{forge::RimEdge{static_cast<uint16_t>(ci),
-                                                   static_cast<uint16_t>(cj),
-                                                   static_cast<uint8_t>(side), 1},
-                                    true});
+              es.push_back(
+                  WorkEdge{forge::RimEdge{static_cast<uint16_t>(ci), static_cast<uint16_t>(cj),
+                                          static_cast<uint8_t>(side), 1},
+                           true});
         }
       }
       const size_t count = es.size();
@@ -383,10 +384,22 @@ RimPlan rim_plan(const terrain::ComposedLattice& lat, const int32_t* vdist) {
             const size_t base = static_cast<size_t>(e.cj) * lat.w + e.ci;
             size_t va, vb;
             switch (e.side) {
-              case 0: va = base; vb = base + e.span; break;
-              case 1: va = base + lat.w + e.span; vb = base + lat.w; break;
-              case 2: va = base + static_cast<size_t>(e.span) * lat.w; vb = base; break;
-              default: va = base + 1; vb = base + static_cast<size_t>(e.span) * lat.w + 1; break;
+              case 0:
+                va = base;
+                vb = base + e.span;
+                break;
+              case 1:
+                va = base + lat.w + e.span;
+                vb = base + lat.w;
+                break;
+              case 2:
+                va = base + static_cast<size_t>(e.span) * lat.w;
+                vb = base;
+                break;
+              default:
+                va = base + 1;
+                vb = base + static_cast<size_t>(e.span) * lat.w + 1;
+                break;
             }
             int64_t p = vdist[va];
             if (vdist[vb] > p) p = vdist[vb];

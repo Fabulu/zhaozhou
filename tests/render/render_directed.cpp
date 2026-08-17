@@ -336,7 +336,8 @@ void test_no_seam_cracks_drum() {
     }
   if (bg != 0) {
     for (uint32_t x = 0; x < kW; ++x)
-      if (per_col[x] != 0) std::fprintf(stderr, "  drum crack column x=%u (%u px)\n", x, per_col[x]);
+      if (per_col[x] != 0)
+        std::fprintf(stderr, "  drum crack column x=%u (%u px)\n", x, per_col[x]);
   }
   std::printf("  full-screen drum: %u background pixels (must be 0)\n", bg);
   check(bg == 0, "full-screen sky drum leaves no uncovered (crack) pixel");
@@ -362,7 +363,8 @@ void test_no_seam_cracks_terrain() {
   for (uint32_t y = 0; y < kH; ++y)
     for (uint32_t x = 0; x < kW; ++x) {
       const size_t i = static_cast<size_t>(y) * kW + x;
-      if (surf.rgb[i * 3] == bgc.r && surf.rgb[i * 3 + 1] == bgc.g && surf.rgb[i * 3 + 2] == bgc.b) {
+      if (surf.rgb[i * 3] == bgc.r && surf.rgb[i * 3 + 1] == bgc.g &&
+          surf.rgb[i * 3 + 2] == bgc.b) {
         ++bg;
         per_col[x]++;
       }
@@ -591,8 +593,8 @@ void test_resolve_and_crc() {
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
   for (uint32_t row = 0; row < 192; ++row) {
     crc = zhao_abi::zhao_crc32c(crc, slot.data() + static_cast<size_t>(row) * 256 * 2, 256 * 2);
-    crc = zhao_abi::zhao_crc32c(
-        crc, slot.data() + 0x18000 + static_cast<size_t>(row) * 256 * 2, 256 * 2);
+    crc = zhao_abi::zhao_crc32c(crc, slot.data() + 0x18000 + static_cast<size_t>(row) * 256 * 2,
+                                256 * 2);
   }
   for (int i = 0; i < 24; ++i) crc = zhao_abi::zhao_crc32c(crc, border, sizeof(border));
   check(crc == c_disp, "displayed CRC law recomputed by hand matches");
@@ -705,8 +707,7 @@ void test_duo_packed_layout() {
   // wall-clamp law keeps it inside, so its first pixel IS the view's origin
   // ortho_topdown maps screen x from world x and screen y from world Z, so a
   // far -x/-z position clamps the marker into the view's TOP-LEFT corner
-  res.transforms.push_back(
-      {8, zref::render::FormTransform{-1000 << 16, 0, -1000 << 16, 8 << 16}});
+  res.transforms.push_back({8, zref::render::FormTransform{-1000 << 16, 0, -1000 << 16, 8 << 16}});
   const auto body = [&](zhao::ZhaoFrameBuilder& b) {
     auto spc = zhao_abi::zhao_sample_set_presentation_contract();
     spc.payload.mode = zhao_abi::VIDEO_DUO;
@@ -736,7 +737,8 @@ void test_duo_packed_layout() {
   zref::render::SoftwareRenderer rend;
   zref::render::RenderCanvas canvas;
   rend.render_frame(rtest::seal_frame(1, body), 0, canvas, res);  // Z60 warm-up
-  const zref::render::RenderResult r = rend.render_frame(rtest::seal_frame(2, body), 0, canvas, res);
+  const zref::render::RenderResult r =
+      rend.render_frame(rtest::seal_frame(2, body), 0, canvas, res);
   check(r.status == zhao_abi::ZH_ABI_OK, "Duo two-view frame renders");
 
   check(zref::render::kDuoViewBytes == 0x18000u, "one Duo view canvas is 0x18000 bytes");

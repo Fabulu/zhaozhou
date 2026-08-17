@@ -51,8 +51,8 @@ zc::Skeleton chain3() {
   zc::Skeleton sk;
   sk.bone_count = 3;
   sk.bones[0] = zc::Bone{0, 0, 0, 0};
-  sk.bones[1] = zc::Bone{0, 2 * M1, 0, 0};   // hip 2 m out on +X
-  sk.bones[2] = zc::Bone{1, 0, -M1, 0};      // knee 1 m down from hip
+  sk.bones[1] = zc::Bone{0, 2 * M1, 0, 0};  // hip 2 m out on +X
+  sk.bones[2] = zc::Bone{1, 0, -M1, 0};     // knee 1 m down from hip
   return sk;
 }
 
@@ -100,8 +100,8 @@ void test_quat_anchors() {
   // lane-exact in ANY power-of-two quat scale (sqrt(2)/2 is irrational);
   // recorded as a contract-wording finding, bounded here.
   const zref::angle16 half{0x2000};  // 1/8 turn = 45 deg
-  zc::quat16 q90y = zc::quat16_axis_angle(fx16{0}, fx16{M1}, fx16{0}, zref::fx_sin(half),
-                                          zref::fx_cos(half));
+  zc::quat16 q90y =
+      zc::quat16_axis_angle(fx16{0}, fx16{M1}, fx16{0}, zref::fx_sin(half), zref::fx_cos(half));
   check_eq(q90y.q[0], 11585, "90y w lane");
   check_eq(q90y.q[2], 11585, "90y y lane");
   zc::quat16_to_mat3(q90y, m, L);
@@ -126,10 +126,11 @@ void test_quat_error_sweep() {
   // deterministic axis-angle grid; the double oracle is the TEST's, not the
   // implementation's (libm-oracle precedent, test_fixp sin/cos).
   // UNIT axes in fx16 (a non-unit axis makes a non-unit quat: lanes saturate)
-  const int32_t axes[5][3] = {{M1, 0, 0}, {0, M1, 0}, {0, 0, M1}, {37837, 37837, 37837}, {46341, 46341, 0}};
-  double worst_elem = 0;   // max |m_ij - exact*65536|, in fx16 LSB
-  double worst_norm = 0;   // max |col_norm - 65536| (scale drift, no renorm)
-  double worst_rot = 0;    // max angle error of a mapped unit vector, degrees
+  const int32_t axes[5][3] = {
+      {M1, 0, 0}, {0, M1, 0}, {0, 0, M1}, {37837, 37837, 37837}, {46341, 46341, 0}};
+  double worst_elem = 0;  // max |m_ij - exact*65536|, in fx16 LSB
+  double worst_norm = 0;  // max |col_norm - 65536| (scale drift, no renorm)
+  double worst_rot = 0;   // max angle error of a mapped unit vector, degrees
   for (int ai = 0; ai < 5; ++ai) {
     double ax = 0, ay = 0, az = 0;
     const double an = std::sqrt(static_cast<double>(axes[ai][0]) * axes[ai][0] +
@@ -144,11 +145,10 @@ void test_quat_error_sweep() {
       // the integer authoring path: HALF-angle turn = (t + 0.5)/1440 turns
       // (the first draft wrote the full-angle turn — a 2x error the sweep's
       // own 90-deg worst-case exposed; the implementation was innocent)
-      const uint16_t turn =
-          static_cast<uint16_t>((65536LL * (2 * t + 1) / 2880) & 0xFFFF);
-      const zc::quat16 q =
-          zc::quat16_axis_angle(fx16{axes[ai][0]}, fx16{axes[ai][1]}, fx16{axes[ai][2]},
-                                zref::fx_sin(zref::angle16{turn}), zref::fx_cos(zref::angle16{turn}));
+      const uint16_t turn = static_cast<uint16_t>((65536LL * (2 * t + 1) / 2880) & 0xFFFF);
+      const zc::quat16 q = zc::quat16_axis_angle(
+          fx16{axes[ai][0]}, fx16{axes[ai][1]}, fx16{axes[ai][2]},
+          zref::fx_sin(zref::angle16{turn}), zref::fx_cos(zref::angle16{turn}));
       zc::mat3x4fx m;
       zc::quat16_to_mat3(q, m, L);
       // TWO oracles, two different numbers:
@@ -176,21 +176,20 @@ void test_quat_error_sweep() {
         const double dn = std::fabs(nrm - 65536.0);
         if (dn > worst_norm) worst_norm = dn;
         const double tw = hc, tx = hs * ax, ty = hs * ay, tz = hs * az;
-        const double te[9] = {1 - 2 * (ty * ty + tz * tz), 2 * (tx * ty - tz * tw),
-                              2 * (tx * tz + ty * tw),     2 * (tx * ty + tz * tw),
-                              1 - 2 * (tx * tx + tz * tz), 2 * (ty * tz - tx * tw),
-                              2 * (tx * tz - ty * tw),     2 * (ty * tz + tx * tw),
-                              1 - 2 * (tx * tx + ty * ty)};
-        const double dot =
-            (col[0] * te[c] + col[1] * te[3 + c] + col[2] * te[6 + c]) / nrm;
+        const double te[9] = {
+            1 - 2 * (ty * ty + tz * tz), 2 * (tx * ty - tz * tw),     2 * (tx * tz + ty * tw),
+            2 * (tx * ty + tz * tw),     1 - 2 * (tx * tx + tz * tz), 2 * (ty * tz - tx * tw),
+            2 * (tx * tz - ty * tw),     2 * (ty * tz + tx * tw),     1 - 2 * (tx * tx + ty * ty)};
+        const double dot = (col[0] * te[c] + col[1] * te[3 + c] + col[2] * te[6 + c]) / nrm;
         const double deg = std::acos(dot > 1 ? 1 : (dot < -1 ? -1 : dot)) * 180.0 / kPi;
         if (deg > worst_rot) worst_rot = deg;
       }
     }
   }
-  std::printf("quat sweep (S 1.0.14, 3600 rotations): decode element err <= %.2f LSB, "
-              "column-norm drift <= %.2f LSB, end-to-end column angle err <= %.4f deg\n",
-              worst_elem, worst_norm, worst_rot);
+  std::printf(
+      "quat sweep (S 1.0.14, 3600 rotations): decode element err <= %.2f LSB, "
+      "column-norm drift <= %.2f LSB, end-to-end column angle err <= %.4f deg\n",
+      worst_elem, worst_norm, worst_rot);
   // declared bounds for the PROPOSED lane (freeze with the qformats
   // amendment; tightened numbers must re-run this sweep). Decode-only
   // elements: ONE rescale each -> <= 0.5 LSB + exact-formula slack.
@@ -265,8 +264,8 @@ void test_skin_anchors() {
   c.quats.resize(2);
   c.quats[0] = zc::quat16_identity();
   const zref::angle16 half{0x2000};
-  c.quats[1] = zc::quat16_axis_angle(fx16{0}, fx16{0}, fx16{M1}, zref::fx_sin(half),
-                                     zref::fx_cos(half));
+  c.quats[1] =
+      zc::quat16_axis_angle(fx16{0}, fx16{0}, fx16{M1}, zref::fx_sin(half), zref::fx_cos(half));
   bank.clips.push_back(std::move(c));
 
   zc::CreatureType type;
@@ -482,7 +481,8 @@ void test_pose_bank() {
   c.frame_count = 300;  // > cache capacity
   c.root.assign(300 * 3, 0);
   c.quats.resize(300, zc::quat16_identity());
-  for (int f = 0; f < 300; ++f) c.quats[f] = zc::quat16{{static_cast<int16_t>(16000 - f * 8), 0, 0, 0}};
+  for (int f = 0; f < 300; ++f)
+    c.quats[f] = zc::quat16{{static_cast<int16_t>(16000 - f * 8), 0, 0, 0}};
   bank.clips.push_back(std::move(c));
   zc::CreatureType type;
   type.type_id = 3;
@@ -514,7 +514,7 @@ void test_pose_bank() {
   for (int f = 0; f < 128; ++f) full.acquire(type, 1, f);
   check_eq(full.resident(), 128, "cache filled to 128");
   full.begin_frame();
-  full.acquire(type, 1, 0);  // tuple 0 referenced this frame
+  full.acquire(type, 1, 0);    // tuple 0 referenced this frame
   full.acquire(type, 1, 128);  // forces eviction of LRU unreferenced (tuple 1)
   check_eq(full.resident(), 128, "still 128 after evict+insert");
   const zc::mat3x4fx* keep = full.acquire(type, 1, 0);
@@ -633,8 +633,8 @@ void test_ground_tilt() {
   holed.cell_state.assign(4, zref::terrain::kVoidAuthored);
   zc::GroundTilt t5;
   t5.slope_f = 12345;
-  zc::ground_tilt_update(t5, zc::TiltMode::kCompletely, zref::angle16{0}, holed, fx16{M1},
-                         fx16{0}, fx16{M1 / 2}, fx16{10 * M1});
+  zc::ground_tilt_update(t5, zc::TiltMode::kCompletely, zref::angle16{0}, holed, fx16{M1}, fx16{0},
+                         fx16{M1 / 2}, fx16{10 * M1});
   check_eq(t5.slope_f, 12345, "void column holds slope");
 }
 
@@ -674,7 +674,8 @@ void test_bulk_and_skip() {
   check_eq(b.scale, M1 + (M1 >> 4), "exponential smoothing anchor (1 + 1/16)");
   for (int i = 0; i < 200; ++i) zc::bulk_update(b, 4);
   check(b.scale >= 2 * M1 - 16, "converges to target (shift-stall rail 16 raw)");
-  check(zc::bulk_popped(b, static_cast<int32_t>(65536LL + (65536LL * 32768) / 65536)), "pop threshold crossed");
+  check(zc::bulk_popped(b, static_cast<int32_t>(65536LL + (65536LL * 32768) / 65536)),
+        "pop threshold crossed");
 
   check(zc::tick_skip_due(0, 1) && zc::tick_skip_due(4, 1) && zc::tick_skip_due(8, 1),
         "4-tick interval due at 0, 4, 8");
@@ -687,8 +688,8 @@ void test_bulk_and_skip() {
 
 void test_lod() {
   zc::CreatureType t;
-  t.bound_radius = M1;       // 1 m
-  t.micro_error = M1 / 8;    // 0.125 m
+  t.bound_radius = M1;     // 1 m
+  t.micro_error = M1 / 8;  // 0.125 m
   t.splat_error = M1 / 2;
   t.glint_error = M1;
   const int32_t thresh = 512;  // 2 px in S12.8
@@ -708,10 +709,8 @@ void test_lod() {
   check(zc::lod_update(st, 3600, thresh, t) == zc::LodRung::kMicro,
         "3600 <= 0.9*4096: coarsens (hold elapsed)");
   st.hold = 100;
-  check(zc::lod_update(st, 4200, thresh, t) == zc::LodRung::kMicro,
-        "4200 < 1.1*4096: stays micro");
-  check(zc::lod_update(st, 4600, thresh, t) == zc::LodRung::kMesh,
-        "4600 >= 1.1*4096: refines");
+  check(zc::lod_update(st, 4200, thresh, t) == zc::LodRung::kMicro, "4200 < 1.1*4096: stays micro");
+  check(zc::lod_update(st, 4600, thresh, t) == zc::LodRung::kMesh, "4600 >= 1.1*4096: refines");
 
   // minimum hold: a deep move does not switch until the 15 ticks elapse.
   // hold starts 0; calls 1..15 see hold < 15 (call 15 raises it TO 15);
@@ -747,9 +746,9 @@ void test_gibs() {
   zc::spawn_gibs(t, pose.data(), fx16{5 * M1}, fx16{0}, fx16{0}, 42, g1);
   zc::spawn_gibs(t, pose.data(), fx16{5 * M1}, fx16{0}, fx16{0}, 42, g2);
   check_eq(g1.size(), 14, "one gib per meshlet vertex (12 ring + 2 apex)");
-  check(g1.size() == g2.size() && std::memcmp(g1.data(), g2.data(),
-                                              g1.size() * sizeof(zc::Gib)) == 0,
-        "gib burst deterministic (same seed)");
+  check(
+      g1.size() == g2.size() && std::memcmp(g1.data(), g2.data(), g1.size() * sizeof(zc::Gib)) == 0,
+      "gib burst deterministic (same seed)");
   // world offset applied: vertices span x in [-0.5, 0.5] m around the root
   for (const zc::Gib& g : g1) {
     check(g.x >= 4 * M1 && g.x <= 6 * M1, "gib world offset applied (integer bounds)");

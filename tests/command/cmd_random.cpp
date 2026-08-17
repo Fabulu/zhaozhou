@@ -94,30 +94,48 @@ uint64_t runTimeline(uint32_t frames, uint64_t seed) {
   for (uint32_t f = 0; f < frames; ++f) {
     // build this frame's record program
     opcodes.clear();
-    w0s.clear(); w1s.clear(); w2s.clear(); w3s.clear();
+    w0s.clear();
+    w1s.clear();
+    w2s.clear();
+    w3s.clear();
     const int n_rec = static_cast<int>(rng(6));
     opcodes.push_back(ZHAO_OP_BEGIN_FRAME);  // frame opens with BeginFrame
-    w0s.push_back(f); w1s.push_back(rng(3)); w2s.push_back(0);
-    w3s.push_back(20 + rng(90));             // small deadline: both paths hit
+    w0s.push_back(f);
+    w1s.push_back(rng(3));
+    w2s.push_back(0);
+    w3s.push_back(20 + rng(90));  // small deadline: both paths hit
     for (int r = 0; r < n_rec; ++r) {
       const uint32_t k = rng(6);
       if (k == 0) {
         opcodes.push_back(ZHAO_OP_SET_PRESENTATION_CONTRACT);
-        w0s.push_back(rng(3)); w1s.push_back(0); w2s.push_back(0); w3s.push_back(0);
+        w0s.push_back(rng(3));
+        w1s.push_back(0);
+        w2s.push_back(0);
+        w3s.push_back(0);
       } else if (k == 1) {
         opcodes.push_back(ZHAO_OP_DEBUG_FRAME_BLIT);
-        w0s.push_back((rng(3) << 8) | rng(2)); w1s.push_back(rng.next());
-        w2s.push_back(rng.next()); w3s.push_back(rng.next());
+        w0s.push_back((rng(3) << 8) | rng(2));
+        w1s.push_back(rng.next());
+        w2s.push_back(rng.next());
+        w3s.push_back(rng.next());
       } else if (k == 2) {
         opcodes.push_back(ZHAO_OP_DEBUG_RUMBLE);
-        w0s.push_back(rng.next()); w1s.push_back(0); w2s.push_back(0); w3s.push_back(0);
+        w0s.push_back(rng.next());
+        w1s.push_back(0);
+        w2s.push_back(0);
+        w3s.push_back(0);
       } else if (k == 3) {
         opcodes.push_back(ZHAO_OP_NOP);
-        w0s.push_back(0); w1s.push_back(0); w2s.push_back(0); w3s.push_back(0);
+        w0s.push_back(0);
+        w1s.push_back(0);
+        w2s.push_back(0);
+        w3s.push_back(0);
       } else {
         opcodes.push_back(static_cast<uint16_t>(rng.next()));  // unknown/etc
-        w0s.push_back(rng.next()); w1s.push_back(rng.next());
-        w2s.push_back(rng.next()); w3s.push_back(rng.next());
+        w0s.push_back(rng.next());
+        w1s.push_back(rng.next());
+        w2s.push_back(rng.next());
+        w3s.push_back(rng.next());
       }
     }
     rec_idx = 0;
@@ -182,27 +200,26 @@ uint64_t runTimeline(uint32_t frames, uint64_t seed) {
 
       // pre-edge state snapshot for the RUN->DONE differential count
       zref::SlotState pre_rtl[3];
-      for (int s = 0; s < 3; ++s) pre_rtl[s] = static_cast<zref::SlotState>(rtl.top_->slot_state_o[s]);
+      for (int s = 0; s < 3; ++s)
+        pre_rtl[s] = static_cast<zref::SlotState>(rtl.top_->slot_state_o[s]);
 
       const zref::SchedObs a = rtl.cycle(e);
       const zref::SchedObs b = orc.cycle(e);
       const char* where = nullptr;
       if (!zhao_cmd::obsEqual(a, b, &where)) {
         char what[160];
-        std::snprintf(what, sizeof(what),
-                      "random: RTL != oracle (%s) @%llu [mode r=%u o=%u pend_o=%u rec=%u op=%04x w0=%08x]",
-                      where, static_cast<unsigned long long>(cycle),
-                      static_cast<unsigned>(a.mode), static_cast<unsigned>(b.mode),
-                      static_cast<unsigned>(b.mode_pending),
-                      e.rec_valid ? 1u : 0u, static_cast<unsigned>(e.opcode),
-                      e.w0);
+        std::snprintf(
+            what, sizeof(what),
+            "random: RTL != oracle (%s) @%llu [mode r=%u o=%u pend_o=%u rec=%u op=%04x w0=%08x]",
+            where, static_cast<unsigned long long>(cycle), static_cast<unsigned>(a.mode),
+            static_cast<unsigned>(b.mode), static_cast<unsigned>(b.mode_pending),
+            e.rec_valid ? 1u : 0u, static_cast<unsigned>(e.opcode), e.w0);
         check(false, what, 1, 0);
       }
       // fence bookkeeping + law
       if (a.fence) {
         ++fences_rtl;
-        check(a.state[a.fence_slot] == SlotState::Done,
-              "random: fence rides a DONE slot", 1,
+        check(a.state[a.fence_slot] == SlotState::Done, "random: fence rides a DONE slot", 1,
               static_cast<uint64_t>(a.state[a.fence_slot]));
       }
       if (b.fence) ++fences_orc;
@@ -239,10 +256,8 @@ uint64_t runTimeline(uint32_t frames, uint64_t seed) {
       ++cycle;
     }
   }
-  check(fences_rtl == fences_orc, "random: fence count RTL == oracle", fences_orc,
-        fences_rtl);
-  check(fences_rtl == run2done, "random: fences == FPGA_RUNNING->DONE count",
-        run2done, fences_rtl);
+  check(fences_rtl == fences_orc, "random: fence count RTL == oracle", fences_orc, fences_rtl);
+  check(fences_rtl == run2done, "random: fences == FPGA_RUNNING->DONE count", run2done, fences_rtl);
   return hash;
 }
 
@@ -262,9 +277,8 @@ int main(int argc, char** argv) {
   const uint64_t hash1 = runTimeline(frames, seed);
   const uint64_t hash2 = runTimeline(frames, seed);  // plan R1: run twice
   check(hash1 == hash2, "run-twice transcript hash identical", hash1, hash2);
-  std::printf("cmd_random: %u frames, seed 0x%016llx, transcript hash 0x%016llx\n",
-              frames, static_cast<unsigned long long>(seed),
-              static_cast<unsigned long long>(hash1));
+  std::printf("cmd_random: %u frames, seed 0x%016llx, transcript hash 0x%016llx\n", frames,
+              static_cast<unsigned long long>(seed), static_cast<unsigned long long>(hash1));
 
   return zhao::report_and_exit("cmd_random");
 }

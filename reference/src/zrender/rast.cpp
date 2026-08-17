@@ -231,15 +231,14 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 // rounding per channel
                 const int32_t tx = terrain::mirror_texel(u);
                 const int32_t ty = terrain::mirror_texel(v);
-                const uint8_t tile =
-                    tex->mosaic ? terrain::mosaic_pick(tex->tile_a, tex->tile_b, tex->weight,
-                                                       u >> 10, v >> 10)
-                                : tex->tile_a;
-                const uint8_t ci8 = tex->ts->tiles[tile][(static_cast<size_t>(ty) << 6) +
-                                                         static_cast<size_t>(tx)];
+                const uint8_t tile = tex->mosaic
+                                         ? terrain::mosaic_pick(tex->tile_a, tex->tile_b,
+                                                                tex->weight, u >> 10, v >> 10)
+                                         : tex->tile_a;
+                const uint8_t ci8 =
+                    tex->ts->tiles[tile][(static_cast<size_t>(ty) << 6) + static_cast<size_t>(tx)];
                 const uint16_t c565 = tex->ts->palette[ci8];
-                const uint32_t r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F,
-                               b5 = c565 & 0x1F;
+                const uint32_t r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F, b5 = c565 & 0x1F;
                 dst[0] = sat_u8((((r5 * 255 + 15) / 31) * tex->mod_r + 32768) >> 16);
                 dst[1] = sat_u8((((g6 * 255 + 31) / 63) * tex->mod_g + 32768) >> 16);
                 dst[2] = sat_u8((((b5 * 255 + 15) / 31) * tex->mod_b + 32768) >> 16);

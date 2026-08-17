@@ -203,9 +203,7 @@ struct ClipBank {
 };
 
 /** Byte size of one frame as shipped: 12 + 8 * bone_count (creature_rules 2.1). */
-inline constexpr uint32_t clip_frame_bytes(uint8_t bone_count) {
-  return 12u + 8u * bone_count;
-}
+inline constexpr uint32_t clip_frame_bytes(uint8_t bone_count) { return 12u + 8u * bone_count; }
 
 // ----------------------------------------------------- pose bank (GEOM.POSE) —
 
@@ -299,13 +297,13 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
 
 // -------------------------------------------------------------- meshlets ---
 
-inline constexpr int kMeshletMaxVerts = 64;   // charter 10
-inline constexpr int kMeshletMaxTris = 126;   // charter 10 (96..126 band)
+inline constexpr int kMeshletMaxVerts = 64;  // charter 10
+inline constexpr int kMeshletMaxTris = 126;  // charter 10 (96..126 band)
 
 /** One compiled meshlet (charter 10): <=64 verts, <=126 tris, one material. */
 struct Meshlet {
   std::vector<SkinVertex> verts;
-  std::vector<uint8_t> idx;  // 3 * tri_count vertex indices
+  std::vector<uint8_t> idx;           // 3 * tri_count vertex indices
   uint8_t r = 128, g = 128, b = 128;  // part material (the CLUT8 page stand-in)
 };
 
@@ -337,9 +335,9 @@ struct RingPart {
   std::vector<RingSpec> rings;
   uint8_t caps = 0;
   uint8_t align = 0;
-  uint8_t bone = 0;         // rigid part: one bone per part (donor law)
-  uint8_t pitch_q = 0;      // quarter turns about X applied at build
-  uint8_t yaw_q = 0;        // quarter turns about Y applied at build
+  uint8_t bone = 0;     // rigid part: one bone per part (donor law)
+  uint8_t pitch_q = 0;  // quarter turns about X applied at build
+  uint8_t yaw_q = 0;    // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;
 };
 
@@ -417,7 +415,7 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
 
 /** Source vertex carrying 3 influences (the authoring rig's export). */
 struct SourceVertex {
-  int32_t x, y, z;           // fx16 bind position
+  int32_t x, y, z;  // fx16 bind position
   uint8_t b0 = 0, b1 = 0, b2 = 0;
   uint8_t w0 = 0, w1 = 0, w2 = 0;  // 1/64 quanta, w0+w1+w2 == 64 (validated)
 };
@@ -425,9 +423,9 @@ struct SourceVertex {
 struct ClampVerdict {
   uint32_t worst_vertex = 0;
   uint32_t worst_frame = 0;
-  int32_t worst_err = 0;  // fx16 — w2 * |p3(f) - p12(f)| at the worst frame
-  bool warn = false;      //   > 1% of bound radius
-  bool reject = false;    //   > 3% of bound radius (author must re-rig)
+  int32_t worst_err = 0;         // fx16 — w2 * |p3(f) - p12(f)| at the worst frame
+  bool warn = false;             //   > 1% of bound radius
+  bool reject = false;           //   > 3% of bound radius (author must re-rig)
   uint32_t renorm_adjusted = 0;  // vertices whose largest weight got the
                                  // force-to-64 adjustment
 };
@@ -586,9 +584,9 @@ LodRung lod_update(LodState& st, int32_t proj_radius_q8, int32_t thresh_q8,
 
 /** A gib particle (the PART.SPAWN burst payload — DrawPopulation shape). */
 struct Gib {
-  int32_t x, y, z;      // fx16 spawn position (world)
-  int32_t vx, vy, vz;   // fx16 per-tick velocity
-  uint8_t size;         // U 0.4.4 px
+  int32_t x, y, z;     // fx16 spawn position (world)
+  int32_t vx, vy, vz;  // fx16 per-tick velocity
+  uint8_t size;        // U 0.4.4 px
   uint8_t r, g, b;
 };
 
@@ -613,9 +611,9 @@ void spawn_gibs(const CreatureType& type, const mat3x4fx* palette, fx16 wx, fx16
  * are the pieces (the sim owns gameplay truth, charter 29-8).
  */
 struct SimParams {
-  uint8_t skip_shift = 0;  // update every 4^n ticks (0 = every tick)
-  fx16 tap_dist{2 << 14};  // rotateOnGround tap half-distance (0.5 m)
-  fx16 tilt_step{1 << 13}; // per-tick slope rate limit (0.125)
+  uint8_t skip_shift = 0;   // update every 4^n ticks (0 = every tick)
+  fx16 tap_dist{2 << 14};   // rotateOnGround tap half-distance (0.5 m)
+  fx16 tilt_step{1 << 13};  // per-tick slope rate limit (0.125)
 };
 
 struct CreatureInstance;  // defined below (compositor section)

@@ -52,8 +52,8 @@ void check_eq(uint64_t expected, uint64_t actual, const char* what) {
 
 // RTL-vs-oracle differential core (stream + occupancy + shadows + counters)
 bool diff(const std::vector<Burst>& bursts, uint32_t cycles,
-          const std::vector<uint32_t>& frame_ticks, RunResult* out_rtl,
-          RunResult* out_oracle, const char* scenario) {
+          const std::vector<uint32_t>& frame_ticks, RunResult* out_rtl, RunResult* out_oracle,
+          const char* scenario) {
   RtlDev rtl;
   OracleDev orc;
   *out_rtl = zhao_audio::run_schedule(rtl, bursts, cycles, frame_ticks);
@@ -96,8 +96,7 @@ int main() {
     std::vector<Burst> bursts;
     bursts.push_back(Burst{0, 256});
     bursts.push_back(Burst{16, 256});
-    for (uint32_t base = 1024; base < 3 * 4 * zref::kAudioPairsPerFrame;
-         base += 1024) {
+    for (uint32_t base = 1024; base < 3 * 4 * zref::kAudioPairsPerFrame; base += 1024) {
       bursts.push_back(Burst{base, 256});
     }
     const uint32_t cycles = 3 * 4 * zref::kAudioPairsPerFrame;  // 9600
@@ -119,14 +118,12 @@ int main() {
     for (; i < r.stream.size(); ++i) {
       uint16_t l, rr;
       zhao_audio::pair_k(expect++, &l, &rr);
-      const bool ok = r.stream[i].valid && !r.stream[i].underrun &&
-                      r.stream[i].l == l && r.stream[i].r == rr;
+      const bool ok =
+          r.stream[i].valid && !r.stream[i].underrun && r.stream[i].l == l && r.stream[i].r == rr;
       if (!ok) {
         char buf[128];
-        std::snprintf(buf, sizeof buf,
-                      "steady fill: pair %llu mismatch (%04x,%04x vs %04x,%04x)",
-                      (unsigned long long)(expect - 1), r.stream[i].l, r.stream[i].r,
-                      l, rr);
+        std::snprintf(buf, sizeof buf, "steady fill: pair %llu mismatch (%04x,%04x vs %04x,%04x)",
+                      (unsigned long long)(expect - 1), r.stream[i].l, r.stream[i].r, l, rr);
         check(false, buf);
         break;
       }
@@ -194,8 +191,7 @@ int main() {
         zhao_audio::pair_k(expect++, &l, &rr);
         if (r.stream[i].l != l || r.stream[i].r != rr) {
           char buf[128];
-          std::snprintf(buf, sizeof buf,
-                        "deliberate underrun: pair %llu out of order",
+          std::snprintf(buf, sizeof buf, "deliberate underrun: pair %llu out of order",
                         (unsigned long long)(expect - 1));
           check(false, buf);
         }
@@ -213,8 +209,7 @@ int main() {
       ++events;
       size_t starved = 0;
       while (i < r.stream.size() && r.stream[i].underrun) {
-        const bool ok = r.stream[i].valid && r.stream[i].l == cur_l &&
-                        r.stream[i].r == cur_r;
+        const bool ok = r.stream[i].valid && r.stream[i].l == cur_l && r.stream[i].r == cur_r;
         if (!ok) check(false, "deliberate underrun: repeat tick bit-exact");
         check_eq(r.stream[i].underruns, static_cast<uint64_t>(events),
                  "deliberate underrun: ONE count per continuous event");
@@ -223,10 +218,8 @@ int main() {
       }
       if (events == 1) first_starve_len = starved;
     }
-    check(first_starve_len >= 16,
-          "deliberate underrun: a real starvation run observed");
-    check_eq(expect, 1024,
-             "deliberate underrun: every written pair emitted exactly once");
+    check(first_starve_len >= 16, "deliberate underrun: a real starvation run observed");
+    check_eq(expect, 1024, "deliberate underrun: every written pair emitted exactly once");
     check_eq(events, 2, "deliberate underrun: exactly two continuous events");
   }
 
@@ -256,8 +249,7 @@ int main() {
     }
     check_eq(occ_max, AudioFifo::kDepth, "full backpressure: occupancy reaches full");
     check(occ_max <= AudioFifo::kDepth, "full backpressure: never beyond depth");
-    check(full_cycles >= 512,
-          "full backpressure: a real sustained stall at full observed");
+    check(full_cycles >= 512, "full backpressure: a real sustained stall at full observed");
     // stream: [silence head] pairs 0..4095 in order, then repeats of the
     // last pair once starved (never a gap)
     size_t i = 0;
@@ -339,9 +331,8 @@ int main() {
           }
           res->occupancy.push_back(dev.occupancy());
           if (dev.audio_edge_fired) {
-            res->stream.push_back(RunResult::Tick{
-                dev.pcm_valid, dev.pcm_l, dev.pcm_r, dev.underrun_status,
-                dev.underruns()});
+            res->stream.push_back(RunResult::Tick{dev.pcm_valid, dev.pcm_l, dev.pcm_r,
+                                                  dev.underrun_status, dev.underruns()});
           }
         }
         res->underruns_final = dev.underruns();
@@ -364,10 +355,8 @@ int main() {
                       r.stream[i].r == static_cast<uint16_t>(want[k].r);
       if (!ok) {
         char buf[160];
-        std::snprintf(buf, sizeof buf,
-                      "tone passthrough: tick %zu (%04x,%04x) vs tone (%04x,%04x)",
-                      k, r.stream[i].l, r.stream[i].r, (uint16_t)want[k].l,
-                      (uint16_t)want[k].r);
+        std::snprintf(buf, sizeof buf, "tone passthrough: tick %zu (%04x,%04x) vs tone (%04x,%04x)",
+                      k, r.stream[i].l, r.stream[i].r, (uint16_t)want[k].l, (uint16_t)want[k].r);
         check(false, buf);
         break;
       }

@@ -33,18 +33,16 @@ namespace zref {
 // ------------------------------------------------------------ helpers -----
 
 // saturating increment (spec/counters.md 4: u64 counters saturate, never wrap)
-inline uint64_t sat_inc64(uint64_t v) {
-  return (v == 0xFFFFFFFFFFFFFFFFull) ? v : v + 1;
-}
+inline uint64_t sat_inc64(uint64_t v) { return (v == 0xFFFFFFFFFFFFFFFFull) ? v : v + 1; }
 
 // ---------------------------------------------------------------- pads -----
 
 // Raw decoded pad state as it enters INPUT.SNAPSHOT (hardware applies ZERO
 // policy: raw sticks, no deadzone/calibration/remap — input_rules.md 1).
 struct PadRawState {
-  bool     present;
+  bool present;
   uint32_t buttons;
-  int16_t  lx, ly, rx, ry;
+  int16_t lx, ly, rx, ry;
 };
 
 inline PadRawState absentPad() { return PadRawState{false, 0, 0, 0, 0, 0}; }
@@ -53,33 +51,33 @@ inline PadRawState absentPad() { return PadRawState{false, 0, 0, 0, 0, 0}; }
 // Field order = wire order; toWire() emits the exact .zcap CONTROLLER_SNAPSHOT
 // entry bytes (byte-identical to the SV zhao_pack_pad_frame layout).
 struct PadFrame {
-  uint8_t  pad_index;
-  uint8_t  flags;      // bit0 pad_present; bits 1-7 reserved 0
-  uint16_t sequence;   // per-pad monotonic (input_rules.md 2.3)
+  uint8_t pad_index;
+  uint8_t flags;      // bit0 pad_present; bits 1-7 reserved 0
+  uint16_t sequence;  // per-pad monotonic (input_rules.md 2.3)
   uint32_t buttons;
-  int16_t  lx, ly, rx, ry;
-  uint32_t rsv;        // reserved, 0
+  int16_t lx, ly, rx, ry;
+  uint32_t rsv;  // reserved, 0
 
   bool operator==(const PadFrame& o) const {
     return pad_index == o.pad_index && flags == o.flags && sequence == o.sequence &&
-           buttons == o.buttons && lx == o.lx && ly == o.ly && rx == o.rx &&
-           ry == o.ry && rsv == o.rsv;
+           buttons == o.buttons && lx == o.lx && ly == o.ly && rx == o.rx && ry == o.ry &&
+           rsv == o.rsv;
   }
   bool operator!=(const PadFrame& o) const { return !(*this == o); }
 };
 
 // Exact wire bytes (20) of one PadFrame — the .zcap 0x0004 entry body.
 inline void padFrameToWire(const PadFrame& f, uint8_t out[20]) {
-  out[0]  = f.pad_index;
-  out[1]  = f.flags;
-  out[2]  = uint8_t(f.sequence & 0xFF);
-  out[3]  = uint8_t(f.sequence >> 8);
-  out[4]  = uint8_t(f.buttons & 0xFF);
-  out[5]  = uint8_t((f.buttons >> 8) & 0xFF);
-  out[6]  = uint8_t((f.buttons >> 16) & 0xFF);
-  out[7]  = uint8_t((f.buttons >> 24) & 0xFF);
-  out[8]  = uint8_t(uint16_t(f.lx) & 0xFF);
-  out[9]  = uint8_t(uint16_t(f.lx) >> 8);
+  out[0] = f.pad_index;
+  out[1] = f.flags;
+  out[2] = uint8_t(f.sequence & 0xFF);
+  out[3] = uint8_t(f.sequence >> 8);
+  out[4] = uint8_t(f.buttons & 0xFF);
+  out[5] = uint8_t((f.buttons >> 8) & 0xFF);
+  out[6] = uint8_t((f.buttons >> 16) & 0xFF);
+  out[7] = uint8_t((f.buttons >> 24) & 0xFF);
+  out[8] = uint8_t(uint16_t(f.lx) & 0xFF);
+  out[9] = uint8_t(uint16_t(f.lx) >> 8);
   out[10] = uint8_t(uint16_t(f.ly) & 0xFF);
   out[11] = uint8_t(uint16_t(f.ly) >> 8);
   out[12] = uint8_t(uint16_t(f.rx) & 0xFF);
@@ -207,7 +205,7 @@ class RumbleBridge {
 
   const uint8_t* duty() const { return duty_; }
   uint8_t duty(int pad) const { return duty_[pad]; }
-  uint64_t dropped() const { return dropped_; }          // live counter
+  uint64_t dropped() const { return dropped_; }               // live counter
   uint64_t droppedShadow() const { return dropped_shadow_; }  // frame-stable
 
   // PWM carrier model (input_rules.md 3): 8-bit phase, free-running from
@@ -221,9 +219,9 @@ class RumbleBridge {
   }
 
  private:
-  uint8_t duty_[4];        // latched targets (the pad PHY out)
-  bool    pend_valid_[4];
-  bool    pend_en_[4];
+  uint8_t duty_[4];  // latched targets (the pad PHY out)
+  bool pend_valid_[4];
+  bool pend_en_[4];
   uint8_t pend_str_[4];
   uint64_t dropped_, dropped_shadow_;
 };

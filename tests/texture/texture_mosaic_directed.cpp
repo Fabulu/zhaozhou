@@ -124,8 +124,8 @@ zr::TerrainPatch tex_patch(uint8_t wa, uint16_t tint_v) {
   p.env_x1 = p.env_z1 = (2 << 16);
   p.heights.assign(9, 2560);  // flat 10 m top
   p.tileset_id = 77;
-  p.mat_a.assign(4, 0);   // tile 0: palette entry 1 everywhere
-  p.mat_b.assign(4, 1);   // tile 1: palette entry 2 everywhere
+  p.mat_a.assign(4, 0);  // tile 0: palette entry 1 everywhere
+  p.mat_b.assign(4, 1);  // tile 1: palette entry 2 everywhere
   p.mat_w.assign(4, wa);
   p.tint.assign(9, tint_v);
   return p;
@@ -219,9 +219,12 @@ void test_rendered_mosaic() {
   for (uint32_t y = 100; y < 140; ++y)
     for (uint32_t x = 170; x < 215; ++x) {
       const uint16_t q = rtest::px(c3, 0, x, y, 384);
-      if (q == resolve_px((const uint8_t[]){161, 152, 74}, x, y)) ++na;
-      else if (q == resolve_px((const uint8_t[]){31, 128, 191}, x, y)) ++nb;
-      else if (q != resolve_px((const uint8_t[]){0, 0, 0}, x, y)) ++other;  // bg dither
+      if (q == resolve_px((const uint8_t[]){161, 152, 74}, x, y))
+        ++na;
+      else if (q == resolve_px((const uint8_t[]){31, 128, 191}, x, y))
+        ++nb;
+      else if (q != resolve_px((const uint8_t[]){0, 0, 0}, x, y))
+        ++other;  // bg dither
     }
   std::printf("  dither census: A=%d B=%d other=%d\n", na, nb, other);
   check(na > 50 && nb > 50, "weight 128: BOTH tile families visible in one cell");

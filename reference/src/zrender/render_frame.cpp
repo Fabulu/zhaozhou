@@ -262,8 +262,7 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
           ts = res.tileset(patch->tileset_id);
           if (ts == nullptr) ++rr.resource_misses;
         }
-        terrain.push_back(
-            TerrainInst{patch, c.payload.program, c.payload.transform, mat, ts});
+        terrain.push_back(TerrainInst{patch, c.payload.program, c.payload.transform, mat, ts});
         break;
       }
       case zhao_abi::ZHAO_OP_DRAW_FORM: {
@@ -372,91 +371,91 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
         // Sweep the primitive list twice: everything except Cloud (bands,
         // cap, under, sun — already in pass order), then Cloud.
         for (int sweep = 0; sweep < 2; ++sweep) {
-        const bool cloud_sweep = sweep == 1;
-        for (const sky::SkyPrimitive& p : prims) {
-          if ((p.layer == sky::SkyLayer::Cloud) != cloud_sweep) continue;
-          ScreenV sv[3];
-          bool ok = true;
-          for (int k = 0; k < 3; ++k) {
-            const ProjOut o = project_vertex(rpp, vpp, p.v[k].x, p.v[k].y, p.v[k].z, &rr.sat);
-            if (!o.in) {
-              ok = false;
-              break;
+          const bool cloud_sweep = sweep == 1;
+          for (const sky::SkyPrimitive& p : prims) {
+            if ((p.layer == sky::SkyLayer::Cloud) != cloud_sweep) continue;
+            ScreenV sv[3];
+            bool ok = true;
+            for (int k = 0; k < 3; ++k) {
+              const ProjOut o = project_vertex(rpp, vpp, p.v[k].x, p.v[k].y, p.v[k].z, &rr.sat);
+              if (!o.in) {
+                ok = false;
+                break;
+              }
+              sv[k] = o.s;
+              sv[k].a = static_cast<int32_t>(p.v[k].alpha) << 8;  // Q16.16
             }
-            sv[k] = o.s;
-            sv[k].a = static_cast<int32_t>(p.v[k].alpha) << 8;  // Q16.16
+            if (!ok) continue;
+            TriMode m;
+            uint8_t cr = 0, cg = 0, cb = 0;
+            switch (p.layer) {
+              case sky::SkyLayer::BandLower:
+                cr = lerp8(sky.set->band_lower_horizon.r, sky.set->band_lower_top.r, p.row,
+                           sky::kBandRows);
+                cg = lerp8(sky.set->band_lower_horizon.g, sky.set->band_lower_top.g, p.row,
+                           sky::kBandRows);
+                cb = lerp8(sky.set->band_lower_horizon.b, sky.set->band_lower_top.b, p.row,
+                           sky::kBandRows);
+                m.depth_test = false;
+                m.depth_write = true;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkyFarDepth;
+                break;
+              case sky::SkyLayer::BandUpper:
+                cr = lerp8(sky.set->band_upper_bottom.r, sky.set->band_upper_top.r, p.row,
+                           sky::kBandRows);
+                cg = lerp8(sky.set->band_upper_bottom.g, sky.set->band_upper_top.g, p.row,
+                           sky::kBandRows);
+                cb = lerp8(sky.set->band_upper_bottom.b, sky.set->band_upper_top.b, p.row,
+                           sky::kBandRows);
+                m.depth_test = false;
+                m.depth_write = true;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkyFarDepth;
+                break;
+              case sky::SkyLayer::Cap:
+                cr = sky.set->cap.r;
+                cg = sky.set->cap.g;
+                cb = sky.set->cap.b;
+                m.depth_test = false;
+                m.depth_write = true;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkyFarDepth;
+                break;
+              case sky::SkyLayer::Under:
+                cr = sky.set->under.r;
+                cg = sky.set->under.g;
+                cb = sky.set->under.b;
+                m.depth_test = true;
+                m.depth_write = true;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkyUnderDepth;
+                break;
+              case sky::SkyLayer::Cloud:
+                cr = sky.set->cloud.r;
+                cg = sky.set->cloud.g;
+                cb = sky.set->cloud.b;
+                m.depth_test = true;
+                m.depth_write = false;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkyCloudDepth;
+                m.blend = BlendMode::kAlpha;
+                m.interp_alpha = true;
+                break;
+              case sky::SkyLayer::Sun:
+                cr = sky.set->sun.r;
+                cg = sky.set->sun.g;
+                cb = sky.set->sun.b;
+                m.depth_test = true;
+                m.depth_write = false;
+                m.use_fixed_depth = true;
+                m.fixed_depth = kSkySunDepth;
+                m.blend = BlendMode::kAdditive;
+                m.interp_alpha = true;
+                break;
+            }
+            raster_tri(surf, vpp, sv[0], sv[1], sv[2], cr, cg, cb, m);
           }
-          if (!ok) continue;
-          TriMode m;
-          uint8_t cr = 0, cg = 0, cb = 0;
-          switch (p.layer) {
-            case sky::SkyLayer::BandLower:
-              cr = lerp8(sky.set->band_lower_horizon.r, sky.set->band_lower_top.r, p.row,
-                         sky::kBandRows);
-              cg = lerp8(sky.set->band_lower_horizon.g, sky.set->band_lower_top.g, p.row,
-                         sky::kBandRows);
-              cb = lerp8(sky.set->band_lower_horizon.b, sky.set->band_lower_top.b, p.row,
-                         sky::kBandRows);
-              m.depth_test = false;
-              m.depth_write = true;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkyFarDepth;
-              break;
-            case sky::SkyLayer::BandUpper:
-              cr = lerp8(sky.set->band_upper_bottom.r, sky.set->band_upper_top.r, p.row,
-                         sky::kBandRows);
-              cg = lerp8(sky.set->band_upper_bottom.g, sky.set->band_upper_top.g, p.row,
-                         sky::kBandRows);
-              cb = lerp8(sky.set->band_upper_bottom.b, sky.set->band_upper_top.b, p.row,
-                         sky::kBandRows);
-              m.depth_test = false;
-              m.depth_write = true;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkyFarDepth;
-              break;
-            case sky::SkyLayer::Cap:
-              cr = sky.set->cap.r;
-              cg = sky.set->cap.g;
-              cb = sky.set->cap.b;
-              m.depth_test = false;
-              m.depth_write = true;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkyFarDepth;
-              break;
-            case sky::SkyLayer::Under:
-              cr = sky.set->under.r;
-              cg = sky.set->under.g;
-              cb = sky.set->under.b;
-              m.depth_test = true;
-              m.depth_write = true;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkyUnderDepth;
-              break;
-            case sky::SkyLayer::Cloud:
-              cr = sky.set->cloud.r;
-              cg = sky.set->cloud.g;
-              cb = sky.set->cloud.b;
-              m.depth_test = true;
-              m.depth_write = false;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkyCloudDepth;
-              m.blend = BlendMode::kAlpha;
-              m.interp_alpha = true;
-              break;
-            case sky::SkyLayer::Sun:
-              cr = sky.set->sun.r;
-              cg = sky.set->sun.g;
-              cb = sky.set->sun.b;
-              m.depth_test = true;
-              m.depth_write = false;
-              m.use_fixed_depth = true;
-              m.fixed_depth = kSkySunDepth;
-              m.blend = BlendMode::kAdditive;
-              m.interp_alpha = true;
-              break;
-          }
-          raster_tri(surf, vpp, sv[0], sv[1], sv[2], cr, cg, cb, m);
-        }
         }
       }
     }

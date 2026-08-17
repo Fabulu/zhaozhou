@@ -43,7 +43,10 @@ struct Pcg32 {
 class CrcDev {
  public:
   CrcDev() : top_(new Vzhao_debug_crc) { reset(); }
-  ~CrcDev() { top_->final(); delete top_; }
+  ~CrcDev() {
+    top_->final();
+    delete top_;
+  }
   CrcDev(const CrcDev&) = delete;
   CrcDev& operator=(const CrcDev&) = delete;
 
@@ -130,8 +133,8 @@ static int runRandom(uint32_t frames, uint64_t seed) {
     check(r.crc == want, "rand: oracle bit-exact", want, r.crc);
     zref::Crc32c model;
     const zref::Crc32c::Result m = model.frame(bytes, n);
-    check(m.valid && !m.size_err && m.crc == r.crc,
-          "rand: zref::Crc32c device oracle agrees", m.crc, r.crc);
+    check(m.valid && !m.size_err && m.crc == r.crc, "rand: zref::Crc32c device oracle agrees",
+          m.crc, r.crc);
   }
   std::printf("debug_crc random: %u frames\n", frames);
   return 0;
@@ -166,8 +169,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 32; ++i) ramp.push_back(static_cast<uint8_t>(i));
     for (int i = 31; i >= 0; --i) ramp_r.push_back(static_cast<uint8_t>(i));
     const std::vector<Vec> vecs = {
-        {"empty-ish \"123456789\"",
-         {'1', '2', '3', '4', '5', '6', '7', '8', '9'}, 0xE3069283u},
+        {"empty-ish \"123456789\"", {'1', '2', '3', '4', '5', '6', '7', '8', '9'}, 0xE3069283u},
         {"32 x 00", zeros, 0x8A9136AAu},
         {"32 x FF", ones, 0x62A8AB43u},
         {"32 B 0x00..0x1F", ramp, 0x46DD794Eu},
@@ -177,18 +179,13 @@ int main(int argc, char** argv) {
       const CrcDev::Result r = t.stream(v.bytes, static_cast<uint32_t>(v.bytes.size()));
       check(r.valid, v.name, 1, r.valid);
       check(!r.err, std::string(v.name).append(" (size ok)").c_str(), 0, r.err);
-      check(r.crc == v.crc, std::string(v.name).append(" (crc)").c_str(), v.crc,
-            r.crc);
-      const uint32_t orc =
-          zhao_abi::zhao_crc32c(0, v.bytes.data(), v.bytes.size());
-      check(r.crc == orc, std::string(v.name).append(" (== oracle)").c_str(), orc,
-            r.crc);
+      check(r.crc == v.crc, std::string(v.name).append(" (crc)").c_str(), v.crc, r.crc);
+      const uint32_t orc = zhao_abi::zhao_crc32c(0, v.bytes.data(), v.bytes.size());
+      check(r.crc == orc, std::string(v.name).append(" (== oracle)").c_str(), orc, r.crc);
       zref::Crc32c model;
-      const zref::Crc32c::Result m =
-          model.frame(v.bytes, static_cast<uint32_t>(v.bytes.size()));
-      check(m.valid && m.crc == r.crc,
-            std::string(v.name).append(" (== zref::Crc32c)").c_str(), m.crc,
-            r.crc);
+      const zref::Crc32c::Result m = model.frame(v.bytes, static_cast<uint32_t>(v.bytes.size()));
+      check(m.valid && m.crc == r.crc, std::string(v.name).append(" (== zref::Crc32c)").c_str(),
+            m.crc, r.crc);
     }
   }
 
@@ -200,7 +197,9 @@ int main(int argc, char** argv) {
       uint32_t bytes;
     };
     const Mode modes[] = {
-        {"Z60", 184320}, {"Storm", 153600}, {"Duo", 245760},
+        {"Z60", 184320},
+        {"Storm", 153600},
+        {"Duo", 245760},
     };
     for (const Mode& m : modes) {
       Pcg32 rng{0xC0FFEE12u + m.bytes, 0x9E3779B9u};
@@ -210,15 +209,12 @@ int main(int argc, char** argv) {
       }
       const uint32_t want = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
       const CrcDev::Result r = t.stream(canvas, m.bytes);
-      check(r.valid && !r.err, std::string(m.name).append(": valid").c_str(), 1,
-            r.valid);
-      check(r.crc == want, std::string(m.name).append(": oracle bit-exact").c_str(),
-            want, r.crc);
+      check(r.valid && !r.err, std::string(m.name).append(": valid").c_str(), 1, r.valid);
+      check(r.crc == want, std::string(m.name).append(": oracle bit-exact").c_str(), want, r.crc);
       zref::Crc32c model;
       const zref::Crc32c::Result mr = model.frame(canvas, m.bytes);
       check(mr.valid && mr.crc == r.crc,
-            std::string(m.name).append(": zref::Crc32c agrees").c_str(), mr.crc,
-            r.crc);
+            std::string(m.name).append(": zref::Crc32c agrees").c_str(), mr.crc, r.crc);
     }
   }
 
@@ -228,17 +224,15 @@ int main(int argc, char** argv) {
     Pcg32 rng{0xD0D0D0D0u, 0x1234567u};
     std::vector<uint8_t> a(64 * 1024);
     for (auto& b : a) b = static_cast<uint8_t>(rng.next());
-    std::vector<uint8_t> b = a;                 // the SAME frame repeated
+    std::vector<uint8_t> b = a;  // the SAME frame repeated
     const uint32_t ea = static_cast<uint32_t>(a.size());
     const CrcDev::Result ra = t.stream(a, ea);
     const CrcDev::Result rb = t.stream(b, ea);
     check(ra.valid && rb.valid, "repeat: both valid", 1, ra.valid && rb.valid);
-    check(ra.crc == rb.crc, "repeat: repeated frame CRCs identical (60 Hz law)",
-          ra.crc, rb.crc);
-    b[b.size() / 2] ^= 0x01;                    // one flipped byte
+    check(ra.crc == rb.crc, "repeat: repeated frame CRCs identical (60 Hz law)", ra.crc, rb.crc);
+    b[b.size() / 2] ^= 0x01;  // one flipped byte
     const CrcDev::Result rc = t.stream(b, ea);
-    check(rc.crc != ra.crc, "repeat: a changed frame CRCs differently", ra.crc,
-          rc.crc);
+    check(rc.crc != ra.crc, "repeat: a changed frame CRCs differently", ra.crc, rc.crc);
   }
 
   // ---- 4. mis-sized stream + stray bytes --------------------------------------
@@ -246,15 +240,13 @@ int main(int argc, char** argv) {
     CrcDev t;
     std::vector<uint8_t> canvas(1024, 0x5A);
     // eof 4 bytes early: mis-sized -> error, no published CRC
-    CrcDev::Result r = t.stream(std::vector<uint8_t>(canvas.begin(), canvas.end() - 4),
-                                1024);
+    CrcDev::Result r = t.stream(std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
     check(r.err, "size: mis-sized stream flagged", 1, r.err);
     check(!r.valid, "size: CRC not published", 0, r.valid);
     zref::Crc32c model;
-    const zref::Crc32c::Result m = model.frame(
-        std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
-    check(m.size_err && !m.valid, "size: zref::Crc32c agrees (err, no publish)",
-          1, m.size_err);
+    const zref::Crc32c::Result m =
+        model.frame(std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
+    check(m.size_err && !m.valid, "size: zref::Crc32c agrees (err, no publish)", 1, m.size_err);
 
     // a byte outside any frame (no sof since idle): raster violation
     t.park();
@@ -268,8 +260,7 @@ int main(int argc, char** argv) {
     t.top_->eval();
     t.top_->clk = 0;
     t.top_->eval();
-    check(t.top_->size_err_evt_o != 0, "size: stray byte flagged", 1,
-          t.top_->size_err_evt_o);
+    check(t.top_->size_err_evt_o != 0, "size: stray byte flagged", 1, t.top_->size_err_evt_o);
   }
 
   return zhao::report_and_exit("debug_crc_directed");

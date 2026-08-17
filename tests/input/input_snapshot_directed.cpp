@@ -34,8 +34,8 @@ static void checkFrame(int ctx_frame) {
     const zref::PadFrame& exp = oracle.frame(i);
     char what[128];
     std::snprintf(what, sizeof what,
-                  "frame %d pad %d latched PadFrame (seq=%u flags=%02x buttons=%08x)",
-                  ctx_frame, i, got.sequence, got.flags, got.buttons);
+                  "frame %d pad %d latched PadFrame (seq=%u flags=%02x buttons=%08x)", ctx_frame, i,
+                  got.sequence, got.flags, got.buttons);
     zhao::check(got == exp, what, 1, got == exp ? 1 : 0);
   }
 }
@@ -76,8 +76,8 @@ int main() {
 
   // mid-frame noise: raw inputs thrash for 200 cycles; NOTHING may move
   const auto snap_flat = top.pad_frame_flat;  // stable copy (VlWide<20>)
-  const uint16_t snap_seq[4] = {top.pad_sequence[0], top.pad_sequence[1],
-                                top.pad_sequence[2], top.pad_sequence[3]};
+  const uint16_t snap_seq[4] = {top.pad_sequence[0], top.pad_sequence[1], top.pad_sequence[2],
+                                top.pad_sequence[3]};
   for (int c = 0; c < 200; ++c) {
     zref::PadRawState noise[4];
     const uint32_t r = lcg32();
@@ -92,16 +92,14 @@ int main() {
     zhao_input::drivePads(top, noise);
     edge(top);
     const bool flat_same = (top.pad_frame_flat == snap_flat);
-    zhao::check(flat_same, "mid-frame input change invisible (atomic latch)", 1,
-                flat_same ? 1 : 0);
+    zhao::check(flat_same, "mid-frame input change invisible (atomic latch)", 1, flat_same ? 1 : 0);
     for (int i = 0; i < 4; ++i) {
       if (top.pad_sequence[i] != snap_seq[i]) {
         zhao::check(false, "sequence frozen between ticks", snap_seq[i], top.pad_sequence[i]);
       }
     }
   }
-  zhao::check(top.input_sequence_gaps == 0, "no gaps (atomic latch)", 0,
-              top.input_sequence_gaps);
+  zhao::check(top.input_sequence_gaps == 0, "no gaps (atomic latch)", 0, top.input_sequence_gaps);
   zhao::check(top.input_sequence_gap_evt == 0, "gap event never fires", 0,
               top.input_sequence_gap_evt);
 
@@ -119,8 +117,7 @@ int main() {
   top.eval();
   oracle.tick(B, 8);
   checkFrame(1);
-  zhao::check(top.pad_sequence[0] == 1, "absent pad sequence frozen at 1", 1,
-              top.pad_sequence[0]);
+  zhao::check(top.pad_sequence[0] == 1, "absent pad sequence frozen at 1", 1, top.pad_sequence[0]);
   zhao::check(top.pad_sequence[2] == 2, "present pad sequence advanced to 2", 2,
               top.pad_sequence[2]);
   zhao::check(readPadFrame(top, 0).flags == 0x00, "unplugged pad flags.pad_present=0", 0,
@@ -135,9 +132,12 @@ int main() {
   // ------------------------------------------- 3. four slots independent --
   zref::PadRawState four[4];
   for (int i = 0; i < 4; ++i) {
-    four[i] = zref::PadRawState{true, 0x11111111u * (i + 1), static_cast<int16_t>(1000 * (i + 1)),
+    four[i] = zref::PadRawState{true,
+                                0x11111111u * (i + 1),
+                                static_cast<int16_t>(1000 * (i + 1)),
                                 static_cast<int16_t>(-1000 * (i + 1)),
-                                static_cast<int16_t>(7 * i), static_cast<int16_t>(-7 * i)};
+                                static_cast<int16_t>(7 * i),
+                                static_cast<int16_t>(-7 * i)};
   }
   four[2].present = false;  // slot 2 goes absent with history on board
   zhao_input::drivePads(top, four);
@@ -154,10 +154,9 @@ int main() {
               "absent slot 2 frozen sequence in zero frame", 1, 0);
 
   // --------------------------------------------- 4. absent-pad law --------
-  zref::PadRawState one[4] = {zref::PadRawState{true, 0xDEADBEEF, 5, -5, 7, -7},
-                              zref::PadRawState{false, 0, 0, 0, 0, 0},
-                              zref::PadRawState{false, 0, 0, 0, 0, 0},
-                              zref::PadRawState{false, 0, 0, 0, 0, 0}};
+  zref::PadRawState one[4] = {
+      zref::PadRawState{true, 0xDEADBEEF, 5, -5, 7, -7}, zref::PadRawState{false, 0, 0, 0, 0, 0},
+      zref::PadRawState{false, 0, 0, 0, 0, 0}, zref::PadRawState{false, 0, 0, 0, 0, 0}};
   for (int f = 0; f < 5; ++f) {  // pad 0 present 5 more frames
     zhao_input::drivePads(top, one);
     top.frame_tick = zhao_input::tickWord(true, 10 + f, false);

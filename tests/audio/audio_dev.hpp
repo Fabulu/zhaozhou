@@ -30,8 +30,11 @@ namespace zhao_audio {
 class RtlDev {
  public:
   RtlDev() : top_(new Vzhao_audio_fifo), cycle_(0) { reset(); }
-  ~RtlDev() { top_->final(); delete top_; }
-  RtlDev(const RtlDev&) = delete;             // owns the Verilated model
+  ~RtlDev() {
+    top_->final();
+    delete top_;
+  }
+  RtlDev(const RtlDev&) = delete;  // owns the Verilated model
   RtlDev& operator=(const RtlDev&) = delete;
 
   void reset() {
@@ -81,12 +84,12 @@ class RtlDev {
 
   // gpu-domain views (post-edge)
   uint32_t occupancy() const { return top_->occupancy_o; }
-  bool     wr_ready() const { return top_->wr_ready_o != 0; }
-  bool     refill_req() const { return top_->refill_req_o != 0; }
+  bool wr_ready() const { return top_->wr_ready_o != 0; }
+  bool refill_req() const { return top_->refill_req_o != 0; }
   uint32_t underruns() const { return top_->audio_underruns_o; }
 
   // counter snapshot (zhao_counter_snap_t: valid MSB, id, u64 value LE)
-  bool     snap_valid() const { return top_->cnt_snap_o[2] & 0x10000; }
+  bool snap_valid() const { return top_->cnt_snap_o[2] & 0x10000; }
   uint16_t snap_id() const { return static_cast<uint16_t>(top_->cnt_snap_o[2]); }
   uint64_t snap_value() const {
     return static_cast<uint64_t>(top_->cnt_snap_o[0]) |
@@ -132,11 +135,11 @@ class OracleDev {
     return accept;
   }
   uint32_t occupancy() const { return f.occupancy(); }
-  bool     wr_ready() const { return f.wr_ready(); }
-  bool     refill_req() const { return f.refill_req(); }
+  bool wr_ready() const { return f.wr_ready(); }
+  bool refill_req() const { return f.refill_req(); }
   uint32_t underruns() const { return f.audio_underruns(); }
-  bool     snap_valid() const { return true; }  // shadow latched this cycle
-  uint16_t snap_id() const { return 31; }       // ZHAO_CNT_AUDIO_UNDERRUNS
+  bool snap_valid() const { return true; }  // shadow latched this cycle
+  uint16_t snap_id() const { return 31; }   // ZHAO_CNT_AUDIO_UNDERRUNS
   uint64_t snap_value() const { return f.audio_underruns_shadow(); }
 
   bool audio_edge_fired;
@@ -160,12 +163,12 @@ struct RunResult {
     bool valid;
     uint16_t l;
     uint16_t r;
-    bool underrun;      // this tick repeated the last pair
-    uint32_t underruns; // counter value after the tick
+    bool underrun;       // this tick repeated the last pair
+    uint32_t underruns;  // counter value after the tick
   };
   std::vector<Tick> stream;
-  std::vector<uint32_t> occupancy;   // per gpu cycle (post-edge)
-  std::vector<uint64_t> shadows;     // after each frame_tick
+  std::vector<uint32_t> occupancy;  // per gpu cycle (post-edge)
+  std::vector<uint64_t> shadows;    // after each frame_tick
   uint64_t accepted = 0;
   uint64_t offered = 0;
   uint32_t underruns_final = 0;
@@ -181,8 +184,8 @@ inline void pair_k(uint64_t k, uint16_t* l, uint16_t* r) {
 // `frame_ticks` (gpu cycles carrying a frame_tick pulse), recording the
 // complete observable behaviour.
 template <typename Dev>
-RunResult run_schedule(Dev& dev, const std::vector<Burst>& bursts,
-                       uint32_t cycles, const std::vector<uint32_t>& frame_ticks) {
+RunResult run_schedule(Dev& dev, const std::vector<Burst>& bursts, uint32_t cycles,
+                       const std::vector<uint32_t>& frame_ticks) {
   std::vector<int64_t> credit_delta(cycles + 1, 0);
   for (const Burst& b : bursts) {
     if (b.start_cycle < cycles) credit_delta[b.start_cycle] += b.len;
@@ -211,8 +214,8 @@ RunResult run_schedule(Dev& dev, const std::vector<Burst>& bursts,
       res.shadows.push_back(dev.snap_value());
     }
     if (dev.audio_edge_fired) {
-      res.stream.push_back(RunResult::Tick{dev.pcm_valid, dev.pcm_l, dev.pcm_r,
-                                           dev.underrun_status, dev.underruns()});
+      res.stream.push_back(RunResult::Tick{dev.pcm_valid, dev.pcm_l, dev.pcm_r, dev.underrun_status,
+                                           dev.underruns()});
     }
   }
   res.underruns_final = dev.underruns();
@@ -221,11 +224,9 @@ RunResult run_schedule(Dev& dev, const std::vector<Burst>& bursts,
 
 // Bit-exact comparison of two complete runs (stream, occupancy, shadows,
 // counters). Returns true equal; on mismatch fills `where`.
-inline bool results_equal(const RunResult& a, const RunResult& b,
-                          std::string* where) {
+inline bool results_equal(const RunResult& a, const RunResult& b, std::string* where) {
   if (a.accepted != b.accepted) {
-    *where = "accepted " + std::to_string(a.accepted) + " vs " +
-             std::to_string(b.accepted);
+    *where = "accepted " + std::to_string(a.accepted) + " vs " + std::to_string(b.accepted);
     return false;
   }
   if (a.underruns_final != b.underruns_final) {
@@ -239,8 +240,7 @@ inline bool results_equal(const RunResult& a, const RunResult& b,
   }
   for (size_t i = 0; i < a.occupancy.size(); ++i) {
     if (a.occupancy[i] != b.occupancy[i]) {
-      *where = "occupancy@" + std::to_string(i) + ": " +
-               std::to_string(a.occupancy[i]) + " vs " +
+      *where = "occupancy@" + std::to_string(i) + ": " + std::to_string(a.occupancy[i]) + " vs " +
                std::to_string(b.occupancy[i]);
       return false;
     }
@@ -251,8 +251,8 @@ inline bool results_equal(const RunResult& a, const RunResult& b,
   }
   for (size_t i = 0; i < a.shadows.size(); ++i) {
     if (a.shadows[i] != b.shadows[i]) {
-      *where = "shadow@" + std::to_string(i) + ": " +
-               std::to_string(a.shadows[i]) + " vs " + std::to_string(b.shadows[i]);
+      *where = "shadow@" + std::to_string(i) + ": " + std::to_string(a.shadows[i]) + " vs " +
+               std::to_string(b.shadows[i]);
       return false;
     }
   }
@@ -264,14 +264,13 @@ inline bool results_equal(const RunResult& a, const RunResult& b,
   for (size_t i = 0; i < a.stream.size(); ++i) {
     const RunResult::Tick& ta = a.stream[i];
     const RunResult::Tick& tb = b.stream[i];
-    if (ta.valid != tb.valid || ta.l != tb.l || ta.r != tb.r ||
-        ta.underrun != tb.underrun || ta.underruns != tb.underruns) {
-      *where = "stream tick " + std::to_string(i) + ": (" +
-               std::to_string(ta.valid) + "," + std::to_string(ta.l) + "," +
-               std::to_string(ta.r) + "," + std::to_string(ta.underrun) + "," +
-               std::to_string(ta.underruns) + ") vs (" + std::to_string(tb.valid) +
-               "," + std::to_string(tb.l) + "," + std::to_string(tb.r) + "," +
-               std::to_string(tb.underrun) + "," + std::to_string(tb.underruns) + ")";
+    if (ta.valid != tb.valid || ta.l != tb.l || ta.r != tb.r || ta.underrun != tb.underrun ||
+        ta.underruns != tb.underruns) {
+      *where = "stream tick " + std::to_string(i) + ": (" + std::to_string(ta.valid) + "," +
+               std::to_string(ta.l) + "," + std::to_string(ta.r) + "," +
+               std::to_string(ta.underrun) + "," + std::to_string(ta.underruns) + ") vs (" +
+               std::to_string(tb.valid) + "," + std::to_string(tb.l) + "," + std::to_string(tb.r) +
+               "," + std::to_string(tb.underrun) + "," + std::to_string(tb.underruns) + ")";
       return false;
     }
   }

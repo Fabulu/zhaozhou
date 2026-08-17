@@ -21,8 +21,8 @@ static bool g_full = false;
 static uint32_t event_spacing() { return g_full ? 40u : 1500u; }
 
 // MERGE FIX: tb.failures now reaches the exit code (see video_mode_random).
-static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences,
-                         uint64_t* ticks, uint64_t* fault_frames, int* fails) {
+static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences, uint64_t* ticks,
+                         uint64_t* fault_frames, int* fails) {
   VideoTb tb;
   tb.reset();
   Rng rng(seed);
@@ -37,7 +37,7 @@ static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences,
     if (countdown == 0) {
       const uint32_t roll = rng.u32() % 100u;
       if (roll < 70u) {
-        tb.slot_ready = rng.u32() & 3u;    // adversarial READY flapping
+        tb.slot_ready = rng.u32() & 3u;  // adversarial READY flapping
       } else {
         static const uint32_t dl[] = {0, 0, 1000, 4096, 20000, 100000};
         tb.deadline_cycles = dl[rng.u32() % 6u];
@@ -46,7 +46,7 @@ static uint64_t scenario(uint64_t seed, uint64_t events, uint64_t* fences,
       countdown = 1 + (rng.next() % event_spacing());
     }
     tb.step();
-    if (tb.top.o_gpu_tick) ++(*fences);   // gpu-domain pulse: 1 gpu cycle
+    if (tb.top.o_gpu_tick) ++(*fences);  // gpu-domain pulse: 1 gpu cycle
     if (tb.vid_edge() && tb.top.o_frame_tick) {
       ++(*ticks);
       if (tb.top.o_repeated) ++(*fault_frames);
@@ -74,19 +74,16 @@ int main(int argc, char** argv) {
     }
     if (h1 != h2) {
       ++fail;
-      std::printf("FAIL framectl_random seed %llu: hash mismatch\n",
-                  (unsigned long long)seed);
+      std::printf("FAIL framectl_random seed %llu: hash mismatch\n", (unsigned long long)seed);
     }
     // fence-exactly-once: one gpu-domain fence pulse per displayed frame
     if (f1 != t1 || f2 != t2) {
       ++fail;
       std::printf("FAIL framectl_random seed %llu: fences %llu != ticks %llu\n",
-                  (unsigned long long)seed, (unsigned long long)f1,
-                  (unsigned long long)t1);
+                  (unsigned long long)seed, (unsigned long long)f1, (unsigned long long)t1);
     }
-    std::printf("  seed %llu: %llu frames, %llu repeated (%s)\n",
-                (unsigned long long)seed, (unsigned long long)t1,
-                (unsigned long long)r1, g_full ? "full" : "fast");
+    std::printf("  seed %llu: %llu frames, %llu repeated (%s)\n", (unsigned long long)seed,
+                (unsigned long long)t1, (unsigned long long)r1, g_full ? "full" : "fast");
   }
   if (fail == 0) {
     std::printf("video_framectl_random: OK (%s, %llu events x 2 seeds x 2)\n",

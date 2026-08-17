@@ -76,8 +76,7 @@ class Bench {
     if (a.fence) {
       ++fences;
       ok_fence_seen |= a.fence_ok;
-      check(a.state[a.fence_slot] == SlotState::Done,
-            "directed: fence rides a DONE slot", 1,
+      check(a.state[a.fence_slot] == SlotState::Done, "directed: fence rides a DONE slot", 1,
             static_cast<uint64_t>(a.state[a.fence_slot]));
     }
     // fold the FPGA's ring write back into the HPS word model
@@ -143,8 +142,7 @@ int main() {
     check(a.fetch_req, "happy: fetch request issued", 1, a.fetch_req);
     check(a.fetch_slot == 0, "happy: fetch slot 0", 0, a.fetch_slot);
     check(a.fetch_addr == 4096u, "happy: fetch addr = base+table", 4096, a.fetch_addr);
-    check(a.fetch_byte_len == 200, "happy: fetch len = descriptor len", 200,
-          a.fetch_byte_len);
+    check(a.fetch_byte_len == 200, "happy: fetch len = descriptor len", 200, a.fetch_byte_len);
     check(a.fetch_epoch == 0, "happy: fetch epoch = current epoch", 0, a.fetch_epoch);
 
     {
@@ -184,8 +182,7 @@ int main() {
       e.opcode = ZHAO_OP_DEBUG_RUMBLE;
       e.w0 = (77u << 16) | (1u << 8) | 2u;  // str, en, pad
       a = t.dual(e);
-      check(a.rumble_valid && a.rumble_pad == 2 && a.rumble_en == 1 &&
-                a.rumble_str == 77,
+      check(a.rumble_valid && a.rumble_pad == 2 && a.rumble_en == 1 && a.rumble_str == 77,
             "happy: rumble dispatched", 1, a.rumble_pad);
 
       e.opcode = ZHAO_OP_END_FRAME;
@@ -261,8 +258,7 @@ int main() {
     check(a.state[1] == SlotState::ArmWriting, "late: never claimed", 1,
           static_cast<uint64_t>(a.state[1]));
     check(!a.fence, "late: NO fence for the dead frame", 0, a.fence);
-    check(a.shadow_faults == 1, "late: deadline_faults counted the repeat", 1,
-          a.shadow_faults);
+    check(a.shadow_faults == 1, "late: deadline_faults counted the repeat", 1, a.shadow_faults);
     t.idle(4);
     check(t.fences == 0, "late: zero fences total", 0, t.fences);
   }
@@ -282,8 +278,7 @@ int main() {
     check(a.fence_status == 5, "crc: safe error status verbatim", 5, a.fence_status);
     check(a.state[2] == SlotState::Done, "crc: slot DONE-with-error", 4,
           static_cast<uint64_t>(a.state[2]));
-    check(a.ring_wr && a.ring_wr_state == 3, "crc: DONE word posted", 3,
-          a.ring_wr_state);
+    check(a.ring_wr && a.ring_wr_state == 3, "crc: DONE word posted", 3, a.ring_wr_state);
     check(!a.blit_valid && !a.rumble_valid, "crc: zero sink traffic", 0, a.blit_valid);
     t.idle(6);
     check(t.fences == 1, "crc: exactly one (fault) fence", 1, t.fences);
@@ -307,8 +302,8 @@ int main() {
     }
     check(a.fence, "deadline: fault fence", 1, a.fence);
     check(!a.fence_ok, "deadline: error fence", 0, a.fence_ok);
-    check(a.fence_status == zref::ZHAO_SCHED_DEADLINE_MISS,
-          "deadline: status = deadline-miss (16)", 16, a.fence_status);
+    check(a.fence_status == zref::ZHAO_SCHED_DEADLINE_MISS, "deadline: status = deadline-miss (16)",
+          16, a.fence_status);
     check(cycles <= 12, "deadline: fault at the 10-cycle limit", 12, cycles);
   }
 
@@ -327,8 +322,8 @@ int main() {
       e.dma_slot = 1;
       e.dma_status = 5;
       a = t.dual(e);
-      check(a.state[0] == SlotState::FpgaRunning, "adv: wrong-slot verdict ignored",
-            3, static_cast<uint64_t>(a.state[0]));
+      check(a.state[0] == SlotState::FpgaRunning, "adv: wrong-slot verdict ignored", 3,
+            static_cast<uint64_t>(a.state[0]));
     }
     // OK verdict then a duplicate: idempotent
     {

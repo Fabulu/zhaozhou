@@ -21,8 +21,7 @@ namespace zhao_cmd {
 
 // zhao_frame_tick_t wire word: {pulse[33], frame_id[32:1], repeated[0]}
 inline uint64_t tickWord(bool pulse, uint32_t frame_id, bool repeated) {
-  return (static_cast<uint64_t>(pulse ? 1u : 0u) << 33) |
-         (static_cast<uint64_t>(frame_id) << 1) |
+  return (static_cast<uint64_t>(pulse ? 1u : 0u) << 33) | (static_cast<uint64_t>(frame_id) << 1) |
          static_cast<uint64_t>(repeated ? 1u : 0u);
 }
 
@@ -37,7 +36,10 @@ inline uint64_t snapWordVal(uint32_t w0, uint32_t w1) {
 class RtlSchedDev {
  public:
   RtlSchedDev() : top_(new Vzhao_cmd_scheduler) { reset(); }
-  ~RtlSchedDev() { top_->final(); delete top_; }
+  ~RtlSchedDev() {
+    top_->final();
+    delete top_;
+  }
   RtlSchedDev(const RtlSchedDev&) = delete;
   RtlSchedDev& operator=(const RtlSchedDev&) = delete;
 
@@ -160,8 +162,7 @@ class OracleSchedDev {
 };
 
 // ---- bit-exact observable compare ------------------------------------------
-inline bool obsEqual(const zref::SchedObs& a, const zref::SchedObs& b,
-                     const char** where) {
+inline bool obsEqual(const zref::SchedObs& a, const zref::SchedObs& b, const char** where) {
   struct Cmp {
     const char* name;
     bool ok;
@@ -183,16 +184,13 @@ inline bool obsEqual(const zref::SchedObs& a, const zref::SchedObs& b,
       {"fetch_byte_len", !a.fetch_req || a.fetch_byte_len == b.fetch_byte_len},
       {"fetch_epoch", !a.fetch_req || a.fetch_epoch == b.fetch_epoch},
       {"blit_valid", a.blit_valid == b.blit_valid},
-      {"blit fields",
-       !a.blit_valid ||
-           (a.blit_dst_slot == b.blit_dst_slot && a.blit_mode == b.blit_mode &&
-            a.blit_src == b.blit_src && a.blit_len == b.blit_len &&
-            a.blit_crc == b.blit_crc)},
+      {"blit fields", !a.blit_valid || (a.blit_dst_slot == b.blit_dst_slot &&
+                                        a.blit_mode == b.blit_mode && a.blit_src == b.blit_src &&
+                                        a.blit_len == b.blit_len && a.blit_crc == b.blit_crc)},
       {"rumble_valid", a.rumble_valid == b.rumble_valid},
       {"rumble fields",
-       !a.rumble_valid ||
-           (a.rumble_pad == b.rumble_pad && a.rumble_en == b.rumble_en &&
-            a.rumble_str == b.rumble_str)},
+       !a.rumble_valid || (a.rumble_pad == b.rumble_pad && a.rumble_en == b.rumble_en &&
+                           a.rumble_str == b.rumble_str)},
       {"snap_valid", a.snap_valid == b.snap_valid},
       {"shadow_cycles", !a.snap_valid || a.shadow_cycles == b.shadow_cycles},
       {"shadow_faults", !a.snap_valid || a.shadow_faults == b.shadow_faults},

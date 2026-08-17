@@ -34,12 +34,12 @@ using namespace zref;
 using zhao_video::VideoTb;
 
 static int g_fail = 0;
-#define EXPECT(cond)                                                        \
-  do {                                                                      \
-    if (!(cond)) {                                                          \
-      ++g_fail;                                                             \
-      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);           \
-    }                                                                       \
+#define EXPECT(cond)                                              \
+  do {                                                            \
+    if (!(cond)) {                                                \
+      ++g_fail;                                                   \
+      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+    }                                                             \
   } while (0)
 
 // patterned canvas: pixel (x,y) -> RGB565 for the never-torn check
@@ -59,9 +59,8 @@ static std::vector<uint8_t> pattern_canvas(uint32_t mode) {
       } else {
         if (y < 24 || y >= 216) continue;
         const uint32_t sy = y - 24;
-        const size_t off = (x < 256)
-                               ? (size_t)(sy * 256 + x) * 2
-                               : 0x18000u + (size_t)(sy * 256 + (x - 256)) * 2;
+        const size_t off =
+            (x < 256) ? (size_t)(sy * 256 + x) * 2 : 0x18000u + (size_t)(sy * 256 + (x - 256)) * 2;
         c[off + 0] = (uint8_t)(p & 0xFF);
         c[off + 1] = (uint8_t)(p >> 8);
       }
@@ -87,11 +86,11 @@ static FrameCap capture_frame(VideoTb& tb, uint64_t max_steps = 1200000) {
   while (steps < max_steps) {
     tb.step();
     ++steps;
-    if (!tb.vid_edge()) continue;          // sample once per vid cycle
+    if (!tb.vid_edge()) continue;  // sample once per vid cycle
     if (tb.top.o_frame_tick) {
       if (started) break;
       started = true;
-      cap.mode = tb.top.o_mode;   // the mode the NEXT frame displays under
+      cap.mode = tb.top.o_mode;  // the mode the NEXT frame displays under
       continue;
     }
     if (started && tb.top.o_px_valid) {
@@ -129,15 +128,14 @@ static uint64_t scenario() {
     VideoTb tb;
     tb.reset();
     const uint32_t w = active_width(0);
-    std::vector<uint8_t> c0(canvas_bytes(0), 0x30);   // slot 0: dark
-    std::vector<uint8_t> c1(canvas_bytes(0), 0xC0);   // slot 1: light
+    std::vector<uint8_t> c0(canvas_bytes(0), 0x30);  // slot 0: dark
+    std::vector<uint8_t> c1(canvas_bytes(0), 0xC0);  // slot 1: light
     tb.resp.set_canvas(0, c0);
     tb.resp.set_canvas(1, c1);
 
     // frame 0 (no READY ever): slot 0 free-runs from reset, dec0 repeats
     FrameCap f0 = capture_frame(tb);
-    std::printf("f0: %zu bytes (want %u) starve=%llu faults=%llu\n",
-                f0.bytes.size(), 2u * w * 240u,
+    std::printf("f0: %zu bytes (want %u) starve=%llu faults=%llu\n", f0.bytes.size(), 2u * w * 240u,
                 (unsigned long long)tb.top.o_starvation,
                 (unsigned long long)tb.top.o_deadline_faults);
     EXPECT(f0.bytes.size() == 2u * w * 240u);
@@ -146,9 +144,8 @@ static uint64_t scenario() {
     // clean handoff: arm slot 1 -> swap at vblank -> slot 1 displays
     arm_and_swap(tb, 1);
     FrameCap f1 = capture_frame(tb);
-    std::printf("f1: %zu bytes first=%02x%02x faults=%llu starve=%llu\n",
-                f1.bytes.size(), f1.bytes[0], f1.bytes[1],
-                (unsigned long long)tb.top.o_deadline_faults,
+    std::printf("f1: %zu bytes first=%02x%02x faults=%llu starve=%llu\n", f1.bytes.size(),
+                f1.bytes[0], f1.bytes[1], (unsigned long long)tb.top.o_deadline_faults,
                 (unsigned long long)tb.top.o_starvation);
     EXPECT(f1.bytes.size() == 2u * w * 240u);
     EXPECT(crc_of(f1) == frame_pixel_crc(0, c1));
@@ -168,10 +165,10 @@ static uint64_t scenario() {
     // the READY lands past the shut window -> repeat + fault (spec §4)
     tb.deadline_cycles = 4096;
     while (!tb.top.o_frame_start) tb.step();
-    for (int i = 0; i < 5000; ++i) tb.step();   // > 2048 vid cycles
+    for (int i = 0; i < 5000; ++i) tb.step();  // > 2048 vid cycles
     const uint64_t faults_before = tb.top.o_deadline_faults;
-    tb.slot_ready = 2;                          // slot 1, LATE
-    while (!tb.top.o_frame_tick) tb.step();     // the repeat decision
+    tb.slot_ready = 2;                       // slot 1, LATE
+    while (!tb.top.o_frame_tick) tb.step();  // the repeat decision
     tb.step();
     tb.step();
     tb.slot_ready = 0;
@@ -203,7 +200,7 @@ static uint64_t scenario() {
     const uint32_t w = active_width(0);
     tb.resp.set_canvas(0, pattern_canvas(0));
     tb.resp.set_canvas(1, pattern_canvas(0));
-    capture_frame(tb);   // settle into clean display
+    capture_frame(tb);  // settle into clean display
 
     // black the guard service out for ~40 lines, capture every line,
     // then restore and confirm exact display again
@@ -214,9 +211,12 @@ static uint64_t scenario() {
     uint64_t starve_at_blackout = tb.top.o_starvation;
     for (uint64_t i = 0; i < 70ull * 480u * 2u; ++i) {
       tb.step();
-      if (!tb.vid_edge()) continue;        // sample once per vid cycle
+      if (!tb.vid_edge()) continue;  // sample once per vid cycle
       if (tb.top.o_px_valid) {
-        if (!in_line) { in_line = true; cur.clear(); }
+        if (!in_line) {
+          in_line = true;
+          cur.clear();
+        }
         cur.push_back((uint16_t)tb.top.o_px_rgb);
       } else if (in_line) {
         in_line = false;
@@ -228,8 +228,7 @@ static uint64_t scenario() {
     // starvation advanced during the blackout (visible, spec §4)
     EXPECT(tb.top.o_starvation > starve_at_blackout);
     if (lines.size() < 40)
-      std::printf("  captured %zu full lines in the blackout window\n",
-                  lines.size());
+      std::printf("  captured %zu full lines in the blackout window\n", lines.size());
     EXPECT(lines.size() >= 40);
 
     // never torn: every displayed line is a COMPLETE canvas row (any row —
@@ -273,7 +272,7 @@ static uint64_t scenario() {
     tb.step();
     tb.step();
     tb.mode_we = false;
-    capture_frame(tb);   // the latch frame (Z60 timing -> Duo at frame_start)
+    capture_frame(tb);  // the latch frame (Z60 timing -> Duo at frame_start)
     FrameCap fd = capture_frame(tb);
     const uint32_t w = active_width(2);
     EXPECT(fd.bytes.size() == 2u * w * 240u);
@@ -285,8 +284,7 @@ static uint64_t scenario() {
       for (uint32_t y = 0; y < 240; ++y) {
         for (uint32_t x = 0; x < w; ++x) {
           const size_t i = (size_t)(y * w + x) * 2;
-          const uint16_t got =
-              (uint16_t)(fd.bytes[i] | ((uint16_t)fd.bytes[i + 1] << 8));
+          const uint16_t got = (uint16_t)(fd.bytes[i] | ((uint16_t)fd.bytes[i + 1] << 8));
           if (y < 24 || y >= 216) {
             if (got != 0) ++border_bad;
           } else if (got != pattern_px(x, y)) {
@@ -303,11 +301,9 @@ static uint64_t scenario() {
         for (uint32_t y = 24; y < 216 && shown < 6; ++y) {
           for (uint32_t x = 0; x < 512 && shown < 6; ++x) {
             const size_t i = (size_t)(y * w + x) * 2;
-            const uint16_t got =
-                (uint16_t)(fd.bytes[i] | ((uint16_t)fd.bytes[i + 1] << 8));
+            const uint16_t got = (uint16_t)(fd.bytes[i] | ((uint16_t)fd.bytes[i + 1] << 8));
             if (got != pattern_px(x, y)) {
-              std::printf("  first: y=%u x=%u got=%04x want=%04x\n", y, x,
-                          got, pattern_px(x, y));
+              std::printf("  first: y=%u x=%u got=%04x want=%04x\n", y, x, got, pattern_px(x, y));
               ++shown;
             }
           }
@@ -325,7 +321,7 @@ static uint64_t scenario() {
 int main() {
   const uint64_t h1 = scenario();
   const uint64_t h2 = scenario();
-  EXPECT(h1 == h2);   // run-twice determinism (plan R1)
+  EXPECT(h1 == h2);  // run-twice determinism (plan R1)
 
   if (g_fail == 0) {
     std::printf("video_scanout_directed: OK\n");

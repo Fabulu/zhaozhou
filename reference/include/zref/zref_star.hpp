@@ -108,12 +108,12 @@ inline constexpr uint8_t pulse_gain_u35(uint16_t spin_phase) {
 extern const uint8_t kClassPick[32];
 
 struct StarIdentity {
-  uint8_t cls = 0;             // gamut row
-  int32_t radius_milli = 0;    // class_ray + (h1 mod class_rayvar)
-  uint16_t spin_rate = 0;      // angle16 units/tick; 0 = non-compact (§2:
-                               // wall-clock rotation DROPPED, boil carries it)
-  uint32_t spin_draw = 0;      // h2 (kept for capture §8)
-  uint32_t texture_seed = 0;   // h3
+  uint8_t cls = 0;                // gamut row
+  int32_t radius_milli = 0;       // class_ray + (h1 mod class_rayvar)
+  uint16_t spin_rate = 0;         // angle16 units/tick; 0 = non-compact (§2:
+                                  // wall-clock rotation DROPPED, boil carries it)
+  uint32_t spin_draw = 0;         // h2 (kept for capture §8)
+  uint32_t texture_seed = 0;      // h3
   uint8_t under6[3] = {0, 0, 0};  // resolved undertone (S09: 24 + ((h3>>(5c))&31))
 };
 
@@ -419,24 +419,24 @@ struct GlintPoint {
 /** One near star, screen-space quantities only (spec §9: ARM computes the
  *  projection in wide integers; only these cross). */
 struct ComposeLight {
-  int32_t x_px = 0, y_px = 0;   // light centre (canvas px, integer)
-  int32_t disc_r_px = 0;        // projected disc radius (0 = no disc)
-  int32_t halo_r_px = 0;        // halo half-size (0 = no halo)
-  TrailHistory* trail = nullptr;   // §15: ring of past positions (persistent
-                                   // across frames; pushed by compose_view)
-  int32_t ghost_r_px = 0;          // §15: reconstructed corona radius (0 = off)
-  uint8_t halo_core16 = 5;      // §4 variant: 0 atmo / 5 space / 8 airless
-  int64_t d_milli = 0;          // distance (wide int)
-  int64_t r_milli = 1;          // star radius (wide int)
-  const uint8_t (*ramp)[3] = nullptr;  // 64-entry built ramp (caller slews)
-  const Sprite8* face = nullptr;       // starface (disc texture)
-  const Sprite8* corona = nullptr;     // corona sprite (halo texture)
-  uint8_t flare_mode = 0;              // 0 none / 1 flare / 2 pulsar duty
-  uint16_t spin_phase = 0;             // for the duty gate
-  uint8_t tint[3] = {255, 255, 255};   // flare tint (upscale-composite)
-  int32_t probe_x = 0, probe_y = 0;    // occlusion probe pixel (canvas px)
-  uint8_t in_window = 1;               // §5 gating: 5r ≤ d ≤ 1000r (caller)
-  uint8_t in_front = 1;                // w > wmin guard (caller)
+  int32_t x_px = 0, y_px = 0;              // light centre (canvas px, integer)
+  int32_t disc_r_px = 0;                   // projected disc radius (0 = no disc)
+  int32_t halo_r_px = 0;                   // halo half-size (0 = no halo)
+  TrailHistory* trail = nullptr;           // §15: ring of past positions (persistent
+                                           // across frames; pushed by compose_view)
+  int32_t ghost_r_px = 0;                  // §15: reconstructed corona radius (0 = off)
+  uint8_t halo_core16 = 5;                 // §4 variant: 0 atmo / 5 space / 8 airless
+  int64_t d_milli = 0;                     // distance (wide int)
+  int64_t r_milli = 1;                     // star radius (wide int)
+  const uint8_t (*ramp)[3] = nullptr;      // 64-entry built ramp (caller slews)
+  const Sprite8* face = nullptr;           // starface (disc texture)
+  const Sprite8* corona = nullptr;         // corona sprite (halo texture)
+  uint8_t flare_mode = 0;                  // 0 none / 1 flare / 2 pulsar duty
+  uint16_t spin_phase = 0;                 // for the duty gate
+  uint8_t tint[3] = {255, 255, 255};       // flare tint (upscale-composite)
+  int32_t probe_x = 0, probe_y = 0;        // occlusion probe pixel (canvas px)
+  uint8_t in_window = 1;                   // §5 gating: 5r ≤ d ≤ 1000r (caller)
+  uint8_t in_front = 1;                    // w > wmin guard (caller)
   int32_t halo_r_max_px = kHaloRMaxZ60Px;  // Duo passes 160
 };
 
@@ -468,9 +468,9 @@ struct ComposeStats {
  * latched tag, never the framebuffer (§5).
  */
 void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint32_t vx0,
-                  uint32_t vy0, uint32_t vw, uint32_t vh, uint32_t tick,
-                  const ComposeLight* lights, int n_lights, const GlintPoint* glints, int n_glints,
-                  FlareSlots& slots, ComposeStats* stats);
+                  uint32_t vy0, uint32_t vw, uint32_t vh, uint32_t tick, const ComposeLight* lights,
+                  int n_lights, const GlintPoint* glints, int n_glints, FlareSlots& slots,
+                  ComposeStats* stats);
 
 // ---- §8 celestial_state capture chunk ---------------------------------------
 

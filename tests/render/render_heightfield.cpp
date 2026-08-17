@@ -342,10 +342,10 @@ void test_near_camera_keeps_island() {
   // perspective with w = z: vertices at z < 0 are behind the eye. The
   // island spans z in [-8, 8]: the near half's vertices are behind, the far
   // half's are in front.
-  const int32_t m[16] = {2048, 0, 0, 0,          //
-                         0, -2048, 0, 0,         //
-                         0, 0, 1 << 16, 0,       //
-                         0, 0, 1 << 16, 0};
+  const int32_t m[16] = {2048, 0,     0,       0,  //
+                         0,    -2048, 0,       0,  //
+                         0,    0,     1 << 16, 0,  //
+                         0,    0,     1 << 16, 0};
   zref::render::Material mat{200, 180, 160};
   zref::render::RenderResources res;
   res.terrain_patches.push_back({44, &patch});

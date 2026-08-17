@@ -285,8 +285,8 @@ struct ZhaoSourceMapSizeResult {
 };
 
 /** Non-allocating, wide v1 layout arithmetic and global byte admission. */
-ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
-    uint64_t entry_count, uint64_t file_count, uint64_t string_blob_bytes);
+ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(uint64_t entry_count, uint64_t file_count,
+                                                       uint64_t string_blob_bytes);
 ZhaoSourceMapError zhao_source_map_v1_admit_byte_length(uint64_t bytes);
 
 struct ZhaoSourceMapParseResult {

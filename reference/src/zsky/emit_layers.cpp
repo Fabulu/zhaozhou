@@ -123,10 +123,8 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
   // fx_cos/fx_sin words -> identical vertices).
   if (layer_flags & kLayerCap) {
     for (int k = 0; k < kDrumCols; ++k) {
-      const angle16 a0 =
-          angle16{static_cast<uint16_t>(drum_yaw.raw + (k << 16) / kDrumCols)};
-      const angle16 a1 =
-          angle16{static_cast<uint16_t>(drum_yaw.raw + ((k + 1) << 16) / kDrumCols)};
+      const angle16 a0 = angle16{static_cast<uint16_t>(drum_yaw.raw + (k << 16) / kDrumCols)};
+      const angle16 a1 = angle16{static_cast<uint16_t>(drum_yaw.raw + ((k + 1) << 16) / kDrumCols)};
       // planar UV over the 64x64 clamp texture: direction/2 + 1/2
       const fx16 u0 = lerp_fx(fx_cos(a0), fx16{0}, fx16{1 << 16});
       const fx16 u1 = lerp_fx(fx_cos(a1), fx16{0}, fx16{1 << 16});
@@ -166,13 +164,12 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
             fx_add(cz, fx16{static_cast<int32_t>((static_cast<int64_t>(j) * 2 * kUnderHalf) / n)},
                    nullptr),
             fx16{kUnderHalf}, nullptr);
-        grid[j * (n + 1) + i] =
-            SkyVertex{x,
-                      y,
-                      z,
-                      fx16{(static_cast<int32_t>(i) << 16) / n},
-                      fx16{(static_cast<int32_t>(j) << 16) / n},
-                      0xFF};
+        grid[j * (n + 1) + i] = SkyVertex{x,
+                                          y,
+                                          z,
+                                          fx16{(static_cast<int32_t>(i) << 16) / n},
+                                          fx16{(static_cast<int32_t>(j) << 16) / n},
+                                          0xFF};
       }
     }
     for (int j = 0; j < n; ++j) {

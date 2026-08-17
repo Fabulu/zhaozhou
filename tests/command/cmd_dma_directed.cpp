@@ -63,22 +63,24 @@ ReqView reqView(uint64_t w) {
 // word2 = {beat_valid(bit2), data[63:62](bits1:0)}
 void setRsp(uint32_t* w, bool beat_valid, uint64_t data, bool last, bool err) {
   const uint64_t sh = (data << 2) & 0xFFFFFFFFFFFFFFFFull;
-  w[0] = static_cast<uint32_t>(sh & 0xFFFFFFFFull) | (last ? 2u : 0u) |
-         (err ? 1u : 0u);
+  w[0] = static_cast<uint32_t>(sh & 0xFFFFFFFFull) | (last ? 2u : 0u) | (err ? 1u : 0u);
   w[1] = static_cast<uint32_t>((sh >> 32) & 0xFFFFFFFFull);
   w[2] = static_cast<uint32_t>((data >> 62) & 3ull) | (beat_valid ? 4u : 0u);
 }
 
 // ---- the harness-as-HPS device ----------------------------------------------
 constexpr uint32_t kRingBase = 0x0;
-constexpr uint32_t kSlotBody0 = kRingBase + 4096;      // slot 0 body
-constexpr uint32_t kBlitSrc = 0x00100000;             // blit source arena
-constexpr int kFirstBeatLatency = 16;                  // D10 sim profile
+constexpr uint32_t kSlotBody0 = kRingBase + 4096;  // slot 0 body
+constexpr uint32_t kBlitSrc = 0x00100000;          // blit source arena
+constexpr int kFirstBeatLatency = 16;              // D10 sim profile
 
 class DmaBench {
  public:
   DmaBench() : top_(new Vzhao_cmd_dma) { reset(); }
-  ~DmaBench() { top_->final(); delete top_; }
+  ~DmaBench() {
+    top_->final();
+    delete top_;
+  }
   DmaBench(const DmaBench&) = delete;
   DmaBench& operator=(const DmaBench&) = delete;
 
@@ -157,15 +159,13 @@ class DmaBench {
       } else {
         const uint64_t d = top_->guard_wdata_o;
         for (int b = 0; b < 8; ++b) {
-          guard_writes_.back().data.push_back(
-              static_cast<uint8_t>((d >> (8 * b)) & 0xFF));
+          guard_writes_.back().data.push_back(static_cast<uint8_t>((d >> (8 * b)) & 0xFF));
         }
       }
     }
     // capture the verdict pulse + packet stream
     if (top_->dma_done_o) {
-      verdicts_.push_back(Verdict{top_->dma_slot_o, top_->dma_status_o,
-                                  top_->dma_bytes_consumed_o,
+      verdicts_.push_back(Verdict{top_->dma_slot_o, top_->dma_status_o, top_->dma_bytes_consumed_o,
                                   top_->dma_cmds_consumed_o});
     }
     if (top_->pkt_valid_o && top_->pkt_ready_i) {
@@ -228,12 +228,8 @@ class DmaBench {
   // guard packed view: {valid,write,client[2:0],addr[26:0],len[6:0],be[63:0]}
   // 103 bits -> words[3:0]; valid = bit102 (w3 bit6), len = bits[70:64]
   // (w2 bits[6:0]), addr = bits[97:71] (w2 bits[26:0] << ... )
-  bool guardValid() const {
-    return (top_->guard_req_o[3] & 0x40u) != 0;
-  }
-  uint8_t guardLen() const {
-    return static_cast<uint8_t>(top_->guard_req_o[2] & 0x7Fu);
-  }
+  bool guardValid() const { return (top_->guard_req_o[3] & 0x40u) != 0; }
+  uint8_t guardLen() const { return static_cast<uint8_t>(top_->guard_req_o[2] & 0x7Fu); }
   uint32_t guardAddr() const {
     // addr[26:0] = bits[97:71]: word2 bits [31:7] = addr[24:0],
     // word3 bit 0 = addr[25], bit 1 = addr[26]
@@ -282,9 +278,8 @@ class DmaBench {
 };
 
 // ---- packet crafting ---------------------------------------------------------
-std::vector<uint8_t> makePacket(uint32_t frame_id, uint32_t epoch,
-                                uint32_t deadline, uint16_t flags,
-                                const std::vector<std::vector<uint8_t>>& records) {
+std::vector<uint8_t> makePacket(uint32_t frame_id, uint32_t epoch, uint32_t deadline,
+                                uint16_t flags, const std::vector<std::vector<uint8_t>>& records) {
   // hand-built sealed packet (capture_format.md 3) so malformed-but-CRC-intact
   // variants are possible (the ZhaoFrameBuilder only emits lawful packets)
   uint32_t cb = 0;
@@ -301,7 +296,7 @@ std::vector<uint8_t> makePacket(uint32_t frame_id, uint32_t epoch,
   put16(4, 2);            // abi_version
   put16(6, flags);
   put32(8, frame_id);
-  put32(12, frame_id);    // sequence
+  put32(12, frame_id);  // sequence
   put32(16, epoch);
   put32(20, deadline);
   put32(24, static_cast<uint32_t>(records.size()));
@@ -357,7 +352,6 @@ struct Pcg32 {
   uint32_t operator()(uint32_t bound) { return next() % bound; }
 };
 
-
 // The fail-safe order (capture_format.md 3.2) as the packet-level oracle:
 // zref::CmdDma::verdict (reference/include/zref/zref_cmd2.hpp) — given the
 // (possibly corrupted) bytes, the descriptor length and the current epoch,
@@ -392,8 +386,7 @@ int runRandom(uint32_t packets, uint64_t seed) {
         flags |= 1;
         recs.push_back(makeRecord(ZHAO_OP_DEBUG_RUMBLE, 32, {0, 0, 0, 0}));
       } else {
-        recs.push_back(makeRecord(ZHAO_OP_SET_PRESENTATION_CONTRACT, 48,
-                                  {rng(3), 0, 0, 0}));
+        recs.push_back(makeRecord(ZHAO_OP_SET_PRESENTATION_CONTRACT, 48, {rng(3), 0, 0, 0}));
       }
     }
     std::vector<uint8_t> pkt = makePacket(n, 0, 20, flags, recs);
@@ -414,18 +407,17 @@ int runRandom(uint32_t packets, uint64_t seed) {
     } else if (corrupt == 4) {
       fetch_epoch = 1;  // epoch mismatch: drop before the first payload byte
     }
-    const zref::CmdDma::Verdict expect = zref::CmdDma::verdict(
-        pkt, static_cast<uint32_t>(pkt.size()), fetch_epoch);
+    const zref::CmdDma::Verdict expect =
+        zref::CmdDma::verdict(pkt, static_cast<uint32_t>(pkt.size()), fetch_epoch);
     if (corrupt == 5 && cb > 0) {
       // descriptor truncated to the header: the bound 40+N > byte_len fires
       t.load(kSlotBody0, pkt);
       t.fetch(kSlotBody0, 40, 0);
-      zhao::check(t.verdicts_.size() == 1, "rand: one verdict (trunc)", 1,
-                  t.verdicts_.size());
+      zhao::check(t.verdicts_.size() == 1, "rand: one verdict (trunc)", 1, t.verdicts_.size());
       if (t.verdicts_.size() == 1) {
         zhao::check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
-                    "rand: truncated descriptor -> BAD_LENGTH",
-                    zhao_abi::ZH_ABI_BAD_LENGTH, t.verdicts_[0].status);
+                    "rand: truncated descriptor -> BAD_LENGTH", zhao_abi::ZH_ABI_BAD_LENGTH,
+                    t.verdicts_[0].status);
       }
       continue;
     }
@@ -433,15 +425,13 @@ int runRandom(uint32_t packets, uint64_t seed) {
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), fetch_epoch);
     zhao::check(t.verdicts_.size() == 1, "rand: one verdict", 1, t.verdicts_.size());
     if (t.verdicts_.size() == 1) {
-      zhao::check(t.verdicts_[0].status == expect.status, "rand: predicted verdict",
-                  expect.status, t.verdicts_[0].status);
-      zhao::check(t.verdicts_[0].bytes == expect.bytes_consumed,
-                  "rand: bytes_consumed law", expect.bytes_consumed,
-                  t.verdicts_[0].bytes);
+      zhao::check(t.verdicts_[0].status == expect.status, "rand: predicted verdict", expect.status,
+                  t.verdicts_[0].status);
+      zhao::check(t.verdicts_[0].bytes == expect.bytes_consumed, "rand: bytes_consumed law",
+                  expect.bytes_consumed, t.verdicts_[0].bytes);
       if (expect.status == 0) {
-        zhao::check(t.verdicts_[0].cmds == expect.cmds_walked,
-                    "rand: cmds_consumed law", expect.cmds_walked,
-                    t.verdicts_[0].cmds);
+        zhao::check(t.verdicts_[0].cmds == expect.cmds_walked, "rand: cmds_consumed law",
+                    expect.cmds_walked, t.verdicts_[0].cmds);
       }
       if (expect.status != 0) {
         zhao::check(t.pkt_bytes_.empty(), "rand: ZERO bytes downstream on error", 0,
@@ -480,24 +470,20 @@ int main(int argc, char** argv) {
     DmaBench t;
     const std::vector<uint8_t> pkt = makePacket(
         9, 0, 50, 0,
-        {makeRecord(ZHAO_OP_BEGIN_FRAME, 32, {9, 0, 0, 50}),
-         makeRecord(ZHAO_OP_NOP, 16, {}),
+        {makeRecord(ZHAO_OP_BEGIN_FRAME, 32, {9, 0, 0, 50}), makeRecord(ZHAO_OP_NOP, 16, {}),
          makeRecord(ZHAO_OP_END_FRAME, 32, {0, 0, 0, 0})});
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
     check(t.verdicts_.size() == 1, "happy: one verdict", 1, t.verdicts_.size());
     check(t.verdicts_[0].status == 0, "happy: status OK", 0, t.verdicts_[0].status);
-    check(t.verdicts_[0].bytes == pkt.size(),
-          "happy: bytes_consumed = 40+N", pkt.size(), t.verdicts_[0].bytes);
-    check(t.verdicts_[0].cmds == 3, "happy: cmds_consumed = 3", 3,
-          t.verdicts_[0].cmds);
+    check(t.verdicts_[0].bytes == pkt.size(), "happy: bytes_consumed = 40+N", pkt.size(),
+          t.verdicts_[0].bytes);
+    check(t.verdicts_[0].cmds == 3, "happy: cmds_consumed = 3", 3, t.verdicts_[0].cmds);
     t.idle(static_cast<int>(pkt.size()) + 8);  // drain the verified stream
-    check(t.pkt_bytes_ == pkt, "happy: verified stream bit-exact", pkt.size(),
-          t.pkt_bytes_.size());
+    check(t.pkt_bytes_ == pkt, "happy: verified stream bit-exact", pkt.size(), t.pkt_bytes_.size());
     // burst geometry: first burst at the slot base, 64 B, 64-B aligned steps
-    check(!t.bursts_.empty() && t.bursts_[0].addr == kSlotBody0,
-          "happy: first burst at slot base", kSlotBody0,
-          t.bursts_.empty() ? 0 : t.bursts_[0].addr);
+    check(!t.bursts_.empty() && t.bursts_[0].addr == kSlotBody0, "happy: first burst at slot base",
+          kSlotBody0, t.bursts_.empty() ? 0 : t.bursts_[0].addr);
     check(!t.bursts_.empty() && t.bursts_[0].len == 64, "happy: 64-B burst", 64,
           t.bursts_.empty() ? 0 : t.bursts_[0].len);
     for (const auto& b : t.bursts_) {
@@ -510,39 +496,31 @@ int main(int argc, char** argv) {
   // ---- 2. corrupt header CRC: the GATE ---------------------------------------
   {
     DmaBench t;
-    std::vector<uint8_t> pkt = makePacket(
-        1, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    std::vector<uint8_t> pkt = makePacket(1, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
     pkt[8] ^= 0xFF;  // corrupt a header byte INSIDE the CRC window [0,32)
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
     check(t.verdicts_.size() == 1, "crc-h: one verdict", 1, t.verdicts_.size());
-    check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_HEADER_CRC,
-          "crc-h: status BAD_HEADER_CRC", zhao_abi::ZH_ABI_BAD_HEADER_CRC,
-          t.verdicts_[0].status);
-    check(t.verdicts_[0].bytes == 36, "crc-h: bytes_consumed = 36", 36,
-          t.verdicts_[0].bytes);
-    check(t.bursts_.size() == 1, "crc-h: ONLY the header burst issued", 1,
-          t.bursts_.size());
-    check(t.pkt_bytes_.empty(), "crc-h: ZERO bytes downstream", 0,
-          t.pkt_bytes_.size());
+    check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_HEADER_CRC, "crc-h: status BAD_HEADER_CRC",
+          zhao_abi::ZH_ABI_BAD_HEADER_CRC, t.verdicts_[0].status);
+    check(t.verdicts_[0].bytes == 36, "crc-h: bytes_consumed = 36", 36, t.verdicts_[0].bytes);
+    check(t.bursts_.size() == 1, "crc-h: ONLY the header burst issued", 1, t.bursts_.size());
+    check(t.pkt_bytes_.empty(), "crc-h: ZERO bytes downstream", 0, t.pkt_bytes_.size());
     t.idle(4);
-    check(t.pkt_bytes_.empty(), "crc-h: still zero bytes after idle", 0,
-          t.pkt_bytes_.size());
+    check(t.pkt_bytes_.empty(), "crc-h: still zero bytes after idle", 0, t.pkt_bytes_.size());
   }
 
   // ---- 3. corrupt payload CRC -------------------------------------------------
   {
     DmaBench t;
-    std::vector<uint8_t> pkt = makePacket(
-        2, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {}),
-                      makeRecord(ZHAO_OP_NOP, 16, {})});
+    std::vector<uint8_t> pkt =
+        makePacket(2, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {}), makeRecord(ZHAO_OP_NOP, 16, {})});
     pkt[40] ^= 0xAA;  // corrupt a payload byte (header CRC window intact)
     // NOTE: header CRC covers [0,32) only — still valid; payload CRC fails.
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
     check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC,
-          "crc-p: status BAD_PAYLOAD_CRC", zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC,
-          t.verdicts_[0].status);
+          "crc-p: status BAD_PAYLOAD_CRC", zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, t.verdicts_[0].status);
     check(t.verdicts_[0].bytes == pkt.size(), "crc-p: bytes = 40+N", pkt.size(),
           t.verdicts_[0].bytes);
     check(t.pkt_bytes_.empty(), "crc-p: ZERO bytes downstream (no partial)", 0,
@@ -552,14 +530,12 @@ int main(int argc, char** argv) {
   // ---- 4. epoch mismatch ------------------------------------------------------
   {
     DmaBench t;
-    const std::vector<uint8_t> pkt = makePacket(
-        3, 7, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    const std::vector<uint8_t> pkt = makePacket(3, 7, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);  // cur epoch 0 != 7
-    check(t.verdicts_[0].status == zref::ZHAO_DMA_EPOCH_MISMATCH,
-          "epoch: status 15 (local)", 15, t.verdicts_[0].status);
-    check(t.verdicts_[0].bytes == 36, "epoch: header-level abort", 36,
-          t.verdicts_[0].bytes);
+    check(t.verdicts_[0].status == zref::ZHAO_DMA_EPOCH_MISMATCH, "epoch: status 15 (local)", 15,
+          t.verdicts_[0].status);
+    check(t.verdicts_[0].bytes == 36, "epoch: header-level abort", 36, t.verdicts_[0].bytes);
     check(t.bursts_.size() == 1, "epoch: dropped before the first payload byte", 1,
           t.bursts_.size());
     check(t.pkt_bytes_.empty(), "epoch: no bytes", 0, t.pkt_bytes_.size());
@@ -568,8 +544,7 @@ int main(int argc, char** argv) {
   // ---- 5. truncated descriptor -------------------------------------------------
   {
     DmaBench t;
-    const std::vector<uint8_t> pkt = makePacket(
-        4, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    const std::vector<uint8_t> pkt = makePacket(4, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, 20, 0);  // descriptor len < 36: cannot hold a header
     check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH, "trunc0: BAD_LENGTH",
@@ -581,218 +556,183 @@ int main(int argc, char** argv) {
     t.fetch(kSlotBody0, 48, 0);
     check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH, "trunc1: BAD_LENGTH",
           zhao_abi::ZH_ABI_BAD_LENGTH, t.verdicts_[0].status);
-    check(t.verdicts_.size() == 1 && t.verdicts_[0].bytes == 36,
-          "trunc1: header-level abort", 36, t.verdicts_[0].bytes);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].bytes == 36, "trunc1: header-level abort", 36,
+          t.verdicts_[0].bytes);
   }
 
   // ---- 6. walk errors with intact CRCs -----------------------------------------
-  {
-    // unknown opcode (0x9999) with a record size that satisfies nothing
-    {
-      DmaBench t;
-      const std::vector<uint8_t> pkt =
-          makePacket(5, 0, 20, 0, {makeRecord(0x9999, 16, {})});
-      t.load(kSlotBody0, pkt);
-      t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
-      check(t.verdicts_[0].status == zhao_abi::ZH_ABI_UNKNOWN_OPCODE, "walk: UNKNOWN_OPCODE",
-            zhao_abi::ZH_ABI_UNKNOWN_OPCODE, t.verdicts_[0].status);
-      check(t.pkt_bytes_.empty(), "walk: no bytes", 0, t.pkt_bytes_.size());
-      const zref::CmdDma::Verdict ov =
-          zref::CmdDma::verdict(pkt, static_cast<uint32_t>(pkt.size()), 0);
-      check(t.verdicts_[0].status == ov.status, "walk: oracle status", ov.status,
-            t.verdicts_[0].status);
-      check(t.verdicts_[0].bytes == ov.bytes_consumed,
-            "walk: oracle bytes_consumed (walk abort consumes 40+N)",
-            ov.bytes_consumed, t.verdicts_[0].bytes);
-      check(t.verdicts_[0].cmds == ov.cmds_walked, "walk: oracle cmds_walked",
-            ov.cmds_walked, t.verdicts_[0].cmds);
-    }
-    // count mismatch: records sum exactly to cb (2 x 48 B = 96), count says
-    // 3 (3*16 = 48 <= 96, so the fail-safe bounds pass; intact CRCs)
-    {
-      DmaBench t;
-      std::vector<uint8_t> p = makePacket(
-          6, 0, 20, 1,  // flags bit0: the 48-B records are debug opcodes
-          {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {0, 0, 0, 0}),
-           makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {0, 0, 0, 0})});
-      for (int i = 0; i < 4; ++i) {
-        p[24 + i] = static_cast<uint8_t>(3 >> (8 * i));  // command_count = 3
-      }
-      // recompute the header CRC (bytes [0,32)) — the count lives inside it
-      const uint32_t hcrc = zhao_abi::zhao_crc32c(0, p.data(), 32);
-      for (int i = 0; i < 4; ++i) p[32 + i] = static_cast<uint8_t>(hcrc >> (8 * i));
-      t.load(kSlotBody0, p);
-      t.fetch(kSlotBody0, static_cast<uint32_t>(p.size()), 0);
-      check(t.verdicts_[0].status == zhao_abi::ZH_ABI_COUNT_MISMATCH,
-            "walk: COUNT_MISMATCH", zhao_abi::ZH_ABI_COUNT_MISMATCH,
-            t.verdicts_[0].status);
-      check(t.verdicts_[0].cmds == 2, "walk: 2 records walked before abort", 2,
-            t.verdicts_[0].cmds);
-      const zref::CmdDma::Verdict ov =
-          zref::CmdDma::verdict(p, static_cast<uint32_t>(p.size()), 0);
-      check(ov.status == zhao_abi::ZH_ABI_COUNT_MISMATCH && ov.cmds_walked == 2 &&
-                t.verdicts_[0].bytes == ov.bytes_consumed,
-            "walk: oracle agrees (status/cmds/bytes)", ov.bytes_consumed,
-            t.verdicts_[0].bytes);
-      check(t.pkt_bytes_.empty(), "walk: no bytes (count mismatch)", 0,
-            t.pkt_bytes_.size());
-    }
-    // debug opcode without flags bit0
-    {
-      DmaBench t;
-      const std::vector<uint8_t> pkt = makePacket(
-          7, 0, 20, 0,  // flags = 0
-          {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48,
-                      {1, 0x00100000u, 184320, 0})});
-      t.load(kSlotBody0, pkt);
-      t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
-      check(t.verdicts_[0].status == zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED,
-            "walk: DEBUG_FLAG_REQUIRED", zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED,
-            t.verdicts_[0].status);
-    }
-    // the same debug opcode WITH flags bit0: OK
-    {
-      DmaBench t;
-      const std::vector<uint8_t> pkt = makePacket(
-          8, 0, 20, 1,  // flags bit0 = contains_debug_commands
-          {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48,
-                      {1, 0x00100000u, 184320, 0})});
-      t.load(kSlotBody0, pkt);
-      t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
-      check(t.verdicts_[0].status == 0, "walk: debug frame with bit0 OK", 0,
-            t.verdicts_[0].status);
-      t.idle(static_cast<int>(pkt.size()) + 8);
-      check(t.pkt_bytes_.size() == pkt.size(), "walk: debug frame streamed", 1,
-            t.pkt_bytes_.size());
-    }
+  {// unknown opcode (0x9999) with a record size that satisfies nothing
+   {DmaBench t;
+  const std::vector<uint8_t> pkt = makePacket(5, 0, 20, 0, {makeRecord(0x9999, 16, {})});
+  t.load(kSlotBody0, pkt);
+  t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+  check(t.verdicts_[0].status == zhao_abi::ZH_ABI_UNKNOWN_OPCODE, "walk: UNKNOWN_OPCODE",
+        zhao_abi::ZH_ABI_UNKNOWN_OPCODE, t.verdicts_[0].status);
+  check(t.pkt_bytes_.empty(), "walk: no bytes", 0, t.pkt_bytes_.size());
+  const zref::CmdDma::Verdict ov = zref::CmdDma::verdict(pkt, static_cast<uint32_t>(pkt.size()), 0);
+  check(t.verdicts_[0].status == ov.status, "walk: oracle status", ov.status,
+        t.verdicts_[0].status);
+  check(t.verdicts_[0].bytes == ov.bytes_consumed,
+        "walk: oracle bytes_consumed (walk abort consumes 40+N)", ov.bytes_consumed,
+        t.verdicts_[0].bytes);
+  check(t.verdicts_[0].cmds == ov.cmds_walked, "walk: oracle cmds_walked", ov.cmds_walked,
+        t.verdicts_[0].cmds);
+}
+// count mismatch: records sum exactly to cb (2 x 48 B = 96), count says
+// 3 (3*16 = 48 <= 96, so the fail-safe bounds pass; intact CRCs)
+{
+  DmaBench t;
+  std::vector<uint8_t> p =
+      makePacket(6, 0, 20, 1,  // flags bit0: the 48-B records are debug opcodes
+                 {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {0, 0, 0, 0}),
+                  makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {0, 0, 0, 0})});
+  for (int i = 0; i < 4; ++i) {
+    p[24 + i] = static_cast<uint8_t>(3 >> (8 * i));  // command_count = 3
   }
+  // recompute the header CRC (bytes [0,32)) — the count lives inside it
+  const uint32_t hcrc = zhao_abi::zhao_crc32c(0, p.data(), 32);
+  for (int i = 0; i < 4; ++i) p[32 + i] = static_cast<uint8_t>(hcrc >> (8 * i));
+  t.load(kSlotBody0, p);
+  t.fetch(kSlotBody0, static_cast<uint32_t>(p.size()), 0);
+  check(t.verdicts_[0].status == zhao_abi::ZH_ABI_COUNT_MISMATCH, "walk: COUNT_MISMATCH",
+        zhao_abi::ZH_ABI_COUNT_MISMATCH, t.verdicts_[0].status);
+  check(t.verdicts_[0].cmds == 2, "walk: 2 records walked before abort", 2, t.verdicts_[0].cmds);
+  const zref::CmdDma::Verdict ov = zref::CmdDma::verdict(p, static_cast<uint32_t>(p.size()), 0);
+  check(ov.status == zhao_abi::ZH_ABI_COUNT_MISMATCH && ov.cmds_walked == 2 &&
+            t.verdicts_[0].bytes == ov.bytes_consumed,
+        "walk: oracle agrees (status/cmds/bytes)", ov.bytes_consumed, t.verdicts_[0].bytes);
+  check(t.pkt_bytes_.empty(), "walk: no bytes (count mismatch)", 0, t.pkt_bytes_.size());
+}
+// debug opcode without flags bit0
+{
+  DmaBench t;
+  const std::vector<uint8_t> pkt =
+      makePacket(7, 0, 20, 0,  // flags = 0
+                 {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {1, 0x00100000u, 184320, 0})});
+  t.load(kSlotBody0, pkt);
+  t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+  check(t.verdicts_[0].status == zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED, "walk: DEBUG_FLAG_REQUIRED",
+        zhao_abi::ZH_ABI_DEBUG_FLAG_REQUIRED, t.verdicts_[0].status);
+}
+// the same debug opcode WITH flags bit0: OK
+{
+  DmaBench t;
+  const std::vector<uint8_t> pkt =
+      makePacket(8, 0, 20, 1,  // flags bit0 = contains_debug_commands
+                 {makeRecord(ZHAO_OP_DEBUG_FRAME_BLIT, 48, {1, 0x00100000u, 184320, 0})});
+  t.load(kSlotBody0, pkt);
+  t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+  check(t.verdicts_[0].status == 0, "walk: debug frame with bit0 OK", 0, t.verdicts_[0].status);
+  t.idle(static_cast<int>(pkt.size()) + 8);
+  check(t.pkt_bytes_.size() == pkt.size(), "walk: debug frame streamed", 1, t.pkt_bytes_.size());
+}
+}
 
-  // ---- 7. bridge error ----------------------------------------------------------
-  {
-    DmaBench t;
-    const std::vector<uint8_t> pkt = makePacket(
-        10, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
-    t.load(kSlotBody0, pkt);
-    t.force_err_ = true;
-    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
-    check(t.verdicts_[0].status == 17, "bridge: status 17 (local)", 17,
-          t.verdicts_[0].status);
-    check(t.pkt_bytes_.empty(), "bridge: nothing downstream", 0, t.pkt_bytes_.size());
+// ---- 7. bridge error ----------------------------------------------------------
+{
+  DmaBench t;
+  const std::vector<uint8_t> pkt = makePacket(10, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+  t.load(kSlotBody0, pkt);
+  t.force_err_ = true;
+  t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+  check(t.verdicts_[0].status == 17, "bridge: status 17 (local)", 17, t.verdicts_[0].status);
+  check(t.pkt_bytes_.empty(), "bridge: nothing downstream", 0, t.pkt_bytes_.size());
+}
+
+// ---- 8. blit engine -------------------------------------------------------------
+{
+  DmaBench t;
+  // Z60 canvas: 184,320 bytes, deterministic pattern
+  std::vector<uint8_t> canvas(184320);
+  for (uint32_t i = 0; i < canvas.size(); ++i) {
+    canvas[i] = static_cast<uint8_t>((i * 7u + 11u) & 0xFF);
   }
+  const uint32_t want_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+  t.load(kBlitSrc, canvas);
 
-  // ---- 8. blit engine -------------------------------------------------------------
-  {
-    DmaBench t;
-    // Z60 canvas: 184,320 bytes, deterministic pattern
-    std::vector<uint8_t> canvas(184320);
-    for (uint32_t i = 0; i < canvas.size(); ++i) {
-      canvas[i] = static_cast<uint8_t>((i * 7u + 11u) & 0xFF);
+  // 8a. good blit into FB slot 1
+  t.blit(1, 0 /*VIDEO_Z60*/, kBlitSrc, 184320, want_crc);
+  check(t.blit_results_.size() == 1, "blit: one completion", 1, t.blit_results_.size());
+  check(t.blit_results_[0] == 0, "blit: committed (status 0)", 0, t.blit_results_[0]);
+  uint32_t got_bytes = 0;
+  bool data_ok = true;
+  bool beats_ok = true;
+  uint32_t off = 0;
+  for (const auto& g : t.guard_writes_) {
+    check(g.addr == (0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off),
+          "blit: guard addr exact (slot-1 region)",
+          0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off, g.addr);
+    check(g.len == 64, "blit: 64-B requests", 64, g.len);
+    // ALL len bytes must have streamed (8 beats x 8 B), in order
+    if (g.data.size() != g.len) beats_ok = false;
+    for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
+      if (g.data[b] != canvas[off + b]) data_ok = false;
     }
-    const uint32_t want_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
-    t.load(kBlitSrc, canvas);
-
-    // 8a. good blit into FB slot 1
-    t.blit(1, 0 /*VIDEO_Z60*/, kBlitSrc, 184320, want_crc);
-    check(t.blit_results_.size() == 1, "blit: one completion", 1,
-          t.blit_results_.size());
-    check(t.blit_results_[0] == 0, "blit: committed (status 0)", 0,
-          t.blit_results_[0]);
-    uint32_t got_bytes = 0;
-    bool data_ok = true;
-    bool beats_ok = true;
-    uint32_t off = 0;
-    for (const auto& g : t.guard_writes_) {
-      check(g.addr == (0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off),
-            "blit: guard addr exact (slot-1 region)", 0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off,
-            g.addr);
-      check(g.len == 64, "blit: 64-B requests", 64, g.len);
-      // ALL len bytes must have streamed (8 beats x 8 B), in order
-      if (g.data.size() != g.len) beats_ok = false;
-      for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
-        if (g.data[b] != canvas[off + b]) data_ok = false;
-      }
-      got_bytes += g.len;
-      off += 64;
-    }
-    check(got_bytes == 184320, "blit: exactly canvas bytes committed", 184320,
-          got_bytes);
-    check(beats_ok, "blit: every request streamed all len bytes", 1, beats_ok);
-    check(data_ok, "blit: committed bytes bit-exact (ALL 64 per request)", 1,
-          data_ok);
-    check(t.stray_wbeats_ == 0, "blit: no stray data beats", 0,
-          t.stray_wbeats_);
-
-    // 8b. corrupt blit CRC: ZERO guard writes (the gate)
-    t.blit(0, 0, kBlitSrc, 184320, want_crc ^ 1);
-    check(t.blit_results_[0] == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC,
-          "blit-crc: BAD_PAYLOAD_CRC", zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, t.blit_results_[0]);
-    check(t.guard_writes_.empty(), "blit-crc: ZERO VRAM writes", 0,
-          t.guard_writes_.size());
-
-    // 8c. wrong length (not canvas_bytes(mode)): rejected before any byte
-    t.blit(0, 0, kBlitSrc, 100000, want_crc);
-    check(t.blit_results_[0] == 18, "blit-len: status 18 (rejected)", 18,
-          t.blit_results_[0]);
-    check(t.bursts_.empty(), "blit-len: rejected before the first byte", 0,
-          t.bursts_.size());
-    check(t.guard_writes_.empty(), "blit-len: zero writes", 0,
-          t.guard_writes_.size());
+    got_bytes += g.len;
+    off += 64;
   }
+  check(got_bytes == 184320, "blit: exactly canvas bytes committed", 184320, got_bytes);
+  check(beats_ok, "blit: every request streamed all len bytes", 1, beats_ok);
+  check(data_ok, "blit: committed bytes bit-exact (ALL 64 per request)", 1, data_ok);
+  check(t.stray_wbeats_ == 0, "blit: no stray data beats", 0, t.stray_wbeats_);
 
-  // ---- 8d. Duo blit: OCCUPANCY, not allocation (video_rules.md 1/3.1) ----
-  // A Duo frame stores exactly 0x30000 = 196,608 packed view bytes of its
-  // 0x3C000 slot; the blit-length law follows zhao_pkg::zhao_canvas_bytes.
-  // The 245,760 ALLOCATION — the pre-split Duo value, and coincidentally
-  // the Duo DISPLAYED-stream size — must now be REJECTED: the spec declares
-  // the slot tail untouched, and a blit of it would touch it.
-  {
-    DmaBench t;
-    const uint32_t kDuoBytes = 196608;  // zhao_pkg::ZHAO_CANVAS_BYTES_DUO
-    std::vector<uint8_t> canvas(kDuoBytes);
-    for (uint32_t i = 0; i < canvas.size(); ++i) {
-      canvas[i] = static_cast<uint8_t>((i * 13u + 5u) & 0xFF);
-    }
-    const uint32_t want_crc =
-        zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
-    t.load(kBlitSrc, canvas);
+  // 8b. corrupt blit CRC: ZERO guard writes (the gate)
+  t.blit(0, 0, kBlitSrc, 184320, want_crc ^ 1);
+  check(t.blit_results_[0] == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "blit-crc: BAD_PAYLOAD_CRC",
+        zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, t.blit_results_[0]);
+  check(t.guard_writes_.empty(), "blit-crc: ZERO VRAM writes", 0, t.guard_writes_.size());
 
-    // occupancy length commits, covering exactly [slot0, slot0+0x30000)
-    t.blit(0, 2 /*VIDEO_DUO*/, kBlitSrc, kDuoBytes, want_crc);
-    check(t.blit_results_.size() == 1, "duo blit: one completion", 1,
-          t.blit_results_.size());
-    check(t.blit_results_[0] == 0, "duo blit: committed (status 0)", 0,
-          t.blit_results_[0]);
-    uint32_t got_bytes = 0;
-    bool data_ok = true;
-    bool beats_ok = true;
-    uint32_t off = 0;
-    for (const auto& g : t.guard_writes_) {
-      check(g.addr == off, "duo blit: guard addr exact (slot-0 region)", off,
-            g.addr);
-      if (g.data.size() != g.len) beats_ok = false;
-      for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
-        if (g.data[b] != canvas[off + b]) data_ok = false;
-      }
-      got_bytes += g.len;
-      off += 64;
-    }
-    check(got_bytes == kDuoBytes, "duo blit: exactly the 0x30000 occupancy",
-          kDuoBytes, got_bytes);
-    check(beats_ok, "duo blit: every request streamed all len bytes", 1,
-          beats_ok);
-    check(data_ok, "duo blit: committed bytes bit-exact (ALL 64 per request)",
-          1, data_ok);
+  // 8c. wrong length (not canvas_bytes(mode)): rejected before any byte
+  t.blit(0, 0, kBlitSrc, 100000, want_crc);
+  check(t.blit_results_[0] == 18, "blit-len: status 18 (rejected)", 18, t.blit_results_[0]);
+  check(t.bursts_.empty(), "blit-len: rejected before the first byte", 0, t.bursts_.size());
+  check(t.guard_writes_.empty(), "blit-len: zero writes", 0, t.guard_writes_.size());
+}
 
-    // the allocation length (the pre-split value) is now a length fault
-    t.blit(0, 2, kBlitSrc, 245760, want_crc);
-    check(t.blit_results_[0] == 18,
-          "duo blit-alloc-len: 245,760 rejected (status 18)", 18,
-          t.blit_results_[0]);
-    check(t.bursts_.empty(), "duo blit-alloc-len: no fetch", 0,
-          t.bursts_.size());
-    check(t.guard_writes_.empty(), "duo blit-alloc-len: zero writes", 0,
-          t.guard_writes_.size());
+// ---- 8d. Duo blit: OCCUPANCY, not allocation (video_rules.md 1/3.1) ----
+// A Duo frame stores exactly 0x30000 = 196,608 packed view bytes of its
+// 0x3C000 slot; the blit-length law follows zhao_pkg::zhao_canvas_bytes.
+// The 245,760 ALLOCATION — the pre-split Duo value, and coincidentally
+// the Duo DISPLAYED-stream size — must now be REJECTED: the spec declares
+// the slot tail untouched, and a blit of it would touch it.
+{
+  DmaBench t;
+  const uint32_t kDuoBytes = 196608;  // zhao_pkg::ZHAO_CANVAS_BYTES_DUO
+  std::vector<uint8_t> canvas(kDuoBytes);
+  for (uint32_t i = 0; i < canvas.size(); ++i) {
+    canvas[i] = static_cast<uint8_t>((i * 13u + 5u) & 0xFF);
   }
+  const uint32_t want_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+  t.load(kBlitSrc, canvas);
 
-  return zhao::report_and_exit("cmd_dma_directed");
+  // occupancy length commits, covering exactly [slot0, slot0+0x30000)
+  t.blit(0, 2 /*VIDEO_DUO*/, kBlitSrc, kDuoBytes, want_crc);
+  check(t.blit_results_.size() == 1, "duo blit: one completion", 1, t.blit_results_.size());
+  check(t.blit_results_[0] == 0, "duo blit: committed (status 0)", 0, t.blit_results_[0]);
+  uint32_t got_bytes = 0;
+  bool data_ok = true;
+  bool beats_ok = true;
+  uint32_t off = 0;
+  for (const auto& g : t.guard_writes_) {
+    check(g.addr == off, "duo blit: guard addr exact (slot-0 region)", off, g.addr);
+    if (g.data.size() != g.len) beats_ok = false;
+    for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
+      if (g.data[b] != canvas[off + b]) data_ok = false;
+    }
+    got_bytes += g.len;
+    off += 64;
+  }
+  check(got_bytes == kDuoBytes, "duo blit: exactly the 0x30000 occupancy", kDuoBytes, got_bytes);
+  check(beats_ok, "duo blit: every request streamed all len bytes", 1, beats_ok);
+  check(data_ok, "duo blit: committed bytes bit-exact (ALL 64 per request)", 1, data_ok);
+
+  // the allocation length (the pre-split value) is now a length fault
+  t.blit(0, 2, kBlitSrc, 245760, want_crc);
+  check(t.blit_results_[0] == 18, "duo blit-alloc-len: 245,760 rejected (status 18)", 18,
+        t.blit_results_[0]);
+  check(t.bursts_.empty(), "duo blit-alloc-len: no fetch", 0, t.bursts_.size());
+  check(t.guard_writes_.empty(), "duo blit-alloc-len: zero writes", 0, t.guard_writes_.size());
+}
+
+return zhao::report_and_exit("cmd_dma_directed");
 }

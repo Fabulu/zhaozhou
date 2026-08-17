@@ -33,7 +33,7 @@ namespace zhao_video {
 class VideoTb {
  public:
   Vzhao_video_tb top;
-  zref::VramResponder resp{4};   // fixed sim profile latency (gpu cycles)
+  zref::VramResponder resp{4};  // fixed sim profile latency (gpu cycles)
   zref::Scanout oracle;
 
   // per-cycle stimulus (set by the scenario before step())
@@ -43,8 +43,8 @@ class VideoTb {
   uint32_t deadline_cycles = 0;
   bool px_out_ready = true;
 
-  uint64_t n = 0;          // gpu steps since reset
-  Fnv1a trace;             // run-twice determinism hash
+  uint64_t n = 0;  // gpu steps since reset
+  Fnv1a trace;     // run-twice determinism hash
   int failures = 0;
   int checks = 0;
 
@@ -93,11 +93,9 @@ class VideoTb {
       // invariant: the fetch only ever addresses the two FB slots
       // (region map, spec/memory_rules.md §5)
       ++failures;
-      std::fprintf(stderr,
-                   "ROGUE REQ n=%llu addr=0x%x len=%u raster=(%u,%u) m=%u/%u\n",
-                   (unsigned long long)(n + 1), ra, rl, (unsigned)top.o_x,
-                   (unsigned)top.o_y, (unsigned)top.o_mode,
-                   (unsigned)top.o_mode_next);
+      std::fprintf(stderr, "ROGUE REQ n=%llu addr=0x%x len=%u raster=(%u,%u) m=%u/%u\n",
+                   (unsigned long long)(n + 1), ra, rl, (unsigned)top.o_x, (unsigned)top.o_y,
+                   (unsigned)top.o_mode, (unsigned)top.o_mode_next);
     }
     const zref::VramResponder::Out ro = resp.step(rv, ra, rl);
     top.guard_ready = ro.ready ? 1 : 0;
@@ -105,7 +103,7 @@ class VideoTb {
     top.guard_violation = ro.violation ? 1 : 0;
     top.beat_valid = ro.beat_valid ? 1 : 0;
     top.beat_data = ro.beat_data;
-    top.beat_last = 0;   // the responder delivers beats back-to-back
+    top.beat_last = 0;  // the responder delivers beats back-to-back
 
     // edge
     clock_only_();
@@ -141,11 +139,11 @@ class VideoTb {
     top.eval();
     if (n & 1) {
       top.gpu_clk = 1;
-      top.vid_clk = 1;   // coincident posedges (fixed 2:1 phase)
+      top.vid_clk = 1;  // coincident posedges (fixed 2:1 phase)
       top.eval();
     } else {
       top.gpu_clk = 1;
-      top.vid_clk = 0;   // gpu posedge only (vid low half)
+      top.vid_clk = 0;  // gpu posedge only (vid low half)
       top.eval();
     }
     top.gpu_clk = 0;
@@ -160,16 +158,13 @@ class VideoTb {
       ++failures;
       if (failures <= 20) {
         std::printf("MISMATCH gpu_step=%llu vid_step=%llu %s: oracle=%llu rtl=%llu\n",
-                    (unsigned long long)n,
-                    (unsigned long long)oracle.vid_steps(), what,
+                    (unsigned long long)n, (unsigned long long)oracle.vid_steps(), what,
                     (unsigned long long)exp, (unsigned long long)act);
         std::vector<uint8_t> vec;
         for (uint64_t v : {exp, act, n}) {
-          for (int i = 0; i < 8; ++i)
-            vec.push_back((uint8_t)((v >> (8 * i)) & 0xFF));
+          for (int i = 0; i < 8; ++i) vec.push_back((uint8_t)((v >> (8 * i)) & 0xFF));
         }
-        zhao::save_failing_vector(std::string("video_") + what,
-                                  vec,
+        zhao::save_failing_vector(std::string("video_") + what, vec,
                                   std::to_string((unsigned long long)exp),
                                   std::to_string((unsigned long long)act));
       }

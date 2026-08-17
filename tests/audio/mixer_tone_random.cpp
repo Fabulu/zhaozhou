@@ -23,8 +23,7 @@ namespace fs = std::filesystem;
 namespace {
 
 uint32_t pcg_perm(uint32_t s) {
-  const uint32_t w = static_cast<uint32_t>(((s >> ((s >> 28) + 4)) ^ s) *
-                                           277803737u);
+  const uint32_t w = static_cast<uint32_t>(((s >> ((s >> 28) + 4)) ^ s) * 277803737u);
   return (w >> 22) ^ w;
 }
 
@@ -49,8 +48,7 @@ int main() {
     std::fprintf(stderr, "FAIL: cannot open %s\n", p.string().c_str());
     return 1;
   }
-  std::vector<uint8_t> raw((std::istreambuf_iterator<char>(in)),
-                           std::istreambuf_iterator<char>());
+  std::vector<uint8_t> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   if (raw.size() != 65536 * 8) {
     std::fprintf(stderr, "FAIL: golden sin_cos_u16.bin layout\n");
     return 1;
@@ -93,9 +91,8 @@ int main() {
         std::fprintf(stderr,
                      "FAIL: frame %u tick %u: got (%04x,%04x) want %04x "
                      "(angle %04x)\n",
-                     frame, k, static_cast<uint16_t>(got.l),
-                     static_cast<uint16_t>(got.r), static_cast<uint16_t>(want),
-                     angle);
+                     frame, k, static_cast<uint16_t>(got.l), static_cast<uint16_t>(got.r),
+                     static_cast<uint16_t>(want), angle);
         ++failures;
         if (failures > 8) return 1;
       }

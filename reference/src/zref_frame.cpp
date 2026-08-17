@@ -505,8 +505,8 @@ bool zmap_utf8(const uint8_t* bytes, size_t size) {
 }
 
 bool zmap_text_ok(const std::string& text) {
-  return text.find('\0') == std::string::npos
-      && zmap_utf8(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+  return text.find('\0') == std::string::npos &&
+         zmap_utf8(reinterpret_cast<const uint8_t*>(text.data()), text.size());
 }
 
 ZhaoSourceMapBuildResult zmap_build_fail(ZhaoSourceMapError error, const char* diagnostic) {
@@ -525,17 +525,16 @@ ZhaoSourceMapParseResult zmap_parse_fail(ZhaoSourceMapError error, const char* d
 
 }  // namespace
 
-ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
-    uint64_t entry_count, uint64_t file_count, uint64_t string_blob_bytes) {
+ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(uint64_t entry_count, uint64_t file_count,
+                                                       uint64_t string_blob_bytes) {
   ZhaoSourceMapSizeResult result;
   constexpr uint64_t kU32Max = std::numeric_limits<uint32_t>::max();
   if (entry_count > kU32Max || file_count > kU32Max || string_blob_bytes > kU32Max) {
     result.error = ZhaoSourceMapError::kSizeOverflow;
     return result;
   }
-  const uint64_t body_bytes = entry_count * ZHAO_ZMAP_ENTRY_BYTES
-                            + file_count * ZHAO_ZMAP_FILE_BYTES
-                            + string_blob_bytes;
+  const uint64_t body_bytes =
+      entry_count * ZHAO_ZMAP_ENTRY_BYTES + file_count * ZHAO_ZMAP_FILE_BYTES + string_blob_bytes;
   if (body_bytes > kU32Max) {
     result.error = ZhaoSourceMapError::kSizeOverflow;
     return result;
@@ -545,13 +544,12 @@ ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
 }
 
 ZhaoSourceMapError zhao_source_map_v1_admit_byte_length(uint64_t bytes) {
-  return bytes > ZHAO_ZMAP_MAX_BYTES ? ZhaoSourceMapError::kTooLarge
-                                     : ZhaoSourceMapError::kOk;
+  return bytes > ZHAO_ZMAP_MAX_BYTES ? ZhaoSourceMapError::kTooLarge : ZhaoSourceMapError::kOk;
 }
 
 ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
-  if (map.entries.size() > std::numeric_limits<uint32_t>::max()
-      || map.files.size() > std::numeric_limits<uint32_t>::max()) {
+  if (map.entries.size() > std::numeric_limits<uint32_t>::max() ||
+      map.files.size() > std::numeric_limits<uint32_t>::max()) {
     return zmap_build_fail(ZhaoSourceMapError::kSizeOverflow,
                            "sourceids.zmap exceeds v1 u32 size limits");
   }
@@ -561,10 +559,10 @@ ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
   }
 
   std::vector<ZhaoSourceMapEntry> entries = map.entries;
-  std::sort(entries.begin(), entries.end(), [](const ZhaoSourceMapEntry& a,
-                                                const ZhaoSourceMapEntry& b) {
-    return a.source_id < b.source_id;
-  });
+  std::sort(entries.begin(), entries.end(),
+            [](const ZhaoSourceMapEntry& a, const ZhaoSourceMapEntry& b) {
+              return a.source_id < b.source_id;
+            });
   bool any_hash = false;
   uint32_t previous = 0;
   bool have_previous = false;
@@ -580,8 +578,8 @@ ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
       return zmap_build_fail(ZhaoSourceMapError::kKindMismatch,
                              "sourceids.zmap: denormalized kind mismatch");
     }
-    if (entry.module_id != module || entry.file_index != entry.module_id
-        || entry.file_index >= map.files.size()) {
+    if (entry.module_id != module || entry.file_index != entry.module_id ||
+        entry.file_index >= map.files.size()) {
       return zmap_build_fail(ZhaoSourceMapError::kModuleFileMismatch,
                              "sourceids.zmap: denormalized module/file");
     }
@@ -595,8 +593,7 @@ ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
                              "sourceids.zmap: denormalized program-hash flags");
     }
     if (entry.span_end < entry.span_begin) {
-      return zmap_build_fail(ZhaoSourceMapError::kReversedSpan,
-                             "sourceids.zmap: reversed span");
+      return zmap_build_fail(ZhaoSourceMapError::kReversedSpan, "sourceids.zmap: reversed span");
     }
     if (!zmap_text_ok(entry.name) || !zmap_text_ok(entry.file)) {
       return zmap_build_fail(ZhaoSourceMapError::kInvalidUtf8,
@@ -620,9 +617,9 @@ ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
       offset = found->second;
       return true;
     }
-    if (text.size() > std::numeric_limits<uint32_t>::max()
-        || blob_bytes + static_cast<uint64_t>(text.size()) + 1u
-            > std::numeric_limits<uint32_t>::max()) {
+    if (text.size() > std::numeric_limits<uint32_t>::max() ||
+        blob_bytes + static_cast<uint64_t>(text.size()) + 1u >
+            std::numeric_limits<uint32_t>::max()) {
       return false;
     }
     offset = static_cast<uint32_t>(blob_bytes);
@@ -689,8 +686,8 @@ ZhaoSourceMapBuildResult zhao_zcap_build_source_map(const ZhaoSourceMap& map) {
     std::memcpy(out.data() + offset, text.data(), text.size());
     offset += text.size() + 1u;
   }
-  wr32(out, 20, zhao_crc32c(0, out.data() + ZHAO_ZMAP_HEADER_BYTES,
-                            out.size() - ZHAO_ZMAP_HEADER_BYTES));
+  wr32(out, 20,
+       zhao_crc32c(0, out.data() + ZHAO_ZMAP_HEADER_BYTES, out.size() - ZHAO_ZMAP_HEADER_BYTES));
   return result;
 }
 
@@ -715,8 +712,7 @@ ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t 
   }
   const uint16_t header_flags = rd16(body + 6u);
   if ((header_flags & ~1u) != 0u) {
-    return zmap_parse_fail(ZhaoSourceMapError::kReservedFlags,
-                           "sourceids.zmap: reserved flags");
+    return zmap_parse_fail(ZhaoSourceMapError::kReservedFlags, "sourceids.zmap: reserved flags");
   }
   uint64_t reserved = 0;
   for (size_t i = 0; i < 8u; ++i) reserved |= static_cast<uint64_t>(body[24u + i]) << (8u * i);
@@ -735,8 +731,8 @@ ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t 
   }
   const uint64_t entry_bytes = static_cast<uint64_t>(entry_count) * ZHAO_ZMAP_ENTRY_BYTES;
   const uint64_t file_bytes = static_cast<uint64_t>(file_count) * ZHAO_ZMAP_FILE_BYTES;
-  if (zhao_crc32c(0, body + ZHAO_ZMAP_HEADER_BYTES,
-                  n - ZHAO_ZMAP_HEADER_BYTES) != rd32(body + 20u)) {
+  if (zhao_crc32c(0, body + ZHAO_ZMAP_HEADER_BYTES, n - ZHAO_ZMAP_HEADER_BYTES) !=
+      rd32(body + 20u)) {
     return zmap_parse_fail(ZhaoSourceMapError::kBodyCrcMismatch,
                            "sourceids.zmap: body CRC mismatch");
   }
@@ -784,8 +780,7 @@ ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t 
                              "sourceids.zmap: reserved entry bits");
     }
     if (entry.span_end < entry.span_begin) {
-      return zmap_parse_fail(ZhaoSourceMapError::kReversedSpan,
-                             "sourceids.zmap: reversed span");
+      return zmap_parse_fail(ZhaoSourceMapError::kReversedSpan, "sourceids.zmap: reversed span");
     }
     if ((entry.flags & 1u) == 0u && hash != 0u) {
       return zmap_parse_fail(ZhaoSourceMapError::kHashWithoutFlag,
@@ -803,8 +798,8 @@ ZhaoSourceMapParseResult zhao_zcap_parse_source_map(const uint8_t* body, size_t 
   }
 
   const size_t blob_start = ZHAO_ZMAP_HEADER_BYTES + static_cast<size_t>(entry_bytes + file_bytes);
-  const auto read_string = [&](uint32_t relative, std::string& text,
-                               ZhaoSourceMapError& error, const char*& diagnostic) -> bool {
+  const auto read_string = [&](uint32_t relative, std::string& text, ZhaoSourceMapError& error,
+                               const char*& diagnostic) -> bool {
     if (relative >= blob_bytes) {
       error = ZhaoSourceMapError::kStringOffsetOutsideBlob;
       diagnostic = "sourceids.zmap: string offset outside blob";

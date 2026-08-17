@@ -51,8 +51,7 @@ std::vector<int32_t> load_golden_sin() {
     ++failures;
     return {};
   }
-  std::vector<uint8_t> raw((std::istreambuf_iterator<char>(in)),
-                           std::istreambuf_iterator<char>());
+  std::vector<uint8_t> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   if (raw.size() != 65536 * 8) {
     check(false, "golden sin_cos_u16.bin has the frozen 65536x8B layout");
     return {};
@@ -97,11 +96,9 @@ int main() {
         const int16_t want = expected_sample(golden_sin, angle);
         if (fr[k].l != want || fr[k].r != want) {
           char buf[160];
-          std::snprintf(buf, sizeof buf,
-                        "%s frame %u tick %u: (%04x,%04x) vs golden (%04x)",
+          std::snprintf(buf, sizeof buf, "%s frame %u tick %u: (%04x,%04x) vs golden (%04x)",
                         spec.name, f, k, static_cast<uint16_t>(fr[k].l),
-                        static_cast<uint16_t>(fr[k].r),
-                        static_cast<uint16_t>(want));
+                        static_cast<uint16_t>(fr[k].r), static_cast<uint16_t>(want));
           check(false, buf);
           break;
         }
@@ -132,8 +129,8 @@ int main() {
       check(p.l == c.want && p.r == c.want, c.what);
     }
     // dynamic corners: every angle that maps to the extreme table entries
-    for (const uint16_t angle : {uint16_t(0x3FFF), uint16_t(0x4001),
-                                 uint16_t(0xBFFF), uint16_t(0xC001)}) {
+    for (const uint16_t angle :
+         {uint16_t(0x3FFF), uint16_t(0x4001), uint16_t(0xBFFF), uint16_t(0xC001)}) {
       tone.set_phase(static_cast<uint32_t>(angle) << 16);
       const zref::AudioPair p = tone.tick();
       const int16_t want = expected_sample(golden_sin, angle);
@@ -160,15 +157,13 @@ int main() {
     uint32_t seq = 0;
     auto next_pair = [&seq] {
       ++seq;
-      return zref::AudioPair{static_cast<int16_t>(seq * 3),
-                             static_cast<int16_t>(-seq * 5)};
+      return zref::AudioPair{static_cast<int16_t>(seq * 3), static_cast<int16_t>(-seq * 5)};
     };
     for (int i = 0; i < 8; ++i) {
       check(ring.write(next_pair()), "ring write succeeds while free space");
     }
     check_eq(ring.free_pairs(), 0, "ring full after capacity writes");
-    check(!ring.write(zref::AudioPair{1, 2}),
-          "ring REFUSES the overwrite (free-space law)");
+    check(!ring.write(zref::AudioPair{1, 2}), "ring REFUSES the overwrite (free-space law)");
     check_eq(ring.host_write_ptr(), 8, "host_write_ptr frozen on refusal");
     // FPGA reads 3 (it owns fpga_read_ptr only)
     zref::AudioPair p0 = ring.fpga_read();
@@ -182,14 +177,12 @@ int main() {
     for (int i = 0; i < 3; ++i) {
       check(ring.write(next_pair()), "ring accepts again after reads");
     }
-    check(!ring.write(zref::AudioPair{3, 4}),
-          "free-space law holds across the cycle");
+    check(!ring.write(zref::AudioPair{3, 4}), "free-space law holds across the cycle");
     // drain the FULL content (pairs 4..11: the 5 unread from the first fill
     // precede the 3 refilled): global FIFO order preserved end to end
     for (uint32_t k = 4; k <= 11; ++k) {
       const zref::AudioPair p = ring.fpga_read();
-      check(p.l == static_cast<int16_t>(k * 3) &&
-                p.r == static_cast<int16_t>(-k * 5),
+      check(p.l == static_cast<int16_t>(k * 3) && p.r == static_cast<int16_t>(-k * 5),
             "ring total order: every pair read exactly once, in order");
     }
     check_eq(ring.filled_pairs(), 0, "ring drained");

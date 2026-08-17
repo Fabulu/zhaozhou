@@ -48,7 +48,7 @@ struct VidTiming {
   uint32_t frame_gpu_cycles;
 };
 
-const VidTiming& vid_timing(uint32_t mode);   // mode 0/1/2
+const VidTiming& vid_timing(uint32_t mode);  // mode 0/1/2
 
 // Bytes a frame OCCUPIES per mode (spec/video_rules.md §1 "Allocation is
 // not occupancy": Duo stores 0x30000 packed view bytes of its 0x3C000
@@ -64,8 +64,8 @@ uint32_t active_width(uint32_t mode);
 uint32_t frame_pixel_crc(uint32_t mode, const std::vector<uint8_t>& canvas);
 
 // per-mode line geometry used by fetch and the frame composer
-bool   duo_border_line(uint32_t display_y);  // true for the 48 border rows
-uint32_t duo_source_row(uint32_t display_y); // display y -> view row (>=24)
+bool duo_border_line(uint32_t display_y);     // true for the 48 border rows
+uint32_t duo_source_row(uint32_t display_y);  // display y -> view row (>=24)
 
 // ------------------------------------------------------------- VideoMode ---
 struct RasterView {
@@ -138,7 +138,7 @@ class FrameCtl {
   uint64_t frame_cycles() const { return frame_cycles_q_; }
   uint32_t frame_id() const { return frame_id_q_; }
   uint32_t display_slot() const { return cur_slot_; }
-  bool tick_tog() const { return tick_tog_; }        // gpu-crossing source
+  bool tick_tog() const { return tick_tog_; }  // gpu-crossing source
   bool cur_repeated() const { return cur_repeated_; }
 
  private:
@@ -206,12 +206,12 @@ class VramResponder {
  private:
   uint32_t latency_;
   bool service_ = true;
-  std::vector<uint8_t> vram_;   // full 2-slot span (0x78000)
+  std::vector<uint8_t> vram_;  // full 2-slot span (0x78000)
   // in-flight burst
   bool busy_ = false;
-  uint32_t beat_countdown_ = 0; // cycles until the next beat
+  uint32_t beat_countdown_ = 0;  // cycles until the next beat
   uint32_t beats_left_ = 0;
-  uint32_t burst_base_ = 0;     // accepted request byte address
+  uint32_t burst_base_ = 0;  // accepted request byte address
 };
 
 // ---------------------------------------------------------------- Scanout ---
@@ -245,8 +245,7 @@ struct VideoSysOut {
   PxStream px;
   bool scaler_violation = false;
   // framectl (vid) + its gpu broadcast
-  bool frame_tick = false, frame_repeated = false, swap_req = false,
-       swap_ack = false;
+  bool frame_tick = false, frame_repeated = false, swap_req = false, swap_ack = false;
   uint32_t swap_slot = 0, frame_id = 0, deadline_margin = 0;
   uint64_t deadline_faults = 0, frame_cycles = 0;
   bool gpu_tick = false;
@@ -282,12 +281,11 @@ class Scanout {
 
  private:
   void vid_step_(const VideoSysIn& in, bool s_full_tog0, bool s_full_tog1);
-  void gpu_step_(const VideoSysIn& in, bool s_dec_tog, bool s_fs_tog,
-                 uint32_t s_slot, uint32_t s_mnext, uint32_t s_mode,
-                 bool s_cons_tog0, bool s_cons_tog1, bool s_ftog,
+  void gpu_step_(const VideoSysIn& in, bool s_dec_tog, bool s_fs_tog, uint32_t s_slot,
+                 uint32_t s_mnext, uint32_t s_mode, bool s_cons_tog0, bool s_cons_tog1, bool s_ftog,
                  uint32_t s_fslot, bool s_frep, uint32_t s_ffid);
-  PxStream decode_px_() const;            // serializer stream decode
-  uint32_t lane_pixel_(uint32_t x) const; // 16-bit lane of the read word
+  PxStream decode_px_() const;             // serializer stream decode
+  uint32_t lane_pixel_(uint32_t x) const;  // 16-bit lane of the read word
 
   uint64_t gpu_steps_ = 0, vid_steps_ = 0;
 
@@ -298,8 +296,8 @@ class Scanout {
 
   // ---- VIDEO.FRAMECTL (vid + gpu crossing) ----
   FrameCtl framectl_;
-  FrameCtlIn fctl_in_;                 // stimulus during the current vid cycle
-  FrameCtlOut fctl_out_reg_;           // registered view
+  FrameCtlIn fctl_in_;        // stimulus during the current vid cycle
+  FrameCtlOut fctl_out_reg_;  // registered view
 
   // ---- VIDEO.SCANOUT (zhao_video_scanout.sv) ----
   // vid domain
@@ -319,7 +317,7 @@ class Scanout {
   uint32_t fill_line_buf_ = 0;
 
   // linebuf (gpu + vid)
-  uint32_t bstate_[2] = {0, 0};        // 0 EMPTY / 1 FILLING / 2 FULL
+  uint32_t bstate_[2] = {0, 0};  // 0 EMPTY / 1 FILLING / 2 FULL
   bool full_toggle_[2] = {false, false};
   bool cons_s1_[2] = {false, false};
   bool cons_s2_[2] = {false, false};
@@ -339,7 +337,7 @@ class Scanout {
 
   // scaler (vid)
   ScalerFeed scaler_;
-  PxStream ser_px_;                    // serializer stream during the cycle
+  PxStream ser_px_;  // serializer stream during the cycle
 
   // FRAMECTL gpu broadcast (tog + 2FF + edge; zhao_video_framectl.sv)
   bool f_tog_s1_ = false, f_tog_s2_ = false, f_tog_s2q_ = false;
@@ -350,6 +348,6 @@ class Scanout {
   uint32_t gpu_complete_slot_q_ = 0;
 };
 
-using VideoSys = Scanout;   // transitional alias (harness code)
+using VideoSys = Scanout;  // transitional alias (harness code)
 
 }  // namespace zref

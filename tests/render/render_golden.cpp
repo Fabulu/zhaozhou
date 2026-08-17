@@ -63,7 +63,7 @@ void check(bool ok, const char* what) {
 //     green dither overflowed the 6-bit field for g >= 252 at Bayer >= 8,
 //     wrapping full white to magenta on half the phases; the white spark
 //     particles in this frame carried the wrap (41C51A73 -> 47893F4C).
-constexpr uint32_t kGoldenCanvasCrc = 0xB1B5171Au;     // [w3.5-golden] re-pinned
+constexpr uint32_t kGoldenCanvasCrc = 0xB1B5171Au;  // [w3.5-golden] re-pinned
 // 2026-08-16: kBandRows 8->16 (dcb32ff, the banding fix) moved both goldens;
 // the previous constants were 0x47893F4C / 0xC3ED350F.
 constexpr uint32_t kGoldenDisplayedCrc = 0x2B73E8CBu;  // [w3.5-golden] re-pinned

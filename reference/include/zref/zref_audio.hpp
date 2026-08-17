@@ -53,10 +53,10 @@ enum class ToneId : uint8_t {
 // Increments are floor(freq * 2^32 / 48000), stated once in the spec and
 // copied verbatim here; no new constants are derived anywhere.
 struct ToneSpec {
-  ToneId     id;
+  ToneId id;
   const char* name;
-  uint32_t   freq_hz;
-  uint32_t   increment;  // per-48kHz-tick phase increment
+  uint32_t freq_hz;
+  uint32_t increment;  // per-48kHz-tick phase increment
 };
 
 constexpr ToneSpec kToneTable[3] = {
@@ -84,12 +84,12 @@ class MixerTone {
  public:
   explicit MixerTone(ToneId id) : inc_(tone_increment(id)), id_(id), phase_(0) {}
 
-  void     reset(ToneId id);          // process start / tone selection
-  void     select(ToneId id);         // switch tone, phase accumulator KEEPS running
-  ToneId   id() const { return id_; }
+  void reset(ToneId id);   // process start / tone selection
+  void select(ToneId id);  // switch tone, phase accumulator KEEPS running
+  ToneId id() const { return id_; }
   uint32_t increment() const { return inc_; }
   uint32_t phase() const { return phase_; }
-  void     set_phase(uint32_t raw);   // oracle/test hook (saturation corners)
+  void set_phase(uint32_t raw);  // oracle/test hook (saturation corners)
 
   // One 48 kHz tick: advances the accumulator, returns the pair.
   AudioPair tick();
@@ -99,7 +99,7 @@ class MixerTone {
 
  private:
   uint32_t inc_;
-  ToneId   id_;
+  ToneId id_;
   uint32_t phase_;
 };
 
@@ -113,7 +113,9 @@ class MixerTone {
 class PcmRing {
  public:
   explicit PcmRing(uint64_t capacity_pairs)
-      : cap_(capacity_pairs), host_write_ptr_(0), fpga_read_ptr_(0),
+      : cap_(capacity_pairs),
+        host_write_ptr_(0),
+        fpga_read_ptr_(0),
         data_(static_cast<size_t>(capacity_pairs)) {}
 
   uint64_t capacity_pairs() const { return cap_; }
@@ -155,9 +157,9 @@ class PcmRing {
 class AudioFifo {
  public:
   // D4-frozen geometry (spec/audio_rules.md §2).
-  static constexpr uint32_t kDepth        = 2048;  // stereo pairs
-  static constexpr uint32_t kWatermark    = 512;   // refill request level
-  static constexpr uint32_t kRefillBurst  = 256;   // pairs per refill
+  static constexpr uint32_t kDepth = 2048;       // stereo pairs
+  static constexpr uint32_t kWatermark = 512;    // refill request level
+  static constexpr uint32_t kRefillBurst = 256;  // pairs per refill
   static constexpr uint32_t kPairsPerFrame = kAudioPairsPerFrame;
 
   // Sim seam: gpu cycles per audio tick (audio_clk = gpu_clk/4; the real
@@ -171,22 +173,21 @@ class AudioFifo {
 
   // Advance one gpu cycle (both edges in the documented order). Returns
   // whether the pair write was accepted this cycle.
-  bool gpu_cycle(bool wr_valid, uint16_t wr_l, uint16_t wr_r,
-                 bool frame_tick = false);
+  bool gpu_cycle(bool wr_valid, uint16_t wr_l, uint16_t wr_r, bool frame_tick = false);
 
   // ---- audio-tick outputs (post-edge values; stable until the next edge) --
-  bool     audio_edge_fired() const { return audio_edge_fired_; }
-  bool     pcm_valid() const { return pcm_valid_; }
+  bool audio_edge_fired() const { return audio_edge_fired_; }
+  bool pcm_valid() const { return pcm_valid_; }
   uint16_t pcm_l() const { return pcm_l_; }
   uint16_t pcm_r() const { return pcm_r_; }
-  bool     underrun_status() const { return underrun_status_; }  // this tick repeated
-  uint32_t audio_underruns() const { return underruns_; }        // live counter
+  bool underrun_status() const { return underrun_status_; }  // this tick repeated
+  uint32_t audio_underruns() const { return underruns_; }    // live counter
 
   // ---- gpu-domain views (post-edge values) --------------------------------
-  uint32_t occupancy() const { return occ_gpu_; }   // conservative (synced rd)
-  bool     full() const { return occ_gpu_ == kDepth; }
-  bool     wr_ready() const { return !full(); }
-  bool     refill_req() const { return occ_gpu_ <= kWatermark; }
+  uint32_t occupancy() const { return occ_gpu_; }  // conservative (synced rd)
+  bool full() const { return occ_gpu_ == kDepth; }
+  bool wr_ready() const { return !full(); }
+  bool refill_req() const { return occ_gpu_ <= kWatermark; }
   uint64_t audio_underruns_shadow() const { return shadow_; }  // frame_tick latch
 
   // ---- accounting (§1: the 800-pair law is test-side) ---------------------
@@ -197,29 +198,29 @@ class AudioFifo {
   uint32_t ptr_gray(uint32_t bin, uint32_t bits) const;
   uint32_t gray_ptr(uint32_t gray, uint32_t bits) const;
 
-  uint32_t div_;       // gpu cycles per audio tick
-  uint64_t cycle_;     // gpu cycles since reset
+  uint32_t div_;    // gpu cycles per audio tick
+  uint64_t cycle_;  // gpu cycles since reset
 
   // memory (gpu writes, audio reads — whole pairs, never torn)
   std::vector<AudioPair> mem_;
 
   // gpu-domain state
-  uint32_t wr_ptr_;        // PTR_W bits (mod 2*kDepth)
-  uint32_t rd_gray_meta_, rd_gray_sync_;   // rd pointer view (2FF)
-  uint32_t cnt_gray_meta_, cnt_gray_sync_; // underruns view (2FF)
+  uint32_t wr_ptr_;                         // PTR_W bits (mod 2*kDepth)
+  uint32_t rd_gray_meta_, rd_gray_sync_;    // rd pointer view (2FF)
+  uint32_t cnt_gray_meta_, cnt_gray_sync_;  // underruns view (2FF)
   uint32_t occ_gpu_;
   uint64_t shadow_;
   uint64_t accepted_;
 
   // audio-domain state
   uint32_t rd_ptr_;
-  uint32_t wr_gray_meta_, wr_gray_sync_;   // wr pointer view (2FF)
-  bool     started_;
+  uint32_t wr_gray_meta_, wr_gray_sync_;  // wr pointer view (2FF)
+  bool started_;
   uint16_t pcm_l_, pcm_r_;
-  bool     pcm_valid_, underrun_status_;
+  bool pcm_valid_, underrun_status_;
   uint32_t underruns_;
   uint64_t emitted_;
-  bool     audio_edge_fired_;
+  bool audio_edge_fired_;
 };
 
 }  // namespace zref

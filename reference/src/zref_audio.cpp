@@ -12,11 +12,11 @@ namespace zref {
 // ---- MixerTone -------------------------------------------------------------
 
 int16_t tone_sample(angle16 phase_turns) {
-  const int32_t s = fx_sin(phase_turns).raw;  // ±0x10000 (qformats.md §7.1)
-  const int32_t half = s >> 1;                // arithmetic shift toward -inf
-  if (half > 0x7FFF) return 0x7FFF;           // +0x10000 -> +0x8000 -> saturate
+  const int32_t s = fx_sin(phase_turns).raw;                 // ±0x10000 (qformats.md §7.1)
+  const int32_t half = s >> 1;                               // arithmetic shift toward -inf
+  if (half > 0x7FFF) return 0x7FFF;                          // +0x10000 -> +0x8000 -> saturate
   if (half < -0x8000) return static_cast<int16_t>(-0x8000);  // unreachable, law shape
-  return static_cast<int16_t>(half);          // -0x10000 -> -0x8000 fits exactly
+  return static_cast<int16_t>(half);                         // -0x10000 -> -0x8000 fits exactly
 }
 
 void MixerTone::reset(ToneId id) {
@@ -71,8 +71,7 @@ constexpr uint32_t kCntBits = 32;  // underrun counter width (saturating)
 constexpr uint32_t kPtrMask = (1u << kPtrBits) - 1;
 }  // namespace
 
-AudioFifo::AudioFifo(uint32_t gpu_cycles_per_audio_tick)
-    : div_(gpu_cycles_per_audio_tick) {
+AudioFifo::AudioFifo(uint32_t gpu_cycles_per_audio_tick) : div_(gpu_cycles_per_audio_tick) {
   reset();
 }
 
@@ -115,13 +114,12 @@ uint32_t AudioFifo::gray_ptr(uint32_t gray, uint32_t bits) const {
   return b;
 }
 
-bool AudioFifo::gpu_cycle(bool wr_valid, uint16_t wr_l, uint16_t wr_r,
-                          bool frame_tick) {
+bool AudioFifo::gpu_cycle(bool wr_valid, uint16_t wr_l, uint16_t wr_r, bool frame_tick) {
   // ---- gpu-domain edge (inputs sampled at the rising edge) ----------------
   const bool accept = wr_valid && (occ_gpu_ != kDepth);  // wr_ready = !full
   if (accept) {
-    mem_[wr_ptr_ & (kDepth - 1)] = AudioPair{static_cast<int16_t>(wr_l),
-                                             static_cast<int16_t>(wr_r)};
+    mem_[wr_ptr_ & (kDepth - 1)] =
+        AudioPair{static_cast<int16_t>(wr_l), static_cast<int16_t>(wr_r)};
     wr_ptr_ = (wr_ptr_ + 1) & kPtrMask;
     ++accepted_;
   }

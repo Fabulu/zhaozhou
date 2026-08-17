@@ -59,11 +59,16 @@ enum class SlotState : uint8_t {
 
 inline const char* slotStateName(SlotState s) {
   switch (s) {
-    case SlotState::Free: return "FREE";
-    case SlotState::ArmWriting: return "ARM_WRITING";
-    case SlotState::Ready: return "READY";
-    case SlotState::FpgaRunning: return "FPGA_RUNNING";
-    case SlotState::Done: return "DONE";
+    case SlotState::Free:
+      return "FREE";
+    case SlotState::ArmWriting:
+      return "ARM_WRITING";
+    case SlotState::Ready:
+      return "READY";
+    case SlotState::FpgaRunning:
+      return "FPGA_RUNNING";
+    case SlotState::Done:
+      return "DONE";
   }
   return "?";
 }
@@ -124,7 +129,7 @@ struct SchedObs {
   bool snap_valid = false;  // D9: shadow set latched this edge
   uint64_t shadow_cycles = 0, shadow_faults = 0, shadow_cmds = 0;
   uint64_t frame_cycles = 0, deadline_faults = 0, commands = 0;
-  uint8_t mode = 0;        // active mode (latched at frame boundary, D6)
+  uint8_t mode = 0;  // active mode (latched at frame boundary, D6)
   uint8_t mode_pending = 0;
   uint32_t epoch = 0;
   bool rec_ready = true;  // combinational (pre-edge view)
@@ -246,7 +251,8 @@ class CmdScheduler {
             to_done = true;
             done_ok = false;
             done_status = ZHAO_SCHED_DEADLINE_MISS;
-          } else if (e.tick && e.frame_complete && e.frame_complete_slot == static_cast<uint8_t>(s)) {
+          } else if (e.tick && e.frame_complete &&
+                     e.frame_complete_slot == static_cast<uint8_t>(s)) {
             to_done = true;
             done_ok = true;
             done_status = 0;
@@ -534,23 +540,38 @@ class CmdDma {
   /** record_bytes for a known opcode, 0 for unknown (generated layouts). */
   static uint16_t recordSize(uint16_t opcode) {
     switch (opcode) {
-      case zhao_abi::ZHAO_OP_NOP: return sizeof(zhao_abi::ZhRecordNop);
-      case zhao_abi::ZHAO_OP_BEGIN_FRAME: return sizeof(zhao_abi::ZhRecordBeginFrame);
-      case zhao_abi::ZHAO_OP_END_FRAME: return sizeof(zhao_abi::ZhRecordEndFrame);
-      case zhao_abi::ZHAO_OP_SET_VIEW: return sizeof(zhao_abi::ZhRecordSetView);
+      case zhao_abi::ZHAO_OP_NOP:
+        return sizeof(zhao_abi::ZhRecordNop);
+      case zhao_abi::ZHAO_OP_BEGIN_FRAME:
+        return sizeof(zhao_abi::ZhRecordBeginFrame);
+      case zhao_abi::ZHAO_OP_END_FRAME:
+        return sizeof(zhao_abi::ZhRecordEndFrame);
+      case zhao_abi::ZHAO_OP_SET_VIEW:
+        return sizeof(zhao_abi::ZhRecordSetView);
       case zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT:
         return sizeof(zhao_abi::ZhRecordSetPresentationContract);
-      case zhao_abi::ZHAO_OP_TERRAIN_FIELD: return sizeof(zhao_abi::ZhRecordTerrainField);
-      case zhao_abi::ZHAO_OP_SURFACE_STAMP: return sizeof(zhao_abi::ZhRecordSurfaceStamp);
-      case zhao_abi::ZHAO_OP_DRAW_FORM: return sizeof(zhao_abi::ZhRecordDrawForm);
-      case zhao_abi::ZHAO_OP_DRAW_POPULATION: return sizeof(zhao_abi::ZhRecordDrawPopulation);
-      case zhao_abi::ZHAO_OP_DRAW_PROCEDURAL: return sizeof(zhao_abi::ZhRecordDrawProcedural);
-      case zhao_abi::ZHAO_OP_DRAW_SKY: return sizeof(zhao_abi::ZhRecordDrawSky);
-      case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT: return sizeof(zhao_abi::ZhRecordEmitAudioEvent);
-      case zhao_abi::ZHAO_OP_DEBUG_BOOTSTRAP: return sizeof(zhao_abi::ZhRecordDebugBootstrap);
-      case zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT: return sizeof(zhao_abi::ZhRecordDebugFrameBlit);
-      case zhao_abi::ZHAO_OP_DEBUG_RUMBLE: return sizeof(zhao_abi::ZhRecordDebugRumble);
-      default: return 0;
+      case zhao_abi::ZHAO_OP_TERRAIN_FIELD:
+        return sizeof(zhao_abi::ZhRecordTerrainField);
+      case zhao_abi::ZHAO_OP_SURFACE_STAMP:
+        return sizeof(zhao_abi::ZhRecordSurfaceStamp);
+      case zhao_abi::ZHAO_OP_DRAW_FORM:
+        return sizeof(zhao_abi::ZhRecordDrawForm);
+      case zhao_abi::ZHAO_OP_DRAW_POPULATION:
+        return sizeof(zhao_abi::ZhRecordDrawPopulation);
+      case zhao_abi::ZHAO_OP_DRAW_PROCEDURAL:
+        return sizeof(zhao_abi::ZhRecordDrawProcedural);
+      case zhao_abi::ZHAO_OP_DRAW_SKY:
+        return sizeof(zhao_abi::ZhRecordDrawSky);
+      case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT:
+        return sizeof(zhao_abi::ZhRecordEmitAudioEvent);
+      case zhao_abi::ZHAO_OP_DEBUG_BOOTSTRAP:
+        return sizeof(zhao_abi::ZhRecordDebugBootstrap);
+      case zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT:
+        return sizeof(zhao_abi::ZhRecordDebugFrameBlit);
+      case zhao_abi::ZHAO_OP_DEBUG_RUMBLE:
+        return sizeof(zhao_abi::ZhRecordDebugRumble);
+      default:
+        return 0;
     }
   }
 
@@ -562,9 +583,7 @@ class CmdDma {
   static Verdict verdict(const std::vector<uint8_t>& p, uint32_t descriptor_len,
                          uint32_t fetch_epoch,
                          uint32_t slot_buf_bytes = 4096 /* RTL SLOT_BUF_BYTES */) {
-    auto get16 = [&p](uint32_t o) {
-      return static_cast<uint16_t>(p[o] | (p[o + 1] << 8));
-    };
+    auto get16 = [&p](uint32_t o) { return static_cast<uint16_t>(p[o] | (p[o + 1] << 8)); };
     auto get32 = [&p](uint32_t o) {
       uint32_t v = 0;
       for (int i = 0; i < 4; ++i) v |= static_cast<uint32_t>(p[o + i]) << (8 * i);
@@ -645,7 +664,7 @@ class Crc32c {
  public:
   struct Result {
     uint32_t crc = 0;
-    bool valid = false;   // published (stream length matched)
+    bool valid = false;  // published (stream length matched)
     bool size_err = false;
   };
 
@@ -699,8 +718,7 @@ class Crc32c {
   Result frame(const std::vector<uint8_t>& bytes, uint32_t expect_bytes) {
     Result out;
     for (size_t i = 0; i < bytes.size(); ++i) {
-      const Result r = byte(bytes[i], i == 0, i + 1 == bytes.size(),
-                            expect_bytes);
+      const Result r = byte(bytes[i], i == 0, i + 1 == bytes.size(), expect_bytes);
       if (r.valid) out = r;
       if (r.size_err) out.size_err = true;
     }

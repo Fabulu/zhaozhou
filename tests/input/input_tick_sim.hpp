@@ -11,8 +11,7 @@ namespace zhao_input {
 // MSB-first (SV law), so the wire bit map is {pulse[33], frame_id[32:1],
 // repeated[0]}:
 inline uint64_t tickWord(bool pulse, uint32_t frame_id, bool repeated) {
-  return (static_cast<uint64_t>(pulse ? 1u : 0u) << 33) |
-         (static_cast<uint64_t>(frame_id) << 1) |
+  return (static_cast<uint64_t>(pulse ? 1u : 0u) << 33) | (static_cast<uint64_t>(frame_id) << 1) |
          static_cast<uint64_t>(repeated ? 1u : 0u);
 }
 

@@ -22,7 +22,9 @@ struct Rng {
   uint64_t s;
   explicit Rng(uint64_t seed) : s(seed ? seed : 1) {}
   uint64_t next() {
-    s ^= s >> 12; s ^= s << 25; s ^= s >> 27;
+    s ^= s >> 12;
+    s ^= s << 25;
+    s ^= s >> 27;
     return s * 2685821657736338717ull;
   }
   uint32_t u32() { return (uint32_t)(next() >> 32); }

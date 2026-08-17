@@ -48,14 +48,14 @@ static uint64_t scenario(uint64_t seed, uint64_t events, int* fails) {
       // start — the latch law is part of the compared trace)
       const uint32_t roll = rng.u32() % 100u;
       if (roll < 45u) {
-        tb.slot_ready = rng.u32() & 3u;               // READY timeline
+        tb.slot_ready = rng.u32() & 3u;  // READY timeline
       } else if (roll < 60u) {
         static const uint32_t dl[] = {0, 0, 0, 2000, 8000, 40000, 300000};
         tb.deadline_cycles = dl[rng.u32() % 7u];
       } else if (roll < 80u) {
-        tb.resp.set_service((rng.u32() & 3u) != 0);   // starvation storms
+        tb.resp.set_service((rng.u32() & 3u) != 0);  // starvation storms
       } else if (roll < 90u && !tb.mode_we) {
-        tb.mode_we = true;                            // rare mode switch
+        tb.mode_we = true;  // rare mode switch
         tb.mode_in = rng.u32() % 3u;
       } else if (tb.mode_we) {
         tb.mode_we = false;
@@ -92,9 +92,8 @@ int main(int argc, char** argv) {
     }
   }
   if (fail == 0) {
-    std::printf("video_scanout_random: OK (%s, %llu events x %llu x 2)\n",
-                g_full ? "full" : "fast", (unsigned long long)events,
-                (unsigned long long)seeds);
+    std::printf("video_scanout_random: OK (%s, %llu events x %llu x 2)\n", g_full ? "full" : "fast",
+                (unsigned long long)events, (unsigned long long)seeds);
     zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_scanout_random: %d FAILURES\n", fail);

@@ -80,13 +80,11 @@ class ScalerTb {
     if (exp != act) {
       ++failures;
       if (failures <= 20) {
-        std::printf("SCALER MISMATCH n=%llu %s: oracle=%llu rtl=%llu\n",
-                    (unsigned long long)n, what, (unsigned long long)exp,
-                    (unsigned long long)act);
+        std::printf("SCALER MISMATCH n=%llu %s: oracle=%llu rtl=%llu\n", (unsigned long long)n,
+                    what, (unsigned long long)exp, (unsigned long long)act);
         std::vector<uint8_t> vec;
         for (uint64_t v : {exp, act, n}) {
-          for (int i = 0; i < 8; ++i)
-            vec.push_back((uint8_t)((v >> (8 * i)) & 0xFF));
+          for (int i = 0; i < 8; ++i) vec.push_back((uint8_t)((v >> (8 * i)) & 0xFF));
         }
         zhao::save_failing_vector(std::string("scaler_") + what, vec,
                                   std::to_string((unsigned long long)exp),

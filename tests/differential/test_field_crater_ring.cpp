@@ -281,10 +281,10 @@ int main() {
     std::vector<uint8_t> body;
     bool ok = smSec && r.read_body(*smSec, body);
     const zhao::ZhaoSourceMapParseResult back = zhao::zhao_zcap_parse_source_map(body);
-    ok = ok && back.ok() && back.map.entries.size() == 1
-         && back.map.entries[0].source_id == dec.prog.source_id
-         && back.map.entries[0].name == "crater_ring"
-         && back.map.entries[0].program_hash == dec.prog.program_hash;
+    ok = ok && back.ok() && back.map.entries.size() == 1 &&
+         back.map.entries[0].source_id == dec.prog.source_id &&
+         back.map.entries[0].name == "crater_ring" &&
+         back.map.entries[0].program_hash == dec.prog.program_hash;
     CHECK(ok, "gate 5: source ID and program hash survive the round-trip");
     const zhao::ZhaoZcapSectionInfo* pgSec = r.find(zhao::ZHAO_ZCAP_RESOURCE_PAGES);
     std::vector<uint8_t> pbody;

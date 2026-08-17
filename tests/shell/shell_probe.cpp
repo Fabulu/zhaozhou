@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
   for (int t = 0; t < 8; ++t) {
     for (uint64_t i = 0; i < 3'000'000; ++i) {
       h.step();
-      if (linemap && t == 3) {   // map one steady frame
+      if (linemap && t == 3) {  // map one steady frame
         const int y = h.top.px_valid_o ? int(h.top.px_y_o) : prev_y;
         if (y != prev_y) {
           const uint64_t st = h.top.starvation_o;
@@ -56,8 +56,8 @@ int main(int argc, char** argv) {
         }
       }
       if (h.blit_log.size() > blits_seen) {
-        std::printf("  blit %zu done at n=%llu (status %u)\n", blits_seen,
-                    (unsigned long long)h.n, h.blit_log.back().status);
+        std::printf("  blit %zu done at n=%llu (status %u)\n", blits_seen, (unsigned long long)h.n,
+                    h.blit_log.back().status);
         ++blits_seen;
       }
       if (h.tick_seen_last_step) break;
@@ -65,12 +65,12 @@ int main(int argc, char** argv) {
     std::printf("  [tick at n=%llu]\n", (unsigned long long)h.n);
     const TickEvent tk = h.ticks.back();
     const uint64_t st = h.top.starvation_o;
-    std::printf("tick %u repeated=%d starve=%llu (+%llu) crcs=%zu blits=%zu "
-                "faults=%llu err=%llx\n",
-                tk.frame_id, tk.repeated ? 1 : 0, (unsigned long long)st,
-                (unsigned long long)(st - prev_starve), h.crcs.size(),
-                h.blit_log.size(), (unsigned long long)h.top.deadline_faults_o,
-                (unsigned long long)h.sticky_errors());
+    std::printf(
+        "tick %u repeated=%d starve=%llu (+%llu) crcs=%zu blits=%zu "
+        "faults=%llu err=%llx\n",
+        tk.frame_id, tk.repeated ? 1 : 0, (unsigned long long)st,
+        (unsigned long long)(st - prev_starve), h.crcs.size(), h.blit_log.size(),
+        (unsigned long long)h.top.deadline_faults_o, (unsigned long long)h.sticky_errors());
     prev_starve = st;
 
     while (crc_seen < h.crcs.size()) {
@@ -82,12 +82,10 @@ int main(int argc, char** argv) {
       ++published;
       const uint32_t f = published;
       compose_duo_frame(canvas, f, p1, p2);
-      const uint32_t crc =
-          zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+      const uint32_t crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
       std::memcpy(mirror.data(), canvas.data(), canvas.size());
       std::printf("  P%u: payload=%08X displayed=%08X\n", f, crc,
-                  zref::render::displayed_crc32c(zhao_abi::VIDEO_DUO,
-                                                 mirror.data()));
+                  zref::render::displayed_crc32c(zhao_abi::VIDEO_DUO, mirror.data()));
       const uint32_t arena = (f & 1u) ? kArena1 : kArena0;
       h.mem_write(arena, canvas);
       PacketSpec s;

@@ -201,9 +201,9 @@ void composite_trail(Plane& p, const std::vector<uint8_t>& intensity, const uint
 }  // namespace
 
 void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint32_t vx0,
-                  uint32_t vy0, uint32_t vw, uint32_t vh, uint32_t tick,
-                  const ComposeLight* lights, int n_lights, const GlintPoint* glints, int n_glints,
-                  FlareSlots& slots, ComposeStats* stats) {
+                  uint32_t vy0, uint32_t vw, uint32_t vh, uint32_t tick, const ComposeLight* lights,
+                  int n_lights, const GlintPoint* glints, int n_glints, FlareSlots& slots,
+                  ComposeStats* stats) {
   (void)h;
   ComposeStats local;
   ComposeStats* st = stats ? stats : &local;
@@ -254,8 +254,7 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
     // structure. One class-ramp lookup happens only after reconstruction.
     if (L.trail != nullptr && L.ghost_r_px > 0 && L.corona != nullptr) {
       int32_t gr = L.ghost_r_px;
-      const int32_t gmax =
-          L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px;
+      const int32_t gmax = L.halo_r_max_px < kHaloRMaxZ60Px ? L.halo_r_max_px : kHaloRMaxZ60Px;
       if (gr > gmax) gr = gmax;
 
       int32_t hr0 = L.halo_r_px;
@@ -327,10 +326,10 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
     if (L.flare_mode == 2 && !pulsar_active(L.spin_phase)) continue;
 
     // border fade: signed distance of the light centre to the nearest edge
-    const int32_t ex = (L.x_px - p.x0) < (p.x1 - 1 - L.x_px) ? (L.x_px - p.x0)
-                                                             : (p.x1 - 1 - L.x_px);
-    const int32_t ey = (L.y_px - p.y0) < (p.y1 - 1 - L.y_px) ? (L.y_px - p.y0)
-                                                             : (p.y1 - 1 - L.y_px);
+    const int32_t ex =
+        (L.x_px - p.x0) < (p.x1 - 1 - L.x_px) ? (L.x_px - p.x0) : (p.x1 - 1 - L.x_px);
+    const int32_t ey =
+        (L.y_px - p.y0) < (p.y1 - 1 - L.y_px) ? (L.y_px - p.y0) : (p.y1 - 1 - L.y_px);
     const uint8_t border = flare::border_alpha(ex < ey ? ex : ey);
     if (border == 0) continue;
     const uint8_t fade = flare::fade_alpha(slots.fade_ctr[i]);
@@ -346,13 +345,12 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
       const star::Sprite8& spr =
           fs.sprite == 0 ? sp.burst12 : (fs.sprite == 1 ? sp.burst4 : sp.streak);
       // effective alpha: splat × fade × border through the ONE unit_mul
-      const uint8_t a =
-          unit_mul(unit8{unit_mul(unit8{fs.alpha}, unit8{fade})}, unit8{border});
+      const uint8_t a = unit_mul(unit8{unit_mul(unit8{fs.alpha}, unit8{fade})}, unit8{border});
       // glow-buffer coords: the plane is ¼ res of the view (§5)
       const int32_t gcx = (fs.cx_px - static_cast<int32_t>(vx0)) >> 2;
       const int32_t gcy = (fs.cy_px - static_cast<int32_t>(vy0)) >> 2;
-      const int32_t r = post::flare_splat(glow, spr, gcx, gcy, fs.half_x_px >> 2,
-                                          fs.half_y_px >> 2, a, budget);
+      const int32_t r =
+          post::flare_splat(glow, spr, gcx, gcy, fs.half_x_px >> 2, fs.half_y_px >> 2, a, budget);
       if (r < 0) {
         ++st->splats_dropped;
       } else {

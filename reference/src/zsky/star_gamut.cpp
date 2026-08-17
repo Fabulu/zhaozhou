@@ -45,8 +45,8 @@ const StarClass kGamut[kStarClasses] = {
 
 // §7 CLASS_PICK[32]: S00×7 S01×2 S02×2 S03×4 S04×4 S05×4 S06×2 S07×2 S08×2
 // S09×1 S10×1 S11×1 (sums to 32).
-const uint8_t kClassPick[32] = {0, 0, 0, 0, 0, 0, 0, 1, 1,  2,  2, 3, 3, 3, 3, 4,
-                                4, 4, 4, 5, 5, 5, 5, 6, 6,  7,  7, 8, 8, 9, 10, 11};
+const uint8_t kClassPick[32] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 3,  4,
+                                4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10, 11};
 
 // ---- §7 identity schedule ---------------------------------------------------
 
@@ -63,10 +63,9 @@ StarIdentity identity(int32_t sx, int32_t sy, int32_t sz, uint32_t galaxy_seed) 
   id.cls = kClassPick[h0 >> 27];
   const StarClass& c = kGamut[id.cls];
   id.radius_milli = c.ray_milli + static_cast<int32_t>(h1 % static_cast<uint32_t>(c.rayvar_milli));
-  id.spin_rate =
-      c.spin_mod == 0
-          ? 0
-          : static_cast<uint16_t>(kSpinK * (1 + static_cast<int32_t>(h2 % c.spin_mod)));
+  id.spin_rate = c.spin_mod == 0
+                     ? 0
+                     : static_cast<uint16_t>(kSpinK * (1 + static_cast<int32_t>(h2 % c.spin_mod)));
   id.spin_draw = h2;
   id.texture_seed = h3;
   if (id.cls == 9) {

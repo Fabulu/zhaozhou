@@ -85,8 +85,8 @@ int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t b
   const int32_t fx = rescale_s32(n0, 16, L);  // -> Q16.16 world-units^2
   const int32_t fy = rescale_s32(n1, 16, L);
   const int32_t fz = rescale_s32(n2, 16, L);
-  const __int128 ndot = static_cast<__int128>(fx) * kLightX +
-                        static_cast<__int128>(fy) * kLightY + static_cast<__int128>(fz) * kLightZ;
+  const __int128 ndot = static_cast<__int128>(fx) * kLightX + static_cast<__int128>(fy) * kLightY +
+                        static_cast<__int128>(fz) * kLightZ;
   const uint64_t nmag2 = static_cast<uint64_t>(fx) * static_cast<uint64_t>(fx) +
                          static_cast<uint64_t>(fy) * static_cast<uint64_t>(fy) +
                          static_cast<uint64_t>(fz) * static_cast<uint64_t>(fz);
@@ -341,7 +341,7 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
     int32_t depth;
     uint8_t kind;
     uint32_t index;
-    uint32_t index2 = 0;   // wall: the second top-edge vertex
+    uint32_t index2 = 0;     // wall: the second top-edge vertex
     int32_t u0 = 0, u1 = 0;  // wall strata U at index/index2 (Q16.16, §5)
   };
   std::vector<Prim> prims;
@@ -386,10 +386,22 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       const size_t base = static_cast<size_t>(e.cj) * w + e.ci;
       size_t va, vb;
       switch (e.side) {
-        case 0: va = base; vb = base + e.span; break;          // -z, left to right
-        case 1: va = base + w + e.span; vb = base + w; break;  // +z, right to left
-        case 2: va = base + static_cast<size_t>(e.span) * w; vb = base; break;  // -x, far to near
-        default: va = base + 1; vb = base + static_cast<size_t>(e.span) * w + 1; break;  // +x
+        case 0:
+          va = base;
+          vb = base + e.span;
+          break;  // -z, left to right
+        case 1:
+          va = base + w + e.span;
+          vb = base + w;
+          break;  // +z, right to left
+        case 2:
+          va = base + static_cast<size_t>(e.span) * w;
+          vb = base;
+          break;  // -x, far to near
+        default:
+          va = base + 1;
+          vb = base + static_cast<size_t>(e.span) * w + 1;
+          break;  // +x
       }
       const int32_t u0 = static_cast<int32_t>(acc >> 3);
       acc += static_cast<int64_t>(e.span) * pitch_raw;
@@ -557,10 +569,14 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
         // vertex: 0 at the top edge, thickness/8 at the modelled bottom —
         // mirrored repeat turns the strata tile into geology (§5)
         ScreenV ta = sv[va], tb = sv[vb], ba = svb[va], bb = svb[vb];
-        ta.u = prim.u0; ta.v = 0;
-        tb.u = prim.u1; tb.v = 0;
-        ba.u = prim.u0; ba.v = (y[va] - lat.bottom[va]) >> 3;
-        bb.u = prim.u1; bb.v = (y[vb] - lat.bottom[vb]) >> 3;
+        ta.u = prim.u0;
+        ta.v = 0;
+        tb.u = prim.u1;
+        tb.v = 0;
+        ba.u = prim.u0;
+        ba.v = (y[va] - lat.bottom[va]) >> 3;
+        bb.u = prim.u1;
+        bb.v = (y[vb] - lat.bottom[vb]) >> 3;
         raster_tri(surf, vpp, ta, tb, bb, 0, 0, 0, mode, &span);
         raster_tri(surf, vpp, ta, bb, ba, 0, 0, 0, mode, &span);
         continue;
@@ -608,9 +624,12 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       const auto emit = [&](const size_t ia, const size_t ib, const size_t ic) {
         if (spanp != nullptr) {
           ScreenV a = sv[ia], b = sv[ib], c = sv[ic];
-          a.u = u_top[ia]; a.v = v_top[ia];
-          b.u = u_top[ib]; b.v = v_top[ib];
-          c.u = u_top[ic]; c.v = v_top[ic];
+          a.u = u_top[ia];
+          a.v = v_top[ia];
+          b.u = u_top[ib];
+          b.v = v_top[ib];
+          c.u = u_top[ic];
+          c.v = v_top[ic];
           raster_tri(surf, vpp, a, b, c, 0, 0, 0, mode, spanp);
           return;
         }
@@ -649,16 +668,18 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       const auto emit_b = [&](const size_t ia, const size_t ib, const size_t ic) {
         if (spanp != nullptr) {
           ScreenV a = svb[ia], b = svb[ib], c = svb[ic];
-          a.u = u_und[ia]; a.v = v_und[ia];
-          b.u = u_und[ib]; b.v = v_und[ib];
-          c.u = u_und[ic]; c.v = v_und[ic];
+          a.u = u_und[ia];
+          a.v = v_und[ia];
+          b.u = u_und[ib];
+          b.v = v_und[ib];
+          c.u = u_und[ic];
+          c.v = v_und[ic];
           raster_tri(surf, vpp, a, b, c, 0, 0, 0, mode, spanp);
           return;
         }
         const int32_t shade =
-            ambient(shade_points(wx[ia % w], lat.bottom[ia], wz[ia / w], wx[ib % w],
-                                 lat.bottom[ib], wz[ib / w], wx[ic % w], lat.bottom[ic],
-                                 wz[ic / w]));
+            ambient(shade_points(wx[ia % w], lat.bottom[ia], wz[ia / w], wx[ib % w], lat.bottom[ib],
+                                 wz[ib / w], wx[ic % w], lat.bottom[ic], wz[ic / w]));
         const auto lit = [shade](uint8_t base) {
           return static_cast<uint8_t>((static_cast<int32_t>(base) * shade + 32768) >> 16);
         };

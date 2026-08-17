@@ -130,7 +130,6 @@ struct TextureSpan {
   int32_t mod_r = 1 << 16, mod_g = 1 << 16, mod_b = 1 << 16;
 };
 
-
 /**
  * Rasterize one triangle with the §8 law: s64 edge setup (subpixel^2),
  * E' = E0 >> 8 at pixel centres, D3D top-left bias, exact incremental
@@ -156,7 +155,6 @@ struct TextureSpan {
 void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A, const ScreenV& B,
                 const ScreenV& C, uint8_t r, uint8_t g, uint8_t b, const TriMode& m,
                 const TextureSpan* tex = nullptr);
-
 
 // ---- shared constants -------------------------------------------------------
 

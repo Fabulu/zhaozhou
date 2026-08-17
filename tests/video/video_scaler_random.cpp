@@ -37,7 +37,7 @@ static uint64_t scenario(uint64_t seed, uint64_t cycles, int* fails) {
     if ((rng.next() & 511u) == 0) px.vblank = !px.vblank;
     // conforming stream: valid never asserted outside the active window
     if (px.hblank || px.vblank) px.valid = false;
-    const bool ready = (rng.next() & 3u) != 0;   // 25% stall duty
+    const bool ready = (rng.next() & 3u) != 0;  // 25% stall duty
     tb.step(px, ready);
   }
   *fails += tb.failures;
@@ -65,8 +65,8 @@ int main(int argc, char** argv) {
     }
   }
   if (fail == 0) {
-    std::printf("video_scaler_random: OK (%s, %llu cycles x 4 seeds x 2)\n",
-                full ? "full" : "fast", (unsigned long long)cycles);
+    std::printf("video_scaler_random: OK (%s, %llu cycles x 4 seeds x 2)\n", full ? "full" : "fast",
+                (unsigned long long)cycles);
     zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_scaler_random: %d FAILURES\n", fail);

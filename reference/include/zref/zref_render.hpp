@@ -146,11 +146,11 @@ struct TerrainPatch {
   // mat_a/mat_b/mat_w per cell ((width-1)*(height-1)); tint per vertex
   // (width*height, RGB565 LE). ALL EMPTY = the Phase-3 legacy flat path,
   // pixel-identical to the pre-texturing renderer (goldens pin it).
-  std::vector<uint8_t> mat_a;      // layer E candidate A (tile id)
-  std::vector<uint8_t> mat_b;      // layer E candidate B (tile id)
-  std::vector<uint8_t> mat_w;      // layer E weight (unit8; 255 = pure A)
-  std::vector<uint16_t> tint;      // layer H per-vertex RGB565 (LMAP heir)
-  uint32_t tileset_id = 0;         // §2.1 header field; 0 = no tileset
+  std::vector<uint8_t> mat_a;  // layer E candidate A (tile id)
+  std::vector<uint8_t> mat_b;  // layer E candidate B (tile id)
+  std::vector<uint8_t> mat_w;  // layer E weight (unit8; 255 = pure A)
+  std::vector<uint16_t> tint;  // layer H per-vertex RGB565 (LMAP heir)
+  uint32_t tileset_id = 0;     // §2.1 header field; 0 = no tileset
   bool dual() const { return bottom.size() == static_cast<size_t>(width) * height; }
   bool textured() const {
     return tileset_id != 0 && mat_a.size() == static_cast<size_t>(width - 1) * (height - 1);
@@ -164,8 +164,8 @@ struct TerrainPatch {
  * VRAM layout/swizzle is Phase-6 TEXTURE.CACHE work.
  */
 struct Tileset {
-  uint16_t palette[256] = {};          // RGB565 LE halfwords
-  uint8_t tiles[256][64 * 64] = {};    // CLUT8 indices per tile
+  uint16_t palette[256] = {};        // RGB565 LE halfwords
+  uint8_t tiles[256][64 * 64] = {};  // CLUT8 indices per tile
 };
 
 /** DrawProcedural material page (Phase-3 subset: a flat base colour). */

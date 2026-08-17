@@ -111,8 +111,8 @@ star::Sprite8 bake_streak() {
   // the single c=0 survivor: one horizontal spoke on 768×128, R = 384
   const int W = 768, H = 128, cx = 384, cy = 64;
   std::vector<uint8_t> canvas(static_cast<size_t>(W) * H, 0);
-  const int32_t L = static_cast<int32_t>(
-      detail::div_rhu_s64(static_cast<int64_t>(384) * kSpokeLenSeq[0], 54));
+  const int32_t L =
+      static_cast<int32_t>(detail::div_rhu_s64(static_cast<int64_t>(384) * kSpokeLenSeq[0], 54));
   line32(canvas, W, H, cx - L, cy, cx + L, cy);
   return downsample8(canvas, W, H);
 }

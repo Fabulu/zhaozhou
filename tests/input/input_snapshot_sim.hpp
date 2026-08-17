@@ -58,8 +58,7 @@ inline zref::PadFrame readPadFrame(const Vzhao_input_snapshot& top, int i) {
 }
 
 // byte identity: the ABI wire bytes of a frame vs the packed output
-inline bool frameBytesMatchFlat(const zref::PadFrame& f,
-                                const Vzhao_input_snapshot& top, int i) {
+inline bool frameBytesMatchFlat(const zref::PadFrame& f, const Vzhao_input_snapshot& top, int i) {
   uint8_t wire[20];
   zref::padFrameToWire(f, wire);
   for (int b = 0; b < 20; ++b) {

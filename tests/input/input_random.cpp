@@ -84,9 +84,8 @@ static uint64_t runTimeline(uint32_t frames, uint64_t seed) {
     }
     // mid-frame stability: duty targets hold between ticks
     for (int i = 0; i < 4; ++i) {
-      zhao::check(tops.rum.rumble_duty[i] == rumOracle.duty(i),
-                  "random: duty stable between ticks", rumOracle.duty(i),
-                  tops.rum.rumble_duty[i]);
+      zhao::check(tops.rum.rumble_duty[i] == rumOracle.duty(i), "random: duty stable between ticks",
+                  rumOracle.duty(i), tops.rum.rumble_duty[i]);
     }
   };
 
@@ -134,7 +133,7 @@ static uint64_t runTimeline(uint32_t frames, uint64_t seed) {
     int n_cmds = 0;
     for (int c = 0; c < n_want; ++c) {
       RumbleCmd cmd;
-      cmd.pad_index = static_cast<uint8_t>(rng(8));  // 4..7 = illegal
+      cmd.pad_index = static_cast<uint8_t>(rng(8));            // 4..7 = illegal
       cmd.enable = static_cast<uint8_t>(rng(4) == 0 ? 0 : 1);  // bias on
       cmd.strength = static_cast<uint8_t>(rng(256));
       int at = static_cast<int>(rng(len));
@@ -212,9 +211,8 @@ static uint64_t runTimeline(uint32_t frames, uint64_t seed) {
                 "random: gap counter matches oracle", padOracle.gaps(),
                 tops.snap.input_sequence_gaps);
     for (int i = 0; i < 4; ++i) {
-      zhao::check(tops.rum.rumble_duty[i] == rumOracle.duty(i),
-                  "random: duty table matches oracle", rumOracle.duty(i),
-                  tops.rum.rumble_duty[i]);
+      zhao::check(tops.rum.rumble_duty[i] == rumOracle.duty(i), "random: duty table matches oracle",
+                  rumOracle.duty(i), tops.rum.rumble_duty[i]);
       zhao::check(((tops.rum.rumble_active >> i) & 1u) == (rumOracle.duty(i) != 0 ? 1u : 0u),
                   "random: active flag matches oracle", rumOracle.duty(i) != 0 ? 1 : 0,
                   ((tops.rum.rumble_active >> i) & 1u));
@@ -250,9 +248,8 @@ int main(int argc, char** argv) {
   const uint64_t hash1 = runTimeline(frames, seed);
   const uint64_t hash2 = runTimeline(frames, seed);  // plan R1: run twice
   zhao::check(hash1 == hash2, "run-twice transcript hash identical", hash1, hash2);
-  std::printf("input_random: %u frames, seed 0x%016llx, transcript hash 0x%016llx\n",
-              frames, static_cast<unsigned long long>(seed),
-              static_cast<unsigned long long>(hash1));
+  std::printf("input_random: %u frames, seed 0x%016llx, transcript hash 0x%016llx\n", frames,
+              static_cast<unsigned long long>(seed), static_cast<unsigned long long>(hash1));
 
   return zhao::report_and_exit("input_random");
 }

@@ -95,15 +95,15 @@ Sprite8 starface(uint32_t texture_seed, uint8_t smooth_passes) {
     for (int x = 0; x < 128; ++x) {
       const int32_t dx = 2 * x - 127;
       if (dx * dx + dy * dy >= 120 * 120) continue;  // index 0 outside
-      const int32_t vfx = static_cast<int32_t>(
-          detail::div_rhu_s64(static_cast<int64_t>(dy) << 16, 120));
+      const int32_t vfx =
+          static_cast<int32_t>(detail::div_rhu_s64(static_cast<int64_t>(dy) << 16, 120));
       const int32_t a_lat = asin16(vfx);
       int32_t v = ((a_lat + 0x4000) * 64) >> 15;
       if (v > 63) v = 63;
       const int32_t rx =
           static_cast<int32_t>(isqrt_u32(static_cast<uint32_t>(120 * 120 - dy * dy)));
-      const int32_t ufx = static_cast<int32_t>(
-          detail::div_rhu_s64(static_cast<int64_t>(dx) << 16, rx));
+      const int32_t ufx =
+          static_cast<int32_t>(detail::div_rhu_s64(static_cast<int64_t>(dx) << 16, rx));
       const int32_t a_lon = asin16(ufx);
       const int32_t u = (((a_lon + 0x4000) * 128) >> 15) & 255;
       // §3 step 4: index 0 transparent; intensity 1..63 (grid is 0..62)
@@ -118,8 +118,8 @@ Sprite8 corona_sprite(uint8_t core16) {
   constexpr int32_t R_h = 120;
   const int32_t fgm_h =
       static_cast<int32_t>(detail::div_rhu_s64(static_cast<int64_t>(R_h) * core16, 16));
-  const int32_t k = static_cast<int32_t>(
-      detail::div_rhu_s64(static_cast<int64_t>(63) << 16, R_h - fgm_h));
+  const int32_t k =
+      static_cast<int32_t>(detail::div_rhu_s64(static_cast<int64_t>(63) << 16, R_h - fgm_h));
   Sprite8 out;
   out.w = out.h = 128;
   out.pix.assign(128 * 128, 0);
@@ -127,8 +127,7 @@ Sprite8 corona_sprite(uint8_t core16) {
     const int32_t dy = 2 * y - 127;
     for (int x = 0; x < 128; ++x) {
       const int32_t dx = 2 * x - 127;
-      const int32_t rr =
-          static_cast<int32_t>(isqrt_u32(static_cast<uint32_t>(dx * dx + dy * dy)));
+      const int32_t rr = static_cast<int32_t>(isqrt_u32(static_cast<uint32_t>(dx * dx + dy * dy)));
       uint8_t pix = 0;
       if (rr < R_h) {
         if (rr <= fgm_h) {

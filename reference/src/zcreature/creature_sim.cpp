@@ -125,12 +125,11 @@ mat3x4fx tilt_matrix(const GroundTilt& t, SatLedger* L) {
   const int64_t a2 = static_cast<int64_t>(ax) * ax + static_cast<int64_t>(az) * az;
   mat3x4fx r = mat3x4_identity();
   // cross term (exact adds) + K*(a_i a_j - |a|^2 delta) (one rounding each)
-  const int64_t prod[3][3] = {{static_cast<int64_t>(ax) * ax, static_cast<int64_t>(ax) * ay,
-                               static_cast<int64_t>(ax) * az},
-                              {static_cast<int64_t>(ay) * ax, static_cast<int64_t>(ay) * ay,
-                               static_cast<int64_t>(ay) * az},
-                              {static_cast<int64_t>(az) * ax, static_cast<int64_t>(az) * ay,
-                               static_cast<int64_t>(az) * az}};
+  const int64_t prod[3][3] = {
+      {static_cast<int64_t>(ax) * ax, static_cast<int64_t>(ax) * ay, static_cast<int64_t>(ax) * az},
+      {static_cast<int64_t>(ay) * ax, static_cast<int64_t>(ay) * ay, static_cast<int64_t>(ay) * az},
+      {static_cast<int64_t>(az) * ax, static_cast<int64_t>(az) * ay,
+       static_cast<int64_t>(az) * az}};
   const int32_t cross[3][3] = {{0, -az, ay}, {az, 0, -ax}, {-ay, ax, 0}};
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
@@ -237,8 +236,8 @@ void spawn_gibs(const CreatureType& type, const mat3x4fx* palette, fx16 wx, fx16
       g.x = px + wx.raw;
       g.y = py + wy.raw;
       g.z = pz + wz.raw;
-      g.vx = s16lane(h0) * 2;                       // fx16 raw: |v| < 2.0
-      g.vy = (1 << 16) + (s16lane(h1) >> 1);       // up bias 1.0 +- 0.5
+      g.vx = s16lane(h0) * 2;                 // fx16 raw: |v| < 2.0
+      g.vy = (1 << 16) + (s16lane(h1) >> 1);  // up bias 1.0 +- 0.5
       g.vz = s16lane(h1 << 8) * 2;
       g.size = static_cast<uint8_t>(2 + (h1 & 3));  // 2..5 (U 0.4.4 px)
       g.r = static_cast<uint8_t>((m.r * 200 + 128) >> 8);
@@ -360,13 +359,17 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
       render::TriMode tm;  // depth-tested against terrain, writes depth
       const int32_t r8 = ci.lod.rung == LodRung::kSplat
                              ? std::max(radius_q8, 2 * 256)  // >= 2 px reads
-                             : 128;                           // 1 px half-extent
+                             : 128;                          // 1 px half-extent
       const int32_t x0 = pc.s.x - r8, x1 = pc.s.x + r8;
       const int32_t y0 = pc.s.y - r8, y1 = pc.s.y + r8;
-      a.x = x0; a.y = y0;
-      b.x = x1; b.y = y0;
-      c.x = x1; c.y = y1;
-      d.x = x0; d.y = y1;
+      a.x = x0;
+      a.y = y0;
+      b.x = x1;
+      b.y = y0;
+      c.x = x1;
+      c.y = y1;
+      d.x = x0;
+      d.y = y1;
       uint8_t cr, cg, cb;
       if (ci.lod.rung == LodRung::kSplat && !T.mesh.empty()) {
         const Meshlet& m0 = T.mesh.front();
@@ -387,8 +390,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     for (int b = 0; b < T.bank.bone_count; ++b) {
       mat3x4_mul(world, pose[b], worldm[b], L);
     }
-    const std::vector<Meshlet>& mset =
-        ci.lod.rung == LodRung::kMicro ? T.micro : T.mesh;
+    const std::vector<Meshlet>& mset = ci.lod.rung == LodRung::kMicro ? T.micro : T.mesh;
     for (const Meshlet& m : mset) {
       struct PV {
         render::ScreenV s;
@@ -398,8 +400,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
       std::vector<PV> pvs(m.verts.size());
       for (size_t vi = 0; vi < m.verts.size(); ++vi) {
         skin_vertex(worldm.data(), m.verts[vi], pvs[vi].wx, pvs[vi].wy, pvs[vi].wz, L);
-        const render::ProjOut po =
-            render::project_vertex(vp, vpp, fx16{pvs[vi].wx}, fx16{pvs[vi].wy}, fx16{pvs[vi].wz}, L);
+        const render::ProjOut po = render::project_vertex(vp, vpp, fx16{pvs[vi].wx},
+                                                          fx16{pvs[vi].wy}, fx16{pvs[vi].wz}, L);
         pvs[vi].s = po.s;
         pvs[vi].in = po.in;
       }
@@ -408,9 +410,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const PV& b = pvs[m.idx[ti + 1]];
         const PV& c = pvs[m.idx[ti + 2]];
         if (!a.in || !b.in || !c.in) continue;  // Phase-3 near-plane law
-        const int32_t shade =
-            quant_shade(ambient_floor(render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz,
-                                                              c.wx, c.wy, c.wz, L)));
+        const int32_t shade = quant_shade(ambient_floor(
+            render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L)));
         render::TriMode tm;  // opaque: depth test + write
         render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * shade + 32768) >> 16),
                            sat_u8((m.g * shade + 32768) >> 16), sat_u8((m.b * shade + 32768) >> 16),

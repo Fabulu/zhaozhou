@@ -127,10 +127,10 @@ void draw_form_marker(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   const int32_t vh = static_cast<int32_t>(vpp.h);
   const int32_t vx0 = static_cast<int32_t>(vpp.x0);
   const int32_t vy0 = static_cast<int32_t>(vpp.y0);
-  cx_px = 2 * half_px <= vw ? clamp_i32(cx_px, vx0 + half_px, vx0 + vw - 1 - half_px)
-                            : vx0 + vw / 2;
-  cy_px = 2 * half_px <= vh ? clamp_i32(cy_px, vy0 + half_px, vy0 + vh - 1 - half_px)
-                            : vy0 + vh / 2;
+  cx_px =
+      2 * half_px <= vw ? clamp_i32(cx_px, vx0 + half_px, vx0 + vw - 1 - half_px) : vx0 + vw / 2;
+  cy_px =
+      2 * half_px <= vh ? clamp_i32(cy_px, vy0 + half_px, vy0 + vh - 1 - half_px) : vy0 + vh / 2;
 
   blit_pattern_8x8(surf, vpp, cx_px - half_px, cy_px - half_px, half_px * 2, half_px * 2, form,
                    c.s.d, /*depth_write=*/true);

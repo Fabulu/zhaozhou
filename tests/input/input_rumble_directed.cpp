@@ -49,8 +49,7 @@ static void frameTick(uint32_t frame_id) {
 
 static void checkVsOracle(const char* what) {
   for (int i = 0; i < 4; ++i) {
-    zhao::check(top.rumble_duty[i] == oracle.duty(i), what, oracle.duty(i),
-                top.rumble_duty[i]);
+    zhao::check(top.rumble_duty[i] == oracle.duty(i), what, oracle.duty(i), top.rumble_duty[i]);
     const uint8_t active = static_cast<uint8_t>((top.rumble_active >> i) & 1u);
     zhao::check(active == (oracle.duty(i) != 0 ? 1u : 0u), "active == duty!=0",
                 oracle.duty(i) != 0 ? 1 : 0, active);
@@ -74,8 +73,7 @@ int main() {
   oracle.reset();
   cycles = 0;
   checkVsOracle("reset duties 0");
-  zhao::check(top.rumble_frames_dropped == 0, "reset dropped == 0", 0,
-              top.rumble_frames_dropped);
+  zhao::check(top.rumble_frames_dropped == 0, "reset dropped == 0", 0, top.rumble_frames_dropped);
   checkPwmAll();
 
   // ---------------------------------------- 2. frame-gated first latch ---
@@ -90,8 +88,7 @@ int main() {
   }
   frameTick(1);
   checkVsOracle("duty latched at the tick after the command");
-  zhao::check(top.rumble_duty[0] == 200, "duty == strength when enabled", 200,
-              top.rumble_duty[0]);
+  zhao::check(top.rumble_duty[0] == 200, "duty == strength when enabled", 200, top.rumble_duty[0]);
 
   // ----------------------------------------------- 3. PWM duty stream ----
   // one full carrier period: exactly `strength` high phases per pad, and the
@@ -126,19 +123,17 @@ int main() {
   zhao::check(top.rumble_frames_dropped == 3, "total drops 1+2", 3, top.rumble_frames_dropped);
 
   // ------------------------------------- 5. bad pad_index: drop + count ---
-  const uint8_t duty_snapshot[4] = {top.rumble_duty[0], top.rumble_duty[1],
-                                    top.rumble_duty[2], top.rumble_duty[3]};
+  const uint8_t duty_snapshot[4] = {top.rumble_duty[0], top.rumble_duty[1], top.rumble_duty[2],
+                                    top.rumble_duty[3]};
   cmd(7, 1, 255);
   cmd(4, 1, 255);
   frameTick(5);
   checkVsOracle("out-of-range index dropped + counted");
   for (int i = 0; i < 4; ++i) {
-    zhao::check(top.rumble_duty[i] == duty_snapshot[i],
-                "bad index never wraps onto another pad", duty_snapshot[i],
-                top.rumble_duty[i]);
+    zhao::check(top.rumble_duty[i] == duty_snapshot[i], "bad index never wraps onto another pad",
+                duty_snapshot[i], top.rumble_duty[i]);
   }
-  zhao::check(top.rumble_frames_dropped == 5, "total drops 3+2", 5,
-              top.rumble_frames_dropped);
+  zhao::check(top.rumble_frames_dropped == 5, "total drops 3+2", 5, top.rumble_frames_dropped);
 
   // ------------------------------- 6. enable / strength corner behaviour --
   cmd(2, 0, 200);  // enable=0 forces duty 0 regardless of strength
@@ -150,8 +145,8 @@ int main() {
   cmd(2, 1, 0);  // enabled, strength 0 = off
   frameTick(7);
   checkVsOracle("strength 0 -> duty 0");
-  zhao::check(top.rumble_duty[2] == 0 && (top.rumble_active & 4u) == 0,
-              "strength 0: off", 0, (top.rumble_active & 4u));
+  zhao::check(top.rumble_duty[2] == 0 && (top.rumble_active & 4u) == 0, "strength 0: off", 0,
+              (top.rumble_active & 4u));
 
   cmd(2, 1, 255);  // max duty ~99.6%
   frameTick(8);
@@ -172,11 +167,11 @@ int main() {
     frameTick(9 + f);
   }
   checkVsOracle("10 frames without commands: targets hold (no auto-stop)");
-  zhao::check(top.rumble_duty[0] == 50 && top.rumble_duty[1] == 30 &&
-                  top.rumble_duty[2] == 255 && top.rumble_duty[3] == 0,
+  zhao::check(top.rumble_duty[0] == 50 && top.rumble_duty[1] == 30 && top.rumble_duty[2] == 255 &&
+                  top.rumble_duty[3] == 0,
               "hold: all duties unchanged", 1,
-              (top.rumble_duty[0] == 50 && top.rumble_duty[1] == 30 &&
-               top.rumble_duty[2] == 255 && top.rumble_duty[3] == 0)
+              (top.rumble_duty[0] == 50 && top.rumble_duty[1] == 30 && top.rumble_duty[2] == 255 &&
+               top.rumble_duty[3] == 0)
                   ? 1
                   : 0);
   zhao::check(top.rumble_frames_dropped == 5, "no new drops while holding", 5,

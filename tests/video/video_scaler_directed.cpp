@@ -23,12 +23,12 @@ using namespace zref;
 using zhao_video::ScalerTb;
 
 static int g_fail = 0;
-#define EXPECT(cond)                                                        \
-  do {                                                                      \
-    if (!(cond)) {                                                          \
-      ++g_fail;                                                             \
-      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);           \
-    }                                                                       \
+#define EXPECT(cond)                                              \
+  do {                                                            \
+    if (!(cond)) {                                                \
+      ++g_fail;                                                   \
+      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+    }                                                             \
   } while (0)
 
 // synthetic raster-shaped stream sample for cycle i within a frame
@@ -42,15 +42,11 @@ static PxStream raster_sample(uint32_t mode, uint32_t i) {
   p.hblank = x >= t.h_active;
   p.vblank = y >= t.v_active;
   p.valid = !p.hblank && !p.vblank;
-  p.hsync = (x >= t.h_active + t.h_front) &&
-            (x < t.h_active + t.h_front + t.h_sync);
-  p.vsync = (y >= t.v_active + t.v_front) &&
-            (y < t.v_active + t.v_front + t.v_sync);
+  p.hsync = (x >= t.h_active + t.h_front) && (x < t.h_active + t.h_front + t.h_sync);
+  p.vsync = (y >= t.v_active + t.v_front) && (y < t.v_active + t.v_front + t.v_sync);
   p.x = x & 0x3FF;
   p.y = y & 0xFF;
-  p.rgb565 = p.valid
-                 ? (uint16_t)((x * 7u + y * 13u) ^ (x * y) ^ (mode * 0x1111u))
-                 : (uint16_t)0;
+  p.rgb565 = p.valid ? (uint16_t)((x * 7u + y * 13u) ^ (x * y) ^ (mode * 0x1111u)) : (uint16_t)0;
   return p;
 }
 
@@ -100,9 +96,9 @@ static uint64_t scenario() {
   tb3.reset();
   PxStream bad;
   bad.valid = 1;
-  bad.hblank = 1;   // valid outside the active window: impossible input
+  bad.hblank = 1;  // valid outside the active window: impossible input
   for (int k = 0; k < 4 && !tb3.top.never_active; ++k) tb3.step(bad, true);
-  EXPECT(tb3.top.never_active != 0);   // sticky, no silent fallback
+  EXPECT(tb3.top.never_active != 0);  // sticky, no silent fallback
   EXPECT(tb3.failures == 0);
   g_fail += tb3.failures;
 
@@ -112,10 +108,9 @@ static uint64_t scenario() {
 int main() {
   const uint64_t h1 = scenario();
   const uint64_t h2 = scenario();
-  EXPECT(h1 == h2);   // run-twice determinism (plan R1)
+  EXPECT(h1 == h2);  // run-twice determinism (plan R1)
   if (h1 != h2)
-    std::printf("  trace hash %llx != %llx\n", (unsigned long long)h1,
-                (unsigned long long)h2);
+    std::printf("  trace hash %llx != %llx\n", (unsigned long long)h1, (unsigned long long)h2);
 
   if (g_fail == 0) {
     std::printf("video_scaler_directed: OK\n");

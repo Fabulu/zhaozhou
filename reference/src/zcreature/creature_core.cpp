@@ -223,12 +223,14 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
                  int32_t& oz, SatLedger* L) {
   const mat3x4fx& A = palette[v.b0];
   if (v.b1 == v.b0 || v.w0 == 64) {
-    ox = rescale_s32(static_cast<__int128>(A.m[0]) * v.x + static_cast<__int128>(A.m[1]) * v.y +
-                         static_cast<__int128>(A.m[2]) * v.z + (static_cast<__int128>(A.m[3]) << 16),
-                     16, L, &SatLedger::mul);
-    oy = rescale_s32(static_cast<__int128>(A.m[4]) * v.x + static_cast<__int128>(A.m[5]) * v.y +
-                         static_cast<__int128>(A.m[6]) * v.z + (static_cast<__int128>(A.m[7]) << 16),
-                     16, L, &SatLedger::mul);
+    ox =
+        rescale_s32(static_cast<__int128>(A.m[0]) * v.x + static_cast<__int128>(A.m[1]) * v.y +
+                        static_cast<__int128>(A.m[2]) * v.z + (static_cast<__int128>(A.m[3]) << 16),
+                    16, L, &SatLedger::mul);
+    oy =
+        rescale_s32(static_cast<__int128>(A.m[4]) * v.x + static_cast<__int128>(A.m[5]) * v.y +
+                        static_cast<__int128>(A.m[6]) * v.z + (static_cast<__int128>(A.m[7]) << 16),
+                    16, L, &SatLedger::mul);
     oz = rescale_s32(static_cast<__int128>(A.m[8]) * v.x + static_cast<__int128>(A.m[9]) * v.y +
                          static_cast<__int128>(A.m[10]) * v.z +
                          (static_cast<__int128>(A.m[11]) << 16),
@@ -244,14 +246,12 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
   int32_t* o[3] = {&ox, &oy, &oz};
   for (int i = 0; i < 3; ++i) {
     const int r = rows[i];
-    const __int128 pa = static_cast<__int128>(A.m[r]) * v.x +
-                        static_cast<__int128>(A.m[r + 1]) * v.y +
-                        static_cast<__int128>(A.m[r + 2]) * v.z +
-                        (static_cast<__int128>(A.m[r + 3]) << 16);
-    const __int128 pb = static_cast<__int128>(B.m[r]) * v.x +
-                        static_cast<__int128>(B.m[r + 1]) * v.y +
-                        static_cast<__int128>(B.m[r + 2]) * v.z +
-                        (static_cast<__int128>(B.m[r + 3]) << 16);
+    const __int128 pa =
+        static_cast<__int128>(A.m[r]) * v.x + static_cast<__int128>(A.m[r + 1]) * v.y +
+        static_cast<__int128>(A.m[r + 2]) * v.z + (static_cast<__int128>(A.m[r + 3]) << 16);
+    const __int128 pb =
+        static_cast<__int128>(B.m[r]) * v.x + static_cast<__int128>(B.m[r + 1]) * v.y +
+        static_cast<__int128>(B.m[r + 2]) * v.z + (static_cast<__int128>(B.m[r + 3]) << 16);
     *o[i] = rescale_s32(v.w0 * pa + w1 * pb, 22, L, &SatLedger::mul);
   }
 }
@@ -272,13 +272,12 @@ struct BuiltVert {
 std::vector<BuiltVert> build_ring(const RingSpec& spec, uint8_t align, uint8_t v_lane) {
   std::vector<BuiltVert> out(spec.segments);
   for (int k = 0; k < spec.segments; ++k) {
-    const uint16_t ang =
-        static_cast<uint16_t>((k * 65536 / spec.segments + align * 256) & 0xFFFF);
-    out[k].x = rescale_s32(static_cast<int64_t>(spec.radius) * fx_cos(angle16{ang}).raw, 16,
-                           nullptr);
+    const uint16_t ang = static_cast<uint16_t>((k * 65536 / spec.segments + align * 256) & 0xFFFF);
+    out[k].x =
+        rescale_s32(static_cast<int64_t>(spec.radius) * fx_cos(angle16{ang}).raw, 16, nullptr);
     out[k].y = spec.y;
-    out[k].z = rescale_s32(static_cast<int64_t>(spec.radius) * fx_sin(angle16{ang}).raw, 16,
-                           nullptr);
+    out[k].z =
+        rescale_s32(static_cast<int64_t>(spec.radius) * fx_sin(angle16{ang}).raw, 16, nullptr);
     out[k].u = static_cast<uint8_t>(ang >> 8);
     out[k].v = v_lane;
   }
@@ -317,7 +316,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
         R[i * 3 + j] = X[i * 3 + 0] / 65536 * Y[0 * 3 + j] + X[i * 3 + 1] / 65536 * Y[1 * 3 + j] +
-                        X[i * 3 + 2] / 65536 * Y[2 * 3 + j];
+                       X[i * 3 + 2] / 65536 * Y[2 * 3 + j];
     return R;
   }();
 
@@ -389,8 +388,8 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
       int32_t ax0 = 0, ay0 = part.rings[0].y, az0 = 0;
       orient(ax0, ay0, az0);
-      cur.verts.push_back(SkinVertex{ax0, ay0, az0, part.bone, part.bone, 64,
-                                     static_cast<uint8_t>(part.align), 0});
+      cur.verts.push_back(
+          SkinVertex{ax0, ay0, az0, part.bone, part.bone, 64, static_cast<uint8_t>(part.align), 0});
       for (int k = 0; k < n; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(lo + k));
         cur.idx.push_back(static_cast<uint8_t>(lo + (k + 1 == n ? 0 : k + 1)));
@@ -528,8 +527,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       int32_t dev = 0;
       const int32_t den = b.y - a.y;
       if (den != 0) {
-        const int32_t lerp =
-            terrain::lattice_lerp(a.radius, b.radius, mid.y - a.y, den);
+        const int32_t lerp = terrain::lattice_lerp(a.radius, b.radius, mid.y - a.y, den);
         dev = mid.radius > lerp ? mid.radius - lerp : lerp - mid.radius;
       } else {
         dev = mid.radius > a.radius ? mid.radius - a.radius : a.radius - mid.radius;
@@ -541,8 +539,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       if (rs.segments < 6) continue;  // already coarse
       const uint8_t half = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
       const int32_t c = fx_cos(angle16{static_cast<uint16_t>(0x8000 / half)}).raw;
-      const int32_t dev =
-          rescale_s32(static_cast<int64_t>(rs.radius) * (65536 - c), 16, nullptr);
+      const int32_t dev = rescale_s32(static_cast<int64_t>(rs.radius) * (65536 - c), 16, nullptr);
       if (dev > micro_err) micro_err = dev;
     }
   }
@@ -630,8 +627,8 @@ ClampVerdict clamp_3to2(const std::vector<SourceVertex>& src, const Skeleton& sk
       const mat3x4fx* pose = poses[pi].pose.data();
       int32_t x3, y3, z3, x12, y12, z12;
       skin_vertex(pose, SkinVertex{s.x, s.y, s.z, bi[2], bi[2], 64}, x3, y3, z3, L);
-      skin_vertex(pose, SkinVertex{s.x, s.y, s.z, bi[0], bi[1], static_cast<uint8_t>(n0)}, x12,
-                  y12, z12, L);
+      skin_vertex(pose, SkinVertex{s.x, s.y, s.z, bi[0], bi[1], static_cast<uint8_t>(n0)}, x12, y12,
+                  z12, L);
       const int64_t dx = x3 - x12, dy = y3 - y12, dz = z3 - z12;
       const uint64_t d2 = static_cast<uint64_t>(dx * dx + dy * dy + dz * dz);
       const int32_t err = rescale_s32(static_cast<int64_t>(wi[2]) * isqrt_u64(d2), 6, L);

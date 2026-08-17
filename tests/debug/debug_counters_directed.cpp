@@ -49,7 +49,10 @@ struct Snap {
 class Dev {
  public:
   Dev() : top_(new Vzhao_debug_counters) { reset(); }
-  ~Dev() { top_->final(); delete top_; }
+  ~Dev() {
+    top_->final();
+    delete top_;
+  }
   Dev(const Dev&) = delete;
   Dev& operator=(const Dev&) = delete;
 
@@ -95,8 +98,8 @@ class Dev {
     top_->eval();
     if (top_->snap_valid_o && top_->snap_ready_i) {
       const uint16_t id = static_cast<uint16_t>(top_->snap_o[2]);
-      const uint64_t v = static_cast<uint64_t>(top_->snap_o[0]) |
-                         (static_cast<uint64_t>(top_->snap_o[1]) << 32);
+      const uint64_t v =
+          static_cast<uint64_t>(top_->snap_o[0]) | (static_cast<uint64_t>(top_->snap_o[1]) << 32);
       swept_.push_back(Snap{id, v});
     }
     edge();
@@ -236,10 +239,10 @@ int main(int argc, char** argv) {
     orc.reset();
 
     // inject a known event count per provider (catalog indices, D9)
-    t.provide(0, true, 0, 7);      // frame_cycles = 7
-    t.provide(1, true, 1, 3);      // deadline_faults = 3
-    t.provide(2, true, 2, 1234);   // commands = 1234
-    t.provide(3, true, 31, 9);     // audio_underruns = 9
+    t.provide(0, true, 0, 7);     // frame_cycles = 7
+    t.provide(1, true, 1, 3);     // deadline_faults = 3
+    t.provide(2, true, 2, 1234);  // commands = 1234
+    t.provide(3, true, 31, 9);    // audio_underruns = 9
     orc.provide(0, 7);
     orc.provide(1, 3);
     orc.provide(2, 1234);
@@ -255,8 +258,7 @@ int main(int argc, char** argv) {
     check(sweepsEqual(got, want), "snap: sweep bit-exact vs oracle", 1, 0);
     // ascending order (capture_format 4.2 law)
     for (size_t i = 1; i < got.size(); ++i) {
-      check(got[i - 1].id < got[i].id, "snap: ascending counter_id", got[i].id,
-            got[i - 1].id);
+      check(got[i - 1].id < got[i].id, "snap: ascending counter_id", got[i].id, got[i - 1].id);
     }
     // ownerless counters read 0 (spec/counters.md 5)
     check(got[28].id == 28 && got[28].value == 0, "snap: ownerless id 28 reads 0", 0,
@@ -278,29 +280,26 @@ int main(int argc, char** argv) {
   {
     Dev t;
     t.provide(0, true, 0, 42);
-    t.tick_boundary();                       // tick: capture + window opens
+    t.tick_boundary();  // tick: capture + window opens
     std::vector<Snap> a = t.sweep(false);
     check(a.size() == kCatalog, "window: full sweep", kCatalog, a.size());
 
-    t.tick_boundary();                       // a fresh window for the stall test
-    std::vector<Snap> b = t.sweep(true); // heavy periodic backpressure
-    check(b.size() == kCatalog, "window: full sweep under backpressure", kCatalog,
-          b.size());
+    t.tick_boundary();                    // a fresh window for the stall test
+    std::vector<Snap> b = t.sweep(true);  // heavy periodic backpressure
+    check(b.size() == kCatalog, "window: full sweep under backpressure", kCatalog, b.size());
     check(snapsEqual(a, b), "window: backpressure changes nothing", 1, 0);
 
     // tick mid-sweep: restarts ascending from id 0 with the CAPTURED shadow
     t.provide(0, true, 0, 100);
-    t.tick_boundary();                       // open a window
-    for (int i = 0; i < 10; ++i) {       // consume part of it
+    t.tick_boundary();              // open a window
+    for (int i = 0; i < 10; ++i) {  // consume part of it
       t.cycle(false);
     }
-    t.tick_boundary();                       // mid-sweep tick: capture + restart
+    t.tick_boundary();  // mid-sweep tick: capture + restart
     std::vector<Snap> c = t.sweep(false);
-    check(c.size() == kCatalog, "window: restart sweeps the full catalog", kCatalog,
-          c.size());
+    check(c.size() == kCatalog, "window: restart sweeps the full catalog", kCatalog, c.size());
     check(c[0].id == 0, "window: restart begins at id 0", 0, c[0].id);
-    check(c[0].value == 100, "window: restart uses the CAPTURED shadow", 100,
-          c[0].value);
+    check(c[0].value == 100, "window: restart uses the CAPTURED shadow", 100, c[0].value);
   }
 
   // ---- 4: reading never disturbs the live set ------------------------------
@@ -310,23 +309,22 @@ int main(int argc, char** argv) {
     orc.reset();
     t.provide(0, true, 0, 5);
     orc.provide(0, 5);
-    t.tick_boundary();   // tick: bank[0] = 5
+    t.tick_boundary();  // tick: bank[0] = 5
     orc.tick();
     // consume only the first few beats, then change the LIVE provider value
     for (int i = 0; i < 5; ++i) t.cycle(false);
-    t.provide(0, true, 0, 999);          // live change INSIDE the window
+    t.provide(0, true, 0, 999);  // live change INSIDE the window
     orc.provide(0, 999);
     std::vector<Snap> rest = t.sweep(false);
     check(rest.size() == kCatalog - 5, "quiet: rest of the window drains", kCatalog - 5,
           rest.size());
-    check(rest[0].value == 0 && rest[0].id == 5, "quiet: mid-window beats are shadow",
-          5, rest[0].id);
-    t.tick_boundary();   // the NEXT tick captures the new value
+    check(rest[0].value == 0 && rest[0].id == 5, "quiet: mid-window beats are shadow", 5,
+          rest[0].id);
+    t.tick_boundary();  // the NEXT tick captures the new value
     orc.tick();
     std::vector<Snap> c = t.sweep();
     check(c.size() == kCatalog, "quiet: next sweep full", kCatalog, c.size());
-    check(c[0].value == 999, "quiet: next tick captures the new value", 999,
-          c[0].value);
+    check(c[0].value == 999, "quiet: next tick captures the new value", 999, c[0].value);
     check(sweepsEqual(c, orc.sweep()), "quiet: still bit-exact vs oracle", 1, 0);
   }
 

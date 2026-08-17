@@ -78,8 +78,7 @@ int main(int argc, char** argv) {
   }
   if (fail == 0) {
     std::printf("video_mode_random: OK (%s, %llu events x %llu seeds x 2)\n",
-                full ? "full" : "fast", (unsigned long long)events,
-                (unsigned long long)seeds);
+                full ? "full" : "fast", (unsigned long long)events, (unsigned long long)seeds);
     zhao::exit_hard(0);  // teardown-deadlock workaround (zhao_sim.hpp)
   }
   std::printf("video_mode_random: %d FAILURES\n", fail);

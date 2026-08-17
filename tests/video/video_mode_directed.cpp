@@ -25,12 +25,12 @@ using namespace zref;
 using zhao_video::VideoTb;
 
 static int g_fail = 0;
-#define EXPECT(cond)                                                        \
-  do {                                                                      \
-    if (!(cond)) {                                                          \
-      ++g_fail;                                                             \
-      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);           \
-    }                                                                       \
+#define EXPECT(cond)                                              \
+  do {                                                            \
+    if (!(cond)) {                                                \
+      ++g_fail;                                                   \
+      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+    }                                                             \
   } while (0)
 
 // walk `frames` frame periods from the current position, measuring gpu
@@ -45,13 +45,12 @@ static void walk_frames(VideoTb& tb, int frames, uint32_t expected_period) {
     tb.mode_we = false;
     tb.step();
     const bool fs = tb.top.o_frame_start != 0;
-    if (fs && !prev && (tb.gpu_steps() & 1ull)) {   // rising, at the vid edge
+    if (fs && !prev && (tb.gpu_steps() & 1ull)) {  // rising, at the vid edge
       if (started) {
         const uint64_t period = tb.gpu_steps() - last_start;
         EXPECT(period == expected_period);
         if (period != expected_period) {
-          std::printf("  frame period %llu != %u\n",
-                      (unsigned long long)period, expected_period);
+          std::printf("  frame period %llu != %u\n", (unsigned long long)period, expected_period);
         }
       }
       last_start = tb.gpu_steps();
@@ -115,7 +114,7 @@ static uint64_t scenario() {
     tb.step();
     tb.mode_we = false;
     const uint32_t mode_at_write = tb.top.o_mode;
-    EXPECT(mode_at_write == 0);          // no mid-frame effect (spec §1.1)
+    EXPECT(mode_at_write == 0);  // no mid-frame effect (spec §1.1)
 
     // the frame COMPLETES under Z60 (h_total stays 480 until frame_start)
     uint32_t max_x = 0;
@@ -123,21 +122,21 @@ static uint64_t scenario() {
       tb.step();
       if (tb.top.o_x > max_x) max_x = tb.top.o_x;
     }
-    EXPECT(max_x == 479);                // old mode completed the frame
+    EXPECT(max_x == 479);  // old mode completed the frame
     EXPECT(tb.top.o_mode_next == 1);
     // mode_out latches exactly AT frame_start (the cycle the raster left
     // vblank): by now it must be STORM
     EXPECT(tb.top.o_mode == 1);
 
     // the new mode's timing is atomic from the first line: max x = 415
-    tb.step();   // leave the frame_start pulse before re-walking
+    tb.step();  // leave the frame_start pulse before re-walking
     tb.step();
     max_x = 0;
     while (!tb.top.o_frame_start) {
       tb.step();
       if (tb.top.o_x > max_x) max_x = tb.top.o_x;
     }
-    EXPECT(max_x == 415);                // Storm h_total-1
+    EXPECT(max_x == 415);  // Storm h_total-1
     if (max_x != 415) std::printf("  max_x=%u (expected 415)\n", max_x);
     EXPECT(tb.failures == 0);
     g_fail += tb.failures;
@@ -161,16 +160,16 @@ static uint64_t scenario() {
   {
     VideoTb tb;
     tb.reset();
-    while (!tb.top.o_frame_start) tb.step();   // frame 0 boundary
+    while (!tb.top.o_frame_start) tb.step();  // frame 0 boundary
     tb.mode_we = true;
-    tb.mode_in = 3;                            // not a declared value
+    tb.mode_in = 3;  // not a declared value
     tb.step();
     tb.step();
     tb.mode_we = false;
-    EXPECT(tb.top.o_mode_next == 0);           // holds (last valid wins)
+    EXPECT(tb.top.o_mode_next == 0);  // holds (last valid wins)
     tb.step();
     while (!tb.top.o_frame_start) tb.step();
-    EXPECT(tb.top.o_mode == 0);                // still Z60 after the latch
+    EXPECT(tb.top.o_mode == 0);  // still Z60 after the latch
     EXPECT(tb.failures == 0);
     g_fail += tb.failures;
     hsum = hsum * 37 + tb.trace.h;
@@ -181,10 +180,9 @@ static uint64_t scenario() {
 int main() {
   const uint64_t h1 = scenario();
   const uint64_t h2 = scenario();
-  EXPECT(h1 == h2);   // run-twice determinism (plan R1)
+  EXPECT(h1 == h2);  // run-twice determinism (plan R1)
   if (h1 != h2)
-    std::printf("  trace hash %llu != %llu\n",
-                (unsigned long long)h1, (unsigned long long)h2);
+    std::printf("  trace hash %llu != %llu\n", (unsigned long long)h1, (unsigned long long)h2);
 
   if (g_fail == 0) {
     std::printf("video_mode_directed: OK\n");

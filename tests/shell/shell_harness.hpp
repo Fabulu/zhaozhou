@@ -62,26 +62,26 @@ struct Pcg32 {
 
 // ---------------------------------------------------------------- layout --
 constexpr uint32_t kRingBase = 0x0;
-constexpr uint32_t kDescTable = kRingBase;                  // 3 x 32 B
-constexpr uint32_t kSlotBody0 = kRingBase + 4096;           // + s * 1 MiB
-constexpr uint32_t kArena0 = 0x00400000;                    // pixel arena A
-constexpr uint32_t kArena1 = 0x00440000;                    // pixel arena B
-constexpr int kFirstBeatLatency = 16;                       // D10 profile
+constexpr uint32_t kDescTable = kRingBase;         // 3 x 32 B
+constexpr uint32_t kSlotBody0 = kRingBase + 4096;  // + s * 1 MiB
+constexpr uint32_t kArena0 = 0x00400000;           // pixel arena A
+constexpr uint32_t kArena1 = 0x00440000;           // pixel arena B
+constexpr int kFirstBeatLatency = 16;              // D10 profile
 
 struct TickEvent {
   uint32_t frame_id;
   bool repeated;
 };
 
-struct SweepEvent {           // one counters-window sweep (40 ascending ids)
-  std::vector<uint64_t> bank; // index = counter_id
+struct SweepEvent {            // one counters-window sweep (40 ascending ids)
+  std::vector<uint64_t> bank;  // index = counter_id
 };
 
 class ShellHarness {
  public:
   Vtb_zhao_shell top;
-  std::vector<uint8_t> mem;   // HPS DDR (ring + arenas)
-  uint64_t n = 0;             // gpu steps since reset
+  std::vector<uint8_t> mem;  // HPS DDR (ring + arenas)
+  uint64_t n = 0;            // gpu steps since reset
 
   // ring mirror (what hps_state_i shows; FPGA writes come back via ring_wr)
   uint8_t ring_state[3] = {0, 0, 0};
@@ -96,29 +96,35 @@ class ShellHarness {
 
   // audio feed (steady pacing per the W2.4-verified law)
   bool audio_enable = true;
-  uint32_t audio_prime = 512;      // pairs fed back-to-back at start
-  uint32_t audio_period = 4;       // then one pair per N gpu cycles
+  uint32_t audio_prime = 512;  // pairs fed back-to-back at start
+  uint32_t audio_period = 4;   // then one pair per N gpu cycles
   uint32_t audio_fed = 0;
   // audio identity is checked ON THE FLY against a bounded ring of the fed
   // pairs (the FIFO holds <= 2048+prime pairs, far below the ring): storing
   // every pair made a 10,000-frame soak need gigabytes.
-  static constexpr uint32_t kAudRing = 8192;   // power of two
+  static constexpr uint32_t kAudRing = 8192;  // power of two
   std::vector<uint32_t> aud_ring = std::vector<uint32_t>(kAudRing, 0);
   uint64_t aud_sent_count = 0;
   uint64_t pcm_pop_count = 0;
   uint64_t pcm_mismatches = 0;
-  uint64_t aud_ring_overruns = 0;   // lag exceeded the ring (never lawful)
+  uint64_t aud_ring_overruns = 0;  // lag exceeded the ring (never lawful)
   uint64_t audio_next_at = 0;
   zref::MixerTone tone{zref::ToneId::TONE_A4};
 
   // collectors
-  std::vector<TickEvent> ticks;       // appended as observed
-  std::vector<uint32_t> crcs;         // displayed-frame CRC pulses, in order
-  std::vector<SweepEvent> sweeps;     // one per tick (40-beat window)
-  std::vector<uint8_t> fences;        // fence pulses: (ok<<7)|status? no:
-  struct Fence { uint8_t slot; bool ok; uint8_t status; };
+  std::vector<TickEvent> ticks;    // appended as observed
+  std::vector<uint32_t> crcs;      // displayed-frame CRC pulses, in order
+  std::vector<SweepEvent> sweeps;  // one per tick (40-beat window)
+  std::vector<uint8_t> fences;     // fence pulses: (ok<<7)|status? no:
+  struct Fence {
+    uint8_t slot;
+    bool ok;
+    uint8_t status;
+  };
   std::vector<Fence> fence_log;
-  struct BlitDone { uint8_t status; };
+  struct BlitDone {
+    uint8_t status;
+  };
   std::vector<BlitDone> blit_log;
   uint32_t crc_size_errs = 0;
 
@@ -192,10 +198,10 @@ class ShellHarness {
   // publish a sealed packet into ring slot s (FREE -> ARM_WRITING -> READY;
   // the ARM state shows for exactly one observed cycle)
   bool publish(int s, const std::vector<uint8_t>& pkt) {
-    if (ring_state[s] != 0) return false;   // not FREE: protocol misuse
+    if (ring_state[s] != 0) return false;  // not FREE: protocol misuse
     mem_write(kSlotBody0 + uint32_t(s) * zhao_abi::FRAME_SLOT_BYTES, pkt);
     ring_len[s] = uint32_t(pkt.size());
-    publish_arm[s] = 2;   // 2 cycles of ARM_WRITING, then READY
+    publish_arm[s] = 2;  // 2 cycles of ARM_WRITING, then READY
     return true;
   }
 
@@ -210,7 +216,7 @@ class ShellHarness {
     // ---- present inputs for this cycle ------------------------------------
     for (int s = 0; s < 3; ++s) {
       uint8_t st = ring_state[s];
-      if (publish_arm[s] > 0) st = 1;                 // ARM_WRITING
+      if (publish_arm[s] > 0) st = 1;  // ARM_WRITING
       top.hps_state_i[s] = st;
       top.hps_byte_len_i[s] = ring_len[s];
     }
@@ -310,14 +316,13 @@ class ShellHarness {
     // publish sequencing advances one observed cycle at a time
     for (int s = 0; s < 3; ++s) {
       if (publish_arm[s] > 0) {
-        if (--publish_arm[s] == 0) ring_state[s] = 2;   // READY
+        if (--publish_arm[s] == 0) ring_state[s] = 2;  // READY
       }
     }
 
     // ---- post-edge observations -------------------------------------------
     if (top.gpu_tick_o) {
-      ticks.push_back(TickEvent{top.gpu_tick_frame_id_o,
-                                top.gpu_tick_repeated_o != 0});
+      ticks.push_back(TickEvent{top.gpu_tick_frame_id_o, top.gpu_tick_repeated_o != 0});
       tick_seen_last_step = true;
       // a tick (re)starts the counters sweep
       if (sweep_open && !cur_sweep.bank.empty()) sweeps.push_back(cur_sweep);
@@ -338,17 +343,15 @@ class ShellHarness {
       if (top.crc_size_err_o) ++crc_size_errs;
     }
     if (top.fence_valid_o) {
-      fence_log.push_back(Fence{uint8_t(top.fence_slot_o),
-                                top.fence_ok_o != 0,
-                                uint8_t(top.fence_status_o)});
+      fence_log.push_back(
+          Fence{uint8_t(top.fence_slot_o), top.fence_ok_o != 0, uint8_t(top.fence_status_o)});
     }
     if (top.blit_done_o) {
       blit_log.push_back(BlitDone{uint8_t(top.blit_status_o)});
     }
     if (audio_fired && top.pcm_valid_o) {
       const uint32_t got = (uint32_t(top.pcm_l_o) << 16) | top.pcm_r_o;
-      if (pcm_pop_count >= aud_sent_count ||
-          aud_sent_count - pcm_pop_count > kAudRing) {
+      if (pcm_pop_count >= aud_sent_count || aud_sent_count - pcm_pop_count > kAudRing) {
         ++aud_ring_overruns;
       } else if (aud_ring[pcm_pop_count & (kAudRing - 1)] != got) {
         ++pcm_mismatches;
@@ -398,7 +401,7 @@ struct MarkerState {
 };
 
 inline int clamp_step(int16_t analog) {
-  int d = analog >> 12;             // arithmetic: [-8, 7]
+  int d = analog >> 12;  // arithmetic: [-8, 7]
   if (d > 8) d = 8;
   if (d < -8) d = -8;
   return d;
@@ -414,11 +417,10 @@ inline void marker_move(MarkerState& m, int16_t ax, int16_t ay) {
 }
 
 // one 256x192 view canvas (RGB565 LE) into out[0x18000]
-inline void compose_view(uint8_t* out, uint32_t frame, int view,
-                         const MarkerState& m) {
-  const uint16_t bg0 = view ? 0x2104 : 0x1082;   // dark checker tones
+inline void compose_view(uint8_t* out, uint32_t frame, int view, const MarkerState& m) {
+  const uint16_t bg0 = view ? 0x2104 : 0x1082;  // dark checker tones
   const uint16_t bg1 = view ? 0x3186 : 0x2945;
-  const uint16_t mk = view ? 0xF800 : 0x07E0;    // P2 red, P1 green
+  const uint16_t mk = view ? 0xF800 : 0x07E0;  // P2 red, P1 green
   for (int y = 0; y < 192; ++y) {
     for (int x = 0; x < 256; ++x) {
       uint16_t c;
@@ -445,8 +447,8 @@ inline void compose_view(uint8_t* out, uint32_t frame, int view,
 }
 
 // the full Duo frame occupancy (two packed view blocks, 0x30000 B)
-inline void compose_duo_frame(std::vector<uint8_t>& canvas, uint32_t frame,
-                              const MarkerState& p1, const MarkerState& p2) {
+inline void compose_duo_frame(std::vector<uint8_t>& canvas, uint32_t frame, const MarkerState& p1,
+                              const MarkerState& p2) {
   canvas.assign(0x30000, 0);
   compose_view(canvas.data(), frame, 0, p1);
   compose_view(canvas.data() + 0x18000, frame, 1, p2);
@@ -469,7 +471,7 @@ inline void compose_pattern(std::vector<uint8_t>& canvas, zhao_abi::video_mode m
 struct PacketSpec {
   uint32_t frame_id = 0;
   uint32_t sequence = 0;
-  uint8_t mode = 2;              // video_mode byte
+  uint8_t mode = 2;  // video_mode byte
   bool has_blit = false;
   uint8_t blit_dst = 0;
   uint32_t blit_src = 0;
