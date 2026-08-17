@@ -78,6 +78,13 @@ export interface TransientResourceBinding extends TransientResourceSite {
 
 const MAX_RESOURCE_INDEX = 0x00ffffff;
 const RESOURCE_GENERATION = 1;
+const MODULE_ARTIFACT_PREFIX = 'form_module_x';
+const FIXED_ARTIFACT_STEMS = new Set(['form_game', 'form_types']);
+const WINDOWS_DEVICE_STEMS = new Set([
+  'con', 'prn', 'aux', 'nul',
+  'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+  'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
+]);
 
 function authoredRoleOrder(role: AuthoredResourceRole): number {
   switch (role) {
@@ -200,9 +207,52 @@ export function emitCpp(hir: HirProgram, zir: ZirProgram): CppOutput {
   return new CppEmitter(hir, zir).run();
 }
 
+/**
+ * Maps an authored module name to one portable artifact basename. Lowercase
+ * ordinary identifiers remain readable. Every other name is UTF-8 hex encoded
+ * under a prefix that authored direct stems may never occupy. This makes the
+ * mapping injective even after case folding and keeps fixed cartridge files,
+ * Windows device names, separators, and trailing-dot/space rules disjoint.
+ */
+export function cppModuleArtifactStem(value: string): string {
+  if (value.length === 0) throw new Error('C++ artifact preflight received an empty module name');
+  for (let index = 0; index < value.length; ++index) {
+    const unit = value.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new Error('C++ artifact preflight received an unpaired UTF-16 surrogate');
+      }
+      ++index;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new Error('C++ artifact preflight received an unpaired UTF-16 surrogate');
+    }
+  }
+  const bytes = Buffer.from(value, 'utf8');
+  if (bytes.length > 64) {
+    throw new Error(`C++ artifact preflight received a module name over 64 UTF-8 bytes (${bytes.length})`);
+  }
+  const direct = /^[a-z][a-z0-9_]*$/.test(value)
+    && !value.startsWith(MODULE_ARTIFACT_PREFIX)
+    && !FIXED_ARTIFACT_STEMS.has(value)
+    && !WINDOWS_DEVICE_STEMS.has(value);
+  return direct ? value : `${MODULE_ARTIFACT_PREFIX}${bytes.toString('hex')}`;
+}
+
+function caseInsensitiveArtifactPath(path: string): string {
+  const normalized = path.replaceAll('\\', '/');
+  const parts = normalized.split('/');
+  if (parts.some((part) => part.length === 0 || part === '.' || part === '..'
+      || /[. ]$/.test(part))) {
+    throw new Error(`C++ artifact preflight received unsafe path '${path}'`);
+  }
+  return parts.map((part) => part.toLowerCase()).join('/');
+}
+
 class CppEmitter {
   private readonly modules = new Map<number, HirModule>();
   private readonly moduleNames = new Map<number, string>();
+  private readonly moduleArtifactStems = new Map<number, string>();
   private readonly declByKey = new Map<string, HirDeclaration>();
   private readonly structs = new Map<string, HirStruct>();
   private readonly pools = new Map<string, HirPool>();
@@ -217,6 +267,7 @@ class CppEmitter {
     for (const module of hir.modules) {
       this.modules.set(module.index, module);
       this.moduleNames.set(module.index, cppAuthoredModuleIdentifier(module.name));
+      this.moduleArtifactStems.set(module.index, cppModuleArtifactStem(module.name));
     }
     for (const decl of hir.declarations) {
       this.declByKey.set(key(decl.module, decl.name), decl);
@@ -229,12 +280,26 @@ class CppEmitter {
   run(): CppOutput {
     this.refuseUnlinkedFieldApplications();
     this.assignPresentationResourceIndices();
-    const files: CppGeneratedFile[] = [{ path: 'generated/form/form_types.hpp', content: this.typesHeader() }];
+    const files: CppGeneratedFile[] = [];
+    const paths = new Map<string, string>();
+    const add = (path: string, content: string): void => {
+      const normalized = caseInsensitiveArtifactPath(path);
+      const prior = paths.get(normalized);
+      if (prior !== undefined) {
+        throw new Error(
+          `C++ artifact preflight found duplicate case-insensitive paths '${prior}' and '${path}'`,
+        );
+      }
+      paths.set(normalized, path);
+      files.push({ path, content });
+    };
+    add('generated/form/form_types.hpp', this.typesHeader());
     for (const module of [...this.hir.modules].sort((a, b) => a.index - b.index)) {
-      files.push({ path: `generated/form/${module.name}.hpp`, content: this.moduleHeader(module) });
-      files.push({ path: `generated/form/${module.name}.cpp`, content: this.moduleSource(module) });
+      const stem = this.moduleArtifactStem(module.index);
+      add(`generated/form/${stem}.hpp`, this.moduleHeader(module));
+      add(`generated/form/${stem}.cpp`, this.moduleSource(module));
     }
-    files.push({ path: 'generated/form/form_game.hpp', content: this.gameHeader() });
+    add('generated/form/form_game.hpp', this.gameHeader());
     files.sort((a, b) => utf8Compare(a.path, b.path));
     for (const file of files) {
       if (file.content.includes('\r') || !file.content.endsWith('\n')) throw new Error(`C++ emitter violated LF law for ${file.path}`);
@@ -719,7 +784,7 @@ class CppEmitter {
     o.line('#include "form_types.hpp"');
     o.line('#include <array>');
     for (const imported of [...new Set(module.imports.map((item) => item.module))].sort((a, b) => a - b)) {
-      o.line(`#include "${this.modules.get(imported)!.name}.hpp"`);
+      o.line(`#include "${this.moduleArtifactStem(imported)}.hpp"`);
     }
     o.line();
     o.line('namespace form { struct FormState; }');
@@ -872,7 +937,7 @@ class CppEmitter {
     const ns = this.moduleName(module.index);
     const declarations = this.hir.declarations.filter((decl) => decl.module === module.index);
     o.line(this.banner());
-    o.line(`#include "${module.name}.hpp"`);
+    o.line(`#include "${this.moduleArtifactStem(module.index)}.hpp"`);
     o.line('#include "form_game.hpp"');
     o.line('#include <vector>');
     o.line('#include <zhao_abi.h>');
@@ -1268,7 +1333,7 @@ class CppEmitter {
     o.line();
     o.line('#include "form_types.hpp"');
     o.line('#include <array>');
-    for (const module of modules) o.line(`#include "${module.name}.hpp"`);
+    for (const module of modules) o.line(`#include "${this.moduleArtifactStem(module.index)}.hpp"`);
     o.line();
     o.line('namespace form {');
     o.line(`inline constexpr u32 kProgramManifestCrc32c = 0x${hex8(this.hir.manifestCrc32c)}u;`);
@@ -1969,6 +2034,7 @@ class CppEmitter {
 
   private cppStructName(module: number, name: string): string { return `form::${this.moduleName(module)}::${ident(name)}`; }
   private moduleName(module: number): string { const name = this.moduleNames.get(module); if (!name) throw new Error(`unknown HIR module ${module}`); return name; }
+  private moduleArtifactStem(module: number): string { const stem = this.moduleArtifactStems.get(module); if (!stem) throw new Error(`unknown HIR module artifact ${module}`); return stem; }
   private stateMember(module: number, name: string, state: string): string { return `${state}.${this.moduleName(module)}.${ident(name)}`; }
   private moduleForSpan(file: string): number { return this.hir.modules.find((module) => module.file === file)?.index ?? 0; }
   private resolveDeclaration(moduleIndex: number, name: string): HirDeclaration | null {

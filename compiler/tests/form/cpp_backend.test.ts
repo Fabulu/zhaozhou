@@ -8,6 +8,7 @@ import test from 'node:test';
 import { decodeSourceMap, emitCpp, emitSourceMap } from '../../src/backends/index.js';
 import {
   allocateAuthoredResourceIndices, allocateTransientResourceIndices, cppAuthoredIdentifier,
+  cppModuleArtifactStem,
 } from '../../src/backends/cpp/emitter.js';
 import { compileFrontend } from '../../src/frontend/index.js';
 import { lowerHir } from '../../src/hir/index.js';
@@ -158,6 +159,74 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
   assert.doesNotMatch(game, /if \(\(tick % 4u\) == 0u\) arena::system_advance/);
   assert.match(game, /arena::system_advance\(state, pads, tick\);/);
   assert.match(byPath(first, 'arena.cpp'), /if \(\(i % 4u\) == \(tick % 4u\)\)/);
+});
+
+test('module artifact stems are injective, fixed-name disjoint, and filesystem-safe', () => {
+  assert.equal(cppModuleArtifactStem('arena'), 'arena');
+  assert.equal(cppModuleArtifactStem('foo'), 'foo');
+  assert.equal(cppModuleArtifactStem('Foo'), 'form_module_x466f6f');
+  assert.equal(cppModuleArtifactStem('form_game'), 'form_module_x666f726d5f67616d65');
+  assert.equal(cppModuleArtifactStem('form_types'), 'form_module_x666f726d5f7479706573');
+  assert.equal(cppModuleArtifactStem('con'), 'form_module_x636f6e');
+  assert.equal(cppModuleArtifactStem('CON'), 'form_module_x434f4e');
+  assert.equal(cppModuleArtifactStem('trail.'), 'form_module_x747261696c2e');
+  assert.equal(cppModuleArtifactStem('../x'), 'form_module_x2e2e2f78');
+  assert.equal(cppModuleArtifactStem('é'), 'form_module_xc3a9');
+  assert.equal(cppModuleArtifactStem('模块'), 'form_module_xe6a8a1e59d97');
+  assert.throws(() => cppModuleArtifactStem('\ud800'), /unpaired UTF-16 surrogate/);
+
+  const adversaries = [
+    'foo', 'Foo', 'FOO', 'form_game', 'form_types', 'form_module_x666f6f',
+    'con', 'CON', 'prn', 'aux', 'nul', 'com1', 'COM1', 'lpt9',
+    'trail.', 'trail ', '../x', 'a/b', 'é', '模块',
+  ];
+  const folded = adversaries.map((name) => cppModuleArtifactStem(name).toLowerCase());
+  assert.equal(new Set(folded).size, adversaries.length);
+  for (const stem of folded) {
+    assert.match(stem, /^[a-z0-9_]+$/);
+    assert.doesNotMatch(stem, /[. ]$/);
+    assert.ok(!['form_game', 'form_types', 'con', 'prn', 'aux', 'nul', 'com1', 'lpt9'].includes(stem));
+  }
+});
+
+test('strict native C++ accepts fixed, case-only, and Windows-device module artifact families', (t) => {
+  const compiler = 'C:/programmieren/dsstuff/mingw64/bin/g++.exe';
+  if (!existsSync(compiler)) {
+    t.skip(`WinLibs compiler absent: ${compiler}`);
+    return;
+  }
+  const names = [
+    'form_game', 'form_types', 'foo', 'Foo', 'con', 'aux', 'nul', 'com1', 'lpt9',
+    'form_module_x666f6f',
+  ];
+  const sources = Object.fromEntries(names.map((name, index) => [
+    `${index.toString().padStart(2, '0')}.form`,
+    `module ${name} { global value_${index}: u32 = ${index}; }\n`,
+  ]));
+  const first = compileSources(sources);
+  const second = compileSources(Object.fromEntries(Object.entries(sources).reverse()));
+  assert.deepEqual(first, second);
+
+  const paths = first.files.map((file) => file.path);
+  assert.equal(new Set(paths.map((item) => item.toLowerCase())).size, paths.length);
+  for (const name of names) {
+    const stem = cppModuleArtifactStem(name);
+    assert.ok(paths.includes(`generated/form/${stem}.hpp`), `missing ${stem}.hpp`);
+    assert.ok(paths.includes(`generated/form/${stem}.cpp`), `missing ${stem}.cpp`);
+    assert.match(byPath(first, `${stem}.cpp`), new RegExp(`#include "${stem}\\.hpp"`));
+    assert.match(byPath(first, 'form_game.hpp'), new RegExp(`#include "${stem}\\.hpp"`));
+  }
+  assert.ok(paths.includes('generated/form/form_game.hpp'));
+  assert.ok(paths.includes('generated/form/form_types.hpp'));
+
+  const run = runGeneratedNative(first, `#include "form_game.hpp"
+int main() {
+  form::FormState state{};
+  form::initialize(state, 1u);
+  return 0;
+}
+`);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
 });
 
 test('authored C++ spellings are injective and disjoint from generated symbol families', () => {

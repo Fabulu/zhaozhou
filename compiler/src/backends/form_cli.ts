@@ -29,12 +29,30 @@ function expectedArtifacts(): Map<string, Uint8Array> {
   if (!hir) throw new Error('Form frontend admitted fixture but HIR lowering refused it');
   const zir = lowerZir(hir);
   const files = new Map<string, Uint8Array>();
-  files.set('hir.json', encoder.encode(serializeHir(hir)));
-  files.set('sim.zir.json', encoder.encode(serializeHir(zir.sim)));
-  files.set('present.zir.json', encoder.encode(serializeHir(zir.present)));
-  files.set('test.zir.json', encoder.encode(serializeHir(zir.test)));
-  files.set('sourceids.zmap', emitSourceMap(hir));
-  files.set('costs.zcost', emitCostReport(hir, zir, {
+  const normalizedPaths = new Map<string, string>();
+  const put = (relative: string, bytes: Uint8Array): void => {
+    const portable = relative.replaceAll('\\', '/');
+    const parts = portable.split('/');
+    if (parts.some((part) => part.length === 0 || part === '.' || part === '..'
+        || /[. ]$/.test(part))) {
+      throw new Error(`Form artifact generator received unsafe path '${relative}'`);
+    }
+    const normalized = parts.map((part) => part.toLowerCase()).join('/');
+    const prior = normalizedPaths.get(normalized);
+    if (prior !== undefined) {
+      throw new Error(
+        `Form artifact generator received duplicate case-insensitive paths '${prior}' and '${relative}'`,
+      );
+    }
+    normalizedPaths.set(normalized, relative);
+    files.set(relative, bytes);
+  };
+  put('hir.json', encoder.encode(serializeHir(hir)));
+  put('sim.zir.json', encoder.encode(serializeHir(zir.sim)));
+  put('present.zir.json', encoder.encode(serializeHir(zir.present)));
+  put('test.zir.json', encoder.encode(serializeHir(zir.test)));
+  put('sourceids.zmap', emitSourceMap(hir));
+  put('costs.zcost', emitCostReport(hir, zir, {
     abiVersion: 2,
     commandMemoryCeilingBytes: 1_048_576,
     fieldPrograms: [],
@@ -44,7 +62,7 @@ function expectedArtifacts(): Map<string, Uint8Array> {
   // Until W3.4 supplies validated physical FieldProgram metadata, declared
   // fields remain explicit in costs.zcost.unlinked_programs without invented
   // instruction, cycle, table, DSP, or register numbers.
-  for (const file of emitCpp(hir, zir).files) files.set(file.path, encoder.encode(file.content));
+  for (const file of emitCpp(hir, zir).files) put(file.path, encoder.encode(file.content));
   return files;
 }
 
