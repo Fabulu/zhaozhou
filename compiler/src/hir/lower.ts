@@ -369,8 +369,8 @@ class HirLowerer {
           }
           break;
         }
-        const qualified = ast.obj.kind === 'ident' && !env.has(ast.obj.name)
-          ? this.qualifiedMember(module, ast.obj.name, ast.field)
+        const qualified = ast.obj.kind === 'ident'
+          ? this.expressionQualifiedMember(module, ast.obj.name, ast.field, env)
           : null;
         if (qualified) {
           type = this.symbolType(qualified);
@@ -452,8 +452,8 @@ class HirLowerer {
 
   private directDeclaration(module: number, expression: Expr, env: LocalEnv): SymbolInfo | null {
     if (expression.kind === 'ident') return env.has(expression.name) ? null : this.resolve(module, expression.name);
-    if (expression.kind === 'member' && expression.obj.kind === 'ident' && !env.has(expression.obj.name)) {
-      return this.qualifiedMember(module, expression.obj.name, expression.field);
+    if (expression.kind === 'member' && expression.obj.kind === 'ident') {
+      return this.expressionQualifiedMember(module, expression.obj.name, expression.field, env);
     }
     return null;
   }
@@ -613,7 +613,7 @@ class HirLowerer {
         if (expression.kind === 'ident') {
           symbol = this.resolve(owner, expression.name);
         } else if (expression.kind === 'member' && expression.obj.kind === 'ident') {
-          symbol = this.qualifiedMember(owner, expression.obj.name, expression.field);
+          symbol = this.unshadowedQualifiedMember(owner, expression.obj.name, expression.field);
         }
         if (symbol?.decl.kind !== 'Const') return null;
         return {
@@ -655,7 +655,7 @@ class HirLowerer {
       const member = this.constantEnumMember(module, ast);
       if (member) return member.type as Type;
       if (ast.obj.kind === 'ident') {
-        const symbol = this.qualifiedMember(module, ast.obj.name, ast.field);
+        const symbol = this.unshadowedQualifiedMember(module, ast.obj.name, ast.field);
         if (symbol?.decl.kind === 'Const') return this.type(symbol.module, symbol.decl.type);
       }
       const objectType = this.constantType(module, ast.obj);
@@ -690,7 +690,7 @@ class HirLowerer {
       name = ast.field;
     } else if (ast.kind === 'member' && ast.obj.kind === 'member'
         && ast.obj.obj.kind === 'ident') {
-      symbol = this.qualifiedMember(module, ast.obj.obj.name, ast.obj.field);
+      symbol = this.unshadowedQualifiedMember(module, ast.obj.obj.name, ast.obj.field);
       name = ast.field;
     }
     if (symbol?.decl.kind !== 'Enum') return null;
@@ -743,6 +743,25 @@ class HirLowerer {
     const sym = this.resolve(module, name);
     if (!sym) throw new Error(`internal HIR resolution failure: ${this.modules[module]!.ast.name}.${name}`);
     return sym;
+  }
+
+  private unshadowedQualifiedMember(
+    requester: number,
+    moduleName: string,
+    member: string,
+  ): SymbolInfo | null {
+    if (BUTTONS.has(moduleName) || this.resolve(requester, moduleName) !== null) return null;
+    return this.qualifiedMember(requester, moduleName, member);
+  }
+
+  private expressionQualifiedMember(
+    requester: number,
+    moduleName: string,
+    member: string,
+    env: LocalEnv,
+  ): SymbolInfo | null {
+    if (env.has(moduleName)) return null;
+    return this.unshadowedQualifiedMember(requester, moduleName, member);
   }
 
   private qualifiedMember(requester: number, moduleName: string, member: string): SymbolInfo | null {

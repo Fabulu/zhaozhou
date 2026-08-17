@@ -202,6 +202,30 @@ test('HIR shares exact nested aggregate projection with checker bounds without f
   assert.equal(row.fields[0]!.type.t === 'array' ? row.fields[0]!.type.len : null, 12);
 });
 
+test('aggregate constants shadow same-spelled whole-module qualifiers exactly', () => {
+  const frontend = compileFrontend({
+    'a_settings.form': `module settings {
+      const capacity: u32 = 9;
+    }\n`,
+    'b_shadow.form': `module shadow {
+      import settings;
+      struct metadata { capacity: u32; }
+      const settings: metadata = metadata { capacity = 4 };
+      const CAP: u32 = settings.capacity;
+      struct row { value: u32; }
+      pool rows: row[CAP];
+    }\n`,
+  });
+  assert.equal(frontend.ok, true, frontend.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'));
+  const hir = lowerHir(frontend);
+  assert.ok(hir);
+  const cap = declarationsOf(hir, 'const').find((item) => item.module === 1 && item.name === 'CAP')!;
+  assert.equal(cap.raw, 4n);
+  assert.equal(cap.init.symbol, null);
+  assert.deepEqual(cap.init.children[0]!.symbol, { kind: 'const', module: 1, name: 'settings' });
+  assert.equal(declarationsOf(hir, 'pool').find((item) => item.module === 1)?.capacity, 4);
+});
+
 test('checker-owned whole/selective call targets retain owners and qualified pools in HIR', () => {
   const compile = (whole: boolean) => compileFrontend({
     'a_data.form': `module data {

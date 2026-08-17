@@ -931,14 +931,19 @@ class Checker {
     return type;
   }
 
+  /** A visible whole-module qualifier after top-level/selective-name shadowing. */
+  private unshadowedQualifierModule(ms: ModuleSym, name: string): ModuleSym | null {
+    if (this.resolveUnqualified(ms, name) !== null) return null;
+    const target = this.byName.get(name);
+    const visible = ms.ast.name === name
+      || ms.ast.imports.some((item) => item.module === name && item.names.length === 0);
+    return target && visible ? target : null;
+  }
+
   /** A whole-module qualifier is considered only after lexical/unqualified names. */
   private qualifierModule(ctx: Ctx, name: string): ModuleSym | null {
-    if (ctx.locals.has(name) || ctx.laterLets?.has(name)
-        || this.resolveUnqualified(ctx.mod, name) !== null) return null;
-    const target = this.byName.get(name);
-    const visible = ctx.mod.ast.name === name
-      || ctx.mod.ast.imports.some((item) => item.module === name && item.names.length === 0);
-    return target && visible ? target : null;
+    if (ctx.locals.has(name) || ctx.laterLets?.has(name)) return null;
+    return this.unshadowedQualifierModule(ctx.mod, name);
   }
 
   private resolveRootSymbol(
@@ -1975,8 +1980,7 @@ class Checker {
       case 'member': {
         if (e.obj.kind === 'member' && e.obj.obj.kind === 'ident') {
           const moduleName = e.obj.obj.name;
-          const target = ms.ast.imports.some((imp) => imp.module === moduleName && imp.names.length === 0)
-            ? this.byName.get(moduleName) : undefined;
+          const target = this.unshadowedQualifierModule(ms, moduleName) ?? undefined;
           const declaration = target?.table.get(e.obj.field);
           if (declaration?.kind === 'enum') {
             return (declaration.decl as unknown as EnumDecl).members.some((member) => member.name === e.field);
@@ -1986,9 +1990,8 @@ class Checker {
         if (directModule !== null) {
           // Qualified module constants are values; globals and every other
           // module member remain runtime state and are refused here.
-          const target = this.byName.get(directModule);
-          const importedWhole = ms.ast.imports.some((imp) => imp.module === directModule && imp.names.length === 0);
-          if (target && importedWhole && !this.resolveUnqualified(ms, directModule)) {
+          const target = this.unshadowedQualifierModule(ms, directModule);
+          if (target) {
             const sym = target.table.get(e.field);
             return sym !== undefined && followConst(target, sym);
           }
@@ -2020,7 +2023,9 @@ class Checker {
         if (expression.kind === 'ident') {
           resolved = this.resolveName(owner, expression.name);
         } else if (expression.kind === 'member' && expression.obj.kind === 'ident') {
-          resolved = this.resolveName(owner, `${expression.obj.name}.${expression.field}`);
+          const target = this.unshadowedQualifierModule(owner, expression.obj.name);
+          const symbol = target?.table.get(expression.field);
+          resolved = target && symbol ? { sym: symbol, mod: target, ambiguous: false } : null;
         }
         if (!resolved || resolved.ambiguous === true || resolved.sym.kind !== 'const') return null;
         const declaration = resolved.sym.decl as unknown as ConstDecl;
@@ -2079,9 +2084,10 @@ class Checker {
       const member = this.constEnumMember(ms, e);
       if (member) return member.type as Type;
       if (e.obj.kind === 'ident') {
-        const resolved = this.resolveName(ms, `${e.obj.name}.${e.field}`);
-        if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'const') {
-          return this.resolveType(resolved.mod, (resolved.sym.decl as unknown as ConstDecl).type);
+        const target = this.unshadowedQualifierModule(ms, e.obj.name);
+        const symbol = target?.table.get(e.field);
+        if (target && symbol?.kind === 'const') {
+          return this.resolveType(target, (symbol.decl as unknown as ConstDecl).type);
         }
       }
       const objectType = this.constKnownType(ms, e.obj);
@@ -2119,10 +2125,11 @@ class Checker {
       }
     } else if (e.kind === 'member' && e.obj.kind === 'member'
         && e.obj.obj.kind === 'ident') {
-      const resolved = this.resolveName(ms, `${e.obj.obj.name}.${e.obj.field}`);
-      if (resolved && resolved.ambiguous !== true && resolved.sym.kind === 'enum') {
-        declaration = resolved.sym.decl as unknown as EnumDecl;
-        owner = resolved.mod;
+      const target = this.unshadowedQualifierModule(ms, e.obj.obj.name);
+      const symbol = target?.table.get(e.obj.field);
+      if (target && symbol?.kind === 'enum') {
+        declaration = symbol.decl as unknown as EnumDecl;
+        owner = target;
         memberName = e.field;
       }
     }
