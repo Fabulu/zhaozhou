@@ -17,7 +17,9 @@
     "tables:gen": "npm run -w tools/fixgen gen",
     "abi:check": "npm run -w tools/abi-gen check",
     "abi:gen": "npm run -w tools/abi-gen gen",
-    "field:check": "npm run -w compiler test"
+    "field:check": "npm run -w compiler test",
+    "form:gen": "npm run -w compiler form:gen",
+    "form:check": "npm run -w compiler form:check"
   },
   "engines": {
     "node": ">=20"

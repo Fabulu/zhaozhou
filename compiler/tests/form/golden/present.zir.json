@@ -1,0 +1,209 @@
+{
+ "kind": "PresentZIR",
+ "perFrameEstimateBytes": 64,
+ "templates": [
+  {
+   "command": {
+    "args": [
+     {
+      "name": "pool",
+      "span": {
+       "end": 1104,
+       "file": "a_arena.form",
+       "start": 1100
+      },
+      "value": {
+       "ast": {
+        "kind": "ident",
+        "name": "particles",
+        "span": {
+         "end": 1115,
+         "file": "a_arena.form",
+         "start": 1106
+        }
+       },
+       "children": [],
+       "span": {
+        "end": 1115,
+        "file": "a_arena.form",
+        "start": 1106
+       },
+       "symbol": {
+        "kind": "pool",
+        "module": 0,
+        "name": "particles"
+       },
+       "type": {
+        "name": "particles",
+        "struct": "0::particle",
+        "t": "pool"
+       }
+      }
+     },
+     {
+      "name": "view_mask",
+      "span": {
+       "end": 1126,
+       "file": "a_arena.form",
+       "start": 1117
+      },
+      "value": {
+       "ast": {
+        "intVal": "1",
+        "kind": "literal",
+        "lit": "int",
+        "span": {
+         "end": 1129,
+         "file": "a_arena.form",
+         "start": 1128
+        },
+        "text": "1"
+       },
+       "children": [],
+       "span": {
+        "end": 1129,
+        "file": "a_arena.form",
+        "start": 1128
+       },
+       "symbol": null,
+       "type": {
+        "t": "i32"
+       }
+      }
+     },
+     {
+      "name": "weight",
+      "span": {
+       "end": 1137,
+       "file": "a_arena.form",
+       "start": 1131
+      },
+      "value": {
+       "ast": {
+        "frac": {
+         "fracDigits": "",
+         "intDigits": "100",
+         "suffix": "%"
+        },
+        "kind": "literal",
+        "lit": "frac",
+        "span": {
+         "end": 1143,
+         "file": "a_arena.form",
+         "start": 1139
+        },
+        "text": "100%"
+       },
+       "children": [],
+       "span": {
+        "end": 1143,
+        "file": "a_arena.form",
+        "start": 1139
+       },
+       "symbol": null,
+       "type": {
+        "t": "unit8"
+       }
+      }
+     }
+    ],
+    "emitKind": "draw_population",
+    "kind": "emit",
+    "sourceId": 2415919109,
+    "span": {
+     "end": 1145,
+     "file": "a_arena.form",
+     "start": 1079
+    }
+   },
+   "module": 0,
+   "ordinal": 0,
+   "presentation": "main_view",
+   "recordBytes": 32
+  },
+  {
+   "command": {
+    "args": [
+     {
+      "name": "sound",
+      "span": {
+       "end": 1166,
+       "file": "a_arena.form",
+       "start": 1161
+      },
+      "value": {
+       "ast": {
+        "kind": "ident",
+        "name": "chime",
+        "span": {
+         "end": 1173,
+         "file": "a_arena.form",
+         "start": 1168
+        }
+       },
+       "children": [],
+       "span": {
+        "end": 1173,
+        "file": "a_arena.form",
+        "start": 1168
+       },
+       "symbol": {
+        "kind": "sound",
+        "module": 0,
+        "name": "chime"
+       },
+       "type": {
+        "t": "sound"
+       }
+      }
+     },
+     {
+      "name": "at",
+      "span": {
+       "end": 1177,
+       "file": "a_arena.form",
+       "start": 1175
+      },
+      "value": {
+       "ast": {
+        "kind": "ident",
+        "name": "origin",
+        "span": {
+         "end": 1185,
+         "file": "a_arena.form",
+         "start": 1179
+        }
+       },
+       "children": [],
+       "span": {
+        "end": 1185,
+        "file": "a_arena.form",
+        "start": 1179
+       },
+       "symbol": {
+        "kind": "global",
+        "module": 0,
+        "name": "origin"
+       },
+       "type": {
+        "t": "world3"
+       }
+      }
+     }
+    ],
+    "emitKind": "audio",
+    "kind": "emit",
+    "sourceId": 2415919110,
+    "span": {
+     "end": 1187,
+     "file": "a_arena.form",
+     "start": 1150
+    }
+   },
+   "module": 0,
+   "ordinal": 1,
+   "presentation": "main_view",
+   "recordBytes": 32
+  }
+ ]
+}

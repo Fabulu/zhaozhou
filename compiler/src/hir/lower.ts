@@ -460,7 +460,11 @@ class HirLowerer {
     }
     if (ast.kind === 'literal') {
       if (ast.lit === 'bool') return ast.text === 'true' ? 1n : 0n;
-      if (ast.lit === 'colour') return BigInt(ast.text);
+      if (ast.lit === 'colour') {
+        const digits = ast.text.startsWith('#') ? ast.text.slice(1) : ast.text;
+        const rgb = BigInt(`0x${digits}`);
+        return digits.length === 6 ? 0xff000000n | rgb : rgb;
+      }
       if (ast.lit === 'int' || ast.lit === 'tick') {
         const value = ast.intVal ?? 0n;
         return type.t === 'fx16' ? value << 16n : type.t === 'fx24' ? value << 24n : value;
@@ -568,8 +572,18 @@ class HirLowerer {
   private manifestBytes(): Uint8Array {
     const lines = ['form-program-manifest-v1'];
     for (const mod of this.modules) lines.push(`file ${mod.index} ${mod.ast.span.file}\n${serializeAst(mod.ast).trimEnd()}`);
+    const systemOrder = new Map(
+      this.declarations
+        .filter((decl) => decl.kind === 'system')
+        .map((decl) => [`${decl.module}\0${decl.name}`, decl.order]),
+    );
     for (const phase of this.schedule.phases) {
-      for (const system of phase.systems) lines.push(`phase ${phase.index} ${system.module}.${system.name} every ${system.every}`);
+      const systems = [...phase.systems].sort((a, b) => {
+        const am = this.moduleByName.get(a.module)!;
+        const bm = this.moduleByName.get(b.module)!;
+        return am - bm || systemOrder.get(`${am}\0${a.name}`)! - systemOrder.get(`${bm}\0${b.name}`)!;
+      });
+      for (const system of systems) lines.push(`phase ${phase.index} ${system.module}.${system.name} every ${system.every}`);
     }
     return new TextEncoder().encode(lines.join('\n') + '\n');
   }
