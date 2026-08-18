@@ -656,6 +656,46 @@ int main(int argc, char** argv) {
       check(dut.subpatch_dirty_o == want, c.what, want, dut.subpatch_dirty_o);
     }
 
+    // THE FULL SWEEP: all 33x33 lattice vertices, not eight spot cases. A
+    // randomized lane found the RTL and the oracle disagreeing on ONE bit for
+    // some vertices, which eight hand-picked cases missed entirely.
+    {
+      reset_dut(dut);
+      dut.st_ready_i = 1;
+      load_list(dut, empty, 5);
+      int mismatches = 0;
+      int first_vi = -1, first_vj = -1;
+      uint16_t first_want = 0, first_got = 0;
+      for (int vj = 0; vj <= 32; ++vj) {
+        for (int vi = 0; vi <= 32; ++vi) {
+          dut.list_clear_i = 1;
+          zhao::tick(dut);
+          dut.list_clear_i = 0;
+          zt::ComposeIn in;
+          in.base = 100;
+          in.scar = -7;  // the vertex MOVED, so it marks
+          in.bottom = -32768;
+          in.dual = true;
+          compose_one(dut, in, 0, nullptr, vi, vj, 1);
+          const uint16_t want = zt::subpatch_mask(vi, vj);
+          if (dut.subpatch_dirty_o != want) {
+            if (mismatches == 0) {
+              first_vi = vi;
+              first_vj = vj;
+              first_want = want;
+              first_got = static_cast<uint16_t>(dut.subpatch_dirty_o);
+            }
+            ++mismatches;
+          }
+        }
+      }
+      if (mismatches != 0)
+        std::fprintf(stderr, "  first mask mismatch at (%d,%d): want %04X got %04X\n", first_vi,
+                     first_vj, first_want, first_got);
+      check(mismatches == 0, "the subpatch mask agrees at every one of 1,089 lattice vertices", 0,
+            static_cast<uint32_t>(mismatches));
+    }
+
     // A vertex that did NOT move marks nothing — the whole point of the mask.
     reset_dut(dut);
     dut.st_ready_i = 1;

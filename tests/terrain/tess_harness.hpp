@@ -182,8 +182,18 @@ inline zt::ComposedLattice make_lattice(bool dual, int pitch_m = 2) {
   return lat;
 }
 
-/** Deterministic relief on both planes: the height16 grid, exactly << 8. */
-inline void fill_relief(zt::ComposedLattice& lat, uint32_t seed) {
+/**
+ * Deterministic relief on both planes.
+ *
+ * `fine` adds a sub-height16 fx16 ripple, and it is the DEFAULT because a
+ * composed lattice really is not on the height16 grid: TERRAIN.PATCH produces
+ * `live_top = base<<8 + the fx16 field chain` (terrain_rules §3.4), so live
+ * ground carries fx16 detail below the authored 1/256 m step. Filling only on
+ * the height16 grid makes every parent difference EVEN, so the geomorph
+ * halving never has a remainder and a truncation in place of round-half-up
+ * survives the whole suite — which is exactly what a mutation sweep found.
+ */
+inline void fill_relief(zt::ComposedLattice& lat, uint32_t seed, bool fine = true) {
   uint32_t s = seed;
   const auto next = [&s]() {
     s = s * 1103515245u + 12345u;
@@ -193,10 +203,10 @@ inline void fill_relief(zt::ComposedLattice& lat, uint32_t seed) {
     for (int i = 0; i < lat.w; ++i) {
       const size_t k = static_cast<size_t>(j) * static_cast<size_t>(lat.w) + static_cast<size_t>(i);
       const int32_t base = static_cast<int16_t>(2560 + static_cast<int>(next() % 2048) - 1024);
-      lat.top[k] = base << 8;
+      lat.top[k] = (base << 8) + (fine ? static_cast<int32_t>(next() % 511) - 255 : 0);
       if (lat.dual) {
         const int32_t bot = static_cast<int16_t>(-12800 + static_cast<int>(next() % 512));
-        lat.bottom[k] = bot << 8;
+        lat.bottom[k] = (bot << 8) + (fine ? static_cast<int32_t>(next() % 511) - 255 : 0);
       }
     }
   }

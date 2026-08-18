@@ -547,6 +547,49 @@ int main(int argc, char** argv) {
     check(moved_interior > 0, "and interior vertices genuinely DID move at full factor", 1,
           static_cast<uint32_t>(moved_interior));
 
+    // THE ROUNDING BOUNDARY, on the RTL and not just the oracle. The geomorph
+    // target is `ha + rescale(hb - ha, 1)`, a round-half-up halving, and the
+    // half is only visible when the parent difference is ODD. Build a lattice
+    // whose two coarse parents differ by exactly +1 and exactly -1 and read the
+    // emitted vertex back: +1 must round UP to 1, and -1 must round to 0, not
+    // -1. A truncating shift passes every other case in this file.
+    for (int sign = 0; sign < 2; ++sign) {
+      zt::ComposedLattice h = make_lattice(true);
+      // level 1 (stride 2) at subpatch (8,8): vertex (10,10) is a DIAGONAL
+      // midpoint of the coarse cell whose corners are (8,8) and (12,12).
+      const int32_t hb = sign ? -1 : 1;
+      h.top[static_cast<size_t>(8) * 33 + 8] = 0;
+      h.top[static_cast<size_t>(12) * 33 + 12] = hb;
+      zt::SubpatchJob j;
+      j.ox = 8;
+      j.oz = 8;
+      j.level = 1;
+      for (int k = 0; k < 4; ++k) j.nlevel[k] = 1;
+      j.morph = 65536;
+      expect_job(drv, h, j, "the geomorph rounding boundary, both halves");
+      const int32_t want_y = zt::coarse_height(0, hb);
+      check(want_y == (sign ? 0 : 1), "a coarse midpoint of (0,+-1) rounds half UP",
+            static_cast<uint32_t>(sign ? 0 : 1), static_cast<uint32_t>(want_y));
+      bool rej = false;
+      const std::vector<zt::MeshTri> got = drv.run(h, j, &rej);
+      const int32_t px = h.wx[10], pz = h.wz[10];
+      int seen_probe = 0, wrong = 0;
+      const auto probe = [&](int32_t x, int32_t y, int32_t z) {
+        if (x != px || z != pz) return;
+        ++seen_probe;
+        if (y != want_y) ++wrong;
+      };
+      for (const zt::MeshTri& t : got) {
+        probe(t.ax, t.ay, t.az);
+        probe(t.bx, t.by, t.bz);
+        probe(t.cx, t.cy, t.cz);
+      }
+      check(seen_probe > 0, "the rounding-boundary vertex was actually emitted", 1,
+            static_cast<uint32_t>(seen_probe));
+      check(wrong == 0, "and it carries the round-half-up coarse height", 0,
+            static_cast<uint32_t>(wrong));
+    }
+
     // the out-of-range morph factor is clamped and counted
     const uint32_t cl_before = dut.lod_clamped_o;
     zt::SubpatchJob big = z0;

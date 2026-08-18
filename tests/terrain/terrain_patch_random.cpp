@@ -77,6 +77,7 @@ struct Stats {
   uint32_t saturated = 0;      // the chain hit an fx16 rail
   uint32_t rejected = 0;       // §9.1 reject path taken
   uint32_t dirty = 0;
+  uint32_t edge_probes = 0;  // vertices placed EXACTLY on a footprint edge
 };
 
 /** Load a field list into the DUT, mirroring the oracle's verdicts. */
@@ -161,6 +162,11 @@ void run_lane(Vzhao_terrain_patch& dut, Rng& rng, int patches, bool lattice, Sta
       offered.push_back(r);
     }
     load_list(dut, oracle, offered, patch_id, st);
+    // The subpatch dirty mask accumulates over the patch and is cleared by the
+    // same `list_clear` that empties the field list, so the model resets here.
+    uint16_t exp_mask = 0;
+    check(dut.subpatch_dirty_o == 0, "list_clear cleared the subpatch dirty mask", 0,
+          dut.subpatch_dirty_o);
     rejects_seen = st.rejected;
     check(dut.programs_rejected_o == rejects_seen,
           "programs_rejected accumulates across patches, unaffected by list_clear", rejects_seen,
@@ -190,6 +196,23 @@ void run_lane(Vzhao_terrain_patch& dut, Rng& rng, int patches, bool lattice, Sta
         in.dual = !rng.chance(4);  // the legacy page is a quarter of lane B
         in.wx = rng.range(-half, half);
         in.wz = rng.range(-half, half);
+      }
+
+      // THE CLOSED INTERVAL IS A MEASURE-ZERO EVENT. Uniform random world
+      // coordinates never land exactly on a footprint edge, so a `<` that
+      // should be `<=` survives any amount of uniform sampling — a mutation
+      // sweep proved exactly that, with the directed suite red and this lane
+      // green. Snap onto (and one raw unit either side of) a real footprint
+      // edge often enough that the boundary is genuinely exercised.
+      if (oracle.size() > 0 && !rng.chance(3)) {
+        const int lane_i = rng.range(0, oracle.size() - 1);
+        const int32_t xs[4] = {oracle[lane_i].x0 - 1, oracle[lane_i].x0, oracle[lane_i].x1,
+                               oracle[lane_i].x1 + 1};
+        const int32_t zs[4] = {oracle[lane_i].z0 - 1, oracle[lane_i].z0, oracle[lane_i].z1,
+                               oracle[lane_i].z1 + 1};
+        in.wx = xs[rng.range(0, 3)];
+        in.wz = zs[rng.range(0, 3)];
+        ++st.edge_probes;
       }
 
       int32_t fh[zt::kMaxPatchFields];
@@ -274,7 +297,21 @@ void run_lane(Vzhao_terrain_patch& dut, Rng& rng, int patches, bool lattice, Sta
       for (int d = 0; d < 3; ++d) zhao::tick(dut);
 
       ++st.vertices;
-      if (want.dirty) ++st.dirty;
+      if (want.dirty) {
+        ++st.dirty;
+        exp_mask = static_cast<uint16_t>(exp_mask | zt::subpatch_mask(vi, vj));
+      }
+      // The mask is charter §11.1's 4x4 subpatch grid with SHARED border
+      // vertices marking both neighbours. A mutation sweep found this
+      // unchecked here while the directed suite caught it, so it is checked on
+      // every vertex now.
+      if (dut.subpatch_dirty_o != exp_mask)
+        std::fprintf(stderr, "  mask at v(%d,%d) dirty=%d p=%d v=%d want=%04X got=%04X\n", vi, vj,
+                     want.dirty ? 1 : 0, p, v, exp_mask,
+                     static_cast<uint32_t>(dut.subpatch_dirty_o));
+      check(dut.subpatch_dirty_o == exp_mask,
+            lattice ? "lane A subpatch dirty mask matches" : "lane B subpatch dirty mask matches",
+            exp_mask, dut.subpatch_dirty_o);
       if (in.dual && want.compose_top == (static_cast<int32_t>(in.bottom) << 8)) ++st.clamp_compose;
       if (in.dual && want.live_top == (static_cast<int32_t>(in.bottom) << 8)) ++st.clamp_live;
       if (want.live_top == INT32_MAX || want.live_top == INT32_MIN) ++st.saturated;
@@ -310,6 +347,7 @@ int main(int argc, char** argv) {
         lat.clamp_compose);
   check(lat.clamp_live > 0, "lane A actually sampled the live clamp at bottom", 1, lat.clamp_live);
   check(lat.uncovered > 0, "lane A actually sampled uncovered footprints", 1, lat.uncovered);
+  check(lat.edge_probes > 0, "lane A actually probed footprint edges exactly", 1, lat.edge_probes);
   check(lat.dirty > 0, "lane A actually sampled moved ground", 1, lat.dirty);
   check(lat.saturated == 0, "lane A never saturates: real terrain does not rail", 0, lat.saturated);
 
@@ -317,15 +355,19 @@ int main(int argc, char** argv) {
   check(words.rejected > 0, "lane B actually took the §9.1 reject path", 1, words.rejected);
   check(words.uncovered > 0, "lane B actually sampled uncovered footprints", 1, words.uncovered);
   check(words.clamp_live > 0, "lane B actually sampled the live clamp", 1, words.clamp_live);
+  check(words.edge_probes > 0, "lane B actually probed footprint edges exactly", 1,
+        words.edge_probes);
 
   std::printf(
       "terrain_patch_random: lane A %u vertices over %u patches "
-      "(compose-clamp %u, live-clamp %u, uncovered %u, dirty %u, saturated %u); "
+      "(compose-clamp %u, live-clamp %u, uncovered %u, dirty %u, edge-probes %u, "
+      "saturated %u); "
       "lane B %u vertices over %u patches "
-      "(live-clamp %u, uncovered %u, saturated %u, rejected %u)%s\n",
+      "(live-clamp %u, uncovered %u, edge-probes %u, saturated %u, rejected %u)%s\n",
       lat.vertices, lat.patches, lat.clamp_compose, lat.clamp_live, lat.uncovered, lat.dirty,
-      lat.saturated, words.vertices, words.patches, words.clamp_live, words.uncovered,
-      words.saturated, words.rejected, nightly ? " [nightly]" : "");
+      lat.edge_probes, lat.saturated, words.vertices, words.patches, words.clamp_live,
+      words.uncovered, words.edge_probes, words.saturated, words.rejected,
+      nightly ? " [nightly]" : "");
 
   return zhao::report_and_exit("terrain_patch_random");
 }

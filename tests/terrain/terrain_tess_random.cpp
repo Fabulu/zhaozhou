@@ -85,11 +85,17 @@ void run_lane(Driver& drv, Vzhao_terrain_tess& dut, Rng& rng, int jobs, bool lat
       for (int i = 0; i < 33; ++i) {
         const size_t k = static_cast<size_t>(j) * 33 + static_cast<size_t>(i);
         if (lattice) {
-          // an authored island: height16 relief over a deep keel, EXACT << 8
-          lat.top[k] = static_cast<int32_t>(static_cast<int16_t>(rng.range(-2048, 8192))) << 8;
+          // A LIVE island: authored height16 relief over a deep keel, PLUS the
+          // sub-height16 fx16 detail the §3.4 field chain leaves behind. A
+          // composed lattice is not on the height16 grid, and filling it as if
+          // it were makes every geomorph parent difference even — which hides a
+          // truncation in place of round-half-up completely.
+          lat.top[k] = (static_cast<int32_t>(static_cast<int16_t>(rng.range(-2048, 8192))) << 8) +
+                       rng.range(-255, 255);
           if (dual)
-            lat.bottom[k] = static_cast<int32_t>(static_cast<int16_t>(rng.range(-32000, -8192)))
-                            << 8;
+            lat.bottom[k] =
+                (static_cast<int32_t>(static_cast<int16_t>(rng.range(-32000, -8192))) << 8) +
+                rng.range(-255, 255);
         } else {
           lat.top[k] = static_cast<int32_t>(static_cast<uint32_t>(rng.next() >> 32));
           if (dual) lat.bottom[k] = static_cast<int32_t>(static_cast<uint32_t>(rng.next() >> 32));
