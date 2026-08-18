@@ -249,3 +249,35 @@ runs:
       crosses the 2FF chain as stale freshness — a torn read. Fenced by
       the documented SYSTEM spacing law (vblank-only aborts), header
       rewritten to name that true enforcer. 6 covers, all reached by step 8.
+
+  - property: tests/formal/raster_edgewalk_top_left.sby
+    status: green
+    date: "2026-08-18"
+    commit: 8ad678a
+    lane: formal_raster_edgewalk_top_left
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The §8 D3D top-left fill rule, proved on zhao_raster_fill — the module
+      zhao_raster_edgewalk instantiates 48× per tile row, so the proof and
+      the silicon are the same bytes rather than a restatement. Two laws:
+      a_exact (the narrow (E', rnz, tl) form the RTL evaluates EQUALS
+      `E0 + bias >= 0` on the exactly reconstructed E0, bias 0 / -1) and
+      a_exactly_once (the adjacent-triangle law, charter §20.4: two
+      triangles sharing an edge see E0 and -E0 with complementary top-left
+      flags and accept EXACTLY once — no hole, no double fill, at any
+      subpixel position). TOTAL, not bounded: the harness is combinational
+      with unconstrained inputs, and (E', r) with r in [0,255] is a
+      BIJECTION onto the integers via E0 = 256*E' + r, so free (E', r)
+      ranges over every edge value the decomposition can carry — recorded
+      as an explicit "# SCOPE-TOTAL:" waiver (V19) because there is no
+      horizon for a scope guard to assert. Six covers, all reached: accept,
+      reject, on-the-edge on both bias polarities, and the sub-unit
+      tiebreak (E' = 0, r != 0) that a bias on the floored E' would drop on
+      both sides. The proof was itself mutation-checked before this entry:
+      removing rnz, and forcing a strict `>`, each make a_exactly_once FAIL
+      — so the assertions are live, not decorative. NOT proved here: the
+      edge setup (s64 cross products, winding flip, tile-local saturation)
+      carries 46-bit multipliers that put a whole-module BMC out of reach
+      for this engine; that half is covered by the differential lanes
+      against rast.cpp (20,000 tiles per fast run).
