@@ -933,3 +933,77 @@ Earlier the same day it was the verilate copy-scripts (deleting them makes the
 build fail silently and the old exe run) and mtime-touching (poisons ninja's
 next comparison). The rule that actually works: check that the thing rebuilt,
 by hash or by the linker line, before believing any result.
+
+## Phase 6 complete enough to render: terrain reaches the framebuffer
+
+`TERRAIN.PROJECT` and `TERRAIN.LOD` landed, and with them the chain closes.
+`tests/terrain/terrain_project_chain.cpp` wires FOUR Verilated models with no
+adapter:
+
+    TERRAIN.PROJECT -> GEOM.CLIP -> GEOM.SETUP -> zhao_geom_bin_pipe
+                                                 (BINNER -> EDGEWALK -> EARLYZ
+                                                  -> FRAGMENT -> TILESTORE
+                                                  -> RESOLVE)
+
+Real terrain vertices in, RGB565 framebuffer words out, checked against the
+oracle at every stage. The case worth keeping: a near camera with the eye INSIDE
+the patch drops 8 triangles for a behind-the-eye corner and still draws 24, 174
+records, 15,489 px. That is `terrain.cpp`'s "a near camera used to erase the
+island" law holding through actual hardware rather than through the software
+renderer.
+
+`terrain_lod_tess.cpp` drives the real tessellator from the real LOD block:
+across all 24 interior subpatch boundaries the two sides emit the identical
+vertex set on the shared edge, and the patch tiles exactly (signed areas sum to
+-2A).
+
+Verified here: 140/140, exit 0, format gate clean.
+
+### What composing exposed, again
+
+1. `TERRAIN.TESS` carries one `src_id` per JOB, not per triangle, so a triangle
+   cannot be followed from world vertex to the framebuffer word it produced.
+   That is a charter `source_ids` gap and it only becomes visible when blocks
+   are wired together.
+2. There is no vertex-to-triangle assembler in the ledger between projection and
+   clipping. The increment made PROJECT triangle-in/triangle-out rather than
+   hiding the missing block behind C++ glue, and recorded the cost: a shared
+   lattice vertex is projected up to six times. `GEOM.WCACHE` is the fix and it
+   is phase 8.
+
+### Three mutations came back green, and they were findings
+
+- A uniform row-sum scaling is invisible to the chain because projection is
+  HOMOGENEOUS: ndc is unchanged, only `1/w` moves, and the depth test is off.
+- A B/C vertex swap is invisible because `GEOM.CLIP` normalises winding.
+- Random input never produces `clip.w == 0` or `dev == distance` exactly, which
+  is the entire reason hand-built boundary cases exist.
+
+Meanwhile a transposed neighbour index left BOTH blocks internally consistent
+and only the composition called it a tear. That is the argument for composition
+tests in one line.
+
+### Three coverage counters were zero while every differential passed
+
+Lane A started every subpatch at the finest level, so the ladder only ever
+walked one way; lane B drew the morph factor uniformly, so a refine could never
+commit; lane B's coordinates sat at the word limit where every level passes. All
+three fixed, and the lanes now assert they reach those states. A green random
+lane that sampled nothing is not evidence.
+
+## Synthesis reaches the new RTL
+
+`31db6cf` extends `run_block_fit.ps1` with `-ExtraSources`, because everything
+built today lives outside the shell cone and the runner could not reach any of
+it. Same QSF, same flow, so one lane characterizes both rather than a second
+drifting from the first.
+
+First placed-and-routed results for work from this session:
+
+    zhao_raster_fill    23 ALMs
+    zhao_raster_quant   39 ALMs
+
+A sweep of the remaining 19 new modules is running. Limitations unchanged and
+carried in the JSON: provisional device, virtual I/O, no board, and a per-block
+fit says nothing about the composed machine's routing or timing closure. Phase 0
+stays blocked. Nothing has been programmed onto a device.
