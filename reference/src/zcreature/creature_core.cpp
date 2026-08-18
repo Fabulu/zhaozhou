@@ -310,13 +310,13 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     rx(pq, X);
     ry(yq, Y);
     std::array<int32_t, 9> R{};
-    // X entries are 0 or +-65536, so X/65536 is the exact integer {-1,0,1};
-    // each R row is +-one row of Y (a quarter turn has one nonzero per row),
-    // so R stays in {0, +-65536} — fx16 raw scale, zero rounding anywhere.
+    // Apply pitch first, then yaw: R = Ry * Rx, matching the authored axis
+    // convention above. Both inputs are signed permutation matrices, so the
+    // product remains exact in {0, +-65536}.
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
-        R[i * 3 + j] = X[i * 3 + 0] / 65536 * Y[0 * 3 + j] + X[i * 3 + 1] / 65536 * Y[1 * 3 + j] +
-                       X[i * 3 + 2] / 65536 * Y[2 * 3 + j];
+        R[i * 3 + j] = Y[i * 3 + 0] / 65536 * X[0 * 3 + j] + Y[i * 3 + 1] / 65536 * X[1 * 3 + j] +
+                       Y[i * 3 + 2] / 65536 * X[2 * 3 + j];
     return R;
   }();
 
@@ -487,6 +487,18 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   int64_t max_r2 = 0;
   for (const RingPart& p : parts) {
     for (Meshlet& m : build_ring_part(p)) {
+      // RingPart vertices are authored in bone-local bind space. Store the
+      // compiled payload in creature-global bind space so S=A*inv_rest keeps
+      // the part attached at that bone in the identity pose instead of piling
+      // every rigid part at the root.
+      const int32_t bx = out.baked.world_x[p.bone];
+      const int32_t by = out.baked.world_y[p.bone];
+      const int32_t bz = out.baked.world_z[p.bone];
+      for (SkinVertex& v : m.verts) {
+        v.x += bx;
+        v.y += by;
+        v.z += bz;
+      }
       for (const SkinVertex& v : m.verts) {
         const int64_t r2 = static_cast<int64_t>(v.x) * v.x + static_cast<int64_t>(v.y) * v.y +
                            static_cast<int64_t>(v.z) * v.z;
@@ -516,7 +528,17 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       rs.segments = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
       d.rings.push_back(rs);
     }
-    for (Meshlet& m : build_ring_part(d)) out.micro.push_back(std::move(m));
+    for (Meshlet& m : build_ring_part(d)) {
+      const int32_t bx = out.baked.world_x[p.bone];
+      const int32_t by = out.baked.world_y[p.bone];
+      const int32_t bz = out.baked.world_z[p.bone];
+      for (SkinVertex& v : m.verts) {
+        v.x += bx;
+        v.y += by;
+        v.z += bz;
+      }
+      out.micro.push_back(std::move(m));
+    }
 
     // error term 1: dropped rings — radius deviation from the linear blend
     // of the kept neighbours (lattice_lerp: the ONE shared lerp, 29-6)

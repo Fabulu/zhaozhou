@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -357,6 +358,17 @@ void test_ring_builder() {
   std::vector<zc::Meshlet> taper = zc::build_ring_part(cone);
   check_eq(taper.size(), 1, "cone single meshlet");
   check_eq(taper[0].idx.size() / 3, 8 + 4, "zipper tri count n + m");
+
+  // Combined quarter turns obey the documented order: pitch maps the local
+  // ring axis +Y to +Z, then yaw maps +Z to +X.
+  zc::RingPart oriented;
+  oriented.rings = {{0, 0, 3}, {M1, 0, 3}};
+  oriented.pitch_q = 1;
+  oriented.yaw_q = 1;
+  const std::vector<zc::Meshlet> turned = zc::build_ring_part(oriented);
+  check_eq(turned[0].verts[3].x, M1, "pitch then yaw maps +Y ring axis to +X");
+  check_eq(turned[0].verts[3].y, 0, "combined quarter turn y lane");
+  check_eq(turned[0].verts[3].z, 0, "combined quarter turn z lane");
 }
 
 // ---- 6. compile + bound radius + micro error ---------------------------------
@@ -379,6 +391,29 @@ void test_compile() {
   check_eq(t.glint_error, t.bound_radius, "glint error = R");
   check_eq(t.splat_error, t.bound_radius / 2, "splat error = R/2");
   check(t.micro_error >= 0 && t.micro.size() >= 1, "micro built");
+
+  // Ring parts are bone-local authoring. Compilation translates them to the
+  // bone's world-rest attachment before the inverse-bind skin palette is used.
+  zc::Skeleton attached_sk;
+  attached_sk.bone_count = 2;
+  attached_sk.bones[0] = zc::Bone{0, 0, 0, 0};
+  attached_sk.bones[1] = zc::Bone{0, 2 * M1, M1, -M1};
+  zc::ClipBank attached_bank = identity_bank(2, 1);
+  zc::RingPart attached_part = body;
+  attached_part.bone = 1;
+  zc::CreatureType attached;
+  check(zc::compile_creature(attached_sk, attached_bank, {attached_part}, attached, &reason),
+        "compile attached rigid part");
+  int32_t min_x = std::numeric_limits<int32_t>::max();
+  int32_t max_x = std::numeric_limits<int32_t>::min();
+  for (const zc::Meshlet& m : attached.mesh) {
+    for (const zc::SkinVertex& v : m.verts) {
+      min_x = std::min(min_x, v.x);
+      max_x = std::max(max_x, v.x);
+    }
+  }
+  check(min_x >= 3 * M1 / 2 && max_x <= 5 * M1 / 2,
+        "compiled vertices include child bone world-rest attachment");
 
   // validation: 5 events on one frame rejected (creature_rules 2.1 <= 4)
   zc::ClipBank bad_bank = identity_bank(1, 4);

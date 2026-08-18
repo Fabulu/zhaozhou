@@ -50,10 +50,11 @@
 #include "wave_pool.hpp"    // compiler/tests/generated (TS-generated)
 #include "zfield/zfield.hpp"
 #include "zref/zref_creature.hpp"  // creature reference core (creature_rules.md)
-#include "zref/zref_star.hpp"     // celestial compositor preview (stars_and_flares.md)
-#include "zref/zref_terrain.hpp"  // dual-heightfield bake/breach reference
-#include "zrender/internal.hpp"   // compose_lattice for the sim-side tilt taps
+#include "zref/zref_star.hpp"      // celestial compositor preview (stars_and_flares.md)
+#include "zref/zref_terrain.hpp"   // dual-heightfield bake/breach reference
+#include "zrender/internal.hpp"    // compose_lattice for the sim-side tilt taps
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -209,8 +210,7 @@ zhao_abi::ZhMat4fx mat4_mul(const zhao_abi::ZhMat4fx& a, const zhao_abi::ZhMat4f
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j) {
       __int128 sum = 0;
-      for (int k = 0; k < 4; ++k)
-        sum += static_cast<__int128>(A[i * 4 + k]) * B[k * 4 + j];
+      for (int k = 0; k < 4; ++k) sum += static_cast<__int128>(A[i * 4 + k]) * B[k * 4 + j];
       R[i * 4 + j] = static_cast<int32_t>(sum >> 16);
     }
   return r;
@@ -276,9 +276,9 @@ zhao_abi::ZhMat4fx cam_pitch(int32_t k, int32_t eye_m, int32_t dist_m, int32_t p
 constexpr uint8_t c8(uint8_t c6) { return static_cast<uint8_t>((c6 << 2) | (c6 >> 4)); }
 
 struct CelAssets {
-  zref::star::Sprite8 face;         // starface for the subject's class
-  zref::star::Sprite8 corona;       // corona variant
-  uint8_t ramp[64][3];              // built ramp (slew state at targets)
+  zref::star::Sprite8 face;    // starface for the subject's class
+  zref::star::Sprite8 corona;  // corona variant
+  uint8_t ramp[64][3];         // built ramp (slew state at targets)
   std::vector<zref::star::GlintPoint> glints;
 };
 
@@ -288,8 +288,8 @@ struct CelCtx {
   const SceneSubject* sub = nullptr;
   uint32_t frame = 0;
   CelAssets* assets = nullptr;
-  zref::star::FlareSlots slots;         // persists across the loop (the fade)
-  zref::star::TrailHistory trails[2];   // §15 rings, persist across the loop
+  zref::star::FlareSlots slots;        // persists across the loop (the fade)
+  zref::star::TrailHistory trails[2];  // §15 rings, persist across the loop
 };
 
 // Starfield backdrop: the §7 sector hash over the ±4 cube around sector
@@ -360,10 +360,10 @@ void cel_build_assets(int celestial, CelAssets& a) {
       cls = 0;  // S00 yellow star: the classic flare
       break;
     case 3:
-      cls = 11;   // S11 pulsar
-      core16 = 8; // halo_airless: hard core + short skirt — few ring
-                  // colours under the strobing burst (palette law), and a
-                  // crisp look that suits a compact object
+      cls = 11;    // S11 pulsar
+      core16 = 8;  // halo_airless: hard core + short skirt — few ring
+                   // colours under the strobing burst (palette law), and a
+                   // crisp look that suits a compact object
       break;
     case 4:
       cls = 0;
@@ -456,12 +456,11 @@ std::unique_ptr<zref::render::Tileset> island_tileset() {
   // strata 10..14, underside 15..16) - small on purpose: the palette law
   // counts texel x shade x tint products, and 256 is the ceiling
   const uint8_t rgb888[][3] = {
-      {86, 138, 60},    {104, 156, 70},  {122, 172, 78},  {140, 186, 88},   // grass
-      {128, 116, 98},   {110, 99, 84},   {146, 133, 112}, {96, 86, 73},     // rock
-      {176, 160, 118},  {192, 176, 132},                                     // sand
-      {122, 100, 78},   {104, 84, 64},   {140, 118, 92},  {88, 70, 54},
-      {150, 130, 104},                                                       // strata
-      {92, 80, 66},     {76, 66, 54},                                         // under
+      {86, 138, 60},   {104, 156, 70},  {122, 172, 78},  {140, 186, 88},                   // grass
+      {128, 116, 98},  {110, 99, 84},   {146, 133, 112}, {96, 86, 73},                     // rock
+      {176, 160, 118}, {192, 176, 132},                                                    // sand
+      {122, 100, 78},  {104, 84, 64},   {140, 118, 92},  {88, 70, 54},   {150, 130, 104},  // strata
+      {92, 80, 66},    {76, 66, 54},                                                       // under
   };
   const int NPAL = static_cast<int>(sizeof(rgb888) / sizeof(rgb888[0]));
   for (int k = 0; k < NPAL; ++k) {
@@ -579,13 +578,17 @@ zref::render::TerrainPatch dual_island_patch() {
       const double t = r / coast_r(x, z);  // 0 heart .. 1 rim
       // candidates: grass family in the heart, rock family at the coast;
       // the weight dithers the ring between them (Mosaic, 6.2)
-      p.mat_a[c] = static_cast<uint8_t>(next15() & 7);        // grass 0..7
-      p.mat_b[c] = static_cast<uint8_t>(16 + (next15() & 7)); // rock 16..23
+      p.mat_a[c] = static_cast<uint8_t>(next15() & 7);         // grass 0..7
+      p.mat_b[c] = static_cast<uint8_t>(16 + (next15() & 7));  // rock 16..23
       int w = 0;
-      if (t < 0.62) w = 255;
-      else if (t < 0.82) w = 160;
-      else if (t < 0.92) w = 96;
-      else if (t < 0.985) w = 32;
+      if (t < 0.62)
+        w = 255;
+      else if (t < 0.82)
+        w = 160;
+      else if (t < 0.92)
+        w = 96;
+      else if (t < 0.985)
+        w = 32;
       p.mat_w[c] = static_cast<uint8_t>(w);
       // sand collar right at the lip (the beach reads the coastline)
       if (t >= 0.92 && next15() < 3) {
@@ -687,7 +690,7 @@ struct SceneSubject {
   //   4 flare-occlusion (surface dusk: the sun crosses behind the island,
   //     the probe fade Noctis lacked)
   int celestial = 0;
-  bool space = false;  // no DrawSky (fallback black), no terrain
+  bool space = false;   // no DrawSky (fallback black), no terrain
   int sky_variant = 0;  // dusk_sky variant (1 = flat upper band, still C0)
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
@@ -724,8 +727,8 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
   L.ramp = a.ramp;
   L.face = &a.face;
   L.corona = &a.corona;
-  L.trail = &ctx.trails[0];  // §15: history persists across the loop; the
-                             // static-skip law keeps resting subjects clean
+  L.trail = &ctx.trails[0];     // §15: history persists across the loop; the
+                                // static-skip law keeps resting subjects clean
   zref::star::ComposeLight L2;  // the S08 multiple system's companion body
   L2.ramp = a.ramp;
   L2.face = &a.face;
@@ -764,7 +767,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 150;
       L.disc_r_px = 8;
       L.halo_r_px = 16;
-      L.ghost_r_px = 12;  // bounded smear overlaps at ~12 px/frame
+      L.ghost_r_px = 12;                                   // bounded smear overlaps at ~12 px/frame
       L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
@@ -962,55 +965,67 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
 namespace zc = zref::creature;
 
 // The demo subject: a watchdog quadruped. Ring parts are rigid per bone
-// (donor law); the body lies along Z via an EXACT quarter turn (pitch_q=1).
-// 7 bones, 6 parts, authored in integer constants only.
+// (donor law). Its authored forward axis is +X: pitch maps each body/head ring
+// stack +Y -> +Z, then yaw maps +Z -> +X. Six bones/parts: torso, head, and
+// four independently animated legs.
 const zc::CreatureType& watchdog_type() {
   static const zc::CreatureType t = [] {
     zc::Skeleton sk;
-    sk.bone_count = 7;
+    sk.bone_count = 6;
     sk.bones[0] = zc::Bone{0, 0, fxm(520), 0};
-    sk.bones[1] = zc::Bone{0, 0, fxm(120), fxm(420)};
-    sk.bones[2] = zc::Bone{0, -fxm(180), -fxm(50), fxm(260)};
-    sk.bones[3] = zc::Bone{0, fxm(180), -fxm(50), fxm(260)};
-    sk.bones[4] = zc::Bone{0, -fxm(180), -fxm(50), -fxm(260)};
-    sk.bones[5] = zc::Bone{0, fxm(180), -fxm(50), -fxm(260)};
+    sk.bones[1] = zc::Bone{0, fxm(390), fxm(80), 0};
+    sk.bones[2] = zc::Bone{0, fxm(300), -fxm(20), -fxm(180)};
+    sk.bones[3] = zc::Bone{0, fxm(300), -fxm(20), fxm(180)};
+    sk.bones[4] = zc::Bone{0, -fxm(300), -fxm(20), -fxm(180)};
+    sk.bones[5] = zc::Bone{0, -fxm(300), -fxm(20), fxm(180)};
 
     std::vector<zc::RingPart> parts;
     zc::RingPart body;
-    body.rings = {{-fxm(280), fxm(200), 10}, {-fxm(140), fxm(265), 10}, {0, fxm(280), 10},
-                  {fxm(140), fxm(265), 10}, {fxm(280), fxm(200), 10}};
+    body.rings = {{-fxm(450), fxm(145), 10},
+                  {-fxm(300), fxm(185), 10},
+                  {0, fxm(205), 10},
+                  {fxm(300), fxm(185), 10},
+                  {fxm(450), fxm(145), 10}};
     body.caps = zc::kCapTop | zc::kCapBot;
-    body.pitch_q = 1;  // exact quarter turn: stack along +Z (the facing axis)
+    body.pitch_q = 1;
+    body.yaw_q = 1;
     body.bone = 0;
-    body.r = 198; body.g = 108; body.b = 58;
+    body.r = 198;
+    body.g = 108;
+    body.b = 58;
     parts.push_back(body);
 
     zc::RingPart head;
-    head.rings = {{0, fxm(125), 8}, {fxm(150), fxm(115), 8}, {fxm(300), fxm(80), 8}};
+    head.rings = {{-fxm(80), fxm(135), 8}, {fxm(110), fxm(120), 8}, {fxm(300), fxm(75), 8}};
     head.caps = zc::kCapTop | zc::kCapBot;
     head.pitch_q = 1;
+    head.yaw_q = 1;
     head.bone = 1;
-    head.r = 232; head.g = 168; head.b = 96;
+    head.r = 232;
+    head.g = 168;
+    head.b = 96;
     parts.push_back(head);
 
     for (int leg = 0; leg < 4; ++leg) {
       zc::RingPart lp;
-      lp.rings = {{0, fxm(60), 6}, {-fxm(250), fxm(55), 6}, {-fxm(500), fxm(45), 6}};
+      lp.rings = {{0, fxm(55), 6}, {-fxm(260), fxm(48), 6}, {-fxm(520), fxm(38), 6}};
       lp.caps = zc::kCapTop | zc::kCapBot;
       lp.bone = static_cast<uint8_t>(2 + leg);
-      lp.r = 122; lp.g = 74; lp.b = 52;
+      lp.r = 122;
+      lp.g = 74;
+      lp.b = 52;
       parts.push_back(lp);
     }
 
     // clip bank: slot 1 idle (breathing bob), slot 2 walk (16 keys).
     // Authored through the fx trig tables — the integer path.
     zc::ClipBank bank;
-    bank.bone_count = 7;
+    bank.bone_count = 6;
     zc::Clip idle;
     idle.slot_id = 1;
     idle.frame_count = 32;
     idle.root.assign(32 * 3, 0);
-    idle.quats.assign(static_cast<size_t>(32) * 7, zc::quat16_identity());
+    idle.quats.assign(static_cast<size_t>(32) * 6, zc::quat16_identity());
     for (uint16_t f = 0; f < 32; ++f) {
       const zref::angle16 breathe{static_cast<uint16_t>(f * (65536u / 32u))};
       idle.root[f * 3 + 1] = (zref::fx_sin(breathe).raw * 520) >> 16;  // +-8 mm
@@ -1021,31 +1036,29 @@ const zc::CreatureType& watchdog_type() {
     walk.slot_id = 2;
     walk.frame_count = 16;
     walk.root.assign(16 * 3, 0);
-    walk.quats.assign(static_cast<size_t>(16) * 7, zc::quat16_identity());
-    // swing: legs +-0.30 rad about X, diagonal pairs in antiphase; head
-    // nods; root bobs at double frequency. Half-angle as angle16 via a
-    // linear map of the table sine (all integer).
+    walk.quats.assign(static_cast<size_t>(16) * 6, zc::quat16_identity());
+    // Stride: legs swing +-0.30 rad about Z, so the upright legs move along
+    // the authored +X forward axis. Diagonal pairs run in antiphase; the root
+    // lowers by the lost vertical reach so at least one pair stays planted.
     for (uint16_t f = 0; f < 16; ++f) {
       const zref::angle16 ph{static_cast<uint16_t>(f * (65536u / 16u))};
       const int32_t s1 = zref::fx_sin(ph).raw;
       const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph.raw * 2)}).raw;
       for (int b = 2; b <= 5; ++b) {
-        const bool diagonalA = (b == 2 || b == 5);
-        const int32_t swing = (diagonalA ? s1 : -s1) * 1565 >> 16;  // 0.15 rad half
+        const bool diagonal_a = (b == 2 || b == 5);
+        const int32_t swing = (diagonal_a ? s1 : -s1) * 1565 >> 16;
         const zref::angle16 half{static_cast<uint16_t>(swing & 0xFFFF)};
-        walk.quats[static_cast<size_t>(f) * 7 + b] =
-            zc::quat16_axis_angle(zref::fx16{1 << 16}, zref::fx16{0}, zref::fx16{0}, zref::fx_sin(half),
-                                  zref::fx_cos(half));
+        walk.quats[static_cast<size_t>(f) * 6 + b] =
+            zc::quat16_axis_angle(zref::fx16{0}, zref::fx16{0}, zref::fx16{1 << 16},
+                                  zref::fx_sin(half), zref::fx_cos(half));
       }
       const int32_t nod = (s2 * 400) >> 16;
       const zref::angle16 halfh{static_cast<uint16_t>(nod & 0xFFFF)};
-      walk.quats[static_cast<size_t>(f) * 7 + 1] =
-          zc::quat16_axis_angle(zref::fx16{1 << 16}, zref::fx16{0}, zref::fx16{0}, zref::fx_sin(halfh),
-                                zref::fx_cos(halfh));
-      walk.root[f * 3 + 1] = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph.raw * 2 + 0x4000)})
-                                  .raw *
-                              1640) >>
-                             16;  // +-25 mm bob
+      walk.quats[static_cast<size_t>(f) * 6 + 1] =
+          zc::quat16_axis_angle(zref::fx16{0}, zref::fx16{0}, zref::fx16{1 << 16},
+                                zref::fx_sin(halfh), zref::fx_cos(halfh));
+      walk.root[f * 3 + 1] =
+          -static_cast<int32_t>((static_cast<int64_t>(std::abs(s1)) * fxm(23)) >> 16);
     }
     walk.events = {{0, zc::kEvFoot, 0}, {8, zc::kEvFoot, 1}};
     bank.clips.push_back(std::move(walk));
@@ -1061,11 +1074,75 @@ const zc::CreatureType& watchdog_type() {
   return t;
 }
 
+struct ReelGibPiece {
+  int32_t x = 0, y = 0, z = 0;
+  int32_t vx = 0, vy = 0, vz = 0;
+  int32_t half_extent = 0;
+  uint16_t yaw = 0, pitch = 0;
+  uint16_t yaw_step = 0, pitch_step = 0;
+  uint16_t age = 0, lifetime = 0;
+  uint8_t r = 0, g = 0, b = 0;
+};
+
+void spawn_reel_gibs(const zc::CreatureType& type, const zc::mat3x4fx* pose, int32_t wx, int32_t wy,
+                     int32_t wz, int32_t ground, std::vector<ReelGibPiece>& out) {
+  std::vector<zc::Gib> points;
+  zc::spawn_gibs(type, pose, zref::fx16{wx}, zref::fx16{wy}, zref::fx16{wz}, 0x600DF00Du, points);
+  out.clear();
+  for (size_t i = 0; i < points.size() && out.size() < 18; i += 3) {
+    const zc::Gib& src = points[i];
+    ReelGibPiece p;
+    p.x = src.x;
+    p.y = src.y;
+    p.z = src.z;
+    p.vx = src.vx / 4 + (src.x >= wx ? fxm(55) : -fxm(55));
+    p.vy = std::max(fxm(150), src.vy / 5);
+    p.vz = src.vz / 4 + (src.z >= wz ? fxm(45) : -fxm(45));
+    p.half_extent = fxm(55 + static_cast<int32_t>(i % 4) * 10);
+    if (p.y < ground + p.half_extent) p.y = ground + p.half_extent;
+    p.yaw = static_cast<uint16_t>(0x0713u * (i + 1));
+    p.pitch = static_cast<uint16_t>(0x0B47u * (i + 3));
+    p.yaw_step = static_cast<uint16_t>(0x0311u + (i % 5) * 0x0097u);
+    p.pitch_step = static_cast<uint16_t>(0x021Du + (i % 7) * 0x0061u);
+    p.lifetime = static_cast<uint16_t>(28 + i % 5);
+    p.r = src.r;
+    p.g = src.g;
+    p.b = src.b;
+    out.push_back(p);
+  }
+}
+
+void advance_reel_gibs(std::vector<ReelGibPiece>& pieces, int32_t ground, int32_t gravity) {
+  for (auto it = pieces.begin(); it != pieces.end();) {
+    ReelGibPiece& p = *it;
+    ++p.age;
+    if (p.age >= p.lifetime) {
+      it = pieces.erase(it);
+      continue;
+    }
+    p.x += p.vx;
+    p.y += p.vy;
+    p.z += p.vz;
+    p.vy -= gravity;
+    const int32_t floor = ground + p.half_extent;
+    if (p.y < floor) {
+      p.y = floor;
+      if (p.vy < 0) p.vy = -p.vy / 3;
+      p.vx = p.vx * 3 / 4;
+      p.vz = p.vz * 3 / 4;
+    }
+    p.yaw = static_cast<uint16_t>(p.yaw + p.yaw_step);
+    p.pitch = static_cast<uint16_t>(p.pitch + p.pitch_step);
+    ++it;
+  }
+}
+
 struct CreatureReelCtx {
   zc::CreatureInstance* inst = nullptr;
   zc::PoseBank* poses = nullptr;
   zref::mat4fx vp;
-  std::vector<zc::Gib>* gibs = nullptr;
+  std::vector<ReelGibPiece>* gibs = nullptr;
+  uint32_t gibs_in_view = 0;
 };
 
 void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
@@ -1075,10 +1152,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   {
     // telemetry: rung, projected radius, screen bbox of the skinned mesh
     const zc::CreatureType& T = *c.inst->type;
-    const zref::vec4fx clip = zref::mat4_vec4(
-        c.vp, zref::vec4fx{zref::fx16{c.inst->x}, zref::fx16{c.inst->y}, zref::fx16{c.inst->z},
-                           zref::fx16{1 << 16}},
-        nullptr);
+    const zref::vec4fx clip =
+        zref::mat4_vec4(c.vp,
+                        zref::vec4fx{zref::fx16{c.inst->x}, zref::fx16{c.inst->y},
+                                     zref::fx16{c.inst->z}, zref::fx16{1 << 16}},
+                        nullptr);
     const zref::render::Viewport vpp{0, 0, w, h};
     const zref::render::ProjOut pc = zref::render::project_vertex(
         c.vp, vpp, zref::fx16{c.inst->x}, zref::fx16{c.inst->y}, zref::fx16{c.inst->z}, nullptr);
@@ -1093,31 +1171,64 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   }
 #endif
   zc::compose_creatures(rgb, depth, w, h, c.vp, &c.inst, 1, *c.poses, nullptr);
+  c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
-  // gib particles: projected squares at fixed depth (the PART.SPAWN burst
-  // stand-in; DrawPopulation draws the shipping version)
+
+  // Reel-only detached chunks: each piece is a separately translated and
+  // rotating cube, depth-tested through zrender's raster. This is deliberately
+  // a fixed fragment list, not a new particle or rigging framework.
   zref::render::WorkSurface surf;
   surf.w = w;
   surf.h = h;
   surf.rgb.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
   surf.depth.assign(depth, depth + static_cast<size_t>(w) * h);
   const zref::render::Viewport vpp{0, 0, w, h};
-  for (const zc::Gib& g : *c.gibs) {
-    const zref::render::ProjOut pc =
-        zref::render::project_vertex(c.vp, vpp, zref::fx16{g.x}, zref::fx16{g.y}, zref::fx16{g.z},
-                                     nullptr);
-    if (!pc.in) continue;
-    const int32_t r8 = static_cast<int32_t>(g.size) * 16;  // U 0.4.4 px -> S12.8
-    zref::render::ScreenV a = pc.s, b = pc.s, d = pc.s, e = pc.s;
-    a.x = pc.s.x - r8; a.y = pc.s.y - r8;
-    b.x = pc.s.x + r8; b.y = pc.s.y - r8;
-    d.x = pc.s.x + r8; d.y = pc.s.y + r8;
-    e.x = pc.s.x - r8; e.y = pc.s.y + r8;
-    zref::render::TriMode tm;
-    tm.use_fixed_depth = true;
-    tm.fixed_depth = pc.s.d;
-    zref::render::raster_tri(surf, vpp, a, b, d, g.r, g.g, g.b, tm);
-    zref::render::raster_tri(surf, vpp, a, d, e, g.r, g.g, g.b, tm);
+  constexpr uint8_t kTri[12][3] = {{0, 2, 1}, {0, 3, 2}, {4, 5, 6}, {4, 6, 7},
+                                   {0, 1, 5}, {0, 5, 4}, {3, 7, 6}, {3, 6, 2},
+                                   {0, 4, 7}, {0, 7, 3}, {1, 2, 6}, {1, 6, 5}};
+  constexpr uint16_t kFaceShade[6] = {176, 224, 192, 240, 160, 208};
+  for (const ReelGibPiece& g : *c.gibs) {
+    const zref::render::ProjOut centre = zref::render::project_vertex(
+        c.vp, vpp, zref::fx16{g.x}, zref::fx16{g.y}, zref::fx16{g.z}, nullptr);
+    if (!centre.in) continue;
+    ++c.gibs_in_view;
+
+    const uint16_t remaining = static_cast<uint16_t>(g.lifetime - g.age);
+    const int32_t half =
+        remaining < 6 ? static_cast<int32_t>((static_cast<int64_t>(g.half_extent) * remaining) / 6)
+                      : g.half_extent;
+    const int32_t cy = zref::fx_cos(zref::angle16{g.yaw}).raw;
+    const int32_t sy = zref::fx_sin(zref::angle16{g.yaw}).raw;
+    const int32_t cp = zref::fx_cos(zref::angle16{g.pitch}).raw;
+    const int32_t sp = zref::fx_sin(zref::angle16{g.pitch}).raw;
+    std::array<zref::render::ProjOut, 8> pv;
+    for (int vi = 0; vi < 8; ++vi) {
+      const int32_t lx = (vi & 1) != 0 ? half : -half;
+      const int32_t ly = (vi & 2) != 0 ? half : -half;
+      const int32_t lz = (vi & 4) != 0 ? half : -half;
+      const int32_t x1 = zref::rescale_s32(
+          static_cast<int64_t>(cy) * lx + static_cast<int64_t>(sy) * lz, 16, nullptr);
+      const int32_t z1 = zref::rescale_s32(
+          -static_cast<int64_t>(sy) * lx + static_cast<int64_t>(cy) * lz, 16, nullptr);
+      const int32_t y2 = zref::rescale_s32(
+          static_cast<int64_t>(cp) * ly - static_cast<int64_t>(sp) * z1, 16, nullptr);
+      const int32_t z2 = zref::rescale_s32(
+          static_cast<int64_t>(sp) * ly + static_cast<int64_t>(cp) * z1, 16, nullptr);
+      pv[vi] = zref::render::project_vertex(c.vp, vpp, zref::fx16{g.x + x1}, zref::fx16{g.y + y2},
+                                            zref::fx16{g.z + z2}, nullptr);
+    }
+    for (int ti = 0; ti < 12; ++ti) {
+      const zref::render::ProjOut& a = pv[kTri[ti][0]];
+      const zref::render::ProjOut& b = pv[kTri[ti][1]];
+      const zref::render::ProjOut& d = pv[kTri[ti][2]];
+      if (!a.in || !b.in || !d.in) continue;
+      const uint16_t shade = kFaceShade[ti / 2];
+      zref::render::TriMode tm;
+      zref::render::raster_tri(surf, vpp, a.s, b.s, d.s,
+                               static_cast<uint8_t>((g.r * shade + 128) >> 8),
+                               static_cast<uint8_t>((g.g * shade + 128) >> 8),
+                               static_cast<uint8_t>((g.b * shade + 128) >> 8), tm);
+    }
   }
   std::memcpy(rgb, surf.rgb.data(), surf.rgb.size());
   std::memcpy(depth, surf.depth.data(), surf.depth.size() * sizeof(int32_t));
@@ -1192,14 +1303,20 @@ int render_scene(const SceneSubject& sub) {
   const zc::CreatureType* dog = nullptr;
   zc::CreatureInstance dog_inst;
   zc::PoseBank dog_poses;
-  std::vector<zc::Gib> gibs;
+  std::vector<ReelGibPiece> gibs;
   CreatureReelCtx cr_ctx;
   int32_t pop_threshold = 0;
   int32_t gib_gravity = 0;
+  uint32_t gib_spawn_frame = sub.frames;
+  uint32_t gib_spawn_count = 0;
+  uint32_t gib_visible_frames = 0;
+  int32_t gib_initial_span = 0;
+  int32_t gib_max_span = 0;
   if (sub.creature != 0) {
     dog = &watchdog_type();
     dog_inst.type = dog;
     dog_inst.tilt_mode = zc::TiltMode::kCompletely;
+    dog_inst.facing = zref::angle16{0x1000};       // front-quarter read, 22.5 degrees
     dog_inst.anim.cut(sub.creature == 1 ? 2 : 1);  // walk / idle
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
@@ -1259,12 +1376,18 @@ int render_scene(const SceneSubject& sub) {
     // (physics equals pixels, terrain_rules 4.1).
     int32_t cam_eye = sub.cam_eye, cam_dist = sub.cam_dist, cam_bias = sub.cam_bias;
     if (dog != nullptr) {
+      if (!gibs.empty() && f > gib_spawn_frame) {
+        advance_reel_gibs(gibs, dog_inst.y, gib_gravity);
+      }
       if (sub.cam_pull && f >= sub.cam_pull0) {
         const int64_t n = sub.frames - sub.cam_pull0;
         const int64_t k = f - sub.cam_pull0;
-        cam_eye = static_cast<int32_t>(sub.cam_eye + (k * (sub.cam2_eye - sub.cam_eye) + n / 2) / n);
-        cam_dist = static_cast<int32_t>(sub.cam_dist + (k * (sub.cam2_dist - sub.cam_dist) + n / 2) / n);
-        cam_bias = static_cast<int32_t>(sub.cam_bias + (k * (sub.cam2_bias - sub.cam_bias) + n / 2) / n);
+        cam_eye =
+            static_cast<int32_t>(sub.cam_eye + (k * (sub.cam2_eye - sub.cam_eye) + n / 2) / n);
+        cam_dist =
+            static_cast<int32_t>(sub.cam_dist + (k * (sub.cam2_dist - sub.cam_dist) + n / 2) / n);
+        cam_bias =
+            static_cast<int32_t>(sub.cam_bias + (k * (sub.cam2_bias - sub.cam_bias) + n / 2) / n);
       }
       std::vector<zref::render::FieldApp> fapps;
       for (const FieldSpec& fs : sub.fields) {
@@ -1284,9 +1407,12 @@ int render_scene(const SceneSubject& sub) {
           patch, rtest::xform_identity(), fapps, tick, nullptr, nullptr);
 
       if (sub.creature == 1) {
-        // walk: root motion + ground snap, 8 anim ticks per frame
-        dog_inst.x += fxm(22);
-        dog_inst.facing = zref::angle16{0};
+        // walk: root motion follows the authored +X forward axis at a
+        // front-quarter yaw; four independent legs carry the 16-key stride.
+        const int32_t fc = zref::fx_cos(dog_inst.facing).raw;
+        const int32_t fs = zref::fx_sin(dog_inst.facing).raw;
+        dog_inst.x += zref::rescale_s32(static_cast<int64_t>(fxm(22)) * fc, 16, nullptr);
+        dog_inst.z -= zref::rescale_s32(static_cast<int64_t>(fxm(22)) * fs, 16, nullptr);
         for (int t = 0; t < 8; ++t) {
           const zc::ClipEvent* fired = nullptr;
           uint8_t nf = 0;
@@ -1303,8 +1429,8 @@ int render_scene(const SceneSubject& sub) {
         }
         // bulk inflation: target ramps from frame 16; crossing the species
         // pop threshold gibs the creature (mesh removed, burst spawned)
-        dog_inst.bulk.target = f < 16 ? (1 << 16)
-                                   : static_cast<int32_t>(65536 + (f - 16) * (65536 * 14 / 10) / 24);
+        dog_inst.bulk.target =
+            f < 16 ? (1 << 16) : static_cast<int32_t>(65536 + (f - 16) * (65536 * 14 / 10) / 24);
         for (int t = 0; t < 8; ++t) zc::bulk_update(dog_inst.bulk, 4);
         if (dog_inst.visible && zc::bulk_popped(dog_inst.bulk, pop_threshold)) {
           dog_inst.visible = false;
@@ -1317,28 +1443,56 @@ int render_scene(const SceneSubject& sub) {
           for (int b = 0; b < dog->bank.bone_count; ++b) {
             for (int i = 0; i < 3; ++i)
               for (int j = 0; j < 3; ++j)
-                pose[b].m[i * 4 + j] = zref::rescale_s32(
-                    static_cast<int64_t>(pose[b].m[i * 4 + j]) * bs, 16, nullptr);
+                pose[b].m[i * 4 + j] =
+                    zref::rescale_s32(static_cast<int64_t>(pose[b].m[i * 4 + j]) * bs, 16, nullptr);
           }
-          zc::spawn_gibs(*dog, pose.data(), zref::fx16{dog_inst.x}, zref::fx16{dog_inst.y},
-                         zref::fx16{dog_inst.z}, 0x600DF00Du, gibs);
+          spawn_reel_gibs(*dog, pose.data(), dog_inst.x, dog_inst.y, dog_inst.z, dog_inst.y, gibs);
+          gib_spawn_frame = f;
+          gib_spawn_count = static_cast<uint32_t>(gibs.size());
+          if (gib_spawn_count < 12) {
+            std::fprintf(stderr, "%s frame %u: only %u detached pieces spawned (need >=12)\n",
+                         sub.name, f, gib_spawn_count);
+            return 5;
+          }
+          int32_t min_x = gibs.front().x, max_x = gibs.front().x;
+          int32_t min_y = gibs.front().y, max_y = gibs.front().y;
+          int32_t min_z = gibs.front().z, max_z = gibs.front().z;
+          for (const ReelGibPiece& g : gibs) {
+            min_x = std::min(min_x, g.x);
+            max_x = std::max(max_x, g.x);
+            min_y = std::min(min_y, g.y);
+            max_y = std::max(max_y, g.y);
+            min_z = std::min(min_z, g.z);
+            max_z = std::max(max_z, g.z);
+            if (g.y < dog_inst.y + g.half_extent) {
+              std::fprintf(stderr, "%s frame %u: gib spawned below ground\n", sub.name, f);
+              return 5;
+            }
+          }
+          gib_initial_span = std::max({max_x - min_x, max_y - min_y, max_z - min_z});
+          gib_max_span = gib_initial_span;
         }
       }
       // ground snap (root sits on the leg length; the skeleton carries 0.52)
       const zref::terrain::ColumnResult col =
           zref::terrain::column_query(lat, zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z});
       if (col.cls == zref::terrain::ColumnClass::kSolid) dog_inst.y = col.top.raw;
-      // gib ballistics (integer)
-      for (auto it = gibs.begin(); it != gibs.end();) {
-        it->x += it->vx * 8;
-        it->y += it->vy * 8;
-        it->z += it->vz * 8;
-        it->vy -= gib_gravity;
-        if (it->y < dog_inst.y - (2 << 16)) {
-          it = gibs.erase(it);
-        } else {
-          ++it;
+      // Detached-chunk ballistics advance at the start of subsequent frames,
+      // so the exact authored breakup pose is visible for one full frame.
+      if (!gibs.empty()) {
+        int32_t min_x = gibs.front().x, max_x = gibs.front().x;
+        int32_t min_y = gibs.front().y, max_y = gibs.front().y;
+        int32_t min_z = gibs.front().z, max_z = gibs.front().z;
+        for (const ReelGibPiece& g : gibs) {
+          min_x = std::min(min_x, g.x);
+          max_x = std::max(max_x, g.x);
+          min_y = std::min(min_y, g.y);
+          max_y = std::max(max_y, g.y);
+          min_z = std::min(min_z, g.z);
+          max_z = std::max(max_z, g.z);
         }
+        gib_max_span =
+            std::max(gib_max_span, std::max({max_x - min_x, max_y - min_y, max_z - min_z}));
       }
       dog_poses.begin_frame();
     }
@@ -1357,19 +1511,16 @@ int render_scene(const SceneSubject& sub) {
       // sunlit-side camera (zsign −1), bias recentres the island; k/eye/dist
       // are per-subject (the island scenes stand much further back; creature
       // subjects lerp them for the LOD pull-back)
-      sv.payload.view_projection = cam_pitch(sub.cam_k, cam_eye, cam_dist, sub.cam_ps,
-                                             sub.cam_pc, cam_bias, -1, shake_raw);
+      sv.payload.view_projection =
+          cam_pitch(sub.cam_k, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw);
       if (sub.orbit) {
         // one exact turn per loop: theta = f * 65536 / frames (integer)
-        const uint16_t theta = static_cast<uint16_t>(
-            (static_cast<uint64_t>(f) * 65536u) / (sub.frames > 0 ? sub.frames : 1));
+        const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
+                                                     (sub.frames > 0 ? sub.frames : 1));
         sv.payload.view_projection = mat4_mul(sv.payload.view_projection, rot_world_yaw(theta));
       }
       if (dog != nullptr) {
-        // the creature hook consumes the SAME matrix (16 raws, ABI -> zref)
-        const int32_t* mm = &sv.payload.view_projection.m00;
-        for (int i = 0; i < 4; ++i)
-          for (int j = 0; j < 4; ++j) cr_ctx.vp.m[i][j] = zref::fx16{mm[i * 4 + j]};
+        cr_ctx.vp = rtest::to_zref(sv.payload.view_projection);
       }
       std::vector<uint8_t> v1;
       zhao_abi::zhao_pack_set_view(sv, v1);
@@ -1384,10 +1535,9 @@ int render_scene(const SceneSubject& sub) {
         const uint32_t half = sub.frames / 2;
         const uint32_t ph = f < half ? f : (sub.frames - 1 - f);
         const int32_t th =
-            sub.sweep_pitch0 + static_cast<int32_t>((static_cast<int64_t>(sub.sweep_pitch1 -
-                                                                          sub.sweep_pitch0) *
-                                                     ph) /
-                                                    (half - 1));
+            sub.sweep_pitch0 +
+            static_cast<int32_t>((static_cast<int64_t>(sub.sweep_pitch1 - sub.sweep_pitch0) * ph) /
+                                 (half - 1));
         sky_ps = zref::fx_sin(zref::angle16{static_cast<uint16_t>(th)}).raw;
         sky_pc = zref::fx_cos(zref::angle16{static_cast<uint16_t>(th)}).raw;
         sky_bias = 0;
@@ -1397,8 +1547,8 @@ int render_scene(const SceneSubject& sub) {
         sk.payload.sky_set = 2;
         sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
         if (sub.orbit) {
-          const uint16_t theta = static_cast<uint16_t>(
-              (static_cast<uint64_t>(f) * 65536u) / (sub.frames > 0 ? sub.frames : 1));
+          const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
+                                                       (sub.frames > 0 ? sub.frames : 1));
           sk.payload.rot_proj[0] = mat4_mul(sk.payload.rot_proj[0], rot_world_yaw(theta));
         }
         sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
@@ -1474,6 +1624,11 @@ int render_scene(const SceneSubject& sub) {
       return 2;
     }
 
+    if (sub.creature == 2 && f >= gib_spawn_frame && f < gib_spawn_frame + 12 &&
+        cr_ctx.gibs_in_view >= 10) {
+      ++gib_visible_frames;
+    }
+
     const std::vector<uint8_t> rgb = canvas_rgb(canvas, 0, W, H);
     pal.add_frame(rgb);
     frame_crcs.push_back(zhao_abi::zhao_crc32c(0, rgb.data(), rgb.size()));
@@ -1484,6 +1639,22 @@ int render_scene(const SceneSubject& sub) {
       std::snprintf(fp, sizeof(fp), "%s/%04u.rgb", dir.c_str(), f);
       if (!write_rgb(fp, W, H, rgb)) return 2;
     }
+  }
+
+  if (sub.creature == 2) {
+    const int32_t required_growth = fxm(500);
+    if (gib_spawn_count < 12 || gib_visible_frames < 8 ||
+        gib_max_span < gib_initial_span + required_growth) {
+      std::fprintf(stderr,
+                   "%s: detached-piece invariant failed: spawned=%u visible_frames=%u "
+                   "span=%d->%d raw\n",
+                   sub.name, gib_spawn_count, gib_visible_frames, gib_initial_span, gib_max_span);
+      return 5;
+    }
+    std::printf(
+        "%s: detached-piece invariant: %u spawned, %u early frames with >=10 in "
+        "view, span %d -> %d raw\n",
+        sub.name, gib_spawn_count, gib_visible_frames, gib_initial_span, gib_max_span);
   }
 
   // ---- the palette law: a shipped GIF must be palette-exact ----
@@ -1522,7 +1693,7 @@ int render_scene(const SceneSubject& sub) {
 
   // ---- provenance ----
   std::string meta;
-  char line[512];
+  char line[2048];
   std::snprintf(line, sizeof(line),
                 "subject=%s\nmode=Z60 384x240 single view, reference oracle (zref::render)\n"
                 "frames=%u step=%u ticks (frame f: tick = f*step)\n"
@@ -1537,6 +1708,14 @@ int render_scene(const SceneSubject& sub) {
                 sub.stamps.size(), sub.debris.size(), sub.shake.size(), pal.count(), sub.note,
                 seq_crc);
   meta += line;
+  if (sub.creature == 2) {
+    std::snprintf(line, sizeof(line),
+                  "detached_pieces=%u spawn_frame=%u visible_early_frames=%u "
+                  "initial_span_raw=%d max_span_raw=%d\n",
+                  gib_spawn_count, gib_spawn_frame, gib_visible_frames, gib_initial_span,
+                  gib_max_span);
+    meta += line;
+  }
   for (uint32_t f = 0; f < frame_crcs.size(); ++f) {
     std::snprintf(line, sizeof(line), "frame_%04u_crc32c=0x%08X\n", f, frame_crcs[f]);
     meta += line;
@@ -1579,7 +1758,8 @@ SceneSubject subject_wave() {
   s.fields.push_back(fs);
   // note text is published on the site; it must pass the copy gate
   // (zhaozhou-site/tools/copycheck.py: no em dashes, no banned phrases)
-  s.note = "travelling radial wave, n=2 whole cycles per loop: frame 63 steps straight back to frame 0";
+  s.note =
+      "travelling radial wave, n=2 whole cycles per loop: frame 63 steps straight back to frame 0";
   s.expect_seq_crc = 0xE89BB76Bu;  // re-pinned 2026-08-16: kBandRows 8->16
   // (dcb32ff, the banding fix). The SHIPPED gif is the pre-fix capture
   // (sequence_crc32c=0x0222090B, provenance in zhaozhou-site/scratch-reel)
@@ -1641,7 +1821,8 @@ SceneSubject subject_impact() {
   s.note =
       "strike -> expanding annular wave -> centre rebound -> settle; "
       "debris + screen shake (erupt-style garnish); starts and ends at rest";
-  s.expect_seq_crc = 0x7E07D08Au;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x4F97AD9B)
+  s.expect_seq_crc = 0x7E07D08Au;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
+                                   // pre-fix (0x4F97AD9B)
   return s;
 }
 
@@ -1688,7 +1869,8 @@ SceneSubject subject_scars() {
   s.note =
       "three strikes in sequence; surface-sheet scars persist and accrue "
       "(the loop restart is the sequence replaying)";
-  s.expect_seq_crc = 0x106B4DE8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is pre-fix (0x86069EA1)
+  s.expect_seq_crc = 0x106B4DE8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
+                                   // pre-fix (0x86069EA1)
   return s;
 }
 
@@ -1709,7 +1891,7 @@ SceneSubject subject_orbit() {
   s.orbit = true;
   // low pitch (10 deg down) from a raised eye: the keel dome and the rim
   // walls carry the frame; the under-sky shows below the silhouette
-  s.cam_ps = zref::fx_sin(zref::angle16{0x071C}).raw;   // 10.0 deg (1820 turns)
+  s.cam_ps = zref::fx_sin(zref::angle16{0x071C}).raw;  // 10.0 deg (1820 turns)
   s.cam_pc = zref::fx_cos(zref::angle16{0x071C}).raw;
   s.cam_k = 96000;
   s.cam_eye = 34;
@@ -1976,8 +2158,8 @@ SceneSubject subject_flareocclusion() {
   s.frames = 64;
   s.step = 8;
   s.celestial = 4;
-  s.sky_variant = 1;  // flat upper band (still C0): additive headroom
-  s.island = true;     // the dual-heightfield island, framed from afar
+  s.sky_variant = 1;     // flat upper band (still C0): additive headroom
+  s.island = true;       // the dual-heightfield island, framed from afar
   s.island_flat = true;  // palette law: the flare chain owns the colour budget
   s.cam_k = 112000;
   s.cam_eye = 140;
@@ -2000,8 +2182,8 @@ SceneSubject subject_flareocclusion() {
   return s;
 }
 
-// 16. creature-wave-walk — the creature-lane identity shot: the watchdog
-// walks the island while a travelling wave passes UNDER it; two
+// 16. creature-wave-walk — the creature-lane identity shot: the six-part
+// watchdog walks the island while a travelling wave passes UNDER it; two
 // column_query taps per tick tilt it through the wave (rotateOnGround);
 // then the camera pulls back and the LOD ladder walks it down
 // mesh -> micro-mesh -> splat -> glint with 10%/15-tick hysteresis.
@@ -2046,19 +2228,20 @@ SceneSubject subject_creaturewalk() {
   fs.duration = s.frames * s.step;
   s.fields.push_back(fs);
   s.note =
-      "watchdog quadruped (7 bones, 6 ring parts) walks east at 0.022 m/frame; "
-      "a 1.2 m wave crosses under it and two column_query taps per tick tilt "
-      "it through the crest; frames 48+ pull the camera back 9 m -> 320 m and "
-      "the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
+      "watchdog quadruped (6 bones, 6 rigid ring parts: long torso, pale head, "
+      "4 separate legs) walks along its authored +X axis at 0.022 m/frame; a "
+      "0.5 m-amplitude wave crosses under it and two column_query taps per tick "
+      "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
+      "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x33782CB8u;  // pinned 2026-08-16 (first render)
+  s.expect_seq_crc = 0x82442994u;  // re-pinned 2026-08-18 after rigid bind-space repair
   return s;
 }
 
-// 17. creature-bulk-pop — bulk inflation then the gib burst: the watchdog
-// idles while its root SCALE inflates 1.0 -> ~2.3; crossing the species pop
-// threshold (2.2) removes the mesh and spawns the PART.SPAWN burst
-// (deterministic noise2 velocities, integer ballistics).
+// 17. creature-bulk-pop — bulk inflation then a detached-geometry burst: the
+// watchdog idles while its root SCALE inflates 1.0 -> ~2.3; crossing the species
+// pop threshold (2.2) removes the mesh. Eighteen deterministic donor samples
+// become independently translated and rotating chunks with integer ballistics.
 SceneSubject subject_creaturepop() {
   SceneSubject s;
   s.name = "creature-bulk-pop";
@@ -2073,11 +2256,12 @@ SceneSubject subject_creaturepop() {
   s.cam_dist = 8;
   s.cam_bias = 0;
   s.note =
-      "watchdog idles (32-key breathing clip) while bulk inflates the root "
-      "scale 1.0 -> 2.3 (exponential smoothing, one scalar); crossing the "
-      "2.2 pop threshold removes the mesh and bursts 64 gibs with "
-      "noise2-derived velocities and integer ballistics";
-  s.expect_seq_crc = 0x00889F52u;  // pinned 2026-08-16 (first render)
+      "six-part watchdog idles (32-key breathing clip) while bulk inflates the "
+      "root scale 1.0 -> 2.3 (exponential smoothing, one scalar); crossing the "
+      "2.2 pop threshold removes the mesh and releases 18 detached rotating "
+      "chunks, deterministically sampled from donor gibs, with integer "
+      "ballistics, gravity, and damped ground bounce";
+  s.expect_seq_crc = 0x9E32172Cu;  // re-pinned 2026-08-18 after visible chunk repair
   return s;
 }
 
@@ -2092,38 +2276,40 @@ struct LibraryEntry {
 };
 
 constexpr LibraryEntry kLibrary[] = {
-  {"star-s00-yellow", "Yellow star", "Classic main sequence star with full lens flare chain", true},
-  {"star-s03-red-giant", "Red giant", "Large cool star with boiling CLUT rotation", true},
-  {"star-s11-pulsar", "Pulsar", "Compact neutron star with duty-cycle strobe", true},
-  {"terrain-wave", "Wave pool", "Travelling radial wave, two full cycles per loop", true},
-  {"terrain-impact", "Impact wave", "Expanding annular wave with debris and screen shake", true},
-  {"terrain-crater", "Crater ring", "Static crater with charred core and cracked ring", true},
-  {"terrain-scars", "Scars accumulation", "Three strikes with persistent surface-sheet scars", true},
-  {"terrain-orbit", "Orbit", "Textured deep-keel island, one 360-degree orbit", true},
+    {"star-s00-yellow", "Yellow star", "Classic main sequence star with full lens flare chain",
+     true},
+    {"star-s03-red-giant", "Red giant", "Large cool star with boiling CLUT rotation", true},
+    {"star-s11-pulsar", "Pulsar", "Compact neutron star with duty-cycle strobe", true},
+    {"terrain-wave", "Wave pool", "Travelling radial wave, two full cycles per loop", true},
+    {"terrain-impact", "Impact wave", "Expanding annular wave with debris and screen shake", true},
+    {"terrain-crater", "Crater ring", "Static crater with charred core and cracked ring", true},
+    {"terrain-scars", "Scars accumulation", "Three strikes with persistent surface-sheet scars",
+     true},
+    {"terrain-orbit", "Orbit", "Textured deep-keel island, one 360-degree orbit", true},
     {"terrain-breach", "Breach", "Textured deep-keel island, 84 m pit punched through", true},
-  {"celestial-sky-sweep", "Sky sweep", "Camera pitch sweep horizon to zenith", true},
-  {"celestial-flare-occlusion", "Flare occlusion", "Sun crosses behind island with 15-frame fade", true},
+    {"celestial-sky-sweep", "Sky sweep", "Camera pitch sweep horizon to zenith", true},
+    {"celestial-flare-occlusion", "Flare occlusion", "Sun crosses behind island with 15-frame fade",
+     true},
 
-  // Newly implemented stars (2026-08-16)
-  {"star-s01-blue-giant", "Blue giant", "Large hot star 15k radius, bright blue-white", true},
-  {"star-s02-white-dwarf", "White dwarf", "Compact hot star 300 radius, fast spin", true},
-  {"star-s04-orange-giant", "Orange giant", "Warm giant 15k radius, golden orange", true},
-  {"star-s07-blue-dwarf", "Blue dwarf", "Compact hot star 2k radius, fast spin", true},
-  {"star-s08-multiple", "Multiple", "Binary star system 4k radius", true},
-  {"star-s09-infant", "Infant star", "Young protostar with variable undertone", true},
+    // Newly implemented stars (2026-08-16)
+    {"star-s01-blue-giant", "Blue giant", "Large hot star 15k radius, bright blue-white", true},
+    {"star-s02-white-dwarf", "White dwarf", "Compact hot star 300 radius, fast spin", true},
+    {"star-s04-orange-giant", "Orange giant", "Warm giant 15k radius, golden orange", true},
+    {"star-s07-blue-dwarf", "Blue dwarf", "Compact hot star 2k radius, fast spin", true},
+    {"star-s08-multiple", "Multiple", "Binary star system 4k radius", true},
+    {"star-s09-infant", "Infant star", "Young protostar with variable undertone", true},
 
-  // Creature/character lane (spec/creature_rules.md)
-  {"creature-wave-walk", "Creature wave walk",
-   "Ring-mesh quadruped tilts through a wave, LOD ladder to glints", true},
-  {"creature-bulk-pop", "Bulk inflate and pop",
-   "Root-scale bulk inflation crossing the pop threshold into gibs", true},
+    // Creature/character lane (spec/creature_rules.md)
+    {"creature-wave-walk", "Creature wave walk",
+     "Six-part quadruped strides through a wave, LOD ladder to glint", true},
+    {"creature-bulk-pop", "Bulk inflate and pop",
+     "Root-scale inflation releases 18 detached rotating chunks", true},
 
-  // Dead classes (no flare capability, stub entries only)
-  {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
-  {"star-s06-grey-giant", "Grey giant", "Low luminosity giant, no flare", false},
-  {"star-s10-runaway", "Runaway", "High-velocity star, no flare capability", false},
-  {nullptr, nullptr, nullptr, false}
-};
+    // Dead classes (no flare capability, stub entries only)
+    {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
+    {"star-s06-grey-giant", "Grey giant", "Low luminosity giant, no flare", false},
+    {"star-s10-runaway", "Runaway", "High-velocity star, no flare capability", false},
+    {nullptr, nullptr, nullptr, false}};
 
 int main(int argc, char** argv) {
   // --list: enumerate the library catalogue
@@ -2162,6 +2348,8 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_bluedwarf());
     rc |= render_scene(subject_multiple());
     rc |= render_scene(subject_infant());
+    rc |= render_scene(subject_creaturewalk());
+    rc |= render_scene(subject_creaturepop());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
