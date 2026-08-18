@@ -79,7 +79,7 @@ with `B` the 4×4 Bayer value and `/` a floor division on a non-negative numerat
 
 ## Latency (fixed or variable)
 
-**Variable**, as the ledger declares. At full readiness on both sides a tile costs 258 cycles (256 pixels, the two-cycle pipeline fill, and the finalize cycle that carries `tile_crc_valid_o`), plus one cycle to accept the start. Unbounded above under backpressure on either side — a stall costs beats, never pixels. Lower bound per tile: 259 cycles from `start` acceptance to the CRC pulse.
+**Variable**, as the ledger declares. At full readiness on both sides a tile costs **259 cycles** from the `start`-accepting edge to the `tile_crc_valid_o` pulse — **measured**, by `test_latency`, not derived: the arithmetic (256 pixels + 2 cycles of pipeline fill + the finalize cycle) says 258, and the extra cycle is the first issue, because `tr_valid_o` is a function of `busy_r` and `busy_r` is only set *by* the accepting edge, so no read can be issued in the accepting cycle itself. Unbounded above under backpressure on either side — a stall costs beats, never pixels, and `test_latency` also pins that no stall pattern can ever make a tile *faster* than 259.
 
 ## Target throughput
 

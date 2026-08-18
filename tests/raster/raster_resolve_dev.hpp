@@ -67,6 +67,7 @@ class ResolveDev {
     Resolved out;
     bool got_pixel[kPixels] = {};
     uint32_t rng = stall_seed;
+    cycles_ = 0;
 
     // ---- offer the tile (ready/valid) ------------------------------------
     park();
@@ -173,6 +174,7 @@ class ResolveDev {
         add(err, "start_ready_o asserted while a tile is in flight");
 
       edge();
+      ++cycles_;
       pend = next_pend;
       pend_data = next_data;
       if (seen_crc) break;
@@ -186,6 +188,10 @@ class ResolveDev {
     top_.eval();
     return out;
   }
+
+  // Cycles from the start-accepting edge to the tile_crc_valid_o pulse,
+  // inclusive — the contract's latency figure, measured rather than derived.
+  uint32_t last_cycles() const { return cycles_; }
 
  private:
   static uint32_t mask12(int32_t v) { return static_cast<uint32_t>(v) & 0xFFFu; }
@@ -214,6 +220,7 @@ class ResolveDev {
   }
 
   Vzhao_raster_resolve top_;
+  uint32_t cycles_ = 0;
 };
 
 // ---------------------------------------------------------------- helpers ---

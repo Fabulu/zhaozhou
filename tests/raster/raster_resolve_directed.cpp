@@ -32,7 +32,9 @@
 //                       that a flipped byte order would change the answer
 //   9. backpressure   — PCG stalls on BOTH the tile_read and fb_tiles sides:
 //                       identical pixels, identical CRC, beats held stable
-//  10. back to back   — several tiles through one instance with no reset
+//  10. latency        — the contract's cycle count, measured: exactly 258 at
+//                       full readiness, and never fewer under any stall
+//  11. back to back   — several tiles through one instance with no reset
 
 #include "raster_resolve_dev.hpp"
 
@@ -96,7 +98,7 @@ void fill(uint64_t* w, uint64_t px) {
 
 // --------------------------------------------------------------------------
 void test_rails() {
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
 
   // ---- THE BLACK RAIL IS NOT CLEAN, AND THAT IS THE ORACLE'S LAW ---------
   // Pure black does NOT resolve to 0x0000. Green's dither amplitude is 32
@@ -169,7 +171,7 @@ void test_channel_sweep() {
   // 1,024 tiles = 262,144 pixels. A tile of ONE constant value visits all 16
   // Bayer phases 16 times each, so every (value, phase) pair of every channel
   // is covered exactly, not sampled.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   uint32_t bad = 0;
   for (int v = 0; v < 256; ++v) {
     const uint8_t u = static_cast<uint8_t>(v);
@@ -212,7 +214,7 @@ void test_green_amplitude() {
               discriminating);
 
   // Now the real check, against the oracle, over exactly that grid.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   uint32_t bad = 0;
   for (int g = 0; g < 256; ++g) {
     fill(w, pack_px(0, static_cast<uint8_t>(g), 0));
@@ -239,7 +241,7 @@ void test_rounding_edges() {
   // green 255/63 ≈ 4.05, so a ±1 error in the rounding term shows up within a
   // couple of units of each boundary. Sweep a dense band around every one of
   // them, all channels at once, at all four x-phases.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   uint32_t bad = 0;
   uint32_t tiles = 0;
   for (int q = 0; q <= 63; ++q) {
@@ -273,7 +275,7 @@ void test_dither_phases() {
   // quantization buckets in play, two different phase shifts could in
   // principle land on the same picture, and the "all 16 phases differ" claim
   // below would be measuring the colour rather than the phase.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   for (int i = 0; i < kPixels; ++i)
     w[i] = pack_px(static_cast<uint8_t>(i * 13 + 1), static_cast<uint8_t>(i * 7 + 2),
                    static_cast<uint8_t>(i * 3 + 5), static_cast<uint8_t>(i));
@@ -325,7 +327,7 @@ void test_dither_phases() {
 void test_tag() {
   // spec/stars_and_flares.md §1: "the tag byte is never dithered". Every tag
   // value against a colour that IS being dithered hard.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   for (int i = 0; i < kPixels; ++i)
     w[i] = pack_px(static_cast<uint8_t>(i * 3), static_cast<uint8_t>(i * 5),
                    static_cast<uint8_t>(i * 7), static_cast<uint8_t>(i));
@@ -336,7 +338,7 @@ void test_tag() {
   check(bad == 0, "tag: every effect tag rides through undithered and unpermuted", 0, bad);
 
   // The tag must not depend on the colour or the phase either.
-  uint64_t w2[kPixels];
+  uint64_t w2[kPixels] = {};
   for (int i = 0; i < kPixels; ++i) w2[i] = pack_px(255, 128, 3, static_cast<uint8_t>(i));
   const Resolved r2 = diff(w2, 3, 3, "tag_indep", 0, false);
   uint32_t drift = 0;
@@ -350,7 +352,8 @@ void test_depth_stencil_ignored() {
   // Depth and stencil are the unresolved half of the word (charter §8: no
   // external full-screen depth buffer). Two tiles with identical colour+tag
   // and wildly different depth/stencil must resolve identically.
-  uint64_t a[kPixels], b[kPixels];
+  uint64_t a[kPixels] = {};
+  uint64_t b[kPixels] = {};
   for (int i = 0; i < kPixels; ++i) {
     const uint8_t r = static_cast<uint8_t>(i * 11);
     const uint8_t g = static_cast<uint8_t>(i * 17);
@@ -371,7 +374,7 @@ void test_crc_payloads() {
   //     lifts half the tile to 0x0020), so the all-zero CRC is used as a
   //     NEGATIVE anchor — it pins the finding, and it would still catch a
   //     resolve that silently zeroed the tile.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   fill(w, pack_px(0, 0, 0));
   std::vector<uint8_t> zeros(kPixels * 2, 0);
   const uint32_t crc_zero = zhao_abi::zhao_crc32c(0, zeros.data(), zeros.size());
@@ -425,7 +428,7 @@ void test_backpressure() {
   // PCG stalls on BOTH sides (tile_read ready and fb_tiles ready). The driver
   // asserts beat stability and request ordering; here we require the pixels
   // and the CRC to be bit-identical to the unstalled run.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   for (int i = 0; i < kPixels; ++i)
     w[i] = pack_px(static_cast<uint8_t>(i * 31 + 3), static_cast<uint8_t>(i * 61 + 9),
                    static_cast<uint8_t>(i * 91 + 17), static_cast<uint8_t>(i * 5));
@@ -439,10 +442,39 @@ void test_backpressure() {
 }
 
 // --------------------------------------------------------------------------
+void test_latency() {
+  // The contract's latency line, MEASURED — 259 cycles from the accepting
+  // edge to the tile_crc_valid_o pulse, not the 258 the arithmetic suggested
+  // (256 pixels + 2 cycles of pipeline fill + the finalize cycle). The extra
+  // cycle is the first issue: `tr_valid_o` is a function of `busy_r`, which
+  // is only set BY the accepting edge, so no read can be issued in the
+  // accepting cycle itself. Under backpressure it may take longer and may
+  // never take less; both halves are checked, because a block that is fast
+  // because it skipped something is the failure mode worth catching.
+  uint64_t w[kPixels] = {};
+  for (int i = 0; i < kPixels; ++i)
+    w[i] = pack_px(static_cast<uint8_t>(i), static_cast<uint8_t>(i * 2),
+                   static_cast<uint8_t>(i * 3), static_cast<uint8_t>(i));
+
+  diff(w, 0, 0, "latency_full", 0, false);
+  const uint32_t full = dev().last_cycles();
+  std::printf("  latency: %u cycles at full readiness (256 px + fill + finalize)\n", full);
+  check(full == 259, "latency: a tile at full readiness costs exactly 259 cycles", 259, full);
+
+  uint32_t never_faster = 0;
+  for (uint32_t s = 1; s <= 6; ++s) {
+    diff(w, 0, 0, "latency_stall", 0x3000u * s + 11u, false);
+    if (dev().last_cycles() < full) ++never_faster;
+  }
+  check(never_faster == 0, "latency: backpressure can only ever cost cycles, never save them", 0,
+        never_faster);
+}
+
+// --------------------------------------------------------------------------
 void test_back_to_back() {
   // Several tiles through one instance with no reset: the CRC seed, the
   // occupancy counter and the address cursor must all re-arm per tile.
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   uint32_t bad = 0;
   for (uint32_t k = 0; k < 6; ++k) {
     for (int i = 0; i < kPixels; ++i)
@@ -468,6 +500,7 @@ int main() {
   test_depth_stencil_ignored();
   test_crc_payloads();
   test_backpressure();
+  test_latency();
   test_back_to_back();
 
   std::printf("raster_resolve_directed: %u tiles resolved\n", g_tiles);

@@ -126,7 +126,7 @@ Resolved one(ResolveDev& dev, const uint64_t* w, int32_t tx, int32_t ty, uint32_
 void lane_a(ResolveDev& dev, uint32_t iters) {
   Prng rng(0x5EED'0024u);
   uint32_t unaligned = 0;
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
   for (uint32_t i = 0; i < iters; ++i) {
     make_tile(rng, w, i % 4u);
     // Deliberately NOT all 16-aligned: half the origins are arbitrary, so the
@@ -150,7 +150,7 @@ void lane_b(ResolveDev& dev, uint32_t iters) {
   Prng rng(0x5EED'0025u);
   uint32_t phase_drift = 0;
   uint32_t stall_drift = 0;
-  uint64_t w[kPixels];
+  uint64_t w[kPixels] = {};
 
   for (uint32_t i = 0; i < iters; ++i) {
     make_tile(rng, w, i % 4u);
