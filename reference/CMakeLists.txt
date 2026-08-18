@@ -7,7 +7,9 @@
 # W2.4 adds the audio subsystem (MixerTone tone subset + AudioFifo oracle).
 # W3.5 adds the software renderer (zrender/) + the sky emitter (zsky/).
 # Phase 4 adds zref::EdgeWalk (zrender/edgewalk.cpp) — the RASTER.EDGEWALK
-#     tile-coverage oracle, a view onto rast.cpp's frozen fill law.
+#     tile-coverage oracle, a view onto rast.cpp's frozen fill law — plus
+#     zref::TileStore (zrender/tilestore.cpp, the RASTER.TILESTORE ping-pong
+#     model).
 # World-identity wave adds the creature/character reference core
 #     (zcreature/: ring meshlets, pose bank, skinning, alive laws, LOD).
 
@@ -25,6 +27,7 @@ add_library(zhao_zref STATIC
   src/zrender/terrain.cpp
   src/zrender/sprites.cpp
   src/zrender/resolve.cpp
+  src/zrender/tilestore.cpp
   src/zsky/emit_layers.cpp
   src/zsky/star_gamut.cpp
   src/zsky/star_bake.cpp

@@ -1086,6 +1086,51 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
+# ---- Phase 4: RASTER.TILESTORE (charter phase 4, ZH-021; law charter 8 ------
+# ---- "Active tile storage"; contract design/contracts/RASTER.TILESTORE.md) --
+# The oracle is zref::TileStore. A memory has no pre-existing law to call, so
+# the oracle is a deliberately plain second implementation of the CONTRACT
+# (two arrays and a present bit) — what the differential tests exercise is the
+# RTL's ping-pong, O(1) clear and write-through-read bypass mechanics.
+set(ZHAO_RASTER_TILESTORE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv)
+
+add_executable(test_raster_tilestore_directed raster/raster_tilestore_directed.cpp)
+target_link_libraries(test_raster_tilestore_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_tilestore_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_tilestore_directed
+  PREFIX Vzhao_raster_tilestore
+  TOP_MODULE zhao_raster_tilestore
+  SOURCES ${ZHAO_RASTER_TILESTORE_SV})
+add_test(NAME raster_tilestore_directed COMMAND test_raster_tilestore_directed)
+set_tests_properties(raster_tilestore_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_tilestore_random raster/raster_tilestore_random.cpp)
+target_link_libraries(test_raster_tilestore_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_tilestore_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_tilestore_random
+  PREFIX Vzhao_raster_tilestore
+  TOP_MODULE zhao_raster_tilestore
+  SOURCES ${ZHAO_RASTER_TILESTORE_SV})
+add_test(NAME raster_tilestore_random COMMAND test_raster_tilestore_random)
+set_tests_properties(raster_tilestore_random PROPERTIES LABELS "fast;nightly")
+# 300k-cycle soak of the same binary (20k fast above)
+add_test(NAME raster_tilestore_random_nightly
+         COMMAND test_raster_tilestore_random --nightly)
+set_tests_properties(raster_tilestore_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_raster_tilestore
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_tilestore
+                 ${ZHAO_RASTER_TILESTORE_SV})
+set_tests_properties(lint_raster_tilestore PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # ---- W2.7: console shell + Duo marker demo (plan W2.7; the Phase-2 gate) ----
 # zhao_shell_top composes the whole Phase-2 machine; tb_zhao_shell adds the
 # behavioural SDRAM model (testbench-only, D2). The harness C++ is the HPS
