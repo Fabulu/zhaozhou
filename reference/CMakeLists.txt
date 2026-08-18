@@ -11,6 +11,9 @@
 #     zref::TileStore (zrender/tilestore.cpp, the RASTER.TILESTORE ping-pong
 #     model) and zref::TileResolve (zrender/tileresolve.cpp, a view onto
 #     resolve.cpp's frozen ordered dither).
+# Phase 5 texture adds zref::TextureCache + zref::Tmu (zrender/texture.cpp —
+#     TEXTURE.CACHE's tag/fill model and TEXTURE.TMU's addressing, wrap, mip
+#     and filter; the RGB565 expansion is delegated to zref::sky::rgb565).
 # Phase 4/5 raster completion adds zref::FragmentPipeline (zrender/
 #     fragment.cpp — RASTER.FRAGMENT's depth/stencil/blend, calling the frozen
 #     zref::unit_mul rather than restating it) and zref::EarlyZ (zrender/
@@ -37,6 +40,7 @@ add_library(zhao_zref STATIC
   src/zrender/tileresolve.cpp
   src/zrender/earlyz.cpp
   src/zrender/fragment.cpp
+  src/zrender/texture.cpp
   src/zsky/emit_layers.cpp
   src/zsky/star_gamut.cpp
   src/zsky/star_bake.cpp
