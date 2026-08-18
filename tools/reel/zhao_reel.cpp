@@ -736,10 +736,12 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
   L2.trail = &ctx.trails[1];
   int n_lights = 1;
   // ping-pong drift for the class portraits: +-150 px about the centre,
-  // ~9.7 px/frame. The speed is a PALETTE-LAW choice, not just an aesthetic
-  // one: ghost radius sits at/below the per-frame spacing, so a trail pixel
-  // sums at most ~2 ghost falloffs (contiguous-sum pairs) instead of all 8
-  // (the 400+-colour blow-up the tool refuses to ship).
+  // ~9.7 px/frame. Each subject's ghost radius is its OWN visible radius, so
+  // a 42 px giant lays down a 42 px smear and a 14 px dwarf lays down 14.
+  // Overlapping ghosts cost no extra palette: the reconstruction plane is
+  // six-bit, so however many falloffs a pixel sums, one class-ramp lookup at
+  // the end still yields at most 64 trail colours. The per-sequence palette
+  // counter stays the arbiter and every star sequence clears 256.
   const int32_t drift_x = 42 + static_cast<int32_t>((300 * ph) / (half - 1));
 
   switch (sub.celestial) {
@@ -767,7 +769,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 150;
       L.disc_r_px = 8;
       L.halo_r_px = 16;
-      L.ghost_r_px = 12;                                   // bounded smear overlaps at ~12 px/frame
+      L.ghost_r_px = 16;  // == halo_r_px: the footprint is the sun's own extent
       L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
@@ -834,7 +836,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 40;
       L.halo_r_px = 26;
-      L.ghost_r_px = 15;
+      L.ghost_r_px = 40;  // == disc_r_px
       L.d_milli = 5LL * zref::star::kGamut[1].ray_milli / 2;
       L.r_milli = zref::star::kGamut[1].ray_milli;
       L.flare_mode = 0;
@@ -849,7 +851,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 16;
       L.halo_r_px = 14;
-      L.ghost_r_px = 11;
+      L.ghost_r_px = 16;  // == disc_r_px
       L.d_milli = 2LL * zref::star::kGamut[2].ray_milli;
       L.r_milli = zref::star::kGamut[2].ray_milli;
       L.flare_mode = 0;
@@ -863,7 +865,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 42;
       L.halo_r_px = 28;
-      L.ghost_r_px = 15;
+      L.ghost_r_px = 42;  // == disc_r_px
       L.d_milli = 5LL * zref::star::kGamut[4].ray_milli / 2;
       L.r_milli = zref::star::kGamut[4].ray_milli;
       L.flare_mode = 0;
@@ -877,7 +879,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 14;
       L.halo_r_px = 12;
-      L.ghost_r_px = 10;
+      L.ghost_r_px = 14;  // == disc_r_px
       L.d_milli = 2LL * zref::star::kGamut[7].ray_milli;
       L.r_milli = zref::star::kGamut[7].ray_milli;
       L.flare_mode = 0;
@@ -897,7 +899,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120 - ((90 * si) >> 16);
       L.disc_r_px = 26;
       L.halo_r_px = 18;
-      L.ghost_r_px = 12;
+      L.ghost_r_px = 26;  // == disc_r_px
       L.d_milli = 5LL * zref::star::kGamut[8].ray_milli / 2;
       L.r_milli = zref::star::kGamut[8].ray_milli;
       L.flare_mode = 0;
@@ -907,7 +909,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L2.y_px = 120 + ((90 * si) >> 16);
       L2.disc_r_px = 16;  // the companion: smaller, no flare of its own
       L2.halo_r_px = 12;
-      L2.ghost_r_px = 9;
+      L2.ghost_r_px = 16;  // == the companion's own disc_r_px
       L2.d_milli = 15LL * zref::star::kGamut[8].ray_milli;
       L2.r_milli = zref::star::kGamut[8].ray_milli;
       L2.flare_mode = 0;
@@ -922,7 +924,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 24;
       L.halo_r_px = 18;
-      L.ghost_r_px = 12;
+      L.ghost_r_px = 24;  // == disc_r_px
       L.d_milli = 2LL * zref::star::kGamut[9].ray_milli;
       L.r_milli = zref::star::kGamut[9].ray_milli;
       L.flare_mode = 0;
@@ -1409,11 +1411,15 @@ int render_scene(const SceneSubject& sub) {
       if (sub.creature == 1) {
         // walk: root motion follows the authored +X forward axis at a
         // front-quarter yaw; four independent legs carry the 16-key stride.
+        // The clip clock runs on the sim clock (sub.step ticks per frame), so
+        // the 32-tick stride cycle covers 0.70 m of root motion -- about one
+        // body length per cycle, which is what keeps the feet planted instead
+        // of skating a 16-key cycle through 0.088 m.
         const int32_t fc = zref::fx_cos(dog_inst.facing).raw;
         const int32_t fs = zref::fx_sin(dog_inst.facing).raw;
         dog_inst.x += zref::rescale_s32(static_cast<int64_t>(fxm(22)) * fc, 16, nullptr);
         dog_inst.z -= zref::rescale_s32(static_cast<int64_t>(fxm(22)) * fs, 16, nullptr);
-        for (int t = 0; t < 8; ++t) {
+        for (uint32_t t = 0; t < sub.step; ++t) {
           const zc::ClipEvent* fired = nullptr;
           uint8_t nf = 0;
           zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
@@ -2036,7 +2042,7 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst and three lens ghosts over a graded, connected "
       "motion smear rebuilt with subtract-8 decay and asymmetric diffusion; "
       "the flare dims over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0xA4480FB8u;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0xC1969F58u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2069,7 +2075,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0xC38E703Cu;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0x9C9104F1u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2084,7 +2090,7 @@ SceneSubject subject_whitedwarf() {
   s.note =
       "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
       "spin; five-pass box-smooth granulation; drifts with a long smear";
-  s.expect_seq_crc = 0x61C32E3Au;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0xE72F8737u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2099,7 +2105,7 @@ SceneSubject subject_orangegiant() {
   s.note =
       "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
       "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
-  s.expect_seq_crc = 0x0C35E965u;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0x81CA0B78u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2114,7 +2120,7 @@ SceneSubject subject_bluedwarf() {
   s.note =
       "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
       "smear grades white to deep blue along the tail";
-  s.expect_seq_crc = 0xBA485DBAu;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0xBCAC662Du;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2129,7 +2135,7 @@ SceneSubject subject_multiple() {
   s.note =
       "S08 multiple system: two bodies of one class orbiting the barycentre, "
       "one revolution per loop, each with a curved trail (the §15 showpiece)";
-  s.expect_seq_crc = 0x1AB97077u;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0x5F3E8CE8u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2144,7 +2150,7 @@ SceneSubject subject_infant() {
   s.note =
       "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
       "per-identity undertone; drifts with a purple smear";
-  s.expect_seq_crc = 0x24BCEDD2u;  // re-pinned 2026-08-17: source-kernel smear
+  s.expect_seq_crc = 0x432CE740u;  // re-pinned 2026-08-18: ghost radius == the sun
   return s;
 }
 
@@ -2191,7 +2197,10 @@ SceneSubject subject_creaturewalk() {
   SceneSubject s;
   s.name = "creature-wave-walk";
   s.frames = 96;
-  s.step = 8;
+  // one sim tick per frame: a key is held 2 ticks (creature 2.1), so the
+  // 16-key stride is a 32-frame cycle and the 0.022 m/frame root motion
+  // lays down ~0.70 m per cycle -- a planted walk, not a 4-frame scramble.
+  s.step = 1;
   s.creature = 1;
   // near phase: camera aims AT the creature (aim y = eye - 0.4877*dist =
   // 8 m, the bump-patch crown it walks on); focal 3.36 puts the ~1 m
@@ -2229,12 +2238,14 @@ SceneSubject subject_creaturewalk() {
   s.fields.push_back(fs);
   s.note =
       "watchdog quadruped (6 bones, 6 rigid ring parts: long torso, pale head, "
-      "4 separate legs) walks along its authored +X axis at 0.022 m/frame; a "
+      "4 separate legs) walks along its authored +X axis at 0.022 m/frame; the "
+      "16-key stride is held on the sim clock, so one full gait cycle spans 32 "
+      "frames and lays down 0.70 m, about one body length per cycle; a "
       "0.5 m-amplitude wave crosses under it and two column_query taps per tick "
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x82442994u;  // re-pinned 2026-08-18 after rigid bind-space repair
+  s.expect_seq_crc = 0x9680E223u;  // re-pinned 2026-08-18: stride back on the sim clock
   return s;
 }
 
