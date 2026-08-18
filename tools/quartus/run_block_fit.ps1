@@ -1,6 +1,10 @@
 [CmdletBinding()]
 param(
     [string[]]$Module,
+    # Extra SystemVerilog files to append to the source cone, so blocks that are
+    # NOT in the shell cone (raster, texture, geometry, terrain) can be
+    # characterized with the same flow rather than a second one.
+    [string[]]$ExtraSources,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [int]$TimeoutSeconds = 900,
     [switch]$KeepWorkspace
@@ -86,6 +90,12 @@ try {
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
+        if ($ExtraSources) {
+            foreach ($extra in $ExtraSources) {
+                $abs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path.Replace([char]92, [char]47)
+                $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $abs"
+            }
+        }
         $qsf | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qsf') -Encoding ascii
 
         $row = [ordered]@{ module = $mod; status = 'unknown' }
