@@ -219,9 +219,8 @@ class ClipDev {
     snap_[9] = top_.out_max_y_o;
   }
   bool same_packet() const {
-    return snap_[0] == top_.out_ax_o && snap_[1] == top_.out_ay_o &&
-           snap_[2] == top_.out_bx_o && snap_[3] == top_.out_by_o &&
-           snap_[4] == top_.out_cx_o && snap_[5] == top_.out_cy_o &&
+    return snap_[0] == top_.out_ax_o && snap_[1] == top_.out_ay_o && snap_[2] == top_.out_bx_o &&
+           snap_[3] == top_.out_by_o && snap_[4] == top_.out_cx_o && snap_[5] == top_.out_cy_o &&
            snap_[6] == top_.out_min_x_o && snap_[7] == top_.out_max_x_o &&
            snap_[8] == top_.out_min_y_o && snap_[9] == top_.out_max_y_o;
   }
@@ -358,9 +357,8 @@ class SetupDev {
     snapq_[2] = top_.out_kc2_o;
   }
   bool same_packet() const {
-    return snap_[0] == top_.out_kx0_o && snap_[1] == top_.out_ky0_o &&
-           snap_[2] == top_.out_kx1_o && snap_[3] == top_.out_ky1_o &&
-           snap_[4] == top_.out_kx2_o && snap_[5] == top_.out_ky2_o &&
+    return snap_[0] == top_.out_kx0_o && snap_[1] == top_.out_ky0_o && snap_[2] == top_.out_kx1_o &&
+           snap_[3] == top_.out_ky1_o && snap_[4] == top_.out_kx2_o && snap_[5] == top_.out_ky2_o &&
            snap_[6] == top_.out_tl_o && snapq_[0] == top_.out_kc0_o &&
            snapq_[1] == top_.out_kc1_o && snapq_[2] == top_.out_kc2_o;
   }
@@ -387,8 +385,8 @@ namespace zhao_geom {
  */
 struct BinJob {
   int32_t ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
-  int32_t tx = 0, ty = 0;     // tile index
-  int32_t px = 0, py = 0;     // the raw port value: the tile's top-left pixel
+  int32_t tx = 0, ty = 0;  // tile index
+  int32_t px = 0, py = 0;  // the raw port value: the tile's top-left pixel
   uint16_t src_id = 0;
 };
 
@@ -569,8 +567,8 @@ class BinnerDev {
       top_.job_ready_i = rdy ? 1 : 0;
       top_.eval();
       if (top_.job_valid_o) {
-        const uint32_t snap[9] = {top_.job_ax_o, top_.job_ay_o,      top_.job_bx_o,
-                                  top_.job_by_o, top_.job_cx_o,      top_.job_cy_o,
+        const uint32_t snap[9] = {top_.job_ax_o,     top_.job_ay_o,     top_.job_bx_o,
+                                  top_.job_by_o,     top_.job_cx_o,     top_.job_cy_o,
                                   top_.job_tile_x_o, top_.job_tile_y_o, top_.job_src_id_o};
         if (held) {
           for (int i = 0; i < 9; ++i)

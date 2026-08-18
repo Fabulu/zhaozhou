@@ -59,7 +59,11 @@
 //    guard band", and `zref_fixp.hpp::to_screen_xy` does exactly that (and
 //    bumps the saturation ledger). A screen vertex ARRIVING here is therefore
 //    already inside ±2048 px by construction; there is no coordinate this
-//    block could be handed that the guard band would reject. What the ±2048 px
+//    block could be handed that the guard band would reject. That is an
+//    ASSUMPTION on the producer, and the producer is the clamp itself:
+//    ENFORCED-BY: reference/include/zref/zref_fixp.hpp:to_screen_xy
+//    (exercised at both rails by
+//    tests/geometry/geom_clip_directed.cpp:test_guard_band). What the ±2048 px
 //    extent buys is that the 21-bit coordinate and the §8 Giesen bound
 //    (2^43−2 at p = 21) hold for every triangle that reaches the rasterizer,
 //    including the wildly off-screen ones — which is precisely why they can be
@@ -86,7 +90,10 @@
 //    swaps B and C (the double-sided law). Doing the flip HERE rather than in
 //    GEOM.SETUP is the ruling this file owns: RASTER.EDGEWALK also flips, and
 //    a triangle that arrives already normalised makes its flip a no-op, so the
-//    two agree by construction instead of by coincidence — and GEOM.SETUP's
+//    two agree by construction instead of by coincidence.
+//    ENFORCED-BY: tests/geometry/geom_setup_directed.cpp:test_joint_with_edgewalk
+//    (coverage rebuilt from the coefficients of a normalised triangle equals
+//    RASTER.EDGEWALK's own, tile for tile). And GEOM.SETUP's
 //    top-left bits, which are only meaningful for a positive-area triangle,
 //    are then derived from the same vertices RASTER.EDGEWALK will use.
 //

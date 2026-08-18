@@ -161,8 +161,8 @@ void test_many_tiles() {
   bool seen[24][15] = {};
   for (const BinJob& j : got) {
     check(j.tx >= 0 && j.tx < kGridW && j.ty >= 0 && j.ty < kGridH, "many tiles: in grid", 1, 1);
-    check((j.tx << 4) <= t.max_x && ((j.tx << 4) + 15) >= t.min_x &&
-              (j.ty << 4) <= t.max_y && ((j.ty << 4) + 15) >= t.min_y,
+    check((j.tx << 4) <= t.max_x && ((j.tx << 4) + 15) >= t.min_x && (j.ty << 4) <= t.max_y &&
+              ((j.ty << 4) + 15) >= t.min_y,
           "many tiles: no tile outside the scan box", 1, 1);
     seen[j.tx][j.ty] = true;
   }
@@ -179,11 +179,10 @@ void test_many_tiles() {
   check(covered_tiles > 40, "many tiles: the fixture really does span many tiles", 40,
         covered_tiles);
   // and the trivial-reject earns its keep: fewer jobs than the bbox rectangle
-  const uint32_t bbox_tiles =
-      static_cast<uint32_t>(((t.max_x >> 4) - (t.min_x >> 4) + 1) *
-                            ((t.max_y >> 4) - (t.min_y >> 4) + 1));
-  check(got.size() < bbox_tiles, "many tiles: the corner test rejects some of the bbox",
-        bbox_tiles, static_cast<uint32_t>(got.size()));
+  const uint32_t bbox_tiles = static_cast<uint32_t>(((t.max_x >> 4) - (t.min_x >> 4) + 1) *
+                                                    ((t.max_y >> 4) - (t.min_y >> 4) + 1));
+  check(got.size() < bbox_tiles, "many tiles: the corner test rejects some of the bbox", bbox_tiles,
+        static_cast<uint32_t>(got.size()));
 }
 
 // --------------------------------------------------------- the joint -------
@@ -337,8 +336,7 @@ void test_one_tile() {
     check(got[0].src_id == 11, "one tile: src_id rides through", 11, got[0].src_id);
   }
   const uint32_t want_depth = st.max_depth_before > 1u ? st.max_depth_before : 1u;
-  check(st.max_depth == want_depth, "one tile: max_tile_list_depth == 1", want_depth,
-        st.max_depth);
+  check(st.max_depth == want_depth, "one tile: max_tile_list_depth == 1", want_depth, st.max_depth);
   diff({t}, "one tile: differential");
 }
 
@@ -384,8 +382,8 @@ void test_chunk_boundary() {
     std::vector<BinTri> tris;
     for (int i = 0; i < n; ++i) {
       const int32_t x = 34 * 256 + i * 16;
-      tris.push_back(mk(x, 34 * 256, x + 8 * 256, 36 * 256, x, 44 * 256,
-                        static_cast<uint16_t>(100 + i)));
+      tris.push_back(
+          mk(x, 34 * 256, x + 8 * 256, 36 * 256, x, 44 * 256, static_cast<uint16_t>(100 + i)));
     }
     BinStatus st;
     const std::vector<BinJob> got = run(tris, "chunk boundary: drain", 0, &st);
@@ -431,8 +429,7 @@ void test_triangle_store_overflow() {
   for (int i = 0; i < 140; ++i) {
     const int32_t x = (i % 20) * 16 * 256 + 2 * 256;
     const int32_t y = (i / 20) * 16 * 256 + 2 * 256;
-    tris.push_back(mk(x, y, x + 10 * 256, y + 2 * 256, x, y + 10 * 256,
-                      static_cast<uint16_t>(i)));
+    tris.push_back(mk(x, y, x + 10 * 256, y + 2 * 256, x, y + 10 * 256, static_cast<uint16_t>(i)));
   }
   BinStatus st;
   const std::vector<BinJob> got = run(tris, "tri overflow: frame", 0, &st);
@@ -488,8 +485,7 @@ void test_frames_are_isolated() {
   // an EMPTY frame after a full one must drain nothing at all
   BinStatus st3;
   const std::vector<BinJob> f3 = run({}, "frames: empty frame after a full one", 0, &st3);
-  check(f3.empty(), "frames: nothing survives frame_begin", 0,
-        static_cast<uint32_t>(f3.size()));
+  check(f3.empty(), "frames: nothing survives frame_begin", 0, static_cast<uint32_t>(f3.size()));
 }
 
 // --------------------------------------------------------------- 12 --------
@@ -511,16 +507,17 @@ void test_throughput() {
   const std::vector<BinJob> got = run({t}, "throughput: measurement", 0, &st);
   const double per_ref =
       got.empty() ? 0.0 : static_cast<double>(st.bin_cycles) / static_cast<double>(got.size());
-  std::printf("  MEASURED GEOM.BINNER bin throughput: %llu cycles for %u references = "
-              "%.2f cycles/reference (ledger target: 1)\n",
-              static_cast<unsigned long long>(st.bin_cycles), static_cast<unsigned>(got.size()),
-              per_ref);
+  std::printf(
+      "  MEASURED GEOM.BINNER bin throughput: %llu cycles for %u references = "
+      "%.2f cycles/reference (ledger target: 1)\n",
+      static_cast<unsigned long long>(st.bin_cycles), static_cast<unsigned>(got.size()), per_ref);
   const double drain_per_job =
       got.empty() ? 0.0 : static_cast<double>(st.drain_cycles) / static_cast<double>(got.size());
-  std::printf("  MEASURED GEOM.BINNER drain: %llu cycles for %u jobs = %.2f cycles/job "
-              "(RASTER.EDGEWALK spends 21..37 on each)\n",
-              static_cast<unsigned long long>(st.drain_cycles), static_cast<unsigned>(got.size()),
-              drain_per_job);
+  std::printf(
+      "  MEASURED GEOM.BINNER drain: %llu cycles for %u jobs = %.2f cycles/job "
+      "(RASTER.EDGEWALK spends 21..37 on each)\n",
+      static_cast<unsigned long long>(st.drain_cycles), static_cast<unsigned>(got.size()),
+      drain_per_job);
   // The claim in the RTL header and the contract is "one reference per two
   // clocks"; hold the block to it so a regression cannot quietly widen it.
   check(per_ref > 0.0 && per_ref < 4.0, "throughput: within the recorded bound", 4,
@@ -528,9 +525,8 @@ void test_throughput() {
   // The drain cost is STRUCTURAL, not per-job: two cycles for every tile of the
   // grid (the head read) plus four for every job. Hold the block to that shape
   // rather than to a cycles-per-job number the grid size dominates.
-  const uint64_t bound =
-      2ull * static_cast<uint64_t>(kGridW) * static_cast<uint64_t>(kGridH) +
-      6ull * static_cast<uint64_t>(got.size()) + 64ull;
+  const uint64_t bound = 2ull * static_cast<uint64_t>(kGridW) * static_cast<uint64_t>(kGridH) +
+                         6ull * static_cast<uint64_t>(got.size()) + 64ull;
   check(st.drain_cycles <= bound, "throughput: drain within 2*tiles + 6*jobs + 64",
         static_cast<uint32_t>(bound), static_cast<uint32_t>(st.drain_cycles));
 }

@@ -250,6 +250,64 @@ runs:
       the documented SYSTEM spacing law (vblank-only aborts), header
       rewritten to name that true enforcer. 6 covers, all reached by step 8.
 
+  - property: tests/formal/geom_binner_arena_bounds.sby
+    status: green
+    date: "2026-08-18"
+    commit: 56ebf94
+    lane: formal_geom_binner_arena_bounds
+    tasks: [prove, cover]
+    covers: true
+    notes: >-
+      The GEOM.BINNER arena bound the ledger names (ZH-058 / ZH-026), proved on
+      zhao_geom_arena - the module zhao_geom_binner instantiates to hand out
+      chunks, so the proof and the silicon are the same bytes. The ledger's
+      note is "Safe overflow: excess triangles degrade to next-frame, NEVER
+      SCRIBBLE", and "never scribble" reduces to one arithmetic fact: the
+      allocator must never present a grant for an index at or past the end of
+      the arena, however many requests arrive, in any order, with any
+      interleaving of frame releases. Five laws: a_bound (used <= CHUNKS
+      always), a_in_range (a GRANT always names a chunk strictly inside the
+      arena - the "never scribble" statement itself), a_wall (full implies no
+      grant, however hard the allocator is asked, which is what makes the
+      binner's frame wall total), a_monotone + a_step_one (between releases
+      `used` never decreases and a grant advances it by EXACTLY one, so two
+      grants never name the same chunk), and a_release (a release empties the
+      arena in one cycle - no residue survives a frame boundary).
+      MODE PROVE, NOT BMC, and that is the point: every assertion is one-step
+      inductive, so temporal induction closes them for ALL time. It had to be
+      unbounded here in a way it did not for the fill rule - the interesting
+      state, a FULL arena, is 256 grants from reset and no bounded run of a
+      sane depth reaches it. V19's scope-guard rule is therefore not engaged:
+      there is no bmc task and no horizon to guard.
+      FOUR COVERS, all reached at real step counts on a deliberately tiny
+      SECOND instance (CHUNKS = 4) in the same harness: c_grant (step 2),
+      c_fills (step 6 - exactly four grants from reset), c_refuses (a full
+      arena refusing a request) and c_reuse (a release re-arming a full one).
+      They are load-bearing: without them a_bound and a_wall would also hold
+      for an allocator that never granted anything at all. The inductive proof
+      is parameter-independent - it never mentions the value of CHUNKS, only
+      the relation between `used`, CAP and the grant - so the shipping
+      instance (CHUNKS = 256) carries the assertions and the tiny one carries
+      the covers.
+      TWO HARNESS DEFECTS were found and fixed while writing it, recorded so
+      nobody re-introduces them: the history registers needed a reset (a free
+      initial used_q gave a FALSE base-case counterexample at step 1 - a bug
+      about the harness, not the allocator), and the initial state needed
+      pinning to reset (an async reset only bites while rst_n is low, and
+      before that the cover task "reached" a full four-chunk arena in ONE
+      step, which is arithmetically impossible).
+      MUTATION-CHECKED: removing the `!full_o` term from alloc_ok_o makes
+      a_in_range AND a_wall both fail, so the proof is not passing vacuously.
+      NOT proved here, and named rather than assumed away: the binner's
+      overflow POLICY (which triangle is dropped, when the wall goes up, that
+      at most one triangle per frame is partially binned) is behaviour over a
+      12-state FSM with four RAMs and is out of reach for this engine; the
+      corner test, the enumeration order and the tile indexing are 36-bit
+      affine arithmetic over a 576-entry tile RAM. Both are covered instead by
+      geom_binner_directed (818 checks, including two overflow cases) and
+      geom_binner_random's three lanes, whose soundness sweeps run against
+      zref::EdgeWalk rather than against the binner's own oracle.
+
   - property: tests/formal/raster_edgewalk_top_left.sby
     status: green
     date: "2026-08-18"

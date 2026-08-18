@@ -116,8 +116,8 @@ void test_plane_identity() {
         const int64_t plane = static_cast<int64_t>(s.e[i].kx) * sub_x +
                               static_cast<int64_t>(s.e[i].ky) * sub_y + s.e[i].kc;
         if (law != plane) {
-          check(false, "plane identity: kx*px + ky*py + kc == orient()",
-                static_cast<uint64_t>(law), static_cast<uint64_t>(plane));
+          check(false, "plane identity: kx*px + ky*py + kc == orient()", static_cast<uint64_t>(law),
+                static_cast<uint64_t>(plane));
           return;
         }
       }
@@ -188,9 +188,8 @@ void test_third_constant() {
     const Clip::Out c = clipped(sh.ax, sh.ay, sh.bx, sh.by, sh.cx, sh.cy);
     if (c.verdict != Clip::kAccept) continue;
     const Setup::Out s = diff(c, "third constant: differential");
-    check(s.e[0].kc + s.e[1].kc + s.e[2].kc == s.area2,
-          "third constant: kc0 + kc1 + kc2 == 2A", static_cast<uint64_t>(s.area2),
-          static_cast<uint64_t>(s.e[0].kc + s.e[1].kc + s.e[2].kc));
+    check(s.e[0].kc + s.e[1].kc + s.e[2].kc == s.area2, "third constant: kc0 + kc1 + kc2 == 2A",
+          static_cast<uint64_t>(s.area2), static_cast<uint64_t>(s.e[0].kc + s.e[1].kc + s.e[2].kc));
     check(s.e[0].kx + s.e[1].kx + s.e[2].kx == 0, "third constant: kx sums to zero", 0,
           static_cast<uint32_t>(s.e[0].kx + s.e[1].kx + s.e[2].kx));
     check(s.e[0].ky + s.e[1].ky + s.e[2].ky == 0, "third constant: ky sums to zero", 0,
@@ -205,12 +204,12 @@ void test_steps_match_edgewalk() {
   const Clip::Out c = clipped(40 * 256 + 91, 60 * 256 + 13, 190 * 256 + 7, 45 * 256 + 201,
                               120 * 256 + 155, 200 * 256 + 33);
   const Setup::Out s = diff(c, "steps: differential");
-  check(s.e[0].kx == -(c.cy - c.by) && s.e[0].ky == (c.cx - c.bx), "steps: edge 0 = EDGEWALK sx0/sy0",
-        0, 0);
-  check(s.e[1].kx == -(c.ay - c.cy) && s.e[1].ky == (c.ax - c.cx), "steps: edge 1 = EDGEWALK sx1/sy1",
-        0, 0);
-  check(s.e[2].kx == -(c.by - c.ay) && s.e[2].ky == (c.bx - c.ax), "steps: edge 2 = EDGEWALK sx2/sy2",
-        0, 0);
+  check(s.e[0].kx == -(c.cy - c.by) && s.e[0].ky == (c.cx - c.bx),
+        "steps: edge 0 = EDGEWALK sx0/sy0", 0, 0);
+  check(s.e[1].kx == -(c.ay - c.cy) && s.e[1].ky == (c.ax - c.cx),
+        "steps: edge 1 = EDGEWALK sx1/sy1", 0, 0);
+  check(s.e[2].kx == -(c.by - c.ay) && s.e[2].ky == (c.bx - c.ax),
+        "steps: edge 2 = EDGEWALK sx2/sy2", 0, 0);
 }
 
 // ---------------------------------------------------------------- 5 --------
@@ -220,12 +219,12 @@ void test_top_left() {
   const struct {
     int32_t ax, ay, bx, by, cx, cy;
   } shapes[] = {
-      {50 * 256, 50 * 256, 90 * 256, 50 * 256, 70 * 256, 90 * 256},   // top horizontal
-      {50 * 256, 90 * 256, 90 * 256, 90 * 256, 70 * 256, 50 * 256},   // bottom horizontal
-      {50 * 256, 50 * 256, 50 * 256, 90 * 256, 90 * 256, 70 * 256},   // left vertical
-      {90 * 256, 50 * 256, 90 * 256, 90 * 256, 50 * 256, 70 * 256},   // right vertical
-      {50 * 256, 50 * 256, 90 * 256, 90 * 256, 50 * 256, 90 * 256},   // NW-SE diagonal
-      {90 * 256, 50 * 256, 50 * 256, 90 * 256, 90 * 256, 90 * 256},   // NE-SW diagonal
+      {50 * 256, 50 * 256, 90 * 256, 50 * 256, 70 * 256, 90 * 256},  // top horizontal
+      {50 * 256, 90 * 256, 90 * 256, 90 * 256, 70 * 256, 50 * 256},  // bottom horizontal
+      {50 * 256, 50 * 256, 50 * 256, 90 * 256, 90 * 256, 70 * 256},  // left vertical
+      {90 * 256, 50 * 256, 90 * 256, 90 * 256, 50 * 256, 70 * 256},  // right vertical
+      {50 * 256, 50 * 256, 90 * 256, 90 * 256, 50 * 256, 90 * 256},  // NW-SE diagonal
+      {90 * 256, 50 * 256, 50 * 256, 90 * 256, 90 * 256, 90 * 256},  // NE-SW diagonal
   };
   uint32_t seen = 0;
   for (const auto& sh : shapes) {

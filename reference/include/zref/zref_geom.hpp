@@ -102,10 +102,10 @@ struct Clip {
  */
 struct Setup {
   struct Edge {
-    int32_t kx = 0;    // -(b.y - a.y): the per-subpixel x coefficient
-    int32_t ky = 0;    // +(b.x - a.x): the per-subpixel y coefficient
-    int64_t kc = 0;    // a.x*b.y - a.y*b.x
-    bool tl = false;   // §8 top-left: (a.y == b.y) ? (a.x < b.x) : (a.y < b.y)
+    int32_t kx = 0;   // -(b.y - a.y): the per-subpixel x coefficient
+    int32_t ky = 0;   // +(b.x - a.x): the per-subpixel y coefficient
+    int64_t kc = 0;   // a.x*b.y - a.y*b.x
+    bool tl = false;  // §8 top-left: (a.y == b.y) ? (a.x < b.x) : (a.y < b.y)
   };
 
   struct Out {

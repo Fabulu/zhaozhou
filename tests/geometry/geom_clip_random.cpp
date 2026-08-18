@@ -52,7 +52,8 @@ const Clip::Viewport kVps[4] = {
 std::vector<uint8_t> serialize(const Clip::In& t, const Clip::Viewport& vp, int cull) {
   std::vector<uint8_t> v;
   auto put = [&v](int32_t x) {
-    for (int i = 0; i < 4; ++i) v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
+    for (int i = 0; i < 4; ++i)
+      v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
   };
   put(t.ax);
   put(t.ay);
@@ -74,8 +75,8 @@ std::string describe(const Clip::Out& want, const Clip::Out& got) {
   std::snprintf(buf, sizeof(buf),
                 "verdict oracle %d rtl %d; box oracle [%d..%d]x[%d..%d] rtl [%d..%d]x[%d..%d]; "
                 "2A oracle %lld rtl %lld",
-                want.verdict, got.verdict, want.min_x, want.max_x, want.min_y, want.max_y,
-                got.min_x, got.max_x, got.min_y, got.max_y,
+                static_cast<int>(want.verdict), static_cast<int>(got.verdict), want.min_x,
+                want.max_x, want.min_y, want.max_y, got.min_x, got.max_x, got.min_y, got.max_y,
                 static_cast<long long>(want.area2), static_cast<long long>(got.area2));
   return std::string(buf);
 }
@@ -222,8 +223,8 @@ void lane_b(ClipDev& dev, uint32_t iters) {
       const zref::EdgeWalk::Tri et{t.ax, t.ay, t.bx, t.by, t.cx, t.cy};
       for (uint32_t ty = vp.y0; ty < vp.y0 + vp.h && total == 0; ty += 16)
         for (uint32_t tx = vp.x0; tx < vp.x0 + vp.w && total == 0; tx += 16)
-          total += zref::EdgeWalk::tile(et, static_cast<int32_t>(tx), static_cast<int32_t>(ty))
-                       .count;
+          total +=
+              zref::EdgeWalk::tile(et, static_cast<int32_t>(tx), static_cast<int32_t>(ty)).count;
       if (total != 0) {
         bad = true;
         err = "kOffscreen deleted real coverage";

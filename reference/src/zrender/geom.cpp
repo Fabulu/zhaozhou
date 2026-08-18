@@ -138,8 +138,8 @@ std::vector<Binner::Ref> Binner::bin(const Setup::Out& s, int32_t min_x, int32_t
         // that MAXIMISES it (E' is affine, so its max over the 16x16 block of
         // centres is at a corner). If the max still fails the §8 fill test,
         // no centre in the tile can pass it.
-        int64_t ep = base[i] + static_cast<int64_t>(s.e[i].kx) * px +
-                     static_cast<int64_t>(s.e[i].ky) * py;
+        int64_t ep =
+            base[i] + static_cast<int64_t>(s.e[i].kx) * px + static_cast<int64_t>(s.e[i].ky) * py;
         if (s.e[i].kx > 0) ep += static_cast<int64_t>(s.e[i].kx) * (kTile - 1);
         if (s.e[i].ky > 0) ep += static_cast<int64_t>(s.e[i].ky) * (kTile - 1);
         if (!fill_accept(ep, nz[i], s.e[i].tl)) {

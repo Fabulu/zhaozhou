@@ -106,7 +106,8 @@ bool same(const BinJob& a, const BinJob& b) {
 std::vector<uint8_t> serialize(const std::vector<BinTri>& tris) {
   std::vector<uint8_t> v;
   auto put = [&v](int32_t x) {
-    for (int i = 0; i < 4; ++i) v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
+    for (int i = 0; i < 4; ++i)
+      v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
   };
   for (const BinTri& t : tris) {
     put(t.ax);

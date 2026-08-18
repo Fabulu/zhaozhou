@@ -71,6 +71,18 @@ const int kGridH = 15;
 const uint64_t kFillWord = 0xFFFFFF00'00000000ull;  // white RGB, tag 0, depth 0
 const uint64_t kClearWord = 0x00000000'00000000ull;
 
+/**
+ * One triangle as the real chain would hand it over: GEOM.CLIP's accepted
+ * packet and GEOM.SETUP's coefficients, in ONE container. They travel together
+ * because they describe the same triangle -- and because two parallel vectors
+ * are a bounds correlation no static analyser can see (cppcheck said so, and
+ * it was right to).
+ */
+struct TriPacket {
+  Clip::Out c;
+  Setup::Out s;
+};
+
 struct TileResult {
   int32_t tx = 0, ty = 0;
   uint32_t cov = 0;
@@ -96,8 +108,7 @@ class PipeDev {
   }
 
   /** One whole frame; returns the tiles the chain actually rasterized. */
-  std::vector<TileResult> frame(const std::vector<Setup::Out>& setups,
-                                const std::vector<Clip::Out>& clips, std::string* err) {
+  std::vector<TileResult> frame(const std::vector<TriPacket>& tris, std::string* err) {
     std::vector<TileResult> out;
     park();
     top_.frame_begin_i = 1;
@@ -107,9 +118,9 @@ class PipeDev {
     top_.eval();
     for (int i = 0; i < 1200 && !top_.tri_ready_o; ++i) tick();
 
-    for (size_t k = 0; k < setups.size(); ++k) {
-      const Setup::Out& s = setups[k];
-      const Clip::Out& c = clips[k];
+    for (size_t k = 0; k < tris.size(); ++k) {
+      const Setup::Out& s = tris[k].s;
+      const Clip::Out& c = tris[k].c;
       top_.tri_valid_i = 1;
       top_.tri_kx0_i = m23(s.e[0].kx);
       top_.tri_ky0_i = m23(s.e[0].ky);
@@ -120,8 +131,8 @@ class PipeDev {
       top_.tri_kx2_i = m23(s.e[2].kx);
       top_.tri_ky2_i = m23(s.e[2].ky);
       top_.tri_kc2_i = m48(s.e[2].kc);
-      top_.tri_tl_i = static_cast<uint32_t>((s.e[0].tl ? 1 : 0) | (s.e[1].tl ? 2 : 0) |
-                                            (s.e[2].tl ? 4 : 0));
+      top_.tri_tl_i =
+          static_cast<uint32_t>((s.e[0].tl ? 1 : 0) | (s.e[1].tl ? 2 : 0) | (s.e[2].tl ? 4 : 0));
       top_.tri_ax_i = m21(c.ax);
       top_.tri_ay_i = m21(c.ay);
       top_.tri_bx_i = m21(c.bx);
@@ -266,7 +277,7 @@ void test_one_triangle_many_tiles() {
         "fixture: accepted by GEOM.CLIP", 1, 1);
 
   std::string err;
-  const std::vector<TileResult> got = dev().frame({s}, {c}, &err);
+  const std::vector<TileResult> got = dev().frame({TriPacket{c, s}}, &err);
   check(err.empty(), "pipe: protocol", 0, err.empty() ? 0 : 1);
   if (!err.empty()) std::printf("    %s\n", err.c_str());
 
@@ -320,9 +331,8 @@ void test_one_triangle_many_tiles() {
     for (int i = 0; i < zref::TileResolve::kPixels; ++i) {
       if (want_px.rgb565[i] != t.px[static_cast<size_t>(i)]) {
         char buf[160];
-        std::snprintf(buf, sizeof(buf),
-                      "pipe: tile (%d,%d) pixel %d — oracle %04X, resolved %04X", t.tx, t.ty, i,
-                      want_px.rgb565[i], t.px[static_cast<size_t>(i)]);
+        std::snprintf(buf, sizeof(buf), "pipe: tile (%d,%d) pixel %d — oracle %04X, resolved %04X",
+                      t.tx, t.ty, i, want_px.rgb565[i], t.px[static_cast<size_t>(i)]);
         check(false, buf, want_px.rgb565[i], t.px[static_cast<size_t>(i)]);
         px_ok = false;
         break;
@@ -357,20 +367,20 @@ void test_one_tile_and_empty() {
   check(build(82 * 256, 66 * 256, 94 * 256, 68 * 256, 84 * 256, 78 * 256, &c, &s),
         "fixture: single-tile triangle accepted", 1, 1);
   std::string err;
-  const std::vector<TileResult> got = dev().frame({s}, {c}, &err);
+  const std::vector<TileResult> got = dev().frame({TriPacket{c, s}}, &err);
   check(err.empty(), "pipe: protocol (one tile)", 0, err.empty() ? 0 : 1);
   check(got.size() == 1, "pipe: a single-tile triangle rasterizes one tile", 1,
         static_cast<uint32_t>(got.size()));
   if (got.size() == 1) {
     check(got[0].tx == 5 && got[0].ty == 4, "pipe: and it is the right tile", 5u * 100 + 4,
           static_cast<uint32_t>(got[0].tx) * 100 + static_cast<uint32_t>(got[0].ty));
-    const zref::EdgeWalk::Cov cov = zref::EdgeWalk::tile({c.ax, c.ay, c.bx, c.by, c.cx, c.cy},
-                                                         got[0].tx * 16, got[0].ty * 16);
+    const zref::EdgeWalk::Cov cov =
+        zref::EdgeWalk::tile({c.ax, c.ay, c.bx, c.by, c.cx, c.cy}, got[0].tx * 16, got[0].ty * 16);
     check(got[0].cov == cov.count, "pipe: single-tile coverage", cov.count, got[0].cov);
   }
 
   std::string err2;
-  const std::vector<TileResult> none = dev().frame({}, {}, &err2);
+  const std::vector<TileResult> none = dev().frame({}, &err2);
   check(err2.empty(), "pipe: protocol (empty frame)", 0, err2.empty() ? 0 : 1);
   check(none.empty(), "pipe: an empty frame rasterizes nothing", 0,
         static_cast<uint32_t>(none.size()));

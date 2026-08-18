@@ -46,7 +46,8 @@ const Clip::Viewport kVp{0, 0, 384, 240};
 std::vector<uint8_t> serialize(const Clip::Out& c) {
   std::vector<uint8_t> v;
   auto put = [&v](int32_t x) {
-    for (int i = 0; i < 4; ++i) v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
+    for (int i = 0; i < 4; ++i)
+      v.push_back(static_cast<uint8_t>(static_cast<uint32_t>(x) >> (8 * i)));
   };
   put(c.ax);
   put(c.ay);
@@ -68,16 +69,17 @@ bool same(const Setup::Out& a, const Setup::Out& b) {
 
 std::string describe(const Setup::Out& want, const Setup::Out& got) {
   char buf[512];
-  std::snprintf(buf, sizeof(buf),
-                "2A %lld/%lld  e0 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)  e1 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)"
-                "  e2 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)",
-                static_cast<long long>(want.area2), static_cast<long long>(got.area2),
-                want.e[0].kx, want.e[0].ky, static_cast<long long>(want.e[0].kc), want.e[0].tl,
-                got.e[0].kx, got.e[0].ky, static_cast<long long>(got.e[0].kc), got.e[0].tl,
-                want.e[1].kx, want.e[1].ky, static_cast<long long>(want.e[1].kc), want.e[1].tl,
-                got.e[1].kx, got.e[1].ky, static_cast<long long>(got.e[1].kc), got.e[1].tl,
-                want.e[2].kx, want.e[2].ky, static_cast<long long>(want.e[2].kc), want.e[2].tl,
-                got.e[2].kx, got.e[2].ky, static_cast<long long>(got.e[2].kc), got.e[2].tl);
+  std::snprintf(
+      buf, sizeof(buf),
+      "2A %lld/%lld  e0 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)  e1 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)"
+      "  e2 (%d,%d,%lld,%d)/(%d,%d,%lld,%d)",
+      static_cast<long long>(want.area2), static_cast<long long>(got.area2), want.e[0].kx,
+      want.e[0].ky, static_cast<long long>(want.e[0].kc), want.e[0].tl, got.e[0].kx, got.e[0].ky,
+      static_cast<long long>(got.e[0].kc), got.e[0].tl, want.e[1].kx, want.e[1].ky,
+      static_cast<long long>(want.e[1].kc), want.e[1].tl, got.e[1].kx, got.e[1].ky,
+      static_cast<long long>(got.e[1].kc), got.e[1].tl, want.e[2].kx, want.e[2].ky,
+      static_cast<long long>(want.e[2].kc), want.e[2].tl, got.e[2].kx, got.e[2].ky,
+      static_cast<long long>(got.e[2].kc), got.e[2].tl);
   return std::string(buf);
 }
 
@@ -156,7 +158,8 @@ void lane_a(SetupDev& dev, uint32_t iters) {
     const Setup::Out got = dev.run(c, static_cast<uint16_t>(i), stall, &err);
     const Setup::Out want = Setup::setup(c.ax, c.ay, c.bx, c.by, c.cx, c.cy, c.area2);
     if (!err.empty() || !same(got, want)) {
-      fail("a", i, c, describe(want, got) + (err.empty() ? std::string() : ("\n  protocol: " + err)));
+      fail("a", i, c,
+           describe(want, got) + (err.empty() ? std::string() : ("\n  protocol: " + err)));
       continue;
     }
     if (got.e[0].kc + got.e[1].kc + got.e[2].kc != got.area2)
@@ -185,8 +188,8 @@ void lane_b(SetupDev& dev, uint32_t iters) {
                        << 4;
     const int32_t ty = (ty0 + static_cast<int32_t>(r.draw() % static_cast<uint32_t>(ty1 - ty0 + 1)))
                        << 4;
-    const zref::EdgeWalk::Cov want = zref::EdgeWalk::tile({c.ax, c.ay, c.bx, c.by, c.cx, c.cy}, tx,
-                                                          ty);
+    const zref::EdgeWalk::Cov want =
+        zref::EdgeWalk::tile({c.ax, c.ay, c.bx, c.by, c.cx, c.cy}, tx, ty);
     for (int row = 0; row < 16; ++row) {
       uint16_t mask = 0;
       for (int col = 0; col < 16; ++col) {

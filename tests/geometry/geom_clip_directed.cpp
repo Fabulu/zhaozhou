@@ -121,14 +121,15 @@ void test_outside() {
   const struct {
     int32_t dx, dy;
     const char* name;
-  } off[] = {{-500 * 256, 0, "left"},  {500 * 256, 0, "right"},
-             {0, -500 * 256, "above"}, {0, 500 * 256, "below"},
+  } off[] = {{-500 * 256, 0, "left"},
+             {500 * 256, 0, "right"},
+             {0, -500 * 256, "above"},
+             {0, 500 * 256, "below"},
              {-2000 * 256, -2000 * 256, "guard band away"}};
   for (const auto& o : off) {
-    const Clip::Out r =
-        diff(tri(o.dx + 10 * 256, o.dy + 10 * 256, o.dx + 30 * 256, o.dy + 10 * 256,
-                 o.dx + 20 * 256, o.dy + 30 * 256),
-             kVp, Clip::kCullNone, "outside: offscreen");
+    const Clip::Out r = diff(tri(o.dx + 10 * 256, o.dy + 10 * 256, o.dx + 30 * 256, o.dy + 10 * 256,
+                                 o.dx + 20 * 256, o.dy + 30 * 256),
+                             kVp, Clip::kCullNone, "outside: offscreen");
     check(r.verdict == Clip::kOffscreen, o.name, Clip::kOffscreen, r.verdict);
   }
 }
@@ -154,11 +155,11 @@ void test_near_plane() {
 // ---------------------------------------------------------------- 4 --------
 void test_degenerate() {
   const Clip::In cases[] = {
-      tri(50 * 256, 50 * 256, 50 * 256, 50 * 256, 50 * 256, 50 * 256),      // coincident
-      tri(50 * 256, 50 * 256, 90 * 256, 70 * 256, 50 * 256, 50 * 256),      // repeated A/C
-      tri(50 * 256, 50 * 256, 60 * 256, 60 * 256, 80 * 256, 80 * 256),      // collinear
+      tri(50 * 256, 50 * 256, 50 * 256, 50 * 256, 50 * 256, 50 * 256),  // coincident
+      tri(50 * 256, 50 * 256, 90 * 256, 70 * 256, 50 * 256, 50 * 256),  // repeated A/C
+      tri(50 * 256, 50 * 256, 60 * 256, 60 * 256, 80 * 256, 80 * 256),  // collinear
       tri(50 * 256, 50 * 256, 50 * 256 + 1, 50 * 256 + 1, 50 * 256 + 2, 50 * 256 + 2),
-      tri(0, 0, 100 * 256, 0, 200 * 256, 0),                                // horizontal
+      tri(0, 0, 100 * 256, 0, 200 * 256, 0),  // horizontal
   };
   for (const Clip::In& t : cases) {
     const Clip::Out r = diff(t, kVp, Clip::kCullNone, "degenerate: zero area");
@@ -177,9 +178,9 @@ void test_windings() {
   Clip::Out first;
   bool have = false;
   for (const auto& p : perm) {
-    const Clip::Out r = diff(tri(v[p[0]][0], v[p[0]][1], v[p[1]][0], v[p[1]][1], v[p[2]][0],
-                                 v[p[2]][1]),
-                             kVp, Clip::kCullNone, "windings: differential");
+    const Clip::Out r =
+        diff(tri(v[p[0]][0], v[p[0]][1], v[p[1]][0], v[p[1]][1], v[p[2]][0], v[p[2]][1]), kVp,
+             Clip::kCullNone, "windings: differential");
     check(r.verdict == Clip::kAccept, "windings: accepted", Clip::kAccept, r.verdict);
     if (!have) {
       first = r;
@@ -187,8 +188,8 @@ void test_windings() {
     } else {
       // 2A and the box are permutation invariant; the normalised triangle is
       // the same cycle, so its area and box must match exactly
-      check(r.area2 == first.area2, "windings: |2A| invariant",
-            static_cast<uint64_t>(first.area2), static_cast<uint64_t>(r.area2));
+      check(r.area2 == first.area2, "windings: |2A| invariant", static_cast<uint64_t>(first.area2),
+            static_cast<uint64_t>(r.area2));
       check(r.min_x == first.min_x && r.max_x == first.max_x && r.min_y == first.min_y &&
                 r.max_y == first.max_y,
             "windings: box invariant", 0, 1);
@@ -204,8 +205,8 @@ void test_box_law() {
   for (int32_t frac = 0; frac < 256; ++frac) {
     const int32_t x0 = 40 * 256 + frac;
     const int32_t x1 = 60 * 256 + frac;
-    diff(tri(x0, 40 * 256 + frac, x1, 40 * 256 + frac, x0, 60 * 256 + frac), kVp,
-         Clip::kCullNone, "box law: subpixel sweep");
+    diff(tri(x0, 40 * 256 + frac, x1, 40 * 256 + frac, x0, 60 * 256 + frac), kVp, Clip::kCullNone,
+         "box law: subpixel sweep");
   }
   // and a triangle exactly one subpixel wide/tall at every fraction — the case
   // where min and max land on the same pixel or on none at all
@@ -218,8 +219,8 @@ void test_box_law() {
 
 // ---------------------------------------------------------------- 7 --------
 void test_scissor() {
-  const Clip::Viewport vps[] = {{0, 0, 384, 240}, {0, 0, 320, 240}, {0, 0, 256, 192},
-                                {0, 192, 256, 192}};
+  const Clip::Viewport vps[] = {
+      {0, 0, 384, 240}, {0, 0, 320, 240}, {0, 0, 256, 192}, {0, 192, 256, 192}};
   for (const Clip::Viewport& vp : vps) {
     const int32_t x0 = static_cast<int32_t>(vp.x0) * 256;
     const int32_t y0 = static_cast<int32_t>(vp.y0) * 256;
@@ -289,13 +290,11 @@ void test_backface() {
         static_cast<uint64_t>(b.area2));
 
   // CULL_NEG rejects 2A < 0, CULL_POS rejects 2A > 0
-  check(diff(neg, kVp, Clip::kCullNegative, "backface: NEG rejects CCW").verdict ==
-            Clip::kBackface,
+  check(diff(neg, kVp, Clip::kCullNegative, "backface: NEG rejects CCW").verdict == Clip::kBackface,
         "backface: NEG rejects CCW", Clip::kBackface, 0);
   check(diff(pos, kVp, Clip::kCullNegative, "backface: NEG keeps CW").verdict == Clip::kAccept,
         "backface: NEG keeps CW", Clip::kAccept, 0);
-  check(diff(pos, kVp, Clip::kCullPositive, "backface: POS rejects CW").verdict ==
-            Clip::kBackface,
+  check(diff(pos, kVp, Clip::kCullPositive, "backface: POS rejects CW").verdict == Clip::kBackface,
         "backface: POS rejects CW", Clip::kBackface, 0);
   check(diff(neg, kVp, Clip::kCullPositive, "backface: POS keeps CCW").verdict == Clip::kAccept,
         "backface: POS keeps CCW", Clip::kAccept, 0);
@@ -324,8 +323,8 @@ void test_counters() {
   const uint32_t c0 = dev().clipped();
   const uint32_t k0 = dev().culled();
 
-  diff(tri(100 * 256, 100 * 256, 140 * 256, 100 * 256, 120 * 256, 140 * 256), kVp,
-       Clip::kCullNone, "counters: one accept");
+  diff(tri(100 * 256, 100 * 256, 140 * 256, 100 * 256, 120 * 256, 140 * 256), kVp, Clip::kCullNone,
+       "counters: one accept");
   check(dev().submitted() == s0 + 1, "counters: submitted counts every input", s0 + 1,
         dev().submitted());
   check(dev().clipped() == c0 && dev().culled() == k0, "counters: an accept moves neither reject",
@@ -339,8 +338,8 @@ void test_counters() {
 
   diff(tri(-1000 * 256, 0, -900 * 256, 0, -950 * 256, 100 * 256), kVp, Clip::kCullNone,
        "counters: offscreen is CLIPPED");
-  check(dev().clipped() == c0 + 2 && dev().culled() == k0, "counters: offscreen -> clipped",
-        c0 + 2, dev().clipped());
+  check(dev().clipped() == c0 + 2 && dev().culled() == k0, "counters: offscreen -> clipped", c0 + 2,
+        dev().clipped());
 
   diff(tri(50 * 256, 50 * 256, 60 * 256, 60 * 256, 80 * 256, 80 * 256), kVp, Clip::kCullNone,
        "counters: zero area is CULLED");

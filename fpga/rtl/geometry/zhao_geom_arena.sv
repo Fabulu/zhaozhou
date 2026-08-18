@@ -39,6 +39,7 @@ module zhao_geom_arena #(
 
   // used_r counts allocated chunks and saturates at CHUNKS by construction:
   // it only ever increments on a GRANT, and a grant requires used_r < CHUNKS.
+  // ENFORCED-BY: tests/formal/geom_binner_arena_bounds_fv.sv:a_bound
   localparam logic [PTR_W:0] CAP = (PTR_W+1)'(CHUNKS);
 
   logic [PTR_W:0] used_r;

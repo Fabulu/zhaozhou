@@ -196,6 +196,7 @@
 // bottleneck by construction: RASTER.EDGEWALK spends 21…37 cycles on the job
 // it is handed, so behind it the drain is idle ~80% of the time, and the
 // whole-grid scan is 720 cycles out of a 251,520-cycle frame (0.3%).
+// ENFORCED-BY: tests/geometry/geom_binner_directed.cpp:test_throughput
 //
 // Conservative SystemVerilog subset only (charter §2); depends on
 // zhao_raster_fill and zhao_geom_arena. No package deps.
