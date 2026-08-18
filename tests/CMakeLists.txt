@@ -1739,6 +1739,18 @@ set_tests_properties(lint_terrain_project PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# TERRAIN.PROJECT -> GEOM.CLIP -> GEOM.SETUP -> the real rasterizer (phase 6)
+#
+# Four Verilated models wired to each other with no adapter: real tessellated
+# terrain goes in as fx16 world vertices and RGB565 framebuffer words come out.
+# Composing GEOM.BINNER with the rasterizer exposed a silent 16x tile-index
+# error no isolated test could see; TERRAIN.PROJECT -> GEOM.CLIP is the seam
+# this increment created, and nothing else checks that the block which CLAMPS
+# to the guard band and the block which ASSUMES the clamp agree on 21 bits.
+#
+# Registered after ZHAO_GEOM_BIN_PIPE_SV is defined; see below.
+
 # per-module lint (charter 21 step 8)
 add_test(NAME lint_geom_clip
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
@@ -1796,6 +1808,31 @@ verilate(test_geom_bin_pipe_directed
   SOURCES ${ZHAO_GEOM_BIN_PIPE_SV})
 add_test(NAME geom_bin_pipe_directed COMMAND test_geom_bin_pipe_directed)
 set_tests_properties(geom_bin_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_project_chain terrain/terrain_project_chain.cpp)
+target_link_libraries(test_terrain_project_chain PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_project_chain PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_terrain_project_chain
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+verilate(test_terrain_project_chain
+  PREFIX Vzhao_geom_clip
+  TOP_MODULE zhao_geom_clip
+  SOURCES ${ZHAO_GEOM_CLIP_SV})
+verilate(test_terrain_project_chain
+  PREFIX Vzhao_geom_setup
+  TOP_MODULE zhao_geom_setup
+  SOURCES ${ZHAO_GEOM_SETUP_SV})
+verilate(test_terrain_project_chain
+  PREFIX Vzhao_geom_bin_pipe
+  TOP_MODULE zhao_geom_bin_pipe
+  SOURCES ${ZHAO_GEOM_BIN_PIPE_SV})
+add_test(NAME terrain_project_chain COMMAND test_terrain_project_chain)
+set_tests_properties(terrain_project_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
 add_test(NAME lint_geom_bin_pipe
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
