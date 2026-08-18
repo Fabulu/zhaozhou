@@ -1326,6 +1326,124 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
+
+# ---- Phase 5: TEXTURE.CACHE (ZH-061) + TEXTURE.TMU (ZH-027) ----------------
+# ---- law: charter 15 (formats, layout, the Primary TMU capability list),
+# ---- 7.3 (M10K tenancy), 26 (no second unrestricted TMU); spec/qformats.md
+# ---- 2/3/4 (unit8, single rounding, rescale) and 8 (perspective UV);
+# ---- spec/stars_and_flares.md 1 (nearest mandatory on a palette, the
+# ---- palette-page invalidate); spec/sky_and_beams.md 1.1/2 (which recipe
+# ---- needs which mode); spec/terrain_rules.md 6.2 (the frozen mirrored fold).
+# ---- contracts design/contracts/TEXTURE.CACHE.md + TEXTURE.TMU.md ---------
+# The oracles are zref::TextureCache and zref::Tmu. Neither restates arithmetic
+# it can delegate: the RGB565 expansion is zref::sky::rgb565::to_rgb888 (the
+# frozen stars-2 law) and MIRROR is the generalisation of
+# zref::terrain::mirror_texel that texture_tmu_directed pins against the frozen
+# helper itself over a full period. The mip level OFFSET is a summation loop in
+# the oracle and a base-4-repunit closed form in the RTL, so the differential
+# lanes check that identity too. THE BILINEAR LAW IS DERIVED, NOT CITED: no
+# spec in this repository defines filter weights or their rounding, and the
+# derivation from qformats 2/3/4 is recorded in zhao_texture_bilerp.sv and in
+# design/contracts/TEXTURE.TMU.md.
+set(ZHAO_TEXTURE_CACHE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache.sv)
+set(ZHAO_TEXTURE_TMU_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu.sv)
+
+add_executable(test_texture_cache_directed texture/texture_cache_directed.cpp)
+target_link_libraries(test_texture_cache_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_cache_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_cache_directed
+  PREFIX Vzhao_texture_cache
+  TOP_MODULE zhao_texture_cache
+  SOURCES ${ZHAO_TEXTURE_CACHE_SV})
+add_test(NAME texture_cache_directed COMMAND test_texture_cache_directed)
+set_tests_properties(texture_cache_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_texture_cache_random texture/texture_cache_random.cpp)
+target_link_libraries(test_texture_cache_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_cache_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_cache_random
+  PREFIX Vzhao_texture_cache
+  TOP_MODULE zhao_texture_cache
+  SOURCES ${ZHAO_TEXTURE_CACHE_SV})
+add_test(NAME texture_cache_random COMMAND test_texture_cache_random)
+set_tests_properties(texture_cache_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# 13x soak of the same binary
+add_test(NAME texture_cache_random_nightly COMMAND test_texture_cache_random --nightly)
+set_tests_properties(texture_cache_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_texture_tmu_directed texture/texture_tmu_directed.cpp)
+target_link_libraries(test_texture_tmu_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_tmu_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_tmu_directed
+  PREFIX Vzhao_texture_tmu
+  TOP_MODULE zhao_texture_tmu
+  SOURCES ${ZHAO_TEXTURE_TMU_SV})
+add_test(NAME texture_tmu_directed COMMAND test_texture_tmu_directed)
+set_tests_properties(texture_tmu_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_texture_tmu_random texture/texture_tmu_random.cpp)
+target_link_libraries(test_texture_tmu_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_tmu_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_tmu_random
+  PREFIX Vzhao_texture_tmu
+  TOP_MODULE zhao_texture_tmu
+  SOURCES ${ZHAO_TEXTURE_TMU_SV})
+add_test(NAME texture_tmu_random COMMAND test_texture_tmu_random)
+set_tests_properties(texture_tmu_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# 15x soak of the same binary
+add_test(NAME texture_tmu_random_nightly COMMAND test_texture_tmu_random --nightly)
+set_tests_properties(texture_tmu_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_texture_cache
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_cache
+                 ${ZHAO_TEXTURE_CACHE_SV})
+set_tests_properties(lint_texture_cache PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_texture_tmu
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_tmu
+                 ${ZHAO_TEXTURE_TMU_SV})
+set_tests_properties(lint_texture_tmu PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the bilinear channel, proved on zhao_texture_bilerp - the module
+# zhao_texture_tmu instantiates 4x per filtered sample. TWO tasks (bmc AND
+# cover): the covers pin the EXACT rounding tie actually firing and the filter
+# actually mixing, without which the exactness and convexity theorems would
+# also hold for a truncating filter that never left tap 0. Reuses the hardened
+# mem_formal_lane wrapper.
+if(ZHAO_SBY_BIN)
+  set(PROP "texture_bilerp")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/texture_bilerp_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/texture_bilerp_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_texture_bilerp
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_texture_bilerp PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
 # ---- Phase 4/5: the composed tile pipe (charter phase 4; the roadmap's -----
 # ---- "first exact tile and triangle"). RASTER.EDGEWALK -> RASTER.EARLYZ ->
 # ---- RASTER.FRAGMENT -> RASTER.TILESTORE -> RASTER.RESOLVE, the whole
