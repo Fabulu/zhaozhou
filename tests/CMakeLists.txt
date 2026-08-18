@@ -1204,22 +1204,149 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
-# ---- Phase 4: the composed tile pipe (charter phase 4; the roadmap's "first --
-# ---- exact tile and triangle"). RASTER.EDGEWALK -> RASTER.TILESTORE ->
-# ---- RASTER.RESOLVE, instantiated together for the first time.
+# ---- Phase 5: RASTER.EARLYZ (ZH-059; law spec/qformats.md 8's strict -------
+# ---- invw24 depth test + charter 8's pass-6 coarse depth binning;
+# ---- contract design/contracts/RASTER.EARLYZ.md) ---------------------------
+# The oracle is zref::EarlyZ. Like zref::TileStore it is a plainly-written
+# model of the CONTRACT rather than a view onto a frozen function - nothing
+# earlier here maintains a hierarchical-Z floor - so what the differential
+# lanes exercise is the RTL's registered output stage, backpressure and
+# saturating counters. The one thing both sides share is the fragment state
+# word's bit positions, which come from zref::FragmentPipeline::State.
+# Kept a separate block from RASTER.FRAGMENT by architect ruling (1.D); the
+# argument for that split is in the RTL header and the contract.
+set(ZHAO_RASTER_EARLYZ_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv)
+
+add_executable(test_raster_earlyz_directed raster/raster_earlyz_directed.cpp)
+target_link_libraries(test_raster_earlyz_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_earlyz_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_earlyz_directed
+  PREFIX Vzhao_raster_earlyz
+  TOP_MODULE zhao_raster_earlyz
+  SOURCES ${ZHAO_RASTER_EARLYZ_SV})
+add_test(NAME raster_earlyz_directed COMMAND test_raster_earlyz_directed)
+set_tests_properties(raster_earlyz_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_earlyz_random raster/raster_earlyz_random.cpp)
+target_link_libraries(test_raster_earlyz_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_earlyz_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_earlyz_random
+  PREFIX Vzhao_raster_earlyz
+  TOP_MODULE zhao_raster_earlyz
+  SOURCES ${ZHAO_RASTER_EARLYZ_SV})
+add_test(NAME raster_earlyz_random COMMAND test_raster_earlyz_random)
+set_tests_properties(raster_earlyz_random PROPERTIES LABELS "fast;nightly")
+# 15x soak of the same binary
+add_test(NAME raster_earlyz_random_nightly COMMAND test_raster_earlyz_random --nightly)
+set_tests_properties(raster_earlyz_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_raster_earlyz
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_earlyz
+                 ${ZHAO_RASTER_EARLYZ_SV})
+set_tests_properties(lint_raster_earlyz PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- Phase 4: RASTER.FRAGMENT (ZH-025; the charter 4 EXEMPLAR block; law ---
+# ---- spec/qformats.md 8 (the strict depth test) + 2/3/4 (unit8 and the one
+# ---- rounding primitive) + spec/sky_and_beams.md 1.1/2 and
+# ---- spec/stars_and_flares.md 1 (the six ratified recipes);
+# ---- contract design/contracts/RASTER.FRAGMENT.md) -------------------------
+# The oracle is zref::FragmentPipeline, which restates no arithmetic it can
+# delegate: the unit8 product is zref::unit_mul (qformats 3's frozen
+# `((u32)a*b + 128) >> 8`) and the tile word is zref::TileStore::Word. So
+# "RTL == oracle" is "RTL == the 8 depth test, the frozen unit8 lane, and the
+# recipes those two specs ratified".
+set(ZHAO_RASTER_FRAGMENT_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv)
+
+add_executable(test_raster_fragment_directed raster/raster_fragment_directed.cpp)
+target_link_libraries(test_raster_fragment_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_fragment_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_fragment_directed
+  PREFIX Vzhao_raster_fragment
+  TOP_MODULE zhao_raster_fragment
+  SOURCES ${ZHAO_RASTER_FRAGMENT_SV})
+add_test(NAME raster_fragment_directed COMMAND test_raster_fragment_directed)
+set_tests_properties(raster_fragment_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_fragment_random raster/raster_fragment_random.cpp)
+target_link_libraries(test_raster_fragment_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_fragment_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_fragment_random
+  PREFIX Vzhao_raster_fragment
+  TOP_MODULE zhao_raster_fragment
+  SOURCES ${ZHAO_RASTER_FRAGMENT_SV})
+add_test(NAME raster_fragment_random COMMAND test_raster_fragment_random)
+set_tests_properties(raster_fragment_random PROPERTIES LABELS "fast;nightly")
+# 15x soak of the same binary
+add_test(NAME raster_fragment_random_nightly COMMAND test_raster_fragment_random --nightly)
+set_tests_properties(raster_fragment_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_raster_fragment
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_fragment
+                 ${ZHAO_RASTER_FRAGMENT_SV})
+set_tests_properties(lint_raster_fragment PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the blend channel, proved on zhao_raster_blend - the module
+# zhao_raster_fragment instantiates 3x per fragment. TWO tasks (bmc AND
+# cover): the covers pin the additive rail actually firing and the alpha
+# lerp actually reaching both endpoints, without which the no-overshoot and
+# no-wrap theorems would also hold for a blend that never moved. Reuses the
+# hardened mem_formal_lane wrapper.
+if(ZHAO_SBY_BIN)
+  set(PROP "raster_fragment_blend")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/raster_fragment_blend_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/raster_fragment_blend_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_raster_fragment_blend
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_raster_fragment_blend PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
+# ---- Phase 4/5: the composed tile pipe (charter phase 4; the roadmap's -----
+# ---- "first exact tile and triangle"). RASTER.EDGEWALK -> RASTER.EARLYZ ->
+# ---- RASTER.FRAGMENT -> RASTER.TILESTORE -> RASTER.RESOLVE, the whole
+# ---- raster chain instantiated together.
 # NOT a ledger block: design/blocks.yml's RASTER group has five entries and
 # none of them is "the composition", and registering one is a validator-gated
 # ledger edit. The rationale lives in the RTL header
 # (fpga/rtl/raster/zhao_raster_tile_pipe.sv), which is also where the three
 # laws this file owns -- the tile sequencing/ping-pong, the coverage->write
 # expansion, and the framebuffer pixel address -- are stated.
-# The oracle is the THREE oracles wired the same way: zref::EdgeWalk ->
-# zref::TileStore -> zref::TileResolve, each itself a view onto a frozen
-# reference, so "RTL == oracle" is "RTL == the three laws, composed".
+# The oracle is the FIVE oracles wired the same way: zref::EdgeWalk ->
+# zref::EarlyZ -> zref::FragmentPipeline -> zref::TileStore ->
+# zref::TileResolve, each a view onto a frozen reference or a plainly-written
+# contract model, so "RTL == oracle" is "RTL == the five laws, composed".
 set(ZHAO_RASTER_TILE_PIPE_SV
     ${ZHAO_ABI_PKG}
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv

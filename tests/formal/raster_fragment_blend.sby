@@ -1,0 +1,65 @@
+# raster_fragment_blend — the RASTER.FRAGMENT blend channel, proved on the
+# module zhao_raster_fragment actually instantiates three times per fragment
+# (ZH-025). Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1..P7: REPLACE is the source; ALPHA is EXACTLY the spec's
+#           single-rounded signed lerp AND never overshoots either endpoint;
+#           ADD is exactly min(255, dst+src); ADD_MOD is exactly
+#           min(255, dst + unit_mul(src,a)); neither additive mode can darken;
+#           and no mode can leave the 8-bit field. All are unconditional over
+#           free inputs, so depth 2 is the whole property: the harness is
+#           combinational and its inputs are unconstrained.
+#   cover — the corners the comments claim are REACHABLE: the additive rail
+#           ACTUALLY firing (without it, the min() and field bounds would also
+#           hold for a blend that never reaches 255), the alpha lerp reaching
+#           BOTH endpoints and moving in BOTH directions (without which the
+#           no-overshoot theorem holds for a blend that never moves), the
+#           unit8 endpoint (a=255 gives 254, not 255), and — the load-bearing
+#           one — an exact ROUNDING TIE on the negative half, which is the
+#           case a magnitude-then-sign implementation gets wrong by one LSB.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. The harness is
+# purely combinational (zhao_raster_blend is three always_comb blocks; the
+# only always_ff blocks hold the assert and cover statements) and every input
+# is unconstrained, so the reachable state set is identical at every step. The
+# input parametrisation is likewise total rather than sampled: dst and src are
+# u8 because the charter §8 working colour IS one byte per channel, a is a u8
+# because it IS a unit8 (spec/qformats.md §2), and mode is 2 bits because the
+# field is 2 bits. Free (mode, dst, src, a) is all 67,108,864 inputs the block
+# can ever be handed. There is no horizon for a scope guard to assert.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The mode ENCODING (which recipe
+# selects which mode), the depth/stencil/alpha tests, the tag and stencil
+# write paths, the two-stage pipeline, the stall that re-issues its own read,
+# and the counters are NOT proved here: they are covered by the differential
+# lanes against zref::FragmentPipeline (raster_fragment_directed's recipe,
+# test-mode and same-pixel cases, plus raster_fragment_random's three lanes)
+# and by the mutation evidence in design/contracts/RASTER.FRAGMENT.md. What IS
+# proved is the arithmetic every blended fragment in the machine flows
+# through, three times over.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_raster_blend.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top raster_fragment_blend_fv zhao_raster_blend.sv raster_fragment_blend_fv.sv
+prep -top raster_fragment_blend_fv
+
+[files]
+../../fpga/rtl/raster/zhao_raster_blend.sv
+raster_fragment_blend_fv.sv
