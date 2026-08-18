@@ -314,3 +314,57 @@ Edit the TEMPLATE only. `public/index.html` is generated and overwritten.
 Deploy with `deploy.ps1` so both copycheck gates run. Watch the copy rules: no
 em dashes, no en dashes used as dashes, no banned phrases, no defensive
 frame-rate prose.
+
+## Wave 4 progress: three phase-4 blocks in RTL
+
+`RASTER.EDGEWALK` (`8ad678a`, `d20d56f`, `d19ee93`), then `RASTER.TILESTORE`
+and `RASTER.RESOLVE` (`da4960c`, `1a77214`, `c25da82`, `7d68c2f`, `aa2120b`).
+Both increments were built by one agent at a time and reviewed here before
+pushing. Verified independently rather than on the agents' reports:
+
+- Full fast lane on the final tree: **96/96, 0 failures**. Not argued by
+  composition; actually run.
+- Format gate: 123 files clean under the pinned LLVM 15.
+- EDGEWALK fill rule: algebra checked by hand against `rast.cpp`
+  (`E0 = 256*E' + r`; `r` is constant per tile because a pixel step is 256
+  subpixels, so both edge steps are multiples of 256).
+- EDGEWALK mutation-checked HERE, not just by the agent: injecting the
+  top-left defect took the directed suite to 11/148 failed with the right
+  symptom (oracle covers 16 diagonal pixels, mutant covers 0), and the formal
+  proof failed too. The suite can go red, so its green means something.
+
+Maturity stays SPECIFIED for all three. Simulated and formally proven is not
+synthesized and is not hardware.
+
+### Open decision: black does not resolve to black
+
+Verified independently by evaluating the oracle's own expression over all 16
+Bayer cells. Green's dither amplitude is 32 while red and blue get 16, so for a
+black pixel the green numerator is `32*B + 16`, which reaches 255 at `B >= 8`:
+
+    B = 0..7   -> 0x0000   correct black
+    B = 8..15  -> 0x0020   green level 1
+
+Half of every black region resolves to a faint green speckle. This is the
+counterpart of the white-rail defect fixed 2026-08-16, and it is the same class
+of bug left half-done. It matters here specifically because the game is set
+against night skies and space.
+
+The agent handled it correctly: it reproduced `resolve.cpp` bit-for-bit rather
+than making the RTL "better" than its own oracle, pinned the real behaviour in
+`test_rails`, and escalated. An RTL block that silently disagrees with its
+reference is worse than one that faithfully reproduces a known defect.
+
+Owner decision required, because fixing `resolve.cpp` moves every golden
+capture's canvas CRC:
+1. Fix the law and re-pin all goldens (recommended)
+2. Leave it and document the speckle as intended dither behaviour
+3. Clamp the black rail only, leaving the rest of the law untouched
+
+### Also found, not acted on (validator-gated, not an RTL whim)
+
+Two stale ledger notes, documented in the contracts instead of edited:
+- TILESTORE "M10K budget per memory_rules §7.3" - that file has seven sections
+  and no §7.3; the tenancy list is CHARTER §7.3.
+- RESOLVE "Dither matrix is a generated table (W3 fixgen), never hand-typed" -
+  contradicts `resolve.cpp`, which records that fixgen has no such table.
