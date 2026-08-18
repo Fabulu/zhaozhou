@@ -1585,6 +1585,50 @@ set_tests_properties(lint_terrain_normals PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# TERRAIN.PATCH (phase 6, ZH-033)
+#
+# The Mantle entry point: terrain_rules 3.4's per-vertex composition chain and
+# 9.1's frozen live-field intake (MAX_PATCH_FIELDS = 16, reject the tail, never
+# evict). The oracle is a THIN VIEW onto compose_lattice, and
+# terrain_patch_directed proves that by composing a real 33x33 dual patch with
+# two real earth programs both ways and requiring all 1,089 vertices to agree —
+# without that cross-check the oracle would be a second implementation of 3.4
+# and charter 29-6 would be broken before the RTL was written.
+set(ZHAO_TERRAIN_PATCH_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
+
+add_executable(test_terrain_patch_directed terrain/terrain_patch_directed.cpp)
+target_link_libraries(test_terrain_patch_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_patch_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_terrain_patch_directed
+  PREFIX Vzhao_terrain_patch
+  TOP_MODULE zhao_terrain_patch
+  SOURCES ${ZHAO_TERRAIN_PATCH_SV})
+add_test(NAME terrain_patch_directed COMMAND test_terrain_patch_directed)
+set_tests_properties(terrain_patch_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_terrain_patch_random terrain/terrain_patch_random.cpp)
+target_link_libraries(test_terrain_patch_random PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_patch_random
+  PREFIX Vzhao_terrain_patch
+  TOP_MODULE zhao_terrain_patch
+  SOURCES ${ZHAO_TERRAIN_PATCH_SV})
+add_test(NAME terrain_patch_random COMMAND test_terrain_patch_random)
+set_tests_properties(terrain_patch_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME terrain_patch_random_nightly COMMAND test_terrain_patch_random --nightly)
+set_tests_properties(terrain_patch_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_patch
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_patch
+                 ${ZHAO_TERRAIN_PATCH_SV})
+set_tests_properties(lint_terrain_patch PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # per-module lint (charter 21 step 8)
 add_test(NAME lint_geom_clip
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
