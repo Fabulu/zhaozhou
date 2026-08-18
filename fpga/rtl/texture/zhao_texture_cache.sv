@@ -101,16 +101,21 @@
 // Every access is eventually accepted with all its lanes hitting, so counting
 // the tag check AT acceptance would make `cache_hits` equal the lookup count
 // and the hit RATE identically 1 — a counter that cannot report the thing it
-// is for. So what is counted is the FIRST look, reconstructed at acceptance
-// from the fills the access needed (`fills_r`) rather than latched from the
-// first tag check — because a master may drop `acc_valid_i` while it waits,
-// and a latch conditioned on that signal forgets the first look and re-takes
-// it after the fills:
+// is for. So both counters are decided at the FIRST look, PER LANE, ONCE PER
+// TRANSACTION:
 //
 //   cache_hits   += the enabled lanes that were resident when the access was
 //                   first offered;
-//   cache_misses += one per LINE FETCHED, which is exactly the enabled lanes
-//                   that were not.
+//   cache_misses += the enabled lanes that were not, which is exactly the
+//                   number of LINES this access goes on to fetch.
+//
+// `acct_r` marks the lanes already counted for the access in flight and is
+// cleared ONLY at acceptance. It must not be conditioned on `acc_valid_i`:
+// a master is entitled to drop that signal while it waits, and bookkeeping
+// cleared by it forgets the first look and re-takes it AFTER the fills —
+// which reported a hit rate near 1 under exactly that stimulus. Counting the
+// misses here rather than at fill start is what makes the pair one instant's
+// decision, and therefore timing-independent.
 //
 // hits + misses is therefore the enabled-lane lookup count, and
 // hits / (hits + misses) is the hit rate an engineer means by that phrase.
