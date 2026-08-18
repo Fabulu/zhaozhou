@@ -2055,7 +2055,7 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst and three lens ghosts over a graded, connected "
       "motion smear rebuilt with subtract-8 decay and asymmetric diffusion; "
       "the flare dims over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0xC1969F58u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0xEF28949Au;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2088,7 +2088,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0xDF1E8E3Fu;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0x9E8D1F43u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2103,7 +2103,7 @@ SceneSubject subject_whitedwarf() {
   s.note =
       "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
       "spin; five-pass box-smooth granulation; drifts with a long smear";
-  s.expect_seq_crc = 0x8D95CAFEu;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0xDBE7758Du;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2118,7 +2118,7 @@ SceneSubject subject_orangegiant() {
   s.note =
       "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
       "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
-  s.expect_seq_crc = 0x19C251D6u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0x407489A1u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2133,7 +2133,7 @@ SceneSubject subject_bluedwarf() {
   s.note =
       "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
       "smear grades white to deep blue along the tail";
-  s.expect_seq_crc = 0xAC7D9AD1u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0x6BDF3EE7u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2148,7 +2148,7 @@ SceneSubject subject_multiple() {
   s.note =
       "S08 multiple system: two bodies of one class orbiting the barycentre, "
       "one revolution per loop, each with a curved trail (the §15 showpiece)";
-  s.expect_seq_crc = 0x900490A7u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0xD062BA51u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 
@@ -2163,7 +2163,7 @@ SceneSubject subject_infant() {
   s.note =
       "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
       "per-identity undertone; drifts with a purple smear";
-  s.expect_seq_crc = 0x7E40EF46u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
+  s.expect_seq_crc = 0x18F1B23Cu;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
   return s;
 }
 

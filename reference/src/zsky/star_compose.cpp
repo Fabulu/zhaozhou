@@ -141,36 +141,94 @@ int32_t trail_disc_radius(const ComposeLight& L, int32_t corona_r) {
   return dr < 1 ? 1 : dr;
 }
 
-// One authoritative Noctis source-age step. Fade strips palette-bank bits by
-// construction because this plane is six-bit. Each smoother output at (x,y)
-// averages (x,y+1), (x+1,y+1), (x,y+2), (x+1,y+2), so energy moves up/left.
+// The source-age step: decay, then diffuse.
+//
+// AMENDMENT v1.3 (2026-08-18) - THE KERNEL FOLLOWS THE MOTION.
+//
+// Noctis samples (x,y+1), (x+1,y+1), (x,y+2), (x+1,y+2), which moves energy up
+// and left on every pass no matter which way the light is travelling. That is
+// right in Noctis, where the star field slides past a ship flying one way. It
+// is wrong here: our suns ping-pong horizontally, so a fixed up-left bias puts
+// the smear ABOVE the sun instead of behind it, and does so however the ghosts
+// are placed. The trail-at-the-top the owner reported is THIS KERNEL, not the
+// stamps.
+//
+// The offsets are therefore rotated onto the direction of travel. The two
+// on-axis taps sample AHEAD of each pixel along the motion, which propagates
+// energy BACKWARD; two more taps sample either side of the first, spreading the
+// smear across its own axis. On-axis extent makes the trail long, across-axis
+// spread is what reads as haze. A sun moving in any direction trails behind
+// itself, and purely horizontal motion gets no vertical smear at all.
+//
+// Unchanged: the mean is one shift, every sample is six-bit, out-of-view
+// samples are zero, and an age-g sample receives exactly g decay and diffusion
+// steps. Only the kernel's orientation and its pass count move.
+struct TrailKernel {
+  int32_t ax = 0, ay = 1;  // on-axis: sample ahead, so energy goes back
+  int32_t px = 1, py = 0;  // across-axis: the haze spread
+  int passes = 3;
+};
+
+// Eight-way choice rather than a blend: every offset stays a whole texel, so
+// the mean stays exact and no interpolation enters a six-bit plane.
+TrailKernel trail_kernel_for(int32_t vx, int32_t vy) {
+  TrailKernel k;
+  if (vx == 0 && vy == 0) return k;  // static; the section 15 skip means unused
+  const int32_t sx = vx > 0 ? 1 : (vx < 0 ? -1 : 0);
+  const int32_t sy = vy > 0 ? 1 : (vy < 0 ? -1 : 0);
+  const int64_t mx = vx < 0 ? -static_cast<int64_t>(vx) : vx;
+  const int64_t my = vy < 0 ? -static_cast<int64_t>(vy) : vy;
+  // Within a factor of two on both axes the travel is diagonal enough to smear
+  // diagonally; otherwise snap to the dominant axis.
+  if (mx > 0 && my > 0 && mx <= 2 * my && my <= 2 * mx) {
+    k.ax = sx;
+    k.ay = sy;
+    k.px = sx;
+    k.py = -sy;
+  } else if (mx >= my) {
+    k.ax = sx;
+    k.ay = 0;
+    k.px = 0;
+    k.py = 1;
+  } else {
+    k.ax = 0;
+    k.ay = sy;
+    k.px = 1;
+    k.py = 0;
+  }
+  return k;
+}
+
 void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& work,
-                       const Plane& p) {
+                       const Plane& p, const TrailKernel& k) {
   for (int32_t y = p.y0; y < p.y1; ++y)
     for (int32_t x = p.x0; x < p.x1; ++x) {
       uint8_t& v = intensity[static_cast<size_t>(y) * p.w + x];
       v = trail_fade(v & 0x3Fu);
     }
 
-  for (int pass = 0; pass < 2; ++pass) {
+  auto tap = [&](int32_t x, int32_t y) -> uint16_t {
+    if (x < p.x0 || x >= p.x1 || y < p.y0 || y >= p.y1) return 0;
+    return intensity[static_cast<size_t>(y) * p.w + x];
+  };
+
+  // EIGHT taps, mean by one shift of three. Four reach along the motion at
+  // 1..4 texels, four sit either side of the first two. A narrower kernel is
+  // not enough blur: the ghosts are discs about 9.7 px apart, so a two-tap
+  // reach leaves them visible as discrete scallops instead of one haze. Reach
+  // is what dissolves the stamps; the across-axis pairs stop the haze from
+  // being a hard-edged bar.
+  for (int pass = 0; pass < k.passes; ++pass) {
     std::fill(work.begin(), work.end(), 0);
     for (int32_t y = p.y0; y < p.y1; ++y) {
-      const bool row1 = y + 1 < p.y1;
-      const bool row2 = y + 2 < p.y1;
       for (int32_t x = p.x0; x < p.x1; ++x) {
-        const bool col1 = x + 1 < p.x1;
-        uint16_t sum = 0;
-        if (row1) {
-          const size_t a = static_cast<size_t>(y + 1) * p.w + x;
-          sum += intensity[a];
-          if (col1) sum += intensity[a + 1];
-        }
-        if (row2) {
-          const size_t b = static_cast<size_t>(y + 2) * p.w + x;
-          sum += intensity[b];
-          if (col1) sum += intensity[b + 1];
-        }
-        work[static_cast<size_t>(y) * p.w + x] = static_cast<uint8_t>(sum >> 2);
+        const uint16_t sum =
+            tap(x + k.ax, y + k.ay) + tap(x + 2 * k.ax, y + 2 * k.ay) +
+            tap(x + 3 * k.ax, y + 3 * k.ay) + tap(x + 4 * k.ax, y + 4 * k.ay) +
+            tap(x + k.ax + k.px, y + k.ay + k.py) + tap(x + k.ax - k.px, y + k.ay - k.py) +
+            tap(x + 2 * k.ax + k.px, y + 2 * k.ay + k.py) +
+            tap(x + 2 * k.ax - k.px, y + 2 * k.ay - k.py);
+        work[static_cast<size_t>(y) * p.w + x] = static_cast<uint8_t>(sum >> 3);
       }
     }
     intensity.swap(work);
@@ -266,6 +324,19 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
       const int32_t gdr = L.face != nullptr ? trail_disc_radius(L, gr) : 0;
       const uint8_t floor6 = disc_floor6(L);
 
+      // v1.3: the diffusion follows the sun's CURRENT velocity, taken from the
+      // newest retained position to where it is now. One kernel for the whole
+      // replay, not one per age: the smear is a single trail behind a single
+      // moving light, so every age must diffuse the same way. Deriving it per
+      // age would bend the trail wherever the drift reversed.
+      TrailKernel kern;
+      if (L.trail->length >= 1) {
+        uint16_t rx, ry;
+        trail_at(*L.trail, 1, rx, ry);
+        kern = trail_kernel_for(L.x_px - static_cast<int32_t>(rx),
+                                L.y_px - static_cast<int32_t>(ry));
+      }
+
       for (uint32_t g = L.trail->length; g >= 1; --g) {
         uint16_t gx, gy;
         trail_at(*L.trail, g, gx, gy);
@@ -283,7 +354,7 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
           stamp_intensity_quad(intensity, p, *L.corona, gx, gy, gr, true);
           if (gdr > 0) stamp_intensity_quad(intensity, p, *L.face, gx, gy, gdr, false, floor6);
         }
-        trail_source_step(intensity, work, p);
+        trail_source_step(intensity, work, p, kern);
       }
       composite_trail(p, intensity, L.ramp, skip2, L.x_px, L.y_px, &st->star_fragments);
     }

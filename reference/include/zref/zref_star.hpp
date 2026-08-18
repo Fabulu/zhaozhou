@@ -387,8 +387,17 @@ struct TrailHistory {
 
 /** §15 one authoritative source-age fade step. Noctis first removes palette
  *  bank bits, then subtracts 8 from the six-bit intensity with saturation. */
+inline constexpr uint8_t kTrailDecay = 4;
+
+/** §15 v1.3 decay. Noctis subtracts 8 from a six-bit intensity, so a trail is
+ *  extinct after 8 ages and the ring's oldest entry contributes exactly
+ *  nothing (63 - 8*8 < 0). Subtracting 5 lets all eight retained ages carry
+ *  energy, which is what makes the smear read as hazy rather than as a short
+ *  bright stub. Still a saturating integer subtract on a six-bit plane: no new
+ *  arithmetic, no wider intermediate, and the palette ceiling is unchanged
+ *  because one class-ramp lookup still happens after reconstruction. */
 inline constexpr uint8_t trail_fade(uint8_t intensity6) {
-  return intensity6 > 8 ? static_cast<uint8_t>(intensity6 - 8) : 0;
+  return intensity6 > kTrailDecay ? static_cast<uint8_t>(intensity6 - kTrailDecay) : 0;
 }
 
 /** §15 push: ghosts render BEFORE the push; this records the current

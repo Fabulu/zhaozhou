@@ -519,16 +519,20 @@ void test_compose() {
               fstats.splats_dropped);
 }
 
-// ---- §13 star_trail_anchor (§15) --------------------------------------------
-// Hand computations:
-//   fade: 63 -> 55, 9 -> 1, 8 -> 0.
-//   A one-pixel source at (100,100), after fade and two exact smoothers,
-//   leaves its peak 13 at (99,97) and no energy down/right of the source.
+// ---- §13 star_trail_anchor (§15, amendment v1.3) ----------------------------
+// Hand computations, all recomputed for v1.3 (decay 4, three passes of the
+// eight-tap kernel rotated onto the direction of travel):
+//   fade: 63 -> 59, 9 -> 5, 4 -> 0.
+//   A one-pixel source at (100,100) with the light now at (200,100) is
+//   travelling +x, so the kernel is ax=+1, ay=0, px=0, py=1 and diffusion runs
+//   in -x ONLY. The impulse leaves its peak 3 at (94,100) — on the source row,
+//   behind the source — and NOTHING at or ahead of x=97. Verified against an
+//   independent implementation of the spec text, not against this one.
 //   Ring: push (10,20) then (30,40), so age 1 is (30,40). The ninth push
 //   evicts the oldest entry while length remains eight.
 void test_trail_anchor() {
-  check(star::trail_fade(63) == 55 && star::trail_fade(9) == 1 && star::trail_fade(8) == 0,
-        "subtract-8 six-bit fade saturates exactly");
+  check(star::trail_fade(63) == 59 && star::trail_fade(9) == 5 && star::trail_fade(4) == 0,
+        "v1.3 six-bit fade subtracts 4 and saturates exactly");
 
   star::TrailHistory t;
   star::trail_push(t, 10, 20);
@@ -574,13 +578,19 @@ void test_trail_anchor() {
   star::FlareSlots islots;
   star::compose_view(irgb.data(), idepth.data(), W, H, 0, 0, W, H, 0, &I, 1, nullptr, 0, islots,
                      nullptr);
-  check(sample(irgb, 99, 97) == 13,
-        "one source texel peaks at 13 after subtract-8 and two smoothers");
-  check(sample(irgb, 101, 97) == 0 && sample(irgb, 99, 99) == 0,
-        "diffusion moves up and left, never down or right");
+  check(sample(irgb, 94, 100) == 3,
+        "one source texel peaks at 3 on the source row after v1.3 decay and diffusion");
+  // The whole point of v1.3: a light moving +x smears ONLY in -x. Nothing may
+  // appear ahead of the source, and nothing may appear on the source column,
+  // which is exactly what the old up-left kernel got wrong.
+  check(sample(irgb, 100, 100) == 0 && sample(irgb, 101, 100) == 0 && sample(irgb, 102, 100) == 0,
+        "no energy at or ahead of the source along the direction of travel");
+  check(sample(irgb, 97, 100) == 0, "diffusion reach behind the source is bounded");
 
-  // Graded connected trail. The age-g centre moves about (-g,-3g) under two
-  // source smoothers per step, so the probes follow that asymmetric axis.
+  // Graded connected trail. v1.3: these ghosts all sit on y=120 and the light
+  // travels +x, so the trail lies along y=120 extending in -x and the probes
+  // follow THAT axis. Under v1.2's fixed up-left kernel they followed a
+  // (-g,-3g) diagonal, which is the bug this amendment removes.
   const star::Sprite8 corona = star::corona_sprite(5);
   star::TrailHistory tr;
   star::trail_push(tr, 80, 120);
@@ -600,14 +610,14 @@ void test_trail_anchor() {
   star::compose_view(rgb.data(), depth.data(), W, H, 0, 0, W, H, 0, &L, 1, nullptr, 0, slots,
                      nullptr);
 
-  const uint8_t newest = sample(rgb, 115, 117);
-  const uint8_t oldest = sample(rgb, 76, 108);
+  const uint8_t newest = sample(rgb, 114, 120);
+  const uint8_t oldest = sample(rgb, 78, 120);
   check(newest > oldest && oldest > 0, "newest-to-oldest trail intensity decays");
-  check(sample(rgb, 108, 116) > 0 && sample(rgb, 96, 113) > 0 && sample(rgb, 83, 110) > 0,
-        "historical silhouettes join with lit continuity");
-  const uint8_t shoulder = sample(rgb, 122, 117);
-  check(shoulder > 0 && shoulder < newest && sample(rgb, 136, 117) == 0,
-        "graded trail has off-axis falloff instead of a solid circular mask");
+  check(sample(rgb, 104, 120) > 0 && sample(rgb, 94, 120) > 0 && sample(rgb, 86, 120) > 0,
+        "historical silhouettes join with lit continuity along the travel axis");
+  const uint8_t shoulder = sample(rgb, 114, 128);
+  check(shoulder > 0 && shoulder < newest,
+        "graded trail has across-axis falloff instead of a solid circular mask");
 
   std::vector<uint32_t> colours;
   colours.reserve(W * H);
