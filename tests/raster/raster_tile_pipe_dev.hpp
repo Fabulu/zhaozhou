@@ -117,7 +117,9 @@ inline PipeExpect pipe_oracle(zref::TileStore& store, const PipeJob& j) {
   s.swap = true;
   store.step(s);
 
-  uint64_t words[kPipePixels];
+  // Value-initialised: the loop below fills every element, but cppcheck cannot
+  // see that through store.peek() and the static-analysis tier is a hard gate.
+  uint64_t words[kPipePixels] = {};
   for (int i = 0; i < kPipePixels; ++i) words[i] = store.peek(written, static_cast<uint8_t>(i));
   e.res = zref::TileResolve::tile(words, j.tx, j.ty);
   return e;
