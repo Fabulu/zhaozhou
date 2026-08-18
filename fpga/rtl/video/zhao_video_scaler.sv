@@ -47,19 +47,18 @@ module zhao_video_scaler
   // both pipeline stages hold their contents (no pixel is lost or duplicated).
   always_ff @(posedge vid_clk or negedge rst_n) begin
     if (!rst_n) begin
-      stage1     <= '0;
-      stage2     <= '0;
-      violation_q<= 1'b0;
-    end else if (out_ready) begin
-      stage1 <= in;
-      stage2 <= stage1;
+      stage1      <= '0;
+      stage2      <= '0;
+      violation_q <= 1'b0;
     end else begin
-      stage1 <= stage1;  // held
-      stage2 <= stage2;  // held
-    end
-    // sticky protocol violation (valid only inside the active window)
-    if (in.valid && (in.hblank || in.vblank)) begin
-      violation_q <= 1'b1;
+      if (out_ready) begin
+        stage1 <= in;
+        stage2 <= stage1;
+      end
+      // sticky protocol violation (valid only inside the active window)
+      if (in.valid && (in.hblank || in.vblank)) begin
+        violation_q <= 1'b1;
+      end
     end
   end
 

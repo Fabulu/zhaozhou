@@ -41,9 +41,22 @@
 // wave-2 capture (their frame headers pin abi_version 2) without buying a
 // single compat guarantee. Promotions are recorded in capture_format.md
 // 1.2/1.3 [w3] rows.
+//
+// ABI v3 (2026-08-17, lighting & pose consolidation wave, run
+// RUN-20260816-0046): SetEnvironment 0x0311 reserved (spec/sky_and_beams.md
+// 4a — the sky extension range's first allocation, under that file's v1.2
+// version bump), plus the rgb565 struct and fog_mode enum it introduces.
+// VERSION DECISION: this change DOES bump `abi version` 2 -> 3 — a new
+// opcode is a wire change (the frozen rule: "additive change = new opcode";
+// a v2 decoder reports ZH_ABI_UNKNOWN_OPCODE on 0x0311, so the generation
+// must be distinguishable at frame validation). Committed wave-2 captures
+// pin abi_version 2 and remain valid historical evidence; a v3 replay
+// refuses them by design. The same wave's QFMT_VERSION 1 -> 2 (qformats 7.6,
+// amendment C1) did NOT bump the version — a numeric-law constant change
+// moves no opcode, field set, or size, and leaves the frame wire untouched.
 
 abi zhao {
-  version 2
+  version 3
   endian little
   command_alignment 16
   opcode_width u16
@@ -55,7 +68,11 @@ const u32 FRAME_SLOT_BYTES = 1048576;
 
 // Numeric-law version (spec/qformats.md §13): travels with the ABI so capture
 // replay can refuse mismatched numerics. Bump on any frozen Q-format change.
-const u16 QFMT_VERSION = 1;
+// = 2 since the lighting & pose consolidation wave (RUN-20260816-0046):
+// amendment C1 froze the quat16 lane (qformats §7.6). The `abi version`
+// itself stays 2 for this bump — a numeric-law constant change is not a
+// command-surface change (no opcode, field set, or size moved).
+const u16 QFMT_VERSION = 2;
 
 // Error codes — generated verbatim into C++/TS/SV and shared by the frame
 // validator (spec/capture_format.md 4.2), the .zcap tools, and the stub RTL.
@@ -105,6 +122,14 @@ enum forge_kind : u8 {
                                 // terrain skirt/ground — the Wound Lab island
 }
 
+// [v3, sky_and_beams v1.2] Fog mode (law: qformats.md 8; sky_and_beams 4a).
+// Members ascend additively; the deferred exponential form appends, never
+// renumbers (the forge_kind member-0 precedent).
+enum fog_mode : u8 {
+  FOG_OFF = 0;
+  FOG_LINEAR = 1;
+}
+
 // ---- composed fixed-point containers (element = fx16, Q16.16, spec/qformats.md)
 
 // Axis-aligned footprint in world units.
@@ -143,6 +168,13 @@ struct mat4fx {
   fx16 m31;
   fx16 m32;
   fx16 m33;
+}
+
+// [v3, sky_and_beams v1.2] Packed RGB565 colour (rrrrrggggggbbbbbb) — the
+// resolve wire format (qformats.md 2 colour8: "RGB565 at resolve");
+// expansion law: stars_and_flares.md 2 bit replication.
+struct rgb565 {
+  u16 bits;
 }
 
 // ---- controller (plan D5): the canonical pad snapshot ------------------------
@@ -309,7 +341,8 @@ command DrawProcedural 0x0302 implemented {
 // the command activates). flags: b0 under_plane, b1 cloud, b2 sun, b3 cap,
 // b4 sun_glow_tag; b5..b7 reserved-0. reserved0/reserved1 must be zero.
 // Opcodes 0x0311..0x031F are reserved for sky extensions — never allocate
-// one without a spec/sky_and_beams.md version bump.
+// one without a spec/sky_and_beams.md version bump. [v3: 0x0311 is now
+// SetEnvironment below — 0x0312..0x031F remain reserved.]
 command DrawSky 0x0310 reserved {
   handle32[sky_set] sky_set;   // sky asset set (bands/cap/under/clouds/sun)
   mat4fx rot_proj[2];          // per-view rotation-only view-projection
@@ -321,6 +354,30 @@ command DrawSky 0x0310 reserved {
   u8 reserved0;                // must be 0
   u8 reserved1;                // must be 0
   pad[14];                     // to the 16-B record alignment (176 B record)
+}
+
+// [v3, sky_and_beams v1.2 §4a] Sky/environment extension — the FIRST
+// allocation from the sky extension range (0x0311..0x031F), made under that
+// file's version-bump law. Reserved: layout FROZEN, execution lands with the
+// weather/lighting wave. The world's ONE light/environment state record —
+// the donor envi.d per-level lighting struct (sun direction/colour, ambient,
+// fog; S6 §1) ported to lawful widths. Per-frame GLOBAL state: no viewport
+// mask (one world, one sun; Duo views share it; SetView stays the per-view
+// record). Consumption laws (vertex light, global tint, fog mix order,
+// defaults) live in sky_and_beams 4a; the fog formula in qformats 8.
+// unit8 = qformats 2. pad[12] bytes 0-3 are the documented same-bytes site
+// for a future fog_density (exponential fog — deferred, qformats 8).
+command SetEnvironment 0x0311 reserved {
+  angle16 sun_yaw;    // sun azimuth, turns (yaw 0 faces +Z); direction law: sky_and_beams 4a
+  angle16 sun_pitch;  // sun elevation, turns (0x4000 = zenith)
+  rgb565 sun_colour;  // sun colour (lanes carry the strength)
+  rgb565 ambient;     // ambient colour
+  rgb565 tint;        // global vertex-light tint
+  u8 tint_strength;   // unit8 (qformats 2)
+  fog_mode fog;       // fog law: qformats 8 (far <= near disables — deterministic no-op)
+  fx16 fog_near;      // world metres
+  fx16 fog_far;       // world metres
+  pad[12];
 }
 
 // ---- audio (implemented in wave 3 — D7)

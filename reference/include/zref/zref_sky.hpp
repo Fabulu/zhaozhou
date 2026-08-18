@@ -175,5 +175,72 @@ std::vector<SkyPrimitive> emit_layers(const SkySet& set, uint32_t tick, angle16 
  */
 bool rot_proj_is_rotation_only(const mat4fx& m);
 
+// ---- §4a environment state (amendment v1.2) ----------------------------------
+//
+// The ZRef mirror of SetEnvironment 0x0311 (spec/commands.zidl; law:
+// spec/sky_and_beams.md 4a): the world's ONE light/environment record —
+// sun direction (angle16 pair), sun colour / ambient / tint (RGB565
+// working storage here, packed on the wire), tint strength, fog mode +
+// extents. Serialized into the ENVIRONMENT_STATE .zcap chunk (0x000C,
+// capture_format.md 4.2) as a byte-mirror of the command payload so the
+// chunk and the command can never drift.
+//
+// The Phase-3 stand-in renderer does NOT consume this yet (its hard-coded
+// light is terrain.cpp's 0.25 + 0.75*lambert floor — sky_and_beams 4a
+// records the equivalence); the record exists for capture and future
+// consumers. Wiring it into zrender is the weather wave's change.
+
+/** Packed RGB565 wire value: rrrrrggg ggbbbbbb. */
+struct rgb565 {
+  uint16_t bits = 0;
+
+  static constexpr rgb565 from_rgb888(uint8_t r, uint8_t g, uint8_t b) {
+    return rgb565{static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3))};
+  }
+  /** qformats 2 / stars 2 expansion law: c8 = (c5 << 3) | (c5 >> 2),
+   *  (c6 << 2) | (c6 >> 4) — round-trips 0xFF and 0x00 exactly. */
+  void to_rgb888(uint8_t& r, uint8_t& g, uint8_t& b) const {
+    const uint8_t r5 = static_cast<uint8_t>((bits >> 11) & 0x1F);
+    const uint8_t g6 = static_cast<uint8_t>((bits >> 5) & 0x3F);
+    const uint8_t b5 = static_cast<uint8_t>(bits & 0x1F);
+    r = static_cast<uint8_t>((r5 << 3) | (r5 >> 2));
+    g = static_cast<uint8_t>((g6 << 2) | (g6 >> 4));
+    b = static_cast<uint8_t>((b5 << 3) | (b5 >> 2));
+  }
+};
+
+enum class FogMode : uint8_t {
+  Off = 0,
+  Linear = 1,  // the frozen v1 formula (qformats 8); exponential deferred
+};
+
+/** The environment record. Defaults = sky_and_beams 4a power-on law: zenith
+ *  sun, sun 0xBDF7 (lanes 23,47,23 -> expands (189,190,189) ~ 0.75) and
+ *  ambient 0x4208 (lanes 8,16,8 -> (66,65,66) ~ 0.25) — the stand-in's
+ *  0.25 + 0.75*ndl to within one 565 quantum per channel (the lanes carry
+ *  the strengths; white+white would rail every lit channel; no exact grey
+ *  exists off the 0/255 endpoints because the 5- and 6-bit lanes replicate
+ *  differently — the packed values are the law) — white tint at strength 0,
+ *  fog off. */
+struct EnvState {
+  angle16 sun_yaw{0};
+  angle16 sun_pitch{0x4000};  // zenith
+  rgb565 sun_colour = rgb565{static_cast<uint16_t>((23u << 11) | (47u << 5) | 23u)};
+  rgb565 ambient = rgb565{static_cast<uint16_t>((8u << 11) | (16u << 5) | 8u)};
+  rgb565 tint = rgb565::from_rgb888(255, 255, 255);
+  uint8_t tint_strength = 0;  // unit8
+  FogMode fog = FogMode::Off;
+  fx16 fog_near{0};
+  fx16 fog_far{0};
+};
+
+inline constexpr size_t kEnvStateBytes = 20;
+
+/** Fixed little-endian layout (capture_format.md 4.2 [v3] ENVIRONMENT_STATE):
+ *  yaw 2, pitch 2, sun 2, ambient 2, tint 2, strength 1, fog 1, near 4,
+ *  far 4. */
+void env_state_serialize(const EnvState& st, uint8_t out[kEnvStateBytes]);
+EnvState env_state_deserialize(const uint8_t in[kEnvStateBytes]);
+
 }  // namespace sky
 }  // namespace zref

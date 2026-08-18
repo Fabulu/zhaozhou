@@ -48,8 +48,7 @@
 // `verilator --lint-only -Wall` (lint_mem_vram_arbiter CTest).
 
 module zhao_vram_arbiter
-  import zhao_pkg::*;
-  import zhao_sdram_params_pkg::*;
+  import zhao_pkg::*, zhao_sdram_params_pkg::*;
 (
   input  logic clk,
   input  logic rst_n,

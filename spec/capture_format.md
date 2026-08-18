@@ -8,6 +8,18 @@ struct, implemented debug commands (0xF002/0xF004), `angle16` wire type,
 (plan W3.1/D7/D11, run RUN-20260815-0544): Phase-3 command promotions
 (§1.2 note), source-ID kinds 8-11 (§5), binary `sourceids.zmap` (§7),
 `.zpak` cartridge container (spec/cartridge.md, which reuses §4 verbatim).
+**ABI v3 amendment (2026-08-17, lighting & pose consolidation wave, run
+RUN-20260816-0046):** `SetEnvironment 0x0311` reserved (spec/sky_and_beams.md
+§4a, the sky extension range's first allocation — that file's v1.2), `rgb565`
+struct + `fog_mode` enum, and two state chunks — `CELESTIAL_STATE 0x000B`
+(spec/stars_and_flares.md §8, landing the chunk that spec declared) and
+`ENVIRONMENT_STATE 0x000C` (§4.2). The v2→v3 bump is the new-opcode wire
+change the frozen rule names (a v2 decoder reports `ZH_ABI_UNKNOWN_OPCODE`
+on 0x0311); committed wave-2 captures pin `abi_version 2` and remain valid
+historical evidence — a v3 replay refuses them by design, which is the bump
+buying what it costs. The same wave's `QFMT_VERSION` 1→2 (qformats §7.6,
+amendment C1) is a numeric-law constant change only and did NOT bump the ABI
+version (no opcode, field set, or size moved; the frame wire is unchanged).
 Single source of
 truth for everything that crosses a language or a machine boundary.
 `spec/commands.zidl` is the machine-readable ABI definition; this document is
@@ -119,7 +131,7 @@ Ratified wave-1 extensions:
 |---|---|---|
 | `0x0000-0x00FF` | frame control, views, presentation | Nop 0x0000, BeginFrame 0x0001, EndFrame 0x0002, SetView 0x0010, SetPresentationContract 0x0020 |
 | `0x0200-0x02FF` | terrain / surface | TerrainField 0x0200, SurfaceStamp 0x0210 (**implemented [w3]**, D7 — software console executes them) |
-| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (**implemented [w3]**, D7); DrawSky 0x0310 reserved [v2, spec/sky_and_beams.md 4; wave 8]; `0x0311-0x031F` reserved for sky extensions (never allocate without a spec/sky_and_beams.md version bump) |
+| `0x0300-0x03FF` | forms / populations / procedural | DrawForm 0x0300, DrawPopulation 0x0301, DrawProcedural 0x0302 (**implemented [w3]**, D7); DrawSky 0x0310 reserved [v2, spec/sky_and_beams.md 4; wave 8]; SetEnvironment 0x0311 reserved [v3, spec/sky_and_beams.md §4a — the light/environment state record]; `0x0312-0x031F` reserved for sky extensions (never allocate without a spec/sky_and_beams.md version bump) |
 | `0x0400-0x04FF` | audio | EmitAudioEvent 0x0400 (**implemented [w3]**, D7 — wave-2 mixer tone) |
 | `0xF000-0xF0FF` | bootstrap/debug umbrella | DebugBootstrap 0xF001 (reserved), DebugFrameBlit 0xF002 (implemented [v2]), DebugRumble 0xF004 (implemented [v2]) — never game-facing |
 
@@ -152,6 +164,7 @@ a `0xF000-0xF0FF` opcode MUST set frame header flags bit0
 | DrawProcedural | 0x0302 | 64 | **implemented [w3]** |
 | EmitAudioEvent | 0x0400 | 32 | **implemented [w3]** |
 | DrawSky | 0x0310 | 176 | reserved |
+| SetEnvironment | 0x0311 | 48 | reserved [v3] |
 | DebugBootstrap | 0xF001 | 64 | reserved |
 | DebugFrameBlit | 0xF002 | 48 | implemented |
 | DebugRumble | 0xF004 | 32 | implemented |
@@ -393,7 +406,57 @@ Section-table entry:
 | 0x0008 | COUNTERS | `u32 count` + count × `{u16 counter_id; u16 rsv; u64 expected_value}` |
 | 0x0009 | SOURCE_MAP | 6 |
 | 0x000A | TRACE | first-divergence record (charter 20.6): `{u32 tile; u32 primitive; u32 pixel; u8 stage; u8 rsv[3]; u32 expected_fx; u32 actual_fx; u32 source_id; u32 command_seq}` |
+| 0x000B | CELESTIAL_STATE | **[v3]** fixed **236 B** little-endian, the chunk `spec/stars_and_flares.md` §8 declares (layout below, semantics and change control stay that file's) |
+| 0x000C | ENVIRONMENT_STATE | **[v3]** fixed **20 B** little-endian, the light/environment state mirror of `SetEnvironment` (layout below; law: `spec/sky_and_beams.md` §4a) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip |
+
+**[v3] CELESTIAL_STATE body (236 B — the reference serializer is the
+evidence, `reference/src/zsky/star_gamut.cpp`, round-trip asserted in
+`tests/render/render_star.cpp`):**
+
+```
++0    56  ramp slew state, near star 0: 12 x s16 cur, 12 x s16 tgt,
+          u8 init, 7 x u8 reserved (0)
++56   56  ramp slew state, near star 1 (same shape)
++112  16  flare fade slots x4: { u16 light_id; u8 fade_ctr; u8 latched_tag }
++128  24  near-star slots x2: { u8 class; u8 rsv; u16 spin_phase;
+          s32 radius_milli; u32 texture_seed }
++152   4  GALAXY_SEED (u32)
++156  12  camera sector (3 x s32)
++168  68  motion-trail rings x2 (stars_and_flares §15): { 8 x u16 x_px;
+          8 x u16 y_px; u8 head; u8 length }
+```
+
+**[v3] ENVIRONMENT_STATE body (20 B — byte-mirror of the `SetEnvironment`
+payload, so a captured frame's light state and the command that set it can
+never drift):**
+
+```
++0    2  sun_yaw (angle16, turns)
++2    2  sun_pitch (angle16, turns; 0x4000 = zenith)
++4    2  sun_colour (rgb565)
++6    2  ambient (rgb565)
++8    2  tint (rgb565)
++10   1  tint_strength (unit8, qformats §2)
++11   1  fog mode (fog_mode enum: 0 off, 1 linear)
++12   4  fog_near (fx16, world metres)
++16   4  fog_far (fx16, world metres)
+```
+
+**[v3] State-chunk replay-exactness law.** CELESTIAL_STATE and
+ENVIRONMENT_STATE are the temporal state the §3 command stream alone
+cannot reconstruct: palettes in flight, flare fade counters, trail
+rings, the resolved light and fog. A capture that contains them replays
+from ANY frame boundary bit-exactly — light, weather and trails
+included — with no warm-up rule (a trail is history; the capture is the
+history — stars §8's ruling, generalised here to the environment: a
+storm is sim state, and state the machine consumes is captured, never
+re-derived). Writers SHOULD emit both chunks per captured frame (as
+CONTROLLER_SNAPSHOT is); readers MUST skip unknown section versions per
+§4.3 rule 2. The crossfade weight of sky_and_beams §1.3 is deliberately
+NOT a chunk field: its products (the palette upload, the resolved
+SetEnvironment values) are command-stream bytes, and the capture records
+what the machine consumes, not what the sim was thinking.
 
 `ABI_INFO` identities: `zidl_sha256` = SHA-256 over the exact bytes of
 `spec/commands.zidl`; `generator_sha256` = SHA-256 over the generator's

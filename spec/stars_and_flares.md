@@ -144,7 +144,7 @@ scale  = k >> 2                                  # glow buffer is ¼ res
 
 ## 8. Determinism + capture (D8)
 
-Everything derives from `(GALAXY_SEED, sector coords, tick)`. Temporal state exists in exactly four places, all captured in a new `celestial_state` chunk: ramp slew control points+targets (56 B/ramp, ≤2), flare slots `{light_id, fade_ctr, latched_tag}`×4 (16 B), per-star `{class, identity, radius_milli, spin_phase}`×2 + GALAXY_SEED + camera sector (~32 B), and the per-star motion-trail rings (§15), 34 B × 2. Total chunk: 168 + 68 = **236 B**. Replay from any captured frame reproduces palettes, boil phase, flare alpha, pulsar duty and the reconstructed smear bit-exactly. No warm-up rule applies because the captured ring is the history.
+Everything derives from `(GALAXY_SEED, sector coords, tick)`. Temporal state exists in exactly four places, all captured in a new `celestial_state` chunk: ramp slew control points+targets (56 B/ramp, ≤2), flare slots `{light_id, fade_ctr, latched_tag}`×4 (16 B), per-star `{class, identity, radius_milli, spin_phase}`×2 + GALAXY_SEED + camera sector (~32 B), and the per-star motion-trail rings (§15), 34 B × 2. Total chunk: 168 + 68 = **236 B**. Replay from any captured frame reproduces palettes, boil phase, flare alpha, pulsar duty and the reconstructed smear bit-exactly. No warm-up rule applies because the captured ring is the history. [The chunk landed in the container law 2026-08-17: `.zcap` section type **0x000B `CELESTIAL_STATE`**, byte layout in `spec/capture_format.md` §4.2 — the reference serializer (`reference/src/zsky/star_gamut.cpp`) is its evidence; editorial note, no semantic change, no version bump.]
 
 ## 9. Where each piece runs — and which refusal it avoids (D9)
 

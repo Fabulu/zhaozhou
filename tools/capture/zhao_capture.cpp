@@ -56,6 +56,10 @@ const char* section_name(uint16_t type) {
       return "SOURCE_MAP";
     case 0x000A:
       return "TRACE";
+    case 0x000B:  // [v3] stars_and_flares 8 (capture_format.md 4.2)
+      return "CELESTIAL_STATE";
+    case 0x000C:  // [v3] sky_and_beams 4a
+      return "ENVIRONMENT_STATE";
     default:
       return (type >= 0x8000) ? "private" : "unknown";
   }

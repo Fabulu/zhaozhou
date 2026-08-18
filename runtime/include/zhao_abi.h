@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
-//   zidl_sha256         = 58684d0baedc77a1847b4f868713fd4cccf4e85fe50d14c895066fbee94932eb
+//   abi_identity_sha256 = db6f6b2bbf7c3a383788d21fa594e09519ace1e90943d9d8ed2227f7b199db12
+//   zidl_sha256         = b9c5d806ef60c962de3205067d68d2c6a8409ac7cf836f19d3041a0f3488584d
 #pragma once
 
 #include <cstdint>
@@ -11,11 +11,11 @@
 
 namespace zhao_abi {
 
-constexpr uint16_t ZHAO_ABI_VERSION        = 2;
+constexpr uint16_t ZHAO_ABI_VERSION        = 3;
 constexpr uint16_t ZHAO_COMMAND_ALIGNMENT = 16;
 constexpr uint16_t ZHAO_OPCODE_WIDTH      = 2; // u16
 constexpr uint32_t FRAME_SLOT_BYTES = 1048576u;
-constexpr uint16_t QFMT_VERSION = 1u;
+constexpr uint16_t QFMT_VERSION = 2u;
 
 enum zhao_abi_error : uint32_t {
   ZH_ABI_OK = 0,
@@ -47,6 +47,12 @@ enum forge_kind : uint8_t {
   FORGE_HEIGHTFIELD_PATCH = 0,
 };
 
+// enum fog_mode: u8 on the wire (capture_format.md 3.2 step 7)
+enum fog_mode : uint8_t {
+  FOG_OFF = 0,
+  FOG_LINEAR = 1,
+};
+
 constexpr uint16_t ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 constexpr uint16_t ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
@@ -58,6 +64,7 @@ constexpr uint16_t ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
+constexpr uint16_t ZHAO_OP_SET_ENVIRONMENT = 0x0311; // 48 B, reserved
 constexpr uint16_t ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
@@ -254,6 +261,13 @@ static_assert(offsetof(ZhMat4fx, m31) == 52, "layout drift: mat4fx.m31");
 static_assert(offsetof(ZhMat4fx, m32) == 56, "layout drift: mat4fx.m32");
 static_assert(offsetof(ZhMat4fx, m33) == 60, "layout drift: mat4fx.m33");
 static_assert(sizeof(ZhMat4fx) == 64, "layout drift: mat4fx size");
+
+// rgb565: 2 bytes (spec/commands.zidl)
+struct ZhRgb565 {
+  uint16_t bits;
+};
+static_assert(offsetof(ZhRgb565, bits) == 0, "layout drift: rgb565.bits");
+static_assert(sizeof(ZhRgb565) == 2, "layout drift: rgb565 size");
 
 // PadFrame: 20 bytes (spec/commands.zidl)
 struct ZhPadFrame {
@@ -537,6 +551,37 @@ struct ZhRecordDrawSky {
 };
 static_assert(sizeof(ZhRecordDrawSky) == 176, "layout drift: DrawSky record");
 
+// SetEnvironment 0x0311: 48-byte record (reserved)
+struct ZhCmdSetEnvironment {
+  uint16_t sun_yaw;
+  uint16_t sun_pitch;
+  ZhRgb565 sun_colour;
+  ZhRgb565 ambient;
+  ZhRgb565 tint;
+  uint8_t tint_strength;
+  fog_mode fog;  // enum, 1 B
+  int32_t fog_near;
+  int32_t fog_far;
+  uint8_t pad[12];
+};
+static_assert(offsetof(ZhCmdSetEnvironment, sun_yaw) == 0, "layout drift: SetEnvironment.sun_yaw");
+static_assert(offsetof(ZhCmdSetEnvironment, sun_pitch) == 2, "layout drift: SetEnvironment.sun_pitch");
+static_assert(offsetof(ZhCmdSetEnvironment, sun_colour) == 4, "layout drift: SetEnvironment.sun_colour");
+static_assert(offsetof(ZhCmdSetEnvironment, ambient) == 6, "layout drift: SetEnvironment.ambient");
+static_assert(offsetof(ZhCmdSetEnvironment, tint) == 8, "layout drift: SetEnvironment.tint");
+static_assert(offsetof(ZhCmdSetEnvironment, tint_strength) == 10, "layout drift: SetEnvironment.tint_strength");
+static_assert(offsetof(ZhCmdSetEnvironment, fog) == 11, "layout drift: SetEnvironment.fog");
+static_assert(offsetof(ZhCmdSetEnvironment, fog_near) == 12, "layout drift: SetEnvironment.fog_near");
+static_assert(offsetof(ZhCmdSetEnvironment, fog_far) == 16, "layout drift: SetEnvironment.fog_far");
+static_assert(offsetof(ZhCmdSetEnvironment, pad[0]) == 20, "layout drift: SetEnvironment.pad");
+static_assert(sizeof(ZhCmdSetEnvironment) == 32, "layout drift: SetEnvironment payload");
+
+struct ZhRecordSetEnvironment {
+  ZhCmdHeader hdr;
+  ZhCmdSetEnvironment payload;
+};
+static_assert(sizeof(ZhRecordSetEnvironment) == 48, "layout drift: SetEnvironment record");
+
 // EmitAudioEvent 0x0400: 32-byte record (implemented)
 struct ZhCmdEmitAudioEvent {
   uint32_t event_id;
@@ -653,6 +698,12 @@ inline ZhTransform2fx zhao_sample_transform2fx() {
   v.r01 = 285207;
   v.r10 = 350743;
   v.r11 = 416279;
+  return v;
+}
+
+inline ZhRgb565 zhao_sample_rgb565() {
+  ZhRgb565 v{};
+  v.bits = 60833u;
   return v;
 }
 
@@ -889,11 +940,30 @@ inline ZhRecordDrawSky zhao_sample_draw_sky() {
   return r;
 }
 
+inline ZhRecordSetEnvironment zhao_sample_set_environment() {
+  ZhRecordSetEnvironment r{};
+  r.hdr.opcode       = ZHAO_OP_SET_ENVIRONMENT;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.sun_yaw = 22925;
+  r.payload.sun_pitch = 47428;
+  r.payload.sun_colour = zhao_sample_rgb565();
+  r.payload.ambient = zhao_sample_rgb565();
+  r.payload.tint = zhao_sample_rgb565();
+  r.payload.tint_strength = 140u;
+  r.payload.fog = static_cast<fog_mode>(0u);
+  r.payload.fog_near = 547351;
+  r.payload.fog_far = 88599;
+  return r;
+}
+
 inline ZhRecordEmitAudioEvent zhao_sample_emit_audio_event() {
   ZhRecordEmitAudioEvent r{};
   r.hdr.opcode       = ZHAO_OP_EMIT_AUDIO_EVENT;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
+  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.event_id = 0u;
@@ -908,7 +978,7 @@ inline ZhRecordDebugBootstrap zhao_sample_debug_bootstrap() {
   ZhRecordDebugBootstrap r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_BOOTSTRAP;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
+  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.data[0] = 113u;
@@ -966,7 +1036,7 @@ inline ZhRecordDebugFrameBlit zhao_sample_debug_frame_blit() {
   ZhRecordDebugFrameBlit r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_FRAME_BLIT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
+  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.dst_slot = 53u;
@@ -981,7 +1051,7 @@ inline ZhRecordDebugRumble zhao_sample_debug_rumble() {
   ZhRecordDebugRumble r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_RUMBLE;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
+  r.hdr.source_id    = 1342242831u; // kind 5, module 1, index 15
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.pad_index = 113u;
@@ -1023,6 +1093,10 @@ inline void zhao_pack_transform2fx(const ZhTransform2fx& v, ZhWriter& w) {
   w.u32(v.r01);
   w.u32(v.r10);
   w.u32(v.r11);
+}
+
+inline void zhao_pack_rgb565(const ZhRgb565& v, ZhWriter& w) {
+  w.u16(v.bits);
 }
 
 inline void zhao_pack_nop(const ZhRecordNop& r, std::vector<uint8_t>& out) {
@@ -1156,6 +1230,22 @@ inline void zhao_pack_draw_sky(const ZhRecordDrawSky& r, std::vector<uint8_t>& o
   for (int i = 0; i < 14; ++i) w.u8(r.payload.pad[i]);
 }
 
+inline void zhao_pack_set_environment(const ZhRecordSetEnvironment& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u16(r.payload.sun_yaw);
+  w.u16(r.payload.sun_pitch);
+  zhao_pack_rgb565(r.payload.sun_colour, w);
+  zhao_pack_rgb565(r.payload.ambient, w);
+  zhao_pack_rgb565(r.payload.tint, w);
+  w.u8(r.payload.tint_strength);
+  w.u8(r.payload.fog);
+  w.u32(r.payload.fog_near);
+  w.u32(r.payload.fog_far);
+  for (int i = 0; i < 12; ++i) w.u8(r.payload.pad[i]);
+}
+
 inline void zhao_pack_emit_audio_event(const ZhRecordEmitAudioEvent& r, std::vector<uint8_t>& out) {
   ZhWriter w(out);
   w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
@@ -1235,6 +1325,12 @@ inline bool zhao_unpack_transform2fx(ZhReader& r, ZhTransform2fx& out) {
   { uint32_t t; if (!r.take32(t)) return false; out.r01 = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.r10 = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.r11 = t; }
+  return true;
+}
+
+inline bool zhao_unpack_rgb565(ZhReader& r, ZhRgb565& out) {
+  out = {};
+  { uint16_t t; if (!r.take16(t)) return false; out.bits = t; }
   return true;
 }
 
@@ -1456,6 +1552,24 @@ inline bool zhao_unpack_draw_sky(ZhReader& r, ZhRecordDrawSky& out) {
   return true;
 }
 
+inline bool zhao_unpack_set_environment(ZhReader& r, ZhRecordSetEnvironment& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.sun_yaw = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.sun_pitch = t; }
+  if (!zhao_unpack_rgb565(r, out.payload.sun_colour)) return false;
+  if (!zhao_unpack_rgb565(r, out.payload.ambient)) return false;
+  if (!zhao_unpack_rgb565(r, out.payload.tint)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.tint_strength = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.fog = static_cast<fog_mode>(t); }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.fog_near = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.fog_far = t; }
+  if (!r.skip(12)) return false;
+  return true;
+}
+
 inline bool zhao_unpack_emit_audio_event(ZhReader& r, ZhRecordEmitAudioEvent& out) {
   out = {};
   if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
@@ -1567,6 +1681,7 @@ constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_POPULATION[] = {8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_DRAW_PROCEDURAL[] = {37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
 constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159};
+constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
@@ -1581,12 +1696,13 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DrawPopulation", 0x0301, 32, true, ZHAO_PADS_DRAW_POPULATION, 8},
   {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 11},
   {"DrawSky", 0x0310, 176, false, ZHAO_PADS_DRAW_SKY, 14},
+  {"SetEnvironment", 0x0311, 48, false, ZHAO_PADS_SET_ENVIRONMENT, 12},
   {"EmitAudioEvent", 0x0400, 32, true, nullptr, 0},
   {"DebugBootstrap", 0xF001, 64, false, nullptr, 0},
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 15;
+constexpr size_t ZHAO_COMMAND_COUNT = 16;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -1605,6 +1721,11 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
       if (!(v0 == 0u)) return false;
       return true;
     }
+    case ZHAO_OP_SET_ENVIRONMENT: {
+      const uint32_t v0 = uint32_t(p[11]);  // fog: fog_mode
+      if (!(v0 == 0u || v0 == 1u)) return false;
+      return true;
+    }
     case ZHAO_OP_DEBUG_FRAME_BLIT: {
       const uint32_t v0 = uint32_t(p[1]);  // mode: video_mode
       if (!(v0 == 0u || v0 == 1u || v0 == 2u)) return false;
@@ -1616,8 +1737,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x3B, 0x4D, 0xD3, 0x86, 0x9F, 0xDB, 0x39, 0xBB, 0xC9, 0xC2, 0x3D, 0x87, 0x62, 0x0F, 0x99, 0x8C, 0xCE, 0xD2, 0xC8, 0x1B, 0xEE, 0x95, 0x6B, 0x75, 0xD3, 0x61, 0xCE, 0x02, 0x2A, 0x23, 0x80, 0x23};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x58, 0x68, 0x4D, 0x0B, 0xAE, 0xDC, 0x77, 0xA1, 0x84, 0x7B, 0x4F, 0x86, 0x87, 0x13, 0xFD, 0x4C, 0xCC, 0xF4, 0xE8, 0x5F, 0xE5, 0x0D, 0x14, 0xC8, 0x95, 0x06, 0x6F, 0xBE, 0xE9, 0x49, 0x32, 0xEB};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xDB, 0x6F, 0x6B, 0x2B, 0xBF, 0x7C, 0x3A, 0x38, 0x37, 0x88, 0xD2, 0x1F, 0xA5, 0x94, 0xE0, 0x95, 0x19, 0xAC, 0xE1, 0xE9, 0x09, 0x43, 0xD9, 0xD8, 0xED, 0x22, 0x27, 0xF7, 0xB1, 0x99, 0xDB, 0x12};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xB9, 0xC5, 0xD8, 0x06, 0xEF, 0x60, 0xC9, 0x62, 0xDE, 0x32, 0x05, 0x06, 0x7D, 0x68, 0xD2, 0xC6, 0xA8, 0x40, 0x9A, 0xC7, 0xCF, 0x83, 0x6F, 0x19, 0xD3, 0x04, 0x1A, 0x0F, 0x34, 0x88, 0x58, 0x4D};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

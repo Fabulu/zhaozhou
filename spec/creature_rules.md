@@ -51,12 +51,13 @@ loads.
 
 ## 2. Animation
 
-### 2.1 Storage (frozen shape; exact Q formats need a qformats amendment)
+### 2.1 Storage (frozen; the Q formats are frozen — qformats §7.6, C1)
 
 Clips ship compressed, SXSK-style:
 
 - per frame: root displacement (3 × fx16, 12 B) + `bone_count` × quantized
-  quaternion (s16[4], **8 B/bone/frame**). 32 bones ⇒ ≤ 268 B/frame.
+  quaternion (`quat16`, s16[4], **8 B/bone/frame** — qformats §7.6).
+  32 bones ⇒ ≤ 268 B/frame.
 - keys at **30 Hz**, each key shown 2 sim ticks, **no interpolation** —
   donor-shipped and it reads perfectly at 240p; a later geomorph between
   keys is a presentation nicety, not v1.
@@ -92,9 +93,13 @@ instances, the ARM never uploads per-limb matrices (S2's "budget hazard"
 list, honoured).
 
 Quantized-quat decode numerics (lane format, rounding of the 9-product
-matrix formula) are **proposed for a qformats amendment** and must be
+matrix formula) ~~are **proposed for a qformats amendment** and must be
 frozen before GEOM.POSE reaches REFERENCE_COMPLETE — flagged, not decided
-here (QFMT_VERSION change control, qformats §13).
+here (QFMT_VERSION change control, qformats §13).~~ **Frozen 2026-08-17:
+qformats §7.6 (amendment C1, QFMT_VERSION 2)** — S 1.0.14 hemisphere-
+canonical lanes, one rescale(·,11) per matrix element, no renormalisation,
+declared bounds measurement-cited to the creature lane commit `bd1c733`.
+GEOM.POSE is REFERENCE_COMPLETE on that evidence.
 
 ## 3. The 3→2 weight clamp — claim CORRECTED, gate specified
 
@@ -252,6 +257,10 @@ The novel flagship (S3 §B4): a giant whose torso is walkable terrain.
 
 1. GEOM.POSE decode vs zref bit-exactness once quat numerics freeze;
    pose-cache determinism (same tuple set → same content, any order).
+   [Delivered in the reference lane: `tests/geometry/creature_core.cpp`
+   §1–§2 (decode anchors + the 3,600-rotation sweep vs a double oracle) and
+   §7 (pose-cache determinism, eviction, bad-id no-op), commit `bd1c733`.
+   The RTL-vs-zref leg runs at Phase 9 with the directed suite.]
 2. Clamp-gate goldens: synthetic 3-weight rigs at known D and w₃ — the
    compile error metric must equal the analytic bound.
 3. Reparent epoch safety: stale-generation reparent is a safe no-op.
@@ -261,8 +270,10 @@ The novel flagship (S3 §B4): a giant whose torso is walkable terrain.
 
 ## 9. Not decided here (and what it blocks)
 
-- Quantized-quat lane format + decode rounding — blocks GEOM.POSE
-  REFERENCE_COMPLETE (qformats amendment required first).
+- ~~Quantized-quat lane format + decode rounding — blocks GEOM.POSE
+  REFERENCE_COMPLETE (qformats amendment required first).~~ Decided
+  2026-08-17: qformats §7.6 (C1); GEOM.POSE promoted REFERENCE_COMPLETE
+  (ledger maturity_log pins `bd1c733`).
 - `ReparentTransform` ABI wire shape — blocks nothing until Phase 9
   integration; lands via abi-gen with the ABI owner.
 - Giant content-tier fragment reservations — Phase 11 presentation

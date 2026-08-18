@@ -529,3 +529,99 @@ the lint_* tests went green again.
    tool that builds one on the stack dies silently (exit 127, no output -
    buffered stdout is lost on the fault). Heap-allocate Tilesets
    everywhere; two separate build paths hit this.
+
+---
+
+## Lighting & pose consolidation session (2026-08-17, spec/ratification agent)
+
+The spec wave S6 asked for: the quat lane law, the light/environment
+record, the fog law, and the sky-set crossfade decision. Amendments +
+ABI v3 + the capture mirror only - NO new renders (reel --check green,
+byte-identical; the record exists for capture and future consumers, the
+Phase-3 stand-in keeps its hard-coded light as sky_and_beams 4a records).
+
+### Frozen / amended
+
+1. **qformats C1 (QFMT_VERSION 1 -> 2), section 7.6**: the quat16 lane -
+   S 1.0.14, hemisphere-canonical quantisation, the 9-product decode with
+   ONE rescale(.,11) per element, NO renormalisation. Bounds are
+   evidence-cited to bd1c733 and were re-observed at HEAD before citing
+   (decode element <= 0.50 LSB = the single-rounding bound; column-norm
+   drift <= 15.86 LSB ~ 2.4e-4 relative, the declared no-renorm cost;
+   end-to-end column angle <= 0.0156 deg over the 3,600-rotation sweep;
+   the protocol is frozen with them). Exactness laws: identity/180-deg
+   exact, 90 deg NEVER exact in any power-of-two lane (sqrt(2)/2
+   irrational; 3 LSB in S 1.0.14) - the GEOM.POSE contract's
+   "identity/90 deg exact" wording corrected.
+2. **GEOM.POSE -> REFERENCE_COMPLETE** on that evidence (maturity_log
+   pins bd1c733; tests point at tests/geometry/creature_core.cpp, the
+   suite that exists - V17 caught the phantom geom_pose_directed/random
+   citations, and even caught the path inside my historical note about
+   them; the rule reads every tests/ mention). Diagrams regenerated.
+3. **ABI v3: SetEnvironment 0x0311 reserved** (sun angle16 pair, sun/
+   ambient/tint RGB565, unit8 tint strength, fog mode/near/far; 48-B
+   record) + rgb565 struct + fog_mode enum. sky_and_beams v1.2 owns the
+   semantics (4a: direction law, vertex-light model = the stand-in's
+   0.25+0.75*ndl parameterised, tint-before-texture, mix order, 565-
+   native power-on defaults) and the crossfade decision (1.3). The
+   QFMT 1->2 const change deliberately did NOT bump abi version (frame
+   wire untouched); the new opcode DID (v3) - the split is argued in the
+   .zidl header and capture_format's status note.
+4. **capture_format [v3]**: ENVIRONMENT_STATE 0x000C (20 B, byte-mirror
+   of the command payload) AND the missing CELESTIAL_STATE 0x000B
+   (236 B - the byte layout the reference serializer already
+   implements; stars 8's chunk finally has a container home) + the
+   state-chunk replay-exactness law (light, weather and trails replay
+   bit-exactly from any frame; a storm is sim state).
+5. **The fog law** (qformats 8): linear frozen (per-frame field_rcp +
+   one mul/sub/clamp per vertex on the guarded forward w, mix into the
+   lit vertex colour AFTER the global tint, one rounding per channel),
+   colour bound to the sky set's horizon join value (Giants' depth
+   cue), exempt list (sky family, additive emissive, HUD), exponential
+   deferred with the pad-bytes-0-3 same-bytes site named for
+   fog_density. Not costed where no model exists - stated in the law.
+6. **Crossfade decision** (sky_and_beams 1.3): option (c)'s semantics
+   WITHOUT an opcode - the interpolation is sim-side palette arithmetic
+   (CLUT8 lerp on the star-ramp precedent) whose products already cross
+   the ABI lawfully (palette uploads + resolved SetEnvironment); the
+   discrete switch is the degenerate case, authored intermediate sets
+   rejected with the derivation; 0x0312..0x031F stay reserved with the
+   escape hatch recorded. Costs (512 B/frame palette traffic class)
+   explicitly NOT ratified - the rain wave costs them.
+7. Reference minimal: zref::sky::EnvState + env_state_serialize/
+   deserialize (+ env_state.cpp), chunk enum 0x000B/0x000C,
+   zhao-capture section names, render_sky test_env_state_roundtrip.
+   Two of my own 565 anchor drafts were wrong before the third
+   (252/64/191 are not in the replication image; 5- and 6-bit lanes
+   expand differently so exact greys barely exist - the packed values
+   0xBDF7/0x4208 with their exact expansions are the law).
+
+### Evidence discipline
+
+- The stale-golden re-pin was mutation-verified per ABI commit: observe
+  duo_markers RED against the stale committed golden (the byte-identical
+  compare has teeth), --write, observe green. Ran twice (QFMT bump,
+  then v3 bump) so each commit is self-consistent. Golden delta = 67 of
+  51,908 bytes (the two embedded SHA-256 identities + CRCs) for the
+  QFMT bump - identity-shaped, not content-shaped.
+- The v3 .zidl syntax was pre-validated against the real parser in a
+  scratch file before touching the live spec; the regen diff was read
+  (version byte + header CRC in frame_minimal; source-id-index shifts
+  in command samples; the new 48-B golden; 26 outputs).
+- fixgen's own version test correctly went RED on the QFMT bump (its
+  whole job) - updated to 2 with the C1 note.
+
+### Findings for the orchestrator
+
+1. QUEUE-atmospheric-rain-and-sky-darkening.md (RUN-20260815-2307) is
+   NOT in the repo - the three crossfade options are known only via
+   S6's citation of it. The decision rests on its own derivation
+   regardless, but the rain wave should re-check the queue's own words
+   when it starts.
+2. S6 said "16 commands, zero light/fog state" - the .zidl had 15. It
+   has 16 now (SetEnvironment), which will confuse a future grep.
+3. S6's gap list otherwise confirmed point for point: celestial_state
+   absent from capture_format (fixed), no light ABI record (fixed), fog
+   owned by no spec (fixed), GEOM.PROJECT contract a TODO stub (left -
+   its "lighting" purpose line + a pointer to 4a/qformats 8 is all that
+   is lawful before the block leaves SPECIFIED).

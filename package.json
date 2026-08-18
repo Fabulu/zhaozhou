@@ -2,20 +2,24 @@
   "name": "zhaozhou",
   "version": "0.0.1",
   "private": true,
-  "description": "Zhaozhou FPGA game console — hardware and tooling workspaces; the Nanquan language/compiler is external (https://github.com/Fabulu/nanquan)",
+  "description": "Zhaozhou FPGA game console — compiler + tooling workspaces (npm lane; C++/RTL build is CMake)",
   "workspaces": [
+    "compiler",
     "tools/abi-gen",
     "tools/ledger",
     "tools/fixgen"
   ],
   "scripts": {
-    "test": "npm run -w tools/ledger test && npm run -w tools/fixgen test && npm run -w tools/abi-gen test",
+    "test": "npm run -w compiler test && npm run -w tools/ledger test && npm run -w tools/fixgen test && npm run -w tools/abi-gen test",
     "ledger:check": "npm run -w tools/ledger check",
     "ledger:gen": "npm run -w tools/ledger gen",
     "tables:check": "npm run -w tools/fixgen check",
     "tables:gen": "npm run -w tools/fixgen gen",
     "abi:check": "npm run -w tools/abi-gen check",
-    "abi:gen": "npm run -w tools/abi-gen gen"
+    "abi:gen": "npm run -w tools/abi-gen gen",
+    "field:check": "npm run -w compiler test",
+    "form:gen": "npm run -w compiler form:gen",
+    "form:check": "npm run -w compiler form:check"
   },
   "engines": {
     "node": ">=20"

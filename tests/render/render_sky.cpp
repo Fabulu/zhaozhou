@@ -1,10 +1,13 @@
 // render_sky.cpp — W3.5 sky tests: emit_layers layer census, the §1.1
 // cloud vertex-alpha law, tick-exact scroll determinism (T vs T+3840),
 // the rotation-only rot_proj validation, and the fallback flat-clear rule.
+// [v1.2] the §4a environment-state record round-trip (the ENVIRONMENT_STATE
+// chunk enforcer).
 //
 // Law: spec/sky_and_beams.md §1 (assembly, fallback, "no pixel left
 // unwritten"), §1.1 (layer table: counts, UV laws, scroll formulas, cloud
-// vertex alpha), §6 (the ZRef preview functions); spec/qformats.md §3/§4.
+// vertex alpha), §4a (environment state + chunk), §6 (the ZRef preview
+// functions); spec/qformats.md §3/§4.
 
 #include "render_helpers.hpp"
 
@@ -309,7 +312,9 @@ void test_sky_orientation() {
   res.sky_sets.push_back({2, s});
   const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 5714, 65287, false);
   {
-    const zref::mat4fx rp = rtest::to_zref(m);
+    zref::mat4fx rp;
+    for (int a = 0; a < 4; ++a)
+      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{(&m.m00)[a * 4 + b]};
     check(zref::sky::rot_proj_is_rotation_only(rp), "orientation fixture is rotation-only (§1)");
   }
 
@@ -361,9 +366,8 @@ void test_sky_orientation() {
       }
     }
   }
-  std::printf(
-      "render_sky: orientation — cap %u px (%u below the midline), under %u px (%u above)\n",
-      cap_px, cap_lower, under_px, under_upper);
+  std::printf("render_sky: orientation — cap %u px (%u below the midline), under %u px (%u above)\n",
+              cap_px, cap_lower, under_px, under_upper);
   check(cap_px > 0, "the zenith cap reaches the canvas at all");
   check(under_px > 0, "the under-plane reaches the canvas at all");
   check(cap_lower == 0, "ZENITH cap pixels land in the UPPER half of the frame");
@@ -583,13 +587,13 @@ void test_seam_continuity() {
   // conforming: one dusk elevation ramp sampled at the join elevations
   zref::sky::SkySet good;
   good.background = {24, 26, 70};
-  good.under = {228, 130, 88};               // == band_lower_horizon (§1.2 rule 1)
-  good.band_lower_horizon = {228, 130, 88};  // warm horizon
-  good.band_lower_top = {150, 92, 118};      // == band_upper_bottom (rule 2)
+  good.under = {228, 130, 88};              // == band_lower_horizon (§1.2 rule 1)
+  good.band_lower_horizon = {228, 130, 88}; // warm horizon
+  good.band_lower_top = {150, 92, 118};     // == band_upper_bottom (rule 2)
   good.band_upper_bottom = {150, 92, 118};
-  good.band_upper_top = {56, 48, 110};  // zenith
-  good.cap = {56, 48, 110};             // == band_upper_top (rule 3)
-  good.cloud = {255, 255, 255};         // unused (layers not requested below)
+  good.band_upper_top = {56, 48, 110};      // zenith
+  good.cap = {56, 48, 110};  // == band_upper_top (rule 3)
+  good.cloud = {255, 255, 255};  // unused (layers not requested below)
   good.sun = {255, 255, 255};
   good.cloud_max_alpha = zref::fx16{0};
   good.sun_energy = zref::fx16{0};
@@ -682,6 +686,85 @@ void test_seam_continuity() {
 
 }  // namespace
 
+// ---- §4a environment-state record round-trip (amendment v1.2) ---------------
+//
+// The ENVIRONMENT_STATE chunk (capture_format.md 4.2 [v3]) is a byte-mirror
+// of the SetEnvironment payload; the round-trip is its enforcer. The 565
+// expansion anchors are hand-derived from the frozen replication law
+// (stars 2): 5-bit c5 -> (c5<<3)|(c5>>2), 6-bit c6 -> (c6<<2)|(c6>>4);
+// exactly the image of that expansion round-trips (15 -> 123, 31 -> 125,
+// 8 -> 66; 63 -> 255 in both widths).
+
+void test_env_state_roundtrip() {
+  using zref::sky::EnvState;
+  using zref::sky::rgb565;
+
+  // defaults = the §4a power-on law (the stand-in's 0.25 + 0.75*ndl; no
+  // exact grey exists off 0/255 — the 5/6-bit lanes replicate differently,
+  // so the packed values and their exact expansions are the anchors)
+  EnvState def;
+  check(def.sun_pitch.raw == 0x4000, "env default: zenith sun");
+  check(def.tint_strength == 0 && def.fog == zref::sky::FogMode::Off,
+        "env default: tint 0, fog off");
+  uint8_t r = 0, g = 0, b = 0;
+  check(def.sun_colour.bits == 0xBDF7, "env default: sun packed 0xBDF7");
+  def.sun_colour.to_rgb888(r, g, b);
+  check(r == 189 && g == 190 && b == 189, "env default: sun expands (189,190,189)");
+  check(def.ambient.bits == 0x4208, "env default: ambient packed 0x4208");
+  def.ambient.to_rgb888(r, g, b);
+  check(r == 66 && g == 65 && b == 66, "env default: ambient expands (66,65,66)");
+  def.tint.to_rgb888(r, g, b);
+  check(r == 255 && g == 255 && b == 255, "env default: white tint (565 0xFFFF round-trips)");
+
+  // a storm-ish record with non-trivial fields
+  EnvState st;
+  st.sun_yaw = zref::angle16{0x1234};
+  st.sun_pitch = zref::angle16{0xC000};  // nadir (below horizon, sunset side)
+  st.sun_colour = rgb565::from_rgb888(255, 200, 120);
+  st.ambient = rgb565::from_rgb888(40, 50, 80);
+  st.tint = rgb565::from_rgb888(90, 100, 140);
+  st.tint_strength = 128;
+  st.fog = zref::sky::FogMode::Linear;
+  st.fog_near = zref::fx16{40 * 65536};
+  st.fog_far = zref::fx16{300 * 65536};
+
+  uint8_t buf[zref::sky::kEnvStateBytes];
+  zref::sky::env_state_serialize(st, buf);
+  // wire law anchors (capture_format.md 4.2 layout): offsets 0/2 angles,
+  // 4/6/8 the three 565s, 10 strength, 11 mode, 12/16 the fx16 extents
+  check(buf[0] == 0x34 && buf[1] == 0x12, "env wire: sun_yaw LE");
+  check(buf[10] == 128, "env wire: tint_strength @10");
+  check(buf[11] == 1, "env wire: fog linear @11");
+  const uint32_t near_raw = static_cast<uint32_t>(buf[12]) | (static_cast<uint32_t>(buf[13]) << 8) |
+                            (static_cast<uint32_t>(buf[14]) << 16) |
+                            (static_cast<uint32_t>(buf[15]) << 24);
+  check(near_raw == 40u * 65536u, "env wire: fog_near fx16 @12");
+
+  const EnvState back = zref::sky::env_state_deserialize(buf);
+  check(back.sun_yaw.raw == st.sun_yaw.raw && back.sun_pitch.raw == st.sun_pitch.raw,
+        "env round-trip: angles");
+  check(back.sun_colour.bits == st.sun_colour.bits && back.ambient.bits == st.ambient.bits &&
+            back.tint.bits == st.tint.bits,
+        "env round-trip: 565 fields");
+  check(back.tint_strength == st.tint_strength && back.fog == st.fog,
+        "env round-trip: strength + mode");
+  check(back.fog_near.raw == st.fog_near.raw && back.fog_far.raw == st.fog_far.raw,
+        "env round-trip: fog extents");
+
+  // serialize(deserialize(x)) is the identity (the star-chunk discipline)
+  uint8_t buf2[zref::sky::kEnvStateBytes];
+  zref::sky::env_state_serialize(back, buf2);
+  check(std::memcmp(buf, buf2, zref::sky::kEnvStateBytes) == 0, "env round-trip: byte identity");
+
+  // the 565 expansion anchors, hand-derived (frozen replication law)
+  const rgb565 native = rgb565::from_rgb888(123, 125, 66);  // r5=15, g6=31, b5=8
+  native.to_rgb888(r, g, b);
+  check(r == 123 && g == 125 && b == 66, "env 565: image values round-trip exactly");
+  const rgb565 mid = rgb565{0x7BE0};  // r5 = 15, g6 = 31, b5 = 0
+  mid.to_rgb888(r, g, b);
+  check(r == 123 && g == 125 && b == 0, "env 565: mid anchors (15->123, 31->125)");
+}
+
 int main() {
   test_layer_census();
   test_band_geometry();
@@ -693,6 +776,7 @@ int main() {
   test_rot_proj_validation();
   test_fallback_clear();
   test_seam_continuity();
+  test_env_state_roundtrip();
   if (failures == 0) std::printf("render_sky: all green\n");
   return failures == 0 ? 0 : 1;
 }

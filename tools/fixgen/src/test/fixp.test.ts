@@ -26,8 +26,8 @@ import {
 import { renderCpp, renderTs, renderMem } from "../emit.js";
 import { goldenSinCos, goldenUnit8, goldenNoise2 } from "../golden.js";
 
-test("QFMT_VERSION is 1 (qformats.md 13)", () => {
-  assert.equal(QFMT_VERSION, 1);
+test("QFMT_VERSION is 2 (qformats.md 13; 1 -> 2 with amendment C1, the quat16 lane)", () => {
+  assert.equal(QFMT_VERSION, 2);
 });
 
 test("round_half_up division and rescale (qformats.md 4)", () => {

@@ -1563,17 +1563,21 @@ blocks:
     target_throughput: 1 decoded bone per clock on miss; 1 palette handle per request on hit
     reference_model: zref::PoseBank
     tests:
-      directed: tests/geometry/geom_pose_directed.cpp
-      random: tests/geometry/geom_pose_random.cpp
+      directed: tests/geometry/creature_core.cpp
+      random: tests/geometry/creature_core.cpp
     counters: [cache_hits, cache_misses]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-17"
+        commit: bd1c733
+        evidence: tests/geometry/creature_core.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "World-identity wave (RUN-20260816-0046). Quantized-quat lane format and decode rounding require a spec/qformats.md amendment (QFMT_VERSION 13) before REFERENCE_COMPLETE — flagged in the contract."
+    notes: "World-identity wave (RUN-20260816-0046); promoted by the lighting & pose consolidation wave (2026-08-17) once the quat lane froze: qformats 7.6 (amendment C1, QFMT_VERSION 2). Evidence: the creature reference core at bd1c733 (zref::PoseBank decode-on-fetch, 3,600-rotation sweep vs a double oracle, cache determinism/eviction/bad-id anchors in tests/geometry/creature_core.cpp). The original geom_pose_directed/random.cpp reservations were never written; the creature core suite carries both roles (one file, MEM.GUARD precedent)."
 
   - id: GEOM.SKIN
     name: Skinning stage

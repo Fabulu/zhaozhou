@@ -1,7 +1,7 @@
 # Sky and Beams Specification (Sacrifice-style 360° sky + god beams)
 
-**Status:** RATIFIED v1 (2026-08-14) — architecture addendum from run RUN-20260814-2015 (evidence: reverse-engineered Sacrifice engine structure + architecture-fit recons; see `runs/CLAUDE-RUNS/RUN-20260814-2015-sacrifice-sky-and-beams/`). **v1.1 (2026-08-16): §1.2 elevation-ramp continuity law added** — closes the layer-join colour-discontinuity spec gap the project owner reported ("ovals, not sky").
-**Authority:** this file owns sky/beam semantics. Charter §8 pass 1 ("terrain/backdrop prefill") admits the sky prefill without charter amendment. ABI reservation: `0x0310..0x031F` (`DrawSky 0x0310` + extensions; lands in `spec/commands.zidl` post-W4). Version this file on any semantic change.
+**Status:** RATIFIED v1 (2026-08-14) — architecture addendum from run RUN-20260814-2015 (evidence: reverse-engineered Sacrifice engine structure + architecture-fit recons; see `runs/CLAUDE-RUNS/RUN-20260814-2015-sacrifice-sky-and-beams/`). **v1.1 (2026-08-16): §1.2 elevation-ramp continuity law added** — closes the layer-join colour-discontinuity spec gap the project owner reported ("ovals, not sky"). **v1.2 (2026-08-17, lighting & pose consolidation wave, RUN-20260816-0046): §1.3 sky-set crossfade law and §4a the environment-state record (`SetEnvironment 0x0311`) added; §8 notes amended.** The crossfade decision unblocks the queued rain work (owner idea #9); the environment record is the ABI home of sun/ambient/tint/fog state that S6's lighting recon identified as the highest-leverage gap.
+**Authority:** this file owns sky/beam/environment-light state semantics. Charter §8 pass 1 ("terrain/backdrop prefill") admits the sky prefill without charter amendment. ABI reservation: `0x0310..0x031F` (`DrawSky 0x0310` + extensions; lands in `spec/commands.zidl` post-W4; `SetEnvironment 0x0311` allocated by the v1.2 amendment — the first allocation from the extension range). Version this file on any semantic change.
 **Cross-references:** `spec/qformats.md` (fx16/angle16/rounding law), charter §8 (pass order), §9 (Measure/hysteresis), §14 (Forge), §15 (textures/recipes), §16 (Mirror Gate), §25 (counters), §26 (refusals — none touched).
 
 ---
@@ -47,6 +47,90 @@ For the textured layers (Phase 6+ assets) the same law binds the v-edge texel ro
 
 ENFORCED-BY: `tests/render/render_sky.cpp` `test_seam_continuity` (renders a pitch-spanning column through all three joins and asserts no join step exceeds the largest in-band gradient step).
 
+### 1.3 Sky-set crossfade law (amendment v1.2, 2026-08-17)
+
+**The decision this closes:** the rain queue (owner idea #9 — "rain that
+darkens sky as clouds come in; spells cause weather") listed three
+mechanisms for moving between sky sets, costs undecided: (a) a discrete
+per-frame switch, (b) authored intermediate sets, (c) a per-tick
+interpolation parameter in the reserved `0x0311..0x031F` range.
+
+**Decision: (c)'s semantics without (c)'s opcode — the crossfade is
+sim-side palette arithmetic whose products already cross the ABI lawfully.
+(a) is its degenerate case; (b) is rejected.** Derivation:
+
+1. Since §1.2 the whole sky is one elevation-indexed colour ramp sampled by
+   geometry, and the textured layers (drum, cap, under) are **CLUT8** —
+   colour lives in palette pages. The machine already ratified per-frame
+   ARM palette rebuilds as a zero-fabric lane (stars_and_flares §1: ≤512 B
+   upload/frame; the §3 ramp slew ±1/tick law is the anti-pop discipline).
+   A sky crossfade is therefore `palette lerped by w`, not `fragments
+   blended`: the fragment path samples ONE palette exactly as it does
+   today — no second sample (§26's second-TMU refusal stays moot), no
+   blend unit, no new recipe.
+2. **(a) discrete switch** is legal today (DrawSky names any set per
+   frame) but jumps the whole ramp at once — exactly the discontinuity
+   class §1.2 was written to kill within a set. Adequate for hard cuts
+   (level load, a spell's instant night); wrong for weather fronts and
+   day cycles.
+3. **(b) authored intermediate sets** approximates (c) with assets: N
+   extra sets per transition pair at ~0.9 MB VRAM each (§1.1 costs), N×
+   authoring, and it still pops between adjacent rungs. It buys the look
+   of (c) at strictly higher cost. Rejected.
+4. **(c) as state, not opcode:** the crossfade triple `{set_a, set_b, w}`
+   is sim/presentation state (the weather system's, the day clock's). Its
+   visible products already have lawful carriers: the ARM-rebuilt palette
+   page (an ordinary resource upload — uploads are command-stream bytes,
+   so captures replay them exactly) and the resolved environment values
+   (`SetEnvironment 0x0311`, §4a). An opcode carrying `w` would add ABI
+   surface to state that never needs to cross it; `0x0312..0x031F` stay
+   unallocated. Escape hatch: if the rain wave finds the palette-upload
+   bandwidth or a two-art transition needs an explicit command, it
+   allocates from the reserved range under this file's version-bump law —
+   the decision above is about WHERE the interpolation lives, not a
+   refusal of the range.
+
+**The law:**
+
+- A sky transition is the pair `(set_a, set_b)` plus a monotonic weight
+  `w ∈ [0, 1]` advanced per tick by the sim (deterministic; a spell's
+  weather change is sim truth, never a renderer toggle). At `w` the
+  active sky palette entry is `lerp(set_a[i], set_b[i], w)` per channel,
+  round-half-up, computed by ARM into the active palette page each frame
+  while `0 < w < 1`; at the endpoints the owning set's page is used
+  verbatim.
+- Per-set scalars crossfade by the same weight: `cloud max_alpha`,
+  `sun energy` (§1.1), and the environment record's sun colour / ambient /
+  tint + strength (§4a) — the resolved values are what the commands
+  carry. One weight, one clock: sky, clouds, sun and the world-light tint
+  move together; that unity is the point of the record.
+- The §1.2 continuity law extends to crossfades: a lerp of two C0 ramps
+  is C0 (each join equality is preserved by the per-channel lerp), and
+  the ±1/tick slew discipline (stars_and_flares §3) governs palette
+  changes during a transition — palette changes never pop, crossfades
+  included.
+- The cloud sheet is ARGB4444 direct colour (not CLUT): its crossfade
+  rides the alpha path (`max_alpha` lerp through the ratified
+  `sky_cloud_fade` blend), never a texture blend. A transition that needs
+  different cloud ART authors it as palette + alpha-parameter work on one
+  sheet; a second sampled sheet is not available to this law.
+- Time-of-day and weather are the same law at different rates: a day
+  cycle is a slow crossfade between dawn/day/dusk/night sets with
+  `SetEnvironment` sun direction advancing per frame. No separate
+  mechanism may be built for either.
+- Capture-exactness: replay of a captured frame reproduces the sky,
+  weather and light bit-exactly — the palette upload bytes and the
+  resolved `SetEnvironment` values are in the frame; `w` itself is
+  derived sim state and needs no chunk of its own (the celestial_state
+  precedent: capture what the machine consumes, not what the sim was
+  thinking).
+- **Not costed here:** the per-frame palette-upload bandwidth for a sky
+  in transition (a 256-entry CLUT8 palette page is 512 B at RGB565 — the
+  stars' ≤512 B/frame line is the precedent, not a ratified sky budget);
+  the ARM-side lerp cost; any DRAM traffic for the second set's palette
+  source. The rain wave costs them against ZH-004 board truth before
+  relying on the law at storm intensity.
+
 **Costs (cost-model lines)**: `sky_triangles ≤ 352` total (192 drum + 16 cap + 2 under + 128 cloud + 2 sun + margin), ×2 Duo views; `sky_fragments ≤ 92,160` (the clear it replaces) + cloud ≤ ~45K blended; VRAM ≈ 0.9 MB (~1.9% of the texture pool), shared between Duo views. Measure-**exempt** with these declared budget lines; fully counted in §25 counters; carries the DrawSky source ID.
 
 ## 2. Beam architecture (ratified D6)
@@ -79,11 +163,85 @@ Mode of POST.COMPOSITE's glow path. Per texel of the 96×60 (Z60) / 2×64×48 (D
 
 ## 4. Command surface (post-W4 patch)
 
-One new semantic command (see ADDENDUM §4 for exact .zidl — `DrawSky 0x0310` with `sky_set` handle, per-view `rot_proj[2]`, cloud scroll u/v, `drum_yaw`, viewport mask, layer flags; reserved `0x0311..0x031F` for extensions; version-bump this file before allocating). Beams: **no new opcode** — `DRAW_PROCEDURAL` with forge kind `beam_cone`; parameter layout (apex/axis/height/radii/fade_band/intensity[2]/min_px/semantic_weight) defined inside the generic parameter blob. Bootstrap lowering: `DRAW_SCREEN_TRIANGLES` (charter §6); game-facing meaning never changes.
+One new semantic command (see ADDENDUM §4 for exact .zidl — `DrawSky 0x0310` with `sky_set` handle, per-view `rot_proj[2]`, cloud scroll u/v, `drum_yaw`, viewport mask, layer flags; reserved `0x0311..0x031F` for extensions [v1.2: `0x0311` is now `SetEnvironment`, §4a — the remainder `0x0312..0x031F` stays reserved]; version-bump this file before allocating). Beams: **no new opcode** — `DRAW_PROCEDURAL` with forge kind `beam_cone`; parameter layout (apex/axis/height/radii/fade_band/intensity[2]/min_px/semantic_weight) defined inside the generic parameter blob. Bootstrap lowering: `DRAW_SCREEN_TRIANGLES` (charter §6); game-facing meaning never changes.
+
+## 4a. The environment-state record — `SetEnvironment 0x0311` (amendment v1.2)
+
+**The gap this closes (S6 lighting recon §4.4/§5.1):** no ABI record
+carried sun direction, ambient, global tint or fog state; the Phase-3
+stand-in hard-codes one light; every global lighting cheat and the
+determinism law (state not in a command cannot be in a capture) routed
+through the missing record. This is the donor's `envi.d` per-level
+lighting struct (sun direction/colour, ambient, fog — S6 §1) ported to
+lawful widths — one directional sun + one ambient + fog, **no dynamic
+point lights in the format** (the donor never had them; local light is
+the flare/beam/stamp machinery, S6 §2).
+
+**Command:** `SetEnvironment 0x0311` (reserved; layout frozen in
+`spec/commands.zidl` since ABI v3, execution lands with the
+weather/lighting wave): sun direction as an `angle16` pair, sun colour /
+ambient / tint as `rgb565`, `tint_strength` unit8, fog mode + near/far
+(fx16). Per-frame **global** state — no viewport mask: one world, one sun
+(Duo views share it; `SetView` remains the per-view record).
+
+**Consumption laws:**
+
+- **Sun direction.** `sun_yaw`/`sun_pitch` are turns (qformats §2);
+  `0x4000` pitch = zenith. The world-space unit direction is
+
+  ```
+  L = ( fx_mul(cos p, sin y),  sin p,  fx_mul(cos p, cos y) )
+  ```
+
+  with `fx_sin`/`fx_cos` (qformats §7.1) and single-rounded products
+  (§3). `yaw = 0` faces +Z; the convention is content's to steer. The
+  sky set's authored sun anchor (§1.1 row 6) MUST equal this direction —
+  the asset compiler rejects a divergent set (the §1.2 enforcement home:
+  defects live where the values are authored).
+- **Vertex light.** In GEOM.PROJECT (its contract purpose already owns
+  "projection + lighting"), per vertex with unit normal `N`:
+  `ndl = clamp(N·L, 0, 1)` (fx dot, single rounding), then per channel
+  `lit = sat_u8( ambient_c + rescale_u(sun_c · ndl, 8) )`. The Phase-3
+  stand-in's hard-coded floor — `0.25 + 0.75·lambert` under one light
+  (1,2,1)/√6 (`reference/src/zrender/terrain.cpp`, the `ambient` lambda:
+  `16384 + rhu(shade·49152)`) — is this law at `ambient = 0x4000`,
+  `sun = 0xC000` in the Q16.16 lanes; the record parameterises what the
+  stand-in froze. RGB565 → 8-bit expansion by bit replication
+  (`c8 = (c5 << 3) | (c5 >> 2)`, `(c6 << 2) | (c6 >> 4)` — the frozen
+  stars §2 expansion).
+- **Global tint** (time-of-day / weather mood; the §1.3 crossfade's
+  world-light leg). Per channel, applied to the LIT vertex colour before
+  texture modulation (the donor's `lmap` position — tint the light, not
+  the albedo): `lit' = sat_u8( lit + rescale_s((tint_c − lit) · s, 8) )`
+  with `s = tint_strength` (unit8). One multiply per channel per vertex;
+  zero fragment cost.
+- **Fog.** Mode/near/far ride this record; the formula, Q-formats,
+  rounding, per-vertex placement, colour binding (to this file's horizon
+  ramp) and the exempt list are law in `spec/qformats.md` §8 (the raster-
+  basics home; one truth for the numbers). `fog_far ≤ fog_near` disables
+  fog regardless of mode — a deterministic no-op, not an error.
+- **Defaults.** A frame with no `SetEnvironment` keeps the previous
+  state; the power-on default is sun pitch `0x4000` (zenith), sun colour
+  packed 565 `0xBDF7` (lanes 23,47,23 — expands to (189,190,189)),
+  ambient `0x4208` (lanes 8,16,8 — expands to (66,65,66)), tint white at
+  strength 0, fog off. That is the stand-in's `0.25 + 0.75·ndl` to
+  within one 565 quantum per channel, so wiring the record reproduces
+  today's look by construction. (The 5- and 6-bit lanes expand by
+  different replication laws, so no exact grey exists off the r5=g6=b5
+  endpoints 0/255 — the packed values above are the law, not a grey
+  intent; white sun AND white ambient would rail every lit channel, so
+  the 565 lanes carry the strengths.)
+
+**Capture:** the record's state serialises into the `ENVIRONMENT_STATE`
+.zcap chunk (capture_format.md §4.2) so replay from any captured frame
+reproduces light and fog bit-exactly — the determinism law stated where
+the container lives. The Phase-3 stand-in keeps its hard-coded light
+until the consuming wave wires the record; the chunk and the struct exist
+now so that wiring is a consumer change, never a format change.
 
 ## 5. Form declarations (present domain)
 
-`sky { bands, cap, under, clouds (scroll/direction/max_alpha), sun (energy), background, drum_yaw period, fog_exempt }` and `beam { anchor, height, slant, radius top/bottom, tint, fade_band, min_px, semantic_weight, ladder {…}, hysteresis }` — shapes recorded in ADDENDUM §6; land in `spec/form/language_semantics.md` when Phase 3 expands it.
+`sky { bands, cap, under, clouds (scroll/direction/max_alpha), sun (energy), background, drum_yaw period, fog_exempt }` and `beam { anchor, height, slant, radius top/bottom, tint, fade_band, min_px, semantic_weight, ladder {…}, hysteresis }` — shapes recorded in ADDENDUM §6; land in `spec/form/language_semantics.md` when Phase 3 expands it. **[v1.2]** `environment { sun { yaw, pitch, colour }, ambient, tint { colour, strength }, fog { mode, near, far } }` lowers to `SetEnvironment 0x0311` (§4a); the crossfade weight of §1.3 is weather-sim state and has no form shape of its own — the weather author drives `w`, the form emits the resolved record.
 
 ## 6. ZRef preview functions
 
@@ -96,3 +254,4 @@ One new semantic command (see ADDENDUM §4 for exact .zidl — `DrawSky 0x0310` 
 ## 8. Ledger hooks
 
 No new blocks; no ops.yml entries (sky/beams are not field programs). Notes amended on FORGE.PRIM, TWOD.PLANE, POST.GATHER, POST.COMPOSITE (purpose), PART.SOFT, RASTER.FRAGMENT, SW.CPUCOLL. Maturity path: this spec + oracle functions + golden captures + DDA corpus → FORGE.PRIM / POST.COMPOSITE may advance to REFERENCE_COMPLETE; RTL is Phase 11 (ZH-044/ZH-046).
+**[v1.2]** `SetEnvironment` rides existing blocks only: the vertex-light/tint/fog stage is GEOM.PROJECT's chartered "projection + lighting" purpose (per-vertex ALU cost NOT costed — no vertex cost model exists beyond 1 vertex/clock; the S6 §2 finding, restated so nobody reads "rides" as "free"), the palette crossfade rides TEXTURE.TMU's hot-page lane (stars precedent), the emitted record rides SW.CMDBUILD (an `environment` module beside the celestial one). The ZRef mirror of the record (`zref::sky::EnvState`, serialize/deserialize) landed with this amendment for the capture chunk; the stand-in renderer does not yet consume it (wiring it is the weather wave's consumer change — reel CRCs were byte-identical through this amendment).

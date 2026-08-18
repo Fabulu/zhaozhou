@@ -1,6 +1,6 @@
 # Zhaozhou Fixed-Point Q-Format Specification — v1
 
-**QFMT_VERSION = 1** (see §13 for change control)
+**QFMT_VERSION = 2** (see §13 for change control)
 
 This document is the single written law for every number the machine manipulates
 (charter §8, §29-7). The C++ reference library `reference/include/zref/*.hpp`,
@@ -15,6 +15,16 @@ RXS-M-XS noise constants; bilinear value noise is a macro-expansion, not an
 opcode), Q1 (height16 = S 1.7.8), Q2 (Field IR lanes = Q16.16), Q3
 (particle128 provisional), Q4 (guard band ±2048 px provisional, widths frozen
 now), Q5 (audio mixer adopts this library, fx24 accumulators, Phase 2).
+**C1 (2026-08-17, QFMT_VERSION 1 → 2:** the `quat16` quantised-quaternion
+lane — `spec/creature_rules.md` §2.1's 8 B/bone/frame clip format frozen as
+S 1.0.14 with hemisphere-canonical quantisation and the 9-product
+single-rounding decode of §7.6; evidence: the creature reference lane, run
+RUN-20260816-0046, commit `bd1c733`, measurements restated in §7.6 and
+asserted as regression tripwires in `tests/geometry/creature_core.cpp`.
+No existing type, table, or golden changed — the bump travels so capture
+replay can refuse pre-C1 numerics if creature clip pages ever reach a
+capture)**. The fog law (§8, same wave) is prose + formula only and adds no
+type, so it rides the same bump without a second one.
 
 ---
 
@@ -54,6 +64,7 @@ now), Q5 (audio mixer adopts this library, fx24 accumulators, Phase 2).
 | `invw24` | u24 | U 0.0.24 | saturate 0xFFFFFF | round-half-up | depth, larger = closer (§8) |
 | `u/v_over_w` | s32 | S 8.24 | saturate | round-half-up | perspective numerators (§8) |
 | `particle128` | u128 | §10 | per field | — | provisional (Q3) |
+| `quat16` | 4 × s16 | S 1.0.14 per lane (§7.6) | per lane: saturate s16 | round-half-up on quantize | unit quaternion, hemisphere-canonical; the 8 B/bone/frame creature clip lane (C1) |
 
 Field IR lanes are **Q16.16 (s32) everywhere** (Q2); `fx24` exists only as a
 ZRef sim-truth accumulator outside Field IR.
@@ -338,6 +349,81 @@ C++ and TS — the reference implementation lives in
 `reference/include/zref/zref_fixp.hpp` (`noise2_hash`), the Field IR
 interpreter (W5) calls it; there is no third implementation.
 
+### 7.6 `quat16` — the quantised-quaternion lane (C1)
+
+The creature clip-bank storage of `spec/creature_rules.md` §2.1 (8 B per
+bone per frame) and the GEOM.POSE decode input. One implementation:
+`reference/include/zref/zref_creature.hpp` (`quat16_quantize`,
+`quat16_axis_angle`, `quat16_to_mat3`); RTL mirrors it at Phase 9 against
+the same anchors.
+
+**Lane format:** four s16 lanes `(w, x, y, z)`, each **S 1.0.14** —
+`raw = round_half_up(q · 2^14)`, saturate at ±16384. Chosen over
+S 1.0.15: the quaternion sum-of-squares is ≤ 1, so every lane fits [−1, 1]
+in 1+14 bits with the guard bit absorbing the 0.5-LSB quantisation
+overshoot. A saturated lane means the author fed a non-unit quaternion —
+a tool-side bug; the quantiser clamps silently (no SatLedger — the clip
+compiler is the gate, and the declared bounds below hold for unit
+inputs).
+
+**Quantisation is hemisphere-canonical:** negate all four lanes when
+`w < 0`, or `w = 0 ∧ x < 0`, or `w = x = 0 ∧ y < 0`, or only `z < 0`.
+A quaternion and its negation encode the same rotation and MUST quantise
+identically — clip compression must not depend on which hemisphere the
+author exported. Deterministic authoring path: `quat16_axis_angle` builds
+lanes from a unit axis (fx16) and half-angle sin/cos (the §7.1 tables),
+`w = cos`, vector lanes `axis · sin`, each single-rounded per §3.
+
+**Decode — the 9-product formula, ONE rounding per element, NO
+renormalisation** (the §3 single-rounding law applied verbatim; with lanes
+`Qw..Qz` in 2^14 scale, matrix elements in Q16.16):
+
+```
+diag_ijj = 65536 − rescale(Qa² + Qb², 11)          // 1 − 2(qa² + qb²)
+off_ij   = rescale(Qa·Qb ± Qc·Qd, 11)              // 2(qa·qb ∓ qc·qd)
+```
+
+Products exact in s64 (28-bit lane products), the sums exact, then ONE
+`rescale(·, 11)` round-half-up per element and saturate. The shift: a lane
+product lives at 2^28 scale and the matrix element at 2^16 — 12 bits down —
+but the formula's leading factor 2 hands one bit back, so the net
+rescale is 11. Renormalisation is **rejected**: it would insert a second
+rounding
+stage (isqrt + rcp + 4 muls per bone) into every decode, invalidate every
+committed anchor, and buy only the scale correction whose residue is
+declared below — the drift is bounded and carried, not repaired.
+
+**Exactness laws (frozen):** identity `(16384, 0, 0, 0)` decodes to the
+exact identity matrix; **180° about a principal axis** (one vector lane
+±16384, w = 0) decodes exactly. **90° about a principal axis is NOT exact
+and cannot be in any power-of-two quaternion lane** — √2/2 is irrational;
+in S 1.0.14 it quantises to 11585 (error 0.23 LSB) and the decoded off-axis
+elements sit 3 LSB from 65536. The GEOM.POSE contract's directed-test
+wording is "identity/180° exact, 90° within the declared bound" (the
+original "identity/90° exact" wording was unachievable and is corrected by
+this amendment).
+
+**Declared bounds (C1, measurement-cited — commit `bd1c733`,
+`tests/geometry/creature_core.cpp` §2, re-observed 2026-08-17):**
+
+| Quantity | Bound | Mechanism |
+|---|---|---|
+| decode element error vs the quantised-lane oracle | **≤ 0.50 LSB** (fx16 element) | the single-rounding bound — each element rounds exactly once (§4) |
+| decoded column-norm drift | **≤ 15.86 LSB** (≤ 2.4·10⁻⁴ relative) | no renormalisation: lane quantisation leaves ‖q‖² = 1 + ε, decode adds ≤ 0.5 LSB/element |
+| end-to-end column angle error vs the true rotation | **≤ 0.0156°** | authoring fx-table error + quantisation + decode, composed |
+
+Measurement protocol (frozen with the bounds): a deterministic axis-angle
+grid — 5 axes (three principal, (1,1,1)/√3, (1,1,0)/√2) × 720 half-angle
+steps = **3,600 rotations** — authored through the integer path
+(`fx_sin`/`fx_cos` half-angle tables) and decoded; the oracle is
+double precision and belongs to the TEST, not the implementation (the
+libm-oracle precedent of §7.1). Two oracles carry two numbers: the
+quantised-lane oracle (exact matrix of the quantised quaternion) isolates
+the decode formula for the element bound; the true-rotation oracle carries
+the end-to-end angle. Committed tripwires assert the looser regression
+bounds — element ≤ 1 LSB, norm ≤ 20 LSB, angle ≤ 0.05° — so any lane change
+that moves the measured numbers re-runs the sweep before it can pass.
+
 ## 8. Raster formats
 
 **Subpixel = 8 bits** (D3D11 mandates exactly 8; D3D10 ≥ 8; OpenGL requires
@@ -425,6 +511,87 @@ by plane equation; per pixel `u = rescale((s64)u_over_w · rcp_u24(invw24_interp
 Hecker's span-subdivision approximation is deliberately **not** used — the
 exact per-pixel rcp avoids his documented span-width-dependent rounding bug.
 
+**Fog — deterministic, per-vertex.** *(Added 2026-08-17, lighting & pose
+consolidation wave. Charter §8 names "deterministic fog" a non-negotiable
+basic, §16 lists a fog sheet under Twin Horizons, and §20.1 makes ZRef
+fog-exact — before this paragraph no spec owned a formula, Q-format, state,
+or placement; there was no earlier law to supersede.)*
+
+**State** travels in `SetEnvironment 0x0311` (wire: `spec/commands.zidl`;
+semantics: `spec/sky_and_beams.md` §4a): `fog_mode` (u8 enum: 0 off,
+1 linear), `fog_near`/`fog_far` (fx16, world metres). `fog_far ≤ fog_near`
+disables fog regardless of mode — a deterministic no-op, not an error. The
+donor's `envi.d` carried linear AND exponential fog
+(`fog {linear|exponential, nearZ/farZ/density, RGB}` — S6 §1); **exponential
+is deferred, not refused**: an exact fixed-point exp(−λd) needs a
+per-density table rebuild (the ARM palette lane could carry one) or a
+multi-step product series, and neither is costed nor consumed today. The
+command's `pad[12]` bytes 0–3 are the documented same-bytes site for a
+future `fog_density` (the v2→w3 reinterpretation precedent; an opcode's
+field set never changes once shipped).
+
+**Linear law (frozen):** per frame, compute once
+`k = field_rcp(fog_far − fog_near)` (§6.2 — the denominator is
+frame-constant; far ≤ near is the disabled case above). Per vertex, with
+`d` = the view-space forward distance — the guarded `w` this section's
+depth pipeline already clamps to `[wmin, wmax]`, NOT radial distance
+(radial costs a per-vertex `isqrt_u32` (§7.2) and differs from forward
+distance only off-axis):
+
+```
+f_raw = fx_mul(fx_sub(fog_far, d), k)   // ONE rounding (§3)
+f     = clamp(f_raw, 0, 0x10000)        // d ≥ far → 0 (full fog), d ≤ near → 1 (clear)
+f8    = fx16 → unit8 (§2, round-half-up)
+```
+
+**Mix (frozen):** fog is a vertex-colour operation in GEOM.PROJECT,
+ordered AFTER lighting and AFTER the global tint (sky_and_beams §4a — the
+tint darkens the object; fog then pulls it toward the sky's own colour, so
+the fog colour is never itself tinted), per channel of the colour8 lanes:
+
+```
+c' = sat_u8( c + rescale_s((fog_c − c) · f8, 8) )
+```
+
+ONE rounding per channel. The fogged colour rides the ordinary Gouraud
+path — the factor is not a separate interpolant and there is no
+per-fragment fog anywhere in v1 (a per-pixel form would be a
+RASTER.FRAGMENT recipe change: not costed, not built). Because the mix is
+per-vertex, a triangle whose vertices shade differently interpolates
+*mixed* colours rather than *mixing interpolated* colours — the accepted
+cost of zero fragment work (the donor's own terrain was Gouraud-lit; the
+modern Dagon reimplementation's per-pixel fog is explicitly not donor
+truth — S6 §1).
+
+**Colour (frozen binding — the Giants depth-cue):** `fog_c` is NOT a
+command field. It is the active sky set's horizon colour — the
+`band_lower_horizon == under` join value that `spec/sky_and_beams.md`
+§1.2 law 1 already forces equal — so fog and sky cannot disagree at the
+seam where they meet. Frames without DrawSky use the bound set's
+background (the §1 fallback value); during a §1.3 crossfade the horizon
+lerps with `w` like every other ramp entry. Lane expansion by the frozen
+replication law (§2; stars_and_flares §2).
+
+**Exempt list (frozen):** the sky family — pass-1 prefill drum and cap
+(they ARE the far field), the under-plane (`fog-exempt` already,
+sky_and_beams §1.1 layer table), the sun quad and cloud sheet (pass 6,
+beyond-far content; `sky_cloud_fade` has no lawful fog input); additive
+emissive — beams, flares, glints, souls (fog toward a colour on an
+additive layer has no lawful form; the donor drew these unlit with
+energy, S6 §1); the HUD/overlay planes (charter §16, 2D). Fogged:
+terrain (every layer), creatures, forms, decals and projected shadows (a
+decal must fog with its host surface or it pops against it), polygon
+particles (their fog application rides the particle tint path — not
+costed).
+
+**Not costed (per the no-invented-costs law):** the per-vertex ALU — one
+sub, one mul, one clamp per vertex plus one `field_rcp` per frame and
+three channel mixes per vertex in GEOM.PROJECT, against a vertex cost
+model that does not exist beyond "1 projected vertex/clock"; and the
+charter §16 fog-sheet 2D plane mode (listed by the charter, owned by no
+spec yet — a 2D plane mode is orthogonal to this vertex path, and
+nothing here depends on that plane existing).
+
 ## 9. height16 ↔ fx16 (Q1, decided)
 
 `height16` = **S 1.7.8** (s16): ±128 m, step 2^-8 m ≈ 3.9 mm. Live terrain
@@ -494,7 +661,8 @@ is expected and asserted).
 
 ## 13. Change control
 
-`QFMT_VERSION` (currently **1**) bumps on **any** change to: a type's width or
+`QFMT_VERSION` (currently **2**; 1 → 2 with amendment C1, §7.6) bumps on
+**any** change to: a type's width or
 format, the rounding/saturation laws (§3–§5), any frozen constant or table
 formula (§6–§7), a golden-vector layout (§12), or the fixgen output set (§11).
 A bump requires: spec amendment, full regeneration + recomittance of tables

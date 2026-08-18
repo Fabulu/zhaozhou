@@ -15,7 +15,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | debug | 1 | · | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 1 | 1 | · | · | · | · | · | · | 2 |
-| geometry | 11 | · | · | · | · | · | · | · | 11 |
+| geometry | 10 | 1 | · | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 3 | · | · | · | · | · | · | · | 3 |
 | memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 3 | 1 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 66 | 5 | 3 | 14 | · | · | · | 6 | 88 |
+| **all** | 65 | 6 | 3 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -72,6 +72,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.FRAMECTL | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_random.cpp |
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
 | FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |

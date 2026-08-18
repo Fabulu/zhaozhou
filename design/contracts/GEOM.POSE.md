@@ -1,6 +1,6 @@
 # Contract — GEOM.POSE (Pose bank decoder and cache)
 
-> Ledger: `design/blocks.yml` · owner ZH-081 · phase 9 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-081 · phase 9 · maturity REFERENCE_COMPLETE (2026-08-17, pinned `bd1c733`)
 >
 > Introduced by the world-identity wave (RUN-20260816-0046). Law:
 > `spec/creature_rules.md` §2.2. Clips live in VRAM compressed (8 B/bone/
@@ -49,11 +49,16 @@ Read-only on clip pages; exclusive writer of the decoded-pose cache region
 ## Q formats and rounding
 
 Quantized quaternion lanes s16[4]; decode = the 9-product quat→matrix
-formula with qformats §3 single-rounding per element. **The exact lane
+formula with qformats §3 single-rounding per element. ~~**The exact lane
 format (proposed S 1.0.14) and decode rounding are NOT yet frozen — they
 require a spec/qformats.md amendment (QFMT_VERSION discipline §13) before
-this block may reach REFERENCE_COMPLETE.** No renormalization at decode;
-the quantization-induced scale error bound is declared with the amendment.
+this block may reach REFERENCE_COMPLETE.**~~ **Frozen 2026-08-17:
+`quat16` = S 1.0.14 hemisphere-canonical, one `rescale(·,11)` per matrix
+element, no renormalization — qformats §7.6 (amendment C1, QFMT_VERSION 2),
+with the declared bounds (element ≤ 0.50 LSB, column-norm drift ≤ 15.86 LSB,
+end-to-end column angle ≤ 0.0156°, measurement protocol included).** No
+renormalization at decode; the quantization-induced scale error bound is
+declared there.
 
 ## Latency (fixed or variable)
 
@@ -81,19 +86,30 @@ of the creature lane). Trace: decoded tuple ids.
 
 ## Scalar reference function
 
-`zref::PoseBank` (to be written at REFERENCE_COMPLETE, after the qformats
-amendment freezes decode numerics).
+`zref::PoseBank` — decode-on-fetch pose cache per creature_rules §2.2
+(128-tuple LRU, referenced-this-frame never evicted, clamped inserts
+counted, bad ids → identity bind pose). Landed with the creature reference
+core, commit `bd1c733` (`reference/include/zref/zref_creature.hpp`).
 
 ## Directed tests
 
-`tests/geometry/geom_pose_directed.cpp` (reserved): decode golden vectors,
-identity/90° quats exact, eviction law, bad-id no-op.
+`tests/geometry/creature_core.cpp` (§1–§2, §7): decode golden vectors with
+hand-computed anchors — **identity/180° quats exact; 90° within the
+declared bound (3 LSB)**, hemisphere canonicalization, cache hit/miss
+counters, eviction law (referenced-this-frame never evicted), clamped
+insert, bad-id no-op. (The original reservation named a
+`geom_pose_directed.cpp` that was never written and the wording
+"identity/90° quats exact" — 90° exactness is unachievable in any
+power-of-two quat lane, √2/2 being irrational; both corrected here.)
 
 ## Randomized differential tests
 
-`tests/geometry/geom_pose_random.cpp` (reserved): random clip banks vs
-zref; cache determinism — same request multiset in any order yields
-identical cache content and palettes.
+`tests/geometry/creature_core.cpp` §2 + §7 (same file, MEM.GUARD
+precedent): the 3,600-rotation decode sweep vs a double-precision oracle
+(five axes × 720 half-angle steps; the oracle is the test's, not the
+implementation's) asserting the §7.6 bounds, and the order-independence
+differential — same request multiset in any order yields identical cache
+content and palettes.
 
 ## Formal properties
 

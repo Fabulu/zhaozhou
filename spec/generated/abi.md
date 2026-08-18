@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
-zidl_sha256         = 58684d0baedc77a1847b4f868713fd4cccf4e85fe50d14c895066fbee94932eb
+abi_identity_sha256 = db6f6b2bbf7c3a383788d21fa594e09519ace1e90943d9d8ed2227f7b199db12
+zidl_sha256         = b9c5d806ef60c962de3205067d68d2c6a8409ac7cf836f19d3041a0f3488584d
 ```
 
-ABI version **2**, little-endian, command alignment
+ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-15 commands (13 implemented).
+16 commands (13 implemented).
 
 ## Commands
 
@@ -28,6 +28,7 @@ ABI version **2**, little-endian, command alignment
 | `DrawPopulation` | `0x0301` | 32 | implemented |
 | `DrawProcedural` | `0x0302` | 64 | implemented |
 | `DrawSky` | `0x0310` | 176 | reserved |
+| `SetEnvironment` | `0x0311` | 48 | reserved |
 | `EmitAudioEvent` | `0x0400` | 32 | implemented |
 | `DebugBootstrap` | `0xF001` | 64 | reserved |
 | `DebugFrameBlit` | `0xF002` | 48 | implemented |
@@ -329,6 +330,46 @@ Golden sample: `tests/abi/golden/cmd_draw_sky.bin` (C++ packer
 TS `zhaoPackDrawSky(zhaoSampleDrawSky(), ...)`, SV round-trips it via
 `zhao_unpack_draw_sky`/`zhao_pack_draw_sky`).
 
+### SetEnvironment — 0x0311 (48 B, reserved)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 2 | `sun_yaw` | angle16 |
+| 2 | 2 | `sun_pitch` | angle16 |
+| 4 | 2 | `sun_colour` | rgb565 |
+| 6 | 2 | `ambient` | rgb565 |
+| 8 | 2 | `tint` | rgb565 |
+| 10 | 1 | `tint_strength` | u8 |
+| 11 | 1 | `fog` | fog_mode |
+| 12 | 4 | `fog_near` | fx16 |
+| 16 | 4 | `fog_far` | fx16 |
+| 20 | 12 | `pad` | pad (zero) ×12 |
+
+`sun_colour` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 8 | 2 | `sun_colour.bits` | u16 |
+
+`ambient` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 12 | 2 | `ambient.bits` | u16 |
+
+`tint` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 16 | 2 | `tint.bits` | u16 |
+
+Golden sample: `tests/abi/golden/cmd_set_environment.bin` (C++ packer
+`zhao_abi::zhao_pack_set_environment(zhao_abi::zhao_sample_set_environment(), ...)`,
+TS `zhaoPackSetEnvironment(zhaoSampleSetEnvironment(), ...)`, SV round-trips it via
+`zhao_unpack_set_environment`/`zhao_pack_set_environment`).
+
 ### EmitAudioEvent — 0x0400 (32 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
@@ -437,6 +478,12 @@ TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
 | 56 | 4 | `m32` | fx16 |
 | 60 | 4 | `m33` | fx16 |
 
+### rgb565 — 2 B
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 2 | `bits` | u16 |
+
 ### PadFrame — 20 B
 
 | Offset | Size | Field | Type |
@@ -466,6 +513,13 @@ TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
 | Value | Name |
 |---|---|
 | 0 | `FORGE_HEIGHTFIELD_PATCH` |
+
+### `fog_mode` — backing `u8`
+
+| Value | Name |
+|---|---|
+| 0 | `FOG_OFF` |
+| 1 | `FOG_LINEAR` |
 
 ## Error codes (generated enum, shared verbatim C++/TS/SV)
 
@@ -508,6 +562,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_draw_population.bin` | canonical DrawPopulation sample record |
 | `tests/abi/golden/cmd_draw_procedural.bin` | canonical DrawProcedural sample record |
 | `tests/abi/golden/cmd_draw_sky.bin` | canonical DrawSky sample record |
+| `tests/abi/golden/cmd_set_environment.bin` | canonical SetEnvironment sample record |
 | `tests/abi/golden/cmd_emit_audio_event.bin` | canonical EmitAudioEvent sample record |
 | `tests/abi/golden/cmd_debug_bootstrap.bin` | canonical DebugBootstrap sample record |
 | `tests/abi/golden/cmd_debug_frame_blit.bin` | canonical DebugFrameBlit sample record |

@@ -28,10 +28,9 @@
 // Lint: clean under `verilator_bin --lint-only -Wall`.
 
 module zhao_input_rumble
-  import zhao_pkg::*;
-  import zhao_abi_pkg::*;  // ABI re-export seam (same import pair as the
-                           // snapshot bridge — the frozen zhao_pkg wildcard
-                           // does not transitively re-export the ABI names)
+  import zhao_pkg::*, zhao_abi_pkg::*;  // ABI re-export seam (same import pair as the
+                                       // snapshot bridge — the frozen zhao_pkg wildcard
+                                       // does not transitively re-export the ABI names)
 #(
   parameter int unsigned PWM_PHASE_DIV = 1  // clk cycles per PWM phase step
 )(

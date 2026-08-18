@@ -164,7 +164,7 @@ test('zcap reader: golden parses, verifies, and round-trips source IDs', () => {
   const infoBody = sectionBody(file, info[0]!)!;
   assert.ok(verifySection(file, info[0]!));
   const abi = parseAbiInfo(infoBody);
-  assert.equal(abi.abiVersion, ZHAO_ABI_VERSION); // ABI v2 since wave 2
+  assert.equal(abi.abiVersion, ZHAO_ABI_VERSION); // ABI v3 since SetEnvironment (2026-08-17)
   assert.equal(abi.generatorName, 'zhaozhou-abi-gen');
 
   const map = findSections(z, ZCAP_SECTION.SOURCE_MAP);
@@ -226,7 +226,7 @@ test('bytesConsumed: 36 on header-level abort, full packet on record-level error
   assert.equal(r1.bytesConsumed!, 36, 'magic abort consumes exactly the 36-B header');
 
   const badVer = Uint8Array.from(good);
-  badVer[4] = badVer[4]! ^ 0x01; // abi_version low byte (ZHAO_ABI_VERSION 2 -> 3)
+  badVer[4] = badVer[4]! ^ 0x01; // abi_version low byte corrupted (3 -> 2)
   const r2 = validateFrame(badVer, FRAME_SLOT_BYTES);
   assert.equal(r2.error, ZH_ABI_BAD_ABI_VERSION);
   assert.equal(r2.bytesConsumed!, 36, 'version abort consumes exactly the 36-B header');

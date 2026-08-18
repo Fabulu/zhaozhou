@@ -7,6 +7,9 @@ set_global_assignment -name DEVICE 5CSEBA6U23I7
 set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_top
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 set_global_assignment -name SDC_FILE zhao_shell_fit.sdc
+# Exclude generated verification-only open-array helpers from Quartus 17's
+# parser; the shell cone uses the guarded synthesizable ABI declarations.
+set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 
 # Reproducible single-seed characterization settings supported by Quartus 17.0.2.
 set_global_assignment -name NUM_PARALLEL_PROCESSORS 1

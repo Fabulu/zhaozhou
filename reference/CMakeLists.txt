@@ -28,6 +28,7 @@ add_library(zhao_zref STATIC
   src/zsky/star_flare.cpp
   src/zsky/star_field.cpp
   src/zsky/star_compose.cpp
+  src/zsky/env_state.cpp
   src/zcreature/creature_core.cpp
   src/zcreature/creature_sim.cpp)
 target_include_directories(zhao_zref PUBLIC

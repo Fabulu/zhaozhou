@@ -32,8 +32,7 @@
 // Lint: clean under `verilator_bin --lint-only -Wall`.
 
 module zhao_input_snapshot
-  import zhao_pkg::*;
-  import zhao_abi_pkg::*;  // zhao_pad_frame_t + pack (ABI re-export seam)
+  import zhao_pkg::*, zhao_abi_pkg::*;  // zhao_pad_frame_t + pack (ABI re-export seam)
 (
   input  logic clk,
   input  logic rst_n,

@@ -1,15 +1,15 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 3b4dd3869fdb39bbc9c23d87620f998cced2c81bee956b75d361ce022a238023
-//   zidl_sha256         = 58684d0baedc77a1847b4f868713fd4cccf4e85fe50d14c895066fbee94932eb
+//   abi_identity_sha256 = db6f6b2bbf7c3a383788d21fa594e09519ace1e90943d9d8ed2227f7b199db12
+//   zidl_sha256         = b9c5d806ef60c962de3205067d68d2c6a8409ac7cf836f19d3041a0f3488584d
 
 // ---------------------------------------------------------------- abi ---
 
-export const ZHAO_ABI_VERSION = 2 as const;
+export const ZHAO_ABI_VERSION = 3 as const;
 export const ZHAO_COMMAND_ALIGNMENT = 16 as const;
 export const FRAME_SLOT_BYTES = 1048576 as const;
-export const QFMT_VERSION = 1 as const;
+export const QFMT_VERSION = 2 as const;
 
 // error codes — shared verbatim across C++/TS/SV (zhao_abi.h / zhao_abi_pkg.sv)
 export const ZH_ABI_OK = 0 as const;
@@ -55,6 +55,11 @@ export const ZHAO_ENUM_VIDEO_MODE: readonly number[] = [0, 1, 2];
 export const FORGE_HEIGHTFIELD_PATCH = 0 as const;
 export const ZHAO_ENUM_FORGE_KIND: readonly number[] = [0];
 
+// enum fog_mode: u8 on the wire (capture_format.md 3.2 step 7)
+export const FOG_OFF = 0 as const;
+export const FOG_LINEAR = 1 as const;
+export const ZHAO_ENUM_FOG_MODE: readonly number[] = [0, 1];
+
 // opcodes
 export const ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 export const ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
@@ -67,6 +72,7 @@ export const ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, implemented
 export const ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, implemented
 export const ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, implemented
 export const ZHAO_OP_DRAW_SKY = 0x0310; // 176 B, reserved
+export const ZHAO_OP_SET_ENVIRONMENT = 0x0311; // 48 B, reserved
 export const ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, implemented
 export const ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 export const ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
@@ -136,6 +142,11 @@ export interface ZhMat4fx {
   m31: number; // fx16 (Q16.16, int32), @52
   m32: number; // fx16 (Q16.16, int32), @56
   m33: number; // fx16 (Q16.16, int32), @60
+}
+
+/** rgb565: 2 bytes (spec/commands.zidl); pads are not modeled */
+export interface ZhRgb565 {
+  bits: number; // u16, @0
 }
 
 /** PadFrame: 20 bytes (spec/commands.zidl); pads are not modeled */
@@ -271,6 +282,20 @@ export interface ZhRecordDrawSky {
   reserved1: number; // u8, @145
 }
 
+/** SetEnvironment 0x0311: 48-byte record (reserved) */
+export interface ZhRecordSetEnvironment {
+  hdr: ZhCmdHeader;
+  sun_yaw: number; // angle16 (U 0.0.16 turns, u16), @0
+  sun_pitch: number; // angle16 (U 0.0.16 turns, u16), @2
+  sun_colour: ZhRgb565; // @4
+  ambient: ZhRgb565; // @6
+  tint: ZhRgb565; // @8
+  tint_strength: number; // u8, @10
+  fog: number; // fog_mode (u8), @11
+  fog_near: number; // fx16 (Q16.16, int32), @12
+  fog_far: number; // fx16 (Q16.16, int32), @16
+}
+
 /** EmitAudioEvent 0x0400: 32-byte record (implemented) */
 export interface ZhRecordEmitAudioEvent {
   hdr: ZhCmdHeader;
@@ -327,12 +352,13 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: true, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
   { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0] }] },
   { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
+  { name: 'SetEnvironment', opcode: 0x0311, recordBytes: 48, implemented: false, padOffsets: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 11, size: 1, values: [0, 1] }] },
   { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DebugBootstrap', opcode: 0xF001, recordBytes: 64, implemented: false, padOffsets: [], enumChecks: [] },
   { name: 'DebugFrameBlit', opcode: 0xF002, recordBytes: 48, implemented: true, padOffsets: [2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 1, size: 1, values: [0, 1, 2] }] },
   { name: 'DebugRumble', opcode: 0xF004, recordBytes: 32, implemented: true, padOffsets: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
 ];
-export const ZHAO_COMMAND_COUNT = 15 as const;
+export const ZHAO_COMMAND_COUNT = 16 as const;
 export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
@@ -486,6 +512,12 @@ export function zhaoSampleTransform2fx(): ZhTransform2fx {
     r01: 285207,
     r10: 350743,
     r11: 416279,
+  };
+}
+
+export function zhaoSampleRgb565(): ZhRgb565 {
+  return {
+    bits: 60833,
   };
 }
 
@@ -667,12 +699,32 @@ export function zhaoSampleDrawSky(): ZhRecordDrawSky {
   };
 }
 
+export function zhaoSampleSetEnvironment(): ZhRecordSetEnvironment {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_SET_ENVIRONMENT,
+      recordBytes: 48,
+      sourceId: 1342242827, // kind 5, module 1, index 11
+      flags: 0,
+    },
+    sun_yaw: 22925,
+    sun_pitch: 47428,
+    sun_colour: zhaoSampleRgb565(),
+    ambient: zhaoSampleRgb565(),
+    tint: zhaoSampleRgb565(),
+    tint_strength: 140,
+    fog: 0,
+    fog_near: 547351,
+    fog_far: 88599,
+  };
+}
+
 export function zhaoSampleEmitAudioEvent(): ZhRecordEmitAudioEvent {
   return {
     hdr: {
       opcode: ZHAO_OP_EMIT_AUDIO_EVENT,
       recordBytes: 32,
-      sourceId: 1342242827, // kind 5, module 1, index 11
+      sourceId: 1342242828, // kind 5, module 1, index 12
       flags: 0,
     },
     event_id: 0,
@@ -688,7 +740,7 @@ export function zhaoSampleDebugBootstrap(): ZhRecordDebugBootstrap {
     hdr: {
       opcode: ZHAO_OP_DEBUG_BOOTSTRAP,
       recordBytes: 64,
-      sourceId: 1342242828, // kind 5, module 1, index 12
+      sourceId: 1342242829, // kind 5, module 1, index 13
       flags: 0,
     },
     data: [113, 17, 53, 185, 245, 21, 109, 189, 137, 201, 49, 1, 201, 193, 109, 93, 73, 157, 233, 89, 81, 41, 61, 217, 149, 93, 245, 157, 153, 81, 117, 165, 129, 213, 185, 169, 113, 233, 253, 237, 21, 157, 21, 189, 17, 25, 93, 57],
@@ -700,7 +752,7 @@ export function zhaoSampleDebugFrameBlit(): ZhRecordDebugFrameBlit {
     hdr: {
       opcode: ZHAO_OP_DEBUG_FRAME_BLIT,
       recordBytes: 48,
-      sourceId: 1342242829, // kind 5, module 1, index 13
+      sourceId: 1342242830, // kind 5, module 1, index 14
       flags: 0,
     },
     dst_slot: 53,
@@ -716,7 +768,7 @@ export function zhaoSampleDebugRumble(): ZhRecordDebugRumble {
     hdr: {
       opcode: ZHAO_OP_DEBUG_RUMBLE,
       recordBytes: 32,
-      sourceId: 1342242830, // kind 5, module 1, index 14
+      sourceId: 1342242831, // kind 5, module 1, index 15
       flags: 0,
     },
     pad_index: 113,
@@ -758,6 +810,10 @@ export function zhaoPackTransform2fx(v: ZhTransform2fx, w: ZhByteWriter): void {
   w.fx16(v.r01);
   w.fx16(v.r10);
   w.fx16(v.r11);
+}
+
+export function zhaoPackRgb565(v: ZhRgb565, w: ZhByteWriter): void {
+  w.u16(v.bits);
 }
 
 export function zhaoPackNop(r: ZhRecordNop, w: ZhByteWriter): void {
@@ -880,6 +936,21 @@ export function zhaoPackDrawSky(r: ZhRecordDrawSky, w: ZhByteWriter): void {
   w.zeros(14); // pad
 }
 
+export function zhaoPackSetEnvironment(r: ZhRecordSetEnvironment, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u16(r.sun_yaw);
+  w.u16(r.sun_pitch);
+  zhaoPackRgb565(r.sun_colour, w);
+  zhaoPackRgb565(r.ambient, w);
+  zhaoPackRgb565(r.tint, w);
+  w.u8(r.tint_strength);
+  w.u8(r.fog);
+  w.fx16(r.fog_near);
+  w.fx16(r.fog_far);
+  w.zeros(12); // pad
+}
+
 export function zhaoPackEmitAudioEvent(r: ZhRecordEmitAudioEvent, w: ZhByteWriter): void {
   w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
   w.u32(r.hdr.flags); w.zeros(4); // reserved0
@@ -919,6 +990,6 @@ export function zhaoPackDebugRumble(r: ZhRecordDebugRumble, w: ZhByteWriter): vo
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x3B, 0x4D, 0xD3, 0x86, 0x9F, 0xDB, 0x39, 0xBB, 0xC9, 0xC2, 0x3D, 0x87, 0x62, 0x0F, 0x99, 0x8C, 0xCE, 0xD2, 0xC8, 0x1B, 0xEE, 0x95, 0x6B, 0x75, 0xD3, 0x61, 0xCE, 0x02, 0x2A, 0x23, 0x80, 0x23];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x58, 0x68, 0x4D, 0x0B, 0xAE, 0xDC, 0x77, 0xA1, 0x84, 0x7B, 0x4F, 0x86, 0x87, 0x13, 0xFD, 0x4C, 0xCC, 0xF4, 0xE8, 0x5F, 0xE5, 0x0D, 0x14, 0xC8, 0x95, 0x06, 0x6F, 0xBE, 0xE9, 0x49, 0x32, 0xEB];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xDB, 0x6F, 0x6B, 0x2B, 0xBF, 0x7C, 0x3A, 0x38, 0x37, 0x88, 0xD2, 0x1F, 0xA5, 0x94, 0xE0, 0x95, 0x19, 0xAC, 0xE1, 0xE9, 0x09, 0x43, 0xD9, 0xD8, 0xED, 0x22, 0x27, 0xF7, 0xB1, 0x99, 0xDB, 0x12];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0xB9, 0xC5, 0xD8, 0x06, 0xEF, 0x60, 0xC9, 0x62, 0xDE, 0x32, 0x05, 0x06, 0x7D, 0x68, 0xD2, 0xC6, 0xA8, 0x40, 0x9A, 0xC7, 0xCF, 0x83, 0x6F, 0x19, 0xD3, 0x04, 0x1A, 0x0F, 0x34, 0x88, 0x58, 0x4D];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

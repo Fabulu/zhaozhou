@@ -40,9 +40,9 @@ function parseAndLayout(source: string) {
 
 test('parser accepts the real commands.zidl', () => {
   const ir = parseAndLayout(zidlSource());
-  assert.equal(ir.abi.version, 2); // ABI v2 (wave 2)
+  assert.equal(ir.abi.version, 3); // ABI v3 (SetEnvironment 0x0311, 2026-08-17)
   assert.equal(ir.abi.commandAlignment, 16);
-  assert.equal(ir.commands.length, 15);
+  assert.equal(ir.commands.length, 16); // v3: +SetEnvironment 0x0311 (reserved)
 });
 
 test('parser rejects missing command status keyword', () => {
@@ -83,7 +83,7 @@ test('computed record sizes match the ratified table (capture_format.md 1.3)', (
     Nop: 16, BeginFrame: 32, EndFrame: 32, SetView: 96, SetPresentationContract: 48,
     TerrainField: 112, SurfaceStamp: 64, DrawForm: 32, DrawPopulation: 32,
     DrawProcedural: 64, EmitAudioEvent: 32, DebugBootstrap: 64,
-    DebugFrameBlit: 48, DebugRumble: 32, DrawSky: 176,
+    DebugFrameBlit: 48, DebugRumble: 32, DrawSky: 176, SetEnvironment: 48,
   };
   for (const [name, bytes] of Object.entries(want)) {
     const c = ir.commands.find((x) => x.name === name);

@@ -90,8 +90,7 @@
 // testbench-only (D2) and lives in the tb wrapper.
 
 module zhao_shell_top
-  import zhao_pkg::*;
-  import zhao_abi_pkg::*;
+  import zhao_pkg::*, zhao_abi_pkg::*;
 #(
   parameter int unsigned FRAMER_Q = 8,    // record-queue depth (glue 3)
   parameter int unsigned WFIFO_W  = 64    // write-data queue, 16-bit words
