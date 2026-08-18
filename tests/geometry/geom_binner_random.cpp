@@ -20,6 +20,23 @@
 //     against the FILL LAW, not against the binner's own oracle, so a shared
 //     mistake in both would still be caught.
 //
+//   LANE C - THE ROUNDING BOUNDARY, reached by construction because it cannot
+//     be reached by sampling. The section-8 decomposition is E' = E0 >>> 8, an
+//     ARITHMETIC shift, i.e. FLOOR; truncation toward zero differs from it by
+//     exactly one unit, and only for a negative, non-multiple-of-256 value.
+//     A mutation sweep on 2026-08-18 injected that truncation and lanes A and B
+//     both stayed green: the difference only changes a tile's verdict when the
+//     tile's extreme corner sits within ONE E'-unit of an edge, and the random
+//     populations step past that window 16*|k| at a time. So this lane draws
+//     from a family that lands ON it. For the right triangle (0,0), (W,0),
+//     (0,H), the hypotenuse has kx = -H and ky = -W -- both negative -- so the
+//     corner maximising it over tile (0,0) is pixel (0,0) itself, and the edge
+//     value there is exactly the number the shift rounds:
+//         e0_base = W*H - 128*(W + H),  i.e.  (W-128)(H-128) = 16384 - e0_base
+//     Drawing a divisor pair of 16384 - k for k in [1,255] therefore lands
+//     e0_base on any chosen boundary value, and k outside that range gives the
+//     controls either side. The lane asserts it actually reached the window.
+//
 // Modes: default = 400 scenes / 600 triangles (CTest fast); --nightly =
 // 6,000 / 8,000. Every failing vector is saved (charter §29-17).
 
@@ -248,6 +265,74 @@ void lane_b(BinnerDev& dev, uint32_t iters) {
   }
 }
 
+// ---- LANE C: the rounding boundary, by construction -----------------------
+void lane_c(BinnerDev& dev, uint32_t iters) {
+  Prng r(0xF10012BDu);
+  uint32_t on_boundary = 0;
+  for (uint32_t i = 0; i < iters; ++i) {
+    // k in [1,255] puts e0_base exactly on the window where floor and
+    // truncation disagree; k = 0 and k > 255 are the controls either side.
+    const int32_t k = r.span(0, 400);
+    const int32_t n = 16384 - k;
+    if (n <= 0) continue;
+    int32_t divs[64];
+    int nd = 0;
+    for (int32_t d = 1; d * d <= n && nd < 62; ++d) {
+      if (n % d != 0) continue;
+      divs[nd++] = d;
+      if (d != n / d) divs[nd++] = n / d;
+    }
+    if (nd == 0) continue;
+    const int32_t d = divs[r.draw() % static_cast<uint32_t>(nd)];
+    const int32_t w = 128 + d;
+    const int32_t h = 128 + n / d;
+    if (w > 383 * 256 || h > 239 * 256) continue;
+
+    BinTri t;
+    if (!make_bin_tri(0, 0, w, 0, 0, h, kVp, static_cast<uint16_t>(i), &t)) continue;
+    const int64_t base = zref::Binner::e0_base(t.s.e[0]);
+    // edge numbering depends on which edge the setup calls 0; find the one
+    // whose coefficients are both negative -- the hypotenuse.
+    int hyp = -1;
+    for (int e = 0; e < 3; ++e)
+      if (t.s.e[e].kx < 0 && t.s.e[e].ky < 0) hyp = e;
+    if (hyp >= 0) {
+      const int64_t hb = zref::Binner::e0_base(t.s.e[hyp]);
+      if (hb >= -255 && hb <= -1) ++on_boundary;
+    }
+    (void)base;
+
+    std::string err;
+    BinStatus st;
+    const std::vector<BinJob> got = dev.frame({t}, kGridW, kGridH, 0, &st, &err);
+    const std::vector<BinJob> want = expect({t});
+    if (!err.empty()) {
+      fail("c", i, {t}, "protocol: " + err);
+      continue;
+    }
+    if (got.size() != want.size()) {
+      char buf[160];
+      std::snprintf(buf, sizeof(buf), "boundary W=%d H=%d: oracle %u jobs, rtl %u", w, h,
+                    static_cast<unsigned>(want.size()), static_cast<unsigned>(got.size()));
+      fail("c", i, {t}, buf);
+      continue;
+    }
+    for (size_t j = 0; j < got.size(); ++j)
+      if (!same(got[j], want[j])) {
+        char buf[192];
+        std::snprintf(buf, sizeof(buf),
+                      "boundary W=%d H=%d job %u: oracle tile (%d,%d), rtl (%d,%d)", w, h,
+                      static_cast<unsigned>(j), want[j].tx, want[j].ty, got[j].tx, got[j].ty);
+        fail("c", i, {t}, buf);
+        break;
+      }
+  }
+  if (on_boundary == 0) {
+    ++failures;
+    std::printf("FAIL lane C never reached the rounding boundary - the population is wrong\n");
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -258,6 +343,7 @@ int main(int argc, char** argv) {
   BinnerDev dev;
   lane_a(dev, nightly ? 6000u : 400u);
   lane_b(dev, nightly ? 8000u : 600u);
+  lane_c(dev, nightly ? 4000u : 500u);
 
   check(failures == 0, "geom_binner_random: differential", 0, static_cast<uint32_t>(failures));
   return zhao::report_and_exit("geom_binner_random");

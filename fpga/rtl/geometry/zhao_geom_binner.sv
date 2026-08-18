@@ -470,6 +470,15 @@ module zhao_geom_binner #(
     end
   endfunction
 
+  // E' = floor(E0 / 256), the §8 decomposition. FLOOR, not truncation toward
+  // zero: `>>>` on a signed value is the arithmetic shift, and the fill rule
+  // is stated on `E0 = 256·E' + r` with `r ∈ [0,255]`, which only holds for
+  // the flooring quotient. Truncating instead moves every NEGATIVE edge value
+  // by one unit and turns the tile reject into a coin flip at the boundary.
+  function automatic logic signed [ACC_W-1:0] ep_of(input logic signed [47:0] e0);
+    ep_of = ACC_W'(e0 >>> 8);
+  endfunction
+
   // tile index of a row. GRID_W is a parameter, so `ty·GRID_W` is a constant
   // multiply (24 = 16 + 8), not a multiplier. BOTH phases use it, so the bin
   // and the drain address the same list.
@@ -672,7 +681,7 @@ module zhao_geom_binner #(
           S_SETUP1: begin
             for (int k = 0; k < 3; k++) begin
               rnz_r[k] <= (e0_base(2'(k))[7:0] != 8'd0);
-              ep_r[k]  <= $signed(e0_base(2'(k))[(ACC_W+8)-1:8]);
+              ep_r[k]  <= ep_of(e0_base(2'(k)));
               off_r[k] <= ((kx_r[k] > ACC_ZERO) ? mul15(kx_r[k]) : ACC_ZERO) +
                           ((ky_r[k] > ACC_ZERO) ? mul15(ky_r[k]) : ACC_ZERO);
             end

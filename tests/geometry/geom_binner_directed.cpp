@@ -209,6 +209,121 @@ void test_pixel_origin() {
         cov.count > 0 ? 1 : 0);
 }
 
+// ------------------------------------------------- the flooring boundary ----
+// THE HOLE THIS CLOSES, and how it was found. The §8 decomposition takes
+// `E' = E0 >>> 8` — an ARITHMETIC shift, i.e. FLOOR — because the fill rule is
+// stated on `E0 = 256·E' + r` with `r ∈ [0,255]`, which only holds for the
+// flooring quotient. Replacing it with truncation toward zero (the mutation a
+// C++ `/` or a logical shift would produce) moves `E'` by exactly +1 for every
+// NEGATIVE, non-multiple-of-256 edge value, and by nothing at all otherwise.
+//
+// A mutation sweep on 2026-08-18 injected exactly that and NEITHER the directed
+// nor the random binner lane went red: the shift only changes a tile's verdict
+// when that tile's extreme corner sits within ONE E'-unit of an edge — 256
+// subpixel², a 256th of a pixel² — and random triangles essentially never land
+// there. The lanes were sound and the case was unreachable by sampling, which
+// is the definition of a hole.
+//
+// So it is CONSTRUCTED instead of sampled. A triangle with one very SHORT edge
+// has tiny `kx`/`ky`, so translating it one subpixel at a time steps that
+// edge's value by only a few units — small enough to walk straight through the
+// 255-wide window where floor and truncation disagree. The sweep below looks
+// for a triangle and a tile where, for one edge, the exact corner value lies in
+// [−255, −1] (so floor says REJECT and truncation would say ACCEPT, the `rnz`
+// bit being 1 by construction) while the other two edges accept — the precise
+// state in which the two roundings give different tile lists — and then runs
+// the ordinary differential on it. Finding at least one witness is itself
+// asserted, so the day this family stops covering the case the test says so
+// rather than going quietly green.
+namespace {
+
+int64_t e0_at(const zref::Setup::Edge& e, int32_t px, int32_t py) {
+  return static_cast<int64_t>(e.kx) * (static_cast<int64_t>(px) * 256 + 128) +
+         static_cast<int64_t>(e.ky) * (static_cast<int64_t>(py) * 256 + 128) + e.kc;
+}
+
+// The value at the tile corner that MAXIMISES this edge (E is affine).
+int64_t e0_corner(const zref::Setup::Edge& e, int32_t tx, int32_t ty) {
+  return e0_at(e, tx * 16 + (e.kx > 0 ? 15 : 0), ty * 16 + (e.ky > 0 ? 15 : 0));
+}
+
+bool corner_accepts(const zref::Setup::Edge& e, int64_t v) {
+  return zref::fill_accept(v >> 8, (v & 255) != 0, e.tl);
+}
+
+}  // namespace
+
+void test_floor_boundary() {
+  // THE WITNESS, CONSTRUCTED. Take the right triangle A = (0,0), B = (W,0),
+  // C = (0,W) in subpixels. Its hypotenuse (B,C) has kx = -W and ky = -W, both
+  // NEGATIVE, so the corner that maximises it over tile (0,0) is pixel (0,0)
+  // itself — and the edge value there IS `e0_base`, the one number `ep_of`
+  // rounds. With a = b = 0 the algebra collapses to
+  //
+  //     e0_base(B,C) = W*W - 128*(W + W) = W*(W - 256)
+  //
+  // so W = 255 gives EXACTLY -255: floor puts E' at -1 (the tile is rejected,
+  // correctly — the pixel centre (128,128) has 128+128 = 256 > 255 and is
+  // outside), while truncation toward zero would put it at 0 and, with the low
+  // byte non-zero, ACCEPT. The scan box of this triangle is the single pixel
+  // (0,0), so the two roundings differ by a whole tile list: zero jobs against
+  // one. The other two edges are axis-aligned with positive coefficients and
+  // accept tile (0,0) comfortably, so nothing else masks the difference.
+  //
+  // The neighbours are swept too (W around 255) because they are the control:
+  // W = 254 gives e0_base = -508, which floors to -2 and truncates to -1 —
+  // both reject, no difference — and W = 256 gives 0, which both accept. Only
+  // the exact boundary separates the two laws, which is precisely why a
+  // sampled lane cannot find it: the event is one integer wide in a space the
+  // random triangles step through 16*|k| at a time.
+  auto verdicts = [](const zref::Setup::Out& sp, int32_t tx, int32_t ty, bool* keep_floor,
+                     bool* keep_trunc) {
+    *keep_floor = true;
+    *keep_trunc = true;
+    for (int i = 0; i < 3; ++i) {
+      const int64_t base = zref::Binner::e0_base(sp.e[i]);
+      const bool nz = zref::Binner::rnz(sp.e[i]);
+      const int64_t ep = e0_corner(sp.e[i], tx, ty) >> 8;
+      const int64_t shift = (base < 0 && (base & 255) != 0) ? 1 : 0;
+      if (!zref::fill_accept(ep, nz, sp.e[i].tl)) *keep_floor = false;
+      if (!zref::fill_accept(ep + shift, nz, sp.e[i].tl)) *keep_trunc = false;
+    }
+  };
+
+  uint32_t witnesses = 0;
+  for (int32_t w = 248; w <= 264; ++w) {
+    BinTri t;
+    if (!make_bin_tri(0, 0, w, 0, 0, w, kVp, static_cast<uint16_t>(w), &t)) continue;
+    bool differs = false;
+    for (int32_t ty = t.min_y >> 4; ty <= (t.max_y >> 4); ++ty)
+      for (int32_t tx = t.min_x >> 4; tx <= (t.max_x >> 4); ++tx) {
+        bool kf = false, kt = false;
+        verdicts(t.s, tx, ty, &kf, &kt);
+        if (kf != kt) differs = true;
+      }
+    if (differs) ++witnesses;
+    diff({t}, "floor boundary: the tile list is the FLOORED one");
+  }
+  check(witnesses > 0,
+        "floor boundary: the sweep contains a triangle where floor and truncation disagree", 1,
+        witnesses);
+
+  // and the pair either side of it, spelled out: the boundary triangle bins
+  // NOTHING (its only candidate pixel centre is outside), the one a subpixel
+  // wider bins its tile.
+  BinTri on_edge, inside;
+  check(make_bin_tri(0, 0, 255, 0, 0, 255, kVp, 1, &on_edge), "floor boundary: W=255 accepted", 1,
+        1);
+  check(make_bin_tri(0, 0, 256, 0, 0, 256, kVp, 2, &inside), "floor boundary: W=256 accepted", 1,
+        1);
+  const std::vector<BinJob> a = run({on_edge}, "floor boundary: W=255 drain");
+  const std::vector<BinJob> b = run({inside}, "floor boundary: W=256 drain");
+  check(a.empty(), "floor boundary: W=255 bins no tile (E' = -1, the FLOORED verdict)", 0,
+        static_cast<uint32_t>(a.size()));
+  check(b.size() == 1, "floor boundary: W=256 bins its tile (E' = 0, top-left accepts)", 1,
+        static_cast<uint32_t>(b.size()));
+}
+
 // ---------------------------------------------------------------- 2 --------
 void test_one_tile() {
   // wholly inside tile (5,4): pixels [80,96) x [64,80)
@@ -425,6 +540,7 @@ void test_throughput() {
 int main() {
   test_many_tiles();
   test_pixel_origin();
+  test_floor_boundary();
   test_one_tile();
   test_order_and_fifo();
   test_chunk_boundary();
