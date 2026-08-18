@@ -1373,7 +1373,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decision per patch per frame
-    reference_model: zref::TerrainLod
+    reference_model: zref::terrain::lod_select
     tests:
       directed: tests/terrain/terrain_lod_directed.cpp
       random: tests/terrain/terrain_lod_random.cpp

@@ -1740,6 +1740,71 @@ set_tests_properties(lint_terrain_project PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.LOD (phase 6, ZH-050)
+#
+# The oracle here is MOSTLY DEFINITION, not view: no ratified terrain LOD
+# arithmetic exists (charter 11.5 lists ingredients, 9 lists required stability
+# properties, MEASURE.GOVERNOR's contract is a stub), so zref_terrain_lod.hpp
+# states a law and says at every line that it is choosing one. The directed
+# lane therefore checks the law's OWN properties by hand as well as agreement
+# with the oracle.
+set(ZHAO_TERRAIN_LOD_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lod.sv)
+
+add_executable(test_terrain_lod_directed terrain/terrain_lod_directed.cpp)
+target_link_libraries(test_terrain_lod_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_lod_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_lod_directed
+  PREFIX Vzhao_terrain_lod
+  TOP_MODULE zhao_terrain_lod
+  SOURCES ${ZHAO_TERRAIN_LOD_SV})
+add_test(NAME terrain_lod_directed COMMAND test_terrain_lod_directed)
+set_tests_properties(terrain_lod_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_lod_random terrain/terrain_lod_random.cpp)
+target_link_libraries(test_terrain_lod_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_lod_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_lod_random
+  PREFIX Vzhao_terrain_lod
+  TOP_MODULE zhao_terrain_lod
+  SOURCES ${ZHAO_TERRAIN_LOD_SV})
+add_test(NAME terrain_lod_random COMMAND test_terrain_lod_random)
+set_tests_properties(terrain_lod_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME terrain_lod_random_nightly COMMAND test_terrain_lod_random --nightly)
+set_tests_properties(terrain_lod_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_terrain_lod
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_lod
+                 ${ZHAO_TERRAIN_LOD_SV})
+set_tests_properties(lint_terrain_lod PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.LOD -> TERRAIN.TESS composition (phase 6)
+#
+# The decisions drive the real tessellator. TERRAIN.LOD's output packet IS
+# zhao_terrain_tess's job port, so the two are wired with no adapter and the
+# stitch law is checked on the geometry the pair actually emits.
+add_executable(test_terrain_lod_tess terrain/terrain_lod_tess.cpp)
+target_link_libraries(test_terrain_lod_tess PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_lod_tess PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_lod_tess
+  PREFIX Vzhao_terrain_lod
+  TOP_MODULE zhao_terrain_lod
+  SOURCES ${ZHAO_TERRAIN_LOD_SV})
+verilate(test_terrain_lod_tess
+  PREFIX Vzhao_terrain_tess
+  TOP_MODULE zhao_terrain_tess
+  SOURCES ${ZHAO_TERRAIN_TESS_SV})
+add_test(NAME terrain_lod_tess COMMAND test_terrain_lod_tess)
+set_tests_properties(terrain_lod_tess PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
 # TERRAIN.PROJECT -> GEOM.CLIP -> GEOM.SETUP -> the real rasterizer (phase 6)
 #
 # Four Verilated models wired to each other with no adapter: real tessellated
