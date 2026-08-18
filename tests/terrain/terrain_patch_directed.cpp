@@ -96,6 +96,16 @@ void load_list(Vzhao_terrain_patch& dut, const zt::FieldList& list, uint16_t pat
         dut.fields_active_o);
 }
 
+/**
+ * The empty field-lane array, VALUE-INITIALISED and passed instead of a null
+ * pointer. `compose_vertex` never dereferences it when the list is empty, but
+ * cppcheck cannot see that across the call and reports a possible null
+ * dereference — the same family as the `uninitvar` trap that bites arrays
+ * filled through helper calls. Handing it a real array costs nothing and
+ * removes the question.
+ */
+constexpr int32_t kNoFields[zt::kMaxPatchFields] = {};
+
 struct RtlOut {
   int32_t top = 0;
   int32_t bottom = 0;
@@ -333,9 +343,9 @@ int main(int argc, char** argv) {
     in.scar = -200;
     in.bottom = -500;
     in.dual = true;
-    expect(dut, in, empty, nullptr, "base + scar, above bottom");
+    expect(dut, in, empty, kNoFields, "base + scar, above bottom");
     {
-      const zt::ComposeOut w = zt::compose_vertex(in, empty, nullptr);
+      const zt::ComposeOut w = zt::compose_vertex(in, empty, kNoFields);
       check(w.live_top == ((1000 - 200) << 8), "the height16 up-conversion is an exact <<8",
             static_cast<uint32_t>(800 << 8), static_cast<uint32_t>(w.live_top));
       check(w.dirty, "a scarred vertex reports dirty", 1, w.dirty ? 1 : 0);
@@ -343,9 +353,9 @@ int main(int argc, char** argv) {
 
     // zero scar: NOT dirty, because the ground has not moved.
     in.scar = 0;
-    expect(dut, in, empty, nullptr, "zero scar composes to base exactly");
+    expect(dut, in, empty, kNoFields, "zero scar composes to base exactly");
     {
-      const zt::ComposeOut w = zt::compose_vertex(in, empty, nullptr);
+      const zt::ComposeOut w = zt::compose_vertex(in, empty, kNoFields);
       check(!w.dirty, "an unscarred, unfielded vertex is not dirty", 0, w.dirty ? 1 : 0);
     }
 
@@ -353,9 +363,9 @@ int main(int argc, char** argv) {
     in.base = 100;
     in.scar = -900;
     in.bottom = -300;
-    expect(dut, in, empty, nullptr, "base + scar clamps UP to bottom");
+    expect(dut, in, empty, kNoFields, "base + scar clamps UP to bottom");
     {
-      const zt::ComposeOut w = zt::compose_vertex(in, empty, nullptr);
+      const zt::ComposeOut w = zt::compose_vertex(in, empty, kNoFields);
       check(w.compose_top == (-300 << 8), "clamp 1 lands exactly on fx(bottom)",
             static_cast<uint32_t>(-300 << 8), static_cast<uint32_t>(w.compose_top));
       check(w.live_top == w.compose_top, "with no fields live_top == compose_top",
@@ -367,7 +377,7 @@ int main(int argc, char** argv) {
     in.base = 400;
     in.scar = 0;
     in.bottom = 600;
-    expect(dut, in, empty, nullptr, "a thin lip clamps the top up to its own bottom");
+    expect(dut, in, empty, kNoFields, "a thin lip clamps the top up to its own bottom");
 
     // THE LEGACY SINGLE-SURFACE PAGE (terrain_rules §3.1 option (a), kept as
     // the degenerate case): NO underside, so NO clamp, and `bottom` is meant to
@@ -377,9 +387,9 @@ int main(int argc, char** argv) {
     in.base = 100;
     in.scar = -900;
     in.bottom = 30000;  // deliberately absurd: it must not be consulted
-    expect(dut, in, empty, nullptr, "a legacy page ignores bottom entirely");
+    expect(dut, in, empty, kNoFields, "a legacy page ignores bottom entirely");
     {
-      const zt::ComposeOut w = zt::compose_vertex(in, empty, nullptr);
+      const zt::ComposeOut w = zt::compose_vertex(in, empty, kNoFields);
       check(w.live_top == ((100 - 900) << 8), "the legacy page composes base + scar unclamped",
             static_cast<uint32_t>((-800) << 8), static_cast<uint32_t>(w.live_top));
       check(w.bottom == w.live_top, "a legacy lattice reports bottom == top",
@@ -391,11 +401,11 @@ int main(int argc, char** argv) {
     in.base = 32767;
     in.scar = 32767;
     in.bottom = -32768;
-    expect(dut, in, empty, nullptr, "both height16 rails compose without saturating fx16");
+    expect(dut, in, empty, kNoFields, "both height16 rails compose without saturating fx16");
     in.base = -32768;
     in.scar = -32768;
     in.bottom = -32768;
-    expect(dut, in, empty, nullptr, "the negative height16 rails clamp at bottom");
+    expect(dut, in, empty, kNoFields, "the negative height16 rails clamp at bottom");
   }
 
   // =========================================================================
@@ -647,7 +657,7 @@ int main(int argc, char** argv) {
       in.scar = -7;  // nonzero: the vertex MOVED, so it may mark
       in.bottom = -32768;
       in.dual = true;
-      compose_one(dut, in, 0, nullptr, c.vi, c.vj, 1);
+      compose_one(dut, in, 0, kNoFields, c.vi, c.vj, 1);
       const uint16_t want = zt::subpatch_mask(c.vi, c.vj);
       int n = 0;
       for (int b = 0; b < 16; ++b)
@@ -676,7 +686,7 @@ int main(int argc, char** argv) {
           in.scar = -7;  // the vertex MOVED, so it marks
           in.bottom = -32768;
           in.dual = true;
-          compose_one(dut, in, 0, nullptr, vi, vj, 1);
+          compose_one(dut, in, 0, kNoFields, vi, vj, 1);
           const uint16_t want = zt::subpatch_mask(vi, vj);
           if (dut.subpatch_dirty_o != want) {
             if (mismatches == 0) {
@@ -705,12 +715,12 @@ int main(int argc, char** argv) {
     still.scar = 0;
     still.bottom = -32768;
     still.dual = true;
-    compose_one(dut, still, 0, nullptr, 4, 4, 1);
+    compose_one(dut, still, 0, kNoFields, 4, 4, 1);
     check(dut.subpatch_dirty_o == 0, "an unmoved vertex marks no subpatch dirty", 0,
           dut.subpatch_dirty_o);
     // and a moved one, in the same patch, accumulates
     still.scar = -7;
-    compose_one(dut, still, 0, nullptr, 20, 20, 1);
+    compose_one(dut, still, 0, kNoFields, 20, 20, 1);
     check(dut.subpatch_dirty_o == zt::subpatch_mask(20, 20), "the mask accumulates over a patch",
           zt::subpatch_mask(20, 20), dut.subpatch_dirty_o);
     dut.list_clear_i = 1;
