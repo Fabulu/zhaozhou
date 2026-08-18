@@ -405,5 +405,25 @@ oracle. What was rejected is recorded with each.
    comparison exact. Carrying both would force a division or a rounding inside
    the block for no expressive gain.
 
-**MUTATION-CHECKED.** See the increment's report for the injected defects, the
-binary hashes proving each relink, and which lane caught each.
+**MUTATION-CHECKED.** Four defects were injected one at a time, each proved to
+have relinked by hashing the three test binaries before running them, and each
+reverted afterwards:
+
+| mutation | directed | random | LOD → TESS |
+|---|---|---|---|
+| the ladder compares `<` instead of `<=` | 2/211 red | **green** | **green** |
+| the −x neighbour lookup transposes the grid index | 6/211 red | 659/701 red | **2/94 red — a real crack** |
+| the two cameras combine by taking the COARSER decision | 3/211 red | 99/701 red | **green** |
+| refine adopts the finer level with the factor at ZERO | 2/211 red | 135/701 red | **green** |
+
+**The second row is the whole argument for the composition.** A transposed
+neighbour index makes both blocks individually self-consistent — LOD emits
+coherent packets, TESS stitches them faithfully — and the composition reports it
+in the only language that matters: *"subpatch 2 and 3 disagree on their shared
+edge — 3 vs 2 vertices"*. That is a tear in the island, found on emitted
+geometry.
+
+**The first row is the argument for the directed flip-point case.** `<` versus
+`<=` is an exact-equality event, which random input never produces, and which
+the tessellator cannot see because a level is a level. Only a case that
+constructs `dev = distance` by hand can catch it.

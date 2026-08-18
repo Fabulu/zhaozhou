@@ -406,5 +406,30 @@ rejection carrying zeros; and the guard band as a CLAMP.
    block whose consumer is a rasterizer that stalls in long tile-sized bursts,
    not in single cycles.
 
-**MUTATION-CHECKED.** See the increment's report for the injected defects, the
-binary hashes proving each relink, and which lane caught each.
+**MUTATION-CHECKED.** Six defects were injected one at a time, each proved to
+have relinked by hashing the three test binaries before running them, and each
+reverted afterwards:
+
+| mutation | directed | random | chain |
+|---|---|---|---|
+| §2 row rescale by 15 instead of 16 | 451/2007 red | 1169/2089 red | **green** |
+| the divider rounds with D instead of D/2 | 520/2007 red | 881/2089 red | 4/26 red |
+| the guard band clamps one subpixel short | 24/2007 red | 155/2089 red | **green** |
+| the near plane is `< 0` instead of `<= 0` | 18/2007 red | **green** | **green** |
+| the negative quotient floors instead of ceils | 87/2007 red | 847/2089 red | 2/26 red |
+| the reassembly swaps vertices B and C | 593/2007 red | 1330/2089 red | **green** |
+
+**Three of those greens are findings, not gaps, and each one is a fact about the
+machine.**
+
+- *The chain is blind to a uniform scaling of the row sums,* because projection
+  is homogeneous: rescaling by 15 doubles `clip.x`, `clip.y` AND `clip.w`, and
+  `ndc = clip.x / clip.w` is unchanged. Only `1/w` moves, and the composition
+  runs the tile pipe with the depth test off. A composition can only see what
+  reaches the framebuffer.
+- *The chain is blind to a B/C swap,* because GEOM.CLIP NORMALISES THE WINDING —
+  `area < 0` swaps B and C, which is its documented double-sided law. Vertex
+  order is absorbed one block downstream by design.
+- *The random lanes are blind to `w == 0`,* which is a measure-zero event under
+  random input. That case exists in the directed suite for exactly this reason,
+  and it is why "the boundary value, by hand" is not a formality.

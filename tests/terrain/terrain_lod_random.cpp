@@ -107,27 +107,34 @@ void compare(const LodJob& job, const std::vector<LodOut>& got, const char* what
          got[i].src_id == want[i].src_id && got[i].hold == want[i].hold;
     if (!ok) bad = i;
   }
-  check(ok, what, want.empty() ? 0 : want[bad].level, got.size() > bad ? got[bad].level : 0xFF);
+  // The two packets at the first disagreement, or a zeroed one when the block
+  // emitted the wrong COUNT and there is no packet to name. Value-initialised
+  // so no field is read before it is written (cppcheck uninitvar).
+  LodOut w{};
+  LodOut g{};
+  if (bad < want.size()) w = want[bad];
+  if (bad < got.size()) g = got[bad];
+  check(ok, what, w.level, g.level);
   if (!ok && *failed < 4) {
     ++*failed;
     std::vector<uint8_t> bytes(64, 0);
-    const int32_t w[8] = {job.sp[0].cx,
-                          job.sp[0].cy,
-                          job.sp[0].cz,
-                          job.cam[0].ex,
-                          job.cam[0].ey,
-                          job.cam[0].ez,
-                          static_cast<int32_t>(job.sp[0].dev[1]),
-                          static_cast<int32_t>(job.policy.morph_step)};
-    std::memcpy(bytes.data(), w, sizeof(w));
+    const int32_t words[8] = {job.sp[0].cx,
+                              job.sp[0].cy,
+                              job.sp[0].cz,
+                              job.cam[0].ex,
+                              job.cam[0].ey,
+                              job.cam[0].ez,
+                              static_cast<int32_t>(job.sp[0].dev[1]),
+                              static_cast<int32_t>(job.policy.morph_step)};
+    std::memcpy(bytes.data(), words, sizeof(words));
     char e[160];
     char a[160];
     std::snprintf(e, sizeof(e), "packet %u level %u morph %u hold %u", static_cast<unsigned>(bad),
-                  want.size() > bad ? want[bad].level : 0xFF,
-                  want.size() > bad ? want[bad].morph : 0, want.size() > bad ? want[bad].hold : 0);
+                  static_cast<unsigned>(w.level), static_cast<unsigned>(w.morph),
+                  static_cast<unsigned>(w.hold));
     std::snprintf(a, sizeof(a), "packet %u level %u morph %u hold %u", static_cast<unsigned>(bad),
-                  got.size() > bad ? got[bad].level : 0xFF, got.size() > bad ? got[bad].morph : 0,
-                  got.size() > bad ? got[bad].hold : 0);
+                  static_cast<unsigned>(g.level), static_cast<unsigned>(g.morph),
+                  static_cast<unsigned>(g.hold));
     zhao::save_failing_vector(what, bytes, e, a);
   }
 }
