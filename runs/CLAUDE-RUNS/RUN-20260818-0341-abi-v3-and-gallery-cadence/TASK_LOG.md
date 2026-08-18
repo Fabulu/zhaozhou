@@ -254,3 +254,47 @@ Renaming `FORM_LANGUAGE_HARDWARE_CODESIGN.md` is a judgement call: it is a
 historical co-design document with a provenance header. Retitling the content
 to Nanquan while keeping a note that it was written as "Form" is honest;
 silently rewriting history is not.
+
+#### Same item: the site's dashboard and progress claims are now stale
+
+Owner added: "also update dashboard and progress stuff on website."
+
+Today's work falsified several statements on the page. They must be corrected,
+and corrected WITHOUT overclaiming - the page's whole value is that it does not
+soften hardware claims. Concretely, in `zhaozhou-site/template/index.html`:
+
+Phase table:
+- Row 1 and row 3 still say "Form" (see the rename item above).
+- Row 4 "First exact tile and triangle: the hardware rasterizer begins" is
+  marked `not started`. That is now false. `RASTER.EDGEWALK` is implemented in
+  RTL, differentially tested against the C++ oracle, formally proven for the
+  top-left rule, and mutation-checked. `RASTER.TILESTORE` and `RASTER.RESOLVE`
+  are in flight.
+
+"What simply is not built yet" section:
+- "The hardware rasterizer is not started. Its five blocks are
+  specification-only and its RTL directory is empty." Every clause of that is
+  now wrong. `fpga/rtl/raster/` contains `zhao_raster_edgewalk.sv` and
+  `zhao_raster_fill.sv`.
+- The neighbouring claim "Every image on this page came from the software
+  renderer" is STILL TRUE and must stay. The rasterizer is simulated and
+  formally proven; it has produced no published image.
+
+What the replacement wording must preserve:
+- simulated and formally proven is NOT synthesized, and neither is on-hardware
+- no board has been probed; phase 0 stays BLOCKED
+- "Per-block resource figures and timing closure" stays unclaimed
+
+New, honest, and worth stating because it is a measured result rather than a
+guess: full-shell synthesis was ATTEMPTED on Quartus 17.0.2 Lite and does not
+fit this machine. `quartus_map` committed 28.4 GB against 24 GB of RAM and
+thrashed at near-zero CPU. A single leaf module elaborates cleanly in 67 s with
+a 4.8 GB peak just to parse the 22-file cone. So the toolchain works, the design
+is not at fault, and per-subsystem characterization is the lane that fits. That
+is a better sentence than "the synthesis toolchain is open locally" because it
+reports an experiment instead of a capability.
+
+Edit the TEMPLATE only. `public/index.html` is generated and overwritten.
+Deploy with `deploy.ps1` so both copycheck gates run. Watch the copy rules: no
+em dashes, no en dashes used as dashes, no banned phrases, no defensive
+frame-rate prose.
