@@ -140,7 +140,7 @@ Cases: reset (the first touch of any line is a miss and exactly one fill); miss-
 
 **Lane D — the mid-fill invalidate**, and it is deliberately **not** differential: `zref::TextureCache` has no fill beats, so it cannot express an invalidate landing while a line is on its way in. It checks the RTL law directly instead — an invalidate on any beat *before* the last must kill the torn line, so the same access has to fetch it a second time — over random lines, random beats and random fill timings. It exists because a last-beat-only directed case was green against a mutation that deleted the kill entirely (see Mutation evidence).
 
-The lanes assert their own coverage and fail if any bucket is empty; at the fast setting they fire **113 accesses served with no fill at all, 360 quad accesses missing on all four lanes, 9,589 evictions, 70 invalidate cycles and 60 mid-fill invalidates**. Default 220 + 45 + 70 + 60 batches (CTest `fast`); `--nightly` 3,000 + 600 + 900 + 700. Failing vectors are serialized per charter §29-17.
+The lanes assert their own coverage and fail if any bucket is empty; at the fast setting they fire **113 accesses served with no fill at all, 360 quad accesses missing on all four lanes, 9,589 evictions, 70 invalidate cycles and 60 mid-fill invalidates**. Default 220 + 45 + 70 + 60 batches (CTest `fast`); `--nightly` 20,000 + 4,000 + 6,000 + 5,000, which runs in **30 s** and fires 866,023 evictions, 32,543 all-miss quads, 6,000 invalidates and 5,000 mid-fill invalidates. Failing vectors are serialized per charter §29-17.
 
 ## Mutation evidence (2026-08-18)
 

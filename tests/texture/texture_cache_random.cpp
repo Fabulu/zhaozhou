@@ -322,10 +322,10 @@ int main(int argc, char** argv) {
     if (std::strcmp(argv[i], "--nightly") == 0) nightly = true;
 
   CacDev dev;
-  const int a = nightly ? 3000 : 220;
-  const int b = nightly ? 600 : 45;
-  const int c = nightly ? 900 : 70;
-  const int d = nightly ? 700 : 60;
+  const int a = nightly ? 20000 : 220;
+  const int b = nightly ? 4000 : 45;
+  const int c = nightly ? 6000 : 70;
+  const int d = nightly ? 5000 : 60;
   lane_a(&dev, a);
   lane_b(&dev, b);
   lane_c(&dev, c);

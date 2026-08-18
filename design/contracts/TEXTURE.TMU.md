@@ -200,7 +200,7 @@ Cases: all five formats with their expansions pinned by value (0xF800 → pure r
 
 **Lane C — the filter, hammered.** One bilinear surface with fractions sweeping 0..255 in both axes against random texel content.
 
-The lanes assert their own coverage and fail if any bucket is empty; at the fast setting they fire **3,749 bilinear samples (476 exactly at a rounding tie, 26 exactly at a texel centre), 2,052 mipped samples, all three wrap modes (8,588 / 2,036 / 1,535), all five formats, and 1,122 malformed against 5,499 clean modes**. Default 260 + 80 + 80 batches (CTest `fast`); `--nightly` 4,000 + 1,200 + 1,200. Failing vectors are serialized per charter §29-17.
+The lanes assert their own coverage and fail if any bucket is empty; at the fast setting they fire **3,749 bilinear samples (476 exactly at a rounding tie, 26 exactly at a texel centre), 2,052 mipped samples, all three wrap modes (8,588 / 2,036 / 1,535), all five formats, and 1,122 malformed against 5,499 clean modes**. Default 260 + 80 + 80 batches (CTest `fast`); `--nightly` 60,000 + 18,000 + 18,000, which runs in **9 s** and fires 1,518,128 samples — 859,582 of them bilinear, 116,681 exactly at a rounding tie — across 470,478 mipped samples, all three wraps and 260,993 malformed modes. Failing vectors are serialized per charter §29-17.
 
 ## Mutation evidence (2026-08-18)
 

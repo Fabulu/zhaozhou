@@ -299,9 +299,9 @@ int main(int argc, char** argv) {
     if (std::strcmp(argv[i], "--nightly") == 0) nightly = true;
 
   TmuDev dev;
-  const int a = nightly ? 4000 : 260;
-  const int b = nightly ? 1200 : 80;
-  const int c = nightly ? 1200 : 80;
+  const int a = nightly ? 60000 : 260;
+  const int b = nightly ? 18000 : 80;
+  const int c = nightly ? 18000 : 80;
   lane_a(&dev, a);
   lane_b(&dev, b);
   lane_c(&dev, c);
