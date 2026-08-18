@@ -168,13 +168,17 @@ not an RTL decision.
 `zref::terrain::compose_vertex`, `zref::terrain::FieldList` and
 `zref::terrain::subpatch_mask` in `reference/include/zref/zref_terrain_patch.hpp`.
 
-**The ledger's `reference_model: zref::TerrainPatch` name was NOT used, and the
-reason is a collision rather than a preference:** `zref::render::TerrainPatch`
-already exists and is the patch RESOURCE (the cartridge page plus the in-memory
-layers), which is this block's INPUT, not its model. Binding the ledger name to
-an oracle would have made two different things share it. The oracle lives under
-`zref::terrain::` as functions instead, which is also where `column_query`,
-`bake_dig` and `apply_breach_law` already live.
+**The ledger's `reference_model` was AMENDED, from `zref::TerrainPatch` to the
+symbol above.** That is a deviation from "honour the ledger entry" and it is
+recorded as one. The reason is that `zref::render::TerrainPatch` already exists
+and is the patch RESOURCE — the cartridge page plus its in-memory layers, this
+block's INPUT rather than its model — so the old name would have made two
+different things share one, and rule V17(a) will demand a real definition of it
+the moment maturity rises above SPECIFIED. The oracle lives under
+`zref::terrain::` instead, alongside `column_query`, `bake_dig` and
+`apply_breach_law`, and the ledger already carries
+`reference_model: zref::terrain::mosaic_pick` for TEXTURE.MOSAIC, so this is the
+established form rather than a new one.
 
 `compose_vertex` is a **thin view onto `zref::render::compose_lattice`**, and
 `terrain_patch_directed` proves it rather than asserting it: a real 33×33 dual

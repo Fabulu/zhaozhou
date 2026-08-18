@@ -48,8 +48,11 @@
 //
 // That is symmetric, so two neighbours independently compute the SAME stride
 // for the edge they share, and the shared-edge vertex SETS are identical — the
-// contract's crack invariant, by construction rather than by testing. The
-// rejected alternative was vertex snapping (the finer side keeps its extra
+// contract's crack invariant, by construction rather than by testing.
+// ENFORCED-BY: tests/terrain/terrain_tess_directed.cpp:on_x_line
+// (all 16 level pairs, checked on the vertex sets two independently-run
+// subpatches actually emit onto their shared line — not on this paragraph).
+// The rejected alternative was vertex snapping (the finer side keeps its extra
 // boundary vertices and slides them onto the coarse segment): it leaves
 // T-junctions, and a fixed-point rasterizer cracks at a T-junction by a pixel.
 // That is the 2026-08-15 seam-crack defect class recorded in

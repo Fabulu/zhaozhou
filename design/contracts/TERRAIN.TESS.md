@@ -154,10 +154,13 @@ the two degrade counters. All three are pinned by directed cases.
 `zref::terrain::tessellate` in `reference/include/zref/zref_terrain_tess.hpp`,
 with `coarse_height` and `morph_height`.
 
-The ledger names it `zref::TerrainTess`; it lives under `zref::terrain::` as
-functions, alongside `column_query` whose triangulation it shares, and for the
-same reason TERRAIN.PATCH's does — that namespace is where the terrain laws
-already are.
+The ledger's `reference_model` was AMENDED from `zref::TerrainTess` to that
+symbol — a deviation from "honour the ledger entry", recorded as one. It lives
+under `zref::terrain::` alongside `column_query`, whose triangulation it shares,
+which is where the terrain laws already are and which the ledger already uses
+for TEXTURE.MOSAIC (`zref::terrain::mosaic_pick`). `ledger_check` rule V17 wants
+the contract and the ledger to name the same symbol, and V17(a) will want that
+symbol to actually be defined once maturity rises above SPECIFIED.
 
 That header is **part view, part definition, and it says which at every line.**
 The cell split, the emit order, both windings, the void rule's `dual` guard, the

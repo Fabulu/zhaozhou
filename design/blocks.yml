@@ -1223,7 +1223,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 patch-layer update per clock
-    reference_model: zref::TerrainPatch
+    reference_model: zref::terrain::compose_vertex
     tests:
       directed: tests/terrain/terrain_patch_directed.cpp
       random: tests/terrain/terrain_patch_random.cpp
@@ -1253,7 +1253,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 emitted vertex per clock
-    reference_model: zref::TerrainTess
+    reference_model: zref::terrain::tessellate
     tests:
       directed: tests/terrain/terrain_tess_directed.cpp
       random: tests/terrain/terrain_tess_random.cpp
@@ -1283,7 +1283,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 normal per vertex per clock
-    reference_model: zref::TerrainNormals
+    reference_model: zref::terrain::face_normal
     tests:
       directed: tests/terrain/terrain_normals_directed.cpp
       random: tests/terrain/terrain_normals_random.cpp
