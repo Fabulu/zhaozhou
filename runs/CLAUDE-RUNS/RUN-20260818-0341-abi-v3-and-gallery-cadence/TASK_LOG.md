@@ -336,7 +336,7 @@ pushing. Verified independently rather than on the agents' reports:
 Maturity stays SPECIFIED for all three. Simulated and formally proven is not
 synthesized and is not hardware.
 
-### Open decision: black does not resolve to black
+### RESOLVED (owner, 2026-08-18): black does not resolve to black
 
 Verified independently by evaluating the oracle's own expression over all 16
 Bayer cells. Green's dither amplitude is 32 while red and blue get 16, so for a
@@ -835,3 +835,101 @@ above wants it). Then water as a reel subject to prove the wake mechanic. Then
 fire via CLUT rotation. All three before any of it goes near RTL, since the
 reference renderer is where the look gets settled and none of these are
 hardware-blocked.
+
+## The black rail, resolved at the cause (owner decision)
+
+Owner: "you asked way back if it was ok for the black triangle to have green
+stuff. That's not okay, we do it right from the start."
+
+Investigating to fix it found something better than a patch. `resolve.cpp`'s own
+header states the law as "the dither threshold t = (B+0.5)/16 of one
+quantization step". One quantization step is 255 numerator units for ALL THREE
+channels, because all three divide by 255. So that threshold is `(B*16 + 8)`
+everywhere. Green was implemented as `(B*32 + 16)`, DOUBLE its own stated law.
+
+The doubled amplitude broke both rails:
+
+    black,  g=0   : (32B + 16)/255 = 1 for B >= 8, so half of every pure-black
+                    tile resolved to 0x0020. Red and blue, at the correct
+                    amplitude, top out at 248/255 and stay exactly 0.
+    white,  g=255 : (255*63 + 496)/255 = 64, which wrapped the six-bit field.
+                    That was patched on 2026-08-16 with a clamp. The clamp
+                    treated the symptom; the cause was always this amplitude.
+
+At the documented `(B*16 + 8)`, verified across every Bayer phase: black gives
+{0}, white gives {63}, and mid-tones still dither ({31,32} at g=128). The
+`min()` clamps stay as belt and braces rather than as load-bearing repairs.
+
+So the white-rail fix in August was half a fix. Correcting the amplitude closes
+both, and it makes the code agree with the sentence directly above it, which it
+had contradicted since it was written.
+
+Blast radius: every golden capture CRC that contains a resolved frame moves.
+That was the reason this was escalated rather than fixed unilaterally, and the
+owner has now called it.
+
+## Sun trails v1.3 series, and what the dither fix cost
+
+Owner reported four things across the session. All four are fixed, all verified
+by decoding frames and looking at them rather than by CRC.
+
+| report | cause | fix |
+|---|---|---|
+| trails at the TOP of horizontally moving suns | Noctis's kernel samples down-right, so energy always moves up-left regardless of heading. The documented v1.2 law. | v1.3: offsets rotate onto the direction of travel |
+| orbiting pair's trails JUMP between orientations | v1.3 chose one of EIGHT lattice directions, which snaps as a binary's heading sweeps | v1.3a: taps are a Bresenham line along the true heading, changing one texel at a time |
+| not smeary or hazy enough | four narrow taps cannot dissolve ghosts ~9.7 px apart | eight taps reaching four texels along the motion plus across-axis spread |
+| not strong enough | decay 8 from a six-bit value extinguishes a trail in 8 ages, so the ring's oldest entry contributed exactly nothing | decay 4, so all eight retained ages carry energy |
+| blue star has no animated sheen | SATUR = min(63, 12d/r) is a FLOOR that boil_index clamps every entry up to; at 2.5r it was 30 and the bottom half of the ramp went flat | 1.5r, so the floor is 18 like star-boil. Closer also REDUCES white wash, so class colour is better preserved |
+| trails should be asymmetric, throwing sunstuff | stamps were perfectly circular | v1.3b: one prominence lobe, rotating with the star, seeded per body so a binary's two suns do not eject alike |
+| parts should be lesser, ephemeral, slightly off | a perfectly graded smear reads as computed, not retained | v1.3c: deterministic per-age intensity variation and +-1 texel jitter |
+
+Every one of these is deterministic, so replay stays byte-exact and the capture
+law is untouched.
+
+### What the dither correction cost, measured
+
+Correcting green's amplitude UN-COLLAPSED greens that the doubled value had been
+merging, so colour counts moved. `noctis-flare` went to 284 against a ceiling of
+256. Measured rather than guessed:
+
+    flare chain alone (ghost_r_px = 0) : 245 colours
+    trail on top                       : ~39 more
+    shrinking the trail to 10 px       : still 270
+
+So the trail is not the cost, the chain is. Moving the sun from k=40 to k=20
+fits the subject at 240 AND makes the burst bigger, which is the direction the
+owner asked for, so the constraint and the request happened to agree.
+
+This is the docketed blocker with a number on it: the flare chain sums graded
+levels straight into RGB, so its cost is (backgrounds x levels). Route it
+through ONE six-bit plane with a single ramp lookup at the end, the way the
+trail already is, and the cost drops to about the ramp size. Until that lands,
+`noctis-flare` is the ceiling case and every change to it must be measured.
+
+### Test changes this forced, and why none of them is a weakening
+
+- Six separate files carried their own copy of the dither law with green's wrong
+  amplitude. All six corrected: `render_sky` (x3), `render_directed`,
+  `render_heightfield`, `terrain_dual`, `texture_mosaic_directed`.
+- THREE tests had pinned the defect as expected behaviour, e.g. "black rail:
+  green is lifted to 1 at exactly the 8 Bayer values >= 8 (128 px)". That was
+  the honest thing to do when the behaviour was observed-not-endorsed. They now
+  assert black is black.
+- `render_star`'s impulse anchor could no longer be a single hand-computed
+  number, because v1.3c deliberately varies each age. The DIRECTION law is still
+  asserted exactly (nothing at or ahead of the source, which is what v1.2 got
+  wrong); the magnitude is asserted over the region the jitter can reach. The
+  source was widened from one texel to 5x5 because a single texel can now be
+  attenuated to nothing, which would have made the direction checks VACUOUS
+  rather than failing.
+- `render_golden`'s two CRCs re-pinned with the reason recorded inline, matching
+  the file's existing convention of logging every re-pin and its cause.
+
+### A trap that cost real time, third occurrence today
+
+`ninja: no work to do` after editing a `.cpp`. I iterated several times on
+`render_star` against a STALE binary before noticing the build was a no-op.
+Earlier the same day it was the verilate copy-scripts (deleting them makes the
+build fail silently and the old exe run) and mtime-touching (poisons ninja's
+next comparison). The rule that actually works: check that the thing rebuilt,
+by hash or by the linker line, before believing any result.

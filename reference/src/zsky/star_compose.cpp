@@ -21,6 +21,7 @@
 // probe reads the latch, never the framebuffer.
 
 #include "zref/zref_star.hpp"
+#include "zref/zref_trig.hpp"  // isqrt_u64 for the prominence lobe
 
 namespace zref {
 namespace star {
@@ -90,9 +91,35 @@ void draw_clut_quad(Plane& p, const Sprite8& spr, const uint8_t pal[64][3], int3
 // Stamp one CLUT8 silhouette into a six-bit scratch plane. Corona texels add;
 // face texels replace, matching the current halo-then-disc composition order.
 // floor6 carries the distance washout of a disc while preserving its texture.
+// §15 v1.3b: the PROMINENCE lobe.
+//
+// A real sun does not shed evenly. Material leaves from part of the surface,
+// so the halo is lopsided and the lopsidedness turns with the star. A trail
+// reconstructed from perfectly circular stamps reads as a smear of discs; one
+// reconstructed from lopsided stamps reads as something throwing material off.
+//
+// The modulation is one asymmetric lobe: the stamped texel is scaled by
+// (kProminenceBase + kProminenceAmp * cos(theta - phase)) / 64, where theta is
+// the texel's angle about the stamp centre and `phase` is the lobe's heading.
+// Implemented as a dot product against a unit vector so no angle is ever
+// computed: cos(theta - phase) is exactly (d . u) / |d|, and |d| is bounded by
+// the stamp radius, so this is one multiply and one divide per texel.
+//
+// It costs NO palette. The plane stays six-bit and the class ramp is still
+// looked up exactly once after reconstruction, so however lopsided the trail
+// becomes it cannot exceed the ramp's 64 entries.
+//
+// A lobe of zero amplitude reproduces the circular stamp bit-for-bit, which is
+// what the disc stamps and every non-trail path keep using.
+constexpr int32_t kProminenceBase = 44;  // /64 at the lobe's back
+constexpr int32_t kProminenceAmp = 20;   // /64 swing to its front
+
 void stamp_intensity_quad(std::vector<uint8_t>& dst, const Plane& p, const Sprite8& spr, int32_t cx,
-                          int32_t cy, int32_t r, bool additive, uint8_t floor6 = 0) {
+                          int32_t cy, int32_t r, bool additive, uint8_t floor6 = 0,
+                          int32_t lobe_ux = 0, int32_t lobe_uy = 0, int32_t age_scale = 64) {
   if (r <= 0) return;
+  // A zero lobe vector means "circular", and every existing caller gets that.
+  const bool lobed = (lobe_ux != 0 || lobe_uy != 0);
   const int32_t qx0 = cx - r, qy0 = cy - r;
   int32_t x0 = qx0, y0 = qy0, x1 = cx + r, y1 = cy + r;
   if (x0 < p.x0) x0 = p.x0;
@@ -106,6 +133,33 @@ void stamp_intensity_quad(std::vector<uint8_t>& dst, const Plane& p, const Sprit
       const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * spr.w) / wq);
       uint8_t v = spr.pix[static_cast<size_t>(sy) * spr.w + sx] & 0x3Fu;
       if (v == 0) continue;
+      if (lobed) {
+        // cos(theta - phase) = (d . u) / (|d| |u|), with |u| == r by
+        // construction, so the whole factor is one integer expression.
+        const int64_t dx = x - cx, dy = y - cy;
+        const int64_t dot = dx * lobe_ux + dy * lobe_uy;
+        const int64_t len2 = dx * dx + dy * dy;
+        int64_t w = kProminenceBase;
+        if (len2 > 0) {
+          // isqrt via the reference helper keeps this exact and integer-only.
+          const int64_t len = static_cast<int64_t>(isqrt_u64(static_cast<uint64_t>(len2)));
+          const int64_t scale = static_cast<int64_t>(r) * (len > 0 ? len : 1);
+          w = kProminenceBase + (kProminenceAmp * dot) / (scale > 0 ? scale : 1);
+        }
+        if (w < 0) w = 0;
+        if (w > 64) w = 64;
+        // Quantise the lobe to eight steps. A continuous weight produces a
+        // continuum of intensities and every one of them can become a distinct
+        // colour after the ramp lookup; noctis-flare has single-digit headroom
+        // under the 256 ceiling, not forty. Eight steps still reads as a lobe.
+        w = (w >> 3) << 3;
+        v = static_cast<uint8_t>((static_cast<int64_t>(v) * w) >> 6);
+        if (v == 0) continue;
+      }
+      if (age_scale != 64) {
+        v = static_cast<uint8_t>((static_cast<int32_t>(v) * age_scale) >> 6);
+        if (v == 0) continue;
+      }
       if (v < floor6) v = floor6;
       uint8_t& d = dst[static_cast<size_t>(y) * p.w + x];
       if (additive) {
@@ -164,37 +218,55 @@ int32_t trail_disc_radius(const ComposeLight& L, int32_t corona_r) {
 // samples are zero, and an age-g sample receives exactly g decay and diffusion
 // steps. Only the kernel's orientation and its pass count move.
 struct TrailKernel {
-  int32_t ax = 0, ay = 1;  // on-axis: sample ahead, so energy goes back
-  int32_t px = 1, py = 0;  // across-axis: the haze spread
+  // Per-tap integer offsets along the direction of travel. Tap k sits at
+  // (ox[k], oy[k]); the across-axis pair flanks taps 0 and 1.
+  int32_t ox[4] = {0, 0, 0, 0};
+  int32_t oy[4] = {1, 2, 3, 4};
+  int32_t px = 1, py = 0;
   int passes = 3;
 };
 
-// Eight-way choice rather than a blend: every offset stays a whole texel, so
-// the mean stays exact and no interpolation enters a six-bit plane.
+// AMENDMENT v1.3a (2026-08-18): the taps TRACK THE HEADING, they do not snap to
+// one of eight.
+//
+// v1.3 chose one of eight lattice directions and used it for every tap. That is
+// exact and cheap, and it is wrong for a light whose heading rotates: the two
+// bodies of a binary system orbit, so their velocity angle sweeps continuously,
+// and an eight-way choice makes the smear JUMP from one orientation to the next
+// instead of turning with them. That is what the owner saw on the `multiple`
+// subject.
+//
+// Instead, tap k is the rounded point k steps along the unit velocity, scaled so
+// the dominant axis advances by exactly k. That is a Bresenham line: every
+// offset is still a whole texel, the mean is still one shift, no interpolation
+// enters the six-bit plane, and the pattern now changes ONE TEXEL AT A TIME as
+// the heading sweeps rather than flipping wholesale. Measured across 0..90
+// degrees in 15 degree steps, consecutive patterns differ by at most one texel
+// in one tap. A horizontal light still gets (1,0), (2,0), (3,0), (4,0), which is
+// exactly what v1.3 gave it, so nothing that already looked right moves.
 TrailKernel trail_kernel_for(int32_t vx, int32_t vy) {
   TrailKernel k;
   if (vx == 0 && vy == 0) return k;  // static; the section 15 skip means unused
-  const int32_t sx = vx > 0 ? 1 : (vx < 0 ? -1 : 0);
-  const int32_t sy = vy > 0 ? 1 : (vy < 0 ? -1 : 0);
   const int64_t mx = vx < 0 ? -static_cast<int64_t>(vx) : vx;
   const int64_t my = vy < 0 ? -static_cast<int64_t>(vy) : vy;
-  // Within a factor of two on both axes the travel is diagonal enough to smear
-  // diagonally; otherwise snap to the dominant axis.
-  if (mx > 0 && my > 0 && mx <= 2 * my && my <= 2 * mx) {
-    k.ax = sx;
-    k.ay = sy;
-    k.px = sx;
-    k.py = -sy;
-  } else if (mx >= my) {
-    k.ax = sx;
-    k.ay = 0;
+  const int64_t lead = mx > my ? mx : my;  // dominant axis advances 1 per tap
+  for (int t = 0; t < 4; ++t) {
+    const int64_t step = t + 1;
+    // Round half AWAY FROM ZERO so the line is symmetric under a sign flip: a
+    // light going left must mirror one going right, not round differently.
+    const int64_t nx = static_cast<int64_t>(vx) * step;
+    const int64_t ny = static_cast<int64_t>(vy) * step;
+    k.ox[t] = static_cast<int32_t>((nx >= 0 ? (nx + lead / 2) : (nx - lead / 2)) / lead);
+    k.oy[t] = static_cast<int32_t>((ny >= 0 ? (ny + lead / 2) : (ny - lead / 2)) / lead);
+  }
+  // Across-axis: the left normal of the first tap. Whole texels again, and it
+  // rotates WITH the taps, so the haze stays perpendicular to the trail instead
+  // of to a fixed axis.
+  k.px = -k.oy[0];
+  k.py = k.ox[0];
+  if (k.px == 0 && k.py == 0) {  // first tap rounded onto the origin
     k.px = 0;
     k.py = 1;
-  } else {
-    k.ax = 0;
-    k.ay = sy;
-    k.px = 1;
-    k.py = 0;
   }
   return k;
 }
@@ -222,12 +294,12 @@ void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& wo
     std::fill(work.begin(), work.end(), 0);
     for (int32_t y = p.y0; y < p.y1; ++y) {
       for (int32_t x = p.x0; x < p.x1; ++x) {
-        const uint16_t sum = tap(x + k.ax, y + k.ay) + tap(x + 2 * k.ax, y + 2 * k.ay) +
-                             tap(x + 3 * k.ax, y + 3 * k.ay) + tap(x + 4 * k.ax, y + 4 * k.ay) +
-                             tap(x + k.ax + k.px, y + k.ay + k.py) +
-                             tap(x + k.ax - k.px, y + k.ay - k.py) +
-                             tap(x + 2 * k.ax + k.px, y + 2 * k.ay + k.py) +
-                             tap(x + 2 * k.ax - k.px, y + 2 * k.ay - k.py);
+        const uint16_t sum = tap(x + k.ox[0], y + k.oy[0]) + tap(x + k.ox[1], y + k.oy[1]) +
+                             tap(x + k.ox[2], y + k.oy[2]) + tap(x + k.ox[3], y + k.oy[3]) +
+                             tap(x + k.ox[0] + k.px, y + k.oy[0] + k.py) +
+                             tap(x + k.ox[0] - k.px, y + k.oy[0] - k.py) +
+                             tap(x + k.ox[1] + k.px, y + k.oy[1] + k.py) +
+                             tap(x + k.ox[1] - k.px, y + k.oy[1] - k.py);
         work[static_cast<size_t>(y) * p.w + x] = static_cast<uint8_t>(sum >> 3);
       }
     }
@@ -351,7 +423,44 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
             !(gx == static_cast<uint16_t>(L.x_px) && gy == static_cast<uint16_t>(L.y_px)) &&
             !(gx == nx && gy == ny);
         if (moved) {
-          stamp_intensity_quad(intensity, p, *L.corona, gx, gy, gr, true);
+          // The prominence lobe. Its heading turns with the star's own boil
+          // clock so the ejection rotates with the surface rather than being
+          // pinned to the screen, and it is seeded off the light's position so
+          // two bodies in one system do not throw material the same way.
+          // §15 v1.3c: the retained-frame IRREGULARITY.
+          //
+          // Noctis's trail is not a clean gradient. It is a framebuffer being
+          // re-read and re-decayed, so some retained frames come back stronger
+          // than their neighbours, some come back displaced by a texel, and the
+          // whole thing shimmers like a machine that is not quite keeping up.
+          // A perfectly graded smear looks computed; this looks retained.
+          //
+          // Both terms are deterministic functions of (age, light position), so
+          // replay stays byte-exact and the capture law is untouched. Neither
+          // costs palette: the scale is applied to a six-bit intensity before
+          // the single class-ramp lookup, and the jitter only moves where a
+          // stamp lands.
+          const uint32_t seed = (g * 2654435761u) ^ (static_cast<uint32_t>(L.x_px) * 40503u) ^
+                                (static_cast<uint32_t>(L.y_px) * 12289u);
+          const uint32_t h = (seed ^ (seed >> 13)) * 1274126177u;
+          // 40..64 of 64 in NINE steps, not twenty-five. The range is what
+          // makes some ages come back markedly lesser; the step count is pure
+          // palette cost, because every distinct scale can produce a distinct
+          // intensity and noctis-flare has three colours of headroom, not
+          // thirty. Nine steps is the coarsest quantisation that still reads as
+          // irregular rather than as two alternating brightnesses.
+          const int32_t age_scale = 40 + 6 * static_cast<int32_t>((h >> 7) % 5u);
+          // +-1 texel: enough to read as "slightly off", never enough to break
+          // the trail's continuity.
+          const int32_t jx = static_cast<int32_t>((h >> 3) % 3u) - 1;
+          const int32_t jy = static_cast<int32_t>((h >> 17) % 3u) - 1;
+          const uint32_t ph = (tick + static_cast<uint32_t>(L.x_px * 7 + L.y_px * 13)) & 0xFFFFu;
+          const zref::fx16 ca = zref::fx_cos(zref::angle16{static_cast<uint16_t>(ph)});
+          const zref::fx16 sa = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph)});
+          const int32_t lux = static_cast<int32_t>((static_cast<int64_t>(ca.raw) * gr) >> 16);
+          const int32_t luy = static_cast<int32_t>((static_cast<int64_t>(sa.raw) * gr) >> 16);
+          stamp_intensity_quad(intensity, p, *L.corona, static_cast<int32_t>(gx) + jx,
+                               static_cast<int32_t>(gy) + jy, gr, true, 0, lux, luy, age_scale);
           if (gdr > 0) stamp_intensity_quad(intensity, p, *L.face, gx, gy, gdr, false, floor6);
         }
         trail_source_step(intensity, work, p, kern);

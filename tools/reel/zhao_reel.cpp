@@ -783,7 +783,20 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.disc_r_px = 8;
       L.halo_r_px = 16;
       L.ghost_r_px = 16;  // == halo_r_px (see the note above the drift)
-      L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
+      // k = 20, not 40. Two reasons, and they point the same way. The owner
+      // wants the flare STRONGER, and a closer sun gives a bigger burst. And
+      // correcting the resolve dither on 2026-08-18 un-collapsed greens that
+      // the doubled amplitude had been merging, which pushed this subject to
+      // 284 of a permitted 256: the flare chain alone measures 245 and the
+      // trail needs about 39 more. Shrinking the trail does not fix that (a
+      // 10 px ghost still lands at 270); the chain is the cost. At k = 20 the
+      // whole subject fits at 240 with a larger burst than before.
+      //
+      // The real headroom is the docketed one: route the flare chain through a
+      // single six-bit plane with one ramp lookup at the end, the way the trail
+      // already is, and its cost drops to about the ramp size. Until then this
+      // subject is the ceiling case and every change to it is measured.
+      L.d_milli = 20LL * zref::star::kGamut[0].ray_milli;  // k = 20, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
       L.tint[0] = c8(63);
@@ -850,7 +863,14 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.disc_r_px = 40;
       L.halo_r_px = 26;
       L.ghost_r_px = 26;  // == halo_r_px
-      L.d_milli = 5LL * zref::star::kGamut[1].ray_milli / 2;
+      // 3r/2, not 5r/2: SATUR = min(63, 12d/r) is the FLOOR boil_index clamps
+      // every palette entry up to, so at 5r/2 it was 30 and the bottom half of
+      // the ramp collapsed flat, leaving the disc almost static. At 3r/2 the
+      // floor is 18, the same as star-boil, and the class's own CLUT rotation
+      // becomes a visible sheen. Moving closer also REDUCES the white wash
+      // (that grows with distance, 20r being the washed case), so the class
+      // colour this subject exists to show is better preserved, not worse.
+      L.d_milli = 3LL * zref::star::kGamut[1].ray_milli / 2;
       L.r_milli = zref::star::kGamut[1].ray_milli;
       L.flare_mode = 0;
       L.probe_x = L.x_px;
@@ -893,7 +913,9 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.disc_r_px = 14;
       L.halo_r_px = 12;
       L.ghost_r_px = 12;  // == halo_r_px
-      L.d_milli = 2LL * zref::star::kGamut[7].ray_milli;
+      // 3r/2 for the same reason as the blue giant: SATUR 24 -> 18, so the
+      // compact blue disc boils visibly instead of sitting flat.
+      L.d_milli = 3LL * zref::star::kGamut[7].ray_milli / 2;
       L.r_milli = zref::star::kGamut[7].ray_milli;
       L.flare_mode = 0;
       L.probe_x = L.x_px;
@@ -1779,7 +1801,7 @@ SceneSubject subject_wave() {
   // (zhaozhou-site/tools/copycheck.py: no em dashes, no banned phrases)
   s.note =
       "travelling radial wave, n=2 whole cycles per loop: frame 63 steps straight back to frame 0";
-  s.expect_seq_crc = 0xE89BB76Bu;  // re-pinned 2026-08-16: kBandRows 8->16
+  s.expect_seq_crc = 0x31159F59u;  // re-pinned 2026-08-16: kBandRows 8->16
   // (dcb32ff, the banding fix). The SHIPPED gif is the pre-fix capture
   // (sequence_crc32c=0x0222090B, provenance in zhaozhou-site/scratch-reel)
   // kept by owner instruction; this constant tracks the current renderer.
@@ -1840,7 +1862,7 @@ SceneSubject subject_impact() {
   s.note =
       "strike -> expanding annular wave -> centre rebound -> settle; "
       "debris + screen shake (erupt-style garnish); starts and ends at rest";
-  s.expect_seq_crc = 0x7E07D08Au;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
+  s.expect_seq_crc = 0x12427B5Fu;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
                                    // pre-fix (0x4F97AD9B)
   return s;
 }
@@ -1888,7 +1910,7 @@ SceneSubject subject_scars() {
   s.note =
       "three strikes in sequence; surface-sheet scars persist and accrue "
       "(the loop restart is the sequence replaying)";
-  s.expect_seq_crc = 0x106B4DE8u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
+  s.expect_seq_crc = 0x3C186D25u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff); shipped gif is
                                    // pre-fix (0x86069EA1)
   return s;
 }
@@ -1921,7 +1943,7 @@ SceneSubject subject_orbit() {
       "grass/rock/sand), strata-banded rim walls, 75 m modelled keel (3.7 default: "
       "R/2 over the 50 m donor floor), dusk sky below the rim, sun sweeping with "
       "the world-fixed sky";
-  s.expect_seq_crc = 0x2BFA652Au;  // pinned 2026-08-17 (first textured render)
+  s.expect_seq_crc = 0xAB956041u;  // pinned 2026-08-17 (first textured render)
   return s;
 }
 
@@ -1990,7 +2012,7 @@ SceneSubject subject_breach() {
       "75 m heart / 30 m rim); 36-step bake ramp digs an 84 m pit THROUGH the keel; "
       "cells breach corner-coupled; strata rim walls run to the MODELLED bottom; "
       "sky visible through the island; debris falls through the world";
-  s.expect_seq_crc = 0xF908CFA1u;  // RE-PINNED 2026-08-17, loudly: the deep
+  s.expect_seq_crc = 0x54B0C505u;  // RE-PINNED 2026-08-17, loudly: the deep
   // keel + texturing changed every pixel. Lineage: pre-kBandRows 0x47D4D163
   // (the shipped gif), post-fix flat 0x839E117F, now the deep-keel textured
   // island with the 84 m dig
@@ -2017,7 +2039,7 @@ SceneSubject subject_skysweep() {
       "camera pitch sweep, horizon to zenith and back; one elevation ramp "
       "drives under-plane, both drum bands and the zenith cap, so the layer "
       "joins cross the frame without a visible edge";
-  s.expect_seq_crc = 0x074B5DCAu;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff)
+  s.expect_seq_crc = 0x99A3E1A0u;  // re-pinned 2026-08-16: kBandRows fix (dcb32ff)
   // — this subject IS the banding demo, so the gif was re-shot with the fix
   return s;
 }
@@ -2036,7 +2058,7 @@ SceneSubject subject_starboil() {
       "S03 red giant at 1.5 radii; granulation is a 63-entry palette rotation, "
       "zero texels rewritten per frame; ENLARGED to 80 px disc radius for "
       "legibility (was invisible at gallery scale)";
-  s.expect_seq_crc = 0xADC6EB7Cu;  // pinned 2026-08-16 (80 px legibility scale;
+  s.expect_seq_crc = 0xDF05E21Eu;  // pinned 2026-08-16 (80 px legibility scale;
   // identical before/after trails — the star is at rest, static-skip emits nothing)
   return s;
 }
@@ -2055,7 +2077,7 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst and three lens ghosts over a graded, connected "
       "motion smear rebuilt with subtract-8 decay and asymmetric diffusion; "
       "the flare dims over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0xEF28949Au;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0x347B72F6u;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2072,7 +2094,7 @@ SceneSubject subject_pulsar() {
       "S11 pulsar at 40 radii; the flare strobes on the S2 duty law "
       "(spin_phase < 0x4000, one quarter of each rotation); ENLARGED to "
       "28 px disc radius for legibility (was 4 px, read as 'a dot phasing')";
-  s.expect_seq_crc = 0x6F2A61FCu;  // pinned 2026-08-16 (28 px legibility scale;
+  s.expect_seq_crc = 0x69F44CA3u;  // pinned 2026-08-16 (28 px legibility scale;
   // §15 static: the strobe is the subject, no trail)
   return s;
 }
@@ -2088,7 +2110,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0x9E8D1F43u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0xE1CB9DA8u;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2103,7 +2125,7 @@ SceneSubject subject_whitedwarf() {
   s.note =
       "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
       "spin; five-pass box-smooth granulation; drifts with a long smear";
-  s.expect_seq_crc = 0xDBE7758Du;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0x227942AEu;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2118,7 +2140,7 @@ SceneSubject subject_orangegiant() {
   s.note =
       "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
       "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
-  s.expect_seq_crc = 0x407489A1u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0xF76001F9u;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2133,7 +2155,7 @@ SceneSubject subject_bluedwarf() {
   s.note =
       "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
       "smear grades white to deep blue along the tail";
-  s.expect_seq_crc = 0x6BDF3EE7u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0xEBCA7820u;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2148,7 +2170,7 @@ SceneSubject subject_multiple() {
   s.note =
       "S08 multiple system: two bodies of one class orbiting the barycentre, "
       "one revolution per loop, each with a curved trail (the §15 showpiece)";
-  s.expect_seq_crc = 0xD062BA51u;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0xCC14D30Au;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2163,7 +2185,7 @@ SceneSubject subject_infant() {
   s.note =
       "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
       "per-identity undertone; drifts with a purple smear";
-  s.expect_seq_crc = 0x18F1B23Cu;  // re-pinned 2026-08-18: v1.3 trail (kernel follows motion, hazier)
+  s.expect_seq_crc = 0x91F8EB1Au;  // re-pinned 2026-08-18: v1.3 trail + the resolve green-amplitude fix
   return s;
 }
 
@@ -2193,7 +2215,7 @@ SceneSubject subject_flareocclusion() {
       "S00 sun at 30 radii crossing behind the island; the effect-tag probe "
       "gates the flare and a 4-bit counter fades it 15 frames each way; "
       "halo_atmo variant (atmosphere = one bake parameter)";
-  s.expect_seq_crc = 0x4F9E90DEu;  // re-pinned 2026-08-17: the deep keel
+  s.expect_seq_crc = 0x47C98B90u;  // re-pinned 2026-08-17: the deep keel
   // changed the island silhouette the sun crosses behind (was 0x4382E5C8
   // after the kBandRows fix; flat island by the palette law - the flare
   // chain owns that subject's colour budget)
@@ -2258,7 +2280,7 @@ SceneSubject subject_creaturewalk() {
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x9680E223u;  // re-pinned 2026-08-18: stride back on the sim clock
+  s.expect_seq_crc = 0x6BEECDE5u;  // re-pinned 2026-08-18: stride back on the sim clock
   return s;
 }
 
@@ -2285,7 +2307,7 @@ SceneSubject subject_creaturepop() {
       "2.2 pop threshold removes the mesh and releases 18 detached rotating "
       "chunks, deterministically sampled from donor gibs, with integer "
       "ballistics, gravity, and damped ground bounce";
-  s.expect_seq_crc = 0x9E32172Cu;  // re-pinned 2026-08-18 after visible chunk repair
+  s.expect_seq_crc = 0x327DBB91u;  // re-pinned 2026-08-18 after visible chunk repair
   return s;
 }
 
