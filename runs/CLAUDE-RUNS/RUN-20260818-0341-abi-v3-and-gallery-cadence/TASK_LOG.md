@@ -524,3 +524,72 @@ Per-block fits landing steadily against the provisional 5CSEBA6U23I7:
 rather than given a fabricated number. Note a flaw in `run_block_fit.ps1`: the
 timeout is checked BETWEEN stages, so it detects an overrun after the fact
 instead of preempting it. The status means "exceeded budget", not "was killed".
+
+## Phase 5 complete: textures and the geometry front
+
+Two increments, one agent at a time, both reviewed here before pushing.
+
+### TEXTURE.CACHE and TEXTURE.TMU
+
+`zhao_texture_cache.sv` (four independent direct-mapped lanes, so a bilinear
+sample is ONE cache access), `zhao_texture_tmu.sv` + `zhao_texture_bilerp.sv`.
+Nearest is bilinear with both fractions forced to zero, so charter §26's "no
+second unrestricted sampler" is satisfied structurally rather than by promise.
+Integrated into RASTER.FRAGMENT's texel ports in both directions WITHOUT
+changing that interface, which is what it was designed for.
+
+Verified here: fast lane 111/111.
+
+The increment set a standard worth keeping: it listed five laws it CHOSE rather
+than found (bilinear weights and their rounding, half-texel bias, mip selection,
+row-major layout, colour expansions) and recorded each in both the RTL header
+and the contract. Charter §15 asks for Morton swizzle, but no Morton formula is
+ratified anywhere, so it used row-major and said so instead of inventing one and
+presenting it as law.
+
+It also reported a ledger target it did NOT meet, with the measurement: "1
+sample per clock" is actually 1 per 4 clocks direct, 1 per 6 CLUT.
+
+### GEOM.CLIP, GEOM.SETUP, GEOM.BINNER
+
+`zhao_geom_clip.sv`, `zhao_geom_setup.sv`, `zhao_geom_binner.sv` +
+`zhao_geom_arena.sv`, plus `zhao_geom_bin_pipe.sv` which drives the REAL
+rasterizer from real tile lists.
+
+Laws found rather than invented, each cited: the near plane is a whole-primitive
+rejection and not a clip (so CLIP needs no divider at all), the guard band is an
+upstream saturation in `to_screen_xy` rather than a clip plane, the scissor test
+is `raster_tri`'s own early return (extracted as `zref::render::scan_bbox` so
+the law has ONE site and the oracle calls it), and the edge function's third
+constant is free by the barycentric identity, which saves exactly 2 of 6
+multipliers.
+
+Three findings worth keeping:
+
+1. Wiring BINNER to the real rasterizer found a real bug immediately: the drain
+   port emitted the tile INDEX where EDGEWALK wants the tile's top-left PIXEL, a
+   silent 16x error no tile-indexed differential could ever see. That is the
+   argument for composing blocks rather than testing them alone, demonstrated
+   instead of asserted.
+2. One mutation was caught by NEITHER lane and the increment fixed the tests
+   instead of arguing. The §8 flooring-versus-truncation difference only shows
+   for negative non-multiples of 256, and 20,000 random triangles gave zero hits
+   (measured). So it constructed a witness: for triangle (0,0),(W,0),(0,W) the
+   value at pixel (0,0) is exactly W*(W-256), so W=255 gives -255. Directed case
+   plus controls at 254 and 256, plus a random lane that asserts it reaches the
+   window.
+3. A Verilog signedness trap cost a real bug: a comparison goes unsigned if
+   EITHER operand is, so a negative `kx` tested as positive and 29 tiles
+   vanished. Recorded in `GEOM.CLIP.md`'s Q-formats section so the next reader
+   does not repeat it.
+
+Ledger targets not met, measured and recorded as shortfalls rather than left
+unexamined: BINNER is 2.83 cycles per bin reference against a target of 1, and
+GEOM.SETUP's gradient half is not built because `rast.cpp` re-derives each row
+start with an independent `div_rhu_s128` (so a plane-setup block would not be
+bit-exact against the oracle) and RASTER.FRAGMENT interpolates nothing yet.
+
+Verified here: fast lane 122/122, exit 0. Format gate clean on 154 files.
+
+All blocks stay SPECIFIED. Simulated and formally proven is not synthesized, and
+neither is on-hardware.
