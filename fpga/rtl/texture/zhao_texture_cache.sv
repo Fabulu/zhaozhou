@@ -405,10 +405,13 @@ module zhao_texture_cache #(
         fill_beat_r <= {BEAT_W{1'b0}};
         fill_src_r  <= acc_src_id_i;  // the request carries the asker's id
         // `cache_misses` is NOT incremented here: it is counted at the first
-        // look, above, together with the hits. The two are equal by
-        // construction — a lane that missed at the first look gets exactly one
-        // fill — and counting them at one instant is what makes the pair
-        // timing-independent.
+        // look, above, together with the hits. Counting them at one instant is
+        // what makes the pair timing-independent, and it leaves the two equal:
+        // a lane that missed at the first look gets exactly one fill.
+        // ENFORCED-BY: tests/texture/texture_cache_directed.cpp:test_counters
+        // (`misses == fills.size()` asserted directly), and every batch of
+        // tests/texture/texture_cache_random.cpp, which diffs the whole
+        // fill-request sequence AND both counters against zref::TextureCache.
       end
 
       // ---- the request is taken -----------------------------------------
