@@ -446,6 +446,55 @@ void test_clear_sweep_stalls_the_stamp(Chain& ch) {
         got.strength[0]);
 }
 
+void test_two_resident_patches(Chain& ch) {
+  // Added 2026-08-19 after the mutation sweep: dropping the SLOT bits from
+  // SURFACE.SHEET's write address was caught by the sheet suites and NOT by
+  // this chain, because every earlier case here stamped one patch at a time
+  // and slot 0 is the address a dropped slot field decays to. Two patches
+  // resident at once, stamped differently, is the case that makes the slot
+  // field observable through the composition.
+  ch.reset();
+  const uint32_t pa = 0x0000'2C01, pb = 0x0000'2D01;
+  check(ch.request(sdev::kOpAcquire, pa).status == sdev::kStAllocated, "patch A allocates", 1, 1);
+  check(ch.request(sdev::kOpAcquire, pb).status == sdev::kStAllocated, "patch B allocates", 1, 1);
+
+  zref::render::SurfaceSheet ra, rb;
+  for (int k = 0; k < 3; ++k) {
+    StampCmd a;
+    a.handle = pa;
+    a.env = kEnv;
+    a.tag = static_cast<uint8_t>(11 + k);
+    a.strength = static_cast<uint16_t>(0x2000 + k * 0x1000);
+    a.radius = (4 + k) * kM;
+    a.tx = -8 * kM;
+    ch.run(a);
+    apply_reference(ra, kEnv, a);
+
+    StampCmd b;
+    b.handle = pb;
+    b.env = kEnv;
+    b.tag = static_cast<uint8_t>(90 + k);
+    b.strength = static_cast<uint16_t>(0xF000 - k * 0x1000);
+    b.radius = (12 - k) * kM;
+    b.tx = 10 * kM;
+    b.ring_width = 2 * kM;
+    ch.run(b);
+    apply_reference(rb, kEnv, b);
+  }
+
+  const zs::Sheet ga = ch.readback(pa);
+  const zs::Sheet gb = ch.readback(pb);
+  check(diff(ra, ga) == 0, "patch A's sheet holds only patch A's stamps", 0, diff(ra, ga));
+  check(diff(rb, gb) == 0, "patch B's sheet holds only patch B's stamps", 0, diff(rb, gb));
+  // and the two sheets are genuinely different, or the check above is vacuous
+  uint32_t differ = 0;
+  for (int t = 0; t < zs::kSheetTexels; ++t)
+    if (ga.tag[t] != gb.tag[t] || ga.strength[t] != gb.strength[t]) ++differ;
+  // Measured 352 differing texels with this fixture; the bound is set below it
+  // rather than at a round number picked before running anything.
+  check(differ > 300, "the two resident sheets really do hold different data", 1, differ);
+}
+
 void test_randomized_composition(Chain& ch) {
   ch.reset();
   ch.request(sdev::kOpAcquire, kPatch);
@@ -491,6 +540,7 @@ int main(int argc, char** argv) {
   test_persistence_across_frames(ch);
   test_overflow_writes_nothing(ch);
   test_clear_sweep_stalls_the_stamp(ch);
+  test_two_resident_patches(ch);
   test_randomized_composition(ch);
 
   std::printf("surface_stamp_chain: STAMP -> SHEET -> readback -> sample_sheet, all real RTL\n");
