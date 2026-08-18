@@ -1204,6 +1204,64 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
+# ---- Phase 4: the composed tile pipe (charter phase 4; the roadmap's "first --
+# ---- exact tile and triangle"). RASTER.EDGEWALK -> RASTER.TILESTORE ->
+# ---- RASTER.RESOLVE, instantiated together for the first time.
+# NOT a ledger block: design/blocks.yml's RASTER group has five entries and
+# none of them is "the composition", and registering one is a validator-gated
+# ledger edit. The rationale lives in the RTL header
+# (fpga/rtl/raster/zhao_raster_tile_pipe.sv), which is also where the three
+# laws this file owns -- the tile sequencing/ping-pong, the coverage->write
+# expansion, and the framebuffer pixel address -- are stated.
+# The oracle is the THREE oracles wired the same way: zref::EdgeWalk ->
+# zref::TileStore -> zref::TileResolve, each itself a view onto a frozen
+# reference, so "RTL == oracle" is "RTL == the three laws, composed".
+set(ZHAO_RASTER_TILE_PIPE_SV
+    ${ZHAO_ABI_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv)
+
+add_executable(test_raster_tile_pipe_directed raster/raster_tile_pipe_directed.cpp)
+target_link_libraries(test_raster_tile_pipe_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_tile_pipe_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_tile_pipe_directed
+  PREFIX Vzhao_raster_tile_pipe
+  TOP_MODULE zhao_raster_tile_pipe
+  SOURCES ${ZHAO_RASTER_TILE_PIPE_SV})
+add_test(NAME raster_tile_pipe_directed COMMAND test_raster_tile_pipe_directed)
+set_tests_properties(raster_tile_pipe_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_tile_pipe_random raster/raster_tile_pipe_random.cpp)
+target_link_libraries(test_raster_tile_pipe_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_tile_pipe_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_tile_pipe_random
+  PREFIX Vzhao_raster_tile_pipe
+  TOP_MODULE zhao_raster_tile_pipe
+  SOURCES ${ZHAO_RASTER_TILE_PIPE_SV})
+add_test(NAME raster_tile_pipe_random COMMAND test_raster_tile_pipe_random)
+set_tests_properties(raster_tile_pipe_random PROPERTIES LABELS "fast;nightly")
+# 16k-tile soak of the same binary (1.6k fast above)
+add_test(NAME raster_tile_pipe_random_nightly
+         COMMAND test_raster_tile_pipe_random --nightly)
+set_tests_properties(raster_tile_pipe_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_raster_tile_pipe
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_tile_pipe
+                 ${ZHAO_RASTER_TILE_PIPE_SV})
+set_tests_properties(lint_raster_tile_pipe PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # ---- W2.7: console shell + Duo marker demo (plan W2.7; the Phase-2 gate) ----
 # zhao_shell_top composes the whole Phase-2 machine; tb_zhao_shell adds the
 # behavioural SDRAM model (testbench-only, D2). The harness C++ is the HPS
