@@ -65,7 +65,15 @@ b5 = min(31, (b*31 + (B*16 +  8)) / 255)
 
 with `B` the 4×4 Bayer value and `/` a floor division on a non-negative numerator. The RTL computes exactly this: `zhao_raster_quant #(MAXQ, QW, AMP, RND)` instantiated three times as `(31,5,16,8)`, `(63,6,32,16)`, `(31,5,16,8)`.
 
-**`AMP` and `RND` are parameters, not a formula.** The oracle's header calls green out by hand — "its dither amplitude doubles (32 vs 16) while its quantization headroom halves" — and green's 32/16 is *not* what the stated threshold `t = (B+0.5)/16` of **one** quantization step would give. One output level is 255 numerator units for all three channels, so that threshold yields 16/8 for every channel; green's 32/16 dithers across **two** quantization steps. Deriving `AMP` from `MAXQ` would therefore be inventing a law that contradicts the oracle. The oracle is the law; these are its constants, named at the instantiation.
+**`AMP` and `RND` are parameters, not a formula — and green's value was CORRECTED on 2026-08-18.**
+
+This block originally shipped green at `AMP=32, RND=16`, matching the oracle as it then stood, and this contract recorded that green's 32/16 "is *not* what the stated threshold `t = (B+0.5)/16` of one quantization step would give", since one output level is 255 numerator units for all three channels and that threshold yields 16/8 everywhere. That observation was correct. The conclusion drawn from it — that the oracle must be the law and 32/16 must therefore be intended — was not.
+
+It was a defect in the oracle, and the owner called it: green's doubled amplitude broke **both** rails. At `g=0` it gave `(32B+16)/255 = 1` for `B >= 8`, so half of every pure-black tile resolved to `0x0020`, a green speckle on black. At `g=255` it gave 64, which wrapped the six-bit field; that half was patched on 2026-08-16 with a `min()` clamp, treating the symptom.
+
+`reference/src/zrender/resolve.cpp` now uses `(B*16 + 8)` for all three channels, which is exactly the threshold its own header states. Verified across every Bayer phase: black gives `{0}`, white gives `{63}`, and mid-tones still dither (`{31,32}` at `g=128`). The `min()` clamps remain as belt and braces rather than as load-bearing repairs. All three `zhao_raster_quant` instances now carry `AMP=16, RND=8`.
+
+The lesson worth keeping: this contract spotted the arithmetic discrepancy months before it was fixed and then reasoned itself out of acting on it, because the oracle was treated as definitionally correct. An oracle is the law for what the RTL must match; it is not proof that the law is right.
 
 **The dither matrix is transcribed, not generated.** `plan W3.5`, quoted in `resolve.cpp`'s own header: *"fixgen has NO dither table today (checked at W3.5 start), so the canonical 4×4 Bayer thresholds (B+0.5)/16 are defined HERE, once."* The RTL's `bayer4` function is that matrix and nothing else. There is no generated table to include and none was invented. See Notes for the stale ledger claim.
 
@@ -136,7 +144,7 @@ Default 1,200 + 300 tiles (CTest `fast`); `--nightly` 18,000 + 4,000. Failing ve
 
 | mutation | directed | random | formal |
 |---|---|---|---|
-| green amplitude 16/8 instead of 32/16 | RED | RED | — |
+| green amplitude 32/16 instead of 16/8 (the pre-2026-08-18 value) | RED | RED | — |
 | Bayer phase tile-local (tile origin dropped) | RED | RED | — |
 | Bayer matrix entry pair swapped | RED | RED | — |
 | CRC byte order flipped (high then low) | RED | RED | — |

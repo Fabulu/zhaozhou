@@ -177,7 +177,7 @@ constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9},
 uint16_t resolve_px(const uint8_t rgb[3], uint32_t x, uint32_t y) {
   const uint8_t b = kBayer4[y & 3][x & 3];
   const uint32_t r5 = (rgb[0] * 31 + b * 16 + 8) / 255;
-  const uint32_t g6 = (rgb[1] * 63 + b * 32 + 16) / 255;
+  const uint32_t g6 = (rgb[1] * 63 + b * 16 + 8) / 255;
   const uint32_t b5 = (rgb[2] * 31 + b * 16 + 8) / 255;
   return static_cast<uint16_t>((r5 > 31 ? 31 : r5) << 11 | ((g6 > 63 ? 63 : g6) << 5) |
                                (b5 > 31 ? 31 : b5));

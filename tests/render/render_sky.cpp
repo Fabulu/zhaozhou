@@ -435,10 +435,15 @@ uint8_t kBayerRow(uint32_t y, uint32_t x) {
 }
 
 // dithered-black 565 value (the resolve law on rgb 0,0,0)
+// Black through the dither law. Since 2026-08-18 every channel uses the same
+// amplitude (B*16 + 8), which is what resolve.cpp's stated threshold always
+// implied, so this is identically 0 at every Bayer phase. It is kept as an
+// expression rather than folded to 0x0000 because it states WHY black is black,
+// and it would move again if the law moved again.
 uint16_t oracle_black(uint32_t x, uint32_t y) {
   const uint8_t B = kBayerRow(y, x);
   const uint32_t r5 = (B * 16 + 8) / 255;
-  const uint32_t g6 = (B * 32 + 16) / 255;
+  const uint32_t g6 = (B * 16 + 8) / 255;
   const uint32_t b5 = (B * 16 + 8) / 255;
   return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
 }
@@ -515,7 +520,7 @@ void test_fallback_clear() {
       for (uint32_t x = 0; x < 384; ++x) {
         const uint8_t Bv = kB[y & 3][x & 3];
         const uint32_t r5 = (4u * 31 + Bv * 16 + 8) / 255;
-        const uint32_t g6 = (8u * 63 + Bv * 32 + 16) / 255;
+        const uint32_t g6 = (8u * 63 + Bv * 16 + 8) / 255;
         const uint32_t b5 = (16u * 31 + Bv * 16 + 8) / 255;
         const uint16_t w = static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
         if (rtest::px(canvas, 0, x, y, 384) != w) ++mism;
@@ -532,7 +537,7 @@ void test_fallback_clear() {
     check(r.status == zhao_abi::ZH_ABI_OK, "legal sky frame renders");
     const auto flat565 = [](uint8_t cr, uint8_t cg, uint8_t cb, uint8_t B) {
       const uint32_t r5 = (static_cast<uint32_t>(cr) * 31 + B * 16 + 8) / 255;
-      const uint32_t g6 = (static_cast<uint32_t>(cg) * 63 + B * 32 + 16) / 255;
+      const uint32_t g6 = (static_cast<uint32_t>(cg) * 63 + B * 16 + 8) / 255;
       const uint32_t b5 = (static_cast<uint32_t>(cb) * 31 + B * 16 + 8) / 255;
       return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
     };
@@ -655,7 +660,7 @@ void test_seam_continuity() {
     auto is_bg = [&](uint32_t x, uint32_t y) {
       const uint8_t B = kBayerRow(y, x);
       const uint32_t r5 = (static_cast<uint32_t>(set.background.r) * 31 + B * 16 + 8) / 255;
-      const uint32_t g6 = (static_cast<uint32_t>(set.background.g) * 63 + B * 32 + 16) / 255;
+      const uint32_t g6 = (static_cast<uint32_t>(set.background.g) * 63 + B * 16 + 8) / 255;
       const uint32_t b5 = (static_cast<uint32_t>(set.background.b) * 31 + B * 16 + 8) / 255;
       return rtest::px(canvas, 0, x, y, 384) == static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
     };

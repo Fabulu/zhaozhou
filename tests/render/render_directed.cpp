@@ -558,7 +558,7 @@ void test_resolve_and_crc() {
   //  B=2: (3968+40)/255 = 15 (15.72)
   //  B=10: (3968+168)/255 = 16 (16.21)
   const auto r5_of = [](uint8_t B) { return (128 * 31 + B * 16 + 8) / 255; };
-  const auto g6_of = [](uint8_t B) { return (128 * 63 + B * 32 + 16) / 255; };
+  const auto g6_of = [](uint8_t B) { return (128 * 63 + B * 16 + 8) / 255; };
   const uint8_t bayer0[4] = {0, 8, 2, 10};  // row 0 of the matrix
   for (int x = 0; x < 4; ++x) {
     const uint16_t pxv = static_cast<uint16_t>(out[x * 2] | (out[x * 2 + 1] << 8));

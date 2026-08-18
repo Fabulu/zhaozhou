@@ -44,7 +44,7 @@ constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9},
 uint16_t oracle_px(uint8_t r, uint8_t g, uint8_t b, uint32_t x, uint32_t y) {
   const uint8_t B = kBayer4[y & 3][x & 3];
   const uint32_t r5 = (static_cast<uint32_t>(r) * 31 + B * 16 + 8) / 255;
-  const uint32_t g6 = (static_cast<uint32_t>(g) * 63 + B * 32 + 16) / 255;
+  const uint32_t g6 = (static_cast<uint32_t>(g) * 63 + B * 16 + 8) / 255;
   const uint32_t b5 = (static_cast<uint32_t>(b) * 31 + B * 16 + 8) / 255;
   return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
 }

@@ -639,10 +639,14 @@ void test_black_rail() {
     else
       ++other;
   }
-  check(other == 0, "black rail: black resolves ONLY to 0x0000 or 0x0020", 0, other);
-  check(lifted == 128, "black rail: exactly half the pixels are lifted to green level 1 (KNOWN)",
-        128, lifted);
-  check(zero == 128, "black rail: the other half is exactly 0x0000", 128, zero);
+  // FIXED 2026-08-18. This used to pin `lifted == 128`: green dithered at
+  // double the amplitude resolve.cpp's own header states, so (32B+16)/255
+  // reached 1 at B >= 8 and half of every black tile came out 0x0020. The
+  // amplitude is now (B*16 + 8) on all three channels and black is black,
+  // through the whole composed path rather than only in the resolve block.
+  check(other == 0, "black rail: black resolves ONLY to 0x0000", 0, other);
+  check(lifted == 0, "black rail: no pixel is lifted to green level 1", 0, lifted);
+  check(zero == kPipePixels, "black rail: every pixel is exactly 0x0000", kPipePixels, zero);
 }
 
 // --------------------------------------------------------------------- 8 ---

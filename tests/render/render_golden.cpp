@@ -63,10 +63,19 @@ void check(bool ok, const char* what) {
 //     green dither overflowed the 6-bit field for g >= 252 at Bayer >= 8,
 //     wrapping full white to magenta on half the phases; the white spark
 //     particles in this frame carried the wrap (41C51A73 -> 47893F4C).
-constexpr uint32_t kGoldenCanvasCrc = 0xB1B5171Au;  // [w3.5-golden] re-pinned
+//   resolve GREEN AMPLITUDE corrected (2026-08-18, owner: "we do it right from
+//     the start"): green dithered at (B*32 + 16), double the threshold
+//     resolve.cpp's own header states. One quantization step is 255 numerator
+//     units for every channel, so (B+0.5)/16 of a step is (B*16 + 8)
+//     throughout. The doubled value lifted pure black to 0x0020 on half the
+//     Bayer phases and, at the other rail, produced the 64 that the 2026-08-16
+//     clamp was added to catch. Correcting the amplitude closes both, and this
+//     frame's blacks and near-blacks move with it
+//     (B1B5171A -> B36E44B2 / 2B73E8CB -> E514CD5C).
+constexpr uint32_t kGoldenCanvasCrc = 0xB36E44B2u;  // [w3.5-golden] re-pinned
 // 2026-08-16: kBandRows 8->16 (dcb32ff, the banding fix) moved both goldens;
-// the previous constants were 0x47893F4C / 0xC3ED350F.
-constexpr uint32_t kGoldenDisplayedCrc = 0x2B73E8CBu;  // [w3.5-golden] re-pinned
+// the constants before that were 0x47893F4C / 0xC3ED350F.
+constexpr uint32_t kGoldenDisplayedCrc = 0xE514CD5Cu;  // [w3.5-golden] re-pinned
 constexpr uint32_t kGoldenFieldOffCanvasCrc = 0x0u;    // filled below if 0
 
 // view-projections: simple perspective (w = z + 32 m) — view 1 shifts the

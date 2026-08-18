@@ -125,13 +125,16 @@ void test_rails() {
         if (r.rgb565[i] == 0x0020) ++lifted;
         if ((r.rgb565[i] >> 11) != 0 || (r.rgb565[i] & 0x1Fu) != 0) ++red_or_blue;
       }
-      check(off_law == 0, "black rail: every pixel is 0x0000 or 0x0020 and nothing else", 0,
-            off_law);
-      check(red_or_blue == 0, "black rail: red and blue are EXACTLY 0 (amplitude 16 has headroom)",
-            0, red_or_blue);
-      check(lifted == 128,
-            "black rail: green is lifted to 1 at exactly the 8 Bayer values >= 8 (128 px)", 128,
-            lifted);
+      // FIXED 2026-08-18 (owner: "we do it right from the start"). This used
+      // to pin `lifted == 128`: green's amplitude was 32, double the threshold
+      // resolve.cpp's own header states, so (32B+16)/255 reached 1 at B >= 8
+      // and half of every black tile came out 0x0020. The amplitude is now 16
+      // for all three channels, which is the documented law, and black is
+      // black. Red and blue never lifted, because 16 always had the headroom;
+      // that check is unchanged and is what made the asymmetry visible.
+      check(off_law == 0, "black rail: every pixel is exactly 0x0000", 0, off_law);
+      check(red_or_blue == 0, "black rail: red and blue are EXACTLY 0", 0, red_or_blue);
+      check(lifted == 0, "black rail: green is NOT lifted at any Bayer phase", 0, lifted);
     }
   }
 
@@ -370,18 +373,19 @@ void test_depth_stencil_ignored() {
 
 // --------------------------------------------------------------------------
 void test_crc_payloads() {
-  // (a) black is NOT an all-zero payload (see test_rails: green's amplitude
-  //     lifts half the tile to 0x0020), so the all-zero CRC is used as a
-  //     NEGATIVE anchor — it pins the finding, and it would still catch a
-  //     resolve that silently zeroed the tile.
+  // (a) black IS an all-zero payload, since 2026-08-18. This used to be a
+  //     NEGATIVE anchor pinning the opposite, because green's doubled dither
+  //     amplitude lifted half the tile to 0x0020; correcting the amplitude to
+  //     the documented 16 made black actually black. Kept as a POSITIVE anchor
+  //     now: it would catch the amplitude regressing, and it is the cheapest
+  //     possible statement of the property the owner asked for.
   uint64_t w[kPixels] = {};
   fill(w, pack_px(0, 0, 0));
   std::vector<uint8_t> zeros(kPixels * 2, 0);
   const uint32_t crc_zero = zhao_abi::zhao_crc32c(0, zeros.data(), zeros.size());
   const Resolved rz = diff(w, 0, 0, "crc_black", 0, false);
-  check(rz.crc32c != crc_zero,
-        "crc: a black tile is NOT 512 zero bytes (green's amplitude lifts half of it)", 1,
-        rz.crc32c != crc_zero ? 1 : 0);
+  check(rz.crc32c == crc_zero, "crc: a black tile IS 512 zero bytes", 1,
+        rz.crc32c == crc_zero ? 1 : 0);
   std::vector<uint8_t> blk(kPixels * 2, 0);
   for (int i = 0; i < kPixels; ++i) {
     blk[i * 2 + 0] = static_cast<uint8_t>(rz.rgb565[i] & 0xFF);

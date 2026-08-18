@@ -202,7 +202,7 @@ module zhao_raster_resolve (
   logic [5:0] c_g6;
   zhao_raster_quant #(.MAXQ(31), .QW(5), .AMP(16), .RND(8))
     u_qr (.v_i(px_r), .bayer_i(bay), .q_o(c_r5));
-  zhao_raster_quant #(.MAXQ(63), .QW(6), .AMP(32), .RND(16))
+  zhao_raster_quant #(.MAXQ(63), .QW(6), .AMP(16), .RND(8))
     u_qg (.v_i(px_g), .bayer_i(bay), .q_o(c_g6));
   zhao_raster_quant #(.MAXQ(31), .QW(5), .AMP(16), .RND(8))
     u_qb (.v_i(px_b), .bayer_i(bay), .q_o(c_b5));

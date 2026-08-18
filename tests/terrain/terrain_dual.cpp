@@ -403,7 +403,7 @@ zref::render::RenderResult render_with(const zr::TerrainPatch& patch,
 constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 uint16_t bg_px(uint32_t x, uint32_t y) {  // the dithered black background
   const uint8_t B = kBayer4[y & 3][x & 3];
-  const uint32_t r5 = (B * 16 + 8) / 255, g6 = (B * 32 + 16) / 255, b5 = (B * 16 + 8) / 255;
+  const uint32_t r5 = (B * 16 + 8) / 255, g6 = (B * 16 + 8) / 255, b5 = (B * 16 + 8) / 255;
   return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
 }
 

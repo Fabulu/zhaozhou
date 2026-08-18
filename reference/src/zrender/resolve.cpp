@@ -24,9 +24,26 @@
 // Channel quantization law (deterministic floor division — the resolve is a
 // formatting step, not an fx lane; no SatLedger involvement):
 //   r5 = min(31, (r*31 + (B*16 + 8)) / 255)
-//   g6 = min(63, (g*63 + (B*32 + 16)) / 255)
+//   g6 = min(63, (g*63 + (B*16 + 8)) / 255)
 //   b5 = min(31, (b*31 + (B*16 + 8)) / 255)
 // i.e. the dither threshold t = (B+0.5)/16 of one quantization step.
+//
+// DEFECT FIXED 2026-08-18 (owner decision: "we do it right from the start").
+// Green's amplitude was (B*32 + 16), DOUBLE the law stated one line above. One
+// quantization step is 255 numerator units for ALL THREE channels, because all
+// three divide by 255, so (B+0.5)/16 of a step is (B*16 + 8) everywhere. The
+// doubled amplitude broke BOTH rails:
+//   black  g=0:   (32B + 16)/255 = 1 for B >= 8, so half of every pure-black
+//                 tile resolved to 0x0020, a green speckle on black. Red and
+//                 blue, at the correct amplitude, top out at 248/255 and stay
+//                 exactly 0.
+//   white  g=255: (255*63 + 496)/255 = 64, which WRAPPED the 6-bit field. That
+//                 was patched on 2026-08-16 with a clamp, which treated the
+//                 symptom; the cause was always this amplitude.
+// At the documented (B*16 + 8) both rails are exact without help: black gives
+// {0} and white gives {63} across every Bayer phase, while mid-tones still
+// dither ({31,32} at g=128). The min() clamps stay as belt and braces, no
+// longer load-bearing.
 //
 // DEFECT FIXED 2026-08-16 (found by the star compositor, the first producer
 // of saturated pure white): the original law had NO clamp, arguing "worst
@@ -61,7 +78,7 @@ void resolve_rgb565(const uint8_t* rgb888, uint32_t width, uint32_t height, uint
       const uint8_t g = rgb888[i * 3 + 1];
       const uint8_t bl = rgb888[i * 3 + 2];
       const uint32_t r5q = (static_cast<uint32_t>(r) * 31 + b * 16 + 8) / 255;
-      const uint32_t g6q = (static_cast<uint32_t>(g) * 63 + b * 32 + 16) / 255;
+      const uint32_t g6q = (static_cast<uint32_t>(g) * 63 + b * 16 + 8) / 255;
       const uint32_t b5q = (static_cast<uint32_t>(bl) * 31 + b * 16 + 8) / 255;
       const uint32_t r5 = r5q > 31 ? 31 : r5q;
       const uint32_t g6 = g6q > 63 ? 63 : g6q;  // the white rail (see header)
