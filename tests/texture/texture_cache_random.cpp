@@ -2,7 +2,7 @@
 // against zref::TextureCache (design/contracts/TEXTURE.CACHE.md, ZH-061).
 //
 // Deterministic from fixed seeds (the PCG shape every other random lane in
-// this tree uses). Three lanes, because the block has three regimes a single
+// this tree uses). Four lanes, because the block has regimes a single
 // uniform stream would visit badly:
 //
 //   Lane A — HOT SET. Addresses drawn from a window only a few ways wide, so
@@ -20,8 +20,15 @@
 //     cache, with a per-batch page invalidate or full flush, which is the
 //     stars §1 palette-upload duty cycle.
 //
+//   Lane D — THE MID-FILL INVALIDATE. Deliberately NOT differential, and it
+//     says so at its own definition: the oracle has no fill beats, so it
+//     cannot express an invalidate landing while a line is on its way in.
+//     It checks the RTL law directly instead, over random lines, beats and
+//     fill timings. It exists because a last-beat-only directed case was
+//     GREEN against a mutation that deleted the kill entirely.
+//
 // Every returned halfword, the whole fill-request sequence and both counters
-// are compared on every access of every lane.
+// are compared on every access of lanes A, B and C.
 
 #include "texture_cache_dev.hpp"
 
@@ -56,6 +63,7 @@ uint32_t g_acc_all_hit = 0;   // accesses served with no fill at all
 uint32_t g_acc_all_miss = 0;  // quad accesses that fetched four lines
 uint32_t g_collisions = 0;    // a fill that displaced a DIFFERENT resident tag
 uint32_t g_invalidates = 0;
+uint32_t g_mid_fill_invalidates = 0;
 uint32_t g_hits = 0;
 uint32_t g_misses = 0;
 
@@ -260,6 +268,52 @@ void lane_c(CacDev* dev, int batches) {
   }
 }
 
+// ------------------------------------------------------------------ lane D --
+// THE MID-FILL INVALIDATE, randomized. This lane is NOT differential and says
+// so: zref::TextureCache has no beats, so it cannot express an invalidate that
+// lands while a line is on its way in. What it checks instead is the RTL law
+// directly — an invalidate on any beat BEFORE the last must kill the torn
+// line, so the same access has to fetch it a second time — over random lines,
+// random beats and random fill timings.
+//
+// It exists because a last-beat-only directed case was GREEN against a
+// mutation that deleted the kill entirely: on the last beat the invalidate
+// clears the valid bit in the same cycle the tag is written, so the guard is
+// invisible there. Every earlier beat is where it lives.
+void lane_d(int batches) {
+  uint32_t rng = 0x0D0DDu;
+  const int last_beat = kLineBytes / 2 - 1;
+  for (int b = 0; b < batches; ++b) {
+    CacDev d;
+    d.reset();
+    const uint32_t line =
+        kPoolBase + (next(&rng) % ((kPoolSize - 32u) / static_cast<uint32_t>(kLineBytes))) *
+                        static_cast<uint32_t>(kLineBytes);
+    const int beat = static_cast<int>(next(&rng) % static_cast<uint32_t>(last_beat));
+    const bool all = (next(&rng) & 1u) != 0u;
+    const int lat = static_cast<int>(next(&rng) % 4u);
+    const int gap = static_cast<int>(next(&rng) % 3u);
+    std::string err;
+    d.arm_invalidate_on_beat(beat, all, line);
+    CacAccess a;
+    a.en[0] = true;
+    a.addr[0] = line + (next(&rng) % static_cast<uint32_t>(kLineBytes));
+    const CacRun g1 = d.feed({a}, pool(), 0, 0, lat, gap, &err);
+    const CacRun g2 = d.feed({a}, pool(), 0, 0, lat, gap, &err);
+    if (!err.empty() || g1.fills.size() != 2 || !g2.fills.empty() ||
+        g1.out[0].data[0] != pool().halfword(a.addr[0])) {
+      ++g_failures;
+      if (g_saved < 6) {
+        ++g_saved;
+        std::printf("  D[%d]: line %08X beat %d: fills %zu then %zu (want 2 then 0)%s\n", b, line,
+                    beat, g1.fills.size(), g2.fills.size(),
+                    err.empty() ? "" : (" / " + err).c_str());
+      }
+    }
+    ++g_mid_fill_invalidates;
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -271,14 +325,18 @@ int main(int argc, char** argv) {
   const int a = nightly ? 3000 : 220;
   const int b = nightly ? 600 : 45;
   const int c = nightly ? 900 : 70;
+  const int d = nightly ? 700 : 60;
   lane_a(&dev, a);
   lane_b(&dev, b);
   lane_c(&dev, c);
+  lane_d(d);
 
   std::printf(
-      "texture_cache_random lane A: %d batches; lane B: %d; lane C: %d; "
-      "%u all-hit accesses, %u all-miss quads, %u evictions, %u invalidates\n",
-      a, b, c, g_acc_all_hit, g_acc_all_miss, g_collisions, g_invalidates);
+      "texture_cache_random lane A: %d batches; lane B: %d; lane C: %d; lane D: %d; "
+      "%u all-hit accesses, %u all-miss quads, %u evictions, %u invalidates, "
+      "%u mid-fill invalidates\n",
+      a, b, c, d, g_acc_all_hit, g_acc_all_miss, g_collisions, g_invalidates,
+      g_mid_fill_invalidates);
 
   check(g_failures == 0, "texture_cache_random: every access matches zref::TextureCache", 0,
         g_failures);
@@ -294,6 +352,8 @@ int main(int argc, char** argv) {
         g_collisions > 0 ? 1 : 0);
   check(g_invalidates > 0, "coverage: the stars-1 invalidate duty cycle ran", 1,
         g_invalidates > 0 ? 1 : 0);
+  check(g_mid_fill_invalidates > 0, "coverage: invalidates landed MID-FILL, on early beats", 1,
+        g_mid_fill_invalidates > 0 ? 1 : 0);
 
   return zhao::report_and_exit("texture_cache_random");
 }

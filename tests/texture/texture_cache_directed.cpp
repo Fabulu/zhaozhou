@@ -311,6 +311,33 @@ void test_invalidate_beats_a_fill() {
   const uint32_t line = kPoolBase + 0x340u;
   const int last_beat = kLineBytes / 2 - 1;
 
+  // THE CASE THE `fill_kill_r` GUARD ACTUALLY EXISTS FOR: an invalidate on an
+  // EARLY beat. Beats 0..b then carry pre-upload bytes and beats b+1..7
+  // post-upload ones, so the line in flight is TORN and must never become
+  // valid. The LAST beat is NOT this case and does not test the guard — the
+  // invalidate clears the valid bit in the same cycle the tag is written, so
+  // the line is dead either way. (A mutation removing the guard was GREEN
+  // against a last-beat-only test; this loop is the fix.)
+  for (int b = 0; b < last_beat; ++b) {
+    CacDev d;
+    d.reset();
+    std::string err;
+    d.arm_invalidate_on_beat(b, false, line);
+    const CacRun g1 = d.feed({one(line)}, pool(), 0, 0, 2, 0, &err);
+    const CacRun g2 = d.feed({one(line)}, pool(), 0, 0, 2, 0, &err);
+    check(err.empty(), "inv-vs-fill: no protocol violation on an early-beat invalidate", 1,
+          err.empty() ? 1 : 0);
+    check(g1.fills.size() == 2,
+          "inv-vs-fill: an invalidate on an EARLY beat kills the torn line, so the access "
+          "fetches it again",
+          2, g1.fills.size());
+    check(g2.fills.empty(), "inv-vs-fill: and the second, un-killed fill did stick", 1,
+          g2.fills.empty() ? 1 : 0);
+    check(g1.out[0].data[0] == pool().halfword(line),
+          "inv-vs-fill: the bytes finally served are the un-torn ones", pool().halfword(line),
+          g1.out[0].data[0]);
+  }
+
   // The LAST beat is the cycle the tag would be written; an invalidate in that
   // same cycle must win, so the line must NOT become valid. This is not
   // expressible against the oracle (which has no beats), so it asserts the
