@@ -379,10 +379,16 @@ class SetupDev {
 
 namespace zhao_geom {
 
-/** One drained (triangle × tile) job — RASTER.EDGEWALK's job port. */
+/**
+ * One drained (triangle × tile) job — RASTER.EDGEWALK's job port. The port
+ * carries the tile's top-left PIXEL (that block's unit); `tx`/`ty` here are
+ * the tile INDEX the driver derives from it, and the driver asserts the two
+ * agree so an index-for-pixel confusion cannot hide behind the conversion.
+ */
 struct BinJob {
   int32_t ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
-  int32_t tx = 0, ty = 0;
+  int32_t tx = 0, ty = 0;     // tile index
+  int32_t px = 0, py = 0;     // the raw port value: the tile's top-left pixel
   uint16_t src_id = 0;
 };
 
@@ -578,8 +584,12 @@ class BinnerDev {
           j.by = s21(top_.job_by_o);
           j.cx = s21(top_.job_cx_o);
           j.cy = s21(top_.job_cy_o);
-          j.tx = s12(top_.job_tile_x_o);
-          j.ty = s12(top_.job_tile_y_o);
+          j.px = s12(top_.job_tile_x_o);
+          j.py = s12(top_.job_tile_y_o);
+          if ((j.px & 15) != 0 || (j.py & 15) != 0)
+            add_err(err, "job_tile_x/y_o is not a 16-pixel tile origin");
+          j.tx = j.px >> 4;
+          j.ty = j.py >> 4;
           j.src_id = static_cast<uint16_t>(top_.job_src_id_o);
           jobs.push_back(j);
           held = false;

@@ -20,7 +20,9 @@
 //       `max_tile_list_depth` "is a high-water mark, not a count".
 //   fpga/rtl/raster/zhao_raster_edgewalk.sv — the CONSUMER. Its job port is
 //       `{6 × signed 21 vertex, signed 12 tile_x, signed 12 tile_y, src_id}`
-//       and this block's drain port is exactly that, field for field.
+//       and this block's drain port is exactly that, field for field —
+//       including the units: `job_tile_x_o` is the tile's top-left PIXEL, as
+//       that block's contract says, not a tile index.
 //
 // WHAT THIS BLOCK IS NOT: no clipping or scissoring (GEOM.CLIP hands over an
 // already-scissored scan box), no edge setup (GEOM.SETUP), no coverage
@@ -535,8 +537,17 @@ module zhao_geom_binner #(
   assign job_cx_o     = $signed(d_tri_r[104:84]);
   assign job_cy_o     = $signed(d_tri_r[125:105]);
   assign job_src_id_o = d_tri_r[141:126];
-  assign job_tile_x_o = $signed({6'd0, d_jx_r});
-  assign job_tile_y_o = $signed({6'd0, d_jy_r});
+  // RASTER.EDGEWALK's `job_tile_x_i` is "the tile origin — the top-left PIXEL
+  // of the 16×16 tile" (its contract, Input packet layouts), NOT a tile index.
+  // The drain port is that port field for field, so the index is scaled here,
+  // once, and the pixel is what leaves the block. (Emitting the index instead
+  // is a silent 16× error that no differential against a tile-indexed oracle
+  // would ever see; it took the zhao_geom_bin_pipe composition — a real
+  // rasterized picture — to catch it, which is exactly why that composition
+  // was built. tests/geometry/geom_binner_directed.cpp:test_pixel_origin now
+  // pins it directly.)
+  assign job_tile_x_o = $signed({2'd0, d_jx_r, 4'd0});
+  assign job_tile_y_o = $signed({2'd0, d_jy_r, 4'd0});
   assign drain_busy_o = (state >= D_TILE) && (state <= D_EMIT);
   assign drain_done_o = drain_done_r;
 

@@ -1571,6 +1571,47 @@ set_tests_properties(lint_geom_binner PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---- the composition: GEOM.BINNER -> zhao_raster_tile_pipe --------------
+# REAL TILE LISTS DRIVING THE REAL RASTERIZER. Not a ledger block (the
+# GEOMETRY group has no entry for "the composition", exactly as the RASTER
+# group has none for zhao_raster_tile_pipe); the rationale and the two laws it
+# owns live in fpga/rtl/geometry/zhao_geom_bin_pipe.sv. Verilator only: not in
+# fpga/files.qip, no Quartus fit, no capture, never on hardware.
+set(ZHAO_GEOM_BIN_PIPE_SV
+    ${ZHAO_ABI_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv)
+
+add_executable(test_geom_bin_pipe_directed geometry/geom_bin_pipe_directed.cpp)
+target_link_libraries(test_geom_bin_pipe_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_bin_pipe_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_bin_pipe_directed
+  PREFIX Vzhao_geom_bin_pipe
+  TOP_MODULE zhao_geom_bin_pipe
+  SOURCES ${ZHAO_GEOM_BIN_PIPE_SV})
+add_test(NAME geom_bin_pipe_directed COMMAND test_geom_bin_pipe_directed)
+set_tests_properties(geom_bin_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_geom_bin_pipe
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_bin_pipe
+                 ${ZHAO_GEOM_BIN_PIPE_SV})
+set_tests_properties(lint_geom_bin_pipe PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # formal: the arena bound the ledger names (tests/formal/
 # geom_binner_arena_bounds.sby), proved on zhao_geom_arena — the module
 # zhao_geom_binner instantiates, so the proof and the silicon are the same

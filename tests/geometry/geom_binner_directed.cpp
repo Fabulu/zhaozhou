@@ -186,6 +186,29 @@ void test_many_tiles() {
         bbox_tiles, static_cast<uint32_t>(got.size()));
 }
 
+// --------------------------------------------------------- the joint -------
+// The drain port is RASTER.EDGEWALK's job port, INCLUDING ITS UNITS: that
+// block's contract says `job_tile_x_i` is "the tile origin — the top-left
+// PIXEL of the 16x16 tile", not a tile index. Emitting the index instead is a
+// silent 16x error that no differential against a tile-indexed oracle can see;
+// it was found by the zhao_geom_bin_pipe composition rendering a picture in
+// the wrong place, and this pins it directly.
+void test_pixel_origin() {
+  const BinTri t = mk(82 * 256, 66 * 256, 94 * 256, 68 * 256, 84 * 256, 78 * 256, 3);
+  const std::vector<BinJob> got = run({t}, "pixel origin: drain");
+  check(got.size() == 1, "pixel origin: one job", 1, static_cast<uint32_t>(got.size()));
+  if (got.size() != 1) return;
+  check(got[0].px == 80 && got[0].py == 64,
+        "pixel origin: the port carries the tile's top-left PIXEL", 80u * 1000 + 64,
+        static_cast<uint32_t>(got[0].px) * 1000 + static_cast<uint32_t>(got[0].py));
+  // and the pixel the port names is one RASTER.EDGEWALK covers with the same
+  // triangle, which is the whole point of the units matching
+  const zref::EdgeWalk::Cov cov =
+      zref::EdgeWalk::tile({t.ax, t.ay, t.bx, t.by, t.cx, t.cy}, got[0].px, got[0].py);
+  check(cov.count > 0, "pixel origin: EDGEWALK covers the tile the port names", 1,
+        cov.count > 0 ? 1 : 0);
+}
+
 // ---------------------------------------------------------------- 2 --------
 void test_one_tile() {
   // wholly inside tile (5,4): pixels [80,96) x [64,80)
@@ -401,6 +424,7 @@ void test_throughput() {
 
 int main() {
   test_many_tiles();
+  test_pixel_origin();
   test_one_tile();
   test_order_and_fifo();
   test_chunk_boundary();
