@@ -1,0 +1,62 @@
+# raster_resolve_quant — the charter 8 RGB565 resolve quantizer, proved on
+# the module zhao_raster_resolve actually instantiates (RASTER.RESOLVE,
+# ZH-024). Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1 (the shipping quantizer IS min(MAXQ, floor(num/255)) on
+#           reference/src/zrender/resolve.cpp's numerator) and P2 (the result
+#           can never exceed its RGB565 field — the 2026-08-16 white rail)
+#           hold for every input, at BOTH shipping parameter sets. Both are
+#           unconditional over free inputs, so depth 2 is the whole property:
+#           the harness is combinational and its inputs are unconstrained.
+#   cover — the corners the comments claim are REACHABLE: both ends of both
+#           channels' ranges, full white landing on the rail, and — the
+#           load-bearing one — GREEN'S CLAMP ACTUALLY FIRING (the unclamped
+#           floor really is 64 and the rail caught it). Without that cover,
+#           a_no_wrap_six would also hold for a quantizer that simply never
+#           reaches the top, which is not the theorem claimed.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. The harness is
+# purely combinational (zhao_raster_quant is two always_comb blocks around
+# zhao_raster_div255's one; the only always_ff blocks hold the assert and
+# cover statements) and every input is unconstrained, so the reachable state
+# set is identical at every step. The input parametrisation is likewise total
+# rather than sampled: v is a u8 because the working colour channel IS a u8,
+# and B is 0..15 because the 4x4 Bayer matrix's entries are exactly 0..15 —
+# free (v, B) is all 4,096 inputs the block can ever be handed. There is no
+# horizon for a scope guard to assert.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The Bayer MATRIX itself (which of
+# the 16 values sits at which (y&3, x&3)), the absolute phase arithmetic, the
+# tile walk, the skid FIFO credit rule and the CRC are NOT proved here: they
+# are covered by the differential lanes against zref::TileResolve
+# (raster_resolve_directed's 1,024-tile channel sweep and 16-phase grid, plus
+# raster_resolve_random) and by the mutation evidence in the contract. What
+# IS proved is the arithmetic every one of those pixels flows through.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_raster_quant.sv and zhao_raster_div255.sv are self-contained, so
+# nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top raster_resolve_quant_fv zhao_raster_div255.sv zhao_raster_quant.sv raster_resolve_quant_fv.sv
+prep -top raster_resolve_quant_fv
+
+[files]
+../../fpga/rtl/raster/zhao_raster_div255.sv
+../../fpga/rtl/raster/zhao_raster_quant.sv
+raster_resolve_quant_fv.sv

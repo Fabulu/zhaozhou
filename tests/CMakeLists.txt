@@ -1131,6 +1131,79 @@ set_tests_properties(lint_raster_tilestore PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---- Phase 4: RASTER.RESOLVE (charter phase 4, ZH-024; law -----------------
+# ---- reference/src/zrender/resolve.cpp + spec/video_rules.md 3 +
+# ---- spec/capture_format.md 2; contract design/contracts/RASTER.RESOLVE.md) -
+# The oracle is zref::TileResolve, which is itself a view onto the FROZEN
+# software resolve (reference/src/zrender/resolve.cpp), so "RTL == oracle" is
+# literally "RTL == the charter 8 ordered dither" — no re-derived dither
+# anywhere in the test. The CRC likewise delegates to the one generated
+# CRC-32C machine, on both sides.
+set(ZHAO_RASTER_RESOLVE_SV
+    ${ZHAO_ABI_PKG}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv)
+
+add_executable(test_raster_resolve_directed raster/raster_resolve_directed.cpp)
+target_link_libraries(test_raster_resolve_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_resolve_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_resolve_directed
+  PREFIX Vzhao_raster_resolve
+  TOP_MODULE zhao_raster_resolve
+  SOURCES ${ZHAO_RASTER_RESOLVE_SV})
+add_test(NAME raster_resolve_directed COMMAND test_raster_resolve_directed)
+set_tests_properties(raster_resolve_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_resolve_random raster/raster_resolve_random.cpp)
+target_link_libraries(test_raster_resolve_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_resolve_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_resolve_random
+  PREFIX Vzhao_raster_resolve
+  TOP_MODULE zhao_raster_resolve
+  SOURCES ${ZHAO_RASTER_RESOLVE_SV})
+add_test(NAME raster_resolve_random COMMAND test_raster_resolve_random)
+set_tests_properties(raster_resolve_random PROPERTIES LABELS "fast;nightly")
+# 18k-tile soak of the same binary (1.2k fast above)
+add_test(NAME raster_resolve_random_nightly
+         COMMAND test_raster_resolve_random --nightly)
+set_tests_properties(raster_resolve_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_raster_resolve
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_resolve
+                 ${ZHAO_RASTER_RESOLVE_SV})
+set_tests_properties(lint_raster_resolve PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the RGB565 quantizer, proved on zhao_raster_quant — the module
+# zhao_raster_resolve instantiates 3x per pixel — at BOTH shipping parameter
+# sets. TWO tasks (bmc AND cover): the covers pin green's clamp actually
+# firing, without which the no-wrap theorem would also hold for a quantizer
+# that never reaches the rail. Reuses the hardened mem_formal_lane wrapper.
+if(ZHAO_SBY_BIN)
+  set(PROP "raster_resolve_quant")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/raster_resolve_quant_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/raster_resolve_quant_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_raster_resolve_quant
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_raster_resolve_quant PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
 # ---- W2.7: console shell + Duo marker demo (plan W2.7; the Phase-2 gate) ----
 # zhao_shell_top composes the whole Phase-2 machine; tb_zhao_shell adds the
 # behavioural SDRAM model (testbench-only, D2). The harness C++ is the HPS
