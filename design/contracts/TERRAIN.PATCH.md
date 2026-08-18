@@ -168,6 +168,14 @@ not an RTL decision.
 `zref::terrain::compose_vertex`, `zref::terrain::FieldList` and
 `zref::terrain::subpatch_mask` in `reference/include/zref/zref_terrain_patch.hpp`.
 
+**The ledger's `reference_model: zref::TerrainPatch` name was NOT used, and the
+reason is a collision rather than a preference:** `zref::render::TerrainPatch`
+already exists and is the patch RESOURCE (the cartridge page plus the in-memory
+layers), which is this block's INPUT, not its model. Binding the ledger name to
+an oracle would have made two different things share it. The oracle lives under
+`zref::terrain::` as functions instead, which is also where `column_query`,
+`bake_dig` and `apply_breach_law` already live.
+
 `compose_vertex` is a **thin view onto `zref::render::compose_lattice`**, and
 `terrain_patch_directed` proves it rather than asserting it: a real 33×33 dual
 patch with scars, a thin authored lip, void cells and TWO real earth programs

@@ -154,6 +154,11 @@ the two degrade counters. All three are pinned by directed cases.
 `zref::terrain::tessellate` in `reference/include/zref/zref_terrain_tess.hpp`,
 with `coarse_height` and `morph_height`.
 
+The ledger names it `zref::TerrainTess`; it lives under `zref::terrain::` as
+functions, alongside `column_query` whose triangulation it shares, and for the
+same reason TERRAIN.PATCH's does — that namespace is where the terrain laws
+already are.
+
 That header is **part view, part definition, and it says which at every line.**
 The cell split, the emit order, both windings, the void rule's `dual` guard, the
 scan order and the geomorph target are views onto ratified law. The level
