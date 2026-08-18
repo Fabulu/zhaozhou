@@ -736,12 +736,25 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
   L2.trail = &ctx.trails[1];
   int n_lights = 1;
   // ping-pong drift for the class portraits: +-150 px about the centre,
-  // ~9.7 px/frame. Each subject's ghost radius is its OWN visible radius, so
-  // a 42 px giant lays down a 42 px smear and a 14 px dwarf lays down 14.
-  // Overlapping ghosts cost no extra palette: the reconstruction plane is
-  // six-bit, so however many falloffs a pixel sums, one class-ramp lookup at
-  // the end still yields at most 64 trail colours. The per-sequence palette
-  // counter stays the arbiter and every star sequence clears 256.
+  // ~9.7 px/frame.
+  //
+  // ghost_r_px is the ghost's HALO radius, and trail_disc_radius derives the
+  // ghost's DISC from it as disc_r * ghost_r / halo_r. So setting it to
+  // halo_r_px is what makes a ghost exactly the sun's own silhouette: the
+  // derived disc comes back as disc_r_px on the nose. Each sun therefore
+  // smears at its own size, 12 px for the blue dwarf up to 28 for the orange
+  // giant, instead of the old uniform 9..15 band that made every sun leave
+  // the same footprint.
+  //
+  // Do NOT set this to disc_r_px. That reads as "the smear should be as big
+  // as the sun" and is wrong twice: it feeds the ratio, so the orange giant
+  // derived a 63 px ghost disc against a real 42 px one, and a ghost larger
+  // than its sun bleeds out in FRONT of it and above and below, which is not
+  // a trail. Ask for the halo and the disc follows.
+  //
+  // Overlap costs no palette: the reconstruction plane is six-bit, so however
+  // many falloffs a pixel sums, one class-ramp lookup still yields at most 64
+  // trail colours. The per-sequence palette counter stays the arbiter.
   const int32_t drift_x = 42 + static_cast<int32_t>((300 * ph) / (half - 1));
 
   switch (sub.celestial) {
@@ -769,7 +782,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 150;
       L.disc_r_px = 8;
       L.halo_r_px = 16;
-      L.ghost_r_px = 16;  // == halo_r_px: the footprint is the sun's own extent
+      L.ghost_r_px = 16;  // == halo_r_px (see the note above the drift)
       L.d_milli = 40LL * zref::star::kGamut[0].ray_milli;  // k = 40, burst12
       L.r_milli = zref::star::kGamut[0].ray_milli;
       L.flare_mode = 1;
@@ -836,7 +849,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 40;
       L.halo_r_px = 26;
-      L.ghost_r_px = 40;  // == disc_r_px
+      L.ghost_r_px = 26;  // == halo_r_px
       L.d_milli = 5LL * zref::star::kGamut[1].ray_milli / 2;
       L.r_milli = zref::star::kGamut[1].ray_milli;
       L.flare_mode = 0;
@@ -851,7 +864,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 16;
       L.halo_r_px = 14;
-      L.ghost_r_px = 16;  // == disc_r_px
+      L.ghost_r_px = 14;  // == halo_r_px
       L.d_milli = 2LL * zref::star::kGamut[2].ray_milli;
       L.r_milli = zref::star::kGamut[2].ray_milli;
       L.flare_mode = 0;
@@ -865,7 +878,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 42;
       L.halo_r_px = 28;
-      L.ghost_r_px = 42;  // == disc_r_px
+      L.ghost_r_px = 28;  // == halo_r_px
       L.d_milli = 5LL * zref::star::kGamut[4].ray_milli / 2;
       L.r_milli = zref::star::kGamut[4].ray_milli;
       L.flare_mode = 0;
@@ -879,7 +892,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 14;
       L.halo_r_px = 12;
-      L.ghost_r_px = 14;  // == disc_r_px
+      L.ghost_r_px = 12;  // == halo_r_px
       L.d_milli = 2LL * zref::star::kGamut[7].ray_milli;
       L.r_milli = zref::star::kGamut[7].ray_milli;
       L.flare_mode = 0;
@@ -899,7 +912,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120 - ((90 * si) >> 16);
       L.disc_r_px = 26;
       L.halo_r_px = 18;
-      L.ghost_r_px = 26;  // == disc_r_px
+      L.ghost_r_px = 18;  // == halo_r_px
       L.d_milli = 5LL * zref::star::kGamut[8].ray_milli / 2;
       L.r_milli = zref::star::kGamut[8].ray_milli;
       L.flare_mode = 0;
@@ -909,7 +922,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L2.y_px = 120 + ((90 * si) >> 16);
       L2.disc_r_px = 16;  // the companion: smaller, no flare of its own
       L2.halo_r_px = 12;
-      L2.ghost_r_px = 16;  // == the companion's own disc_r_px
+      L2.ghost_r_px = 12;  // == the companion's own halo_r_px
       L2.d_milli = 15LL * zref::star::kGamut[8].ray_milli;
       L2.r_milli = zref::star::kGamut[8].ray_milli;
       L2.flare_mode = 0;
@@ -924,7 +937,7 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.y_px = 120;
       L.disc_r_px = 24;
       L.halo_r_px = 18;
-      L.ghost_r_px = 24;  // == disc_r_px
+      L.ghost_r_px = 18;  // == halo_r_px
       L.d_milli = 2LL * zref::star::kGamut[9].ray_milli;
       L.r_milli = zref::star::kGamut[9].ray_milli;
       L.flare_mode = 0;
@@ -2042,7 +2055,7 @@ SceneSubject subject_noctisflare() {
       "S00 at 40 radii; burst and three lens ghosts over a graded, connected "
       "motion smear rebuilt with subtract-8 decay and asymmetric diffusion; "
       "the flare dims over the outer 16 px instead of cutting";
-  s.expect_seq_crc = 0xC1969F58u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0xC1969F58u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2075,7 +2088,7 @@ SceneSubject subject_bluegiant() {
   s.note =
       "S01 blue giant at 20 radii; large hot star with bright blue-white "
       "colour (30,50,63 VGA); compact corona and burst flare";
-  s.expect_seq_crc = 0x9C9104F1u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0xDF1E8E3Fu;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2090,7 +2103,7 @@ SceneSubject subject_whitedwarf() {
   s.note =
       "S02 white dwarf at 2 radii; compact white star (63,63,63) with rapid "
       "spin; five-pass box-smooth granulation; drifts with a long smear";
-  s.expect_seq_crc = 0xE72F8737u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0x8D95CAFEu;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2105,7 +2118,7 @@ SceneSubject subject_orangegiant() {
   s.note =
       "S04 orange giant at 2.5 radii; warm giant star with golden orange colour "
       "(63,55,32); drifts with a white-hot smear fading to orange at the fringe";
-  s.expect_seq_crc = 0x81CA0B78u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0x19C251D6u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2120,7 +2133,7 @@ SceneSubject subject_bluedwarf() {
   s.note =
       "S07 blue dwarf at 2 radii; compact deep blue star (10,20,63); the drift "
       "smear grades white to deep blue along the tail";
-  s.expect_seq_crc = 0xBCAC662Du;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0xAC7D9AD1u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2135,7 +2148,7 @@ SceneSubject subject_multiple() {
   s.note =
       "S08 multiple system: two bodies of one class orbiting the barycentre, "
       "one revolution per loop, each with a curved trail (the §15 showpiece)";
-  s.expect_seq_crc = 0x5F3E8CE8u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0x900490A7u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
@@ -2150,7 +2163,7 @@ SceneSubject subject_infant() {
   s.note =
       "S09 infant star at 2 radii; young protostar, purple (48,32,63), "
       "per-identity undertone; drifts with a purple smear";
-  s.expect_seq_crc = 0x432CE740u;  // re-pinned 2026-08-18: ghost radius == the sun
+  s.expect_seq_crc = 0x7E40EF46u;  // re-pinned 2026-08-18: ghost radius == halo_r_px
   return s;
 }
 
