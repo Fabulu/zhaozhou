@@ -52,13 +52,22 @@ using zhao_raster::Tri;
 
 namespace {
 
-RtlDev* g_dev = nullptr;
+// One Verilated model for the whole suite. A function-local static, NOT a
+// global pointer to main's local — the latter is a dangling-lifetime trap one
+// refactor away (cppcheck danglingLifetime, and it is right). Its destructor
+// never runs: zhao::report_and_exit finishes with _Exit, which is the
+// deliberate house workaround for the Verilator/libwinpthread exit deadlock.
+RtlDev& dev() {
+  static RtlDev d;
+  return d;
+}
+
 uint16_t g_src = 0;
 
 // The differential core: RTL vs rast.cpp for one triangle × one tile.
 TileCov diff(const Tri& t, int32_t tx, int32_t ty, const char* what, uint32_t stall_seed = 0) {
   std::string err;
-  const TileCov got = g_dev->run(t, tx, ty, ++g_src, stall_seed, &err);
+  const TileCov got = dev().run(t, tx, ty, ++g_src, stall_seed, &err);
   const TileCov want = oracle_cover(t, tx, ty);
   check(err.empty(), (std::string(what) + ": protocol clean").c_str(), 0, err.empty() ? 0 : 1);
   if (!err.empty()) std::printf("    protocol: %s\n", err.c_str());
@@ -212,7 +221,7 @@ void test_seam_sweep(bool vertical) {
     int cover[kTile][kTile] = {};
     for (int q = 0; q < 4; ++q) {
       std::string err;
-      const TileCov got = g_dev->run(quads[q], 0, 0, ++g_src, 0, &err);
+      const TileCov got = dev().run(quads[q], 0, 0, ++g_src, 0, &err);
       const TileCov want = oracle_cover(quads[q], 0, 0);
       if (!err.empty() || got != want) {
         char name[64];
@@ -288,11 +297,11 @@ void test_subpixel() {
 void test_backpressure() {
   const Tri t{px(1) + 77, px(2), px(14), px(3) + 200, px(5), px(15) + 40};
   std::string err;
-  const TileCov free_run = g_dev->run(t, 0, 0, 0x1234, 0, &err);
+  const TileCov free_run = dev().run(t, 0, 0, 0x1234, 0, &err);
   check(err.empty(), "backpressure: free-running protocol clean", 0, err.empty() ? 0 : 1);
   for (uint32_t seed = 1; seed <= 8; ++seed) {
     std::string e2;
-    const TileCov stalled = g_dev->run(t, 0, 0, 0x5678, seed * 2654435761u, &e2);
+    const TileCov stalled = dev().run(t, 0, 0, 0x5678, seed * 2654435761u, &e2);
     check(e2.empty(), "backpressure: stalled protocol clean", 0, e2.empty() ? 0 : 1);
     if (!e2.empty()) std::printf("    protocol: %s\n", e2.c_str());
     check(stalled == free_run, "backpressure: stalls do not change coverage", free_run.count,
@@ -328,9 +337,6 @@ void test_tile_origins() {
 }  // namespace
 
 int main() {
-  RtlDev dev;
-  g_dev = &dev;
-
   test_degenerate();
   test_windings();
   test_outside();

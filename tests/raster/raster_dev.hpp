@@ -40,21 +40,20 @@ inline TileCov oracle_cover(const Tri& t, int32_t tile_x, int32_t tile_y) {
 // backpressure lane; 0 means "always ready".
 class RtlDev {
  public:
-  RtlDev() : top_(new Vzhao_raster_edgewalk) { reset(); }
-  ~RtlDev() {
-    top_->final();
-    delete top_;
-  }
+  // The Verilated model is held BY VALUE, not new/delete: the device owns no
+  // dynamic resource, so there is no copy/ownership hazard to get wrong.
+  RtlDev() { reset(); }
+  ~RtlDev() { top_.final(); }
   RtlDev(const RtlDev&) = delete;
   RtlDev& operator=(const RtlDev&) = delete;
 
   void reset() {
-    top_->rst_n = 0;
+    top_.rst_n = 0;
     park();
-    top_->eval();
+    top_.eval();
     for (int i = 0; i < 2; ++i) edge();
-    top_->rst_n = 1;
-    top_->eval();
+    top_.rst_n = 1;
+    top_.eval();
   }
 
   // Runs one job. Any protocol violation is appended to *err (empty = clean).
@@ -64,28 +63,28 @@ class RtlDev {
     park();
 
     // ---- offer the job (ready/valid) ------------------------------------
-    top_->job_valid_i = 1;
-    top_->job_ax_i = mask21(t.ax);
-    top_->job_ay_i = mask21(t.ay);
-    top_->job_bx_i = mask21(t.bx);
-    top_->job_by_i = mask21(t.by);
-    top_->job_cx_i = mask21(t.cx);
-    top_->job_cy_i = mask21(t.cy);
-    top_->job_tile_x_i = mask12(tile_x);
-    top_->job_tile_y_i = mask12(tile_y);
-    top_->job_src_id_i = src_id;
-    top_->eval();
-    for (int guard = 0; !top_->job_ready_o; ++guard) {
+    top_.job_valid_i = 1;
+    top_.job_ax_i = mask21(t.ax);
+    top_.job_ay_i = mask21(t.ay);
+    top_.job_bx_i = mask21(t.bx);
+    top_.job_by_i = mask21(t.by);
+    top_.job_cx_i = mask21(t.cx);
+    top_.job_cy_i = mask21(t.cy);
+    top_.job_tile_x_i = mask12(tile_x);
+    top_.job_tile_y_i = mask12(tile_y);
+    top_.job_src_id_i = src_id;
+    top_.eval();
+    for (int guard = 0; !top_.job_ready_o; ++guard) {
       if (guard > 64) {
         add(err, "job_ready_o never asserted");
         return out;
       }
       edge();
-      top_->eval();
+      top_.eval();
     }
     edge();  // the accepting edge
     park();
-    top_->eval();
+    top_.eval();
 
     // ---- collect the coverage beats -------------------------------------
     uint32_t rng = stall_seed;
@@ -100,23 +99,23 @@ class RtlDev {
         return out;
       }
       const bool rdy = (stall_seed == 0) || ((next(&rng) & 3u) != 0u);
-      top_->cov_ready_i = rdy ? 1 : 0;
-      top_->eval();
+      top_.cov_ready_i = rdy ? 1 : 0;
+      top_.eval();
 
-      if (top_->cov_valid_o) {
-        const uint32_t pack = (static_cast<uint32_t>(top_->cov_last_o) << 20) |
-                              (static_cast<uint32_t>(top_->cov_row_o) << 16) |
-                              static_cast<uint32_t>(top_->cov_mask_o);
+      if (top_.cov_valid_o) {
+        const uint32_t pack = (static_cast<uint32_t>(top_.cov_last_o) << 20) |
+                              (static_cast<uint32_t>(top_.cov_row_o) << 16) |
+                              static_cast<uint32_t>(top_.cov_mask_o);
         if (held && pack != held_pack) add(err, "stalled beat changed while cov_ready_i was low");
-        if (top_->cov_src_id_o != src_id) add(err, "cov_src_id_o mismatch");
+        if (top_.cov_src_id_o != src_id) add(err, "cov_src_id_o mismatch");
         if (seen_last) add(err, "beat emitted after cov_last_o");
         if (rdy) {
-          const int r = top_->cov_row_o;
+          const int r = top_.cov_row_o;
           if (seen_row[r]) add(err, "row emitted twice");
           seen_row[r] = true;
-          out.row[r] = top_->cov_mask_o;
-          if (top_->cov_mask_o == 0) add(err, "empty row emitted");
-          if (top_->cov_last_o) seen_last = true;
+          out.row[r] = top_.cov_mask_o;
+          if (top_.cov_mask_o == 0) add(err, "empty row emitted");
+          if (top_.cov_last_o) seen_last = true;
           held = false;
         } else {
           held = true;
@@ -127,10 +126,14 @@ class RtlDev {
         held = false;
       }
 
+      // one job in flight: the block must not offer to take another until
+      // it is done, or a producer could restart it mid-walk
+      if (top_.job_ready_o) add(err, "job_ready_o asserted while a job is in flight");
+
       edge();
-      if (top_->job_done_o) {
-        out.count = top_->cov_count_o;
-        out.degenerate = top_->job_degenerate_o != 0;
+      if (top_.job_done_o) {
+        out.count = top_.cov_count_o;
+        out.degenerate = top_.job_degenerate_o != 0;
         break;
       }
     }
@@ -142,7 +145,7 @@ class RtlDev {
     if (popcount != out.count) add(err, "cov_count_o disagrees with the emitted masks");
 
     park();
-    top_->eval();
+    top_.eval();
     return out;
   }
 
@@ -159,19 +162,19 @@ class RtlDev {
   }
 
   void park() {
-    top_->job_valid_i = 0;
-    top_->cov_ready_i = 1;
+    top_.job_valid_i = 0;
+    top_.cov_ready_i = 1;
   }
   void edge() {
-    top_->clk = 0;
-    top_->eval();
-    top_->clk = 1;
-    top_->eval();
-    top_->clk = 0;
-    top_->eval();
+    top_.clk = 0;
+    top_.eval();
+    top_.clk = 1;
+    top_.eval();
+    top_.clk = 0;
+    top_.eval();
   }
 
-  Vzhao_raster_edgewalk* top_;
+  Vzhao_raster_edgewalk top_;
 };
 
 // Pretty-print a mismatch (charter §29-17 minimal failing vector body).
