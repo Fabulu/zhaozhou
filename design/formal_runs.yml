@@ -384,3 +384,67 @@ runs:
       zref::FragmentPipeline (raster_fragment_directed's 93 checks and
       raster_fragment_random's three lanes) and by the five-way mutation
       table in design/contracts/RASTER.FRAGMENT.md.
+
+  - property: tests/formal/texture_bilerp.sby
+    status: green
+    date: "2026-08-18"
+    commit: 186546e
+    lane: formal_texture_bilerp
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The bilinear channel of TEXTURE.TMU, proved on zhao_texture_bilerp —
+      the module zhao_texture_tmu instantiates 4× per filtered sample, once
+      per channel (R, G, B, A) — so the proof and the silicon are the same
+      bytes rather than a restatement. THE LAW IT PROVES IS DERIVED, NOT
+      CITED: no spec in this repository defines bilinear weights or their
+      rounding (searched: spec/qformats.md, spec/sky_and_beams.md §2,
+      spec/stars_and_flares.md §1, spec/terrain_rules.md §6.2, charter §15
+      and §20.1 — all name bilinear without stating it), and the derivation
+      from qformats §2 (unit8 = raw/256, so the complement 256−f REACHES
+      256), §3 (the single-rounding law, which REFUSES the textbook
+      two-lerps-then-a-lerp form) and §4 (rescale_u, round-half-up) is
+      written out in the RTL header and in design/contracts/TEXTURE.TMU.md.
+      FOUR laws: a_exact (the output IS (Σ t·w + 32768) >> 16 computed in a
+      32-bit lane — which catches all three named one-LSB traps at once, a
+      truncated rounding, swapped weights, and a /255 scale, and which —
+      because that wide law is compared against an EIGHT-BIT output — also
+      proves the weighted sum can never leave the field); a_wsum (PARTITION
+      OF UNITY, Σw = 65,536 exactly, true only because the unit8 complement
+      reaches 256 — a filter whose weights summed to 65,025, the /255
+      mistake, fails it immediately, and together with a_exact it gives the
+      flat-footprint theorem by arithmetic); a_corner (fu = fv = 0 is the
+      EXACT identity on t00, which is what lets FILTER_NEAREST force both
+      fractions to zero and take THE SAME datapath rather than a parallel
+      one — if this failed, every nearest sample in the machine would be
+      wrong); and a_in_field (no clamp anywhere in the module). TOTAL, not
+      bounded: the harness is combinational with unconstrained inputs, and
+      free (t00,t10,t01,t11,fu,fv) is EVERY input the block can be handed —
+      the four texel bytes are u8 because every charter §15 format decodes
+      to charter §8's 8-bit channel lanes, and the two fractions are u8
+      because they ARE unit8s — so all 2^48 inputs are covered with no
+      reachability gap. Recorded as an explicit "# SCOPE-TOTAL:" waiver
+      (V19) because there is no horizon for a scope guard to assert. SEVEN
+      covers, all reached: the load-bearing c_tie_up (an EXACT rounding tie
+      firing — without it a_exact also holds for a TRUNCATING filter on
+      every non-tie input, which is almost all of them) and its neighbour
+      c_tie_below; c_strictly_between (the filter lands strictly INSIDE its
+      own footprint, without which a_exact would also hold for a filter that
+      never left tap 0); both far corners; the 128/128 centre; and
+      c_unity_flat (a flat footprint at a non-trivial fraction filtering to
+      itself). MEASURED COST, recorded because it drove the property set:
+      bmc closes in 741 s on this kit (boolector, depth 2) — the CTest lane
+      carries TIMEOUT 3600 for that reason, not 2100. TWO REAL PROPERTIES
+      WERE WRITTEN, RUN AND REMOVED because they do not close here, and the
+      omission is named rather than assumed away: CONVEXITY (min(t) ≤ out ≤
+      max(t)) is genuinely nonlinear — the solver would need t_i·w_i ≤
+      max·w_i, which bit-blasting does not get cheaply — and MONOTONICITY in
+      fu needs a second DUT instance that doubles the multipliers; with
+      convexity added the task ran past 25 minutes twice without an answer.
+      NOT proved here: the address generation, the three wrap folds, the mip
+      selection and its base-4-repunit offset, the five format decodes, the
+      palette pass, the cache handshake, the mode-error rules and the state
+      machine; those are covered by the differential lanes against zref::Tmu
+      (texture_tmu_directed's 73 checks and texture_tmu_random's three
+      lanes) and by the nine-way mutation table in
+      design/contracts/TEXTURE.TMU.md.

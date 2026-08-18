@@ -1,0 +1,76 @@
+# texture_bilerp — the TEXTURE.TMU bilinear channel, proved on the module
+# zhao_texture_tmu actually instantiates four times per filtered sample
+# (ZH-027). Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1..P4: the output is EXACTLY the derived single-rounded weighted
+#           sum (which catches all three named one-LSB traps at once, and --
+#           because the wide law is compared against an EIGHT-BIT output --
+#           also proves the sum can never leave the field); the weights are a
+#           partition of unity, Sw = 65,536 exactly, which with P1 makes a
+#           flat footprint filter to itself; fu = fv = 0 is the exact identity
+#           on t00, which is what makes nearest sampling the same datapath;
+#           and the 8-bit field holds with no clamp in the datapath. All are
+#           unconditional over free inputs, so depth 2 is the whole property:
+#           the harness is combinational and its inputs are unconstrained.
+#
+# WHAT WAS WRITTEN, RUN, AND REMOVED because it does not close on this engine
+# -- recorded so nobody re-adds it blind. CONVEXITY (min(t) <= out <= max(t))
+# is genuinely nonlinear: the solver would have to know t_i*w_i <= max*w_i,
+# which bit-blasting does not get cheaply. MONOTONICITY in fu needs a second
+# DUT instance, doubling the multipliers. Measured here (boolector, depth 2,
+# 32-bit law lane): the exactness theorem alone closes in 339 s; with
+# convexity added the task ran past 25 minutes twice without an answer. The
+# gap is named in the harness header rather than assumed away.
+#
+#   cover — the corners the comments claim are REACHABLE: an EXACT ROUNDING
+#           TIE firing (without it, the exactness theorem also holds for a
+#           truncating filter on every non-tie input, which is almost all of
+#           them), the result landing strictly INSIDE its own footprint
+#           (without which P1 would also hold for a filter that never left
+#           tap 0), both far corners, the 128/128 centre, and a flat footprint
+#           at a non-trivial fraction filtering to itself.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. The harness is
+# purely combinational (zhao_texture_bilerp is three always_comb blocks; the
+# only always_ff blocks hold the assert and cover statements) and every input
+# is unconstrained, so the reachable state set is identical at every step. The
+# input parametrisation is likewise total rather than sampled: the four texel
+# bytes are u8 because every texture format in charter 15 decodes to charter
+# 8's 8-bit channel lanes, and the two fractions are u8 because they ARE
+# unit8s (spec/qformats.md 2). Free (t00,t10,t01,t11,fu,fv) is all 2^48 inputs
+# the block can ever be handed. There is no horizon for a scope guard.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The address generation, the three
+# wrap folds, the mip level selection and its base-4-repunit offset, the five
+# format decodes, the palette pass, the cache handshake, the mode-error rules
+# and the state machine are NOT proved here: they are covered by the
+# differential lanes against zref::Tmu (texture_tmu_directed and
+# texture_tmu_random) and by the mutation evidence in
+# design/contracts/TEXTURE.TMU.md. What IS proved is the arithmetic every
+# filtered texel in the machine flows through, four times over.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_texture_bilerp.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top texture_bilerp_fv zhao_texture_bilerp.sv texture_bilerp_fv.sv
+prep -top texture_bilerp_fv
+
+[files]
+../../fpga/rtl/texture/zhao_texture_bilerp.sv
+texture_bilerp_fv.sv
