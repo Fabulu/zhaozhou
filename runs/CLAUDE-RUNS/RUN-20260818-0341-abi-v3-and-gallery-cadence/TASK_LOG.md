@@ -368,3 +368,59 @@ Two stale ledger notes, documented in the contracts instead of edited:
   and no §7.3; the tenancy list is CHARTER §7.3.
 - RESOLVE "Dither matrix is a generated table (W3 fixgen), never hand-typed" -
   contradicts `resolve.cpp`, which records that fixgen has no such table.
+
+## Phase 4 core: the three blocks composed
+
+`85e41b1`, `b7eacec`, `95a5395` add `fpga/rtl/raster/zhao_raster_tile_pipe.sv`:
+EDGEWALK -> TILESTORE -> RESOLVE wired together, so a triangle now becomes
+RGB565 framebuffer words with a deterministic tile CRC. Until this, the three
+blocks had never been instantiated together and each contract said so.
+
+Verified here, not taken from the agent's report:
+- Full fast lane run on the final tree.
+- Ping-pong MEASURED by re-running the directed test myself: 16 tiles
+  back-to-back is 5011 cycles (313/tile, max 2 in flight); the same 16 fed
+  serially is 8896 cycles (556/tile, max 1). Identical pictures and CRCs both
+  ways. That 1.78x is the whole justification for the tile store being
+  ping-pong, and it is now a number instead of an argument.
+
+The agent found and fixed a real hole in its own work: the framebuffer-address
+mutation was caught by the directed lane only, because the random lane had no
+address check at all. It moved the law into a shared helper, wired it into both
+lanes, and re-ran. A green random lane there had been meaningless.
+
+It also hit the stale-rebuild hazard and did not paper over it: a batched
+mutation sweep produced IDENTICAL failure lists for three different mutations
+because ninja skipped re-verilation after same-tick edits, so mutated RTL ran
+against a stale model. It redid the entire sweep one mutation per invocation,
+asserting the relink each time. Worth knowing for anyone scripting mutation
+runs on this toolchain.
+
+Deliberately not done, and I agree with each: no ledger entry invented for the
+composition (the RASTER group has five blocks and none is "the composition";
+registering one is a validator-gated edit), and no formal property, because the
+composition's real laws are dataflow over a 256x64 store and a 259-cycle
+stream, far beyond shallow BMC, while the shallow ones would restate the
+`assign` they claim to prove. The two arithmetic cores worth proving already
+have proofs on the exact modules this block instantiates.
+
+## Synthesis: per-block characterization is producing numbers
+
+`96b627d` adds `tools/quartus/run_block_fit.ps1`. First placed-and-routed
+results against the provisional 5CSEBA6U23I7:
+
+    zhao_video_mode    70 ALMs,  58 registers, 0 M10K
+    zhao_audio_fifo   222 ALMs, 292 registers, 7 M10K
+    zhao_debug_crc    158 ALMs
+
+Two traps cost real time and are commented in the script so they cannot cost it
+twice:
+- `Start-Process -PassThru` with `-NoNewWindow` and redirected streams returns
+  a Process whose `ExitCode` reads back EMPTY. Every stage looked like a
+  failure while Quartus was reporting "0 errors, implemented 127 logic cells".
+  Caught only by reading the tool's own log instead of believing the script.
+  Direct invocation plus `$LASTEXITCODE` is authoritative.
+- StrictMode faults on the resource keys a failed fit never gains.
+
+Still not hardware. Provisional device, virtual I/O, no board, and a per-block
+fit says nothing about the composed machine's routing or timing closure.
