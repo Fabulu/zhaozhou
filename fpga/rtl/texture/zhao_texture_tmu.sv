@@ -442,12 +442,28 @@ module zhao_texture_tmu (
 
 
   // ======================================================= the request =====
-  // Four states and no pipeline. A sample is one texel access (four lanes for
+  // Four states and NO PIPELINE. A sample is one texel access (four lanes for
   // bilinear, one for nearest) plus, for the CLUT formats only, a second
   // access for the palette entry — the index is not known until the first one
-  // answers, so the two are unavoidably serial. What this costs is stated
-  // rather than papered over in the contract's Target throughput section: it
-  // is a SAMPLE PER REQUEST, not a sample per clock.
+  // answers, so the two are unavoidably serial.
+  //
+  // WHAT THIS COSTS, measured rather than papered over. Against a cache that
+  // answers in one cycle: accept in cycle N, sample retired in N+3 for direct
+  // colour and N+5 for CLUT, and the next request is accepted the cycle after
+  // that, because `req_ready_o` is `st_r == ST_IDLE` and nothing overlaps. So
+  // the sustained rate is ONE SAMPLE PER FOUR CLOCKS (direct) or PER SIX
+  // (CLUT), not the ledger's "1 sample per clock". The half of that line this
+  // block DOES meet is "bilinear = 1 request": four taps are one request beat
+  // and one cache access, never four serialised lookups.
+  //
+  // Reaching one per clock needs a pipelined address → fetch → filter chain
+  // with a separate palette stage. That is a change to THIS FILE only — the
+  // ports, the mode word and zref::Tmu are all unaffected — and it is stated
+  // in design/contracts/TEXTURE.TMU.md's Target throughput section rather
+  // than left for a reader to discover.
+  // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp:test_backpressure_and_latency
+  // (the worst accept-to-retire is measured and asserted ≤ 16, the ledger's
+  // `variable_bounded:16`).
   logic [1:0]   st_r;
   logic         sent_r;      // this state's cache request has been taken
   logic [127:0] q_addr_r;
