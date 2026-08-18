@@ -1694,6 +1694,51 @@ verilate(test_terrain_tess_normals
 add_test(NAME terrain_tess_normals COMMAND test_terrain_tess_normals)
 set_tests_properties(terrain_tess_normals PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---------------------------------------------------------------------------
+# TERRAIN.PROJECT (phase 6, ZH-051)
+#
+# The oracle is the SHIPPED function: reference/src/zrender/rast.cpp's
+# project_vertex, which every golden capture in this tree was drawn with. No
+# model of it is written anywhere in this lane, so "RTL == oracle" is "RTL ==
+# the pictures the project already ships". White-box include of
+# reference/src is what lets the test call it.
+set(ZHAO_TERRAIN_PROJECT_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_project.sv)
+
+add_executable(test_terrain_project_directed terrain/terrain_project_directed.cpp)
+target_link_libraries(test_terrain_project_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_project_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_terrain_project_directed
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_project_directed COMMAND test_terrain_project_directed)
+set_tests_properties(terrain_project_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_project_random terrain/terrain_project_random.cpp)
+target_link_libraries(test_terrain_project_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_project_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_project_random
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_project_random COMMAND test_terrain_project_random)
+set_tests_properties(terrain_project_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME terrain_project_random_nightly COMMAND test_terrain_project_random --nightly)
+set_tests_properties(terrain_project_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_terrain_project
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_project
+                 ${ZHAO_TERRAIN_PROJECT_SV})
+set_tests_properties(lint_terrain_project PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # per-module lint (charter 21 step 8)
 add_test(NAME lint_geom_clip
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

@@ -1403,7 +1403,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 projected vertex per clock
-    reference_model: zref::TerrainProject
+    reference_model: zref::render::project_vertex
     tests:
       directed: tests/terrain/terrain_project_directed.cpp
       random: tests/terrain/terrain_project_random.cpp
