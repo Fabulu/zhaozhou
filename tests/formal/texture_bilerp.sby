@@ -19,9 +19,11 @@
 # is genuinely nonlinear: the solver would have to know t_i*w_i <= max*w_i,
 # which bit-blasting does not get cheaply. MONOTONICITY in fu needs a second
 # DUT instance, doubling the multipliers. Measured here (boolector, depth 2,
-# 32-bit law lane): the exactness theorem alone closes in 339 s; with
-# convexity added the task ran past 25 minutes twice without an answer. The
-# gap is named in the harness header rather than assumed away.
+# 32-bit law lane): the exactness theorem alone closes in 339 s, the four
+# shipped laws in 741 s standalone and 1,264 s as the CTest lane -- which is
+# why that lane carries TIMEOUT 3600 rather than the 2100 the other formal
+# lanes use. With convexity added the task ran past 25 minutes twice without
+# an answer. The gap is named in the harness header rather than assumed away.
 #
 #   cover — the corners the comments claim are REACHABLE: an EXACT ROUNDING
 #           TIE firing (without it, the exactness theorem also holds for a

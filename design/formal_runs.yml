@@ -433,8 +433,9 @@ runs:
       never left tap 0); both far corners; the 128/128 centre; and
       c_unity_flat (a flat footprint at a non-trivial fraction filtering to
       itself). MEASURED COST, recorded because it drove the property set:
-      bmc closes in 741 s on this kit (boolector, depth 2) — the CTest lane
-      carries TIMEOUT 3600 for that reason, not 2100. TWO REAL PROPERTIES
+      bmc closes in 741 s standalone on this kit (boolector, depth 2) and the
+      whole lane in 1,264 s under CTest — which is why it carries TIMEOUT
+      3600 and not the 2100 the other formal lanes use. TWO REAL PROPERTIES
       WERE WRITTEN, RUN AND REMOVED because they do not close here, and the
       omission is named rather than assumed away: CONVEXITY (min(t) ≤ out ≤
       max(t)) is genuinely nonlinear — the solver would need t_i·w_i ≤
