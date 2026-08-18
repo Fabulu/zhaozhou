@@ -11,8 +11,8 @@ set_global_assignment -name SDC_FILE zhao_shell_fit.sdc
 # parser; the shell cone uses the guarded synthesizable ABI declarations.
 set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 
-# Reproducible single-seed characterization settings supported by Quartus 17.0.2.
-set_global_assignment -name NUM_PARALLEL_PROCESSORS 1
+# Reproducible fixed-seed characterization settings supported by Quartus 17.0.2.
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
 set_global_assignment -name SEED 1
 set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
