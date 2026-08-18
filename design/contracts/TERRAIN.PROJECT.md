@@ -172,10 +172,15 @@ cost a real bug in `GEOM.BINNER` and made 29 tiles vanish (see
 
 ## Latency (fixed or variable)
 
-**Fixed, 37 cycles at full readiness**, per vertex: 1 sequencer, 1 row sums, 1
+**Fixed, 38 cycles at full readiness**, per vertex: 1 sequencer, 1 row sums, 1
 rescale, 1 divider setup, 31 restoring steps, 1 quotient assembly, 1 `fx_mad`,
-1 `to_screen_xy` + reassembly. The triangle's own latency is that plus the two
+1 `to_screen_xy`, 1 reassembly. The triangle's own latency is that plus the two
 clocks its other vertices take.
+
+**MEASURED, not counted off the source.** `terrain_project_directed` §11 pushes
+128 triangles back to back and reports **422 cycles**. The steady state is 3
+cycles per triangle (384), so the fill is 422 − 384 = **38**, which is the stage
+count above. A latency claim that only adds up in prose is not a latency claim.
 
 The ledger says `variable`, which a fixed latency satisfies; this contract
 records the stronger fact. Under backpressure the *elapsed* time grows because
