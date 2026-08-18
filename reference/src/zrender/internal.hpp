@@ -156,6 +156,25 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A, const Scre
                 const ScreenV& C, uint8_t r, uint8_t g, uint8_t b, const TriMode& m,
                 const TextureSpan* tex = nullptr);
 
+/**
+ * The §8 SCAN BOX: the whole-pixel range whose CENTRES can lie in triangle
+ * ABC, scissored to `vp`. `empty` is exactly raster_tri's own early return.
+ *
+ * Extracted from raster_tri (2026-08-18, GEOM.CLIP increment) so the bbox law
+ * has ONE site: GEOM.CLIP's viewport test is the same decision the software
+ * raster makes, and `zref::Clip` reaches it by calling this rather than by
+ * restating `(v_min + 127) >> 8`. Pure extract-function — raster_tri calls it
+ * and the arithmetic is byte-identical; the golden capture CRCs are the proof.
+ * Permutation-invariant in A/B/C (it is a min/max over the three), so it does
+ * not matter whether it is asked before or after the winding flip.
+ */
+struct ScanBox {
+  int32_t min_x = 0, max_x = 0, min_y = 0, max_y = 0;
+  bool empty = true;  // min_x > max_x || min_y > max_y — nothing to scan
+};
+
+ScanBox scan_bbox(const ScreenV& A, const ScreenV& B, const ScreenV& C, const Viewport& vp);
+
 // ---- shared constants -------------------------------------------------------
 
 // Flat-shading light: unit (1,2,1)/sqrt(6), hand-normalized to Q16.16

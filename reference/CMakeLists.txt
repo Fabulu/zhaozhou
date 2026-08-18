@@ -19,6 +19,12 @@
 #     zref::unit_mul rather than restating it) and zref::EarlyZ (zrender/
 #     earlyz.cpp — RASTER.EARLYZ's conservative hierarchical-Z floor and the
 #     coarse transparent-depth bins).
+# Phase 5 geometry front adds zref::Clip + zref::Setup + zref::Binner
+#     (zrender/geom.cpp — GEOM.CLIP's near-plane/winding/scissor verdict,
+#     GEOM.SETUP's affine decomposition of orient(), and GEOM.BINNER's tile
+#     enumeration; the bbox and the 2A cross product are CALLED from rast.cpp,
+#     not restated — zref::render::scan_bbox was extracted from raster_tri for
+#     exactly that reason).
 # World-identity wave adds the creature/character reference core
 #     (zcreature/: ring meshlets, pose bank, skinning, alive laws, LOD).
 
@@ -33,6 +39,7 @@ add_library(zhao_zref STATIC
   src/zrender/render_frame.cpp
   src/zrender/rast.cpp
   src/zrender/edgewalk.cpp
+  src/zrender/geom.cpp
   src/zrender/terrain.cpp
   src/zrender/sprites.cpp
   src/zrender/resolve.cpp

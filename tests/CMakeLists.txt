@@ -1448,6 +1448,153 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
+# ---- Phase 5: the GEOMETRY FRONT — GEOM.CLIP / GEOM.SETUP / GEOM.BINNER ----
+# ---- (charter phase 5 build order 14/15 "screen-space triangle setup in
+# ---- FPGA" + "tile binner in FPGA", and item 3 "chunked tile lists and safe
+# ---- overflow"; ZH-056 / ZH-057 / ZH-058 / ZH-026). Law spec/qformats.md 8;
+# ---- contracts design/contracts/GEOM.CLIP.md / GEOM.SETUP.md / GEOM.BINNER.md
+# The oracles are zref::Clip, zref::Setup and zref::Binner. None of them
+# restates a law rast.cpp already owns: the 2A cross product is
+# zref::EdgeWalk::area2 (which IS rast.cpp's orient()), and the scissored
+# pixel-centre scan box is zref::render::scan_bbox — the very function
+# raster_tri calls, EXTRACTED from it for this increment so the bbox law has
+# one site. The binning law itself (grid anchor, enumeration order, the affine
+# corner trivial-reject, the overflow wall) is CHOSEN, not found; it is argued
+# in fpga/rtl/geometry/zhao_geom_binner.sv and recorded in the contract.
+set(ZHAO_GEOM_CLIP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clip.sv)
+set(ZHAO_GEOM_SETUP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_setup.sv)
+set(ZHAO_GEOM_BINNER_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv)
+
+add_executable(test_geom_clip_directed geometry/geom_clip_directed.cpp)
+target_link_libraries(test_geom_clip_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_clip_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_clip_directed
+  PREFIX Vzhao_geom_clip
+  TOP_MODULE zhao_geom_clip
+  SOURCES ${ZHAO_GEOM_CLIP_SV})
+add_test(NAME geom_clip_directed COMMAND test_geom_clip_directed)
+set_tests_properties(geom_clip_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_geom_clip_random geometry/geom_clip_random.cpp)
+target_link_libraries(test_geom_clip_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_clip_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_clip_random
+  PREFIX Vzhao_geom_clip
+  TOP_MODULE zhao_geom_clip
+  SOURCES ${ZHAO_GEOM_CLIP_SV})
+add_test(NAME geom_clip_random COMMAND test_geom_clip_random)
+set_tests_properties(geom_clip_random PROPERTIES LABELS "fast;nightly")
+# 15x soak of the same binary
+add_test(NAME geom_clip_random_nightly COMMAND test_geom_clip_random --nightly)
+set_tests_properties(geom_clip_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_geom_setup_directed geometry/geom_setup_directed.cpp)
+target_link_libraries(test_geom_setup_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_setup_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_setup_directed
+  PREFIX Vzhao_geom_setup
+  TOP_MODULE zhao_geom_setup
+  SOURCES ${ZHAO_GEOM_SETUP_SV})
+add_test(NAME geom_setup_directed COMMAND test_geom_setup_directed)
+set_tests_properties(geom_setup_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_geom_setup_random geometry/geom_setup_random.cpp)
+target_link_libraries(test_geom_setup_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_setup_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_setup_random
+  PREFIX Vzhao_geom_setup
+  TOP_MODULE zhao_geom_setup
+  SOURCES ${ZHAO_GEOM_SETUP_SV})
+add_test(NAME geom_setup_random COMMAND test_geom_setup_random)
+set_tests_properties(geom_setup_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME geom_setup_random_nightly COMMAND test_geom_setup_random --nightly)
+set_tests_properties(geom_setup_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_geom_binner_directed geometry/geom_binner_directed.cpp)
+target_link_libraries(test_geom_binner_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_binner_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_binner_directed
+  PREFIX Vzhao_geom_binner
+  TOP_MODULE zhao_geom_binner
+  SOURCES ${ZHAO_GEOM_BINNER_SV})
+add_test(NAME geom_binner_directed COMMAND test_geom_binner_directed)
+set_tests_properties(geom_binner_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_geom_binner_random geometry/geom_binner_random.cpp)
+target_link_libraries(test_geom_binner_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_binner_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_geom_binner_random
+  PREFIX Vzhao_geom_binner
+  TOP_MODULE zhao_geom_binner
+  SOURCES ${ZHAO_GEOM_BINNER_SV})
+add_test(NAME geom_binner_random COMMAND test_geom_binner_random)
+set_tests_properties(geom_binner_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_binner_random_nightly COMMAND test_geom_binner_random --nightly)
+set_tests_properties(geom_binner_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter 21 step 8)
+add_test(NAME lint_geom_clip
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_clip
+                 ${ZHAO_GEOM_CLIP_SV})
+set_tests_properties(lint_geom_clip PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_geom_setup
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_setup
+                 ${ZHAO_GEOM_SETUP_SV})
+set_tests_properties(lint_geom_setup PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_geom_binner
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_binner
+                 ${ZHAO_GEOM_BINNER_SV})
+set_tests_properties(lint_geom_binner PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the arena bound the ledger names (tests/formal/
+# geom_binner_arena_bounds.sby), proved on zhao_geom_arena — the module
+# zhao_geom_binner instantiates, so the proof and the silicon are the same
+# bytes. TWO tasks (bmc AND cover): the covers pin the arena actually FILLING
+# and the wall actually REFUSING, without which the bound would also hold for
+# an allocator that never grants anything.
+if(ZHAO_SBY_BIN)
+  set(PROP "geom_binner_arena_bounds")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/geom_binner_arena_bounds_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/geom_binner_arena_bounds_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_geom_binner_arena_bounds
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_geom_binner_arena_bounds PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
 # ---- Phase 4/5: the composed tile pipe (charter phase 4; the roadmap's -----
 # ---- "first exact tile and triangle"). RASTER.EDGEWALK -> RASTER.EARLYZ ->
 # ---- RASTER.FRAGMENT -> RASTER.TILESTORE -> RASTER.RESOLVE, the whole

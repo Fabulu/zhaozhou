@@ -1,0 +1,161 @@
+// zref_geom.hpp — the GEOM.CLIP / GEOM.SETUP / GEOM.BINNER reference models
+// (phase 5, ZH-056 / ZH-057 / ZH-058).
+//
+// The three scalar oracles named by design/blocks.yml (`reference_model:
+// zref::Clip`, `zref::Setup`, `zref::Binner`) and by their contracts. They are
+// the geometry front that feeds RASTER.EDGEWALK: a triangle enters as three
+// projected screen vertices and leaves as a stream of (triangle × tile) jobs,
+// which is exactly RASTER.EDGEWALK's job port.
+//
+// ---------------------------------------------------------------------------
+// WHAT IS DELEGATED, AND WHAT IS NOT
+// ---------------------------------------------------------------------------
+// Nothing here restates a law that reference/src/zrender/rast.cpp already owns:
+//
+//   · the 2A cross product is `zref::EdgeWalk::area2`, which IS rast.cpp's
+//     `orient()` — orient(a, b, px, py) == EdgeWalk::area2({a, b, (px,py)}).
+//     Clip's zero-area / winding verdict and Setup's plane identity are both
+//     checked against that function, not against a re-derivation.
+//   · the scan box is `zref::render::scan_bbox` — the SAME function raster_tri
+//     itself calls, extracted from it for this increment (internal.hpp). So
+//     GEOM.CLIP's viewport test is literally the software raster's own early
+//     return, including the 2026-08-15 pixel-centre defect fix.
+//   · the fill predicate is the §8 rule proved on `zhao_raster_fill.sv`
+//     (tests/formal/raster_edgewalk_top_left.sby); `fill_accept` below is its
+//     one-line C++ transcription and nothing else.
+//
+// What IS defined here, because no spec defines it, is the BINNING law — which
+// tiles a triangle is enumerated into and in what order. That is a CHOICE; it
+// is argued in fpga/rtl/geometry/zhao_geom_binner.sv and recorded in
+// design/contracts/GEOM.BINNER.md as chosen, not found.
+
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+namespace zref {
+
+/**
+ * The §8 top-left fill predicate, on the narrow (E', r != 0, top-left) form.
+ * This is the C++ transcription of `zhao_raster_fill.sv` — the module the
+ * formal lane proves equal to `E0 + bias >= 0` for every (E', r). It is not a
+ * second fill rule; it is the same expression, in the other language.
+ */
+inline bool fill_accept(int64_t ep, bool rnz, bool tl) {
+  return (ep >= 0) && (tl || rnz || ep != 0);
+}
+
+/** GEOM.CLIP — near-plane rejection, winding, backface, scissor. */
+struct Clip {
+  /** +/-2048 px guard band in S 12.8 subpixels (spec/qformats.md §8). */
+  static constexpr int32_t kGuard = 524288;
+
+  /**
+   * Backface culling mode. kCullNone is the DEFAULT and the only mode the
+   * software raster has: rast.cpp is double-sided (`area < 0` flips the
+   * winding, it never rejects). The other two exist because the ledger's
+   * purpose line names "backface cull" while no spec ratifies a winding —
+   * see the RTL header and the contract, where the choice is recorded.
+   */
+  enum CullMode : uint8_t { kCullNone = 0, kCullNegative = 1, kCullPositive = 2 };
+
+  /** Why a triangle left. Order matters: it is the order the tests are made. */
+  enum Verdict : uint8_t {
+    kAccept = 0,
+    kNearPlane = 1,  // some vertex had w <= 0 — whole-primitive rejection
+    kZeroArea = 2,   // rast.cpp `if (area == 0) return;`
+    kBackface = 3,   // cull_mode rejected the sign of 2A
+    kOffscreen = 4   // the scissored scan box is empty
+  };
+
+  /** Scissor rectangle in whole pixels (zref::render::Viewport, non-negative). */
+  struct Viewport {
+    int32_t x0 = 0, y0 = 0, w = 0, h = 0;
+  };
+
+  /** One projected triangle. `behind` bit k = vertex k had w <= 0. */
+  struct In {
+    int32_t ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
+    uint8_t behind = 0;
+  };
+
+  /** The accepted packet. Every field is meaningless unless `verdict == kAccept`. */
+  struct Out {
+    Verdict verdict = kAccept;
+    int32_t ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;  // winding-normalised
+    int64_t area2 = 0;                                       // 2A > 0
+    int32_t min_x = 0, max_x = 0, min_y = 0, max_y = 0;      // scissored, inclusive
+  };
+
+  static Out clip(const In& t, const Viewport& vp, CullMode cull);
+};
+
+/**
+ * GEOM.SETUP — the affine decomposition of rast.cpp's `orient()`.
+ *
+ * E_i(px, py) = kx_i * px + ky_i * py + kc_i, in subpixel^2, EXACT, where
+ * (px, py) is a subpixel position. Edge 0 = (B,C), 1 = (C,A), 2 = (A,B), the
+ * same numbering as rast.cpp's w0 / w1 / w2. The identity
+ * `E_i(px,py) == orient(a_i, b_i, px, py)` is asserted against
+ * `zref::EdgeWalk::area2` in the directed test.
+ */
+struct Setup {
+  struct Edge {
+    int32_t kx = 0;    // -(b.y - a.y): the per-subpixel x coefficient
+    int32_t ky = 0;    // +(b.x - a.x): the per-subpixel y coefficient
+    int64_t kc = 0;    // a.x*b.y - a.y*b.x
+    bool tl = false;   // §8 top-left: (a.y == b.y) ? (a.x < b.x) : (a.y < b.y)
+  };
+
+  struct Out {
+    Edge e[3] = {};
+    int64_t area2 = 0;
+  };
+
+  /** Setup for a WINDING-NORMALISED triangle (area2 > 0), as GEOM.CLIP emits. */
+  static Out setup(int32_t ax, int32_t ay, int32_t bx, int32_t by, int32_t cx, int32_t cy,
+                   int64_t area2);
+};
+
+/**
+ * GEOM.BINNER — the tile enumeration.
+ *
+ * The tile grid is anchored at surface pixel (0,0) with a 16 px pitch (the
+ * RASTER.EDGEWALK / RASTER.TILESTORE tile), so tile (tx,ty) owns pixels
+ * [16tx, 16tx+16) x [16ty, 16ty+16). Enumeration is ROW-MAJOR over the tiles
+ * the scan box touches (ty outer ascending, tx inner ascending), and a tile is
+ * emitted only if the three edge functions can still be satisfied somewhere in
+ * it — the affine corner test described in the RTL header.
+ */
+struct Binner {
+  static constexpr int kTileLog2 = 4;
+  static constexpr int kTile = 1 << kTileLog2;
+
+  struct Ref {
+    int32_t tx = 0, ty = 0;
+    bool operator==(const Ref& o) const { return tx == o.tx && ty == o.ty; }
+    bool operator!=(const Ref& o) const { return !(*this == o); }
+  };
+
+  /**
+   * The tile references for one accepted, set-up triangle, IN EMISSION ORDER.
+   * The scan box is GEOM.CLIP's (inclusive whole pixels, already scissored).
+   */
+  static std::vector<Ref> bin(const Setup::Out& s, int32_t min_x, int32_t max_x, int32_t min_y,
+                              int32_t max_y);
+
+  /**
+   * The per-edge screen-wide constants the corner test rides on:
+   * E0 at the centre of pixel (0,0), its low 8 bits, and E' there.
+   * `ep_at(px,py) = ep_base + kx*px + ky*py` is EXACT (both edge steps are
+   * multiples of 256, so `r` is constant over every pixel centre).
+   */
+  static int64_t e0_base(const Setup::Edge& e) {
+    return static_cast<int64_t>(e.kx) * 128 + static_cast<int64_t>(e.ky) * 128 + e.kc;
+  }
+  static bool rnz(const Setup::Edge& e) { return (e0_base(e) & 255) != 0; }
+  static int64_t ep_base(const Setup::Edge& e) { return e0_base(e) >> 8; }
+};
+
+}  // namespace zref

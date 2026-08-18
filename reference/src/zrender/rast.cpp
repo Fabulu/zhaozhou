@@ -77,6 +77,41 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 
 }  // namespace
 
+// The §8 scan box: exactly the pixels whose CENTRE can lie in the triangle,
+// scissored to the viewport (declaration + rationale: internal.hpp).
+//
+// The centre of pixel p sits at 256*p + 128 subpixels (§8). So the first
+// candidate column is the smallest p with 256p + 128 >= v_min, i.e.
+// p = ceil((v_min - 128)/256) = (v_min + 127) >> 8, and the last is the
+// largest p with 256p + 128 <= v_max, i.e. p = (v_max - 128) >> 8.
+//
+// DEFECT FIXED 2026-08-15: this used to be ceil(v_min/256) = (v_min+255)>>8,
+// which is one column too far right whenever v_min's subpixel fraction lies
+// in (0,128] — the pixel centre is still inside, but the loop never visits
+// it. On a shared vertical seam between two quads (sky drum columns, terrain
+// grid columns) the left quad's edge functions correctly reject that pixel
+// and the right quad's bbox refuses to test it, so NOBODY covers it and the
+// clear colour shows through as a full-height 1px crack. Same on Y.
+// Instrumented proof: sky drum seam at subpixel x = 9547 (px 37.293), pixel
+// (37,60) — the right-hand quads' edge test says INSIDE (E' = 6189/26206/403
+// against biases 0/0/-1) but the old min_x = 38 excluded the column; the
+// left-hand quads say outside. Tests: render_directed.cpp
+// test_seam_subpixel_sweep / test_no_seam_cracks_drum / _terrain.
+// The max side was conservative rather than wrong (a centre strictly right
+// of every vertex is always rejected by an edge function); it is tightened
+// to the same law so the bbox is exactly "pixel centres in [v_min, v_max]".
+ScanBox scan_bbox(const ScreenV& A, const ScreenV& B, const ScreenV& C, const Viewport& vp) {
+  ScanBox b;
+  b.min_x = std::max<int32_t>((std::min({A.x, B.x, C.x}) + 127) >> 8, static_cast<int32_t>(vp.x0));
+  b.max_x = std::min<int32_t>((std::max({A.x, B.x, C.x}) - 128) >> 8,
+                              static_cast<int32_t>(vp.x0 + vp.w) - 1);
+  b.min_y = std::max<int32_t>((std::min({A.y, B.y, C.y}) + 127) >> 8, static_cast<int32_t>(vp.y0));
+  b.max_y = std::min<int32_t>((std::max({A.y, B.y, C.y}) - 128) >> 8,
+                              static_cast<int32_t>(vp.y0 + vp.h) - 1);
+  b.empty = (b.min_x > b.max_x) || (b.min_y > b.max_y);
+  return b;
+}
+
 void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const ScreenV& B0,
                 const ScreenV& C0, uint8_t r, uint8_t g, uint8_t b, const TriMode& m,
                 const TextureSpan* tex) {
@@ -90,38 +125,14 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
     area = -area;
   }
 
-  // bbox in whole pixels, scissored to the viewport.
-  //
-  // The bbox must enumerate exactly the pixels whose CENTRE can lie in the
-  // triangle, and the centre of pixel p sits at 256*p + 128 subpixels (§8).
-  // So the first candidate column is the smallest p with 256p + 128 >= v_min,
-  // i.e. p = ceil((v_min - 128)/256) = (v_min + 127) >> 8, and the last is the
-  // largest p with 256p + 128 <= v_max, i.e. p = (v_max - 128) >> 8.
-  //
-  // DEFECT FIXED 2026-08-15: this used to be ceil(v_min/256) = (v_min+255)>>8,
-  // which is one column too far right whenever v_min's subpixel fraction lies
-  // in (0,128] — the pixel centre is still inside, but the loop never visits
-  // it. On a shared vertical seam between two quads (sky drum columns, terrain
-  // grid columns) the left quad's edge functions correctly reject that pixel
-  // and the right quad's bbox refuses to test it, so NOBODY covers it and the
-  // clear colour shows through as a full-height 1px crack. Same on Y.
-  // Instrumented proof: sky drum seam at subpixel x = 9547 (px 37.293), pixel
-  // (37,60) — the right-hand quads' edge test says INSIDE (E' = 6189/26206/403
-  // against biases 0/0/-1) but the old min_x = 38 excluded the column; the
-  // left-hand quads say outside. Tests: render_directed.cpp
-  // test_seam_subpixel_sweep / test_no_seam_cracks_drum / _terrain.
-  // The max side was conservative rather than wrong (a centre strictly right
-  // of every vertex is always rejected by an edge function); it is tightened
-  // to the same law so the bbox is exactly "pixel centres in [v_min, v_max]".
-  const int32_t min_x =
-      std::max<int32_t>((std::min({A.x, B.x, C.x}) + 127) >> 8, static_cast<int32_t>(vp.x0));
-  const int32_t max_x = std::min<int32_t>((std::max({A.x, B.x, C.x}) - 128) >> 8,
-                                          static_cast<int32_t>(vp.x0 + vp.w) - 1);
-  const int32_t min_y =
-      std::max<int32_t>((std::min({A.y, B.y, C.y}) + 127) >> 8, static_cast<int32_t>(vp.y0));
-  const int32_t max_y = std::min<int32_t>((std::max({A.y, B.y, C.y}) - 128) >> 8,
-                                          static_cast<int32_t>(vp.y0 + vp.h) - 1);
-  if (min_x > max_x || min_y > max_y) return;
+  // bbox in whole pixels, scissored to the viewport — scan_bbox() below, the
+  // ONE site of this law (GEOM.CLIP's viewport test calls the same function).
+  const ScanBox bb = scan_bbox(A, B, C, vp);
+  if (bb.empty) return;
+  const int32_t min_x = bb.min_x;
+  const int32_t max_x = bb.max_x;
+  const int32_t min_y = bb.min_y;
+  const int32_t max_y = bb.max_y;
 
   // per-pixel edge deltas (one pixel = 256 subpixel units, §8)
   const int64_t dw0_dx = -(static_cast<int64_t>(C.y) - B.y) * 256;
