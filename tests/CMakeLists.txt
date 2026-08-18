@@ -1546,6 +1546,45 @@ add_test(NAME geom_binner_random_nightly COMMAND test_geom_binner_random --night
 set_tests_properties(geom_binner_random_nightly PROPERTIES
   LABELS "nightly" TIMEOUT 3600)
 
+# ---------------------------------------------------------------------------
+# TERRAIN.NORMALS (phase 6, ZH-038)
+#
+# The oracle is a thin view onto shade_flat_tri's ratified cross product
+# (reference/src/zrender/terrain.cpp), so RTL == oracle means RTL == the law the
+# golden captures already pin. The Q-format shift is 16, NOT 32: at 32 a
+# sub-metre lattice shades solid black, a defect this project already paid for
+# and which terrain_normals_directed pins against.
+set(ZHAO_TERRAIN_NORMALS_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normals.sv)
+
+add_executable(test_terrain_normals_directed terrain/terrain_normals_directed.cpp)
+target_link_libraries(test_terrain_normals_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_normals_directed
+  PREFIX Vzhao_terrain_normals
+  TOP_MODULE zhao_terrain_normals
+  SOURCES ${ZHAO_TERRAIN_NORMALS_SV})
+add_test(NAME terrain_normals_directed COMMAND test_terrain_normals_directed)
+set_tests_properties(terrain_normals_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_terrain_normals_random terrain/terrain_normals_random.cpp)
+target_link_libraries(test_terrain_normals_random PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_normals_random
+  PREFIX Vzhao_terrain_normals
+  TOP_MODULE zhao_terrain_normals
+  SOURCES ${ZHAO_TERRAIN_NORMALS_SV})
+add_test(NAME terrain_normals_random COMMAND test_terrain_normals_random)
+set_tests_properties(terrain_normals_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME terrain_normals_random_nightly COMMAND test_terrain_normals_random --nightly)
+set_tests_properties(terrain_normals_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_normals
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_normals
+                 ${ZHAO_TERRAIN_NORMALS_SV})
+set_tests_properties(lint_terrain_normals PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # per-module lint (charter 21 step 8)
 add_test(NAME lint_geom_clip
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

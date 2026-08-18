@@ -199,8 +199,8 @@ TrailKernel trail_kernel_for(int32_t vx, int32_t vy) {
   return k;
 }
 
-void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& work,
-                       const Plane& p, const TrailKernel& k) {
+void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& work, const Plane& p,
+                       const TrailKernel& k) {
   for (int32_t y = p.y0; y < p.y1; ++y)
     for (int32_t x = p.x0; x < p.x1; ++x) {
       uint8_t& v = intensity[static_cast<size_t>(y) * p.w + x];
@@ -222,12 +222,12 @@ void trail_source_step(std::vector<uint8_t>& intensity, std::vector<uint8_t>& wo
     std::fill(work.begin(), work.end(), 0);
     for (int32_t y = p.y0; y < p.y1; ++y) {
       for (int32_t x = p.x0; x < p.x1; ++x) {
-        const uint16_t sum =
-            tap(x + k.ax, y + k.ay) + tap(x + 2 * k.ax, y + 2 * k.ay) +
-            tap(x + 3 * k.ax, y + 3 * k.ay) + tap(x + 4 * k.ax, y + 4 * k.ay) +
-            tap(x + k.ax + k.px, y + k.ay + k.py) + tap(x + k.ax - k.px, y + k.ay - k.py) +
-            tap(x + 2 * k.ax + k.px, y + 2 * k.ay + k.py) +
-            tap(x + 2 * k.ax - k.px, y + 2 * k.ay - k.py);
+        const uint16_t sum = tap(x + k.ax, y + k.ay) + tap(x + 2 * k.ax, y + 2 * k.ay) +
+                             tap(x + 3 * k.ax, y + 3 * k.ay) + tap(x + 4 * k.ax, y + 4 * k.ay) +
+                             tap(x + k.ax + k.px, y + k.ay + k.py) +
+                             tap(x + k.ax - k.px, y + k.ay - k.py) +
+                             tap(x + 2 * k.ax + k.px, y + 2 * k.ay + k.py) +
+                             tap(x + 2 * k.ax - k.px, y + 2 * k.ay - k.py);
         work[static_cast<size_t>(y) * p.w + x] = static_cast<uint8_t>(sum >> 3);
       }
     }
@@ -333,8 +333,8 @@ void compose_view(uint8_t* rgb888, int32_t* depth, uint32_t w, uint32_t h, uint3
       if (L.trail->length >= 1) {
         uint16_t rx, ry;
         trail_at(*L.trail, 1, rx, ry);
-        kern = trail_kernel_for(L.x_px - static_cast<int32_t>(rx),
-                                L.y_px - static_cast<int32_t>(ry));
+        kern =
+            trail_kernel_for(L.x_px - static_cast<int32_t>(rx), L.y_px - static_cast<int32_t>(ry));
       }
 
       for (uint32_t g = L.trail->length; g >= 1; --g) {
