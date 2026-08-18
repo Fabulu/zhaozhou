@@ -366,8 +366,9 @@ void test_sky_orientation() {
       }
     }
   }
-  std::printf("render_sky: orientation — cap %u px (%u below the midline), under %u px (%u above)\n",
-              cap_px, cap_lower, under_px, under_upper);
+  std::printf(
+      "render_sky: orientation — cap %u px (%u below the midline), under %u px (%u above)\n",
+      cap_px, cap_lower, under_px, under_upper);
   check(cap_px > 0, "the zenith cap reaches the canvas at all");
   check(under_px > 0, "the under-plane reaches the canvas at all");
   check(cap_lower == 0, "ZENITH cap pixels land in the UPPER half of the frame");
@@ -587,13 +588,13 @@ void test_seam_continuity() {
   // conforming: one dusk elevation ramp sampled at the join elevations
   zref::sky::SkySet good;
   good.background = {24, 26, 70};
-  good.under = {228, 130, 88};              // == band_lower_horizon (§1.2 rule 1)
-  good.band_lower_horizon = {228, 130, 88}; // warm horizon
-  good.band_lower_top = {150, 92, 118};     // == band_upper_bottom (rule 2)
+  good.under = {228, 130, 88};               // == band_lower_horizon (§1.2 rule 1)
+  good.band_lower_horizon = {228, 130, 88};  // warm horizon
+  good.band_lower_top = {150, 92, 118};      // == band_upper_bottom (rule 2)
   good.band_upper_bottom = {150, 92, 118};
-  good.band_upper_top = {56, 48, 110};      // zenith
-  good.cap = {56, 48, 110};  // == band_upper_top (rule 3)
-  good.cloud = {255, 255, 255};  // unused (layers not requested below)
+  good.band_upper_top = {56, 48, 110};  // zenith
+  good.cap = {56, 48, 110};             // == band_upper_top (rule 3)
+  good.cloud = {255, 255, 255};         // unused (layers not requested below)
   good.sun = {255, 255, 255};
   good.cloud_max_alpha = zref::fx16{0};
   good.sun_energy = zref::fx16{0};

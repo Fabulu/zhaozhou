@@ -63,9 +63,8 @@ EnvState env_state_deserialize(const uint8_t in[kEnvStateBytes]) {
   // beyond the member set cannot arrive from a validated record — clamp to
   // Off so a corrupt chunk still deserializes deterministically.
   const uint8_t fog_raw = *p++;
-  st.fog = fog_raw <= static_cast<uint8_t>(FogMode::Linear)
-               ? static_cast<FogMode>(fog_raw)
-               : FogMode::Off;
+  st.fog = fog_raw <= static_cast<uint8_t>(FogMode::Linear) ? static_cast<FogMode>(fog_raw)
+                                                            : FogMode::Off;
   st.fog_near = fx16{static_cast<int32_t>(take32())};
   st.fog_far = fx16{static_cast<int32_t>(take32())};
   return st;

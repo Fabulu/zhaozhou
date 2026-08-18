@@ -119,8 +119,8 @@ enum ZhaoZcapSection : uint16_t {
   ZHAO_ZCAP_COUNTERS = 0x0008,
   ZHAO_ZCAP_SOURCE_MAP = 0x0009,
   ZHAO_ZCAP_TRACE = 0x000A,
-  ZHAO_ZCAP_CELESTIAL_STATE = 0x000B,   // [v3] stars_and_flares 8 (236 B)
-  ZHAO_ZCAP_ENVIRONMENT_STATE = 0x000C, // [v3] sky_and_beams 4a (20 B)
+  ZHAO_ZCAP_CELESTIAL_STATE = 0x000B,    // [v3] stars_and_flares 8 (236 B)
+  ZHAO_ZCAP_ENVIRONMENT_STATE = 0x000C,  // [v3] sky_and_beams 4a (20 B)
 };
 constexpr uint16_t ZHAO_ZCAP_TOOL_NAMESPACE_LO = 0x8000;
 
@@ -287,8 +287,8 @@ struct ZhaoSourceMapSizeResult {
 };
 
 /** Non-allocating, wide v1 layout arithmetic and global byte admission. */
-ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(
-    uint64_t entry_count, uint64_t file_count, uint64_t string_blob_bytes);
+ZhaoSourceMapSizeResult zhao_source_map_v1_byte_length(uint64_t entry_count, uint64_t file_count,
+                                                       uint64_t string_blob_bytes);
 ZhaoSourceMapError zhao_source_map_v1_admit_byte_length(uint64_t bytes);
 
 struct ZhaoSourceMapParseResult {
