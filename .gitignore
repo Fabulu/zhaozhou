@@ -9,6 +9,16 @@ out/
 # NOTE: no global *.bin ignore — golden vector binaries (tests/golden/,
 # tests/abi/golden/, captures/) are committed evidence, not build output.
 
+# Quartus characterization products (projects and constraints stay tracked)
+fpga/quartus/shell_fit/db/
+fpga/quartus/shell_fit/incremental_db/
+fpga/quartus/shell_fit/output_files/
+fpga/quartus/shell_fit/greybox_tmp/
+fpga/quartus/shell_fit/hc_output/
+fpga/quartus/shell_fit/simulation/
+fpga/quartus/shell_fit/*.qws
+fpga/quartus/shell_fit/*.smsg
+
 # Simulation artifacts
 obj_dir/
 *.vcd

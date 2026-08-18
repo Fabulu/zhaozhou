@@ -1,0 +1,6 @@
+# Quartus Prime Lite 17.0.2 standalone characterization project.
+# This project targets zhao_shell_top directly; it is not the framework project.
+QUARTUS_VERSION = "17.0"
+DATE = "00:00:00  August 18, 2026"
+
+PROJECT_REVISION = "zhao_shell_fit"

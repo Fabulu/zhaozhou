@@ -1,0 +1,44 @@
+# Standalone Phase-2 shell characterization only.
+# 5CSEBA6U23I7 is a PROVISIONAL capacity/timing target, not board truth.
+# No framework files, PLLs, or physical pin assignments belong in this project.
+
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_top
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name SDC_FILE zhao_shell_fit.sdc
+
+# Reproducible single-seed characterization settings supported by Quartus 17.0.2.
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 1
+set_global_assignment -name SEED 1
+set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+
+# Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/generated/zhao_abi_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_params_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_mode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_framectl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_scaler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_linebuf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_serializer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_scanout.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/command/zhao_cmd_scheduler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/command/zhao_cmd_dma.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_counters.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_crc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/zhao_input_snapshot.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/input/zhao_input_rumble.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/audio/zhao_audio_fifo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_vram_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_mem_guard.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_bridge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
+
+# The simulation harness interface is intentionally virtual. This prevents the
+# characterization project from inventing a package pinout or exhausting I/O;
+# zhao_shell_top remains the top and its complete port/logic cone remains present.
+set_instance_assignment -name VIRTUAL_PIN ON -to *

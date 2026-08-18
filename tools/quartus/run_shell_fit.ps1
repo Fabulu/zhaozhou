@@ -1,0 +1,309 @@
+[CmdletBinding()]
+param(
+    [switch]$ParityOnly,
+    [switch]$KeepWorkspace,
+    [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
+    [string]$ReportRoot
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$ProjectRel = 'fpga/quartus/shell_fit'
+$ProjectDir = Join-Path $RepoRoot ($ProjectRel -replace '/', '\')
+$QsfPath = Join-Path $ProjectDir 'zhao_shell_fit.qsf'
+$CmakePath = Join-Path $RepoRoot 'tests\CMakeLists.txt'
+
+function Get-NormalizedRelativePath([string]$AbsolutePath, [string]$Root) {
+    $absolute = [IO.Path]::GetFullPath($AbsolutePath).TrimEnd('\')
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    if (-not $absolute.StartsWith($rootFull + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path '$absolute' escapes repository root '$rootFull'."
+    }
+    return $absolute.Substring($rootFull.Length + 1).Replace('\', '/')
+}
+
+function Get-CmakeShellSources {
+    $text = [IO.File]::ReadAllText($CmakePath)
+    $block = [regex]::Match($text, '(?ms)set\(ZHAO_SHELL_RTL\s+(.*?)\)')
+    if (-not $block.Success) {
+        throw 'Could not locate set(ZHAO_SHELL_RTL ...) in tests/CMakeLists.txt.'
+    }
+
+    $sources = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($token in [regex]::Matches($block.Groups[1].Value, '\$\{ZHAO_ABI_PKG\}|\$\{CMAKE_SOURCE_DIR\}/[^\s\)]+')) {
+        if ($token.Value -eq '${ZHAO_ABI_PKG}') {
+            $sources.Add('fpga/rtl/generated/zhao_abi_pkg.sv')
+        } else {
+            $sources.Add($token.Value.Substring('${CMAKE_SOURCE_DIR}/'.Length))
+        }
+    }
+    return $sources.ToArray()
+}
+
+function Get-QsfShellSources {
+    $sources = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($line in [IO.File]::ReadAllLines($QsfPath)) {
+        $match = [regex]::Match($line, '^\s*set_global_assignment\s+-name\s+SYSTEMVERILOG_FILE\s+(?:"([^"]+)"|(\S+))\s*$')
+        if ($match.Success) {
+            $value = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+            $absolute = [IO.Path]::GetFullPath((Join-Path $ProjectDir ($value -replace '/', '\')))
+            $sources.Add((Get-NormalizedRelativePath $absolute $RepoRoot))
+        }
+    }
+    return $sources.ToArray()
+}
+
+function Assert-SourceParity {
+    $cmake = @(Get-CmakeShellSources)
+    $qsf = @(Get-QsfShellSources)
+    if ($cmake.Count -ne $qsf.Count) {
+        throw "Shell source parity failed: CMake has $($cmake.Count) sources; QSF has $($qsf.Count)."
+    }
+    for ($i = 0; $i -lt $cmake.Count; ++$i) {
+        if ($cmake[$i] -cne $qsf[$i]) {
+            throw "Shell source parity failed at index $i`: CMake='$($cmake[$i])', QSF='$($qsf[$i])'."
+        }
+    }
+    Write-Host "PASS source parity: $($cmake.Count) ordered shell sources match tests/CMakeLists.txt."
+    return $cmake
+}
+
+$SourceCone = @(Assert-SourceParity)
+if ($ParityOnly) {
+    exit 0
+}
+
+$QuartusSh = Join-Path $QuartusBin 'quartus_sh.exe'
+$QuartusMap = Join-Path $QuartusBin 'quartus_map.exe'
+$QuartusFit = Join-Path $QuartusBin 'quartus_fit.exe'
+$QuartusSta = Join-Path $QuartusBin 'quartus_sta.exe'
+foreach ($exe in @($QuartusSh, $QuartusMap, $QuartusFit, $QuartusSta)) {
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+        throw "Required Quartus executable not found: $exe"
+    }
+}
+
+$head = (& git -C $RepoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
+    throw 'Could not resolve repository HEAD.'
+}
+
+# A real run is always made from committed HEAD. This prevents any pre-existing
+# dirty ABI/environment record in the canonical worktree from entering evidence.
+$requiredFlowFiles = @(
+    '.gitignore',
+    'fpga/quartus/shell_fit/zhao_shell_fit.qpf',
+    'fpga/quartus/shell_fit/zhao_shell_fit.qsf',
+    'fpga/quartus/shell_fit/zhao_shell_fit.sdc',
+    'fpga/quartus/shell_fit/report.tcl',
+    'tools/quartus/run_shell_fit.ps1'
+)
+foreach ($path in $requiredFlowFiles) {
+    & git -C $RepoRoot cat-file -e "HEAD`:$path" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Real characterization requires committed flow file at HEAD: $path (use -ParityOnly before the flow commit)."
+    }
+}
+
+$Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-shell-fit-{0}-{1}" -f $PID, [guid]::NewGuid().ToString('N'))
+$Archive = "$Workspace.zip"
+$Snapshot = Join-Path $Workspace 'source'
+New-Item -ItemType Directory -Path $Snapshot -Force | Out-Null
+
+try {
+    & git -C $RepoRoot archive --format=zip --output=$Archive HEAD
+    if ($LASTEXITCODE -ne 0) { throw 'git archive HEAD failed.' }
+    Expand-Archive -LiteralPath $Archive -DestinationPath $Snapshot
+    Remove-Item -LiteralPath $Archive -Force
+
+    $SnapshotScript = Join-Path $Snapshot 'tools\quartus\run_shell_fit.ps1'
+    $SnapshotProject = Join-Path $Snapshot 'fpga\quartus\shell_fit'
+    $SnapshotCmake = Join-Path $Snapshot 'tests\CMakeLists.txt'
+    if (-not (Test-Path -LiteralPath $SnapshotScript) -or -not (Test-Path -LiteralPath $SnapshotCmake)) {
+        throw 'Clean HEAD archive is missing characterization inputs.'
+    }
+
+    # Repeat parity against the clean snapshot, not merely the canonical tree.
+    $snapshotCmakeText = [IO.File]::ReadAllText($SnapshotCmake)
+    $snapshotBlock = [regex]::Match($snapshotCmakeText, '(?ms)set\(ZHAO_SHELL_RTL\s+(.*?)\)')
+    $snapshotExpected = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($token in [regex]::Matches($snapshotBlock.Groups[1].Value, '\$\{ZHAO_ABI_PKG\}|\$\{CMAKE_SOURCE_DIR\}/[^\s\)]+')) {
+        if ($token.Value -eq '${ZHAO_ABI_PKG}') { $snapshotExpected.Add('fpga/rtl/generated/zhao_abi_pkg.sv') }
+        else { $snapshotExpected.Add($token.Value.Substring('${CMAKE_SOURCE_DIR}/'.Length)) }
+    }
+    if (($snapshotExpected -join "`n") -cne ($SourceCone -join "`n")) {
+        throw 'Clean HEAD archive source cone differs from the parity-checked canonical source cone.'
+    }
+
+    $LogDir = Join-Path $Workspace 'logs'
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    $stageStatus = [ordered]@{}
+
+    function Invoke-QuartusStage([string]$Name, [string]$Exe, [string[]]$Arguments) {
+        Write-Host "RUN $Name`: $([IO.Path]::GetFileName($Exe)) $($Arguments -join ' ')"
+        Push-Location $SnapshotProject
+        try {
+            $lines = @(& $Exe @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+            $exitCode = $LASTEXITCODE
+        } finally {
+            Pop-Location
+        }
+        $logPath = Join-Path $LogDir "$Name.log"
+        [IO.File]::WriteAllText($logPath, (($lines -join "`n") + "`n"), $Utf8NoBom)
+        foreach ($line in $lines) { Write-Host $line }
+        if ($exitCode -ne 0) {
+            $stageStatus[$Name] = 'failed'
+            throw "Quartus stage '$Name' failed with exit code $exitCode; log: $logPath"
+        }
+        $stageStatus[$Name] = 'success'
+    }
+
+    Invoke-QuartusStage 'analysisAndElaboration' $QuartusMap @('zhao_shell_fit', '--analysis_and_elaboration')
+    Invoke-QuartusStage 'synthesis' $QuartusMap @('zhao_shell_fit')
+    Invoke-QuartusStage 'fitter' $QuartusFit @('zhao_shell_fit')
+    Invoke-QuartusStage 'timequest' $QuartusSta @('zhao_shell_fit', '--report_script=report.tcl')
+
+    $versionLines = @(& $QuartusSh --version 2>&1 | ForEach-Object { $_.ToString() })
+    if ($LASTEXITCODE -ne 0) { throw 'quartus_sh --version failed.' }
+    $version = ($versionLines | Where-Object { $_ -match 'Version|Quartus' } | Select-Object -First 1).Trim()
+
+    $outputDir = Join-Path $SnapshotProject 'output_files'
+    $fitSummary = Join-Path $outputDir 'zhao_shell_fit.fit.summary'
+    $metricPath = Join-Path $outputDir 'characterization\timing_metrics.tsv'
+    $ucpPath = Join-Path $outputDir 'characterization\unconstrained_paths.rpt'
+    foreach ($required in @($fitSummary, $metricPath, $ucpPath)) {
+        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+            throw "Expected Quartus report missing: $required"
+        }
+    }
+
+    function Get-ReportField([string]$Text, [string[]]$Labels) {
+        foreach ($label in $Labels) {
+            $match = [regex]::Match($Text, "(?im)^\s*" + [regex]::Escape($label) + "\s*:\s*([^\r\n]+)")
+            if ($match.Success) { return $match.Groups[1].Value.Trim() }
+        }
+        return $null
+    }
+
+    function Get-LeadingInteger([AllowNull()][string]$Value) {
+        if ($null -eq $Value) { return $null }
+        $match = [regex]::Match($Value, '-?[0-9][0-9,]*')
+        if (-not $match.Success) { return $null }
+        return [int64]::Parse($match.Value.Replace(',', ''), [Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    $fitText = [IO.File]::ReadAllText($fitSummary)
+    $resources = [ordered]@{
+        logicUtilizationAlms = Get-LeadingInteger (Get-ReportField $fitText @('Logic utilization (in ALMs)', 'Logic utilization'))
+        combinationalFunctions = Get-LeadingInteger (Get-ReportField $fitText @('Total combinational functions', 'Combinational ALUT usage'))
+        registers = Get-LeadingInteger (Get-ReportField $fitText @('Total registers', 'Dedicated logic registers'))
+        blockMemoryBits = Get-LeadingInteger (Get-ReportField $fitText @('Total block memory bits', 'Total memory bits'))
+        ramBlocks = Get-LeadingInteger (Get-ReportField $fitText @('Total RAM Blocks', 'Total block memory implementation bits'))
+        dspBlocks = Get-LeadingInteger (Get-ReportField $fitText @('Total DSP Blocks', 'Total DSP block 18-bit elements'))
+        pins = Get-LeadingInteger (Get-ReportField $fitText @('Total pins'))
+        virtualPins = Get-LeadingInteger (Get-ReportField $fitText @('Total virtual pins'))
+    }
+
+    $allLogLines = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($log in Get-ChildItem -LiteralPath $LogDir -Filter '*.log' | Sort-Object Name) {
+        foreach ($line in [IO.File]::ReadAllLines($log.FullName)) { $allLogLines.Add($line) }
+    }
+    $criticalWarnings = @($allLogLines | Where-Object { $_ -match '^Critical Warning' } | ForEach-Object {
+        $normalized = $_ -replace [regex]::Escape($Snapshot), '<clean-head>'
+        $normalized = $normalized -replace '\\', '/'
+        $normalized.Trim()
+    } | Sort-Object -Unique)
+
+    $metricRows = @(Import-Csv -LiteralPath $metricPath -Delimiter "`t")
+    $clocks = [ordered]@{}
+    foreach ($row in $metricRows | Where-Object { $_.record -eq 'clock' } | Sort-Object name) {
+        $clocks[$row.name] = [double]::Parse($row.value, [Globalization.CultureInfo]::InvariantCulture)
+    }
+    $analyses = [ordered]@{}
+    foreach ($name in @('setup', 'hold', 'recovery', 'removal')) {
+        $row = $metricRows | Where-Object { $_.record -eq 'analysis' -and $_.name -eq $name } | Select-Object -First 1
+        if ($null -eq $row) { throw "Timing metric missing for analysis '$name'." }
+        $slack = if ($row.value -eq 'NA') { $null } else { [double]::Parse($row.value, [Globalization.CultureInfo]::InvariantCulture) }
+        $analyses[$name] = [ordered]@{
+            worstSlackNs = $slack
+            failingEndpointCount = [int64]::Parse($row.count, [Globalization.CultureInfo]::InvariantCulture)
+        }
+    }
+
+    $ucpText = [IO.File]::ReadAllText($ucpPath)
+    $ucpRows = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($line in $ucpText -split '\r?\n') {
+        $match = [regex]::Match($line, '^\s*([^;|]+?)\s*[;|]\s*([0-9][0-9,]*)\s*$')
+        if ($match.Success -and $match.Groups[1].Value.Trim() -notmatch '^[-=]+$') {
+            $ucpRows.Add([ordered]@{
+                category = $match.Groups[1].Value.Trim()
+                count = [int64]::Parse($match.Groups[2].Value.Replace(',', ''), [Globalization.CultureInfo]::InvariantCulture)
+            })
+        }
+    }
+
+    $limitations = @(
+        '5CSEBA6U23I7 is a provisional capacity/timing target, not frozen board truth.',
+        'All harness I/O is virtual; no package pins, board I/O delays, PLLs, or physical clocks are claimed.',
+        'gpu_clk and vid_clk remain timing-related so the known phase-dependent displayed-byte crossing is not waived.',
+        'Only audio_clk is grouped asynchronous against GPU/video, matching the dual-clock FIFO boundary.',
+        'Harness data/reset paths have no invented I/O delays or reset exceptions; unconstrained and recovery/removal limitations remain reportable.',
+        'The result does not characterize a physical SDRAM interface, framework integration, or fabricated hardware.'
+    )
+
+    $synthesisJson = [ordered]@{
+        schemaVersion = 1
+        characterization = 'provisional-shell-fit'
+        sourceCommit = $head
+        sourceConeParity = $true
+        sourceFileCount = $SourceCone.Count
+        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = $version }
+        design = [ordered]@{ top = 'zhao_shell_top'; device = '5CSEBA6U23I7'; frameworkTopModified = $false }
+        stages = $stageStatus
+        resources = $resources
+        criticalWarningCount = $criticalWarnings.Count
+        criticalWarnings = $criticalWarnings
+        limitations = $limitations
+    }
+
+    $timingJson = [ordered]@{
+        schemaVersion = 1
+        characterization = 'provisional-shell-fit'
+        sourceCommit = $head
+        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = $version }
+        design = [ordered]@{ top = 'zhao_shell_top'; device = '5CSEBA6U23I7' }
+        targetClocksNs = $clocks
+        analyses = $analyses
+        unconstrainedPathSummary = $ucpRows.ToArray()
+        timingPassed = (($analyses.setup.failingEndpointCount -eq 0) -and ($analyses.hold.failingEndpointCount -eq 0) -and ($analyses.recovery.failingEndpointCount -eq 0) -and ($analyses.removal.failingEndpointCount -eq 0))
+        knownCdc = 'The GPU-to-video displayed-byte serializer crossing is intentionally not false-pathed; its result remains part of setup/hold characterization.'
+        criticalWarningCount = $criticalWarnings.Count
+        criticalWarnings = $criticalWarnings
+        limitations = $limitations
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ReportRoot)) {
+        $ReportRoot = Join-Path $RepoRoot 'reports'
+    } elseif (-not [IO.Path]::IsPathRooted($ReportRoot)) {
+        $ReportRoot = Join-Path $RepoRoot $ReportRoot
+    }
+    $synthOut = Join-Path $ReportRoot 'synthesis\zhao_shell_fit.json'
+    $timingOut = Join-Path $ReportRoot 'timing\zhao_shell_fit.json'
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($synthOut)) -Force | Out-Null
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($timingOut)) -Force | Out-Null
+    [IO.File]::WriteAllText($synthOut, (($synthesisJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
+    [IO.File]::WriteAllText($timingOut, (($timingJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
+
+    Write-Host "PASS analysis/elaboration, synthesis, fitter, and TimeQuest."
+    Write-Host "WROTE $synthOut"
+    Write-Host "WROTE $timingOut"
+    Write-Host "CLEAN_HEAD $head"
+    if ($KeepWorkspace) { Write-Host "WORKSPACE $Workspace" }
+} finally {
+    if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
+        Remove-Item -LiteralPath $Workspace -Recurse -Force
+    }
+}
