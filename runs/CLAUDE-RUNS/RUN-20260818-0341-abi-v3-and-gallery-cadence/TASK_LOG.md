@@ -83,6 +83,19 @@ a clean state. The GIF set had been left half-new and half-a-day-old, which is
 exactly the kind of mixed gallery that must never be deployed, so no deploy
 happened until the encode completed in full.
 
+## Gallery deploy
+
+All 18 GIFs regenerated from one reel build, palette-exact, each verified by
+decoding the shipped GIF back and comparing every frame byte for byte. Assembled
+through `assemble.py` and deployed with `deploy.ps1`, so both copycheck gates
+ran. Wrangler was never invoked by hand.
+
+Deployment: `https://ff75be7a.zhaozhou.pages.dev` -> `https://zhaozhou.pages.dev`
+
+The gallery was deliberately NOT deployed while a kill had left it half-new and
+half-a-day-old. A mixed set would have published a page whose suns disagreed
+with each other about their own trail law.
+
 ## Maturity
 
 No hardware maturity is claimed here. Quartus analysis/elaboration of
