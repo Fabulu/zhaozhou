@@ -116,7 +116,11 @@ New-Item -ItemType Directory -Path $Snapshot -Force | Out-Null
 try {
     & git -C $RepoRoot archive --format=zip --output=$Archive HEAD
     if ($LASTEXITCODE -ne 0) { throw 'git archive HEAD failed.' }
-    Expand-Archive -LiteralPath $Archive -DestinationPath $Snapshot
+    # ZipFile over Expand-Archive: the cmdlet pipes every entry through the
+    # PowerShell object model and takes tens of minutes on a tree this size,
+    # which is longer than the synthesis it exists to feed.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($Archive, $Snapshot)
     Remove-Item -LiteralPath $Archive -Force
 
     $SnapshotScript = Join-Path $Snapshot 'tools\quartus\run_shell_fit.ps1'
