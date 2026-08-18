@@ -281,3 +281,48 @@ runs:
       carries 46-bit multipliers that put a whole-module BMC out of reach
       for this engine; that half is covered by the differential lanes
       against rast.cpp (20,000 tiles per fast run).
+
+  - property: tests/formal/raster_resolve_quant.sby
+    status: green
+    date: "2026-08-18"
+    commit: 1a77214
+    lane: formal_raster_resolve_quant
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The charter §8 RGB565 resolve quantizer, proved on zhao_raster_quant —
+      the module zhao_raster_resolve instantiates 3× per pixel — elaborated
+      at BOTH shipping parameter sets ((31,5,16,8) for the 5-bit channels,
+      (63,6,32,16) for green), so the proof and the silicon are the same
+      bytes rather than a restatement. Two laws: a_exact_five/a_exact_six
+      (the shipping output IS min(MAXQ, floor(num/255)) on
+      reference/src/zrender/resolve.cpp's numerator, stated division-free as
+      "q == MAXQ ⇒ num ≥ MAXQ·255, else q·255 ≤ num < (q+1)·255" so the
+      solver never sees a divider) and a_no_wrap_five/a_no_wrap_six — THE
+      WHITE RAIL: the result can never exceed its RGB565 field, which is the
+      2026-08-16 defect (green quantizing to 64 and wrapping in six bits, so
+      full white resolved to a 0xFFFF/0xF81F checkerboard) discharged as a
+      theorem instead of pinned as a regression vector. TOTAL, not bounded:
+      the harness is combinational with unconstrained inputs, and free
+      (v, B) with v a u8 and B in [0,15] is EVERY input the block can be
+      handed — the working colour channel is a u8 and the 4×4 Bayer matrix's
+      entries are exactly 0..15 — so all 4,096 inputs per parameter set are
+      covered with no reachability gap. Recorded as an explicit
+      "# SCOPE-TOTAL:" waiver (V19) because there is no horizon for a scope
+      guard to assert. Eight covers, all reached: both ends of both
+      channels' ranges, full white landing on the rail in both, the 5-bit
+      channels' top-of-range (documenting that their clamp is
+      belt-and-braces — their numerator maxes at 8,153 < 32·255 = 8,160),
+      and the LOAD-BEARING one, c_six_clamped: green's clamp actually FIRES
+      (the unclamped floor really is 64 and the rail caught it), without
+      which a_no_wrap_six would also hold for a quantizer that simply never
+      reaches the top. The proof was itself mutation-checked before this
+      entry: dropping the +1 from zhao_raster_div255's reciprocal identity,
+      and removing the clamp, each make it FAIL — so the assertions are
+      live, not decorative. NOT proved here: the Bayer MATRIX (which value
+      sits at which (y&3, x&3)), the absolute phase arithmetic, the
+      256-pixel walk, the skid-FIFO credit rule and the CRC accumulation;
+      those are covered by the differential lanes against zref::TileResolve
+      (a 1,024-tile channel sweep and a 16-phase grid that decide the matrix
+      and the phase exhaustively over the value space) and by the seven-way
+      mutation table in design/contracts/RASTER.RESOLVE.md.
