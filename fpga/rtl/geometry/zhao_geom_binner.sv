@@ -681,8 +681,15 @@ module zhao_geom_binner #(
           // ---------------------------------------------------------------
           S_SETUP1: begin
             for (int k = 0; k < 3; k++) begin
-              rnz_r[k] <= (e0_base(2'(k))[7:0] != 8'd0);
-              ep_r[k]  <= ep_of(e0_base(2'(k)));
+              // Quartus 17.0 rejects indexing a function call's return value
+              // directly (`f(x)[7:0]`), which Verilator accepts. Bind it to a
+              // temporary first. Found by synthesis, not by simulation: this
+              // is exactly the class of defect a Verilator-only lane cannot
+              // see, and it failed EVERY module in the sweep because every
+              // file is compiled regardless of which one is the top.
+              automatic logic signed [47:0] e0k = e0_base(2'(k));  // matches e0_base
+              rnz_r[k] <= (e0k[7:0] != 8'd0);
+              ep_r[k]  <= ep_of(e0k);
               off_r[k] <= ((kx_r[k] > ACC_ZERO) ? mul15(kx_r[k]) : ACC_ZERO) +
                           ((ky_r[k] > ACC_ZERO) ? mul15(ky_r[k]) : ACC_ZERO);
             end
