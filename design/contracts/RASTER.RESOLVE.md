@@ -108,7 +108,7 @@ It is deliberately **not** a second implementation of the dither: the body calls
 
 ## Directed tests
 
-`tests/raster/raster_resolve_directed.cpp` (driver `tests/raster/raster_resolve_dev.hpp`) — **110 checks over 3,512 resolved tiles**. Every case diffs all 256 RGB565 pixels, all 256 tags and the tile CRC against `zref::TileResolve`; on top of that:
+`tests/raster/raster_resolve_directed.cpp` (driver `tests/raster/raster_resolve_dev.hpp`) — **112 checks over 3,519 resolved tiles**. Every case diffs all 256 RGB565 pixels, all 256 tags and the tile CRC against `zref::TileResolve`; on top of that:
 
 - **the rails.** White is `0xFFFF` at every one of the 16 Bayer phases and no pixel wraps to `0xF81F`; the near-white band `[248,255]` never wraps green to 0. Black is pinned to its *actual* law — see Notes: every pixel is `0x0000` or `0x0020`, red and blue are exactly 0, and exactly 128 of 256 pixels are lifted.
 - **channel sweep** — 1,024 constant tiles (grey, and each channel alone, for every value 0…255), i.e. 262,144 pixels. A constant tile visits all 16 Bayer phases 16 times each, so every (value, phase) pair of every channel is *covered*, not sampled.
@@ -119,6 +119,7 @@ It is deliberately **not** a second implementation of the dither: the body calls
 - **depth/stencil** — two tiles identical in colour+tag and maximally different in depth+stencil resolve identically.
 - **CRC payloads** — an all-white tile is checked against `zhao_crc32c` over 512 `0xFF` bytes (an independent known payload); the mixed tile's CRC is checked against the little-endian halfword reconstruction *and* the big-endian one is shown to differ, so a byte-order flip cannot hide; black is used as a negative anchor (it is *not* 512 zero bytes).
 - **backpressure** — 8 PCG stall patterns on both the `tile_read` and `fb_tiles` sides give bit-identical pixels and CRC.
+- **latency** — the figure in the Latency section, measured: exactly 259 cycles at full readiness, and no stall pattern can make a tile faster.
 - **back to back** — six tiles through one instance with no reset.
 
 ## Randomized differential tests
