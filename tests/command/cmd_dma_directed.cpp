@@ -29,6 +29,7 @@
 #include "verilated.h"
 #include "Vzhao_cmd_dma.h"
 
+#include "zhao_abi.h"  // generated: ZHAO_ABI_VERSION
 #include "zhao_sim.hpp"
 #include "zref/zref.hpp"
 #include "zref/zref_cmd2.hpp"
@@ -293,7 +294,7 @@ std::vector<uint8_t> makePacket(uint32_t frame_id, uint32_t epoch, uint32_t dead
     for (int i = 0; i < 4; ++i) p[off + i] = static_cast<uint8_t>(v >> (8 * i));
   };
   put32(0, 0x314B505Au);  // magic
-  put16(4, 2);            // abi_version
+  put16(4, zhao_abi::ZHAO_ABI_VERSION);  // abi_version (track the wire, never a literal)
   put16(6, flags);
   put32(8, frame_id);
   put32(12, frame_id);  // sequence

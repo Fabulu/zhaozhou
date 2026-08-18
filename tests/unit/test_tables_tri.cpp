@@ -117,8 +117,10 @@ int main() {
   check_set("FIELD_RCP_T0", gen::FIELD_RCP_T0, 256, parse_hex_words(sv_frcp),
             array_after(ts, "FIELD_RCP_T0"), 5);
 
-  // TS must carry the same QFMT_VERSION as the C++ header and the spec.
-  if (ts.find("QFMT_VERSION = 1") == std::string::npos) {
+  // TS must carry the same QFMT_VERSION as the C++ header and the spec. The
+  // literal comes from the header so a version bump cannot leave it behind.
+  const std::string want_qfmt = "QFMT_VERSION = " + std::to_string(gen::QFMT_VERSION);
+  if (ts.find(want_qfmt) == std::string::npos) {
     fail("tables.ts QFMT_VERSION marker missing");
   }
 

@@ -754,7 +754,10 @@ int main(int argc, char** argv) {
   const bool full = argc > 1 && 0 == std::strcmp(argv[1], "--rcp-full");
   std::printf("test_fixp (qformats.md QFMT_VERSION %u)%s\n", gen::QFMT_VERSION,
               full ? " [full rcp sweep]" : "");
-  CHECK_EQ(gen::QFMT_VERSION, 1u);
+  // 2 since qformats amendment C1 froze the quat16 lane. C1 added a lane
+  // rather than changing a law this file covers, so every check below is
+  // unchanged; quat16 itself is exercised by tests/geometry/creature_core.cpp.
+  CHECK_EQ(gen::QFMT_VERSION, 2u);
 
   test_sin_cos();
   test_sin_table_endpoint();

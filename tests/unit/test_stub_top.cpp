@@ -132,9 +132,11 @@ int main(int argc, char** argv) {
       h[0] = 0xEF;  // corrupt magic (no re-seal: corruption IS the test)
       cases.push_back({"bad magic", h, E_BAD_MAGIC});
     }
-    // ABI v2 since wave 2: 1 (the v1 value) and 3 are both wrong
-    cases.push_back({"bad abi v1", hdr_of(frame, 1), E_BAD_ABI});
-    cases.push_back({"bad abi v3", hdr_of(frame, 3), E_BAD_ABI});
+    // Neighbours of the current ABI version are the interesting rejects: one
+    // below is the superseded wire, one above does not exist yet. Deriving
+    // them from ZHAO_ABI_VERSION keeps this from going stale on the next bump.
+    cases.push_back({"abi one below current", hdr_of(frame, ZHAO_ABI_VERSION - 1), E_BAD_ABI});
+    cases.push_back({"abi one above current", hdr_of(frame, ZHAO_ABI_VERSION + 1), E_BAD_ABI});
     {
       // reserved frame flag bit set, resealed (so earlier checks pass)
       auto full = resealed([&] {
