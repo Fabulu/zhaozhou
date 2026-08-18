@@ -1,6 +1,19 @@
 // raster_tile_pipe_random.cpp — randomized differential test for the composed
-// phase-4 tile pipe (fpga/rtl/raster/zhao_raster_tile_pipe.sv):
-// RASTER.EDGEWALK -> RASTER.TILESTORE -> RASTER.RESOLVE.
+// phase-4/5 tile pipe (fpga/rtl/raster/zhao_raster_tile_pipe.sv):
+// RASTER.EDGEWALK -> RASTER.EARLYZ -> RASTER.FRAGMENT -> RASTER.TILESTORE ->
+// RASTER.RESOLVE.
+//
+// THE FRAGMENT STATE IS PART OF THE RANDOM DRAW, and it has to be. When
+// RASTER.EARLYZ and RASTER.FRAGMENT replaced the flat write path, this lane
+// still drove `state == 0` for every job — the plain opaque write, with the
+// depth test off, blend REPLACE and no alpha test. A mutation sweep caught it
+// immediately: an INVERTED DEPTH COMPARISON in RASTER.FRAGMENT was caught by
+// both of that block's own lanes and by the composed DIRECTED lane, and this
+// one stayed green, because at state 0 there is no depth comparison to
+// invert. So `make_job` now draws a legal random state for half its jobs and
+// the phase-4 state 0 for the other half — the second half is what keeps the
+// bit-for-bit phase-4 compatibility evidence, and the first half is what
+// makes this lane able to fail.
 //
 // Two lanes, both fully deterministic from fixed seeds (the PCG shape every
 // other random lane in this tree uses):
@@ -38,6 +51,7 @@
 #include <vector>
 
 #include "zref/zref_earlyz.hpp"
+#include "zref/zref_fragment.hpp"
 #include "zref/zref_tilestore.hpp"
 
 using zhao::check;
@@ -83,6 +97,41 @@ uint32_t g_partial = 0;
 uint32_t g_empty = 0;
 uint32_t g_full = 0;
 uint32_t g_degenerate = 0;
+uint32_t g_state_zero = 0;        // jobs at the phase-4 opaque write
+uint32_t g_state_rand = 0;        // jobs at a random legal recipe
+uint32_t g_ez_rejects = 0;        // early-Z rejects the oracle predicted
+uint32_t g_frag_killed = 0;       // candidates the fragment tests killed
+uint32_t g_blended = 0;           // surviving fragments that really blended
+uint32_t g_depth_tie = 0;         // fragment depth EXACTLY at the tile clear depth
+uint32_t g_depth_just_above = 0;  // ...and exactly one LSB above it
+
+/**
+ * A legal random fragment state. The 32-bit encoding has no reserved holes,
+ * so every draw is a state the chain must handle and nothing is filtered out.
+ * The depth test is forced ON far more often than a uniform bit would give
+ * it, because a state with the test off exercises neither RASTER.EARLYZ's
+ * reject nor RASTER.FRAGMENT's comparison — which is exactly the hole that
+ * made this lane blind before.
+ */
+uint32_t random_state(Prng& rng) {
+  const uint32_t r = rng.draw();
+  zref::FragmentPipeline::State s;
+  s.z_test_en = (r & 3u) != 0u;  // on 3 times in 4
+  s.z_write_dis = (r >> 2) & 1u;
+  s.z_force_far = (r >> 3) & 1u;
+  s.blend = static_cast<uint8_t>((r >> 4) & 3u);
+  s.shade_mod = (r >> 6) & 1u;
+  s.alpha_mod = (r >> 7) & 1u;
+  s.atest_en = (r >> 8) & 1u;
+  s.atest_ref = ((r >> 9) & 1u) ? 0 : static_cast<uint8_t>(rng.draw());
+  s.sten_func = static_cast<uint8_t>((r >> 10) & 3u);
+  s.sten_op = static_cast<uint8_t>((r >> 12) & 3u);
+  s.tag_write_dis = (r >> 14) & 1u;
+  s.tag_from_texel = (r >> 15) & 1u;
+  s.tag_channel = static_cast<uint8_t>((r >> 16) & 3u);
+  s.sten_mask = ((r >> 18) & 1u) ? 0xFF : static_cast<uint8_t>(rng.draw());
+  return s.pack();
+}
 
 // One job: a triangle around a tile, in four populations.
 //   0 — a triangle a few pixels across, mostly partial coverage
@@ -143,12 +192,49 @@ PipeJob make_job(Prng& rng, uint32_t population, uint16_t index) {
     }
   }
 
+  // Half the jobs keep the phase-4 opaque write (state 0), which is what
+  // makes "the pre-RASTER.FRAGMENT behaviour is preserved bit for bit" a
+  // measured claim rather than an assertion; the other half draw a legal
+  // recipe, which is what lets this lane fail at all.
+  if ((rng.draw() & 1u) != 0u) {
+    j.state = 0u;
+    ++g_state_zero;
+  } else {
+    j.state = random_state(rng);
+    ++g_state_rand;
+  }
+  j.src_a = static_cast<uint8_t>(rng.draw());
+  j.texel_rgb = rng.draw() & 0xFFFFFFu;
+  j.texel_a = static_cast<uint8_t>(rng.draw());
+  // Index 0 a quarter of the time: it is the ratified alpha-test sentinel.
+  j.texel_idx = ((rng.draw() & 3u) == 0u) ? 0 : static_cast<uint8_t>(rng.draw());
+
+  // THE DEPTH IS DRAWN IN A NARROW WINDOW AROUND THE CLEAR DEPTH. A uniform
+  // 24-bit draw makes `fragment depth == tile clear depth (+/- 1)` a
+  // 1-in-16-million event, and those three values are the ONLY ones that
+  // separate a correct early-Z boundary from an off-by-one: this composition
+  // is flat-shaded, so every fragment of a tile carries the same depth and
+  // the reject decision is all-or-nothing per tile. A mutation sweep proved
+  // the point - widening RASTER.EARLYZ's reject by one LSB survived this lane
+  // untouched until the window below was added.
+  const uint32_t clear_depth = rng.draw() & 0xFFFFFFu;
+  uint32_t frag_depth = rng.draw() & 0xFFFFFFu;
+  if ((rng.draw() & 1u) != 0u) {
+    const int32_t off = rng.span(-2, 3);
+    int64_t d = static_cast<int64_t>(clear_depth) + off;
+    if (d < 0) d = 0;
+    if (d > 0xFFFFFF) d = 0xFFFFFF;
+    frag_depth = static_cast<uint32_t>(d);
+    if (frag_depth == clear_depth) ++g_depth_tie;
+    if (frag_depth == clear_depth + 1u) ++g_depth_just_above;
+  }
+
   j.fill = pipe_word(static_cast<uint8_t>(rng.draw()), static_cast<uint8_t>(rng.draw()),
-                     static_cast<uint8_t>(rng.draw()), static_cast<uint8_t>(rng.draw()),
-                     rng.draw() & 0xFFFFFFu, static_cast<uint8_t>(rng.draw()));
+                     static_cast<uint8_t>(rng.draw()), static_cast<uint8_t>(rng.draw()), frag_depth,
+                     static_cast<uint8_t>(rng.draw()));
   j.clear = pipe_word(static_cast<uint8_t>(rng.draw()), static_cast<uint8_t>(rng.draw()),
                       static_cast<uint8_t>(rng.draw()), static_cast<uint8_t>(rng.draw()),
-                      rng.draw() & 0xFFFFFFu, static_cast<uint8_t>(rng.draw()));
+                      clear_depth, static_cast<uint8_t>(rng.draw()));
   j.index = index;
   j.src = static_cast<uint16_t>(index * 7u + 1u);
   return j;
@@ -167,8 +253,12 @@ bool one_batch(PipeDev& dev, const std::vector<PipeJob>& jobs, PipeFeed feed, ui
 
   zref::TileStore store;
   zref::EarlyZ ez;
+  uint32_t want_rejects = 0;
+  uint32_t want_blended = 0;
   for (size_t i = 0; i < jobs.size(); ++i) {
     const PipeExpect want = pipe_oracle(store, ez, jobs[i]);
+    want_rejects += want.rejects;
+    want_blended += want.blended;
     if (want.degenerate)
       ++g_degenerate;
     else if (want.count == 0)
@@ -177,6 +267,10 @@ bool one_batch(PipeDev& dev, const std::vector<PipeJob>& jobs, PipeFeed feed, ui
       ++g_full;
     else
       ++g_partial;
+
+    g_ez_rejects += want.rejects;
+    g_frag_killed += want.candidates - want.writes;
+    g_blended += want.blended;
 
     const uint32_t addr_bad = pipe_address_errors(jobs[i], (*got)[i]);
     if (addr_bad != 0) {
@@ -199,6 +293,29 @@ bool one_batch(PipeDev& dev, const std::vector<PipeJob>& jobs, PipeFeed feed, ui
       std::snprintf(name, sizeof(name), "raster_tile_pipe_%s_%u_%zu", lane, iter, i);
       zhao::save_failing_vector(name, zhao_raster::pipe_serialize(jobs[i]),
                                 "zref::EdgeWalk->TileStore->TileResolve", body);
+      ++g_saved;
+    }
+  }
+
+  // THE TWO NEW BLOCKS' COUNTERS, ON EVERY CASE. The composed picture cannot
+  // see everything the chain does: RASTER.EARLYZ is a CONSERVATIVE reject, so
+  // an early-Z that passes a fragment RASTER.FRAGMENT then kills produces the
+  // identical tile - by design, since the block is allowed to be pessimistic
+  // and only forbidden to be optimistic. What it is NOT allowed to do is
+  // disagree with its contract about how many it rejected: `early_z_rejects`
+  // is a budgeted counter, and a reject that quietly stopped happening is a
+  // performance regression nothing else here would notice. So the counters
+  // are diffed against the composed oracle's own prediction on EVERY case,
+  // not only in the counters case. (A mutation sweep found this: relaxing the
+  // reject's tie survived both composed lanes until this comparison existed.)
+  if (dev.early_z_rejects() != want_rejects || dev.blended_fragments() != want_blended ||
+      dev.saw_fragment_error()) {
+    ok = false;
+    ++g_failures;
+    if (g_saved < 6) {
+      std::printf("  %s[%u]: counters rejects %u/%u blended %u/%u error %d\n", lane, iter,
+                  want_rejects, dev.early_z_rejects(), want_blended, dev.blended_fragments(),
+                  static_cast<int>(dev.saw_fragment_error()));
       ++g_saved;
     }
   }
@@ -231,6 +348,27 @@ void lane_a(PipeDev& dev, uint32_t iters) {
   check(g_empty > 0 && g_full > 0 && g_degenerate > 0,
         "lane A: empty, full and degenerate tiles all occur", 1,
         (g_empty > 0 && g_full > 0 && g_degenerate > 0) ? 1 : 0);
+
+  // The fragment chain has to have DONE something, or this lane is once again
+  // only testing the phase-4 write path with extra steps.
+  std::printf(
+      "raster_tile_pipe_random recipes: %u jobs at state 0, %u at a random recipe; "
+      "%u early-Z rejects, %u fragments killed by the tests, %u blended\n",
+      g_state_zero, g_state_rand, g_ez_rejects, g_frag_killed, g_blended);
+  check(g_state_zero > 0 && g_state_rand > 0,
+        "lane A: both the phase-4 state 0 and random recipes were driven", 1,
+        (g_state_zero > 0 && g_state_rand > 0) ? 1 : 0);
+  check(g_ez_rejects > 0, "lane A: RASTER.EARLYZ actually rejected fragments", 1,
+        g_ez_rejects > 0 ? 1 : 0);
+  check(g_frag_killed > 0, "lane A: RASTER.FRAGMENT's tests actually killed fragments", 1,
+        g_frag_killed > 0 ? 1 : 0);
+  check(g_blended > 0, "lane A: fragments were actually BLENDED into the tile", 1,
+        g_blended > 0 ? 1 : 0);
+  std::printf("raster_tile_pipe_random depth boundary: %u ties at the clear depth, %u one above\n",
+              g_depth_tie, g_depth_just_above);
+  check(g_depth_tie > 0 && g_depth_just_above > 0,
+        "lane A: the early-Z boundary (the tie, and one LSB above) was actually reached", 1,
+        (g_depth_tie > 0 && g_depth_just_above > 0) ? 1 : 0);
 }
 
 // --------------------------------------------------------------------- B ---

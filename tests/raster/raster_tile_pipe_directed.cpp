@@ -154,8 +154,12 @@ bool run_batch(const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_se
 
   zref::TileStore store;
   zref::EarlyZ ez;
+  uint32_t want_rejects = 0;
+  uint32_t want_blended = 0;
   for (size_t i = 0; i < jobs.size(); ++i) {
     const PipeExpect want = pipe_oracle(store, ez, jobs[i]);
+    want_rejects += want.rejects;
+    want_blended += want.blended;
     if (pipe_match(want, (*got)[i])) continue;
     ok = false;
     const std::string body = pipe_describe(jobs[i], want, (*got)[i]);
@@ -167,6 +171,32 @@ bool run_batch(const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_se
                                 "zref::EdgeWalk->TileStore->TileResolve", body);
       ++g_saved;
     }
+  }
+
+  // THE TWO NEW BLOCKS' COUNTERS, ON EVERY CASE. The composed picture cannot
+  // see everything the chain does: RASTER.EARLYZ is a CONSERVATIVE reject, so
+  // an early-Z that passes a fragment RASTER.FRAGMENT then kills produces the
+  // identical tile - by design, since the block is allowed to be pessimistic
+  // and only forbidden to be optimistic. What it is NOT allowed to do is
+  // disagree with its contract about how many it rejected: `early_z_rejects`
+  // is a budgeted counter, and a reject that quietly stopped happening is a
+  // performance regression nothing else here would notice. So the counters
+  // are diffed against the composed oracle's own prediction on EVERY case,
+  // not only in the counters case. (A mutation sweep found this: relaxing the
+  // reject's tie survived both composed lanes until this comparison existed.)
+  if (dev().early_z_rejects() != want_rejects) {
+    ok = false;
+    std::printf("  %s: early_z_rejects oracle %u rtl %u\n", what, want_rejects,
+                dev().early_z_rejects());
+  }
+  if (dev().blended_fragments() != want_blended) {
+    ok = false;
+    std::printf("  %s: blended_fragments oracle %u rtl %u\n", what, want_blended,
+                dev().blended_fragments());
+  }
+  if (dev().saw_fragment_error()) {
+    ok = false;
+    std::printf("  %s: fragment_error_o fired\n", what);
   }
   return ok;
 }
@@ -890,8 +920,13 @@ void test_recipes_through_the_chain() {
     j.tx = 3 + static_cast<int32_t>(i) * kPipeTile;
     j.ty = 11;
     j.tri = tri_full(j.tx, j.ty);
+    // The clear is deliberately BRIGHT: with a source of (C8, 64, 30) the
+    // additive recipes rail on red (C8+C0) and green (64+E0) and do not on
+    // blue (30+90), so one vector exercises both sides of the rail. A dimmer
+    // destination let an additive blend that never saturated survive this
+    // lane - found by the mutation sweep, fixed here.
     j.fill = pipe_word(0xC8, 0x64, 0x30, 0x5A, 0x00A000u, 0x11);
-    j.clear = pipe_word(0x20, 0x40, 0x60, 0x00, 0x004000u, 0x00);
+    j.clear = pipe_word(0xC0, 0xE0, 0x90, 0x00, 0x004000u, 0x00);
     j.state = recipes[i].pack();
     j.src_a = 0xB0;
     j.texel_rgb = zhao_raster::pipe_rgb(0xF0, 0x80, 0x40);
@@ -948,6 +983,85 @@ void test_recipes_through_the_chain() {
       all_clear = false;
   check(all_clear, "recipes: a fully-covered star disc masked at index 0 resolves as if UNCOVERED",
         1, all_clear ? 1 : 0);
+
+  // THE ADDITIVE RAIL, END TO END. sky_and_beams 2 and stars 1 both spell
+  // the additive recipes as `dst = sat(dst + src)`, and the saturation is the
+  // RECIPE rather than an overflow: a beam crossing a bright sky is supposed
+  // to blow out to white, never to wrap through black. A fully covered tile
+  // whose destination and source sum past 255 on every channel must therefore
+  // resolve to pure white - 0xFFFF in RGB565, on every one of its 256 pixels,
+  // with no dither speckle, because every channel is railed.
+  PipeJob rail;
+  rail.tx = 3;
+  rail.ty = 11;
+  rail.tri = tri_full(rail.tx, rail.ty);
+  rail.fill = pipe_word(0xF0, 0xF0, 0xF0, 0x40, 0x000010u, 0x00);
+  rail.clear = pipe_word(0xC0, 0xC0, 0xC0, 0x00, 0x000000u, 0x00);
+  rail.state = zref::FragmentPipeline::star_halo_additive().pack();
+  rail.texel_idx = 0x3F;
+  rail.index = 77;
+  rail.src = 0xD00;
+  std::vector<PipeJob> rj;
+  rj.push_back(rail);
+  std::vector<PipeTile> gr;
+  const bool ok_r = run_batch(rj, PipeFeed::kBackToBack, 0u, 0u, "recipes-rail", &gr);
+  check(ok_r, "recipes: the additive rail matches the composed oracle", 1, ok_r ? 1 : 0);
+  bool white = true;
+  for (int i = 0; i < kPipePixels; ++i)
+    if (gr[0].rgb565[i] != 0xFFFF) white = false;
+  check(white,
+        "recipes: an additive blend past 255 on every channel resolves to WHITE, never wraps", 1,
+        white ? 1 : 0);
+
+  // THE EARLY-Z BOUNDARY, THROUGH THE WHOLE CHAIN. This composition is
+  // flat-shaded, so every fragment of a tile carries the same depth and
+  // RASTER.EARLYZ's decision is all-or-nothing per tile: the tile either
+  // paints or resolves exactly as the clear word. Three jobs straddle the
+  // boundary at one LSB.
+  //
+  // spec/qformats.md 8's test is strict, so `depth == clear depth` LOSES and
+  // `depth == clear depth + 1` wins - the same one-LSB margin
+  // stars_and_flares.md 3 relies on when it puts STAR_DEPTH at "sky-prefill
+  // far + 1". A reject widened or narrowed by one LSB moves exactly one of
+  // these three tiles, and nothing else in this lane would notice.
+  const uint32_t CD = 0x00ABCDEu;
+  zref::FragmentPipeline::State tested;
+  tested.z_test_en = true;
+  const int32_t offs[3] = {-1, 0, 1};
+  const bool want_paint[3] = {false, false, true};
+  const char* labels[3] = {"one LSB BELOW the clear depth: every fragment rejected",
+                           "EXACTLY at the clear depth: every fragment rejected (ties fail)",
+                           "one LSB ABOVE: the tile paints - the STAR_DEPTH margin"};
+  for (int k = 0; k < 3; ++k) {
+    PipeJob zj;
+    zj.tx = 3;
+    zj.ty = 11;
+    zj.tri = tri_full(zj.tx, zj.ty);
+    zj.fill = pipe_word(0xE0, 0x10, 0x70, 0x22,
+                        static_cast<uint32_t>(static_cast<int32_t>(CD) + offs[k]), 0x00);
+    zj.clear = pipe_word(0x08, 0xF8, 0x08, 0x00, CD, 0x00);
+    zj.state = tested.pack();
+    zj.index = static_cast<uint16_t>(80 + k);
+    zj.src = static_cast<uint16_t>(0xE00 + k);
+
+    // The same tile with NO coverage at all: the reference for "resolved
+    // exactly as the clear word", without restating the dither anywhere.
+    PipeJob none = zj;
+    none.tri = tri_no_pixel(zj.tx + 3, zj.ty + 3);
+    none.index = static_cast<uint16_t>(90 + k);
+
+    std::vector<PipeJob> pair;
+    pair.push_back(zj);
+    pair.push_back(none);
+    std::vector<PipeTile> gp;
+    const bool ok_z = run_batch(pair, PipeFeed::kBackToBack, 0u, 0u, "earlyz-edge", &gp);
+    check(ok_z, "early-Z edge: the straddling pair matches the composed oracle", 1, ok_z ? 1 : 0);
+
+    bool painted = false;
+    for (int i = 0; i < kPipePixels; ++i)
+      if (gp[0].rgb565[i] != gp[1].rgb565[i]) painted = true;
+    check(painted == want_paint[k], labels[k], want_paint[k] ? 1 : 0, painted ? 1 : 0);
+  }
 }
 
 }  // namespace
