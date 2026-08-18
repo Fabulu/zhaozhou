@@ -271,7 +271,15 @@ constexpr height16 height16_from_fx16(fx16 x, SatLedger* L) {  // bake-back (§9
 constexpr int32_t SCREEN_GUARD_PX = 2048;
 
 constexpr int32_t to_screen_xy(fx16 x, SatLedger* L) {
-  int32_t px = rescale_s32(x.raw, 8, L);  // rescale(.,8): 16 -> 8 fraction bits
+  // cppcheck-suppress constStatement  // FALSE POSITIVE on cppcheck 2.19.0
+  // (the version CI pins): it misreads this variable definition as a function
+  // declaration, because rescale_s32's trailing parameter is a
+  // pointer-to-member with a default argument, and then reports the definition
+  // as an unused function. 2.20.0 parses it correctly. The line is an ordinary
+  // initialisation and `px` is read on every path below. Suppressed rather than
+  // restructured because contorting correct arithmetic to satisfy one release
+  // of one tool is the worse trade.
+  const int32_t px = rescale_s32(x.raw, 8, L);  // rescale(.,8): 16 -> 8 fraction bits
   const int32_t lim = SCREEN_GUARD_PX << 8;
   if (px > lim) {
     detail::ledger_bump(L, &SatLedger::rescale);
