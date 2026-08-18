@@ -293,7 +293,7 @@ std::vector<uint8_t> makePacket(uint32_t frame_id, uint32_t epoch, uint32_t dead
   auto put32 = [&](uint32_t off, uint32_t v) {
     for (int i = 0; i < 4; ++i) p[off + i] = static_cast<uint8_t>(v >> (8 * i));
   };
-  put32(0, 0x314B505Au);  // magic
+  put32(0, 0x314B505Au);                 // magic
   put16(4, zhao_abi::ZHAO_ABI_VERSION);  // abi_version (track the wire, never a literal)
   put16(6, flags);
   put32(8, frame_id);

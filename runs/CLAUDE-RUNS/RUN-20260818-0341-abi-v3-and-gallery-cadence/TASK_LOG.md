@@ -59,12 +59,29 @@ reconstruction plane is six-bit: one class-ramp lookup yields at most 64 trail
 colours however many falloffs a pixel sums. Every star sequence still clears
 256; noctis-flare at 248 is the ceiling case.
 
+### `4402bc5` — cppcheck objectIndex
+`(&m.m00)[i]` walked off the first member of `ZhMat4fx`. The ABI
+static_asserts pin the layout so it worked, but it is UB and cppcheck 2.13 on
+the Linux runner is right to reject it. All sixteen members are named now. No
+suppression was added.
+
 ## Evidence
 
 - `reel --check`: all 18 sequence CRCs match
-- fast CTest in `build-verify`: 87 tests
+- fast CTest in `build-verify`: 86/87 observed passing in one run, plus
+  `shell_golden_replay` verified directly at 756 checks after that run was
+  killed part-way. Every fast test is therefore accounted for green.
 - `cmd_dma_directed` 8894 checks, `cmd_dma_random` 1482, `stub_top` 46,
-  `fixp` 29385050, `tables_tri` OK, `shell_golden` 753
+  `fixp` 29385050, `tables_tri` OK, `shell_golden` 756
+
+## Interruptions
+
+Three background jobs (Quartus elaboration, the fast CTest sweep, the GIF
+encode) were killed externally part-way. Nothing was lost: CTest was resumed by
+running its one outstanding test directly, and the GIF encode was restarted from
+a clean state. The GIF set had been left half-new and half-a-day-old, which is
+exactly the kind of mixed gallery that must never be deployed, so no deploy
+happened until the encode completed in full.
 
 ## Maturity
 
