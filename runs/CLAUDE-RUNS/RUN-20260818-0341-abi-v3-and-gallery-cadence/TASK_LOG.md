@@ -103,3 +103,32 @@ No hardware maturity is claimed here. Quartus analysis/elaboration of
 target is a capacity and timing characterization only. It is not board truth,
 not a programmed device, and not integration. No `HARDWARE_PROVEN` claim is made
 or implied.
+
+## Docket (owner, 2026-08-18)
+
+### Open: flare-occlusion shows no real occlusion
+
+Owner: "the fade the original lacked - both old and new doesn't have a real
+effect, it's just a transparent stripe over the image with a white dot moving
+left and right. I don't think that's the intended effect."
+
+The `flare-occlusion` subject is supposed to show a sun passing BEHIND island
+terrain, with the flare chain fading out as the disc is occluded and recovering
+as it clears. What ships reads as a flat transparent stripe with a white dot
+sliding left and right, which is not that.
+
+Where to look:
+- `tools/reel/zhao_reel.cpp`, the `celestial` case for flare-occlusion (it sets
+  `L.probe_x` / `L.probe_y` and a flare mode; check the occluder is real
+  geometry and not a painted band)
+- `reference/src/zsky/star_flare.cpp` and the occlusion probe path: confirm the
+  probe actually samples the depth/terrain buffer at the disc, and that the
+  documented 15-frame fade grades the whole flare chain rather than a single
+  alpha over the frame
+- the subject note claims "Sun crosses behind island with 15-frame fade" — if
+  the island is not in the scene at all, the note is the lie and the scene
+  needs the island, not a stripe
+
+Fix, then regenerate the reel, inspect DECODED frames visually rather than
+trusting the CRC, re-pin `expect_seq_crc`, re-encode the GIF, and deploy through
+`zhaozhou-site\deploy.ps1`. Do not deploy a mixed gallery.
