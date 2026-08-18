@@ -1629,6 +1629,71 @@ set_tests_properties(lint_terrain_patch PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# TERRAIN.TESS (phase 6, ZH-034)
+#
+# The unstitched path is the reference path: terrain_rules 4.3's emit order
+# verbatim, so "RTL == oracle" is "RTL == the geometry the golden captures pin".
+# The stitched path is an annulus whose outer boundary uses ONLY the per-side
+# coarse vertices, which makes the shared-edge vertex sets identical by
+# construction — the contract's crack invariant, checked on real emitted
+# geometry in terrain_tess_directed rather than argued in prose.
+set(ZHAO_TERRAIN_TESS_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv)
+
+add_executable(test_terrain_tess_directed terrain/terrain_tess_directed.cpp)
+target_link_libraries(test_terrain_tess_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_tess_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_tess_directed
+  PREFIX Vzhao_terrain_tess
+  TOP_MODULE zhao_terrain_tess
+  SOURCES ${ZHAO_TERRAIN_TESS_SV})
+add_test(NAME terrain_tess_directed COMMAND test_terrain_tess_directed)
+set_tests_properties(terrain_tess_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_tess_random terrain/terrain_tess_random.cpp)
+target_link_libraries(test_terrain_tess_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_tess_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_tess_random
+  PREFIX Vzhao_terrain_tess
+  TOP_MODULE zhao_terrain_tess
+  SOURCES ${ZHAO_TERRAIN_TESS_SV})
+add_test(NAME terrain_tess_random COMMAND test_terrain_tess_random)
+set_tests_properties(terrain_tess_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME terrain_tess_random_nightly COMMAND test_terrain_tess_random --nightly)
+set_tests_properties(terrain_tess_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_terrain_tess
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_tess
+                 ${ZHAO_TERRAIN_TESS_SV})
+set_tests_properties(lint_terrain_tess PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.TESS -> TERRAIN.NORMALS composition (phase 6)
+#
+# Real tessellated cells drive the real normals block. Composing GEOM.BINNER
+# with the real rasterizer immediately exposed a 16x tile-index-versus-pixel
+# error no isolated test could see; this is the same move for the Mantle chain.
+add_executable(test_terrain_tess_normals terrain/terrain_tess_normals.cpp)
+target_link_libraries(test_terrain_tess_normals PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_tess_normals PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_tess_normals
+  PREFIX Vzhao_terrain_tess
+  TOP_MODULE zhao_terrain_tess
+  SOURCES ${ZHAO_TERRAIN_TESS_SV})
+verilate(test_terrain_tess_normals
+  PREFIX Vzhao_terrain_normals
+  TOP_MODULE zhao_terrain_normals
+  SOURCES ${ZHAO_TERRAIN_NORMALS_SV})
+add_test(NAME terrain_tess_normals COMMAND test_terrain_tess_normals)
+set_tests_properties(terrain_tess_normals PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # per-module lint (charter 21 step 8)
 add_test(NAME lint_geom_clip
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
