@@ -312,9 +312,14 @@ void test_sky_orientation() {
   res.sky_sets.push_back({2, s});
   const zhao_abi::ZhMat4fx m = sky_pitch_mat(91750, 5714, 65287, false);
   {
+    // Name all sixteen members rather than walking off &m.m00: the ABI
+    // static_asserts pin the layout, but the pointer walk is still UB and
+    // cppcheck says so.
+    const int32_t row_major[16] = {m.m00, m.m01, m.m02, m.m03, m.m10, m.m11, m.m12, m.m13,
+                                   m.m20, m.m21, m.m22, m.m23, m.m30, m.m31, m.m32, m.m33};
     zref::mat4fx rp;
     for (int a = 0; a < 4; ++a)
-      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{(&m.m00)[a * 4 + b]};
+      for (int b = 0; b < 4; ++b) rp.m[a][b] = zref::fx16{row_major[a * 4 + b]};
     check(zref::sky::rot_proj_is_rotation_only(rp), "orientation fixture is rotation-only (§1)");
   }
 
