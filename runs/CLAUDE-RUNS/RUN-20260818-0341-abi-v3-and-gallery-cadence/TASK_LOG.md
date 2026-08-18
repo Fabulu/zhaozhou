@@ -250,10 +250,26 @@ Suggested order:
    validates block ids and contract paths, so rename both together and re-run.
 4. The `compiler/` build coupling, last and on its own commit.
 
-Renaming `FORM_LANGUAGE_HARDWARE_CODESIGN.md` is a judgement call: it is a
-historical co-design document with a provenance header. Retitling the content
-to Nanquan while keeping a note that it was written as "Form" is honest;
-silently rewriting history is not.
+CORRECTION (owner, 2026-08-18): the language was ALWAYS called Nanquan. "Form"
+was never a real name; it entered the tree through a miscommunication with an
+agent that did not know the name. There is no history to preserve here.
+
+So this is fixing an error, not renaming a thing. Practical consequences:
+
+- Replace "Form" with "Nanquan" everywhere it names the language, including in
+  old documents and provenance headers. Do NOT add notes saying it "was
+  formerly called Form" and do NOT keep the old name for continuity. That would
+  preserve a mistake as though it were a decision.
+- `FORM_LANGUAGE_HARDWARE_CODESIGN.md` should be renamed to
+  `NANQUAN_LANGUAGE_HARDWARE_CODESIGN.md` and its contents corrected outright.
+- `SW.COMPILER.FORM` in the ledger, `design/contracts/SW.COMPILER.FORM.md`, the
+  `FORM-E-nnn` diagnostic prefix and the `.form` source extension are all the
+  same error and should all become Nanquan forms. Check whether the Nanquan
+  repo already fixed the diagnostic prefix and file extension, and match it
+  rather than inventing a second convention.
+- Keep the ordinary English word "form" where it genuinely means shape or a
+  form of something. A blind replace will corrupt those; several exist in the
+  co-design document already.
 
 #### Same item: the site's dashboard and progress claims are now stale
 
