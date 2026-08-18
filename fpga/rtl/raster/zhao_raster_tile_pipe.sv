@@ -1,0 +1,472 @@
+// zhao_raster_tile_pipe.sv — the phase-4 "first exact tile and triangle"
+// composition: RASTER.EDGEWALK → RASTER.TILESTORE → RASTER.RESOLVE, wired
+// together into one flat-colour triangle rasterized to RGB565 framebuffer
+// words with a deterministic tile CRC.
+//
+// ---------------------------------------------------------------------------
+// THIS BLOCK IS NOT IN design/blocks.yml, AND THAT IS DELIBERATE
+// ---------------------------------------------------------------------------
+// The ledger's RASTER group has exactly five entries — EDGEWALK, TILESTORE,
+// EARLYZ, FRAGMENT, RESOLVE — and none of them is "the composition". There is
+// no ledger block for this file and none was invented: registering a block is
+// a validator-gated ledger edit (charter §4) and not this increment's call, so
+// the rationale lives here instead of in a contract nobody's ledger row points
+// at. What this file IS:
+//
+//   · the wiring the three contracts each declared as NOT built. RASTER.
+//     RESOLVE.md, "Integration capture cases", says in as many words: "It has
+//     also never been composed with `zhao_raster_tilestore`… no test
+//     instantiates both, and the driver plays the store from a flat array
+//     instead. That composition… is the next increment." This is that
+//     increment.
+//   · a COMPOSITION ONLY. Every law lives in the three blocks it instantiates
+//     and in their contracts; this file adds exactly three things of its own,
+//     each named below (the tile sequencing, the coverage→write expansion, and
+//     the framebuffer pixel address). It re-derives no fill rule, no dither,
+//     no CRC, no word layout.
+//   · the stand-in for RASTER.FRAGMENT. In the shipping dataflow the tile
+//     store's write port belongs to RASTER.FRAGMENT (Z test, blend, tag), which
+//     does not exist yet. This block writes ONE flat 64-bit word at every
+//     covered pixel and nothing else — no depth test, no blend, no stencil op,
+//     no attribute interpolation. When RASTER.FRAGMENT lands it replaces the
+//     `RS_WALK` write path here, not the sequencing around it.
+//
+// WHAT THIS BLOCK IS NOT: no binning (it is handed one triangle × one tile,
+// exactly as GEOM.BINNER would hand it), no early-Z, no fragment maths, no
+// VRAM addressing or framebuffer write (it emits a pixel stream and that
+// pixel's SURFACE coordinate; MEM.GUARD and the write path own the address),
+// no tile scheduling across a frame, no multi-triangle accumulation into one
+// tile (one job = one clear + one triangle + one resolve).
+//
+// ---------------------------------------------------------------------------
+// THE THREE LAWS THIS FILE OWNS
+// ---------------------------------------------------------------------------
+// 1. TILE SEQUENCING AND THE PING-PONG. Per job: clear the FRONT bank, walk
+//    the triangle, write every covered pixel into the front bank, then SWAP
+//    and hand the now-BACK bank to the resolve. The swap is the only
+//    synchronisation point, and it is gated on BOTH sides:
+//      · the raster stage must have retired its last write (a swap one cycle
+//        early sends that write into the bank the resolve is about to read,
+//        and the resolve then reads a hole), and
+//      · the resolve must be idle (a swap one tile early pulls the bank out
+//        from under a resolve that is still streaming it).
+//    After the swap the raster stage is immediately free: `job_ready_o` rises
+//    the next cycle, so tile N+1's clear and coverage run into the new front
+//    bank WHILE tile N resolves out of the back bank. That overlap is the
+//    entire reason RASTER.TILESTORE is ping-pong at all (its header: "resolve
+//    streams the back bank at its own pace while the fragment pipeline already
+//    renders the next tile into the front"), and it is measured, not asserted,
+//    by tests/raster/raster_tile_pipe_directed.cpp:test_pingpong_overlap.
+//
+//    Ordering, cycle by cycle, is forced by RASTER.TILESTORE's rule 4 ("an
+//    access accepted in the same cycle as a swap targets the roles as they
+//    were BEFORE the swap"):
+//      cycle T   — `swap` and the resolve's `start` are accepted together. The
+//                  resolve cannot issue a read in its own accepting cycle
+//                  (RASTER.RESOLVE.md's Latency section: `tr_valid_o` is a
+//                  function of `busy_r`, which the accepting edge sets), so
+//                  its first read lands at T+1, after the swap.
+//      cycle T+1 — the raster stage is IDLE and may accept the next job.
+//      cycle T+2 — the earliest that job's `clear` can be accepted. A clear
+//                  only ever touches the FRONT bank, so it can never reach the
+//                  tile now resolving out of the back one.
+//
+// 2. COVERAGE → WRITES. RASTER.EDGEWALK emits one 16-bit row mask per
+//    non-empty row; RASTER.TILESTORE takes one full 64-bit word per cycle at
+//    `{row[3:0], col[3:0]}`. This block expands the mask lowest-column-first,
+//    one write per set bit, and accepts the next coverage beat only once the
+//    current mask is drained. Cost is exactly popcount(mask) write cycles per
+//    row plus one accept cycle — no cycles are spent on uncovered columns.
+//    (The lowest-set-index selector is the same idiom as EDGEWALK's own
+//    `drain_row`.) Uncovered pixels are never written, so they keep their
+//    PRESENT bit at 0 and resolve as the clear word — which is why a tile the
+//    triangle misses entirely still resolves, and resolves to the cleared
+//    colour, without costing 256 write cycles.
+//
+// 3. THE FRAMEBUFFER PIXEL ADDRESS. RASTER.RESOLVE emits `fb_addr_o` =
+//    `{row, col}` WITHIN the tile; the surface coordinate is the resolving
+//    tile's origin plus that, in the same signed 12-bit pixel space the job
+//    came in on (§8's ±2048 px guard band). The resolving tile's origin is NOT
+//    `job_tile_x_i` — by then the raster stage is a whole tile ahead — so it is
+//    shadowed at the swap, together with the coverage count and the degenerate
+//    flag, which are likewise the finishing tile's and not the walking one's.
+//
+// ---------------------------------------------------------------------------
+// THE FLAT WORD, AND WHY IT IS A WORD AND NOT A COLOUR
+// ---------------------------------------------------------------------------
+// `job_fill_word_i` and `job_clear_word_i` are whole RASTER.TILESTORE words
+// (that block's header, charter §8 order, MSB first: [63:40] RGB, [39:32]
+// effect tag, [31:8] depth, [7:0] stencil). This block does not decode them
+// and does not name their fields — RASTER.TILESTORE is field-agnostic and so
+// is its composition. The layout is stated in exactly one place and this is
+// not it.
+//
+// ---------------------------------------------------------------------------
+// A KNOWN, ESCALATED ORACLE DEFECT RIDES THROUGH THIS BLOCK UNCHANGED
+// ---------------------------------------------------------------------------
+// reference/src/zrender/resolve.cpp resolves pure black to 0x0020 (green level
+// 1) at the 8 Bayer cells with B ≥ 8, because green's dither amplitude is 32
+// while red and blue get 16 (RASTER.RESOLVE.md, "FINDING — the BLACK rail is
+// not clean"). A tile this block clears to black therefore resolves to a green
+// speckle on black, not to 512 zero bytes. That is reproduced bit for bit and
+// deliberately NOT fixed here: the oracle is the law, and changing it moves
+// every golden capture's canvas CRC. The directed test pins the actual
+// behaviour rather than the desired one.
+//
+// Conservative SystemVerilog subset only (charter §2). Depends on
+// zhao_abi_pkg (through zhao_raster_resolve's generated CRC step),
+// zhao_raster_fill, zhao_raster_edgewalk, zhao_raster_tilestore,
+// zhao_raster_div255, zhao_raster_quant, zhao_raster_resolve.
+// Lint: clean under `verilator_bin --lint-only -Wall` (lint_raster_tile_pipe).
+
+module zhao_raster_tile_pipe (
+  input  logic clk,
+  input  logic rst_n,
+
+  // ---- job in: one triangle × one 16×16 tile × one flat word ------------
+  // Vertices are S 12.8 screen subpixels (spec/qformats.md §8), guard band
+  // ±2048 px; the tile origin is the tile's top-left PIXEL.
+  input  logic               job_valid_i,
+  output logic               job_ready_o,
+  input  logic signed [20:0] job_ax_i,
+  input  logic signed [20:0] job_ay_i,
+  input  logic signed [20:0] job_bx_i,
+  input  logic signed [20:0] job_by_i,
+  input  logic signed [20:0] job_cx_i,
+  input  logic signed [20:0] job_cy_i,
+  input  logic signed [11:0] job_tile_x_i,
+  input  logic signed [11:0] job_tile_y_i,
+  input  logic        [63:0] job_fill_word_i,   // written at every COVERED pixel
+  input  logic        [63:0] job_clear_word_i,  // the tile's clear word
+  input  logic        [15:0] job_tile_index_i,  // .zcap TILE_CRC tile_index
+  input  logic        [15:0] job_src_id_i,      // source_id passthrough
+
+  // ---- framebuffer words out: one beat per pixel, tile raster order ------
+  output logic               fb_valid_o,
+  input  logic               fb_ready_i,
+  output logic        [15:0] fb_rgb565_o,       // video_rules.md §3 [15:11] R
+  output logic        [7:0]  fb_tag_o,          // effect tag — never dithered
+  output logic        [7:0]  fb_addr_o,         // {row[3:0], col[3:0]} in-tile
+  output logic signed [11:0] fb_x_o,            // SURFACE pixel x of this beat
+  output logic signed [11:0] fb_y_o,            // SURFACE pixel y of this beat
+  output logic               fb_last_o,         // the 256th pixel of this tile
+  output logic        [15:0] fb_src_id_o,
+
+  // ---- per-tile completion (one pulse per resolved tile) ----------------
+  output logic        [31:0] tile_crc_o,
+  output logic        [15:0] tile_crc_index_o,
+  output logic               tile_done_o,
+  output logic        [8:0]  tile_cov_count_o,   // covered pixels, 0..256
+  output logic               tile_degenerate_o,  // area == 0: culled
+
+  // ---- observability ----------------------------------------------------
+  output logic               front_bank_o,
+  output logic        [31:0] tile_references_o,  // RASTER.TILESTORE's counter
+  output logic        [31:0] resolved_tiles_o    // RASTER.RESOLVE's counter
+);
+
+  // ======================================================= raster stage ====
+  // RS_IDLE  — accept a job.
+  // RS_CLEAR — clear the FRONT bank and launch the edge walk (same cycle).
+  // RS_WALK  — consume coverage beats, one write per set column.
+  // RS_SWAP  — the last write has retired: swap the banks and start the
+  //            resolve, as soon as the resolve stage is free.
+  localparam logic [1:0] RS_IDLE  = 2'd0;
+  localparam logic [1:0] RS_CLEAR = 2'd1;
+  localparam logic [1:0] RS_WALK  = 2'd2;
+  localparam logic [1:0] RS_SWAP  = 2'd3;
+
+  logic [1:0] rs_state;
+
+  // the job, latched at acceptance
+  logic signed [20:0] ax_r, ay_r, bx_r, by_r, cx_r, cy_r;
+  logic signed [11:0] tile_x_r, tile_y_r;
+  logic        [63:0] fill_r, clear_r;
+  logic        [15:0] index_r, src_r;
+
+  // the coverage beat being expanded into writes
+  logic [3:0]  pend_row_r;
+  logic [15:0] pend_mask_r;
+
+  // the edge walk's per-job status, latched at its done pulse
+  logic       ew_done_r;
+  logic [8:0] ew_count_r;
+  logic       ew_degen_r;
+
+  // ------------------------------------------------- the resolve shadow ----
+  // The finishing tile's origin and status. The raster stage is a whole tile
+  // ahead by the time these are needed, so they are captured at the swap.
+  logic [11:0] rz_tile_x_r, rz_tile_y_r;
+  logic [8:0]  rz_count_r;
+  logic        rz_degen_r;
+
+  // ------------------------------------------------------- block wiring ----
+  logic        ew_start, ew_ready;
+  logic        cov_valid, cov_ready, cov_last;
+  logic [3:0]  cov_row;
+  logic [15:0] cov_mask, cov_src;
+  logic        ew_done, ew_degen;
+  logic [8:0]  ew_count;
+
+  logic        ts_clear, ts_clear_ready;
+  logic        ts_wr, ts_wr_ready;
+  logic [7:0]  ts_wr_addr;
+  logic        ts_rd_ready, ts_rd_valid;
+  logic [63:0] ts_rd_data;
+  logic [15:0] ts_rd_src;
+  logic        ts_swap, ts_swap_ready;
+
+  logic        tr_valid, tr_ready, tr_data_valid;
+  logic [7:0]  tr_addr;
+  logic [63:0] tr_data;
+
+  logic        rz_start, rz_ready;
+
+  // ------------------------------------------- lowest set coverage column --
+  // Same idiom as zhao_raster_edgewalk's `drain_row`: the descending loop
+  // leaves the SMALLEST set index in place, so columns are written left to
+  // right and `ts_wr_addr` is a plain {row, col} concatenation.
+  logic [3:0]  wr_col;
+  logic [15:0] wr_hot;
+  always_comb begin
+    wr_col = 4'd0;
+    wr_hot = 16'd0;
+    for (int i = 15; i >= 0; i--) begin
+      if (pend_mask_r[i]) begin
+        wr_col = i[3:0];
+        wr_hot = 16'd1 << i;
+      end
+    end
+  end
+
+  // ---------------------------------------------------------- handshakes ---
+  // Hygiene: no `valid` here is a function of its own channel's `ready`.
+  // `ts_swap` does depend on the RESOLVE's `start_ready_o` — a DIFFERENT
+  // channel's ready, the permitted direction — because the two must be
+  // accepted on the same edge (law 1 above); RASTER.TILESTORE's `swap_ready_o`
+  // is a constant 1, so that composition is loop-free.
+  assign job_ready_o = (rs_state == RS_IDLE);
+  assign ew_start    = (rs_state == RS_CLEAR);
+  assign ts_clear    = (rs_state == RS_CLEAR);
+  assign cov_ready   = (rs_state == RS_WALK) && (pend_mask_r == 16'd0);
+  assign ts_wr       = (rs_state == RS_WALK) && (pend_mask_r != 16'd0);
+  assign ts_wr_addr  = {pend_row_r, wr_col};
+  assign rz_start    = (rs_state == RS_SWAP);
+  assign ts_swap     = (rs_state == RS_SWAP) && rz_ready;
+
+  logic cov_acc, wr_acc, swap_acc;
+  assign cov_acc  = cov_valid && cov_ready;
+  assign wr_acc   = ts_wr && ts_wr_ready;
+  assign swap_acc = ts_swap && ts_swap_ready;
+
+  // ------------------------------------------------- the surface address ---
+  // Law 3: the resolving tile's origin plus the in-tile {row, col}. Signed
+  // 12-bit pixel space, wrapping exactly as the job's own coordinates do.
+  logic [11:0] fb_x_raw, fb_y_raw;
+  always_comb begin
+    fb_x_raw = rz_tile_x_r + {8'd0, fb_addr_o[3:0]};
+    fb_y_raw = rz_tile_y_r + {8'd0, fb_addr_o[7:4]};
+  end
+  assign fb_x_o = $signed(fb_x_raw);
+  assign fb_y_o = $signed(fb_y_raw);
+
+  assign tile_cov_count_o  = rz_count_r;
+  assign tile_degenerate_o = rz_degen_r;
+
+  // -------------------------------------------------- unused block ports ---
+  // RASTER.TILESTORE's read port A is RASTER.FRAGMENT's working view, and
+  // RASTER.FRAGMENT does not exist yet: it is tied off rather than removed,
+  // because the store's contract is a five-channel one and a composition that
+  // deletes a channel is not the block the ledger registered. The edge walk's
+  // source-id echo is likewise unused here — this block carries the job's own
+  // `src_r` to the resolve, which is the same value.
+  logic unused_ok;
+  assign unused_ok = &{1'b0, ts_clear_ready, ts_rd_ready, ts_rd_valid, ts_rd_data,
+                       ts_rd_src, ts_swap_ready, cov_last, cov_src, ew_ready};
+
+  // ============================================================ EDGEWALK ===
+  zhao_raster_edgewalk u_edgewalk (
+    .clk              (clk),
+    .rst_n            (rst_n),
+    .job_valid_i      (ew_start),
+    .job_ready_o      (ew_ready),
+    .job_ax_i         (ax_r),
+    .job_ay_i         (ay_r),
+    .job_bx_i         (bx_r),
+    .job_by_i         (by_r),
+    .job_cx_i         (cx_r),
+    .job_cy_i         (cy_r),
+    .job_tile_x_i     (tile_x_r),
+    .job_tile_y_i     (tile_y_r),
+    .job_src_id_i     (src_r),
+    .cov_valid_o      (cov_valid),
+    .cov_ready_i      (cov_ready),
+    .cov_row_o        (cov_row),
+    .cov_mask_o       (cov_mask),
+    .cov_last_o       (cov_last),
+    .cov_src_id_o     (cov_src),
+    .job_done_o       (ew_done),
+    .job_degenerate_o (ew_degen),
+    .cov_count_o      (ew_count)
+  );
+
+  // =========================================================== TILESTORE ===
+  zhao_raster_tilestore u_tilestore (
+    .clk               (clk),
+    .rst_n             (rst_n),
+    .clear_valid_i     (ts_clear),
+    .clear_ready_o     (ts_clear_ready),
+    .clear_data_i      (clear_r),
+    .wr_valid_i        (ts_wr),
+    .wr_ready_o        (ts_wr_ready),
+    .wr_addr_i         (ts_wr_addr),
+    .wr_data_i         (fill_r),
+    // read port A — RASTER.FRAGMENT's, not built yet (see above)
+    .rd_valid_i        (1'b0),
+    .rd_ready_o        (ts_rd_ready),
+    .rd_addr_i         (8'd0),
+    .rd_src_id_i       (16'd0),
+    .rd_valid_o        (ts_rd_valid),
+    .rd_data_o         (ts_rd_data),
+    .rd_src_id_o       (ts_rd_src),
+    // read port B — RASTER.RESOLVE's `tr_*` master, port for port
+    .res_valid_i       (tr_valid),
+    .res_ready_o       (tr_ready),
+    .res_addr_i        (tr_addr),
+    .res_valid_o       (tr_data_valid),
+    .res_data_o        (tr_data),
+    .swap_valid_i      (ts_swap),
+    .swap_ready_o      (ts_swap_ready),
+    .front_bank_o      (front_bank_o),
+    .tile_references_o (tile_references_o)
+  );
+
+  // ============================================================= RESOLVE ===
+  // The `tr_*` / `res_*` pairing RASTER.RESOLVE.md documents: this master's
+  // request channel is the store's back-bank read port, and `tr_data_valid_i`
+  // is that port's fixed 1-cycle response — exactly one per accepted request.
+  zhao_raster_resolve u_resolve (
+    .clk                (clk),
+    .rst_n              (rst_n),
+    .start_valid_i      (rz_start),
+    .start_ready_o      (rz_ready),
+    .start_tile_x_i     (tile_x_r),
+    .start_tile_y_i     (tile_y_r),
+    .start_tile_index_i (index_r),
+    .start_src_id_i     (src_r),
+    .tr_valid_o         (tr_valid),
+    .tr_ready_i         (tr_ready),
+    .tr_addr_o          (tr_addr),
+    .tr_data_valid_i    (tr_data_valid),
+    .tr_data_i          (tr_data),
+    .fb_valid_o         (fb_valid_o),
+    .fb_ready_i         (fb_ready_i),
+    .fb_rgb565_o        (fb_rgb565_o),
+    .fb_tag_o           (fb_tag_o),
+    .fb_addr_o          (fb_addr_o),
+    .fb_last_o          (fb_last_o),
+    .fb_src_id_o        (fb_src_id_o),
+    .tile_crc_o         (tile_crc_o),
+    .tile_crc_index_o   (tile_crc_index_o),
+    .tile_crc_valid_o   (tile_done_o),
+    .tile_references_o  (resolved_tiles_o)
+  );
+
+  // ============================================================ sequential =
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rs_state    <= RS_IDLE;
+      ax_r        <= 21'sd0;
+      ay_r        <= 21'sd0;
+      bx_r        <= 21'sd0;
+      by_r        <= 21'sd0;
+      cx_r        <= 21'sd0;
+      cy_r        <= 21'sd0;
+      tile_x_r    <= 12'sd0;
+      tile_y_r    <= 12'sd0;
+      fill_r      <= 64'd0;
+      clear_r     <= 64'd0;
+      index_r     <= 16'd0;
+      src_r       <= 16'd0;
+      pend_row_r  <= 4'd0;
+      pend_mask_r <= 16'd0;
+      ew_done_r   <= 1'b0;
+      ew_count_r  <= 9'd0;
+      ew_degen_r  <= 1'b0;
+      rz_tile_x_r <= 12'd0;
+      rz_tile_y_r <= 12'd0;
+      rz_count_r  <= 9'd0;
+      rz_degen_r  <= 1'b0;
+    end else begin
+      // The edge walk's status pulse can land in any RS_WALK cycle (or, for a
+      // degenerate triangle, before the first coverage beat would have been);
+      // it is latched here and consumed at the swap.
+      if (ew_done) begin
+        ew_done_r  <= 1'b1;
+        ew_count_r <= ew_count;
+        ew_degen_r <= ew_degen;
+      end
+
+      case (rs_state)
+        RS_IDLE: begin
+          if (job_valid_i) begin
+            ax_r        <= job_ax_i;
+            ay_r        <= job_ay_i;
+            bx_r        <= job_bx_i;
+            by_r        <= job_by_i;
+            cx_r        <= job_cx_i;
+            cy_r        <= job_cy_i;
+            tile_x_r    <= job_tile_x_i;
+            tile_y_r    <= job_tile_y_i;
+            fill_r      <= job_fill_word_i;
+            clear_r     <= job_clear_word_i;
+            index_r     <= job_tile_index_i;
+            src_r       <= job_src_id_i;
+            pend_mask_r <= 16'd0;
+            ew_done_r   <= 1'b0;
+            ew_count_r  <= 9'd0;
+            ew_degen_r  <= 1'b0;
+            rs_state    <= RS_CLEAR;
+          end
+        end
+
+        // The clear and the edge-walk job are accepted on the same edge. The
+        // walk needs 5 setup cycles before its first coverage beat, so the
+        // one-cycle clear is always long retired before the first write.
+        RS_CLEAR: begin
+          if (ew_ready) rs_state <= RS_WALK;
+        end
+
+        RS_WALK: begin
+          // Law 2: one write per set column, lowest first; the next coverage
+          // beat is accepted only once the current mask has drained.
+          if (wr_acc) pend_mask_r <= pend_mask_r & ~wr_hot;
+          if (cov_acc) begin
+            pend_row_r  <= cov_row;
+            pend_mask_r <= cov_mask;
+          end
+          // Law 1, the raster half of the swap gate: the walk has reported
+          // done AND the last write has retired. `ew_done_r` is a register and
+          // `pend_mask_r` is checked as one, so this can never fire in the
+          // same cycle as the write it is waiting for.
+          if (ew_done_r && (pend_mask_r == 16'd0) && !cov_acc) rs_state <= RS_SWAP;
+        end
+
+        RS_SWAP: begin
+          // Law 1, the resolve half: the bank cannot be handed over until the
+          // previous tile has finished streaming out of it.
+          if (swap_acc) begin
+            rz_tile_x_r <= tile_x_r;
+            rz_tile_y_r <= tile_y_r;
+            rz_count_r  <= ew_count_r;
+            rz_degen_r  <= ew_degen_r;
+            rs_state    <= RS_IDLE;
+          end
+        end
+
+        default: rs_state <= RS_IDLE;
+      endcase
+    end
+  end
+
+endmodule : zhao_raster_tile_pipe
