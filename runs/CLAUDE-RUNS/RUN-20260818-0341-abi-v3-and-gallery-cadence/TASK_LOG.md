@@ -658,3 +658,86 @@ compromises on twice today (see the flare-occlusion diagnosis above).
 
 Do NOT start this before the flare-occlusion item, since that item is the same
 code path and fixing it is a prerequisite rather than a parallel task.
+
+## Docket: the set-piece catalogue (owner, 2026-08-18)
+
+Extending the eclipse request into a family. Owner's words:
+
+> similar scenes for bloodmoons, sunsets, sunrises, blood rainbows where a
+> rainbow persists into an extremely blood red scene. Find a few more of these
+> amazing lookers of scenes. Maybe a giant asteroid falls, the clouds blow
+> apart. A huge volcano in the background (probably just part of the skybox, not
+> simulated) spews ash into the air and it covers everything. Lots of events
+> like this.
+
+### The owner's own insight, which should become a rule
+
+"probably just part of the skybox, not simulated" is the right instinct and
+deserves to be a general principle, not a one-off concession. A background
+volcano that is a drum-band element costs a texture and a scroll; a simulated
+one costs terrain, particles and bandwidth. The catalogue below is therefore
+split by COST CLASS, because that is what decides whether a scene is a week or
+an afternoon:
+
+- **Class S (skybox):** lives in the sky drum. Bands, cap, scroll, additive
+  layers. Cheap, and `sky_and_beams.md` already carries the machinery.
+- **Class P (palette / environment):** a global colour law. `SetEnvironment`
+  landed in ABI v3 today, so a scene that is "the same world, different light"
+  is nearly free.
+- **Class E (event):** needs a moving occluder, a particle burst, or terrain
+  response. Real work, real budget.
+
+### The catalogue
+
+| scene | class | what carries it | what it needs that does not exist |
+|---|---|---|---|
+| Eclipse (see the item above) | E | sun + moon occluder + corona | fractional occlusion law |
+| Bloodmoon | P + S | environment palette shift, red moon in the drum | a moon sprite in the sky set |
+| Sunset / sunrise | P + S | band gradient + sun altitude + warm horizon | nothing; `sky-dusk` already proves the bands |
+| Blood rainbow | S | an additive arc layer over a red-shifted sky | an arc primitive; the palette fight is the real cost |
+| Asteroid fall, clouds blown apart | E | a streak, then a cloud-sheet displacement | cloud sheet needs a radial displace; particles are phase 10 |
+| Background volcano spewing ash | S then P | drum band with an animated plume, then a global ash tint | an animated drum layer; the tint is `SetEnvironment` |
+| Ash covering everything | P | environment tint plus a surface-sheet darkening | surface sheet is phase 6, in flight |
+
+### A few more, since the owner asked for suggestions
+
+- **Aurora over a night battlefield.** Class S. Vertical additive curtains in the
+  drum with a slow shear. Reads as expensive, costs almost nothing, and the
+  six-bit additive plane already exists for exactly this kind of glow.
+- **Twin suns setting out of phase.** Class S + P. The star gamut already has
+  twelve classes and `multiple` proves two bodies. Two different-class suns at
+  different altitudes give two shadow colours and one very strange sky.
+- **Moonrise behind a storm, lightning silhouetting the clouds.** Class S + E.
+  Lightning is a full-frame additive flash, the cheapest drama available, and it
+  makes a static cloud sheet look alive.
+- **Total darkness with only spell light.** Class P. Set the environment near
+  black and let additive effects be the only illumination. Cheapest scene in the
+  list and probably the most atmospheric.
+- **Falling ash after the volcano, settling on the terrain.** Class P + E. The
+  interesting half is persistence: the surface sheet already holds scars, so ash
+  that ACCUMULATES rather than merely tinting would reuse a mechanism that
+  exists.
+- **Sun through a dust storm, the disc reddened and the corona gone.** Class P.
+  A single law: attenuate the flare chain and shift the ramp. Pairs with the ash
+  scene and proves the environment lane end to end.
+
+### The constraint every one of these hits
+
+The 256-colour-per-sequence ceiling. It has already forced compromises twice
+today: the flare-occlusion subject was cut to a stripe-and-dot for it, and
+noctis-flare sits at 248 of 256. Every scene above is a wide-gamut scene by
+nature, so the palette is the design constraint, not the effect list.
+
+The trail work today found the technique that survives it: composite the glow
+into ONE six-bit intensity plane and take a single ramp lookup at the end, so
+however many layers overlap, the result cannot exceed 64 colours. Any of these
+scenes that stacks glow should be built that way from the start rather than
+summing graded levels straight into RGB and then discovering the ceiling.
+
+### Suggested order
+
+Cheapest-first, because each one that lands makes the next easier to judge:
+sunset/sunrise, then total darkness, then bloodmoon, then aurora, then the
+volcano plume, then ash accumulation, then the asteroid, and the eclipse
+whenever the fractional occlusion law is done. Blood rainbow last: the arc
+primitive is new and the palette fight is worst there.
