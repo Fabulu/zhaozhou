@@ -1017,6 +1017,75 @@ if(ZHAO_SBY_BIN)
   endforeach()
 endif()
 
+# ---- Phase 4: RASTER.EDGEWALK (charter phase 4, ZH-022/ZH-023; law -------
+# ---- spec/qformats.md §8; contract design/contracts/RASTER.EDGEWALK.md) ----
+# The oracle is zref::EdgeWalk, which is itself a view onto the FROZEN
+# software raster (reference/src/zrender/rast.cpp), so "RTL == oracle" is
+# literally "RTL == the §8 fill law" — no re-derived fill rule anywhere in
+# the test.
+set(ZHAO_RASTER_EDGEWALK_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv)
+
+add_executable(test_raster_edgewalk_directed raster/raster_edgewalk_directed.cpp)
+target_link_libraries(test_raster_edgewalk_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_edgewalk_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_edgewalk_directed
+  PREFIX Vzhao_raster_edgewalk
+  TOP_MODULE zhao_raster_edgewalk
+  SOURCES ${ZHAO_RASTER_EDGEWALK_SV})
+add_test(NAME raster_edgewalk_directed COMMAND test_raster_edgewalk_directed)
+set_tests_properties(raster_edgewalk_directed PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_raster_edgewalk_random raster/raster_edgewalk_random.cpp)
+target_link_libraries(test_raster_edgewalk_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_raster_edgewalk_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster)
+verilate(test_raster_edgewalk_random
+  PREFIX Vzhao_raster_edgewalk
+  TOP_MODULE zhao_raster_edgewalk
+  SOURCES ${ZHAO_RASTER_EDGEWALK_SV})
+add_test(NAME raster_edgewalk_random COMMAND test_raster_edgewalk_random)
+set_tests_properties(raster_edgewalk_random PROPERTIES LABELS "fast;nightly")
+# 60k-tile soak of the same binary (4k fast above)
+add_test(NAME raster_edgewalk_random_nightly COMMAND test_raster_edgewalk_random --nightly)
+set_tests_properties(raster_edgewalk_random_nightly PROPERTIES
+  LABELS "nightly" TIMEOUT 3600)
+
+# per-module lint (charter §21 step 8)
+add_test(NAME lint_raster_edgewalk
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_edgewalk
+                 ${ZHAO_RASTER_EDGEWALK_SV})
+set_tests_properties(lint_raster_edgewalk PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the §8 top-left fill rule (charter §20.4 — "adjacent-triangle
+# exactly-once coverage is a SymbiYosys formal property"). Proved on
+# zhao_raster_fill, the module the tile walker instantiates 48× per row, so
+# the proof and the silicon are the same bytes. TWO tasks (bmc AND cover):
+# the covers pin the on-the-edge and sub-unit corners as reachable. Reuses
+# the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for multi-task).
+if(ZHAO_SBY_BIN)
+  set(PROP "raster_edgewalk_top_left")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/raster_edgewalk_top_left_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/raster_edgewalk_top_left_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_raster_edgewalk_top_left
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_raster_edgewalk_top_left PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
 # ---- W2.7: console shell + Duo marker demo (plan W2.7; the Phase-2 gate) ----
 # zhao_shell_top composes the whole Phase-2 machine; tb_zhao_shell adds the
 # behavioural SDRAM model (testbench-only, D2). The harness C++ is the HPS

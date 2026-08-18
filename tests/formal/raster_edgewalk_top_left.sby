@@ -1,0 +1,59 @@
+# raster_edgewalk_top_left — the §8 D3D top-left fill rule, proved on the
+# module zhao_raster_edgewalk actually instantiates (RASTER.EDGEWALK, ZH-023;
+# charter §20.4 "adjacent-triangle exactly-once coverage is a SymbiYosys
+# formal property"). Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1 (the narrow (E', r) form IS `E0 + bias >= 0`) and P2 (the two
+#           sides of a shared edge accept EXACTLY once) hold for every edge
+#           value. Both are unconditional equalities over free inputs, so
+#           depth 2 is the whole property: the harness is combinational and
+#           its inputs are unconstrained.
+#   cover — the corners the comments claim are REACHABLE: on-the-edge on both
+#           bias polarities, and the sub-unit tiebreak (E' = 0, r != 0) that
+#           a bias on the floored E' would drop on both sides. Without this
+#           task nothing distinguishes this proof from one about a DUT whose
+#           interesting inputs are unreachable.
+#
+# SCOPE — stated plainly. This proves the FILL RULE, which is where the
+# 2026-08-15 spec defects lived and what the ledger names. It does NOT prove
+# the edge SETUP (the s64 cross products, the winding flip, the tile-local
+# saturation): those carry 46-bit multipliers that put a whole-module BMC out
+# of reach for this engine, and they are covered instead by the differential
+# lanes against rast.cpp (raster_edgewalk_directed / _random, 20k tiles).
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. The harness is
+# purely combinational (zhao_raster_fill is a single continuous assignment;
+# the only always_ff blocks hold the assert/cover statements) and every input
+# is unconstrained, so the reachable state set is identical at every step —
+# raising the depth cannot expose a state step 1 does not already contain.
+# The input parametrisation is likewise total rather than sampled: (E', r)
+# with r in [0,255] is a BIJECTION onto the integers via E0 = 256*E' + r
+# (floor(E0/256) = E', E0 & 255 = r), so free (E', r) ranges over EVERY edge
+# value the §8 decomposition can carry. There is no horizon for a scope guard
+# to assert, and no depth at which this proof would say less than it says now.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_raster_fill.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top raster_edgewalk_top_left_fv zhao_raster_fill.sv raster_edgewalk_top_left_fv.sv
+prep -top raster_edgewalk_top_left_fv
+
+[files]
+../../fpga/rtl/raster/zhao_raster_fill.sv
+raster_edgewalk_top_left_fv.sv
