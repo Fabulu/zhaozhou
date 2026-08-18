@@ -326,3 +326,61 @@ runs:
       (a 1,024-tile channel sweep and a 16-phase grid that decide the matrix
       and the phase exhaustively over the value space) and by the seven-way
       mutation table in design/contracts/RASTER.RESOLVE.md.
+
+  - property: tests/formal/raster_fragment_blend.sby
+    status: green
+    date: "2026-08-18"
+    commit: f5bcf18
+    lane: formal_raster_fragment_blend
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The blend channel of RASTER.FRAGMENT (the charter §4 exemplar block),
+      proved on zhao_raster_blend — the module zhao_raster_fragment
+      instantiates 3× per fragment, once per colour channel — so the proof
+      and the silicon are the same bytes rather than a restatement. All four
+      blend modes are elaborated at once by leaving `mode` free. Seven laws,
+      each written against spec/qformats.md's arithmetic in a wide signed
+      lane rather than against the RTL's expression: a_replace (REPLACE is
+      the source, so a datapath that quietly blended in "blend off" would
+      break sky_backdrop and star_disc_masked); a_alpha_exact (ALPHA is
+      EXACTLY dst + rescale_s((src−dst)·a, 8) — the §4 arithmetic-shift
+      round-half-up — which catches swapped operands, a /255 divide, a
+      missing rounding term, and the classic magnitude-then-sign error that
+      rounds ties the wrong way on the darkening half); a_alpha_bounded (THE
+      LERP NEVER OVERSHOOTS either endpoint — a real theorem, false for the
+      obvious near-misses, and the justification for the module's own
+      comment that ALPHA cannot leave [0,255]); a_add_exact (ADD is exactly
+      min(255, dst+src), two-sided so it catches both a wrap — 255+1 → 0, a
+      black hole in a beam — and an early clamp); a_addmod_exact (ADD_MOD is
+      exactly min(255, dst + unit_mul(src, a)), sun_additive's
+      dst = sat(dst + src·tex.a)); a_add_monotone (NEITHER additive mode can
+      DARKEN, which is what makes charter §26's no-OIT refusal moot for the
+      beam and halo layers — addition commutes AND is monotone, so draw
+      order cannot lose energy); and a_in_field (no mode leaves the 8-bit
+      field). TOTAL, not bounded: the harness is combinational with
+      unconstrained inputs, and free (mode, dst, src, a) is EVERY input the
+      block can be handed — dst and src are u8 because the charter §8
+      working colour is one byte per channel, a is a u8 because it IS a
+      unit8 (§2), and the mode field is exactly two bits — so all 67,108,864
+      inputs are covered with no reachability gap. Recorded as an explicit
+      "# SCOPE-TOTAL:" waiver (V19) because there is no horizon for a scope
+      guard to assert. THIRTEEN covers, all reached: the additive rail
+      actually FIRING in both additive modes (without which a_add_exact's
+      min() and a_in_field would also hold for a blend that never reaches
+      255), ADD landing exactly on 255 and strictly inside the range, the
+      alpha lerp moving UP and DOWN and reaching BOTH endpoints (without
+      which a_alpha_bounded holds for a blend that never moves), the unit8
+      endpoint c_alpha_unit_endpoint (a = 255 is 255/256, so white over
+      black is 254 and NOT 255 — the same value the ratified fog mix gives
+      at f8 = 255), c_alpha_identity (a = 0 is the EXACT identity), and the
+      load-bearing pair c_alpha_neg_tie / c_alpha_pos_tie: an exact ROUNDING
+      TIE on each half, the negative one being precisely the case a
+      magnitude-then-sign implementation gets wrong by one LSB. NOT proved
+      here: the mode ENCODING (which recipe selects which mode), the depth,
+      stencil and alpha-index tests, the tag and stencil write paths, the
+      two-stage pipeline, the stall that re-issues its own read, and the
+      counters; those are covered by the differential lanes against
+      zref::FragmentPipeline (raster_fragment_directed's 93 checks and
+      raster_fragment_random's three lanes) and by the five-way mutation
+      table in design/contracts/RASTER.FRAGMENT.md.

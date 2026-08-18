@@ -81,6 +81,11 @@
 // nothing to the accumulator. A fragment that is merely blended contributes
 // nothing either: an additive beam leaves depth untouched by construction
 // (`Z-write OFF`, spec/sky_and_beams.md §2), so it is no evidence about depth.
+// ENFORCED-BY: tests/raster/raster_earlyz_directed.cpp:test_only_certain_writers_raise_the_floor
+// (four disqualifiers, one full-tile sweep each, none of which may move the
+// floor, plus a control sweep that must), and the invariant itself by
+// tests/raster/raster_earlyz_directed.cpp:test_floor_rises_only_on_full_coverage
+// (255 of 256 covered pixels move the floor not at all).
 //
 // ---------------------------------------------------------------------------
 // THE COARSE TRANSPARENT-DEPTH BINS

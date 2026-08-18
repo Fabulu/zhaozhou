@@ -102,6 +102,10 @@
 // and building a per-fragment fog stage here would contradict a ratified
 // spec. The exempt list (sky family, additive emissive) is honoured by
 // construction: this block cannot fog anything.
+// ENFORCED-BY: tests/raster/raster_fragment_directed.cpp:test_fog_is_a_vertex_operation
+// (the §8 vertex mix is computed in the test across a factor sweep and must
+// reach the tile UNALTERED — a block that grew a fog stage would double-apply
+// it and that case would go red).
 //
 // ALSO NOT BUILT, so the next wave knows: no attribute interpolation (colour,
 // alpha, depth and UV all arrive interpolated — GEOM.SETUP's job); no
