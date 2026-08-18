@@ -2101,3 +2101,106 @@ verilate(shell_golden
 add_test(NAME shell_golden_replay COMMAND shell_golden)
 set_tests_properties(shell_golden_replay PROPERTIES
   LABELS "fast;nightly" TIMEOUT 1200)
+
+# ---------------------------------------------------------------------------
+# SURFACE.SHEET (phase 6, ZH-031) and SURFACE.STAMP (phase 6, ZH-052)
+#
+# Layer F — the 64x64 {tag u8, strength u8} per-patch surface sheet of charter
+# 12 — and the Scar Scribe stamp engine that is its only writer
+# (spec/terrain_rules.md 7). The ratified law is
+# `zref::render::stamp_surface`, executed today by the software console and
+# pinned by tests/render/render_golden.cpp's crack ring; the oracle
+# `zref/zref_surface.hpp` is a VIEW onto it and surface_stamp_directed proves
+# the view faithful before anything else runs.
+#
+# surface_stamp_chain wires the two REAL blocks together and then reads the
+# sheet back out through SURFACE.SHEET's own port into
+# `zref::render::sample_sheet`, the draw-time consumer, whose world->texel
+# mapping is independent of the stamp's.
+# ---------------------------------------------------------------------------
+
+set(ZHAO_SURFACE_SHEET_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv)
+set(ZHAO_SURFACE_STAMP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
+
+add_executable(test_surface_sheet_directed surface/surface_sheet_directed.cpp)
+target_link_libraries(test_surface_sheet_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_sheet_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface)
+verilate(test_surface_sheet_directed
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${ZHAO_SURFACE_SHEET_SV})
+add_test(NAME surface_sheet_directed COMMAND test_surface_sheet_directed)
+set_tests_properties(surface_sheet_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_surface_sheet_random surface/surface_sheet_random.cpp)
+target_link_libraries(test_surface_sheet_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_sheet_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface)
+verilate(test_surface_sheet_random
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${ZHAO_SURFACE_SHEET_SV})
+add_test(NAME surface_sheet_random COMMAND test_surface_sheet_random)
+set_tests_properties(surface_sheet_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME surface_sheet_random_nightly COMMAND test_surface_sheet_random --nightly)
+set_tests_properties(surface_sheet_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_executable(test_surface_stamp_directed surface/surface_stamp_directed.cpp)
+target_link_libraries(test_surface_stamp_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_stamp_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_surface_stamp_directed
+  PREFIX Vzhao_surface_stamp
+  TOP_MODULE zhao_surface_stamp
+  SOURCES ${ZHAO_SURFACE_STAMP_SV})
+add_test(NAME surface_stamp_directed COMMAND test_surface_stamp_directed)
+set_tests_properties(surface_stamp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
+add_executable(test_surface_stamp_random surface/surface_stamp_random.cpp)
+target_link_libraries(test_surface_stamp_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_stamp_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface)
+verilate(test_surface_stamp_random
+  PREFIX Vzhao_surface_stamp
+  TOP_MODULE zhao_surface_stamp
+  SOURCES ${ZHAO_SURFACE_STAMP_SV})
+add_test(NAME surface_stamp_random COMMAND test_surface_stamp_random)
+set_tests_properties(surface_stamp_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME surface_stamp_random_nightly COMMAND test_surface_stamp_random --nightly)
+set_tests_properties(surface_stamp_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_surface_stamp_chain surface/surface_stamp_chain.cpp)
+target_link_libraries(test_surface_stamp_chain PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_stamp_chain PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_surface_stamp_chain
+  PREFIX Vzhao_surface_stamp
+  TOP_MODULE zhao_surface_stamp
+  SOURCES ${ZHAO_SURFACE_STAMP_SV})
+verilate(test_surface_stamp_chain
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${ZHAO_SURFACE_SHEET_SV})
+add_test(NAME surface_stamp_chain COMMAND test_surface_stamp_chain)
+set_tests_properties(surface_stamp_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_surface_sheet
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_sheet
+                 ${ZHAO_SURFACE_SHEET_SV})
+set_tests_properties(lint_surface_sheet PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_surface_stamp
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_stamp
+                 ${ZHAO_SURFACE_STAMP_SV})
+set_tests_properties(lint_surface_stamp PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
