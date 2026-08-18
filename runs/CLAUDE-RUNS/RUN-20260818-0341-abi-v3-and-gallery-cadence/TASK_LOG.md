@@ -460,3 +460,67 @@ radius "sits at/below the per-frame spacing". I read that as a palette argument,
 checked the palette, found it held, and changed the value. It was load-bearing
 for geometry too. A comment that gives one reason is not proof there is only
 one.
+
+## RASTER subsystem complete: all five ledger blocks in RTL
+
+`34d8373`..`d4b995b` add `RASTER.EARLYZ` and `RASTER.FRAGMENT`, and replace the
+tile pipe's stand-in write path with the real chain. The ledger's RASTER group
+is now five blocks and all five exist:
+
+    TILESTORE  EDGEWALK  EARLYZ  FRAGMENT  RESOLVE
+
+The composed pipe is now EDGEWALK -> EARLYZ -> FRAGMENT -> TILESTORE -> RESOLVE.
+Throughput re-measured at 316 cycles/tile back-to-back against 313 before: a
+1.0% regression that is exactly the new chain's fill-and-drain (1 cycle EARLYZ,
+2 FRAGMENT) paid once per tile at the `pipe_empty` swap gate. Steady state is
+unchanged at one covered pixel per clock.
+
+### A coordination hazard I caused
+
+The agent reported `reel_sequence_crc` RED at its baseline `625d327`, and it was
+right. I was editing `tools/reel/zhao_reel.cpp` for the smear fix in the SAME
+working tree while it ran its suite, so its baseline was poisoned by my
+in-flight edit until `c35ab7f` re-pinned the CRCs. It correctly attributed the
+recovery to my commit instead of claiming it. One shared tree plus a running
+agent means edits to shared files are visible to its test runs; either stay out
+of the tree while an agent runs, or expect to explain the noise.
+
+### What the increment got right and is worth keeping as the standard
+
+- Found FOUR holes in its own composed lane and fixed them rather than noting
+  them: the pipe drove `state == 0` for every job so there was nothing to
+  invert, the recipe vector never railed, depths were uniform over 24 bits so
+  the one-LSB early-Z boundary was a 1-in-16M shot, and the composed picture
+  cannot observe early-Z PESSIMISM at all, so both lanes now diff
+  `early_z_rejects` / `blended_fragments` against the oracle directly.
+- Declined three things for stated reasons: no extra depth comparison modes
+  (spec/qformats.md §8 defines exactly one, so an enum would be law invented in
+  RTL), no stencil-only ops (TILESTORE has no byte enables), and no formal
+  property on EARLYZ, because its interesting invariant is over state it cannot
+  see and proving it would prove a model rather than the shipping bytes.
+- Pinned the ABSENCE of per-pixel fog. `spec/qformats.md` §8 freezes fog as
+  per-vertex in GEOM.PROJECT and records that a per-pixel form is "not costed,
+  not built". The ledger's purpose line predates that. Rather than build to the
+  stale line or silently skip it, the directed test computes the frozen vertex
+  mix and requires it to reach the tile unaltered, so a block that grew a fog
+  stage would double-apply and go red.
+
+Verified here: the tag-never-dithered law holds in `zhao_raster_resolve.sv`
+(`px_tag = tr_data_i[39:32]` straight through, no quantizer, not in the CRC),
+so there was genuinely nothing to patch. Format gate clean on 136 files.
+
+Still SPECIFIED for both blocks. Simulated and formally proven is not
+synthesized, and neither is on-hardware.
+
+## Synthesis sweep progress
+
+Per-block fits landing steadily against the provisional 5CSEBA6U23I7:
+
+    zhao_video_mode      70 ALMs      zhao_scanout_fetch   208 ALMs
+    zhao_audio_fifo     222 ALMs      zhao_video_framectl  301 ALMs
+    zhao_debug_crc      158 ALMs      zhao_video_scaler     52 ALMs
+
+`zhao_video_scanout` exceeded its 900 s budget and is recorded as `timeout`
+rather than given a fabricated number. Note a flaw in `run_block_fit.ps1`: the
+timeout is checked BETWEEN stages, so it detects an overrun after the fact
+instead of preempting it. The status means "exceeded budget", not "was killed".
