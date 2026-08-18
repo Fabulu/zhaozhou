@@ -37,6 +37,7 @@
 #include <string>
 #include <vector>
 
+#include "zref/zref_earlyz.hpp"
 #include "zref/zref_tilestore.hpp"
 
 using zhao::check;
@@ -153,7 +154,7 @@ PipeJob make_job(Prng& rng, uint32_t population, uint16_t index) {
   return j;
 }
 
-// Runs one batch and diffs every tile against the three composed oracles.
+// Runs one batch and diffs every tile against the five composed oracles.
 bool one_batch(PipeDev& dev, const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_seed,
                uint32_t fb_seed, const char* lane, uint32_t iter, std::vector<PipeTile>* got) {
   std::string err;
@@ -165,8 +166,9 @@ bool one_batch(PipeDev& dev, const std::vector<PipeJob>& jobs, PipeFeed feed, ui
   }
 
   zref::TileStore store;
+  zref::EarlyZ ez;
   for (size_t i = 0; i < jobs.size(); ++i) {
-    const PipeExpect want = pipe_oracle(store, jobs[i]);
+    const PipeExpect want = pipe_oracle(store, ez, jobs[i]);
     if (want.degenerate)
       ++g_degenerate;
     else if (want.count == 0)

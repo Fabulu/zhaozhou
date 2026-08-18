@@ -47,6 +47,8 @@
 #include <string>
 #include <vector>
 
+#include "zref/zref_earlyz.hpp"
+#include "zref/zref_fragment.hpp"
 #include "zref/zref_tilestore.hpp"
 
 using zhao::check;
@@ -138,7 +140,7 @@ PipeTri tri_degenerate(int32_t tx, int32_t ty) {
 }
 
 // ----------------------------------------------------------- the compare ---
-// Runs a batch through the RTL and through the three composed oracles, and
+// Runs a batch through the RTL and through the five composed oracles, and
 // requires every tile to match bit for bit.
 bool run_batch(const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_seed,
                uint32_t fb_seed, const char* what, std::vector<PipeTile>* got,
@@ -151,8 +153,9 @@ bool run_batch(const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_se
   if (!ok) std::printf("  %s: protocol violation: %s\n", what, err.c_str());
 
   zref::TileStore store;
+  zref::EarlyZ ez;
   for (size_t i = 0; i < jobs.size(); ++i) {
-    const PipeExpect want = pipe_oracle(store, jobs[i]);
+    const PipeExpect want = pipe_oracle(store, ez, jobs[i]);
     if (pipe_match(want, (*got)[i])) continue;
     ok = false;
     const std::string body = pipe_describe(jobs[i], want, (*got)[i]);
@@ -171,7 +174,8 @@ bool run_batch(const std::vector<PipeJob>& jobs, PipeFeed feed, uint32_t feed_se
 // The oracle's verdict for one job, without the RTL (case setup assertions).
 PipeExpect solo_oracle(const PipeJob& j) {
   zref::TileStore store;
-  return pipe_oracle(store, j);
+  zref::EarlyZ ez;
+  return pipe_oracle(store, ez, j);
 }
 
 // --------------------------------------------------------------------- 1 ---
@@ -762,15 +766,188 @@ void test_counters() {
 
   uint32_t covered = 0;
   for (const PipeJob& j : jobs) covered += solo_oracle(j).count;
-  const uint32_t want_refs = covered + static_cast<uint32_t>(jobs.size()) * kPipePixels;
+
+  // RASTER.TILESTORE counts accepted DATA accesses on all three ports (its
+  // contract: "writes plus both read ports"), and the arrival of
+  // RASTER.FRAGMENT added a whole port's worth. Read port A was TIED OFF in
+  // the phase-4 composition; it is now the fragment pipeline's working view,
+  // and every fragment reads its destination before it writes it. So each
+  // covered pixel now costs TWO references, not one:
+  //     covered reads (port A) + covered writes + 256 resolve reads (port B).
+  // These jobs run at state 0 — the plain opaque write — so every covered
+  // fragment survives and every read is followed by a write, and there are no
+  // re-read cycles because a stall needs the store to refuse a write and the
+  // only thing that refuses one is a clear, which happens before any fragment.
+  const uint32_t want_refs = 2u * covered + static_cast<uint32_t>(jobs.size()) * kPipePixels;
   check(dev().tile_references() == want_refs,
-        "counters: tile_references == covered writes + 256 resolve reads per tile", want_refs,
-        dev().tile_references());
+        "counters: tile_references == fragment reads + writes + 256 resolve reads per tile",
+        want_refs, dev().tile_references());
   check(dev().resolved_tiles() == jobs.size(), "counters: resolved_tiles == tiles handed in",
         jobs.size(), dev().resolved_tiles());
   check(dev().front_toggles() == jobs.size(), "counters: one bank swap per tile", jobs.size(),
         dev().front_toggles());
   check(covered > 0, "counters: the batch really did write something", 1, covered > 0 ? 1 : 0);
+
+  // The two new blocks' counters, on the same batch. `covered_fragments` is
+  // claimed by BOTH RASTER.EARLYZ and RASTER.FRAGMENT in design/blocks.yml;
+  // with nothing rejected they must agree, and that agreement is the check
+  // that would break first if early-Z started killing fragments it should
+  // keep.
+  check(dev().ez_covered() == covered, "counters: EARLYZ covered_fragments == covered pixels",
+        covered, dev().ez_covered());
+  check(dev().fr_covered() == covered, "counters: FRAGMENT covered_fragments == covered pixels",
+        covered, dev().fr_covered());
+  check(dev().early_z_rejects() == 0,
+        "counters: state 0 has the depth test OFF, so early-Z rejects nothing", 0,
+        dev().early_z_rejects());
+  check(dev().blended_fragments() == 0,
+        "counters: state 0 is a REPLACE write, so nothing is counted as blended", 0,
+        dev().blended_fragments());
+  check(!dev().saw_fragment_error(), "counters: fragment_error_o never fired", 1,
+        dev().saw_fragment_error() ? 0 : 1);
+}
+
+// -------------------------------------------------------------------- 11 ---
+// THE SWAP GATE'S NEW TERM. When RASTER.FRAGMENT replaced the flat write
+// path, `pend_mask_r == 0` stopped meaning "the last write has retired" and
+// started meaning "the last fragment ENTERED the chain" - two stages and up
+// to three cycles earlier. Swapping there would hand the resolve a bank the
+// fragment pipeline was still writing into, and the last pixels of every tile
+// would resolve as the CLEAR word instead of the fill.
+//
+// This case is built to expose exactly that. A triangle whose LAST covered
+// row is a single pixel means the final fragment enters the chain with the
+// coverage mask already empty, so a drain-blind swap gate fires immediately
+// and that one pixel is lost. The differential compare against the composed
+// oracle then fails on that pixel - and, because the CRC covers every byte,
+// on the CRC too. Run at full readiness and under framebuffer backpressure,
+// because a stalled resolve changes when the swap is *allowed*, and a gate
+// that happened to be safe at full speed need not be under stalls.
+void test_pipeline_drain_before_swap() {
+  std::vector<PipeJob> jobs;
+  for (uint16_t i = 0; i < 6; ++i) {
+    PipeJob j;
+    j.tx = 4 + static_cast<int32_t>(i) * kPipeTile;
+    j.ty = 6;
+    // A tall thin wedge: wide at the top, one pixel at the bottom.
+    j.tri.ax = px(j.tx + 1) + 40;
+    j.tri.ay = px(j.ty + 1) + 40;
+    j.tri.bx = px(j.tx + 12) + 40;
+    j.tri.by = px(j.ty + 1) + 40;
+    j.tri.cx = px(j.tx + 1) + 40;
+    j.tri.cy = px(j.ty + 12) + 40;
+    j.fill = distinct_word(i + 200u);
+    j.clear = distinct_word(i + 220u);
+    j.index = i;
+    j.src = static_cast<uint16_t>(0xB00 + i);
+    jobs.push_back(j);
+  }
+
+  std::vector<PipeTile> fast;
+  std::vector<PipeTile> slow;
+  const bool ok_f = run_batch(jobs, PipeFeed::kBackToBack, 0u, 0u, "drain", &fast);
+  const bool ok_s = run_batch(jobs, PipeFeed::kBackToBack, 0u, 0x51D1u, "drain-stalled", &slow);
+  check(ok_f, "drain: the last fragment of every tile reaches the bank before the swap", 1,
+        ok_f ? 1 : 0);
+  check(ok_s, "drain: and still does with the framebuffer stalling the resolve", 1, ok_s ? 1 : 0);
+
+  bool identical = true;
+  for (size_t i = 0; i < jobs.size(); ++i)
+    if (!fast[i].same_picture(slow[i])) identical = false;
+  check(identical, "drain: backpressure costs cycles and changes not one pixel", 1,
+        identical ? 1 : 0);
+
+  // The shape really is the adversarial one: coverage must taper, or this
+  // case proves nothing about the drain.
+  const PipeExpect e = solo_oracle(jobs[0]);
+  check(e.count > 0 && e.count < static_cast<uint32_t>(kPipePixels),
+        "drain: the wedge really is a partial, tapering triangle", 1,
+        (e.count > 0 && e.count < static_cast<uint32_t>(kPipePixels)) ? 1 : 0);
+}
+
+// -------------------------------------------------------------------- 12 ---
+// THE CHAIN, END TO END, ON THE RATIFIED RECIPES. Each of the six recipes
+// spec/sky_and_beams.md and spec/stars_and_flares.md define, driven through
+// the WHOLE chain (coverage -> early-Z -> fragment -> store -> ordered dither
+// -> CRC) and diffed against the five composed oracles bit for bit.
+//
+// Scope, stated honestly: this composition is ONE triangle per tile, so the
+// recipes cannot be layered over each other here - each gets its own tile.
+// What this case proves is that every recipe survives the whole chain, not
+// that pass 1 and pass 6 compose in one tile. The per-recipe arithmetic lives
+// where it belongs, in tests/raster/raster_fragment_directed.cpp.
+void test_recipes_through_the_chain() {
+  const zref::FragmentPipeline::State recipes[6] = {
+      zref::FragmentPipeline::sky_backdrop(),     zref::FragmentPipeline::sky_cloud_fade(),
+      zref::FragmentPipeline::sun_additive(),     zref::FragmentPipeline::beam_additive_fade(),
+      zref::FragmentPipeline::star_disc_masked(), zref::FragmentPipeline::star_halo_additive()};
+  const char* names[6] = {"sky_backdrop",       "sky_cloud_fade",   "sun_additive",
+                          "beam_additive_fade", "star_disc_masked", "star_halo_additive"};
+
+  std::vector<PipeJob> jobs;
+  for (uint16_t i = 0; i < 6; ++i) {
+    PipeJob j;
+    j.tx = 3 + static_cast<int32_t>(i) * kPipeTile;
+    j.ty = 11;
+    j.tri = tri_full(j.tx, j.ty);
+    j.fill = pipe_word(0xC8, 0x64, 0x30, 0x5A, 0x00A000u, 0x11);
+    j.clear = pipe_word(0x20, 0x40, 0x60, 0x00, 0x004000u, 0x00);
+    j.state = recipes[i].pack();
+    j.src_a = 0xB0;
+    j.texel_rgb = zhao_raster::pipe_rgb(0xF0, 0x80, 0x40);
+    j.texel_a = 0x90;
+    j.texel_idx = static_cast<uint8_t>(0x25 + i);
+    j.index = i;
+    j.src = static_cast<uint16_t>(0xC00 + i);
+    jobs.push_back(j);
+  }
+
+  std::vector<PipeTile> got;
+  const bool ok = run_batch(jobs, PipeFeed::kBackToBack, 0u, 0u, "recipes", &got);
+  check(ok, "recipes: all six ratified recipes match the five composed oracles", 1, ok ? 1 : 0);
+
+  // Every recipe must actually have DONE something distinguishable, or the
+  // compare above is agreeing about nothing. Each tile is fully covered, so
+  // the resolved picture is a flat colour; six recipes over one source must
+  // not all land on the same one.
+  int distinct = 0;
+  for (size_t i = 0; i < jobs.size(); ++i) {
+    bool seen = false;
+    for (size_t k = 0; k < i; ++k)
+      if (got[k].rgb565[0] == got[i].rgb565[0] && got[k].tag[0] == got[i].tag[0]) seen = true;
+    if (!seen) ++distinct;
+  }
+  std::printf("raster_tile_pipe recipes:");
+  for (size_t i = 0; i < jobs.size(); ++i)
+    std::printf(" %s=%04X/%02X", names[i], got[i].rgb565[0], got[i].tag[0]);
+  std::printf("\n");
+  check(distinct >= 4, "recipes: the six recipes really do produce different pictures", 1,
+        distinct >= 4 ? 1 : 0);
+
+  // star_disc_masked is the alpha-test recipe: at CLUT index 0 every fragment
+  // is killed, so a FULLY covered tile must resolve exactly as an UNCOVERED
+  // one does - the clear word, everywhere.
+  PipeJob masked = jobs[4];
+  masked.texel_idx = 0;
+  masked.index = 99;
+  std::vector<PipeJob> one;
+  one.push_back(masked);
+  std::vector<PipeTile> gotm;
+  const bool ok_m = run_batch(one, PipeFeed::kBackToBack, 0u, 0u, "recipes-masked", &gotm);
+  check(ok_m, "recipes: star_disc_masked at index 0 matches the oracle", 1, ok_m ? 1 : 0);
+
+  PipeJob empty = masked;
+  empty.tri = tri_no_pixel(masked.tx + 2, masked.ty + 2);
+  std::vector<PipeJob> two;
+  two.push_back(empty);
+  std::vector<PipeTile> gote;
+  run_batch(two, PipeFeed::kBackToBack, 0u, 0u, "recipes-empty", &gote);
+  bool all_clear = true;
+  for (int i = 0; i < kPipePixels; ++i)
+    if (gotm[0].rgb565[i] != gote[0].rgb565[i] || gotm[0].tag[i] != gote[0].tag[i])
+      all_clear = false;
+  check(all_clear, "recipes: a fully-covered star disc masked at index 0 resolves as if UNCOVERED",
+        1, all_clear ? 1 : 0);
 }
 
 }  // namespace
@@ -786,5 +963,7 @@ int main() {
   test_fb_address();
   test_status_and_crc();
   test_counters();
+  test_pipeline_drain_before_swap();
+  test_recipes_through_the_chain();
   return zhao::report_and_exit("raster_tile_pipe_directed");
 }

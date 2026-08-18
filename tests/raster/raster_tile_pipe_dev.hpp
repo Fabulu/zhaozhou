@@ -1,16 +1,21 @@
-// raster_tile_pipe_dev.hpp — Verilator driver for the composed phase-4 tile
-// pipe: RASTER.EDGEWALK -> RASTER.TILESTORE -> RASTER.RESOLVE
+// raster_tile_pipe_dev.hpp — Verilator driver for the composed phase-4/5 tile
+// pipe: RASTER.EDGEWALK -> RASTER.EARLYZ -> RASTER.FRAGMENT ->
+// RASTER.TILESTORE -> RASTER.RESOLVE
 // (fpga/rtl/raster/zhao_raster_tile_pipe.sv).
 //
-// THE ORACLE IS THE THREE ORACLES, WIRED THE SAME WAY. `pipe_oracle()` calls
-// zref::EdgeWalk for the coverage, drives zref::TileStore with the SAME cycle
+// THE ORACLE IS THE FIVE ORACLES, WIRED THE SAME WAY. `pipe_oracle()` calls
+// zref::EdgeWalk for the coverage, runs every covered pixel through
+// zref::EarlyZ and then zref::FragmentPipeline against the destination word
+// zref::TileStore currently holds, drives that store with the SAME cycle
 // sequence the RTL drives (clear the front bank, one full-word write per
-// covered pixel, swap), and hands the swapped-out bank to zref::TileResolve.
-// Every one of those is itself a view onto a frozen reference — the §8 fill
-// law (rast.cpp), the charter §8 store contract, and the charter §8 ordered
-// dither (resolve.cpp). So "RTL == oracle" is literally "RTL == the three
-// laws, composed"; this file contains no fill rule, no dither, no CRC and no
-// word layout of its own.
+// SURVIVING fragment, swap), and hands the swapped-out bank to
+// zref::TileResolve. Every one of those is a view onto a frozen reference or
+// a plainly-written contract model — the §8 fill law (rast.cpp), the §8
+// strict depth test and unit8 arithmetic (qformats, through zref::unit_mul),
+// the charter §8 store contract, and the charter §8 ordered dither
+// (resolve.cpp). So "RTL == oracle" is literally "RTL == the five laws,
+// composed"; this file contains no fill rule, no blend, no dither, no CRC and
+// no word layout of its own.
 //
 // The ONE thing it does state is the composition's own law 3 — the surface
 // pixel address, `fb_x = tile_x + col`, `fb_y = tile_y + row` — because no
@@ -34,7 +39,9 @@
 #include "Vzhao_raster_tile_pipe.h"
 
 #include "zhao_sim.hpp"
+#include "zref/zref_earlyz.hpp"
 #include "zref/zref_edgewalk.hpp"
+#include "zref/zref_fragment.hpp"
 #include "zref/zref_tileresolve.hpp"
 #include "zref/zref_tilestore.hpp"
 
@@ -46,7 +53,17 @@ using PipeWord = zref::TileStore::Word;
 inline constexpr int kPipeTile = zref::TileStore::kTile;
 inline constexpr int kPipePixels = zref::TileStore::kWords;
 
-/** One job: a triangle, a tile, a flat fill word and a clear word. */
+/**
+ * One job: a triangle, a tile, the flat fragment source and a clear word.
+ *
+ * `fill` is the fragment SOURCE in RASTER.TILESTORE's word layout ([63:40]
+ * RGB, [39:32] tag, [31:8] depth, [7:0] stencil reference). `state` is the
+ * 32-bit fragment state word; **state 0 is the plain opaque write**, so a job
+ * that leaves it default writes `fill` at every covered pixel exactly as the
+ * pre-RASTER.FRAGMENT composition did. The texel fields are what TEXTURE.TMU
+ * would have sampled — that block does not exist, and this driver presents
+ * the texel rather than pretending to sample one.
+ */
 struct PipeJob {
   PipeTri tri;
   int32_t tx = 0;
@@ -55,6 +72,11 @@ struct PipeJob {
   uint64_t clear = 0;
   uint16_t index = 0;
   uint16_t src = 0;
+  uint32_t state = 0;
+  uint8_t src_a = 0;
+  uint32_t texel_rgb = 0;
+  uint8_t texel_a = 0;
+  uint8_t texel_idx = 0;
 };
 
 /** One resolved tile as the composition emits it. */
@@ -76,21 +98,50 @@ struct PipeTile {
   }
 };
 
-/** What the three oracles, composed, say the tile must be. */
+/** What the five oracles, composed, say the tile must be. */
 struct PipeExpect {
   zref::TileResolve::Out res;
-  uint32_t count = 0;
+  uint32_t count = 0;  // covered pixels (RASTER.EDGEWALK's)
   bool degenerate = false;
+  uint32_t rejects = 0;     // early-Z rejects in THIS job
+  uint32_t candidates = 0;  // fragments RASTER.EARLYZ passed on
+  uint32_t writes = 0;      // fragments that survived all three tests
+  uint32_t blended = 0;     // surviving fragments that combined src with dst
 };
 
+/** The job's flat fragment source, unpacked into the shading packet. */
+inline zref::FragmentPipeline::Frag pipe_frag(const PipeJob& j, uint8_t addr) {
+  const PipeWord src = PipeWord::unpack(j.fill);
+  zref::FragmentPipeline::Frag f;
+  f.addr = addr;
+  f.depth = src.depth;
+  f.state = j.state;
+  f.vr = src.r;
+  f.vg = src.g;
+  f.vb = src.b;
+  f.va = j.src_a;
+  f.tag = src.tag;
+  f.sten_ref = src.stencil;
+  f.tr = static_cast<uint8_t>(j.texel_rgb >> 16);
+  f.tg = static_cast<uint8_t>(j.texel_rgb >> 8);
+  f.tb = static_cast<uint8_t>(j.texel_rgb);
+  f.ta = j.texel_a;
+  f.tidx = j.texel_idx;
+  return f;
+}
+
 /**
- * The composed oracle. `store` is carried ACROSS jobs on purpose: the RTL's
- * ping-pong alternates banks tile by tile, and driving the reference store
- * through the identical clear/write/swap sequence means the reference walks
- * the same alternation. A composition that cleared or wrote the wrong bank
- * would diverge from this, not merely from a flat array.
+ * The composed oracle. `store` and `ez` are carried ACROSS jobs on purpose.
+ * The RTL's ping-pong alternates banks tile by tile, so driving the reference
+ * store through the identical clear/write/swap sequence means the reference
+ * walks the same alternation — a composition that cleared or wrote the wrong
+ * bank would diverge from this, not merely from a flat array. zref::EarlyZ is
+ * carried for the same reason in the other direction: its counters accumulate
+ * across the batch exactly as the RTL's do, so a `tile_begin` that failed to
+ * reset the depth floor would show up as a divergence on the SECOND tile
+ * rather than being hidden by a fresh model per job.
  */
-inline PipeExpect pipe_oracle(zref::TileStore& store, const PipeJob& j) {
+inline PipeExpect pipe_oracle(zref::TileStore& store, zref::EarlyZ& ez, const PipeJob& j) {
   PipeExpect e;
   const zref::EdgeWalk::Cov cov = zref::EdgeWalk::tile(j.tri, j.tx, j.ty);
   e.count = cov.count;
@@ -100,14 +151,36 @@ inline PipeExpect pipe_oracle(zref::TileStore& store, const PipeJob& j) {
   c.clear = true;
   c.clear_data = j.clear;
   store.step(c);
+  // Same cycle, same event: the tile now holds the clear word everywhere, so
+  // the clear word's DEPTH field is exactly the early-Z floor.
+  ez.tile_begin(PipeWord::unpack(j.clear).depth);
 
+  const int front = store.front();
   for (int row = 0; row < kPipeTile; ++row) {
     for (int col = 0; col < kPipeTile; ++col) {
       if (!cov.covered(col, row)) continue;
+      const uint8_t addr = static_cast<uint8_t>(row * kPipeTile + col);
+
+      // RASTER.EARLYZ first — it never touches the store.
+      if (!ez.fragment(addr, PipeWord::unpack(j.fill).depth, j.state).keep) {
+        ++e.rejects;
+        continue;
+      }
+      ++e.candidates;
+
+      // RASTER.FRAGMENT reads the destination the store currently holds,
+      // which is why the writes below must be applied as they happen: two
+      // fragments at one pixel must see each other.
+      const zref::FragmentPipeline::Out fo =
+          zref::FragmentPipeline::apply(pipe_frag(j, addr), store.peek(front, addr));
+      if (!fo.write) continue;
+      ++e.writes;
+      if (fo.blended) ++e.blended;
+
       zref::TileStore::Cycle w;
       w.wr = true;
-      w.wr_addr = static_cast<uint8_t>(row * kPipeTile + col);
-      w.wr_data = j.fill;
+      w.wr_addr = addr;
+      w.wr_data = fo.word;
       store.step(w);
     }
   }
@@ -161,6 +234,7 @@ class PipeDev {
     out->assign(jobs.size(), PipeTile{});
     front_toggles_ = 0;
     max_in_flight_ = 0;
+    frag_error_ = false;
 
     size_t issued = 0;
     size_t done = 0;
@@ -252,6 +326,15 @@ class PipeDev {
         }
       }
 
+      // ---- RASTER.FRAGMENT's error pulse ------------------------------------
+      // It fires only if RASTER.TILESTORE breaks its own `latency: fixed:1`,
+      // so it must never fire. Latched rather than sampled at the end: it is
+      // a one-cycle pulse.
+      if (top_.fragment_error_o) {
+        frag_error_ = true;
+        add(err, "fragment_error_o fired: the tile store missed a read response");
+      }
+
       // ---- ping-pong observability ------------------------------------------
       const bool front = top_.front_bank_o != 0;
       if (have_prev_front && front != prev_front) ++front_toggles_;
@@ -281,6 +364,14 @@ class PipeDev {
   size_t max_in_flight() const { return max_in_flight_; }
   uint32_t tile_references() const { return top_.tile_references_o; }
   uint32_t resolved_tiles() const { return top_.resolved_tiles_o; }
+  uint32_t early_z_rejects() const { return top_.early_z_rejects_o; }
+  uint32_t ez_covered() const { return top_.ez_covered_o; }
+  uint32_t fr_covered() const { return top_.fr_covered_o; }
+  uint32_t blended_fragments() const { return top_.blended_fragments_o; }
+  uint8_t bin_mask() const { return static_cast<uint8_t>(top_.bin_mask_o); }
+  uint32_t z_floor() const { return top_.z_floor_o; }
+  /** RASTER.FRAGMENT's error pulse: it must NEVER fire. */
+  bool saw_fragment_error() const { return frag_error_; }
 
  private:
   static int32_t sext12(uint32_t v) {
@@ -311,6 +402,11 @@ class PipeDev {
     top_.job_clear_word_i = j.clear;
     top_.job_tile_index_i = j.index;
     top_.job_src_id_i = j.src;
+    top_.job_state_i = j.state;
+    top_.job_src_a_i = j.src_a;
+    top_.job_texel_rgb_i = j.texel_rgb;
+    top_.job_texel_a_i = j.texel_a;
+    top_.job_texel_idx_i = j.texel_idx;
   }
 
   void park() {
@@ -329,6 +425,7 @@ class PipeDev {
   Vzhao_raster_tile_pipe top_;
   uint32_t front_toggles_ = 0;
   size_t max_in_flight_ = 0;
+  bool frag_error_ = false;
 };
 
 // ---------------------------------------------------------------- helpers ---
@@ -346,6 +443,11 @@ inline uint64_t pipe_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag = 0, uint
 
 /** Pixels, in S 12.8 screen subpixels (spec/qformats.md §8). */
 inline int32_t px(int32_t p) { return p * 256; }
+
+/** Pack a 24-bit texel RGB for PipeJob::texel_rgb. */
+inline uint32_t pipe_rgb(uint8_t r, uint8_t g, uint8_t b) {
+  return (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) | b;
+}
 
 inline bool pipe_match(const PipeExpect& want, const PipeTile& got) {
   if (want.res.crc32c != got.crc32c) return false;
