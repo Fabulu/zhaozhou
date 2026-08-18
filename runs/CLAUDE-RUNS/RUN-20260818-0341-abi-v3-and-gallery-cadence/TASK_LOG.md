@@ -741,3 +741,97 @@ sunset/sunrise, then total darkness, then bloodmoon, then aurora, then the
 volcano plume, then ash accumulation, then the asteroid, and the eclipse
 whenever the fractional occlusion law is done. Blood rainbow last: the arc
 primitive is new and the palette fight is worst there.
+
+## Docket: stronger Noctis flares as a reusable feature (owner, 2026-08-18)
+
+> Make the noctis flares stronger if anything. We can put them on various things
+> and I want it to be a thing.
+
+Agreed, and there is a specific blocker to clear first, because "stronger" and
+"on various things" both cost the same scarce resource.
+
+`noctis-flare` currently sits at **253 of 256 colours** with the v1.3 trail. It
+is the busiest subject in the gallery: flare chain plus retained-history trail.
+So the flare cannot get stronger, and certainly cannot be applied to other
+subjects on top of their own content, until its palette cost comes down.
+
+### The enabling change, and it is already proven elsewhere
+
+The trail work today established the technique: composite the glow into ONE
+six-bit intensity plane and take a SINGLE class-ramp lookup at the end. However
+many falloffs overlap, the result cannot exceed 64 colours, because 64 is all
+the ramp has.
+
+The flare chain does not do this. It sums graded levels straight into RGB, so
+every additional flare element multiplies against every background colour it
+lands on. That is why it is expensive and why it had to be cut to a
+stripe-and-dot in `flare-occlusion`.
+
+Route the flare chain through the same single-plane reconstruction and its
+palette cost collapses to roughly the ramp size. That is what buys BOTH a
+stronger flare AND the ability to put flares on various things, which is what
+the owner actually asked for. Do this before tuning any flare strength upward,
+otherwise every increase gets refused by the palette counter and the real
+answer looks like a limitation.
+
+### Then, the strength itself
+
+Once the cost is bounded: raise the burst intensity, extend the ghost chain,
+widen the anamorphic streak, and let the glow tag drive a brighter bloom.
+Author each against the palette counter, which stays the arbiter.
+
+## Docket: lightning, fire, and water (owner, 2026-08-18)
+
+> a pass for really good lightning and fiery fire effects should also be on the
+> docket. And a bit for water. We already have the terrain looking like water in
+> deformation, might as well use that for actual water wave physics. Maybe a
+> little wizard dude can run across so fast he doesn't sink.
+
+### Lightning
+
+Cheap and dramatic, and it should be built early for that reason. A full-frame
+additive flash costs almost nothing and makes a static cloud sheet look alive.
+The bolt itself is a jagged additive polyline with a bright core and a wide dim
+halo; the flash is the payoff, not the geometry. Two laws worth pinning up
+front: the flash must be a single environment-level term so it cannot multiply
+the palette, and the bolt's branch recursion must be seeded deterministically so
+replay stays byte-exact.
+
+### Fire
+
+Harder than lightning and worth doing properly. Fire is the case where a
+palette-indexed rotation earns its keep: a CLUT cycling through a heat ramp gives
+motion for free, which is exactly the trick `star-boil` already proves at 191
+colours. Build it as a ramp rotation over a noise field rather than as particles,
+at least first; particles are phase 10 and fire does not need to wait for them.
+
+### Water, and the owner's own good idea
+
+> We already have the terrain looking like water in deformation, might as well
+> use that for actual water wave physics.
+
+This is the strongest suggestion in the set, because the machinery exists. The
+`wave_pool` field program already produces travelling sinusoidal displacement
+over the lattice, and `terrain-wave` ships it. What separates that from water is
+not the waves, it is:
+
+1. a material and shading treatment (specular, transparency, a horizon tint),
+2. sustained motion rather than a bounded event, and
+3. a response to things moving through it.
+
+Point 3 is where the wizard comes in. "Runs across so fast he doesn't sink" is a
+lovely mechanic and it is also a physics statement: contact time versus
+displacement response. If the surface's restoring force is slower than the
+runner's footfall interval, the runner stays on top. That is a genuinely cheap
+rule to implement on a lattice that already has velocity, and it makes the
+mechanic emerge from the simulation rather than being scripted, which is much
+better. Worth prototyping in the reference renderer as a reel subject: a fast
+mover leaving a wake and staying up, then slowing and breaking through.
+
+### Order
+
+Lightning first (cheapest, biggest immediate payoff, and the set-piece catalogue
+above wants it). Then water as a reel subject to prove the wake mechanic. Then
+fire via CLUT rotation. All three before any of it goes near RTL, since the
+reference renderer is where the look gets settled and none of these are
+hardware-blocked.
