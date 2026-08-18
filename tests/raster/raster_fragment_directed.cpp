@@ -42,6 +42,8 @@
 
 #include "raster_fragment_dev.hpp"
 
+#include "zref/zref_texture.hpp"
+
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -947,6 +949,141 @@ void test_counters() {
   check(!got.error, "counters: fragment_error_o never fired", 1, got.error ? 0 : 1);
 }
 
+// -------------------------------------------------------------------- 14 ---
+// THE TEXEL NOW COMES FROM TEXTURE.TMU, AND NOTHING IN THIS BLOCK CHANGED.
+//
+// This block's header and contract have said since phase 4 that
+// `frag_texel_rgb_i` / `frag_texel_a_i` / `frag_texel_idx_i` are "the clean
+// interface TEXTURE.TMU fills in when it lands ... Nothing here will need to
+// change when it does - the texel arrives from a port instead of from a test
+// driver." TEXTURE.TMU landed (ZH-027). This case cashes that claim: the three
+// fields are filled by `zref::Tmu::sample` against a real CLUT8 star face and
+// a real direct-colour beam ramp instead of by hand, and the RTL is driven
+// through EXACTLY the ports it already had. Not one line of
+// zhao_raster_fragment.sv moved, and this file's driver did not grow a port.
+//
+// The two recipes are the ones whose sampling the specs pin by name:
+//   star_disc_masked   - spec/stars_and_flares.md 1, CLUT8 NEAREST, alpha-test
+//                        index 0, glow tag with strength = the CLUT intensity.
+//                        The recipe is unreachable without a RAW INDEX, and a
+//                        sampler that returned only a colour could not serve
+//                        it - which is why smp_idx_o exists.
+//   beam_additive_fade - spec/sky_and_beams.md 2, direct colour with BILINEAR
+//                        mandatory, colour = tex.RGB x vertex.RGB.
+void test_texels_from_the_tmu() {
+  // A tiny pool: an 8x8 CLUT8 star face whose byte k is k (so index 0 - the
+  // transparent one - really occurs), a 256-entry RGB565 palette, and a 4x4
+  // RGB565 beam ramp.
+  zref::TextureMemory mem;
+  mem.base = 0x0500'0000u;
+  mem.bytes.assign(0x800, 0);
+  auto put16 = [&mem](uint32_t off, uint16_t v) {
+    mem.bytes[off] = static_cast<uint8_t>(v & 0xFFu);
+    mem.bytes[off + 1] = static_cast<uint8_t>(v >> 8);
+  };
+  for (uint32_t k = 0; k < 64u; ++k) mem.bytes[k] = static_cast<uint8_t>(k);
+  for (uint32_t i = 0; i < 256u; ++i)
+    put16(0x100u + i * 2u, static_cast<uint16_t>((i << 8) | (i ^ 0x39u)));
+  for (uint32_t k = 0; k < 16u; ++k)
+    put16(0x400u + k * 2u, static_cast<uint16_t>(0x0821u * (k + 1u)));
+
+  zref::Tmu::Mode star_mode;
+  star_mode.fmt = zref::Tmu::kClut8;
+  star_mode.log2w = 3;
+  star_mode.log2h = 3;
+
+  zref::Tmu::Mode beam_mode;
+  beam_mode.fmt = zref::Tmu::kRgb565;
+  beam_mode.bilinear = true;
+  beam_mode.log2w = 2;
+  beam_mode.log2h = 2;
+
+  const uint32_t st_star = FragmentPipeline::star_disc_masked().pack();
+  const uint32_t st_beam = FragmentPipeline::beam_additive_fade().pack();
+
+  uint64_t tile[kFrWords] = {};
+  FrWord dst;
+  dst.r = 20;
+  dst.g = 30;
+  dst.b = 40;
+  dst.depth = 0x100000u;
+  fr_fill(tile, dst.pack());
+
+  std::vector<FrFrag> frags;
+  int expect_masked = 0;
+  for (int i = 0; i < 8; ++i) {
+    zref::Tmu::Req q;
+    q.u = static_cast<int32_t>((static_cast<uint32_t>(i) << 16) / 8u);
+    q.v = 0;
+    q.base = mem.base;
+    q.pal_base = mem.base + 0x100u;
+    q.mode = star_mode.pack();
+    const zref::Tmu::Sample s = zref::Tmu::sample(q, mem);
+    if (s.idx == 0) ++expect_masked;
+
+    FrFrag f;
+    f.addr = static_cast<uint8_t>(i);
+    f.depth = 0x400000u;
+    f.state = st_star;
+    f.vr = 200;
+    f.vg = 180;
+    f.vb = 160;
+    f.va = 255;
+    f.tr = s.r;
+    f.tg = s.g;
+    f.tb = s.b;
+    f.ta = s.a;
+    f.tidx = s.idx;
+    frags.push_back(f);
+  }
+  for (int i = 0; i < 8; ++i) {
+    zref::Tmu::Req q;
+    // Fractional coordinates on purpose: the beam ramp is bilinear, so these
+    // texels are FILTERED before the fragment modulates them.
+    q.u = 9000 + i * 5000;
+    q.v = 12000 + i * 3000;
+    q.base = mem.base + 0x400u;
+    q.pal_base = mem.base + 0x100u;
+    q.mode = beam_mode.pack();
+    const zref::Tmu::Sample s = zref::Tmu::sample(q, mem);
+
+    FrFrag f;
+    f.addr = static_cast<uint8_t>(0x40 + i);
+    f.depth = 0x400000u;
+    f.state = st_beam;
+    f.vr = 255;
+    f.vg = 128;
+    f.vb = 64;
+    f.va = 255;
+    f.tr = s.r;
+    f.tg = s.g;
+    f.tb = s.b;
+    f.ta = s.a;
+    f.tidx = s.idx;
+    frags.push_back(f);
+  }
+
+  FrRun got;
+  const bool ok = run_seq(tile, frags, 0x51u, 0x62u, "tmu-texels", &got);
+  check(ok, "TMU texels: the RTL matches zref::FragmentPipeline on TMU-sampled texels", 1,
+        ok ? 1 : 0);
+  check(expect_masked == 1, "TMU texels: exactly one of the eight star texels is CLUT index 0", 1,
+        expect_masked);
+  check(got.writes.size() == frags.size() - 1u,
+        "TMU texels: the index-0 texel is alpha-tested away and every other fragment writes",
+        frags.size() - 1u, got.writes.size());
+  // The glow tag carries the TMU's RAW INDEX, not a palette colour - the one
+  // thing only a sampler that reports its index can supply.
+  bool tags_ok = true;
+  for (int i = 1; i < 8; ++i) {
+    const FrWord w = FrWord::unpack(got.tile[i]);
+    const uint8_t want = static_cast<uint8_t>((FragmentPipeline::kGlow << 6) | (i & 63));
+    if (w.tag != want) tags_ok = false;
+  }
+  check(tags_ok, "TMU texels: each star's glow strength is ITS OWN CLUT intensity", 1,
+        tags_ok ? 1 : 0);
+}
+
 }  // namespace
 
 int main() {
@@ -962,5 +1099,6 @@ int main() {
   test_same_pixel_raw();
   test_write_stall();
   test_counters();
+  test_texels_from_the_tmu();
   return zhao::report_and_exit("raster_fragment_directed");
 }
