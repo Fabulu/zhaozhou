@@ -593,3 +593,68 @@ Verified here: fast lane 122/122, exit 0. Format gate clean on 154 files.
 
 All blocks stay SPECIFIED. Simulated and formally proven is not synthesized, and
 neither is on-hardware.
+
+## Docket: the eclipse battle scene (owner, 2026-08-18)
+
+Owner, flagged by them as a late request with the hardware already well along:
+
+> I want a scene in the game to be players with their creatures on the
+> battlefield. It's a beautiful day, there are birds and chirp sounds. The sun
+> is awesome. Then the moon slowly moves in front of the sun, maybe because of
+> a spell. The entire battlefield goes dark. There is thunder, lightning, it
+> rains from the clouds above, the moon is in front of the sun, slowly there is
+> an eclipse, and there is an amazing corona for the sun.
+
+This is a signature set piece, not an effect. Beat sheet as described:
+
+1. Bright day. Players and their creatures on the battlefield. Birds, chirping.
+   The sun is the hero element.
+2. A moon enters, slowly, possibly spell-driven.
+3. The battlefield darkens as occlusion grows.
+4. Weather turns: thunder, lightning, rain from the clouds above.
+5. Totality, with a corona that is the payoff shot.
+
+### Why it is a good late request rather than a bad one
+
+Almost every system it needs is already specified or built, and it exercises
+them together, which is exactly what a set piece should do:
+
+| beat | what it leans on | state |
+|---|---|---|
+| sun, corona | `stars_and_flares.md`, `star_compose.cpp`, the flare chain | built (reference) |
+| occlusion and the fade | the occlusion probe + 15-frame fade | built, but see the flare-occlusion docket item, it currently has nothing worth fading |
+| darkening | environment / `SetEnvironment` (ABI v3, landed today) | ABI exists |
+| clouds, rain, lightning | `sky_and_beams.md` cloud sheet; particles are phase 10 | sky partly, particles not started |
+| creatures on the field | creature system, phase 9 | reference only |
+| birds, chirps, thunder | audio; `zhao_audio_fifo` exists in RTL and is fitted | transport exists, content does not |
+
+So the honest read: the scene is composable from the reference renderer FIRST,
+as a reel subject, well before the hardware can carry it. That is also the
+right order, because it would pin down what the eclipse actually needs before
+any of it is committed to RTL.
+
+### The one hard part, named early
+
+A real eclipse is not the existing occlusion path. The current probe is a
+binary "is the disc hidden" gate driving a fade. An eclipse needs PARTIAL
+coverage that grows: a moving occluder disc subtracting a lune from the sun's
+disc, with the corona surviving after the photosphere is gone. That is a
+different law, and it is the thing that makes the payoff shot work. It also
+interacts with the palette ceiling, because a corona against a darkened sky is
+exactly the wide-gamut case the 256-colour budget has already forced
+compromises on twice today (see the flare-occlusion diagnosis above).
+
+### Suggested order when this comes up the queue
+
+1. Amend the occlusion law from binary-gate to fractional coverage, in the
+   reference, with the corona surviving totality.
+2. Build it as a reel subject: sun, moon crossing, darkening, corona. Judge it
+   by decoding frames and looking at them.
+3. Add weather (cloud darkening, rain, lightning flashes) once the eclipse
+   itself reads correctly. Lightning is a full-frame additive flash, which is
+   cheap and dramatic and should be authored against the palette counter.
+4. Creatures and audio last: both are real subsystems with their own phases,
+   and neither is needed to prove the scene's look.
+
+Do NOT start this before the flare-occlusion item, since that item is the same
+code path and fixing it is a prerequisite rather than a parallel task.
