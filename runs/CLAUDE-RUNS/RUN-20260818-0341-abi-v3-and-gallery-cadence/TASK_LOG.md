@@ -167,3 +167,42 @@ behind the island silhouette, and keep the colour cost bounded by compositing
 the glow through a single ramped plane rather than summing graded levels
 directly into RGB. Then the existing probe and 15-frame fade have something
 worth fading. Verify by DECODING frames and looking at them, not by CRC.
+
+### Open: big suns smear forward and sideways, should trail only
+
+Owner, 2026-08-18: "The big suns' smear now extends to the top and bottom and
+front of the star, should only be at back."
+
+This is a REGRESSION I introduced in `5755d5c` today, and it is live on the
+site. Diagnosis, including what I got wrong:
+
+Each history entry stamps a FULL DISC of radius `ghost_r_px` centred on a past
+position. The class portraits drift about 9.7 px per frame. So the newest ghost
+sits only ~9.7 px behind the sun. A disc of radius R centred 9.7 px behind the
+current position extends `R - 9.7` px IN FRONT of it, and R px above and below.
+With R now at 40-42 px for the giants, that is ~32 px of smear ahead of the
+star and a full 42 px halo of it above and below. Exactly what the owner sees.
+
+The radius I replaced was 9-15 px, and the comment said the ghost radius "sits
+at/below the per-frame spacing". I read that as a palette argument and checked
+only the palette, which held. It was ALSO a geometry constraint: R <= spacing
+is precisely the condition for a round stamp not to bleed past the sun it
+trails. I removed the constraint without noticing it was load-bearing twice.
+
+The owner's actual requirement is unchanged and still right: a big sun must
+leave a big smear. The smear's WIDTH should be the sun's width. Its EXTENT must
+be backward only. A disc stamp cannot express that, which is the real defect.
+
+Fix options, cheapest first:
+1. Clip each ghost stamp to the half-plane behind the current position along
+   the travel direction (`dot(pixel - now, velocity) <= 0`). Keeps sun-sized
+   width, removes all forward bleed. The sideways extent stays R, which is
+   correct: that IS the sun's width.
+2. If top/bottom still reads as too much, make the stamp anisotropic: full
+   radius along travel, reduced across it.
+3. Do NOT simply revert to 9-15 px. That restores the uniform-dot defect the
+   owner reported earlier the same day.
+
+Verify by DECODING frames and looking at them. The CRC cannot see this, and I
+shipped it because I checked the CRC and the palette count and looked only at
+noctis-flare, whose sun is small enough that R <= spacing still held.
