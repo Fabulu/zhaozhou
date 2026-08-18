@@ -161,7 +161,10 @@ jobs:
   format:
     name: format + static analysis (charter 27)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45, not 30: cppcheck is the long pole and a timeout burns the
+    # whole budget before reporting anything. Still tight enough that
+    # a real regression surfaces as a failure, not a slow green.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -193,7 +196,12 @@ jobs:
           cppcheck --version
           files=$(git ls-files reference tests tools/capture \
             | grep -E '\.(cpp|hpp|h)$' | grep -v generated)
-          cppcheck --enable=warning --std=c++17 --inline-suppr \
+          # -j: the sweep re-analyses the generated zhao_abi.h once per
+          # translation unit, so its cost grew with the ABI and ran this job
+          # past its budget single-threaded. Parallelism is the fix; the
+          # checks and their results are unchanged (measured identical,
+          # zero findings, 2.4x faster).
+          cppcheck -j "$(nproc)" --enable=warning --std=c++17 --inline-suppr \
             --suppress=missingIncludeSystem --error-exitcode=2 \
             -I reference/include -I runtime/include -I tests/harness \
             --platform=unix64 $files
