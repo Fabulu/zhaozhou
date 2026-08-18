@@ -110,6 +110,8 @@ Budget group `tile`. Estimate only — **this block has not been synthesized**; 
 
 None yet — the block is standalone. It is not in `ZHAO_SHELL_RTL`, has no capture, and has never run on hardware. Phase-4 gate ("single triangle is bit-exact in ZRef, Verilator and physical FPGA") is satisfied for ZRef and Verilator only; the FPGA leg belongs to ZH-024 (resolve one exact tile to a hardware framebuffer) together with RASTER.TILESTORE and RASTER.RESOLVE.
 
+**Composed, in simulation only (2026-08-18).** `fpga/rtl/raster/zhao_raster_tile_pipe.sv` now instantiates RASTER.EDGEWALK, RASTER.TILESTORE and RASTER.RESOLVE together — one flat-colour triangle walked, written into the tile store, swapped, and resolved to RGB565 framebuffer words with a tile CRC — and `tests/raster/raster_tile_pipe_directed.cpp` / `..._random.cpp` diff it against `zref::EdgeWalk` -> `zref::TileStore` -> `zref::TileResolve` driven through the identical clear/write/swap sequence. That composition is **not a ledger block**: `design/blocks.yml`'s RASTER group has five entries and none of them is the composition, and registering one is a validator-gated ledger edit; the rationale and the three laws the composition owns live in that file's header. It is Verilator-only — not in `fpga/files.qip`, no Quartus fit, no capture, never on hardware. Simulated is not synthesized and neither is on-hardware.
+
 ## Notes
 
 Top-left rule exactness is a formal candidate (ZH-023 covers fill conventions) — now discharged for the fill rule itself, see Formal properties.
