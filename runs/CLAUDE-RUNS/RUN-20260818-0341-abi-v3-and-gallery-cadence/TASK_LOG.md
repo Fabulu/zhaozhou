@@ -168,7 +168,7 @@ the glow through a single ramped plane rather than summing graded levels
 directly into RGB. Then the existing probe and 15-frame fade have something
 worth fading. Verify by DECODING frames and looking at them, not by CRC.
 
-### Open: big suns smear forward and sideways, should trail only
+### RESOLVED: big suns smear forward and sideways, should trail only
 
 Owner, 2026-08-18: "The big suns' smear now extends to the top and bottom and
 front of the star, should only be at back."
@@ -424,3 +424,39 @@ twice:
 
 Still not hardware. Provisional device, virtual I/O, no board, and a per-block
 fit says nothing about the composed machine's routing or timing closure.
+
+#### Resolution of the smear regression (`c35ab7f`)
+
+The half-plane clip was tried first and rejected on sight: it removed the
+forward bleed but left a straight guillotine edge through the smear where the
+clip plane crossed the disc. Looking at that instead of shipping it exposed the
+real cause, which was mine and one level up.
+
+`ghost_r_px` is the ghost's HALO radius, not "how big the smear should be".
+`trail_disc_radius` derives the ghost's disc from it:
+
+    ghost_disc = disc_r * ghost_r / halo_r
+
+Feeding it `disc_r_px` squares the ratio. The orange giant got a 63 px ghost
+disc against a real 42 px one. A ghost larger than its own sun spills past it
+on every side by construction, which is exactly what shipped.
+
+`ghost_r_px = halo_r_px` makes the derived disc come back as `disc_r_px` on the
+nose, so a ghost IS the sun's silhouette: same size, one step behind, nothing
+in front. The owner's requirement is still met and met better, because the
+smear inherits each sun's actual size (12 px blue dwarf, 28 px orange giant)
+rather than the uniform 9..15 band that caused the original complaint.
+
+The confirmation worth trusting: `noctis-flare` is byte-identical before and
+after. Its ghost was already `halo_r_px`, and it was the one subject that
+looked right.
+
+Verified by decoding frames and looking at them. `reel --check` green on all 18
+sequences, all 18 GIFs regenerated from one build and byte-exact verified,
+deployed through `deploy.ps1` with both copy gates.
+
+Lesson recorded because it caused this: the earlier comment said the ghost
+radius "sits at/below the per-frame spacing". I read that as a palette argument,
+checked the palette, found it held, and changed the value. It was load-bearing
+for geometry too. A comment that gives one reason is not proof there is only
+one.
