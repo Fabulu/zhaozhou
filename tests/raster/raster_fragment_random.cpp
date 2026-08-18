@@ -243,7 +243,7 @@ void fill_random_tile(uint32_t* rng, uint64_t* tile) {
 void lane_a(FrDev* dev, int batches) {
   uint32_t rng = 0xF00DBA51u;
   for (int b = 0; b < batches; ++b) {
-    uint64_t tile[kFrWords];
+    uint64_t tile[kFrWords] = {};
     fill_random_tile(&rng, tile);
     std::vector<FrFrag> frags;
     const int n = 20 + static_cast<int>(next(&rng) % 40u);
@@ -261,7 +261,7 @@ void lane_a(FrDev* dev, int batches) {
 void lane_b(FrDev* dev, int batches) {
   uint32_t rng = 0x1DEA5EEDu;
   for (int b = 0; b < batches; ++b) {
-    uint64_t tile[kFrWords];
+    uint64_t tile[kFrWords] = {};
     fill_random_tile(&rng, tile);
     const uint8_t base = static_cast<uint8_t>(next(&rng));
     const uint8_t span = static_cast<uint8_t>(1u + (next(&rng) & 3u));
@@ -289,7 +289,7 @@ void lane_c(FrDev* dev, int batches) {
       FragmentPipeline::sun_additive().pack(),     FragmentPipeline::beam_additive_fade().pack(),
       FragmentPipeline::star_disc_masked().pack(), FragmentPipeline::star_halo_additive().pack()};
   for (int b = 0; b < batches; ++b) {
-    uint64_t tile[kFrWords];
+    uint64_t tile[kFrWords] = {};
     fill_random_tile(&rng, tile);
     std::vector<FrFrag> frags;
     const int n = 24 + static_cast<int>(next(&rng) % 32u);

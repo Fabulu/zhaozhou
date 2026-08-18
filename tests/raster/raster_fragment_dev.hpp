@@ -234,7 +234,12 @@ inline FrExpect fr_expect(const uint64_t* tile, const std::vector<FrFrag>& frags
   return e;
 }
 
-/** A tile filled with one word. */
+/**
+ * A tile filled with one word. Callers still value-initialise their arrays at
+ * the declaration: cppcheck cannot see through this call, and the
+ * static-analysis tier is a hard gate (the precedent is
+ * raster_tile_pipe_dev.hpp's `words[]`).
+ */
 inline void fr_fill(uint64_t* tile, uint64_t word) {
   for (int i = 0; i < kFrWords; ++i) tile[i] = word;
 }

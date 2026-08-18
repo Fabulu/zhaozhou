@@ -149,7 +149,7 @@ bool run_seq(const uint64_t* tile, const std::vector<FrFrag>& frags, uint32_t in
 
 /** One fragment against one destination word: the hand-computable shape. */
 uint64_t one(uint64_t dst, const FrFrag& f, bool* wrote) {
-  uint64_t tile[kFrWords];
+  uint64_t tile[kFrWords] = {};
   fr_fill(tile, dst);
   std::vector<FrFrag> v;
   v.push_back(f);
@@ -719,7 +719,7 @@ void test_ratified_recipes() {
     f.depth = 0x300000u;  // in front of the destination, so nothing is z-killed
     frags.push_back(f);
   }
-  uint64_t tile[kFrWords];
+  uint64_t tile[kFrWords] = {};
   fr_fill(tile, dst);
   FrRun got;
   const bool ok = run_seq(tile, frags, 0u, 0u, "recipes", &got);
@@ -767,7 +767,7 @@ void test_ratified_recipes() {
     halo.tidx = 0x3F;
     two.push_back(halo);
 
-    uint64_t t2[kFrWords];
+    uint64_t t2[kFrWords] = {};
     fr_fill(t2, dst);
     FrRun g2;
     const bool ok2 = run_seq(t2, two, 0u, 0u, "sky-then-halo", &g2);
@@ -805,7 +805,7 @@ void test_same_pixel_raw() {
     f.vb = 0;
     frags.push_back(f);
   }
-  uint64_t tile[kFrWords];
+  uint64_t tile[kFrWords] = {};
   fr_fill(tile, fr_word(0, 0, 0, 0, 0x100000u, 0));
   FrRun got;
   const bool ok = run_seq(tile, frags, 0u, 0u, "same-pixel", &got);
@@ -838,7 +838,7 @@ void test_same_pixel_raw() {
     f.vr = static_cast<uint8_t>(i + 1);
     zf.push_back(f);
   }
-  uint64_t t2[kFrWords];
+  uint64_t t2[kFrWords] = {};
   fr_fill(t2, fr_word(0, 0, 0, 0, 0, 0));
   FrRun gz;
   const bool ok3 = run_seq(t2, zf, 0u, 0u, "same-pixel-depth", &gz);
@@ -874,7 +874,7 @@ void test_write_stall() {
     frags.push_back(f);
   }
 
-  uint64_t tile[kFrWords];
+  uint64_t tile[kFrWords] = {};
   for (int i = 0; i < kFrWords; ++i)
     tile[i] = fr_word(static_cast<uint8_t>(i), static_cast<uint8_t>(255 - i),
                       static_cast<uint8_t>(i * 3), static_cast<uint8_t>(i),
@@ -932,7 +932,7 @@ void test_counters() {
   // wanted to.
   for (int i = 0; i < 25; ++i) frags.push_back(mk(static_cast<uint8_t>(i), killed.pack()));
 
-  uint64_t tile[kFrWords];
+  uint64_t tile[kFrWords] = {};
   fr_fill(tile, fr_word(1, 2, 3, 4, 5, 6));
   FrRun got;
   const bool ok = run_seq(tile, frags, 0x99u, 0x88u, "counters", &got);
