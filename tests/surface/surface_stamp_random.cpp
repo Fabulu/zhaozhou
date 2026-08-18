@@ -61,9 +61,28 @@ struct Stats {
   uint32_t field_stamps = 0;
   uint32_t blend_seen[7] = {0, 0, 0, 0, 0, 0, 0};
   uint32_t stalled = 0;
+  // Texels lying EXACTLY on a rim. Added 2026-08-19 after the mutation sweep:
+  // flipping the outer test from `>` to `>=` (i.e. clipping the rim texel) was
+  // caught ONLY by the directed suite, because a uniformly random radius
+  // essentially never makes d2 == r*r exactly. A lane that cannot reach the
+  // boundary is not evidence about the boundary, so lane A now CONSTRUCTS the
+  // equality and asserts it was reached.
+  uint32_t rim_exact_outer = 0;
+  uint32_t rim_exact_inner = 0;
 };
 
-StampCmd make_cmd(Rng& rng, bool limit_lane, Stats& st) {
+// On the canonical envelope a texel centre sits at an exact half-metre and two
+// centres in the same row are an exact whole number of metres apart, so a
+// radius of k metres from texel i0 puts texel i0+k EXACTLY on the outer rim.
+// `covers` is inclusive on both radii, so that texel must be stamped.
+struct RimProbe {
+  bool active = false;
+  int outer_i = 0, outer_j = 0;
+  bool inner_active = false;
+  int inner_i = 0;
+};
+
+StampCmd make_cmd(Rng& rng, bool limit_lane, Stats& st, RimProbe* probe, int index) {
   StampCmd c;
   c.handle = 0x0000'2C01;
   c.src_id = static_cast<uint16_t>(rng.range(0, 65535));
@@ -77,7 +96,11 @@ StampCmd make_cmd(Rng& rng, bool limit_lane, Stats& st) {
     // full coverage and total misses all occur without being forced.
     c.tx = rng.range(-45, 45) * kM;
     c.ty = rng.range(-45, 45) * kM;
-    const int pick = rng.range(0, 19);
+    // The two extreme radii are SCHEDULED, not rolled. A 1-in-20 roll over 60
+    // stamps leaves it a coin flip whether the fully-covered sheet is ever
+    // produced, and the run where it is not is a green run that sampled
+    // nothing at the boundary. (Learned twice while writing this file.)
+    const int pick = (index % 11 == 3) ? 0 : ((index % 17 == 5) ? 1 : 2);
     if (pick == 0) {
       // Big enough to swallow the whole sheet FROM ANY of the centres above:
       // the far corner from (45, 45) is sqrt(77^2 + 77^2) = 109 m away, so
@@ -94,6 +117,32 @@ StampCmd make_cmd(Rng& rng, bool limit_lane, Stats& st) {
       ++st.rings;
     }
     c.operation = static_cast<uint8_t>(rng.range(0, 1));
+
+    if (index % 3 == 1) {
+      // Rim-exact construction (see Stats::rim_exact_outer). Scheduled for the
+      // same reason as the radii above.
+      const int i0 = rng.range(8, 40);
+      const int j0 = rng.range(8, 40);
+      const int k = rng.range(1, 20);
+      c.tx = static_cast<int32_t>(zs::texel_wx(c.env, i0));
+      c.ty = static_cast<int32_t>(zs::texel_wz(c.env, j0));
+      c.radius = k * kM;
+      c.ring_width = 0;
+      probe->active = true;
+      probe->outer_i = i0 + k;
+      probe->outer_j = j0;
+      if (probe->outer_i > 63) {
+        probe->outer_i = i0 - k;
+        if (probe->outer_i < 0) probe->active = false;
+      }
+      if (k > 2 && rng.chance(2)) {
+        const int m = rng.range(1, k - 1);
+        c.ring_width = (k - m) * kM;  // r_inner = m metres, exactly
+        probe->inner_active = true;
+        probe->inner_i = i0 + m <= 63 ? i0 + m : i0 - m;
+        if (probe->inner_i < 0) probe->inner_active = false;
+      }
+    }
   } else {
     const int32_t lim = 4096;
     c.env.x0 = rng.range(-lim, lim) * kM;
@@ -136,15 +185,20 @@ void run_lane(Vzhao_surface_stamp& dut, Rng& rng, int stamps, bool limit_lane, S
   std::vector<zs::FieldResult> fld(zs::kSheetTexels);
 
   for (int i = 0; i < stamps; ++i) {
-    const StampCmd c = make_cmd(rng, limit_lane, st);
+    RimProbe probe;
+    const StampCmd c = make_cmd(rng, limit_lane, st, &probe, i);
     // Backpressure rides continuously rather than living in one dedicated
     // case, so every stamp is also a handshake test.
     sim.stall_req = rng.chance(2) ? rng.range(2, 9) : 0;
     sim.stall_wr = rng.chance(2) ? rng.range(2, 9) : 0;
     sim.stall_res = rng.chance(2) ? rng.range(2, 9) : 0;
     if (sim.stall_req || sim.stall_wr || sim.stall_res) ++st.stalled;
-    // A rare residency overflow: the stamp must write NOTHING (S4).
-    sim.force_overflow = rng.chance(20);
+    // A residency overflow every 13th stamp: the stamp must write NOTHING
+    // (S4). Scheduled rather than rolled, because a 1-in-20 roll over 60
+    // stamps is a coin flip on whether the case is sampled at all — and a
+    // rejection path that is never entered is the exact failure mode these
+    // coverage assertions exist to prevent.
+    sim.force_overflow = (i % 13 == 7);
     sim.results.clear();
     sim.writes.clear();
 
@@ -198,6 +252,13 @@ void run_lane(Vzhao_surface_stamp& dut, Rng& rng, int stamps, bool limit_lane, S
         if (r.strength == 255 && r.before != 255) ++st.hit_255;
         if (r.strength == 0 && r.before != 0) ++st.hit_0_after_sub;
       }
+      // The rim texel must be covered — both radii are inclusive. If the
+      // construction ever stopped producing exact equality this would go
+      // silent, so the counter is asserted at the end of the run.
+      const zs::StampGeom g{c.tx, c.ty, c.radius, c.ring_width};
+      if (probe.active && zs::covers(c.env, g, probe.outer_i, probe.outer_j)) ++st.rim_exact_outer;
+      if (probe.inner_active && zs::covers(c.env, g, probe.inner_i, probe.outer_j))
+        ++st.rim_exact_inner;
     }
 
     const zs::Sheet& got = sim.store.at(sim.store.find(c.handle));
@@ -262,6 +323,10 @@ int main(int argc, char** argv) {
         a.blend_seen[sdev::kBlDecayAcc]);
   check(a.rejected > 0, "lane A actually hit a residency rejection", 1, a.rejected);
   check(a.stalled > 0, "lane A actually ran under backpressure", 1, a.stalled);
+  check(a.rim_exact_outer > 0, "lane A actually stamped a texel EXACTLY on the outer rim", 1,
+        a.rim_exact_outer);
+  check(a.rim_exact_inner > 0, "lane A actually stamped a texel EXACTLY on the inner rim", 1,
+        a.rim_exact_inner);
 
   // ---- lane B reached the domain limit ------------------------------------
   check(b.inverted_env > 0, "lane B actually built inverted envelopes", 1, b.inverted_env);
@@ -280,10 +345,10 @@ int main(int argc, char** argv) {
 
   std::printf(
       "surface_stamp_random: lane A %u stamps (full %u, partial %u, empty %u, rings %u, "
-      "sat255 %u, rejected %u), lane B %u stamps (inv-env %u, neg-r %u, field %u, "
+      "sat255 %u, rejected %u, rim-exact %u/%u), lane B %u stamps (inv-env %u, neg-r %u, field %u, "
       "full %u, empty %u, sat0 %u, blends %u)%s\n",
       a.stamps, a.full_cover, a.partial_cover, a.zero_cover, a.rings, a.hit_255, a.rejected,
-      b.stamps, b.inverted_env, b.negative_radius, b.field_stamps, b.full_cover, b.zero_cover,
+      a.rim_exact_outer, a.rim_exact_inner, b.stamps, b.inverted_env, b.negative_radius, b.field_stamps, b.full_cover, b.zero_cover,
       b.hit_0_after_sub, blends_used, nightly ? " [nightly]" : "");
 
   return zhao::report_and_exit("surface_stamp_random");
