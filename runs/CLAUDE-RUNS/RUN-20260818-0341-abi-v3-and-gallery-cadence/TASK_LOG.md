@@ -206,3 +206,51 @@ Fix options, cheapest first:
 Verify by DECODING frames and looking at them. The CRC cannot see this, and I
 shipped it because I checked the CRC and the palette count and looked only at
 noctis-flare, whose sun is small enough that R <= spacing still held.
+
+### Open: the language is still called Form in the site and the repo
+
+Owner, 2026-08-18: "website still says Form language instead of Nanquan. Our
+repo also still might contain remnants. Update docs."
+
+Surveyed. There are remnants, and one of them is not just a name.
+
+Site (`zhaozhou-site/template/index.html`, the copy source of truth):
+- phase 1 row: "Specification, Form IR and oracle skeleton"
+- phase 3 row: "Software console and minimal Form language"
+Edit the TEMPLATE, never `public/index.html`, then re-assemble and deploy
+through `deploy.ps1` so both copy gates run.
+
+Repo, roughly 16 files outside `compiler/`, notably:
+- `AGENT_START_HERE.md` (several)
+- `design/blocks.yml` block `SW.COMPILER.FORM`, name "Form compiler"
+- `design/contracts/SW.COMPILER.FORM.md` (contract title, `.form` source
+  extension, `FORM-E-nnn` diagnostics, `form:gen`/`form:check`)
+- `design/contracts/SW.TOOLS.ASSET.md`
+- `docs/naming.md` which still states the language "lives in this repository
+  under `compiler/`" - that is now false and is the sentence most likely to
+  mislead the next agent
+- `FORM_LANGUAGE_HARDWARE_CODESIGN.md` (whole document, and its filename)
+
+The part that is NOT a rename: `compiler/` (2.6 MB) is still in the Zhaozhou
+tree and the hardware C++ tests still BUILD against it:
+
+    tests/CMakeLists.txt:216,651,729  -> ${CMAKE_SOURCE_DIR}/compiler/tests/generated
+    tests/unit/test_tables_tri.cpp    -> compiler/src/generated/tables.ts
+
+So `compiler/` cannot simply be deleted; `crater_ring.hpp` and the generated
+`tables.ts` are real inputs to the hardware test lane. Untangling that is the
+actual work: either move the generated artifacts the hardware needs into a
+hardware-owned path, or vendor them, so Zhaozhou stops depending on a language
+tree that now lives in the Nanquan repo.
+
+Suggested order:
+1. Site copy (small, visible, deployable on its own).
+2. `docs/naming.md` and `AGENT_START_HERE.md`, since those actively misdirect.
+3. Ledger/contract rename `SW.COMPILER.FORM` -> Nanquan. Note `ledger:check`
+   validates block ids and contract paths, so rename both together and re-run.
+4. The `compiler/` build coupling, last and on its own commit.
+
+Renaming `FORM_LANGUAGE_HARDWARE_CODESIGN.md` is a judgement call: it is a
+historical co-design document with a provenance header. Retitling the content
+to Nanquan while keeping a note that it was written as "Form" is honest;
+silently rewriting history is not.
