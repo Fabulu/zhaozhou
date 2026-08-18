@@ -253,7 +253,12 @@ Two things to watch, neither measured: the address generator is a 48-bit shift, 
 
 None on hardware. **Not composed with TEXTURE.CACHE in RTL**: the ledger registers four TEXTURE blocks and none of them is "the composition"; registering one is a validator-gated ledger edit and is not this increment's. The TMU's lane models the cache port with configurable latency and stall patterns (the same choice `raster_fragment_dev.hpp` documents for the tile store, and for the same reason — it drives timings the real block would never produce), and TEXTURE.CACHE is verified against its own oracle in its own lanes.
 
-**Integrated with RASTER.FRAGMENT in the reference, in simulation only:** `test_clut_index_zero_and_the_fragment` takes samples out of the RTL TMU and runs them through `zref::FragmentPipeline` under `star_disc_masked`, asserting the alpha-test kill, the six survivors' writes and each survivor's glow-tag strength. **No RASTER.FRAGMENT port changed** — the three fields the TMU emits are the three the fragment already had. Verilator-only; no Quartus fit, no capture, never on hardware. Simulated is not synthesized and neither is on-hardware.
+**Integrated with RASTER.FRAGMENT, in simulation only, in BOTH directions, and neither needed a port change:**
+
+- `tests/texture/texture_tmu_directed.cpp:test_clut_index_zero_and_the_fragment` takes samples out of the **RTL TMU** and runs them through `zref::FragmentPipeline` under `star_disc_masked`, asserting the alpha-test kill, the seven survivors' writes and each survivor's glow-tag strength.
+- `tests/raster/raster_fragment_directed.cpp:test_texels_from_the_tmu` goes the other way: `zref::Tmu::sample` fills `frag_texel_rgb_i` / `_a_i` / `_idx_i` against a real CLUT8 star face and a real bilinear direct-colour ramp, and drives the **RTL fragment** through exactly the ports it already had.
+
+**Not one line of `zhao_raster_fragment.sv` changed, and its driver grew no port.** The interface that block's phase-4 header described as "the clean interface TEXTURE.TMU fills in when it lands" fits as written. Verilator-only; no Quartus fit, no capture, never on hardware. Simulated is not synthesized and neither is on-hardware.
 
 ## Notes
 
