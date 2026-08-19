@@ -1623,3 +1623,73 @@ that is not there.
 
 Site redeployed with the corrected caption and the atmosphere pair.
 
+
+## Phase 8: the composition GEOM.BINNER waited two phases for
+
+`MEASURE.TOKENS x GEOM.BINNER`, both blocks real, landed at `994c5b9`. This was
+the increment the phase-8 agent named as most valuable for that block and did
+not do, and it is the seam `GEOM.BINNER`'s law E deferred in phase 6 with the
+words: MEASURE.TOKENS "is phase 8, its contract is still a stub, and no packet
+layout for `token_grant` exists anywhere".
+
+**How the two blocks meet.** Law E says `tok_grant_i` "is sampled on that same
+edge", so the composition has to honour a combinational round trip inside one
+cycle. A new `BinnerDev::token_authority` / `after_edge` pair opens exactly that
+window: after `tri_ready_o` rises (so `tok_req_o` is genuinely asserted) and
+before the accepting edge, the authority drives the real TOKENS instance, reads
+`tok_grant_o` after a single eval, writes it back, and both blocks then take the
+same edge. A single eval settling is itself the evidence that no combinational
+loop crosses the seam.
+
+**Measured: 6 granted, 4 denied against a budget of 6**, the binner's own
+`triangles_culled` up by exactly 4, and view 1's pool untouched throughout —
+charter §9 fairness observed from the CONSUMER side rather than from inside the
+block that implements it.
+
+### The seam is six bindings short, and that asymmetry is the finding
+
+`MEASURE.GOVERNOR → TERRAIN.LOD` composed with **no adapter at all**. This one
+needs six decisions nobody has ratified. `src_id` and `class` are sound;
+**`view` has no port on the binner at all**; `cost`, `essential` and `rep` are
+CHOSEN in the test because nothing supplies them.
+
+Two consequences now stated rather than left implicit:
+
+- **`den_rep_o` reports 0 for every denial from this producer**, whatever LOD
+  rung actually made the triangle. It is useless for the binner today.
+- **Law T1's essential/refinement reserve has no producer exercising it.**
+  Nothing upstream of the binner marks a triangle as refinement.
+
+And one constraint discovered rather than assumed: **a per-tile-reference cost
+model is not buildable at this seam.** The reference count is not known until
+the triangle has been enumerated, which happens after the grant. A cost model
+that needs the answer before the question cannot exist here.
+
+### REPORTED DEFECT: the pool only ever drains
+
+TOKENS publishes a return path and law T4 gives it meaning. **GEOM.BINNER has
+no return port.** Law E named the return path as one of four things it left for
+this block to write; this block wrote it and gave the binner no way to reach it.
+A granted triangle's token is gone for good, so the geometry pool falls
+monotonically and after `budget` triangles that producer is denied forever
+however much of the work finished.
+
+The test asserts `avail_geom0_o == 0` — pinning the defect AS IT IS, on purpose,
+so that wiring a return path turns the line red and forces whoever does it to
+state the new law here rather than fixing it quietly. Adding a port to a landed
+phase-6 block is its own interface change; proving the gap exists is the honest
+first step.
+
+### A fixture trap worth keeping
+
+Screen coordinates into `make_bin_tri` are **8.8 subpixel**. Plain pixel numbers
+made every triangle sub-pixel, GEOM.CLIP rejected all ten, and the frame ran
+empty. The fixture assertion ("ten triangles survived CLIP and SETUP") is what
+caught it — without that line the composition would have "passed" against zero
+triangles, which is the same failure shape as a green mutation sweep against a
+stale binary.
+
+**Gates:** fast lane **100% of 171**, up from 170 by this test. The 16 related
+lanes including every pre-existing binner test are green, so the driver hook
+disturbs nothing.
+
