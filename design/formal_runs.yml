@@ -507,3 +507,64 @@ runs:
       (texture_tmu_directed's 73 checks and texture_tmu_random's three
       lanes) and by the nine-way mutation table in
       design/contracts/TEXTURE.TMU.md.
+
+  - property: tests/formal/surface_blend.sby
+    status: green
+    date: "2026-08-19"
+    commit: 8bd35d2
+    lane: formal_surface_blend
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The surface-sheet blend of SURFACE.STAMP (ZH-052), proved on
+      zhao_surface_blend — the module zhao_surface_stamp instantiates, and the
+      only instance of it — so the proof and the silicon are the same bytes
+      rather than a restatement. The blend was factored OUT of the stamp
+      pipeline for exactly this reason: inside it, reaching the arithmetic
+      needs a command, a residency grant and two pipeline stages, and none of
+      that is arithmetic anybody can state a theorem about. SCOPE-TOTAL, not
+      bounded: the harness is one always_comb and its 22 free input bits
+      (mode 3, dst 8, src 8, age_shift 3) ARE the module's whole input space —
+      dst is u8 because layer F's strength IS one byte (charter §12,
+      spec/terrain_rules.md §2), src is u8 because it IS `strength >> 8` of
+      the ABI's u16 field, mode is 3 bits because the blend field is, and the
+      shift is 0..7 — so all 4,194,304 inputs are covered and depth 2 is the
+      full reachable set. Recorded as an explicit "# SCOPE-TOTAL:" waiver
+      (V19) because there is no horizon for a scope guard to assert. NINE
+      laws, each written against the arithmetic in wide lanes rather than
+      against the RTL's case arms: a_replace; a_max_exact (exactly
+      max(dst,src) — the blend EVERY ABI operation byte other than 1 selects,
+      including the reference's `else`, and the one tests/render/
+      render_golden.cpp's crack ring pins); a_decay_exact (exactly
+      min(255,(dst>>1)+src), zref::render::stamp_surface's own expression for
+      ABI operation 1); a_add_exact and a_sub_exact (exactly min(255,dst+src)
+      and max(0,dst-src), both two-sided so the WRAP and the early clamp die
+      together — a subtract that wrapped would turn an erase into the
+      brightest scar on the sheet); a_age_exact; a_sub_darkens (SUB and AGE
+      can never brighten); a_add_brightens (ADD and MAX can never darken —
+      with DECAY_ACC DELIBERATELY EXCLUDED, because (dst>>1)+0 halves, so
+      asserting monotonicity there would assert something FALSE about the
+      ratified blend); and a_age_terminates (a non-zero shift strictly
+      decreases a non-zero destination), which is the theorem that justifies
+      choosing a shift over the rejected qformats §2 unit_mul form — rate
+      255/256 has a fixed point at 1, so an aged scar would never reach zero.
+      NINE covers, all reached: both saturation rails ACTUALLY firing (without
+      them a_add_exact/a_sub_exact's min and max also hold for a blend that
+      never reaches a rail), the decay rail, DECAY_ACC actually halving (the
+      non-monotone case a_add_brightens excludes), MAX taking each of its two
+      branches, the ABI STAMP code taking src, AGE driving a non-zero
+      destination to zero, and REPLACE actually lowering. NOT VACUOUS,
+      demonstrated: removing SUB's saturation makes bmc FAIL (and also fails
+      both differential lanes; binary hash F1F8DE20 -> E20EB1E5, relink
+      proven). Measured cost: 2.7 s under CTest on this kit (boolector,
+      depth 2) — it carries the standard TIMEOUT 2100. Deliberately NOT
+      asserted: "the result never leaves the 8-bit field", because out_o IS
+      eight bits wide and that is a tautology about a port declaration rather
+      than a theorem — unlike zhao_raster_blend, whose internal lane is wider
+      than its output. NOT proved here: the coverage geometry (texel centres,
+      the annulus, the truncating divide and its stated ±4,096 m domain), the
+      ABI operation -> blend mapping, the residency handshake with
+      SURFACE.SHEET, the two-stage pipeline, the counters and the
+      stamp_results stream; those are covered by the differential lanes
+      against zref::render::stamp_surface (tests/surface/) and by the
+      nine-way mutation table in design/contracts/SURFACE.STAMP.md.

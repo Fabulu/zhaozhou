@@ -1437,7 +1437,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 sheet texel per clock
-    reference_model: zref::SurfaceSheet
+    reference_model: zref::surface::SheetStore
     tests:
       directed: tests/surface/surface_sheet_directed.cpp
       random: tests/surface/surface_sheet_random.cpp
@@ -1449,7 +1449,14 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Residency policy per §11; overflow rejects the stamp, never partial-writes.
+    notes: >-
+      Residency policy per §11; overflow rejects the stamp, never
+      partial-writes. 2026-08-19: `reference_model` AMENDED from
+      `zref::SurfaceSheet` to `zref::surface::SheetStore` (the same deviation
+      TERRAIN.PATCH records, for the same reason). `zref::SurfaceSheet` named
+      nothing; `zref::render::SurfaceSheet` exists but is the STORAGE — 64×64
+      tag+strength bytes, no residency — while this block's model is the
+      resident directory plus that storage. Argued in the contract.
 
   - id: SURFACE.STAMP
     name: Deterministic stamp engine
@@ -1467,7 +1474,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 stamp texel per clock
-    reference_model: zref::SurfaceStamp
+    reference_model: zref::surface::stamp_apply
     tests:
       directed: tests/surface/surface_stamp_directed.cpp
       random: tests/surface/surface_stamp_random.cpp
@@ -1479,7 +1486,14 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Capture-exact: identical inputs replay to identical sheets (§20 discipline)."
+    notes: >-
+      Capture-exact: identical inputs replay to identical sheets (§20
+      discipline). 2026-08-19: `reference_model` AMENDED from
+      `zref::SurfaceStamp` to `zref::surface::stamp_apply` — the old name
+      defined nothing anywhere in the tree, and the executed law is
+      `zref::render::stamp_surface`, of which `zref::surface::stamp_apply` is
+      the per-texel VIEW (proved faithful by
+      tests/surface/surface_stamp_directed.cpp). Argued in the contract."
 
   # ===========================================================================
   # GEOM — Ten Thousand Forms (fpga/rtl/geometry)

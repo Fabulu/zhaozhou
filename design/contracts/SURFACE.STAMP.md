@@ -286,7 +286,18 @@ every `stamp_results` record.
 ## Scalar reference function
 
 `zref::surface::stamp_apply` / `stamp_apply_field` / `blend_apply` in
-`reference/include/zref/zref_surface.hpp`. For the ratified path this is a
+`reference/include/zref/zref_surface.hpp`.
+
+**The ledger's `reference_model` was AMENDED, from `zref::SurfaceStamp` to the
+symbol above.** That is a deviation from "honour the ledger entry" and it is
+recorded as one, in the same shape `design/contracts/TERRAIN.PATCH.md` records
+its own. The reason: `zref::SurfaceStamp` defines nothing anywhere in this tree
+(`zhao_abi::ZhCmdSurfaceStamp` is the wire struct, not a model), while the law
+this block implements has been executing for waves under the name
+`zref::render::stamp_surface`. Citing a phantom would have been exactly the
+`zref::CmdDma` failure rule V17 exists to catch.
+
+For the ratified path this is a
 **VIEW** onto `zref::render::stamp_surface`, not a second implementation:
 `surface_stamp_directed`'s first test runs 400 randomized commands (including
 inverted envelopes, negative radii and annuli) through `stamp_surface` and

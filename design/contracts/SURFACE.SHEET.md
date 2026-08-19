@@ -207,7 +207,20 @@ rejected acquire. `source_ids: true` is honoured on the request port
 `zref::surface::SheetStore` in `reference/include/zref/zref_surface.hpp`. It is
 the **first** implementation of the residency law (there was none), so it is not
 a view onto anything — the RTL and it were written to the same argued rules and
-the randomized differential holds them together.
+the randomized differential holds them together. The 64×64 byte pair itself is
+`zref::surface::Sheet`, byte-identical in content to the existing
+`zref::render::SurfaceSheet`.
+
+**The ledger's `reference_model` was AMENDED, from `zref::SurfaceSheet` to the
+symbol above.** That is a deviation from "honour the ledger entry" and it is
+recorded as one, in the same shape `design/contracts/TERRAIN.PATCH.md` records
+its own. The reason: `zref::SurfaceSheet` names nothing anywhere in this tree,
+and the symbol it was presumably reaching for — `zref::render::SurfaceSheet` —
+is the STORAGE (two byte arrays, no residency, no directory, no clear), while
+this block's model is the resident directory *plus* that storage. Citing the
+struct would have made the residency law — every choice C1..C5 above, and the
+only part of this block anybody could get wrong — belong to no reference model
+at all.
 
 ## Directed tests
 
