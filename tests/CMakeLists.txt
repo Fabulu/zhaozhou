@@ -2668,6 +2668,27 @@ verilate(test_measure_governor_lod
 add_test(NAME measure_governor_lod COMMAND test_measure_governor_lod)
 set_tests_properties(measure_governor_lod PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---- phase 8: MEASURE.TOKENS x GEOM.BINNER composition ---------------------
+# The seam GEOM.BINNER's law E deferred to phase 8. Both blocks real, wired
+# cycle-accurately through the driver's live token authority; see the file
+# header for the six unratified bindings this exposes and the return-path
+# defect it reports.
+add_executable(test_measure_tokens_binner measure/measure_tokens_binner.cpp)
+target_link_libraries(test_measure_tokens_binner PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_tokens_binner PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_measure_tokens_binner
+  PREFIX Vzhao_measure_tokens
+  TOP_MODULE zhao_measure_tokens
+  SOURCES ${ZHAO_MEASURE_TOKENS_SV})
+verilate(test_measure_tokens_binner
+  PREFIX Vzhao_geom_binner
+  TOP_MODULE zhao_geom_binner
+  SOURCES ${ZHAO_GEOM_BINNER_SV})
+add_test(NAME measure_tokens_binner COMMAND test_measure_tokens_binner)
+set_tests_properties(measure_tokens_binner PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME lint_measure_governor
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_measure_governor

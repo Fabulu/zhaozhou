@@ -480,3 +480,65 @@ seam has the same shape.
 oracle over 2.9 M checks and carries a green inductive proof of its central
 guarantee — but it is simulated, not synthesized and not on hardware, and its
 one landed consumer has never been driven by it.
+
+## Composition: GEOM.BINNER, both blocks real
+
+`tests/measure/measure_tokens_binner.cpp` — the seam `GEOM.BINNER`'s law E
+deferred to this block. Both DUTs are instantiated and co-driven cycle by
+cycle: the binner raises `tok_req_o`, this block answers combinationally, the
+answer is written back and sampled on the accepting edge, and both take that
+same edge. The driver hook is `BinnerDev::token_authority` / `after_edge`; a
+scripted grant cannot establish any of this.
+
+**Result: 6 granted, 4 denied out of 10 offered against a budget of 6.** The
+binner's own `triangles_culled` rose by exactly 4, and view 1's pool was
+untouched throughout — charter §9 fairness observed from the CONSUMER side
+rather than from inside the block that implements it.
+
+### THE SEAM IS SIX BINDINGS SHORT, and that is the finding
+
+`MEASURE.GOVERNOR → TERRAIN.LOD` composes with **no adapter at all**, port for
+port. This seam does not. This block reads a QUALIFIED request; the binner
+emits a bare pulse plus one field. Every gap, and who owns it:
+
+| field | status | owner |
+|---|---|---|
+| `req_src_id` | SOUND — connects straight through | — |
+| `req_class` | SOUND — a fact about which block this is | — |
+| `req_view` | **no port on the binner** | block-interface decision |
+| `req_cost` | CHOSEN 1/triangle | cost lane |
+| `req_essential` | CHOSEN true — binner cannot distinguish | producer marking |
+| `req_rep` | CHOSEN 0 — rung never reaches the binner | TERRAIN.LOD seam |
+
+Two consequences worth stating rather than leaving implicit. **`den_rep_o`
+reports 0 for every denial from this producer**, whatever LOD rung actually
+made the triangle, so it is useless for the binner today. And **law T1's
+essential/refinement split has no producer exercising it** — nothing upstream
+of the binner marks a triangle as refinement, so the reserve is untested from
+this direction.
+
+A cost model charging per TILE REFERENCE was considered and is **not
+buildable at this seam**: the reference count is not known until the triangle
+has been enumerated, which happens after the grant. A cost model that needs
+the answer before the question cannot exist here. Recorded because it is a
+real constraint on the cost lane, not a preference.
+
+### REPORTED DEFECT: the pool only ever drains
+
+This block publishes a return path (`ret_valid_i`, `ret_view_i`, `ret_class_i`,
+`ret_shared_i`, `ret_cost_i`) and law T4 gives it meaning. **`GEOM.BINNER` has
+no return port at all.** Law E named the return path as one of four things it
+left for this block to write; this block wrote it and gave the binner no way to
+reach it.
+
+So a granted triangle's token is gone for good. The geometry pool falls
+monotonically and, after `budget` triangles, that producer is denied forever
+however much of the work has actually completed. The composition asserts
+`avail_geom0_o == 0` at the end — pinning the defect AS IT IS, deliberately, so
+that wiring a return path turns the line red and forces whoever does it to come
+here and state the new law rather than fixing it quietly.
+
+**Not fixed in this increment.** Adding a return port to a landed phase-6 block
+is an interface change with its own contract, and the honest first step is a
+composition that proves the gap exists. That is this file.
+

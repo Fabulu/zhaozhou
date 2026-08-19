@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -467,6 +468,27 @@ class BinnerDev {
   }
 
   /**
+   * OPTIONAL LIVE TOKEN AUTHORITY (phase 8 composition).
+   *
+   * Left empty — the default — every triangle's scripted `BinTri::token`
+   * decides the grant, which is what every lane that is not about tokens
+   * wants and what this driver has always done.
+   *
+   * Set, it is consulted at the one instant the protocol allows: after
+   * `tri_ready_o` has risen (so `tok_req_o` is genuinely asserted) and BEFORE
+   * the accepting edge, because law E of `zhao_geom_binner.sv` says
+   * `tok_grant_i` "is sampled on that same edge". The callback is where a real
+   * MEASURE.TOKENS instance gets driven and its combinational answer read
+   * back, so the two blocks meet cycle-accurately rather than through a
+   * recorded script.
+   *
+   * `after_edge` is called once immediately after the binner's accepting edge,
+   * so a co-driven DUT can take the same edge and commit its debit.
+   */
+  std::function<bool(const BinTri&)> token_authority;
+  std::function<void()> after_edge;
+
+  /**
    * A whole frame: begin, offer every triangle, end, drain. `stall_seed` != 0
    * gates job_ready_i with a PCG bit stream.
    */
@@ -529,7 +551,15 @@ class BinnerDev {
         top_.eval();
       }
       if (!top_.tok_req_o) add_err(err, "tok_req_o low on an accepted triangle");
+      // The live-authority window: the request is up, the edge has not
+      // happened. Asking here and re-evaluating is what makes the grant land
+      // on the same edge the protocol names.
+      if (token_authority) {
+        top_.tok_grant_i = token_authority(t) ? 1 : 0;
+        top_.eval();
+      }
       edge(top_);
+      if (after_edge) after_edge();
       ++bin_cycles;
       top_.tri_valid_i = 0;
       top_.eval();
