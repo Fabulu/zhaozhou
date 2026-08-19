@@ -679,17 +679,42 @@ set_tests_properties(terrain_keel PROPERTIES LABELS "fast;nightly")
 # ---- deep-keel wave: FORGE.CLIFF reference (terrain_rules.md 5) -------------
 # rim enumeration anchors, the checkerboard structural clamp (2,048 -> 512,
 # the TIGHT worst case), near-camera priority, and merge-under-pressure.
+set(ZHAO_FORGE_CLIFF_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff.sv)
+
 add_executable(test_forge_cliff_directed forge/forge_cliff_directed.cpp)
-target_link_libraries(test_forge_cliff_directed PRIVATE zhao_zref)
+target_link_libraries(test_forge_cliff_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_directed
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff
+  SOURCES ${ZHAO_FORGE_CLIFF_SV})
 add_test(NAME forge_cliff_directed COMMAND test_forge_cliff_directed)
-set_tests_properties(forge_cliff_directed PROPERTIES LABELS "fast;nightly")
+set_tests_properties(forge_cliff_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_forge_cliff
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_cliff
+                 ${ZHAO_FORGE_CLIFF_SV})
+set_tests_properties(lint_forge_cliff PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # randomized rim differential: 300 random void masks vs an independent
 # enumeration oracle + the emitted+dropped==enumerated body identity
 add_executable(test_forge_cliff_random forge/forge_cliff_random.cpp)
-target_link_libraries(test_forge_cliff_random PRIVATE zhao_zref)
+target_link_libraries(test_forge_cliff_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_random
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff
+  SOURCES ${ZHAO_FORGE_CLIFF_SV})
 add_test(NAME forge_cliff_random COMMAND test_forge_cliff_random)
-set_tests_properties(forge_cliff_random PROPERTIES LABELS "fast;nightly")
+set_tests_properties(forge_cliff_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME forge_cliff_random_nightly COMMAND test_forge_cliff_random --nightly)
+set_tests_properties(forge_cliff_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
 # ---- deep-keel wave: TEXTURE.MOSAIC (terrain_rules.md 6.2) ------------------
 # The oracle lanes (the mirrored-repeat fold at wrap boundaries, the frozen

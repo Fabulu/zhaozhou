@@ -19,9 +19,33 @@
 //      42-edge straight bite alone stays 42 span-1 edges).
 //   5. default no-merge — a plain straight bite under budget: every span
 //      stays 1 (merge is the DEGRADE path, never the default).
+//
+// THE RTL LANES (2026-08-19, `zhao_forge_cliff`). Lanes 1-5 pin the ORACLE;
+// lanes 6-10 pin the BLOCK against it, bit for bit, over the SAME fixtures
+// plus the ones only a hardware implementation can get wrong.
+//   6. RTL enumeration — the three fixtures above through the block, plus an
+//      all-void lattice (nothing emitted) and a single-cell one (four edges).
+//      Red on: a wrong side set, a mishandled halo, a page-boundary slip.
+//   7. RTL structural worst case — the 32x32 checkerboard page clamps to 512
+//      with 1,536 bodies dropped and NOTHING merged, and the worst-page clock
+//      count is MEASURED and printed.
+//   8. RTL priority — the vdist master exercised four ways: the oracle lane's
+//      single nearest spike, a GRADED field with ties on both sides of the
+//      cut, NEGATIVE priorities (vdist is signed and the reference compares it
+//      signed), and INT32_MIN/INT32_MAX. Red on: an unsigned comparator, a
+//      threshold off by one, a tie-break that is not scan order.
+//   9. RTL merge under pressure — the 9-page fixture: the greedy merges one
+//      run whole and takes a 13-edge PREFIX of the second, because the law
+//      sheds the MINIMUM. Red on: merging whole runs, wrong run order, a
+//      merge that fires without pressure.
+//  10. backpressure and the counter — four stall patterns leave the plan
+//      bit-identical, and `triangles_submitted` counts TWO per emitted edge
+//      (one wall quad).
 
+#include "forge_cliff_dev.hpp"
 #include "zref/zref_terrain.hpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <vector>
 
@@ -174,12 +198,217 @@ void test_merge_under_pressure() {
   check(q.merged == 0 && q.dropped == 0, "no clamp, no merge without pressure");
 }
 
+// ---- 6-10. the RTL lanes ----------------------------------------------------
+
+namespace ct = cliff_test;
+
+void report(const char* what, const ct::Plan& got, const zf::RimPlan& want) {
+  std::fprintf(stderr, "FAIL: %s\n", what);
+  std::fprintf(stderr, "  RTL   edges=%zu merged=%u dropped=%u%s\n", got.edges.size(), got.merged,
+               got.dropped, got.timed_out ? " TIMED OUT" : "");
+  std::fprintf(stderr, "  oracle edges=%zu merged=%u dropped=%u\n", want.edges.size(), want.merged,
+               want.dropped);
+  const size_t n = got.edges.size() < want.edges.size() ? got.edges.size() : want.edges.size();
+  for (size_t k = 0; k < n; ++k) {
+    if (!(got.edges[k] == want.edges[k])) {
+      std::fprintf(stderr,
+                   "  first diff at [%zu]: RTL (ci %u cj %u side %u span %u) vs "
+                   "oracle (ci %u cj %u side %u span %u)\n",
+                   k, got.edges[k].ci, got.edges[k].cj, got.edges[k].side, got.edges[k].span,
+                   want.edges[k].ci, want.edges[k].cj, want.edges[k].side, want.edges[k].span);
+      break;
+    }
+  }
+}
+
+void expect_same(Vzhao_forge_cliff& dut, const zt::ComposedLattice& lat, const int32_t* vdist,
+                 uint32_t stall_mask, const char* what) {
+  const ct::Plan got = ct::plan_lattice(dut, lat, vdist, stall_mask);
+  const zf::RimPlan want = zf::rim_plan(lat, vdist);
+  if (!ct::same(got, want)) {
+    report(what, got, want);
+    ++failures;
+  } else {
+    check(true, what);
+  }
+}
+
+// 6. enumeration — the same three fixtures lane 1 pins on the oracle, now
+//    through the block.
+void test_rtl_enumeration(Vzhao_forge_cliff& dut) {
+  expect_same(dut, make_lat(4, 4, all_solid(4, 4)), nullptr, 0, "RTL: 4x4 solid block");
+
+  std::vector<uint8_t> st = all_solid(4, 4);
+  for (int cj = 1; cj <= 2; ++cj)
+    for (int ci = 1; ci <= 2; ++ci) st[cj * 4 + ci] = zt::kVoidBreached;
+  expect_same(dut, make_lat(4, 4, st), nullptr, 0, "RTL: 4x4 with a centre bite");
+
+  std::vector<uint8_t> ck(64, zt::kVoidAuthored);
+  for (int cj = 0; cj < 8; ++cj)
+    for (int ci = 0; ci < 8; ++ci)
+      if ((ci + cj) % 2 == 0) ck[cj * 8 + ci] = zt::kSolid;
+  expect_same(dut, make_lat(8, 8, ck), nullptr, 0, "RTL: 8x8 checkerboard");
+
+  // a lattice with NO solid cells at all, and one that is entirely solid: the
+  // two ends of the predicate, neither of which any random mask reliably hits
+  expect_same(dut, make_lat(4, 4, std::vector<uint8_t>(16, zt::kVoidAuthored)), nullptr, 0,
+              "RTL: an all-void lattice emits nothing");
+  expect_same(dut, make_lat(1, 1, all_solid(1, 1)), nullptr, 0,
+              "RTL: a single-cell lattice is four rim edges");
+}
+
+// 7. the structural worst case — 2,048 edges clamped to 512 with no merges.
+void test_rtl_checkerboard_clamp(Vzhao_forge_cliff& dut) {
+  std::vector<uint8_t> ck(32 * 32, zt::kVoidAuthored);
+  for (int cj = 0; cj < 32; ++cj)
+    for (int ci = 0; ci < 32; ++ci)
+      if ((ci + cj) % 2 == 0) ck[cj * 32 + ci] = zt::kSolid;
+  const zt::ComposedLattice lat = make_lat(32, 32, ck);
+  const ct::Plan got = ct::plan_lattice(dut, lat, nullptr, 0);
+  const zf::RimPlan want = zf::rim_plan(lat, nullptr);
+  if (!ct::same(got, want)) {
+    report("RTL: the 32x32 checkerboard page", got, want);
+    ++failures;
+    return;
+  }
+  check(got.edges.size() == 512, "RTL: clamped to the 512 per-page budget");
+  check(got.dropped == 1536, "RTL: 1,536 bodies counted beyond the budget");
+  check(got.merged == 0, "RTL: a checkerboard has no mergeable runs at all");
+  std::printf("  cliff worst page: %ld clocks (32x32 checkerboard, 2,048 -> 512)\n",
+              got.worst_page);
+}
+
+// 8. near-camera priority — the frozen tie-break, and the one lane that
+//    exercises the vdist master at all.
+void test_rtl_priority(Vzhao_forge_cliff& dut) {
+  std::vector<uint8_t> ck(32 * 32, zt::kVoidAuthored);
+  for (int cj = 0; cj < 32; ++cj)
+    for (int ci = 0; ci < 32; ++ci)
+      if ((ci + cj) % 2 == 0) ck[cj * 32 + ci] = zt::kSolid;
+  const zt::ComposedLattice lat = make_lat(32, 32, ck);
+
+  // exactly the oracle lane's fixture: ONE late-scan edge marked nearest
+  std::vector<int32_t> vd(static_cast<size_t>(lat.w) * lat.h, 0);
+  vd[31 * lat.w + 32] = 1 << 16;
+  expect_same(dut, lat, vd.data(), 0, "RTL: one nearest edge survives 1,536 rivals");
+  const ct::Plan got = ct::plan_lattice(dut, lat, vd.data(), 0);
+  bool late = false;
+  for (size_t k = 0; k < got.edges.size(); ++k) {
+    if (got.edges[k].ci == 31 && got.edges[k].cj == 31 && got.edges[k].side == 3) late = true;
+  }
+  check(late, "RTL: the nearest-camera edge survives the clamp (governor priority)");
+
+  // a GRADED vdist, so the threshold search has to find a real cut value with
+  // ties on both sides of it rather than a single spike
+  std::vector<int32_t> graded(static_cast<size_t>(lat.w) * lat.h, 0);
+  for (size_t k = 0; k < graded.size(); ++k) {
+    graded[k] = static_cast<int32_t>((k * 37) % 11) << 16;
+  }
+  expect_same(dut, lat, graded.data(), 0, "RTL: a graded vdist with ties across the cut");
+
+  // NEGATIVE priorities: vdist is a signed Q16.16 and the reference compares
+  // it signed, so the biased-key search must span the sign.
+  std::vector<int32_t> negs(static_cast<size_t>(lat.w) * lat.h, 0);
+  for (size_t k = 0; k < negs.size(); ++k) {
+    negs[k] = static_cast<int32_t>((k * 29) % 7) - 3;  // -3..3
+  }
+  expect_same(dut, lat, negs.data(), 0, "RTL: negative vdist values sort correctly (signed)");
+
+  // the extremes of the key space, which the biased comparator must handle
+  std::vector<int32_t> rails(static_cast<size_t>(lat.w) * lat.h, 0);
+  for (size_t k = 0; k < rails.size(); ++k) {
+    rails[k] = (k % 3 == 0) ? INT32_MIN : ((k % 3 == 1) ? INT32_MAX : 0);
+  }
+  expect_same(dut, lat, rails.data(), 0, "RTL: INT32_MIN/INT32_MAX priorities");
+}
+
+// 9. merge under pressure — the frozen R1 rule (shed the MINIMUM, take a
+//    PREFIX), which is the single most reimplementation-hostile line of the
+//    reference.
+void test_rtl_merge_under_pressure(Vzhao_forge_cliff& dut) {
+  const int CW = 96, CH = 96;
+  std::vector<uint8_t> st = all_solid(CW, CH);
+  const auto void_at = [&](int ci, int cj) { st[cj * CW + ci] = zt::kVoidBreached; };
+  for (int ci = 40; ci <= 59; ++ci) void_at(ci, 48);
+  int n = 0;
+  for (int cj = 33; cj <= 46 && n < 127; ++cj)
+    for (int ci = 32; ci <= 63 && n < 127; ++ci)
+      if ((ci + cj) % 2 == 1) {
+        void_at(ci, cj);
+        ++n;
+      }
+  const zt::ComposedLattice lat = make_lat(CW, CH, st);
+  const ct::Plan got = ct::plan_lattice(dut, lat, nullptr, 0);
+  const zf::RimPlan want = zf::rim_plan(lat, nullptr);
+  if (!ct::same(got, want)) {
+    report("RTL: the 9-page merge fixture", got, want);
+    ++failures;
+    return;
+  }
+  check(got.merged == 31, "RTL: minimum merge — 31 bodies shed (19 + a 12-edge prefix)");
+  check(got.dropped == 0, "RTL: the merge alone brought the page inside budget");
+  int s20 = 0, s13 = 0;
+  for (size_t k = 0; k < got.edges.size(); ++k) {
+    if (got.edges[k].span == 20) ++s20;
+    if (got.edges[k].span == 13) ++s13;
+  }
+  check(s20 == 1 && s13 == 1, "RTL: the straight bite is one 20-span + one 13-PREFIX span");
+
+  // the control: the same bite with no pressure merges NOTHING
+  std::vector<uint8_t> st2 = all_solid(CW, CH);
+  for (int ci = 40; ci <= 59; ++ci) st2[48 * CW + ci] = zt::kVoidBreached;
+  const zt::ComposedLattice lat2 = make_lat(CW, CH, st2);
+  const ct::Plan g2 = ct::plan_lattice(dut, lat2, nullptr, 0);
+  const zf::RimPlan w2 = zf::rim_plan(lat2, nullptr);
+  if (!ct::same(g2, w2)) {
+    report("RTL: the unpressured control", g2, w2);
+    ++failures;
+    return;
+  }
+  check(g2.merged == 0 && g2.dropped == 0, "RTL: no clamp and no merge without pressure");
+  bool all_single = true;
+  for (size_t k = 0; k < g2.edges.size(); ++k) {
+    if (g2.edges[k].span != 1) all_single = false;
+  }
+  check(all_single, "RTL: merge is the DEGRADE path, never the default");
+}
+
+// 10. backpressure and the counter.
+void test_rtl_handshake(Vzhao_forge_cliff& dut) {
+  std::vector<uint8_t> ck(32 * 32, zt::kVoidAuthored);
+  for (int cj = 0; cj < 32; ++cj)
+    for (int ci = 0; ci < 32; ++ci)
+      if ((ci + cj) % 2 == 0) ck[cj * 32 + ci] = zt::kSolid;
+  const zt::ComposedLattice lat = make_lat(32, 32, ck);
+  const ct::Plan base = ct::plan_lattice(dut, lat, nullptr, 0);
+  check(dut.idle_o != 0, "RTL: idle once the page drains");
+  check(dut.triangles_submitted_o == 1024,
+        "RTL: triangles_submitted counts TWO per emitted edge (a wall quad)");
+
+  const uint32_t masks[4] = {0xFFFFFFFEu, 0xAAAAAAAAu, 0x0F0F0F0Fu, 0x80000001u};
+  for (int m = 0; m < 4; ++m) {
+    const ct::Plan g = ct::plan_lattice(dut, lat, nullptr, masks[m]);
+    bool ok = g.edges.size() == base.edges.size() && g.merged == base.merged &&
+              g.dropped == base.dropped && !g.timed_out;
+    for (size_t k = 0; ok && k < g.edges.size(); ++k) ok = (g.edges[k] == base.edges[k]);
+    check(ok, "RTL: a stalling consumer changes nothing in the plan");
+  }
+}
+
 }  // namespace
 
 int main() {
   test_enumeration();
   test_checkerboard_clamp();
   test_merge_under_pressure();
+
+  Vzhao_forge_cliff dut;
+  test_rtl_enumeration(dut);
+  test_rtl_checkerboard_clamp(dut);
+  test_rtl_priority(dut);
+  test_rtl_merge_under_pressure(dut);
+  test_rtl_handshake(dut);
+
   if (failures == 0) std::printf("forge_cliff_directed: all green\n");
-  return failures == 0 ? 0 : 1;
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }
