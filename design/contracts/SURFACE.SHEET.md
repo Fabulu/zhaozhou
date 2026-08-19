@@ -176,7 +176,7 @@ rounding law lives entirely in `SURFACE.STAMP`.
 ## Target throughput
 
 Ledger: **1 sheet texel per clock**. **Met, measured:** 256 pipelined reads in
-**258 cycles** (`surface_sheet_directed`), i.e. one per clock plus the two-cycle
+**257 cycles** (`surface_sheet_directed`), i.e. one per clock plus the
 pipeline fill. The write port accepts one texel per clock independently.
 
 ## Overflow and malformed-input behaviour
@@ -233,7 +233,7 @@ hold their contents; a write for a non-resident handle is dropped with the miss
 pulse and lands in neither sheet; RELEASE frees the slot, a double release
 misses, and re-acquiring after release ALLOCATES and clears while the
 un-released sheet keeps everything; the clear sweep is exactly 4,096 cycles with
-the request port refused throughout; 256 pipelined reads in 258 cycles; the
+the request port refused throughout; 256 pipelined reads in 257 cycles; the
 response held under 20 cycles of backpressure; a read and a write accepted in
 the same cycle.
 
