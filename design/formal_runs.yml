@@ -99,6 +99,33 @@ runs:
       with the guard 2026-08-16; the bmc task remains unestablished, so the
       guard has not been observed red on this property — recorded honestly.
 
+  - property: tests/formal/terrain_bake_delta.sby
+    status: banked
+    date: "2026-08-19"
+    commit: cfac156
+    lane: null
+    tasks: [cover]
+    covers: true
+    notes: >-
+      The cover task passes non-vacuously in ~3 s and reaches every corner it
+      claims, INCLUDING c_sat_reachable, which is the one that stops P5 holding
+      vacuously for a datapath that simply never rails. The bmc task does NOT
+      finish. Measured twice: smtbmc boolector ran 10.7 hours stuck in "waiting
+      for solver" before being killed, then terminated without status (rc=16) on
+      a shorter attempt while the cover task passed alongside it. The harness is
+      combinational, so depth is not the problem; the cost is the 17-step
+      restoring divide in zhao_terrain_bake unrolled into SMT together with two
+      free fx16 depths and a 17-bit stencil.
+      Banked rather than reported green, and the engine was NOT simply swapped
+      to yices and rerun to see if it got luckier: an eleven-hour solve is a
+      design problem, not an engine problem, and this file exists because twice
+      in wave 2 a maturity claim rested on a proof that had never elaborated.
+      TERRAIN.BAKE is SPECIFIED and cites no formal evidence, so nothing rests
+      on this. To make it tractable the property has to shrink to the piece that
+      is actually hard to get right - the telescoping identity over the SCALING
+      alone, with the divider's quotient as a free input constrained by its own
+      bound - rather than proving the divider and the identity in one query.
+
   - property: tests/formal/input_snapshot_atomic.sby
     status: green
     date: "2026-08-16"

@@ -1,0 +1,80 @@
+# terrain_bake_delta — the incremental-scaling bake arithmetic, proved on the
+# module zhao_terrain_bake actually instantiates (TERRAIN.BAKE, ZH-036).
+# Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1..P6: the terrain_rules 9.2 law-3 telescoping identity
+#           (delta(a,b) + delta(b,c) == delta(a,c)), antisymmetry, the idle
+#           fixed point, the zero-stencil fixed point, the unreachability of
+#           the first rescale's fx16 rail inside the divider's own bound, and
+#           monotonicity in depth. All are unconditional over free inputs, so
+#           depth 2 is the whole property: the harness is combinational and its
+#           inputs are otherwise unconstrained.
+#   cover — the corners are REACHABLE: the maximum stencil actually moving
+#           ground, deep digs and un-digs, a three-way split whose parts differ
+#           from the whole, a near-rim stencil, and - load-bearing - the
+#           saturate FIRING once the stencil bound is lifted, without which P5
+#           would also hold for a datapath that simply never railed.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound.
+# zhao_terrain_bake_delta is pure combinational logic, so there is no deeper
+# state for a raised depth to reach, and its inputs are unconstrained apart
+# from `s <= 65536`. That single assumption is a STRUCTURAL fact about the
+# 17-step restoring divide in zhao_terrain_bake (its numerator is bounded by
+# r2 * (2^16 + 1), so it cannot emit more), and `c_sat_reachable` shows
+# exactly what it holds back. The parametrisation is total rather than
+# sampled: the depths are full fx16 words because that is the port width, and
+# the stencil is 17 bits because 65,536 needs 17.
+#
+# SCOPE. Depth 2 is the full state space, not a bound: zhao_terrain_bake_delta
+# is pure combinational logic and its inputs are unconstrained apart from
+# `s <= 65536`. That single assumption is a STRUCTURAL fact about the 17-step
+# restoring divide in zhao_terrain_bake - its numerator is bounded by
+# r2 * (2^16 + 1), so it cannot emit more - and `c_sat_reachable` shows exactly
+# what it holds back. The parametrisation is total rather than sampled: the
+# depths are full fx16 words because that is the port width, and the stencil is
+# 17 bits because 65,536 needs 17.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The paraboloid stencil and its
+# divide, `lattice_lerp`'s truncating divide, the no_bake clamp, the height16
+# rails, the 3.4 breach law, the two-phase sweep and the 9.2 budget are NOT
+# proved here; they are covered by the differential lanes against
+# `zref::terrain::bake_dig` / `apply_breach_law`, by the BAKE -> PATCH
+# composition, and by the mutation table in design/contracts/TERRAIN.BAKE.md.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_terrain_bake_delta.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+# NOT in the automated lane. See design/formal_runs.yml: the cover task passes
+# in ~3 s and is non-vacuous, but the bmc task does not finish. Boolector ran
+# 10.7 hours in "waiting for solver" before being killed, and terminated without
+# status on a shorter attempt. The harness is combinational, so depth is not the
+# cost; the cost is the 17-step restoring divide in zhao_terrain_bake unrolled
+# into SMT alongside two free fx16 depths and a 17-bit stencil.
+#
+# The engine was deliberately NOT swapped to yices and rerun to see if it got
+# luckier. An eleven-hour solve is a design problem: the fix is to prove the
+# telescoping identity over the SCALING alone, taking the divider's quotient as
+# a free input constrained by its own bound, rather than asking one query to
+# establish the divider and the identity together.
+smtbmc boolector
+
+[script]
+read_slang --top terrain_bake_delta_fv zhao_terrain_bake_delta.sv terrain_bake_delta_fv.sv
+prep -top terrain_bake_delta_fv
+
+[files]
+../../fpga/rtl/terrain/zhao_terrain_bake_delta.sv
+terrain_bake_delta_fv.sv
