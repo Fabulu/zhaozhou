@@ -730,6 +730,57 @@ set_tests_properties(texture_mosaic_random PROPERTIES LABELS "fast;nightly" TIME
 add_test(NAME texture_mosaic_random_nightly COMMAND test_texture_mosaic_random --nightly)
 set_tests_properties(texture_mosaic_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# ---- TEXTURE.AUX (phase 6, ZH-060, cut-order 2) ------------------------------
+# The restricted auxiliary source: `zref::render::sample_sheet`'s world ->
+# sheet-texel mapping in hardware, mastering SURFACE.SHEET's read port. The
+# oracle `zref::AuxSource` (reference/include/zref/zref_aux.hpp) did not exist
+# before 2026-08-19 — the ledger named it and nothing under reference/ defined
+# it — so texture_aux_directed's FIRST lane proves the new header is a faithful
+# view onto the executed law before anything else runs.
+#
+# texture_aux_directed also composes the two REAL blocks (TEXTURE.AUX mastering
+# zhao_surface_sheet) and reads back through the port what the sheet's own
+# write side put there; that is the only place the port semantics are pinned.
+set(ZHAO_TEXTURE_AUX_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux.sv)
+
+add_executable(test_texture_aux_directed texture/texture_aux_directed.cpp)
+target_link_libraries(test_texture_aux_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_aux_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: sample_sheet IS the law
+verilate(test_texture_aux_directed
+  PREFIX Vzhao_texture_aux
+  TOP_MODULE zhao_texture_aux
+  SOURCES ${ZHAO_TEXTURE_AUX_SV})
+verilate(test_texture_aux_directed
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv)
+add_test(NAME texture_aux_directed COMMAND test_texture_aux_directed)
+set_tests_properties(texture_aux_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
+add_executable(test_texture_aux_random texture/texture_aux_random.cpp)
+target_link_libraries(test_texture_aux_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_aux_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_aux_random
+  PREFIX Vzhao_texture_aux
+  TOP_MODULE zhao_texture_aux
+  SOURCES ${ZHAO_TEXTURE_AUX_SV})
+add_test(NAME texture_aux_random COMMAND test_texture_aux_random)
+set_tests_properties(texture_aux_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME texture_aux_random_nightly COMMAND test_texture_aux_random --nightly)
+set_tests_properties(texture_aux_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_texture_aux
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_aux
+                 ${ZHAO_TEXTURE_AUX_SV})
+set_tests_properties(lint_texture_aux PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_texture_mosaic
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_texture_mosaic
