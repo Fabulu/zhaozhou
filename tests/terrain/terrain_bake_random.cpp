@@ -62,6 +62,7 @@ struct Stats {
   uint32_t legacy = 0;         // a page with no layer C
   uint32_t cellless = 0;       // layer C but no layer D
   uint32_t authored_void = 0;  // a VOID_AUTHORED cell was in the sweep
+  uint32_t invert_probe = 0;   // radius-1 stencil on a snapped inverted-envelope vertex
 };
 
 /** The placed position of one lattice line — the REFERENCE's own lerp. */
@@ -267,7 +268,18 @@ void run_lane(Vzhao_terrain_bake& dut, bdev::Rng& rng, int patches, bool island,
           }
         }
       }
-      if (probe_i < 0) {
+      // CONSTRUCTION 3: on an INVERTED envelope a radius-1 stencil on a
+      // snapped centre is FATAL to a lerp that floors instead of truncating —
+      // the one raw unit is the whole difference. The mutation sweep found the
+      // hole: before this, flooring `lattice_lerp` cost the random lanes
+      // exactly ONE check out of 874, because a one-unit vertex shift under a
+      // large stencil changes no scar word at all.
+      const bool inverted_env = cur.env_x1 < cur.env_x0;
+      if (!island && snap && inverted_env && rng.chance(2)) {
+        st.radius = 1;
+        probe_i = -1;
+        ++s.invert_probe;
+      } else if (probe_i < 0) {
         // a third of the island bakes cover the WHOLE page, which is what puts
         // the snapped cells (and their no_bake plinths) under the stencil
         if (island)
@@ -340,9 +352,9 @@ int main(int argc, char** argv) {
       a.rails, a.centre_exact, a.edge_exact, a.edge_inside, a.idle_stamps);
   std::printf(
       "[terrain_bake] lane B (limit):  %u patches, %u bakes, %llu texels, %u breaches, %u heals,"
-      " %u rails, %u inverted, %u legacy, %u cell-less, %u authored-void\n",
+      " %u rails, %u inverted, %u legacy, %u cell-less, %u authored-void, %u invert-probe\n",
       b.patches, b.bakes, static_cast<unsigned long long>(b.touched), b.breaches, b.heals, b.rails,
-      b.inverted, b.legacy, b.cellless, b.authored_void);
+      b.inverted, b.legacy, b.cellless, b.authored_void, b.invert_probe);
 
   // ---- each lane must have REACHED what it exists for --------------------
   check(a.touched > 4000, "lane A dug real ground", 1, a.touched > 4000 ? 1 : 0);
@@ -364,6 +376,9 @@ int main(int argc, char** argv) {
   check(b.cellless > 0, "lane B ran pages with layer C and no layer D", 1, b.cellless > 0 ? 1 : 0);
   check(b.authored_void > 0, "lane B put VOID_AUTHORED cells under the stencil", 1,
         b.authored_void > 0 ? 1 : 0);
+  check(b.invert_probe > 0,
+        "lane B probed an inverted envelope with a radius-1 stencil on a snapped vertex", 1,
+        b.invert_probe > 0 ? 1 : 0);
   check(b.breaches > 0, "lane B birthed breaches", 1, b.breaches > 0 ? 1 : 0);
   check(b.heals > 0, "lane B healed breached cells", 1, b.heals > 0 ? 1 : 0);
 
