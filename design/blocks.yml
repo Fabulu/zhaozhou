@@ -1158,7 +1158,7 @@ blocks:
     backpressure: credit
     latency: fixed:1
     target_throughput: 1 grant decision per clock
-    reference_model: zref::MeasureTokens
+    reference_model: zref::measure::TokenGuard
     tests:
       directed: tests/measure/measure_tokens_directed.cpp
       random: tests/measure/measure_tokens_random.cpp
@@ -1171,7 +1171,28 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Fairness property formally checked once SBY lane is populated.
+    notes: >-
+      Fairness property formally checked once SBY lane is populated -- DONE
+      2026-08-19: tests/formal/measure_tokens_fairness.sby is green on both
+      tasks (prove by temporal induction on the shipping 32-bit instance, plus
+      six covers on a TOK_W=4 instance). 2026-08-19: `reference_model` AMENDED
+      from `zref::MeasureTokens`, which names nothing in this tree and never
+      has -- the eighth phantom after `zref::CmdDma`, `zref::SurfaceStamp`,
+      `zref::SurfaceSheet`, `zref::AuxSource`, `zref::TerrainBake`,
+      `zref::TerrainVelocity` and `zref::ProgCache`. The oracle written for
+      this block is `zref::measure::TokenGuard`
+      (reference/include/zref/zref_measure.hpp); unlike the terrain oracles it
+      is NOT a view onto an executed reference, because nothing in
+      reference/src allocates tokens.
+      `latency: fixed:1` is left UNCHANGED and is explicitly the DENIAL's
+      latency, not the grant's: the grant is COMBINATIONAL because
+      fpga/rtl/geometry/zhao_geom_binner.sv law E already shipped that seam in
+      phase 6 ("`tok_grant_i` is sampled on that same edge"). Both halves are
+      measured in the directed lane. Argued in the contract.
+      `downstream: [GEOM.BINNER, RASTER.FRAGMENT]` is left UNCHANGED and is
+      half unbuilt: RASTER.FRAGMENT has NO token port (its only matching signal
+      is `fragment_error_o`, a one-bit tilestore-read protocol flag), so the
+      fragment class is served here with no consumer on the other end.
 
   - id: MEASURE.HISTOGRAM
     name: Error histogram

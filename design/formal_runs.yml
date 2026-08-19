@@ -645,3 +645,49 @@ runs:
       stamp_results stream; those are covered by the differential lanes
       against zref::render::stamp_surface (tests/surface/) and by the
       nine-way mutation table in design/contracts/SURFACE.STAMP.md.
+
+  - property: tests/formal/measure_tokens_fairness.sby
+    status: green
+    date: "2026-08-19"
+    commit: 56cb56a
+    lane: formal_measure_tokens_fairness
+    tasks: [prove, cover]
+    covers: true
+    notes: >-
+      The MEASURE.TOKENS Duo fairness guarantee, proved on the SHIPPING module
+      (TOK_W = 32, the ABI's u32). `prove` is TEMPORAL INDUCTION, not bmc, and
+      that is the point: every property here is one-step inductive, while the
+      interesting state (a pool near empty against a near-2^32 budget) is
+      billions of tokens from reset and no bounded run of a sane depth would
+      reach it. Basecase pass, induction pass, 13 s wall on this kit
+      (boolector, depth 4).
+      SIX assertions. a_view0_sealed / a_view1_sealed are THE VOLCANO --
+      charter section 9's "one player looking directly into a volcano cannot
+      make the other player's army disappear" -- stated as a transition
+      property: with no budget load, no granted request of its own and no
+      return of its own, a view's guaranteed pools DO NOT MOVE, and nothing
+      the other view does appears in the antecedent. a_budget_latched (the
+      block latched exactly the five numbers the frame handed it),
+      a_within_budget (no pool ever exceeds them -- the half that stops a
+      malformed return RAISING an allowance), a_no_underflow (a grant never
+      debits more than the pool it draws holds), a_private_first and
+      a_reserve_needs_essential (law T1's ordering and its eligibility rule).
+      SIX covers, all reached, on a deliberately tiny TOK_W=4 second instance
+      in the same harness: a private grant (step 2), a grant from the reserve
+      (3), a denial (3), the reserve emptied (4), a pool emptied (4), and a
+      credit CLAMPED at the budget (5). Without them every assertion above
+      would also hold for a guard that never granted anything.
+      a_budget_latched exists because the first run's induction FAILED: the
+      harness mirrors the block's budget registers, and under induction the
+      mirror and the block's own registers are independent free state, so the
+      solver started from a pre-state where they disagreed. The fix is an
+      ASSERTION that they agree, not an assumption -- an assumption would have
+      hidden a block that latched something else.
+      Kept arithmetic-flat on purpose: five 32-bit compare/add/subtract lanes,
+      no divider, no multiplier, nothing unrolled. The sibling entry for
+      terrain_bake_delta.sby in this file is why.
+      NOT proved here: the counters (pure saturating adders -- covered at the
+      rail by the directed lane and over 120,000 cycles by the two random
+      lanes), the denial's `fixed:1` timing (measured directly in the directed
+      lane), and the 45/45/10 numbers themselves (they arrive from the command
+      stream -- contract law T3).

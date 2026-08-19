@@ -2538,3 +2538,74 @@ add_test(NAME lint_terrain_velocity
 set_tests_properties(lint_terrain_velocity PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# MEASURE.TOKENS (phase 8, ZH-048)
+#
+# The global token guard and the charter §9 Duo fairness split. The grant is
+# COMBINATIONAL because GEOM.BINNER's law E already committed to that seam in
+# phase 6 ("`tok_grant_i` is sampled on that same edge"); the ledger's
+# `latency: fixed:1` is honoured by the registered `token_denial`, and the
+# directed lane MEASURES both rather than asserting them. The oracle is a first
+# implementation, not a view onto an executed reference — nothing in
+# reference/src allocates tokens — so the contract carries every law it makes.
+set(ZHAO_MEASURE_TOKENS_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_tokens.sv)
+
+add_executable(test_measure_tokens_directed measure/measure_tokens_directed.cpp)
+target_link_libraries(test_measure_tokens_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_tokens_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_tokens_directed
+  PREFIX Vzhao_measure_tokens
+  TOP_MODULE zhao_measure_tokens
+  SOURCES ${ZHAO_MEASURE_TOKENS_SV})
+add_test(NAME measure_tokens_directed COMMAND test_measure_tokens_directed)
+set_tests_properties(measure_tokens_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_measure_tokens_random measure/measure_tokens_random.cpp)
+target_link_libraries(test_measure_tokens_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_tokens_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_tokens_random
+  PREFIX Vzhao_measure_tokens
+  TOP_MODULE zhao_measure_tokens
+  SOURCES ${ZHAO_MEASURE_TOKENS_SV})
+add_test(NAME measure_tokens_random COMMAND test_measure_tokens_random)
+set_tests_properties(measure_tokens_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME measure_tokens_random_nightly COMMAND test_measure_tokens_random --nightly)
+set_tests_properties(measure_tokens_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_measure_tokens
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_measure_tokens
+                 ${ZHAO_MEASURE_TOKENS_SV})
+set_tests_properties(lint_measure_tokens PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The Duo fairness guarantee, proved on the SHIPPING module (ZH-048;
+# design/blocks.yml names measure_tokens_fairness.sby as this block's formal
+# lane, and this is it populated rather than promised). TWO tasks: `prove`
+# (temporal induction — the guarantee holds for ALL time, not for a bounded
+# prefix) AND `cover`, on a deliberately tiny TOK_W=4 second instance, because
+# without the covers every property would also hold for a guard that never
+# granted anything. Arithmetic-flat by design: five 32-bit compare/add/subtract
+# lanes, no divider, nothing unrolled.
+if(ZHAO_SBY_BIN)
+  set(PROP "measure_tokens_fairness")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/measure_tokens_fairness_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/measure_tokens_fairness_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_measure_tokens_fairness
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_measure_tokens_fairness PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()

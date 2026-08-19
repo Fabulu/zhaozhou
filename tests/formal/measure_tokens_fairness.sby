@@ -1,0 +1,61 @@
+# measure_tokens_fairness — the MEASURE.TOKENS Duo fairness guarantee, proved
+# on the shipping module (ZH-048; design/blocks.yml names this file as the
+# block's formal lane, and this is it populated rather than promised).
+# Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   prove — P1..P6: view 0's guaranteed pools cannot move except by view 0's
+#           own traffic and the frame's own reload (and the mirror image for
+#           view 1); no pool ever exceeds the budget the frame loaded; a grant
+#           never debits more than the pool it draws holds; the private pool is
+#           tried first; and the emergency pool is unreachable by low-priority
+#           refinement. Every one of those is ONE-STEP INDUCTIVE, so
+#           `mode prove` (temporal induction) closes them for ALL time — which
+#           is the whole reason this is not a bmc task: the interesting state
+#           (a pool near empty against a near-2^32 budget) is billions of
+#           tokens from reset and no bounded run of a sane depth reaches it.
+#   cover  — the interesting states are REACHABLE, shown on a deliberately tiny
+#           second instance (TOK_W = 4) in the same harness: a private grant, a
+#           grant from the reserve, a pool emptied, the reserve emptied, a
+#           denial, and a credit clamped at the budget. Without this task,
+#           P1..P6 would all hold for a guard that never granted anything and
+#           the proof would say nothing.
+#
+# SCOPE — stated plainly. This proves the FAIRNESS GUARANTEE and the pool
+# arithmetic's safety, which is what the charter's sentence about this block
+# actually claims. It does NOT prove the counters (pure saturating adders,
+# covered at the rail by the directed lane and on 120,000 cycles by the two
+# random lanes), the denial payload's `fixed:1` timing (measured directly in
+# the directed lane), or the 45/45/10 numbers (they arrive from the command
+# stream — law T3).
+#
+# NOTHING UNROLLED, NO DIVIDER, NO MULTIPLIER. The datapath is five 32-bit
+# compare/add/subtract lanes and nothing else, deliberately: this repo has one
+# banked property (`terrain_bake_delta.sby`) whose BMC sat for 10.7 hours on a
+# 17-step restoring divide unrolled into SMT, and a proof that cannot finish is
+# worse than none.
+#
+# Frontend: read_slang (the lane choice since W2.3). The RTL is self-contained
+# — no packages — so nothing is staged or copied.
+
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 14
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top measure_tokens_fairness_fv zhao_measure_tokens.sv measure_tokens_fairness_fv.sv
+prep -top measure_tokens_fairness_fv
+
+[files]
+../../fpga/rtl/measure/zhao_measure_tokens.sv
+measure_tokens_fairness_fv.sv
