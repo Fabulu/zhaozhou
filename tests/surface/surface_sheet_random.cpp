@@ -33,9 +33,9 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_surface.hpp"
 
-using zhao::check;
 using sdev::Rng;
 using sdev::SheetResponse;
+using zhao::check;
 namespace zs = zref::surface;
 
 namespace {
@@ -59,8 +59,8 @@ struct Stats {
 // residency verdict or the texel value is a mismatch.
 void one_op(Vzhao_surface_sheet& dut, zs::SheetStore& store, Rng& rng,
             const std::vector<uint32_t>& handles, Stats& st, bool limit_lane) {
-  const uint32_t h = handles[static_cast<size_t>(rng.range(0, static_cast<int32_t>(
-                                                                  handles.size() - 1)))];
+  const uint32_t h =
+      handles[static_cast<size_t>(rng.range(0, static_cast<int32_t>(handles.size() - 1)))];
   // Weighting is the whole point of the two lanes: lane A mostly writes and
   // reads an already-resident sheet; lane B mostly churns residency.
   const int roll = rng.range(0, 99);
@@ -153,8 +153,8 @@ void run_lane(Vzhao_surface_sheet& dut, Rng& rng, int ops, bool limit_lane, Stat
     const int slot = store.find(h);
     if (slot < 0) continue;
     for (int t = 0; t < zs::kSheetTexels; t += 7) {
-      const SheetResponse r = sdev::sheet_request(dut, sdev::kOpRead, h, static_cast<uint16_t>(t),
-                                                  0);
+      const SheetResponse r =
+          sdev::sheet_request(dut, sdev::kOpRead, h, static_cast<uint16_t>(t), 0);
       if (r.tag != store.at(slot).tag[t] || r.strength != store.at(slot).strength[t])
         ++st.mismatches;
     }

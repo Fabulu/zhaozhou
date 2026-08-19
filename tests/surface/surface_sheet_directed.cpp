@@ -20,8 +20,8 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_surface.hpp"
 
-using zhao::check;
 using sdev::SheetResponse;
+using zhao::check;
 namespace zs = zref::surface;
 
 namespace {
@@ -62,8 +62,8 @@ void test_acquire_allocates_and_clears(Vzhao_surface_sheet& dut) {
 }
 
 void test_write_readback_and_byte_enables(Vzhao_surface_sheet& dut) {
-  check(sdev::sheet_write(dut, kHandleA, 100, 0xAB, 0xCD, true, true, 7),
-        "the write port accepts", 1, 1);
+  check(sdev::sheet_write(dut, kHandleA, 100, 0xAB, 0xCD, true, true, 7), "the write port accepts",
+        1, 1);
   SheetResponse r = sdev::sheet_request(dut, sdev::kOpRead, kHandleA, 100, 0);
   check(r.tag == 0xAB && r.strength == 0xCD, "write then read returns both bytes", 0xABCD,
         (static_cast<uint32_t>(r.tag) << 8) | r.strength);
@@ -181,11 +181,10 @@ void test_release_ends_persistence(Vzhao_surface_sheet& dut) {
   // The freed slot is available again, and re-acquiring A now CLEARS: release
   // is where persistence ends.
   const SheetResponse a = sdev::sheet_request(dut, sdev::kOpAcquire, kHandleA, 0, 0);
-  check(a.status == sdev::kStAllocated, "re-acquiring after release ALLOCATES",
-        sdev::kStAllocated, a.status);
+  check(a.status == sdev::kStAllocated, "re-acquiring after release ALLOCATES", sdev::kStAllocated,
+        a.status);
   const SheetResponse q = sdev::sheet_request(dut, sdev::kOpRead, kHandleA, 100, 0);
-  check(q.tag == 0 && q.strength == 0, "the re-allocated sheet was cleared", 0,
-        q.tag + q.strength);
+  check(q.tag == 0 && q.strength == 0, "the re-allocated sheet was cleared", 0, q.tag + q.strength);
   // B, which was never released, kept everything.
   const SheetResponse b = sdev::sheet_request(dut, sdev::kOpRead, kHandleB, 100, 0);
   check(b.tag == 0x77 && b.strength == 0x88, "B's contents survived A's whole cycle", 0x7788,

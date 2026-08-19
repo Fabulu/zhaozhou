@@ -60,10 +60,10 @@
 #include "zref/zref_surface.hpp"
 #include "zrender/internal.hpp"  // white-box: stamp_surface, sample_sheet
 
-using zhao::check;
 using sdev::Rng;
 using sdev::SheetResponse;
 using sdev::StampCmd;
+using zhao::check;
 namespace zs = zref::surface;
 
 namespace {
@@ -330,7 +330,8 @@ void test_draw_time_sampler_agrees(Chain& ch) {
       for (int k = 0; k < 2; ++k) {
         const int32_t wx = static_cast<int32_t>(zs::texel_wx(kEnv, i)) + (k ? kM / 8 : 0);
         const int32_t wz = static_cast<int32_t>(zs::texel_wz(kEnv, j)) + (k ? kM / 8 : 0);
-        const uint8_t sa = zref::render::sample_sheet(hw_ref, patch, zref::fx16{wx}, zref::fx16{wz});
+        const uint8_t sa =
+            zref::render::sample_sheet(hw_ref, patch, zref::fx16{wx}, zref::fx16{wz});
         const uint8_t sb = zref::render::sample_sheet(ref, patch, zref::fx16{wx}, zref::fx16{wz});
         if (sa != sb) ++bad;
         if (sb) ++nonzero;
@@ -442,8 +443,7 @@ void test_clear_sweep_stalls_the_stamp(Chain& ch) {
   const zs::Sheet got = ch.readback(kPatch);
   check(diff(ref, got) == 0, "the recycled slot was truly cleared before the stamp landed", 0,
         diff(ref, got));
-  check(got.strength[0] == 0, "the previous tenant's 255 is gone from texel 0", 0,
-        got.strength[0]);
+  check(got.strength[0] == 0, "the previous tenant's 255 is gone from texel 0", 0, got.strength[0]);
 }
 
 void test_two_resident_patches(Chain& ch) {
@@ -522,8 +522,8 @@ void test_randomized_composition(Chain& ch) {
     if (c.tx > 44 * kM || c.tx < -44 * kM) ++empty;
   }
   const zs::Sheet got = ch.readback(kPatch);
-  check(diff(ref, got) == 0, "24 randomized stamps through both real blocks match the reference",
-        0, diff(ref, got));
+  check(diff(ref, got) == 0, "24 randomized stamps through both real blocks match the reference", 0,
+        diff(ref, got));
   check(rings > 0 && full > 0, "the randomized composition covered rings and full sheets", 1,
         (rings > 0 && full > 0) ? 1 : 0);
   ch.res_stall_on = false;

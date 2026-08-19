@@ -23,10 +23,10 @@
 #include "zref/zref_surface.hpp"
 #include "zrender/internal.hpp"  // white-box: zref::render::stamp_surface
 
-using zhao::check;
 using sdev::Rng;
 using sdev::SheetSim;
 using sdev::StampCmd;
+using zhao::check;
 namespace zs = zref::surface;
 
 namespace {
@@ -43,8 +43,7 @@ zs::StampGeom geom_of(const StampCmd& c) {
 }
 
 zs::Blend blend_of(const StampCmd& c) {
-  return c.blend_en ? static_cast<zs::Blend>(c.blend)
-                    : zs::blend_of_abi_operation(c.operation);
+  return c.blend_en ? static_cast<zs::Blend>(c.blend) : zs::blend_of_abi_operation(c.operation);
 }
 
 zs::StampSource source_of(const StampCmd& c) {
@@ -384,8 +383,7 @@ void test_inverted_envelope(Vzhao_surface_stamp& dut) {
   const Outcome o = run_one(dut, c, empty, rng);
   check(o.texels_written > 0, "the inverted-envelope stamp covers something", 1, o.texels_written);
   check(sheet_diff(o.want, o.got) == 0,
-        "inverted envelope truncates toward zero like the reference", 0,
-        sheet_diff(o.want, o.got));
+        "inverted envelope truncates toward zero like the reference", 0, sheet_diff(o.want, o.got));
 }
 
 void test_saturation(Vzhao_surface_stamp& dut) {
@@ -442,7 +440,7 @@ void test_persistence_across_frames(Vzhao_surface_stamp& dut) {
   c.tag = 30;
   c.strength = 0x3000;  // 48
   c.radius = 3 * kM;
-  c.operation = 1;      // decay-accumulate: 48, 72, 84, 90, ...
+  c.operation = 1;  // decay-accumulate: 48, 72, 84, 90, ...
   uint8_t prev = 0;
   int rising = 0;
   for (int frame = 0; frame < 5; ++frame) {
@@ -513,7 +511,7 @@ void test_blend_modes(Vzhao_surface_stamp& dut) {
   Rng rng(15);
   const uint8_t modes[6] = {sdev::kBlStamp, sdev::kBlMax,     sdev::kBlAdd,
                             sdev::kBlSub,   sdev::kBlReplace, sdev::kBlAge};
-  const char* names[6] = {"blend STAMP", "blend MAX", "blend ADD",
+  const char* names[6] = {"blend STAMP", "blend MAX",     "blend ADD",
                           "blend SUB",   "blend REPLACE", "blend AGE"};
   for (int m = 0; m < 6; ++m) {
     zs::Sheet initial;
@@ -567,7 +565,7 @@ void test_field_brush(Vzhao_surface_stamp& dut) {
   StampCmd c;
   c.env = kEnv8;
   c.field_en = true;
-  c.tag = 0xEE;       // must be IGNORED in field mode
+  c.tag = 0xEE;  // must be IGNORED in field mode
   c.strength = 0xEEEE;
   c.radius = 5 * kM;
   const Outcome o = run_one(dut, c, initial, rng, 0, 0, 0, false, &fld);

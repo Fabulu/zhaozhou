@@ -36,10 +36,10 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_surface.hpp"
 
-using zhao::check;
 using sdev::Rng;
 using sdev::SheetSim;
 using sdev::StampCmd;
+using zhao::check;
 namespace zs = zref::surface;
 
 namespace {
@@ -53,7 +53,7 @@ struct Stats {
   uint32_t full_cover = 0;
   uint32_t partial_cover = 0;
   uint32_t rings = 0;
-  uint32_t hit_255 = 0;        // a texel saturated high
+  uint32_t hit_255 = 0;          // a texel saturated high
   uint32_t hit_0_after_sub = 0;  // a texel saturated low
   uint32_t inverted_env = 0;
   uint32_t negative_radius = 0;
@@ -242,9 +242,12 @@ void run_lane(Vzhao_surface_stamp& dut, Rng& rng, int stamps, bool limit_lane, S
     // coverage bookkeeping — from the ORACLE, so it describes the stimulus and
     // not whatever the DUT happened to do
     if (!sim.force_overflow) {
-      if (w.empty()) ++st.zero_cover;
-      else if (w.size() == static_cast<size_t>(zs::kSheetTexels)) ++st.full_cover;
-      else ++st.partial_cover;
+      if (w.empty())
+        ++st.zero_cover;
+      else if (w.size() == static_cast<size_t>(zs::kSheetTexels))
+        ++st.full_cover;
+      else
+        ++st.partial_cover;
       if (!c.field_en)
         ++st.blend_seen[c.blend_en ? c.blend
                                    : static_cast<uint8_t>(zs::blend_of_abi_operation(c.operation))];
@@ -313,8 +316,7 @@ int main(int argc, char** argv) {
   check(a.partial_cover > 0, "lane A actually produced partially covered sheets", 1,
         a.partial_cover);
   check(a.full_cover > 0, "lane A actually produced a fully covered sheet", 1, a.full_cover);
-  check(a.zero_cover > 0, "lane A actually produced a stamp that covered NOTHING", 1,
-        a.zero_cover);
+  check(a.zero_cover > 0, "lane A actually produced a stamp that covered NOTHING", 1, a.zero_cover);
   check(a.rings > 0, "lane A actually produced annulus stamps", 1, a.rings);
   check(a.hit_255 > 0, "lane A actually drove a texel to the 255 rail", 1, a.hit_255);
   check(a.blend_seen[sdev::kBlStamp] > 0, "lane A used ABI operation 0 (max)", 1,
@@ -332,24 +334,22 @@ int main(int argc, char** argv) {
   check(b.inverted_env > 0, "lane B actually built inverted envelopes", 1, b.inverted_env);
   check(b.negative_radius > 0, "lane B actually used negative radii", 1, b.negative_radius);
   check(b.field_stamps > 0, "lane B actually ran the field-driven brush", 1, b.field_stamps);
-  check(b.zero_cover > 0, "lane B actually produced a stamp that covered NOTHING", 1,
-        b.zero_cover);
+  check(b.zero_cover > 0, "lane B actually produced a stamp that covered NOTHING", 1, b.zero_cover);
   check(b.full_cover > 0, "lane B actually produced a fully covered sheet", 1, b.full_cover);
-  check(b.hit_0_after_sub > 0, "lane B actually drove a texel to the 0 rail", 1,
-        b.hit_0_after_sub);
+  check(b.hit_0_after_sub > 0, "lane B actually drove a texel to the 0 rail", 1, b.hit_0_after_sub);
   uint32_t blends_used = 0;
   for (int k = 0; k < 7; ++k)
     if (b.blend_seen[k] > 0) ++blends_used;
-  check(blends_used >= 6, "lane B exercised at least six of the seven blend codes", 6,
-        blends_used);
+  check(blends_used >= 6, "lane B exercised at least six of the seven blend codes", 6, blends_used);
 
   std::printf(
       "surface_stamp_random: lane A %u stamps (full %u, partial %u, empty %u, rings %u, "
       "sat255 %u, rejected %u, rim-exact %u/%u), lane B %u stamps (inv-env %u, neg-r %u, field %u, "
       "full %u, empty %u, sat0 %u, blends %u)%s\n",
       a.stamps, a.full_cover, a.partial_cover, a.zero_cover, a.rings, a.hit_255, a.rejected,
-      a.rim_exact_outer, a.rim_exact_inner, b.stamps, b.inverted_env, b.negative_radius, b.field_stamps, b.full_cover, b.zero_cover,
-      b.hit_0_after_sub, blends_used, nightly ? " [nightly]" : "");
+      a.rim_exact_outer, a.rim_exact_inner, b.stamps, b.inverted_env, b.negative_radius,
+      b.field_stamps, b.full_cover, b.zero_cover, b.hit_0_after_sub, blends_used,
+      nightly ? " [nightly]" : "");
 
   return zhao::report_and_exit("surface_stamp_random");
 }

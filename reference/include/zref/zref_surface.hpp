@@ -71,9 +71,9 @@ namespace surface {
 
 // ---------------------------------------------------------------- geometry --
 
-inline constexpr int kSheetDim = 64;                              // charter 12
-inline constexpr int kSheetTexels = kSheetDim * kSheetDim;        // 4,096
-inline constexpr int kSheetBytes = kSheetTexels * 2;              // 8,192
+inline constexpr int kSheetDim = 64;                        // charter 12
+inline constexpr int kSheetTexels = kSheetDim * kSheetDim;  // 4,096
+inline constexpr int kSheetBytes = kSheetTexels * 2;        // 8,192
 
 /**
  * The patch envelope the sheet is stretched across, fx16 raw — exactly
@@ -90,9 +90,9 @@ struct Envelope {
  * in a comment and never reads r00..r11).
  */
 struct StampGeom {
-  int32_t tx = 0, ty = 0;   // fx16 raw, world
-  int32_t radius = 0;       // fx16 raw, world metres
-  int32_t ring_width = 0;   // fx16 raw; <= 0 = filled disc
+  int32_t tx = 0, ty = 0;  // fx16 raw, world
+  int32_t radius = 0;      // fx16 raw, world metres
+  int32_t ring_width = 0;  // fx16 raw; <= 0 = filled disc
 };
 
 /**
@@ -254,9 +254,9 @@ struct Sheet {
 
 /** Residency verdicts (CHOSEN; terrain_rules 11 decides nothing here). */
 enum class Residency : uint8_t {
-  kHit = 0,       // handle was already resident — contents PERSIST
-  kAllocated = 1, // a free slot was taken and CLEARED to zero
-  kOverflow = 2,  // no free slot: the request is REJECTED, nothing written
+  kHit = 0,        // handle was already resident — contents PERSIST
+  kAllocated = 1,  // a free slot was taken and CLEARED to zero
+  kOverflow = 2,   // no free slot: the request is REJECTED, nothing written
 };
 
 struct AcquireResult {
@@ -371,10 +371,10 @@ struct StampSource {
 
 /** One texel the stamp actually wrote — the `stamp_results` record. */
 struct StampWrite {
-  uint16_t texel = 0;   // j*64 + i, scan order
-  uint8_t tag = 0;      // value written to layer F tag
-  uint8_t strength = 0; // value written to layer F strength
-  uint8_t before = 0;   // strength before the blend (BAKE needs the delta)
+  uint16_t texel = 0;    // j*64 + i, scan order
+  uint8_t tag = 0;       // value written to layer F tag
+  uint8_t strength = 0;  // value written to layer F strength
+  uint8_t before = 0;    // strength before the blend (BAKE needs the delta)
 };
 
 /**
@@ -399,8 +399,7 @@ inline void stamp_apply(Sheet& sheet, const Envelope& e, const StampGeom& g, con
       const uint8_t before = sheet.strength[idx];
       sheet.strength[idx] = blend_apply(s.blend, before, src, s.age_shift);
       sheet.tag[idx] = s.tag;
-      if (out)
-        out->push_back({static_cast<uint16_t>(idx), s.tag, sheet.strength[idx], before});
+      if (out) out->push_back({static_cast<uint16_t>(idx), s.tag, sheet.strength[idx], before});
     }
   }
 }
