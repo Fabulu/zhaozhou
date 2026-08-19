@@ -373,8 +373,18 @@ void test_latency_bound(Vzhao_texture_aux& dut) {
   const std::vector<at::Smp> got = dev.run(in, sheet);
   check_stream(in, got, sheet, "RTL free-running stream");
   const int worst = dev.worst_latency();
-  std::printf("  aux worst accept-to-retire: %d clocks (ledger variable_bounded:8)\n", worst);
+  const long span = dev.span_clocks();
+  std::printf(
+      "  aux worst accept-to-retire: %d clocks (ledger variable_bounded:8); "
+      "256 samples in %ld clocks = %.2f clocks/sample\n",
+      worst, span, static_cast<double>(span) / 256.0);
   check(worst >= 0 && worst <= 8, "RTL: accept-to-retire is within the ledger's bound of 8");
+  // The ledger asks for one aux sample per clock. This shape does NOT meet it,
+  // and the shortfall is MEASURED rather than derived from the state count: one
+  // request is in flight and the sheet read cannot start until the divide
+  // answers. design/contracts/TEXTURE.AUX.md's Target throughput section
+  // records the number this line prints.
+  check(span == 1536, "RTL: the sustained rate is one sample per SIX clocks (256 in 1,536)");
   check(dev.samples() == 256, "RTL: texture_samples_o counts retired samples");
   check(dev.sheet_reads() == 256, "RTL: one sheet read per non-degenerate sample, never two");
   check(dev.idle(), "RTL: idle again once the stream drains");

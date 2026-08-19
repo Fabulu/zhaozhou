@@ -219,7 +219,13 @@ ENFORCED-BY: tests/texture/texture_aux_directed.cpp:test_latency_bound
 **MISSED, and here is the measurement.** The ledger asks for "1 aux sample per
 clock". This shape sustains **one sample per six clocks**: `req_ready_o` is
 `st_r == ST_IDLE` and nothing overlaps, so a 256-packet stream against a
-one-cycle sheet occupies about 1,536 clocks. That is the same honest shortfall
+one-cycle sheet occupies **exactly 1,536 clocks — 6.00 clocks per sample**,
+measured from the first accept to the last retire and asserted, not derived
+from the state count.
+ENFORCED-BY: tests/texture/texture_aux_directed.cpp:test_latency_bound
+(`the sustained rate is one sample per SIX clocks (256 in 1,536)`).
+
+That is the same honest shortfall
 `design/contracts/TEXTURE.TMU.md` records for the primary TMU ("the sustained
 rate is ONE SAMPLE PER FOUR CLOCKS (direct) or PER SIX (CLUT), not the
 ledger's 1 sample per clock").

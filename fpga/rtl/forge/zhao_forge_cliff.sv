@@ -626,6 +626,11 @@ module zhao_forge_cliff (
             rlen_r      <= 6'd1;
             idx_r       <= idx_r + {{(EIW - 1) {1'b0}}, 1'b1};
           end else begin
+            // The 63 guard cannot fire: a run lies along ONE lattice line
+            // inside ONE page, so it is at most 32 entries, and the descending
+            // sweep below starts at 32 for the same reason. The guard is here
+            // so the 6-bit length cannot wrap if the page size ever grows
+            // without this sweep growing with it.
             if (contig_c && rlen_r != 6'd63) begin
               run_prev_r <= edge_rd_c;
               rlen_r     <= rlen_r + 6'd1;

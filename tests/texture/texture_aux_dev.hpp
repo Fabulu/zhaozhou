@@ -100,15 +100,20 @@ class Dev {
   long sheet_reads() const { return sheet_reads_; }
   /** The worst accept-to-retire distance seen, in clocks (the ledger's bound). */
   int worst_latency() const { return worst_lat_; }
+  /** Clocks from the first accept to the last retire — the SUSTAINED rate. */
+  long span_clocks() const { return span_clocks_; }
 
   std::vector<Smp> run(const std::vector<Req>& in, SheetModel& sheet, uint32_t stall_mask = 0) {
     std::vector<Smp> out;
     out.reserve(in.size());
     size_t pushed = 0;
     int accept_cycle = -1;
+    int first_accept = -1;
+    int last_retire = 0;
     const int limit = static_cast<int>(in.size()) * 256 + 4096;
     sheet_reads_ = 0;
     worst_lat_ = -1;
+    span_clocks_ = 0;
 
     for (int cycle = 0; cycle < limit; ++cycle) {
       const bool ready = (stall_mask == 0) || (((stall_mask >> (cycle & 31)) & 1u) == 0);
@@ -161,6 +166,7 @@ class Dev {
         s.miss = dut_.smp_miss_o != 0;
         s.src_id = static_cast<uint16_t>(dut_.smp_src_id_o);
         out.push_back(s);
+        last_retire = cycle;
         if (accept_cycle >= 0) {
           const int lat = cycle - accept_cycle;
           if (lat > worst_lat_) worst_lat_ = lat;
@@ -183,6 +189,7 @@ class Dev {
       zhao::tick(dut_);
       if (take) {
         accept_cycle = cycle;
+        if (first_accept < 0) first_accept = cycle;
         ++pushed;
       }
       if (out.size() == in.size()) break;
@@ -190,6 +197,7 @@ class Dev {
     dut_.req_valid_i = 0;
     dut_.smp_ready_i = 0;
     dut_.eval();
+    span_clocks_ = (first_accept < 0) ? 0 : (last_retire - first_accept + 1);
     return out;
   }
 
@@ -197,6 +205,7 @@ class Dev {
   Vzhao_texture_aux& dut_;
   long sheet_reads_ = 0;
   int worst_lat_ = -1;
+  long span_clocks_ = 0;
 };
 
 }  // namespace aux_test
