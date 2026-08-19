@@ -161,6 +161,30 @@ zref::sky::SkySet dusk_sky(int variant = 0) {
     // an animated subject inside the 256-colour palette law
     s.band_upper_top = {150, 92, 118};
     s.cap = {150, 92, 118};
+  } else if (variant == 2) {
+    // FULLY flat: every band, the cap and the under-plane are one colour.
+    // Trivially C0 under S1.2 (all joins are equalities).
+    //
+    // Variant 1 only flattens the UPPER band, which is enough for a subject
+    // whose additive chain sits high. It is not enough for a large corona
+    // that descends THROUGH the horizon: the halo then crosses the lower
+    // band's whole gradient, and since the sequence palette counts the union
+    // over every frame, the product is halo levels x sky rows. Measured on
+    // the atmosphere pair at 395 and 408 unique colours against a ceiling of
+    // 256.
+    //
+    // The colour is deliberately NEAR-NEUTRAL rather than a warm dusk. These
+    // subjects exist to compare a whitening ramp against a reddening one, and
+    // a warm sky would flatter the reddening one before the comparison
+    // started. A loaded test is worse than no test.
+    const zref::sky::SkyColor flat = {110, 96, 104};
+    s.background = flat;
+    s.under = flat;
+    s.band_lower_horizon = flat;
+    s.band_lower_top = flat;
+    s.band_upper_bottom = flat;
+    s.band_upper_top = flat;
+    s.cap = flat;
   }
   s.cloud = {255, 216, 196};  // unused (layer not requested)
   s.sun = {255, 206, 130};    // unused (layer not requested)
@@ -387,11 +411,55 @@ void cel_build_assets(int celestial, CelAssets& a) {
     case 10:
       cls = 9;  // S09 infant star
       break;
+    case 11:
+    case 12:
+      cls = 0;     // S00 yellow star, the sun over a world
+      core16 = 0;  // halo_atmo: surface sun w/ atmosphere (§4)
+      break;
   }
   const zref::star::StarClass& c = zref::star::kGamut[cls];
   const zref::star::StarIdentity id = cel_identity(cls, 0xA11CE5u);
   zref::star::RampState rs;
   zref::star::ramp_retarget(rs, id);  // snap: reel ramps sit at targets
+  if (celestial == 12) {
+    // THE THICK-ATMOSPHERE CORRECTION — a transmission filter on the ramp's
+    // control points, applied before the ramp is built.
+    //
+    // FIRST ATTEMPT, AND WHY IT FAILED, because the failure is the useful part.
+    // §3 freezes the ramp's top control point at P3 = (256, 280, 304): every
+    // channel over-ranges the 0..255 clamp, so the top of the ramp whitens by
+    // deliberate early saturation. That is wrong for thick air, so the obvious
+    // correction is to redden P3 alone. Rendered, it is INVISIBLE — the pair
+    // was indistinguishable at every frame.
+    //
+    // Two reasons, both worth keeping:
+    //   1. §4's corona falls off LINEARLY in radius, so ramp index is roughly
+    //      linear in distance from the centre. On a 104 px halo the top of the
+    //      ramp covers a few pixels and the mid and low entries carry the
+    //      entire visible glow. P3 governs [40..64) — a quarter of the ramp
+    //      that is almost none of the picture.
+    //   2. The corona composites ADDITIVELY (§4 star_halo_additive,
+    //      dst = sat(dst + src)). Near the core every channel rails no matter
+    //      what colour went in, so the brightest region is white either way.
+    //      Additive saturation eats exactly the correction P3 was making.
+    //
+    // The physically-suggestive model is also the one that survives both:
+    // thick air is a per-wavelength TRANSMISSION, so it attenuates the star's
+    // colour at every intensity, not only at the top. Applying it to the
+    // control points leaves §3's segment law and its single rounding entirely
+    // untouched — only the inputs change — and it costs three multiplies at
+    // bake time, once, for the whole ramp.
+    //
+    // (1.0, 0.60, 0.25): red passes, green is halved, blue is mostly gone.
+    // P0 stays black; black is black through any depth of air.
+    static const int32_t kTrans[3] = {256, 154, 64};  // /256
+    for (int pt = 1; pt < 4; ++pt)
+      for (int ch = 0; ch < 3; ++ch) {
+        const int idx = pt * 3 + ch;
+        const int32_t v = (static_cast<int32_t>(rs.cur[idx]) * kTrans[ch] + 128) / 256;
+        rs.cur[idx] = rs.tgt[idx] = static_cast<int16_t>(v);
+      }
+  }
   zref::star::ramp_build(rs.cur, a.ramp);
   if (celestial == 2) {
     // The flare subject shares one global GIF palette with its ramp smear.
@@ -405,7 +473,7 @@ void cel_build_assets(int celestial, CelAssets& a) {
   // glints: space subjects only; exclusion rects sized per subject below
   if (celestial == 1) {
     a.glints = make_glints(false, {{44, 12, 340, 220}});  // giant + halo box
-  } else if (celestial == 2 || celestial == 3 || celestial >= 5) {
+  } else if (celestial == 2 || celestial == 3 || (celestial >= 5 && celestial <= 10)) {
     // the sweep + ghost lanes cover most of the frame; white glints
     // saturate under additive overlap and add no palette colours
     // celestial >= 5 are the new star classes (5-10)
@@ -965,6 +1033,39 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
       L.flare_mode = 0;
       L.probe_x = L.x_px;
       L.probe_y = 120;
+      break;
+    }
+    case 11:    // atmo-sun-donor  — §4 halo_atmo, §3 ramp exactly as ported
+    case 12: {  // atmo-sun-thick  — the same, with P3 retargeted (see above)
+      // The two subjects are IDENTICAL here on purpose. Every geometric and
+      // photometric parameter below is shared; the only difference between the
+      // published pair is the one ramp control point set in cel_build_assets.
+      // A comparison that moves two things proves nothing about either.
+      //
+      // No trail. The sun descends rather than crossing, and §15's smear is
+      // not what this subject is about — the atmosphere is. Leaving the trail
+      // live would also put ghost falloff levels on top of the halo's, which
+      // is palette the halo needs.
+      L.trail = nullptr;
+      L.x_px = 192;
+      // A setting sun: 96 px of descent over the loop, ending low. Thick air
+      // is a PATH LENGTH effect, so the look belongs near the horizon where
+      // the path is longest — a zenith sun in the same atmosphere is nearly
+      // white and would not show what this pair exists to show.
+      L.y_px = 56 + static_cast<int32_t>((96 * ph) / (half - 1));
+      L.disc_r_px = 26;
+      // 4x the disc, per §4's own note against halo_atmo ("pure glow ball,
+      // 4xR"). kHaloRMaxZ60Px (225) still bounds it; 104 is well inside.
+      L.halo_r_px = 104;
+      // 3r/2 -> SATUR = min(63, 12d/r) = 18, the same floor star-boil uses.
+      // Distance washout is the WRONG lever here: it whitens, and whitening
+      // is the thing the corrected variant exists to argue against. Keeping
+      // the sun close leaves the ramp's own colour in charge of the look.
+      L.d_milli = 3LL * zref::star::kGamut[0].ray_milli / 2;
+      L.r_milli = zref::star::kGamut[0].ray_milli;
+      L.flare_mode = 0;  // no lens chain: the subject is the atmosphere
+      L.probe_x = L.x_px;
+      L.probe_y = L.y_px;
       break;
     }
     default:
@@ -2228,6 +2329,76 @@ SceneSubject subject_flareocclusion() {
 // column_query taps per tick tilt it through the wave (rotateOnGround);
 // then the camera pulls back and the LOD ladder walks it down
 // mesh -> micro-mesh -> splat -> glint with 10%/15-tick hysteresis.
+// 19/20. atmo-sun-donor / atmo-sun-thick — THE PAIR.
+//
+// A sun setting through a thick atmosphere, over the dual-heightfield island.
+// Published as two subjects that differ in exactly one number, so the argument
+// can be checked rather than taken on trust:
+//
+//   atmo-sun-donor  §3's ramp as ported: P3 = (256, 280, 304), a top that
+//                   whitens by deliberate early per-channel saturation.
+//   atmo-sun-thick  the same subject with P3 = (300, 150, 40) — red railing,
+//                   green mid, blue scattered out of the path.
+//
+// The island is FLAT-SHADED here (island_flat), and that is not a concession.
+// The halo composites additively (§4 star_halo_additive, dst = sat(dst+src)),
+// so every halo level meets every terrain shade and the product is what the
+// 256-colour sequence law counts. flare-occlusion hit the same wall and
+// measured 325 unique colours with the texture lane live. It is also the right
+// picture: a dark land under a vast glowing sky is the look being argued for,
+// not a compromise forced by the budget.
+SceneSubject atmo_common(const char* name, int celestial) {
+  SceneSubject s;
+  s.name = name;
+  s.frames = 64;
+  s.step = 8;
+  s.celestial = celestial;
+  s.sky_variant = 2;     // FULLY flat sky: the corona descends through the
+                         // horizon, so the upper-band-only flattening is not
+                         // enough (see dusk_sky). Near-neutral on purpose.
+  s.island = true;
+  s.island_flat = true;  // see the note above — additive halo x terrain shade
+  s.cam_k = 112000;
+  s.cam_eye = 140;
+  s.cam_dist = 300;
+  s.cam_bias = 5243;
+  // A silhouette material. Thick air does not light the land facing away from
+  // the sun; compressing the lambert range is also what keeps the halo sums
+  // inside the palette law.
+  s.mat_r = 44;
+  s.mat_g = 48;
+  s.mat_b = 42;
+  return s;
+}
+
+SceneSubject subject_atmosundonor() {
+  SceneSubject s = atmo_common("atmo-sun-donor", 11);
+  s.note =
+      "S00 sun setting through a thick atmosphere over the island; halo_atmo "
+      "corona at 4x the disc radius, no lens chain. The ramp is the ported "
+      "one: its top control point over-ranges the clamp on every channel, so "
+      "the core whitens as it brightens. Pair this with atmo-sun-thick, which "
+      "applies an atmospheric transmission to the same ramp and changes "
+      "nothing else about the scene";
+  s.expect_seq_crc = 0xD16723F6u;  // pinned 2026-08-19 (first render)
+  return s;
+}
+
+SceneSubject subject_atmosunthick() {
+  SceneSubject s = atmo_common("atmo-sun-thick", 12);
+  s.note =
+      "the same sun, the same island, the same camera, with one number "
+      "changed: a per-channel transmission (1.0, 0.60, 0.25) is applied to "
+      "the ramp control points before the ramp is built, so red passes, green "
+      "is halved and blue is mostly gone at EVERY intensity. Reddening only "
+      "the ramp top was tried first and is invisible: the corona falls off "
+      "linearly so the top governs a few pixels, and additive compositing "
+      "rails every channel near the core regardless. The corona is built from "
+      "the same ramp and follows without a second knob";
+  s.expect_seq_crc = 0x08B5A606u;  // pinned 2026-08-19 (first render)
+  return s;
+}
+
 SceneSubject subject_creaturewalk() {
   SceneSubject s;
   s.name = "creature-wave-walk";
@@ -2394,6 +2565,8 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_bluedwarf());
     rc |= render_scene(subject_multiple());
     rc |= render_scene(subject_infant());
+    rc |= render_scene(subject_atmosundonor());
+    rc |= render_scene(subject_atmosunthick());
     rc |= render_scene(subject_creaturewalk());
     rc |= render_scene(subject_creaturepop());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
@@ -2428,6 +2601,8 @@ int main(int argc, char** argv) {
   if (wanted("blue-dwarf")) rc |= render_scene(subject_bluedwarf());
   if (wanted("multiple")) rc |= render_scene(subject_multiple());
   if (wanted("infant")) rc |= render_scene(subject_infant());
+  if (wanted("atmo-sun-donor")) rc |= render_scene(subject_atmosundonor());
+  if (wanted("atmo-sun-thick")) rc |= render_scene(subject_atmosunthick());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
   return rc;

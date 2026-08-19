@@ -1250,3 +1250,329 @@ a framebuffer constraint.** The console resolves to RGB565. So a close-up
 creature can be rich, and additive effects transfer from the donor for free
 rather than needing an index-blend LUT — which was the study's flagged open
 question and is now answered.
+
+## Split screen: I said it was undecided, and it is a shipped video mode
+
+The owner corrected this and was right. While writing the game's mode list I
+recorded "two players" as an open hardware question, listed three options
+(linked consoles / split screen / shared camera), and claimed split screen
+"roughly doubles geometry and command work". Every part of that was already
+answered in this repo:
+
+- `spec/video_rules.md` mode 2 is **`VIDEO_DUO`, 512x240 as two independent
+  256x192 view canvases**, vertically centred in the 240 active lines, with its
+  own framebuffer size and scanout law (lines 24-26, 112-119).
+- `shell_duo_markers_fast` is a standing fast-lane test.
+- The charter's project mandate names **local split-screen** alongside extreme
+  screen-space LOD and deformable terrain.
+- `FORM_LANGUAGE_HARDWARE_CODESIGN.md` §12 is titled "Split-screen is a
+  source-level concept" and gives the `present duo` form with declared per-view
+  budgets.
+
+And the cost claim was wrong in the direction that mattered. Two 256x192 views
+is **98,304 pixels against Z60's 384x240 = 92,160 — 6.7% more fill, not
+double.** The resolution was chosen with two players in it. Geometry is not
+duplicated either: §12 states that simulation, terrain fields, creature
+animation and particle state are represented once and only camera-local LOD and
+projection fork, and the owner's point stands that aggressive screen-space LOD
+is what makes the second view cost what it is worth on screen rather than what
+the first view cost.
+
+**The lesson is the one this project keeps relearning:** I reasoned from first
+principles about a question the spec had already frozen. The specs are long, but
+"is this already decided" is a grep, not a derivation.
+
+### What this hands to Phase 8, which is in flight right now
+
+`MEASURE.GOVERNOR` is not a generic throttle. FORM §12 and charter §115 make it
+the block that has to degrade two views **fairly** against declared shares
+(45/45 with a 10% shared emergency reserve). That implies per-view accounting
+rather than a single global pool, and a reserve neither view owns. The MEASURE
+agent has been told, with the specific instruction that if it chooses a
+global-only policy it must record that as a CHOSEN law with per-view fairness as
+the rejected alternative — because `TERRAIN.LOD` already had to guess at this
+policy once against a stub contract, and there are now two prior claimants on it.
+
+## Digging, tunnels, overhangs: what the format already answers
+
+The owner asked for a creature or spell that digs a tunnel that persists, and
+noted round overhangs should fall out of the same mechanism. Expected to be
+"very tricky with our technology". `spec/terrain_rules.md` §3 had already
+settled the underlying question, in both directions.
+
+**The model:** a dual heightfield — top (layer A base + layer B persistent
+scar) and bottom (layer C, added for the deep keel) — where every column is
+**one solid interval `[bottom, top]` or void**. So "can we have a tunnel" is
+exactly "can a column hold two solid intervals". It cannot, and §3.6 says so
+explicitly about caves, arches and through-tunnels.
+
+**Overhangs, however, need nothing new.** §3.6 lists overhanging thin lips as
+high-bottom slab columns, and rims curving up into the island — the
+bitten-apple profile the §3.7 keel generator already produces by default. Round
+overhangs are an authoring operation on layer C, available today.
+
+**Four tunnel approaches, cheapest first, all read off existing law:**
+
+1. **Trench — free today.** A digging creature is a moving stamp. The scar
+   delta is already persistent, bake-written, capture-replay exact, and already
+   marks nav cells dirty on change (§3.5). A deep narrow groove stays with no
+   new hardware, and reads as a tunnel from this camera for most of its length.
+2. **Keel burrow — also free.** Layer C is bake-writable (§3.4: the bottom
+   surface changes exclusively at bake time — but it *does* change). A digger
+   that raises the bottom along its path carves up into the island from
+   underneath: real ground as roof, open to the sky below. On a floating island
+   that is a genuinely good look for one existing layer.
+3. **Breach + Wound plug — the ratified path.** §3.6 states that the void mask
+   IS the Wound socket and "the patch format needs nothing further now". Charter
+   §11.7 Wounds are bounded volumetric meshlet plugs parented to the island
+   transform. Cost is the plug format, a Phase-11+ hero feature, not a terrain
+   change.
+4. **Rotated sheets — already an open investigation** (see the entry above). A
+   sheet displacing along a horizontal axis gives roofs and walls from ground
+   machinery. Same unanswered question: which axis the height layers displace
+   along. Same plan: one rotated patch in the reference renderer before any RTL.
+
+**A trap worth naming:** *breaching* is not digging. A breach is top meeting
+bottom — a hole through the entire island — and over the §3.7 minimum 50 m keel
+that is a chasm, not a tunnel. Anything that wants a roof must move layer C, not
+drive layer B down to it.
+
+**The real bill is not rendering.** The column query (§4) returns one interval,
+so a Wound plug that renders correctly is still not collidable and still not
+navigable. A Wound has to carry its own collision and nav or the tunnel is
+scenery — and that lands on the sim side, not this hardware. Which is the
+argument for shipping trenches and keel burrows first, where the existing column
+query already tells the truth.
+
+**Docket:** nothing is scheduled from this yet. Items 1 and 2 are authoring and
+bake-side and need no new block; item 4 is the rotated-sheet investigation
+already open; item 3 waits on Wounds.
+
+## A build-environment trap that produced a false green, then a false red
+
+Worth recording because it cost real time and every layer of it lied.
+
+`tools/env/zhao-env.ps1` exists and documents the machine's rules — that
+`VERILATOR_ROOT` must be `share/verilator` and not the suite root, and that **the
+devkitPro msys2 cmake is first on PATH by default and is broken with native
+g++**. I did not source it. The consequences, in order:
+
+1. A bare `cmake` picked up devkitPro's, which wrote a cache whose source path
+   was `/c/programmieren/...` and whose verilate rules carried
+   `VERILATOR_ROOT=` empty. Verilator then looked for its own headers in
+   `/yosyshq/share/verilator`, its compile-time default.
+2. Every test in the fast lane reported **`BAD_COMMAND`** — which reads as "test
+   binary missing", not "your environment is wrong".
+3. The run reported **exit code 0**, because ctest's status was swallowed by a
+   pipe into `tail`.
+4. Prepending the suite to PATH by hand made it worse, not better: the suite
+   ships no cmake, so the devkitPro one still won and now failed at
+   `CMakeTestCXXCompiler`.
+
+Three layers each reported success or a misleading cause. The fix was to source
+the documented script and delete the poisoned build tree. Same family as the
+verilate-output-deletion trap and the mtime-poisoning trap already recorded
+above: **a build system that has been disturbed reports test failures, not build
+failures.**
+
+
+## Rotated sheets: the open question is ANSWERED, and the answer changes the shape
+
+The entry above opened this investigation and named the blocker: "which axis the
+height layers displace along. If that is fixed to Y, a vertical sheet needs
+either a per-patch axis or pre-rotated authoring. Everything downstream looks
+orientation-agnostic, but that is a reading of the code, not a test."
+
+Read properly, from ratified law and the landed RTL. **It is fixed to Y, in two
+places, and they are not the same kind of fixed.**
+
+**Render side — barely fixed at all.** `zhao_terrain_tess.sv` assembles a vertex
+by SLOT ASSIGNMENT, not arithmetic: `vx[p] <= lat_wx_i`, `vz[p] <= lat_wz_i`,
+`vy[p] <= lat_h_i` (lines 759-762), emitted as `o_ax/o_ay/o_az`. The block never
+does anything to Y it does not also do to X and Z. And `zhao_terrain_project.sv`
+holds a **full mat4 view-projection matrix per view** (cfg_addr 0..15, row-major
+fx16), applied as `mat4_vec4`. So an island rotation can simply be folded into
+that matrix — MVP instead of VP, 16 words reloaded when the island changes — and
+the tessellator, the normals block and the LOD ladder never learn about it.
+
+**Sim side — structurally fixed, and this is the real finding.** §4.3's
+`column_query(island, wx, wz)` is a 2D-to-1D function: the sparse directory is
+keyed `(ix, iz)`, the patch envelope is an axis-aligned `rectfx x0,z0,x1,z1`,
+and the result is ONE interval `[bottom, top]`. SW.CPUCOLL, PART.COLLIDE, nav
+and the height query all go through it.
+
+### The conclusion: rotate the ISLAND, not the patch
+
+A patch rotated INSIDE an island puts two surfaces at the same `(x, z)` — which
+is precisely the "second solid interval in one column" that §3.6 refuses, and
+precisely the wall the tunnel question hit from the other side. **Rotated sheets
+and tunnels are the same problem.** A per-patch axis flag would therefore break
+the column law rather than extend it, and it should not be built.
+
+Rotating a whole island keeps every internal law intact, because every law is
+already expressed in island-local terms — heights are relative to the island
+datum, envelopes are island-datum-relative, and `column_query` is already
+parameterised by island. What changes is only the island-to-world transform.
+
+**Cost, stated honestly:**
+
+- §1.5 gives an island a world ORIGIN and nothing else — translation only, no
+  orientation field. That is the one format change, and it is small.
+- The sim's broad phase must transform the query point into island-local space
+  before the directory lookup, and must be willing to test more than one island
+  for the same world point. Today a vertical sheet and the ground beneath it
+  are two islands overlapping in `(x, z)`, which the current query shape does
+  not contemplate.
+- §3.5's "falls out of the world" rule compares against
+  `island_datum + min(bottom)`, which stays island-local and therefore stays
+  correct — but "below" is no longer a single direction across islands.
+
+**Next step is unchanged and now better specified:** prototype ONE rotated
+island in the reference renderer — not a rotated patch — and confirm the
+reference's `column_query` still satisfies the §4.3 "physics equals pixels"
+differential when the query point is transformed in first. No RTL until that
+holds.
+
+**Incidental confirmation while reading:** `zhao_terrain_project.sv` already
+carries two matrix + viewport register sets selected by `cfg_view_i`, with its
+header naming "camera views (Duo)" and the 256x192 pair explicitly. The
+split-screen path is not merely specified, it is wired into the geometry lane.
+
+
+## Docket: the thick-atmosphere sun (owner: "one of the best ones, we must steal it")
+
+Read the law before costing it, per the lesson two entries up. Most of this is
+already ratified and unbuilt, one piece is a genuinely free win, and one piece
+is an honest spec amendment.
+
+**Already ours, already specified:**
+
+- `stars_and_flares.md` §4 already has the variant. `halo_atmo`, `core16 = 0/16`,
+  described in the table as "surface sun w/ atmosphere — pure glow ball (4×R)".
+  `zref::star::corona_sprite(0)` bakes it and reel subject 4 already selects it.
+- Fog is already the aerial-perspective term, already bound to the horizon ramp
+  (`qformats.md` §8 owns the numbers), already carried per frame by
+  `SetEnvironment 0x0311` with mode/near/far.
+- Global tint is on the same record, applied to the LIT vertex colour before
+  texture modulation — the donor's `lmap` position, tint the light not the
+  albedo. That is the whole-scene wash a thick sky puts over everything.
+
+**The free win, and it is the one that matters most.** The star ramp's control
+points are `P0 = (0,0,0)`, `P1 = undertone`, `P2 = class colour`,
+`P3 = (256,280,304)` — and that P3 is a **deliberate early per-channel
+saturation that whitens the top of the ramp**. For a thick atmosphere that is
+exactly backwards. Air thick enough to bloat the disc has already scattered the
+blue out; the core should go *dimmer and redder*, never whiter.
+
+`zref::star::RampState` holds P0..P3 as `cur[12]` in the s16 pre-clamp domain
+and **slews each channel ±1 per tick toward its target**. So P3 is not a
+constant — it is an animatable target. A thick-atmosphere sun is
+`P3 ≈ (300, 150, 40)`: red railing early, green landing mid, blue staying low.
+Zero new law, zero runtime cost, and because §4 says the corona uses **the same
+ramp palette**, the halo reddens with the disc automatically — the entire glow
+ball turns together.
+
+Better still, the slew makes it a *transition*: the sun can visibly thicken and
+redden as weather rolls in, which is the mechanism the eclipse and bloodmoon
+set pieces on this docket already need.
+
+**The honest gap — falloff shape.** §4's bake is a **LINEAR** falloff:
+`pix = 63 − rescale_u((rr − fgm_h)·k, 16)`. With `core16 = 0` that is a straight
+cone from centre to rim, which reads as a solid glow ball with a definable edge
+at 4×R. What makes the donor's version good is a long soft shoulder — bright
+centre, slow tail, no discernible boundary. Getting that means a new row in the
+§4 variant table with a non-linear profile (a squared or reciprocal shape), i.e.
+a spec amendment, not a parameter change.
+
+It is still cheap at runtime: §4's whole point is that "the LUT *is* the
+texture", so a different falloff costs bake time and nothing else. But it is a
+new frozen table and it must be argued in the spec, not slipped in.
+
+**The other gap — the sky has no azimuthal term.** `sky_and_beams.md` §1.1 gives
+the sky an ELEVATION ramp. A thick-atmosphere sun brightens the sky *around
+itself*, which is an azimuthal effect centred on the sun anchor, not a vertical
+one. Nothing in the sky layer table expresses that today. Worth stating before
+anyone promises the full look.
+
+**Order:** the ramp-target change is free and lands with the next sun increment.
+The falloff variant and the azimuthal sky term are separate, specified pieces
+and go on the docket behind the hardware waves.
+
+
+## The atmosphere pair, and a correction to my own correction
+
+The owner asked for the thick-atmosphere sun rendered over an island, twice: the
+donor's design and mine beside it. Both are now reel subjects, `atmo-sun-donor`
+(celestial 11) and `atmo-sun-thick` (celestial 12), differing in exactly one
+thing so the claim can be checked rather than believed.
+
+### I was wrong about what the correction is
+
+The docket entry above proposed retargeting the ramp's top control point P3
+from `(256,280,304)` to roughly `(300,150,40)`. **Rendered, that is invisible.**
+The pair was indistinguishable at every frame. Two reasons, and both are worth
+keeping because they generalise:
+
+1. **§4's corona falls off LINEARLY in radius**, so ramp index is roughly linear
+   in distance from the centre. On a 104 px halo, the `[40..64)` segment P3
+   governs covers a handful of pixels; the mid and low entries carry the entire
+   visible glow. P3 owns a quarter of the ramp and almost none of the picture.
+2. **The corona composites additively** (§4 `star_halo_additive`,
+   `dst = sat(dst + src)`). Near the core every channel rails whatever colour
+   went in, so the brightest region is white either way. Additive saturation
+   eats precisely the correction P3 was making.
+
+**What actually works is a transmission filter.** Thick air attenuates per
+wavelength at every intensity, not only at the top, so the honest model is a
+per-channel multiply — `(1.0, 0.60, 0.25)` — applied to the control points P1,
+P2 and P3 before §3 builds the ramp. P0 stays black; black is black through any
+depth of air. §3's segment law and its single rounding are untouched, only its
+inputs change, and it costs three multiplies once at bake time.
+
+That version reads immediately: a deep orange disc inside a warm glow against a
+dark island, where the donor variant is a pale disc in a white glow.
+
+### What the palette law forced, and it was not a compromise
+
+First render: **395 and 408 unique colours against a ceiling of 256.** The cause
+is the sequence palette counting the union over every frame, so a descending
+corona multiplies its own falloff levels by every sky row it crosses.
+`sky_variant = 1` only flattens the UPPER band, which is enough for subjects
+whose additive chain stays high and not enough for one that sets through the
+horizon. Added `sky_variant = 2`, a fully flat sky (trivially C0 under §1.2 —
+every join is an equality). Result: 151 and 152 colours.
+
+The flat sky is deliberately **near-neutral** `(110, 96, 104)` rather than a warm
+dusk. These subjects exist to compare a whitening ramp against a reddening one,
+and a warm sky would flatter the reddening one before the comparison started.
+
+The island is flat-shaded for the same additive reason flare-occlusion is, and
+that is the right picture anyway: dark land under a vast glowing sky is the look
+being argued for.
+
+### Honest limits of what was published
+
+- Still the **linear** falloff. The soft-shouldered profile the donor's version
+  actually has remains a §4 table amendment and is not in these renders.
+- Still **no azimuthal sky term**, so the sky does not brighten around the sun.
+  In these frames the corona IS the sky glow, which is a stand-in, not the
+  effect.
+- The transmission constants are authored, not derived from any scattering law.
+  They are a look, chosen and stated.
+
+CRCs pinned at first render: donor `0xD16723F6`, thick `0x08B5A606`.
+
+## The deleted captures were the fast lane's only red
+
+Restored `captures/failures/` from HEAD and `field_crater_ring` went green
+immediately; the full fast lane was otherwise 162 of 163 with `format_check`
+skipped (no clang-format on this machine).
+
+The failure mode is worth recording. `test_field_crater_ring` gate 6 compares a
+committed failing vector against a freshly minimized one, and writes the pair
+only when it is absent. With `captures/failures/field/` deleted *including its
+`.gitkeep`*, the directory itself was gone, so the test could neither compare
+nor write, and reported `gate 6: failing vector + report WRITTEN (first run)`
+as a FAILURE. Deleting committed evidence therefore does not merely lose
+evidence — it takes a lane red in a way that reads like a code defect.
+
