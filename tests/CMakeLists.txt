@@ -2372,3 +2372,98 @@ if(ZHAO_SBY_BIN)
     TIMEOUT 2100
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
+
+# ---------------------------------------------------------------------------
+# TERRAIN.BAKE (phase 7, ZH-036)
+#
+# The only writer of layers B and D (terrain_rules 7). The oracle is the
+# EXECUTED reference — `zref::terrain::bake_dig` then
+# `zref::terrain::apply_breach_law` — rather than a second implementation of
+# 3.4, so "RTL == oracle" is "RTL == the deformation the software console
+# already ships". The block owns its own 33x33 sweep, so the tests drive it as
+# a MEMORY answering its read addresses, which is also what makes the scan
+# order a checkable fact instead of an assumption.
+set(ZHAO_TERRAIN_BAKE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_delta.sv)
+
+add_executable(test_terrain_bake_directed terrain/terrain_bake_directed.cpp)
+target_link_libraries(test_terrain_bake_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_bake_directed
+  PREFIX Vzhao_terrain_bake
+  TOP_MODULE zhao_terrain_bake
+  SOURCES ${ZHAO_TERRAIN_BAKE_SV})
+add_test(NAME terrain_bake_directed COMMAND test_terrain_bake_directed)
+set_tests_properties(terrain_bake_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_bake_random terrain/terrain_bake_random.cpp)
+target_link_libraries(test_terrain_bake_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_bake_random
+  PREFIX Vzhao_terrain_bake
+  TOP_MODULE zhao_terrain_bake
+  SOURCES ${ZHAO_TERRAIN_BAKE_SV})
+add_test(NAME terrain_bake_random COMMAND test_terrain_bake_random)
+set_tests_properties(terrain_bake_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME terrain_bake_random_nightly COMMAND test_terrain_bake_random --nightly)
+set_tests_properties(terrain_bake_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# BAKE -> PATCH: the `baked_scars` seam, both blocks REAL. This is the first
+# time layer B has had a producer in RTL, so it is the first time the Mantle
+# entry point can be fed the plane its contract says TERRAIN.BAKE owns.
+add_executable(test_terrain_bake_chain terrain/terrain_bake_chain.cpp)
+target_link_libraries(test_terrain_bake_chain PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_chain PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_terrain_bake_chain
+  PREFIX Vzhao_terrain_bake
+  TOP_MODULE zhao_terrain_bake
+  SOURCES ${ZHAO_TERRAIN_BAKE_SV})
+verilate(test_terrain_bake_chain
+  PREFIX Vzhao_terrain_patch
+  TOP_MODULE zhao_terrain_patch
+  SOURCES ${ZHAO_TERRAIN_PATCH_SV})
+add_test(NAME terrain_bake_chain COMMAND test_terrain_bake_chain)
+set_tests_properties(terrain_bake_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_bake
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_bake
+                 ${ZHAO_TERRAIN_BAKE_SV})
+set_tests_properties(lint_terrain_bake PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_terrain_bake_delta
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_bake_delta
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_delta.sv)
+set_tests_properties(lint_terrain_bake_delta PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the incremental-scaling arithmetic, proved on the module
+# zhao_terrain_bake actually instantiates. The deferral identity of
+# terrain_rules 9.2 law 3 is the theorem the frozen BAKE_PATCH_BUDGET rests on,
+# and it is proved here rather than sampled.
+if(ZHAO_SBY_BIN)
+  set(PROP "terrain_bake_delta")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/terrain_bake_delta_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/terrain_bake_delta_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_terrain_bake_delta
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_terrain_bake_delta PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
