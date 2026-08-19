@@ -508,6 +508,56 @@ runs:
       lanes) and by the nine-way mutation table in
       design/contracts/TEXTURE.TMU.md.
 
+  - property: tests/formal/texture_mod255.sby
+    status: green
+    date: "2026-08-19"
+    commit: 24d8d21
+    lane: formal_texture_mod255
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The `h mod 255` residue network of TEXTURE.MOSAIC (ZH-030), proved on
+      zhao_texture_mod255 — the module zhao_texture_mosaic instantiates, and
+      the only instance of it — so the proof and the silicon are the same
+      bytes. The residue was factored OUT of the mosaic pipeline for exactly
+      the reason the surface blend was: inside it, reaching the arithmetic
+      needs a packet, two pipeline stages and a handshake, none of which is
+      arithmetic anybody can state a theorem about. SCOPE-TOTAL, not bounded:
+      the harness is one always_comb and its free `h` is 32 bits, which IS the
+      port width and IS the width of spec/terrain_rules.md §6.2's uint32_t
+      hash, so all 4,294,967,296 inputs are covered and depth 2 is the full
+      reachable set. Recorded as an explicit "# SCOPE-TOTAL:" waiver (V19)
+      because there is no horizon for a scope guard to assert. THREE laws,
+      and the first is the interesting one: a_is_the_residue states that the
+      output IS h mod 255 WITHOUT putting a divider in the property — a free
+      25-bit q and 8-bit r witness h = 255*q + r, r < 255 is assumed, and the
+      block's answer must equal r. Because that decomposition is unique the
+      assumption pins r to exactly h % 255, and the property contains only
+      multiply, add and compare, so it is not a second implementation of the
+      fold it is checking. a_in_range states UNCONDITIONALLY that p <= 254,
+      which is the fact zref::terrain::mosaic_pick's "weight 255 = always
+      matA" rests on — an 8-bit port makes p <= 255 a tautology about a
+      declaration, while p <= 254 is a theorem about the conditional
+      subtract. a_zero anchors h = 0. SIX covers, all reached, and they are
+      load-bearing rather than decorative because a_is_the_residue is guarded
+      by an assumption and could otherwise pass on an unsatisfiable
+      antecedent: r = 0 with a NON-ZERO h (the single input the conditional
+      subtract exists for, and the one a random sweep meets once in 255
+      draws), r = 254, r = 1, h = 0xFFFFFFFF (255 x 16,843,009, where the
+      byte sum reaches the 255 rail), and both ends of q's range. NOT VACUOUS,
+      demonstrated: mutating the final compare from `s2 >= 255` to `s2 > 255`
+      makes bmc FAIL in 4 s (and also fails both differential lanes and the
+      directed constructed-residue case; binary hash a38c01a6 -> b8d3cd97,
+      relink proven). Measured cost: 110.5 s under CTest on this kit
+      (boolector, depth 2) — it carries the standard TIMEOUT 2100. NOT proved
+      here: the two frozen multiplier constants (73,856,093 and 19,349,663),
+      the XOR, the arithmetic shift to the world texel index, the mirrored
+      fold, the `p < weight` compare, the rigid two-stage pipeline, the
+      ready/valid handshake and the texture_samples counter; those are
+      covered by the two differential lanes against
+      zref::terrain::mosaic_pick / mirror_texel (tests/texture/) and by the
+      three-way mutation table in design/contracts/TEXTURE.MOSAIC.md.
+
   - property: tests/formal/surface_blend.sby
     status: green
     date: "2026-08-19"
