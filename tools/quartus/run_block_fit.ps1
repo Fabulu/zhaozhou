@@ -6,7 +6,13 @@ param(
     # characterized with the same flow rather than a second one.
     [string[]]$ExtraSources,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
-    [int]$TimeoutSeconds = 900,
+    # 3000, not 900. MEASURED 2026-08-19: zhao_measure_tokens reported
+    # `timeout` at the 900 s default and then fitted cleanly in 749 s of
+    # quartus_fit on the very next run with a larger budget. A "timeout" row in
+    # the report reads as "this block does not fit", when all it meant was
+    # "we did not wait". Ten rows in the committed report carry that status and
+    # every one of them is suspect for the same reason.
+    [int]$TimeoutSeconds = 3000,
     [switch]$KeepWorkspace
 )
 
@@ -166,8 +172,33 @@ try {
     }
     $dest = Join-Path $RepoRoot 'reports\synthesis\zhao_block_fit.json'
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($dest)) -Force | Out-Null
+
+    # MERGE, never replace. This script characterizes whichever modules it was
+    # ASKED for, and a targeted run (one module, or a couple of new ones) used
+    # to write a report containing only those. Measured 2026-08-19: a two-module
+    # run turned a committed 21-block report into a 2-block one, silently
+    # destroying nineteen blocks' worth of fitter evidence. Recoverable from git
+    # that time; the point is that nothing said it had happened.
+    #
+    # So: load whatever is already on disk, replace only the rows this run
+    # actually produced, and keep the rest. A module re-run overwrites its own
+    # row (the newest measurement wins, which is what re-running means) and
+    # touches nothing else. Rows are then sorted by module so the file's diff
+    # shows measurements changing rather than lines moving around.
+    $merged = [ordered]@{}
+    if (Test-Path -LiteralPath $dest) {
+        try {
+            $prior = [IO.File]::ReadAllText($dest) | ConvertFrom-Json
+            foreach ($row in $prior.blocks) { $merged[$row.module] = $row }
+        } catch {
+            Write-Warning "existing $dest could not be parsed; it will be replaced rather than merged"
+        }
+    }
+    foreach ($row in $results) { $merged[$row.module] = $row }
+    $out.blocks = @($merged.Keys | Sort-Object | ForEach-Object { $merged[$_] })
+
     [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
-    Write-Host "WROTE $dest"
+    Write-Host ("WROTE {0} ({1} block(s); {2} measured this run)" -f $dest, $out.blocks.Count, $results.Count)
 } finally {
     if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
         Remove-Item -LiteralPath $Workspace -Recurse -Force -ErrorAction SilentlyContinue

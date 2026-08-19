@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "sourceCommit":  "3a1ce51bce3cad8743aec785b88bbb0bde355a6c",
+    "sourceCommit":  "eea2e6bb441f3ea37efc87c5ab63528ada38aaff",
     "rtlCleanAtHead":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -9,6 +9,60 @@
              },
     "device":  "5CSEBA6U23I7",
     "blocks":  [
+                   {
+                       "module":  "zhao_geom_arena",
+                       "status":  "ok",
+                       "seconds":  420.1,
+                       "alms":  19,
+                       "registers":  9,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  23
+                   },
+                   {
+                       "module":  "zhao_geom_binner",
+                       "status":  "ok",
+                       "seconds":  883.4,
+                       "alms":  1303,
+                       "registers":  795,
+                       "blockMemoryBits":  42944,
+                       "ramBlocks":  9,
+                       "dspBlocks":  12,
+                       "virtualPins":  756
+                   },
+                   {
+                       "module":  "zhao_geom_clip",
+                       "status":  "timeout",
+                       "seconds":  1621.6
+                   },
+                   {
+                       "module":  "zhao_geom_setup",
+                       "status":  "timeout",
+                       "seconds":  1517.7
+                   },
+                   {
+                       "module":  "zhao_measure_governor",
+                       "status":  "ok",
+                       "seconds":  763.3,
+                       "alms":  589,
+                       "registers":  486,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  344
+                   },
+                   {
+                       "module":  "zhao_measure_tokens",
+                       "status":  "ok",
+                       "seconds":  749.3,
+                       "alms":  1422,
+                       "registers":  664,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  760
+                   },
                    {
                        "module":  "zhao_raster_blend",
                        "status":  "ok",
@@ -21,22 +75,6 @@
                        "virtualPins":  34
                    },
                    {
-                       "module":  "zhao_raster_edgewalk",
-                       "status":  "timeout",
-                       "seconds":  1320.9
-                   },
-                   {
-                       "module":  "zhao_raster_tilestore",
-                       "status":  "ok",
-                       "seconds":  855.5,
-                       "alms":  929,
-                       "registers":  891,
-                       "blockMemoryBits":  32768,
-                       "ramBlocks":  4,
-                       "dspBlocks":  0,
-                       "virtualPins":  359
-                   },
-                   {
                        "module":  "zhao_raster_earlyz",
                        "status":  "ok",
                        "seconds":  849.6,
@@ -46,6 +84,11 @@
                        "ramBlocks":  0,
                        "dspBlocks":  0,
                        "virtualPins":  475
+                   },
+                   {
+                       "module":  "zhao_raster_edgewalk",
+                       "status":  "timeout",
+                       "seconds":  1320.9
                    },
                    {
                        "module":  "zhao_raster_fragment",
@@ -70,88 +113,15 @@
                        "virtualPins":  267
                    },
                    {
-                       "module":  "zhao_texture_bilerp",
+                       "module":  "zhao_raster_tilestore",
                        "status":  "ok",
-                       "seconds":  176.3,
-                       "alms":  38,
-                       "registers":  0,
-                       "blockMemoryBits":  0,
-                       "ramBlocks":  0,
-                       "dspBlocks":  7,
-                       "virtualPins":  56
-                   },
-                   {
-                       "module":  "zhao_texture_cache",
-                       "status":  "timeout",
-                       "seconds":  2180.6
-                   },
-                   {
-                       "module":  "zhao_texture_tmu",
-                       "status":  "timeout",
-                       "seconds":  1222.4
-                   },
-                   {
-                       "module":  "zhao_geom_arena",
-                       "status":  "ok",
-                       "seconds":  420.1,
-                       "alms":  19,
-                       "registers":  9,
-                       "blockMemoryBits":  0,
-                       "ramBlocks":  0,
+                       "seconds":  855.5,
+                       "alms":  929,
+                       "registers":  891,
+                       "blockMemoryBits":  32768,
+                       "ramBlocks":  4,
                        "dspBlocks":  0,
-                       "virtualPins":  23
-                   },
-                   {
-                       "module":  "zhao_geom_clip",
-                       "status":  "timeout",
-                       "seconds":  1621.6
-                   },
-                   {
-                       "module":  "zhao_geom_setup",
-                       "status":  "timeout",
-                       "seconds":  1517.7
-                   },
-                   {
-                       "module":  "zhao_geom_binner",
-                       "status":  "ok",
-                       "seconds":  883.4,
-                       "alms":  1303,
-                       "registers":  795,
-                       "blockMemoryBits":  42944,
-                       "ramBlocks":  9,
-                       "dspBlocks":  12,
-                       "virtualPins":  756
-                   },
-                   {
-                       "module":  "zhao_terrain_normals",
-                       "status":  "ok",
-                       "seconds":  896.2,
-                       "alms":  789,
-                       "registers":  319,
-                       "blockMemoryBits":  0,
-                       "ramBlocks":  0,
-                       "dspBlocks":  18,
-                       "virtualPins":  456
-                   },
-                   {
-                       "module":  "zhao_terrain_patch",
-                       "status":  "timeout",
-                       "seconds":  3363
-                   },
-                   {
-                       "module":  "zhao_terrain_tess",
-                       "status":  "timeout",
-                       "seconds":  1426.4
-                   },
-                   {
-                       "module":  "zhao_terrain_lod",
-                       "status":  "timeout",
-                       "seconds":  2048.1
-                   },
-                   {
-                       "module":  "zhao_terrain_project",
-                       "status":  "timeout",
-                       "seconds":  1754
+                       "virtualPins":  359
                    },
                    {
                        "module":  "zhao_surface_blend",
@@ -179,6 +149,58 @@
                        "ramBlocks":  0,
                        "dspBlocks":  28,
                        "virtualPins":  675
+                   },
+                   {
+                       "module":  "zhao_terrain_lod",
+                       "status":  "timeout",
+                       "seconds":  2048.1
+                   },
+                   {
+                       "module":  "zhao_terrain_normals",
+                       "status":  "ok",
+                       "seconds":  896.2,
+                       "alms":  789,
+                       "registers":  319,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  18,
+                       "virtualPins":  456
+                   },
+                   {
+                       "module":  "zhao_terrain_patch",
+                       "status":  "timeout",
+                       "seconds":  3363
+                   },
+                   {
+                       "module":  "zhao_terrain_project",
+                       "status":  "timeout",
+                       "seconds":  1754
+                   },
+                   {
+                       "module":  "zhao_terrain_tess",
+                       "status":  "timeout",
+                       "seconds":  1426.4
+                   },
+                   {
+                       "module":  "zhao_texture_bilerp",
+                       "status":  "ok",
+                       "seconds":  176.3,
+                       "alms":  38,
+                       "registers":  0,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  7,
+                       "virtualPins":  56
+                   },
+                   {
+                       "module":  "zhao_texture_cache",
+                       "status":  "timeout",
+                       "seconds":  2180.6
+                   },
+                   {
+                       "module":  "zhao_texture_tmu",
+                       "status":  "timeout",
+                       "seconds":  1222.4
                    }
                ],
     "limitations":  [

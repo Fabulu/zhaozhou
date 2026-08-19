@@ -1693,3 +1693,56 @@ stale binary.
 lanes including every pre-existing binner test are green, so the driver hook
 disturbs nothing.
 
+
+## Phase 8 reaches synthesis, and the characterization report was lying twice
+
+Both landed phase-8 blocks now have real fitter numbers against the provisional
+5CSEBA6U23I7. The phase-8 agent left them "simulated, not synthesized and not
+on hardware"; that half is now closed.
+
+| block | ALMs | registers | fit |
+|---|---:|---:|---:|
+| `zhao_measure_tokens` | **1,422** | 664 | 749 s |
+| `zhao_measure_governor` | 589 | 486 | 587 s, reproduced at 763 s |
+
+**`MEASURE.TOKENS` is now the LARGEST block in the design**, ahead of
+`zhao_geom_binner` at 1,303. The charter §9 fairness guarantee costs more
+silicon than the binner it guards. That is not obviously wrong — five 32-bit
+pools with saturation and a shared-reserve path — but `TOK_W` is the lever and
+nobody has argued for 32 bits. Worth settling before any device is frozen.
+
+The governor reproducing 589 exactly across two runs is worth noting on its own:
+the measurement is stable even though the wall time was not (587 s vs 763 s
+under different machine contention).
+
+### DEFECT 1: the report overwrote instead of merging
+
+`run_block_fit.ps1` wrote a report containing ONLY the modules of the current
+invocation. A two-module run turned the committed **21-block** report into a
+**2-block** one — nineteen blocks of fitter evidence gone from the working tree,
+recoverable from git, with nothing anywhere saying it had happened. Same shape
+as today's deleted captures: evidence disappearing while every exit code says
+success.
+
+Fixed: the script now loads what is on disk, replaces only the rows this run
+measured, keeps the rest, sorts by module so diffs show measurements rather than
+moved lines, and PRINTS the arithmetic — `WROTE ... (23 block(s); 1 measured
+this run)`. That message is the proof the merge happened.
+
+### DEFECT 2: ten rows said `timeout` and meant "we did not wait"
+
+`zhao_measure_tokens` reported `timeout` at the script's 900 s default, then
+fitted cleanly in **749 s of quartus_fit** on the next run with a larger budget.
+So `timeout` never meant "this block does not fit". It meant the budget expired.
+
+**Ten of the twenty-three rows carry that status**: `texture_tmu`,
+`texture_cache`, `terrain_tess`, `terrain_project`, `terrain_patch`,
+`terrain_lod`, `surface_sheet`, `raster_edgewalk`, `geom_setup`, `geom_clip`.
+Every one is suspect for exactly the same reason, and the report as committed
+reads as "twelve fit, ten are problems" when the truth is "twelve fit, ten are
+UNMEASURED".
+
+Default raised to 3000 s with that measurement recorded as the reason, and all
+ten queued for re-characterization. A default that manufactures false failures
+is worse than a slow one, because a false failure gets designed around.
+
