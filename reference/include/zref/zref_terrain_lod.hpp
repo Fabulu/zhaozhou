@@ -185,6 +185,15 @@ inline uint32_t lod_tris(int level) {
  */
 inline LodDecision lod_select(const LodSubpatch& sp, const LodCamera cams[2],
                               const LodPolicy& policy) {
+  // cppcheck-suppress duplicateAssignExpression  // FALSE POSITIVE on the
+  // cppcheck CI pins (2.19.0; local 2.20.0 does not report it). These are two
+  // INDEPENDENT minimum-accumulators over the camera loop below, and both
+  // legitimately start at the same sentinel — the coarsest level — because a
+  // fold to a minimum must start above every candidate. They diverge on the
+  // very next lines, where `s` and `r` come from lod_ladder called with
+  // DIFFERENT hysteresis arguments (256 versus policy.hyst). Collapsing them
+  // into one variable would delete the retention band and with it the whole
+  // point of this function.
   int t_strict = kLodLevels - 1;
   int t_relaxed = kLodLevels - 1;
   bool any = false;
