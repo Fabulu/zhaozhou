@@ -1007,3 +1007,161 @@ A sweep of the remaining 19 new modules is running. Limitations unchanged and
 carried in the JSON: provisional device, virtual I/O, no board, and a per-block
 fit says nothing about the composed machine's routing or timing closure. Phase 0
 stays blocked. Nothing has been programmed onto a device.
+
+## Phase 6 closed to 10 of 11, and Phase 7 opened
+
+`SURFACE.SHEET`, `SURFACE.STAMP` (+ a `zhao_surface_blend` split out so it could
+be proved), `TEXTURE.MOSAIC` (+ `zhao_texture_mod255`), `TEXTURE.AUX`,
+`FORGE.CLIFF`, and then `TERRAIN.BAKE` (+ `zhao_terrain_bake_delta`) all landed.
+`FIELD.SEQ.STAMP` is the only phase-6 RTL block not built, and it was refused
+deliberately: a 30-opcode Field IR processor whose own named reference does not
+exist and whose upstream `FIELD.PROGCACHE` is phase 7. That was the right call.
+
+Verified here at each step: 148/148, then 154/154, both exit 0, format gate
+clean.
+
+### Two refusals worth keeping
+
+`STAMP -> SHEET -> PATCH` was NOT wired, and the reason is correct: `PATCH`'s
+`scar_i` is layer B (height16, per-vertex, 33x33) while `SHEET` owns layer F
+(`{tag u8, strength u8}`, 64x64), and `terrain_rules §7` says B is written only
+by `TERRAIN.BAKE`. Faking that seam would have meant inventing a format
+mapping. `TERRAIN.BAKE` is now built, so the chain became wireable and a
+`terrain_bake_chain` test exists.
+
+`FORGE.CLIFF`'s wall-vertex emission was left out because it needs the
+tessellator's stitched edge set, layer C, and a stateful rim-length accumulator
+— none of them ports that block has. Stated in the contract's first paragraph
+rather than left to inference.
+
+### The FOURTH phantom reference model
+
+The ledger has now named four `reference_model` symbols that do not exist:
+`zref::CmdDma`, `zref::SurfaceStamp`, `zref::SurfaceSheet`, `zref::AuxSource`,
+and now `zref::TerrainBake` (the real one is `zref::terrain::bake_dig`). Rule
+V17 exists to catch exactly this, and it only fires once a block's maturity
+rises. Every increment that touches a new block should verify its
+`reference_model` resolves before relying on it.
+
+### Real defects the work found in itself
+
+- `FORGE.CLIFF`'s `idx_r` was both the enumeration write pointer and every later
+  read cursor and was not reset per page, so page 2 of a multi-page lattice
+  wrote above its own count and emitted NOTHING, silently.
+- A dropped slot field in `SURFACE.SHEET`'s write address was invisible to the
+  chain at first, because every case stamped one patch and slot 0 is what a
+  missing slot field decays to. A two-resident-patches case now kills it.
+
+### The coverage lesson, now four times over
+
+Mutations caught by the directed lane only, because uniform random input never
+reaches an exact-equality boundary:
+
+    d2 == r*r            surface stamp rim
+    clip.w == 0          projection near plane
+    dev == distance      the LOD ladder
+    last-merge prefix    FORGE.CLIFF's shed
+
+Each was fixed by CONSTRUCTING the boundary rather than sampling for it. This is
+now in every agent brief.
+
+### Honest shortfalls, measured not derived
+
+    TEXTURE.AUX      6.00 clocks/sample against a target of 1
+    FORGE.CLIFF      11,946 clocks for the worst page (32x32 checkerboard)
+    GEOM.BINNER      2.83 cycles/bin reference against a target of 1
+    TERRAIN.TESS     3.56 cycles/triangle amortised, 3.00 steady state
+
+## Synthesis: the new RTL is being characterized
+
+Extended `run_block_fit.ps1` with `-ExtraSources` because everything built today
+sits outside the shell cone. Results so far, placed and routed against the
+provisional 5CSEBA6U23I7:
+
+    zhao_raster_earlyz    677 ALMs      zhao_raster_fill      23 ALMs
+    zhao_raster_fragment  485 ALMs      zhao_raster_quant     39 ALMs
+    zhao_raster_resolve   344 ALMs      zhao_raster_div255    24 ALMs
+    zhao_raster_blend      53 ALMs      zhao_texture_bilerp   38 ALMs
+
+`zhao_texture_cache` and `zhao_texture_tmu` both exceeded their budget, the same
+complexity ceiling the large shell blocks hit.
+
+### The finding that justified the whole synthesis push
+
+`zhao_geom_binner.sv` indexed a function call's return value (`f(x)[7:0]`).
+Verilator accepts it. **Quartus 17.0 rejects it outright.** That block had
+directed tests, random differentials, a mutation sweep, a formal proof on its
+arena, and clean `-Wall` lint, ALL GREEN, on code the synthesis tool could not
+compile. Lint did not catch it either.
+
+It also failed EVERY module in the sweep rather than only its own, because the
+block fit compiles the whole source cone regardless of which entity is the top.
+One unsynthesizable file looks like twenty broken ones.
+
+This is the concrete answer to why "verified in simulation" and "synthesizable"
+are different claims, and it is now in every agent brief.
+
+## What the game design doc asks of this hardware
+
+`untitled-game/docs/DESIGN.md` (updated 2026-08-19) is mostly pending, but its
+one filled section — Haste, and its late-unlock "Wacko mode" — names two
+Zhaozhou capabilities as REQUIREMENTS rather than decoration. Both change how I
+would prioritise.
+
+### 1. Live terrain deformation is a MOVEMENT effect, not a combat effect
+
+> "Deformation waves in your wake. Ground visibly displaced along your path.
+> This is the live terrain deformation the console is being built for (Zhaozhou
+> phase 7), used as a movement effect rather than as combat damage."
+
+This is a performance requirement hiding in a design note. Combat deformation is
+episodic: a strike lands, a crater forms, the budget is paid once. A wake
+follows a moving player EVERY FRAME, for the whole duration of the spell. The
+phase-7 path (`FIELD.SEQ.EARTH` -> `TERRAIN.BAKE` -> `TERRAIN.PATCH` ->
+`TERRAIN.TESS`) has to sustain a continuous stream of small deformations, not
+absorb one large one.
+
+Consequences worth checking before phase 7 is called done:
+- `TERRAIN.BAKE`'s ledger target is "1 bake texel per clock"; a wake needs that
+  sustained, not peak.
+- `TERRAIN.PATCH`'s dirty-subpatch mask exists precisely so a small edit does
+  not re-tessellate a whole patch. A wake is the workload that proves it.
+- The open question in the design doc, "whether the deformation waves are
+  persistent scars or heal behind you", is a HARDWARE question: persistent means
+  layer B accumulates and the surface sheet grows; healing means a decay pass
+  that nothing currently owns.
+
+### 2. The player's Wacko-mode shadow IS the sun-trail law
+
+> "A shadow of yourself streaking behind you, in the manner of the Noctis suns —
+> a trailing double, not a particle ribbon."
+
+The design doc reached for the star trail by name, and it is right that this is
+not a particle system. Everything §15 was built for applies unchanged:
+
+- a ring of retained past positions,
+- stamps replayed oldest to newest into ONE six-bit intensity plane,
+- decay and directional diffusion per age,
+- a single class-ramp lookup at the end, which is what bounds the palette cost
+  to 64 colours however much overlaps.
+
+So `star_compose.cpp`'s trail is not a star effect. It is a general
+**streaking-double primitive** that happens to have been written for suns first,
+and the v1.3 work (kernel follows the heading, prominence lobe, per-age
+irregularity) is directly reusable for a moving character.
+
+What would need to change: the trail currently stamps a corona and a disc
+sprite. A character needs its own silhouette as the stamp source, which is a
+parameter change rather than a new law. And the six-bit plane is per-light
+today; a player double would want one too, so the cost is one more plane, not a
+new subsystem.
+
+**This is worth recording in `spec/stars_and_flares.md` §15 as a note that the
+law is deliberately general**, so nobody later reimplements it as particles for
+the character and ends up with two smear laws that disagree.
+
+### Consequence for the docket
+
+The set-piece catalogue and the eclipse scene are still the right visual
+targets, but this moves LIVE DEFORMATION SUSTAIN up the list: it is now a
+gameplay-critical path with a named consumer, not just a phase in the roadmap.
