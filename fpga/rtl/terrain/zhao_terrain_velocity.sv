@@ -101,6 +101,10 @@
 //     sweep would drop exactly the leading edge of every wake. The mask is
 //     therefore emitted for a consumer to UNION with, never used as a filter
 //     here.
+//     That is not prose: the two masks are read out of BOTH REAL BLOCKS at
+//     one instant of a travelling wave and asserted DISJOINT (0x0004 dirty,
+//     0x0001 moving).
+//     ENFORCED-BY: tests/terrain/terrain_velocity_chain.cpp:test_dirty_is_not_moving
 //
 // ---------------------------------------------------------------------------
 // WIDTHS AND SIGNEDNESS, STATED RATHER THAN ASSUMED
