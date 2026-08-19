@@ -1165,3 +1165,88 @@ the character and ends up with two smear laws that disagree.
 The set-piece catalogue and the eclipse scene are still the right visual
 targets, but this moves LIVE DEFORMATION SUSTAIN up the list: it is now a
 gameplay-critical path with a named consumer, not just a phase in the roadmap.
+
+## Scale facts from the donor, and what they mean for this hardware
+
+Measured from the shipped *Sacrifice* data with Sacengine's parsers as the
+format documentation. Full write-up in `untitled-game/docs/SACRIFICE-NOTES.md`.
+Nothing was copied; these are measurements and technique.
+
+    one world unit          ~1 metre (posed peasant 1.70)
+    terrain lattice         256x256 cells at 10 units/cell, EVERY map
+    world extent            2560 x 2560 units, always
+    land fraction           median ~13% (range 1.9%-58.7%), rest is void
+    playable island         1000-2500 units across
+    wizards                 1.63-3.36 tall
+    largest creature        7.8 tall, 20.7 wingspan
+    camera distance         5-20 units behind the player
+    relief                  median 170 units, ~1/15 of map width
+    fog distance            ~0.9 * sqrt(land area), i.e. one island width
+
+### The budget comparison, done properly
+
+A Zhaozhou patch is 32x32 cells on a 33x33 vertex lattice (`terrain_rules §37`)
+and the composed-cache budget is 256 patches (`terrain_rules §520`). The donor's
+ENTIRE world is 256x256 cells = **64 of our patches**, a quarter of the budget.
+
+But their cell is TEN METRES and ours is sub-metre by design, so the budget is
+not one-dimensional:
+
+    at 10 m cells   4x their area, 2x linear extent
+    at 1 m cells    ~their extent, ~10x the terrain detail
+    mixed           what TERRAIN.LOD already does at runtime
+
+The owner's ruling: the donor's numbers are a FLOOR, not a target.
+
+Worth noting their box is mostly empty (13% land), so raw extent is the least
+interesting axis to spend on. Their flat relief (1/15 of width) is very likely a
+consequence of 10 m cells rather than intent, which means sub-metre cells buy
+real verticality rather than just finer ground.
+
+### Rotated terrain sheets: the investigation to open
+
+The owner wants the headroom spent partly on VERTICAL structure — terrain sheets
+rotated to shape objects (towers, walls, cliff faces), not just ground. This is
+the "rotated terrain sheets for deformable skyscrapers" idea from earlier in the
+project, and it is worth taking seriously because it is REUSE:
+
+- deformation, scars, LOD, tessellation and normals all apply unchanged, so
+  buildings become destructible with no second destruction model
+- layer C (the island underside, added for the deep keel) already gave a patch a
+  top AND a bottom, which is closer to a vertical sheet than flat ground is
+
+**What is already in our favour**, read from the RTL:
+- `zhao_terrain_tess.sv` takes `lat_wx_i` / `lat_wz_i` PER VERTEX from the
+  lattice read port rather than deriving world position from grid indices
+- `zhao_terrain_project.sv` is fully matrix-driven (`mat4_vec4`, two view
+  register sets)
+
+So world position is not baked to an axis-aligned grid anywhere in the chain.
+
+**THE OPEN QUESTION, which must be answered before this is promised to anyone:**
+which axis the height layers displace along. If that is fixed to Y, a vertical
+sheet needs either a per-patch axis or pre-rotated authoring. Everything
+downstream looks orientation-agnostic, but that is a reading of the code, not a
+test.
+
+**Next step: prototype ONE rotated patch in the reference renderer. No RTL until
+the reference proves the geometry.** That ordering is what the whole project has
+been doing successfully and there is no reason to break it here.
+
+### A correction to something I said earlier
+
+I advised that creature textures could be tiny because a creature is ~60 px
+tall. That was wrong, and the owner corrected it: the camera pushes in, you can
+walk up to creatures, and Possession puts you INSIDE one, so a large creature
+fills the frame. Textures must hold up at close range.
+
+The hardware already anticipated this: the LOD ladder and the TMU's mip
+selection exist precisely so the near and far cases are one asset sampled
+differently.
+
+And the palette point is worth stating clearly because it has been muddled:
+**the 256-colour ceiling is a CAPTURE constraint (GIF encoding in the reel), not
+a framebuffer constraint.** The console resolves to RGB565. So a close-up
+creature can be rich, and additive effects transfer from the donor for free
+rather than needing an index-blend LUT — which was the study's flagged open
+question and is now answered.
