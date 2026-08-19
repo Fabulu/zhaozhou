@@ -1576,3 +1576,50 @@ nor write, and reported `gate 6: failing vector + report WRITTEN (first run)`
 as a FAILURE. Deleting committed evidence therefore does not merely lose
 evidence — it takes a lane red in a way that reads like a code defect.
 
+
+## Pushed, and the Duo frame answered
+
+**Pushed** at `d18053c`: eleven commits, origin/main up to date, nothing
+outstanding. Gates run before the push, all green and all named rather than
+asserted:
+
+- `ctest -L fast`: **100% of 170 tests passed**, `format_check` skipped (no
+  clang-format on this machine). That set includes the five new MEASURE tests
+  and both MEASURE lint gates.
+- `npm run ledger:check`: 88 blocks / 40 ops, schemas + V1-V17 + V19-V20 +
+  staleness green, 19 formal runs recorded.
+- `npm run abi:check`: 26 outputs match. `npm run tables:check`: 10 generated
+  files byte-identical.
+
+`measure_governor_lod` passing is the one worth calling out. That is the
+composition against `TERRAIN.LOD`, the block that had to CHOOSE a governor
+policy against a stub contract. It composed rather than contradicted.
+
+### The owner asked why the two Duo views show different amounts
+
+They do, and it is deliberate. `tests/render/render_golden.cpp:82-86`:
+
+```
+// camera (w = z + 40, eye 14 m) so the two Duo views differ
+const int32_t eye  = view == 0 ? 12 : 14;
+const int32_t camz = view == 0 ? 32 : 40;
+```
+
+Both viewports are 256x192 and the projection scale is `2<<16` for both, so
+the field of view is identical. Only eye height and camera distance differ,
+which is why the left island reads closer.
+
+**Why it should stay that way in the test:** if the two views were ever wired
+to one camera, or one view's state leaked into the other, two matching pictures
+would look entirely correct and the fault would pass unnoticed. Disagreement is
+the detector.
+
+**Why the game must do the opposite:** the design doc's rule is equal
+visibility for everyone, because a higher viewpoint is a competitive advantage.
+The golden frame violates that rule precisely because it is not gameplay. The
+two ideas must not be confused, and the site caption now says so — it previously
+said "from different cameras" without saying why, which reads as an unfairness
+that is not there.
+
+Site redeployed with the corrected caption and the atmosphere pair.
+
