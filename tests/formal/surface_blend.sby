@@ -1,0 +1,63 @@
+# surface_blend — the surface-sheet blend arithmetic, proved on the module
+# zhao_surface_stamp actually instantiates (SURFACE.STAMP, ZH-052).
+# Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1..P9: REPLACE is the source; MAX (and the ABI's operation-0
+#           STAMP) is exactly max(dst, src); DECAY_ACC is exactly
+#           min(255, (dst >> 1) + src) — `stamp_surface`'s own expression for
+#           ABI operation 1; ADD and SUB are exactly min(255, dst+src) and
+#           max(0, dst-src); AGE is exactly dst >> shift; SUB and AGE can never
+#           brighten; ADD and MAX can never darken; and a shift decay always
+#           TERMINATES. All are unconditional over free inputs, so depth 2 is
+#           the whole property: the harness is combinational and its inputs are
+#           unconstrained.
+#   cover — the corners are REACHABLE: both saturation rails ACTUALLY firing
+#           (without which the min/max theorems would also hold for a blend
+#           that never reaches a rail), MAX taking each branch, DECAY_ACC
+#           actually halving (the non-monotone case P8 deliberately excludes),
+#           and AGE driving a non-zero destination to zero.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. zhao_surface_blend
+# is a single `always_comb` and every input is unconstrained, so the reachable
+# set is identical at every step. The parametrisation is total rather than
+# sampled: dst is u8 because layer F's strength IS one byte (charter 12,
+# spec/terrain_rules.md 2), src is u8 because it IS `strength >> 8` of the ABI
+# field, mode is 3 bits because the blend field is 3 bits, and age_shift is 3
+# bits because the shift is 0..7. Free (mode, dst, src, age_shift) is all
+# 4,194,304 inputs the block can ever be handed. There is no horizon for a
+# scope guard to assert.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The coverage geometry (texel
+# centres, the annulus, the truncating divide and its stated +-4,096 m input
+# domain), the ABI operation -> blend mapping, the residency handshake with
+# SURFACE.SHEET, the two-stage pipeline, the counters and the `stamp_results`
+# stream are NOT proved here: they are covered by the differential lanes
+# against `zref::render::stamp_surface` (tests/surface/) and by the mutation
+# evidence in design/contracts/SURFACE.STAMP.md. What IS proved is the
+# arithmetic every stamped texel in the machine flows through.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_surface_blend.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top surface_blend_fv zhao_surface_blend.sv surface_blend_fv.sv
+prep -top surface_blend_fv
+
+[files]
+../../fpga/rtl/surface/zhao_surface_blend.sv
+surface_blend_fv.sv

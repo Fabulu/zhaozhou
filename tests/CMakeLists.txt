@@ -2121,7 +2121,10 @@ set_tests_properties(shell_golden_replay PROPERTIES
 
 set(ZHAO_SURFACE_SHEET_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sheet.sv)
+set(ZHAO_SURFACE_BLEND_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv)
 set(ZHAO_SURFACE_STAMP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
 
 add_executable(test_surface_sheet_directed surface/surface_sheet_directed.cpp)
@@ -2204,3 +2207,34 @@ add_test(NAME lint_surface_stamp
 set_tests_properties(lint_surface_stamp PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_surface_blend
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_blend
+                 ${ZHAO_SURFACE_BLEND_SV})
+set_tests_properties(lint_surface_blend PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the surface blend, proved TOTAL rather than bounded — the harness is
+# combinational and its 22 free input bits are the whole input space of the
+# module (mode 3, dst 8, src 8, age_shift 3 = 4,194,304 inputs). The cover task
+# is load-bearing: without it the saturation theorems would also hold for a
+# blend that never reached a rail. Reuses the hardened mem_formal_lane wrapper.
+if(ZHAO_SBY_BIN)
+  set(PROP "surface_blend")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/surface_blend_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/surface_blend_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_surface_blend
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_surface_blend PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()

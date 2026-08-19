@@ -248,12 +248,11 @@ module zhao_surface_stamp (
   localparam logic [1:0] StOverflow = 2'd2;
 
   // ---- the blend vocabulary (zref::surface::Blend) -------------------------
+  // Only the two codes the ABI mapping produces are named here; the full
+  // seven-code vocabulary lives in zhao_surface_blend.sv, which is the module
+  // that acts on it. Naming them twice is how the two drift apart.
   localparam logic [2:0] BlStamp = 3'd0;  // ABI operation 0 and every value != 1
   localparam logic [2:0] BlDecayAcc = 3'd1;  // ABI operation 1
-  localparam logic [2:0] BlAdd = 3'd3;  // ops.yml FIELD.STAMP.ADD
-  localparam logic [2:0] BlSub = 3'd4;  // ops.yml FIELD.STAMP.SUB
-  localparam logic [2:0] BlReplace = 3'd5;  // ops.yml FIELD.STAMP.REPLACE
-  localparam logic [2:0] BlAge = 3'd6;  // ops.yml FIELD.STAMP.AGE
 
   localparam int unsigned Texels = 4096;  // 64 x 64, charter 12
 
@@ -270,33 +269,21 @@ module zhao_surface_stamp (
   logic       acq_sent;
 
   // ---- the blend ------------------------------------------------------------
-  // Codes 0/2 (BlStamp, ops.yml MAX) are the same arithmetic and share the
-  // default arm; they are separate codes only so the two vocabularies stay
-  // distinguishable in a trace.
-  function automatic logic [7:0] blend_apply(input logic [2:0] b, input logic [7:0] dst,
-                                             input logic [7:0] src, input logic [2:0] sh);
-    logic [8:0] s;
-    begin
-      s = 9'd0;
-      case (b)
-        BlDecayAcc: begin
-          s = {2'b0, dst[7:1]} + {1'b0, src};
-          blend_apply = s[8] ? 8'hFF : s[7:0];
-        end
-        BlAdd: begin
-          s = {1'b0, dst} + {1'b0, src};
-          blend_apply = s[8] ? 8'hFF : s[7:0];
-        end
-        BlSub: begin
-          s = {1'b0, dst} - {1'b0, src};
-          blend_apply = s[8] ? 8'h00 : s[7:0];
-        end
-        BlReplace: blend_apply = src;
-        BlAge: blend_apply = dst >> sh;
-        default: blend_apply = (src > dst) ? src : dst;
-      endcase
-    end
-  endfunction
+  // The arithmetic lives in `zhao_surface_blend`, its own combinational module,
+  // so it can be PROVED over all 4,194,304 of its inputs rather than sampled
+  // (tests/formal/surface_blend.sby). This is the only instance of it.
+  logic [2:0] blend_mode_w;
+  logic [7:0] blend_src_w;
+  logic [2:0] blend_age_w;
+  logic [7:0] blend_out_w;
+
+  zhao_surface_blend u_blend (
+      .mode_i(blend_mode_w),
+      .dst_i(pg_strength_i),  // layer F as SURFACE.SHEET just returned it
+      .src_i(blend_src_w),
+      .age_shift_i(blend_age_w),
+      .out_o(blend_out_w)
+  );
 
   // ---- per-stamp registers (loaded once, at command accept) ----------------
   logic [31:0] st_handle;
@@ -395,6 +382,10 @@ module zhao_surface_stamp (
   logic [ 7:0] s2_before;
   logic        s2_wr_done;
   logic        s2_res_done;
+
+  assign blend_mode_w = s1_blend;
+  assign blend_src_w = s1_src;
+  assign blend_age_w = s1_age;
 
   wire wr_fire = wr_valid_o && wr_ready_i;
   wire res_fire = res_valid_o && res_ready_i;
@@ -510,7 +501,7 @@ module zhao_surface_stamp (
         s2_texel <= s1_texel;
         s2_tag <= s1_tag;
         s2_before <= pg_strength_i;
-        s2_after <= blend_apply(s1_blend, pg_strength_i, s1_src, s1_age);
+        s2_after <= blend_out_w;
         s2_wr_done <= 1'b0;
         s2_res_done <= 1'b0;
       end
