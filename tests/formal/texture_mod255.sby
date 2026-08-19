@@ -1,0 +1,59 @@
+# texture_mod255 — the Mosaic pattern's `h mod 255` residue network, proved on
+# the module zhao_texture_mosaic actually instantiates (TEXTURE.MOSAIC,
+# ZH-030). Run with cwd = tests/formal.
+#
+# TWO TASKS, both required:
+#   bmc   — P1..P3: the block's output IS the residue (stated as "the unique
+#           r < 255 for which some q gives h = 255*q + r", so the property
+#           contains no divider and is not a second implementation of the
+#           fold); the output can never reach 255, which is the fact
+#           `mosaic_pick`'s "weight 255 = always matA" rests on; and h = 0
+#           gives 0.
+#   cover — the witness decomposition is SATISFIABLE at every corner: r = 0
+#           with a non-zero h (the single input the conditional subtract
+#           exists for), r = 254, r = 1, h = 0xFFFF_FFFF (255 x 16,843,009,
+#           where the byte sum reaches the 255 rail), q = 0 and q at the top of
+#           its range. P1 is guarded by an assumption, so without these the
+#           lane could pass on an unsatisfiable antecedent.
+#
+# SCOPE-TOTAL: depth 2 is the FULL state space, not a bound. zhao_texture_mod255
+# is a single `always_comb` and every input is unconstrained, so the reachable
+# set is identical at every step. The parametrisation is total rather than
+# sampled: h is 32 bits because spec/terrain_rules.md 6.2's hash IS a uint32_t
+# and the port is 32 bits wide. Free h ranges over all 4,294,967,296 inputs the
+# block can ever be handed. There is no horizon for a scope guard to assert.
+#
+# WHAT THIS DOES NOT PROVE, stated plainly. The two frozen multiplier constants
+# (73,856,093 and 19,349,663), the XOR, the arithmetic shift to the world texel
+# index, the mirrored-repeat fold, the `p < weight` compare, the two-stage
+# pipeline, the ready/valid handshake and the `texture_samples` counter are NOT
+# proved here: they are covered by the differential lanes against
+# `zref::terrain::mosaic_pick` and `zref::terrain::mirror_texel`
+# (tests/texture/texture_mosaic_directed.cpp and _random.cpp) and by the
+# mutation evidence in design/contracts/TEXTURE.MOSAIC.md. What IS proved is
+# the one piece of arithmetic in the block a reviewer cannot check by eye.
+#
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
+# zhao_texture_mod255.sv is self-contained, so nothing is staged or copied.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 2
+cover: mode cover
+cover: depth 2
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top texture_mod255_fv zhao_texture_mod255.sv texture_mod255_fv.sv
+prep -top texture_mod255_fv
+
+[files]
+../../fpga/rtl/texture/zhao_texture_mod255.sv
+texture_mod255_fv.sv

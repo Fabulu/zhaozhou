@@ -691,22 +691,80 @@ target_link_libraries(test_forge_cliff_random PRIVATE zhao_zref)
 add_test(NAME forge_cliff_random COMMAND test_forge_cliff_random)
 set_tests_properties(forge_cliff_random PROPERTIES LABELS "fast;nightly")
 
-# ---- deep-keel wave: TEXTURE.MOSAIC reference (terrain_rules.md 6.2) --------
-# the mirrored-repeat fold at wrap boundaries, the frozen pick constants,
-# and the rendered dither + exact modulation through the replicated resolve.
+# ---- deep-keel wave: TEXTURE.MOSAIC (terrain_rules.md 6.2) ------------------
+# The oracle lanes (the mirrored-repeat fold at wrap boundaries, the frozen
+# pick constants, the rendered dither + exact modulation through the
+# replicated resolve) AND, since 2026-08-19, the RTL lanes: the same two files
+# now also drive `zhao_texture_mosaic`, which is why both targets verilate.
+# `zhao_texture_mod255` rides along because the mosaic instantiates it.
+set(ZHAO_TEXTURE_MOSAIC_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv)
+
 add_executable(test_texture_mosaic_directed texture/texture_mosaic_directed.cpp)
-target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_zref)
+target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_texture_mosaic_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture
   ${CMAKE_CURRENT_SOURCE_DIR}/render
   ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_texture_mosaic_directed
+  PREFIX Vzhao_texture_mosaic
+  TOP_MODULE zhao_texture_mosaic
+  SOURCES ${ZHAO_TEXTURE_MOSAIC_SV})
 add_test(NAME texture_mosaic_directed COMMAND test_texture_mosaic_directed)
-set_tests_properties(texture_mosaic_directed PROPERTIES LABELS "fast;nightly")
+set_tests_properties(texture_mosaic_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
-# randomized pick/fold differential: 100k samples vs the wrapped-u64 oracle
+# randomized pick/fold differential: the u64 oracle lanes, then TWO RTL
+# differential lanes (gameplay-shaped and domain-limit, the latter with the
+# exact-equality boundary CONSTRUCTED for all 255 residues).
 add_executable(test_texture_mosaic_random texture/texture_mosaic_random.cpp)
-target_link_libraries(test_texture_mosaic_random PRIVATE zhao_zref)
+target_link_libraries(test_texture_mosaic_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_mosaic_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_mosaic_random
+  PREFIX Vzhao_texture_mosaic
+  TOP_MODULE zhao_texture_mosaic
+  SOURCES ${ZHAO_TEXTURE_MOSAIC_SV})
 add_test(NAME texture_mosaic_random COMMAND test_texture_mosaic_random)
-set_tests_properties(texture_mosaic_random PROPERTIES LABELS "fast;nightly")
+set_tests_properties(texture_mosaic_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME texture_mosaic_random_nightly COMMAND test_texture_mosaic_random --nightly)
+set_tests_properties(texture_mosaic_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_texture_mosaic
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_mosaic
+                 ${ZHAO_TEXTURE_MOSAIC_SV})
+set_tests_properties(lint_texture_mosaic PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_texture_mod255
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_mod255
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv)
+set_tests_properties(lint_texture_mod255 PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# formal: the mod-255 residue network, proved TOTAL over all 2^32 inputs
+# rather than sampled. See tests/formal/texture_mod255.sby.
+if(ZHAO_SBY_BIN)
+  set(PROP "texture_mod255")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/texture_mod255_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/texture_mod255_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_texture_mod255
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_texture_mod255 PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
 
 # ---- world-identity wave: creature/character reference lane -------------------
 # (spec/creature_rules.md 1-4; the ZREF oracle for the future Phase 8-9 GEOM
