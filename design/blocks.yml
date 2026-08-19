@@ -1128,7 +1128,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decision per frame per camera
-    reference_model: zref::MeasureGovernor
+    reference_model: zref::measure::LodGovernor
     tests:
       directed: tests/measure/measure_governor_directed.cpp
       random: tests/measure/measure_governor_random.cpp
@@ -1140,7 +1140,41 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Hysteresis/hold constants provisional until Wound Lab evidence (charter §12).
+    notes: >-
+      Hysteresis/hold constants provisional until Wound Lab evidence (charter
+      section 12) -- still true, and now CONCRETE: HYST_Q88 = 320 (1.25x),
+      MIN_HOLD = 6, MORPH_STEP = 10923, DEG_HOLD = 12, DEG_MAX = 3, all block
+      parameters, each argued in the contract with what it rejected. MORPH_STEP
+      was chosen to satisfy a theorem rather than picked: MIN_HOLD *
+      MORPH_STEP >= 65536, so a geomorph always completes before the minimum
+      hold can permit the next change.
+      2026-08-19: `reference_model` AMENDED from `zref::MeasureGovernor`, which
+      names nothing in this tree and never has -- the ninth phantom after
+      `zref::CmdDma`, `zref::SurfaceStamp`, `zref::SurfaceSheet`,
+      `zref::AuxSource`, `zref::TerrainBake`, `zref::TerrainVelocity`,
+      `zref::ProgCache` and `zref::MeasureTokens`. The oracle written for this
+      block is `zref::measure::LodGovernor`
+      (reference/include/zref/zref_measure.hpp).
+      `upstream: [CMD.SCHEDULER, MEASURE.HISTOGRAM]` is left UNCHANGED and is
+      half unbuilt: MEASURE.HISTOGRAM is charter Version 2 and this is the
+      Version 1 governor, which by definition consumes no cutoff bucket. Named
+      as an unbuilt edge rather than faked with an invented port.
+      `inputs: [screen_error_stats, dispatch]` is honoured as: dispatch =
+      SetView's pixel_error + view_count (+ a projection scale that HAS NO ABI
+      FIELD -- SetView carries mat4fx view_projection and fx16 pixel_error
+      only, so the port exists and the command that fills it does not);
+      screen_error_stats = one starvation bit per view, whose natural producer
+      is MEASURE.TOKENS.
+      Latency MEASURED at 69 clocks (2 x 33-step restoring divide plus load and
+      publish), against a target of 1 decision per frame per camera -- about
+      four orders of magnitude of headroom, which is why the division TERRAIN
+      .LOD refused to carry was accepted here.
+      NOTE for whoever owns TERRAIN.LOD: `zref_terrain_lod.hpp` documents
+      `scale` as "allowed error per unit distance, Larger = coarser", which is
+      BACKWARDS relative to the ladder implemented in the same file and in
+      zhao_terrain_lod.sv (`dev * scale <= distance * h`, so larger scale =
+      FINER). This block is written against the arithmetic; the prose fix
+      belongs to that block. Argued in design/contracts/MEASURE.GOVERNOR.md.
 
   - id: MEASURE.TOKENS
     name: Geometry/fragment token guard

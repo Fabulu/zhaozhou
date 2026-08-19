@@ -2609,3 +2609,69 @@ if(ZHAO_SBY_BIN)
     TIMEOUT 2100
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
+
+# ---------------------------------------------------------------------------
+# MEASURE.GOVERNOR (phase 8, ZH-047)
+#
+# The per-camera screen-error policy and per-view degradation. Charter §9
+# Version 1 puts the THRESHOLD PREDICTION on the ARM, so this block converts
+# (two camera numbers -> the ONE ratio TERRAIN.LOD's Notes law 8 already
+# committed to consuming) and degrades. The division lives here because
+# TERRAIN.LOD explicitly refused to carry it, and it costs one 33-step
+# restoring divide per camera per frame.
+set(ZHAO_MEASURE_GOVERNOR_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_governor.sv)
+
+add_executable(test_measure_governor_directed measure/measure_governor_directed.cpp)
+target_link_libraries(test_measure_governor_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_governor_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_governor_directed
+  PREFIX Vzhao_measure_governor
+  TOP_MODULE zhao_measure_governor
+  SOURCES ${ZHAO_MEASURE_GOVERNOR_SV})
+add_test(NAME measure_governor_directed COMMAND test_measure_governor_directed)
+set_tests_properties(measure_governor_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_measure_governor_random measure/measure_governor_random.cpp)
+target_link_libraries(test_measure_governor_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_governor_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_governor_random
+  PREFIX Vzhao_measure_governor
+  TOP_MODULE zhao_measure_governor
+  SOURCES ${ZHAO_MEASURE_GOVERNOR_SV})
+add_test(NAME measure_governor_random COMMAND test_measure_governor_random)
+set_tests_properties(measure_governor_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME measure_governor_random_nightly COMMAND test_measure_governor_random --nightly)
+set_tests_properties(measure_governor_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# GOVERNOR -> TERRAIN.LOD, both blocks REAL. TERRAIN.LOD landed in phase 6
+# against a STUB contract for the governor and had to CHOOSE the policy shape
+# itself (its Notes law 8). This is the only way "the governor agrees with what
+# LOD assumed" is proved rather than asserted: the governor's published targets
+# are wired to LOD's target ports with no adapter, and if that stops being true
+# this file stops compiling.
+add_executable(test_measure_governor_lod measure/measure_governor_lod.cpp)
+target_link_libraries(test_measure_governor_lod PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_governor_lod PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_measure_governor_lod
+  PREFIX Vzhao_measure_governor
+  TOP_MODULE zhao_measure_governor
+  SOURCES ${ZHAO_MEASURE_GOVERNOR_SV})
+verilate(test_measure_governor_lod
+  PREFIX Vzhao_terrain_lod
+  TOP_MODULE zhao_terrain_lod
+  SOURCES ${ZHAO_TERRAIN_LOD_SV})
+add_test(NAME measure_governor_lod COMMAND test_measure_governor_lod)
+set_tests_properties(measure_governor_lod PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_measure_governor
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_measure_governor
+                 ${ZHAO_MEASURE_GOVERNOR_SV})
+set_tests_properties(lint_measure_governor PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
