@@ -1313,7 +1313,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 velocity sample per clock
-    reference_model: zref::TerrainVelocity
+    reference_model: zref::terrain::velocity_vertex
     tests:
       directed: tests/terrain/terrain_velocity_directed.cpp
       random: tests/terrain/terrain_velocity_random.cpp
@@ -1325,7 +1325,21 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Driven by the DCURVE-based Earth8 velocity lane (plan 1.D).
+    notes: >-
+      Driven by the DCURVE-based Earth8 velocity lane (plan 1.D). 2026-08-19:
+      `reference_model` AMENDED from `zref::TerrainVelocity`, which names
+      nothing in this tree and never has (the nearest symbols are the struct
+      `zref::render::TerrainVelocitySample` and the accessor
+      `zref::render::field_velocity_lane`, neither of which models this block)
+      — the sixth phantom after `zref::CmdDma`, `zref::SurfaceStamp`,
+      `zref::SurfaceSheet`, `zref::AuxSource` and `zref::TerrainBake`.
+      `design/ops.yml` FIELD.OUT.VELOCITY's `zref::fieldir::sink_out_velocity`
+      does not resolve either: there is no `zref::fieldir` namespace at all.
+      `inputs: [patch_state]` is left UNCHANGED and is explicitly a ROUTING
+      statement, not an arithmetic one: `patch_state` as TERRAIN.PATCH emits it
+      carries no velocity, and the block's real input is earth out-lane 1 plus
+      the section-9.1 covers answer exported on TERRAIN.PATCH's new
+      `fld_covers_o`. Argued in the contract.
 
   - id: TERRAIN.BAKE
     name: Persistent scar bake
@@ -1343,7 +1357,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 bake texel per clock
-    reference_model: zref::TerrainBake
+    reference_model: zref::terrain::bake_dig
     tests:
       directed: tests/terrain/terrain_bake_directed.cpp
       random: tests/terrain/terrain_bake_random.cpp
@@ -1355,7 +1369,19 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Canonical-scar ownership is shared with SW.CPUCOLL (ZH-036); the bake is capture-exact.
+    notes: >-
+      Canonical-scar ownership is shared with SW.CPUCOLL (ZH-036); the bake is
+      capture-exact. 2026-08-19: `reference_model` AMENDED from
+      `zref::TerrainBake` to `zref::terrain::bake_dig` (the same deviation
+      TERRAIN.PATCH and SURFACE.SHEET record, for the same reason).
+      `zref::TerrainBake` names nothing in this tree and never has; the
+      executed reference is `zref::terrain::bake_dig` followed by
+      `zref::terrain::apply_breach_law`, which SW.CPUCOLL's canonical mirror
+      also runs. Argued in the contract. `inputs: [stamp_results]` is left
+      UNCHANGED and is explicitly ambiguous: SURFACE.STAMP's landed port of
+      that name is a per-texel layer-F stream while this block's contract and
+      reference speak stamp records, and the layer-F -> layer-B conversion
+      needs two laws that do not exist yet (contract, "the sheet seam").
 
   - id: TERRAIN.LOD
     name: Terrain LOD selector

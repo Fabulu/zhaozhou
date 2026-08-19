@@ -2467,3 +2467,74 @@ if(ZHAO_SBY_BIN)
     TIMEOUT 2100
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
+
+# ---------------------------------------------------------------------------
+# TERRAIN.VELOCITY (phase 7, ZH-039)
+#
+# The §4.2 velocity lattice: earth out-lane 1 accumulated at lattice vertices
+# and baked back to height16. The oracle is cross-checked against the EXECUTED
+# reference (`compose_lattice`'s recorded velocity samples, grouped by vertex
+# in command order) before the RTL is compared to it, so "RTL == oracle" means
+# "RTL == the velocity lane the software console already records". The block
+# owns its own 33x33 sweep, so the tests drive it as a MEMORY answering the
+# address it asks for — which is what makes the z-then-x scan order a checkable
+# fact instead of an assumption.
+set(ZHAO_TERRAIN_VELOCITY_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_velocity.sv)
+
+add_executable(test_terrain_velocity_directed terrain/terrain_velocity_directed.cpp)
+target_link_libraries(test_terrain_velocity_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_velocity_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_CURRENT_SOURCE_DIR}/render      # white-box: rtest::make_earth_prog
+  ${CMAKE_SOURCE_DIR}/reference/src)      # white-box: zrender/internal.hpp
+verilate(test_terrain_velocity_directed
+  PREFIX Vzhao_terrain_velocity
+  TOP_MODULE zhao_terrain_velocity
+  SOURCES ${ZHAO_TERRAIN_VELOCITY_SV})
+add_test(NAME terrain_velocity_directed COMMAND test_terrain_velocity_directed)
+set_tests_properties(terrain_velocity_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_velocity_random terrain/terrain_velocity_random.cpp)
+target_link_libraries(test_terrain_velocity_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_velocity_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_velocity_random
+  PREFIX Vzhao_terrain_velocity
+  TOP_MODULE zhao_terrain_velocity
+  SOURCES ${ZHAO_TERRAIN_VELOCITY_SV})
+add_test(NAME terrain_velocity_random COMMAND test_terrain_velocity_random)
+set_tests_properties(terrain_velocity_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME terrain_velocity_random_nightly COMMAND test_terrain_velocity_random --nightly)
+set_tests_properties(terrain_velocity_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# PATCH -> VELOCITY: the `fld_covers_o` seam, both blocks REAL. TERRAIN.PATCH
+# owns the §9.1 field list and decides the closed-interval footprint test once;
+# TERRAIN.VELOCITY consumes that answer for out-lane 1. Driving both from ONE
+# field list is the only way the seam is proved rather than asserted, and it is
+# also where the wake workload (one moving field lane, every frame) is measured
+# end to end.
+add_executable(test_terrain_velocity_chain terrain/terrain_velocity_chain.cpp)
+target_link_libraries(test_terrain_velocity_chain PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_velocity_chain PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_CURRENT_SOURCE_DIR}/render
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_velocity_chain
+  PREFIX Vzhao_terrain_velocity
+  TOP_MODULE zhao_terrain_velocity
+  SOURCES ${ZHAO_TERRAIN_VELOCITY_SV})
+verilate(test_terrain_velocity_chain
+  PREFIX Vzhao_terrain_patch
+  TOP_MODULE zhao_terrain_patch
+  SOURCES ${ZHAO_TERRAIN_PATCH_SV})
+add_test(NAME terrain_velocity_chain COMMAND test_terrain_velocity_chain)
+set_tests_properties(terrain_velocity_chain PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_velocity
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_velocity
+                 ${ZHAO_TERRAIN_VELOCITY_SV})
+set_tests_properties(lint_terrain_velocity PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

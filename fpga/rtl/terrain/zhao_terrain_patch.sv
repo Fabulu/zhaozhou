@@ -155,6 +155,16 @@ module zhao_terrain_patch (
     output logic               fld_ready_o,
     input  logic signed [31:0] fld_height_i,
 
+    // The §9.1 CLOSED-interval footprint answer for the lane currently being
+    // offered, valid in the cycle `fld_valid_i && fld_ready_o`. This block owns
+    // the §9.1 list (chosen law 2: the footprint test lives HERE), so it is the
+    // one place the test is decided; TERRAIN.VELOCITY consumes the same
+    // per-vertex lane stream for out-lane 1 and takes this answer rather than
+    // holding a second 16-rectangle list and re-deciding a ratified law
+    // (charter §29-6). Exported 2026-08-19 with TERRAIN.VELOCITY; purely
+    // additive, no internal behaviour changed.
+    output logic               fld_covers_o,
+
     // -----------------------------------------------------------------------
     // patch_state out
     // -----------------------------------------------------------------------
@@ -281,6 +291,7 @@ module zhao_terrain_patch (
   // than trusting this paragraph.
   assign vtx_ready_o = !busy && out_free;
   assign fld_ready_o = busy;
+  assign fld_covers_o = cur_covers;
 
   // ---- the vertex's own composition, before any field lane ----------------
   // height16 -> fx16 is the EXACT `raw << 8` (qformats §9): sign-extend the
