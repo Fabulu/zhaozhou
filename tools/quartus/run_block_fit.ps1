@@ -115,6 +115,25 @@ try {
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
+
+        # THE VIRTUAL-PIN ASYMMETRY, and it is deliberate.
+        #
+        # The shell project names zhao_shell_top's 101 ports explicitly, because
+        # `-to *` matches every node in the design and that cost the composed fit
+        # roughly 23 GB of assignment database. That fix is right for ONE top.
+        #
+        # This flow retargets the same project at a different top every
+        # iteration, and those port names do not exist in any other module. Left
+        # in place they would assign nothing, every block's real ports would
+        # become PHYSICAL pins, and a block with 673 of them would fail the fit
+        # or -- worse -- report a number shaped by pin pressure rather than by
+        # logic. So the explicit list is stripped and the wildcard restored.
+        #
+        # The wildcard's cost is tolerable HERE precisely because these designs
+        # are one block each: the measured fits ran 300-1300 s. It is the
+        # composed cone where the same line became unaffordable.
+        $qsf = $qsf | Where-Object { $_ -notmatch '^set_instance_assignment -name VIRTUAL_PIN' }
+        $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
         if ($ExtraSources) {
             foreach ($extra in $ExtraSources) {
                 $abs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path.Replace([char]92, [char]47)
