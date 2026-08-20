@@ -1601,8 +1601,13 @@ blocks:
     counters: [surface_stamps, surface_texels_touched]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: 175c004
+        evidence: reference/include/zref/zref_surface.hpp
+
 
     deferred: false
     cut_order: null

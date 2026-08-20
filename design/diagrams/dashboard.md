@@ -22,12 +22,12 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | 1 | 4 | · | · | · | · | · | · | 5 |
-| surface | 2 | · | · | · | · | · | · | · | 2 |
+| surface | 1 | 1 | · | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 4 | 3 | · | · | · | · | · | · | 7 |
 | texture | · | 4 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 48 | 22 | 4 | 14 | · | · | · | 6 | 88 |
+| **all** | 47 | 23 | 4 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -79,6 +79,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
 | TERRAIN.NORMALS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_normals.hpp |
 | TERRAIN.LOD | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_star.hpp |
+| SURFACE.STAMP | REFERENCE_COMPLETE | 2026-08-21 | `175c004` | reference/include/zref/zref_surface.hpp |
 | GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
 | GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_creature.hpp |
 | GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |

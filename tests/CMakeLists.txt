@@ -884,6 +884,19 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# FIELD.STAMP.{MAX,ADD,SUB,REPLACE,AGE}: the five stamp-blend ops, exhaustive
+# against zref::surface::blend_apply. ops.yml named this file as their
+# differential coverage and it did not exist -- V10 only surfaced that once
+# SURFACE.STAMP advanced past SPECIFIED.
+add_executable(test_field_stamp_modes differential/field_stamp_modes.cpp)
+target_link_libraries(test_field_stamp_modes PRIVATE zhao_harness zhao_zref)
+verilate(test_field_stamp_modes
+  PREFIX Vzhao_surface_blend
+  TOP_MODULE zhao_surface_blend
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv)
+add_test(NAME field_stamp_modes COMMAND test_field_stamp_modes)
+set_tests_properties(field_stamp_modes PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # DEBUG.TRACE: the reference pinned. No RTL yet -- this fixes the three
 # questions capture_format and the charter leave open (stage numbering, arming
 # as a mask, zeroing a decoder event's raster fields) so they cannot drift
