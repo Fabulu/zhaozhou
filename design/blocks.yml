@@ -1408,6 +1408,7 @@ blocks:
     maturity: SPECIFIED
     maturity_log: []
 
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1565,6 +1566,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
 
     deferred: false
     cut_order: null
@@ -2040,8 +2042,13 @@ blocks:
     counters: [covered_fragments]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: c75de30
+        evidence: reference/include/zref/zref_edgewalk.hpp
+
 
     deferred: false
     cut_order: null

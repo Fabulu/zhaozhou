@@ -21,13 +21,13 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
-| raster | 1 | 4 | · | · | · | · | · | · | 5 |
+| raster | · | 5 | · | · | · | · | · | · | 5 |
 | surface | 1 | 1 | · | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 4 | 3 | · | · | · | · | · | · | 7 |
 | texture | · | 4 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 47 | 23 | 4 | 14 | · | · | · | 6 | 88 |
+| **all** | 46 | 24 | 4 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -85,6 +85,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
 | GEOM.BINNER | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
 | RASTER.TILESTORE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tilestore.hpp |
+| RASTER.EDGEWALK | REFERENCE_COMPLETE | 2026-08-21 | `c75de30` | reference/include/zref/zref_edgewalk.hpp |
 | RASTER.EARLYZ | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_earlyz.hpp |
 | RASTER.FRAGMENT | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_fragment.hpp |
 | RASTER.RESOLVE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tileresolve.hpp |

@@ -519,7 +519,31 @@ export function checkCitations(blocksDoc: BlocksDoc, opts: RuleOptions = {}): st
     if (b.kind === 'rtl' && lastSeg && b.maturity !== 'SPECIFIED') {
       for (const p of [b.tests?.directed, b.tests?.random]) {
         if (!p || !exists(p)) continue; // V6 owns existence
-        const text = readText(p);
+        let text = readText(p);
+        // FOLLOW LOCAL INCLUDES ONE LEVEL.
+        //
+        // The dominant shape in this tree is a shared driver header beside the
+        // test -- velocity_dev.hpp, surface_dev.hpp, raster_dev.hpp,
+        // geom_dev.hpp, governor_dev.hpp, cmd_sim.hpp -- which owns the cycle
+        // contract and CALLS the oracle, so the test file itself never names
+        // it. Reading only the named file therefore reported three blocks as
+        // citing an "alias" when the differential was real and passing:
+        // TERRAIN.VELOCITY (velocity_dev.hpp:227 calls velocity_vertex),
+        // SURFACE.SHEET and RASTER.EDGEWALK.
+        //
+        // One level only, and only siblings. The rule exists to catch a test
+        // that is not about its oracle at all; chasing includes arbitrarily far
+        // would eventually find any symbol anywhere and the check would stop
+        // meaning anything.
+        if (text !== null && !text.includes(lastSeg)) {
+          const dir = p.slice(0, Math.max(p.lastIndexOf('/'), 0));
+          for (const m of text.matchAll(/#include\s+"([A-Za-z0-9_.\-]+)"/g)) {
+            const sib = dir ? `${dir}/${m[1]}` : m[1];
+            if (!exists(sib)) continue;
+            const t2 = readText(sib);
+            if (t2 !== null && t2.includes(lastSeg)) { text = text + t2; break; }
+          }
+        }
         if (text !== null && !text.includes(lastSeg)) {
           errors.push(
             `V17: ${b.id} (${b.maturity}) test "${p}" never mentions its oracle "${lastSeg}" — ` +
