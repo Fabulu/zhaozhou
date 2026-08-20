@@ -5,6 +5,59 @@ at the top.*
 
 ---
 
+## 2026-08-20 08:00 — THE COMPOSED SYNTHESIS RUNS. 28.4 GB to 6.2 GB, and Quartus names the fault
+
+The composed shell no longer thrashes. It ran analysis and synthesis to
+completion and **failed with a precise, named error** instead of dying:
+
+```
+Peak virtual memory: 6352 megabytes      (was 28,400)
+Elapsed: 42:33
+
+Info (276014): Found 2 instances of uninferred RAM logic
+  Info (276007): RAM logic "zhao_cmd_dma:u_dma|blit_buf" is uninferred
+                 due to ASYNCHRONOUS READ LOGIC ... line 239
+  Info (276007): RAM logic "zhao_video_scanout:u_scanout|
+                 zhao_scanout_linebuf:u_linebuf|mem" is uninferred
+                 due to ASYNCHRONOUS READ LOGIC ... line 96
+Error (276003): Cannot convert all sets of registers into RAM megafunctions.
+  The resulting number of registers remaining in design exceeds the number
+  of registers in the device.
+```
+
+**This is the whole answer, from the tool, in its own words.** Not a guess.
+
+### What it tells us that we did not know
+
+1. **The fix is SMALLER than I said.** I wrote that `blit_buf` needed both the
+   async reset removed *and* a registered read. Quartus lists **only the
+   asynchronous read**. One change, not two.
+2. **A SECOND block has the identical defect.** `zhao_scanout_linebuf` line 96,
+   `logic [63:0] mem [0:1][0:127]`, same cause. It was never going to infer
+   either, and nobody knew.
+3. **`zhao_audio_fifo` DID infer**, as a dual-clock RAM — with a warning worth
+   following up: *"the read-during-write behaviour of a dual-clock RAM is
+   undefined and may not match the behaviour of the original design."* That is a
+   correctness risk hiding inside a success.
+
+### Where that leaves it
+
+Both remaining faults are the same shape and both are ordinary RTL work: give
+the memory a registered read and let the consumer take the extra cycle. For
+`blit_buf` that means reading beat *n+1* while beat *n* is on the wire, which
+the beat counter already makes natural.
+
+I have not done it. It changes protocol timing on two landed blocks and wants
+doing carefully rather than at the end of a long session — and the open design
+question below may make the `blit_buf` version moot.
+
+**Route to a composed fit, in order:** registered read on those two memories →
+synthesis passes → the fitter finally reports real composed ALM/DSP/M10K
+numbers → Phase 9 can start. The work-PC handoff stays paused; it is very
+likely unnecessary now.
+
+---
+
 ## 2026-08-20, later — the buffer is fixed enough to matter: 16.2 GB to 2.7 GB
 
 `CMD.DMA`'s `blit_buf` was `logic [7:0] blit_buf [0:245759]` — a byte array
