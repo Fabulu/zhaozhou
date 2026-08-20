@@ -5,6 +5,64 @@ at the top.*
 
 ---
 
+## 2026-08-21 — waves worked in order; the ledger argued back, correctly
+
+### What moved
+
+| | |
+|---|---|
+| `CMD.DECODER` | SPECIFIED to **UNIT_VERIFIED** — contract, oracle, RTL, differential, random lane, mutation sweep |
+| `DEBUG.TRACE` | SPECIFIED to **REFERENCE_COMPLETE** |
+| line buffer | now infers as block RAM; formal never-torn proof still passes |
+| 16 blocks | SPECIFIED to **REFERENCE_COMPLETE** (they were already built) |
+| 5 FIELD.STAMP ops | first differential coverage the op layer has ever had |
+
+Ledger: **47 SPECIFIED, 23 REFERENCE_COMPLETE, 4 UNIT_VERIFIED, 14 RTL_VERIFIED.**
+
+### The finding worth your attention
+
+**Twenty-two blocks were sitting at SPECIFIED while already having RTL, a
+resolving oracle and passing tests.** They have been synthesized and tested all
+session. Only the ledger maturity was never advanced, so the dashboard has been
+badly understating what exists.
+
+When I advanced them, **the ledger refused seven**, and each refusal was real:
+
+- **V17 "an alias, not evidence"** — `TERRAIN.VELOCITY`'s random test never
+  mentions `velocity_vertex`; `SURFACE.SHEET`'s never mentions `SheetStore`;
+  neither `RASTER.EDGEWALK` test mentions `EdgeWalk`. A test that exists but is
+  not *about* the cited oracle is not evidence the oracle is implemented.
+- **V10** — advancing `TERRAIN.PATCH` and `TERRAIN.BAKE` made eleven FIELD ops
+  active, and every declared differential test was missing.
+
+I would have advanced all 22 unchallenged. The rules caught it.
+
+### Where the remaining six FIELD ops actually stand
+
+`FIELD.OUT.{HEIGHT,VELOCITY}` and `FIELD.WRITE.{MATERIAL,NAV,TAG,HAZARD}` still
+have no differential test, and **I did not write one, deliberately.**
+
+They are output ROUTING declarations, not computations. `FIELD.OUT.HEIGHT`'s own
+semantics line says *"profile output map — no dedicated opcode"*. The zfield
+interpreter routes `out_lanes` generically; there is no distinct behaviour these
+six add that a test could compare against a second implementation, because
+**their implementing block `FIELD.SEQ.EARTH` does not exist** — it was refused
+earlier in this project as a block-sized project in its own right.
+
+So six hollow test files would have turned a true red into a false green. The
+ledger is correctly saying: **`TERRAIN.PATCH` and `TERRAIN.BAKE` cannot be
+reference-complete while the ops they implement have no verified routing**, and
+that unblocks when `FIELD.SEQ.EARTH` is built, not before.
+
+### Still true
+
+Phase 0 is entirely `blocked_on: hardware`. Phases 3–11 are unstarted. **Nothing
+has run on a programmed device.** The `CMD.DMA` redesign in
+`reports/CMD.DMA_Redesign_Proposal.md` is still the gate on a composed fit, and
+the `blit_buf` design question there is still yours to decide.
+
+---
+
 ## 2026-08-20 08:15 — read the redesign proposal. It is right and my answer was wrong
 
 `reports/CMD.DMA_Redesign_Proposal.md` arrived on origin. I have read it in full.
