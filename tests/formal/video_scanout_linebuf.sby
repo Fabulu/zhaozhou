@@ -48,11 +48,12 @@ smtbmc boolector
 
 [script]
 plugin -i slang
-read_slang --top video_linebuf_fv -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_scanout_linebuf.sv video_linebuf_fv.sv
+read_slang --top video_linebuf_fv -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_dc_sdp_ram.sv zhao_scanout_linebuf.sv video_linebuf_fv.sv
 prep -top video_linebuf_fv
 
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/common/zhao_dc_sdp_ram.sv
 ../../fpga/rtl/video/zhao_scanout_linebuf.sv
 video_linebuf_fv.sv

@@ -25,6 +25,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_mode.s
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_framectl.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_scaler.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_dc_sdp_ram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_linebuf.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_scanout_serializer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_scanout.sv

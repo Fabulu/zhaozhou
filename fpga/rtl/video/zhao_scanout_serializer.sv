@@ -55,8 +55,9 @@ module zhao_scanout_serializer
   input  logic [1:0]   buf_fresh,
   output logic [1:0]   consume_start,
   output logic [1:0]   consume_done,
-  output logic         rd_buf,
-  output logic [6:0]   rd_addr,
+  output logic         rd_en,
+  output logic         rd_req_buf,
+  output logic [6:0]   rd_req_addr,
   input  logic [63:0]  rd_word,
 
   // pixel stream out (to VIDEO.SCALER)
@@ -108,10 +109,47 @@ module zhao_scanout_serializer
                     : (line_real ? ~display_buf : display_buf);
   assign next_fresh  = buf_fresh[next_buf];
 
+  // ---- read request, ONE CYCLE AHEAD -------------------------------------
+  //
+  // The line buffer's RAM read is registered, so the word for pixel n has to be
+  // requested during pixel n-1. Nothing is added to the video pipeline: the
+  // latency is absorbed entirely by asking early.
+  //
+  // The line-boundary case is the one that matters and the one a naive output
+  // register gets wrong. On the LAST cycle of a line the next cycle is x=0 of
+  // the NEXT line, so the request must already use that line's buffer and word
+  // zero. This module already decides `next_buf` and `next_fresh` at exactly
+  // that edge for the ownership handover, so the lookahead needs no new state.
+  //
+  // `rd_en` is false for a starved or border line, which means NO read is
+  // issued at all. That is deliberate: with a genuine dual-clock RAM, reading a
+  // buffer the GPU may be refilling is the same-address read-during-write
+  // ambiguity Quartus warned about in AUDIO.FIFO. A starved line displays
+  // `last_px` and touches the memory not at all.
+  // 16 bits because x is; only [8:2] selects the word. The low two bits are
+  // the lane within the word and belong to the CURRENT pixel, not the
+  // lookahead, and the high bits cannot be reached inside a 512-pixel line.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [15:0] x_ahead;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign x_ahead = x + 16'd1;
+
+  always_comb begin
+    if (line_last) begin
+      rd_en       = next_real && next_fresh;
+      rd_req_buf  = next_buf;
+      rd_req_addr = 7'd0;
+    end else begin
+      rd_en       = line_real && line_fresh;
+      rd_req_buf  = display_buf;
+      rd_req_addr = x_ahead[8:2];
+    end
+  end
+
   // pixel mux: border black vs buffer word (pixel = 16-bit lane of the word)
+  // UNCHANGED. The lane selector still uses the CURRENT x; only the address
+  // generation moved a cycle earlier.
   logic [15:0] px_buf;
-  assign rd_buf  = display_buf;
-  assign rd_addr = x[8:2];                    // 4 pixels per 64-bit word
   always_comb begin
     unique case (x[1:0])                      // lane select
       2'b00:   px_buf = rd_word[15:0];

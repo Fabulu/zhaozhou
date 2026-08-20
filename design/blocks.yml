@@ -246,7 +246,7 @@ blocks:
     backpressure: ready_valid
     latency: variable_bounded:4
     target_throughput: 1 record per clock
-    reference_model: zref::CmdDecoder
+    reference_model: zref::cmd::validate
     tests:
       directed: tests/command/cmd_decoder_directed.cpp
       random: tests/command/cmd_decoder_random.cpp

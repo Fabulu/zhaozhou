@@ -1021,6 +1021,7 @@ set(ZHAO_VIDEO_RTL ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_fetch.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_linebuf.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_serializer.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scanout.sv)
@@ -1104,6 +1105,9 @@ foreach(zhao_video_mod IN ITEMS
                    --top-module ${zhao_video_mod}
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                   # zhao_scanout_linebuf instantiates the shared inferred-RAM
+                   # primitive; harmless for the modules that do not.
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/${zhao_video_mod}.sv)
   set_tests_properties(lint_${zhao_video_mod} PROPERTIES
     LABELS "lint;fast"
@@ -2141,7 +2145,8 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_fetch.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_linebuf.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_linebuf.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_scanout_serializer.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scanout.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_scheduler.sv

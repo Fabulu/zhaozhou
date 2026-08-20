@@ -219,8 +219,17 @@ module zhao_cmd_dma
   // zhao_video_mode each finish in 0.26 GB. It is also the whole reason the
   // composed shell fit committed 28.4 GB and thrashed.
   //
-  // The byte granularity was never used. BOTH sides are 8-byte aligned by
-  // construction and always move exactly eight bytes:
+  // The byte granularity was never used: both sides move aligned 8-byte groups.
+  // ENFORCED-BY: tests/command/cmd_dma_directed.cpp — its blit cases drive
+  // whole canvases through fetch and commit and compare the emitted beat
+  // stream byte-for-byte against the oracle, so an unaligned move shows up as
+  // wrong data rather than as a passing test. If either side ever moved an
+  // unaligned group the word index would drop the low three bits and address
+  // the wrong word silently, which is why this is the load-bearing claim here.
+  // Reinforced by tests/command/cmd_random.cpp and tests/formal/
+  // cmd_dma_crc_gate.sby, whose CRC covers the same bytes this indexing picks.
+  //
+  // The shapes themselves:
   //   - write: `wr_off <= wr_off + 32'd8` from zero, one hps_rsp_i.data word
   //   - read:  `wdata_off = b_commit + (wbeat << 3)`, and b_commit advances by
   //            glen_q which is a 64-byte multiple for a canvas blit

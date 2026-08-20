@@ -84,16 +84,52 @@ module zhao_scanout_linebuf
   input  logic         vid_clk,
   input  logic [1:0]   consume_start, // line start: freshness of buf i taken
   input  logic [1:0]   consume_done,  // line end: buf i consumed -> credit
-  input  logic         rd_buf,
-  input  logic [6:0]   rd_addr,
+  // Read request, ONE VID CYCLE AHEAD of the pixel that needs it. The RAM read
+  // is registered (zhao_dc_sdp_ram), so the consumer issues the address for
+  // pixel n during pixel n-1 and `rd_word` carries it when pixel n is current.
+  // `rd_en` low means NO read is issued at all, which is what keeps the video
+  // side off a buffer the GPU may be refilling.
+  input  logic         rd_en,
+  input  logic         rd_req_buf,
+  input  logic [6:0]   rd_req_addr,
   output logic [63:0]  rd_word,
   output logic [1:0]   buf_fresh      // displayable now (synced_full != seen)
 );
 
   // ------------------------------------------------------------ storage ---
-  // 2 x 128 x 64 b = 16 Kbit (one M10K). No reset (size); canonical 0 read
-  // before first fill on the Verilator profile.
-  logic [63:0] mem [0:1][0:127];
+  // 2 x 128 x 64 b = 16,384 bits, held in zhao_dc_sdp_ram as ONE flat address
+  // space with the buffer selector as the high address bit. That is what the
+  // hardware is: 256 words of 64 bits, one gpu-clock write port, one vid-clock
+  // registered read port.
+  //
+  // It used to be `logic [63:0] mem [0:1][0:127]` with `assign rd_word =
+  // mem[rd_buf][rd_addr]`, and the composed synthesis named that asynchronous
+  // read as the reason inference failed:
+  //   Info (276007): RAM logic "...linebuf:u_linebuf|mem" is uninferred due to
+  //                  asynchronous read logic
+  // The array is not the mistake -- a line buffer is exactly what block RAM is
+  // for -- only the read-port description was.
+  //
+  // NO CAPACITY CLAIM HERE. The old comment asserted "one M10K"; that was a
+  // guess and guesses of this kind are how this class of defect survived.
+  // 16,384 bits is the logical payload; what Quartus actually places is
+  // recorded in reports/synthesis after it has placed it.
+  logic [7:0]  ram_wr_addr, ram_rd_addr;
+  assign ram_wr_addr = {fill_buf, fill_addr};
+  assign ram_rd_addr = {rd_req_buf, rd_req_addr};
+
+  logic ram_we;
+
+  zhao_dc_sdp_ram #(.DATA_W(64), .ADDR_W(8)) u_ram (
+    .wr_clk  (gpu_clk),
+    .wr_en   (ram_we),
+    .wr_addr (ram_wr_addr),
+    .wr_data (fill_data),
+    .rd_clk  (vid_clk),
+    .rd_en   (rd_en),
+    .rd_addr (ram_rd_addr),
+    .rd_data (rd_word)
+  );
 
 `ifdef FORMAL
   // FORMAL-ONLY storage init, matching the documented Verilator-profile
@@ -105,10 +141,8 @@ module zhao_scanout_linebuf
   // minutes per step (boolector AND yices, measured 2026-08-16).
   // Structurally absent outside `ifdef FORMAL (the W2.6 precedent).
   initial begin
-    for (int unsigned fi = 0; fi < 2; fi++) begin
-      for (int unsigned fj = 0; fj < 128; fj++) begin
-        mem[fi][fj] = 64'd0;
-      end
+    for (int unsigned fj = 0; fj < 256; fj++) begin
+      u_ram.mem[fj] = 64'd0;
     end
   end
 `endif
@@ -130,6 +164,7 @@ module zhao_scanout_linebuf
   logic [1:0] consumed_toggle;   // vid -> gpu (consumption completion)
 
   logic       fill_we_ok, fill_done_ok;
+  assign ram_we       = fill_we && fill_we_ok;
   assign fill_we_ok   = (bstate[fill_buf] == LB_EMPTY)
                      || (bstate[fill_buf] == LB_FILLING);
   assign fill_done_ok = (bstate[fill_buf] == LB_FILLING);
@@ -142,7 +177,7 @@ module zhao_scanout_linebuf
     end else begin
       // write port: accepted only in EMPTY/FILLING (never over a FULL buf)
       if (fill_we && fill_we_ok) begin
-        mem[fill_buf][fill_addr] <= fill_data;
+        // the word itself is written by u_ram, gated by the same condition
       end
 
       // state transitions (priority: abort > done > we > credit)
@@ -207,6 +242,14 @@ module zhao_scanout_linebuf
   assign buf_fresh = full_s2 ^ last_seen;
 
   // ------------------------------------------------------------ read port --
-  assign rd_word = mem[rd_buf][rd_addr];
+  // rd_word is driven by u_ram's registered read. Nothing here reads the array.
+  //
+  // The write enable is the SAME predicate the ownership process uses, lifted
+  // out so the RAM sees it directly: a write only happens to a buffer that is
+  // EMPTY or FILLING, which is what makes a legal read and a legal write
+  // unable to target the same buffer generation. That is the collision
+  // argument zhao_dc_sdp_ram requires of its users, and it is discharged by
+  // the ping-pong ownership protocol already in this file rather than by any
+  // arbitration in the RAM.
 
 endmodule : zhao_scanout_linebuf

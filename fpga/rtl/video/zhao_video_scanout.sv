@@ -141,8 +141,9 @@ module zhao_video_scanout
   logic [1:0]  buf_empty;
 
   logic [1:0]  consume_start, consume_done, buf_fresh;
-  logic        rd_buf;
-  logic [6:0]  rd_addr;
+  logic        rd_en;
+  logic        rd_req_buf;
+  logic [6:0]  rd_req_addr;
   logic [63:0] rd_word;
 
   logic        req_active;
@@ -183,8 +184,9 @@ module zhao_video_scanout
     .vid_clk        (vid_clk),
     .consume_start  (consume_start),
     .consume_done   (consume_done),
-    .rd_buf         (rd_buf),
-    .rd_addr        (rd_addr),
+    .rd_en          (rd_en),
+    .rd_req_buf     (rd_req_buf),
+    .rd_req_addr    (rd_req_addr),
     .rd_word        (rd_word),
     .buf_fresh      (buf_fresh)
   );
@@ -204,8 +206,9 @@ module zhao_video_scanout
     .buf_fresh          (buf_fresh),
     .consume_start      (consume_start),
     .consume_done       (consume_done),
-    .rd_buf             (rd_buf),
-    .rd_addr            (rd_addr),
+    .rd_en              (rd_en),
+    .rd_req_buf         (rd_req_buf),
+    .rd_req_addr        (rd_req_addr),
     .rd_word            (rd_word),
     .px                 (px),
     .starvation_cycles  (starvation_cycles)

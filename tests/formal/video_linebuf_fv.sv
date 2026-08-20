@@ -31,8 +31,9 @@ module video_linebuf_fv
   // free (constrained) display-side stimulus
   input logic [1:0]  consume_start,
   input logic [1:0]  consume_done,
-  input logic        rd_buf,
-  input logic [6:0]  rd_addr,
+  input logic        rd_en,
+  input logic        rd_req_buf,
+  input logic [6:0]  rd_req_addr,
   // symbolic WATCH ADDRESS for the never-torn law: a free input HELD
   // CONSTANT by assumption (the anyconst idiom, but as a port � the
   // recorded frontend trap ties attribute-carrying LOCALS to constants/x,
@@ -53,7 +54,8 @@ module video_linebuf_fv
     .fill_abort(fill_abort), .buf_empty(buf_empty),
     .vid_clk(clk),
     .consume_start(consume_start), .consume_done(consume_done),
-    .rd_buf(rd_buf), .rd_addr(rd_addr), .rd_word(rd_word),
+    .rd_en(rd_en), .rd_req_buf(rd_req_buf), .rd_req_addr(rd_req_addr),
+    .rd_word(rd_word),
     .buf_fresh(buf_fresh)
   );
 
@@ -214,11 +216,33 @@ module video_linebuf_fv
   // hazard on buf_fresh itself is documented in the module header and
   // excluded by the spacing assumptions above, which mirror the system's
   // vblank-only aborts.)
+  // THE READ IS NOW REGISTERED, so the observation point moves one cycle.
+  // The line buffer's storage is zhao_dc_sdp_ram: `rd_word` carries the word
+  // for the request accepted on the PREVIOUS vid edge, and only if `rd_en` was
+  // high. Track that accepted request and assert against it; the law itself is
+  // unchanged, only where it is sampled.
+  reg         rd_req_q_valid = 1'b0;
+  reg         rd_req_q_buf   = 1'b0;
+  reg [6:0]   rd_req_q_addr  = 7'd0;
   always @(posedge clk) begin
-    if (rst_n && started[rd_buf] && rd_addr == f_addr && f_written[rd_buf]) begin
-      assert(rd_word == f_shadow[rd_buf]);
+    rd_req_q_valid <= rd_en;
+    if (rd_en) begin
+      rd_req_q_buf  <= rd_req_buf;
+      rd_req_q_addr <= rd_req_addr;
     end
   end
+
+  always @(posedge clk) begin
+    if (rst_n && rd_req_q_valid && started[rd_req_q_buf]
+        && rd_req_q_addr == f_addr && f_written[rd_req_q_buf]) begin
+      assert(rd_word == f_shadow[rd_req_q_buf]);
+    end
+  end
+
+  // `rd_word` is unconstrained whenever no read was issued. Stating it as a
+  // cover rather than an assertion: the point is that the property above has
+  // an antecedent that can be false, not that the data is meaningful then.
+  c_no_read: cover (rst_n && !rd_req_q_valid);
 
   // ---- SELF-ASSERTING SCOPE GUARD (the arbiter a_horizon_is_refresh_free
   // pattern): the bmc task is bounded at depth 8, which admits AT MOST four
@@ -264,7 +288,7 @@ module video_linebuf_fv
   end
   always @(posedge clk) begin
     if (f_past_valid && rst_n) begin
-      c_read_fresh:  cover(buf_fresh[rd_buf]);          // THE antecedent
+      c_read_fresh:  cover(buf_fresh[rd_req_buf]);          // THE antecedent
       c_fresh_both:  cover(buf_fresh[0] && buf_fresh[1]); // ping-pong overlap
       c_consumed:    cover(buf_fresh[0] && consume_start[0]); // display took it
       c_credit:      cover(saw_done0 && buf_empty[0]
@@ -274,9 +298,9 @@ module video_linebuf_fv
       c_consume_after_abort: cover(saw_abort0 &&        // the spacing law
                            consume_start != 2'b00);     // still admits
                                                         // consumption
-      c_read_written: cover(started[rd_buf] &&          // THE assert's full
-                           rd_addr == f_addr &&
-                           f_written[rd_buf]);          // antecedent
+      c_read_written: cover(rd_req_q_valid && started[rd_req_q_buf] &&  // THE assert's full
+                           rd_req_q_addr == f_addr &&
+                           f_written[rd_req_q_buf]);    // antecedent
     end
   end
 
