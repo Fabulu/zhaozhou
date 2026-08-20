@@ -884,6 +884,18 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# DEBUG.TRACE: the reference pinned. No RTL yet -- this fixes the three
+# questions capture_format and the charter leave open (stage numbering, arming
+# as a mask, zeroing a decoder event's raster fields) so they cannot drift
+# before the RTL exists to be compared against them.
+add_executable(test_debug_trace_directed debug/debug_trace_directed.cpp)
+target_link_libraries(test_debug_trace_directed PRIVATE zhao_harness zhao_zref)
+add_test(NAME debug_trace_directed COMMAND test_debug_trace_directed)
+set_tests_properties(debug_trace_directed PROPERTIES LABELS "fast;nightly")
+# property-based random lane in the same binary (the CMD.DMA shape)
+add_test(NAME debug_trace_random COMMAND test_debug_trace_directed --random 500)
+set_tests_properties(debug_trace_random PROPERTIES LABELS "fast;nightly")
+
 # CMD.DECODER: the streaming validator, differential against
 # zref::cmd::validate -- a thin view onto zhao_frame_validate, which the stub
 # shell, the capture tooling and tests/abi/golden/ have agreed with since
