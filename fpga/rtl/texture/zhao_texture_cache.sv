@@ -233,7 +233,35 @@ module zhao_texture_cache #(
   // instead of dropping a whole line through eight write ports at once. It is
   // deliberately NOT reset: a reset loop over the data array is exactly what
   // stops M10K inference, and no read can reach it while `valid_r` is 0.
-  logic [15:0]      mem_r   [LANES][LINES*HW_PL];
+  //
+  // ONE FLAT ARRAY PER LANE, IN A GENERATE, and the reason is measured.
+  //
+  // This was `logic [15:0] mem_r [LANES][LINES*HW_PL]` — a two-dimensional
+  // unpacked array — and the fill wrote it as `mem_r[fill_lane_r][...]`, with
+  // the LANE selected by a register. Quartus cannot map a write whose memory
+  // selection is dynamic onto separate M10Ks; it has to build a mux across
+  // every lane, and the whole array falls into flip-flops.
+  //
+  // MEASURED 2026-08-19, the first time this block was ever synthesized:
+  // 5,402 ALMs, 9,993 registers, **zero M10K, zero memory bits** — a cache made
+  // entirely of flops, and the second-largest block in the design. The comment
+  // above was already asserting "that is the shape an M10K infers from"; the
+  // intent was right and the code defeated it, and nothing caught it because
+  // simulation cannot see inference. RASTER.TILESTORE gets this right with flat
+  // `ram0`/`ram1` arrays and infers 4 M10K for 32,768 bits at 929 ALMs.
+  //
+  // So the lane index becomes STATIC: `genvar` picks the array, and the write
+  // enable is `fill_lane_r == gl` decoded per lane. Same values, same cycle,
+  // same everything the differential tests check — only the inference changes.
+  genvar gl;
+  generate
+    for (gl = 0; gl < int'(LANES); gl++) begin : g_lane
+      // Deliberately NOT reset, exactly as before: a reset loop over the data
+      // array is itself a thing that stops M10K inference, and no read can
+      // reach it while `valid_r` is 0.
+      logic [15:0] mem_r [LINES*HW_PL];
+    end
+  endgenerate
   // Tags and valids MUST be flops, not RAM: `inv_all_i` clears every valid
   // bit in one cycle, and all four lanes' tags are compared in the same cycle
   // the access is offered. Same reasoning as RASTER.TILESTORE's present bits.
@@ -376,7 +404,9 @@ module zhao_texture_cache #(
           valid_r[k][i] <= 1'b0;
           tag_r[k][i]   <= {TAG_W{1'b0}};
         end
-        s1_hw_r[k] <= 16'd0;
+        // s1_hw_r is NOT reset: it lives in the clock-only RAM process in
+        // g_lane_port, because an M10K has no reset port. s1_v_r below is
+        // what makes that safe.
       end
     end else begin
       // ---- the response stage drains -----------------------------------
@@ -395,7 +425,7 @@ module zhao_texture_cache #(
       if (acc_go) begin
         s1_v_r   <= 1'b1;
         s1_src_r <= acc_src_id_i;
-        for (int unsigned k = 0; k < LANES; k++) s1_hw_r[k] <= mem_r[k][{a_idx[k], a_beat[k]}];
+        // the synchronous read, per lane, from that lane's own array
         acct_r   <= {LANES{1'b0}};
       end
 
@@ -424,7 +454,7 @@ module zhao_texture_cache #(
 
       // ---- the beats land -----------------------------------------------
       if (fill_busy_r && !fill_req_r && fill_data_valid_i) begin
-        mem_r[fill_lane_r][{fill_idx_r, fill_beat_r}] <= fill_data_i;
+        // the data write itself lives in g_lane below, gated by lane decode
         fill_beat_r <= fill_beat_r + {{(BEAT_W-1){1'b0}}, 1'b1};
         if (fill_beat_r == BEAT_W'(HW_PL - 1)) begin
           fill_busy_r <= 1'b0;
@@ -452,5 +482,44 @@ module zhao_texture_cache #(
       end
     end
   end
+
+  // ---- the per-lane RAM ports -------------------------------------------
+  //
+  // One always_ff per lane, so every reference to that lane's array carries a
+  // CONSTANT lane index and Quartus sees four independent single-port RAMs
+  // rather than one array behind a mux. The write enable is the same condition
+  // the main sequencer uses, decoded against this lane; the read is the same
+  // accepting-cycle read that was in the loop above. `s1_hw_r[gl]` is driven
+  // here and nowhere else, including its reset, because a register may have
+  // exactly one driver.
+  generate
+    for (gl = 0; gl < int'(LANES); gl++) begin : g_lane_port
+      // NO RESET IN THIS PROCESS, and that is the point of it.
+      //
+      // ATTEMPT 1 made the lane index static (a genvar picks the array instead
+      // of a register indexing it) and MEASURED NO CHANGE AT ALL: 5,402 ALMs
+      // before, 5,373 after, zero M10K both times. The dynamic outer index was
+      // real but it was not the blocker.
+      //
+      // The blocker is the ASYNCHRONOUS RESET. An M10K has no reset port, so a
+      // memory written inside `always_ff @(posedge clk or negedge rst_n)`
+      // cannot be one — the reset has to reach every bit, which only flops can
+      // do. The original code wrote `mem_r` inside the block's main
+      // async-reset process, so no arrangement of the index was ever going to
+      // help. The array has to live in a clock-only process.
+      //
+      // `s1_hw_r` therefore loses its reset too, which is safe because it is
+      // only ever consumed alongside `s1_v_r`, and `s1_v_r` IS reset in the
+      // main process. That is the standard shape: reset the valid bit, never
+      // the data behind it.
+      always_ff @(posedge clk) begin
+        if (fill_busy_r && !fill_req_r && fill_data_valid_i &&
+            fill_lane_r == LANE_W'(gl)) begin
+          g_lane[gl].mem_r[{fill_idx_r, fill_beat_r}] <= fill_data_i;
+        end
+        if (acc_go) s1_hw_r[gl] <= g_lane[gl].mem_r[{a_idx[gl], a_beat[gl]}];
+      end
+    end
+  endgenerate
 
 endmodule : zhao_texture_cache

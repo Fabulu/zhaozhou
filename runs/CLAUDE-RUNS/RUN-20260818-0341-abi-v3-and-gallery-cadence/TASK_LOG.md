@@ -1821,3 +1821,72 @@ thing as a scattering term.
 
 All ten CRCs pinned at first render; every GIF verified byte-exact on decode.
 
+
+## TEXTURE.CACHE: a cache made of flip-flops, and the two-attempt fix
+
+The first synthesis this block ever had reported **5,402 ALMs, 9,993 registers,
+ZERO M10K, zero memory bits** — the second-largest block in the design, and a
+cache built entirely out of flops. Its own header comment already claimed its
+storage was "the shape an M10K infers from". The intent was right, the code
+defeated it, and **nothing caught it because simulation cannot see inference**.
+
+### ATTEMPT 1 WAS WRONG, and the measurement is the only reason we know
+
+Hypothesis: the write `mem_r[fill_lane_r][{fill_idx_r, fill_beat_r}]` selects
+the MEMORY dynamically on the outer dimension of a 2-D unpacked array, so
+Quartus must mux across lanes and the array falls into flops. Fix: one flat
+array per lane in a generate, lane index static, write enable decoded.
+
+Lint clean, all four differential lanes bit-identical, **and the fit measured
+5,373 ALMs against 5,402. Zero M10K, unchanged.** The dynamic index was real and
+was not the blocker. I was confident and I was wrong; the fitter is what said so.
+
+### ATTEMPT 2: the ASYNCHRONOUS RESET
+
+An M10K has no reset port. A memory written inside
+`always_ff @(posedge clk or negedge rst_n)` therefore cannot be one — the reset
+has to reach every bit and only flops can do that. The original wrote `mem_r`
+inside the block's main async-reset process, so **no arrangement of the index
+was ever going to help.** The array has to live in a clock-only process.
+
+`s1_hw_r` loses its reset with it, which is safe because it is only ever
+consumed alongside `s1_v_r`, and `s1_v_r` IS reset in the main process. Reset
+the valid bit, never the data behind it.
+
+| | before | after | |
+|---|---:|---:|---|
+| ALMs | 5,402 | **1,087** | −80% |
+| registers | 9,993 | **1,737** | −83% |
+| M10K | 0 | **4** | 8,192 bits |
+| fit time | 1,271 s | 359 s | |
+
+Behaviour is bit-identical throughout: Verilator `-Wall` clean and all four
+cache lanes green after each attempt, including the nightly random differential
+against `zref::TextureCache`. Same values, same cycle; only the inference moved.
+
+### The capacity picture, now against REAL device numbers
+
+The block-fit report captures `used / available` since this increment, so these
+are read off the fitter rather than remembered:
+
+| resource | measured | device | |
+|---|---:|---:|---|
+| ALMs | 25,430 | 41,910 | 60.7% |
+| **DSP** | **180** | **112** | **160.7%** |
+| M10K | 40 | 553 | 7.2% |
+
+**DSP is the real ceiling, not ALMs**, and it is already over by 60%. Unlike
+ALMs there is no slack: a multiplier either has a DSP or is rebuilt in logic,
+which spends the ALMs that are also short. `TERRAIN.PROJECT` takes 33,
+`TERRAIN.LOD` and `SURFACE.STAMP` 28 each.
+
+Both figures are still per-block sums and therefore UPPER BOUNDS — no
+cross-block sharing, and ~9,000 virtual pins that become plain wires once
+composed. Only the composed fit settles it, and that is the handoff.
+
+**M10K at 7.2% is the opposite finding and worth acting on:** 513 of 553 blocks
+are unused while the design burns ALMs on registers. The cache just moved 8,192
+bits the right way. Anything else holding a lattice or a line buffer in flops is
+the same trade available again — `FORGE.CLIFF`'s `edge_mem_r[mhead_r][...]` is
+the next candidate and has never been synthesized.
+
