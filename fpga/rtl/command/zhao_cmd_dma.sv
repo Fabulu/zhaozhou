@@ -210,7 +210,33 @@ module zhao_cmd_dma
   dma_state_e m = M_IDLE;
 
   logic [7:0]  slot_buf [0:SLOT_BUF_BYTES-1] = '{default: 8'h00};
-  logic [7:0]  blit_buf [0:BLIT_BUF_BYTES-1] = '{default: 8'h00};
+  // BLIT STAGING, ONE 64-BIT WORD PER ENTRY, not 245,760 bytes.
+  //
+  // This was `logic [7:0] blit_buf [0:BLIT_BUF_BYTES-1]`, and that shape is
+  // what made this block unsynthesizable. MEASURED 2026-08-20, the first time
+  // synthesis ever saw it: elaborating THIS MODULE ALONE peaked at 16.2 GB and
+  // had not finished in seven minutes, while zhao_sdram_ctrl and
+  // zhao_video_mode each finish in 0.26 GB. It is also the whole reason the
+  // composed shell fit committed 28.4 GB and thrashed.
+  //
+  // The byte granularity was never used. BOTH sides are 8-byte aligned by
+  // construction and always move exactly eight bytes:
+  //   - write: `wr_off <= wr_off + 32'd8` from zero, one hps_rsp_i.data word
+  //   - read:  `wdata_off = b_commit + (wbeat << 3)`, and b_commit advances by
+  //            glen_q which is a 64-byte multiple for a canvas blit
+  // So this is a 64-bit memory that was described as a byte array, and the
+  // description cost 245,760 elaboration entries instead of 30,720.
+  //
+  // Still NOT an M10K, and the contract says why: the write lives in an
+  // async-reset process and the read is combinational, and an M10K has no
+  // reset port and a registered read. Fixing that is a protocol change (the
+  // beat stream needs a one-cycle read lead) and is deliberately not done
+  // here. This commit makes the description honest and the block measurable;
+  // whether a 1.97 Mbit on-chip buffer should exist at all is the open design
+  // question in STATUS.md.
+  localparam int unsigned BLIT_BUF_WORDS = BLIT_BUF_BYTES / 8;
+  localparam int unsigned BLIT_IDX_W      = $clog2(BLIT_BUF_WORDS);  // 15
+  logic [63:0] blit_buf [0:BLIT_BUF_WORDS-1];
 
   // fetch latches
   logic [1:0]  f_slot = 2'd0;
@@ -353,14 +379,24 @@ module zhao_cmd_dma
   // write-data beat stream: beat `wbeat` of the accepted request during
   // M_BLIT_DATA (the acceptance-cycle view shows beat 0; consumers must
   // sample on guard_wvalid_o beats only)
+  // Kept 32 bits wide because it is an address arithmetic result; only bits
+  // [BLIT_IDX_W+2:3] index the word array, since the low three are the
+  // always-zero byte offset and everything above the index width cannot be
+  // reached inside a canvas-sized buffer.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] wdata_off;
+  /* verilator lint_on UNUSEDSIGNAL */
   assign wdata_off = b_commit
                    + ((m == M_BLIT_DATA) ? ({29'd0, wbeat} << 3) : 32'd0);
-  always_comb begin
-    for (int i = 0; i < 8; i++) begin
-      guard_wdata_o[8*i +: 8] = blit_buf[wdata_off + 32'(i)];
-    end
-  end
+  // One aligned word, not eight scattered bytes. Identical bits: byte i of the
+  // old read was blit_buf[wdata_off + i], and the word at wdata_off >> 3 holds
+  // exactly those eight bytes in the same order.
+  // The low three bits of wdata_off are the byte offset inside the word and
+  // are always zero here (both sides move aligned 8-byte groups, argued at the
+  // declaration). Slicing from bit 3 up gives exactly the index width the array
+  // needs; taking the whole word offset would be a 29-bit index into a
+  // 30,720-entry array.
+  assign guard_wdata_o = blit_buf[wdata_off[BLIT_IDX_W+2:3]];
   assign guard_wvalid_o = (m == M_BLIT_DATA);
 
   assign pkt_valid_o = pkt_v;
@@ -691,10 +727,10 @@ module zhao_cmd_dma
             begin
               logic [31:0] cnext;
               cnext = crc_pay_r;
+              if (wr_off < BLIT_BUF_BYTES) begin
+                blit_buf[wr_off[BLIT_IDX_W+2:3]] <= hps_rsp_i.data;
+              end
               for (int i = 0; i < 8; i++) begin
-                if ((wr_off + 32'(i)) < BLIT_BUF_BYTES) begin
-                  blit_buf[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
-                end
                 cnext = zhao_abi_pkg::zhao_crc32c_step(
                     cnext, hps_rsp_i.data[8*i +: 8]);
               end

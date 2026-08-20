@@ -5,6 +5,65 @@ at the top.*
 
 ---
 
+## 2026-08-20, later — the buffer is fixed enough to matter: 16.2 GB to 2.7 GB
+
+`CMD.DMA`'s `blit_buf` was `logic [7:0] blit_buf [0:245759]` — a byte array
+holding 1.97 megabits. **The byte granularity was never used.** Both sides move
+aligned 8-byte groups by construction:
+
+- write: `wr_off <= wr_off + 32'd8` from zero, one `hps_rsp_i.data` word
+- read: `wdata_off = b_commit + (wbeat << 3)`, and `b_commit` advances by
+  `glen_q`, a 64-byte multiple for a canvas blit
+
+So it was a 64-bit memory described as bytes, and the description cost **245,760
+elaboration entries instead of 30,720**. Now `logic [63:0] blit_buf [0:30719]`,
+one word in and one word out, no loops.
+
+| | before | after |
+|---|---:|---:|
+| elaboration peak | **16.2 GB** | **2.70 GB** |
+
+**Verified bit-identical.** Verilator `-Wall` clean, and `cmd_dma_directed`,
+`cmd_random`, `cmd_random_soak` all pass — plus the `formal_cmd_dma_crc_gate`
+proof at 315 s. Byte *i* of the old read was `blit_buf[wdata_off + i]`; the word
+at `wdata_off >> 3` holds exactly those eight bytes in the same order.
+
+**A trap I nearly reported through.** The first test run came back green while
+the build had actually FAILED: removing the byte loop renumbered Verilator's
+unnamed blocks, the generated files went inconsistent, and ctest ran the *old*
+binary. So the green was meaningless. Fixed by deleting the stale model
+directory and reconfiguring; the rebuilt binary's hash is recorded before the
+numbers above were taken. This is the fourth time this session that a stale
+build reported success.
+
+**Still open, and it is now a TIME problem rather than a memory one.**
+Elaboration has not finished inside eight minutes even at 2.7 GB; a longer run
+is going. Memory was the wall — 2.7 GB fits anywhere — so this is far less
+serious than it was.
+
+**Still not an M10K**, and the two reasons are unchanged: the write lives in an
+async-reset process and the read is combinational. An M10K has no reset port and
+its read is registered. Fixing that needs a one-cycle read lead in the beat
+stream, which is a protocol change, and I have not made it.
+
+### The open design question is unchanged
+
+A **1.97 Mbit on-chip staging buffer** would claim roughly **192 of the device's
+553 M10K blocks** — about 35% of all on-chip memory — to hold one canvas so the
+CRC can be checked before the first byte is committed.
+
+1. **Two passes over DDR.** Read once to CRC, read again to commit. Costs
+   bandwidth, costs zero on-chip memory. The data is already in DDR. *My
+   preference.*
+2. **Keep it, as real block RAM.** Honest, works, spends a third of the device's
+   memory on a staging buffer.
+3. **Commit optimistically, invalidate on failure.** Cheapest; breaks the "zero
+   guard writes on reject" law in the contract.
+
+Nothing here is decided. It is your call.
+
+---
+
 ## 2026-08-20, early morning — one block cannot fit, and it explains everything
 
 ### THE FINDING
