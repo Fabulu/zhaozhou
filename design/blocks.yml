@@ -1144,8 +1144,13 @@ blocks:
     counters: [lod_representation_counts]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_measure.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1209,8 +1214,13 @@ blocks:
     counters: [lod_representation_counts, triangles_culled]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_measure.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1296,6 +1306,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1324,8 +1335,13 @@ blocks:
     counters: [terrain_triangles_emitted]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_terrain_tess.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1354,8 +1370,13 @@ blocks:
     counters: [terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_terrain_normals.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1386,6 +1407,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1430,6 +1452,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1470,8 +1493,13 @@ blocks:
     counters: [lod_representation_counts, terrain_triangles_emitted]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_star.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1502,6 +1530,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1536,6 +1565,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1573,6 +1603,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1858,8 +1889,13 @@ blocks:
     counters: [triangles_submitted, triangles_clipped, triangles_culled]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_creature.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1888,8 +1924,13 @@ blocks:
     counters: [triangles_submitted]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_geom.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1919,8 +1960,13 @@ blocks:
     counters: [tile_references, max_tile_list_depth, triangles_culled]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_geom.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1953,8 +1999,13 @@ blocks:
     counters: [tile_references]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_tilestore.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1986,6 +2037,7 @@ blocks:
     budget_group: tile
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2014,8 +2066,13 @@ blocks:
     counters: [early_z_rejects, covered_fragments]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_earlyz.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2044,8 +2101,13 @@ blocks:
     counters: [covered_fragments, blended_fragments]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_fragment.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2082,8 +2144,13 @@ blocks:
     counters: [tile_references]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_tileresolve.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2116,8 +2183,13 @@ blocks:
     counters: [texture_samples]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_texture.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2151,8 +2223,13 @@ blocks:
     counters: [texture_samples]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_aux.hpp
+
     deferred: false
     cut_order: 2
     superseded_by: null
@@ -2181,8 +2258,13 @@ blocks:
     counters: [cache_hits, cache_misses]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: ecf2870
+        evidence: reference/include/zref/zref_texture.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null

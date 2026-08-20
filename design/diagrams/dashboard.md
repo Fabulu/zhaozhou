@@ -15,19 +15,19 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | debug | · | 1 | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 1 | 1 | · | · | · | · | · | · | 2 |
-| geometry | 10 | 1 | · | · | · | · | · | · | 11 |
+| geometry | 7 | 4 | · | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
-| measure | 3 | · | · | · | · | · | · | · | 3 |
+| measure | 1 | 2 | · | · | · | · | · | · | 3 |
 | memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
-| raster | 5 | · | · | · | · | · | · | · | 5 |
+| raster | 1 | 4 | · | · | · | · | · | · | 5 |
 | surface | 2 | · | · | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | 7 | · | · | · | · | · | · | · | 7 |
-| texture | 3 | 1 | · | · | · | · | · | · | 4 |
+| terrain | 4 | 3 | · | · | · | · | · | · | 7 |
+| texture | · | 4 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 63 | 7 | 4 | 14 | · | · | · | 6 | 88 |
+| **all** | 48 | 22 | 4 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -74,7 +74,22 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.FRAMECTL | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_random.cpp |
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| MEASURE.GOVERNOR | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
+| MEASURE.TOKENS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
+| TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
+| TERRAIN.NORMALS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_normals.hpp |
+| TERRAIN.LOD | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_star.hpp |
 | GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
+| GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_creature.hpp |
+| GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
+| GEOM.BINNER | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
+| RASTER.TILESTORE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tilestore.hpp |
+| RASTER.EARLYZ | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_earlyz.hpp |
+| RASTER.FRAGMENT | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_fragment.hpp |
+| RASTER.RESOLVE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tileresolve.hpp |
+| TEXTURE.TMU | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
+| TEXTURE.AUX | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_aux.hpp |
+| TEXTURE.CACHE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
 | FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
