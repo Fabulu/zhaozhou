@@ -884,6 +884,32 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# CMD.DECODER: the streaming validator, differential against
+# zref::cmd::validate -- a thin view onto zhao_frame_validate, which the stub
+# shell, the capture tooling and tests/abi/golden/ have agreed with since
+# wave 1. The oracle was NOT written for this test.
+add_executable(test_cmd_decoder_directed command/cmd_decoder_directed.cpp)
+target_link_libraries(test_cmd_decoder_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_cmd_decoder_directed PRIVATE
+  ZHAO_GOLDEN_DIR="${CMAKE_SOURCE_DIR}/tests/abi/golden")
+verilate(test_cmd_decoder_directed
+  PREFIX Vzhao_cmd_decoder
+  TOP_MODULE zhao_cmd_decoder
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv)
+add_test(NAME cmd_decoder_directed COMMAND test_cmd_decoder_directed)
+set_tests_properties(cmd_decoder_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_cmd_decoder
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_cmd_decoder
+                 ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv)
+set_tests_properties(lint_zhao_cmd_decoder PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # CMD.DMA: directed vectors with the harness-as-HPS bridge responder (D10)
 add_executable(test_cmd_dma_directed command/cmd_dma_directed.cpp)
 target_link_libraries(test_cmd_dma_directed PRIVATE zhao_harness zhao_zref)

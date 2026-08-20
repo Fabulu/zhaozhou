@@ -120,6 +120,21 @@ module zhao_cmd_decoder
   logic [7:0] err;
   logic       err_set, hdr_abort, done, hdr_bad;
 
+  // RECORD-LEVEL ERRORS ARE HELD SEPARATELY, and this is forced by streaming.
+  //
+  // spec 3.2's order puts the payload CRC (check 4) BEFORE the per-record
+  // checks (5, 6, 10). A streaming decoder discovers them the other way round:
+  // a record header is complete long before the CRC over the whole stream is.
+  // Latching a record error into `err` directly therefore reported
+  // ZH_ABI_RESERVED_FIELD where the oracle reports ZH_ABI_BAD_PAYLOAD_CRC --
+  // caught by cmd_decoder_directed on its first run, ten checks in two cases.
+  //
+  // So the record verdict waits here and is only promoted at the end, after
+  // the CRC has had its turn. The normative order is preserved even though the
+  // discovery order cannot be.
+  logic [7:0] rec_err_l;
+  logic       rec_err_set;
+
   assign decode_error_o   = err;
   assign bytes_consumed_o = hdr_abort ? 32'd36 : total;
   assign commands_o       = rec_idx;
@@ -144,6 +159,14 @@ module zhao_cmd_decoder
 
   logic take;
   assign take = pkt_valid_i && pkt_ready_o;
+
+  // `total` is latched on the FIRST byte with a non-blocking assignment, so it
+  // still reads zero during that byte. Anything comparing against the length in
+  // the same cycle must use this instead -- the first version of the
+  // short-packet exit did not, and `1 >= 0` sent every packet straight to
+  // S_CHECK with an empty header.
+  logic [31:0] eff_total;
+  assign eff_total = (pos == '0) ? pkt_len_i : total;
 
   // A record's declared size, from the GENERATED table. Unknown opcodes return
   // zero, which is how check 5 tells "not in the ABI" from "wrong size".
@@ -196,6 +219,7 @@ module zhao_cmd_decoder
       cur_opcode <= '0; cur_bytes <= '0; cur_source <= '0;
       cur_flags <= '0; cur_rsv0 <= '0;
       err <= ZH_ABI_OK; err_set <= 1'b0; hdr_abort <= 1'b0; done <= 1'b0;
+      rec_err_l <= ZH_ABI_OK; rec_err_set <= 1'b0;
       rec_valid_o <= 1'b0;
     end else begin
       done <= 1'b0;
@@ -221,7 +245,13 @@ module zhao_cmd_decoder
           else                   h_hdr_crc   <= {pkt_byte_i, h_hdr_crc[31:8]};
 
           pos <= pos + 32'd1;
-          if (pos == 32'd35) st <= S_CHECK;
+          // Normally the header ends at byte 35. But a packet SHORTER than the
+          // 36-byte header must still reach a verdict (BAD_LENGTH, check 1),
+          // and it never delivers a 36th byte -- so leaving on pos == 35 alone
+          // hangs forever waiting for a byte that does not exist. Found by
+          // cmd_decoder_directed's "shorter than a header" case, which timed
+          // out rather than mismatching.
+          if ((pos == 32'd35) || ((pos + 32'd1) >= eff_total)) st <= S_CHECK;
         end
 
         // ---- checks 1-3, consuming nothing ---------------------------------
@@ -259,7 +289,11 @@ module zhao_cmd_decoder
           // before one payload byte has been consumed.
           if (rec_off == 16'd15) begin
             if (rec_err != ZH_ABI_OK) begin
-              `ZHAO_FAIL(rec_err)
+              // HELD, not reported: the payload CRC outranks this (see above).
+              if (!rec_err_set) begin
+                rec_err_l   <= rec_err;
+                rec_err_set <= 1'b1;
+              end
             end else begin
               rec_valid_o <= 1'b1;   // only a record that passed is reported
             end
@@ -286,8 +320,13 @@ module zhao_cmd_decoder
           if ((pos + 32'd1) == total) begin
             // 4 and 9 are decidable only here, which is exactly why records
             // cannot be retired before this instant.
+            // THE NORMATIVE ORDER, restored at the one instant every input to
+            // it exists: 4 (payload CRC), then the held record verdict from
+            // 5/6/10, then 9 (the count laws).
             if ((~crc_pay) != {pkt_byte_i, pcrc_hist}) begin
               `ZHAO_FAIL(ZH_ABI_BAD_PAYLOAD_CRC)
+            end else if (rec_err_set) begin
+              `ZHAO_FAIL(rec_err_l)
             end else if (rec_sum != h_cmd_bytes) begin
               `ZHAO_FAIL(ZH_ABI_TRUNCATED)
             end else if (rec_idx != h_cmd_count) begin
