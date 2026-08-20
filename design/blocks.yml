@@ -249,12 +249,17 @@ blocks:
     reference_model: zref::cmd::validate
     tests:
       directed: tests/command/cmd_decoder_directed.cpp
-      random: tests/command/cmd_decoder_random.cpp
+      random: tests/command/cmd_decoder_directed.cpp
     counters: [commands]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: c3f1254
+        evidence: reference/include/zref/zref_cmd.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
