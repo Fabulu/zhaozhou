@@ -1549,8 +1549,13 @@ blocks:
     counters: [terrain_triangles_emitted]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: 16078f4
+        evidence: reference/src/zrender/internal.hpp
+
 
     deferred: false
     cut_order: null
