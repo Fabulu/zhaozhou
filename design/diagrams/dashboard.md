@@ -10,7 +10,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | subsystem | SPECIFIED | REFERENCE_COMPLETE | UNIT_VERIFIED | RTL_VERIFIED | SYNTHESIZED | INTEGRATED | HARDWARE_PROVEN | blocked | total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | audio | · | · | · | 1 | · | · | · | · | 1 |
-| command | · | 1 | · | 2 | · | · | · | · | 3 |
+| command | · | · | 1 | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | 1 | · | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 7 | · | · | · | · | · | · | · | 7 |
 | texture | 3 | 1 | · | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 64 | 7 | 3 | 14 | · | · | · | 6 | 88 |
+| **all** | 64 | 6 | 4 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -37,6 +37,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | CMD.DMA | UNIT_VERIFIED | 2026-08-15 | `b64afe2` | tests/command/cmd_dma_directed.cpp |
 | CMD.DMA | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | CMD.DECODER | REFERENCE_COMPLETE | 2026-08-21 | `c3f1254` | reference/include/zref/zref_cmd.hpp |
+| CMD.DECODER | UNIT_VERIFIED | 2026-08-21 | `d2cf80d` | tests/command/cmd_decoder_directed.cpp |
 | CMD.SCHEDULER | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
 | CMD.SCHEDULER | UNIT_VERIFIED | 2026-08-16 | `768ce1a` | tests/command/cmd_scheduler_directed.cpp |
 | CMD.SCHEDULER | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
