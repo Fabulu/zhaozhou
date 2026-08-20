@@ -1890,3 +1890,54 @@ bits the right way. Anything else holding a lattice or a line buffer in flops is
 the same trade available again — `FORGE.CLIFF`'s `edge_mem_r[mhead_r][...]` is
 the next candidate and has never been synthesized.
 
+
+## DSP is the binding constraint, and it had no budget document
+
+Totalling the fitter reports for the first time: **171 DSP blocks against the
+device's 112.** Over by 53%, with no slack available — a multiplier either
+occupies a DSP or is rebuilt in logic, spending the ALMs that are also short.
+
+ALMs, which had everyone's attention, are **not** the problem: 25,430 of 41,910,
+61%, and that figure is generously padded by ~9,000 virtual pins that become
+wires once composed. DSP will barely move on composition, because a multiplier
+is a multiplier whether or not its neighbours are there.
+
+**The total is deduplicated and the correction matters.** Five measured rows are
+instantiated inside other measured rows: `TEXTURE.BILERP` x4 inside
+`TEXTURE.TMU` (the TMU's 28 DSP ARE those bilerps), `RASTER.BLEND` inside
+`RASTER.FRAGMENT`, `GEOM.ARENA` inside `GEOM.BINNER`, `SURFACE.BLEND` inside
+`SURFACE.STAMP`, `RASTER.TILESTORE` inside `RASTER.RESOLVE`. Summing every row
+gives 180; the honest figure is 171. Any future capacity claim from this report
+has to do the same subtraction.
+
+### The cause is one habit, not one bad block
+
+Every block computes its products **in parallel** to hit a per-clock throughput
+target. `TERRAIN.PROJECT` issues **nine 32x32 signed products per vertex** —
+three matrix rows by three terms — which at roughly four 18x18 DSPs each is the
+measured 33. `SURFACE.STAMP` runs six wide multiplies at once, two of which
+(`rad_ext*rad_ext`, `rin_ext*rin_ext`) are **per-stamp constants** sitting
+alongside the per-texel distance. `TERRAIN.NORMALS` issues its whole cross
+product in one cycle.
+
+### Levers, estimated not measured
+
+Written up in the new `design/budgets/dsp.md`. Largest first: time-multiplex
+PROJECT's rows (~21 saved, but it trades against the ledger's "1 vertex per
+clock" and that target has to be re-argued rather than assumed); serialise
+STAMP's radius squares or have the caller pass r-squared (~8, and the second
+costs nothing); serialise NORMALS' cross product (~9-12); narrow operands whose
+product is only ever compared.
+
+**These are counts, not measurements.** The TEXTURE.CACHE fix is the cautionary
+example from earlier tonight: a confident, well-argued first attempt moved the
+number by 0.5% and only the fitter said so.
+
+### Why nobody noticed
+
+There was no DSP budget document and the per-block reports were never totalled.
+`design/budgets/dsp.md` now exists, with a standing rule: any block adding a
+wide multiplier states its DSP cost in its contract, and any block claiming a
+per-clock throughput target states what that target costs in DSPs. A 53%
+overrun accumulated without anyone deciding to spend it.
+

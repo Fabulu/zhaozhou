@@ -1,0 +1,100 @@
+# DSP budget — the binding constraint, measured 2026-08-20
+
+> Device `5CSEBA6U23I7`: **112 DSP blocks**, read from the fitter's own
+> `used / available` line rather than from a datasheet or from memory.
+
+## The finding
+
+The design wants **171 DSP blocks against 112**. It is over by 53%, and DSP is
+the one resource with no slack: a multiplier either occupies a DSP or is rebuilt
+in logic, which spends the ALMs that are also short.
+
+This went unnoticed because **there was no DSP budget document** and the
+per-block fitter reports were never totalled. ALMs had everyone's attention
+(25,430 of 41,910, 61%) and were never the problem.
+
+## Measured, per block
+
+Read from `reports/synthesis/zhao_block_fit.json`, provisional per-block fits
+against `5CSEBA6U23I7`.
+
+| block | DSP | ALMs |
+|---|---:|---:|
+| `TERRAIN.PROJECT` | **33** | 6,068 |
+| `TEXTURE.TMU` | 28 | 1,839 |
+| `TERRAIN.LOD` | 28 | 2,086 |
+| `SURFACE.STAMP` | 28 | 950 |
+| `TERRAIN.NORMALS` | 18 | 789 |
+| `GEOM.BINNER` | 12 | 1,303 |
+| `RASTER.FRAGMENT` | 10 | 485 |
+| `TERRAIN.TESS` | 6 | 1,311 |
+| `GEOM.SETUP` | 4 | 743 |
+| `GEOM.CLIP`, `RASTER.EDGEWALK` | 2 each | |
+| **total (deduplicated)** | **171** | **24,327** |
+
+**The total is deduplicated.** Five measured rows are instantiated inside other
+measured rows and would otherwise be counted twice: `TEXTURE.BILERP` inside
+`TEXTURE.TMU` (four instances — the TMU's 28 DSP *are* those bilerps),
+`RASTER.BLEND` inside `RASTER.FRAGMENT`, `GEOM.ARENA` inside `GEOM.BINNER`,
+`SURFACE.BLEND` inside `SURFACE.STAMP`, `RASTER.TILESTORE` inside
+`RASTER.RESOLVE`. Counting every row gives 180; the honest figure is 171.
+
+## Why it is 171: every block multiplies in parallel
+
+The cause is one habit repeated, not one bad block. Each block computes all of
+its products **simultaneously** to hit a per-clock throughput target:
+
+- **`TERRAIN.PROJECT`, 33.** `mul32` is a full 32x32 signed product, and the
+  transform issues **nine of them per vertex** (three matrix rows x three
+  terms). At roughly four 18x18 DSPs per 32x32 product that is ~36, which is
+  the measured 33. The ledger asks for 1 projected vertex per clock and the
+  block delivers it, so the nine are all live at once.
+- **`SURFACE.STAMP`, 28.** Six wide multiplies: two 32-bit radius squares
+  (`rad_ext*rad_ext`, `rin_ext*rin_ext`), two 41-bit span products, and the
+  per-texel `d2 = dxw*dxw + dzw*dzw`.
+- **`TERRAIN.NORMALS`, 18.** The cross product is six multiplies issued in one
+  cycle (`e1y*e2z - e1z*e2y` and its two siblings).
+
+## The levers, in order of size
+
+**These are estimates from multiply counts, not measurements.** Each needs a
+fit to confirm, exactly as the TEXTURE.CACHE fix needed two attempts before the
+number moved.
+
+1. **Time-multiplex `TERRAIN.PROJECT`'s rows.** Three `mul32` per cycle instead
+   of nine, one matrix row at a time: ~33 to ~12, saving ~21. Costs three cycles
+   per vertex instead of one, so it trades directly against the ledger's
+   "1 vertex per clock". That target has to be re-argued rather than assumed —
+   and the composed frame budget, not the block's own datasheet line, is what
+   should decide it.
+2. **Serialise `SURFACE.STAMP`'s radius squares.** `r_outer2` and `r_inner2` are
+   **per-stamp constants**, computed in parallel with the per-texel distance.
+   Either compute them over the stamp's setup cycles with one shared multiplier,
+   or have the caller supply r-squared directly. ~8 saved, and the second option
+   costs nothing at all in the block.
+3. **Serialise `TERRAIN.NORMALS`' cross product.** Six multiplies over two or
+   three cycles instead of one: 18 to ~6-9.
+4. **Narrow operands where the result is only compared.** `d2` feeds an
+   inside/outside test against r-squared. A comparison does not need the full
+   32x32 product's precision, and narrowing the operands drops whole DSPs.
+
+Items 2 and 4 are the cheap ones: neither changes a throughput contract.
+
+## What this does NOT settle
+
+Per-block fits are **upper bounds**. There is no cross-block sharing and no
+composed-design optimisation, and roughly 9,000 virtual pins across the measured
+set become plain wires once composed. The composed fit is the only thing that
+answers "does it fit", and it does not run on the development machine
+(`quartus_map` committed 28.4 GB against 24 GB) — see `reports/composed/`.
+
+DSP is less likely than ALMs to shrink on composition, though: a multiplier is a
+multiplier whether or not its neighbours are present. Treat 171 as close to
+real and 25,430 ALMs as generously padded.
+
+## Standing rule
+
+**Any block that adds a wide multiplier states its DSP cost in its contract**,
+and any block claiming a per-clock throughput target states what that target
+costs in DSPs. The absence of this document is the reason a 53% overrun
+accumulated without anyone deciding to spend it.
