@@ -2,7 +2,13 @@
 param(
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [switch]$NoPush,
-    [switch]$KeepWorkspace
+    [switch]$KeepWorkspace,
+    # Default 1, deliberately. The composed map committed 28.4 GB with the
+    # project's NUM_PARALLEL_PROCESSORS 4; each worker carries its own working
+    # set, so this is the single biggest lever on peak memory. It costs wall
+    # time and changes nothing about the result.
+    # Raise it only if the run completes comfortably and you want it faster.
+    [int]$Processors = 1
 )
 
 Set-StrictMode -Version Latest
@@ -112,6 +118,7 @@ $machine = [ordered]@{
     pageFileBytes  = ($os.TotalVirtualMemorySize * 1KB)
     quartus        = $qver
     quartusBin     = $QuartusBin
+    processors     = $Processors
 }
 [IO.File]::WriteAllText((Join-Path $runDir 'MACHINE.json'),
     (($machine | ConvertTo-Json -Depth 6) + "`n"), $Utf8NoBom)
@@ -128,7 +135,8 @@ $transcript = Join-Path $runDir 'run.log'
 try {
     # NOT $args: that is a PowerShell automatic variable and assigning to it
     # inside a script is a good way to get a confusing failure later.
-    $fitArgs = @('-ReportRoot', $runDir, '-QuartusBin', $QuartusBin)
+    $fitArgs = @('-ReportRoot', $runDir, '-QuartusBin', $QuartusBin,
+                 '-Processors', $Processors)
     if ($KeepWorkspace) { $fitArgs += '-KeepWorkspace' }
     & (Join-Path $PSScriptRoot 'run_shell_fit.ps1') @fitArgs *>&1 |
         Tee-Object -FilePath $transcript

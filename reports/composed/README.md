@@ -29,9 +29,32 @@ at `C:\intelFPGA_lite\17.0\quartus\bin64`. Pass `-NoPush` if you want to inspect
 before it pushes.
 
 Before you start, **close what you can** — browsers especially. The peak is in
-the `quartus_map` stage and it is the whole point of the exercise; 32 GB is a
-tight fit, not a comfortable one. The script prints free RAM at the start and
-warns below ~30 GB.
+the `quartus_map` stage; 32 GB is a tight fit, not a comfortable one, and
+Windows itself will already be holding several GB. The script prints free RAM at
+the start and warns below ~30 GB.
+
+### Peak memory is the thing to manage
+
+The script already defaults to `-Processors 1`, and that is the biggest single
+lever. The 28.4 GB measurement was taken with the project's
+`NUM_PARALLEL_PROCESSORS 4`: each worker carries its own working set of the
+netlist, so the committed footprint scales with the count. Dropping to one
+trades wall time for memory and **changes nothing about the result** — the same
+work, divided differently. The override is applied to the STAGED copy of the
+project only, so the committed QSF is untouched and per-block characterization
+elsewhere is unaffected.
+
+If it still will not fit, in order:
+
+1. Raise the **page file** to 64 GB on the fastest drive. Paging is slow, but a
+   run that finishes slowly beats one that dies. The original failure thrashed
+   at near-zero CPU because 28.4 GB against 24 GB of physical RAM is hopeless;
+   28.4 GB against 32 GB with headroom behind it is a different situation.
+2. Reboot first and start the run before opening anything else. A freshly
+   booted Windows holds far less than one that has been up for days.
+3. Report back rather than lowering synthesis quality to force a pass. A fit
+   that only completes at reduced effort is a different measurement, and this
+   project would rather know the real number than have a comfortable one.
 
 Expect **hours**, not minutes.
 

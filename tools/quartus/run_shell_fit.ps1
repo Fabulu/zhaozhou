@@ -2,6 +2,16 @@
 param(
     [switch]$ParityOnly,
     [switch]$KeepWorkspace,
+    # Peak MEMORY is what stops this flow, not time. Measured 2026-08-18:
+    # quartus_map committed 28.4 GB and thrashed against 24 GB of RAM.
+    # NUM_PARALLEL_PROCESSORS is the biggest lever there, because each worker
+    # holds its own working set of the netlist, so the committed footprint
+    # scales with it. The project QSF asks for 4. Passing a lower number here
+    # overrides it in the STAGED copy only, so the committed project keeps its
+    # value and per-block characterization is unaffected.
+    # Results are identical either way: this changes how the work is divided,
+    # not what is computed.
+    [int]$Processors = 0,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$ReportRoot
 )
@@ -140,6 +150,17 @@ try {
     }
     if (($snapshotExpected -join "`n") -cne ($SourceCone -join "`n")) {
         throw 'Clean HEAD archive source cone differs from the parity-checked canonical source cone.'
+    }
+
+    if ($Processors -gt 0) {
+        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
+        $qsfText = [IO.File]::ReadAllText($stagedQsf)
+        # A later assignment of the same name wins in a QSF, so appending is
+        # enough and the original line stays visible in the staged file.
+        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Processors (peak-memory control).`n"
+        $qsfText += "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors`n"
+        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
+        Write-Host "staged override: NUM_PARALLEL_PROCESSORS $Processors"
     }
 
     $LogDir = Join-Path $Workspace 'logs'
