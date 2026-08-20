@@ -44,4 +44,120 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.s
 # The simulation harness interface is intentionally virtual. This prevents the
 # characterization project from inventing a package pinout or exhausting I/O;
 # zhao_shell_top remains the top and its complete port/logic cone remains present.
-set_instance_assignment -name VIRTUAL_PIN ON -to *
+#
+# EVERY PORT NAMED, rather than `-to *`, and the reason is peak memory.
+#
+# A wildcard instance assignment is matched against EVERY NODE NAME IN THE
+# DESIGN, not against the top-level ports it was meant for. So `-to *` made
+# Quartus carry a VIRTUAL_PIN candidacy for every internal net in the cone,
+# which is a database entry each and a pattern match each. The composed map
+# committed 28.4 GB and thrashed against 24 GB of RAM (measured 2026-08-18) for
+# a design whose whole cone is video, command, debug, input, audio and memory
+# blocks -- no terrain, texture, geometry or raster. A few thousand ALMs should
+# not need 28 GB, and the wildcard is the reason it did.
+#
+# These are the 101 ports of zhao_shell_top, generated from its declaration.
+# Naming a bus applies the assignment to all of its bits. If the port list
+# changes, regenerate: the source of truth is the module header, and a missing
+# port becomes a real pin and fails the fit loudly rather than silently.
+set_instance_assignment -name VIRTUAL_PIN ON -to gpu_clk
+set_instance_assignment -name VIRTUAL_PIN ON -to vid_clk
+set_instance_assignment -name VIRTUAL_PIN ON -to audio_clk
+set_instance_assignment -name VIRTUAL_PIN ON -to rst_n
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_state_i
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_byte_len_i
+set_instance_assignment -name VIRTUAL_PIN ON -to ring_wr_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to ring_wr_slot_o
+set_instance_assignment -name VIRTUAL_PIN ON -to ring_wr_state_o
+set_instance_assignment -name VIRTUAL_PIN ON -to ring_wr_ready_i
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_req_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_req_write_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_req_addr_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_req_len_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_req_grant_i
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_wr_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_wr_data_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_wr_last_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_rd_valid_i
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_rd_data_i
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_rd_last_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_present_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_buttons_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_lx_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ly_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_rx_i
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ry_i
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_wr_valid_i
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_wr_l_i
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_wr_r_i
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_wr_ready_o
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_refill_req_o
+set_instance_assignment -name VIRTUAL_PIN ON -to aud_occupancy_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pcm_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pcm_l_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pcm_r_o
+set_instance_assignment -name VIRTUAL_PIN ON -to underrun_status_o
+set_instance_assignment -name VIRTUAL_PIN ON -to audio_underruns_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_rgb_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_x_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_y_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_hsync_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_vsync_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_hblank_o
+set_instance_assignment -name VIRTUAL_PIN ON -to px_vblank_o
+set_instance_assignment -name VIRTUAL_PIN ON -to scaler_violation_o
+set_instance_assignment -name VIRTUAL_PIN ON -to crc_frame_o
+set_instance_assignment -name VIRTUAL_PIN ON -to crc_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to crc_bytes_o
+set_instance_assignment -name VIRTUAL_PIN ON -to crc_size_err_o
+set_instance_assignment -name VIRTUAL_PIN ON -to gpu_tick_o
+set_instance_assignment -name VIRTUAL_PIN ON -to gpu_tick_frame_id_o
+set_instance_assignment -name VIRTUAL_PIN ON -to gpu_tick_repeated_o
+set_instance_assignment -name VIRTUAL_PIN ON -to gpu_complete_slot_o
+set_instance_assignment -name VIRTUAL_PIN ON -to deadline_faults_o
+set_instance_assignment -name VIRTUAL_PIN ON -to frame_cycles_o
+set_instance_assignment -name VIRTUAL_PIN ON -to slot_state_o
+set_instance_assignment -name VIRTUAL_PIN ON -to fence_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to fence_slot_o
+set_instance_assignment -name VIRTUAL_PIN ON -to fence_ok_o
+set_instance_assignment -name VIRTUAL_PIN ON -to fence_status_o
+set_instance_assignment -name VIRTUAL_PIN ON -to mode_act_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dma_done_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dma_status_o
+set_instance_assignment -name VIRTUAL_PIN ON -to blit_done_o
+set_instance_assignment -name VIRTUAL_PIN ON -to blit_status_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_frame_flat_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_sequence_o
+set_instance_assignment -name VIRTUAL_PIN ON -to input_gaps_o
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_active_o
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_pwm_o
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_drops_o
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_snap_ready_i
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_snap_valid_o
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_snap_id_o
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_snap_value_o
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_window_open_o
+set_instance_assignment -name VIRTUAL_PIN ON -to cnt_cat_violation_o
+set_instance_assignment -name VIRTUAL_PIN ON -to guard_violations_o
+set_instance_assignment -name VIRTUAL_PIN ON -to starvation_o
+set_instance_assignment -name VIRTUAL_PIN ON -to init_done_o
+set_instance_assignment -name VIRTUAL_PIN ON -to refresh_stalls_o
+set_instance_assignment -name VIRTUAL_PIN ON -to bank_conflicts_o
+set_instance_assignment -name VIRTUAL_PIN ON -to scanout_preempted_o
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_err_count_o
+set_instance_assignment -name VIRTUAL_PIN ON -to shell_err_wfifo_o
+set_instance_assignment -name VIRTUAL_PIN ON -to shell_err_route_o
+set_instance_assignment -name VIRTUAL_PIN ON -to shell_err_cdc_o
+set_instance_assignment -name VIRTUAL_PIN ON -to shell_err_framer_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_cs_n_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_ras_n_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_cas_n_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_we_n_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_a_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_ba_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_oe_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_dqm_o
+set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_i
