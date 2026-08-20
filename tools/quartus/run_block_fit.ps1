@@ -70,6 +70,25 @@ $Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-block-fit-{0}" -f $PID)
 New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
 $results = New-Object 'System.Collections.Generic.List[object]'
 
+# The fitter writes resources as "USED / AVAILABLE ( PCT % )". Get-Field takes
+# only the numerator, which is how this report ended up able to say a block is
+# 1,422 ALMs without being able to say whether the design fits anything. This
+# takes the DENOMINATOR from the same line, so the device's capacity travels
+# with the measurement instead of being looked up separately and misremembered.
+function Get-Capacity([string]$Text, [string[]]$Labels) {
+    foreach ($label in $Labels) {
+        $m = [regex]::Match($Text, "(?im)^\s*" + [regex]::Escape($label) + "\s*:\s*([^
+]+)")
+        if ($m.Success) {
+            $n = [regex]::Match($m.Groups[1].Value, '[0-9][0-9,]*\s*/\s*([0-9][0-9,]*)')
+            if ($n.Success) {
+                return [int64]::Parse($n.Groups[1].Value.Replace(',', ''), [Globalization.CultureInfo]::InvariantCulture)
+            }
+        }
+    }
+    return $null
+}
+
 function Get-Field([string]$Text, [string[]]$Labels) {
     foreach ($label in $Labels) {
         $m = [regex]::Match($Text, "(?im)^\s*" + [regex]::Escape($label) + "\s*:\s*([^\r\n]+)")
@@ -141,6 +160,9 @@ try {
             $row.ramBlocks = Get-Field $t @('Total RAM Blocks')
             $row.dspBlocks = Get-Field $t @('Total DSP Blocks')
             $row.virtualPins = Get-Field $t @('Total virtual pins')
+            $row.almsAvailable = Get-Capacity $t @('Logic utilization (in ALMs)', 'Logic utilization')
+            $row.ramBlocksAvailable = Get-Capacity $t @('Total RAM Blocks')
+            $row.dspBlocksAvailable = Get-Capacity $t @('Total DSP Blocks')
         } elseif ($row.status -eq 'unknown') {
             $row.status = 'no-summary'
         }
