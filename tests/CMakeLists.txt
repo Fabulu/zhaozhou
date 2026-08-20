@@ -900,6 +900,12 @@ verilate(test_cmd_decoder_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv)
 add_test(NAME cmd_decoder_directed COMMAND test_cmd_decoder_directed)
 set_tests_properties(cmd_decoder_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# random lane of the same binary: single-bit flips at uniformly random offsets
+# in well-formed packets, verdict compared against the oracle every time.
+add_test(NAME cmd_decoder_random COMMAND test_cmd_decoder_directed --random 300)
+set_tests_properties(cmd_decoder_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME cmd_decoder_random_nightly COMMAND test_cmd_decoder_directed --random 4000)
+set_tests_properties(cmd_decoder_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
 
 add_test(NAME lint_zhao_cmd_decoder
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

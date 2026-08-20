@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -138,6 +139,21 @@ void diff(const std::vector<uint8_t>& pkt, const char* what) {
   }
 }
 
+// PCG RXS-M-XS, the committed test PRNG shape (qformats.md 7.5) that every
+// other random lane in this tree uses.
+struct Prng {
+  uint64_t s;
+  explicit Prng(uint64_t seed) : s(seed * 6364136223846793005ULL + 1442695040888963407ULL) {}
+  uint32_t next() {
+    const uint64_t x = s;
+    s = x * 6364136223846793005ULL + 1442695040888963407ULL;
+    const uint32_t w = static_cast<uint32_t>(((x >> 22) ^ x) >> 29);
+    const uint32_t v = (static_cast<uint32_t>(x >> 27) ^ w) * 277803737u;
+    return (v >> 22) ^ v;
+  }
+  uint32_t below(uint32_t n) { return n ? (next() % n) : 0u; }
+};
+
 std::vector<uint8_t> goodPacket(uint32_t nops) {
   zhao::ZhaoFrameBuilder b;
   b.begin_frame(1, 0, 0, 0);
@@ -148,9 +164,46 @@ std::vector<uint8_t> goodPacket(uint32_t nops) {
 
 }  // namespace
 
+/**
+ * The random lane. A well-formed packet is built, then with high probability a
+ * SINGLE byte somewhere in it is corrupted, and the verdict is compared.
+ *
+ * Corrupting one byte at a uniformly random offset is the point: it lands in
+ * the magic, the version, a length, a CRC word, a record header or a payload
+ * with no bias, and the oracle decides what that should mean. Constructing
+ * "interesting" corruptions by hand would only ever test the failures I had
+ * already thought of -- and the ordering defect this file found on its first
+ * run was one I had not.
+ */
+int randomLane(uint32_t iters, uint64_t seed) {
+  Prng rng(seed);
+  for (uint32_t k = 0; k < iters; ++k) {
+    std::vector<uint8_t> p = goodPacket(rng.below(6));
+    char tag[96];
+    if (rng.below(8) != 0) {
+      const uint32_t off = rng.below(static_cast<uint32_t>(p.size()));
+      const uint8_t was = p[off];
+      p[off] = static_cast<uint8_t>(p[off] ^ (1u << rng.below(8)));
+      std::snprintf(tag, sizeof tag, "random[%u] flip @%u (0x%02X->0x%02X)", k, off, was, p[off]);
+    } else {
+      std::snprintf(tag, sizeof tag, "random[%u] clean", k);
+    }
+    diff(p, tag);
+    if (zhao::check_failures() != 0) return 1;  // stop at the first divergence
+  }
+  return 0;
+}
+
 int main(int argc, char** argv) {
-  (void)argc;
-  (void)argv;
+  // --random N runs the differential over N generated packets instead of the
+  // directed cases; the fast lane uses a small N and nightly a large one.
+  for (int i = 1; i < argc; ++i) {
+    if (std::strcmp(argv[i], "--random") == 0 && (i + 1) < argc) {
+      const uint32_t n = static_cast<uint32_t>(std::atoi(argv[i + 1]));
+      randomLane(n, 0x5A17C0DEULL);
+      return zhao::report_and_exit("cmd_decoder_random");
+    }
+  }
 
   // ---- 1. well-formed packets of several shapes ---------------------------
   diff(goodPacket(0), "valid: begin+end");
@@ -214,6 +267,75 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> p = goodPacket(2);
     p[24] = static_cast<uint8_t>(p[24] + 1);  // command_count, breaking check 9
     diff(p, "count mismatch");
+  }
+
+  // ---- 3b. boundaries that must be CONSTRUCTED ---------------------------
+  // A mutation sweep removing the `record_bytes >= 16` guard SURVIVED both
+  // lanes, which means nothing here was building a record too small to hold
+  // its own header. Uniform random never finds this: it flips bits in
+  // well-formed packets, and the only multiple of 16 below 16 is zero, which
+  // no single bit flip of 0x0010 produces alongside a valid CRC. This project
+  // has now learned the same lesson six times -- exact-equality boundaries
+  // have to be built on purpose.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    std::vector<uint8_t> bad(16, 0);
+    bad[0] = 0x00; bad[1] = 0x00;   // opcode NOP
+    bad[2] = 0x00; bad[3] = 0x00;   // record_bytes = 0: a multiple of 16, and
+                                    // smaller than the 16-byte record header
+    b.append_record(bad);
+    b.end_frame(0);
+    diff(b.seal(1, 1, 0), "record_bytes == 0");
+  }
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    std::vector<uint8_t> bad(16, 0);
+    bad[2] = 0x08;                  // record_bytes = 8: below 16 AND not a
+                                    // multiple of 16, the other side of the guard
+    b.append_record(bad);
+    b.end_frame(0);
+    diff(b.seal(1, 1, 0), "record_bytes == 8");
+  }
+
+  // ---- 3c. two more boundaries that mutations proved were unreachable -----
+  // A sweep removing check 10 (the debug-flag gate) and check 9's count law
+  // BOTH survived. Neither is an equivalent mutation; both were simply never
+  // reached, and for instructive reasons.
+  {
+    // Check 10 needs a debug-umbrella opcode (0xF000-0xF0FF) in a frame whose
+    // flags bit0 is CLEAR. Nothing above used one at all, so the whole gate was
+    // dead code as far as the suite was concerned.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    std::vector<uint8_t> rec(32, 0);
+    rec[0] = 0x04; rec[1] = 0xF0;    // ZHAO_OP_DEBUG_RUMBLE = 0xF004
+    rec[2] = 32;   rec[3] = 0;       // its ABI size, so check 5 passes cleanly
+    b.append_record(rec);
+    b.end_frame(0);
+    diff(b.seal(1, 1, 0, 0, /*flags=*/0), "debug opcode without the debug flag");
+    // ...and the same packet WITH the flag set must be accepted, so the test
+    // pins the gate in both directions rather than only the failing one.
+    diff(b.seal(1, 1, 0, 0, /*flags=*/1), "debug opcode with the debug flag");
+  }
+  {
+    // Check 9's count law was unreachable because the obvious way to break it
+    // -- editing command_count in the header -- also breaks header_crc32c, and
+    // check 3 fires first. The count must be made wrong while the header CRC
+    // stays RIGHT, which means resealing the header after the edit.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.nop();
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    p[24] = static_cast<uint8_t>(p[24] + 1);            // one record too many
+    const uint32_t c = zhao_abi::zhao_crc32c(0, p.data(), 32);
+    p[32] = static_cast<uint8_t>(c);
+    p[33] = static_cast<uint8_t>(c >> 8);
+    p[34] = static_cast<uint8_t>(c >> 16);
+    p[35] = static_cast<uint8_t>(c >> 24);
+    diff(p, "count mismatch with a VALID header CRC");
   }
 
   // ---- 4. every committed golden -----------------------------------------

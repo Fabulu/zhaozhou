@@ -184,7 +184,15 @@ module zhao_cmd_decoder
     else if (|h_flags[15:1])                             hdr_err = ZH_ABI_RESERVED_FLAG;
     else if ((32'd40 + h_cmd_bytes) > FRAME_SLOT_BYTES)  hdr_err = ZH_ABI_BAD_LENGTH;
     else if (|h_cmd_bytes[3:0])                          hdr_err = ZH_ABI_BAD_LENGTH;
-    else if ((h_cmd_count << 4) > h_cmd_bytes)           hdr_err = ZH_ABI_BAD_LENGTH;
+    // NOT `(h_cmd_count << 4) > h_cmd_bytes`. That shift OVERFLOWS 32 bits: a
+    // command_count of 0x10000000 shifts to 0x1_0000_0000, truncates to zero,
+    // and the check silently passes -- the packet then fell through to the
+    // header CRC and reported BAD_HEADER_CRC where the oracle says BAD_LENGTH.
+    // Found by the random lane at iteration 599, a single bit flipped in byte
+    // 27. Dividing the other side instead cannot overflow, and the two forms
+    // agree exactly because command_bytes is already a multiple of 16 (checked
+    // on the line above).
+    else if (h_cmd_count > (h_cmd_bytes >> 4))           hdr_err = ZH_ABI_BAD_LENGTH;
     else if (total != (32'd40 + h_cmd_bytes))            hdr_err = ZH_ABI_BAD_LENGTH;
     else if ((~crc_hdr) != h_hdr_crc)                    hdr_err = ZH_ABI_BAD_HEADER_CRC;
   end

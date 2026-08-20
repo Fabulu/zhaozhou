@@ -149,7 +149,52 @@ Planned: `tests/command/cmd_decoder_directed.cpp`.
 
 ## Randomized differential tests
 
-Planned: `tests/command/cmd_decoder_random.cpp`.
+`tests/command/cmd_decoder_directed.cpp --random N` (300 fast / 4,000 nightly).
+A well-formed packet is built, then with probability 7/8 a SINGLE byte at a
+uniformly random offset has one bit flipped, and the verdict is compared. Every
+packet runs under three record-backpressure patterns.
+
+Random offsets rather than authored corruptions on purpose: a flip lands in the
+magic, the version, a length, either CRC word, a record header or a payload with
+no bias, and the ORACLE decides what it should mean. Hand-built corruptions only
+ever test the failures the author already imagined.
+
+It earned that immediately. At iteration 599 a flip in byte 27 produced a
+`command_count` of 0x10000000, and `(h_cmd_count << 4)` OVERFLOWED 32 bits to
+zero — so the check silently passed and the packet fell through to report
+`BAD_HEADER_CRC` where the oracle says `BAD_LENGTH`. The comparison is now
+`h_cmd_count > (h_cmd_bytes >> 4)`, which cannot overflow and is exact because
+`command_bytes` is already known to be a multiple of 16.
+
+## Mutation testing
+
+Five defects injected one at a time, each with the Verilated model directory
+deleted and the project reconfigured so the rebuild is REAL — the first attempt
+produced two mutations with byte-identical binaries, which is this tree's
+recurring stale-build trap and would have scored a survivor as a kill.
+
+| mutation | outcome |
+|---|---|
+| M1 header CRC compared un-inverted | **killed** (both lanes) |
+| M2 record `>= 16` minimum removed | **survived — EQUIVALENT** |
+| M3 `bytes_consumed` ignores the header abort | **killed** (both lanes) |
+| M4 debug-opcode flag gate removed | survived, then **killed** after new coverage |
+| M5 record-count law removed | survived, then **killed** after new coverage |
+
+**M2 is genuinely equivalent and the guard stays anyway.** Any record reaching
+that test has already passed the multiple-of-16 check, and the only multiple of
+16 below 16 is zero — which the `record_bytes == zhao_opcode_record_bytes(op)`
+check rejects regardless, with the same error code. The guard is unreachable as
+a distinct outcome. It is kept because it states the law locally, and recorded
+here so nobody scores it as a coverage failure again.
+
+**M4 and M5 were real gaps, and both hid behind an earlier check.** Nothing in
+the suite used a debug-umbrella opcode at all, so check 10 was dead code. And
+the obvious way to break the count law — editing `command_count` — also breaks
+`header_crc32c`, so check 3 fired first and check 9 was never reached; the test
+now reseals the header CRC after the edit. Both are the same lesson this project
+has learned six times: exact-equality boundaries must be CONSTRUCTED, because
+uniform random never lands on them.
 
 ## Formal properties
 
