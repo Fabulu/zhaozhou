@@ -1746,3 +1746,78 @@ Default raised to 3000 s with that measurement recorded as the reason, and all
 ten queued for re-characterization. A default that manufactures false failures
 is worse than a slow one, because a false failure gets designed around.
 
+
+## Planetside suns: the donor's actual technique, and why the first attempt could not work
+
+Ten worlds are live on the site. The owner's correction was blunt and correct:
+the atmosphere pair I published earlier "is not what I was talking about", and
+the suns in it "might be fireball effects for spells and stuff". They were: a
+coloured disc with a halo, which is a SPACE sun wearing warmer paint.
+
+### What the donor actually does, read out of its own source
+
+`noctis-0.cpp:2873` `white_sun()` rasterises an **additive, linearly-falling
+radial splat directly into the sky's six-bit intensity plane, before the terrain
+is drawn**, and the atmosphere is ONE number: `K=4, fgm_factor=0` with air (no
+core, no disc at all), `K=3, fgm_factor=0.5` without. Two consequences make the
+whole effect:
+
+1. **The sun has no colour of its own.** It saturates the plane to 63, and 63 is
+   the sky palette's own peak entry. "Different planet, different sky, different
+   sun" is ONE mechanism, not two — which is exactly what the owner said about
+   islands and skies before any of this was read.
+2. **The formless bloom is emergent from additive-plus-clamp.** Where the sky
+   under the splat is already bright, the sum rails over a wide area IN THE
+   SKY'S OWN COLOUR, so the bloom has no edge anywhere. Composite an
+   alpha-blended sprite over a background instead and the effect cannot happen
+   at any radius or any softness of falloff. That is why the first attempt was
+   not fixable by tuning it.
+
+Full study in `untitled-game/docs/NOCTIS-SURFACE-NOTES.md`.
+
+### What landed
+
+`planet_sky_hook` in the reel builds the sky as a six-bit plane — vertical ramp
+(brightest at the horizon, the donor's `crcy = s_background[p] * cpos /
+bk_lines_to_horizon`) plus two octaves of PCG value noise standing in for
+`nebular_sky`'s smoothed middle-square fill — adds the sun splat INTO it, clamps
+at 63, and maps through one 64-entry ramp per world. Ten worlds in `kPlanets`,
+each six colours and four numbers.
+
+**The palette result is the headline.** Every loop carries a full gradient sky,
+cloud mottling and a sky-filling bloom, and they measure **93 to 156 colours**.
+The earlier atmosphere pair had to be given a FLAT NEAR-NEUTRAL sky to fit at
+all, because an additive sprite over a gradient multiplies halo levels by sky
+rows. Sharing one plane and one ramp removes that product entirely.
+
+And the proof that it is the technique rather than luck: **the 480 px red giant,
+the largest sun in the set, produces the loop with the FEWEST colours (93)** —
+against 156 for the blue supergiant. A sun that saturates most of the frame
+collapses onto one entry. Bigger is cheaper.
+
+### Two defects found by looking at the output
+
+- **The RGB sky dome was still being drawn underneath.** Its under-plane sat on
+  screen as real geometry with a depth, and the hook correctly skipped it as a
+  surface — a flat salmon band under the island belonging to no planet's ramp.
+  Planet subjects now suppress the `DrawSky` record entirely.
+- **The binary railed the entire frame white.** Two 300 px and 150 px blooms
+  over a base of 24 leave nowhere unsaturated, and two suns you cannot tell
+  apart are worse than one. It got its own darker world with two smaller,
+  well-separated stars, which keeps both blooms readable AND the dark band
+  between them.
+
+### Honest limits
+
+The vertical ramp falls away BELOW the horizon as well as above it, which the
+donor does not do — it stops at the horizon because you are standing on ground,
+and here the world is a floating island with open sky underneath. That is our
+choice, not the donor's law, and it is why these read as islands hanging in air.
+
+There is still no azimuthal sky term: the sky does not brighten around the sun
+independently of the splat. In these frames the splat IS the sky glow, which is
+now much closer to correct than the corona stand-in was, but it is not the same
+thing as a scattering term.
+
+All ten CRCs pinned at first render; every GIF verified byte-exact on decode.
+

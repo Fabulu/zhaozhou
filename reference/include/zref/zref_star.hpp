@@ -187,6 +187,11 @@ Sprite8 starface(uint32_t texture_seed, uint8_t smooth_passes);
 /** §4 corona bake: 128×128 radial, linear falloff, core16 ∈ {0,5,8}
  *  (halo_atmo / halo_space / halo_airless). */
 Sprite8 corona_sprite(uint8_t core16);
+/** PROPOSED §4 amendment, NOT ratified: the atmospheric bloom profile.
+ *  `63·a²/(a²+rr²)` with `half_h` the half-intensity radius in half-texels —
+ *  a broad core and a tail that never reaches zero inside the sprite, for a
+ *  surface sun with no resolvable disc. §4's linear cone is unchanged above. */
+Sprite8 corona_sprite_bloom(uint8_t half_h);
 
 // §3/§4 screen clamps (Z60; Duo passes its own smaller halo clamp).
 inline constexpr int32_t kDiscRMaxPx = 112;

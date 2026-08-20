@@ -144,5 +144,52 @@ Sprite8 corona_sprite(uint8_t core16) {
   return out;
 }
 
+// ---- PROPOSED §4 amendment: the atmospheric bloom profile ------------------
+//
+// NOT RATIFIED. `corona_sprite` above is the frozen §4 law and is untouched;
+// this is a second profile offered as evidence for an amendment, and nothing
+// in the ledger cites it.
+//
+// WHY A SECOND PROFILE IS NEEDED. §4's falloff is LINEAR in radius, which
+// draws a cone: a findable edge at the rim and a core that shrinks to a point.
+// That is a star seen through nothing, and it is what every space class in the
+// gamut wants. A sun seen from a planet's SURFACE through a thick atmosphere
+// is a different object. It has no resolvable disc at all. It is a formless
+// bloom, mostly sitting below the horizon, whose light bleeds a long way up
+// into the sky with no boundary anywhere. A cone cannot express that, and
+// scaling a cone up only produces a bigger cone.
+//
+// THE PROFILE. Intensity `63·a² / (a² + rr²)` — a Lorentzian, chosen because
+// it holds a broad saturated core and then decays without ever reaching zero
+// inside the sprite, which is exactly the "no findable edge" property. `half_h`
+// is the half-intensity radius in half-texels: intensity is 63 at the centre,
+// 32 at `half_h`, and still around 2 at the 120 half-texel rim.
+//
+// All integer, one rounding, no host floats (charter §29-7). The cost at
+// runtime is unchanged and remains zero: §4's point is that the LUT IS the
+// texture, so a different profile is bake time and nothing else.
+Sprite8 corona_sprite_bloom(uint8_t half_h) {
+  constexpr int32_t R_h = 120;
+  const int32_t a2 = static_cast<int32_t>(half_h) * static_cast<int32_t>(half_h);
+  Sprite8 out;
+  out.w = out.h = 128;
+  out.pix.assign(128 * 128, 0);
+  for (int y = 0; y < 128; ++y) {
+    const int32_t dy = 2 * y - 127;
+    for (int x = 0; x < 128; ++x) {
+      const int32_t dx = 2 * x - 127;
+      const int32_t rr = static_cast<int32_t>(isqrt_u32(static_cast<uint32_t>(dx * dx + dy * dy)));
+      uint8_t pix = 0;
+      if (rr < R_h) {
+        const int64_t den = static_cast<int64_t>(a2) + static_cast<int64_t>(rr) * rr;
+        const int64_t v = (static_cast<int64_t>(63) * a2 + den / 2) / den;
+        pix = static_cast<uint8_t>(v < 1 ? 1 : (v > 63 ? 63 : v));
+      }
+      out.pix[static_cast<size_t>(y) * 128 + x] = pix;
+    }
+  }
+  return out;
+}
+
 }  // namespace star
 }  // namespace zref

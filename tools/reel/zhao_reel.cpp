@@ -362,6 +362,254 @@ std::vector<zref::star::GlintPoint> make_glints(bool white, const std::vector<Re
   return out;
 }
 
+// ===========================================================================
+// PLANETSIDE SUNS — Noctis's actual technique, not a sprite over a gradient
+// ===========================================================================
+//
+// The owner asked for the sun as seen from a planet's SURFACE, and the first
+// attempt (atmo-sun-donor / atmo-sun-thick) got it wrong in a way worth
+// stating: it drew a coloured disc with a halo over an RGB sky. On a world with
+// real air there IS no disc. There is a formless bloom near the horizon
+// bleeding into a mottled sky, and it cannot be produced by compositing a
+// coloured sprite over a background.
+//
+// Read out of the donor's own surface renderer (noctis-1.cpp / noctis-0.cpp;
+// the study is in untitled-game/docs/NOCTIS-SURFACE-NOTES.md), the mechanism is:
+//
+//   1. THE SKY IS A SIX-BIT INTENSITY PLANE, not RGB. `s_background` holds
+//      0..63 per pixel over a panoramic strip and is coloured through a palette
+//      only at the very end.
+//   2. THE SUN IS ADDED INTO THAT PLANE. `white_sun` rasterises an additive,
+//      linearly-falling radial splat straight into the sky's intensity and
+//      saturates at 63 — BEFORE anything is coloured.
+//   3. SO THE SUN HAS NO COLOUR OF ITS OWN. It saturates to 63, and 63 is the
+//      sky palette's own peak entry. "Different planet, different sky,
+//      different sun" is ONE mechanism, not two.
+//   4. ATMOSPHERE IS ONE NUMBER. With air the splat has no flat core at all
+//      (fgm_factor 0); without air it keeps a hard saturated core and reads as
+//      a disc with a skirt.
+//   5. THE FORMLESS LOOK IS EMERGENT from additive-plus-clamp. Where the sky
+//      under the splat is already bright, the sum rails over a wide area IN THE
+//      SKY'S OWN COLOUR, so the bloom has no edge anywhere. Alpha-blend a
+//      sprite instead and the effect cannot happen at any radius.
+//
+// This is the technique, reimplemented in integer arithmetic; no donor asset or
+// data is used. It also fixes the palette problem that forced the first attempt
+// onto a flat sky: sky and sun together select at most 64 colours however large
+// the bloom gets, because they share one plane and one ramp.
+//
+// The vertical ramp (brightest at the horizon, falling toward the zenith) is
+// the donor's `crcy = s_background[p] * cpos / bk_lines_to_horizon`. The
+// mottling is our own PCG value noise smoothed twice, standing in for
+// `nebular_sky`'s middle-square fill plus its smoothers — the donor's own note
+// is that the character comes from the smoothing, not the generator.
+
+struct PlanetSky {
+  uint8_t ramp[64][3] = {};  // intensity -> RGB. ramp[63] IS the sun's colour.
+  int32_t horizon_y = 150;   // screen row the ground meets the sky
+  int32_t sun_x = 192, sun_y = 150;
+  int32_t sun_mag = 120;   // splat radius, px
+  int32_t sun_core = 0;    // flat saturated core, px. 0 = has an atmosphere
+  // A SECOND sun. The donor carries one too (`secondarysun`, with its own
+  // pri_x/pri_y/pri_z), and it costs nothing here because both splats add into
+  // the same plane and the clamp resolves the overlap: where two blooms meet
+  // the sum simply rails, in the sky's own peak colour, exactly as one bloom
+  // does against itself. Two suns therefore add ZERO palette entries.
+  int32_t sun2_mag = 0;  // 0 = single star system
+  int32_t sun2_core = 0;
+  int32_t sun2_x = 0, sun2_y = 0;
+  uint8_t base = 40;       // sky_brightness before the ramp, 0..63
+  uint8_t noise_amp = 10;  // mottling, 0 disables
+  uint32_t seed = 1;
+};
+
+// PCG value noise on an 8x8 lattice, smoothed — deterministic, integer only.
+uint8_t sky_noise(int32_t x, int32_t y, uint32_t seed) {
+  const auto h = [&](int32_t cx, int32_t cy) -> uint32_t {
+    uint32_t v = static_cast<uint32_t>(cx) * 0x9E3779B9u ^ static_cast<uint32_t>(cy) * 0x85EBCA6Bu ^
+                 seed * 0xC2B2AE35u;
+    v ^= v >> 15;
+    v *= 0x2545F491u;
+    v ^= v >> 13;
+    return v;
+  };
+  const int32_t gx = x >> 3, gy = y >> 3;
+  const int32_t fx = x & 7, fy = y & 7;
+  // bilinear over the four lattice corners: the two smoothing passes the donor
+  // runs, folded into the interpolation rather than done as separate sweeps
+  const uint32_t a = (h(gx, gy) >> 24) & 63u;
+  const uint32_t b = (h(gx + 1, gy) >> 24) & 63u;
+  const uint32_t c = (h(gx, gy + 1) >> 24) & 63u;
+  const uint32_t d = (h(gx + 1, gy + 1) >> 24) & 63u;
+  const uint32_t top = (a * (8 - fx) + b * fx) >> 3;
+  const uint32_t bot = (c * (8 - fx) + d * fx) >> 3;
+  return static_cast<uint8_t>((top * (8 - fy) + bot * fy) >> 3);
+}
+
+/** Build a 64-entry ramp from three control colours: the deep sky at 0, the
+ *  mid body, and the peak at 63 — which is what the sun becomes. */
+void planet_ramp(uint8_t out[64][3], const uint8_t lo[3], const uint8_t mid[3],
+                 const uint8_t hi[3]) {
+  for (int i = 0; i < 64; ++i) {
+    for (int c = 0; c < 3; ++c) {
+      int32_t v;
+      if (i < 40) {
+        v = lo[c] + (static_cast<int32_t>(mid[c] - lo[c]) * i + 20) / 40;
+      } else {
+        v = mid[c] + (static_cast<int32_t>(hi[c] - mid[c]) * (i - 40) + 12) / 24;
+      }
+      out[i][c] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+  }
+}
+
+/** The pre-resolve hook: paint every sky pixel from the intensity plane.
+ *  Depth is Q16.16 1/w with larger = closer and the sky backdrop at 0, so a
+ *  pixel with depth 0 is sky and everything else is a real surface we leave
+ *  alone. */
+void planet_sky_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
+                     uint32_t tick) {
+  (void)tick;
+  const PlanetSky& p = *static_cast<const PlanetSky*>(vctx);
+  const int32_t hy = p.horizon_y > 1 ? p.horizon_y : 1;
+  for (uint32_t y = 0; y < h; ++y) {
+    for (uint32_t x = 0; x < w; ++x) {
+      const size_t i = static_cast<size_t>(y) * w + x;
+      if (depth[i] != 0) continue;  // a real surface: not ours to paint
+
+      // 1. The vertical ramp. The donor brightens toward the horizon and stops
+      //    there because you are standing on ground. Here the world is a
+      //    floating island with open sky BELOW it too, so the ramp falls away
+      //    again under the horizon rather than holding flat -- the horizon
+      //    becomes a band of light with dark above and dark below, which is
+      //    what an island hanging in air should look like.
+      int32_t v;
+      if (static_cast<int32_t>(y) <= hy) {
+        v = (static_cast<int32_t>(p.base) * static_cast<int32_t>(y)) / hy;
+      } else {
+        const int32_t below = static_cast<int32_t>(h) - hy;
+        const int32_t d = static_cast<int32_t>(y) - hy;
+        v = static_cast<int32_t>(p.base) - (static_cast<int32_t>(p.base) * d) /
+                                               (below > 0 ? below : 1);
+      }
+
+      // 2. the mottling
+      if (p.noise_amp > 0) {
+        // Two octaves. One alone showed its 8 px lattice as visible squares;
+        // the coarse octave carries the cloud masses and the fine one breaks
+        // the edges up, which is the job the donor's repeated smoothing passes
+        // do to its middle-square fill.
+        const int32_t xi = static_cast<int32_t>(x), yi = static_cast<int32_t>(y);
+        const int32_t n0 = static_cast<int32_t>(sky_noise(xi >> 1, yi >> 1, p.seed));
+        const int32_t n1 = static_cast<int32_t>(sky_noise(xi << 1, yi << 1, p.seed ^ 0x5A17u));
+        const int32_t n = ((n0 - 32) * 3 + (n1 - 32)) / 4;
+        v += (n * p.noise_amp) / 32;
+      }
+
+      // 3. THE SUN, added into the plane and saturating there
+      const int32_t dx = static_cast<int32_t>(x) - p.sun_x;
+      const int32_t dy = static_cast<int32_t>(y) - p.sun_y;
+      const int32_t d2 = dx * dx + dy * dy;
+      if (d2 < p.sun_mag * p.sun_mag) {
+        const int32_t d = static_cast<int32_t>(zref::isqrt_u32(static_cast<uint32_t>(d2)));
+        int32_t add;
+        if (d <= p.sun_core) {
+          add = 63;
+        } else {
+          const int32_t span = p.sun_mag - p.sun_core;
+          add = (63 * (p.sun_mag - d) + span / 2) / (span > 0 ? span : 1);
+        }
+        v += add;
+      }
+
+      // 3b. the companion, if this system has one
+      if (p.sun2_mag > 0) {
+        const int32_t dx2 = static_cast<int32_t>(x) - p.sun2_x;
+        const int32_t dy2 = static_cast<int32_t>(y) - p.sun2_y;
+        const int32_t dd2 = dx2 * dx2 + dy2 * dy2;
+        if (dd2 < p.sun2_mag * p.sun2_mag) {
+          const int32_t d = static_cast<int32_t>(zref::isqrt_u32(static_cast<uint32_t>(dd2)));
+          if (d <= p.sun2_core) {
+            v += 63;
+          } else {
+            const int32_t span = p.sun2_mag - p.sun2_core;
+            v += (63 * (p.sun2_mag - d) + span / 2) / (span > 0 ? span : 1);
+          }
+        }
+      }
+
+      if (v < 0) v = 0;
+      if (v > 63) v = 63;  // the clamp that makes the bloom formless
+      rgb[i * 3 + 0] = p.ramp[v][0];
+      rgb[i * 3 + 1] = p.ramp[v][1];
+      rgb[i * 3 + 2] = p.ramp[v][2];
+    }
+  }
+}
+
+// The planet table. Each row is one world: the deep sky, the mid body, and the
+// PEAK — and the peak is the sun, because the sun saturates the plane to 63 and
+// 63 is this entry. Changing a row changes the sky and the sun together, which
+// is the point: one island, one sky, one sun, one set of numbers.
+//
+// `core` is the atmosphere in a single value. 0 means real air and no
+// resolvable disc at all. A nonzero core is a thin or absent atmosphere, where
+// the splat keeps a hard saturated centre and reads as a disc with a skirt.
+struct PlanetDef {
+  const char* name;
+  uint8_t lo[3], mid[3], hi[3];
+  uint8_t base;       // sky brightness at the horizon before the sun
+  uint8_t noise;      // mottling amplitude
+  int32_t mag;        // splat radius px
+  int32_t core;       // saturated core px: 0 = thick atmosphere
+};
+
+const PlanetDef kPlanets[] = {
+    // 1. the thick violet world: the look the owner pointed at. A wide bloom
+    //    with no core, sitting low, bleeding up through a mottled indigo sky.
+    {"violet-thick", {14, 10, 46}, {70, 44, 132}, {255, 214, 240}, 38, 12, 190, 0},
+    // 2. a breathable blue world. Thinner air: less mottle, a tighter bloom.
+    {"terran-blue", {18, 34, 78}, {96, 140, 196}, {255, 246, 214}, 34, 6, 150, 0},
+    // 3. a dust world. The atmosphere itself is the colour, so the bloom is
+    //    barely distinguishable from the sky it sits in.
+    {"dust-ochre", {40, 22, 10}, {150, 88, 34}, {255, 226, 168}, 44, 14, 210, 0},
+    // 4. a methane world, and the reason the ramp is three points rather than
+    //    two: the mid body carries the identity, the peak stays near-white.
+    {"methane-teal", {8, 28, 30}, {48, 132, 110}, {214, 255, 240}, 30, 10, 170, 0},
+    // 5. NO ATMOSPHERE. Same machinery, core nonzero: a hard white disc with a
+    //    short skirt against an almost black sky. This is the control that
+    //    shows the other four are doing something.
+    {"airless-grey", {2, 2, 4}, {26, 26, 32}, {255, 255, 255}, 8, 3, 56, 30},
+    // 6. a red dwarf's world: dim, deep, and the sun never gets past orange
+    //    because the peak entry itself is orange.
+    {"ember-red", {20, 4, 6}, {112, 26, 18}, {255, 168, 96}, 26, 11, 200, 0},
+    // ---- the big ones. A star close enough to fill the sky is the whole
+    //      reason this technique is worth having: a 420 px splat on a 384x240
+    //      frame saturates most of the visible dome, and because the sun IS
+    //      the sky's peak entry that costs no extra colours at all. Try the
+    //      same picture with a sprite and the palette is gone.
+    // 7. an amber giant seen from close in: the bloom is larger than the frame
+    //    and the sky never gets dark anywhere.
+    {"giant-amber", {60, 26, 8}, {186, 110, 30}, {255, 240, 200}, 46, 9, 420, 0},
+    // 8. a blue supergiant. Big, brutal, and the ramp's peak is near-white, so
+    //    the core reads as glare rather than as a coloured object.
+    {"supergiant-blue", {10, 20, 60}, {74, 132, 214}, {244, 250, 255}, 40, 7, 340, 0},
+    // 9. a swollen red giant filling the sky of a dim world. The peak stays
+    //    orange, so even at full saturation nothing on this world is ever white.
+    {"redgiant-swollen", {28, 6, 4}, {150, 44, 20}, {255, 150, 70}, 42, 13, 480, 0},
+    // 10. a pale close star through thin haze: big but weak, so the bloom is
+    //     broad and never rails except at its very centre.
+    {"pale-close", {26, 26, 34}, {120, 124, 140}, {255, 252, 240}, 24, 8, 300, 0},
+    // 11. a binary's world, and it needed its OWN row. Pointing the two-sun
+    //     subject at `pale-close` railed the entire frame to white: two 300 px
+    //     and 150 px blooms over a base of 24 leave nowhere unsaturated, and
+    //     two suns you cannot tell apart are worse than one. A darker sky and
+    //     two smaller, well-separated stars keep both blooms readable AND the
+    //     dark band between them, which is the thing worth showing.
+    {"binary-pair", {6, 8, 22}, {58, 74, 128}, {255, 244, 226}, 16, 9, 130, 0},
+};
+constexpr int kPlanetCount = static_cast<int>(sizeof(kPlanets) / sizeof(kPlanets[0]));
+
 // identity for a subject: a fixed sector + seed, class forced to the
 // subject's star (the identity schedule stays the source of the seeds)
 zref::star::StarIdentity cel_identity(uint8_t cls, uint32_t seed) {
@@ -760,6 +1008,12 @@ struct SceneSubject {
   int celestial = 0;
   bool space = false;   // no DrawSky (fallback black), no terrain
   int sky_variant = 0;  // dusk_sky variant (1 = flat upper band, still C0)
+  // planetside sky: 0 = off (the RGB dome). >0 selects a planet from kPlanets,
+  // and the six-bit intensity plane replaces the dome entirely.
+  int planet = 0;
+  int32_t planet_sun_x = 192, planet_sun_y0 = 150, planet_sun_y1 = 150;
+  int32_t planet_sun2_mag = 0;  // >0: a binary system, companion at these px
+  int32_t planet_sun2_x = 0, planet_sun2_y = 0;
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
@@ -1431,6 +1685,27 @@ int render_scene(const SceneSubject& sub) {
     rend.set_pre_resolve(&cel_hook, &cel_ctx);
   }
 
+  // Planetside sky: the six-bit intensity plane replaces the RGB dome outright,
+  // so it is its own hook and is exclusive with the celestial compositor. The
+  // sun is IN the plane, so there is no star sprite to compose.
+  PlanetSky psky;
+  if (sub.planet > 0) {
+    const PlanetDef& pd = kPlanets[(sub.planet - 1) % kPlanetCount];
+    planet_ramp(psky.ramp, pd.lo, pd.mid, pd.hi);
+    psky.base = pd.base;
+    psky.noise_amp = pd.noise;
+    psky.sun_mag = pd.mag;
+    psky.sun_core = pd.core;
+    psky.seed = static_cast<uint32_t>(sub.planet) * 2654435761u;
+    psky.sun_x = sub.planet_sun_x;
+    psky.sun_y = sub.planet_sun_y0;
+    psky.sun2_mag = sub.planet_sun2_mag;
+    psky.sun2_x = sub.planet_sun2_x;
+    psky.sun2_y = sub.planet_sun2_y;
+    psky.horizon_y = 150;
+    rend.set_pre_resolve(&planet_sky_hook, &psky);
+  }
+
   const std::string dir = g_out + "/" + sub.name;
   if (g_write) {
     ZHAO_MKDIR(g_out.c_str());
@@ -1468,6 +1743,19 @@ int render_scene(const SceneSubject& sub) {
   for (uint32_t f = 0; f < sub.frames; ++f) {
     const uint32_t tick = f * sub.step;
     cel_ctx.frame = f;  // the hook reads the authored per-frame positions
+
+    // The sun rises and sets. Its height drives the whole look on its own,
+    // because the vertical ramp is brightest at the horizon: low down, the
+    // splat lands on already-bright sky and rails over a wide area, so the
+    // bloom spreads and loses every edge. High up it lands on dim sky and
+    // stays compact. That interaction IS the elevation behaviour -- the donor
+    // has no air-mass or path-length term anywhere, and neither does this.
+    if (sub.planet > 0) {
+      const uint32_t phh = f < (sub.frames / 2) ? f : (sub.frames - 1 - f);
+      const uint32_t denom = (sub.frames / 2) > 1 ? (sub.frames / 2) - 1 : 1;
+      psky.sun_y = sub.planet_sun_y0 + static_cast<int32_t>(
+          (static_cast<int64_t>(sub.planet_sun_y1 - sub.planet_sun_y0) * phh) / denom);
+    }
 
     // deterministic bake steps for this frame (TERRAIN.BAKE reference:
     // bake writes scar layer B, the breach law flips cell-state layer D;
@@ -1684,7 +1972,12 @@ int render_scene(const SceneSubject& sub) {
         sky_pc = zref::fx_cos(zref::angle16{static_cast<uint16_t>(th)}).raw;
         sky_bias = 0;
       }
-      if (!sub.space) {  // space subjects: fallback black clear, no sky
+      // A planet subject paints its own sky from the intensity plane, so the
+      // RGB dome must not be drawn at all. Emitting it anyway left the
+      // under-plane on screen as real geometry with a depth, and the hook
+      // correctly skipped it -- a flat salmon band under the island that had
+      // nothing to do with the planet's ramp.
+      if (!sub.space && sub.planet == 0) {
         auto sk = zhao_abi::zhao_sample_draw_sky();
         sk.payload.sky_set = 2;
         sk.payload.rot_proj[0] = sky_rot_for_cam(sub.cam_k, sky_ps, sky_pc, sky_bias, -1);
@@ -2399,6 +2692,114 @@ SceneSubject subject_atmosunthick() {
   return s;
 }
 
+// 21+. planet-sun-<world> — the planetside sun over the island, one subject per
+// world. Every one of them is the SAME code with a different row of kPlanets:
+// the sky and the sun come from one ramp, so a world's identity is six colours
+// and four numbers rather than a sky asset plus a star asset that have to be
+// kept in agreement.
+SceneSubject planet_subject(const char* name, int planet, uint32_t crc, const char* note) {
+  SceneSubject s;
+  s.name = name;
+  s.frames = 48;
+  s.step = 8;
+  s.planet = planet;
+  s.island = true;
+  s.island_flat = true;  // the sky owns the palette; the land is a silhouette
+  s.planet_sun_x = 192;
+  s.planet_sun_y0 = 96;   // high
+  s.planet_sun_y1 = 176;  // set, below the horizon line
+  s.cam_k = 112000;
+  s.cam_eye = 140;
+  s.cam_dist = 300;
+  s.cam_bias = 5243;
+  s.mat_r = 30;
+  s.mat_g = 32;
+  s.mat_b = 30;
+  s.note = note;
+  s.expect_seq_crc = crc;  // pinned 2026-08-20 (first render)
+  return s;
+}
+
+SceneSubject subject_planet_violet() {
+  return planet_subject("planet-sun-violet", 1, 0x7DFDD03Cu,
+      "a thick-atmosphere world: the sun has NO disc at all, only a bloom that "
+      "spreads as it sets. Sky and sun are one six-bit intensity plane coloured "
+      "through one ramp, so the sun's colour IS the sky's peak entry and the "
+      "whole frame costs 64 colours however large the bloom grows");
+}
+SceneSubject subject_planet_terran() {
+  return planet_subject("planet-sun-terran", 2, 0x503D3FB9u,
+      "thinner air over a blue world: less mottling, a tighter bloom, and a sun "
+      "that stays closer to white because the ramp's peak does");
+}
+SceneSubject subject_planet_dust() {
+  return planet_subject("planet-sun-dust", 3, 0x6FFC26E5u,
+      "a dust world where the atmosphere is the colour: the bloom is barely "
+      "separable from the sky it sits in, which is the point rather than a "
+      "failure to render it");
+}
+SceneSubject subject_planet_methane() {
+  return planet_subject("planet-sun-methane", 4, 0xFB3E3581u,
+      "a methane sky. The ramp carries three control points, not two, so the "
+      "world's identity lives in the mid body while the peak stays near white");
+}
+SceneSubject subject_planet_airless() {
+  return planet_subject("planet-sun-airless", 5, 0x921A069Fu,
+      "NO atmosphere, same machinery: one number gives the splat a hard "
+      "saturated core and the sun becomes a disc with a short skirt against an "
+      "almost black sky. The control that shows the others are doing something");
+}
+SceneSubject subject_planet_ember() {
+  return planet_subject("planet-sun-ember", 6, 0xE4A93123u,
+      "a red dwarf's world: dim and deep, and the sun never gets past orange "
+      "because the ramp's peak entry is orange. Nothing tints the sun; there is "
+      "nothing to tint");
+}
+
+SceneSubject subject_planet_giant() {
+  SceneSubject s = planet_subject("planet-sun-giant", 7, 0xF4C0DB5Du,
+      "an amber giant close enough that the bloom is larger than the frame. The "
+      "sky never goes dark anywhere, and because the sun IS the sky ramp's peak "
+      "entry this costs no colours at all. The same picture built from a sprite "
+      "over a gradient would not fit the palette law");
+  s.planet_sun_y0 = 60;
+  s.planet_sun_y1 = 200;
+  return s;
+}
+SceneSubject subject_planet_supergiant() {
+  SceneSubject s = planet_subject("planet-sun-supergiant", 8, 0x2514843Bu,
+      "a blue supergiant. The ramp's peak is near white, so the core reads as "
+      "glare rather than as a coloured object, while the sky it saturates into "
+      "stays unmistakably blue");
+  s.planet_sun_x = 250;
+  s.planet_sun_y0 = 70;
+  s.planet_sun_y1 = 190;
+  return s;
+}
+SceneSubject subject_planet_redgiant() {
+  SceneSubject s = planet_subject("planet-sun-redgiant", 9, 0xFDC57719u,
+      "a swollen red giant over a dim world, the largest sun in the set at 480 "
+      "px. The peak entry is orange, so nothing on this world is ever white -- "
+      "not the sun, not its glare, not the ground it lights");
+  s.planet_sun_y0 = 40;
+  s.planet_sun_y1 = 210;
+  return s;
+}
+SceneSubject subject_planet_binary() {
+  SceneSubject s = planet_subject("planet-sun-binary", 11, 0xA9D2C999u,
+      "TWO suns. Both splats add into the same plane and the clamp resolves the "
+      "overlap, so where the blooms meet the sum simply rails in the sky's own "
+      "peak colour exactly as one bloom does against itself. A second star adds "
+      "zero palette entries");
+  s.planet_sun_x = 104;
+  s.planet_sun_y0 = 78;
+  s.planet_sun_y1 = 158;
+  s.planet_sun2_mag = 96;
+  s.planet_sun2_x = 292;
+  s.planet_sun2_y = 104;
+  return s;
+}
+
 SceneSubject subject_creaturewalk() {
   SceneSubject s;
   s.name = "creature-wave-walk";
@@ -2567,6 +2968,16 @@ int main(int argc, char** argv) {
     rc |= render_scene(subject_infant());
     rc |= render_scene(subject_atmosundonor());
     rc |= render_scene(subject_atmosunthick());
+    rc |= render_scene(subject_planet_violet());
+    rc |= render_scene(subject_planet_terran());
+    rc |= render_scene(subject_planet_dust());
+    rc |= render_scene(subject_planet_methane());
+    rc |= render_scene(subject_planet_airless());
+    rc |= render_scene(subject_planet_ember());
+    rc |= render_scene(subject_planet_giant());
+    rc |= render_scene(subject_planet_supergiant());
+    rc |= render_scene(subject_planet_redgiant());
+    rc |= render_scene(subject_planet_binary());
     rc |= render_scene(subject_creaturewalk());
     rc |= render_scene(subject_creaturepop());
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
@@ -2603,6 +3014,16 @@ int main(int argc, char** argv) {
   if (wanted("infant")) rc |= render_scene(subject_infant());
   if (wanted("atmo-sun-donor")) rc |= render_scene(subject_atmosundonor());
   if (wanted("atmo-sun-thick")) rc |= render_scene(subject_atmosunthick());
+  if (wanted("planet-sun-violet")) rc |= render_scene(subject_planet_violet());
+  if (wanted("planet-sun-terran")) rc |= render_scene(subject_planet_terran());
+  if (wanted("planet-sun-dust")) rc |= render_scene(subject_planet_dust());
+  if (wanted("planet-sun-methane")) rc |= render_scene(subject_planet_methane());
+  if (wanted("planet-sun-airless")) rc |= render_scene(subject_planet_airless());
+  if (wanted("planet-sun-ember")) rc |= render_scene(subject_planet_ember());
+  if (wanted("planet-sun-giant")) rc |= render_scene(subject_planet_giant());
+  if (wanted("planet-sun-supergiant")) rc |= render_scene(subject_planet_supergiant());
+  if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
+  if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
   return rc;
