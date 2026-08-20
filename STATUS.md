@@ -36,10 +36,16 @@ directory and reconfiguring; the rebuilt binary's hash is recorded before the
 numbers above were taken. This is the fourth time this session that a stale
 build reported success.
 
-**Still open, and it is now a TIME problem rather than a memory one.**
-Elaboration has not finished inside eight minutes even at 2.7 GB; a longer run
-is going. Memory was the wall — 2.7 GB fits anywhere — so this is far less
-serious than it was.
+**IT ELABORATES.** `peak = 2.70 GB, 515 s, exit 0`. From "never finishes at
+16.2 GB" to done in under nine minutes. The composed shell fit is running now
+for the first time since this was found.
+
+**Expect the fitter to fail anyway, and that is fine.** Elaboration succeeding
+does not make 1.97 Mbit of flip-flops placeable: the device has roughly 84,000
+registers and this asks for about two million. What changes is that the failure
+should now be a clear "insufficient resources" from the fitter instead of a
+28 GB thrash, and it should come with a real resource report naming the
+shortfall. A precise refusal is worth far more than an out-of-memory crash.
 
 **Still not an M10K**, and the two reasons are unchanged: the write lives in an
 async-reset process and the read is combinational. An M10K has no reset port and
