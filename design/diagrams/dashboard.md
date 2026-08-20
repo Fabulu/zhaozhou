@@ -14,20 +14,20 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | · | 1 | · | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
-| forge | 1 | 1 | · | · | · | · | · | · | 2 |
-| geometry | 7 | 4 | · | · | · | · | · | · | 11 |
+| forge | 1 | · | 1 | · | · | · | · | · | 2 |
+| geometry | 7 | 1 | 3 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
-| measure | 1 | 2 | · | · | · | · | · | · | 3 |
+| measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
-| raster | · | 5 | · | · | · | · | · | · | 5 |
-| surface | 1 | 1 | · | · | · | · | · | · | 2 |
+| raster | · | · | 5 | · | · | · | · | · | 5 |
+| surface | 1 | · | 1 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | 4 | 3 | · | · | · | · | · | · | 7 |
-| texture | · | 4 | · | · | · | · | · | · | 4 |
+| terrain | 4 | · | 3 | · | · | · | · | · | 7 |
+| texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 46 | 24 | 4 | 14 | · | · | · | 6 | 88 |
+| **all** | 46 | 5 | 23 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -75,25 +75,44 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
 | MEASURE.GOVERNOR | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
+| MEASURE.GOVERNOR | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_governor_directed.cpp |
 | MEASURE.TOKENS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
+| MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
 | TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
+| TERRAIN.TESS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_tess_directed.cpp |
 | TERRAIN.NORMALS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_normals.hpp |
+| TERRAIN.NORMALS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_normals_directed.cpp |
 | TERRAIN.LOD | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_star.hpp |
+| TERRAIN.LOD | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_lod_directed.cpp |
 | SURFACE.STAMP | REFERENCE_COMPLETE | 2026-08-21 | `175c004` | reference/include/zref/zref_surface.hpp |
+| SURFACE.STAMP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/surface/surface_stamp_directed.cpp |
 | GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
 | GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_creature.hpp |
+| GEOM.CLIP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_clip_directed.cpp |
 | GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
+| GEOM.SETUP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_setup_directed.cpp |
 | GEOM.BINNER | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
+| GEOM.BINNER | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_binner_directed.cpp |
 | RASTER.TILESTORE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tilestore.hpp |
+| RASTER.TILESTORE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/raster/raster_tilestore_directed.cpp |
 | RASTER.EDGEWALK | REFERENCE_COMPLETE | 2026-08-21 | `c75de30` | reference/include/zref/zref_edgewalk.hpp |
+| RASTER.EDGEWALK | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/raster/raster_edgewalk_directed.cpp |
 | RASTER.EARLYZ | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_earlyz.hpp |
+| RASTER.EARLYZ | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/raster/raster_earlyz_directed.cpp |
 | RASTER.FRAGMENT | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_fragment.hpp |
+| RASTER.FRAGMENT | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/raster/raster_fragment_directed.cpp |
 | RASTER.RESOLVE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tileresolve.hpp |
+| RASTER.RESOLVE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/raster/raster_resolve_directed.cpp |
 | TEXTURE.TMU | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
+| TEXTURE.TMU | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_tmu_directed.cpp |
 | TEXTURE.AUX | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_aux.hpp |
+| TEXTURE.AUX | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_aux_directed.cpp |
 | TEXTURE.CACHE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
+| TEXTURE.CACHE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_cache_directed.cpp |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
+| TEXTURE.MOSAIC | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_mosaic_directed.cpp |
 | FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
+| FORGE.CLIFF | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/forge/forge_cliff_directed.cpp |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |
 | DEBUG.COUNTERS | UNIT_VERIFIED | 2026-08-15 | `b64afe2` | tests/debug/debug_counters_directed.cpp |
 | DEBUG.COUNTERS | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
