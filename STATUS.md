@@ -5,6 +5,82 @@ at the top.*
 
 ---
 
+## 2026-08-20 08:15 — read the redesign proposal. It is right and my answer was wrong
+
+`reports/CMD.DMA_Redesign_Proposal.md` arrived on origin. I have read it in full.
+**Adopt it.** It is better than what I proposed, and it identifies a soundness
+hole in my suggestion that I had not seen.
+
+### Where I was wrong
+
+I recommended **two passes over DDR** — read once to CRC, read again to commit —
+on the grounds that it costs no on-chip memory. The proposal points out that
+this is **not sound**: the pixel arena is a raw HPS address with no descriptor,
+lease or ownership state, so HPS can mutate it between the two passes.
+Pass 1 verifies bytes A, pass 2 commits bytes B, and the CRC certifies nothing.
+A classic time-of-check/time-of-use hole, and I walked straight into it.
+
+Making two-pass sound would first require a sealed pixel-arena descriptor that
+forbids HPS writes in between — inventing an ownership mechanism to rescue a
+design that then still costs double the bandwidth.
+
+### Why its answer is better
+
+It moves the atomicity boundary to where it actually is. The current law says
+*no byte is written to VRAM before the CRC passes*, which is what forced a
+whole-canvas buffer. But **writes to an inactive, uncommitted framebuffer slot
+are not visible to anyone.** The externally meaningful commit is the slot
+becoming READY.
+
+So: lease an invisible slot, stream into it one 64-byte chunk at a time, CRC on
+the fly, and publish READY only after every write has retired and the CRC
+matches. Fail, and the slot is released FREE and never published.
+
+**512 bits of buffer instead of 1,966,080.** Single pass. And it is immune to
+the mutation problem — if HPS changes the source mid-read, the CRC fails and the
+dirty slot is never shown.
+
+That is the better argument, and it wins on correctness rather than on cost.
+
+### What tonight's synthesis run adds to it
+
+The run finished after the proposal was written, so this is new evidence for it,
+and it confirms two of its rules from the tool's own mouth:
+
+- Quartus named **asynchronous read** as the *only* stated reason `blit_buf` is
+  uninferred. The proposal's synthesis rules list "no combinational array reads"
+  — that is precisely the one that bites.
+- **A second block has the identical defect**, outside CMD.DMA entirely:
+  `zhao_scanout_linebuf` line 96. The proposal's rule list should be applied
+  there too; it is not a CMD.DMA-specific mistake but a house-wide one.
+- `zhao_audio_fifo` **did** infer, as a dual-clock RAM, carrying the warning
+  that read-during-write behaviour of a dual-clock RAM is undefined and may not
+  match the original design. Worth checking separately — that is a correctness
+  risk wearing a success.
+
+### Its other two findings, which I had not looked for and which look right
+
+- **The contract claims 1 MiB packets; the RTL caps at 4 KiB** and rejects
+  anything larger. There is already a hidden effective maximum.
+- **The 1 MiB-per-frame target is physically impossible.** 16,384 bursts at
+  (16 + 8) cycles is 393,216 GPU cycles against 217,984 in the shortest mode
+  frame. The HPS bridge cannot deliver it regardless of what CMD.DMA does. That
+  belongs in the same category as the DSP overrun: a number nobody costed.
+
+### What I have and have not changed
+
+The 64-bit repack I landed (`3a97980`) stands as the emergency cleanup it is:
+16.2 GB to 2.7 GB elaboration, all lanes green, and it is what let the composed
+synthesis produce a named error at all. It does **not** solve the design
+problem, and the proposal says so correctly.
+
+I have **not** started the redesign. It splits a landed block in two, adds a
+framebuffer-slot lease with a real state machine, changes the decoder-facing
+stream from 8 to 64 bits, and amends a ratified law. That is a wave of work and
+it should start deliberately.
+
+---
+
 ## 2026-08-20 08:00 — THE COMPOSED SYNTHESIS RUNS. 28.4 GB to 6.2 GB, and Quartus names the fault
 
 The composed shell no longer thrashes. It ran analysis and synthesis to
