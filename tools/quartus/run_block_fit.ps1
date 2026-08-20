@@ -24,12 +24,27 @@ $ErrorActionPreference = 'Stop'
 # WHY THIS EXISTS rather than run_shell_fit.ps1 with a different top: the
 # composed zhao_shell_top does not fit this machine. Measured 2026-08-18 on
 # Quartus 17.0.2 Lite, quartus_map committed 28.4 GB against 24 GB of RAM and
-# thrashed at near-zero CPU until it was killed. A single leaf module
-# elaborates cleanly in about 67 seconds, and its ~4.8 GB peak is spent
-# PARSING the 22-file source cone before any elaboration begins. So the
-# per-block lane is not a lesser substitute picked for speed. It is the
-# granularity that fits, and it is the granularity design/blocks.yml wants
-# numbers at anyway.
+# thrashed at near-zero CPU until it was killed. So the per-block lane is not a
+# lesser substitute picked for speed. It is the granularity that fits, and it is
+# the granularity design/blocks.yml wants numbers at anyway.
+#
+# CORRECTION 2026-08-20. This comment used to claim that a leaf module's
+# "~4.8 GB peak is spent PARSING the 22-file source cone before any elaboration
+# begins". That is FALSE, and it was believed long enough to shape decisions.
+# Measured directly, with a one-flop module as top so nothing real elaborates:
+#
+#   trivial top, no other sources ............ 0.24 GB, 27 s
+#   trivial top + both shared packages ....... 0.24 GB, 22 s
+#   trivial top + ALL 22 cone files .......... 0.24 GB, 23 s
+#
+# Parsing the entire cone is free. The memory goes into ELABORATING the real
+# top, and it is superlinear: every one of these blocks elaborates on its own,
+# while zhao_shell_top -- sixteen ordinary instances, no generate blocks, no
+# large arrays -- exceeded ten minutes and 16 GB just to elaborate.
+#
+# So the lever is NOT the source cone, the packages, or the virtual-pin
+# assignments (all three were tried and measured). It is the Quartus 17.0.2
+# elaborator itself, and the thing worth trying is a newer Quartus.
 #
 # LIMITATIONS, which travel with every number this produces:
 #   - 5CSEBA6U23I7 is a PROVISIONAL target, not board truth.
