@@ -2671,12 +2671,16 @@ blocks:
     counters: [soft_particles]
     source_ids: true
     budget_group: myriad_forge
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "5ccc2fe"
         evidence: reference/include/zref/zref_particle_soft.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "84cce0d"
+        evidence: tests/particles/part_soft_directed.cpp
 
     deferred: false
     cut_order: null
