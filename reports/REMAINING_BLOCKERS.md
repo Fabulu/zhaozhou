@@ -86,3 +86,44 @@ The cheapest next steps, in order:
 The `PART.*` family (seven blocks) and the compositor family (four) are each a
 coherent chunk that would be better done together than interleaved, since they
 share references.
+
+---
+
+## Addendum: the Field IR sequencers are constrained, not merely unbuilt
+
+`spec/form/field-ir.md` §1 carries a grep-audit law (charter §29-6) that changes
+what "build FIELD.SEQ.*" is allowed to mean:
+
+> Field IR *op semantics* exist in exactly two places — the C++ generic
+> interpreter (`zfield::interpret`) and the TS interpreter … There is and shall
+> be no third implementation: no hand-written per-program evaluator, no "faster"
+> fused C++ variant, **no RTL-side re-derivation ahead of the profile engine
+> (which will consume the same serialized bytes)**. A reviewer greps for the
+> op-name switch outside those two files and must find none.
+
+Read carefully, this is a design constraint rather than a prohibition. RTL is
+foreseen — the parenthesis names "the profile engine" and says it consumes the
+same serialized bytes. What is forbidden is a sequencer that re-derives op
+semantics: a per-program hardwired evaluator, or an RTL opcode switch written
+from the spec by hand.
+
+So the five sequencer blocks are not just expensive, they have a required shape:
+**a byte-code engine that executes `.zprog` images**, differentially verified
+against `zfield::interpret` on the committed `.zvec` corpus. Anything that reads
+like a second implementation of the op table will fail the grep audit by
+construction, however well it tests.
+
+Two consequences worth planning around:
+
+1. The three shared op blockers (`FIELD.MOV`, `FIELD.ADD`, `FIELD.SUB`) come with
+   that engine and are differentials against the same interpreter — they are not
+   separate work.
+2. The engine is one block's worth of effort that unblocks five. That makes it
+   better value than its size suggests, and it is the reason the "first
+   `FIELD.SEQ.*` sequencer" sits third on the cheapest-next list above rather
+   than last.
+
+`FIELD.PROGCACHE` is clear of this constraint: it caches and validates programs
+and never evaluates one. Its validation half is already law —
+`zfield::decode` with thirteen named error classes — so only its cache policy
+needs deciding.
