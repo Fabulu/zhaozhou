@@ -177,3 +177,68 @@ work, and the choices belong to the person whose game it is.
 substantial thing I can do without input. Group 3 is roughly a dozen blocks whose
 *behaviour* has never been decided, and doing them well means deciding it
 deliberately rather than having me invent it and record the invention as law.
+
+---
+
+## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect
+
+**Measured, not inferred.** After step 6 removed the 1.97 Mbit `blit_buf`,
+`zhao_cmd_dma` was re-fitted at HEAD. It did **not** succeed:
+
+| | result |
+| --- | --- |
+| census (96c0394, with `blit_buf`) | `failed:quartus_map` — 16.2 GB elaboration |
+| HEAD (no `blit_buf`) | **`timeout` — 4,838 s without finishing** |
+
+Removing the buffer moved this block from *immediate failure* to *does not
+finish*. That is progress on the memory axis and **not a fix**.
+
+**A CORRECTION.** The step 6 commit called that removal "the composed-fit
+unblock". It is not, on two counts: the QSF source-list drift was a second
+blocker (fixed, and now gated by `tests/lint/source_list_parity`), and this
+block still cannot be characterised at all.
+
+### The cause
+
+`zhao_cmd_dma.sv`, in the state machine's `always_ff`:
+
+```systemverilog
+for (int unsigned k = 36; k < 192; k++) begin
+  if (k < seed_end) begin
+    cseed = zhao_abi_pkg::zhao_crc32c_step(cseed, slot_buf[k]);
+  end
+end
+```
+
+**156 dependent CRC-32C byte steps unrolled into one clock cycle** — about
+1,248 chained XOR/shift stages in a single combinational cone, each with a
+guarded read of a 4,096-entry register array. Synthesis is not running out of
+memory; it is trying to flatten a 156-deep serial dependency chain.
+
+The `crc_final()` helper immediately above it carries a note showing the
+authors knew about this class of problem: *"the loop bound is the constant 32;
+a parameter-bounded loop would put SLOT_BUF_BYTES muxed CRC steps in the formal
+cone for nothing."* The 32-step loop was bounded deliberately. The 156-step one
+was not.
+
+**This is not only a synthesis-time problem.** A 156-byte serial CRC chain in
+one cycle will not close timing on any device. The block is unsynthesisable as
+written, and the per-block census never said so because this block has never
+been successfully fitted.
+
+### What it blocks
+
+The composed fit contains `CMD.DMA`, so **the composed fit cannot be expected
+to complete until this is fixed.** Step 8 of the FRAMEBLIT integration is
+gated on it.
+
+### The shape of the fix (NOT yet done, and it is a real redesign)
+
+The payload CRC seed must be computed **incrementally across cycles**, the way
+the fetch path already accumulates `crc_pay_r` one bridge beat at a time,
+rather than re-walked over the staging buffer in one cycle. `slot_buf` also
+still has `blit_buf`'s original defect in miniature — an initialiser, an
+async-reset write process and a combinational read — so it will not infer as a
+RAM either, at 4,096 entries instead of 30,720.
+
+Both wanted the same treatment and only the large one got it.

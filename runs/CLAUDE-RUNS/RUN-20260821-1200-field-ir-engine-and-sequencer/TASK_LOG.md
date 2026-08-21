@@ -302,6 +302,65 @@ correctly on an ambiguous revert — after 13 mutations and forty minutes of
 rebuilds. Every mutation is now proved to apply once, change something, and
 revert byte-identically before any build runs. It is a two-second check.
 
+## The shell had two source lists, and only one was updated
+
+Found by accident. Re-measuring `CMD.DMA` after step 6, Quartus failed in 15
+seconds with:
+
+    Error (10703): zhao_shell_top.sv(864): can't resolve aggregate expression
+    in connection to port 20 on instance "u_slotmgr"
+
+Step 4 wired `zhao_debug_frameblit`, `zhao_hps_arbiter` and
+`zhao_video_slotmgr` into the shell and into `tests/CMakeLists.txt` — the list
+VERILATOR reads. It did not add them to `zhao_shell_fit.qsf`, the list QUARTUS
+reads. **The suite was green for hours while Quartus could not elaborate the
+shell at all**, and it would have failed the composed fit outright.
+
+**A CORRECTION TO THE STEP 6 COMMIT.** It called the buffer removal "the
+composed-fit unblock". That was INCOMPLETE rather than wrong: the buffer really
+did cause Error 276003, but this second blocker sat underneath it.
+
+Two statements of one fact with nothing checking they agree — the `OP_ABS`
+shape again, except here the two statements are TOOLCHAINS, which is exactly
+why a green Verilator suite proved nothing about the synthesis lane. So the fix
+is not only the three missing lines: `tests/lint/source_list_parity` asserts the
+two lists name the same modules, needs no external tool so it cannot skip, and
+was verified in BOTH directions — it passes now, and deleting
+`zhao_video_slotmgr` from the QSF makes it fail naming that exact module.
+
+## The first DSP cut, and a comment of mine that was wrong
+
+`zhao_raster_blend` formed BOTH `(src-dst)*a` and `src*a` unconditionally in two
+`always_comb` blocks, though `mode_i` consumes at most one. Two DSP per channel,
+three channels, six of `RASTER.FRAGMENT`'s ten. Now one selected signed product.
+
+Method, in order: the oracle first (`zref::FragmentPipeline::blend_channel`,
+whose ADD_MOD path uses "the FROZEN unit8 multiply, not a local copy"); then the
+RTL; then the differential — `raster_fragment_random` exercised all four modes,
+REPLACE/ALPHA/ADD/ADD_MOD = 6862/5457/6676/5563, **24,558 blend operations
+bit-identical**; then the sweep.
+
+**Sweep: 11 mutations, 10 caught, 1 SURVIVED, 0 discarded**, attempted =
+expected = accounted.
+
+The survivor was `logical_shift` — the mutation I had predicted was the
+critical one, because I had written that the signed arithmetic shift was
+load-bearing. **It is not, and the comment was mine.** `>>` and `>>>` differ
+only above bit 9, and both consumers truncate below it: ALPHA takes
+`mixed[9:0]`, ADD_MOD takes `mixed[7:0]`. For a negative sum the logical shift
+gives `A + 1024`, and `(A + 1024) mod 1024 == A mod 1024`. Zero observable
+differences across all 130,816 ALPHA pairs, 64,380 of them with a negative sum.
+**EQUIVALENT MUTANT**, recorded in the RTL rather than left looking like a hole.
+
+What IS load-bearing is the ORIGINAL comment's claim, about a different
+transformation: the `+128` must be applied to the SIGNED product so ties round
+toward +infinity. Splitting the sign off and rescaling the magnitude unsigned
+differs by one LSB on **1,024 of 130,816** pairs — measured, not asserted. The
+file now says which fact carries the weight and which does not.
+
+The corrected comment was proved inert: the generated model hashes identical to
+the sweep's baseline, so 10/1/0 describes the committed design.
+
 ## Limitations
 
 - Everything is Verilator simulation. No synthesis, no fit, no board.
