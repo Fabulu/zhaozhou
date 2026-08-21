@@ -5,6 +5,71 @@ at the top.*
 
 ---
 
+## 2026-08-21 — the arbiter is in the machine, and the gate test had been red for three days
+
+### The arbiter is wired into the shell
+
+The bridge arbiter now sits in the real `zhao_shell_top`, between the command
+path and the host-memory bridge. The blitter's side is tied off until it is
+wired — the point of putting it in **before** the blitter exists is that when
+the blitter arrives, a regression has only one possible cause.
+
+It does real work already. The command path and the bridge disagree about how
+long a request stays up: the command path **pulses** it for one cycle. My
+arbiter re-read the port a cycle later, so it would have **lost every request
+the command path ever made**. Nothing found that until it was actually wired
+into the shell, which is the argument for wiring things early rather than at the
+end. It now captures the request on the edge it picks a winner.
+
+**The 600-frame gate test passes: 24,630 of 24,630 checks.** Every frame is
+bit-identical.
+
+### But it did not pass at first, and the reason was not mine
+
+The gate test failed on the very first run — one check out of 24,630: the
+captured file was not byte-identical to the committed reference.
+
+I did not regenerate the reference. I diffed it. **Sixty-nine bytes differed,
+and every one of them was inside a small block that records which version of the
+data format the build was compiled against** — a version number and two
+fingerprints. Nothing the simulation can influence. Every frame checksum, every
+controller reading, every counter: identical.
+
+So the reference file has been **stale since 18 August**. It was regenerated in
+the same commit that bumped the format version, and the regeneration ran against
+a build that had not picked up the change — so it recorded the *old* version
+number and the *old* fingerprints. It has disagreed with the code ever since.
+
+**Nobody noticed for three days because that test takes twenty-two minutes and
+only runs nightly.** A check that expensive is a check that runs rarely, and one
+that runs rarely is one whose failures age quietly.
+
+### So I made that specific failure cheap
+
+The stale block is built entirely from compile-time constants. Checking it does
+not need a twenty-two minute simulation — it needs to open the file and compare
+five numbers. There is now a test that does exactly that, in the fast lane, over
+**every** committed reference capture. It takes under a second.
+
+I verified it the only way worth verifying such a thing: I put the stale file
+back and confirmed it fails, naming all three wrong fields. Then I put the good
+one back.
+
+It does not replace the full gate test. It separates the one failure mode that
+has nothing to do with the hardware from the many that do.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 36 unit-verified · 14 rtl-verified**
+across **91** blocks.
+
+Step 4 is partly done — the arbiter is in. Still to wire: the blitter itself,
+the slot manager into frame control, and the write queue's back-pressure. Then
+Step 6 deletes the old blitter from the command path, and Step 8 is the composed
+re-fit you asked for.
+
+---
+
 ## 2026-08-21 — the bridge arbiter, and a rule I had exactly backwards
 
 Step 3 done: **`MEM.HPS.ARBITER`**, block 91. Two things now want the one
@@ -232,7 +297,7 @@ All three are closed. The directed test now catches all eighteen on its own.
 ### Where the hardware stands
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**
-across **89** blocks. `ctest -L fast`: **238/238**.
+across **89** blocks. `ctest -L fast`: **239/239**.
 
 Next in the engine: `NOISE2`, `RING`, `RIDGE`, `ROT2`, `ROT3`, then the
 sequencer that actually runs a program. None of that needs anything from you.
@@ -250,7 +315,7 @@ behaviour, but the invention becomes the law the hardware is built to.
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**, now
 across **89** blocks — one more than before, because DEBUG.FRAMEBLIT is a new
-block rather than a rewrite. `ctest -L fast`: **238/238**.
+block rather than a rewrite. `ctest -L fast`: **239/239**.
 
 ### DEBUG.FRAMEBLIT — you were right, the design was sitting there
 

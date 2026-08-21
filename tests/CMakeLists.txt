@@ -124,6 +124,22 @@ target_link_libraries(test_crc PRIVATE zhao_zref zhao_harness)
 add_test(NAME crc COMMAND test_crc)
 set_tests_properties(crc PROPERTIES LABELS "fast;nightly")
 
+# Every committed .zcap golden must carry the CURRENT ABI constants. The
+# duo_markers golden was regenerated in the same commit that bumped
+# ZHAO_ABI_VERSION 2 -> 3 and came out carrying version 2 and the two previous
+# SHA-256s -- the regeneration ran against a build that had not picked up the
+# new header. Nothing caught it for three days, because the only test comparing
+# that file is `shell_duo_markers`, which is gate;nightly and takes 22 minutes.
+# A check that expensive is a check that runs rarely, and one that runs rarely
+# is one whose failures age. The ABI-info section is built entirely from
+# compile-time constants, so it can be checked in a millisecond -- in the FAST
+# lane, where a stale constant is reported in a second.
+add_executable(test_golden_abi_info unit/test_golden_abi_info.cpp)
+target_link_libraries(test_golden_abi_info PRIVATE zhao_zref zhao_harness)
+add_test(NAME golden_abi_info COMMAND test_golden_abi_info
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(golden_abi_info PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_abi_golden unit/test_abi_golden.cpp)
 target_link_libraries(test_abi_golden PRIVATE zhao_zref zhao_harness)
 add_test(NAME abi_golden COMMAND test_abi_golden)
@@ -2765,6 +2781,7 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_vram_arbiter.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
 
 # synthesizable-cone lint (the model/tb are excluded by construction)

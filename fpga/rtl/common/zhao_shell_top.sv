@@ -361,6 +361,26 @@ module zhao_shell_top
   zhao_hps_burst_req_t dma_hps_req;
   zhao_hps_burst_rsp_t dma_hps_rsp;
 
+  // The HPS bridge now has an ARBITER in front of it. Client 1 is tied off in
+  // this step: the point of inserting it before DEBUG.FRAMEBLIT exists is to
+  // prove it does not disturb the path that already works, so that when the
+  // blitter arrives a regression has only one possible cause.
+  //
+  // It also does real work already, because CMD.DMA and the bridge do not agree
+  // on how long a request stays up: CMD.DMA PULSES `hps_req_v` for one cycle,
+  // and the arbiter captures it on the edge it chooses an owner rather than
+  // re-reading the port a cycle later.
+  zhao_hps_burst_req_t arb_hps_req;
+  zhao_hps_burst_rsp_t arb_hps_rsp;
+  logic                arb_bridge_grant;
+  logic                arb_wr_valid, arb_wr_last;
+  logic [63:0]         arb_wr_data;
+  logic                dma_hps_grant;
+  logic                blit_hps_grant;
+  zhao_hps_burst_req_t blit_hps_req;
+  zhao_hps_burst_rsp_t blit_hps_rsp;
+  logic [31:0]         hps_arb_c0_bursts, hps_arb_c1_bursts, hps_arb_c1_wait;
+
   logic        pkt_valid, pkt_ready;
   logic [7:0]  pkt_byte;
   logic [31:0] pkt_len;
@@ -517,7 +537,11 @@ module zhao_shell_top
   logic [31:0] scan_gv_cnt, blit_gv_cnt;
   zhao_guard_req_t scan_gv_req, blit_gv_req;   // trace-only (harness lane)
   logic        ctrl_refresh_pulse;
+  // `bridge_req_grant` is gone: the bridge's accept now lands on the arbiter,
+  // not here. The lint sink below absorbs the arbiter's client-side grants
+  // instead -- DEBUG.FRAMEBLIT will consume its own once it is wired.
   logic        bridge_req_grant;
+  assign bridge_req_grant = dma_hps_grant;
 
   zhao_mem_guard u_guard_scan (
     .clk        (gpu_clk),
@@ -728,15 +752,45 @@ module zhao_shell_top
   // HPS bridge: the DMA's burst port through the verified bridge core
   logic [4:0][31:0] hps_bytes, hps_bytes_shadow;
 
+  // client 0 = CMD.DMA (packet acquisition outranks a debug blit); client 1 is
+  // reserved for DEBUG.FRAMEBLIT and tied off until it is wired.
+  assign blit_hps_req = '0;
+
+  zhao_hps_arbiter u_hps_arb (
+    .clk            (gpu_clk),
+    .rst_n          (rst_n),
+    .c0_req_i       (dma_hps_req),
+    .c0_req_grant_o (dma_hps_grant),
+    .c0_wr_valid_i  (1'b0),
+    .c0_wr_data_i   (64'd0),
+    .c0_wr_last_i   (1'b0),
+    .c0_rsp_o       (dma_hps_rsp),
+    .c1_req_i       (blit_hps_req),
+    .c1_req_grant_o (blit_hps_grant),
+    .c1_wr_valid_i  (1'b0),
+    .c1_wr_data_i   (64'd0),
+    .c1_wr_last_i   (1'b0),
+    .c1_rsp_o       (blit_hps_rsp),
+    .b_req_o        (arb_hps_req),
+    .b_req_grant_i  (arb_bridge_grant),
+    .b_wr_valid_o   (arb_wr_valid),
+    .b_wr_data_o    (arb_wr_data),
+    .b_wr_last_o    (arb_wr_last),
+    .b_rsp_i        (arb_hps_rsp),
+    .c0_bursts_o      (hps_arb_c0_bursts),
+    .c1_bursts_o      (hps_arb_c1_bursts),
+    .c1_wait_cycles_o (hps_arb_c1_wait)
+  );
+
   zhao_hps_bridge u_bridge (
     .clk           (gpu_clk),
     .rst_n         (rst_n),
-    .req           (dma_hps_req),
-    .req_grant     (bridge_req_grant),
-    .wr_valid      (1'b0),
-    .wr_data       (64'd0),
-    .wr_last       (1'b0),
-    .rsp           (dma_hps_rsp),
+    .req           (arb_hps_req),
+    .req_grant     (arb_bridge_grant),
+    .wr_valid      (arb_wr_valid),
+    .wr_data       (arb_wr_data),
+    .wr_last       (arb_wr_last),
+    .rsp           (arb_hps_rsp),
     .hps_req_valid (hps_req_valid_o),
     .hps_req_write (hps_req_write_o),
     .hps_req_addr  (hps_req_addr_o),
@@ -758,7 +812,9 @@ module zhao_shell_top
   logic unused_mem;
   assign unused_mem = ^vram_bytes ^ ^hps_bytes ^ scan_gv ^ blit_gv
                     ^ ^scan_gv_req ^ ^blit_gv_req ^ ctrl_refresh_pulse
-                    ^ bridge_req_grant ^ ^client_rsp[2] ^ ^client_rsp[3]
+                    ^ bridge_req_grant ^ blit_hps_grant ^ ^blit_hps_rsp
+                    ^ ^hps_arb_c0_bursts ^ ^hps_arb_c1_bursts ^ ^hps_arb_c1_wait
+                    ^ ^client_rsp[2] ^ ^client_rsp[3]
                     ^ ^client_rsp[4] ^ ^{client_rsp[0].credits}
                     ^ ^{client_rsp[1].credits}
                     ^ client_rsp[0].grant ^ client_rsp[1].grant;

@@ -20,7 +20,7 @@
 // told its transfer failed.
 //
 // ---------------------------------------------------------------------------
-// THE SIX RULES
+// THE SEVEN RULES
 // ---------------------------------------------------------------------------
 // 1. **ONE OWNER AT A TIME, AND THE OWNER IS LATCHED.** Ownership is decided
 //    once, when the bridge is idle, and does not change until the burst ends.
@@ -68,7 +68,18 @@
 //    write data from the wrong client SURVIVED, because no test issued a write
 //    at all.
 //
-// 6. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
+// 6. **THE REQUEST IS LATCHED WHEN THE OWNER IS CHOSEN, NOT RE-SAMPLED.**
+//    The two clients do not agree on how long a request stays up.
+//    DEBUG.FRAMEBLIT HOLDS its request until granted; CMD.DMA PULSES it for a
+//    single cycle and then relies on the response stream. An arbiter that
+//    re-reads the client port a cycle after deciding works with the first and
+//    silently loses every request from the second.
+//
+//    So the address, length, direction and client id are captured on the edge
+//    the owner is chosen, and the pulse driven from that capture. Both client
+//    styles then work, and neither has to know about the other.
+//
+// 7. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
 //    packet acquisition outranks a debug blit, which is not game-facing and may
 //    wait. Strict priority means client 1 can be starved by a client 0 that
 //    never stops asking, so `c1_wait_cycles_o` exists to make that visible
@@ -121,6 +132,10 @@ module zhao_hps_arbiter (
   logic [1:0] state;
   logic       owner;        // 0 or 1; meaningful outside A_IDLE
   logic       owner_write;  // rule 5: a write burst ends differently
+
+  // Rule 6: the request as it was when the owner was chosen. A pulsing client
+  // has already taken its request down by the time A_PULSE drives the bridge.
+  zhao_pkg::zhao_hps_burst_req_t held_req;
   logic       pick;      // rule 5: strict priority
   assign pick = c0_req_i.valid ? 1'b0 : 1'b1;
 
@@ -139,7 +154,7 @@ module zhao_hps_arbiter (
       // the obvious way to save a cycle -- presents it twice: the bridge
       // accepts on the first and counts the second as a violation.
       A_PULSE: begin
-        b_req_o = owner ? c1_req_i : c0_req_i;
+        b_req_o = held_req;
         b_req_o.valid = 1'b1;
       end
       A_ACTIVE: begin
@@ -182,6 +197,7 @@ module zhao_hps_arbiter (
       state <= A_IDLE;
       owner <= 1'b0;
       owner_write <= 1'b0;
+      held_req <= '0;
       c0_req_grant_o <= 1'b0;
       c1_req_grant_o <= 1'b0;
       c0_bursts_o <= 32'd0;
@@ -202,6 +218,8 @@ module zhao_hps_arbiter (
           if (c0_req_i.valid || c1_req_i.valid) begin
             owner <= pick;
             owner_write <= pick ? c1_req_i.write : c0_req_i.write;
+            // Rule 6: captured HERE. The client may take it down next cycle.
+            held_req <= pick ? c1_req_i : c0_req_i;
             state <= A_PULSE;
           end
         end

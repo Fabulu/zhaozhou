@@ -512,6 +512,44 @@ int main() {
                 dut.c1_wait_cycles_o);
   }
 
+  // ---- 6c. A PULSING CLIENT, which is what CMD.DMA actually is -----------
+  // The two clients do not agree on how long a request stays up.
+  // DEBUG.FRAMEBLIT HOLDS its request until granted; CMD.DMA sets `hps_req_v`
+  // in one state and clears it by a default assignment the next cycle -- a
+  // single-cycle pulse. An arbiter that re-reads the client port after deciding
+  // works with the first and silently loses every request from the second.
+  //
+  // Nothing found this until the block was actually wired into the shell, which
+  // is the argument for wiring it early rather than at the end.
+  {
+    reset(dut);
+    Bench b(dut);
+    // Drive the port by hand: valid for exactly ONE cycle, then gone.
+    dut.c0_valid_i = 1;
+    dut.c0_write_i = 0;
+    dut.c0_client_i = kDmaClient;
+    dut.c0_addr_i = 0xF000'0000;
+    dut.c0_len_i = 64;
+    dut.eval();
+    zhao::tick(dut);
+    dut.c0_valid_i = 0;
+    dut.eval();
+
+    // From here the harness plays the HPS only; the client says nothing more.
+    b.c0.client = kDmaClient;
+    b.c0.base = 0xF000'0000;
+    b.c0.addr = 0xF000'0000;
+    b.c0.next_addr = 0xF000'0000;
+    b.c0.len = 64;
+    b.c0.bursts_wanted = 0;   // it will not ask again
+    b.run(80);
+
+    check(b.c0.beats == 8, "6c.a one-cycle request is not lost", 8,
+          static_cast<uint32_t>(b.c0.beats));
+    check(b.c0.data_ok, "6c.and it fetched the right address", 1, b.c0.data_ok ? 1 : 0);
+    check(dut.hps_err_count_o == 0, "6c.no protocol violation", 0, dut.hps_err_count_o);
+  }
+
   // ---- 7. A WRITE BURST, which ends differently ---------------------------
   // The bridge answers a write with NOTHING -- it forwards the beats and clears
   // `busy` on `wr_last`. An arbiter that ends a burst on `rsp.last` therefore
