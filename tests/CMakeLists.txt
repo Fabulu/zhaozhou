@@ -1949,6 +1949,24 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 set(ZHAO_TERRAIN_PATCH_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
 
+# FIELD.OUT.HEIGHT: the op ops.yml declares with "no dedicated opcode" -- the op
+# IS the routing of the height out-lane into the §3.4 compose chain. Narrow on
+# purpose: terrain_patch_directed.cpp already covers composition as a whole, so
+# this covers only what the op owns (clamp-once, command order, the exact <<8,
+# and the covers gate).
+add_executable(test_field_out_height differential/field_out_height.cpp)
+target_link_libraries(test_field_out_height PRIVATE zhao_harness zhao_zref)
+verilate(test_field_out_height
+  PREFIX Vzhao_terrain_patch
+  TOP_MODULE zhao_terrain_patch
+  SOURCES ${ZHAO_TERRAIN_PATCH_SV})
+add_test(NAME field_out_height COMMAND test_field_out_height)
+set_tests_properties(field_out_height PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_out_height_random COMMAND test_field_out_height --random 300)
+set_tests_properties(field_out_height_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_out_height_random_nightly COMMAND test_field_out_height --random 4000)
+set_tests_properties(field_out_height_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_terrain_patch_directed terrain/terrain_patch_directed.cpp)
 target_link_libraries(test_terrain_patch_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_terrain_patch_directed PRIVATE

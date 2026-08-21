@@ -100,3 +100,54 @@ The pattern that has worked four times today is:
 
 Step 1 takes a minute. Discovering it at step 4 has cost noticeably more than
 that every time it has happened.
+
+---
+
+## Addendum, same day: what advancing TERRAIN.PATCH actually revealed
+
+TERRAIN.PATCH has RTL, and its directed test is a genuine differential against
+`zref::terrain::compose_vertex`. It is still `SPECIFIED`, and trying to advance
+it showed why: ledger rule V10 named **four** op differentials that do not exist
+— `FIELD.OUT.HEIGHT`, `FIELD.WRITE.MATERIAL`, `FIELD.WRITE.NAV`,
+`FIELD.WRITE.HAZARD`.
+
+`FIELD.OUT.HEIGHT` is now written and passing (`tests/differential/
+field_out_height.cpp`, 5/5 mutations caught). It belonged to kind 1 above: the
+op has "no dedicated opcode" by ops.yml's own words, so the op IS the routing of
+the height out-lane into the §3.4 compose chain, and that routing was already
+implemented and already had an oracle.
+
+**The other three are a different problem, and it is not a testing problem.**
+
+`ops.yml` lists `TERRAIN.PATCH` in `implementation_blocks` for all three. It does
+not implement any of them:
+
+- the RTL has no material, nav or hazard port — `grep` finds none;
+- the reference has no material, nav or hazard layer either;
+- the contract says so outright. "What it is NOT, deliberately… no scar writing
+  and no breach law (TERRAIN.BAKE owns layers B and D), no field-program
+  evaluation (FIELD.SEQ.EARTH; terrain_rules §4.1 forbids a second evaluator
+  anywhere)". The three `WRITE.*` sinks are field-program sinks.
+
+So V10 is asking for differential coverage of behaviour that exists in no block.
+The block that will own these sinks is `FIELD.SEQ.EARTH`, which is `SPECIFIED`
+and unbuilt.
+
+**What was deliberately NOT done here.** The quick way to make the rule quiet is
+to delete `TERRAIN.PATCH` from those three `implementation_blocks` lists. That
+edit would turn the ledger green in about a minute. It was not made, for two
+reasons:
+
+1. It may be wrong. `implementation_blocks` might be a design-intent mapping —
+   which blocks *will* implement the op — rather than a built-state mapping. The
+   contract's own purpose line is "own patch state layers (terrain_rules §2:
+   header + layers A–H)", so TERRAIN.PATCH probably *does* eventually own them.
+   Under that reading the list is correct and the block is simply not finished.
+2. Even if it were right, editing the rule's input to stop the rule complaining
+   is the exact failure mode this project has caught repeatedly — the "alias, not
+   evidence" family. A rule that goes quiet because its input was rewritten has
+   not been satisfied.
+
+**Conclusion: TERRAIN.PATCH is legitimately blocked on FIELD.SEQ.EARTH**, and
+staying at `SPECIFIED` is the accurate state, not a missing chore. Three of its
+four op blockers are downstream of a block nobody has built.
