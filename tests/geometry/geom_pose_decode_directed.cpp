@@ -157,7 +157,10 @@ void diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
 
 zc::quat16 q_of(int16_t w, int16_t x, int16_t y, int16_t z) {
   zc::quat16 q;
-  q.q[0] = w; q.q[1] = x; q.q[2] = y; q.q[3] = z;
+  q.q[0] = w;
+  q.q[1] = x;
+  q.q[2] = y;
+  q.q[3] = z;
   return q;
 }
 
@@ -240,18 +243,17 @@ int main(int argc, char** argv) {
   // root, which is exactly the shape that would look like "the creature is
   // slightly wrong" rather than "the creature is broken".
   {
-    Fixture f = make_fixture({0, 0, 1}, {q_of(QONE, 0, 0, 0), q_of(QONE, 0, 0, 0),
-                                         q_of(QONE, 0, 0, 0)},
-                             3 * ONE, -7 * ONE, 2 * ONE);
+    Fixture f =
+        make_fixture({0, 0, 1}, {q_of(QONE, 0, 0, 0), q_of(QONE, 0, 0, 0), q_of(QONE, 0, 0, 0)},
+                     3 * ONE, -7 * ONE, 2 * ONE);
     diff(dut, f, "root displacement on bone 0 only");
   }
 
   // ---- 3. real rotations through a parent chain ---------------------------
   {
-    Fixture f = make_fixture({0, 0, 1, 2},
-                             {q_of(H, H, 0, 0), q_of(H, 0, H, 0), q_of(H, 0, 0, H),
-                              q_of(0, QONE, 0, 0)},
-                             ONE, ONE, ONE);
+    Fixture f = make_fixture(
+        {0, 0, 1, 2}, {q_of(H, H, 0, 0), q_of(H, 0, H, 0), q_of(H, 0, 0, H), q_of(0, QONE, 0, 0)},
+        ONE, ONE, ONE);
     diff(dut, f, "rotations composed down a chain");
   }
 
@@ -313,8 +315,8 @@ int main(int argc, char** argv) {
   // The palette is a stream. A consumer that goes away mid-palette must get
   // every bone when it comes back, in order.
   {
-    Fixture f = make_fixture({0, 0, 1, 2, 3}, std::vector<zc::quat16>(5, q_of(H, H, 0, 0)),
-                             ONE, ONE, ONE);
+    Fixture f =
+        make_fixture({0, 0, 1, 2, 3}, std::vector<zc::quat16>(5, q_of(H, H, 0, 0)), ONE, ONE, ONE);
     zc::CreatureType type;
     type.skeleton = f.sk;
     type.baked = f.bake;
@@ -343,7 +345,7 @@ int main(int argc, char** argv) {
     dut.root_dx_i = static_cast<uint32_t>(f.clip.root[0]);
     dut.root_dy_i = static_cast<uint32_t>(f.clip.root[1]);
     dut.root_dz_i = static_cast<uint32_t>(f.clip.root[2]);
-    dut.out_ready_i = 0;          // consumer is asleep from the very start
+    dut.out_ready_i = 0;  // consumer is asleep from the very start
     dut.start_i = 1;
     present();
     zhao::tick(dut);
@@ -378,7 +380,8 @@ int main(int argc, char** argv) {
     check(order.size() == f.sk.bone_count, "every bone arrives after the stall lifts",
           f.sk.bone_count, static_cast<uint64_t>(order.size()));
     bool in_order = true;
-    for (size_t i = 0; i < order.size(); ++i) in_order = in_order && (order[i] == static_cast<int>(i));
+    for (size_t i = 0; i < order.size(); ++i)
+      in_order = in_order && (order[i] == static_cast<int>(i));
     check(in_order, "and they arrive in bone order", 1, in_order ? 1 : 0);
     bool same = true;
     for (int bi = 0; bi < f.sk.bone_count; ++bi) {

@@ -90,10 +90,10 @@ struct Lease {
 
 struct BlitOutcome {
   BlitStatus status = BlitStatus::kOk;
-  bool acquired = false;    // the transaction took ownership of the lease
-  bool published = false;   // the slot became READY
-  bool released = false;    // the slot went FREE (implies `acquired`)
-  uint32_t bytes_written = 0;   // bytes handed to the memory system
+  bool acquired = false;       // the transaction took ownership of the lease
+  bool published = false;      // the slot became READY
+  bool released = false;       // the slot went FREE (implies `acquired`)
+  uint32_t bytes_written = 0;  // bytes handed to the memory system
   uint32_t computed_crc = 0;
   // Both terminal events carry the identity of the lease they belong to, so a
   // stale one can be refused rather than acted on.

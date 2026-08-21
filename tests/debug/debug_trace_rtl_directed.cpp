@@ -128,8 +128,7 @@ void compare(Vzhao_debug_trace& dut, const zt::Ring& ring, const char* what) {
   const std::string t(what);
   check(dut.count_o == ring.events().size(), (t + ": event count").c_str(),
         static_cast<uint64_t>(ring.events().size()), dut.count_o);
-  check(dut.dropped_o == ring.dropped(), (t + ": dropped").c_str(), ring.dropped(),
-        dut.dropped_o);
+  check(dut.dropped_o == ring.dropped(), (t + ": dropped").c_str(), ring.dropped(), dut.dropped_o);
 
   const size_t n = ring.events().size();
   for (size_t ei = 0; ei < n; ++ei) {
@@ -152,9 +151,9 @@ Offer make(uint8_t stage, uint32_t seed) {
   o.pixel = 0x3000'0000u + seed * 5u;
   o.expected_fx = 0x4000'0000u + seed * 7u;
   o.actual_fx = 0x5000'0000u + seed * 11u;
-  o.source_id = zt::pack_source_id(static_cast<uint8_t>(seed & 0xF),
-                                   static_cast<uint16_t>(seed & 0x0FFF),
-                                   static_cast<uint16_t>(seed));
+  o.source_id =
+      zt::pack_source_id(static_cast<uint8_t>(seed & 0xF), static_cast<uint16_t>(seed & 0x0FFF),
+                         static_cast<uint16_t>(seed));
   o.command_seq = seed;
   return o;
 }
@@ -251,8 +250,8 @@ int main(int argc, char** argv) {
   {
     zt::Ring ring(kDepth);
     reset(dut);
-    const uint8_t mask = (1u << zt::kCommandDecoder) | (1u << zt::kTileInsertion) |
-                         (1u << zt::kFinalPixel);
+    const uint8_t mask =
+        (1u << zt::kCommandDecoder) | (1u << zt::kTileInsertion) | (1u << zt::kFinalPixel);
     arm(dut, ring, mask);
     check(dut.armed_o == mask, "the armed mask reads back", mask, dut.armed_o);
     for (uint8_t s = 0; s < 7; ++s) offer(dut, ring, make(s, 300 + s));
@@ -320,8 +319,8 @@ int main(int argc, char** argv) {
       offer(dut, ring, make(st, 7000 + st));
     }
     offer(dut, ring, make(9, 7100));
-    check(dut.dropped_o == 0,
-          "unarmed and illegal stages are not drops, even against a full ring", 0, dut.dropped_o);
+    check(dut.dropped_o == 0, "unarmed and illegal stages are not drops, even against a full ring",
+          0, dut.dropped_o);
 
     // One ARMED event against the full ring is a drop, and exactly one.
     offer(dut, ring, make(zt::kFinalPixel, 7200));

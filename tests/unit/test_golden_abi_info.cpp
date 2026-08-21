@@ -61,8 +61,7 @@ std::vector<uint8_t> read_file(const fs::path& p) {
 }
 
 uint32_t rd32(const uint8_t* p) {
-  return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) |
-         (uint32_t(p[3]) << 24);
+  return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
 }
 
 /**
@@ -102,8 +101,8 @@ void check_one(const fs::path& p) {
   check(rd32(b) == zhao_abi::ZHAO_ABI_VERSION, (tag + ": ABI version is current").c_str(),
         zhao_abi::ZHAO_ABI_VERSION, rd32(b));
   check(rd32(b + 4) == zhao_abi::ZHAO_ZCAP_SCHEMA_VERSION,
-        (tag + ": zcap schema version is current").c_str(),
-        zhao_abi::ZHAO_ZCAP_SCHEMA_VERSION, rd32(b + 4));
+        (tag + ": zcap schema version is current").c_str(), zhao_abi::ZHAO_ZCAP_SCHEMA_VERSION,
+        rd32(b + 4));
   check(std::memcmp(b + 24, zhao_abi::ZHAO_GENERATOR_SHA256, 32) == 0,
         (tag + ": generator SHA-256 is current").c_str(), 0,
         std::memcmp(b + 24, zhao_abi::ZHAO_GENERATOR_SHA256, 32) == 0 ? 0 : 1);
@@ -131,8 +130,7 @@ int main() {
 
   // A run that found no goldens would pass every check above while checking
   // nothing at all -- the exact shape of the failure this test exists to catch.
-  check(seen > 0, "at least one committed golden was examined", 1,
-        static_cast<uint32_t>(seen));
+  check(seen > 0, "at least one committed golden was examined", 1, static_cast<uint32_t>(seen));
   std::printf("[golden_abi_info] examined %d capture(s)\n", seen);
 
   return zhao::report_and_exit("golden_abi_info");

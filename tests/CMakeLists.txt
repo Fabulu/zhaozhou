@@ -261,10 +261,32 @@ set_tests_properties(lint_zhao_pkg PROPERTIES
 
 # ---- M1 (review RUN-20260814-1912): charter-27 format + static-analysis ----
 # Every-commit tiers, mirrored locally as SKIP-if-absent CTest shims (same
-# discipline as formal_lane): clang-format is not shipped in oss-cad-suite,
-# so machines without it SKIP and the dedicated CI "format" job carries the
-# authoritative gate (pinned npm clang-format = LLVM 15; see .clang-format).
-# cppcheck is present in this repo's MinGW toolchain and on CI runners.
+# discipline as formal_lane). cppcheck is present in this repo's MinGW
+# toolchain and on CI runners.
+#
+# THE FORMAT TIER MUST NOT SILENTLY SKIP. It did, for weeks: clang-format is
+# not shipped in oss-cad-suite, every local run reported "Skipped", and CI
+# went red on every push against a locally green suite. Both readings were
+# accurate and neither was useful.
+#
+# The fix is not to fail when the tool is missing -- it is to make the tool
+# present. `clang-format` is a devDependency pinned to the SAME 1.8.0 (LLVM
+# 15) the CI job installs, so `npm install` puts the authoritative binary in
+# node_modules and the local gate becomes the CI gate rather than a
+# lookalike. A system clang-format of a different LLVM version formats
+# differently, which is why the pinned path is searched FIRST and why the
+# skip existed at all.
+if(WIN32)
+  set(_zhao_cf_platform "win32")
+elseif(APPLE)
+  set(_zhao_cf_platform "darwin_x64")
+else()
+  set(_zhao_cf_platform "linux_x64")
+endif()
+find_program(ZHAO_CLANG_FORMAT_BIN
+  NAMES clang-format clang-format.exe
+  PATHS "${CMAKE_SOURCE_DIR}/node_modules/clang-format/bin/${_zhao_cf_platform}"
+  NO_DEFAULT_PATH)
 find_program(ZHAO_CLANG_FORMAT_BIN NAMES clang-format clang-format.exe)
 configure_file(lint/format_check.cmake.in lint/format_check.cmake @ONLY)
 add_test(NAME format_check

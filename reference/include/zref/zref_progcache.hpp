@@ -84,9 +84,9 @@ enum class ProgStatus : uint8_t {
 
 struct AcquireResult {
   ProgStatus status = ProgStatus::kRejected;
-  int slot = -1;                                     // valid for kHit/kInserted
+  int slot = -1;                                             // valid for kHit/kInserted
   ::zfield::DecodeError error = ::zfield::DecodeError::kOk;  // why, for kRejected
-  uint32_t program_hash = 0;                         // 0 when rejected
+  uint32_t program_hash = 0;                                 // 0 when rejected
 };
 
 /**
@@ -176,9 +176,7 @@ class ProgCache {
     return -1;
   }
 
-  const ::zfield::Decoded& at(int slot) const {
-    return slots_[static_cast<size_t>(slot)].prog;
-  }
+  const ::zfield::Decoded& at(int slot) const { return slots_[static_cast<size_t>(slot)].prog; }
 
   const Counters& counters() const { return ctr_; }
 

@@ -159,8 +159,8 @@ class Dut {
 
 /** The oracle, in the RTL's output shape. */
 VtxOut oracle(const zref::mat4fx& m, const zr::Viewport& vp, const VtxIn& v) {
-  const zr::ProjOut p = zr::project_vertex(m, vp, zref::fx16{v.x}, zref::fx16{v.y},
-                                           zref::fx16{v.z}, nullptr);
+  const zr::ProjOut p =
+      zr::project_vertex(m, vp, zref::fx16{v.x}, zref::fx16{v.y}, zref::fx16{v.z}, nullptr);
   VtxOut o;
   o.behind = !p.in;
   o.x = p.s.x;
@@ -205,7 +205,10 @@ zref::mat4fx persp_vp(int32_t zscale, int32_t wz, int32_t wc) {
 
 zr::Viewport view_of(uint32_t x0, uint32_t y0, uint32_t w, uint32_t h) {
   zr::Viewport v;
-  v.x0 = x0; v.y0 = y0; v.w = w; v.h = h;
+  v.x0 = x0;
+  v.y0 = y0;
+  v.w = w;
+  v.h = h;
   return v;
 }
 
@@ -256,12 +259,13 @@ int main(int argc, char** argv) {
       // plane is reachable rather than theoretical.
       int32_t r[16];
       for (int k = 0; k < 16; ++k) r[k] = static_cast<int32_t>(rng.next()) >> 14;
-      r[12] = 0; r[13] = 0;
+      r[12] = 0;
+      r[13] = 0;
       r[14] = static_cast<int32_t>(rng.next()) >> 15;
       r[15] = static_cast<int32_t>(rng.next()) >> 14;
       const zref::mat4fx m = mat_of(r);
-      const zr::Viewport vp = view_of(rng.below(64), rng.below(64), 1 + rng.below(512),
-                                      1 + rng.below(512));
+      const zr::Viewport vp =
+          view_of(rng.below(64), rng.below(64), 1 + rng.below(512), 1 + rng.below(512));
       dut.configure(0, m, vp);
 
       std::vector<VtxIn> in;
@@ -293,9 +297,9 @@ int main(int argc, char** argv) {
     const zref::mat4fx m = identity_vp();
     dut.configure(0, m, vp0);
     std::vector<VtxIn> in = {
-        {0, 0, 0, false, 0x11},                 // NDC origin -> viewport centre
-        {kOne / 2, 0, 0, false, 0x12},          // +x half
-        {0, kOne / 2, 0, false, 0x13},          // +y half
+        {0, 0, 0, false, 0x11},         // NDC origin -> viewport centre
+        {kOne / 2, 0, 0, false, 0x12},  // +x half
+        {0, kOne / 2, 0, false, 0x13},  // +y half
         {-kOne / 2, -kOne / 2, 0, false, 0x14},
     };
     const std::vector<VtxOut> got = dut.run(in);
@@ -322,10 +326,10 @@ int main(int argc, char** argv) {
     const zref::mat4fx m = persp_vp(kOne, kOne, 0);
     dut.configure(0, m, vp0);
     std::vector<VtxIn> in = {
-        {kOne, kOne, 1, false, 0x21},        // w = 1 raw unit: the smallest legal w
-        {kOne, kOne, 0, false, 0x22},        // w == 0 EXACTLY: rejected
-        {kOne, kOne, -1, false, 0x23},       // w < 0: rejected
-        {kOne, kOne, 4 * kOne, false, 0x24}, // comfortably in front
+        {kOne, kOne, 1, false, 0x21},         // w = 1 raw unit: the smallest legal w
+        {kOne, kOne, 0, false, 0x22},         // w == 0 EXACTLY: rejected
+        {kOne, kOne, -1, false, 0x23},        // w < 0: rejected
+        {kOne, kOne, 4 * kOne, false, 0x24},  // comfortably in front
     };
     const std::vector<VtxOut> got = dut.run(in);
     check(got.size() == in.size(), "near plane: every vertex produced a result", in.size(),
@@ -353,8 +357,10 @@ int main(int argc, char** argv) {
     std::vector<VtxIn> in;
     // With w == 1.0 the quotient is the clip coordinate itself, so these sweep
     // the divider's sign and rounding behaviour directly.
-    const int32_t vals[] = {0, 1, -1, 2, -2, 3, -3, kOne, -kOne, kOne / 2, -kOne / 2,
-                            kOne + 1, -kOne - 1, 0x7FFFFFFF, static_cast<int32_t>(0x80000000)};
+    const int32_t vals[] = {
+        0,         1,        -1,        2,          -2,
+        3,         -3,       kOne,      -kOne,      kOne / 2,
+        -kOne / 2, kOne + 1, -kOne - 1, 0x7FFFFFFF, static_cast<int32_t>(0x80000000)};
     for (int32_t v : vals) in.push_back({v, -v, 0, false, static_cast<uint16_t>(v & 0xFFFF)});
     const std::vector<VtxOut> got = dut.run(in);
     check(got.size() == in.size(), "division: every vertex produced a result", in.size(),
@@ -391,8 +397,8 @@ int main(int argc, char** argv) {
     }
     bool all_in_band = true;
     for (const VtxOut& o : got) {
-      all_in_band = all_in_band && o.x <= 524288 && o.x >= -524288 && o.y <= 524288 &&
-                    o.y >= -524288;
+      all_in_band =
+          all_in_band && o.x <= 524288 && o.x >= -524288 && o.y <= 524288 && o.y >= -524288;
     }
     check(all_in_band, "every vertex leaves inside the ±2048 px guard band", 1,
           all_in_band ? 1 : 0);
@@ -468,9 +474,21 @@ int main(int argc, char** argv) {
     const zref::mat4fx m = mat_of(r);
     dut.configure(0, m, vp0);
     std::vector<VtxIn> in;
-    const int32_t res[] = {0, 1, -1, (1 << 15), -(1 << 15), (1 << 15) + 1, -(1 << 15) - 1,
-                           (1 << 16) - 1, -(1 << 16) + 1, 32768 * 3, -32768 * 3, 12345, -12345,
-                           21845, -21845};
+    const int32_t res[] = {0,
+                           1,
+                           -1,
+                           (1 << 15),
+                           -(1 << 15),
+                           (1 << 15) + 1,
+                           -(1 << 15) - 1,
+                           (1 << 16) - 1,
+                           -(1 << 16) + 1,
+                           32768 * 3,
+                           -32768 * 3,
+                           12345,
+                           -12345,
+                           21845,
+                           -21845};
     for (int32_t a : res) {
       for (int32_t b : {a, -a, a + 1}) {
         in.push_back({a, b, a - b, false, static_cast<uint16_t>(a & 0xFFFF)});
@@ -500,10 +518,8 @@ int main(int argc, char** argv) {
     const std::vector<VtxOut> free_run = dut.run(in);
     const std::vector<VtxOut> stalled = dut.run(in, 0xAAAAAAAAu);
     const std::vector<VtxOut> choppy = dut.run(in, 0xF0F0F0F0u);
-    check(free_run.size() == in.size() && stalled.size() == in.size() &&
-              choppy.size() == in.size(),
-          "every run returned every vertex", in.size(),
-          static_cast<uint64_t>(free_run.size()));
+    check(free_run.size() == in.size() && stalled.size() == in.size() && choppy.size() == in.size(),
+          "every run returned every vertex", in.size(), static_cast<uint64_t>(free_run.size()));
     bool same = true;
     for (size_t k = 0; k < in.size(); ++k) {
       same = same && free_run[k].x == stalled[k].x && free_run[k].y == stalled[k].y &&

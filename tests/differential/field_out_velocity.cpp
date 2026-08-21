@@ -120,8 +120,8 @@ int main(int argc, char** argv) {
             const size_t idx = plane.at(vi, vj, k);
             // A wide magnitude range so the fx_add chain and the bake-back both
             // reach their rails on a real share of vertices, not just in theory.
-            plane.velocity[idx] = static_cast<int32_t>(rng.next()) >>
-                                  static_cast<int>(rng.next() % 20);
+            plane.velocity[idx] =
+                static_cast<int32_t>(rng.next()) >> static_cast<int>(rng.next() % 20);
             plane.covers[idx] = (rng.next() % 4) != 0 ? 1 : 0;
           }
         }
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
         const bool on = ((vi + vj) & 1) == 0;
         p.velocity[p.at(vi, vj, 0)] = on ? 3 * kOne : 0;
         p.covers[p.at(vi, vj, 0)] = on ? 1 : 0;
-        p.velocity[p.at(vi, vj, 1)] = 1000 * kOne;   // huge, and never covers
+        p.velocity[p.at(vi, vj, 1)] = 1000 * kOne;  // huge, and never covers
         p.covers[p.at(vi, vj, 1)] = 0;
         const bool lane2 = !on && (vj % 3 == 0);
         p.velocity[p.at(vi, vj, 2)] = lane2 ? -2 * kOne : 0;
@@ -226,9 +226,11 @@ int main(int argc, char** argv) {
     zref::SatLedger L{};
     const vdev::SweepOut want = vdev::oracle_sweep(p, 0x77, &L);
     bool some_covered = false, some_not = false;
-    for (uint8_t c : want.covered) { some_covered = some_covered || c; some_not = some_not || !c; }
-    check(some_covered && some_not,
-          "the fixture has both covered and uncovered vertices", 1,
+    for (uint8_t c : want.covered) {
+      some_covered = some_covered || c;
+      some_not = some_not || !c;
+    }
+    check(some_covered && some_not, "the fixture has both covered and uncovered vertices", 1,
           (some_covered && some_not) ? 1 : 0);
     run(dut, p, "an uncovered lane is skipped, and every vertex still writes a word");
   }

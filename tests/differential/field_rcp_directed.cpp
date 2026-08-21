@@ -68,8 +68,8 @@ void diff(Vzhao_field_rcp& dut, int32_t a, const char* what) {
   const Res want = oracle(a);
   const Res got = run(dut, a);
   const std::string t(what);
-  check(got.value == want.value, (t + ": value").c_str(),
-        static_cast<uint32_t>(want.value), static_cast<uint32_t>(got.value));
+  check(got.value == want.value, (t + ": value").c_str(), static_cast<uint32_t>(want.value),
+        static_cast<uint32_t>(got.value));
   check(got.sat_rcp == want.sat_rcp, (t + ": SatLedger::rcp").c_str(), want.sat_rcp ? 1 : 0,
         got.sat_rcp ? 1 : 0);
   check(got.rcp0 == want.rcp0, (t + ": SatLedger::rcp0").c_str(), want.rcp0 ? 1 : 0,
@@ -112,10 +112,18 @@ int main(int argc, char** argv) {
       switch (rng.below(5)) {
         // Small magnitudes are where the reciprocal saturates, and they are a
         // vanishing fraction of a uniform draw -- so they get their own lane.
-        case 0: a = static_cast<int32_t>(rng.below(64)) - 32; break;
-        case 1: a = static_cast<int32_t>(rng.next()) >> 20; break;
-        case 2: a = static_cast<int32_t>(rng.next()) >> 8; break;
-        default: a = static_cast<int32_t>(rng.next()); break;
+        case 0:
+          a = static_cast<int32_t>(rng.below(64)) - 32;
+          break;
+        case 1:
+          a = static_cast<int32_t>(rng.next()) >> 20;
+          break;
+        case 2:
+          a = static_cast<int32_t>(rng.next()) >> 8;
+          break;
+        default:
+          a = static_cast<int32_t>(rng.next());
+          break;
       }
       char tag[64];
       std::snprintf(tag, sizeof tag, "random[%u] a=%d", it, a);
@@ -145,14 +153,13 @@ int main(int argc, char** argv) {
         ++bad;
       }
     }
-    check(bad == 0, "the generated ROM agrees with the reference for all 256 seed indices", 0,
-          bad);
+    check(bad == 0, "the generated ROM agrees with the reference for all 256 seed indices", 0, bad);
     if (bad) std::printf("  first divergent seed index: %d\n", first);
 
     // And the table itself, read directly, so a drift is attributed to the ROM
     // rather than to the arithmetic around it.
-    check(zref::gen::FIELD_RCP_T0[0] == 0xFF80u, "the reference table starts where it did",
-          0xFF80u, zref::gen::FIELD_RCP_T0[0]);
+    check(zref::gen::FIELD_RCP_T0[0] == 0xFF80u, "the reference table starts where it did", 0xFF80u,
+          zref::gen::FIELD_RCP_T0[0]);
     check(zref::gen::FIELD_RCP_T0[255] == 0x8020u, "and ends where it did", 0x8020u,
           zref::gen::FIELD_RCP_T0[255]);
   }

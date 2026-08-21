@@ -52,8 +52,8 @@ Res interp(bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y, int32_t 
   zfield::Instr ins{};
   ins.op = rot3 ? zfield::OP_ROT3 : zfield::OP_ROT2;
   ins.dst = 8;
-  ins.a = 0;    // the adjacent input triple lives at reg0..reg2
-  ins.b = 3;    // the angle
+  ins.a = 0;  // the adjacent input triple lives at reg0..reg2
+  ins.b = 3;  // the angle
   ins.c = 0;
   ins.imm = axis;
   prog.instrs.push_back(ins);
@@ -155,8 +155,13 @@ struct Lanes {
 
 Lanes lanes_of(bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y, int32_t z) {
   int32_t p = x, q = y;
-  if (rot3 && axis == 0) { p = y; q = z; }
-  else if (rot3 && axis == 1) { p = z; q = x; }
+  if (rot3 && axis == 0) {
+    p = y;
+    q = z;
+  } else if (rot3 && axis == 1) {
+    p = z;
+    q = x;
+  }
 
   zref::SatLedger L{};
   const int32_t c = zref::fx_cos(zref::angle16{static_cast<uint16_t>(ang & 0xFFFF)}).raw;
@@ -180,9 +185,9 @@ bool fused_would_differ(int32_t ang, int32_t p, int32_t q) {
   const int32_t c = zref::fx_cos(zref::angle16{static_cast<uint16_t>(ang & 0xFFFF)}).raw;
   const int32_t s = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ang & 0xFFFF)}).raw;
   // The law: round each product, then subtract.
-  const int32_t split =
-      zref::fx_sub(zref::fx_mul(zref::fx16{c}, zref::fx16{p}, &L),
-                   zref::fx_mul(zref::fx16{s}, zref::fx16{q}, &L), &L).raw;
+  const int32_t split = zref::fx_sub(zref::fx_mul(zref::fx16{c}, zref::fx16{p}, &L),
+                                     zref::fx_mul(zref::fx16{s}, zref::fx16{q}, &L), &L)
+                            .raw;
   // The tempting "improvement": sum exactly, round once.
   const int64_t exact = static_cast<int64_t>(c) * p - static_cast<int64_t>(s) * q;
   const int32_t fused = zref::rescale_s32(exact, 16, &L);
@@ -206,8 +211,8 @@ void diff(Vzhao_field_rot& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x
     check(got.o[2] == 0, (t + ": ROT2 writes two lanes").c_str(), 0,
           static_cast<uint32_t>(got.o[2]));
   }
-  check((got.sat_add || got.sat_mul) == want.sat, (t + ": Status.sat").c_str(),
-        want.sat ? 1 : 0, (got.sat_add || got.sat_mul) ? 1 : 0);
+  check((got.sat_add || got.sat_mul) == want.sat, (t + ": Status.sat").c_str(), want.sat ? 1 : 0,
+        (got.sat_add || got.sat_mul) ? 1 : 0);
 
   // ...and the lanes SEPARATELY. The collapsed bit above cannot tell an `add`
   // saturation from a `mul` one, and the reference keeps them apart on purpose.
@@ -219,8 +224,13 @@ void diff(Vzhao_field_rot& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x
 
   // Law 1 coverage, on whichever pair actually rotates.
   int32_t p = x, q = y;
-  if (rot3 && axis == 0) { p = y; q = z; }
-  else if (rot3 && axis == 1) { p = z; q = x; }
+  if (rot3 && axis == 0) {
+    p = y;
+    q = z;
+  } else if (rot3 && axis == 1) {
+    p = z;
+    q = x;
+  }
   if (fused_would_differ(ang, p, q)) ++g_fused_differs;
 }
 
@@ -237,12 +247,18 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (next() % n) : 0u; }
   int32_t val() {
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return kOne;
-      case 2: return -kOne;
-      case 3: return INT32_MAX;
-      case 4: return INT32_MIN;
-      default: return static_cast<int32_t>(next());
+      case 0:
+        return 0;
+      case 1:
+        return kOne;
+      case 2:
+        return -kOne;
+      case 3:
+        return INT32_MAX;
+      case 4:
+        return INT32_MIN;
+      default:
+        return static_cast<int32_t>(next());
     }
   }
 };
@@ -279,8 +295,7 @@ int main(int argc, char** argv) {
     check(r0.o[0] == kOne && r0.o[1] == 0, "1.angle 0 is the identity", kOne,
           static_cast<uint32_t>(r0.o[0]));
     const Res r90 = interp(false, 0, 0x4000, kOne, 0, 0);
-    check(r90.o[1] == kOne, "1.a quarter turn sends x to y", kOne,
-          static_cast<uint32_t>(r90.o[1]));
+    check(r90.o[1] == kOne, "1.a quarter turn sends x to y", kOne, static_cast<uint32_t>(r90.o[1]));
   }
 
   // ---- 2. ROT3, all three axes, and LAW 4 --------------------------------
@@ -298,14 +313,14 @@ int main(int argc, char** argv) {
     const int32_t ang = 0x1234;
     const int32_t xv = 12345678, yv = -87654321, zv = 4242424;
     const Res rx = interp(true, 0, ang, xv, yv, zv);
-    check(rx.o[0] == xv, "2.X axis: lane 0 is copied bit for bit",
-          static_cast<uint32_t>(xv), static_cast<uint32_t>(rx.o[0]));
+    check(rx.o[0] == xv, "2.X axis: lane 0 is copied bit for bit", static_cast<uint32_t>(xv),
+          static_cast<uint32_t>(rx.o[0]));
     const Res ry = interp(true, 1, ang, xv, yv, zv);
-    check(ry.o[1] == yv, "2.Y axis: lane 1 is copied bit for bit",
-          static_cast<uint32_t>(yv), static_cast<uint32_t>(ry.o[1]));
+    check(ry.o[1] == yv, "2.Y axis: lane 1 is copied bit for bit", static_cast<uint32_t>(yv),
+          static_cast<uint32_t>(ry.o[1]));
     const Res rz = interp(true, 2, ang, xv, yv, zv);
-    check(rz.o[2] == zv, "2.Z axis: lane 2 is copied bit for bit",
-          static_cast<uint32_t>(zv), static_cast<uint32_t>(rz.o[2]));
+    check(rz.o[2] == zv, "2.Z axis: lane 2 is copied bit for bit", static_cast<uint32_t>(zv),
+          static_cast<uint32_t>(rz.o[2]));
     // ...and prove the copy is not trivially right: cos(ang) != 1 here, so a
     // multiply-by-cosine really would change the value.
     const int32_t c = zref::fx_cos(zref::angle16{static_cast<uint16_t>(ang)}).raw;
@@ -389,10 +404,9 @@ int main(int argc, char** argv) {
     // A large coordinate against a near-unit cosine: the PRODUCTS saturate.
     const DutRes m = run(dut, false, 0, 0x0000, INT32_MAX, 0, 0);
     const Lanes ml = lanes_of(false, 0, 0x0000, INT32_MAX, 0, 0);
-    check(m.sat_mul == ml.mul, "6b.mul lane agrees on a saturating product",
-          ml.mul ? 1 : 0, m.sat_mul ? 1 : 0);
-    check(m.sat_add == ml.add, "6b.and the add lane agrees too", ml.add ? 1 : 0,
-          m.sat_add ? 1 : 0);
+    check(m.sat_mul == ml.mul, "6b.mul lane agrees on a saturating product", ml.mul ? 1 : 0,
+          m.sat_mul ? 1 : 0);
+    check(m.sat_add == ml.add, "6b.and the add lane agrees too", ml.add ? 1 : 0, m.sat_add ? 1 : 0);
 
     // Two in-range products whose DIFFERENCE leaves the range: `add` alone.
     int found = 0;
@@ -410,8 +424,7 @@ int main(int argc, char** argv) {
         ++found;
       }
     }
-    check(found > 0, "6b.and such a case was actually found", 1,
-          static_cast<uint32_t>(found));
+    check(found > 0, "6b.and such a case was actually found", 1, static_cast<uint32_t>(found));
   }
 
   // ---- 7. interface laws --------------------------------------------------
@@ -431,7 +444,10 @@ int main(int argc, char** argv) {
     dut.r_ready_i = 0;
     dut.eval();
     int g = 0;
-    while (!dut.v_ready_o && g++ < 64) { zhao::tick(dut); dut.eval(); }
+    while (!dut.v_ready_o && g++ < 64) {
+      zhao::tick(dut);
+      dut.eval();
+    }
     zhao::tick(dut);
     dut.v_valid_i = 0;
     dut.eval();
@@ -470,8 +486,8 @@ int main(int argc, char** argv) {
       std::snprintf(nm, sizeof nm, "8.random[%d]", i);
       diff(dut, rot3, axis, ang, rng.val(), rng.val(), rng.val(), nm);
     }
-    std::printf("random: %d iterations, %d inputs where a fused form would differ\n",
-                random_iters, g_fused_differs);
+    std::printf("random: %d iterations, %d inputs where a fused form would differ\n", random_iters,
+                g_fused_differs);
   }
 
   return zhao::report_and_exit("field_rot_directed");

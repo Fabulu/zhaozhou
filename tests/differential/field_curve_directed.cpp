@@ -138,9 +138,7 @@ struct Lanes {
   bool add = false, mul = false, rescale = false;
 };
 
-int32_t clamp_raw(int32_t v, int32_t lo, int32_t hi) {
-  return v < lo ? lo : (v > hi ? hi : v);
-}
+int32_t clamp_raw(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 /** Law 1: six steps, k = 5..0, guarded by `mid <= n-1`. */
 int seg_search(const Tab& t, int32_t a) {
@@ -204,13 +202,12 @@ Lanes lanes_of(uint8_t mode, int32_t a, const Tab& t) {
 
   bool coef_sat = false;
   const int32_t C1 = sat_s32_i64(static_cast<int64_t>(p2) - p0, &coef_sat);
-  const int32_t C2 = sat_s32_i64(
-      2 * static_cast<int64_t>(p0) - 5 * static_cast<int64_t>(p1) + 4 * static_cast<int64_t>(p2) -
-          p3,
-      &coef_sat);
-  const int32_t C3 = sat_s32_i64(-static_cast<int64_t>(p0) + 3 * static_cast<int64_t>(p1) -
-                                     3 * static_cast<int64_t>(p2) + p3,
+  const int32_t C2 = sat_s32_i64(2 * static_cast<int64_t>(p0) - 5 * static_cast<int64_t>(p1) +
+                                     4 * static_cast<int64_t>(p2) - p3,
                                  &coef_sat);
+  const int32_t C3 = sat_s32_i64(
+      -static_cast<int64_t>(p0) + 3 * static_cast<int64_t>(p1) - 3 * static_cast<int64_t>(p2) + p3,
+      &coef_sat);
 
   int32_t u = zref::fx_mad(F(tt), F(C3), F(C2), &L).raw;
   u = zref::fx_mad(F(tt), F(u), F(C1), &L).raw;
@@ -368,11 +365,21 @@ Tab random_table(Prng& rng, bool spline) {
     t.x.push_back(x);
     x += step;  // uniform, so the same generator serves both kinds
     switch (rng.below(6)) {
-      case 0: t.y.push_back(0); break;
-      case 1: t.y.push_back(INT32_MAX); break;
-      case 2: t.y.push_back(INT32_MIN); break;
-      case 3: t.y.push_back(static_cast<int32_t>(rng.next()) >> 12); break;
-      default: t.y.push_back(static_cast<int32_t>(rng.next())); break;
+      case 0:
+        t.y.push_back(0);
+        break;
+      case 1:
+        t.y.push_back(INT32_MAX);
+        break;
+      case 2:
+        t.y.push_back(INT32_MIN);
+        break;
+      case 3:
+        t.y.push_back(static_cast<int32_t>(rng.next()) >> 12);
+        break;
+      default:
+        t.y.push_back(static_cast<int32_t>(rng.next()));
+        break;
     }
   }
   const int32_t inv = static_cast<int32_t>((static_cast<int64_t>(kOne) << 16) / step);
@@ -381,10 +388,18 @@ Tab random_table(Prng& rng, bool spline) {
       t.dy.push_back(inv);
     } else {
       switch (rng.below(5)) {
-        case 0: t.dy.push_back(0); break;
-        case 1: t.dy.push_back(INT32_MAX); break;
-        case 2: t.dy.push_back(static_cast<int32_t>(rng.next()) >> 14); break;
-        default: t.dy.push_back(static_cast<int32_t>(rng.next())); break;
+        case 0:
+          t.dy.push_back(0);
+          break;
+        case 1:
+          t.dy.push_back(INT32_MAX);
+          break;
+        case 2:
+          t.dy.push_back(static_cast<int32_t>(rng.next()) >> 14);
+          break;
+        default:
+          t.dy.push_back(static_cast<int32_t>(rng.next()));
+          break;
       }
     }
   }
@@ -525,8 +540,7 @@ int main(int argc, char** argv) {
 
   // ---- 5. SPLINE, and the segment parameter: law 3's visible consequence --
   {
-    const int32_t yv[8] = {0,       2 * kOne, -kOne,   5 * kOne,
-                           3 * kOne, 3 * kOne, -4 * kOne, kOne};
+    const int32_t yv[8] = {0, 2 * kOne, -kOne, 5 * kOne, 3 * kOne, 3 * kOne, -4 * kOne, kOne};
     const Tab t = make_spline(8, -4 * kOne, kOne, yv);
     for (int i = 0; i < 8; ++i) {
       char nm[64];
@@ -549,8 +563,8 @@ int main(int argc, char** argv) {
           static_cast<uint32_t>(kOne), static_cast<uint32_t>(near_next.tt));
     // At the knot the spline passes exactly through p1.
     const InterpRes knot_v = interp(M_SPLINE, t.x[3], t);
-    check(knot_v.value == t.y[3], "5.spline interpolates its knot",
-          static_cast<uint32_t>(t.y[3]), static_cast<uint32_t>(knot_v.value));
+    check(knot_v.value == t.y[3], "5.spline interpolates its knot", static_cast<uint32_t>(t.y[3]),
+          static_cast<uint32_t>(knot_v.value));
   }
 
   // ---- 5b. A spline table whose dy does NOT match the spacing ------------
@@ -603,8 +617,7 @@ int main(int argc, char** argv) {
     // the extrapolated alternative would have been visibly different.
     const Lanes mid = lanes_of(M_SPLINE, t.x[0] + kOne / 2, t);
     const int64_t extrap_p0 = 2LL * t.y[0] - t.y[1];
-    check(extrap_p0 != t.y[0], "6.extrapolation would differ", 1,
-          extrap_p0 != t.y[0] ? 1 : 0);
+    check(extrap_p0 != t.y[0], "6.extrapolation would differ", 1, extrap_p0 != t.y[0] ? 1 : 0);
     check(mid.seg == 0, "6.first segment index", 0, static_cast<uint32_t>(mid.seg));
   }
 
@@ -786,10 +799,17 @@ int main(int argc, char** argv) {
       // never.
       int32_t a;
       switch (rng.below(8)) {
-        case 0: a = INT32_MIN; break;
-        case 1: a = INT32_MAX; break;
-        case 2: a = t.x[0] - static_cast<int32_t>(rng.below(1u << 16)); break;
-        case 3: a = t.x[static_cast<size_t>(t.n() - 1)] + static_cast<int32_t>(rng.below(1u << 16));
+        case 0:
+          a = INT32_MIN;
+          break;
+        case 1:
+          a = INT32_MAX;
+          break;
+        case 2:
+          a = t.x[0] - static_cast<int32_t>(rng.below(1u << 16));
+          break;
+        case 3:
+          a = t.x[static_cast<size_t>(t.n() - 1)] + static_cast<int32_t>(rng.below(1u << 16));
           break;
         default: {
           const int j = static_cast<int>(rng.below(static_cast<uint32_t>(t.n())));
@@ -804,8 +824,7 @@ int main(int argc, char** argv) {
       std::snprintf(nm, sizeof(nm), "10.random[%d]", i);
       diff(dut, mode, a, t, nm);
     }
-    std::printf("random: %d iterations, %d odd v, %d negative v\n", random_iters, g_odd_v,
-                g_neg_v);
+    std::printf("random: %d iterations, %d odd v, %d negative v\n", random_iters, g_odd_v, g_neg_v);
   }
 
   return zhao::report_and_exit("field_curve_directed");

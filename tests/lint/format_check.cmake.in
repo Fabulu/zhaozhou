@@ -6,10 +6,16 @@
 # (reference/include/zref/generated/ is fixgen-owned byte-identity evidence;
 # runtime/include/zhao_abi.h is abi-gen-owned and outside the swept dirs).
 #
-# SKIP discipline (same as the formal lane): when clang-format is not
-# installed locally the test SKIPS — the dedicated CI "format" job runs the
-# authoritative check with the pinned npm clang-format (LLVM 15, see
-# .clang-format and .github/workflows/ci.yml).
+# SKIP discipline: the test still skips when no clang-format can be found at
+# all, but that should no longer happen on a machine that has run
+# `npm install` — clang-format is pinned as a devDependency to the SAME
+# 1.8.0 (LLVM 15) the CI "format" job installs, and CMakeLists searches that
+# node_modules path FIRST. A silent skip here once meant weeks of a green
+# local suite and a red CI on every push.
+#
+# The version pin is the point. A system clang-format from a different LLVM
+# release reformats the same file differently, so "clean locally" against an
+# unpinned binary is not evidence about CI at all.
 if("@ZHAO_CLANG_FORMAT_BIN@" STREQUAL "" OR "@ZHAO_CLANG_FORMAT_BIN@" MATCHES "NOTFOUND")
   message(STATUS "clang-format not found — format tier SKIPPED")
   return()

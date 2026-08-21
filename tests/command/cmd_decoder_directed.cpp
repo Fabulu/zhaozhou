@@ -127,8 +127,8 @@ void diff(const std::vector<uint8_t>& pkt, const char* what) {
 
     check(got.error == static_cast<uint8_t>(want.error), (tag + ": error code").c_str(),
           static_cast<uint64_t>(want.error), got.error);
-    check(got.bytes == want.bytes_consumed, (tag + ": bytes_consumed").c_str(),
-          want.bytes_consumed, got.bytes);
+    check(got.bytes == want.bytes_consumed, (tag + ": bytes_consumed").c_str(), want.bytes_consumed,
+          got.bytes);
     if (want.error == zhao_abi::ZH_ABI_OK) {
       check(got.commands == want.commands_consumed, (tag + ": commands").c_str(),
             want.commands_consumed, got.commands);
@@ -281,9 +281,11 @@ int main(int argc, char** argv) {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
     std::vector<uint8_t> bad(16, 0);
-    bad[0] = 0x00; bad[1] = 0x00;   // opcode NOP
-    bad[2] = 0x00; bad[3] = 0x00;   // record_bytes = 0: a multiple of 16, and
-                                    // smaller than the 16-byte record header
+    bad[0] = 0x00;
+    bad[1] = 0x00;  // opcode NOP
+    bad[2] = 0x00;
+    bad[3] = 0x00;  // record_bytes = 0: a multiple of 16, and
+                    // smaller than the 16-byte record header
     b.append_record(bad);
     b.end_frame(0);
     diff(b.seal(1, 1, 0), "record_bytes == 0");
@@ -292,8 +294,8 @@ int main(int argc, char** argv) {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
     std::vector<uint8_t> bad(16, 0);
-    bad[2] = 0x08;                  // record_bytes = 8: below 16 AND not a
-                                    // multiple of 16, the other side of the guard
+    bad[2] = 0x08;  // record_bytes = 8: below 16 AND not a
+                    // multiple of 16, the other side of the guard
     b.append_record(bad);
     b.end_frame(0);
     diff(b.seal(1, 1, 0), "record_bytes == 8");
@@ -310,8 +312,10 @@ int main(int argc, char** argv) {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
     std::vector<uint8_t> rec(32, 0);
-    rec[0] = 0x04; rec[1] = 0xF0;    // ZHAO_OP_DEBUG_RUMBLE = 0xF004
-    rec[2] = 32;   rec[3] = 0;       // its ABI size, so check 5 passes cleanly
+    rec[0] = 0x04;
+    rec[1] = 0xF0;  // ZHAO_OP_DEBUG_RUMBLE = 0xF004
+    rec[2] = 32;
+    rec[3] = 0;  // its ABI size, so check 5 passes cleanly
     b.append_record(rec);
     b.end_frame(0);
     diff(b.seal(1, 1, 0, 0, /*flags=*/0), "debug opcode without the debug flag");
@@ -329,7 +333,7 @@ int main(int argc, char** argv) {
     b.nop();
     b.end_frame(0);
     std::vector<uint8_t> p = b.seal(1, 1, 0);
-    p[24] = static_cast<uint8_t>(p[24] + 1);            // one record too many
+    p[24] = static_cast<uint8_t>(p[24] + 1);  // one record too many
     const uint32_t c = zhao_abi::zhao_crc32c(0, p.data(), 32);
     p[32] = static_cast<uint8_t>(c);
     p[33] = static_cast<uint8_t>(c >> 8);
@@ -343,7 +347,7 @@ int main(int argc, char** argv) {
   // are the packets the ABI generator, the capture tooling and the stub shell
   // have agreed on since wave 1.
   {
-    const char* names[] = {"cmd_begin_frame.bin",     "cmd_debug_bootstrap.bin",
+    const char* names[] = {"cmd_begin_frame.bin",      "cmd_debug_bootstrap.bin",
                            "cmd_debug_frame_blit.bin", "cmd_debug_rumble.bin",
                            "cmd_draw_form.bin",        "cmd_draw_population.bin",
                            "cmd_draw_procedural.bin"};

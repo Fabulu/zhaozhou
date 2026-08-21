@@ -69,10 +69,12 @@ void reset_dut(Vzhao_terrain_patch& top) {
 }
 
 /** A footprint rectangle covering everything, or a named box. */
-zt::FieldRecord rect(int32_t x0, int32_t z0, int32_t x1, int32_t z1, uint32_t hash,
-                     uint16_t cmd) {
+zt::FieldRecord rect(int32_t x0, int32_t z0, int32_t x1, int32_t z1, uint32_t hash, uint16_t cmd) {
   zt::FieldRecord f;
-  f.x0 = x0; f.z0 = z0; f.x1 = x1; f.z1 = z1;
+  f.x0 = x0;
+  f.z0 = z0;
+  f.x1 = x1;
+  f.z1 = z1;
   f.program_hash = hash;
   f.cmd_index = cmd;
   return f;
@@ -109,7 +111,7 @@ void load_list(Vzhao_terrain_patch& dut, const zt::FieldList& list, uint16_t pat
 struct RtlOut {
   int32_t top = 0, bottom = 0, compose_top = 0;
   bool dirty = false;
-  int covers_seen = 0;   // how many lanes the block reported as covering
+  int covers_seen = 0;  // how many lanes the block reported as covering
   bool seen = false;
 };
 
@@ -213,7 +215,8 @@ int main(int argc, char** argv) {
           list.offer(everywhere(0x1000u + k, static_cast<uint16_t>(k)), 1);
         } else {
           list.offer(rect(100 * kOne, 100 * kOne, 200 * kOne, 200 * kOne, 0x2000u + k,
-                          static_cast<uint16_t>(k)), 1);
+                          static_cast<uint16_t>(k)),
+                     1);
         }
       }
       load_list(dut, list, 1);
@@ -246,7 +249,12 @@ int main(int argc, char** argv) {
     int32_t fh[zt::kMaxPatchFields] = {};
     fh[0] = 3 * kOne;
     zt::ComposeIn in;
-    in.base = 100; in.scar = 0; in.bottom = -1000; in.dual = true; in.wx = 0; in.wz = 0;
+    in.base = 100;
+    in.scar = 0;
+    in.bottom = -1000;
+    in.dual = true;
+    in.wx = 0;
+    in.wz = 0;
     diff(dut, in, list, fh, "one height lane reaches the chain");
   }
 
@@ -264,18 +272,22 @@ int main(int argc, char** argv) {
     load_list(dut, list, 1);
 
     zt::ComposeIn in;
-    in.base = 1000; in.scar = 0; in.bottom = 0; in.dual = true; in.wx = 0; in.wz = 0;
+    in.base = 1000;
+    in.scar = 0;
+    in.bottom = 0;
+    in.dual = true;
+    in.wx = 0;
+    in.wz = 0;
     int32_t fh[zt::kMaxPatchFields] = {};
-    fh[0] = -50 * kOne;   // far below the underside
-    fh[1] = 60 * kOne;    // back above it
+    fh[0] = -50 * kOne;  // far below the underside
+    fh[1] = 60 * kOne;   // back above it
 
     const zt::ComposeOut want = zt::compose_vertex(in, list, fh);
     // The fixture only means something if the two orders of clamping differ.
     const int32_t base_fx = static_cast<int32_t>(in.base) << 8;
     const int32_t bot_fx = static_cast<int32_t>(in.bottom) << 8;
     const int32_t per_lane = (base_fx + fh[0] < bot_fx ? bot_fx : base_fx + fh[0]) + fh[1];
-    check(per_lane != want.live_top,
-          "the fixture distinguishes clamp-once from clamp-per-lane", 1,
+    check(per_lane != want.live_top, "the fixture distinguishes clamp-once from clamp-per-lane", 1,
           per_lane != want.live_top ? 1 : 0);
 
     diff(dut, in, list, fh, "the underside clamp happens once, after the whole chain");
@@ -293,7 +305,12 @@ int main(int argc, char** argv) {
   {
     const int32_t kMax = 0x7FFF'FFFF;
     zt::ComposeIn in;
-    in.base = 0; in.scar = 0; in.bottom = -30000; in.dual = false; in.wx = 0; in.wz = 0;
+    in.base = 0;
+    in.scar = 0;
+    in.bottom = -30000;
+    in.dual = false;
+    in.wx = 0;
+    in.wz = 0;
 
     zt::FieldList a;
     a.reset();
@@ -303,13 +320,17 @@ int main(int argc, char** argv) {
 
     load_list(dut, a, 1);
     int32_t fh1[zt::kMaxPatchFields] = {};
-    fh1[0] = kMax; fh1[1] = kMax; fh1[2] = -kMax;   // saturates, then comes back
+    fh1[0] = kMax;
+    fh1[1] = kMax;
+    fh1[2] = -kMax;  // saturates, then comes back
     const zt::ComposeOut w1 = zt::compose_vertex(in, a, fh1);
     diff(dut, in, a, fh1, "saturating chain: +MAX +MAX -MAX");
 
     load_list(dut, a, 1);
     int32_t fh2[zt::kMaxPatchFields] = {};
-    fh2[0] = -kMax; fh2[1] = kMax; fh2[2] = kMax;   // never saturates the same way
+    fh2[0] = -kMax;
+    fh2[1] = kMax;
+    fh2[2] = kMax;  // never saturates the same way
     const zt::ComposeOut w2 = zt::compose_vertex(in, a, fh2);
     diff(dut, in, a, fh2, "saturating chain: -MAX +MAX +MAX");
 
@@ -330,7 +351,12 @@ int main(int argc, char** argv) {
     const int16_t vals[] = {0, 1, -1, 2, -2, 127, -128, 255, -256, 32767, -32768, 12345, -12345};
     for (int16_t v : vals) {
       zt::ComposeIn in;
-      in.base = v; in.scar = 0; in.bottom = -32768; in.dual = false; in.wx = 0; in.wz = 0;
+      in.base = v;
+      in.scar = 0;
+      in.bottom = -32768;
+      in.dual = false;
+      in.wx = 0;
+      in.wz = 0;
       char tag[96];
       std::snprintf(tag, sizeof tag, "height16 -> fx16 is raw<<8, base=%d", v);
       const RtlOut got = diff(dut, in, empty, none, tag);
@@ -348,15 +374,22 @@ int main(int argc, char** argv) {
   {
     zt::FieldList list;
     list.reset();
-    list.offer(rect(-kOne, -kOne, kOne, kOne, 30, 0), 1);          // covers the origin
-    list.offer(rect(50 * kOne, 50 * kOne, 60 * kOne, 60 * kOne, 31, 1), 1);   // misses
+    list.offer(rect(-kOne, -kOne, kOne, kOne, 30, 0), 1);                    // covers the origin
+    list.offer(rect(50 * kOne, 50 * kOne, 60 * kOne, 60 * kOne, 31, 1), 1);  // misses
     list.offer(rect(-90 * kOne, -90 * kOne, -80 * kOne, -80 * kOne, 32, 2), 1);  // misses
     load_list(dut, list, 1);
 
     int32_t fh[zt::kMaxPatchFields] = {};
-    fh[0] = 5 * kOne; fh[1] = 1000 * kOne; fh[2] = -1000 * kOne;
+    fh[0] = 5 * kOne;
+    fh[1] = 1000 * kOne;
+    fh[2] = -1000 * kOne;
     zt::ComposeIn in;
-    in.base = 0; in.scar = 0; in.bottom = -30000; in.dual = true; in.wx = 0; in.wz = 0;
+    in.base = 0;
+    in.scar = 0;
+    in.bottom = -30000;
+    in.dual = true;
+    in.wx = 0;
+    in.wz = 0;
 
     const RtlOut got = diff(dut, in, list, fh, "only the covering lane reaches the chain");
     check(got.covers_seen == 1, "exactly one of the three lanes reported coverage", 1,
@@ -371,20 +404,23 @@ int main(int argc, char** argv) {
     int32_t efh[zt::kMaxPatchFields] = {};
     efh[0] = 2 * kOne;
     zt::ComposeIn on_corner = in;
-    on_corner.wx = 0; on_corner.wz = 0;
+    on_corner.wx = 0;
+    on_corner.wz = 0;
     const RtlOut c0 = diff(dut, on_corner, edge, efh, "a vertex on the low corner is covered");
     check(c0.covers_seen == 1, "the low corner counts as covered (closed interval)", 1,
           static_cast<uint64_t>(c0.covers_seen));
 
     load_list(dut, edge, 1);
     zt::ComposeIn far_corner = in;
-    far_corner.wx = 10 * kOne; far_corner.wz = 10 * kOne;
+    far_corner.wx = 10 * kOne;
+    far_corner.wz = 10 * kOne;
     const RtlOut c1 = diff(dut, far_corner, edge, efh, "a vertex on the high corner is covered");
     check(c1.covers_seen == 1, "the high corner too", 1, static_cast<uint64_t>(c1.covers_seen));
 
     load_list(dut, edge, 1);
     zt::ComposeIn just_out = in;
-    just_out.wx = 10 * kOne + 1; just_out.wz = 10 * kOne;
+    just_out.wx = 10 * kOne + 1;
+    just_out.wz = 10 * kOne;
     const RtlOut c2 = diff(dut, just_out, edge, efh, "one raw unit past the corner is not");
     check(c2.covers_seen == 0, "and one raw unit outside is not covered", 0,
           static_cast<uint64_t>(c2.covers_seen));

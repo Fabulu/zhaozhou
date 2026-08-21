@@ -48,9 +48,12 @@ constexpr int kSlots = 2;  // the RTL's Slots default and the SheetStore default
 /** The reference's verdict, in the RTL's status encoding. */
 uint8_t status_of(zs::Residency r) {
   switch (r) {
-    case zs::Residency::kHit: return sdev::kStHit;
-    case zs::Residency::kAllocated: return sdev::kStAllocated;
-    default: return sdev::kStOverflow;
+    case zs::Residency::kHit:
+      return sdev::kStHit;
+    case zs::Residency::kAllocated:
+      return sdev::kStAllocated;
+    default:
+      return sdev::kStOverflow;
   }
 }
 
@@ -63,8 +66,7 @@ struct Pair {
   /** ACQUIRE on both; the verdicts must match. */
   void acquire(uint32_t handle, const char* what) {
     const zs::AcquireResult want = ref.acquire(handle);
-    const sdev::SheetResponse got =
-        sdev::sheet_request(dut, sdev::kOpAcquire, handle, 0, 0x100);
+    const sdev::SheetResponse got = sdev::sheet_request(dut, sdev::kOpAcquire, handle, 0, 0x100);
     const std::string t(what);
     check(got.got, (t + ": the block answered").c_str(), 1, got.got ? 1 : 0);
     check(got.status == status_of(want.status), (t + ": residency verdict").c_str(),
@@ -132,8 +134,8 @@ struct Pair {
 
   void check_occupancy(const char* what) {
     const std::string t(what);
-    check(dut.res_occupancy_o == ref.occupancy(), (t + ": occupancy mask").c_str(),
-          ref.occupancy(), dut.res_occupancy_o);
+    check(dut.res_occupancy_o == ref.occupancy(), (t + ": occupancy mask").c_str(), ref.occupancy(),
+          dut.res_occupancy_o);
   }
 };
 
@@ -166,8 +168,12 @@ int main(int argc, char** argv) {
         char tag[80];
         std::snprintf(tag, sizeof tag, "random[%u] op %d h=%u", it, k, h);
         switch (rng.range(0, 3)) {
-          case 0: p.acquire(h, tag); break;
-          case 1: p.release(h, tag); break;
+          case 0:
+            p.acquire(h, tag);
+            break;
+          case 1:
+            p.release(h, tag);
+            break;
           case 2:
             p.write(h, static_cast<uint16_t>(rng.range(0, zs::kSheetTexels - 1)),
                     static_cast<uint8_t>(rng.range(0, 255)),
@@ -266,9 +272,9 @@ int main(int argc, char** argv) {
     p.acquire(0xF1, "byte enables");
     p.write(0xF1, 77, 42, 100, true, true);
     p.read_check(0xF1, 77, "both lanes written");
-    p.write(0xF1, 77, 99, 150, false, true);   // strength only
+    p.write(0xF1, 77, 99, 150, false, true);  // strength only
     p.read_check(0xF1, 77, "strength-only write leaves the tag alone");
-    p.write(0xF1, 77, 13, 200, true, false);   // tag only
+    p.write(0xF1, 77, 13, 200, true, false);  // tag only
     p.read_check(0xF1, 77, "tag-only write leaves the strength alone");
     p.read_all(0xF1, "after selective writes");
   }

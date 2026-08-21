@@ -146,8 +146,7 @@ int main(int argc, char** argv) {
   {
     check(st(dut, 0) == S_FREE, "reset: slot 0 FREE", S_FREE, st(dut, 0));
     check(st(dut, 1) == S_FREE, "reset: slot 1 FREE", S_FREE, st(dut, 1));
-    check(!dut.displayed_valid_o, "reset: nothing displayed", 0,
-          dut.displayed_valid_o ? 1 : 0);
+    check(!dut.displayed_valid_o, "reset: nothing displayed", 0, dut.displayed_valid_o ? 1 : 0);
     check(dut.slot_ready_o == 0, "reset: neither slot READY", 0, dut.slot_ready_o);
     check(!dut.fb_lease_valid_o, "reset: no lease", 0, dut.fb_lease_valid_o ? 1 : 0);
   }
@@ -166,8 +165,7 @@ int main(int argc, char** argv) {
     // expecting zero tests nothing -- it tests when I looked.
     check(dut.lease_refused_o == 1, "a refusal pulses", 1, dut.lease_refused_o);
     idle(dut);
-    check(dut.lease_refused_o == 0, "and it is exactly one cycle wide", 0,
-          dut.lease_refused_o);
+    check(dut.lease_refused_o == 0, "and it is exactly one cycle wide", 0, dut.lease_refused_o);
 
     do_publish(dut, 0, g);
     check(st(dut, 0) == S_READY, "publish makes it READY", S_READY, st(dut, 0));
@@ -233,20 +231,19 @@ int main(int argc, char** argv) {
   {
     uint16_t g1 = 0;
     do_lease(dut, 0, &g1);
-    do_release(dut, 0, g1);          // the first lease dies
+    do_release(dut, 0, g1);  // the first lease dies
     uint16_t g2 = 0;
-    do_lease(dut, 0, &g2);           // re-granted, SAME slot, new generation
+    do_lease(dut, 0, &g2);  // re-granted, SAME slot, new generation
     check(g2 != g1, "4.the re-grant has a new generation", 1, g2 != g1 ? 1 : 0);
     check(st(dut, 0) == S_WRITING, "4.and the state looks identical", S_WRITING, st(dut, 0));
 
     const uint32_t stale_before = dut.stale_events_o;
-    do_publish(dut, 0, g1);          // the DEAD lease publishes
-    check(st(dut, 0) == S_WRITING, "4.a stale publication changes NOTHING", S_WRITING,
-          st(dut, 0));
+    do_publish(dut, 0, g1);  // the DEAD lease publishes
+    check(st(dut, 0) == S_WRITING, "4.a stale publication changes NOTHING", S_WRITING, st(dut, 0));
     check(dut.stale_events_o == stale_before + 1, "4.and is counted", stale_before + 1,
           dut.stale_events_o);
 
-    do_release(dut, 0, g1);          // and so does a stale release
+    do_release(dut, 0, g1);  // and so does a stale release
     check(st(dut, 0) == S_WRITING, "4.a stale release changes NOTHING either", S_WRITING,
           st(dut, 0));
     check(dut.stale_events_o == stale_before + 2, "4.counted too", stale_before + 2,
@@ -262,8 +259,7 @@ int main(int argc, char** argv) {
     const uint32_t before = dut.stale_events_o;
     // Publishing a slot that is READY, not WRITING.
     do_publish(dut, 0, 1);
-    check(st(dut, 0) == S_READY, "5.publishing a READY slot changes nothing", S_READY,
-          st(dut, 0));
+    check(st(dut, 0) == S_READY, "5.publishing a READY slot changes nothing", S_READY, st(dut, 0));
     // Releasing a FREE slot.
     do_release(dut, 1, 0);
     check(st(dut, 1) == S_FREE, "5.releasing a FREE slot changes nothing", S_FREE, st(dut, 1));
@@ -271,11 +267,9 @@ int main(int argc, char** argv) {
     do_swap(dut, 1);
     check(st(dut, 1) == S_FREE, "5.swapping to a non-READY slot changes nothing", S_FREE,
           st(dut, 1));
-    check(!dut.displayed_valid_o || dut.displayed_slot_o != 1,
-          "5.and it does not become displayed", 1,
-          (!dut.displayed_valid_o || dut.displayed_slot_o != 1) ? 1 : 0);
-    check(dut.stale_events_o == before + 3, "5.all three counted", before + 3,
-          dut.stale_events_o);
+    check(!dut.displayed_valid_o || dut.displayed_slot_o != 1, "5.and it does not become displayed",
+          1, (!dut.displayed_valid_o || dut.displayed_slot_o != 1) ? 1 : 0);
+    check(dut.stale_events_o == before + 3, "5.all three counted", before + 3, dut.stale_events_o);
   }
 
   // ---- 6. the displayed slot is freed AT THE SWAP: law 4 ------------------
@@ -374,15 +368,13 @@ int main(int argc, char** argv) {
     dut.eval();
 
     check(st(dut, 1) == S_READY, "7b.the publication landed", S_READY, st(dut, 1));
-    check(st(dut, 0) == S_DISPLAYED, "7b.the swap did NOT consume it", S_DISPLAYED,
-          st(dut, 0));
+    check(st(dut, 0) == S_DISPLAYED, "7b.the swap did NOT consume it", S_DISPLAYED, st(dut, 0));
     check(dut.stale_events_o == stale_before + 1, "7b.and the swap was counted as stale",
           stale_before + 1, dut.stale_events_o);
 
     // The next swap succeeds, because slot 1 is READY by then.
     do_swap(dut, 1);
-    check(st(dut, 1) == S_DISPLAYED, "7b.the following swap takes it", S_DISPLAYED,
-          st(dut, 1));
+    check(st(dut, 1) == S_DISPLAYED, "7b.the following swap takes it", S_DISPLAYED, st(dut, 1));
     check(st(dut, 0) == S_FREE, "7b.and frees the outgoing slot", S_FREE, st(dut, 0));
   }
 
@@ -418,8 +410,7 @@ int main(int argc, char** argv) {
     dut.release_valid_i = 0;
     dut.eval();
 
-    check(st(dut, 0) == S_WRITING, "7c.the unlawful pair changes NOTHING", S_WRITING,
-          st(dut, 0));
+    check(st(dut, 0) == S_WRITING, "7c.the unlawful pair changes NOTHING", S_WRITING, st(dut, 0));
     check(dut.stale_events_o == stale_before + 1, "7c.and is counted exactly once",
           stale_before + 1, dut.stale_events_o);
     check(dut.fb_lease_valid_o == 1, "7c.the lease is still live", 1, dut.fb_lease_valid_o);
@@ -462,8 +453,10 @@ int main(int argc, char** argv) {
             check(false, "8.lease grant agrees", ref_ok ? 1 : 0, dut_ok ? 1 : 0);
           } else if (ref_ok) {
             check(dg == rg, "8.granted generation agrees", rg, dg);
-            if (pool_n < 8) pool[pool_n++] = rg;
-            else pool[rng.below(8)] = rg;
+            if (pool_n < 8)
+              pool[pool_n++] = rg;
+            else
+              pool[rng.below(8)] = rg;
           }
           break;
         }
@@ -474,7 +467,10 @@ int main(int argc, char** argv) {
           if (pool_n > 0 && rng.below(2)) g = pool[rng.below(static_cast<uint32_t>(pool_n))];
           const zv::SlotEvent v = ref.publish(slot, g);
           do_publish(dut, slot, g);
-          if (v == zv::SlotEvent::kAccepted) ++published; else ++stale_seen;
+          if (v == zv::SlotEvent::kAccepted)
+            ++published;
+          else
+            ++stale_seen;
           break;
         }
         case 2: {
@@ -482,13 +478,19 @@ int main(int argc, char** argv) {
           if (pool_n > 0 && rng.below(2)) g = pool[rng.below(static_cast<uint32_t>(pool_n))];
           const zv::SlotEvent v = ref.release(slot, g);
           do_release(dut, slot, g);
-          if (v == zv::SlotEvent::kAccepted) ++released; else ++stale_seen;
+          if (v == zv::SlotEvent::kAccepted)
+            ++released;
+          else
+            ++stale_seen;
           break;
         }
         default: {
           const zv::SlotEvent v = ref.swap(slot);
           do_swap(dut, slot);
-          if (v == zv::SlotEvent::kAccepted) ++swapped; else ++stale_seen;
+          if (v == zv::SlotEvent::kAccepted)
+            ++swapped;
+          else
+            ++stale_seen;
           break;
         }
       }
@@ -501,16 +503,15 @@ int main(int argc, char** argv) {
       std::snprintf(nm, sizeof nm, "8.step %d slot1 state", i);
       check(st(dut, 1) == static_cast<uint8_t>(ref.state(1)), nm,
             static_cast<uint8_t>(ref.state(1)), st(dut, 1));
-      const uint8_t want_ready = static_cast<uint8_t>((ref.ready(0) ? 1u : 0u) |
-                                                      (ref.ready(1) ? 2u : 0u));
+      const uint8_t want_ready =
+          static_cast<uint8_t>((ref.ready(0) ? 1u : 0u) | (ref.ready(1) ? 2u : 0u));
       std::snprintf(nm, sizeof nm, "8.step %d slot_ready", i);
       check(dut.slot_ready_o == want_ready, nm, want_ready, dut.slot_ready_o);
       std::snprintf(nm, sizeof nm, "8.step %d lease live", i);
       check((dut.fb_lease_valid_o != 0) == ref.lease_active(), nm, ref.lease_active() ? 1 : 0,
             dut.fb_lease_valid_o ? 1 : 0);
       std::snprintf(nm, sizeof nm, "8.step %d stale count", i);
-      check(dut.stale_events_o == ref.stale_events(), nm, ref.stale_events(),
-            dut.stale_events_o);
+      check(dut.stale_events_o == ref.stale_events(), nm, ref.stale_events(), dut.stale_events_o);
       std::snprintf(nm, sizeof nm, "8.step %d leases granted", i);
       check(dut.leases_granted_o == ref.leases_granted(), nm, ref.leases_granted(),
             dut.leases_granted_o);
@@ -529,9 +530,10 @@ int main(int argc, char** argv) {
     check(released > 0, "8.releases happened", 1, static_cast<uint32_t>(released));
     check(swapped > 0, "8.swaps happened", 1, static_cast<uint32_t>(swapped));
     check(stale_seen > 0, "8.stale events happened", 1, static_cast<uint32_t>(stale_seen));
-    std::printf("random: %d steps, %d granted, %d published, %d released, %d swapped, "
-                "%d refused\n",
-                random_iters, granted, published, released, swapped, stale_seen);
+    std::printf(
+        "random: %d steps, %d granted, %d published, %d released, %d swapped, "
+        "%d refused\n",
+        random_iters, granted, published, released, swapped, stale_seen);
   }
 
   return zhao::report_and_exit("video_slotmgr_directed");

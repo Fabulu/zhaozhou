@@ -17,6 +17,9 @@
     "abi:check": "npm run -w tools/abi-gen check",
     "abi:gen": "npm run -w tools/abi-gen gen"
   },
+  "devDependencies": {
+    "clang-format": "1.8.0"
+  },
   "engines": {
     "node": ">=20"
   }

@@ -48,13 +48,13 @@ namespace trace {
 /** charter §20.6's seven sources, in the order the charter lists them. */
 enum Stage : uint8_t {
   kCommandDecoder = 0,
-  kVertexOutput   = 1,
-  kClippedTriangle= 2,
-  kTileInsertion  = 3,
+  kVertexOutput = 1,
+  kClippedTriangle = 2,
+  kTileInsertion = 3,
   kTextureAddress = 4,
-  kDepthTest      = 5,
-  kFinalPixel     = 6,
-  kStageCount     = 7
+  kDepthTest = 5,
+  kFinalPixel = 6,
+  kStageCount = 7
 };
 
 /** capture_format.md chunk 0x000A, exactly. 32 bytes on the wire. */
@@ -62,18 +62,17 @@ struct Event {
   uint32_t tile = 0;
   uint32_t primitive = 0;
   uint32_t pixel = 0;
-  uint8_t  stage = 0;
-  uint8_t  rsv[3] = {0, 0, 0};
+  uint8_t stage = 0;
+  uint8_t rsv[3] = {0, 0, 0};
   uint32_t expected_fx = 0;
   uint32_t actual_fx = 0;
   uint32_t source_id = 0;
   uint32_t command_seq = 0;
 
   bool operator==(const Event& o) const {
-    return tile == o.tile && primitive == o.primitive && pixel == o.pixel &&
-           stage == o.stage && rsv[0] == o.rsv[0] && rsv[1] == o.rsv[1] &&
-           rsv[2] == o.rsv[2] && expected_fx == o.expected_fx &&
-           actual_fx == o.actual_fx && source_id == o.source_id &&
+    return tile == o.tile && primitive == o.primitive && pixel == o.pixel && stage == o.stage &&
+           rsv[0] == o.rsv[0] && rsv[1] == o.rsv[1] && rsv[2] == o.rsv[2] &&
+           expected_fx == o.expected_fx && actual_fx == o.actual_fx && source_id == o.source_id &&
            command_seq == o.command_seq;
   }
 };
@@ -86,9 +85,11 @@ inline constexpr uint32_t pack_source_id(uint8_t kind, uint16_t module_, uint16_
   return (static_cast<uint32_t>(kind & 0xF) << 28) |
          (static_cast<uint32_t>(module_ & 0x0FFF) << 16) | static_cast<uint32_t>(index);
 }
-inline constexpr uint8_t  source_kind(uint32_t s)   { return static_cast<uint8_t>(s >> 28); }
-inline constexpr uint16_t source_module(uint32_t s) { return static_cast<uint16_t>((s >> 16) & 0x0FFF); }
-inline constexpr uint16_t source_index(uint32_t s)  { return static_cast<uint16_t>(s & 0xFFFF); }
+inline constexpr uint8_t source_kind(uint32_t s) { return static_cast<uint8_t>(s >> 28); }
+inline constexpr uint16_t source_module(uint32_t s) {
+  return static_cast<uint16_t>((s >> 16) & 0x0FFF);
+}
+inline constexpr uint16_t source_index(uint32_t s) { return static_cast<uint16_t>(s & 0xFFFF); }
 
 /** One decoded record as CMD.DECODER presents it. */
 struct DecodedRecord {
@@ -145,11 +146,14 @@ class Ring {
   const std::vector<Event>& events() const { return events_; }
   uint32_t dropped() const { return dropped_; }
   uint32_t depth() const { return depth_; }
-  void clear() { events_.clear(); dropped_ = 0; }
+  void clear() {
+    events_.clear();
+    dropped_ = 0;
+  }
 
  private:
   uint32_t depth_;
-  uint8_t  mask_ = 0;
+  uint8_t mask_ = 0;
   uint32_t dropped_ = 0;
   std::vector<Event> events_;
 };

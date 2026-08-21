@@ -63,8 +63,11 @@ void run(Vzhao_geom_skin& dut, const zc::mat3x4fx& A, const zc::mat3x4fx& B, con
 void diff(Vzhao_geom_skin& dut, const zc::mat3x4fx& A, const zc::mat3x4fx& B, const Vtx& v,
           const char* what) {
   zc::SkinVertex sv;
-  sv.x = v.x; sv.y = v.y; sv.z = v.z;
-  sv.b0 = 0; sv.b1 = v.rigid ? 0 : 1;
+  sv.x = v.x;
+  sv.y = v.y;
+  sv.z = v.z;
+  sv.b0 = 0;
+  sv.b1 = v.rigid ? 0 : 1;
   sv.w0 = v.w0;
 
   zc::mat3x4fx palette[2] = {A, B};
@@ -84,7 +87,7 @@ void diff(Vzhao_geom_skin& dut, const zc::mat3x4fx& A, const zc::mat3x4fx& B, co
 }
 
 zc::mat3x4fx mat(int32_t a, int32_t b, int32_t c, int32_t tx, int32_t d, int32_t e, int32_t f,
-                   int32_t ty, int32_t g, int32_t h, int32_t i, int32_t tz) {
+                 int32_t ty, int32_t g, int32_t h, int32_t i, int32_t tz) {
   return zc::mat3x4fx{{a, b, c, tx, d, e, f, ty, g, h, i, tz}};
 }
 
@@ -143,7 +146,7 @@ int main(int argc, char** argv) {
       v.x = static_cast<int32_t>(rng.next()) >> 8;
       v.y = static_cast<int32_t>(rng.next()) >> 8;
       v.z = static_cast<int32_t>(rng.next()) >> 8;
-      v.w0 = static_cast<uint8_t>(rng.below(65));   // 0..64 inclusive: both rails
+      v.w0 = static_cast<uint8_t>(rng.below(65));  // 0..64 inclusive: both rails
       v.rigid = (rng.below(4) == 0);
       char tag[64];
       std::snprintf(tag, sizeof tag, "random[%u] w0=%u%s", k, v.w0, v.rigid ? " rigid" : "");
@@ -193,8 +196,17 @@ int main(int argc, char** argv) {
     const zc::mat3x4fx B = mat(3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0);
     // Residues chosen around the half so the two rounding orders are most
     // likely to land on opposite sides of it.
-    const int32_t kResidue[] = {1, 3, (1 << 15) - 1, 1 << 15, (1 << 15) + 1, (1 << 16) - 1,
-                                (1 << 16) + (1 << 15), 12345, -12345, -(1 << 15), -(1 << 15) - 1};
+    const int32_t kResidue[] = {1,
+                                3,
+                                (1 << 15) - 1,
+                                1 << 15,
+                                (1 << 15) + 1,
+                                (1 << 16) - 1,
+                                (1 << 16) + (1 << 15),
+                                12345,
+                                -12345,
+                                -(1 << 15),
+                                -(1 << 15) - 1};
     for (int32_t xv : kResidue) {
       // Every weight, not a sample of them: the disagreement between one
       // rounding and two depends on w0 through the 22-vs-16 shift, so a
@@ -222,8 +234,8 @@ int main(int argc, char** argv) {
   {
     const int32_t BIG = 0x4000'0000;
     const zc::mat3x4fx A = mat(BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG);
-    const zc::mat3x4fx N = mat(-BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG,
-                                 -BIG, -BIG);
+    const zc::mat3x4fx N =
+        mat(-BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG);
     diff(dut, A, A, Vtx{BIG, BIG, BIG, 64, true}, "saturate: positive rail");
     diff(dut, N, N, Vtx{BIG, BIG, BIG, 64, true}, "saturate: negative rail");
     diff(dut, A, N, Vtx{BIG, BIG, BIG, 32, false}, "saturate: blend of both rails");
@@ -241,8 +253,12 @@ int main(int argc, char** argv) {
 
     dut.v_valid_i = 1;
     dut.o_ready_i = 1;
-    dut.v_x_i = ONE; dut.v_y_i = ONE; dut.v_z_i = ONE;
-    dut.v_w0_i = 64; dut.v_rigid_i = 1; dut.v_src_id_i = 0xBEEF;
+    dut.v_x_i = ONE;
+    dut.v_y_i = ONE;
+    dut.v_z_i = ONE;
+    dut.v_w0_i = 64;
+    dut.v_rigid_i = 1;
+    dut.v_src_id_i = 0xBEEF;
     setMat(dut.a_m_i, A);
     setMat(dut.b_m_i, A);
     dut.eval();
@@ -250,11 +266,10 @@ int main(int argc, char** argv) {
     dut.v_valid_i = 0;
     dut.eval();
 
-    check(dut.o_src_id_o == 0xBEEF, "src_id rides through with its vertex", 0xBEEF,
-          dut.o_src_id_o);
+    check(dut.o_src_id_o == 0xBEEF, "src_id rides through with its vertex", 0xBEEF, dut.o_src_id_o);
     check(dut.o_valid_o == 1, "an accepted vertex raises o_valid", 1, dut.o_valid_o);
-    check(dut.vertices_transformed_o == before + 1, "an accepted vertex advances the counter by one",
-          before + 1, dut.vertices_transformed_o);
+    check(dut.vertices_transformed_o == before + 1,
+          "an accepted vertex advances the counter by one", before + 1, dut.vertices_transformed_o);
 
     // A vertex OFFERED but not accepted must not be counted. This is the whole
     // reason the counter sits inside the `take` branch rather than beside
@@ -262,7 +277,7 @@ int main(int argc, char** argv) {
     // "work done" and one that means "work attempted".
     const uint32_t held = dut.vertices_transformed_o;
     dut.v_valid_i = 1;
-    dut.o_ready_i = 0;          // downstream stalls: nothing may be accepted
+    dut.o_ready_i = 0;  // downstream stalls: nothing may be accepted
     dut.v_src_id_i = 0x0BAD;
     dut.eval();
     check(dut.v_ready_o == 0, "a full output register refuses a new vertex", 0, dut.v_ready_o);

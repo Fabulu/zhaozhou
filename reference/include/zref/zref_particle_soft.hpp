@@ -60,7 +60,7 @@ namespace part {
 
 /** The scissored pixel rectangle a point sprite covers. */
 struct SoftRect {
-  bool covered = false;  // false: nothing to draw
+  bool covered = false;          // false: nothing to draw
   int32_t min_x = 0, max_x = 0;  // inclusive whole-pixel range
   int32_t min_y = 0, max_y = 0;
   // The mode law, mirrored from blit_pattern_block: depth decides, never moves.

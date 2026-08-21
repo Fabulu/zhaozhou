@@ -46,8 +46,7 @@ int32_t run(Vzhao_field_sin& dut, uint16_t angle, bool is_cos) {
 }
 
 int32_t oracle(uint16_t angle, bool is_cos) {
-  return is_cos ? zref::fx_cos(zref::angle16{angle}).raw
-                : zref::fx_sin(zref::angle16{angle}).raw;
+  return is_cos ? zref::fx_cos(zref::angle16{angle}).raw : zref::fx_sin(zref::angle16{angle}).raw;
 }
 
 }  // namespace
@@ -90,14 +89,22 @@ int main() {
       const int32_t gs = run(dut, angle, false);
       const int32_t ws = oracle(angle, false);
       if (gs != ws) {
-        if (first_angle < 0) { first_angle = static_cast<int32_t>(a); first_want = ws; first_got = gs; }
+        if (first_angle < 0) {
+          first_angle = static_cast<int32_t>(a);
+          first_want = ws;
+          first_got = gs;
+        }
         ++bad_sin;
       }
 
       const int32_t gc = run(dut, angle, true);
       const int32_t wc = oracle(angle, true);
       if (gc != wc) {
-        if (first_angle < 0) { first_angle = static_cast<int32_t>(a); first_want = wc; first_got = gc; }
+        if (first_angle < 0) {
+          first_angle = static_cast<int32_t>(a);
+          first_want = wc;
+          first_got = gc;
+        }
         ++bad_cos;
       }
     }
@@ -124,8 +131,8 @@ int main() {
           static_cast<uint32_t>(run(dut, 0x4000, false)));
     check(run(dut, 0xC000, false) == -0x10000, "sin(three quarters) is exactly -1.0",
           static_cast<uint32_t>(-0x10000), static_cast<uint32_t>(run(dut, 0xC000, false)));
-    check(run(dut, 0x0000, true) == 0x10000, "cos(0) is exactly 1.0 -- the same endpoint",
-          0x10000u, static_cast<uint32_t>(run(dut, 0x0000, true)));
+    check(run(dut, 0x0000, true) == 0x10000, "cos(0) is exactly 1.0 -- the same endpoint", 0x10000u,
+          static_cast<uint32_t>(run(dut, 0x0000, true)));
     check(run(dut, 0x8000, true) == -0x10000, "cos(half turn) is exactly -1.0",
           static_cast<uint32_t>(-0x10000), static_cast<uint32_t>(run(dut, 0x8000, true)));
     // And one tick either side, so a guard that fired too eagerly would show.
@@ -196,7 +203,10 @@ int main() {
       bool moved = false;
       const int32_t at0 = run(dut, static_cast<uint16_t>(b), false);
       for (uint32_t k = 1; k < 64; ++k) {
-        if (run(dut, static_cast<uint16_t>(b + k), false) != at0) { moved = true; break; }
+        if (run(dut, static_cast<uint16_t>(b + k), false) != at0) {
+          moved = true;
+          break;
+        }
       }
       if (!moved) ++stuck;
     }

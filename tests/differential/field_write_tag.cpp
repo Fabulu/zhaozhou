@@ -109,7 +109,10 @@ int main() {
     ref.at(slot).strength[tx] = 50;
     sdev::sheet_write(dut, H, tx, 40, 50, true, true, 4);
 
-    struct Combo { bool we_tag, we_str; const char* what; };
+    struct Combo {
+      bool we_tag, we_str;
+      const char* what;
+    };
     const Combo combos[4] = {
         {true, true, "both lanes enabled: both change"},
         {true, false, "tag only: strength is untouched"},
@@ -169,8 +172,8 @@ int main() {
     sdev::sheet_request(dut, sdev::kOpRelease, H, 0, 11);
     sdev::sheet_write(dut, H, 5, 0x77, 0x88, true, true, 12);
     const sdev::SheetResponse r = sdev::sheet_request(dut, sdev::kOpRead, H, 5, 13);
-    check(r.status == sdev::kStMiss,
-          "FIELD.WRITE.TAG: a released patch is not a sink any more", sdev::kStMiss, r.status);
+    check(r.status == sdev::kStMiss, "FIELD.WRITE.TAG: a released patch is not a sink any more",
+          sdev::kStMiss, r.status);
   }
 
   dut.final();

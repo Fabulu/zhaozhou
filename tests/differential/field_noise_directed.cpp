@@ -174,8 +174,7 @@ void diff(Vzhao_field_noise& dut, bool ridge, int32_t a0, int32_t a1, uint32_t s
     check(got.o1 == want.o1, (t + ": lane 1").c_str(), static_cast<uint32_t>(want.o1),
           static_cast<uint32_t>(got.o1));
   } else {
-    check(got.o1 == 0, (t + ": RIDGE writes one lane").c_str(), 0,
-          static_cast<uint32_t>(got.o1));
+    check(got.o1 == 0, (t + ": RIDGE writes one lane").c_str(), 0, static_cast<uint32_t>(got.o1));
   }
   check((got.sat_add || got.sat_rescale) == want.sat, (t + ": Status.sat").c_str(),
         want.sat ? 1 : 0, (got.sat_add || got.sat_rescale) ? 1 : 0);
@@ -336,8 +335,8 @@ int main(int argc, char** argv) {
     // Fixed latency, and the result is HELD until it is taken.
     const DutRes a = run(dut, false, kOne, kOne, 1u);
     const DutRes b = run(dut, false, 2 * kOne, 3 * kOne, 1u);
-    check(a.cycles == b.cycles, "7.NOISE2 latency is fixed",
-          static_cast<uint32_t>(a.cycles), static_cast<uint32_t>(b.cycles));
+    check(a.cycles == b.cycles, "7.NOISE2 latency is fixed", static_cast<uint32_t>(a.cycles),
+          static_cast<uint32_t>(b.cycles));
     const DutRes c = run(dut, true, kOne, kOne, 1u);
     check(c.cycles < a.cycles, "7.RIDGE is shorter -- it walks one lane, not two",
           static_cast<uint32_t>(a.cycles), static_cast<uint32_t>(c.cycles));
@@ -350,7 +349,10 @@ int main(int argc, char** argv) {
     dut.r_ready_i = 0;
     dut.eval();
     int g = 0;
-    while (!dut.v_ready_o && g++ < 64) { zhao::tick(dut); dut.eval(); }
+    while (!dut.v_ready_o && g++ < 64) {
+      zhao::tick(dut);
+      dut.eval();
+    }
     zhao::tick(dut);
     dut.v_valid_i = 0;
     dut.eval();
@@ -410,13 +412,22 @@ int main(int argc, char** argv) {
       const bool ridge = (rng.below(2) != 0);
       int32_t x, y;
       switch (rng.below(4)) {
-        case 0: x = static_cast<int32_t>(rng.next()); y = static_cast<int32_t>(rng.next()); break;
-        case 1: x = static_cast<int32_t>(rng.below(64)) * kOne - 32 * kOne;
-                y = static_cast<int32_t>(rng.below(64)) * kOne - 32 * kOne; break;
-        case 2: x = -static_cast<int32_t>(rng.next() >> 4);
-                y = -static_cast<int32_t>(rng.next() >> 4); break;
-        default: x = static_cast<int32_t>(rng.next()) >> 12;
-                 y = static_cast<int32_t>(rng.next()) >> 12; break;
+        case 0:
+          x = static_cast<int32_t>(rng.next());
+          y = static_cast<int32_t>(rng.next());
+          break;
+        case 1:
+          x = static_cast<int32_t>(rng.below(64)) * kOne - 32 * kOne;
+          y = static_cast<int32_t>(rng.below(64)) * kOne - 32 * kOne;
+          break;
+        case 2:
+          x = -static_cast<int32_t>(rng.next() >> 4);
+          y = -static_cast<int32_t>(rng.next() >> 4);
+          break;
+        default:
+          x = static_cast<int32_t>(rng.next()) >> 12;
+          y = static_cast<int32_t>(rng.next()) >> 12;
+          break;
       }
       char nm[64];
       std::snprintf(nm, sizeof nm, "8.random[%d]", i);

@@ -89,10 +89,9 @@ namespace zd = zref::debug;
 //     -- 44 bits, valid is the MSB (bit 43)
 
 void set_hps_rsp(VlWide<3>& w, bool beat_valid, uint64_t data, bool last, bool err) {
-  const __uint128_t v = (static_cast<__uint128_t>(beat_valid ? 1 : 0) << 66) |
-                        (static_cast<__uint128_t>(data) << 2) |
-                        (static_cast<__uint128_t>(last ? 1 : 0) << 1) |
-                        static_cast<__uint128_t>(err ? 1 : 0);
+  const __uint128_t v =
+      (static_cast<__uint128_t>(beat_valid ? 1 : 0) << 66) | (static_cast<__uint128_t>(data) << 2) |
+      (static_cast<__uint128_t>(last ? 1 : 0) << 1) | static_cast<__uint128_t>(err ? 1 : 0);
   w[0] = static_cast<uint32_t>(v & 0xFFFFFFFFu);
   w[1] = static_cast<uint32_t>((v >> 32) & 0xFFFFFFFFu);
   w[2] = static_cast<uint32_t>((v >> 64) & 0xFFFFFFFFu);
@@ -142,8 +141,8 @@ struct Inject {
   uint32_t lease_lost_after = UINT32_MAX;
   uint32_t bridge_err_after = UINT32_MAX;
   uint32_t guard_deny_after = UINT32_MAX;
-  bool regrant_lease = false;   // drop and re-issue with a NEW generation
-  uint32_t stall_writes = 0;    // hold wready low every Nth beat (0 = never)
+  bool regrant_lease = false;  // drop and re-issue with a NEW generation
+  uint32_t stall_writes = 0;   // hold wready low every Nth beat (0 = never)
   // A TRANSIENT drop: the lease goes away for `blip_cycles` and comes back
   // with the same generation. The per-chunk check cannot see this; only a
   // per-CYCLE watch can.
@@ -176,8 +175,8 @@ struct Observed {
   uint8_t status = 0xFF;
   bool published = false;
   bool released = false;
-  uint32_t bytes_written = 0;   // bytes the guard accepted
-  uint32_t bytes_retired = 0;   // bytes credited back by the memory model
+  uint32_t bytes_written = 0;  // bytes the guard accepted
+  uint32_t bytes_retired = 0;  // bytes credited back by the memory model
   bool done = false;
   bool wdata_moved_under_stall = false;  // the held-stable law
 
@@ -237,9 +236,9 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
   dut.fb_lease_slot_i = lease.slot;
   dut.fb_lease_generation_i = gen;
 
-  uint32_t bytes_read = 0;    // source bytes handed to the block
-  uint32_t bytes_written = 0; // bytes the guard accepted
-  int burst_beat = -1;        // -1 = no burst in flight
+  uint32_t bytes_read = 0;     // source bytes handed to the block
+  uint32_t bytes_written = 0;  // bytes the guard accepted
+  int burst_beat = -1;         // -1 = no burst in flight
   uint32_t burst_base = 0;
   uint32_t burst_len = 0;
   uint32_t beats_sent = 0;
@@ -295,12 +294,11 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
     set_hps_rsp(dut.hps_rsp_i, false, 0, false, false);
     if (burst_beat >= 0) {
       const uint32_t beat_bytes = 8;
-      const bool err = (inj.bridge_err_after != UINT32_MAX &&
-                        burst_base >= inj.bridge_err_after);
+      const bool err = (inj.bridge_err_after != UINT32_MAX && burst_base >= inj.bridge_err_after);
       uint64_t data = 0;
       for (int b = 0; b < 8; ++b) {
-        const uint32_t idx = burst_base + static_cast<uint32_t>(burst_beat) * beat_bytes +
-                             static_cast<uint32_t>(b);
+        const uint32_t idx =
+            burst_base + static_cast<uint32_t>(burst_beat) * beat_bytes + static_cast<uint32_t>(b);
         const uint8_t byte = idx < source.size() ? source[idx] : 0;
         data |= static_cast<uint64_t>(byte) << (8 * b);
       }
@@ -364,8 +362,7 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
     } else {
       guard_wait_ctr = 0;
     }
-    const bool deny = (inj.guard_deny_after != UINT32_MAX &&
-                       bytes_written >= inj.guard_deny_after);
+    const bool deny = (inj.guard_deny_after != UINT32_MAX && bytes_written >= inj.guard_deny_after);
     // ok and violation are mutually exclusive; ready is bit 2.
     dut.guard_rsp_i = static_cast<uint8_t>((guard_ready ? 4u : 0u) | (deny ? 1u : 2u));
 
@@ -381,8 +378,7 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
     // Under `retire_hold_bytes` they stop, which is how "every beat accepted"
     // is separated from "every byte landed".
     uint8_t credit_words = 0;
-    if (!hold_armed && inj.retire_hold_bytes != UINT32_MAX &&
-        credited >= inj.retire_hold_bytes) {
+    if (!hold_armed && inj.retire_hold_bytes != UINT32_MAX && credited >= inj.retire_hold_bytes) {
       hold_armed = true;
       hold_left = inj.retire_hold_cycles;
     }
@@ -590,8 +586,8 @@ int main() {
     // It never acquired anything, so it releases nothing. Releasing here would
     // free whatever lease IS active, which belongs to somebody else.
     check(!g1.released, "no lease: and NOTHING is released", 0, g1.released ? 1 : 0);
-    check(w1.released == g1.released, "no lease: reference agrees on release",
-          w1.released ? 1 : 0, g1.released ? 1 : 0);
+    check(w1.released == g1.released, "no lease: reference agrees on release", w1.released ? 1 : 0,
+          g1.released ? 1 : 0);
 
     // A lease for the OTHER slot: the ABI's dst_slot is not trusted on its own.
     const zd::Lease other{true, 0, 42};
@@ -600,8 +596,7 @@ int main() {
     check(g2.status == static_cast<uint8_t>(w2.status),
           "dst_slot that does not match the lease is refused",
           static_cast<uint8_t>(zd::BlitStatus::kSlotMismatch), g2.status);
-    check(g2.bytes_written == 0, "and nothing is written into anybody's slot", 0,
-          g2.bytes_written);
+    check(g2.bytes_written == 0, "and nothing is written into anybody's slot", 0, g2.bytes_written);
     check(!g2.released, "slot mismatch: the other slot's lease is NOT released", 0,
           g2.released ? 1 : 0);
     check(w2.released == g2.released, "slot mismatch: reference agrees on release",
@@ -636,8 +631,8 @@ int main() {
     inj.lease_lost_after = canvas / 2;
     const Observed got = run(dut, req, lease, src, inj);
     check(got.status == static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
-          "a lease that lapses mid-blit aborts",
-          static_cast<uint8_t>(zd::BlitStatus::kLeaseLost), got.status);
+          "a lease that lapses mid-blit aborts", static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
+          got.status);
     check(!got.published, "and NOTHING is published", 0, got.published ? 1 : 0);
     check(got.released, "the slot goes FREE", 1, got.released ? 1 : 0);
   }
@@ -737,8 +732,8 @@ int main() {
     zd::BlitRequest at_zero = bad;
     at_zero.dst_slot = 0;
     const Observed g0 = run(dut, at_zero, slot1, src, Inject{});
-    check(g0.bytes_written == 0,
-          "and a blit naming the DISPLAYED slot writes nothing at all", 0, g0.bytes_written);
+    check(g0.bytes_written == 0, "and a blit naming the DISPLAYED slot writes nothing at all", 0,
+          g0.bytes_written);
   }
 
   // ---- 10. PUBLICATION WAITS FOR PHYSICAL RETIREMENT ----------------------
@@ -756,10 +751,9 @@ int main() {
     inj.retire_hold_bytes = canvas - 256;  // stop crediting near the end
     inj.retire_hold_cycles = 500;          // and stay stopped for a long time
     const Observed got = run(dut, req, lease, src, inj);
-    check(got.published, "credits eventually return, so it publishes", 1,
-          got.published ? 1 : 0);
-    check(got.retired_at_publish == canvas,
-          "and NOT ONE byte was outstanding when it did", canvas, got.retired_at_publish);
+    check(got.published, "credits eventually return, so it publishes", 1, got.published ? 1 : 0);
+    check(got.retired_at_publish == canvas, "and NOT ONE byte was outstanding when it did", canvas,
+          got.retired_at_publish);
     check(got.bytes_written == canvas, "every byte was issued", canvas, got.bytes_written);
   }
 
@@ -773,8 +767,7 @@ int main() {
     inj.retire_hold_cycles = 200'000;  // longer than this run is allowed to be
     inj.max_cycles = 60'000;
     const Observed got = run(dut, req, lease, src, inj);
-    check(!got.done, "credits withheld forever: the blit never completes", 0,
-          got.done ? 1 : 0);
+    check(!got.done, "credits withheld forever: the blit never completes", 0, got.done ? 1 : 0);
     check(!got.published, "and above all never publishes", 0, got.published ? 1 : 0);
   }
 
@@ -799,8 +792,7 @@ int main() {
           got.retired_at_release);
     check(got.release_slot == 1, "release names its slot", 1, got.release_slot);
     check(got.release_gen == 42, "release names its generation", 42, got.release_gen);
-    check(!got.side_effect_after_lease_loss,
-          "no guard request appears after the lease is gone", 0,
+    check(!got.side_effect_after_lease_loss, "no guard request appears after the lease is gone", 0,
           got.side_effect_after_lease_loss ? 1 : 0);
   }
 
@@ -820,8 +812,8 @@ int main() {
     check(!got.released, "credits frozen: the slot is NOT released", 0, got.released ? 1 : 0);
     check(!got.done, "and the transaction does not complete", 0, got.done ? 1 : 0);
     check(!got.published, "and certainly nothing is published", 0, got.published ? 1 : 0);
-    check(got.bytes_written > got.bytes_retired,
-          "with writes genuinely still outstanding", got.bytes_written, got.bytes_retired);
+    check(got.bytes_written > got.bytes_retired, "with writes genuinely still outstanding",
+          got.bytes_written, got.bytes_retired);
   }
 
   // ---- 11c. A SLOW GUARD, AND A LEASE LOST WHILE IT DECIDES ---------------
@@ -838,9 +830,8 @@ int main() {
           "no guard request is asserted on a cycle the lease is not ours", 0,
           got.side_effect_after_lease_loss ? 1 : 0);
     check(!got.published, "and nothing is published", 0, got.published ? 1 : 0);
-    check(got.status == static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
-          "the loss is reported", static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
-          got.status);
+    check(got.status == static_cast<uint8_t>(zd::BlitStatus::kLeaseLost), "the loss is reported",
+          static_cast<uint8_t>(zd::BlitStatus::kLeaseLost), got.status);
   }
 
   // ---- 11d. A SLOW GUARD ON THE HAPPY PATH --------------------------------
@@ -870,9 +861,8 @@ int main() {
     const Observed got = run(dut, req, lease, src, inj);
     check(!got.published, "a lease lost at the publication edge publishes NOTHING", 0,
           got.published ? 1 : 0);
-    check(got.status == static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
-          "and reports the loss", static_cast<uint8_t>(zd::BlitStatus::kLeaseLost),
-          got.status);
+    check(got.status == static_cast<uint8_t>(zd::BlitStatus::kLeaseLost), "and reports the loss",
+          static_cast<uint8_t>(zd::BlitStatus::kLeaseLost), got.status);
   }
 
   // ---- 13. THE HPS BRIDGE MUST ACTUALLY GRANT -----------------------------

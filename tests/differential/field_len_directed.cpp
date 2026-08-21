@@ -48,8 +48,8 @@ struct Res {
 int32_t len_of(const int32_t* v, int n, bool& sat_rescale) {
   uint64_t n2 = 0;
   for (int i = 0; i < n; ++i) {
-    n2 += static_cast<uint64_t>(static_cast<int64_t>(v[i])) * static_cast<uint64_t>(
-              static_cast<int64_t>(v[i]));
+    n2 += static_cast<uint64_t>(static_cast<int64_t>(v[i])) *
+          static_cast<uint64_t>(static_cast<int64_t>(v[i]));
   }
   const uint64_t len = zref::isqrt_u64(n2);
   if (len > static_cast<uint64_t>(INT32_MAX)) {
@@ -116,8 +116,8 @@ void diff(Vzhao_field_len& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2
   const Res want = oracle(mode, a0, a1, a2, b0, b1);
   const Res got = run(dut, mode, a0, a1, a2, b0, b1);
   const std::string t(what);
-  check(got.value == want.value, (t + ": value").c_str(),
-        static_cast<uint32_t>(want.value), static_cast<uint32_t>(got.value));
+  check(got.value == want.value, (t + ": value").c_str(), static_cast<uint32_t>(want.value),
+        static_cast<uint32_t>(got.value));
   check(got.sat_rescale == want.sat_rescale, (t + ": SatLedger::rescale").c_str(),
         want.sat_rescale ? 1 : 0, got.sat_rescale ? 1 : 0);
   check(got.sat_add == want.sat_add, (t + ": SatLedger::add").c_str(), want.sat_add ? 1 : 0,
@@ -137,12 +137,18 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (next() % n) : 0u; }
   int32_t val() {
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return INT32_MAX;
-      case 2: return INT32_MIN;
-      case 3: return static_cast<int32_t>(next()) >> static_cast<int>(below(24));
-      case 4: return static_cast<int32_t>(next()) >> 8;
-      default: return static_cast<int32_t>(next());
+      case 0:
+        return 0;
+      case 1:
+        return INT32_MAX;
+      case 2:
+        return INT32_MIN;
+      case 3:
+        return static_cast<int32_t>(next()) >> static_cast<int>(below(24));
+      case 4:
+        return static_cast<int32_t>(next()) >> 8;
+      default:
+        return static_cast<int32_t>(next());
     }
   }
 };
@@ -255,16 +261,13 @@ int main(int argc, char** argv) {
     diff(dut, M_DIST2, 0, 0, 0, 3 * kOne, 4 * kOne, "dist((0,0),(3,4)) is the same");
     diff(dut, M_DIST2, 10 * kOne, 10 * kOne, 0, 7 * kOne, 6 * kOne, "dist((10,10),(7,6)) is 5.0");
     // The difference saturates: INT32_MAX - INT32_MIN does not fit s32.
-    diff(dut, M_DIST2, INT32_MAX, 0, 0, INT32_MIN, 0,
-         "the difference saturates BEFORE squaring");
+    diff(dut, M_DIST2, INT32_MAX, 0, 0, INT32_MIN, 0, "the difference saturates BEFORE squaring");
     const Res r = run(dut, M_DIST2, INT32_MAX, 0, 0, INT32_MIN, 0);
     check(r.sat_add, "and the saturation records in the ADD lane, not rescale", 1,
           r.sat_add ? 1 : 0);
-    diff(dut, M_DIST2, INT32_MIN, INT32_MIN, 0, INT32_MAX, INT32_MAX,
-         "both lanes saturate");
+    diff(dut, M_DIST2, INT32_MIN, INT32_MIN, 0, INT32_MAX, INT32_MAX, "both lanes saturate");
     // DIST2 must ignore the third lane, which LEN3 reads.
-    diff(dut, M_DIST2, 3 * kOne, 4 * kOne, INT32_MAX, 0, 0,
-         "DIST2 does NOT read the third lane");
+    diff(dut, M_DIST2, 3 * kOne, 4 * kOne, INT32_MAX, 0, 0, "DIST2 does NOT read the third lane");
   }
 
   // ---- 6. LEN2 must not read the third lane either ------------------------

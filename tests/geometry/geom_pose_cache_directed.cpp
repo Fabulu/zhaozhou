@@ -299,11 +299,11 @@ int main(int argc, char** argv) {
     zc::PoseBank bank;
     reset(dut);
     std::vector<Req> reqs = {
-        {10, 0, 0},     // miss, inserts
-        {10, 55, 0},    // no such clip slot
-        {10, 0, 4},     // frame == frame_count, one past the end
-        {10, 0, 3},     // last legal frame of that clip
-        {10, 0, 0},     // must still be a HIT
+        {10, 0, 0},   // miss, inserts
+        {10, 55, 0},  // no such clip slot
+        {10, 0, 4},   // frame == frame_count, one past the end
+        {10, 0, 3},   // last legal frame of that clip
+        {10, 0, 0},   // must still be a HIT
     };
     replay(dut, bank, w, reqs, {}, "bad ids never disturb the cache");
   }
@@ -313,10 +313,10 @@ int main(int argc, char** argv) {
     zc::PoseBank bank;
     reset(dut);
     std::vector<Req> reqs = {
-        {11, 3, 0},   // frame_count is 1 here: 0 is the only legal frame
-        {11, 3, 1},   // one past
-        {12, 2, 7},   // frame_count 8: last legal
-        {12, 2, 8},   // one past
+        {11, 3, 0},  // frame_count is 1 here: 0 is the only legal frame
+        {11, 3, 1},  // one past
+        {12, 2, 7},  // frame_count 8: last legal
+        {12, 2, 8},  // one past
     };
     replay(dut, bank, w, reqs, {}, "the frame bound is frame < frame_count");
   }
@@ -337,10 +337,10 @@ int main(int argc, char** argv) {
     std::vector<size_t> breaks;
 
     breaks.push_back(0);
-    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});   // fill
+    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});  // fill
 
     breaks.push_back(reqs.size());
-    for (uint16_t f = 200; f < 208; ++f) reqs.push_back({11, 9, f});     // evict eight
+    for (uint16_t f = 200; f < 208; ++f) reqs.push_back({11, 9, f});  // evict eight
 
     // Probe the OLDEST group alone. Under LRU these are the eight that went;
     // under MRU they are untouched and every one of these is a hit.
@@ -362,13 +362,13 @@ int main(int argc, char** argv) {
     std::vector<size_t> breaks;
 
     breaks.push_back(0);
-    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});   // fill; 0 is oldest
+    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});  // fill; 0 is oldest
 
     breaks.push_back(reqs.size());
-    reqs.push_back({11, 9, 0});                                          // hit: 0 becomes newest
+    reqs.push_back({11, 9, 0});  // hit: 0 becomes newest
 
     breaks.push_back(reqs.size());
-    for (uint16_t f = 130; f < 138; ++f) reqs.push_back({11, 9, f});     // evict eight
+    for (uint16_t f = 130; f < 138; ++f) reqs.push_back({11, 9, f});  // evict eight
 
     // With the restamp, frame 0 is the YOUNGEST tuple and survives. Without it,
     // frame 0 is still the oldest and is the first thing thrown out.
@@ -390,11 +390,11 @@ int main(int argc, char** argv) {
     std::vector<size_t> breaks;
 
     breaks.push_back(0);
-    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});   // fill
+    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});  // fill
 
     breaks.push_back(reqs.size());
-    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});   // all HITS, all marked
-    reqs.push_back({11, 9, 240});                                        // must clamp
+    for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});  // all HITS, all marked
+    reqs.push_back({11, 9, 240});                                       // must clamp
 
     replay(dut, bank, w, reqs, breaks, "hits mark their tuples, so a fully-used frame clamps");
     check(rtl_counters(dut).clamped == 1,
@@ -434,9 +434,9 @@ int main(int argc, char** argv) {
     std::vector<size_t> breaks;
     breaks.push_back(0);
     for (uint16_t f = 0; f < kTuples; ++f) reqs.push_back({11, 9, f});
-    reqs.push_back({11, 9, 200});                 // clamps: frame is full
-    breaks.push_back(reqs.size());                // marks clear
-    reqs.push_back({11, 9, 201});                 // must insert now
+    reqs.push_back({11, 9, 200});   // clamps: frame is full
+    breaks.push_back(reqs.size());  // marks clear
+    reqs.push_back({11, 9, 201});   // must insert now
     replay(dut, bank, w, reqs, breaks, "begin_frame lifts the clamp");
   }
 

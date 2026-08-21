@@ -35,8 +35,7 @@ void test_source_id_scheme() {
   check(zt::source_kind(s) == 9, "source_id: kind round-trips", 9, zt::source_kind(s));
   check(zt::source_module(s) == 0x301, "source_id: module round-trips", 0x301,
         zt::source_module(s));
-  check(zt::source_index(s) == 0x00AF, "source_id: index round-trips", 0x00AF,
-        zt::source_index(s));
+  check(zt::source_index(s) == 0x00AF, "source_id: index round-trips", 0x00AF, zt::source_index(s));
   // The packed word itself, so a change to the field ORDER fails here rather
   // than quietly reinterpreting every source id in every capture.
   check(s == 0x930100AFu, "source_id: packs to the spec's own worked example", 0x930100AFu, s);
@@ -102,14 +101,12 @@ void test_decoder_event_fields() {
   check(e.stage == zt::kCommandDecoder, "decoder event: stage", zt::kCommandDecoder, e.stage);
   check(e.source_id == rec.source_id, "decoder event: source_id propagates", rec.source_id,
         e.source_id);
-  check(e.command_seq == 41, "decoder event: command_seq is the record index", 41,
-        e.command_seq);
+  check(e.command_seq == 41, "decoder event: command_seq is the record index", 41, e.command_seq);
 
   // The CHOSEN zeroing. These fields describe a raster divergence; leaving them
   // undefined would make a byte comparison of two captures meaningless.
   check(e.tile == 0 && e.primitive == 0 && e.pixel == 0,
-        "decoder event: raster fields are zero, not undefined", 0,
-        e.tile | e.primitive | e.pixel);
+        "decoder event: raster fields are zero, not undefined", 0, e.tile | e.primitive | e.pixel);
   check(e.expected_fx == 0 && e.actual_fx == 0, "decoder event: fx fields are zero", 0,
         e.expected_fx | e.actual_fx);
   check(e.rsv[0] == 0 && e.rsv[1] == 0 && e.rsv[2] == 0, "decoder event: rsv bytes are zero", 0,
@@ -137,8 +134,8 @@ void test_full_ring_drops() {
   // would also be defensible, and this pins which was chosen.
   check(r.events().front().command_seq == 0, "full ring: keeps the earliest event", 0,
         r.events().front().command_seq);
-  check(r.events().back().command_seq == kDepth - 1, "full ring: drops the latest",
-        kDepth - 1, r.events().back().command_seq);
+  check(r.events().back().command_seq == kDepth - 1, "full ring: drops the latest", kDepth - 1,
+        r.events().back().command_seq);
 }
 
 // PCG RXS-M-XS, the committed test PRNG shape (qformats.md §7.5).
@@ -190,8 +187,8 @@ void random_lane(uint32_t iters, uint64_t seed) {
 
     check(stored <= depth, "random: occupancy never exceeds depth", depth, stored);
     if (!armed) {
-      check(stored == 0 && r.dropped() == 0,
-            "random: an unarmed stage neither stores nor drops", 0, stored + r.dropped());
+      check(stored == 0 && r.dropped() == 0, "random: an unarmed stage neither stores nor drops", 0,
+            stored + r.dropped());
     } else {
       check(stored + r.dropped() == n,
             "random: every offered record is stored OR counted as dropped", n,

@@ -121,8 +121,7 @@ class Dut {
 };
 
 void diff(Dut& dut, const VP& v, const P& p, const char* what) {
-  const zp::SoftRect want =
-      zp::soft_rect(p.in, p.x, p.y, p.size, v.x0, v.y0, v.w, v.h);
+  const zp::SoftRect want = zp::soft_rect(p.in, p.x, p.y, p.size, v.x0, v.y0, v.w, v.h);
   dut.set_vp(v);
   zp::SoftRect got{};
   uint16_t src = 0;
@@ -166,7 +165,10 @@ struct Prng {
 void test_reference_is_draw_population() {
   const uint32_t W = 128, H = 96;
   zr::Viewport vp;
-  vp.x0 = 0; vp.y0 = 0; vp.w = W; vp.h = H;
+  vp.x0 = 0;
+  vp.y0 = 0;
+  vp.w = W;
+  vp.h = H;
 
   zref::mat4fx m{};
   for (int i = 0; i < 4; ++i) {
@@ -200,11 +202,10 @@ void test_reference_is_draw_population() {
   zr::WorkSurface sb;
   sb.reset(W, H, bg);
   for (const zr::Particle& p : pop.parts) {
-    const zr::ProjOut c = zr::project_vertex(m, vp, zref::fx16{p.x}, zref::fx16{p.y},
-                                             zref::fx16{p.z}, nullptr);
+    const zr::ProjOut c =
+        zr::project_vertex(m, vp, zref::fx16{p.x}, zref::fx16{p.y}, zref::fx16{p.z}, nullptr);
     const zp::SoftRect r = zp::soft_rect(c.in, c.s.x, c.s.y, p.size, static_cast<int32_t>(vp.x0),
-                                         static_cast<int32_t>(vp.y0),
-                                         static_cast<int32_t>(vp.w),
+                                         static_cast<int32_t>(vp.y0), static_cast<int32_t>(vp.w),
                                          static_cast<int32_t>(vp.h));
     if (!r.covered) continue;
     for (int32_t py = r.min_y; py <= r.max_y; ++py) {
@@ -246,8 +247,8 @@ int main(int argc, char** argv) {
   Dut dut(raw);
 
   const VP vp0{0, 0, 256, 192};
-  const VP vp1{0, 192, 256, 192};   // the Duo second view
-  const VP vpo{37, 11, 100, 80};    // an odd origin, so the scissor is not at 0
+  const VP vp1{0, 192, 256, 192};  // the Duo second view
+  const VP vpo{37, 11, 100, 80};   // an odd origin, so the scissor is not at 0
 
   bool random_mode = false;
   uint32_t iters = 0;
@@ -319,8 +320,9 @@ int main(int argc, char** argv) {
     for (int32_t off = 0; off < 16; ++off) {
       char tag[96];
       std::snprintf(tag, sizeof tag, "subpixel sweep +%d: ceil low, floor high", off);
-      diff(dut, vp0, P{true, 50 * 256 + off * 16, 50 * 256 + off * 16, kOne, 32, 1, 2, 3,
-                       static_cast<uint16_t>(0x200 + off)},
+      diff(dut, vp0,
+           P{true, 50 * 256 + off * 16, 50 * 256 + off * 16, kOne, 32, 1, 2, 3,
+             static_cast<uint16_t>(0x200 + off)},
            tag);
     }
     // Asserted directly too: the reference and the RTL could agree on a
@@ -336,8 +338,7 @@ int main(int argc, char** argv) {
   {
     const uint32_t before = dut.counted();
     diff(dut, vp0, P{true, 100 * 256, 80 * 256, kOne, 0, 1, 2, 3, 0x31}, "size 0 covers nothing");
-    check(dut.counted() == before, "and is not counted as a soft particle", before,
-          dut.counted());
+    check(dut.counted() == before, "and is not counted as a soft particle", before, dut.counted());
     diff(dut, vp0, P{true, 100 * 256, 80 * 256, kOne, 1, 1, 2, 3, 0x32},
          "size 1 is a sixteenth of a pixel");
   }
@@ -399,8 +400,7 @@ int main(int argc, char** argv) {
   {
     const uint32_t before = dut.counted();
     diff(dut, vp0, P{false, 100 * 256, 80 * 256, kOne, 64, 1, 2, 3, 0x71}, "behind the eye");
-    check(dut.counted() == before, "a behind-the-eye sprite is not counted", before,
-          dut.counted());
+    check(dut.counted() == before, "a behind-the-eye sprite is not counted", before, dut.counted());
     diff(dut, vp0, P{true, 100 * 256, 80 * 256, kOne, 64, 1, 2, 3, 0x72},
          "and the next one still works");
     check(dut.counted() == before + 1, "the one in front is counted", before + 1, dut.counted());

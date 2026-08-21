@@ -38,10 +38,12 @@ using zhao::check;
 namespace zc = zref::creature;
 
 /** Drive one quaternion and compare all twelve elements against the oracle. */
-void diff(Vzhao_geom_quat2mat& dut, int16_t w, int16_t x, int16_t y, int16_t z,
-          const char* what) {
+void diff(Vzhao_geom_quat2mat& dut, int16_t w, int16_t x, int16_t y, int16_t z, const char* what) {
   zc::quat16 q;
-  q.q[0] = w; q.q[1] = x; q.q[2] = y; q.q[3] = z;
+  q.q[0] = w;
+  q.q[1] = x;
+  q.q[2] = y;
+  q.q[3] = z;
   zc::mat3x4fx want{};
   zc::quat16_to_mat3(q, want, nullptr);
 
@@ -217,7 +219,9 @@ int main(int argc, char** argv) {
     dut.q_valid_i = 1;
     dut.m_ready_i = 1;
     dut.q_w_i = static_cast<uint16_t>(ONE);
-    dut.q_x_i = 0; dut.q_y_i = 0; dut.q_z_i = 0;
+    dut.q_x_i = 0;
+    dut.q_y_i = 0;
+    dut.q_z_i = 0;
     dut.q_bone_i = 0x2B;
     dut.eval();
     zhao::tick(dut);
@@ -230,7 +234,7 @@ int main(int argc, char** argv) {
 
     const uint32_t held = dut.bones_decoded_o;
     dut.q_valid_i = 1;
-    dut.m_ready_i = 0;         // downstream stalls
+    dut.m_ready_i = 0;  // downstream stalls
     dut.q_bone_i = 0x77;
     dut.eval();
     check(dut.q_ready_o == 0, "a full output register refuses a new bone", 0, dut.q_ready_o);

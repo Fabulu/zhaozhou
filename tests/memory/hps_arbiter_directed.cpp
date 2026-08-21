@@ -75,7 +75,7 @@ uint64_t hps_word(uint32_t addr) {
 struct Client {
   bool write = false;
   uint32_t client = 0;
-  uint32_t base = 0;      // first burst address
+  uint32_t base = 0;  // first burst address
   uint32_t len = 0;
   int bursts_wanted = 0;  // how many 64-byte bursts to ask for
 
@@ -144,8 +144,8 @@ struct Bench {
     // Law 3: while the bridge holds a request out and the HPS has not taken
     // it, the address and length must not move.
     if (dut.hps_req_valid_o) {
-      if (last_req_valid && (dut.hps_req_addr_o != last_req_addr ||
-                             dut.hps_req_len_o != last_req_len)) {
+      if (last_req_valid &&
+          (dut.hps_req_addr_o != last_req_addr || dut.hps_req_len_o != last_req_len)) {
         watch_stable = false;
       }
       last_req_valid = true;
@@ -296,8 +296,7 @@ int main() {
     check(b.c0.grants == 1, "1.exactly one grant", 1, static_cast<uint32_t>(b.c0.grants));
     check(b.c0.beats == 8, "1.eight beats delivered", 8, static_cast<uint32_t>(b.c0.beats));
     check(b.c0.data_ok, "1.and the data is this client's", 1, b.c0.data_ok ? 1 : 0);
-    check(b.c1.beats == 0, "1.the idle client got nothing", 0,
-          static_cast<uint32_t>(b.c1.beats));
+    check(b.c1.beats == 0, "1.the idle client got nothing", 0, static_cast<uint32_t>(b.c1.beats));
     check(dut.hps_err_count_o == 0, "1.no protocol violation", 0, dut.hps_err_count_o);
   }
 
@@ -422,8 +421,7 @@ int main() {
       check(b.c0.beats == 16 && b.c1.beats == 16, nm, 1,
             (b.c0.beats == 16 && b.c1.beats == 16) ? 1 : 0);
       std::snprintf(nm, sizeof nm, "4.hps delay %d: data correct", delay);
-      check(b.c0.data_ok && b.c1.data_ok, nm, 1,
-            (b.c0.data_ok && b.c1.data_ok) ? 1 : 0);
+      check(b.c0.data_ok && b.c1.data_ok, nm, 1, (b.c0.data_ok && b.c1.data_ok) ? 1 : 0);
       std::snprintf(nm, sizeof nm, "4.hps delay %d: NO protocol violation", delay);
       check(dut.hps_err_count_o == 0, nm, 0, dut.hps_err_count_o);
     }
@@ -498,18 +496,15 @@ int main() {
     b.run(700);
     check(b.c0.beats == 48 && b.c1.beats == 48, "6.both finish once each stops asking", 1,
           (b.c0.beats == 48 && b.c1.beats == 48) ? 1 : 0);
-    check(dut.c1_wait_cycles_o > 0, "6.client 1's waiting is counted", 1,
-          dut.c1_wait_cycles_o);
+    check(dut.c1_wait_cycles_o > 0, "6.client 1's waiting is counted", 1, dut.c1_wait_cycles_o);
     check(dut.c0_bursts_o == 6 && dut.c1_bursts_o == 6, "6.both burst counters agree", 6,
           dut.c1_bursts_o);
-    check(b.c1.waited_cycles > b.c0.waited_cycles,
-          "6.and the LOW priority client waited longer",
-          static_cast<uint32_t>(b.c0.waited_cycles),
-          static_cast<uint32_t>(b.c1.waited_cycles));
-    std::printf("priority: c0 %d grants (waited %d), c1 %d grants (waited %d), "
-                "counter %u\n",
-                b.c0.grants, b.c0.waited_cycles, b.c1.grants, b.c1.waited_cycles,
-                dut.c1_wait_cycles_o);
+    check(b.c1.waited_cycles > b.c0.waited_cycles, "6.and the LOW priority client waited longer",
+          static_cast<uint32_t>(b.c0.waited_cycles), static_cast<uint32_t>(b.c1.waited_cycles));
+    std::printf(
+        "priority: c0 %d grants (waited %d), c1 %d grants (waited %d), "
+        "counter %u\n",
+        b.c0.grants, b.c0.waited_cycles, b.c1.grants, b.c1.waited_cycles, dut.c1_wait_cycles_o);
   }
 
   // ---- 6c. A PULSING CLIENT, which is what CMD.DMA actually is -----------
@@ -541,7 +536,7 @@ int main() {
     b.c0.addr = 0xF000'0000;
     b.c0.next_addr = 0xF000'0000;
     b.c0.len = 64;
-    b.c0.bursts_wanted = 0;   // it will not ask again
+    b.c0.bursts_wanted = 0;  // it will not ask again
     b.run(80);
 
     check(b.c0.beats == 8, "6c.a one-cycle request is not lost", 8,
@@ -571,8 +566,7 @@ int main() {
     b.c1.bursts_wanted = 1;
     b.run(80);
 
-    check(b.c1.grants == 1, "7.the write burst was granted", 1,
-          static_cast<uint32_t>(b.c1.grants));
+    check(b.c1.grants == 1, "7.the write burst was granted", 1, static_cast<uint32_t>(b.c1.grants));
     check(b.hps_write_beats == 8, "7.eight write beats reached the HPS", 8,
           static_cast<uint32_t>(b.hps_write_beats));
     check(b.hps_write_lasts == 1, "7.with exactly one `last`", 1,
@@ -620,11 +614,9 @@ int main() {
     b.c1.len = 64;
     b.c1.bursts_wanted = 3;
     b.run(500);
-    check(b.c0.beats == 24, "7b.the reader got every beat", 24,
-          static_cast<uint32_t>(b.c0.beats));
+    check(b.c0.beats == 24, "7b.the reader got every beat", 24, static_cast<uint32_t>(b.c0.beats));
     check(b.c0.data_ok, "7b.and its data is its own", 1, b.c0.data_ok ? 1 : 0);
-    check(b.c1.grants == 3, "7b.the writer got every burst", 3,
-          static_cast<uint32_t>(b.c1.grants));
+    check(b.c1.grants == 3, "7b.the writer got every burst", 3, static_cast<uint32_t>(b.c1.grants));
     check(b.c1.beats == 0, "7b.and the writer received no read beats", 0,
           static_cast<uint32_t>(b.c1.beats));
     check(b.hps_write_lasts == 3, "7b.three write bursts completed", 3,
@@ -645,7 +637,7 @@ int main() {
     b.c0.addr = 0xB000'0000;
     b.c0.next_addr = 0xB000'0000;
     b.c0.len = 64;
-    b.c0.bursts_wanted = 1000;   // never stops
+    b.c0.bursts_wanted = 1000;  // never stops
     b.c1.client = kBlitClient;
     b.c1.base = 0xC000'0000;
     b.c1.addr = 0xC000'0000;

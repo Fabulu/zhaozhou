@@ -46,9 +46,9 @@
 namespace {
 
 using zhao_geom::BinJob;
+using zhao_geom::BinnerDev;
 using zhao_geom::BinStatus;
 using zhao_geom::BinTri;
-using zhao_geom::BinnerDev;
 using zhao_geom::make_bin_tri;
 using zref::Clip;
 namespace zm = zref::measure;
@@ -97,7 +97,7 @@ zm::TokenRequest bind_request(const BinTri& t, int view) {
   zm::TokenRequest r;
   r.valid = true;
   r.view = view;
-  r.cls = 0;         // geometry
+  r.cls = 0;  // geometry
   r.essential = true;
   r.rep = 0;
   r.cost = 1;
@@ -118,8 +118,8 @@ std::vector<BinTri> make_tris(int n) {
     const int32_t x = static_cast<int32_t>((i % 5) * 48 * 256);
     const int32_t y = static_cast<int32_t>((i / 5) * 40 * 256);
     BinTri t;
-    if (!make_bin_tri(x, y, x + 40 * 256, y, x, y + 32 * 256, kVp,
-                      static_cast<uint16_t>(0x900 + i), &t))
+    if (!make_bin_tri(x, y, x + 40 * 256, y, x, y + 32 * 256, kVp, static_cast<uint16_t>(0x900 + i),
+                      &t))
       continue;
     v.push_back(t);
   }
@@ -202,8 +202,7 @@ int main() {
   zhao::check(st.triangles_culled == static_cast<uint32_t>(denied),
               "the binner counted every denial into triangles_culled",
               static_cast<uint64_t>(denied), st.triangles_culled);
-  zhao::check(!jobs.empty(), "granted triangles still produced tile jobs", 1,
-              jobs.empty() ? 0 : 1);
+  zhao::check(!jobs.empty(), "granted triangles still produced tile jobs", 1, jobs.empty() ? 0 : 1);
 
   const tokens_test::Pools after = tokens_test::pools(tok);
 
@@ -227,8 +226,8 @@ int main() {
   // Nothing here works around it. The assertion pins the behaviour AS IT IS so
   // the fix cannot land quietly — whoever wires a return path will see this
   // line go red and will have to come here and say what the new law is.
-  zhao::check(after.g0 == 0,
-              "geometry pool 0 is EMPTY: nothing is ever returned (REPORTED DEFECT)", 0, after.g0);
+  zhao::check(after.g0 == 0, "geometry pool 0 is EMPTY: nothing is ever returned (REPORTED DEFECT)",
+              0, after.g0);
 
   std::printf("seam: granted=%d denied=%d culled=%u jobs=%zu pools g0=%u g1=%u\n", granted, denied,
               st.triangles_culled, jobs.size(), after.g0, after.g1);

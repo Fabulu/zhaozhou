@@ -156,8 +156,7 @@ int main(int argc, char** argv) {
   // ---- 1. the identities --------------------------------------------------
   diff(dut, I, I, "identity x identity");
   {
-    const zc::mat3x4fx M = mat(2 * ONE, ONE / 2, -ONE, 7 * ONE,
-                               -ONE / 4, 3 * ONE, ONE, -2 * ONE,
+    const zc::mat3x4fx M = mat(2 * ONE, ONE / 2, -ONE, 7 * ONE, -ONE / 4, 3 * ONE, ONE, -2 * ONE,
                                ONE, -ONE, ONE / 8, 11 * ONE);
     diff(dut, I, M, "identity x M");
     diff(dut, M, I, "M x identity");
@@ -200,8 +199,8 @@ int main(int argc, char** argv) {
     diff(dut, A, B, "rounding: exact half");
     const zc::mat3x4fx N = mat(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
     diff(dut, N, B, "rounding: negative exact half");
-    const zc::mat3x4fx B2 = mat((1 << 15) + 1, (1 << 15) - 1, 1 << 15, 3 << 15, 0, 0, 0, 0, 0, 0,
-                                0, 0);
+    const zc::mat3x4fx B2 =
+        mat((1 << 15) + 1, (1 << 15) - 1, 1 << 15, 3 << 15, 0, 0, 0, 0, 0, 0, 0, 0);
     diff(dut, A, B2, "rounding: either side of the half");
   }
 
@@ -213,8 +212,8 @@ int main(int argc, char** argv) {
   {
     const int32_t BIG = 0x4000'0000;
     const zc::mat3x4fx P = mat(BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG, BIG);
-    const zc::mat3x4fx M = mat(-BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG,
-                               -BIG);
+    const zc::mat3x4fx M =
+        mat(-BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG, -BIG);
     diff(dut, P, P, "saturate: positive rail");
     diff(dut, M, M, "saturate: negative rail via two negatives");
     diff(dut, P, M, "saturate: negative rail");
@@ -254,7 +253,7 @@ int main(int argc, char** argv) {
     setMat(dut.a_m_i, I);
     setMat(dut.b_m_i, I);
     dut.eval();
-    zhao::tick(dut);          // accepted; the walk starts
+    zhao::tick(dut);  // accepted; the walk starts
     dut.eval();
     check(dut.in_ready_o == 0, "mid-walk the block refuses new operands", 0, dut.in_ready_o);
     check(dut.out_valid_o == 0, "no result is offered mid-walk", 0, dut.out_valid_o);

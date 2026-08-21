@@ -171,8 +171,8 @@ void acquire(Dut& dut, zf::ProgCache& ref, const Image& im, const char* what) {
   if (hit) {
     check(want.status == zf::ProgStatus::kHit, (t + ": both say HIT").c_str(), 1,
           want.status == zf::ProgStatus::kHit ? 1 : 0);
-    check(slot == want.slot, (t + ": the same slot").c_str(),
-          static_cast<uint64_t>(want.slot), static_cast<uint64_t>(slot));
+    check(slot == want.slot, (t + ": the same slot").c_str(), static_cast<uint64_t>(want.slot),
+          static_cast<uint64_t>(slot));
     return;
   }
 
@@ -188,14 +188,13 @@ void acquire(Dut& dut, zf::ProgCache& ref, const Image& im, const char* what) {
   const bool inserted = dut.commit(ok ? d.prog.program_hash : im.hash, ok, cslot, evicted);
 
   if (!ok) {
-    check(!inserted, (t + ": a rejected program is not inserted").c_str(), 0,
-          inserted ? 1 : 0);
-    check(want.status == zf::ProgStatus::kRejected, (t + ": the oracle rejected it too").c_str(),
-          1, want.status == zf::ProgStatus::kRejected ? 1 : 0);
+    check(!inserted, (t + ": a rejected program is not inserted").c_str(), 0, inserted ? 1 : 0);
+    check(want.status == zf::ProgStatus::kRejected, (t + ": the oracle rejected it too").c_str(), 1,
+          want.status == zf::ProgStatus::kRejected ? 1 : 0);
   } else {
     check(inserted, (t + ": a valid program is inserted").c_str(), 1, inserted ? 1 : 0);
-    check(want.status == zf::ProgStatus::kInserted, (t + ": the oracle inserted it too").c_str(),
-          1, want.status == zf::ProgStatus::kInserted ? 1 : 0);
+    check(want.status == zf::ProgStatus::kInserted, (t + ": the oracle inserted it too").c_str(), 1,
+          want.status == zf::ProgStatus::kInserted ? 1 : 0);
     check(cslot == want.slot, (t + ": the same slot was chosen").c_str(),
           static_cast<uint64_t>(want.slot), static_cast<uint64_t>(cslot));
   }
@@ -208,8 +207,7 @@ void compare_counters(Dut& dut, const zf::ProgCache& ref, const char* what) {
   check(dut.misses() == c.misses, (t + ": misses").c_str(), c.misses, dut.misses());
   check(dut.rejected() == c.programs_rejected, (t + ": programs_rejected").c_str(),
         c.programs_rejected, dut.rejected());
-  check(dut.evictions() == c.evictions, (t + ": evictions").c_str(), c.evictions,
-        dut.evictions());
+  check(dut.evictions() == c.evictions, (t + ": evictions").c_str(), c.evictions, dut.evictions());
   check(dut.occupancy() == ref.occupied(), (t + ": occupancy").c_str(),
         static_cast<uint64_t>(ref.occupied()), dut.occupancy());
 }
@@ -234,21 +232,21 @@ int main(int argc, char** argv) {
   Vzhao_field_progcache raw;
   Dut dut(raw);
 
-  const Image crater = image_of("crater_ring", zfield_gen::crater_ring::kProgramBytes.data(),
-                                zfield_gen::crater_ring::kProgramBytesLen,
-                                zfield_gen::crater_ring::kProgramHash);
-  const Image impact = image_of("impact_wave", zfield_gen::impact_wave::kProgramBytes.data(),
-                                zfield_gen::impact_wave::kProgramBytesLen,
-                                zfield_gen::impact_wave::kProgramHash);
-  const Image pool = image_of("wave_pool", zfield_gen::wave_pool::kProgramBytes.data(),
-                              zfield_gen::wave_pool::kProgramBytesLen,
-                              zfield_gen::wave_pool::kProgramHash);
+  const Image crater =
+      image_of("crater_ring", zfield_gen::crater_ring::kProgramBytes.data(),
+               zfield_gen::crater_ring::kProgramBytesLen, zfield_gen::crater_ring::kProgramHash);
+  const Image impact =
+      image_of("impact_wave", zfield_gen::impact_wave::kProgramBytes.data(),
+               zfield_gen::impact_wave::kProgramBytesLen, zfield_gen::impact_wave::kProgramHash);
+  const Image pool =
+      image_of("wave_pool", zfield_gen::wave_pool::kProgramBytes.data(),
+               zfield_gen::wave_pool::kProgramBytesLen, zfield_gen::wave_pool::kProgramHash);
 
   // The fixtures only mean anything if the three programs are actually distinct.
-  check(crater.hash != impact.hash && impact.hash != pool.hash && crater.hash != pool.hash,
-        "the three fixture programs have three distinct hashes", 1,
-        (crater.hash != impact.hash && impact.hash != pool.hash && crater.hash != pool.hash) ? 1
-                                                                                             : 0);
+  check(
+      crater.hash != impact.hash && impact.hash != pool.hash && crater.hash != pool.hash,
+      "the three fixture programs have three distinct hashes", 1,
+      (crater.hash != impact.hash && impact.hash != pool.hash && crater.hash != pool.hash) ? 1 : 0);
 
   // ---- 1. cold miss, insert, then a hit -----------------------------------
   {
@@ -356,8 +354,8 @@ int main(int argc, char** argv) {
     acquire(dut, ref, impact, "and a second resident");
     const Image bad = corrupt(pool, "corrupted wave_pool", 40, 0xC3);
     acquire(dut, ref, bad, "a bad image against a FULL cache");
-    check(dut.evictions() == 0, "a rejected program evicts nothing, even when the cache is full",
-          0, dut.evictions());
+    check(dut.evictions() == 0, "a rejected program evicts nothing, even when the cache is full", 0,
+          dut.evictions());
     acquire(dut, ref, crater, "the first resident still hits");
     acquire(dut, ref, impact, "and so does the second");
     compare_counters(dut, ref, "a rejection against a full cache");
@@ -379,7 +377,9 @@ int main(int argc, char** argv) {
     }
     if (random_mode) {
       std::vector<Image> pool_imgs = {
-          crater, impact, pool,
+          crater,
+          impact,
+          pool,
           corrupt(crater, "bad crater", 27, 0xFF),
           corrupt(impact, "bad impact", 31, 0x5A),
           truncated(pool, "short pool"),

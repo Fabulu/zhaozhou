@@ -110,12 +110,10 @@ struct Lanes {
 
 Lanes lanes_of(int32_t d, int32_t r0, int32_t r1) {
   zref::SatLedger L{};
-  const int32_t m =
-      zref::rescale_s32(static_cast<int64_t>(r0) + r1, 1, &L);
+  const int32_t m = zref::rescale_s32(static_cast<int64_t>(r0) + r1, 1, &L);
   const int32_t s0 = zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L).raw;
   const int32_t s1 = zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L).raw;
-  (void)zref::fx_mul(zref::fx16{s0},
-                     zref::fx_sub(zref::fx16{kOne}, zref::fx16{s1}, &L), &L);
+  (void)zref::fx_mul(zref::fx16{s0}, zref::fx_sub(zref::fx16{kOne}, zref::fx16{s1}, &L), &L);
   Lanes o;
   o.add = L.add != 0;
   o.mul = L.mul != 0;
@@ -180,21 +178,17 @@ void diff(Vzhao_field_ring& dut, int32_t d, int32_t r0, int32_t r1, const char* 
 
   check(got.v == want.v, (t + ": value").c_str(), static_cast<uint32_t>(want.v),
         static_cast<uint32_t>(got.v));
-  check(got.add == lane.add, (t + ": SatLedger::add").c_str(), lane.add ? 1 : 0,
-        got.add ? 1 : 0);
-  check(got.mul == lane.mul, (t + ": SatLedger::mul").c_str(), lane.mul ? 1 : 0,
-        got.mul ? 1 : 0);
-  check(got.rescale == lane.rescale, (t + ": SatLedger::rescale").c_str(),
-        lane.rescale ? 1 : 0, got.rescale ? 1 : 0);
-  check(got.rcp == lane.rcp, (t + ": SatLedger::rcp").c_str(), lane.rcp ? 1 : 0,
-        got.rcp ? 1 : 0);
+  check(got.add == lane.add, (t + ": SatLedger::add").c_str(), lane.add ? 1 : 0, got.add ? 1 : 0);
+  check(got.mul == lane.mul, (t + ": SatLedger::mul").c_str(), lane.mul ? 1 : 0, got.mul ? 1 : 0);
+  check(got.rescale == lane.rescale, (t + ": SatLedger::rescale").c_str(), lane.rescale ? 1 : 0,
+        got.rescale ? 1 : 0);
+  check(got.rcp == lane.rcp, (t + ": SatLedger::rcp").c_str(), lane.rcp ? 1 : 0, got.rcp ? 1 : 0);
   check(got.rcp0 == lane.rcp0, (t + ": SatLedger::rcp0").c_str(), lane.rcp0 ? 1 : 0,
         got.rcp0 ? 1 : 0);
   // The collapsed bit, WITHOUT rcp0 -- which the interpreter reports separately.
   const bool any = got.add || got.mul || got.rescale || got.rcp;
   check(any == want.sat, (t + ": Status.sat").c_str(), want.sat ? 1 : 0, any ? 1 : 0);
-  check(got.rcp0 == want.rcp0, (t + ": Status.rcp0").c_str(), want.rcp0 ? 1 : 0,
-        got.rcp0 ? 1 : 0);
+  check(got.rcp0 == want.rcp0, (t + ": Status.rcp0").c_str(), want.rcp0 ? 1 : 0, got.rcp0 ? 1 : 0);
 
   if (lane.rcp0) ++g_rcp0_seen;
   if (lane.rcp) ++g_rcp_seen;
@@ -215,13 +209,20 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (next() % n) : 0u; }
   int32_t val() {
     switch (below(7)) {
-      case 0: return 0;
-      case 1: return kOne;
-      case 2: return -kOne;
-      case 3: return INT32_MAX;
-      case 4: return INT32_MIN;
-      case 5: return static_cast<int32_t>(next()) >> 12;
-      default: return static_cast<int32_t>(next());
+      case 0:
+        return 0;
+      case 1:
+        return kOne;
+      case 2:
+        return -kOne;
+      case 3:
+        return INT32_MAX;
+      case 4:
+        return INT32_MIN;
+      case 5:
+        return static_cast<int32_t>(next()) >> 12;
+      default:
+        return static_cast<int32_t>(next());
     }
   }
 };
@@ -272,8 +273,7 @@ int main(int argc, char** argv) {
       std::snprintf(nm, sizeof nm, "2.outside d=%d", d / kOne);
       diff(dut, d, 2 * kOne, 8 * kOne, nm);
     }
-    check(g_clamped_lo > 0 && g_clamped_hi > 0,
-          "2.both clamp rails were actually reached", 1,
+    check(g_clamped_lo > 0 && g_clamped_hi > 0, "2.both clamp rails were actually reached", 1,
           (g_clamped_lo > 0 && g_clamped_hi > 0) ? 1 : 0);
   }
 
@@ -307,8 +307,10 @@ int main(int argc, char** argv) {
     int asym = 0, same = 0;
     for (int i = 0; i <= 40; ++i) {
       const int32_t d = (i * 12 * kOne) / 40;
-      if (interp(d, 2 * kOne, 8 * kOne).v != interp(d, 8 * kOne, 2 * kOne).v) ++asym;
-      else ++same;
+      if (interp(d, 2 * kOne, 8 * kOne).v != interp(d, 8 * kOne, 2 * kOne).v)
+        ++asym;
+      else
+        ++same;
     }
     check(asym > 0, "3.rounding BREAKS the exact radius symmetry, and is observable", 1,
           static_cast<uint32_t>(asym));
@@ -342,8 +344,8 @@ int main(int argc, char** argv) {
   // them reach it: a mutation pooling the `rcp` lane into `mul` survived the
   // first sweep purely because this case was missing.
   {
-    const int32_t tiny[][2] = {{0, 2}, {0, 1}, {5, 7}, {-3, -1}, {100, 103},
-                               {kOne, kOne + 2}, {kOne, kOne + 1}};
+    const int32_t tiny[][2] = {{0, 2},     {0, 1},           {5, 7},          {-3, -1},
+                               {100, 103}, {kOne, kOne + 2}, {kOne, kOne + 1}};
     for (int i = 0; i < 7; ++i) {
       char nm[64];
       std::snprintf(nm, sizeof nm, "4b.tiny span [%d,%d]", tiny[i][0], tiny[i][1]);
@@ -367,8 +369,7 @@ int main(int argc, char** argv) {
     check(neg.mid == INT32_MIN, "5.and of two negative rails is that rail",
           static_cast<uint32_t>(INT32_MIN), static_cast<uint32_t>(neg.mid));
     const Lanes mix = lanes_of(0, INT32_MIN, INT32_MAX);
-    check(mix.mid == 0, "5.opposite rails average to zero", 0,
-          static_cast<uint32_t>(mix.mid));
+    check(mix.mid == 0, "5.opposite rails average to zero", 0, static_cast<uint32_t>(mix.mid));
     // What a saturating add would have produced, for contrast.
     zref::SatLedger L{};
     const int32_t wrong = zref::fx_add(zref::fx16{INT32_MAX}, zref::fx16{INT32_MAX}, &L).raw / 2;
@@ -385,8 +386,8 @@ int main(int argc, char** argv) {
     const DutRes q = run(dut, 5 * kOne, 2 * kOne, 8 * kOne);
     check(!q.add && !q.mul && !q.rescale && !q.rcp && !q.rcp0,
           "6.an ordinary ring reports nothing saturating", 0,
-          (q.add ? 16u : 0u) | (q.mul ? 8u : 0u) | (q.rescale ? 4u : 0u) |
-              (q.rcp ? 2u : 0u) | (q.rcp0 ? 1u : 0u));
+          (q.add ? 16u : 0u) | (q.mul ? 8u : 0u) | (q.rescale ? 4u : 0u) | (q.rcp ? 2u : 0u) |
+              (q.rcp0 ? 1u : 0u));
   }
 
   // ---- 7. interface laws --------------------------------------------------
@@ -403,7 +404,10 @@ int main(int argc, char** argv) {
     dut.r_ready_i = 0;
     dut.eval();
     int g = 0;
-    while (!dut.v_ready_o && g++ < 128) { zhao::tick(dut); dut.eval(); }
+    while (!dut.v_ready_o && g++ < 128) {
+      zhao::tick(dut);
+      dut.eval();
+    }
     zhao::tick(dut);
     dut.v_valid_i = 0;
     dut.eval();

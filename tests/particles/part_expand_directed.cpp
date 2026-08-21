@@ -97,12 +97,12 @@ class Dut {
       return false;
     }
     got.emitted = true;
-    got.a = zp::ExpandedVertex{sx22(dut_.t_ax_o), sx22(dut_.t_ay_o),
-                               static_cast<int32_t>(dut_.t_d_o)};
-    got.b = zp::ExpandedVertex{sx22(dut_.t_bx_o), sx22(dut_.t_by_o),
-                               static_cast<int32_t>(dut_.t_d_o)};
-    got.c = zp::ExpandedVertex{sx22(dut_.t_cx_o), sx22(dut_.t_cy_o),
-                               static_cast<int32_t>(dut_.t_d_o)};
+    got.a =
+        zp::ExpandedVertex{sx22(dut_.t_ax_o), sx22(dut_.t_ay_o), static_cast<int32_t>(dut_.t_d_o)};
+    got.b =
+        zp::ExpandedVertex{sx22(dut_.t_bx_o), sx22(dut_.t_by_o), static_cast<int32_t>(dut_.t_d_o)};
+    got.c =
+        zp::ExpandedVertex{sx22(dut_.t_cx_o), sx22(dut_.t_cy_o), static_cast<int32_t>(dut_.t_d_o)};
     got.r = static_cast<uint8_t>(dut_.t_r_o);
     got.g = static_cast<uint8_t>(dut_.t_g_o);
     got.b_ = static_cast<uint8_t>(dut_.t_b_o);
@@ -121,8 +121,7 @@ class Dut {
 };
 
 void diff(Dut& dut, const P& p, const char* what) {
-  const zp::PolyExpand want =
-      zp::expand_polygon(p.in, p.x, p.y, p.d, p.size, p.r, p.g, p.b);
+  const zp::PolyExpand want = zp::expand_polygon(p.in, p.x, p.y, p.d, p.size, p.r, p.g, p.b);
   zp::PolyExpand got{};
   uint16_t src = 0;
   bool dtest = false, dwrite = true;
@@ -174,7 +173,10 @@ struct Prng {
 void test_reference_is_draw_population() {
   const uint32_t W = 128, H = 96;
   zr::Viewport vp;
-  vp.x0 = 0; vp.y0 = 0; vp.w = W; vp.h = H;
+  vp.x0 = 0;
+  vp.y0 = 0;
+  vp.w = W;
+  vp.h = H;
 
   // An identity view-projection: clip == the vertex, w == 1.0, so a particle's
   // world position maps predictably and every particle is in front of the eye.
@@ -210,10 +212,9 @@ void test_reference_is_draw_population() {
   zr::WorkSurface sb;
   sb.reset(W, H, bg);
   for (const zr::Particle& p : pop.parts) {
-    const zr::ProjOut c = zr::project_vertex(m, vp, zref::fx16{p.x}, zref::fx16{p.y},
-                                             zref::fx16{p.z}, nullptr);
-    const zp::PolyExpand e =
-        zp::expand_polygon(c.in, c.s.x, c.s.y, c.s.d, p.size, p.r, p.g, p.b);
+    const zr::ProjOut c =
+        zr::project_vertex(m, vp, zref::fx16{p.x}, zref::fx16{p.y}, zref::fx16{p.z}, nullptr);
+    const zp::PolyExpand e = zp::expand_polygon(c.in, c.s.x, c.s.y, c.s.d, p.size, p.r, p.g, p.b);
     if (!e.emitted) continue;
     const zr::ScreenV a{e.a.x, e.a.y, e.a.d, 0};
     const zr::ScreenV b{e.b.x, e.b.y, e.b.d, 0};
@@ -312,8 +313,7 @@ int main(int argc, char** argv) {
   {
     const zp::PolyExpand e = zp::expand_polygon(true, 0, 0, kOne, 64, 0, 0, 0);
     const int32_t side = 64 << 4;  // 1024 subpixels = 4 px
-    check(e.a.x == 0, "the apex sits on the particle's own x", 0,
-          static_cast<uint32_t>(e.a.x));
+    check(e.a.x == 0, "the apex sits on the particle's own x", 0, static_cast<uint32_t>(e.a.x));
     check(e.a.y == -side, "the apex is a full side above", static_cast<uint32_t>(-side),
           static_cast<uint32_t>(e.a.y));
     check(e.b.y == side / 2 && e.c.y == side / 2, "the base is half a side below", 1,
@@ -349,8 +349,8 @@ int main(int argc, char** argv) {
     const uint32_t before = dut.counted();
     diff(dut, P{false, 100 * 256, 80 * 256, kOne, 32, 1, 2, 3, 0x51}, "behind the eye");
     diff(dut, P{false, 0, 0, 0, 255, 1, 2, 3, 0x52}, "behind the eye, largest size");
-    check(dut.counted() == before, "a behind-the-eye particle is not counted as expanded",
-          before, dut.counted());
+    check(dut.counted() == before, "a behind-the-eye particle is not counted as expanded", before,
+          dut.counted());
     diff(dut, P{true, 0, 0, kOne, 32, 1, 2, 3, 0x53}, "and the next one still works");
     check(dut.counted() == before + 1, "the one in front is counted", before + 1, dut.counted());
   }
@@ -371,9 +371,10 @@ int main(int argc, char** argv) {
   {
     const uint32_t before = dut.counted();
     for (int k = 0; k < 25; ++k) {
-      diff(dut, P{true, k * 256, -k * 128, kOne + k, static_cast<uint8_t>(3 * k + 1),
-                  static_cast<uint8_t>(k), static_cast<uint8_t>(2 * k),
-                  static_cast<uint8_t>(3 * k), static_cast<uint16_t>(0x700 + k)},
+      diff(dut,
+           P{true, k * 256, -k * 128, kOne + k, static_cast<uint8_t>(3 * k + 1),
+             static_cast<uint8_t>(k), static_cast<uint8_t>(2 * k), static_cast<uint8_t>(3 * k),
+             static_cast<uint16_t>(0x700 + k)},
            "back to back");
     }
     check(dut.counted() == before + 25, "every accepted particle is counted once", before + 25,

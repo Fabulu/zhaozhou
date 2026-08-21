@@ -58,8 +58,14 @@ Res oracle2(int32_t x, int32_t y) {
   const uint64_t len = zref::isqrt_u64(n2);
   int e = 0;
   uint64_t m = len;
-  while (m < (1ull << 23)) { m <<= 1; --e; }
-  while (m >= (1ull << 24)) { m >>= 1; ++e; }
+  while (m < (1ull << 23)) {
+    m <<= 1;
+    --e;
+  }
+  while (m >= (1ull << 24)) {
+    m >>= 1;
+    ++e;
+  }
   const uint32_t r = zref::rcp_u24_norm(static_cast<uint32_t>(m));
   zref::SatLedger L{};
   o.o0 = zref::rescale_s32(static_cast<int64_t>(x) * r, 31 + e, &L);
@@ -71,8 +77,8 @@ Res oracle2(int32_t x, int32_t y) {
 Res oracle3(int32_t x, int32_t y, int32_t z) {
   Res o;
   zref::SatLedger L{};
-  const zref::vec3fx v = zref::normalize3_approx(
-      zref::vec3fx{zref::fx16{x}, zref::fx16{y}, zref::fx16{z}}, &L);
+  const zref::vec3fx v =
+      zref::normalize3_approx(zref::vec3fx{zref::fx16{x}, zref::fx16{y}, zref::fx16{z}}, &L);
   o.o0 = v.x.raw;
   o.o1 = v.y.raw;
   o.o2 = v.z.raw;
@@ -126,8 +132,7 @@ void diff(Vzhao_field_normalize& dut, bool is3, int32_t a0, int32_t a1, int32_t 
     check(got.o2 == want.o2, (t + ": lane 2").c_str(), static_cast<uint32_t>(want.o2),
           static_cast<uint32_t>(got.o2));
   }
-  check(got.rcp0 == want.rcp0, (t + ": rcp0 lane").c_str(), want.rcp0 ? 1 : 0,
-        got.rcp0 ? 1 : 0);
+  check(got.rcp0 == want.rcp0, (t + ": rcp0 lane").c_str(), want.rcp0 ? 1 : 0, got.rcp0 ? 1 : 0);
   check(got.sat_rescale == want.sat_rescale, (t + ": rescale saturation").c_str(),
         want.sat_rescale ? 1 : 0, got.sat_rescale ? 1 : 0);
 }
@@ -145,12 +150,18 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (next() % n) : 0u; }
   int32_t val() {
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return INT32_MAX;
-      case 2: return INT32_MIN;
-      case 3: return static_cast<int32_t>(next()) >> static_cast<int>(below(24));
-      case 4: return static_cast<int32_t>(next()) >> 12;
-      default: return static_cast<int32_t>(next());
+      case 0:
+        return 0;
+      case 1:
+        return INT32_MAX;
+      case 2:
+        return INT32_MIN;
+      case 3:
+        return static_cast<int32_t>(next()) >> static_cast<int>(below(24));
+      case 4:
+        return static_cast<int32_t>(next()) >> 12;
+      default:
+        return static_cast<int32_t>(next());
     }
   }
 };
@@ -211,8 +222,7 @@ int main(int argc, char** argv) {
       }
       (void)want;
     }
-    check(bad == 0, "the generated ROM drives rcp_u24_norm correctly for all 256 indices", 0,
-          bad);
+    check(bad == 0, "the generated ROM drives rcp_u24_norm correctly for all 256 indices", 0, bad);
     if (bad) std::printf("  first divergent seed index: %d\n", first);
 
     // The table DESCENDS: the reciprocal of a small mantissa is large. An
@@ -271,8 +281,7 @@ int main(int argc, char** argv) {
     check(z2.rcp0, "NORMALIZE2 of zero DOES record rcp0", 1, z2.rcp0 ? 1 : 0);
     check(!z3.rcp0, "NORMALIZE3 of zero does NOT -- the reference is asymmetric here", 0,
           z3.rcp0 ? 1 : 0);
-    check(z2.o0 == 0 && z2.o1 == 0, "and both return zeros", 1,
-          (z2.o0 == 0 && z2.o1 == 0) ? 1 : 0);
+    check(z2.o0 == 0 && z2.o1 == 0, "and both return zeros", 1, (z2.o0 == 0 && z2.o1 == 0) ? 1 : 0);
     check(z3.o0 == 0 && z3.o1 == 0 && z3.o2 == 0, "all three lanes zero", 1,
           (z3.o0 == 0 && z3.o1 == 0 && z3.o2 == 0) ? 1 : 0);
     // A zero third lane must NOT make NORMALIZE3 behave like NORMALIZE2.
