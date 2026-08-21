@@ -1042,6 +1042,34 @@ set_tests_properties(lint_zhao_field_rcp PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# DEBUG.FRAMEBLIT, the block split out of CMD.DMA by
+# reports/CMD.DMA_Redesign_Proposal.md Part 2. Its reason to exist is that the
+# old blit path carried a 245,760-byte staging buffer and stopped the shell
+# fitting; the amended atomicity law lets the framebuffer slot itself be the
+# transaction buffer and the staging buffer collapses to one 64-byte chunk.
+add_executable(test_debug_frameblit_directed debug/debug_frameblit_directed.cpp)
+target_link_libraries(test_debug_frameblit_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_debug_frameblit_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+verilate(test_debug_frameblit_directed
+  PREFIX Vzhao_debug_frameblit
+  TOP_MODULE zhao_debug_frameblit
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv)
+add_test(NAME debug_frameblit_directed COMMAND test_debug_frameblit_directed)
+set_tests_properties(debug_frameblit_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_debug_frameblit
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_debug_frameblit
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv)
+set_tests_properties(lint_zhao_debug_frameblit PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # The Field IR arithmetic core. One file covers FIELD.MOV, FIELD.ADD and
 # FIELD.SUB -- the three op differentials V10 names as blockers for ALL FOUR
 # FIELD.SEQ.* blocks -- plus the other twelve arithmetic ops, because they share

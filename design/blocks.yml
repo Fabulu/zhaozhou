@@ -287,7 +287,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [engine_dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -514,7 +514,7 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT]
     downstream: [MEM.VRAM.ARBITER]
     backpressure: ready_valid
     latency: fixed:1
@@ -1093,7 +1093,7 @@ blocks:
     owner_issue: ZH-016
     inputs: [scanout_status]
     outputs: [frame_complete, frame_repeated]
-    upstream: []
+    upstream: [DEBUG.FRAMEBLIT]
     downstream: [CMD.SCHEDULER]
     backpressure: none
     latency: fixed:1
@@ -3042,6 +3042,47 @@ blocks:
       silently dropped: neither published nor flagged). Oracle made real,
       defect fixed, nightly observed green at 768ce1a (9,000 checks, 0
       failed).
+
+  # DEBUG.FRAMEBLIT was split out of CMD.DMA by
+  # reports/CMD.DMA_Redesign_Proposal.md Part 2: the blit path carried a
+  # whole-canvas staging buffer inside the command front end and that buffer is
+  # what stopped the shell fitting. A debug-only transport must not be able to
+  # do that.
+  - id: DEBUG.FRAMEBLIT
+    name: Debug frame blit
+    kind: rtl
+    subsystem: debug
+    clock_domain: gpu
+    purpose: "Single-pass transactional DebugFrameBlit: leased framebuffer slot, 64-byte chunks, CRC-32C over the source, publish only on match."
+    contract: design/contracts/DEBUG.FRAMEBLIT.md
+    phase: 2
+    owner_issue: ZH-075
+    inputs: [blit_requests, fb_slot_lease]
+    outputs: [guarded_writes, slot_publish]
+    upstream: [CMD.SCHEDULER]
+    downstream: [MEM.GUARD, VIDEO.FRAMECTL]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: 1 guarded 64-bit beat per clock
+    reference_model: zref::debug::run_blit
+    tests:
+      directed: tests/debug/debug_frameblit_directed.cpp
+      random: tests/debug/debug_frameblit_directed.cpp
+    counters: [hps_ddr_bytes_by_client]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Amended atomicity law: no framebuffer slot becomes visible or READY before
+      every byte has been written, all writes have retired, and the CRC matches.
+      The slot itself is the transaction buffer, so the staging buffer collapses
+      from 1,966,080 bits to 512. The two-pass DDR alternative was rejected as
+      unsound - the pixel arena is a raw HPS address with no ownership state, so
+      the HPS can mutate it between passes.
 
   - id: DEBUG.TRACE
     name: Trace ring and source IDs
