@@ -12,6 +12,116 @@ LOD/deformation first**, and entries below do not outrank that.
 
 ---
 
+## 2026-08-21 — the Reality Tear (LUXURY, gated on proven hardware + measured slack)
+
+> "If we have extra dsp and alm at the end, can we add some fancy silly thing?
+> Or is the architecture too rigid"
+
+**Not too rigid — and the effect is already specified in pieces.** Verified
+against `design/blocks.yml` 2026-08-21, this is not a new feature needing a new
+socket. Every part of it is already named:
+
+| Block | What the ledger ALREADY says |
+| --- | --- |
+| `FORGE.PRIM` | "Ribbons, tubes, radial shells, rings, chains, shard bursts, billboard sheets, spline walls, cones" |
+| `POST.GATHER` | "Accumulate low-resolution glow, **distortion-XY** and outline buffers" |
+| `POST.COMPOSITE` | "Bloom, haze, **shockwave**, **refraction**, grading, palette and flash" |
+| `TEXTURE.AUX` | "Restricted aux texel source (surface sheets, light/shadow compare, **distortion**)" |
+| `POST.ECHO` | "Optional echo of the composited frame back to a capture buffer; **first on the §26 cut list**" — `deferred: true`, `cut_order: 1` |
+
+Distortion is already a sanctioned aux use. Shockwave and refraction are
+already composite modes. The distortion vector field is already a gather
+output. The frame echo already exists as the designated first luxury to cut.
+**The parts spell the effect; nobody had noticed.**
+
+### The effect
+
+Procedural spell geometry from the Forge writes glow/distortion strength into
+the ordinary effect-tag path; the post gate turns that into a low-resolution
+vector field that bends the finished image; `SURFACE.STAMP` leaves a persistent
+scar underneath. Wormholes that twist the background, spells that fold the
+screen inward, heat-haze creatures whose silhouettes distort the world behind
+them, portals shedding fragments of previous frames, an unreality storm where
+terrain scars, geometry and screen feedback all agree on one event.
+
+> "Use the spare silicon to let enormous procedural spells physically generate
+> geometry, scar the terrain and bend the completed image around themselves."
+
+**Spend surplus geometry throughput on impossible spell geometry, not on every
+unit gaining another 200 triangles.** One outrageous battlefield-scale twisting
+object does more for the machine's identity than a uniform detail bump.
+
+### What "spare" has to mean
+
+Owner's own constraint, and it is the important half of this entry. A final fit
+saying "20 DSPs free" does **not** mean 20 spendable DSPs. A luxury feature also
+needs SDRAM bandwidth, M10K, routing near the right pipeline, timing margin,
+frame-cycle slack and command capacity. A full-frame feedback effect might cost
+almost no DSP and be impossible because it adds a framebuffer read; a
+procedural geometry engine might cost eight DSPs and no bandwidth yet swamp
+triangle setup.
+
+So **spare means**: placed and routed, timing closed **on the actual board**,
+worst-case workload at 60 Hz, and measured resource AND bandwidth reserve left
+over.
+
+Budget shape, if the machine lands near the estimated 92-95 DSP: keep **10-12
+DSPs untouched** as engineering reserve, spend **5-8** on the luxury, and only
+go to 10-16 if it lands at 80-85 with comfortable timing. Charter §25's 10%
+reserve is a floor, not a target to consume.
+
+### Easy, hard, and forbidden
+
+**Very easy — after the renderer.** Post effects change no triangle packet, no
+coverage, no depth or texture semantics, no tile layout, and not the bit-exact
+geometry reference. Miss the budget and you drop resolution or taps or switch
+it off; the base frame stays correct.
+
+**Easy — before geometry setup.** A generator that emits ordinary triangles
+feeds the same setup and raster path as everything else. `FORGE.PRIM` is
+exactly this category.
+
+**Medium — a new fixed material recipe**, if it uses texel, vertex colour,
+depth and effect-tag data already present. Dangerous the moment it wants
+another texture lookup or touches the fragment critical path.
+
+**Hard, and mostly forbidden — the renderer's centre.** No second unrestricted
+TMU, no general fragment shaders, no wider tile word, no extra arbitrary
+interpolants, no second geometry pass, no shadow maps, no unrestricted
+render-to-texture, no recursive portals. The ledger already defends this:
+`TEXTURE.AUX` is "deliberately NOT a general second TMU (§26)".
+
+**A fake portal from Forge geometry plus post distortion is easy. A genuinely
+recursively rendered portal is nearly a new renderer.**
+
+### What to reserve NOW, while the contracts are stubs
+
+This is the actionable half and it costs no fabric. `FORGE.PRIM`,
+`POST.GATHER` and `POST.COMPOSITE` are all still `SPECIFIED`, so the interfaces
+can be shaped before anything is built:
+
+- one optional post-effect dispatch;
+- one bounded post recipe id (shockwave / heat haze / portal lens / radial
+  streaks / feedback echo / chromatic smear — **one recipe per pixel, so one
+  bounded DSP bank walks the selected one rather than six multiplier farms**);
+- a low-resolution signed XY distortion buffer;
+- a configurable quality level / tap count;
+- a scheduler token budget;
+- counters for processed texels, taps, dropped effects, deadline degradation;
+- a deterministic fallback ladder: 4-tap filtered feedback -> 2-tap filtered
+  warp -> nearest warp -> glow only -> off.
+
+That ladder is what makes the luxury obey the machine's central rule:
+**the effect negotiates; 60 Hz does not.**
+
+### Status
+
+**NOT SCHEDULED.** Gated on proven hardware and measured slack, per the owner.
+Recorded now because the reservation is free today and expensive later.
+
+---
+
+
 ## 2026-08-21 — latency is now a formal goal (RULING, not an ask)
 
 > "Less latency is an improvement. It should be a goal, really, as long as it
