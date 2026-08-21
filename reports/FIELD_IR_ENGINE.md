@@ -42,6 +42,7 @@ hash did not move is **discarded, never scored**.
 | Normalise | `NORMALIZE2`, `NORMALIZE3` | `zhao_field_normalize.sv` + generated ROM | 419 | 13,522 | **7 / 7** |
 | Table ops | `CURVE`, `DCURVE`, `SPLINE` | `zhao_field_curve.sv` | 11,863 | 21,000 | **18 / 18** |
 | Lattice noise | `NOISE2`, `RIDGE` | `zhao_field_noise.sv` | 346 | 12,000 | **15 / 17**, 2 equivalent |
+| Rotation | `ROT2`, `ROT3` | `zhao_field_rot.sv` | 3,495 | 15,000 | **17 / 17** |
 
 Tests are `tests/differential/field_<piece>_directed.cpp`. The "directed" column
 is the check count with no arguments; "random" is the count added by the fast
@@ -56,8 +57,8 @@ lands on top of them.
 
 ## What is not built
 
-`RING`, `ROT2`, `ROT3` — then the sequencer itself: the register file and the
-instruction walk that turns a `.zprog` image into a run.
+`RING` — then the sequencer itself: the register file and the instruction walk
+that turns a `.zprog` image into a run.
 Until the sequencer exists, the five `FIELD.SEQ.*` blocks in the ledger stay
 SPECIFIED, and so do the blocks downstream of them.
 
@@ -104,6 +105,36 @@ version:
   Catmull-Rom — not `v << 16`. The shift form amplified the term by 2^16 and is
   a fixed defect (review C1, RUN-20260814-1912 wave-1). It is named in the RTL,
   in the test and here so it does not come back.
+
+### The rotation ops round TWICE, and that is the law
+
+`fx_sub(fx_mul(c,p), fx_mul(s,q))` rounds each product separately and then
+saturates the difference. Everywhere else in this design — `mat4_vec4`,
+`fx_mad`, GEOM.SKIN — a row of products is summed exactly and rescaled **once**,
+because double rounding is normally the bug. Here the reference does the
+opposite.
+
+**The rule is not "single rounding is always right"; it is "match the
+reference".** An implementation improved into the house style is wrong, and
+about a quarter of random inputs can tell the two apart. The test counts the
+inputs where a fused form *would* differ and asserts that count is large — a
+sweep on which the two happen to agree proves nothing about which is
+implemented.
+
+### Two mutations that survived because they were wrong, not because the test was
+
+Worth recording, because a surviving mutation is only evidence if the mutation
+is real:
+
+- **`fused_single_rounding` (first attempt)** was algebraically a no-op.
+  `rescale(t·2^16 + p, 16)` equals `t + rescale(p, 16)` exactly, so it
+  "survived" while changing nothing. Rewritten to hold the exact 64-bit
+  products and rescale once — a coordinated multi-edit, since it needs a wider
+  register and every use of it updated — it is caught by 249 directed checks.
+- **`sat_lanes_pooled`** survived because the test only compared the
+  **collapsed** `Status.sat` bit, which cannot tell an `add` saturation from a
+  `mul` one. The test now restates the per-lane attribution and drives the two
+  lanes apart; the mutation is caught.
 
 ### The PCG's last step is dead code here, and it stays
 

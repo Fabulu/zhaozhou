@@ -1077,6 +1077,41 @@ set_tests_properties(lint_zhao_video_slotmgr PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_ROT2 and OP_ROT3. The law that matters here is the one that looks like a
+# defect: EACH PRODUCT IS ROUNDED SEPARATELY. fx_sub(fx_mul(c,p), fx_mul(s,q))
+# rounds TWICE and then saturates the difference, while everywhere else in this
+# design a row of products is summed exactly and rescaled ONCE (A3b) -- because
+# double rounding is normally the bug. Here the reference does the opposite, and
+# an implementation "improved" into the house style is wrong. The test counts
+# the inputs where a fused form would actually differ and asserts that count is
+# large, because a sweep on which the two happen to agree proves nothing about
+# which one is implemented. Four products and two table lookups walk through ONE
+# multiplier and ONE sine ROM.
+add_executable(test_field_rot_directed differential/field_rot_directed.cpp)
+target_link_libraries(test_field_rot_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_rot_directed
+  PREFIX Vzhao_field_rot
+  TOP_MODULE zhao_field_rot
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME field_rot_directed COMMAND test_field_rot_directed)
+set_tests_properties(field_rot_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_rot_random COMMAND test_field_rot_directed --random 4000)
+set_tests_properties(field_rot_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_rot_random_nightly COMMAND test_field_rot_directed --random 60000)
+set_tests_properties(field_rot_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_rot
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_rot
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+set_tests_properties(lint_zhao_field_rot PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_NOISE2 and OP_RIDGE -- the lattice hash (zref::noise2_hash, PCG RXS-M-XS,
 # constants frozen verbatim). The lattice index is an ARITHMETIC shift of a
 # signed register reinterpreted as unsigned, so a logical shift agrees for every

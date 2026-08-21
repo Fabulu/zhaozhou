@@ -426,12 +426,13 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §angle16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_rot2
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 2
     field_ir_opcode: ROT2
-    differential_tests: tests/differential/field_rot2.cpp
-    notes: null
+    differential_tests: tests/differential/field_rot_directed.cpp
+    notes: "RTL: zhao_field_rot.sv, shared with ROT3 (ROT2 is the Z case on two lanes). EACH PRODUCT IS ROUNDED SEPARATELY -- fx_sub(fx_mul(c,p), fx_mul(s,q)) rounds twice and then saturates, which is the OPPOSITE of the A3b single-rounding rule used everywhere else in this design. An implementation improved into the house style is wrong."
+
 
   - id: FIELD.ROT3
     name: 3-D rotation
@@ -441,12 +442,13 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §angle16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_rot3
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.WARP, FIELD.SEQ.FORMATION]
     cost_units: 3
     field_ir_opcode: ROT3
-    differential_tests: tests/differential/field_rot3.cpp
-    notes: null
+    differential_tests: tests/differential/field_rot_directed.cpp
+    notes: "RTL: zhao_field_rot.sv. The axis lane is COPIED bit for bit, not multiplied by a unit cosine, and the angle is reg[b] & 0xFFFF with the upper half ignored rather than rejected."
+
 
   - id: FIELD.DCURVE
     name: Curve derivative
