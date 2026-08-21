@@ -37,6 +37,18 @@
 // hole, where a lease that drops and is re-granted for the same slot looks
 // exactly like one that never lapsed, while the bytes already written belong to
 // somebody else's lease.
+//
+// ---------------------------------------------------------------------------
+// RELEASING IS AN OWNERSHIP TRANSITION, NOT A WAY OF SAYING "ERROR"
+// ---------------------------------------------------------------------------
+// This model used to report `released = true` for a bad length, a missing lease
+// and a slot mismatch. All three fail BEFORE the transaction acquires anything,
+// so a release on them would free a lease belonging to somebody else — and the
+// RTL, written to match this model, did exactly that.
+//
+// Ownership is acquired only once length, lease validity, slot AND generation
+// have all checked out. `acquired` records it, and only an acquired transaction
+// can release. An error completion is a status, not a transition.
 #pragma once
 
 #include <cstddef>
@@ -78,10 +90,15 @@ struct Lease {
 
 struct BlitOutcome {
   BlitStatus status = BlitStatus::kOk;
+  bool acquired = false;    // the transaction took ownership of the lease
   bool published = false;   // the slot became READY
-  bool released = false;    // the slot went FREE
-  uint32_t bytes_written = 0;
+  bool released = false;    // the slot went FREE (implies `acquired`)
+  uint32_t bytes_written = 0;   // bytes handed to the memory system
   uint32_t computed_crc = 0;
+  // Both terminal events carry the identity of the lease they belong to, so a
+  // stale one can be refused rather than acted on.
+  uint8_t event_slot = 0;
+  uint16_t event_generation = 0;
 };
 
 /**
@@ -105,21 +122,24 @@ inline BlitOutcome run_blit(const BlitRequest& req, const Lease& lease, uint32_t
                             uint32_t guard_deny_after = UINT32_MAX) {
   BlitOutcome o;
 
+  // None of these three has acquired anything yet, so none of them releases.
   if (req.len != canvas_bytes) {
     o.status = BlitStatus::kBadLen;
-    o.released = true;
     return o;
   }
   if (!lease.valid) {
     o.status = BlitStatus::kNoLease;
-    o.released = true;
     return o;
   }
   if (req.dst_slot > 1 || req.dst_slot != lease.slot) {
     o.status = BlitStatus::kSlotMismatch;
-    o.released = true;
     return o;
   }
+
+  // From here on the transaction owns the lease, and every exit releases it.
+  o.acquired = true;
+  o.event_slot = lease.slot;
+  o.event_generation = lease.generation;
 
   uint32_t crc = 0;
   uint32_t done = 0;

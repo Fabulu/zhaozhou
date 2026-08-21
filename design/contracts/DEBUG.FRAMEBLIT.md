@@ -38,11 +38,23 @@ the frozen ABI field), `req_mode_i` (u8 ABI video mode), `req_src_i` (u32 HPS
 address), `req_len_i` (u32), `req_crc_i` (u32 expected CRC-32C).
 
 **Lease** (from the shell/frame-control seam): `fb_lease_valid_i`,
-`fb_lease_slot_i`, `fb_lease_generation_i` (u16). Outputs `fb_lease_release_o`
-and `blit_publish_o`, each a one-cycle pulse.
+`fb_lease_slot_i`, `fb_lease_generation_i` (u16).
 
-**HPS reader**: `zhao_hps_burst_req_t` / `zhao_hps_burst_rsp_t`, client
-`ZHAO_CLIENT_BLIT_DMA`, 64 bytes per burst.
+The two terminal events each carry the identity of the lease they belong to:
+`release_valid_o` / `release_slot_o` / `release_generation_o`, and
+`publish_valid_o` / `publish_slot_o` / `publish_generation_o`. A bare pulse
+cannot say WHICH slot and WHICH generation it refers to, and after an ABA
+re-grant that is exactly the question; the slot manager accepts an event only
+when the slot is WRITING and the generation matches.
+
+**Retirement** (from MEM.VRAM.ARBITER's BLIT client credit port):
+`retire_words_i` (u8), 16-bit SDRAM words. This is the only source of truth for
+"the write landed".
+
+**HPS reader**: `zhao_hps_burst_req_t` / `zhao_hps_burst_rsp_t` plus
+`hps_req_grant_i`, client `ZHAO_CLIENT_BLIT_DMA`, 64 bytes per burst. The
+request is HELD stable until the grant; the bridge has one request port and
+CMD.DMA will share it.
 
 **Guarded write**: `zhao_guard_req_t` / `zhao_guard_rsp_t` plus a real data
 handshake — `guard_wdata_o`, `guard_wvalid_o`, **`guard_wready_i`**,
@@ -105,6 +117,21 @@ beyond "it does not stall the shell", which the ready/valid handshakes secure.
     NEW: no framebuffer slot becomes visible or READY before every byte has been
          written, all writes have retired, and the CRC matches.
 
+**"Retired" means the memory system said so.** The first implementation of this
+block advanced its own retirement counter when a chunk was handed downstream,
+which made the law above false by construction: a slot could be published while
+its data was still in the write FIFO, the arbiter, or the controller's pending
+burst. Retirement now arrives from outside on `retire_words_i` and is
+accumulated in every state, because credits return while the next chunk is
+being read.
+
+The publication condition is `retired == len`, exactly as the review specifies —
+not `>=`. That is deliberate and it carries an assumption worth naming: the
+arbiter's credits for this client must sum to exactly the bytes it was asked to
+write. If a future arbiter ever credited at a coarser granularity than the
+request, this block would wait forever rather than publish early. Waiting
+forever is the safe direction and is visible; publishing early is neither.
+
 The amendment is sound because raw writes into an inactive, uncommitted slot are
 not visible: the shell only toggles slot readiness when `blit_status == 0`, and
 FRAMECTL only swaps to a committed READY slot. The externally meaningful commit
@@ -113,6 +140,18 @@ point was never the first write.
 **A dirty unpublished slot is an accepted outcome**, not a compromise. On any
 failure the slot is released FREE with whatever bytes happened to land in it. The
 only thing that must never happen is publishing it.
+
+**But it is released only after it drains, and only if it was ever owned.** Two
+corrections from the integration review:
+
+- A slot released while writes are still in flight can be leased to a new
+  transaction and then overwritten by the dead one's bytes. Failure therefore
+  goes `B_ABORT_STOP` -> `B_ABORT_DRAIN` -> `B_RELEASE`, and nothing touches the
+  lease until `retired == issued`.
+- A bad length, a missing lease and a slot mismatch all fail BEFORE ownership is
+  acquired, so releasing on them would free somebody else's lease. `owns_lease`
+  is set only once every validation passes, and release is gated on it. An error
+  completion is a status, not an ownership transition.
 
 Every failure is distinguishable, because "the blit did not appear" is otherwise
 unactionable:
@@ -137,6 +176,16 @@ The generation closes an ABA hole: a lease that drops and is re-granted for the
 SAME slot mid-transaction looks identical to one that never lapsed, while the
 bytes already written belong to somebody else's lease. The generation is latched
 at accept and compared every cycle, so a re-grant is a lease loss.
+
+**The check happens at the publication edge itself.** Checking the lease in one
+state and pulsing publish in a later one leaves a window in which it can lapse
+in between; the final check and the pulse are the same state on the same edge.
+
+**And losing it stops side effects immediately.** `abort_pending` latches the
+first failure; no new HPS request, guard request or write beat starts after it.
+`guard_req_o.valid` is additionally gated on the LIVE lease, so no request is
+even asserted on a cycle the slot is not ours. A burst already granted is
+drained without being stored or folded into the CRC.
 
 **Why not two-pass DDR.** Reading the source twice — once to verify, once to
 commit — preserves "zero guard writes on reject" and is unsound here: the pixel
@@ -170,8 +219,21 @@ as `zref::cmd2::Crc32c` does — nothing here re-implements a polynomial.
 
 ## Directed tests
 
-`tests/debug/debug_frameblit_directed.cpp` — 43 checks. The harness IS the HPS
-and the guard, and injects each failure at a chosen byte offset.
+`tests/debug/debug_frameblit_directed.cpp` — 97 checks. The harness IS the HPS,
+the guard and the memory system, and injects each failure at a chosen byte
+offset.
+
+**The harness used to say yes to everything**, which is how the block passed 43
+checks while being wrong in six ways. Its guard now validates the request
+ADDRESS against the leased slot's base and can make a request wait; its bridge
+requires a real grant; and its memory returns retirement credits that can be
+withheld or frozen outright.
+
+Mutation sweep: 13 mutations, one per defect the review named. **11 caught, 2
+recorded equivalent** (`guard_request_after_loss`, masked by the combinational
+gate whose own removal IS caught; and `publish_generation_live`, which cannot
+differ because publication already requires the two generations to be equal),
+0 discarded.
 
 Sections: the happy path; a wrong CRC; the three lease refusals; a lease that
 lapses mid-blit; **a lease that lapses for three cycles and recovers**; the ABA

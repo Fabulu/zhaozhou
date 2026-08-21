@@ -84,6 +84,56 @@
 // The slot manager's FREE -> WRITING -> READY -> DISPLAYED -> FREE state machine
 // lives at the shell seam, not in this block. This block consumes a lease and
 // reports `publish` or `release`; it does not decide which slot is displayed.
+// ---------------------------------------------------------------------------
+// WHAT THE INTEGRATION REVIEW CHANGED (reports/DEBUG.FRAMEBLIT_Integration_Corrections.md)
+// ---------------------------------------------------------------------------
+// The first version of this block was unit-verified against a FAKE guard, a
+// FAKE bridge and a self-declared notion of retirement, and every one of those
+// three fakes was more agreeable than the real thing. Six corrections, each a
+// place the block would have been wrong the moment it met real hardware:
+//
+// 1. **THE GUARD ADDRESS IS ABSOLUTE, NOT SLOT-RELATIVE.** `zhao_mem_guard`
+//    checks `addr >= blit_base`, where `blit_base` is ZHAO_FB_SLOT1_BASE
+//    (0x0200_0000) for slot 1. This block used to emit the byte offset. Slot 0
+//    worked only because its base happens to be zero; EVERY slot-1 request
+//    would have been denied. The test could not see it because its fake guard
+//    returned OK without looking at the address.
+//
+// 2. **"RETIRED" NOW MEANS RETIRED.** The counter used to advance when a chunk
+//    was handed downstream, which is not the same as the SDRAM controller
+//    having completed the writes. A slot could be published while its data sat
+//    in the write FIFO, the arbiter, or the controller's pending burst. The
+//    real signal already existed — the VRAM arbiter returns per-client credits
+//    as bursts retire — so retirement now comes in from outside on
+//    `retire_words_i`, in 16-bit words, and is accumulated in EVERY state
+//    because credits come back while the next chunk is being read.
+//
+// 3. **PUBLISH AND RELEASE CARRY IDENTITY.** A bare pulse does not say which
+//    slot or which generation it refers to, which is exactly what an ABA
+//    sequence exploits. Both events now carry slot and generation so the slot
+//    manager can refuse a stale one.
+//
+// 4. **A FAILURE DRAINS BEFORE IT RELEASES.** Releasing a slot while writes are
+//    still in flight lets the next owner start writing and then be overwritten
+//    by the dead transaction's bytes. Failure now stops, drains to
+//    `retired == issued`, and only then releases.
+//
+// 5. **PRE-ACQUISITION FAILURES RELEASE NOTHING.** A bad length, a missing
+//    lease and a slot mismatch never acquired ownership, so releasing on them
+//    would free somebody else's lease. `owns_lease` is set only after all three
+//    validations pass, and release is gated on it. An error completion is not
+//    an ownership transition.
+//
+// 6. **THE LEASE IS CHECKED AT THE PUBLICATION EDGE ITSELF.** Checking it in an
+//    earlier state and publishing in a later one leaves a window; the final
+//    check and the publish pulse now happen in the same state on the same edge.
+//    And losing the lease immediately stops every outward side effect rather
+//    than being noticed at the end.
+//
+// One more, on the bridge: the block used to assert an HPS request for exactly
+// one state and move on, assuming the bridge was idle and accepted it. It now
+// waits for `hps_req_grant_i`, and holds the request stable until then.
+//
 module zhao_debug_frameblit (
     input logic clk,
     input logic rst_n,
@@ -101,11 +151,21 @@ module zhao_debug_frameblit (
     input  logic        fb_lease_valid_i,
     input  logic        fb_lease_slot_i,
     input  logic [15:0] fb_lease_generation_i,
-    output logic        fb_lease_release_o,  // one pulse: the slot goes FREE
-    output logic        blit_publish_o,      // one pulse: the slot becomes READY
+
+    // Terminal events, each carrying the identity of the lease it belongs to.
+    // A bare pulse cannot say WHICH slot and WHICH generation it refers to, and
+    // after an ABA re-grant that is precisely the question. The slot manager
+    // accepts one only when the slot is WRITING and the generation matches.
+    output logic        release_valid_o,
+    output logic        release_slot_o,
+    output logic [15:0] release_generation_o,
+    output logic        publish_valid_o,
+    output logic        publish_slot_o,
+    output logic [15:0] publish_generation_o,
 
     // ---- HPS source burst reader ------------------------------------------
     output zhao_pkg::zhao_hps_burst_req_t hps_req_o,
+    input  logic                          hps_req_grant_i,  // the bridge accepted
     input  zhao_pkg::zhao_hps_burst_rsp_t hps_rsp_i,
 
     // ---- guarded local-SDRAM write ----------------------------------------
@@ -115,6 +175,12 @@ module zhao_debug_frameblit (
     output logic                      guard_wvalid_o,
     input  logic                      guard_wready_i,
     output logic                      guard_wlast_o,
+
+    // ---- retirement, from the VRAM arbiter's BLIT client credit port -------
+    // 16-bit SDRAM words, one credit per retired word. This is the ONLY source
+    // of truth for "the write actually landed"; the block's own issue counter
+    // says nothing about it.
+    input  logic [7:0] retire_words_i,
 
     // ---- completion --------------------------------------------------------
     output logic       done_o,        // one pulse per request
@@ -146,10 +212,10 @@ module zhao_debug_frameblit (
     B_GUARD_VERDICT,
     B_WRITE_CHUNK,
     B_NEXT_CHUNK,
-    B_WAIT_RETIRE,
-    B_CRC_DECIDE,
-    B_PUBLISH,
-    B_ABORT
+    B_DECIDE,        // retirement + live lease + CRC + publish, ONE edge
+    B_ABORT_STOP,    // stop issuing; drain any burst already in flight
+    B_ABORT_DRAIN,   // wait for retired == issued before touching the lease
+    B_RELEASE        // release the exact generation, iff ownership was acquired
   } state_e;
 
   state_e state;
@@ -164,8 +230,23 @@ module zhao_debug_frameblit (
   logic [31:0] issued, retired;
   logic [31:0] crc_acc;
   logic [ 7:0] fail;
-  logic        lease_held;   // the lease was valid on EVERY cycle so far
   logic [15:0] r_gen;        // the generation granted at accept
+
+  // Ownership, and the two flags that make failure safe.
+  //
+  // `owns_lease` is set ONLY after length, lease validity, slot and generation
+  // all check out. Release is gated on it, because a bad length or a missing
+  // lease never acquired anything and releasing on them would free a lease
+  // belonging to somebody else. An error completion is not an ownership
+  // transition.
+  //
+  // `abort_pending` latches the first thing that went wrong. Once it is set no
+  // new HPS request, guard request or write beat may be started -- the reason
+  // the lease exists is that writes stop when it does, not that somebody
+  // notices at the end.
+  logic        owns_lease;
+  logic        abort_pending;
+  logic        hps_inflight;  // a granted burst whose `last` has not arrived
 
   function automatic logic [31:0] canvas_bytes(input logic [7:0] m);
     canvas_bytes = zhao_pkg::zhao_canvas_bytes(zhao_pkg::zhao_mode_from_abi(m));
@@ -208,7 +289,35 @@ module zhao_debug_frameblit (
   assign lease_ok_now = fb_lease_valid_i && (fb_lease_slot_i == r_slot[0]) &&
                         (r_slot[7:1] == 7'd0) && (fb_lease_generation_i == r_gen);
 
+  // Correction 1: the guard wants an ABSOLUTE VRAM address. `zhao_mem_guard`
+  // passes a blit write only when `addr >= blit_base`, and blit_base is
+  // ZHAO_FB_SLOT1_BASE for slot 1. Emitting the bare offset works for slot 0
+  // solely because that base is zero. The base comes from the LATCHED and
+  // validated lease target, never from a live request input.
+  logic [31:0] fb_base;
+  assign fb_base = r_slot[0] ? zhao_pkg::ZHAO_FB_SLOT1_BASE
+                             : zhao_pkg::ZHAO_FB_SLOT0_BASE;
+
+  // Correction 2: retirement arrives from outside, in 16-bit words. One word is
+  // two bytes. It is accumulated in EVERY state below, not only while waiting,
+  // because credits come back while the next chunk is still being read.
+  logic [31:0] retire_bytes;
+  assign retire_bytes = {23'd0, retire_words_i, 1'b0};
+
+  // How many bytes this write beat actually carries. Every lawful canvas is a
+  // multiple of 64 so this is always 8, but a tail beat must not be counted as
+  // a full one or `issued` would never meet `retired`.
+  logic [31:0] beat_left;
+  logic [ 3:0] beat_bytes;
+  assign beat_left  = 32'(this_len) - ({29'd0, beat} * 32'd8);
+  assign beat_bytes = (beat_left >= 32'd8) ? 4'd8 : 4'(beat_left[3:0]);
+
   always_comb begin
+    // The request is asserted for as long as B_READ_REQUEST lasts, which is
+    // until the bridge grants it. Holding a request stable until grant is the
+    // bridge's protocol; the block used to assert it for exactly one state and
+    // advance regardless, which is only correct if the bridge happens to be
+    // idle. That assumption stops holding the moment CMD.DMA shares the port.
     hps_req_o = '0;
     hps_req_o.valid = (state == B_READ_REQUEST);
     hps_req_o.write = 1'b0;
@@ -216,16 +325,28 @@ module zhao_debug_frameblit (
     hps_req_o.addr = r_src + off;
     hps_req_o.len = this_len;
 
+    // The review's rule 6 in its direct form: a side-effecting output checks the
+    // LIVE lease, rather than relying on a state having been entered while a
+    // latched flag was clear. The state-level check below is still there and is
+    // still the thing that stops the transaction; this gate is what guarantees
+    // no guard request is even ASSERTED on a cycle the lease is not ours.
+    //
+    // It does mean a request can be withdrawn before the guard accepts it. That
+    // is the intended trade: the guard drops an unaccepted request harmlessly,
+    // whereas a write into a slot we no longer own is unrecoverable.
     guard_req_o = '0;
-    guard_req_o.valid = (state == B_GUARD_REQUEST);
+    guard_req_o.valid = (state == B_GUARD_REQUEST) && !abort_pending && lease_ok_now;
     guard_req_o.write = 1'b1;
     guard_req_o.client = zhao_pkg::ZHAO_CLIENT_BLIT_DMA;
-    guard_req_o.addr = zhao_pkg::ZHAO_VRAM_ADDR_BITS'(off);
+    // Correction 1: absolute, not slot-relative.
+    guard_req_o.addr = zhao_pkg::ZHAO_VRAM_ADDR_BITS'(fb_base + off);
     guard_req_o.len = this_len;
     guard_req_o.be = '1;
 
     // Data and `last` are HELD while the consumer stalls -- a beat that moves
-    // under a stalled consumer is a corrupted pixel nobody can trace.
+    // under a stalled consumer is a corrupted pixel nobody can trace. Note that
+    // `guard_wvalid_o` is a function of the STATE alone: an abort leaves
+    // B_WRITE_CHUNK only on a beat boundary, so valid never drops mid-beat.
     guard_wvalid_o = (state == B_WRITE_CHUNK);
     guard_wdata_o = chunk[beat];
     guard_wlast_o = (state == B_WRITE_CHUNK) &&
@@ -241,21 +362,41 @@ module zhao_debug_frameblit (
       off <= '0; issued <= '0; retired <= '0;
       crc_acc <= 32'hFFFF_FFFF;
       fail <= ST_OK;
-      lease_held <= 1'b0;
+      owns_lease <= 1'b0;
+      abort_pending <= 1'b0;
+      hps_inflight <= 1'b0;
       done_o <= 1'b0;
       status_o <= ST_OK;
-      fb_lease_release_o <= 1'b0;
-      blit_publish_o <= 1'b0;
+      release_valid_o <= 1'b0;
+      release_slot_o <= 1'b0;
+      release_generation_o <= '0;
+      publish_valid_o <= 1'b0;
+      publish_slot_o <= 1'b0;
+      publish_generation_o <= '0;
       blits_published_o <= '0;
       blits_rejected_o <= '0;
       for (int i = 0; i < CHUNK_BEATS; i++) chunk[i] <= '0;
     end else begin
       done_o <= 1'b0;
-      fb_lease_release_o <= 1'b0;
-      blit_publish_o <= 1'b0;
+      release_valid_o <= 1'b0;
+      publish_valid_o <= 1'b0;
 
-      // Watched on EVERY cycle of the transaction, not sampled at the ends.
-      if (state != B_IDLE && !lease_ok_now) lease_held <= 1'b0;
+      // ---- retirement, accumulated in EVERY state ------------------------
+      // Credits come back while the next chunk is being read, so a counter that
+      // only advanced in the waiting state would miss most of them and then
+      // wait forever for bytes that already landed.
+      if (state != B_IDLE && retire_words_i != 8'd0) begin
+        retired <= retired + retire_bytes;
+      end
+
+      // ---- the lease, watched on EVERY cycle we own it -------------------
+      // Only once ownership is acquired: before that a false `lease_ok_now` is
+      // the NORMAL state of affairs (there may be no lease at all, which is its
+      // own status code) and must not be mistaken for losing one.
+      if (owns_lease && !lease_ok_now && !abort_pending) begin
+        abort_pending <= 1'b1;
+        if (fail == ST_OK) fail <= ST_LEASE_LOST;
+      end
 
       unique case (state)
         B_IDLE: begin
@@ -270,7 +411,9 @@ module zhao_debug_frameblit (
             retired <= '0;
             crc_acc <= 32'hFFFF_FFFF;
             fail <= ST_OK;
-            lease_held <= 1'b1;
+            owns_lease <= 1'b0;
+            abort_pending <= 1'b0;
+            hps_inflight <= 1'b0;
             r_gen <= fb_lease_generation_i;
             state <= B_VALIDATE;
           end
@@ -280,56 +423,88 @@ module zhao_debug_frameblit (
           // The LATCHED length is what is judged. Reading the live input here
           // would judge whatever the producer left on the wire after the
           // handshake, which is not the request that was accepted.
+          //
+          // NOTHING here acquires ownership until all the checks pass, and each
+          // failure goes to the release path with `owns_lease` still clear --
+          // so it completes with a status and releases nothing.
           if (r_len != canvas_bytes(r_mode)) begin
             fail <= ST_BAD_LEN;
-            state <= B_ABORT;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
           end else if (!fb_lease_valid_i) begin
             fail <= ST_NO_LEASE;
-            state <= B_ABORT;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
           end else if (r_slot[7:1] != 7'd0 || fb_lease_slot_i != r_slot[0]) begin
             // The ABI's dst_slot is no longer trusted merely because it is 0
             // or 1: it must MATCH the slot the shell actually leased.
             fail <= ST_SLOT_MISMATCH;
-            state <= B_ABORT;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
+          end else if (fb_lease_generation_i != r_gen) begin
+            // The generation moved between accept and validation: what we
+            // latched is already somebody else's lease.
+            fail <= ST_LEASE_LOST;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
           end else begin
+            owns_lease <= 1'b1;
             state <= B_READ_REQUEST;
           end
         end
 
         B_READ_REQUEST: begin
-          if (!lease_ok_now) begin
-            fail <= ST_LEASE_LOST;
-            state <= B_ABORT;
-          end else begin
+          // Hold the request until the bridge grants it. If the lease has
+          // already gone we do NOT withdraw a request that is on the wire --
+          // the bridge protocol wants it stable -- we take the grant and drain
+          // the burst in B_ABORT_STOP without writing any of it anywhere.
+          if (hps_req_grant_i) begin
+            hps_inflight <= 1'b1;
             beat <= '0;
-            state <= B_READ_CHUNK;
+            state <= abort_pending ? B_ABORT_STOP : B_READ_CHUNK;
           end
         end
 
         B_READ_CHUNK: begin
           if (hps_rsp_i.err) begin
-            fail <= ST_BRIDGE_ERR;
-            state <= B_ABORT;
+            hps_inflight <= 1'b0;
+            if (fail == ST_OK) fail <= ST_BRIDGE_ERR;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
           end else if (hps_rsp_i.beat_valid) begin
-            chunk[beat] <= hps_rsp_i.data;
-            crc_acc <= crc_next;
-            if (hps_rsp_i.last) begin
-              beat <= '0;
-              state <= B_GUARD_REQUEST;
+            if (abort_pending) begin
+              // Drain. Never stored, never folded into the CRC.
+              if (hps_rsp_i.last) begin
+                hps_inflight <= 1'b0;
+                state <= B_ABORT_STOP;
+              end
             end else begin
-              beat <= beat + 3'd1;
+              chunk[beat] <= hps_rsp_i.data;
+              crc_acc <= crc_next;
+              if (hps_rsp_i.last) begin
+                hps_inflight <= 1'b0;
+                beat <= '0;
+                state <= B_GUARD_REQUEST;
+              end else begin
+                beat <= beat + 3'd1;
+              end
             end
           end
         end
 
         B_GUARD_REQUEST: begin
-          if (guard_rsp_i.ready) state <= B_GUARD_VERDICT;
+          // A guard request is a side effect: once the lease is gone, none.
+          if (abort_pending) state <= B_ABORT_STOP;
+          else if (guard_rsp_i.ready) state <= B_GUARD_VERDICT;
         end
 
         B_GUARD_VERDICT: begin
           if (guard_rsp_i.violation || !guard_rsp_i.ok) begin
-            fail <= ST_GUARD_DENY;
-            state <= B_ABORT;
+            if (fail == ST_OK) fail <= ST_GUARD_DENY;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
+          end else if (abort_pending) begin
+            state <= B_ABORT_STOP;
           end else begin
             beat <= '0;
             state <= B_WRITE_CHUNK;
@@ -338,53 +513,96 @@ module zhao_debug_frameblit (
 
         B_WRITE_CHUNK: begin
           if (guard_wvalid_o && guard_wready_i) begin
-            issued <= issued + 32'd8;
-            if (guard_wlast_o) state <= B_NEXT_CHUNK;
+            issued <= issued + {28'd0, beat_bytes};
+            // An abort leaves only on a beat boundary, so `wvalid` never drops
+            // with a beat half-offered.
+            if (abort_pending) state <= B_ABORT_STOP;
+            else if (guard_wlast_o) state <= B_NEXT_CHUNK;
             else beat <= beat + 3'd1;
           end
         end
 
         B_NEXT_CHUNK: begin
-          retired <= retired + 32'(this_len);
-          if (off + 32'(this_len) >= r_len) begin
+          // `retired` is NOT touched here. It used to be, and that is exactly
+          // what made the old atomicity claim false: handing a chunk downstream
+          // is not the SDRAM controller completing the write.
+          if (abort_pending) begin
+            state <= B_ABORT_STOP;
+          end else if (off + 32'(this_len) >= r_len) begin
             off <= r_len;
-            state <= B_WAIT_RETIRE;
+            state <= B_DECIDE;
           end else begin
             off <= off + 32'(this_len);
             state <= B_READ_REQUEST;
           end
         end
 
-        B_WAIT_RETIRE: begin
-          // Every byte issued and retired, and the lease never lapsed.
-          if (!lease_held) begin
-            fail <= ST_LEASE_LOST;
-            state <= B_ABORT;
-          end else begin
-            state <= B_CRC_DECIDE;
-          end
-        end
-
-        B_CRC_DECIDE: begin
-          if ((crc_acc ^ 32'hFFFF_FFFF) == r_crc) state <= B_PUBLISH;
-          else begin
+        B_DECIDE: begin
+          // Correction 6: the final check and the publish pulse are the SAME
+          // edge. A separate publish state leaves a window in which the lease
+          // can lapse after being checked and before the pulse goes out.
+          if (abort_pending || !lease_ok_now) begin
+            if (fail == ST_OK) fail <= ST_LEASE_LOST;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
+          end else if (issued != r_len || retired != r_len) begin
+            // Every byte issued AND retired. There is no timeout: a blit that
+            // never retires is a broken machine, and publishing anyway would
+            // hide it behind a picture that looks fine.
+            state <= B_DECIDE;
+          end else if ((crc_acc ^ 32'hFFFF_FFFF) != r_crc) begin
             fail <= ST_CRC;
-            state <= B_ABORT;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
+          end else begin
+            publish_valid_o <= 1'b1;
+            publish_slot_o <= r_slot[0];
+            publish_generation_o <= r_gen;
+            status_o <= ST_OK;
+            done_o <= 1'b1;
+            owns_lease <= 1'b0;
+            if (blits_published_o != 32'hFFFF_FFFF) begin
+              blits_published_o <= blits_published_o + 32'd1;
+            end
+            state <= B_IDLE;
           end
         end
 
-        B_PUBLISH: begin
-          blit_publish_o <= 1'b1;
-          status_o <= ST_OK;
-          done_o <= 1'b1;
-          if (blits_published_o != 32'hFFFF_FFFF) blits_published_o <= blits_published_o + 32'd1;
-          state <= B_IDLE;
+        B_ABORT_STOP: begin
+          // Everything outward has already stopped by construction: no state
+          // from here on asserts an HPS request, a guard request or a write
+          // beat. What remains is a burst that was already granted.
+          // ENFORCED-BY: tests/debug/debug_frameblit_directed.cpp:side_effect_after_lease_loss
+          abort_pending <= 1'b1;
+          if (hps_inflight) begin
+            if (hps_rsp_i.err) hps_inflight <= 1'b0;
+            else if (hps_rsp_i.beat_valid && hps_rsp_i.last) hps_inflight <= 1'b0;
+          end else begin
+            state <= B_ABORT_DRAIN;
+          end
         end
 
-        B_ABORT: begin
-          // The slot goes FREE and is NEVER published. A dirty inactive slot is
-          // invisible; the only thing that must not happen is publishing it.
-          fb_lease_release_o <= 1'b1;
+        B_ABORT_DRAIN: begin
+          // Correction 4: a slot released while writes are still in flight can
+          // be leased to somebody else and then overwritten by this dead
+          // transaction's bytes. Nothing touches the lease until every write
+          // this transaction got accepted has actually retired.
+          //
+          // A failure before any write was issued passes straight through --
+          // both counters are zero.
+          if (retired >= issued) state <= B_RELEASE;
+        end
+
+        B_RELEASE: begin
+          // Correction 5: release only what we actually own. A bad length, a
+          // missing lease or a slot mismatch never acquired ownership, and
+          // releasing on them would free a lease belonging to somebody else.
+          if (owns_lease) begin
+            release_valid_o <= 1'b1;
+            release_slot_o <= r_slot[0];
+            release_generation_o <= r_gen;
+          end
+          owns_lease <= 1'b0;
           status_o <= fail;
           done_o <= 1'b1;
           if (blits_rejected_o != 32'hFFFF_FFFF) blits_rejected_o <= blits_rejected_o + 32'd1;

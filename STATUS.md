@@ -5,6 +5,67 @@ at the top.*
 
 ---
 
+## 2026-08-21 — your frame-blit review: you were right, and it was worse than one bug
+
+I read `DEBUG.FRAMEBLIT_Integration_Corrections.md` and checked the claims
+against the code instead of just accepting them. **They hold.** The three I
+could verify directly:
+
+- **Slot 1 was broken outright.** The memory guard only accepts a write whose
+  address is inside the leased slot, and slot 1 starts at 0x02000000. My block
+  was sending the offset from the start of the slot, not the real address. Slot
+  0 worked *only* because slot 0 starts at zero. Every single slot-1 blit would
+  have been rejected.
+- **"The writes finished" was a lie my block told itself.** It counted a chunk
+  as complete when it handed it downstream, not when the memory actually wrote
+  it. So a picture could go on screen while part of it was still in a queue. The
+  real signal existed the whole time — the memory arbiter reports completions —
+  and I just wasn't using it.
+- **It never waited for the memory bridge to say yes.** It asked and carried on.
+  That works only while nothing else is using the bridge, which stops being true
+  the moment the command path shares it.
+
+My full point-by-point answer is in
+**`reports/DEBUG.FRAMEBLIT_Integration_Response.md`**.
+
+### The thing I actually want to tell you
+
+All six problems have one cause, and it is not really about this block.
+
+**Every fake I built to test against was more agreeable than the real thing.**
+The fake memory guard approved writes without ever looking at the address. The
+fake bridge said yes instantly. The fake memory reported writes as finished the
+moment they were handed over. So the test passed 43 checks against a block that
+was wrong six ways — not because the checks were weak, but because nothing in
+the room was capable of saying no.
+
+I have rebuilt the fakes so they can refuse: the guard checks addresses and can
+be slow, the bridge makes it wait, the memory can withhold completions or freeze
+them forever. That is the change I would want applied to the other blocks too,
+and I have added it to the list.
+
+### What is done
+
+**All of Step 1 except the formal proofs.** Absolute addressing, real
+retirement, drain-before-release, publish/release carrying slot and generation,
+pre-acquisition failures releasing nothing, the lease checked at the exact
+publication edge, and the bridge grant.
+
+97 checks, up from 43. Mutation sweep on the thirteen defects your review names:
+**11 caught, 2 provably-cannot-differ, 0 unusable results.**
+
+### What is not done, plainly
+
+**Steps 2 through 8** — the slot manager, the bridge arbiter, wiring the real
+memory path, removing the old blitter from the command path, shell tests, and
+the composed re-fit. The standalone block is correct in isolation and **is still
+not in the running machine**, exactly as your point 8 says.
+
+I have taken your Step 8 instruction as binding: no new large feature before the
+composed resource result. That result needs Step 6 first, so the order stands.
+
+---
+
 ## 2026-08-21 — the table ops, and a sweep that was lying to me
 
 ### The Field IR engine
