@@ -69,16 +69,44 @@ So: "finish the hardware" is not one more sitting. I can keep going on group 2
 indefinitely. Group 3 is waiting on you, and it is worth a conversation rather
 than me guessing.
 
-**Started on group 2 already.** The spell-program engine's arithmetic core is
-built and verified — the fifteen basic operations (add, multiply, compare,
-clamp, dot product and so on) against the software interpreter, 300,000 random
-checks clean. The hard remainder is the maths that needs tables or division:
-sine, cosine, reciprocal, length, the curve and noise ops. Each is its own piece
-of work and I'll keep going through them.
+**Group 2 is under way.** Three pieces of the spell-program engine are built and
+verified:
+
+- **the arithmetic core** — fifteen operations (add, multiply, compare, clamp,
+  dot product…), 300,000 random checks clean;
+- **the reciprocal** — division, which needs a 256-entry table and a correction
+  step, 150,000 checks;
+- **sine and cosine** — checked **exhaustively**: an angle here is a 16-bit
+  number of turns, so all 65,536 of them, both functions, every one compared.
+  Not sampled. That one is a proof rather than evidence.
+
+Both tables are **generated from the reference by a script, not typed in**, and
+then checked entry by entry — 256 and 257 constants respectively, and a wrong one
+wouldn't fail loudly, it would just put a few angles slightly off.
+
+Still to come in the engine: length, distance, normalise, the curve/spline/noise
+ops, and then the sequencer that runs the program. Each is its own piece.
 
 One thing the engine does deliberately: an operation it cannot yet perform
 **refuses** rather than returning zero. A quiet zero would let it run a spell it
 cannot actually evaluate, and everything would look fine.
+
+### Four times today my own comments were wrong
+
+Every one was a claim I'd just written about why something matters, and every one
+was caught by deliberately breaking the hardware rather than by re-reading:
+
+- a division that "truncates" — it never does, the numbers are always multiples
+  of 16;
+- a shift that "must be arithmetic or sprites vanish" — at these widths it makes
+  no difference;
+- "multiply-then-round is off by one" — it's *exactly* equal except at the
+  extremes;
+- a table guard I called an X-propagation hazard — it isn't; the real protection
+  is elsewhere and the guard is redundant.
+
+None of the four changed the hardware. All four would have misled whoever read
+the file next, including me.
 
 ---
 
