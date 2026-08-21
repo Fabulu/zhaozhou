@@ -1467,12 +1467,16 @@ blocks:
     counters: [surface_texels_touched]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: 88cfa58
         evidence: reference/include/zref/zref_terrain.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "8117e21"
+        evidence: tests/terrain/terrain_bake_directed.cpp
 
 
     deferred: false

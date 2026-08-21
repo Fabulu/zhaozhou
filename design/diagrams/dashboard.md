@@ -24,10 +24,10 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | 2 | 1 | 4 | · | · | · | · | · | 7 |
+| terrain | 2 | · | 5 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 42 | 5 | 27 | 14 | · | · | · | 6 | 88 |
+| **all** | 42 | 4 | 28 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -83,6 +83,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | TERRAIN.NORMALS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_normals.hpp |
 | TERRAIN.NORMALS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_normals_directed.cpp |
 | TERRAIN.BAKE | REFERENCE_COMPLETE | 2026-08-21 | `88cfa58` | reference/include/zref/zref_terrain.hpp |
+| TERRAIN.BAKE | UNIT_VERIFIED | 2026-08-21 | `8117e21` | tests/terrain/terrain_bake_directed.cpp |
 | TERRAIN.LOD | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_star.hpp |
 | TERRAIN.LOD | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_lod_directed.cpp |
 | TERRAIN.PROJECT | REFERENCE_COMPLETE | 2026-08-21 | `16078f4` | reference/src/zrender/internal.hpp |
