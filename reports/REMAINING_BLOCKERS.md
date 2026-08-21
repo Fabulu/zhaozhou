@@ -236,6 +236,47 @@ deliberately rather than having me invent it and record the invention as law.
 > That is exactly the shape of reasoning that was wrong about the CRC loop an
 > hour earlier: a true measurement, an inferred remedy, written down as
 > required work. The fitter's error decides it, not this paragraph.
+>
+> ### THE FITTER'S ERROR, CAPTURED
+>
+> ```
+> Error (170011): Design contains 95328 blocks of type combinational node.
+>                 However, the device contains only 83820 blocks.
+> Error (11802): Can't fit design in device.
+> ```
+>
+> **This one block needs 114% of the whole device's combinational capacity.**
+>
+> The prediction above was directionally right and badly undersized: it named
+> the read mux at roughly 32,760 LUTs, and the measurement is nearly three
+> times that. The half it did not name is probably the larger one —
+> `slot_buf[wr_off + 32'(i)] <= ...` writes eight bytes at a **variable index**
+> into a 4,096-entry array, which is a 4,096-way write decoder on top of the
+> 4,096:1 read mux. So: predicted the cause, missed the dominant term. Recorded
+> that way rather than as a hit.
+>
+> ### The fix is already written down in the RTL, and was deferred
+>
+> `zhao_cmd_dma.sv` says of this array:
+>
+> > "Still NOT an M10K, and the contract says why: the write lives in an
+> > async-reset process and the read is combinational, and an M10K has no reset
+> > port and a registered read. Fixing that is a protocol change (the beat
+> > stream needs a one-cycle read lead) and is deliberately not done here."
+>
+> That is the same defect `blit_buf` had, the same one `zhao_scanout_linebuf`
+> was cured of by moving to `zhao_dc_sdp_ram` with a registered read, and the
+> same one Quartus Error 276003 named on the composed shell. **Three memories,
+> one defect, and this is the last of them.**
+>
+> **What it blocks:** the composed fit contains `CMD.DMA`, so Step 8 remains
+> gated. Synthesis is no longer the obstacle; placement is, and the remedy is
+> the known protocol change rather than anything new.
+>
+> **What is now known that was not:** the block synthesises, so the CRC cone
+> was a real and separate problem, and the remaining cost is entirely
+> `slot_buf`'s shape. That is a much smaller and better-specified piece of work
+> than "CMD.DMA cannot be fitted".
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
