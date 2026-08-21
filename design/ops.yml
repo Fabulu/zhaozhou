@@ -55,7 +55,7 @@ ops:
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MOV
-    differential_tests: tests/differential/field_mov.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.ADD
@@ -70,7 +70,7 @@ ops:
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: ADD
-    differential_tests: tests/differential/field_add.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.SUB
@@ -85,7 +85,7 @@ ops:
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: SUB
-    differential_tests: tests/differential/field_sub.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.MUL

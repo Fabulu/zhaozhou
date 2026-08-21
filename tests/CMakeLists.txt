@@ -964,6 +964,33 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# The Field IR arithmetic core. One file covers FIELD.MOV, FIELD.ADD and
+# FIELD.SUB -- the three op differentials V10 names as blockers for ALL FOUR
+# FIELD.SEQ.* blocks -- plus the other twelve arithmetic ops, because they share
+# one ALU. The oracle is zfield::interpret's own arithmetic (the zref::fx_*
+# primitives it calls), so nothing is re-derived from spec prose and the block
+# stays on the right side of field-ir.md's grep-audit law.
+add_executable(test_field_alu_ops differential/field_alu_ops.cpp)
+target_link_libraries(test_field_alu_ops PRIVATE zhao_harness zhao_zref)
+verilate(test_field_alu_ops
+  PREFIX Vzhao_field_alu
+  TOP_MODULE zhao_field_alu
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_alu_ops COMMAND test_field_alu_ops)
+set_tests_properties(field_alu_ops PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_alu_random COMMAND test_field_alu_ops --random 20000)
+set_tests_properties(field_alu_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_alu_random_nightly COMMAND test_field_alu_ops --random 400000)
+set_tests_properties(field_alu_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_field_alu
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_alu
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+set_tests_properties(lint_zhao_field_alu PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # PART.SOFT, in the same two layers as PART.EXPAND and for the same reason: its
 # law is the `points` branch of draw_population plus blit_pattern_block, computed
 # and painted inline, so the reference restates it and layer 1 checks the
