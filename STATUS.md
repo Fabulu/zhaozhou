@@ -5,6 +5,82 @@ at the top.*
 
 ---
 
+## 2026-08-21 (evening) — two more blocks done, and one I refused to fake
+
+### Where the hardware stands
+
+**43 specified · 4 reference-complete · 27 unit-verified · 14 rtl-verified.**
+`ctest -L fast`: **200/200**, up from 180 this morning. Everything pushed.
+
+Today added, all differential against the shipped reference, all with mutation
+sweeps: the four creature-animation blocks (earlier note), the **trace ring**,
+and **SURFACE.SHEET** — the store that holds the scars burned into the ground.
+
+### The scar store was finished months ago and stuck anyway
+
+SURFACE.SHEET had working hardware and a good test suite, and could not advance,
+because the ledger looked at its test and said *"that is an alias, not evidence."*
+
+It was right. The test imported the reference model, named it, and then never
+called it. It checked that the block agreed with **itself**.
+
+The differential I wrote runs the real hardware and the real reference over one
+stream of operations and makes them agree on every one of 4,096 texels. The law
+it defends is the one the whole block exists for: **re-acquiring a patch does not
+wipe it.** A scar a player burned into the ground stays there. An implementation
+that cleared on every acquire passes any test that writes and reads in one go —
+and erases the world between frames. That version now fails.
+
+### The thing I did not do
+
+Advancing that block made a rule demand four more tests. One was real and I wrote
+it. **The other three describe behaviour that exists in no block at all.**
+
+The op list says TERRAIN.PATCH writes material, navigation and hazard data. It
+does not: no ports for it, nothing in the reference, and its own contract says in
+so many words that field-program work belongs to a different block — one nobody
+has built yet.
+
+I could have deleted three lines from a config file and turned everything green
+in about a minute. I didn't, and I want to be explicit that this was a choice:
+
+- it might simply be wrong — that list may mean "will own", not "does own", and
+  the block's stated purpose does claim those layers eventually;
+- and even if it were right, **editing a rule's input until the rule stops
+  complaining is not the same as satisfying it.** That is the exact move that
+  produced the "alias, not evidence" problem in the paragraph above.
+
+So TERRAIN.PATCH stays marked unfinished. That is the true state, not a chore I
+skipped.
+
+### An audit worth having: 25 named references do not exist
+
+I have now hit this nine times one at a time, so I checked all of them at once.
+**Of 73 declared reference models, 25 name something that exists nowhere in the
+codebase.** Full list in `reports/PHANTOM_REFERENCES.md`.
+
+None of it is broken — the ledger is correctly refusing to accept a name for
+nothing as proof. But it changes what each remaining block costs, because they
+fall into three different kinds:
+
+1. **The law exists under another name** — just point at it. Cheap.
+2. **The law was never written** — someone has to decide the open questions and
+   write them down once. That was the trace ring today.
+3. **The idea is wrong for that block.** The clock generator, the reset
+   sequencer and the clock-crossing block are the clear cases: a PLL has no
+   scalar model to compare against. Their correctness is a *timing* property. The
+   ledger has one slot for "what proves this block right" and it does not fit
+   them, so they either carry a fiction or can never advance. Worth fixing in the
+   tooling before those blocks come up, not during.
+
+### Still waiting on you
+
+The pose-cache memory question from the earlier note (192 KB, ~28% of the chip's
+fast memory). My recommendation is unchanged: pack by real bone count **and**
+cache fewer poses. Nothing is blocked on it today.
+
+---
+
 ## 2026-08-21 (later still) — the creature path now exists in hardware
 
 ### What moved
