@@ -385,6 +385,12 @@ module zhao_shell_top
   logic [7:0]  pkt_byte;
   logic [31:0] pkt_len;
 
+  // CMD.DMA's now-dead blit outputs, kept only until step 6 deletes them.
+  logic            dma_blit_ready_dead, dma_blit_done_dead, dma_blit_wvalid_dead;
+  logic [7:0]      dma_blit_status_dead;
+  logic [63:0]     dma_blit_wdata_dead;
+  zhao_guard_req_t dma_blit_guard_dead;
+
   logic        dpy_blit_valid, blit_req_ready;
   logic [7:0]  dpy_blit_dst, dpy_blit_mode;
   logic [31:0] dpy_blit_src, dpy_blit_len, dpy_blit_crc;
@@ -401,6 +407,34 @@ module zhao_shell_top
   zhao_guard_rsp_t blit_guard_rsp;
   logic [63:0] blit_wdata;
   logic        blit_wvalid;
+  logic        blit_wready;   // the write queue can take a whole beat
+  logic        blit_wlast;
+
+  // ---- the new blit path -------------------------------------------------
+  // DEBUG.FRAMEBLIT + VIDEO.SLOTMGR replace CMD.DMA's in-house blitter and the
+  // ad-hoc `ready_tog` glue that stood in for slot ownership.
+  logic        slot_lease_req, slot_lease_slot;
+  logic        slot_lease_grant, slot_lease_refused;
+  logic        fb_lease_valid, fb_lease_slot;
+  logic [15:0] fb_lease_gen;
+  logic        blit_pub_v, blit_pub_slot;
+  logic [15:0] blit_pub_gen;
+  logic        blit_rel_v, blit_rel_slot;
+  logic [15:0] blit_rel_gen;
+  logic [1:0]  slot_ready_gpu;
+  logic        slot_displayed_v, slot_displayed_s;
+  logic [1:0]  slot_state_gpu [0:1];
+  logic [31:0] slot_leases_granted, slot_stale_events;
+  logic        swap_gpu_valid, swap_gpu_slot;
+
+  // The request as the shell latched it, held for the whole transaction.
+  logic [ 7:0] r_blit_dst, r_blit_mode;
+  logic [31:0] r_blit_src, r_blit_len, r_blit_crc;
+  logic        nb_req_valid;
+  logic        nb_req_ready;
+  logic        nb_done;
+  logic [ 7:0] nb_status;
+  logic [31:0] blits_published, blits_rejected;
 
   zhao_counter_snap_t sched_snap_cycles, sched_snap_faults, sched_snap_cmds;
   zhao_counter_snap_t dma_snap_cmds, dma_snap_bytes, dma_snap_drops;
@@ -485,19 +519,24 @@ module zhao_shell_top
     .pkt_ready_i         (pkt_ready),
     .pkt_byte_o          (pkt_byte),
     .pkt_len_o           (pkt_len),
-    .blit_req_valid_i    (dpy_blit_valid),
-    .blit_req_ready_o    (blit_req_ready),
-    .blit_dst_slot_i     (dpy_blit_dst),
-    .blit_mode_i         (dpy_blit_mode),
-    .blit_src_i          (dpy_blit_src),
-    .blit_len_i          (dpy_blit_len),
-    .blit_crc_i          (dpy_blit_crc),
-    .blit_done_o         (blit_done),
-    .blit_status_o       (blit_status),
-    .guard_req_o         (blit_guard_req),
-    .guard_rsp_i         (blit_guard_rsp),
-    .guard_wdata_o       (blit_wdata),
-    .guard_wvalid_o      (blit_wvalid),
+    // CMD.DMA's in-house blitter is DEAD from here: the dispatch goes to
+    // DEBUG.FRAMEBLIT instead. Its ports are tied off rather than deleted so
+    // that this step changes WHO does the work and nothing else; step 6 of the
+    // integration order removes the machinery, including the whole-canvas
+    // staging buffer that is the entire point of the redesign.
+    .blit_req_valid_i    (1'b0),
+    .blit_req_ready_o    (dma_blit_ready_dead),
+    .blit_dst_slot_i     (8'd0),
+    .blit_mode_i         (8'd0),
+    .blit_src_i          (32'd0),
+    .blit_len_i          (32'd0),
+    .blit_crc_i          (32'd0),
+    .blit_done_o         (dma_blit_done_dead),
+    .blit_status_o       (dma_blit_status_dead),
+    .guard_req_o         (dma_blit_guard_dead),
+    .guard_rsp_i         ('0),
+    .guard_wdata_o       (dma_blit_wdata_dead),
+    .guard_wvalid_o      (dma_blit_wvalid_dead),
     .frame_tick_i        (gpu_tick),
     .snap_cmds_o         (dma_snap_cmds),
     .snap_bytes_o        (dma_snap_bytes),
@@ -559,7 +598,7 @@ module zhao_shell_top
   );
 
   // guard (blit, write-only into the granted window — glue 4 grants it)
-  logic        map_valid_q;
+  logic        map_valid_q;   // driven from the lease, see GLUE 4 below
   logic [0:0]  map_slot_q;
   logic [31:0] map_span_q;
 
@@ -662,7 +701,13 @@ module zhao_shell_top
       wf_rp <= '0;
       wf_err <= 1'b0;
     end else begin
-      if (blit_wvalid) begin
+      // The queue now ANSWERS. It used to accept every beat and set a sticky
+      // error afterwards if it had not really had room -- which is a report
+      // that pixels were lost, not a mechanism for not losing them. One 64-bit
+      // beat becomes four 16-bit words, so it is ready exactly when four fit.
+      // `wf_err` stays as a tripwire; the overflow branch is now structurally
+      // unreachable from the write side.
+      if (blit_wvalid && blit_wready) begin
         if (wf_occ > ($bits(wf_occ))'(WFIFO_W - 4)) begin
           wf_err <= 1'b1;                      // overflow: beats dropped
         end else begin
@@ -680,6 +725,7 @@ module zhao_shell_top
       end
     end
   end
+  assign blit_wready = (wf_occ <= ($bits(wf_occ))'(WFIFO_W - 4));
   assign shell_err_wfifo_o = wf_err;
 
   // read-beat packer (glue 2): 4 rdata words -> one 64-bit scanout beat
@@ -752,9 +798,134 @@ module zhao_shell_top
   // HPS bridge: the DMA's burst port through the verified bridge core
   logic [4:0][31:0] hps_bytes, hps_bytes_shadow;
 
-  // client 0 = CMD.DMA (packet acquisition outranks a debug blit); client 1 is
-  // reserved for DEBUG.FRAMEBLIT and tied off until it is wired.
-  assign blit_hps_req = '0;
+  // ==========================================================================
+  // THE BLIT PATH: DEBUG.FRAMEBLIT + VIDEO.SLOTMGR
+  // ==========================================================================
+  // What this replaces: CMD.DMA's in-house blitter, which carried a whole-canvas
+  // staging buffer because the old rule said nothing may be written to VRAM
+  // before the checksum passed -- and the `ready_tog` glue below, which stood in
+  // for slot ownership with a bare toggle and no notion of which slot was on
+  // screen.
+  //
+  // ---- THE ONE-CYCLE LAW THIS SEAM LIVES OR DIES BY ------------------------
+  // DEBUG.FRAMEBLIT latches `fb_lease_generation_i` on the SAME edge it accepts
+  // a request. So the lease must already be granted when the request arrives:
+  // asking for the lease and handing over the request on one edge makes the
+  // blitter latch the generation from BEFORE the grant, and every publication
+  // is then refused as stale by a slot manager that is working perfectly.
+  //
+  // Hence the small sequencer below. It costs two cycles per blit and it is the
+  // difference between a machine that works and one that quietly never shows a
+  // frame.
+  localparam logic [1:0] L_IDLE = 2'd0;   // ready for a dispatch
+  localparam logic [1:0] L_LEASE = 2'd1;  // lease asked for; answer lands now
+  localparam logic [1:0] L_ISSUE = 2'd2;  // hand the request to the blitter
+  localparam logic [1:0] L_RUN = 2'd3;    // the blitter owns it
+
+  logic [1:0] lseq;
+
+  assign blit_req_ready = (lseq == L_IDLE);
+  assign slot_lease_req = (lseq == L_IDLE) && dpy_blit_valid;
+  assign slot_lease_slot = dpy_blit_dst[0];
+  assign nb_req_valid = (lseq == L_ISSUE);
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      lseq <= L_IDLE;
+      r_blit_dst <= 8'd0;
+      r_blit_mode <= 8'd0;
+      r_blit_src <= 32'd0;
+      r_blit_len <= 32'd0;
+      r_blit_crc <= 32'd0;
+    end else begin
+      case (lseq)
+        L_IDLE: begin
+          if (dpy_blit_valid) begin
+            r_blit_dst  <= dpy_blit_dst;
+            r_blit_mode <= dpy_blit_mode;
+            r_blit_src  <= dpy_blit_src;
+            r_blit_len  <= dpy_blit_len;
+            r_blit_crc  <= dpy_blit_crc;
+            lseq <= L_LEASE;
+          end
+        end
+        // The grant (or the refusal) is a registered pulse, so it is visible
+        // during this state. Either way the request goes to the blitter: a
+        // refused lease is not the shell's to judge, and the blitter answers it
+        // with ST_NO_LEASE, which is a status somebody can read.
+        L_LEASE: lseq <= L_ISSUE;
+        L_ISSUE: if (nb_req_ready) lseq <= L_RUN;
+        default: if (nb_done) lseq <= L_IDLE;
+      endcase
+    end
+  end
+
+  zhao_video_slotmgr u_slotmgr (
+    .clk                  (gpu_clk),
+    .rst_n                (rst_n),
+    .lease_req_valid_i    (slot_lease_req),
+    .lease_req_slot_i     (slot_lease_slot),
+    .lease_grant_o        (slot_lease_grant),
+    .lease_refused_o      (slot_lease_refused),
+    .fb_lease_valid_o     (fb_lease_valid),
+    .fb_lease_slot_o      (fb_lease_slot),
+    .fb_lease_generation_o(fb_lease_gen),
+    .publish_valid_i      (blit_pub_v),
+    .publish_slot_i       (blit_pub_slot),
+    .publish_generation_i (blit_pub_gen),
+    .release_valid_i      (blit_rel_v),
+    .release_slot_i       (blit_rel_slot),
+    .release_generation_i (blit_rel_gen),
+    .swap_valid_i         (swap_gpu_valid),
+    .swap_slot_i          (swap_gpu_slot),
+    .slot_ready_o         (slot_ready_gpu),
+    .displayed_valid_o    (slot_displayed_v),
+    .displayed_slot_o     (slot_displayed_s),
+    .slot_state_o         (slot_state_gpu),
+    .leases_granted_o     (slot_leases_granted),
+    .stale_events_o       (slot_stale_events)
+  );
+
+  zhao_debug_frameblit u_frameblit (
+    .clk                  (gpu_clk),
+    .rst_n                (rst_n),
+    .req_valid_i          (nb_req_valid),
+    .req_ready_o          (nb_req_ready),
+    .req_dst_slot_i       (r_blit_dst),
+    .req_mode_i           (r_blit_mode),
+    .req_src_i            (r_blit_src),
+    .req_len_i            (r_blit_len),
+    .req_crc_i            (r_blit_crc),
+    .fb_lease_valid_i     (fb_lease_valid),
+    .fb_lease_slot_i      (fb_lease_slot),
+    .fb_lease_generation_i(fb_lease_gen),
+    .release_valid_o      (blit_rel_v),
+    .release_slot_o       (blit_rel_slot),
+    .release_generation_o (blit_rel_gen),
+    .publish_valid_o      (blit_pub_v),
+    .publish_slot_o       (blit_pub_slot),
+    .publish_generation_o (blit_pub_gen),
+    .hps_req_o            (blit_hps_req),
+    .hps_req_grant_i      (blit_hps_grant),
+    .hps_rsp_i            (blit_hps_rsp),
+    .guard_req_o          (blit_guard_req),
+    .guard_rsp_i          (blit_guard_rsp),
+    .guard_wdata_o        (blit_wdata),
+    .guard_wvalid_o       (blit_wvalid),
+    .guard_wready_i       (blit_wready),
+    .guard_wlast_o        (blit_wlast),
+    // Retirement is the VRAM arbiter's credit stream for the blit client. This
+    // is the ONLY thing that means "the write landed"; the block's own issue
+    // count says nothing about it.
+    .retire_words_i       (client_rsp[1].credits),
+    .done_o               (nb_done),
+    .status_o             (nb_status),
+    .blits_published_o    (blits_published),
+    .blits_rejected_o     (blits_rejected)
+  );
+
+  assign blit_done   = nb_done;
+  assign blit_status = nb_status;
 
   zhao_hps_arbiter u_hps_arb (
     .clk            (gpu_clk),
@@ -816,37 +987,91 @@ module zhao_shell_top
                     ^ ^hps_arb_c0_bursts ^ ^hps_arb_c1_bursts ^ ^hps_arb_c1_wait
                     ^ ^client_rsp[2] ^ ^client_rsp[3]
                     ^ ^client_rsp[4] ^ ^{client_rsp[0].credits}
-                    ^ ^{client_rsp[1].credits}
-                    ^ client_rsp[0].grant ^ client_rsp[1].grant;
+                    ^ client_rsp[0].grant ^ client_rsp[1].grant
+                    // CMD.DMA's blit outputs, dead since the dispatch moved to
+                    // DEBUG.FRAMEBLIT. Step 6 deletes the machinery behind them.
+                    ^ dma_blit_ready_dead ^ dma_blit_done_dead ^ dma_blit_wvalid_dead
+                    ^ ^dma_blit_status_dead ^ ^dma_blit_wdata_dead
+                    ^ ^dma_blit_guard_dead
+                    // `guard_wlast_o` marks the last beat of a guard request.
+                    // The write queue does not need it: it enqueues four words
+                    // per beat and the controller pops them on its own schedule,
+                    // so nothing here has to know which beat was final.
+                    ^ blit_wlast
+                    // The slot manager's observability: exposed for tracing and
+                    // for the counters, consumed by neither yet.
+                    ^ slot_lease_grant ^ slot_lease_refused
+                    ^ ^slot_ready_gpu ^ slot_displayed_v ^ slot_displayed_s
+                    ^ ^slot_state_gpu[0] ^ ^slot_state_gpu[1]
+                    ^ ^slot_leases_granted ^ ^slot_stale_events
+                    ^ ^blits_published ^ ^blits_rejected;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
   // GLUE 4 + 5: blit tracking, slot-ready pendings, completion correlator
   // ==========================================================================
-  // gpu domain: which FB slot the in-flight packet's blit targets
+  // THE GUARD WINDOW IS THE LEASE. It used to be opened at dispatch and closed
+  // at done, which meant the guard's idea of who owned a slot and the machine's
+  // idea of it were two separate pieces of bookkeeping that merely happened to
+  // agree. Now there is one: while a lease is live the guard admits writes to
+  // that slot, and when it ends the window shuts with it.
+  assign map_valid_q = fb_lease_valid;
+  assign map_slot_q  = fb_lease_slot;
+  assign map_span_q  = r_blit_len;
+
+  // Per-FB-slot completion toggles, now driven by a PUBLICATION the slot
+  // manager accepted rather than by "the blitter said status zero". A blit that
+  // finished and a blit whose slot is still ours are different facts, and only
+  // the second one may put a frame on screen.
+  logic [1:0] ready_tog;
+
+  // Which FB slot the in-flight packet's blit targets. This is NOT the lease --
+  // the lease ends when the blit publishes, while the completion correlator
+  // fires at the frame tick, which is later. It is latched at dispatch exactly
+  // as it always was, because the correlator's meaning has not changed.
   logic [0:0] run_blit_dst;
-  logic [1:0] ready_tog;            // per-FB-slot completion toggles
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      run_blit_dst <= 1'b0;
       ready_tog    <= 2'b00;
-      map_valid_q  <= 1'b0;
-      map_slot_q   <= 1'b0;
-      map_span_q   <= 32'd0;
+      run_blit_dst <= 1'b0;
     end else begin
-      if (dpy_blit_valid && blit_req_ready) begin
-        run_blit_dst <= dpy_blit_dst[0];
-        map_valid_q  <= 1'b1;              // grant the guard window (D8)
-        map_slot_q   <= dpy_blit_dst[0];
-        map_span_q   <= dpy_blit_len;
-      end
-      if (blit_done) begin
-        map_valid_q <= 1'b0;
-        if (blit_status == 8'd0) ready_tog[run_blit_dst] <= ~ready_tog[run_blit_dst];
-      end
+      if (dpy_blit_valid && blit_req_ready) run_blit_dst <= dpy_blit_dst[0];
+      if (blit_pub_v) ready_tog[blit_pub_slot] <= ~ready_tog[blit_pub_slot];
     end
   end
+
+  // ---- the swap, coming back from the video domain -----------------------
+  // Frame control decides the swap in `vid`; the slot manager owns slot state
+  // in `gpu`. Only a single-bit toggle crosses, with the slot identity held
+  // stable beside it from one swap to the next -- so the gpu side samples a
+  // value that has been settled for far longer than the synchronizer depth.
+  logic swap_tog_vid, swap_slot_vid;
+  always_ff @(posedge vid_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      swap_tog_vid  <= 1'b0;
+      swap_slot_vid <= 1'b0;
+    end else if (swap_req) begin
+      swap_tog_vid  <= ~swap_tog_vid;
+      swap_slot_vid <= swap_slot;
+    end
+  end
+
+  logic sw_g1, sw_g2, sw_g3, ss_g1, ss_g2;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sw_g1 <= 1'b0; sw_g2 <= 1'b0; sw_g3 <= 1'b0;
+      ss_g1 <= 1'b0; ss_g2 <= 1'b0;
+    end else begin
+      sw_g1 <= swap_tog_vid;
+      sw_g2 <= sw_g1;
+      sw_g3 <= sw_g2;
+      ss_g1 <= swap_slot_vid;
+      ss_g2 <= ss_g1;
+    end
+  end
+  assign swap_gpu_valid = (sw_g2 != sw_g3);
+  assign swap_gpu_slot  = ss_g2;
 
   // vid domain: pending registers (2FF per toggle, set on edge, cleared
   // when FRAMECTL consumes the slot at the swap decision; set wins)
