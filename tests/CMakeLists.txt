@@ -884,6 +884,31 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# GEOM.POSE's chain multiply: sequential, one element per cycle, three 32x32
+# products instead of thirty-six. The twelve-cycle walk is asserted as its own
+# law (section 7) -- correct arithmetic delivered in the wrong number of cycles,
+# or offered while still walking, would pass every differential case.
+add_executable(test_geom_mat3x4_mul_directed geometry/geom_mat3x4_mul_directed.cpp)
+target_link_libraries(test_geom_mat3x4_mul_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_mat3x4_mul_directed
+  PREFIX Vzhao_geom_mat3x4_mul
+  TOP_MODULE zhao_geom_mat3x4_mul
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv)
+add_test(NAME geom_mat3x4_mul_directed COMMAND test_geom_mat3x4_mul_directed)
+set_tests_properties(geom_mat3x4_mul_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_mat3x4_mul_random COMMAND test_geom_mat3x4_mul_directed --random 300)
+set_tests_properties(geom_mat3x4_mul_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_mat3x4_mul_random_nightly COMMAND test_geom_mat3x4_mul_directed --random 5000)
+set_tests_properties(geom_mat3x4_mul_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_geom_mat3x4_mul
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_mat3x4_mul
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv)
+set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.POSE's quaternion step: quat16 -> 3x4 rotation, against
 # zref::creature::quat16_to_mat3. The no-renormalization rule (creature_rules
 # 2.2) is a law an "improved" implementation would break, so section 5 drives
