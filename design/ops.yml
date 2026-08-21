@@ -306,12 +306,12 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §noise2]
     result_q: spec/qformats.md §unit-pair
     rounding: saturating
-    reference_function: zref::fieldir::op_noise2
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.FLOW, FIELD.SEQ.STAMP]
     cost_units: 2
     field_ir_opcode: "0x1C"
-    differential_tests: tests/differential/field_noise2.cpp
-    notes: Opcode 0x1C frozen (plan 1.B-4). Bilinear smooth value noise is a MACRO over this op (A1b), documented in field-ir.md, not a separate opcode.
+    differential_tests: tests/differential/field_noise_directed.cpp
+    notes: "Opcode 0x1C frozen (plan 1.B-4). Bilinear smooth value noise is a MACRO over this op (A1b), documented in field-ir.md, not a separate opcode. RTL: zhao_field_noise.sv. The lattice index is an ARITHMETIC shift of a signed register reinterpreted as unsigned, so a logical shift agrees for every non-negative coordinate and disagrees for every negative one."
 
   - id: FIELD.LEN.APPROX
     name: Approximate length
@@ -377,16 +377,16 @@ ops:
     name: Ridge noise shaping
     class: alu
     profiles: [E]
-    semantics: Ridged transform of noise/fields (1 - |2a-1| style shaping, clamped).
+    semantics: "Ridged transform: u = noise2_hash(a>>16, b>>16, imm, lane 0) >> 16, then 1 - |2u - 1| with saturating add/sub and abs. Shares the hash with NOISE2 but reads reg[a] and reg[b] rather than an adjacent pair."
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_ridge
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH]
     cost_units: 2
     field_ir_opcode: RIDGE
-    differential_tests: tests/differential/field_ridge.cpp
-    notes: null
+    differential_tests: tests/differential/field_noise_directed.cpp
+    notes: "RTL: zhao_field_noise.sv, shared with NOISE2. The hash's closing xor-shift cannot reach bit 16 and both ops keep only bits [31:16], so two mutations of that line are provably unobservable and are recorded as equivalent mutants rather than left looking like test holes."
 
   - id: FIELD.SAMPLE.SPLINE
     name: Spline distance sample

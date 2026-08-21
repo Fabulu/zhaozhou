@@ -1077,6 +1077,36 @@ set_tests_properties(lint_zhao_video_slotmgr PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_NOISE2 and OP_RIDGE -- the lattice hash (zref::noise2_hash, PCG RXS-M-XS,
+# constants frozen verbatim). The lattice index is an ARITHMETIC shift of a
+# signed register reinterpreted as unsigned, so a logical shift agrees for every
+# non-negative coordinate and disagrees for every negative one; the RXS shift
+# amount is DATA-DEPENDENT (4..19) and the test asserts it actually reached ten
+# distinct values, because a sweep that only produces one cannot tell a variable
+# shifter from a constant. NOISE2 and RIDGE also disagree about their second
+# operand -- an adjacent pair versus two named registers -- and nothing in the
+# encoding hints at it. Six 32x32 products walk through ONE multiplier.
+add_executable(test_field_noise_directed differential/field_noise_directed.cpp)
+target_link_libraries(test_field_noise_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_noise_directed
+  PREFIX Vzhao_field_noise
+  TOP_MODULE zhao_field_noise
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv)
+add_test(NAME field_noise_directed COMMAND test_field_noise_directed)
+set_tests_properties(field_noise_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_noise_random COMMAND test_field_noise_directed --random 4000)
+set_tests_properties(field_noise_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_noise_random_nightly COMMAND test_field_noise_directed --random 80000)
+set_tests_properties(field_noise_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_noise
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_noise
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv)
+set_tests_properties(lint_zhao_field_noise PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_CURVE, OP_DCURVE and OP_SPLINE -- the first ops in the engine that read a
 # TABLE, so the block takes a table port instead of owning a ROM: tables are
 # per-program data carried in the .zprog image, not constants of the hardware.

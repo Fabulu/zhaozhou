@@ -41,6 +41,7 @@ hash did not move is **discarded, never scored**.
 | Length / distance | `LEN2`, `LEN3`, `DIST2` | `zhao_field_len.sv`, `zhao_field_isqrt.sv` | 159 | 9,000 | — |
 | Normalise | `NORMALIZE2`, `NORMALIZE3` | `zhao_field_normalize.sv` + generated ROM | 419 | 13,522 | **7 / 7** |
 | Table ops | `CURVE`, `DCURVE`, `SPLINE` | `zhao_field_curve.sv` | 11,863 | 21,000 | **18 / 18** |
+| Lattice noise | `NOISE2`, `RIDGE` | `zhao_field_noise.sv` | 346 | 12,000 | **15 / 17**, 2 equivalent |
 
 Tests are `tests/differential/field_<piece>_directed.cpp`. The "directed" column
 is the check count with no arguments; "random" is the count added by the fast
@@ -55,8 +56,8 @@ lands on top of them.
 
 ## What is not built
 
-`NOISE2`, `RING`, `RIDGE`, `ROT2`, `ROT3` — then the sequencer itself: the
-register file and the instruction walk that turns a `.zprog` image into a run.
+`RING`, `ROT2`, `ROT3` — then the sequencer itself: the register file and the
+instruction walk that turns a `.zprog` image into a run.
 Until the sequencer exists, the five `FIELD.SEQ.*` blocks in the ledger stay
 SPECIFIED, and so do the blocks downstream of them.
 
@@ -103,6 +104,24 @@ version:
   Catmull-Rom — not `v << 16`. The shift form amplified the term by 2^16 and is
   a fixed defect (review C1, RUN-20260814-1912 wave-1). It is named in the RTL,
   in the test and here so it does not come back.
+
+### The PCG's last step is dead code here, and it stays
+
+`noise2_hash` ends with `(w >> 22) ^ w`. Both `NOISE2` and `RIDGE` then keep
+only bits `[31:16]` — and `w >> 22` has nothing above bit 9. **The xor perturbs
+exactly the half the ops discard**, so that line cannot change either op's
+answer.
+
+Two mutations of it survive the sweep and both are recorded as equivalent
+mutants rather than left looking like holes: dropping the xor-shift, and
+changing its shift amount from 22 to 21.
+
+It stays in the RTL. The reference is the law and this block is its
+differential, not its optimiser — an implementation that agrees on every
+observable output while quietly computing something else is the thing this
+method exists to prevent, and the day the op is widened to keep more bits, a
+"simplified" version would be silently wrong. The test pins the *reason*
+directly (section 9) rather than leaving it in a comment nobody re-derives.
 
 ### Three gaps the table-op sweep found, and what closed them
 
