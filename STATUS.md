@@ -69,6 +69,17 @@ So: "finish the hardware" is not one more sitting. I can keep going on group 2
 indefinitely. Group 3 is waiting on you, and it is worth a conversation rather
 than me guessing.
 
+**Started on group 2 already.** The spell-program engine's arithmetic core is
+built and verified — the fifteen basic operations (add, multiply, compare,
+clamp, dot product and so on) against the software interpreter, 300,000 random
+checks clean. The hard remainder is the maths that needs tables or division:
+sine, cosine, reciprocal, length, the curve and noise ops. Each is its own piece
+of work and I'll keep going through them.
+
+One thing the engine does deliberately: an operation it cannot yet perform
+**refuses** rather than returning zero. A quiet zero would let it run a spell it
+cannot actually evaluate, and everything would look fine.
+
 ---
 
 ## 2026-08-21 (night) — the backlog is empty; real building starts
