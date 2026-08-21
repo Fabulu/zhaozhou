@@ -518,10 +518,15 @@ export function checkCitations(blocksDoc: BlocksDoc, opts: RuleOptions = {}): st
         // A module name is [a-z0-9_] by the schema's own pattern, so a plain
         // substring test is exact here and needs no escaping.
         const namesRtl = !!(rtlOracle && section && section[1].includes('`' + rtlOracle + '`'));
-        if (!namesRtl) {
+        // A block whose semantics ARE the Field IR interpreter names it, the
+        // same answer ops.yml gives. The section still has to NAME its oracle;
+        // only the accepted namespace widens.
+        const namesInterp = !!(b.reference_model === 'zfield::interpret' && section &&
+                               section[1].includes('`zfield::interpret`'));
+        if (!namesRtl && !namesInterp) {
           errors.push(
             `V17: ${b.id} is ${b.maturity} but its contract ${b.contract} names no backticked oracle ` +
-            'under "## Scalar reference function" — a zref:: symbol, or the rtl:: module it is composed against'
+            'under "## Scalar reference function" — a zref:: symbol, zfield::interpret, or the rtl:: module it is composed against'
           );
         }
       }

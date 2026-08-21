@@ -51,8 +51,8 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_mov
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MOV
     differential_tests: tests/differential/field_alu_ops.cpp
@@ -66,8 +66,8 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_add
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: ADD
     differential_tests: tests/differential/field_alu_ops.cpp
@@ -81,8 +81,8 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_sub
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: SUB
     differential_tests: tests/differential/field_alu_ops.cpp
@@ -96,11 +96,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §rescale]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_mul
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MUL
-    differential_tests: tests/differential/field_mul.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: Single-rounding law (A3b) applies machine-wide.
 
   - id: FIELD.MAD
@@ -111,11 +111,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §rescale]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_mad
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MAD
-    differential_tests: tests/differential/field_mad.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: The DSP MAC primitive; every lerp/blend composes from it.
 
   - id: FIELD.MIN
@@ -126,11 +126,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_min
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MIN
-    differential_tests: tests/differential/field_min.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.MAX
@@ -141,11 +141,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_max
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: MAX
-    differential_tests: tests/differential/field_max.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.ABS
@@ -156,11 +156,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_abs
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: ABS
-    differential_tests: tests/differential/field_abs.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.CLAMP
@@ -171,11 +171,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_clamp
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: CLAMP
-    differential_tests: tests/differential/field_clamp.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.SELECT
@@ -186,11 +186,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §unit8]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_select
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: SELECT
-    differential_tests: tests/differential/field_select.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: No control flow in Field IR — selection is data movement (P4 §12-1).
 
   - id: FIELD.CMP
@@ -201,11 +201,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §unit8
     rounding: saturating
-    reference_function: zref::fieldir::op_cmp
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     cost_units: 1
     field_ir_opcode: CMP
-    differential_tests: tests/differential/field_cmp.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: Booleans are 0 / 0x10000 exactly.
 
   - id: FIELD.DOT2
@@ -216,11 +216,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_dot2
-    implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
     cost_units: 2
     field_ir_opcode: DOT2
-    differential_tests: tests/differential/field_dot2.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: Adjacent-register convention — one instruction, two lanes.
 
   - id: FIELD.DOT3
@@ -231,11 +231,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_dot3
-    implementation_blocks: [FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
+    reference_function: zfield::interpret
+    implementation_blocks: [FIELD.SEQ.CORE, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
     cost_units: 2
     field_ir_opcode: DOT3
-    differential_tests: tests/differential/field_dot3.cpp
+    differential_tests: tests/differential/field_alu_ops.cpp
     notes: null
 
   - id: FIELD.NORM.APPROX

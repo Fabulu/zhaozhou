@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **91** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **92** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -13,7 +13,7 @@ Blocks: **91** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | command | · | · | 1 | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | · | · | 2 | 2 | · | · | · | · | 4 |
-| field | 5 | · | 1 | · | · | · | · | · | 6 |
+| field | 5 | · | 2 | · | · | · | · | · | 7 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
 | geometry | 5 | 1 | 5 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
@@ -27,7 +27,7 @@ Blocks: **91** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 37 | 4 | 36 | 14 | · | · | · | 6 | 91 |
+| **all** | 37 | 4 | 37 | 14 | · | · | · | 6 | 92 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -56,6 +56,8 @@ Blocks: **91** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEM.GUARD | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/formal/formal_mem_guard.sv |
 | FIELD.PROGCACHE | REFERENCE_COMPLETE | 2026-08-21 | `1822cd8` | reference/include/zref/zref_progcache.hpp |
 | FIELD.PROGCACHE | UNIT_VERIFIED | 2026-08-21 | `832edc1` | tests/field/field_progcache_directed.cpp |
+| FIELD.SEQ.CORE | REFERENCE_COMPLETE | 2026-08-21 | `0b8e43a` | reference/src/zfield/zfield_interpret.cpp |
+| FIELD.SEQ.CORE | UNIT_VERIFIED | 2026-08-21 | `0b8e43a` | tests/differential/field_seq_directed.cpp |
 | INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
 | INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
 | INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
@@ -174,7 +176,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 |---|---:|---:|---:|
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 8 | 0% |
-| field | 6% | 6 | 0% |
+| field | 6% | 7 | 0% |
 | geometry_mantle | 20% | 21 | 0% |
 | tile | 30% | 11 | 0% |
 | myriad_forge | 9% | 9 | 0% |

@@ -101,7 +101,10 @@ module zhao_field_alu (
     // and a block that saturated in the wrong lane could still produce the
     // right number and be wrong everywhere else.
     output logic               sat_add_o,
-    output logic               sat_mul_o
+    output logic               sat_mul_o,
+    // ABS records its saturation in the `rescale` lane, not `add` or `mul` --
+    // the reference's own choice (`abs_sat` bumps SatLedger::rescale).
+    output logic               sat_rescale_o
 );
 
   localparam logic [7:0] OP_END    = 8'h00;
@@ -170,10 +173,25 @@ module zhao_field_alu (
     dot3    = dot2 + ext32(a2_i) * ext32(b2_i);
   end
 
-  // ---- ABS: INT32_MIN stays INT32_MIN, it does NOT saturate ---------------
+  // ---- ABS SATURATES, and it took the sequencer to notice -----------------
+  // `zfield_interpret.cpp` §3.7 is explicit: "saturating abs:
+  // abs(0x80000000) = 0x7FFFFFFF + SAT". `abs_sat` returns INT32_MAX and bumps
+  // the `rescale` lane.
+  //
+  // This block returned INT32_MIN, and its own test RESTATED the law the same
+  // wrong way -- "INT32_MIN stays INT32_MIN" -- so the two agreed with each
+  // other and disagreed with the reference. Nothing caught it until the
+  // sequencer's differential ran whole programs against `zfield::interpret`
+  // itself, which is the shipped path rather than a paraphrase of it.
+  //
+  // That is the argument for testing against the real oracle wherever it can be
+  // reached: a restatement can be wrong, and a wrong restatement agrees with a
+  // wrong implementation forever.
   logic signed [31:0] abs_a;
+  logic               abs_sat_fired;
   always_comb begin
-    abs_a = (a0_i == 32'sh8000_0000) ? 32'sh8000_0000 : (a0_i[31] ? -a0_i : a0_i);
+    abs_sat_fired = (a0_i == 32'sh8000_0000);
+    abs_a = abs_sat_fired ? 32'sh7FFF_FFFF : (a0_i[31] ? -a0_i : a0_i);
   end
 
   // ---- CLAMP: max(lo, min(hi, x)) in THAT order ---------------------------
@@ -208,6 +226,7 @@ module zhao_field_alu (
     op_unsupported_o = 1'b0;
     sat_add_o = 1'b0;
     sat_mul_o = 1'b0;
+    sat_rescale_o = 1'b0;
 
     unique case (op_i)
       OP_END: begin
@@ -234,7 +253,10 @@ module zhao_field_alu (
       end
       OP_MIN: result_o = (a0_i < b0_i) ? a0_i : b0_i;
       OP_MAX: result_o = (a0_i > b0_i) ? a0_i : b0_i;
-      OP_ABS: result_o = abs_a;
+      OP_ABS: begin
+        result_o = abs_a;
+        sat_rescale_o = abs_sat_fired;
+      end
       OP_CLAMP: result_o = clamp_r;
       OP_SELECT: result_o = (c_i != 32'sd0) ? a0_i : b0_i;
       OP_CMP: result_o = cmp_t ? 32'sh0001_0000 : 32'sd0;

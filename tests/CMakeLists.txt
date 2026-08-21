@@ -1077,6 +1077,43 @@ set_tests_properties(lint_zhao_video_slotmgr PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# THE FIELD IR SEQUENCER -- the register file and the instruction walk that turns
+# a decoded program into a run. Every other test in this engine checks one op;
+# this one checks the thing that runs them.
+#
+# It does NOT validate, and that is the design: `interpret` runs only on DECODED
+# programs and its default case is __builtin_unreachable(). The decoder proves
+# every register in range, no use-before-def, no dst overlapping an input or its
+# own sources (which is why the write-back needs no bypass network), and exactly
+# one OP_END, last. Re-checking here would be a SECOND implementation of those
+# rules, and two implementations of a rule is how they drift.
+#
+# Three read ports, walked: the widest op reads seven registers, and seven 64:1
+# muxes of 32 bits is thousands of ALMs to save four cycles in a design that has
+# already failed a fit once.
+add_executable(test_field_seq_directed differential/field_seq_directed.cpp)
+target_link_libraries(test_field_seq_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_seq_directed
+  PREFIX Vzhao_field_seq
+  TOP_MODULE zhao_field_seq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_seq_directed COMMAND test_field_seq_directed)
+set_tests_properties(field_seq_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_seq_random COMMAND test_field_seq_directed --random 600)
+set_tests_properties(field_seq_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_seq_random_nightly COMMAND test_field_seq_directed --random 8000)
+set_tests_properties(field_seq_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_seq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_seq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+set_tests_properties(lint_zhao_field_seq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_RING -- the deepest op in the engine: nine products, two reciprocals, two
 # smoothsteps and FIVE ledger lanes. The midpoint is an EXACT 64-bit average
 # (rescale_s32(r0+r1, 1)), not fx_add then halve: with both radii at the rail a

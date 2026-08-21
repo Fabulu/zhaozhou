@@ -633,7 +633,7 @@ blocks:
     inputs: [program_bytes, hash_check]
     outputs: [cached_program, reject_status]
     upstream: [CMD.SCHEDULER]
-    downstream: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    downstream: [FIELD.SEQ.CORE, FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 instruction issue per clock per sequencer
@@ -660,6 +660,44 @@ blocks:
     superseded_by: null
     notes: "Planning split (charter §6A): sequencers may merge/share ALUs post-synthesis; superseded_by will record it."
 
+  - id: FIELD.SEQ.CORE
+    name: Field IR sequencer core
+    kind: rtl
+    subsystem: field
+    clock_domain: gpu
+    purpose: "The register file and the instruction walk shared by all five FIELD.SEQ.* profiles: zero, load the input lanes, walk instructions until OP_END, read the output lanes."
+    contract: design/contracts/FIELD.SEQ.CORE.md
+    phase: 7
+    owner_issue: ZH-078
+    inputs: [cached_program, io_lanes]
+    outputs: [io_lanes, sat_ledger]
+    upstream: [FIELD.PROGCACHE]
+    downstream: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION, FIELD.SEQ.STAMP]
+    backpressure: none
+    latency: variable
+    target_throughput: one instruction per six clocks
+    reference_model: zfield::interpret
+    tests:
+      directed: tests/differential/field_seq_directed.cpp
+      random: tests/differential/field_seq_directed.cpp
+    counters: [field_instructions_by_profile]
+    source_ids: true
+    budget_group: field
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "0b8e43a"
+        evidence: reference/src/zfield/zfield_interpret.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "0b8e43a"
+        evidence: tests/differential/field_seq_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "DISPATCH REACHES THE ARITHMETIC CORE ONLY (zhao_field_alu, fifteen opcodes). The multi-cycle blocks -- reciprocal, sine, length, normalise, table, noise, rotation, ring -- are built and verified and are NOT yet wired to this walk; an op outside the core is REFUSED with a status rather than skipped or zeroed. The five FIELD.SEQ.* profile blocks stay SPECIFIED until that dispatch is complete. This block does not validate: the decoder proves every register in range, no use-before-def, no dst overlapping an input or its own sources, and exactly one OP_END last -- re-checking here would be a second implementation of those rules."
+
   - id: FIELD.SEQ.EARTH
     name: Earth8 field sequencer
     kind: rtl
@@ -671,7 +709,7 @@ blocks:
     owner_issue: ZH-035
     inputs: [cached_program, patch_intake]
     outputs: [field_results]
-    upstream: [FIELD.PROGCACHE]
+    upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
     downstream: [TERRAIN.PATCH]
     backpressure: ready_valid
     latency: variable
@@ -701,7 +739,7 @@ blocks:
     owner_issue: ZH-045
     inputs: [cached_program, vertex_stream]
     outputs: [displaced_vertices]
-    upstream: [FIELD.PROGCACHE]
+    upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
     downstream: [GEOM.WARP]
     backpressure: ready_valid
     latency: variable
@@ -731,7 +769,7 @@ blocks:
     owner_issue: ZH-042
     inputs: [cached_program, force_queries]
     outputs: [force_results]
-    upstream: [FIELD.PROGCACHE]
+    upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
     downstream: [PART.UPDATE]
     backpressure: ready_valid
     latency: variable
@@ -761,7 +799,7 @@ blocks:
     owner_issue: ZH-041
     inputs: [cached_program, loom_queries]
     outputs: [transform_samples]
-    upstream: [FIELD.PROGCACHE]
+    upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
     downstream: [GEOM.LOOM]
     backpressure: ready_valid
     latency: variable
@@ -791,7 +829,7 @@ blocks:
     owner_issue: ZH-045
     inputs: [cached_program, sheet_intake]
     outputs: [stamp_field_results]
-    upstream: [FIELD.PROGCACHE]
+    upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
     downstream: [SURFACE.STAMP]
     backpressure: ready_valid
     latency: variable

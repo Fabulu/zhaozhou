@@ -64,9 +64,9 @@
         "latency": { "$ref": "#/$defs/latency" },
         "target_throughput": { "type": "string", "minLength": 1 },
         "reference_model": {
-          "description": "The block's oracle. Either a zref:: symbol (a scalar reference model), or rtl::<module> when the block has NO arithmetic and its correctness is a protocol relationship with another RTL module -- MEM.HPS.ARBITER routes bursts and is checked against the real zhao_hps_bridge composed in its test. Demanding a zref:: name where none exists is how this ledger accumulated phantom citations; rtl:: is checked for existence by V17 exactly as zref:: is, so it is a different claim and not a weaker one.",
+          "description": "The block's oracle. Either a zref:: symbol (a scalar reference model), or rtl::<module> when the block has NO arithmetic and its correctness is a protocol relationship with another RTL module -- MEM.HPS.ARBITER routes bursts and is checked against the real zhao_hps_bridge composed in its test. Demanding a zref:: name where none exists is how this ledger accumulated phantom citations; rtl:: is checked for existence by V17 exactly as zref:: is, so it is a different claim and not a weaker one. A block whose semantics ARE the Field IR interpreter names zfield::interpret, the same answer design/ops.yml gives: field-ir.md 1 puts op semantics in exactly two places, and the sequencer's law is that interpreter and not a per-block paraphrase of it.",
           "type": "string",
-          "pattern": "^(zref::[A-Za-z0-9_:]+|rtl::[a-z0-9_]+)$"
+          "pattern": "^(zref::[A-Za-z0-9_:]+|zfield::interpret|rtl::[a-z0-9_]+)$"
         },
         "implementation": { "$ref": "#/$defs/path" },
         "tests": {
