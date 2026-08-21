@@ -884,6 +884,31 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# GEOM.POSE's cache half: tags, LRU and the four counters, against
+# zref::creature::PoseBank. The differential is on the five numbers both sides
+# expose -- what a cache can get wrong is which tuple it thinks is resident and
+# which one it discards, and those decisions show up exactly there.
+add_executable(test_geom_pose_cache_directed geometry/geom_pose_cache_directed.cpp)
+target_link_libraries(test_geom_pose_cache_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_pose_cache_directed
+  PREFIX Vzhao_geom_pose_cache
+  TOP_MODULE zhao_geom_pose_cache
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_cache.sv)
+add_test(NAME geom_pose_cache_directed COMMAND test_geom_pose_cache_directed)
+set_tests_properties(geom_pose_cache_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_pose_cache_random COMMAND test_geom_pose_cache_directed --random 20)
+set_tests_properties(geom_pose_cache_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_pose_cache_random_nightly COMMAND test_geom_pose_cache_directed --random 300)
+set_tests_properties(geom_pose_cache_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_geom_pose_cache
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_pose_cache
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_cache.sv)
+set_tests_properties(lint_zhao_geom_pose_cache PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.POSE's decode chain: the first WHOLE-CHAIN differential in the creature
 # path -- one quaternion engine and one shared multiply engine over a real
 # skeleton, against zref::creature::decode_pose. The chain failures are
