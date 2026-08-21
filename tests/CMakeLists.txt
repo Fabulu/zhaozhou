@@ -964,6 +964,29 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_SIN and OP_COS. EXHAUSTIVE -- an angle16 is a u16 of turns, so 65,536
+# angles times two opcodes is the whole input space and there is no sampling
+# argument to make. The quarter-wave table is generated into
+# zhao_field_sin_rom.sv and checked entry by entry.
+add_executable(test_field_sin_directed differential/field_sin_directed.cpp)
+target_link_libraries(test_field_sin_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_sin_directed
+  PREFIX Vzhao_field_sin
+  TOP_MODULE zhao_field_sin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME field_sin_directed COMMAND test_field_sin_directed)
+set_tests_properties(field_sin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_field_sin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_sin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+set_tests_properties(lint_zhao_field_sin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_RCP, the first Field IR op that needs a table. The seed table is GENERATED
 # into zhao_field_rcp_rom.sv from zref_tables.hpp rather than transcribed, and
 # section 1 checks all 256 entries against the reference -- a generated file goes
