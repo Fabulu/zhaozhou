@@ -5,6 +5,87 @@ at the top.*
 
 ---
 
+## 2026-08-21 — the new blitter works, is faster, and I need one decision from you
+
+Step 4 is built: the new frame blitter and the slot manager are wired into the
+real machine, the blit dispatch has moved off the command path, and every piece
+your review asked for is connected — the guard window is now the lease, slot
+readiness comes from a publication that was actually accepted, and the write
+queue can finally say "not yet" instead of reporting afterwards that it lost
+pixels.
+
+**It works. Every blit succeeds and every frame is the right picture.**
+
+It is on a branch called `blit-integration-step4`, not on the main line, and
+`reports/BLIT_INTEGRATION_PHASE_SHIFT.md` explains why in full. The short
+version is below.
+
+### It is faster than the thing it replaces
+
+|  | first blit finishes | period |
+| --- | ---: | ---: |
+| old | 605,308 | 637,184 |
+| new | **547,321** | 637,184 |
+
+**About 58,000 cycles faster.** I expected it to be slower and spent a while
+looking for what I had broken before measuring properly.
+
+The reason is the redesign itself. The old blitter fetched an entire screen from
+host memory and *then* wrote it to video memory, one after the other, because
+the old rule forbade writing anything before the checksum was verified. The new
+one does both at once. Your demo's own notes list "streaming blit" as one of the
+changes that would be needed to reach 60 Hz. This is that change.
+
+### And that is the problem
+
+The picture is identical. The frame rate is identical. But every frame now
+arrives **one frame earlier**, and the Duo demo checks its timing against a
+blitter that took 338,000 cycles. So it fails 41 of 340 checks — not one of them
+a wrong pixel. What fails is the half-rate pattern, the missed-deadline count,
+and a per-frame deadline marker.
+
+`reports/status/phase2_wave2.md` explains at length why 60 Hz is infeasible,
+built on that 338,000 figure. **The figure is now about 58,000 lower.** Not
+enough to reach 60 Hz — but it is no longer the machine's number.
+
+### Why I did not just update the reference file
+
+Because it is not only a picture. It encodes a **measured property of the
+machine** that the demo asserts as a law in code and that a report explains in
+prose. Quietly regenerating it would re-baseline that law, and the next person
+to read the report would find numbers that describe nothing.
+
+The picture being identical is exactly what makes it tempting to just regenerate
+and exactly why I should not.
+
+### What I need from you
+
+1. **Take it** — I update the reference, the demo's expectations and the
+   infeasibility report to the new measured cost. The machine gets faster and
+   the record follows.
+2. **Keep the old timing** — I deliberately hold the blit back so it lands in
+   the same frame as before, throwing the improvement away on purpose.
+3. **Something else**, if that timing matters for a reason I have not seen.
+
+**I would take option 1.** The improvement is real, it is the direction your own
+review pushed, and the report is out of date either way.
+
+### One thing worth knowing, found only by wiring it
+
+The blitter reads its permit number on the *same clock edge* it accepts a job.
+So the permit has to be granted **before** the job arrives. Asking for the permit
+and handing over the job on the same edge makes the blitter memorise a number
+from before it was issued — and then every finished frame is rejected as stale by
+a slot manager that is working perfectly. Nothing in any document said this; it
+only appears when the two are actually connected.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 36 unit-verified · 14 rtl-verified**
+across **91** blocks. Main is green.
+
+---
+
 ## 2026-08-21 — the arbiter is in the machine, and the gate test had been red for three days
 
 ### The arbiter is wired into the shell

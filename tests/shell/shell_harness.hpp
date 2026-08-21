@@ -124,6 +124,10 @@ class ShellHarness {
   std::vector<Fence> fence_log;
   struct BlitDone {
     uint8_t status;
+    // The gpu step it completed on. A blit's COST is the thing the redesign
+    // changes, so the harness has to be able to measure it rather than only
+    // report that it happened.
+    uint64_t at = 0;
   };
   std::vector<BlitDone> blit_log;
   uint32_t crc_size_errs = 0;
@@ -347,7 +351,7 @@ class ShellHarness {
           Fence{uint8_t(top.fence_slot_o), top.fence_ok_o != 0, uint8_t(top.fence_status_o)});
     }
     if (top.blit_done_o) {
-      blit_log.push_back(BlitDone{uint8_t(top.blit_status_o)});
+      blit_log.push_back(BlitDone{uint8_t(top.blit_status_o), n});
     }
     if (audio_fired && top.pcm_valid_o) {
       const uint32_t got = (uint32_t(top.pcm_l_o) << 16) | top.pcm_r_o;

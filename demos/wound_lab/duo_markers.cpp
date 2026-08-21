@@ -581,6 +581,22 @@ int main(int argc, char** argv) {
     std::remove(tmp.c_str());
   }
 
+  // Blit COST, which is exactly what the CMD.DMA redesign changes. Printed
+  // rather than asserted: it is a measurement, and pinning it would freeze an
+  // implementation detail into a golden.
+  if (h.blit_log.size() >= 2) {
+    std::printf("[duo_markers] blit done at:");
+    for (size_t i = 0; i < h.blit_log.size() && i < 6; ++i) {
+      std::printf(" %llu(st=%u)", (unsigned long long)h.blit_log[i].at,
+                  unsigned(h.blit_log[i].status));
+    }
+    std::printf("\n[duo_markers] blit period:");
+    for (size_t i = 1; i < h.blit_log.size() && i < 6; ++i) {
+      std::printf(" %llu", (unsigned long long)(h.blit_log[i].at - h.blit_log[i - 1].at));
+    }
+    std::printf("\n");
+  }
+
   std::printf("[duo_markers] frames=%u ticks=%zu crcs=%zu pcm=%llu%s\n",
               frames, h.ticks.size(), h.crcs.size(),
               (unsigned long long)h.pcm_pop_count, soak ? " (soak)" : "");
