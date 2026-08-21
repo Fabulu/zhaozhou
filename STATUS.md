@@ -5,6 +5,63 @@ at the top.*
 
 ---
 
+## 2026-08-21 — the bridge arbiter, and a rule I had exactly backwards
+
+Step 3 done: **`MEM.HPS.ARBITER`**, block 91. Two things now want the one
+connection to the host memory — the command path and the frame blitter — and
+this decides who gets it.
+
+It is tested **wired to the real bridge**, not to a stand-in. That mattered
+immediately, and it is the same lesson as last time: the real bridge refuses
+things a stand-in would have waved through.
+
+### The rule I got backwards
+
+Your review says the arbiter should hold its request steady until the bridge
+accepts it. That is right for the side facing the clients and **exactly wrong**
+for the side facing the bridge: the bridge takes the request instantly and only
+*says so* a cycle later, so a request still sitting there when the acknowledgement
+arrives counts as a second request — and gets rejected. Every single transfer
+would have failed.
+
+The command path already did this correctly, and had for months. Converting
+between the two conventions is now the arbiter's main job.
+
+### The mutation sweep found a real bug
+
+One deliberate breakage **survived**: routing *write* data from the wrong
+client. It survived because no test wrote anything. Chasing that found something
+worse than a missing test — **the bridge answers a write with no reply at all**,
+so my "is it finished?" condition would have waited forever on the first write
+the machine ever did. Nothing writes to host memory yet, which is precisely why
+it was worth fixing now: a path that is untested *and* broken looks finished.
+
+### Something for you to decide
+
+The command path has strict priority over the blitter. That guarantees the
+command path never waits. It guarantees **nothing** about the blitter ever being
+served — if the command path asked continuously, the blitter would never run.
+
+In practice it asks about once a frame, so it is fine. But "fine" here depends on
+someone else's behaviour, not on anything the arbiter enforces. So the test pins
+both halves: the priority works, **and** the starvation is real and measured.
+
+If you would rather it were fair, the fix is small — after a command-path
+transfer, let a waiting blit go next, costing the command path one blit's worth
+of delay. Your call; I have left it as you specified.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 36 unit-verified · 14 rtl-verified**
+across **91** blocks.
+
+Steps 1, 2 and 3 of your list are done. **Steps 4 to 8 are not** — wiring the
+real memory path, publication into frame control, deleting the old blitter from
+the command path, shell tests, and the composed re-fit. Still not in the running
+machine.
+
+---
+
 ## 2026-08-21 — the slot manager, and the thing nothing was deciding
 
 Step 2 of your integration list is done: **`VIDEO.SLOTMGR`**, the ninetieth
@@ -175,7 +232,7 @@ All three are closed. The directed test now catches all eighteen on its own.
 ### Where the hardware stands
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**
-across **89** blocks. `ctest -L fast`: **236/236**.
+across **89** blocks. `ctest -L fast`: **238/238**.
 
 Next in the engine: `NOISE2`, `RING`, `RIDGE`, `ROT2`, `ROT3`, then the
 sequencer that actually runs a program. None of that needs anything from you.
@@ -193,7 +250,7 @@ behaviour, but the invention becomes the law the hardware is built to.
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**, now
 across **89** blocks — one more than before, because DEBUG.FRAMEBLIT is a new
-block rather than a rewrite. `ctest -L fast`: **236/236**.
+block rather than a rewrite. `ctest -L fast`: **238/238**.
 
 ### DEBUG.FRAMEBLIT — you were right, the design was sitting there
 

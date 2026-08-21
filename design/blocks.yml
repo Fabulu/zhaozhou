@@ -78,6 +78,12 @@ counter_catalog:
   # counted turns a lease bug into a frame that mysteriously never appears.
   - slot_leases_granted
   - slot_stale_events
+  # MEM.HPS.ARBITER: two requesters, one bridge port. `hps_arb_wait_cycles`
+  # counts how long the LOW-priority client is held off -- strict priority
+  # guarantees nothing about it ever being served, and a policy whose safety
+  # depends on somebody else's request pattern has to be visible.
+  - hps_arb_bursts_by_client
+  - hps_arb_wait_cycles
 
 blocks:
 
@@ -453,6 +459,44 @@ blocks:
       the frozen package style with read_slang, and design/formal_runs.yml
       records the green run (ledger rule V16).
 
+  - id: MEM.HPS.ARBITER
+    name: HPS bridge requester arbiter
+    kind: rtl
+    subsystem: memory
+    clock_domain: gpu
+    purpose: "Give CMD.DMA and DEBUG.FRAMEBLIT one HPS bridge port: latch an owner, convert their held request into the single-cycle pulse the bridge requires, and route every response beat to the owner alone."
+    contract: design/contracts/MEM.HPS.ARBITER.md
+    phase: 2
+    owner_issue: ZH-077
+    inputs: [client_burst_requests]
+    outputs: [bridge_burst_request, routed_responses]
+    upstream: [DEBUG.FRAMEBLIT]
+    downstream: [MEM.HPS.BRIDGE]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one burst in flight, which is all the bridge has
+    reference_model: rtl::zhao_hps_bridge
+    tests:
+      directed: tests/memory/hps_arbiter_directed.cpp
+      random: tests/memory/hps_arbiter_directed.cpp
+    counters: [hps_arb_bursts_by_client, hps_arb_wait_cycles]
+    source_ids: true
+    budget_group: platform
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "3b40404"
+        evidence: tests/memory/zhao_hps_arb_compose.sv
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "3b40404"
+        evidence: tests/memory/hps_arbiter_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "No scalar reference and that is the right answer, not a gap: the block has no arithmetic, only a routing decision over a protocol, so its correctness is a relationship between two RTL modules and it is checked against the REAL zhao_hps_bridge composed in the test. The bridge's request protocol is a ONE-CYCLE PULSE -- holding it until grant is a request-while-busy, which the bridge counts as a violation -- and a write burst gets no response at all, so it ends on wr_last."
+
   - id: MEM.HPS.BRIDGE
     name: HPS-DDR burst bridge
     kind: rtl
@@ -464,7 +508,7 @@ blocks:
     owner_issue: ZH-020
     inputs: [hps_axi, client_req]
     outputs: [client_rsp, hps_axi]
-    upstream: [DEBUG.TRACE]
+    upstream: [DEBUG.TRACE, MEM.HPS.ARBITER]
     downstream: [CMD.DMA, PART.STATE]
     backpressure: credit
     latency: variable
@@ -3104,7 +3148,7 @@ blocks:
     inputs: [blit_requests, fb_slot_lease]
     outputs: [guarded_writes, slot_publish]
     upstream: [CMD.SCHEDULER]
-    downstream: [MEM.GUARD, VIDEO.SLOTMGR]
+    downstream: [MEM.GUARD, VIDEO.SLOTMGR, MEM.HPS.ARBITER]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 guarded 64-bit beat per clock

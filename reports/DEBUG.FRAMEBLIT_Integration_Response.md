@@ -158,16 +158,83 @@ A first draft exercised `slot_ready` on slot 1 only, so a mutation breaking slot
 random lane. That is the wrong place for something that simple to be caught.
 Both slots are covered now.
 
+## Step 3 — the HPS requester arbiter: **done**
+
+`MEM.HPS.ARBITER` (`fpga/rtl/memory/zhao_hps_arbiter.sv`), block 91, tested
+**composed with the real `zhao_hps_bridge`** — your Case H, both orderings.
+
+66 checks. **Mutation sweep 12/12 caught, 0 survived, 0 discarded.**
+
+Composing with the real bridge rather than a model was deliberate, and it earned
+its keep immediately. Two bridge behaviours shape the whole design and no
+permissive stub has either:
+
+- a request arriving while the bridge is **busy** is a protocol violation
+  answered with `err` — the loser of an unarbitrated race is not made to wait,
+  it is told its transfer failed;
+- a **malformed** request gets `err`, **no grant** and **no busy**, so an
+  arbiter that waits only for `req_grant` waits forever.
+
+### The one thing I had exactly backwards
+
+Your §7 says the arbiter must "hold the selected request stable until
+`req_grant`". That is right for the **client** side and precisely wrong for the
+**bridge** side: `zhao_hps_bridge` accepts combinationally and sets `busy` on
+the same edge, then raises `req_grant` the *next* cycle — so a request still
+asserted when the grant arrives is a request-while-busy, and every transfer
+earns an `err`. CMD.DMA already knew this; its `hps_req_v` is a one-cycle pulse.
+
+Converting between the two is now the arbiter's main job: clients get a
+handshake they can hold, the bridge gets the single pulse it requires, issued
+only when the arbiter *knows* the bridge is idle — which no individual client
+can know. My first version held it, and the composed test failed with 109 logged
+protocol violations.
+
+### The sweep found a real bug
+
+A mutation that routed **write** data from the wrong client **survived** —
+because no test issued a write at all. Chasing that found something worse than
+the missing test: **the bridge answers a write with no response beats at all**,
+so my completion condition would have hung the port on the first write it ever
+arbitrated. Nothing in Phase 2 writes to HPS DDR, which is exactly why it was
+worth fixing rather than leaving — an untested path with a latent hang is worse
+than an absent one, because it looks finished.
+
+### A policy consequence I want you to see rather than inherit
+
+Strict priority guarantees CMD.DMA never waits behind a blit. It guarantees
+**nothing** about the blit ever being served: a client 0 that asks continuously
+starves client 1 forever. In practice CMD.DMA asks about once per frame, so the
+bound comes from *its* request pattern and not from this arbiter — a policy
+whose safety depends on somebody else's behaviour.
+
+So the test pins **both halves**: that the priority is real, and that the
+starvation is real (§6b asserts client 1 gets nothing while client 0 never
+stops). `c1_wait_cycles_o` makes the cost visible. If that trade stops being
+acceptable, the fix is a bounded yield — after a client-0 burst, let a waiting
+client 1 go next, costing client 0 at most one blit burst of latency. Say the
+word and I will change it.
+
+### A ledger change this forced
+
+The arbiter has **no scalar reference**, and that is the right answer rather
+than a gap: it has no arithmetic, only a routing decision over a protocol, so
+its oracle is another RTL module. The schema demanded a `zref::` symbol from
+every RTL block — which is precisely how this ledger accumulated phantom
+citations. It now also accepts `rtl::<module>`, and V17 checks that module is
+actually declared in an RTL source exactly as it checks a `zref::` symbol is
+defined. A different claim, not a weaker one.
+
 ## What remains
 
-**Steps 1 and 2 are complete.**
+**Steps 1, 2 and 3 are complete.**
 
-**Steps 3–8 are not started**, and they are the larger part:
+**Steps 4–8 are not started**:
 
 | Step | What it needs |
 | --- | --- |
 | 2. Slot manager | **Done** — `VIDEO.SLOTMGR`, block 90. See below. |
-| 3. HPS requester arbiter | CMD.DMA and DEBUG.FRAMEBLIT share one bridge port; response ownership must be proven. |
+| 3. HPS requester arbiter | **Done** — `MEM.HPS.ARBITER`, block 91. See below. |
 | 4. Real memory path | guard → arbiter → SDRAM, and a ready-aware shell write FIFO. |
 | 5. Publication into frame control | |
 | 6. Remove the legacy blit from CMD.DMA | `BLIT_BUF_BYTES`, `blit_buf`, `M_BLIT_*` and the guard ports still exist there. |

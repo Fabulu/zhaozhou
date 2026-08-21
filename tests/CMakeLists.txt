@@ -995,6 +995,38 @@ set_tests_properties(lint_zhao_field_normalize PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# MEM.HPS.ARBITER, composed with the REAL zhao_hps_bridge. Splitting the blit
+# out of CMD.DMA gave the machine two things that want one bridge port, and the
+# bridge treats a request arriving while it is busy as a PROTOCOL VIOLATION --
+# the loser of an unarbitrated race is not made to wait, it is told its transfer
+# failed. The composition is deliberate: the property under test is an agreement
+# BETWEEN the arbiter and the bridge, and a fake bridge is exactly the thing
+# that agrees with whatever the arbiter does. Each client's read data is unique
+# to its own address, so a beat routed to the wrong client is a wrong VALUE and
+# not merely a wrong count.
+add_executable(test_hps_arbiter_directed memory/hps_arbiter_directed.cpp)
+target_link_libraries(test_hps_arbiter_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_hps_arbiter_directed
+  PREFIX Vzhao_hps_arb_compose
+  TOP_MODULE zhao_hps_arb_compose
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/memory/zhao_hps_arb_compose.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv)
+add_test(NAME hps_arbiter_directed COMMAND test_hps_arbiter_directed)
+set_tests_properties(hps_arbiter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_hps_arbiter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_hps_arbiter
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv)
+set_tests_properties(lint_zhao_hps_arbiter PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # VIDEO.SLOTMGR -- the framebuffer slot ownership machine. This is the authority
 # DEBUG.FRAMEBLIT's whole safety argument rested on and which did not exist:
 # something has to decide that the slot being written speculatively is not the

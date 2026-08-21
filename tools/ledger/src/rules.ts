@@ -465,8 +465,30 @@ export function checkCitations(blocksDoc: BlocksDoc, opts: RuleOptions = {}): st
   for (const b of blocksDoc.blocks) {
     const lastSeg = b.reference_model ? b.reference_model.split('::').pop()! : null;
 
+    // (a2) an rtl:: oracle names a MODULE, and that module must exist. This is
+    // the same existence claim as (a), aimed at a different kind of oracle: a
+    // block with no arithmetic -- a router, an arbiter -- has no scalar
+    // reference to cite, and demanding one is how this ledger grew phantom
+    // citations in the first place. What it does have is another RTL module it
+    // must agree with, composed in its test.
+    const rtlOracle = b.reference_model && b.reference_model.startsWith('rtl::')
+      ? b.reference_model.slice(5)
+      : null;
+    if (rtlOracle && rank(b.maturity) >= refComplete) {
+      const files = opts.rtlFiles ?? [];
+      const esc = rtlOracle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const declared = files.some((f) => new RegExp(`\\bmodule\\s+${esc}\\b`).test(f.text));
+      if (!declared) {
+        errors.push(
+          `V17: ${b.id} is ${b.maturity} citing reference_model "${b.reference_model}" but no ` +
+          `\`module ${rtlOracle}\` is declared in any RTL source — an oracle nobody defined is a ` +
+          `phantom citation whichever namespace it is written in`
+        );
+      }
+    }
+
     // (a) cited oracle symbol is defined under reference/
-    if (refText !== null && lastSeg && rank(b.maturity) >= refComplete) {
+    if (refText !== null && lastSeg && !rtlOracle && rank(b.maturity) >= refComplete) {
       const esc = lastSeg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const defined = new RegExp(`(class|struct)\\s+${esc}\\b|\\b${esc}\\s*\\(`).test(refText);
       if (!defined) {
@@ -482,17 +504,26 @@ export function checkCitations(blocksDoc: BlocksDoc, opts: RuleOptions = {}): st
     if (contractText !== null) {
       const section = /##\s*Scalar reference function\s*\n([\s\S]*?)(?=\n##\s|$)/.exec(contractText);
       const cited = section ? /`(zref::[A-Za-z0-9_:]+)`/.exec(section[1]) : null;
-      if (cited && b.reference_model && cited[1] !== b.reference_model) {
+      if (cited && b.reference_model && !rtlOracle && cited[1] !== b.reference_model) {
         errors.push(
           `V17: ${b.id} contract ${b.contract} cites scalar reference "${cited[1]}" but the ledger says ` +
           `"${b.reference_model}" — contract and ledger have drifted (the zref::framePixelCrc failure)`
         );
       }
       if (!cited && b.kind === 'rtl' && rank(b.maturity) >= refComplete) {
-        errors.push(
-          `V17: ${b.id} is ${b.maturity} but its contract ${b.contract} names no backticked zref:: symbol ` +
-          'under "## Scalar reference function"'
-        );
+        // A block whose oracle is another RTL module must still NAME it in that
+        // section -- the claim is checked, only its namespace differs. Waiving
+        // the section entirely would let a block past REFERENCE_COMPLETE while
+        // saying nothing at all about what it is checked against.
+        // A module name is [a-z0-9_] by the schema's own pattern, so a plain
+        // substring test is exact here and needs no escaping.
+        const namesRtl = !!(rtlOracle && section && section[1].includes('`' + rtlOracle + '`'));
+        if (!namesRtl) {
+          errors.push(
+            `V17: ${b.id} is ${b.maturity} but its contract ${b.contract} names no backticked oracle ` +
+            'under "## Scalar reference function" — a zref:: symbol, or the rtl:: module it is composed against'
+          );
+        }
       }
       if (b.maturity !== 'SPECIFIED') {
         const seen = new Set<string>();

@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **90** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **91** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -18,7 +18,7 @@ Blocks: **90** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | geometry | 5 | 1 | 5 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
-| memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
+| memory | 1 | · | 1 | 3 | · | · | · | 1 | 5 |
 | particles | 5 | · | 2 | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | · | · | 5 | · | · | · | · | · | 5 |
@@ -27,7 +27,7 @@ Blocks: **90** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 37 | 4 | 35 | 14 | · | · | · | 6 | 90 |
+| **all** | 37 | 4 | 36 | 14 | · | · | · | 6 | 91 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -46,6 +46,8 @@ Blocks: **90** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEM.VRAM.ARBITER | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/vram_arbiter_directed.cpp |
 | MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_random.cpp |
 | MEM.VRAM.ARBITER | RTL_VERIFIED | 2026-08-16 | `9d49806` | tests/formal/mem_vram_arbiter_liveness.sby |
+| MEM.HPS.ARBITER | REFERENCE_COMPLETE | 2026-08-21 | `3b40404` | tests/memory/zhao_hps_arb_compose.sv |
+| MEM.HPS.ARBITER | UNIT_VERIFIED | 2026-08-21 | `3b40404` | tests/memory/hps_arbiter_directed.cpp |
 | MEM.HPS.BRIDGE | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.HPS.BRIDGE | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/hps_bridge_directed.cpp |
 | MEM.HPS.BRIDGE | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/memory/hps_bridge_random.cpp |
@@ -170,7 +172,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 
 | §25 group | ceiling | rtl blocks | allocated ALM% |
 |---|---:|---:|---:|
-| platform | 14% | 15 | 0% |
+| platform | 14% | 16 | 0% |
 | command_debug | 5% | 8 | 0% |
 | field | 6% | 6 | 0% |
 | geometry_mantle | 20% | 21 | 0% |
