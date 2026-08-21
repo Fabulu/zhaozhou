@@ -277,6 +277,47 @@ deliberately rather than having me invent it and record the invention as law.
 > was a real and separate problem, and the remaining cost is entirely
 > `slot_buf`'s shape. That is a much smaller and better-specified piece of work
 > than "CMD.DMA cannot be fitted".
+>
+> ### ATTEMPT 1: re-describe as 512 x 64 words. MEASURED WORSE. REVERTED.
+>
+> | shape | combinational nodes (device has 83,820) |
+> | --- | ---: |
+> | `logic [7:0] slot_buf [0:4095]` (shipped) | **95,328** |
+> | `logic [63:0] slot_buf [0:511]` + byte accessor | **109,350** |
+>
+> The reasoning was: both sides move aligned 8-byte groups, so a write becomes
+> ONE word and the 4,096-way write decoder disappears, while constant-offset
+> reads fold to constant slices. That reasoning predicted a large reduction. It
+> was wrong by 14,022 nodes IN THE WRONG DIRECTION.
+>
+> The change itself was sound and bit-identical — lint clean, 43 directed and
+> 139,113 random checks, and `cmd_random`'s transcript hash unchanged at
+> `0xb95b5f70a413bdbd` across 1,000 frames. It was reverted because the
+> measurement rejected it, not because it was incorrect.
+>
+> **Why it grew is NOT established, and this entry does not guess.** Two
+> inferences about this block have already been wrong tonight — "the CRC cone
+> needs an incremental redesign" (it needed a bound check) and "words will
+> shrink it" (they enlarged it). A third guess written down as fact would be
+> the pattern, not the exception.
+>
+> ### What the measurements DO establish
+>
+> **A re-description does not fix this. Only a real memory does.** Both shapes
+> are register arrays with a combinational read, and both overflow the device
+> by themselves. The remedy has been written in the RTL from the start:
+>
+> > "the write lives in an async-reset process and the read is combinational,
+> > and an M10K has no reset port and a registered read. Fixing that is a
+> > protocol change (the beat stream needs a one-cycle read lead)."
+>
+> That is the work: a registered read, a one-cycle lead in the beat stream, and
+> the initialiser dropped so the array can infer as RAM — the same cure
+> `zhao_scanout_linebuf` received via `zhao_dc_sdp_ram`. It is a protocol
+> change touching `CMD.DECODER`'s byte stream, which is why it was deferred
+> originally and why it is not a same-session edit.
+>
+> **Step 8 remains gated, on a task that is now precisely specified.**
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 

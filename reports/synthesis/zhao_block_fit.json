@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "5654e6566ba7cec937d930cacd3e9bb82694d942",
+    "newestRunCommit":  "9ba55f88321e53c06d6f39f779ed90d35214f9df",
     "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -25,9 +25,9 @@
                    {
                        "module":  "zhao_cmd_dma",
                        "status":  "failed:quartus_fit.exe",
-                       "sourceCommit":  "5654e6566ba7cec937d930cacd3e9bb82694d942",
+                       "sourceCommit":  "9ba55f88321e53c06d6f39f779ed90d35214f9df",
                        "rtlCleanAtHead":  false,
-                       "seconds":  2839
+                       "seconds":  2660.1
                    },
                    {
                        "module":  "zhao_cmd_scheduler",
