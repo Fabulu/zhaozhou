@@ -1777,12 +1777,16 @@ blocks:
     counters: [vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: b6b5df4
         evidence: reference/src/zcreature/creature_core.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: c51d910
+        evidence: tests/geometry/geom_skin_directed.cpp
 
     deferred: false
     cut_order: null
