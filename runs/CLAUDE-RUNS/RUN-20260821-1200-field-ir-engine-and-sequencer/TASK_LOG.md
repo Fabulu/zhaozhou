@@ -106,6 +106,94 @@ Also filed: `reports/RASTER_Polygon_Budget_Proposal.md` (deferred behind
 FRAMEBLIT steps 4-8 and the composed fit, per the owner),
 `docs/CREATURE_ANIMATION_APPROACH.md`, `docs/PROJECT_ODDS_AND_SCOPE.md`.
 
+### `fcf7e79` — this run log
+
+### `1250b59` — the three notes, refiled from the full text
+
+The owner re-sent the three content dumps and asked whether they had been put
+where they needed to go. They had — but the first filing was made from a
+TRUNCATED view, and the result was three faithful-sounding paraphrases with the
+information removed.
+
+Restored: the six-projects list and the whole odds table (70-90% vertical
+slice, 50-70% FPGA demo, 40-60% sellable short game, 10-25% full campaign,
+single digits for all of it plus a physical console); every cost figure in the
+raster proposal (92,160 pixels at 240p, 4.5 visible pixels per authored
+triangle, 5+16+0-16 = 21-37 clocks per triangle x tile job, a 128-triangle /
+1,024-reference binner at 2.83 clocks per reference, a TMU at one sample per
+4 and 6 clocks), plus its authoring-tier table, its 53-creature battle budget
+and its nine-step order; and in the animation note the owner's own two-modes
+framing, the six hardware-lowering options, and the "armies share states"
+insight.
+
+**A paraphrase that sounds right is not the thing it paraphrases.** Dropping
+the numbers dropped the content, and the same lesson as the `abs` defect
+applies: a restatement can be wrong in ways that read as correct.
+
+### `290814a` — D5's 338k figure marked superseded
+
+`reports/status/phase2_wave2.md` declares 60 Hz full-canvas cadence infeasible
+and builds it on a measured ~338k gpu cycles per Duo blit. The FRAMEBLIT
+redesign streams fetch and commit instead of serialising them and measures ~58k
+cheaper, so that headline is no longer the machine's number.
+
+The CONCLUSION is unchanged and says so: the commit phase still dominates
+against a 318,592-cycle frame, and the Z60 raw-demand bullet is a bandwidth
+proof no blit redesign touches. The marker does not pre-empt the open decision
+in `reports/BLIT_INTEGRATION_PHASE_SHIFT.md`; it exists so nobody reads 338k as
+current while that decision waits.
+
+### `d9a48ea` (zhaozhou-site) — update.ps1 passes --branch
+
+`deploy.ps1` was fixed for this and `update.ps1` was not, leaving the more
+dangerous path broken: update.ps1 is the script that regenerates every render,
+so a full refresh through it landed as a Cloudflare PREVIEW while the public
+URL kept serving the old page. Wrangler exits 0 and prints "Deployment
+complete" either way.
+
+The site directory was not a git repository when the bug first bit, which is
+why wrangler had nothing to infer. It is one now (2026-08-20) and sits on
+`main` — making the inference correct today and silently wrong the first time
+anyone works on a branch. deploy.ps1's comment still asserts the old fact; the
+new note says so rather than repeating it.
+
+## The verification harness lied twice, in two new ways
+
+Recorded because the sweep is the evidence every RTL claim in this run rests
+on, and it was weaker than it looked.
+
+**1. A failed apply was counted as a result.** Python on Windows printed the
+mutation names with CRLF; command substitution strips only the trailing
+newline, so 23 of 24 names reached `apply` with a `` attached and raised
+KeyError. The script printed APPLY-FAILED, **continued**, and reported
+`caught=0 survived=1 discarded=0` with exit code 0.
+
+An apply that fails is not "survived" and not "caught". It is no evidence, and
+counting it as an outcome makes the total a lie. The sweep now aborts on a
+failed apply, and cross-checks `attempted == expected == accounted` before it
+will report at all.
+
+**2. THE DISCARD GUARD COULD NEVER FIRE.** This is the more serious one. The
+guard exists to catch Verilator serving a cached model instead of re-elaborating
+the mutated RTL, and it did that by checking the test BINARY's hash changed.
+
+Two builds from byte-identical source produced `440d4a24...` and `8b57af01...`
+— **the linked binary is not reproducible.** So "hash differs from pristine"
+was unconditionally true and the discard branch was unreachable. Every
+"0 discarded" reported in this run before now, including on the sequencer
+commit `f719dda`, rested on a check that could not fail.
+
+The generated Verilator model IS reproducible: the same two builds both
+produced `5972223c...`. It is a pure function of the RTL, which is the property
+the guard needed. The guard now hashes all 13 generated model sources, and was
+tested in both directions before being trusted — mutate without rebuilding and
+the hash is identical (discard fires); mutate and rebuild and it differs.
+
+**3. A preflight, because the abort came too late.** The hardened sweep aborted
+correctly on an ambiguous revert — after 13 mutations and forty minutes of
+rebuilds. Every mutation is now proved to apply once, change something, and
+revert byte-identically before any build runs. It is a two-second check.
+
 ## Limitations
 
 - Everything is Verilator simulation. No synthesis, no fit, no board.
