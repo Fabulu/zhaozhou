@@ -12,7 +12,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | audio | · | · | · | 1 | · | · | · | · | 1 |
 | command | · | · | 1 | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
-| debug | · | 1 | · | 2 | · | · | · | · | 3 |
+| debug | · | · | 1 | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
 | geometry | 6 | 1 | 4 | · | · | · | · | · | 11 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 3 | · | 4 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 44 | 5 | 25 | 14 | · | · | · | 6 | 88 |
+| **all** | 44 | 4 | 26 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -124,6 +124,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | DEBUG.CRC | UNIT_VERIFIED | 2026-08-16 | `768ce1a` | tests/debug/debug_crc_directed.cpp |
 | DEBUG.CRC | RTL_VERIFIED | 2026-08-16 | `4f76d2e` | demos/wound_lab/duo_markers.cpp |
 | DEBUG.TRACE | REFERENCE_COMPLETE | 2026-08-21 | `04893af` | reference/include/zref/zref_trace.hpp |
+| DEBUG.TRACE | UNIT_VERIFIED | 2026-08-21 | `106674e` | tests/debug/debug_trace_rtl_directed.cpp |
 | SW.MIXER | REFERENCE_COMPLETE | 2026-08-15 | `9e813e0` | tests/audio/mixer_tone_directed.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `7279493` | tests/unit/test_fixp.cpp |
 | SW.ZREF | REFERENCE_COMPLETE | 2026-08-14 | `f0edffa` | reference/include/zref/generated/zref_tables.hpp |

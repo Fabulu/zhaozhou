@@ -1031,6 +1031,32 @@ set_tests_properties(field_stamp_modes PROPERTIES LABELS "fast;nightly" TIMEOUT 
 # questions capture_format and the charter leave open (stage numbering, arming
 # as a mask, zeroing a decoder event's raster fields) so they cannot drift
 # before the RTL exists to be compared against them.
+# DEBUG.TRACE's RTL against zref::trace::Ring. The reference-only laws live in
+# debug_trace_directed.cpp; this is the hardware differential, word for word in
+# capture order. The drop-never-stall law has no ready signal to test, so it is
+# tested by offering events every cycle past the ring's depth and requiring the
+# ring's contents to depend on the events and not on their timing.
+add_executable(test_debug_trace_rtl_directed debug/debug_trace_rtl_directed.cpp)
+target_link_libraries(test_debug_trace_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_debug_trace_rtl_directed
+  PREFIX Vzhao_debug_trace
+  TOP_MODULE zhao_debug_trace
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_trace.sv)
+add_test(NAME debug_trace_rtl_directed COMMAND test_debug_trace_rtl_directed)
+set_tests_properties(debug_trace_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME debug_trace_rtl_random COMMAND test_debug_trace_rtl_directed --random 200)
+set_tests_properties(debug_trace_rtl_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME debug_trace_rtl_random_nightly COMMAND test_debug_trace_rtl_directed --random 3000)
+set_tests_properties(debug_trace_rtl_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_debug_trace
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_debug_trace
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_trace.sv)
+set_tests_properties(lint_zhao_debug_trace PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_executable(test_debug_trace_directed debug/debug_trace_directed.cpp)
 target_link_libraries(test_debug_trace_directed PRIVATE zhao_harness zhao_zref)
 add_test(NAME debug_trace_directed COMMAND test_debug_trace_directed)

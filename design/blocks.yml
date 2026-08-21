@@ -2993,22 +2993,26 @@ blocks:
     outputs: [trace_events]
     upstream: [CMD.DECODER]
     downstream: [MEM.HPS.BRIDGE]
-    backpressure: ready_valid
-    latency: variable
+    backpressure: none
+    latency: fixed:1
     target_throughput: 1 trace event per clock
     reference_model: zref::trace::Ring
     tests:
-      directed: tests/debug/debug_trace_directed.cpp
-      random: tests/debug/debug_trace_directed.cpp
+      directed: tests/debug/debug_trace_rtl_directed.cpp
+      random: tests/debug/debug_trace_rtl_directed.cpp
     counters: [commands]
     source_ids: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: 04893af
         evidence: reference/include/zref/zref_trace.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: 106674e
+        evidence: tests/debug/debug_trace_rtl_directed.cpp
 
     deferred: false
     cut_order: null
