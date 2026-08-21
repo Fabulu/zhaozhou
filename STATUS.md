@@ -5,6 +5,101 @@ at the top.*
 
 ---
 
+## 2026-08-21 (evening) — the blitter is in, and the DSP number was never real
+
+Three things. The first two are finished; the third is why the DSP work was
+starting from a false premise.
+
+### Your decision is in, and it cost nothing
+
+You said take the speedup. It is taken, it is on `main`, and the whole suite is
+green.
+
+**The picture never changed.** All 41 failing checks were timing assertions, so
+I re-derived each law rather than editing numbers until the tests went quiet.
+The Duo capture moved by **five bytes**: one counter — the machine recording
+one fewer missed deadline — and the four-byte checksum of the section holding
+it. I proved that arithmetically before accepting it. The Z60 and Storm
+captures are **byte-identical**. Not a single frame checksum moved.
+
+Something I nearly got wrong. The phase shift happens **only in Duo**. My first
+attempt applied the Duo law to all three modes and broke two of them, and the
+reason I caught it is that the failures contradicted what the other test had
+shown — so I went and measured all three instead of assuming. The three modes
+have different frame lengths, and the ~58,000 cycles you gained only crosses a
+frame boundary in Duo. That is written into the test now, marked as a
+measurement rather than a rule, so whoever changes the timing next knows what
+to re-check.
+
+### The big buffer is gone
+
+`CMD.DMA` used to hold a **whole screen** of pixels on the chip while it worked
+— 1.97 megabits, roughly a third of all the memory the chip has. The new
+blitter streams instead, and holds **64 bytes**.
+
+That buffer was also the thing stopping the full-chip fit from completing.
+Quartus could not turn it into real memory, so it kept failing with a specific
+error, and elaborating that one block alone once needed **16.2 GB**. It does not
+need fixing now. It is not there.
+
+### The DSP number you have been told is not the console's
+
+You sent me an audit saying the "171 DSPs" figure rests on a stale measurement.
+It does, and it is worse than the audit thought.
+
+**That census measures 35 of the 88 blocks in the repository.** It is 93 commits
+old, it says of itself that the code was not clean when it ran, and seven of the
+rows it does list produced no data at all — five timed out on a limit that was
+later found to be too short, and two failed outright.
+
+The 46 blocks never measured include the biggest multiplier users written since:
+the geometry projector, the creature skinner, the pose maths, and the whole
+Field IR engine.
+
+So **171 is not too high or too low. It is a number about a different design**,
+and my own arithmetic subtracting from it was meaningless. Nothing gets planned
+from it again.
+
+I had three agents check every claim in your audit against the actual code
+rather than acting on paper. The audit holds, and four things changed:
+
+- **`TERRAIN.LOD` is a better target than the audit thought.** It does one
+  decision per patch, not per subpatch — sixteen times less work than assumed,
+  with about eleven times more headroom than it needs. It is holding 24
+  multipliers to do it.
+- **The Field IR engine is much worse than the audit thought.** One block alone
+  holds **ten** multipliers running in parallel behind a 34-cycle wait. The
+  engine totals 28, not the 13 the audit assumed — and that is per engine, with
+  five of them planned.
+- Both projectors are 11 multipliers, not 9.
+- The texture unit has **twelve duplicate multipliers**: four copies of the same
+  block computing the identical four numbers from the identical inputs. Sharing
+  them costs nothing at all — no maths changes, no speed changes, and unlike
+  the audit's own suggestion it does not throw away an existing proof. The
+  contract had already written down that this was the fix if the measurement
+  ever showed the sharing had not happened. It shows exactly that.
+
+**And a contract is wrong about its own block.** `TERRAIN.LOD.md` says four
+comparators and no multipliers; the block has twelve and twenty-four. Same
+shape as the `abs` bug from this morning — a document and a design disagreeing
+with nothing checking.
+
+### What I am doing now
+
+Re-measuring every block at the current code, starting with the one that
+failed outright before, because it is the direct test of whether removing that
+buffer worked.
+
+Then three changes that are exact and cost nothing, in order of certainty. I
+checked two of them myself rather than trusting the reports: the blend rewrite
+is identical across all 196,352 possible inputs, and the skinning rewrite is
+identical across its whole legal range and wrong outside it — so that one gets
+a guard naming who guarantees the range, not a comment claiming it.
+
+Everything above is simulation. Nothing has run on a board.
+
+---
+
 ## 2026-08-21 (later) — the sequencer is built, and CI was red for a reason
 
 Two things landed since the note below.

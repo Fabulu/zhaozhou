@@ -40,6 +40,18 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_ctrl.
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_vram_arbiter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_mem_guard.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_bridge.sv
+# Added 2026-08-21 with the DEBUG.FRAMEBLIT integration (steps 4-6). These three
+# were wired into zhao_shell_top and the CMake source list, and NOT here -- so
+# Verilator built the shell fine while Quartus could not resolve u_slotmgr at
+# all, failing every block fit whose cone reaches the shell and blocking the
+# composed fit outright.
+#
+# TWO SOURCE LISTS FOR ONE DESIGN is the defect. This QSF and the CMake
+# ZHAO_SHELL_RTL list must name the same files; nothing checks that they do,
+# which is why the drift went unnoticed until a fit was attempted.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_frameblit.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 
 # The simulation harness interface is intentionally virtual. This prevents the

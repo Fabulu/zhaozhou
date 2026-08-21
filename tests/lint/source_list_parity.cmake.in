@@ -1,0 +1,95 @@
+# source_list_parity.cmake — the shell has ONE file list, not two.
+#
+# WHY THIS EXISTS. Step 4 of the DEBUG.FRAMEBLIT integration wired
+# zhao_debug_frameblit, zhao_hps_arbiter and zhao_video_slotmgr into
+# zhao_shell_top and added them to tests/CMakeLists.txt — the list Verilator
+# reads. It did NOT add them to fpga/quartus/shell_fit/zhao_shell_fit.qsf, the
+# list Quartus reads.
+#
+# So Verilator built and tested the composed shell for hours, green, while
+# Quartus could not resolve `u_slotmgr` at all:
+#
+#   Error (10703): zhao_shell_top.sv(864): can't resolve aggregate expression
+#   in connection to port 20 on instance "u_slotmgr" because the instance has
+#   no module binding
+#
+# That failed every per-block fit whose source cone reaches the shell, and it
+# would have failed the composed fit outright. It was found only because a fit
+# was attempted for an unrelated reason.
+#
+# TWO SOURCE LISTS FOR ONE DESIGN is the defect, and it is the same shape as
+# the OP_ABS defect and the wrong TERRAIN.LOD contract: two statements of one
+# fact, no check that they agree, and the one that is not exercised rots. Here
+# the two are not even documents — they are two toolchains, which is why the
+# green suite proved nothing about the synthesis lane.
+#
+# This gate does not merge the lists (Quartus needs an ORDER, CMake does not,
+# and the generated package enters CMake by a different path). It asserts the
+# SETS match, which is the property that actually broke.
+set(_qsf "@CMAKE_SOURCE_DIR@/fpga/quartus/shell_fit/zhao_shell_fit.qsf")
+set(_cml "@CMAKE_SOURCE_DIR@/tests/CMakeLists.txt")
+
+foreach(_f "${_qsf}" "${_cml}")
+  if(NOT EXISTS "${_f}")
+    message(FATAL_ERROR "source-list parity: missing ${_f}")
+  endif()
+endforeach()
+
+# ---- the QSF's SystemVerilog files, basenames -----------------------------
+file(READ "${_qsf}" _qsf_text)
+string(REGEX MATCHALL "SYSTEMVERILOG_FILE[ \t]+[^\r\n]+" _qsf_lines "${_qsf_text}")
+set(_qsf_names "")
+foreach(_line IN LISTS _qsf_lines)
+  if(_line MATCHES "([A-Za-z0-9_]+)\\.sv")
+    list(APPEND _qsf_names "${CMAKE_MATCH_1}")
+  endif()
+endforeach()
+
+# ---- the CMake ZHAO_SHELL_RTL list, basenames -----------------------------
+file(READ "${_cml}" _cml_text)
+string(FIND "${_cml_text}" "set(ZHAO_SHELL_RTL" _i)
+if(_i EQUAL -1)
+  message(FATAL_ERROR "source-list parity: ZHAO_SHELL_RTL not found in tests/CMakeLists.txt")
+endif()
+string(SUBSTRING "${_cml_text}" ${_i} 4000 _tail)
+string(FIND "${_tail}" ")" _j)
+string(SUBSTRING "${_tail}" 0 ${_j} _block)
+string(REGEX MATCHALL "fpga/rtl/[^ \t\r\n)]+\\.sv" _cml_paths "${_block}")
+set(_cml_names "")
+foreach(_p IN LISTS _cml_paths)
+  if(_p MATCHES "([A-Za-z0-9_]+)\\.sv")
+    list(APPEND _cml_names "${CMAKE_MATCH_1}")
+  endif()
+endforeach()
+
+if(NOT _qsf_names OR NOT _cml_names)
+  message(FATAL_ERROR "source-list parity: parsed an empty list (qsf=${_qsf_names} cmake=${_cml_names})")
+endif()
+
+list(REMOVE_DUPLICATES _qsf_names)
+list(REMOVE_DUPLICATES _cml_names)
+
+# zhao_abi_pkg is generated and reaches the Verilator lane by its own path, so
+# it is expected in the QSF only. It is the ONE sanctioned asymmetry; anything
+# else is drift.
+list(REMOVE_ITEM _qsf_names "zhao_abi_pkg")
+
+set(_only_cmake "${_cml_names}")
+list(REMOVE_ITEM _only_cmake ${_qsf_names})
+set(_only_qsf "${_qsf_names}")
+list(REMOVE_ITEM _only_qsf ${_cml_names})
+
+if(_only_cmake OR _only_qsf)
+  message(FATAL_ERROR
+    "SHELL SOURCE LISTS DISAGREE.\n"
+    "  in tests/CMakeLists.txt but NOT in the Quartus QSF: ${_only_cmake}\n"
+    "  in the Quartus QSF but NOT in tests/CMakeLists.txt: ${_only_qsf}\n"
+    "A module missing from the QSF builds and tests green under Verilator and "
+    "cannot be elaborated by Quartus at all. Add it to "
+    "fpga/quartus/shell_fit/zhao_shell_fit.qsf in dependency order (leaves "
+    "before the shell), or to tests/CMakeLists.txt, so both toolchains see the "
+    "same design.")
+endif()
+
+list(LENGTH _cml_names _n)
+message(STATUS "source-list parity OK: ${_n} shell modules in both lists")

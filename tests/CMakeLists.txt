@@ -295,6 +295,17 @@ set_tests_properties(format_check PROPERTIES
   LABELS "lint;fast"
   SKIP_REGULAR_EXPRESSION "format tier SKIPPED")
 
+# ---- the shell has ONE file list, not two --------------------------------
+# Verilator reads ZHAO_SHELL_RTL below; Quartus reads
+# fpga/quartus/shell_fit/zhao_shell_fit.qsf. Step 4 of the FRAMEBLIT
+# integration updated one and not the other, so the suite was green for hours
+# while Quartus could not elaborate the shell at all. This asserts the sets
+# match. No tool needed, so it never skips.
+configure_file(lint/source_list_parity.cmake.in lint/source_list_parity.cmake @ONLY)
+add_test(NAME source_list_parity
+         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/source_list_parity.cmake)
+set_tests_properties(source_list_parity PROPERTIES LABELS "lint;fast")
+
 find_program(ZHAO_CPPCHECK_BIN NAMES cppcheck cppcheck.exe)
 configure_file(lint/cppcheck_check.cmake.in lint/cppcheck_check.cmake @ONLY)
 add_test(NAME cppcheck_check
