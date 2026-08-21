@@ -83,6 +83,7 @@ The current RTL emits:
 
 ```systemverilog
 guard_req_o.addr = zhao_pkg::ZHAO_VRAM_ADDR_BITS'(off);
+```
 
 That is a byte offset relative to the beginning of the selected framebuffer.
 
