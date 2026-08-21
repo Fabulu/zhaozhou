@@ -3071,12 +3071,16 @@ blocks:
     counters: [hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "325b435"
         evidence: reference/include/zref/zref_frameblit.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "7140733"
+        evidence: tests/debug/debug_frameblit_directed.cpp
 
     deferred: false
     cut_order: null
