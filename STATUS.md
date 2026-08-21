@@ -5,6 +5,67 @@ at the top.*
 
 ---
 
+## 2026-08-21 (night) — the backlog is empty; real building starts
+
+### Where the hardware stands
+
+**40 specified · 4 reference-complete · 30 unit-verified · 14 rtl-verified.**
+`ctest -L fast`: **205/205**. All pushed.
+
+Today moved seven blocks: the four creature-animation ones, the trace ring, the
+scar store, the terrain bake and velocity blocks, and tonight **GEOM.PROJECT** —
+the block that turns a posed creature vertex into a pixel position on screen.
+
+### The important finding: there is nothing left to tidy up
+
+I checked every one of the 24 remaining blocks by trying to advance each one and
+recording what the ledger objected to. Full map in
+`reports/REMAINING_BLOCKERS.md`.
+
+**Several blocks today were finished months ago and simply never recorded.** That
+is now exhausted — `TERRAIN.BAKE` was the last one, and it advanced with no work
+at all beyond regenerating a diagram.
+
+What is left is sixteen blocks that **do not exist yet**, plus five waiting on the
+Field IR sequencers, plus one deliberately postponed. So "get through the waves"
+from here means writing sixteen blocks, not clearing a backlog. I want that to be
+plain rather than discovered slowly.
+
+### GEOM.PROJECT, and why it was the one to do first
+
+Its declared reference didn't exist — but the real law did, under another name,
+and the terrain side is already verified against it. So it was the cheapest of
+the sixteen and a good pattern for the rest.
+
+The interesting part is the divider. Projecting a vertex needs a division, and it
+has to be **exactly** the division the reference does, down to the last bit —
+including how it rounds negative numbers, where the obvious approach is subtly
+wrong. There is no shortcut: no reciprocal trick reproduces it. So the block
+contains a real 31-step divider, pipelined so it still does one vertex per clock.
+
+### Two more tests that were lying, both found by breaking the hardware
+
+Same story as this morning, and I don't think it is a coincidence any more:
+
+- The dual-view test **could not tell whether the block was reading the right
+  camera.** Our two views happen to differ only vertically, so a version that
+  always read camera 0 horizontally gave identical answers and passed. Fixed with
+  a second pair of views that differ both ways.
+- The rounding test **passed a version that rounded wrong**, because every matrix
+  I had written was made of whole numbers with nothing to round. Exactly the
+  mistake I made in the skinning block this morning, made again eight hours
+  later.
+
+Both now fail loudly. The mutation sweep is the only reason either was found, and
+it has now caught something in **five of the seven** blocks I finished today.
+
+### Nothing needed from you
+
+Except the pose-cache memory question from earlier — still open, still not
+blocking anything.
+
+---
+
 ## 2026-08-21 (evening) — two more blocks done, and one I refused to fake
 
 ### Where the hardware stands
