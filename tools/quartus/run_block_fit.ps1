@@ -157,7 +157,13 @@ try {
         }
         $qsf | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qsf') -Encoding ascii
 
-        $row = [ordered]@{ module = $mod; status = 'unknown' }
+        # PER-ROW PROVENANCE. This file MERGES rows across runs (see the merge
+        # note below), so a single top-level sourceCommit is a lie the moment
+        # two runs contribute: it labels every row with the newest run's
+        # commit. Measured 2026-08-21, a one-module run relabelled 41 rows
+        # from 96c0394 as HEAD. Each row now carries the commit it was
+        # actually measured at, and rows without one predate this change.
+        $row = [ordered]@{ module = $mod; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $ok = $true
 
@@ -213,8 +219,10 @@ try {
     $out = [ordered]@{
         schemaVersion    = 1
         characterization = 'provisional-per-block-fit'
-        sourceCommit     = $head
-        rtlCleanAtHead   = $rtlClean
+        # The commit of the MOST RECENT run only. Rows carry their own
+        # sourceCommit; read those, not this.
+        newestRunCommit  = $head
+        newestRunClean   = $rtlClean
         tool             = [ordered]@{ name = 'Quartus Prime Lite'; version = '17.0.2' }
         device           = '5CSEBA6U23I7'
         blocks           = $results.ToArray()
@@ -222,7 +230,9 @@ try {
             '5CSEBA6U23I7 is a provisional capacity target, not board truth.',
             'All I/O is virtual: no package pins, no board I/O delays, no PLLs, no physical clocks.',
             'A per-block fit does not characterize the composed machine routing or timing closure.',
-            'The composed zhao_shell_top does not fit this machine: 28.4 GB committed against 24 GB of RAM on 2026-08-18.',
+            'Rows carry their own sourceCommit. A row measured at an older commit describes THAT code, not HEAD. Check per-row provenance before totalling anything.',
+            'This census does not cover the design: 42 of the repository''s 88 RTL modules, and several of those rows carry no data. See reports/DSP_Audit_2026-08-21.md.',
+            'The composed fit is NOT blocked on machine memory. The 28.4 GB figure once recorded here was a wildcard virtual-pin bug fixed in d1a2b8a; composed synthesis completes in 42:33 at a 6.2 GB peak (f3506b6). It IS blocked on zhao_cmd_dma, which times out: 156 dependent CRC steps in one cycle (reports/REMAINING_BLOCKERS.md).',
             'Nothing here is a programmed device. This is not hardware proof.'
         )
     }

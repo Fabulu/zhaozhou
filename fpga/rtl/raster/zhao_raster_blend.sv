@@ -98,23 +98,58 @@ module zhao_raster_blend (
   // lerp rounds toward zero. Splitting the sign off and rescaling the
   // magnitude unsigned would round those ties the other way and differ by one
   // LSB. That is the whole reason this is written signed.
-  logic signed [17:0] delta_x, alpha_x, prod, mixed;
+  // ---- ONE PRODUCT, NOT TWO ----------------------------------------------
+  // ALPHA needs (src - dst)*a and ADD_MOD needs src*a, and `mode_i` can select
+  // at most one of them per pixel. This used to compute BOTH unconditionally
+  // in two always_comb blocks, so every channel carried two multipliers to use
+  // one: 2 DSP per channel, 3 channels, 6 of RASTER.FRAGMENT's 10.
+  //
+  // The left operand is selected and ONE signed product is formed.
+  //
+  // THE SIGNED LANE IS LOAD-BEARING, BUT NOT FOR THE REASON IT LOOKS LIKE.
+  // What matters is that the +128 is applied to the SIGNED product, so ties
+  // round toward +infinity and a darkening lerp rounds toward zero. Splitting
+  // the sign off and rescaling the MAGNITUDE unsigned rounds those ties the
+  // other way: measured, 1,024 of 130,816 reachable (delta, alpha) pairs
+  // differ by one LSB. That is the original note below and it is correct.
+  //
+  // The SHIFT OPERATOR itself is not observable here, and an earlier version
+  // of this comment wrongly said it was. `>>` and `>>>` differ only above bit
+  // 9, and both consumers truncate below it -- ALPHA takes `mixed[9:0]`,
+  // ADD_MOD takes `mixed[7:0]`. For a negative sum the logical shift yields
+  // A + 1024 where A is the arithmetic result, and (A + 1024) mod 1024 == A
+  // mod 1024. Checked over all 130,816 ALPHA pairs, 64,380 of them with a
+  // negative sum: zero observable differences. The sweep's `logical_shift`
+  // mutant is therefore EQUIVALENT, recorded rather than left looking like a
+  // hole. `>>>` stays because it states the intent.
+  //
+  // ADD_MOD's product is NON-NEGATIVE for every input -- both operands are u8
+  // -- so on that branch the two shifts agree outright, which is the fact that
+  // lets one lane serve both modes.
+  //
+  // VERIFIED EXHAUSTIVELY before the RTL was touched: all 130,816 (delta,alpha)
+  // pairs reachable from two u8s, and all 65,536 (src,alpha) pairs, zero
+  // mismatches against the shipped forms; and zero negative ADD_MOD products,
+  // which is the fact the merge rests on.
+  //
+  // REPLACE and ADD consume no product at all, so the lane is a don't-care
+  // there. `mode_i` is 2 bits and all four codes are defined, which
+  // tests/formal/raster_fragment_blend_fv.sv proves by leaving the mode free.
+  // ENFORCED-BY: tests/raster/raster_fragment_directed.cpp
+  logic signed [17:0] mul_left, alpha_x, prod, mixed;
   always_comb begin
-    delta_x = $signed({10'd0, src_i}) - $signed({10'd0, dst_i});
-    alpha_x = $signed({10'd0, a_i});
-    prod    = delta_x * alpha_x;
-    mixed   = (prod + 18'sd128) >>> 8;
+    mul_left = (mode_i == BL_ALPHA)
+                 ? ($signed({10'd0, src_i}) - $signed({10'd0, dst_i}))
+                 : $signed({10'd0, src_i});
+    alpha_x  = $signed({10'd0, a_i});
+    prod     = mul_left * alpha_x;
+    mixed    = (prod + 18'sd128) >>> 8;
   end
 
-  // ---- ADD_MOD: rescale_u(src·a, 8) --------------------------------------
-  // Non-negative throughout, so the unsigned rescale is the same rounding.
-  // Max (255·255 + 128) >> 8 = 254.
-  logic [15:0] prod_m;
-  logic [7:0]  modv;
-  always_comb begin
-    prod_m = {8'd0, src_i} * {8'd0, a_i};
-    modv   = 8'((prod_m + 16'd128) >> 8);
-  end
+  // ADD_MOD's rescaled value, bounded [0, 254] -- (255*255 + 128) >> 8 = 254 --
+  // so its low 8 bits ARE its value.
+  logic [7:0] modv;
+  assign modv = mixed[7:0];
 
   // ---- the one accumulator and the one rail ------------------------------
   logic signed [9:0] acc;

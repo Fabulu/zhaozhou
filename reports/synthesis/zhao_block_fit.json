@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "characterization": "provisional-per-block-fit",
-  "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
-  "rtlCleanAtHead": false,
+  "newestRunCommit": "669615e6809b727bf9334fabb2a9806802984db4",
+  "newestRunClean": false,
   "tool": {
     "name": "Quartus Prime Lite",
     "version": "17.0.2"
@@ -11,6 +11,8 @@
   "blocks": [
     {
       "module": "zhao_audio_fifo",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 394.4,
       "alms": 222,
@@ -22,11 +24,15 @@
     },
     {
       "module": "zhao_cmd_dma",
-      "status": "failed:quartus_map.exe",
-      "seconds": 909.4
+      "sourceCommit": "669615e6809b",
+      "rtlCleanAtHead": false,
+      "status": "timeout",
+      "seconds": 4838.1
     },
     {
       "module": "zhao_cmd_scheduler",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 799.7,
       "alms": 815,
@@ -38,11 +44,15 @@
     },
     {
       "module": "zhao_debug_counters",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "timeout",
       "seconds": 1312
     },
     {
       "module": "zhao_debug_crc",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 633.4,
       "alms": 158,
@@ -54,11 +64,15 @@
     },
     {
       "module": "zhao_forge_cliff",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "timeout",
       "seconds": 5308.1
     },
     {
       "module": "zhao_geom_arena",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 420.1,
       "alms": 19,
@@ -70,6 +84,8 @@
     },
     {
       "module": "zhao_geom_binner",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 883.4,
       "alms": 1303,
@@ -81,6 +97,8 @@
     },
     {
       "module": "zhao_geom_clip",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 458.4,
       "alms": 764,
@@ -92,6 +110,8 @@
     },
     {
       "module": "zhao_geom_setup",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 2175.7,
       "alms": 743,
@@ -103,6 +123,8 @@
     },
     {
       "module": "zhao_hps_bridge",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 493.7,
       "alms": 555,
@@ -114,6 +136,8 @@
     },
     {
       "module": "zhao_input_rumble",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 708.5,
       "alms": 171,
@@ -125,11 +149,15 @@
     },
     {
       "module": "zhao_input_snapshot",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "timeout",
       "seconds": 1136.3
     },
     {
       "module": "zhao_measure_governor",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 763.3,
       "alms": 589,
@@ -141,6 +169,8 @@
     },
     {
       "module": "zhao_measure_tokens",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 749.3,
       "alms": 1422,
@@ -152,6 +182,8 @@
     },
     {
       "module": "zhao_mem_guard",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 812.5,
       "alms": 302,
@@ -163,6 +195,8 @@
     },
     {
       "module": "zhao_raster_blend",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 701.1,
       "alms": 53,
@@ -174,6 +208,8 @@
     },
     {
       "module": "zhao_raster_earlyz",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 849.6,
       "alms": 677,
@@ -185,6 +221,8 @@
     },
     {
       "module": "zhao_raster_edgewalk",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 540.1,
       "alms": 2286,
@@ -196,6 +234,8 @@
     },
     {
       "module": "zhao_raster_fragment",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 729.2,
       "alms": 485,
@@ -207,6 +247,8 @@
     },
     {
       "module": "zhao_raster_resolve",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 442,
       "alms": 344,
@@ -218,6 +260,8 @@
     },
     {
       "module": "zhao_raster_tilestore",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 855.5,
       "alms": 929,
@@ -229,6 +273,8 @@
     },
     {
       "module": "zhao_scanout_fetch",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 811,
       "alms": 208,
@@ -240,11 +286,15 @@
     },
     {
       "module": "zhao_scanout_linebuf",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "timeout",
       "seconds": 1150.5
     },
     {
       "module": "zhao_scanout_serializer",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 885.3,
       "alms": 228,
@@ -256,6 +306,8 @@
     },
     {
       "module": "zhao_sdram_ctrl",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 272.1,
       "alms": 238,
@@ -267,6 +319,8 @@
     },
     {
       "module": "zhao_surface_blend",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 413,
       "alms": 64,
@@ -278,11 +332,15 @@
     },
     {
       "module": "zhao_surface_sheet",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "failed:quartus_fit.exe",
       "seconds": 3722.3
     },
     {
       "module": "zhao_surface_stamp",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 1057.5,
       "alms": 950,
@@ -294,6 +352,8 @@
     },
     {
       "module": "zhao_terrain_lod",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 1419.2,
       "alms": 2086,
@@ -305,6 +365,8 @@
     },
     {
       "module": "zhao_terrain_normals",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 896.2,
       "alms": 789,
@@ -316,6 +378,8 @@
     },
     {
       "module": "zhao_terrain_patch",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 1128.1,
       "alms": 1584,
@@ -327,6 +391,8 @@
     },
     {
       "module": "zhao_terrain_project",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 1085.2,
       "alms": 6068,
@@ -338,6 +404,8 @@
     },
     {
       "module": "zhao_terrain_tess",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 761,
       "alms": 1311,
@@ -349,6 +417,8 @@
     },
     {
       "module": "zhao_texture_bilerp",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 176.3,
       "alms": 38,
@@ -360,6 +430,8 @@
     },
     {
       "module": "zhao_texture_cache",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 359,
       "alms": 1087,
@@ -374,6 +446,8 @@
     },
     {
       "module": "zhao_texture_tmu",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 295,
       "alms": 1839,
@@ -385,6 +459,8 @@
     },
     {
       "module": "zhao_video_framectl",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 375.2,
       "alms": 301,
@@ -396,6 +472,8 @@
     },
     {
       "module": "zhao_video_mode",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 299,
       "alms": 70,
@@ -407,6 +485,8 @@
     },
     {
       "module": "zhao_video_scaler",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 239.4,
       "alms": 52,
@@ -418,11 +498,15 @@
     },
     {
       "module": "zhao_video_scanout",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "timeout",
       "seconds": 1877.8
     },
     {
       "module": "zhao_vram_arbiter",
+      "sourceCommit": "96c0394a768519453b80d68998a670dd59f9aeb5",
+      "rtlCleanAtHead": false,
       "status": "ok",
       "seconds": 433.5,
       "alms": 776,
@@ -437,8 +521,9 @@
     "5CSEBA6U23I7 is a provisional capacity target, not board truth.",
     "All I/O is virtual: no package pins, no board I/O delays, no PLLs, no physical clocks.",
     "A per-block fit does not characterize the composed machine routing or timing closure.",
-    "Nothing here is a programmed device. This is not hardware proof.",
-    "STALE AND INCOMPLETE (noted 2026-08-21): sourceCommit 96c0394a is 93 commits behind, rtlCleanAtHead is false, and this census covers 42 of the repository's 88 RTL modules. The 46 unmeasured ones include zhao_geom_project, zhao_geom_skin, the pose/matrix blocks and the whole Field IR engine. Do not total this file and call it the console. See reports/DSP_Audit_2026-08-21.md.",
-    "The composed fit is NOT blocked on machine memory: the 28.4 GB figure previously recorded here was a wildcard virtual-pin bug fixed in d1a2b8a; composed synthesis completes in 42:33 at a 6.2 GB peak (f3506b6)."
+    "Rows carry their own sourceCommit. A row measured at an older commit describes THAT code, not HEAD. Check per-row provenance before totalling anything.",
+    "This census does not cover the design: 42 of the repository's 88 RTL modules are listed, and 7 of those carry no data (5 timeout, 2 failed). 35 modules have real numbers. See reports/DSP_Audit_2026-08-21.md.",
+    "The composed fit is NOT blocked on machine memory. The 28.4 GB figure once recorded here was a wildcard virtual-pin bug fixed in d1a2b8a; composed synthesis completes in 42:33 at a 6.2 GB peak (f3506b6). It IS blocked on zhao_cmd_dma, which times out at 4,838 s: 156 dependent CRC steps in one cycle. See reports/REMAINING_BLOCKERS.md.",
+    "Nothing here is a programmed device. This is not hardware proof."
   ]
 }
