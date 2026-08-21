@@ -78,7 +78,25 @@ verified D3 arbiter) offers its request only after scanout has been quiet
 Measured: starvation exactly zero at every cadence.
 
 **D5. 60 Hz full-canvas cadence is INFEASIBLE on the machine as frozen.**
-The end-to-end cost of one lawful Duo blit, starvation-free, measures
+
+> **THE ~338k FIGURE BELOW IS SUPERSEDED AND THE CONCLUSION IS NOT.**
+> Added 2026-08-21. The `DEBUG.FRAMEBLIT` redesign streams the fetch and the
+> commit instead of running them serially, and measures **~58k gpu cycles
+> cheaper** end to end. `reports/BLIT_INTEGRATION_PHASE_SHIFT.md` carries the
+> measurement and the branch it was taken on.
+>
+> D5's conclusion still holds — the commit phase still dominates against a
+> 318,592-cycle frame, and the Z60 raw-demand argument in the last bullet is
+> untouched by any of this, being a bandwidth proof rather than a scheduling
+> one. But the headline NUMBER is no longer the machine's number, and the
+> demo's timing expectations are pinned to the old one. Which of those moves
+> is Fabian's decision, recorded in that report; this note exists so the
+> figure is not read as current in the meantime.
+>
+> `duo_markers.cpp`'s own header already named "streaming blit CRC" as a
+> ratification-scale path that would close 60 Hz. It was right.
+
+The end-to-end cost of one lawful Duo blit, starvation-free, measured
 ~338k gpu cycles against the 318,592-cycle frame:
 
 - HPS fetch ≈ 93k — 3,072 serial 64-B bursts × (16-cycle frozen D10
