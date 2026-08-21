@@ -1768,17 +1768,22 @@ blocks:
     upstream: [GEOM.VDECODE, GEOM.POSE]
     downstream: [GEOM.LOOM, GEOM.WCACHE]
     backpressure: ready_valid
-    latency: variable
+    latency: fixed:1
     target_throughput: 1 skinned vertex per clock
-    reference_model: zref::Skin
+    reference_model: zref::creature::skin_vertex
     tests:
       directed: tests/geometry/geom_skin_directed.cpp
-      random: tests/geometry/geom_skin_random.cpp
+      random: tests/geometry/geom_skin_directed.cpp
     counters: [vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: b6b5df4
+        evidence: reference/src/zcreature/creature_core.cpp
+
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1934,7 +1939,7 @@ blocks:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: ecf2870
-        evidence: reference/include/zref/zref_creature.hpp
+        evidence: reference/include/zref/zref_geom.hpp
       - state: UNIT_VERIFIED
         date: "2026-08-21"
         commit: 2575a2e

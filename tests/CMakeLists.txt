@@ -884,6 +884,31 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# GEOM.SKIN: rigid and two-weight skinning against zref::skin_vertex -- the
+# shipped function every creature the reference renderer has drawn was skinned
+# with. The single-rounding law (one rescale by 22, never two by 16) is what
+# the directed boundaries defend.
+add_executable(test_geom_skin_directed geometry/geom_skin_directed.cpp)
+target_link_libraries(test_geom_skin_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_skin_directed
+  PREFIX Vzhao_geom_skin
+  TOP_MODULE zhao_geom_skin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin.sv)
+add_test(NAME geom_skin_directed COMMAND test_geom_skin_directed)
+set_tests_properties(geom_skin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_skin_random COMMAND test_geom_skin_directed --random 500)
+set_tests_properties(geom_skin_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_skin_random_nightly COMMAND test_geom_skin_directed --random 8000)
+set_tests_properties(geom_skin_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_geom_skin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_skin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin.sv)
+set_tests_properties(lint_zhao_geom_skin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # FIELD.STAMP.{MAX,ADD,SUB,REPLACE,AGE}: the five stamp-blend ops, exhaustive
 # against zref::surface::blend_apply. ops.yml named this file as their
 # differential coverage and it did not exist -- V10 only surfaced that once
