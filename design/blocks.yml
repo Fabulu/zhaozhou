@@ -73,6 +73,11 @@ counter_catalog:
   - rumble_frames_dropped
   - sdram_refresh_stalls
   - sdram_bank_conflicts
+  # VIDEO.SLOTMGR: framebuffer slot ownership. `slot_stale_events` counts every
+  # publication, release or swap the manager REFUSED -- a refusal that is not
+  # counted turns a lease bug into a frame that mysteriously never appears.
+  - slot_leases_granted
+  - slot_stale_events
 
 blocks:
 
@@ -1082,6 +1087,45 @@ blocks:
     superseded_by: null
     notes: leaf (framework scaler consumes it).
 
+  - id: VIDEO.SLOTMGR
+    name: Framebuffer slot manager
+    kind: rtl
+    subsystem: video
+    clock_domain: gpu
+    purpose: "Own the framebuffer slot state machine FREE/WRITING/READY/DISPLAYED with a per-slot generation; grant leases, refuse stale publish/release events, and present slot readiness to frame control."
+    contract: design/contracts/VIDEO.SLOTMGR.md
+    phase: 2
+    owner_issue: ZH-076
+    inputs: [lease_requests, blit_terminal_events, swap_events]
+    outputs: [fb_slot_lease, slot_ready, displayed_slot]
+    upstream: [DEBUG.FRAMEBLIT]
+    downstream: [VIDEO.FRAMECTL]
+    backpressure: none
+    latency: fixed:1
+    target_throughput: one event per clock
+    reference_model: zref::video::SlotManager
+    tests:
+      directed: tests/video/video_slotmgr_directed.cpp
+      random: tests/video/video_slotmgr_directed.cpp
+      formal: tests/formal/video_slotmgr_invariants.sby
+    counters: [slot_leases_granted, slot_stale_events]
+    source_ids: true
+    budget_group: platform
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "ea50d3b"
+        evidence: reference/include/zref/zref_slotmgr.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "ea50d3b"
+        evidence: tests/video/video_slotmgr_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "New block named by reports/DEBUG.FRAMEBLIT_Integration_Corrections.md section 9. DEBUG.FRAMEBLIT's safety argument rested on something deciding that the slot being written is not the one on screen; nothing did. The generation is what makes a publication attributable, which is the ABA hole the blitter's lease check closes at the other end."
+
   - id: VIDEO.FRAMECTL
     name: Frame control handshake
     kind: rtl
@@ -1093,7 +1137,7 @@ blocks:
     owner_issue: ZH-016
     inputs: [scanout_status]
     outputs: [frame_complete, frame_repeated]
-    upstream: [DEBUG.FRAMEBLIT]
+    upstream: [VIDEO.SLOTMGR]
     downstream: [CMD.SCHEDULER]
     backpressure: none
     latency: fixed:1
@@ -3060,7 +3104,7 @@ blocks:
     inputs: [blit_requests, fb_slot_lease]
     outputs: [guarded_writes, slot_publish]
     upstream: [CMD.SCHEDULER]
-    downstream: [MEM.GUARD, VIDEO.FRAMECTL]
+    downstream: [MEM.GUARD, VIDEO.SLOTMGR]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 guarded 64-bit beat per clock

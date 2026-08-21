@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **89** (74 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **90** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -26,8 +26,8 @@ Blocks: **89** (74 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
-| video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 37 | 4 | 34 | 14 | · | · | · | 6 | 89 |
+| video | · | · | 1 | 4 | · | · | · | · | 5 |
+| **all** | 37 | 4 | 35 | 14 | · | · | · | 6 | 90 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -73,6 +73,8 @@ Blocks: **89** (74 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | VIDEO.SCALER | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scaler_random.cpp |
 | VIDEO.SCALER | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_scaler_directed.cpp |
 | VIDEO.SCALER | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
+| VIDEO.SLOTMGR | REFERENCE_COMPLETE | 2026-08-21 | `ea50d3b` | reference/include/zref/zref_slotmgr.hpp |
+| VIDEO.SLOTMGR | UNIT_VERIFIED | 2026-08-21 | `ea50d3b` | tests/video/video_slotmgr_directed.cpp |
 | VIDEO.FRAMECTL | RTL_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_random.cpp |
 | VIDEO.FRAMECTL | UNIT_VERIFIED | 2026-08-16 | `a4ea5d9` | tests/video/video_framectl_directed.cpp |
 | VIDEO.FRAMECTL | REFERENCE_COMPLETE | 2026-08-16 | `0b8c71c` | reference/include/zref/zref_video.hpp |
@@ -168,7 +170,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 
 | §25 group | ceiling | rtl blocks | allocated ALM% |
 |---|---:|---:|---:|
-| platform | 14% | 14 | 0% |
+| platform | 14% | 15 | 0% |
 | command_debug | 5% | 8 | 0% |
 | field | 6% | 6 | 0% |
 | geometry_mantle | 20% | 21 | 0% |

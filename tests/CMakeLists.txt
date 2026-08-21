@@ -995,6 +995,40 @@ set_tests_properties(lint_zhao_field_normalize PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# VIDEO.SLOTMGR -- the framebuffer slot ownership machine. This is the authority
+# DEBUG.FRAMEBLIT's whole safety argument rested on and which did not exist:
+# something has to decide that the slot being written speculatively is not the
+# one on screen. The shell used to grant a guard window at dispatch and clear it
+# at done, with no generation, no notion of DISPLAYED and no way to refuse a
+# stale event.
+#
+# The generation increments on every ENTRY INTO WRITING, which is what makes an
+# event attributable -- a publication carrying the previous generation is
+# refused even though the slot number and the state look identical. That is the
+# ABA case, and closing it in the blitter is worthless if this end does not
+# close it too. A refused event changes nothing AND is counted: a silent refusal
+# turns a lease bug into a frame that mysteriously never appears.
+add_executable(test_video_slotmgr_directed video/video_slotmgr_directed.cpp)
+target_link_libraries(test_video_slotmgr_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_video_slotmgr_directed
+  PREFIX Vzhao_video_slotmgr
+  TOP_MODULE zhao_video_slotmgr
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr.sv)
+add_test(NAME video_slotmgr_directed COMMAND test_video_slotmgr_directed)
+set_tests_properties(video_slotmgr_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME video_slotmgr_random COMMAND test_video_slotmgr_directed --random 4000)
+set_tests_properties(video_slotmgr_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME video_slotmgr_random_nightly COMMAND test_video_slotmgr_directed --random 60000)
+set_tests_properties(video_slotmgr_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_video_slotmgr
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_video_slotmgr
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr.sv)
+set_tests_properties(lint_zhao_video_slotmgr PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_CURVE, OP_DCURVE and OP_SPLINE -- the first ops in the engine that read a
 # TABLE, so the block takes a table port instead of owning a ROM: tables are
 # per-program data carried in the .zprog image, not constants of the hardware.
@@ -1509,7 +1543,8 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # Reuses the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
-  foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety)
+  foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety
+                           video_slotmgr_invariants)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

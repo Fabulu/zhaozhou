@@ -110,15 +110,63 @@ Two findings from writing it:
   the combinational gate, which settles one of the two surviving mutations as
   genuinely equivalent rather than a hole.
 
+## Step 2 — the slot manager: **done**
+
+`VIDEO.SLOTMGR` (`fpga/rtl/video/zhao_video_slotmgr.sv`), reference
+`zref::video::SlotManager`, contract `design/contracts/VIDEO.SLOTMGR.md`. It is
+the ninetieth block and the authority DEBUG.FRAMEBLIT's whole safety argument
+rested on: something has to decide that the slot being written speculatively is
+not the one on screen, and nothing did.
+
+`FREE → WRITING → READY → DISPLAYED → FREE`, per-slot generation, one clock
+domain (`gpu`, as you recommended — the synchronizers stay the shell's so this
+block is a pure single-clock machine that can be proven as one).
+
+**68 directed checks + 28,290 random against the reference. Mutation sweep 14/14
+caught, 0 survived, 0 discarded. Formal: depth 24, 8 covers all reached.**
+
+Six of your eight formal properties are proven. The other two — "never WRITING
+and DISPLAYED at once", "never READY and WRITING at once" — are true by the
+two-bit state encoding, so asserting them would prove a property of
+`logic [1:0]` rather than of this design. They are **named in the RTL** and
+become real assertions the moment anyone moves to one-hot.
+
+### The formal lane found a real defect
+
+A publication and a release in the **same cycle** raced: two state writes in one
+cycle, the later one silently winning, so a slot could go FREE on the very edge
+it was told to become READY.
+
+DEBUG.FRAMEBLIT proves it never emits both (its `a_excl`) — but this block is
+the authority on slot ownership and must not rest on a peer behaving. The pair
+is now refused and counted once, because it is one bad event and not two.
+
+Two further findings were in my properties rather than the design, and both are
+worth knowing:
+
+- `$past(state[$past(slot)])` is ambiguous about whether the index is sampled
+  now or then. It read as a live assertion and behaved as something else. Every
+  such property now uses explicit previous-cycle shadow registers.
+- Those shadows needed the DUT's own reset. Without it they recorded events that
+  arrived *while reset was asserted* — which the DUT correctly ignored — and the
+  counterexample was a grant pulse that never happened.
+
+### One directed gap the mutation sweep found
+
+A first draft exercised `slot_ready` on slot 1 only, so a mutation breaking slot
+0's bit alone walked through the entire directed set and was caught by the
+random lane. That is the wrong place for something that simple to be caught.
+Both slots are covered now.
+
 ## What remains
 
-**Step 1 is complete.**
+**Steps 1 and 2 are complete.**
 
-**Steps 2–8 are not started**, and they are the larger part:
+**Steps 3–8 are not started**, and they are the larger part:
 
 | Step | What it needs |
 | --- | --- |
-| 2. Slot manager | `FREE → WRITING → READY → DISPLAYED → FREE`, generation matching, stale-event refusal, one clock domain owning the state. |
+| 2. Slot manager | **Done** — `VIDEO.SLOTMGR`, block 90. See below. |
 | 3. HPS requester arbiter | CMD.DMA and DEBUG.FRAMEBLIT share one bridge port; response ownership must be proven. |
 | 4. Real memory path | guard → arbiter → SDRAM, and a ready-aware shell write FIFO. |
 | 5. Publication into frame control | |

@@ -5,6 +5,60 @@ at the top.*
 
 ---
 
+## 2026-08-21 — the slot manager, and the thing nothing was deciding
+
+Step 2 of your integration list is done: **`VIDEO.SLOTMGR`**, the ninetieth
+block.
+
+### What it is, and why it did not exist
+
+The frame blitter writes into a screen buffer *before* it knows whether the
+picture is any good, and only makes it visible if everything checked out. That
+is safe for exactly one reason: the buffer it scribbles into is not the one you
+are looking at.
+
+**Nothing in the machine was actually deciding that.** The shell handed out a
+write permit when a blit started and took it back when it finished — no record
+of which buffer was on screen, no way to tell two permits apart, and no way to
+refuse an instruction that arrived too late. The whole safety argument rested on
+a piece that was never built.
+
+This block is that piece. It tracks each buffer as free, being written, ready,
+or on screen, and it stamps every permit with a number so a blit that lost its
+permit and one that never lost it can be told apart. That distinction is the
+entire point — without it they look identical at the moment they ask to be shown.
+
+68 directed checks, 28,290 randomised, **14 of 14 deliberate breakages caught**,
+and the formal proofs pass with all eight reachability checks reached.
+
+### The proofs found a real bug
+
+If a blit said "show this" and "throw this away" **on the same clock edge**, the
+two instructions raced and the later one silently won — so a buffer could be
+thrown away on the very edge it was told to be shown.
+
+The blitter is proven never to say both. But this block is the *authority* on
+who owns a buffer, and an authority that only works while everyone else behaves
+is not an authority. It now refuses the pair outright.
+
+Two more findings were in the proofs rather than the hardware, and I mention
+them because they are the same species as last time: a way of writing "what was
+true one cycle ago" that reads correctly and means something else, and a check
+that recorded events happening *during* reset, which the hardware correctly
+ignored. Both made a proof look like it was watching something it wasn't.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 35 unit-verified · 14 rtl-verified**
+across **90** blocks.
+
+Steps 1 and 2 of your list are complete. **Steps 3 to 8 are not started** — the
+bridge arbiter, the real memory wiring, publication into frame control, deleting
+the old blitter from the command path, shell tests, and the composed re-fit. The
+new path is still not in the running machine.
+
+---
+
 ## 2026-08-21 — your frame-blit review: you were right, and it was worse than one bug
 
 I read `DEBUG.FRAMEBLIT_Integration_Corrections.md` and checked the claims
@@ -121,7 +175,7 @@ All three are closed. The directed test now catches all eighteen on its own.
 ### Where the hardware stands
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**
-across **89** blocks. `ctest -L fast`: **233/233**.
+across **89** blocks. `ctest -L fast`: **236/236**.
 
 Next in the engine: `NOISE2`, `RING`, `RIDGE`, `ROT2`, `ROT3`, then the
 sequencer that actually runs a program. None of that needs anything from you.
@@ -139,7 +193,7 @@ behaviour, but the invention becomes the law the hardware is built to.
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**, now
 across **89** blocks — one more than before, because DEBUG.FRAMEBLIT is a new
-block rather than a rewrite. `ctest -L fast`: **233/233**.
+block rather than a rewrite. `ctest -L fast`: **236/236**.
 
 ### DEBUG.FRAMEBLIT — you were right, the design was sitting there
 

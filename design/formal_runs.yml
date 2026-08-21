@@ -195,6 +195,34 @@ runs:
       fabricated state, which says nothing about the design), and the
       state-level abort check in B_GUARD_REQUEST is redundant given the
       combinational gate on guard_req_o.valid.
+  - property: tests/formal/video_slotmgr_invariants.sby
+    status: green
+    date: "2026-08-21"
+    commit: "ea50d3b"
+    lane: formal_video_slotmgr_invariants
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      VIDEO.SLOTMGR ownership invariants (integration-corrections section 9),
+      depth 24, btormc. Proven: at most one slot DISPLAYED and the displayed
+      bookkeeping agreeing with the states; a lease grant implies the slot was
+      FREE the instant before; a grant moves that slot's generation by exactly
+      one and NOTHING else moves it; a live lease always points at a WRITING
+      slot; publication and release move state ONLY on a matching generation; a
+      stale event changes nothing and is counted; slot_ready means READY
+      exactly. Eight covers, ALL reached by k = 6. Two of the review's eight
+      properties -- never WRITING and DISPLAYED at once, never READY and WRITING
+      at once -- are true by the two-bit encoding and are NAMED in the RTL
+      rather than asserted, because asserting them proves a property of
+      `logic [1:0]` and not of the design. THE LANE FOUND A REAL DEFECT: a
+      publication and a release in the same cycle raced, and the later state
+      write silently won, so a slot could go FREE on the very edge it was told
+      to become READY. The pair is now refused and counted once. Two further
+      findings were in the properties rather than the design: nested
+      `$past(state[$past(slot)])` is ambiguous about when the index is sampled
+      (every such property now uses explicit shadow registers), and those
+      shadows needed the DUT's own reset or they recorded events that arrived
+      while reset was asserted.
   - property: tests/formal/cmd_dma_crc_gate.sby
     status: green
     date: "2026-08-16"

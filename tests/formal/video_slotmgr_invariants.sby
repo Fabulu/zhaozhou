@@ -1,0 +1,59 @@
+# video_slotmgr_invariants.sby — VIDEO.SLOTMGR ownership invariants
+# (reports/DEBUG.FRAMEBLIT_Integration_Corrections.md section 9).
+#
+#   at most one slot is DISPLAYED, and the bookkeeping agrees with the states
+#   a lease grant implies the slot was FREE the instant before
+#   a grant moves that slot's generation by exactly one, and nothing else does
+#   a live lease always points at a slot that is WRITING
+#   a publication moves WRITING -> READY only on a MATCHING generation
+#   a release moves WRITING -> FREE only on a MATCHING generation
+#   a STALE event changes no state, and is counted
+#   slot_ready means READY, exactly
+#
+# Two of the eight properties the review lists -- never WRITING and DISPLAYED at
+# once, never READY and WRITING at once -- are true by the two-bit encoding and
+# are named in the RTL rather than asserted, because asserting them would prove
+# a property of `logic [1:0]` and not of this design.
+#
+# The DUT is driven with EVERY input free: arbitrary lease requests, arbitrary
+# publications and releases carrying arbitrary generations, and arbitrary swaps.
+# That is the adversarial model the invariants need -- can any sequence of
+# events, however malformed, get two slots on screen at once or slip a stale
+# publication past the generation check?
+#
+# SCOPE-TOTAL: the state space is two slots x four states x one outstanding
+# lease, and the depth below covers the complete FREE -> WRITING -> READY ->
+# DISPLAYED -> FREE cycle for both slots plus a stale re-grant. The generation
+# counter is 16 bits and is NOT explored exhaustively -- the properties above
+# constrain it by equality and increment-by-one rather than by value, so no
+# bound on its magnitude is being claimed.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the invariants hold to the depth below.
+#   cover — every antecedent is REACHABLE. All eight assertions are
+#           implications; a model that can never grant, publish, swap or go
+#           stale satisfies them all while proving nothing.
+#
+# Run via `ctest -L formal` or by hand with cwd = tests/formal:
+#   sby -f --prefix <workdir> video_slotmgr_invariants.sby
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 24
+cover: mode cover
+cover: depth 24
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --top zhao_video_slotmgr -DFORMAL zhao_video_slotmgr.sv
+prep -top zhao_video_slotmgr
+
+[files]
+../../fpga/rtl/video/zhao_video_slotmgr.sv
