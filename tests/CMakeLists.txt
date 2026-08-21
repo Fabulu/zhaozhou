@@ -964,6 +964,37 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_NORMALIZE2 and OP_NORMALIZE3. The SECOND reciprocal table now lives in this
+# engine -- RCP24_T0 seeds a 24-bit reciprocal with TWO correction steps, while
+# FIELD_RCP_T0 next door seeds a 32-bit one with ONE. Swapping them would be
+# invisible until some vector came out slightly short, so every entry is checked.
+# The zero case is deliberately asymmetric between the two ops and both halves
+# are pinned.
+add_executable(test_field_normalize_directed differential/field_normalize_directed.cpp)
+target_link_libraries(test_field_normalize_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_normalize_directed
+  PREFIX Vzhao_field_normalize
+  TOP_MODULE zhao_field_normalize
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME field_normalize_directed COMMAND test_field_normalize_directed)
+set_tests_properties(field_normalize_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_normalize_random COMMAND test_field_normalize_directed --random 3000)
+set_tests_properties(field_normalize_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_normalize_random_nightly COMMAND test_field_normalize_directed --random 50000)
+set_tests_properties(field_normalize_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_normalize
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_normalize
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+set_tests_properties(lint_zhao_field_normalize PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_LEN2, OP_LEN3 and OP_DIST2, over the shared exact integer square root.
 # The sum of squares is UNSIGNED because three squares reach 3*2^62 -- which
 # overflows s64 and fits u64, exactly why the reference uses uint64_t -- and the
