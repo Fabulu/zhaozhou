@@ -1421,12 +1421,16 @@ blocks:
     counters: [terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "b6339cf"
         evidence: reference/include/zref/zref_terrain_velocity.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "2674dee"
+        evidence: tests/terrain/terrain_velocity_directed.cpp
 
 
 
