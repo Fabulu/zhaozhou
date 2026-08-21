@@ -2753,6 +2753,26 @@ endif()
 set(ZHAO_TERRAIN_VELOCITY_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_velocity.sv)
 
+# FIELD.OUT.VELOCITY: the op ops.yml declares, and TERRAIN.VELOCITY's only
+# remaining blocker. Narrow on purpose -- each law it checks is a place the
+# velocity lane behaves DIFFERENTLY from the height lane beside it (no clamp,
+# one bake-back, skipped-not-zero, two separate saturation ledgers), which is
+# what an implementer copying across gets wrong.
+add_executable(test_field_out_velocity differential/field_out_velocity.cpp)
+target_link_libraries(test_field_out_velocity PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_field_out_velocity PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_field_out_velocity
+  PREFIX Vzhao_terrain_velocity
+  TOP_MODULE zhao_terrain_velocity
+  SOURCES ${ZHAO_TERRAIN_VELOCITY_SV})
+add_test(NAME field_out_velocity COMMAND test_field_out_velocity)
+set_tests_properties(field_out_velocity PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_out_velocity_random COMMAND test_field_out_velocity --random 6)
+set_tests_properties(field_out_velocity_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_out_velocity_random_nightly COMMAND test_field_out_velocity --random 60)
+set_tests_properties(field_out_velocity_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_terrain_velocity_directed terrain/terrain_velocity_directed.cpp)
 target_link_libraries(test_terrain_velocity_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_terrain_velocity_directed PRIVATE
