@@ -13,7 +13,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | command | · | · | 1 | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | · | · | 1 | 2 | · | · | · | · | 3 |
-| field | 6 | · | · | · | · | · | · | · | 6 |
+| field | 5 | 1 | · | · | · | · | · | · | 6 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
 | geometry | 5 | 1 | 5 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 40 | 4 | 30 | 14 | · | · | · | 6 | 88 |
+| **all** | 39 | 5 | 30 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -52,6 +52,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEM.GUARD | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.GUARD | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_guard_directed.cpp |
 | MEM.GUARD | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/formal/formal_mem_guard.sv |
+| FIELD.PROGCACHE | REFERENCE_COMPLETE | 2026-08-21 | `1822cd8` | reference/include/zref/zref_progcache.hpp |
 | INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
 | INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
 | INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |

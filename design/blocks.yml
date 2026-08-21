@@ -588,15 +588,20 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 instruction issue per clock per sequencer
-    reference_model: zref::ProgCache
+    reference_model: zref::field::ProgCache
     tests:
       directed: tests/field/field_progcache_directed.cpp
-      random: tests/field/field_progcache_random.cpp
+      random: tests/field/field_progcache_directed.cpp
     counters: [progcach_hits, progcach_misses, programs_rejected]
     source_ids: true
     budget_group: field
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "1822cd8"
+        evidence: reference/include/zref/zref_progcache.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null

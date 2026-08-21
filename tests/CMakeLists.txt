@@ -964,6 +964,36 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# FIELD.PROGCACHE against zref::field::ProgCache. Driven with the three real
+# committed .zprog images and CORRUPTED copies of them, so the reject law is
+# exercised by the loader's own verdicts rather than by an invented flag. The
+# cache is instantiated with TWO entries here: three real programs then exercise
+# every residency law there is, which a sixteen-entry cache driven by made-up
+# hashes would not.
+add_executable(test_field_progcache_directed field/field_progcache_directed.cpp)
+target_link_libraries(test_field_progcache_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_field_progcache_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+verilate(test_field_progcache_directed
+  PREFIX Vzhao_field_progcache
+  TOP_MODULE zhao_field_progcache
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+  VERILATOR_ARGS -GENTRIES=2)
+add_test(NAME field_progcache_directed COMMAND test_field_progcache_directed)
+set_tests_properties(field_progcache_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progcache_random COMMAND test_field_progcache_directed --random 60)
+set_tests_properties(field_progcache_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progcache_random_nightly COMMAND test_field_progcache_directed --random 800)
+set_tests_properties(field_progcache_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_progcache
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_progcache
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv)
+set_tests_properties(lint_zhao_field_progcache PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.PROJECT against zref::render::project_vertex -- the real law, replacing
 # the phantom zref::GeomProject the ledger declared. White-box include of
 # reference/src for zrender/internal.hpp, the same access TERRAIN.PROJECT's
