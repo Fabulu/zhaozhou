@@ -964,6 +964,33 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_LEN2, OP_LEN3 and OP_DIST2, over the shared exact integer square root.
+# The sum of squares is UNSIGNED because three squares reach 3*2^62 -- which
+# overflows s64 and fits u64, exactly why the reference uses uint64_t -- and the
+# root is a FLOOR, never rounded.
+add_executable(test_field_len_directed differential/field_len_directed.cpp)
+target_link_libraries(test_field_len_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_len_directed
+  PREFIX Vzhao_field_len
+  TOP_MODULE zhao_field_len
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
+add_test(NAME field_len_directed COMMAND test_field_len_directed)
+set_tests_properties(field_len_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_len_random COMMAND test_field_len_directed --random 3000)
+set_tests_properties(field_len_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_len_random_nightly COMMAND test_field_len_directed --random 60000)
+set_tests_properties(field_len_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_len
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_len
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
+set_tests_properties(lint_zhao_field_len PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_SIN and OP_COS. EXHAUSTIVE -- an angle16 is a u16 of turns, so 65,536
 # angles times two opcodes is the whole input space and there is no sampling
 # argument to make. The quarter-wave table is generated into
