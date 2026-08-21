@@ -2662,17 +2662,22 @@ blocks:
     upstream: [PART.LADDER]
     downstream: [RASTER.FRAGMENT]
     backpressure: ready_valid
-    latency: variable
+    latency: fixed:1
     target_throughput: 1 soft sprite per clock
-    reference_model: zref::SoftParticles
+    reference_model: zref::part::soft_rect
     tests:
       directed: tests/particles/part_soft_directed.cpp
-      random: tests/particles/part_soft_random.cpp
+      random: tests/particles/part_soft_directed.cpp
     counters: [soft_particles]
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "5ccc2fe"
+        evidence: reference/include/zref/zref_particle_soft.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
