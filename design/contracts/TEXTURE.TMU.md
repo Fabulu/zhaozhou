@@ -249,6 +249,18 @@ Budget group `tile`. Estimate only — **this block has not been synthesized**; 
 
 The weight computation is deliberately left inside `zhao_texture_bilerp` rather than hoisted into the TMU, even though hoisting would make the sharing explicit: the weights are part of what `tests/formal/texture_bilerp.sby` PROVES (`a_wsum`), and a module that took its weights as inputs would move that theorem out of the proved bytes. If the fit ever says the sharing did not happen, hoisting is the fix and the proof follows the weights.
 
+> **THE FIT SAID IT DID NOT HAPPEN. Recorded 2026-08-21; the hoist is now sanctioned by the condition above, not yet done.**
+>
+> `reports/synthesis/zhao_block_fit.json`: `zhao_texture_bilerp` = **7 DSP**, `zhao_texture_tmu` = **28 DSP**. That is **4 x 7 exactly, with no discount** — the four instances did not share their weight products. The paragraph above predicted "4 weight multiplies + 16 texel multiplies, not 32"; the measurement is 32.
+>
+> The row is trustworthy despite the census being stale overall: **neither `zhao_texture_tmu.sv` nor `zhao_texture_bilerp.sv` has changed since the census commit `96c0394`** (checked file by file), so this measurement describes the current RTL exactly.
+>
+> All four instances are driven by the SAME `q_fu_r`/`q_fv_r`, so `w00..w11` are bit-identical across them: **12 of the 32 products are literal duplicates.**
+>
+> **The proof cost is smaller than this paragraph feared.** `a_wsum` is asserted on weights the HARNESS derives itself from free `fu_free`/`fv_free` (`tests/formal/texture_bilerp_fv.sv:130-135`), not on anything the DUT computes — it is a check on the derivation formula, and it survives a DUT that takes weights as inputs. What actually moves is the OBLIGATION that the weights are well-formed: today it is structural (the bilerp derives them and cannot be fed bad ones), and after a hoist it becomes a duty on the TMU. That is a real transfer and it is what "the proof follows the weights" has to mean in practice: the TMU would need its own partition-of-unity property.
+>
+> Not done yet because it is the most structurally invasive of the available DSP cuts — it changes a module's ports, its directed tests, its formal harness and this contract — while `RASTER.FRAGMENT`'s blend (landed) and `GEOM.SKIN`'s weight identity are self-contained. Sequenced accordingly, not dismissed.
+
 Two things to watch, neither measured: the address generator is a 48-bit shift, a wrap fold and a `(v << log2w) + u` in one combinational cone from `req_valid_i` to the latched address, which is the longest path in the file; and the 32 multiplies are all in the sample cone. If either becomes critical the honest fix is a register between address generation and the cache request, which costs one cycle of the already-variable latency.
 
 ## Integration capture cases

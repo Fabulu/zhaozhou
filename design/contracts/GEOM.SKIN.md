@@ -136,6 +136,49 @@ The reference records every clamped multiply; the RTL clamps silently. That gap
 matters because a silently saturating vertex is a creature limb snapped to the
 world edge -- visible on screen, and otherwise untraceable.
 
+## The weight identity, and the test gap that gates it
+
+**Not done. Recorded 2026-08-21 with the analysis, because the analysis is the
+part that was missing.**
+
+`reports/DSP_Audit_2026-08-21.md` proposes an exact reduction of the two weight
+products per row to one:
+
+    blend = w0*pa + (64 - w0)*pb   ==   (pb << 6) + w0*(pa - pb)
+
+Six weight multiplies become three. **The identity holds exactly over the legal
+domain** and the shipped code permits it: `blend` is exact and unrounded at 75
+bits and `rescale_sat` is applied ONCE to the finished sum, which the header
+states as law (*"SINGLE ROUNDING IS THE LAW"*). Verified over `w0` 0..63 with
+wide operand pairs: zero differences. Width checked: the rewrite needs 74
+signed bits and the lane is 75.
+
+**Two things must be handled first, and neither is cosmetic.**
+
+**1. The identity is FALSE outside the legal domain.** `w1` is a 7-bit unsigned
+wrap, `w1 = 7'd64 - v_w0_i`, so for `w0` in 65..127 the shipped form computes
+`192 - w0` while the identity reads `(64 - w0)` as negative: 223,020 mismatches
+in a sampled sweep. It is benign only because `w0 > 64` is out of contract and
+`w0 == 64` diverts to the rigid branch. That is an unstated cross-block
+guarantee, so the rewrite needs an `ENFORCED-BY:` naming who upholds `w0 <= 64`
+rather than a comment asserting it.
+
+**2. THE DIFFERENTIAL DOES NOT REACH THE OPERAND EXTREMES.** The random lane
+shifts its inputs down -- matrices by 15 bits, vertices by 8 -- so `pa` and
+`pb` reach about 2^43 against a 67-bit lane that holds +/-2^66. The subtraction
+`pa - pb` is safe at 67 bits ONLY because the real range is bounded by the s32
+inputs: `row_product` sums three s32 x s32 products plus a shifted term, so
+|pa| < 2^64 and the difference needs 66 bits. **The declared types do not
+guarantee that; the input widths do.**
+
+So a 67-bit subtraction is correct and the lane would not wrap -- but nothing
+tests it, and the argument lives in this paragraph rather than in a check. The
+gap must be closed before the rewrite, not after: extend the random lane to
+full-range operands, or add directed extremes at the row-product rails.
+
+**Found by checking the differential's coverage before writing the RTL.** The
+change would have passed the existing lane either way.
+
 ## Scalar reference function
 
 `zref::creature::skin_vertex` -- declared in
