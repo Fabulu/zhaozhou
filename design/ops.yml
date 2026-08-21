@@ -291,12 +291,12 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §curve-tables]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_curve
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
     cost_units: 1
     field_ir_opcode: CURVE
-    differential_tests: tests/differential/field_curve.cpp
-    notes: Totality — every input yields a defined output (P4 §12-10).
+    differential_tests: tests/differential/field_curve_directed.cpp
+    notes: "Totality — every input yields a defined output (P4 §12-10). There is no per-op reference function: the ONE interpreter's OP_CURVE case is the law (field-ir.md §1), and the RTL is zhao_field_curve.sv."
 
   - id: FIELD.NOISE2
     name: Two-lane lattice noise
@@ -396,12 +396,12 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §spline-tables]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_sample_spline
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.FORMATION]
     cost_units: 2
     field_ir_opcode: SPLINE
-    differential_tests: tests/differential/field_sample_spline.cpp
-    notes: null
+    differential_tests: tests/differential/field_curve_directed.cpp
+    notes: "The closing term is rescale_s32(v, 1) — the one-half of Catmull-Rom — not v << 16, which is a fixed defect (review C1, RUN-20260814-1912 wave-1). RTL: zhao_field_curve.sv."
 
   - id: FIELD.SAMPLE.CURVE
     name: Envelope curve sample
@@ -411,12 +411,12 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §curve-tables]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_sample_curve
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
     cost_units: 1
     field_ir_opcode: CURVE
-    differential_tests: tests/differential/field_sample_curve.cpp
-    notes: Shares the CURVE opcode with an immediate table id.
+    differential_tests: tests/differential/field_curve_directed.cpp
+    notes: Shares the CURVE opcode with an immediate table id, so it shares the RTL and the test.
 
   - id: FIELD.ROT2
     name: 2-D rotation
@@ -456,11 +456,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §curve-tables]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_dcurve
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.WARP, FIELD.SEQ.FLOW, FIELD.SEQ.FORMATION]
     cost_units: 1
     field_ir_opcode: "0x1D"
-    differential_tests: tests/differential/field_dcurve.cpp
+    differential_tests: tests/differential/field_curve_directed.cpp
     notes: Opcode 0x1D frozen (plan 1.B-4, fills the gap after NOISE2 0x1C). This IS P2's proposed FIELD.SMOOTH.D, ratified under the new name; fills Earth8's velocity-output gap with zero runtime division.
 
   # ------------------------- table-class op (+1, A3e) ----------------------

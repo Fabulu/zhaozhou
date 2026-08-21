@@ -682,8 +682,13 @@ export function checkOps(
 
   for (const op of opsDoc.ops) {
     // --- V10: reference_function + differential_tests (existence gated on maturity) ---
-    if (!/^zref::fieldir::[a-z0-9_]+$/.test(op.reference_function)) {
-      errors.push(`V10: op ${op.id} reference_function "${op.reference_function}" is not a zref::fieldir:: symbol`);
+    // field-ir.md 1: op semantics live in exactly TWO places, the C++
+    // interpreter and the TS one. Most ops have no per-op function to name, so
+    // `zfield::interpret` -- the one interpreter -- is a legal answer here.
+    // Demanding a per-op symbol is what made this file name functions that
+    // resolve to nothing.
+    if (!/^(zref::fieldir::[a-z0-9_]+|zfield::interpret)$/.test(op.reference_function)) {
+      errors.push(`V10: op ${op.id} reference_function "${op.reference_function}" is neither a zref::fieldir:: symbol nor zfield::interpret`);
     }
     // Path existence is GATED: planned paths are legal while every implementing
     // block is still SPECIFIED (ledger exists before the tests do); the moment

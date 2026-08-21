@@ -5,13 +5,73 @@ at the top.*
 
 ---
 
+## 2026-08-21 — the table ops, and a sweep that was lying to me
+
+### The Field IR engine
+
+`CURVE`, `DCURVE` and `SPLINE` are built and verified. These are the ops that
+read a **curve table** — the compiled shape you get when a designer draws a
+falloff, an envelope or a path and it gets baked into the program.
+
+There is now a report for the whole engine so far, so the numbers live somewhere
+citable instead of only in commit messages: **`reports/FIELD_IR_ENGINE.md`**.
+
+Still simulation. Nothing here has run on a board.
+
+### The part worth your attention: the sweep was reporting scores for tests that never ran
+
+The way each piece gets finished is that I break the hardware on purpose,
+eighteen different ways, and check the test notices. That is the only thing that
+tells me a passing test is actually looking where the bug would be.
+
+This time nine of the eighteen came back as "no result". The build system was
+handing my test an **old copy** of the hardware after I had changed it — so the
+test was passing against the previous version and calling it a pass. At one
+point it did this with the *correct* version too, which is how I noticed.
+
+The sweep already refused to score a run where the compiled file had not changed
+— that check is why this surfaced at all rather than becoming eighteen out of
+eighteen. It now rebuilds from scratch every time, which is slower and honest.
+
+I mention it because it is a general hazard, not a one-off: any result in this
+repo that came from an incremental build is worth a second look.
+
+### And three real holes it found
+
+Once the sweep was trustworthy, it found three places my test was not looking:
+
+- A safety clamp could be **deleted entirely** and every test still passed —
+  because I only ever tested well-formed tables. The program format lets a table
+  through with one field unvalidated, and that clamp is the only thing standing
+  between that and a disagreement with the software.
+- A whole half of another clamp was invisible, because of an accident in how my
+  test built its tables.
+- A rounding law was only tested where it could not fail.
+
+All three are closed. The directed test now catches all eighteen on its own.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**
+across **89** blocks. `ctest -L fast`: **233/233**.
+
+Next in the engine: `NOISE2`, `RING`, `RIDGE`, `ROT2`, `ROT3`, then the
+sequencer that actually runs a program. None of that needs anything from you.
+
+**What still does need you** is unchanged, and it is the larger half: roughly a
+dozen blocks — particle spawn/age/collide, bloom and heat-haze, the HUD sprite
+pipeline — have no software to copy and no spec section. I can invent the
+behaviour, but the invention becomes the law the hardware is built to.
+
+---
+
 ## 2026-08-22 — the frame blit is out of the command front end
 
 ### Where the hardware stands
 
 **37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**, now
 across **89** blocks — one more than before, because DEBUG.FRAMEBLIT is a new
-block rather than a rewrite. `ctest -L fast`: **227/227**.
+block rather than a rewrite. `ctest -L fast`: **233/233**.
 
 ### DEBUG.FRAMEBLIT — you were right, the design was sitting there
 

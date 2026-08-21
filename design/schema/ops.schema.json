@@ -64,7 +64,8 @@
         "rounding": { "enum": ["saturating", "wrapping"] },
         "reference_function": {
           "type": "string",
-          "pattern": "^zref::fieldir::[a-z0-9_]+$"
+          "description": "The op's law. Either a zref::fieldir:: symbol, or the literal zfield::interpret -- field-ir.md 1 puts op semantics in exactly TWO places, the C++ interpreter and the TS one, and most ops have no per-op function to name. Requiring a per-op symbol invents one, which is how this file accumulated names that resolve to nothing.",
+          "pattern": "^(zref::fieldir::[a-z0-9_]+|zfield::interpret)$"
         },
         "implementation_blocks": {
           "type": "array",

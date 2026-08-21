@@ -995,6 +995,36 @@ set_tests_properties(lint_zhao_field_normalize PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_CURVE, OP_DCURVE and OP_SPLINE -- the first ops in the engine that read a
+# TABLE, so the block takes a table port instead of owning a ROM: tables are
+# per-program data carried in the .zprog image, not constants of the hardware.
+# The segment search is SIX steps for every table size, not ceil(log2(n)), and it
+# runs on the CLAMPED value. SPLINE's closing term is rescale_s32(v, 1) -- the
+# one-half of Catmull-Rom -- not v << 16, which is a fixed defect the test keeps
+# fixed. The test carries two oracles: zfield::interpret decides every value, and
+# a restatement decides the per-lane saturation attribution that Status.sat
+# collapses into one bit.
+add_executable(test_field_curve_directed differential/field_curve_directed.cpp)
+target_link_libraries(test_field_curve_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_curve_directed
+  PREFIX Vzhao_field_curve
+  TOP_MODULE zhao_field_curve
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv)
+add_test(NAME field_curve_directed COMMAND test_field_curve_directed)
+set_tests_properties(field_curve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_curve_random COMMAND test_field_curve_directed --random 3000)
+set_tests_properties(field_curve_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_curve_random_nightly COMMAND test_field_curve_directed --random 40000)
+set_tests_properties(field_curve_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_curve
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_curve
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv)
+set_tests_properties(lint_zhao_field_curve PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_LEN2, OP_LEN3 and OP_DIST2, over the shared exact integer square root.
 # The sum of squares is UNSIGNED because three squares reach 3*2^62 -- which
 # overflows s64 and fits u64, exactly why the reference uses uint64_t -- and the
