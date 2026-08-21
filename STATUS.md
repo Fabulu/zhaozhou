@@ -5,6 +5,73 @@ at the top.*
 
 ---
 
+## 2026-08-21 (later) — the sequencer is built, and CI was red for a reason
+
+Two things landed since the note below.
+
+### The Field IR sequencer runs programs now
+
+The last piece. `FIELD.SEQ.CORE` is the register file and the walk that turns a
+compiled program into a run: zero the file, load the inputs, execute until the
+program says stop, read the outputs back. Sixty-four registers, six clocks per
+instruction.
+
+It runs the arithmetic instructions today — fifteen of them. The multi-clock
+ones (reciprocal, sine, length, normalise, the curve tables, noise, rotation,
+ring) are all built and verified but not yet plugged into the walk, so the five
+`FIELD.SEQ.*` profile blocks stay unbuilt until they are. That is the next
+piece of work and it needs nothing from you.
+
+An instruction the walk does not recognise is **refused**, and the run stops
+with a status. It is not skipped and it does not return zero, because a
+sequencer that quietly ignores an instruction produces a field that looks
+plausible and a world that is wrong.
+
+**102 directed checks plus about 1,850 random ones. I broke it nineteen ways on
+purpose; seventeen were caught, and the two that were not are a recorded pair
+that cannot both be removed.**
+
+### It found a bug in something I had already signed off
+
+The arithmetic unit's `abs` was wrong for exactly one input — the most negative
+number there is. The written law says it should saturate. It did not.
+
+The reason nothing caught it for weeks is the interesting part. The arithmetic
+unit's own test did not ask the real reference. It **restated** the rule in its
+own words, restated it the same wrong way, and then asserted the wrong answer —
+under a comment I had written warning that this exact thing could happen. So the
+hardware and its test agreed with each other and the actual law was outvoted.
+
+The sequencer's test does not restate anything. It runs whole programs through
+the shipped reference itself, which is why it saw immediately what nothing else
+had. The arithmetic unit is fixed, and its test now asks the real thing too.
+
+**A wrong restatement agrees with a wrong implementation forever.** That is the
+lesson and I have applied it where I can.
+
+### You were right about CI
+
+Every push has been failing, and it was one thing: code formatting.
+
+The check that catches it needs a specific tool. That tool is not installed on
+this machine, so locally the check reported "skipped" and the suite went green.
+On the server it ran and went red. **Both answers were accurate and neither was
+useful**, which is the worst possible shape for a test to have.
+
+Thirty-five files had drifted, some of them from long before this week. All
+reformatted. The real fix is that the tool is now pinned as a project dependency
+at the exact version the server uses, so `npm install` puts it on any machine
+that builds this repo and the local check stops skipping. It runs here now.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 37 unit-verified · 14 rtl-verified**
+across **92** blocks.
+
+Everything above is simulation. Nothing here has run on a board.
+
+---
+
 ## 2026-08-21 — the new blitter works, is faster, and I need one decision from you
 
 Step 4 is built: the new frame blitter and the slot manager are wired into the
