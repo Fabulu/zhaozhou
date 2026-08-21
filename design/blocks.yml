@@ -595,12 +595,16 @@ blocks:
     counters: [progcach_hits, progcach_misses, programs_rejected]
     source_ids: true
     budget_group: field
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "1822cd8"
         evidence: reference/include/zref/zref_progcache.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "832edc1"
+        evidence: tests/field/field_progcache_directed.cpp
 
     deferred: false
     cut_order: null
