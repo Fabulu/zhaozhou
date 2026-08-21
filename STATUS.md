@@ -5,6 +5,72 @@ at the top.*
 
 ---
 
+## 2026-08-21 (late) — three more blocks, and an honest scope note
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 33 unit-verified · 14 rtl-verified.**
+`ctest -L fast`: **214/214**, up from 180 this morning. All pushed.
+
+New since the last note: **GEOM.PROJECT** (creature vertex → pixel position),
+**FIELD.PROGCACHE** (keeps validated spell programs resident), **PART.EXPAND** and
+**PART.SOFT** (the two ways a particle becomes something drawable — a triangle for
+big ones, a point sprite for small ones).
+
+### A technique that has earned its keep twice today
+
+For the two particle blocks the law was **buried inside the software renderer** —
+computed and immediately drawn, with no function to point at. So I had to copy it
+out, and a copy that only I ever compare against the original is worth nothing.
+
+Both tests therefore draw the same particles **twice**: once through the real
+renderer, once through my copy, and demand the two pictures match pixel for pixel.
+If my copy ever drifts from the renderer, that fails — and it fails whichever of
+the two moved. That check is what makes the rest of the test mean anything.
+
+### What I got wrong today, and how it surfaced
+
+Three times, breaking the hardware on purpose caught a *comment* that was wrong
+rather than code:
+
+- I claimed a division in the particle expansion truncates and that odd sizes
+  would expose a rounding error. **It never truncates** — the numbers are always
+  multiples of 16. No test can tell the two apart. I'd written that claim in three
+  files; all three now say so.
+- I claimed a certain shift had to be arithmetic or sprites would vanish. **At
+  these widths it makes no difference.** Corrected.
+- The sprite test **could not tell whether the block was reading the right edge of
+  an offset viewport** — every test sprite sat left of where the two answers
+  differ. That is the same latent bug the software renderer has a fixed-note
+  about: it made the second player's view silently invisible for a while. Now
+  covered.
+
+### The scope note — this matters for planning
+
+I checked every remaining block for a law already written down somewhere under a
+different name. **There are no more.** The four I finished today were the last of
+the cheap ones.
+
+The remaining 37 split three ways, and only one is mine to do alone:
+
+1. **Needs a spec another part owns** — the compressed vertex format has two
+   ends, and the packing end belongs to the asset tools. Inventing one end on my
+   own would create exactly the kind of made-up law we keep catching.
+2. **Needs the spell-program engine** — five blocks, one engine. Big, but
+   completely unambiguous, and it needs nothing from you. **This is the next real
+   thing I can do.**
+3. **Needs you to decide how the game behaves** — roughly a dozen blocks:
+   how a particle spawns, ages and collides; what bloom and heat-haze look like;
+   what the HUD sprite pipeline does. There is no software to copy and no spec
+   section to follow. I could invent it, but then my invention becomes the law
+   the hardware is built to, and that should be your call rather than mine.
+
+So: "finish the hardware" is not one more sitting. I can keep going on group 2
+indefinitely. Group 3 is waiting on you, and it is worth a conversation rather
+than me guessing.
+
+---
+
 ## 2026-08-21 (night) — the backlog is empty; real building starts
 
 ### Where the hardware stands
