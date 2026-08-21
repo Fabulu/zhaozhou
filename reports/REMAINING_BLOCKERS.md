@@ -127,3 +127,53 @@ Two consequences worth planning around:
 and never evaluates one. Its validation half is already law —
 `zfield::decode` with thirteen named error classes — so only its cache policy
 needs deciding.
+
+---
+
+## Addendum 2: the cheap blocks are gone, and what that leaves
+
+Since the map above was written, five greenfield blocks were built and verified —
+`GEOM.PROJECT`, `FIELD.PROGCACHE`, `PART.EXPAND`, `PART.SOFT`, plus both halves of
+`GEOM.POSE`. Four of the five were **kind-1** phantoms: the law already existed
+under another name and only had to be found, cited and pinned.
+
+**A systematic scan says there are no more of those.** Every remaining
+`reference_model` was checked against the reference tree for a law shipped under a
+different name. The results:
+
+| Block | Is the law already shipped? |
+| --- | --- |
+| `GEOM.VDECODE` | **No.** Meshlets hold plain `SkinVertex` — there is no compressed form anywhere, and the ledger says the format belongs to `SW.TOOLS.ASSET`: *"one spec, two ends"*. |
+| `POST.GATHER`, `POST.COMPOSITE` | **No.** `zref_aux.hpp` says of the distortion map that *"the offset arithmetic belongs to whoever"* — it is explicitly unassigned. Bloom, flash and grading exist only in the star/sky path, which is a different block's law. |
+| `TWOD.SPRITE`, `TWOD.PLANE` | **No.** `blit_pattern_8x8` is a form-marker blit, not a HUD sprite pipeline with descriptors, affine and CLUT paths. |
+| `GEOM.LOOM`, `GEOM.WARP` | **No.** Transform-graph evaluation and Warp8 deformation are unimplemented in software as well. |
+| `PART.SPAWN/STATE/UPDATE/COLLIDE` | **No.** `zref::render::Particle` is a draw-time snapshot the renderer is HANDED. Nothing simulates particles. |
+| `PART.LADDER` | Partly. The seven rungs are charter §9 and the counter lanes are `zref::measure`, but the ledger says the thresholds are *"provisional until Phase-10 evidence"* — the numbers are explicitly not ratified. |
+
+## So the remaining 37 split three ways, and only one is mine to do alone
+
+**1. Needs a spec another block owns.** `GEOM.VDECODE` is the clear case: the
+vertex compression format has two ends and the pack side is `SW.TOOLS.ASSET`'s.
+Inventing one end unilaterally would create exactly the kind of unratified law
+this project keeps catching. `PART.LADDER`'s thresholds are the same shape —
+recorded as provisional pending evidence that does not exist yet.
+
+**2. Needs the Field IR engine.** Five blocks, one engine, required shape already
+documented in addendum 1. This is large but it is unambiguous work: a byte-code
+engine over `.zprog`, differentially verified against `zfield::interpret` on the
+committed `.zvec` corpus. **It is the single highest-value remaining item** and
+nothing about it needs a decision from anyone.
+
+**3. Needs behaviour decided.** The four particle-simulation blocks, the two
+compositor blocks and the two 2D blocks have no law in software, no ratified spec
+section, and no donor behaviour to extract. Each one means choosing how the game
+behaves — how a particle spawns, ages and collides; what bloom looks like — and
+then writing that choice down as the reference before any RTL. That is design
+work, and the choices belong to the person whose game it is.
+
+## The honest statement of scope
+
+"Finish the full hardware" is not one more sitting's work. Group 2 is the next
+substantial thing I can do without input. Group 3 is roughly a dozen blocks whose
+*behaviour* has never been decided, and doing them well means deciding it
+deliberately rather than having me invent it and record the invention as law.
