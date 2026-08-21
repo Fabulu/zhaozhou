@@ -413,15 +413,52 @@ module zhao_cmd_dma #(
             cc <= cc_v;
             h_debug <= fl_v[0];
             need_total <= 32'd40 + cb_v;
-            // seed the payload CRC over the payload bytes already fetched
-            // (bytes [36, min(fetched, 40+N)) of burst 1)
+            // Seed the payload CRC over the payload bytes burst 1 already
+            // landed: bytes [36, min(fetched, 40+N)).
+            //
+            // THE BOUND IS 64 AND IT USED TO BE 192, WHICH MADE THIS BLOCK
+            // UNFITTABLE. Every iteration is a real CRC-32C byte step, so the
+            // bound is the length of a DEPENDENT combinational chain: 156
+            // steps, about 1,248 chained XOR/shift stages, each with a guarded
+            // read of a 4,096-entry register array. Measured 2026-08-21,
+            // quartus_map did not finish it in 4,838 s, and the census row for
+            // this block has never carried data for the same reason.
+            //
+            // At most 28 of those steps could ever be active. Derivation:
+            // `fetched` is zeroed when the fetch is accepted; M_HDR_REQ issues
+            // exactly ONE burst; `burst_len` caps at 64 bytes; M_HDR_WAIT adds
+            // 8 per beat and leaves on `last`. So `fetched` <= 64 here, always,
+            // and `seed_end` is then capped lower still by 36 + N. Iterations
+            // 64..191 were guarded dead logic that synthesis had to build
+            // before it could discard them.
+            //
+            // Bounding at 64 is therefore EXACTLY equivalent, not an
+            // approximation: the removed iterations had `k < seed_end` false
+            // for every reachable state.
+            //
+            // The bound is ASSERTED below rather than left as prose, because
+            // this is the whole reason the loop is safe.
+            //
+            // ONE EQUIVALENT MUTANT, recorded so it does not read as a hole.
+            // Replacing `seed_end = fetched` with the constant 64 survives the
+            // sweep, and it is genuinely equivalent rather than untested:
+            // `fetched` is min(64, roundup8(f_len)), and the cap on the next
+            // line is 36 + N = f_len - 4, which is ALWAYS below `fetched`
+            // whenever `fetched` is under 64. So the cap decides in exactly the
+            // cases where the two inputs differ. Checked over every packet
+            // length from 40 to 4,096: zero differences.
+            //
+            // `fetched` stays because it says what the value MEANS -- how much
+            // burst 1 actually landed -- where 64 would be a constant that
+            // happens to work.
+            // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
             begin
               logic [31:0] seed_end;
               logic [31:0] cseed;
               seed_end = fetched;
               if (seed_end > (32'd36 + cb_v)) seed_end = 32'd36 + cb_v;
               cseed = 32'hFFFF_FFFF;
-              for (int unsigned k = 36; k < 192; k++) begin
+              for (int unsigned k = 36; k < 64; k++) begin
                 if (k < seed_end) begin
                   cseed = zhao_abi_pkg::zhao_crc32c_step(cseed, slot_buf[k]);
                 end
@@ -601,6 +638,12 @@ module zhao_cmd_dma #(
     if (rst_n) begin
       if (pkt_valid_o) begin
         assert(hdr_gate && pay_gate);
+      end
+      // The seed loop's bound. One burst, capped at 64 bytes, so the
+      // catch-up can never reach past byte 64 -- which is what lets the
+      // loop stop there instead of at 192.
+      if (m == M_HDR_CHK) begin
+        assert(fetched <= 32'd64);
       end
     end
   end

@@ -180,7 +180,64 @@ deliberately rather than having me invent it and record the invention as law.
 
 ---
 
-## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect
+## 2026-08-21 (RESOLVED, same day) — CMD.DMA now synthesises
+
+> **`Quartus Prime Analysis & Synthesis was successful. 0 errors.`** 21:06
+> elapsed. This block had never once been successfully processed: the census
+> row is `failed:quartus_map` (16.2 GB elaboration) and at HEAD it was
+> `timeout` at 4,838 s.
+>
+> **THE FIX WAS NOT THE REDESIGN THIS SECTION CALLED FOR.** The analysis below
+> was right about the cause and wrong about the remedy, and the correction is
+> worth more than the original entry.
+>
+> The loop is bounded at **192**. The reachable maximum is **64**:
+> `fetched` is zeroed when the fetch is accepted, `M_HDR_REQ` issues exactly
+> ONE burst, `burst_len` caps at 64 bytes, and `M_HDR_WAIT` adds 8 per beat and
+> leaves on `last`. So iterations 64..191 had their `k < seed_end` guard false
+> in **every reachable state** — 128 steps of unreachable logic that synthesis
+> had to build a ~1,248-stage dependent chain for before discarding.
+>
+> Bounding the loop at 64 is **exactly equivalent**, and the diff is one
+> number. No incremental CRC state machine was needed. The bound is now
+> asserted in the formal cone rather than argued in prose, because it is the
+> reason the loop is safe.
+>
+> Evidence: 43 directed + 139,113 random checks (1,000 frames of packets);
+> mutation sweep 11 / 10 caught / 1 recorded equivalent / 0 discarded.
+>
+> **The lesson is about the diagnosis, not the bug.** "156 dependent CRC steps"
+> was measured and true. "Therefore it needs an incremental CRC redesign" was
+> inferred and false — nobody had asked how many of those steps could actually
+> execute. A cone that large is worth a bound check before it is worth a
+> rewrite.
+>
+> **SYNTHESIS IS FIXED; PLACEMENT IS NOT.** The same run then failed the
+> FITTER at 2,839 s — a real failure, not a timeout (the limit is 3,000 s and
+> the exit was non-zero). So this block now reaches two stages further than it
+> ever has, and `failed:quartus_fit` is the new wall.
+>
+> | attempt | result |
+> | --- | --- |
+> | census (`96c0394`, with `blit_buf`) | `failed:quartus_map`, 16.2 GB |
+> | HEAD after step 6 | `timeout`, 4,838 s |
+> | HEAD + bounded CRC loop | **synthesis 0 errors**, then `failed:quartus_fit`, 2,839 s |
+>
+> **The cause is NOT yet established and is deliberately not recorded here as
+> if it were.** The workspace is auto-deleted on success paths, so the fitter's
+> own error was not captured; the next run keeps it.
+>
+> A PREDICTION, held as a prediction: `slot_buf` still has `blit_buf`'s defect
+> in miniature — initialiser, async-reset write, combinational read — so it
+> does not infer as RAM at 4,096 entries, and
+> `assign pkt_byte_o = slot_buf[rd_off]` is a **4,096:1 byte mux**, on the order
+> of 32,760 LUTs against a 41,910-ALM device.
+>
+> That is exactly the shape of reasoning that was wrong about the CRC loop an
+> hour earlier: a true measurement, an inferred remedy, written down as
+> required work. The fitter's error decides it, not this paragraph.
+
+## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
 **Measured, not inferred.** After step 6 removed the 1.97 Mbit `blit_buf`,
 `zhao_cmd_dma` was re-fitted at HEAD. It did **not** succeed:
