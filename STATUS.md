@@ -5,6 +5,90 @@ at the top.*
 
 ---
 
+## 2026-08-21 (later still) — the creature path now exists in hardware
+
+### What moved
+
+Four new blocks, all differential against the shipped reference, all with
+mutation sweeps:
+
+| | |
+|---|---|
+| `quat2mat` | quaternion to rotation matrix — the innermost step of posing a bone |
+| `mat3x4_mul` | the chain multiply, **sequential** (see below) |
+| `pose_decode` | the whole per-bone chain: one clip + frame in, a full skeleton pose out |
+| `pose_cache` | which poses are already decoded, and which one to throw away |
+
+Together with GEOM.SKIN from earlier today, that is the **entire creature
+animation path** in hardware: bones pose, poses chain down the skeleton, vertices
+follow the bones. This is the road to the animation-state inventory — every state
+in it eventually becomes a bone palette, and this is the hardware that runs one.
+
+`ctest -L fast`: **192/192**. Everything pushed.
+
+### I spent DSPs where it mattered and refused to elsewhere
+
+The chain multiply, done the obvious way, is **36 multipliers**. Twice what
+skinning costs, on a board with 112 where we already want 171.
+
+I built it to do **one element per cycle with three multipliers** instead —
+twelve cycles per matrix. Then the whole decode chain shares **one** multiply
+engine across every bone, so the entire creature-posing block costs **three
+multipliers, not seventy-two.**
+
+It is slower, and that is fine here, because posing is not per-vertex work. A
+pose is decoded once per (creature type, animation, frame) and then **shared by
+every one of that creature on screen that frame** — that is the whole reason the
+cache exists. A full 32-bone skeleton takes about 1,600 cycles to pose. At 50 MHz
+a frame is 833,000.
+
+This is the first of the savings I listed as "open" this morning, actually taken.
+
+### One decision I want from you
+
+**The pose cache needs somewhere to keep 128 poses. That is 192 KB — about 28% of
+all the fast memory on the chip, for one feature.**
+
+I did not spend it. The block I built decides *which* pose is needed and *where*
+it goes, and hands the storage question back out. Burying a quarter of the chip's
+memory inside a module is how a budget gets spent without anyone choosing.
+
+Four ways out, cheapest first:
+
+1. **Pack by real bone count.** 32 bones is the maximum, not the typical. A
+   12-bone creature would use 12 bones' worth. Probably a 2–3x saving for free.
+2. **Cache fewer poses.** 32 instead of 128 is 48 KB (7%). The risk is more
+   re-decoding when lots of different creatures animate at once.
+3. **Keep poses in main memory.** Costs bandwidth every time a creature is drawn
+   instead of chip memory once.
+4. **Store poses smaller** (rotation + position instead of a full matrix): 8 bytes
+   a bone instead of 48. But then skinning has to rebuild the matrix, which costs
+   the multipliers we just saved.
+
+**My recommendation: 1 + 2 together.** They compose, they cost nothing at runtime,
+and between them the cache drops to a few percent of memory instead of a quarter.
+4 trades the resource we are short of for one we are not, so I would not.
+
+Tell me which and I will build it. Until then GEOM.POSE stays honestly marked
+unfinished — two verified halves are not a finished block.
+
+### Two more times the tests were lying
+
+Same lesson as this morning, twice more:
+
+- The cache eviction test **could not tell "throw away the oldest" from "throw
+  away the newest."** It checked both groups, so both policies gave identical
+  totals with the roles swapped. A backwards cache passed it. Fixed; the
+  backwards version now fails 4 checks.
+- Two other cache sections asked for animation frames **past the end of the
+  animation**, so those requests were rejected as invalid and the sections tested
+  nothing at all. They looked green the whole time.
+
+I keep finding these by breaking the hardware on purpose and checking the test
+notices. It is the only reason I trust any of the green numbers above.
+
+---
+
 ## 2026-08-21 (later) — GEOM.SKIN built; the test nearly shipped a lie
 
 ### What moved
