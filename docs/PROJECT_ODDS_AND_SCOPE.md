@@ -1,10 +1,11 @@
 # Odds and scope — an outside assessment
 
-Recorded 2026-08-18. This is an **outside assessment** the owner brought back
-from a conversation elsewhere, kept in the repo because its central claim is a
-scoping decision and scoping decisions belong where the work is.
+Recorded 2026-08-18, from a conversation the owner had elsewhere and asked to
+have filed. It is kept in the repo because its central claim is a **scoping
+decision**, and scoping decisions belong where the work is.
 
-It is not a plan and nothing in it is scheduled.
+Nothing here is a plan and nothing here is scheduled. The odds are explicitly
+described by their author as intuition, not statistics.
 
 ---
 
@@ -13,66 +14,89 @@ It is not a plan and nothing in it is scheduled.
 > "Yes, you have a chance in hell. But the thing currently in your head is not
 > one project. It is about six enormous projects welded together."
 
-Everything below follows from that sentence. The response to it is not to
-abandon anything — it is to **name which project is being worked on right now**,
-and to let the others be later.
+The six:
 
-## The nested victories
+1. a custom FPGA console;
+2. a custom programming language and toolchain;
+3. a bespoke 3D engine;
+4. a Sacrifice-scale strategy/action game;
+5. a large professional content production;
+6. potentially a physical console afterward.
 
-The assessment splits the ambition into three, each a real stopping point:
+> "Trying to complete the maximal version of all six before calling anything
+> 'finished' would be a terrible bet. Getting to a real, distinctive,
+> commercially releasable game by treating them as **nested victories** is much
+> more plausible."
 
-- **Victory 1 — the proof.** The console does something no one thinks a
-  hobbyist FPGA console does. Terrain that deforms like Sacrifice's, suns that
-  smear like Noctis'. This is a *demonstration*, and it is complete on its own.
-- **Victory 2 — the first commercial game.** One finished game that runs on the
-  hardware and that someone pays for.
-- **Victory 3 — the great expansion.** The full roster, the campaign, the
-  platform.
+## The odds
 
-Each victory contains the next. Reaching Victory 1 and stopping is not failure;
-it is the most common good outcome for a project shaped like this one.
+Intuition-based, per their author:
 
-## Why the hardware terminates and the content does not
+| Outcome | The bet |
+| --- | --- |
+| Impressive playable PC/emulator vertical slice | **High: 70–90%** |
+| Real FPGA demo rendering its own terrain, creatures and spells | **Plausible: 50–70%** |
+| Polished, sellable 2–5 hour game using this technology | **Plausible but hard: 40–60%** |
+| Large 15–30 hour campaign, 50 creatures, human-quality VO | **Long shot: 10–25%** |
+| All of that plus a finished bespoke physical console as one launch | **Single digits** |
 
-The load-bearing asymmetry:
+The last two become far more plausible **as expansions over several years**
+rather than as the minimum acceptable first release. That reframing is the
+whole point of the table — it is not a forecast of failure, it is an argument
+about what the first release should contain.
+
+> "The full maximal dream is a moonshot. The core dream — an extraordinary game
+> that genuinely runs on your strange machine — is not fantasy anymore."
+
+## Why the assessment is not flattery
+
+The argument offered, in its own terms: Zhaozhou is no longer a folder of
+architecture prose and enthusiasm. It has real RTL, real reference behaviour,
+differential tests, mutation testing, formal properties, synthesis evidence and
+increasingly real subsystem composition.
+
+The `DEBUG.FRAMEBLIT` work is cited as the example: the design proposal exposed
+genuine faults, those were verified against the implementation and corrected,
+missing ownership and arbitration blocks were built, and further integration
+bugs surfaced in the process.
+
+> "That is what an actual hardware project looks like. It does not look clean.
+> It keeps revealing that the thing you thought was finished was resting on a
+> fake assumption."
+
+## The structural advantage
+
+**The hardware is specialised for one kind of game.** This is not a
+general-purpose PlayStation. Silicon can be spent on deformable terrain,
+extreme LOD, creature geometry and absurd magic, rather than being spread
+evenly across everything a general console must do.
+
+That specialisation is the reason the odds above are as high as they are.
+
+## The asymmetry worth remembering
 
 **Hardware questions terminate.** "Does the raster path fit in 112 DSPs" has an
-answer. Once answered it stays answered. The set of open hardware questions
-shrinks monotonically as work is done.
+answer; once answered it stays answered; the set of open hardware questions
+shrinks as work is done.
 
-**Content expands forever.** Every creature suggests three more. Every effect
-suggests a variant. The set of open content questions *grows* as work is done,
-because doing the work is what reveals the possibilities.
+**Content questions expand.** Every creature suggests three more, every effect a
+variant. The set *grows* as work is done, because doing the work is what reveals
+the possibilities.
 
-This is the argument for finishing the hardware first, and it is a stronger
-argument than "hardware is the foundation" — it is that hardware is the only
-part of this project that can actually be *finished*.
+This is a stronger argument for finishing the hardware first than "hardware is
+the foundation" — it is that hardware is the only part of this project that can
+actually be **finished**.
 
 ## Graceful failure
 
-The project should be arranged so that stopping at any point leaves something
-real:
-
-- Stop after the proof: a working, novel console, publicly demonstrated.
-- Stop after the first game: a shipped product.
-- Stop mid-content: a smaller game, not a broken one.
-
-A plan with no graceful failure mode is a plan that converts years into nothing
-if it stalls. This one has three.
-
-## What would make the assessor bet for, or against
-
-**For:** hardware questions closing one after another, on the record, with
-evidence. Scope held. A second creature that comes out of the machine cheaply.
-
-**Against:** content work starting before the hardware questions close. Scope
-growing in response to progress. A first creature that looks great and a second
-that costs the same as the first.
+Each nested victory is a real stopping point, so stopping leaves something
+real: a working novel console publicly demonstrated; or a shipped product; or a
+smaller game rather than a broken one. A plan with no graceful failure mode
+converts years into nothing if it stalls. This one has three.
 
 ## Creature counts and budget
 
-The research the assessment carried, kept because it is the same data the
-animation note depends on:
+The comparison data, kept because the animation note depends on it:
 
 | Game | Creatures |
 | --- | --- |
@@ -84,22 +108,22 @@ animation note depends on:
 | Cassette Beasts | 120 |
 | Temtem | 165 |
 
-Fifty disciplined 3D creatures, handcrafted: **$150k-$300k**. See
-[CREATURE_ANIMATION_APPROACH.md](CREATURE_ANIMATION_APPROACH.md) for the
-approach that exists to avoid that number, and the revised $10k-$40k picture.
+Fifty disciplined 3D creatures, handcrafted through the standard production
+chain: **$150,000–$300,000**. See
+[CREATURE_ANIMATION_APPROACH.md](CREATURE_ANIMATION_APPROACH.md) for the plan
+that exists to avoid that number and the revised $10,000–$40,000 picture.
 
 ---
 
-## How this reads against the current state of the repo
+## How this reads against the repo it lives in
 
-One honest note, since the assessment is about scope and this file lives in the
-repo the scope applies to.
+One honest note, since the assessment is about scope.
 
-The project is currently doing the thing the assessment recommends: hardware
-questions, closed one at a time, each with an evidence path recorded in the
-ledger. The standing rule that **hardware is first and the compiler is
-incidental** is the same rule this assessment arrives at from the outside.
+The project is currently doing what the assessment recommends: hardware
+questions closed one at a time, each with an evidence path in the ledger. The
+standing rule that hardware comes first and the compiler is incidental is the
+same conclusion this assessment reaches from outside.
 
-The risk it names that is live right now is the second one under "against":
-scope growing in response to progress. The owner docket is the place that gets
-watched for it.
+The risk it names that is live right now is **scope growing in response to
+progress**. [OWNER_DOCKET.md](OWNER_DOCKET.md) is the file to watch for it —
+which is also, honestly, the file most likely to cause it.

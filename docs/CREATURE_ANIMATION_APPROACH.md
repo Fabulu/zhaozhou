@@ -2,81 +2,133 @@
 
 **Status: DESIGN NOTE, deliberately not started.** Recorded 2026-08-18 from the
 owner. Animation architecture is a **later wave**, after `DEBUG.FRAMEBLIT`
-integration and the FPGA fit, and the first prototyping happens in the
-PC/reference path rather than in hardware. The reason is in §5.
+integration and the FPGA fit work, and the first prototyping happens in the
+PC/reference path rather than in hardware. §6 is the reason.
 
 ---
 
-## 1. The thesis
+## 1. The problem, in the owner's words
 
-The 3D models are the hard part of this game, and the mistake to avoid is
-treating them as fifty separate productions. **Build one creature-production
-machine**, then run fifty creatures through it. Whether the machine works is a
-question that gets answered by creature number two, not creature number one —
-the first creature always works, because it was made by hand while the machine
-was being built around it.
+> "Alright, so you basically told me I have to undercut the market somewhere
+> between five and infinity orders of magnitude. I didn't expect it to be this
+> bad. But I intend to attack this problem my way."
 
-Comparable creature counts, for scale: Impossible Creatures 51, Flock 60,
-Zanzarah 77, Bugsnax 100, Temtem 165, Cassette Beasts 120, Monster Sanctuary
-101. Handcrafting fifty disciplined 3D creatures costs roughly **$150k-$300k**.
-The machine exists to not spend that.
+Two modes of attack, **only one of which has to work**, and they may complement
+each other:
 
-## 2. The Spore correction
+1. **Procedural animation.** Spore did it; others did too. With AI the iteration
+   is fast enough to build bespoke procedural animation per creature. Bonus: it
+   can animate through wonky scenes that static animation cannot handle.
+2. **AI-assisted animation.** Not handing it to AI — working out, by trial and
+   error, a process where the owner and AI together do the animating and
+   modelling. Starting from no 3D experience.
 
-Spore is the obvious reference and the obvious trap. Fully procedural animation
-over arbitrary morphology produces motion that is *plausible for anything* and
-*characterful for nothing* — every creature moves like the same rubber toy.
+> "I don't know how fast I'll be, but I have a suspicion it'll be like all my AI
+> projects before this: I'll be faster than I have any right to be."
 
-The correction is a **hybrid**: authored performances stored
-**morphology-independently**, then solved onto a specific skeleton with IK. The
-performance carries the character; the solve carries the anatomy. Neither
-alone gets there.
+## 2. Why this changes the economics
 
-## 3. Eight to twelve morphology systems, not fifty
+The previous estimate assumed the standard chain:
 
-The unit of reuse is a **morphology system**, not a creature. Eight to twelve of
-them — biped, planted quadruped, serpentine, flyer, and so on — cover a fifty
-creature roster, and each system is a place where authored work amortises.
-Fifty bespoke rigs is the failure mode this exists to prevent.
+    concept artist -> modeler -> texture artist -> rigger -> animator -> technical artist
+    repeated fifty times
 
-## 4. The four-layer stack
+The proposal is a different equation:
 
-1. **Procedural locomotion** — gait, footfall, ground adaptation.
-2. **Morphology-independent authored poses** — the character layer, the part a
-   human actually makes.
-3. **Procedural transitions and motion warping** — blending, retargeting,
-   reacting to terrain and impact.
-4. **Secondary motion** — cloth, flesh, tails, ears; the layer that sells
-   weight and costs the least to add.
+    build ONE creature-production machine -> feed it fifty designs
+    -> manually direct and repair the exceptions
 
-### What 240p forgives, and what it does not
+That is not "undercutting contractors by working harder". It changes the unit
+economics from **fifty handcrafted productions into one large tooling project
+plus fifty parameter sets** — which is the kind of bet where being able to build
+large amounts of software with agents actually matters.
 
-It forgives **surface detail**: a face, a hand, subtle skin deformation. None of
-that survives the resolution, so none of it should be paid for.
+## 3. The important correction about Spore
 
-It does not forgive **silhouette and timing**. Those are exactly what reads at
-240p, and they are exactly what bad animation gets wrong. The budget should move
-from detail into silhouette clarity and timing.
+Spore is encouraging, but **not** because it proved code can replace animators.
 
-## 5. Why this is a later wave, and why it prototypes on PC first
+Its final system was a **hybrid**. Animators created motion by familiar posing
+and keyframing, but the result was stored in a **morphology-independent** form.
+At runtime the system preserved the structural and stylistic relationships of
+the performance, converted them into pose goals for a previously unseen
+creature, and solved those goals with **inverse kinematics**. One authored
+performance survived radically different skeletons and limb arrangements.
 
-**The hardware creature plan is clip-oriented.** That is fine as a shipping
-format and dangerous as a starting point: committing to static clips now would
-freeze the animation architecture before anything has been learned about
-whether the four-layer stack survives contact with a real creature.
+That distinction is the good news. The problem to solve is not "how can
+mathematics invent a compelling attack performance" — it is "how does one
+authored performance transfer onto fifty different bodies".
 
-So: prototype in the **PC/reference path**, where iteration is free and the
-oracle already exists. Decide the architecture there. Then make the hardware
-animation format a deliberate wave, informed by what the prototype showed,
-after FRAMEBLIT integration and the FPGA fit have settled how much fabric and
-bandwidth there is to spend.
+## 4. What 240p forgives, and what it does not
 
-Prematurely forcing static clips is the specific mistake this note exists to
-prevent.
+It forgives **surface detail** — faces, hands, subtle skin deformation. None of
+it survives the resolution, so none of it should be paid for.
 
-## 6. Money
+It does not forgive **silhouette and timing**. Those are what read at 240p, and
+they are what bad animation gets wrong. Budget moves out of detail and into
+silhouette clarity and timing.
 
-Revised external spend: **$10k-$40k**, against the $150k-$300k that fifty
-handcrafted creatures would cost. That gap is the entire argument for the
-machine, and it is also the measure of how badly it goes if the machine does
-not work — which is why creature number two is the checkpoint that matters.
+## 5. The architectural issue for Zhaozhou
+
+**The current hardware creature plan is still largely clip-oriented**:
+compressed 30 Hz key poses, decoded pose caching, hard cuts, limited influences,
+and no general animation-blending unit.
+
+> **Do not let that prematurely force you into static clips.**
+
+Prototype the creature-animation system in the **PC/reference path first**. Its
+eventual hardware lowering could take several forms, and the choice should be
+made with evidence rather than assumed now:
+
+- run the procedural solver **offline** and bake reusable motion assets;
+- run it on the **ARM** and cache poses shared by creatures in the same state;
+- **quantize** slope, target direction and gait phase into reusable pose tuples;
+- apply small runtime **IK or gait corrections through Transform Loom nodes**;
+- reserve hardware **procedural modifiers** for feet, spine, head and secondary
+  chains;
+- use full CPU-derived poses only for **one or two close hero creatures**.
+
+**Armies sharing states helps enormously.** Fifty instances of one species
+walking at the same gait phase do not require fifty unrelated pose
+calculations — and the hardware plan should be built to exploit that rather
+than around it.
+
+This becomes a **deliberate animation-architecture wave later**, after the
+present FRAMEBLIT integration and FPGA fit work. It must not become a silent
+assumption that all creature animation is baked.
+
+## 6. The revised belief
+
+The conclusion is no longer:
+
+> "Fifty creatures require $150,000–$300,000, therefore they are impossible."
+
+That was the conventional outsourcing answer. The revised one:
+
+> **Fifty creatures are possible only if creature production itself becomes one
+> of the project's major technologies.**
+
+Which is entirely on-brand for Zhaozhou.
+
+## 7. Money
+
+Rough and **highly uncertain**: a successful automated pipeline could reduce
+external creature-production spend to perhaps **$10,000–$40,000**, on top of the
+**$5,000** concept work already done, with selective paid specialist rescue
+rather than full outsourcing.
+
+The real cost is engineering time, and the real risk is that the pipeline takes
+longer to mature than expected.
+
+> "You may be dramatically faster than a traditional production estimate assumes
+> because you are not going to execute the traditional production process. You
+> are going to attack the process itself until it becomes cheap enough. That
+> does not guarantee success. But it is not delusion."
+
+It is probably the only credible way a solo developer gets fifty distinctive 3D
+creatures into this game without either becoming rich or accepting garbage.
+
+## 8. The checkpoint that matters
+
+**Creature number two.** The first creature always works, because it is made by
+hand while the machine is being built around it. The second is the one that
+tells you whether there is a machine.
