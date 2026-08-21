@@ -5,6 +5,76 @@ at the top.*
 
 ---
 
+## 2026-08-21 (later) — GEOM.SKIN built; the test nearly shipped a lie
+
+### What moved
+
+| | |
+|---|---|
+| `GEOM.SKIN` | SPECIFIED to **UNIT_VERIFIED** — RTL, contract (15 sections), 2,125 directed + 24,000 random checks |
+| phantom #10 | `zref::Skin` was the declared oracle. It does not exist anywhere in `reference/` |
+| `GEOM.CLIP` | evidence path corrected — it cited the wrong file |
+
+Skinning is how a creature's vertices follow its bones. It is the block the
+animation-state work leads into: every state in the inventory eventually becomes
+a bone palette, and this is what turns that palette into a moving creature.
+
+### The thing worth your attention
+
+**My first version of the test passed completely, and was nearly worthless on the
+one law it existed to defend.**
+
+The law is *single rounding*: the blend of two bones is computed exactly and
+rounded once at the end, never rounded twice along the way. Double rounding is
+off by one unit in the last place — invisible as a bug report, visible on screen
+as a silhouette that shimmers while a creature moves.
+
+So I broke the RTL on purpose and re-ran. **The double-rounding version passed all
+39 of my directed checks.** It failed one random case in three hundred, by one
+LSB. If I had not run the sweep, this block would be sitting at UNIT_VERIFIED
+with a test that green-lit the exact defect it was written to catch.
+
+The cause was mundane: every matrix in my test was built from whole numbers, so
+there was nothing below the rounding point to lose, and rounding early threw away
+nothing. Real bone matrices are not whole numbers.
+
+The fix is a section that sweeps all 63 weights against eleven awkward vertex
+values using deliberately ugly matrices. That mutation now fails **696 of 2,125**
+checks instead of one in three hundred.
+
+A second one: zeroing the vertex's ID tag passed all 2,118 arithmetic checks,
+because all of them compared coordinates and nothing else. That would have sent
+every vertex to the wrong creature. Also now covered.
+
+Final sweep: **ten deliberate breakages, ten caught.**
+
+### One process note
+
+Verilator silently skipped rebuilding several times — the test binary was
+byte-identical after I changed the RTL, so I was reading old results. I now check
+the binary's hash after every rebuild and **discard the result** if it did not
+change. Three mutation results were thrown away and re-run for this reason. It is
+worth knowing that "the tests passed" is only meaningful if the tests were
+actually rebuilt.
+
+### Honest about the cost
+
+GEOM.SKIN needs **eighteen 32x32 multipliers** in its blend path. The board has
+**112** DSPs; the project already accounts for **171**. This block makes the DSP
+problem worse, and I have not run a fit on it, so I am not going to quote a
+number I do not have.
+
+The contract lists the ways to cut it (share one row engine across three cycles;
+share one engine across both bones; exploit that a rotation's elements are small)
+— all unexercised. Filed as evidence for the budget argument, not as a solved
+problem.
+
+### Nothing needed from you
+
+`ctest -L fast`: **180/180**. Ledger green. Both commits pushed.
+
+---
+
 ## 2026-08-21 — waves worked in order; the ledger argued back, correctly
 
 ### What moved
