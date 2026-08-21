@@ -1926,17 +1926,22 @@ blocks:
     upstream: [GEOM.WARP, GEOM.WCACHE]
     downstream: [GEOM.CLIP]
     backpressure: ready_valid
-    latency: variable
+    latency: fixed:36
     target_throughput: 1 projected vertex per clock
-    reference_model: zref::GeomProject
+    reference_model: zref::render::project_vertex
     tests:
       directed: tests/geometry/geom_project_directed.cpp
-      random: tests/geometry/geom_project_random.cpp
-    counters: [vertices_transformed, triangles_submitted]
+      random: tests/geometry/geom_project_directed.cpp
+    counters: [vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "e0a7320"
+        evidence: reference/src/zrender/rast.cpp
+
     deferred: false
     cut_order: null
     superseded_by: null

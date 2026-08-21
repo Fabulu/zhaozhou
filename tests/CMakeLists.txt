@@ -964,6 +964,33 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# GEOM.PROJECT against zref::render::project_vertex -- the real law, replacing
+# the phantom zref::GeomProject the ledger declared. White-box include of
+# reference/src for zrender/internal.hpp, the same access TERRAIN.PROJECT's
+# suite already has.
+add_executable(test_geom_project_directed geometry/geom_project_directed.cpp)
+target_link_libraries(test_geom_project_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_project_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_geom_project_directed
+  PREFIX Vzhao_geom_project
+  TOP_MODULE zhao_geom_project
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv)
+add_test(NAME geom_project_directed COMMAND test_geom_project_directed)
+set_tests_properties(geom_project_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME geom_project_random COMMAND test_geom_project_directed --random 100)
+set_tests_properties(geom_project_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME geom_project_random_nightly COMMAND test_geom_project_directed --random 2000)
+set_tests_properties(geom_project_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_geom_project
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_project
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv)
+set_tests_properties(lint_zhao_geom_project PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.POSE's quaternion step: quat16 -> 3x4 rotation, against
 # zref::creature::quat16_to_mat3. The no-renormalization rule (creature_rules
 # 2.2) is a law an "improved" implementation would break, so section 5 drives
