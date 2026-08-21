@@ -86,6 +86,64 @@ across **91** blocks. Main is green.
 
 ---
 
+## 2026-08-21 — every Field IR operation is built
+
+The instruction set the terrain, weather, particle and deformation programs are
+written in is **complete in hardware**. `NOISE2`, `RIDGE`, `ROT2`, `ROT3` and
+`RING` landed today; the earlier pieces were already in.
+
+`reports/FIELD_IR_ENGINE.md` has the table — every op, its test counts and its
+mutation score.
+
+What is left is the **sequencer**: the thing that reads a compiled program and
+runs it, one instruction at a time, over the pieces now sitting there. That is
+the last thing standing between the five `FIELD.SEQ.*` blocks and being real,
+and it needs nothing from you.
+
+### Two things worth telling you
+
+**My mutation harness was lying to me, and I caught it.**
+
+The way each piece gets finished is that I break the hardware eighteen different
+ways on purpose and check the test notices. For `RING` it reported seventeen of
+eighteen caught. That was wrong.
+
+One of the deliberate breakages could not be *undone* — the text it wrote
+happened to appear elsewhere in the file, so the automatic restore refused to
+act. The next breakage was therefore measured against hardware that was still
+broken from the previous one, and scored as a success. The run ended with the
+"clean" check failing, which is how I noticed.
+
+The existing safeguard could not see this: it checks that the compiled file
+*changed*, and it always does. So the harness now makes a **second** check —
+that the restore actually happened and left the file byte-identical to a copy
+taken before the run — and stops the whole sweep if it did not, rather than
+carrying on producing numbers nobody should trust. Re-run properly, one of the
+"successes" turned out to be a false one.
+
+**A ring has a line of dead code, and I left it in.**
+
+One breakage survives no matter what, and the reason is arithmetic: the midpoint
+between two radii can never overflow, whatever the radii. I checked that over
+300,000 cases. So the line that would report an overflow there can never fire.
+
+I left it in and wrote down why. The reference does it that way, and this
+hardware exists to agree with the reference — not to be cleverer than it. The
+day someone widens those numbers, a version that had "tidied it away" would be
+silently wrong.
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 36 unit-verified · 14 rtl-verified**
+across **91** blocks.
+
+Still waiting on your call about the frame blitter's timing
+(`reports/BLIT_INTEGRATION_PHASE_SHIFT.md`) — it is built, works, is faster, and
+shifts a phase the demo pins. That one decision gates the rest of the
+integration and the resource re-fit you asked for.
+
+---
+
 ## 2026-08-21 — the arbiter is in the machine, and the gate test had been red for three days
 
 ### The arbiter is wired into the shell

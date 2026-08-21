@@ -1077,6 +1077,39 @@ set_tests_properties(lint_zhao_video_slotmgr PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_RING -- the deepest op in the engine: nine products, two reciprocals, two
+# smoothsteps and FIVE ledger lanes. The midpoint is an EXACT 64-bit average
+# (rescale_s32(r0+r1, 1)), not fx_add then halve: with both radii at the rail a
+# saturating add would put the midpoint at half the radius and the ring in the
+# wrong place. The reciprocal is field_rcp INCLUDING its zero, so a degenerate
+# ring (r0 == r1) has a defined answer and a sticky rcp0 lane that says so. The
+# clamp is applied to the PRODUCT, not to the input. One multiplier and one
+# combinational reciprocal serve both smoothsteps, walked.
+add_executable(test_field_ring_directed differential/field_ring_directed.cpp)
+target_link_libraries(test_field_ring_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_ring_directed
+  PREFIX Vzhao_field_ring
+  TOP_MODULE zhao_field_ring
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
+add_test(NAME field_ring_directed COMMAND test_field_ring_directed)
+set_tests_properties(field_ring_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_ring_random COMMAND test_field_ring_directed --random 3000)
+set_tests_properties(field_ring_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_ring_random_nightly COMMAND test_field_ring_directed --random 50000)
+set_tests_properties(field_ring_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_field_ring
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_ring
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
+set_tests_properties(lint_zhao_field_ring PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # OP_ROT2 and OP_ROT3. The law that matters here is the one that looks like a
 # defect: EACH PRODUCT IS ROUNDED SEPARATELY. fx_sub(fx_mul(c,p), fx_mul(s,q))
 # rounds TWICE and then saturates the difference, while everywhere else in this

@@ -366,11 +366,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §Q16.16
     rounding: saturating
-    reference_function: zref::fieldir::op_ring
+    reference_function: zfield::interpret
     implementation_blocks: [FIELD.SEQ.EARTH, FIELD.SEQ.STAMP]
     cost_units: 2
     field_ir_opcode: RING
-    differential_tests: tests/differential/field_ring.cpp
+    differential_tests: tests/differential/field_ring_directed.cpp
     notes: The crater_ring demo's core shape (P4 §10).
 
   - id: FIELD.RIDGE

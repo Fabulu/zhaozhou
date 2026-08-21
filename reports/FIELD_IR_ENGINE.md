@@ -43,6 +43,7 @@ hash did not move is **discarded, never scored**.
 | Table ops | `CURVE`, `DCURVE`, `SPLINE` | `zhao_field_curve.sv` | 11,863 | 21,000 | **18 / 18** |
 | Lattice noise | `NOISE2`, `RIDGE` | `zhao_field_noise.sv` | 346 | 12,000 | **15 / 17**, 2 equivalent |
 | Rotation | `ROT2`, `ROT3` | `zhao_field_rot.sv` | 3,495 | 15,000 | **17 / 17** |
+| Band | `RING` | `zhao_field_ring.sv` | 572 | 24,000 | **17 / 18**, 1 equivalent |
 
 Tests are `tests/differential/field_<piece>_directed.cpp`. The "directed" column
 is the check count with no arguments; "random" is the count added by the fast
@@ -57,8 +58,9 @@ lands on top of them.
 
 ## What is not built
 
-`RING` — then the sequencer itself: the register file and the instruction walk
-that turns a `.zprog` image into a run.
+**Every op is built.** What remains is the sequencer itself: the register file
+and the instruction walk that turns a `.zprog` image into a run, and the five
+`FIELD.SEQ.*` blocks that are that sequencer wearing different profiles.
 Until the sequencer exists, the five `FIELD.SEQ.*` blocks in the ledger stay
 SPECIFIED, and so do the blocks downstream of them.
 
@@ -105,6 +107,42 @@ version:
   Catmull-Rom — not `v << 16`. The shift form amplified the term by 2^16 and is
   a fixed defect (review C1, RUN-20260814-1912 wave-1). It is named in the RTL,
   in the test and here so it does not come back.
+
+### A sweep that reverts silently is a sweep that lies
+
+The `RING` sweep first reported 17 of 18 caught. It was wrong.
+
+`rcp0_not_sticky` replaced its line with `rcp0_o <= 1'b0;` — text that also
+appears in the reset and accept branches — so the uniqueness check refused to
+**revert** it. The mutation stayed applied, the next mutation was measured
+against a still-mutated design and scored as CAUGHT, and the pristine re-check
+came back red at the end.
+
+The binary-hash assertion cannot see this: the binary *does* change every time.
+So the sweep now makes **two** assertions per mutation — the hash moved, and the
+revert both succeeded **and** left the file byte-identical to a pristine copy
+taken at the start. A failed revert aborts the run rather than continuing to
+report numbers nobody should trust.
+
+Re-run with the check in place, one of the "caught" results turned out to be a
+false positive.
+
+### `RING`'s midpoint lane is dead, and the line stays
+
+Moving the midpoint's saturation from the `rescale` lane to `add` survives,
+because **the midpoint cannot saturate**. The exact sum of two `s32` values lies
+in `[-2^32, 2^32 - 2]`, and halving with round-half-up lands in
+`[INT32_MIN, INT32_MAX]` for every input — verified over 300,000 cases, with
+both rails hit exactly and nothing outside.
+
+`sat_rescale_o` is therefore always low for `RING`. The line stays because the
+reference records the lane there; the test asserts the lane is low rather than
+leaving it unexamined.
+
+The *other* survivor was not equivalent at all: pooling the `rcp` lane into
+`mul` survived only because every ring in the test had a span of whole units.
+`field_rcp` saturates when the reciprocal exceeds `INT32_MAX`, which needs a
+span of a few **raw** units. With those cases added it is caught by 28 checks.
 
 ### The rotation ops round TWICE, and that is the law
 
