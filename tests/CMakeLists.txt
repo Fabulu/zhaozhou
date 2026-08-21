@@ -964,6 +964,35 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# PART.EXPAND, in TWO layers. Its reference had to RESTATE a law that lives
+# inline inside zref::render::draw_population, and a restated law is a second
+# implementation -- so layer 1 renders the same particles both ways, through
+# draw_population and through expand_polygon + the same raster_tri, and requires
+# identical surfaces. Layer 2 is the ordinary RTL differential. Layer 1 is what
+# makes layer 2 worth anything.
+add_executable(test_part_expand_directed particles/part_expand_directed.cpp)
+target_link_libraries(test_part_expand_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_part_expand_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_part_expand_directed
+  PREFIX Vzhao_part_expand
+  TOP_MODULE zhao_part_expand
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_expand.sv)
+add_test(NAME part_expand_directed COMMAND test_part_expand_directed)
+set_tests_properties(part_expand_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME part_expand_random COMMAND test_part_expand_directed --random 2000)
+set_tests_properties(part_expand_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME part_expand_random_nightly COMMAND test_part_expand_directed --random 40000)
+set_tests_properties(part_expand_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_part_expand
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_expand
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_expand.sv)
+set_tests_properties(lint_zhao_part_expand PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # FIELD.PROGCACHE against zref::field::ProgCache. Driven with the three real
 # committed .zprog images and CORRUPTED copies of them, so the reject law is
 # exercised by the loader's own verdicts rather than by an invented flag. The

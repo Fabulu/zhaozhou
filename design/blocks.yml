@@ -2623,17 +2623,22 @@ blocks:
     upstream: [PART.LADDER]
     downstream: [GEOM.SETUP]
     backpressure: ready_valid
-    latency: variable
+    latency: fixed:1
     target_throughput: 1 expanded particle per clock
-    reference_model: zref::ParticleExpand
+    reference_model: zref::part::expand_polygon
     tests:
       directed: tests/particles/part_expand_directed.cpp
-      random: tests/particles/part_expand_random.cpp
+      random: tests/particles/part_expand_directed.cpp
     counters: [polygon_particles]
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: "986d3ef"
+        evidence: reference/include/zref/zref_particle.hpp
+
     deferred: false
     cut_order: null
     superseded_by: null
