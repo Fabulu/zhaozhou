@@ -84,6 +84,22 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
   expect_crc.push_back(crc_black_mode);  // F1: first frame under the mode
   expect_crc.push_back(crc_black_mode);  // F2: its repeat
   size_t crc_checked = 0;
+  // The same pictures with consecutive repeats collapsed: WHAT must be shown
+  // and IN WHAT ORDER, independent of how the cadence repeats them. See the
+  // drain loop for why the two are separated.
+  //
+  // BUILT BY COLLAPSING, not by hand. In Z60 the boot frame and the first
+  // frame under the mode are the SAME picture (mode 0 IS Z60), so pushing
+  // both would leave a duplicate here that the observed side correctly
+  // collapses away -- and every later comparison would read one ahead. The
+  // expectation has to be collapsed by exactly the rule the observation is.
+  std::vector<uint32_t> expect_distinct;
+  const auto push_distinct = [&expect_distinct](uint32_t c) {
+    if (expect_distinct.empty() || expect_distinct.back() != c) expect_distinct.push_back(c);
+  };
+  push_distinct(crc_black_z60);
+  push_distinct(crc_black_mode);
+  size_t distinct_seen = 0;
 
   std::vector<std::vector<uint8_t>> packets;  // sealed bytes, in order
   std::vector<uint32_t> fresh_crcs;           // displayed CRC per packet
@@ -100,6 +116,26 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
     check(h.publish(0, build_packet(s)), "publish P0", 1, 1);
   }
 
+  // ---- DOES THE STREAMING BLIT SHIFT THIS MODE'S PHASE? -------------------
+  // The DEBUG.FRAMEBLIT redesign completes a canvas ~58k gpu cycles earlier
+  // than the serial CMD.DMA path. Whether that moves the DISPLAYED phase
+  // depends on whether the earlier completion crosses a tick boundary, and
+  // tick boundaries are the mode's frame period:
+  //
+  //     Z60   251,520 gpu cycles/frame
+  //     Storm 217,984
+  //     Duo   318,592
+  //
+  // MEASURED 2026-08-21 across all three modes and every tick: ONLY DUO
+  // SHIFTS. Z60 and Storm keep the original cadence exactly.
+  //
+  // This is a per-mode measurement, not a formula derived from first
+  // principles: the discriminant is where the completion falls inside the
+  // period, and a future timing change can move any mode across it. If a
+  // mode's cadence changes, this flag is what must be re-measured -- the
+  // assertions below already say which way each answer looks.
+  const bool blit_shifts_phase = (mi.mode == 2);  // Duo only
+
   std::vector<uint8_t> canvas;
   uint32_t published = 0;
   const uint32_t last_tick = 2 * kPackets + 2;
@@ -112,7 +148,11 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
     const uint32_t k = tk.frame_id;
     ++ticks_processed;
 
-    const bool exp_rep = (k <= 2) || ((k & 1u) == 0);
+    // Repeats on EVEN ticks unshifted; on ODD ticks once the blit lands a
+    // frame earlier. The tail tick repeats either way: after the last publish
+    // there is nothing further to show.
+    const bool exp_rep = blit_shifts_phase ? ((k == 0) || ((k & 1u) == 1) || (k == last_tick))
+                                           : ((k <= 2) || ((k & 1u) == 0));
     check(tk.repeated == exp_rep, "golden: repeated law", exp_rep, tk.repeated);
 
     // pads latched every tick; publish + oracle latch on this tick's pads
@@ -151,6 +191,7 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       const uint32_t dcrc = zref::render::displayed_crc32c(vm, slot_mirror[dst].data());
       expect_crc.push_back(dcrc);  // fresh F_{2f+1}
       expect_crc.push_back(dcrc);  // repeat F_{2f+2} (60 Hz law, identical)
+      push_distinct(dcrc);
       fresh_crcs.push_back(dcrc);
 
       const zref::PadFrame* of = pad_oracle.frames();
@@ -174,10 +215,37 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       check(h.publish(int(f % 3), pkt), "golden: publish", 1, 1);
     }
 
-    while (crc_checked < h.crcs.size() && crc_checked < expect_crc.size()) {
-      check(h.crcs[crc_checked] == expect_crc[crc_checked],
-            "golden: displayed CRC (repeats identical)", expect_crc[crc_checked],
-            h.crcs[crc_checked]);
+    // CONTENT IS CHECKED INDEPENDENTLY OF REPEAT PLACEMENT, deliberately.
+    //
+    // This compared h.crcs[i] == expect_crc[i], welding WHICH PICTURE to WHICH
+    // FRAME IT LANDED ON. The streaming blitter moves the Duo phase by one
+    // frame and ten of these fired at once -- every `got` being the NEXT
+    // expected value, i.e. the right picture arriving early. A test shaped
+    // that way turns a latency improvement into a correctness failure, and
+    // charter 25 now forbids reverting the improvement to silence it.
+    //
+    // Split into the two claims it conflated: every displayed frame is either
+    // a repeat of the one before it or the next distinct picture IN ORDER
+    // (exact, true at any cadence), while the cadence itself is pinned by the
+    // repeat law and the deadline_faults form above -- which DO move, per
+    // mode, and are supposed to say so.
+    //
+    // Nothing is weakened: a wrong picture, one out of order, a dropped one
+    // and an extra one all still fail.
+    while (crc_checked < h.crcs.size()) {
+      const uint32_t got = h.crcs[crc_checked];
+      if (crc_checked > 0 && got == h.crcs[crc_checked - 1]) {
+        ++crc_checked;  // a lawful repeat of the frame before it
+        continue;
+      }
+      check(distinct_seen < expect_distinct.size(),
+            "golden: no picture beyond the expected sequence", 1,
+            distinct_seen < expect_distinct.size() ? 1 : 0);
+      if (distinct_seen < expect_distinct.size()) {
+        check(got == expect_distinct[distinct_seen], "golden: displayed CRC (distinct, in order)",
+              expect_distinct[distinct_seen], got);
+      }
+      ++distinct_seen;
       ++crc_checked;
     }
 
@@ -188,7 +256,9 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       const uint32_t sk = k - 1;
       if (sw.bank.size() == 40) {
         check(sw.bank[0] == sk, "golden: frame_cycles", sk, sw.bank[0]);
-        const uint64_t faults = (sk <= 1) ? sk : (1 + sk / 2);
+        // Counts the repeat ticks, so it follows the cadence above.
+        const uint64_t faults =
+            blit_shifts_phase ? ((sk == 0) ? 0 : ((sk + 1) / 2)) : ((sk <= 1) ? sk : (1 + sk / 2));
         check(sw.bank[1] == faults, "golden: deadline_faults", faults, sw.bank[1]);
         const uint64_t cmds = 3 + 4ull * (sk / 2);
         check(sw.bank[2] == cmds, "golden: commands", cmds, sw.bank[2]);
@@ -208,10 +278,21 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       }
     }
 
+    // Fence 0 still misses: P0 dispatches with nothing in flight to overlap.
+    // Every fence from 1 on closes CLEAN under the streaming blitter, which is
+    // the result, not a relaxation -- a regression that reintroduced the
+    // deadline miss fails the else-branch here.
     while (fences_checked < h.fence_log.size()) {
       const size_t i = fences_checked++;
-      check(!h.fence_log[i].ok && h.fence_log[i].status == 16, "golden: fence pinned deadline", 16,
-            h.fence_log[i].status);
+      // Only the shifted mode gains the clean close, and only from fence 1:
+      // P0 dispatches with nothing in flight to overlap.
+      if (blit_shifts_phase && i > 0) {
+        check(h.fence_log[i].ok && h.fence_log[i].status == 0, "golden: fence closes clean", 0,
+              h.fence_log[i].status);
+      } else {
+        check(!h.fence_log[i].ok && h.fence_log[i].status == 16, "golden: fence pinned deadline",
+              16, h.fence_log[i].status);
+      }
     }
 
     check(h.sticky_errors() == 0, "golden: sticky flags clear", 0, h.sticky_errors());
@@ -277,7 +358,12 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
       };
       const Ent ents[] = {
           {0, 2 * kPackets + 2},
-          {1, 1 + (2 * kPackets + 2) / 2},
+          // Only the shifted mode records one fewer. last_tick here is EVEN,
+          // where the two closed forms differ -- unlike duo_markers, whose
+          // final tick is odd and where they agree. So the DUO capture's
+          // counter moves 12 -> 11; z60 and storm are untouched.
+          {1, blit_shifts_phase ? uint64_t((2 * kPackets + 2 + 1) / 2)
+                                : uint64_t(1 + (2 * kPackets + 2) / 2)},
           {30, starve_baseline},
           {31, 0},
           {35, 0},

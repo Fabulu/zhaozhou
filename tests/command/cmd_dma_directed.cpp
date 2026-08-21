@@ -16,9 +16,10 @@
 //   6. walk errors with INTACT CRCs: unknown opcode, count mismatch,
 //      debug opcode without flags bit0
 //   7. bridge error: safe drop, nothing issued downstream
-//   8. blit engine: full-canvas fetch + CRC-verified VRAM commit through
-//      the guard port (Z60: 184,320 B, 64-B beats, exact addresses);
-//      corrupt blit CRC => ZERO guard writes; bad length => rejected
+//   (8. the blit engine was REMOVED from CMD.DMA in step 6 of the
+//       DEBUG.FRAMEBLIT integration. The blit is DEBUG.FRAMEBLIT's now,
+//       and its tests are tests/debug/debug_frameblit_directed.cpp. This
+//       module has no MEM.GUARD client at all any more.)
 //      before the first byte
 
 #include <cstdint>
@@ -72,7 +73,6 @@ void setRsp(uint32_t* w, bool beat_valid, uint64_t data, bool last, bool err) {
 // ---- the harness-as-HPS device ----------------------------------------------
 constexpr uint32_t kRingBase = 0x0;
 constexpr uint32_t kSlotBody0 = kRingBase + 4096;  // slot 0 body
-constexpr uint32_t kBlitSrc = 0x00100000;          // blit source arena
 constexpr int kFirstBeatLatency = 16;              // D10 sim profile
 
 class DmaBench {
@@ -102,15 +102,8 @@ class DmaBench {
     top_->fetch_addr_i = 0;
     top_->fetch_byte_len_i = 0;
     top_->fetch_epoch_i = 0;
-    top_->blit_req_valid_i = 0;
-    top_->blit_dst_slot_i = 0;
-    top_->blit_mode_i = 0;
-    top_->blit_src_i = 0;
-    top_->blit_len_i = 0;
-    top_->blit_crc_i = 0;
     top_->pkt_ready_i = 1;
     setRsp(&top_->hps_rsp_i[0], false, 0, false, false);
-    top_->guard_rsp_i = 4;  // packed {ready(MSB),ok,violation}: ready=1
     top_->frame_tick_i = 0;
   }
 
@@ -145,25 +138,6 @@ class DmaBench {
       }
       ++burst_beat_;
     }
-    // observe the guard port (the MEM.GUARD seam): a request cycle first,
-    // then ceil(len/8) guard_wvalid_o data beats (the W2.7 seam law — the
-    // pre-fix sideband only ever carried the request's FIRST 8 bytes, and
-    // this test only ever checked those; now every byte is captured)
-    if (guardValid()) {
-      const uint32_t gaddr = guardAddr();
-      const uint8_t glen = guardLen();
-      guard_writes_.push_back(GuardWrite{gaddr, glen, {}});
-    }
-    if (top_->guard_wvalid_o) {
-      if (guard_writes_.empty()) {
-        ++stray_wbeats_;  // data beat with no request: protocol violation
-      } else {
-        const uint64_t d = top_->guard_wdata_o;
-        for (int b = 0; b < 8; ++b) {
-          guard_writes_.back().data.push_back(static_cast<uint8_t>((d >> (8 * b)) & 0xFF));
-        }
-      }
-    }
     // capture the verdict pulse + packet stream
     if (top_->dma_done_o) {
       verdicts_.push_back(Verdict{top_->dma_slot_o, top_->dma_status_o, top_->dma_bytes_consumed_o,
@@ -171,9 +145,6 @@ class DmaBench {
     }
     if (top_->pkt_valid_o && top_->pkt_ready_i) {
       pkt_bytes_.push_back(static_cast<uint8_t>(top_->pkt_byte_o));
-    }
-    if (top_->blit_done_o) {
-      blit_results_.push_back(top_->blit_status_o);
     }
     edge();
   }
@@ -205,38 +176,9 @@ class DmaBench {
     for (int i = 0; i < max_cycles && verdicts_.empty(); ++i) cycle();
   }
 
-  void blit(uint8_t dst, uint8_t mode, uint32_t src, uint32_t len, uint32_t crc,
-            int max_cycles = 400000) {
-    blit_results_.clear();
-    bursts_.clear();
-    guard_writes_.clear();
-    top_->blit_req_valid_i = 1;
-    top_->blit_dst_slot_i = dst;
-    top_->blit_mode_i = mode;
-    top_->blit_src_i = src;
-    top_->blit_len_i = len;
-    top_->blit_crc_i = crc;
-    cycle();
-    top_->blit_req_valid_i = 0;
-    for (int i = 0; i < max_cycles && blit_results_.empty(); ++i) cycle();
-  }
-
   uint8_t& mem(uint32_t a) {
     if (a >= mem_.size()) mem_.resize(a + 4096, 0);
     return mem_[a];
-  }
-
-  // guard packed view: {valid,write,client[2:0],addr[26:0],len[6:0],be[63:0]}
-  // 103 bits -> words[3:0]; valid = bit102 (w3 bit6), len = bits[70:64]
-  // (w2 bits[6:0]), addr = bits[97:71] (w2 bits[26:0] << ... )
-  bool guardValid() const { return (top_->guard_req_o[3] & 0x40u) != 0; }
-  uint8_t guardLen() const { return static_cast<uint8_t>(top_->guard_req_o[2] & 0x7Fu); }
-  uint32_t guardAddr() const {
-    // addr[26:0] = bits[97:71]: word2 bits [31:7] = addr[24:0],
-    // word3 bit 0 = addr[25], bit 1 = addr[26]
-    const uint32_t lo = top_->guard_req_o[2] >> 7;
-    const uint32_t hi = top_->guard_req_o[3] & 0x3u;
-    return lo | (hi << 25);
   }
 
   struct Verdict {
@@ -245,20 +187,11 @@ class DmaBench {
     uint32_t bytes;
     uint32_t cmds;
   };
-  struct GuardWrite {
-    uint32_t addr;
-    uint8_t len;
-    std::vector<uint8_t> data;  // guard_wvalid_o beats, 8 B each, in order
-  };
-
   Vzhao_cmd_dma* top_;
   std::vector<uint8_t> mem_ = std::vector<uint8_t>(1u << 20);
   std::vector<Verdict> verdicts_;
   std::vector<uint8_t> pkt_bytes_;
   std::vector<ReqView> bursts_;
-  std::vector<GuardWrite> guard_writes_;
-  std::vector<uint8_t> blit_results_;
-  uint32_t stray_wbeats_ = 0;
   bool force_err_ = false;
 
  private:
@@ -638,101 +571,6 @@ int main(int argc, char** argv) {
   t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
   check(t.verdicts_[0].status == 17, "bridge: status 17 (local)", 17, t.verdicts_[0].status);
   check(t.pkt_bytes_.empty(), "bridge: nothing downstream", 0, t.pkt_bytes_.size());
-}
-
-// ---- 8. blit engine -------------------------------------------------------------
-{
-  DmaBench t;
-  // Z60 canvas: 184,320 bytes, deterministic pattern
-  std::vector<uint8_t> canvas(184320);
-  for (uint32_t i = 0; i < canvas.size(); ++i) {
-    canvas[i] = static_cast<uint8_t>((i * 7u + 11u) & 0xFF);
-  }
-  const uint32_t want_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
-  t.load(kBlitSrc, canvas);
-
-  // 8a. good blit into FB slot 1
-  t.blit(1, 0 /*VIDEO_Z60*/, kBlitSrc, 184320, want_crc);
-  check(t.blit_results_.size() == 1, "blit: one completion", 1, t.blit_results_.size());
-  check(t.blit_results_[0] == 0, "blit: committed (status 0)", 0, t.blit_results_[0]);
-  uint32_t got_bytes = 0;
-  bool data_ok = true;
-  bool beats_ok = true;
-  uint32_t off = 0;
-  for (const auto& g : t.guard_writes_) {
-    check(g.addr == (0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off),
-          "blit: guard addr exact (slot-1 region)",
-          0x02000000u /* ZHAO_FB_SLOT1_BASE (zhao_pkg, bank split) */ + off, g.addr);
-    check(g.len == 64, "blit: 64-B requests", 64, g.len);
-    // ALL len bytes must have streamed (8 beats x 8 B), in order
-    if (g.data.size() != g.len) beats_ok = false;
-    for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
-      if (g.data[b] != canvas[off + b]) data_ok = false;
-    }
-    got_bytes += g.len;
-    off += 64;
-  }
-  check(got_bytes == 184320, "blit: exactly canvas bytes committed", 184320, got_bytes);
-  check(beats_ok, "blit: every request streamed all len bytes", 1, beats_ok);
-  check(data_ok, "blit: committed bytes bit-exact (ALL 64 per request)", 1, data_ok);
-  check(t.stray_wbeats_ == 0, "blit: no stray data beats", 0, t.stray_wbeats_);
-
-  // 8b. corrupt blit CRC: ZERO guard writes (the gate)
-  t.blit(0, 0, kBlitSrc, 184320, want_crc ^ 1);
-  check(t.blit_results_[0] == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "blit-crc: BAD_PAYLOAD_CRC",
-        zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, t.blit_results_[0]);
-  check(t.guard_writes_.empty(), "blit-crc: ZERO VRAM writes", 0, t.guard_writes_.size());
-
-  // 8c. wrong length (not canvas_bytes(mode)): rejected before any byte
-  t.blit(0, 0, kBlitSrc, 100000, want_crc);
-  check(t.blit_results_[0] == 18, "blit-len: status 18 (rejected)", 18, t.blit_results_[0]);
-  check(t.bursts_.empty(), "blit-len: rejected before the first byte", 0, t.bursts_.size());
-  check(t.guard_writes_.empty(), "blit-len: zero writes", 0, t.guard_writes_.size());
-}
-
-// ---- 8d. Duo blit: OCCUPANCY, not allocation (video_rules.md 1/3.1) ----
-// A Duo frame stores exactly 0x30000 = 196,608 packed view bytes of its
-// 0x3C000 slot; the blit-length law follows zhao_pkg::zhao_canvas_bytes.
-// The 245,760 ALLOCATION — the pre-split Duo value, and coincidentally
-// the Duo DISPLAYED-stream size — must now be REJECTED: the spec declares
-// the slot tail untouched, and a blit of it would touch it.
-{
-  DmaBench t;
-  const uint32_t kDuoBytes = 196608;  // zhao_pkg::ZHAO_CANVAS_BYTES_DUO
-  std::vector<uint8_t> canvas(kDuoBytes);
-  for (uint32_t i = 0; i < canvas.size(); ++i) {
-    canvas[i] = static_cast<uint8_t>((i * 13u + 5u) & 0xFF);
-  }
-  const uint32_t want_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
-  t.load(kBlitSrc, canvas);
-
-  // occupancy length commits, covering exactly [slot0, slot0+0x30000)
-  t.blit(0, 2 /*VIDEO_DUO*/, kBlitSrc, kDuoBytes, want_crc);
-  check(t.blit_results_.size() == 1, "duo blit: one completion", 1, t.blit_results_.size());
-  check(t.blit_results_[0] == 0, "duo blit: committed (status 0)", 0, t.blit_results_[0]);
-  uint32_t got_bytes = 0;
-  bool data_ok = true;
-  bool beats_ok = true;
-  uint32_t off = 0;
-  for (const auto& g : t.guard_writes_) {
-    check(g.addr == off, "duo blit: guard addr exact (slot-0 region)", off, g.addr);
-    if (g.data.size() != g.len) beats_ok = false;
-    for (uint32_t b = 0; b < g.data.size() && b < g.len; ++b) {
-      if (g.data[b] != canvas[off + b]) data_ok = false;
-    }
-    got_bytes += g.len;
-    off += 64;
-  }
-  check(got_bytes == kDuoBytes, "duo blit: exactly the 0x30000 occupancy", kDuoBytes, got_bytes);
-  check(beats_ok, "duo blit: every request streamed all len bytes", 1, beats_ok);
-  check(data_ok, "duo blit: committed bytes bit-exact (ALL 64 per request)", 1, data_ok);
-
-  // the allocation length (the pre-split value) is now a length fault
-  t.blit(0, 2, kBlitSrc, 245760, want_crc);
-  check(t.blit_results_[0] == 18, "duo blit-alloc-len: 245,760 rejected (status 18)", 18,
-        t.blit_results_[0]);
-  check(t.bursts_.empty(), "duo blit-alloc-len: no fetch", 0, t.bursts_.size());
-  check(t.guard_writes_.empty(), "duo blit-alloc-len: zero writes", 0, t.guard_writes_.size());
 }
 
 return zhao::report_and_exit("cmd_dma_directed");

@@ -61,25 +61,12 @@
 // Conservative SystemVerilog subset only (charter 2).
 // Lint: clean under `verilator_bin --lint-only -Wall` (lint_cmd_dma).
 
-module zhao_cmd_dma
-#(
-  // staging sizes. Parameters exist so the FORMAL harness can shrink the
-  // buffers for tractability; committed defaults are the Phase-2 law
-  // (SLOT_BUF: largest per-frame command packet; BLIT_BUF: the largest
-  // canvas, Duo 245,760 B — the M10K mapping is the synthesis lane).
-  parameter int unsigned SLOT_BUF_BYTES = 4096,
-  parameter int unsigned BLIT_BUF_BYTES = 245760
-`ifdef FORMAL
-  // FORMAL-ONLY (structurally absent outside `ifdef FORMAL, so synthesis
-  // and the Verilator ctest lane always run the law): a nonzero value
-  // overrides the blit-length law `byte_len == canvas_bytes(mode)` so the
-  // blit path fits a tractable BMC depth. Without it the blit CRC gate is
-  // UNREACHABLE in the shrunk formal harness — the smallest lawful canvas
-  // is 153,600 B (≈19,200 fetch cycles), so assertion (b) below was
-  // vacuous while the harness header claimed both gates were in the cone.
-  // The full-size length law itself is exercised by cmd_dma_directed.
-  , parameter int unsigned FORMAL_BLIT_LEN = 0
-`endif
+module zhao_cmd_dma #(
+  // The one staging size left. BLIT_BUF_BYTES and the FORMAL_BLIT_LEN
+  // override went with the blit engine in step 6: the whole-canvas buffer
+  // is DEBUG.FRAMEBLIT's 64-byte chunk now, and there is no blit-length law
+  // here to shrink for a tractable BMC depth.
+  parameter int unsigned SLOT_BUF_BYTES = 4096
 ) (
   input  logic clk,
   input  logic rst_n,
@@ -109,26 +96,6 @@ module zhao_cmd_dma
   output logic [7:0]  pkt_byte_o,
   output logic [31:0] pkt_len_o,         // verified length (40+N)
 
-  // ---- blit engine (Phase-2 dispatch sink of CMD.SCHEDULER) ----------------
-  input  logic        blit_req_valid_i,
-  output logic        blit_req_ready_o,
-  input  logic [7:0]  blit_dst_slot_i,
-  input  logic [7:0]  blit_mode_i,       // ABI video_mode byte
-  input  logic [31:0] blit_src_i,        // HPS source address
-  input  logic [31:0] blit_len_i,        // must equal canvas_bytes(mode)
-  input  logic [31:0] blit_crc_i,        // expected CRC-32C over the payload
-  output logic        blit_done_o,       // one pulse per blit request
-  output logic [7:0]  blit_status_o,     // 0 = committed to VRAM
-
-  // ---- VRAM commit via MEM.GUARD (client BLIT_DMA) -------------------------
-  output zhao_pkg::zhao_guard_req_t guard_req_o,
-  /* verilator lint_off UNUSEDSIGNAL */
-  input  zhao_pkg::zhao_guard_rsp_t guard_rsp_i,
-  /* verilator lint_on UNUSEDSIGNAL */
-  // write-data beat stream (see header: the frozen req struct has no data
-  // lane; ceil(len/8) beats per accepted write request, one per cycle)
-  output logic [63:0] guard_wdata_o,
-  output logic        guard_wvalid_o,
 
   // ---- frame boundary (D9 shadow latch) ------------------------------------
   /* verilator lint_off UNUSEDSIGNAL */
@@ -155,7 +122,6 @@ module zhao_cmd_dma
   localparam logic [7:0] ST_COUNT_MISMATCH  = 8'd13;
   localparam logic [7:0] ST_EPOCH           = 8'd15;  // module-local (zref)
   localparam logic [7:0] ST_BRIDGE_ERR      = 8'd17;  // module-local (zref)
-  localparam logic [7:0] ST_BLIT_REJECT     = 8'd18;  // module-local (zref)
 
   // ---- record size table (generated LayoutIR sizes — never hand-derived) ---
   function automatic logic [15:0] rec_size(input logic [15:0] op);
@@ -186,14 +152,6 @@ module zhao_cmd_dma
   // the mode's lawful blit length. Under `ifdef FORMAL the harness may
   // override it downward (FORMAL_BLIT_LEN != 0) so the blit CRC gate is
   // reachable within the BMC depth; everywhere else this IS canvas_bytes.
-  function automatic logic [31:0] blit_law_len(input logic [7:0] m);
-`ifdef FORMAL
-    blit_law_len = (FORMAL_BLIT_LEN != 0) ? 32'(FORMAL_BLIT_LEN)
-                                          : canvas_bytes(m);
-`else
-    blit_law_len = canvas_bytes(m);
-`endif
-  endfunction
 
   // ------------------------------------------------------------ state -----
   typedef enum logic [3:0] {
@@ -201,51 +159,14 @@ module zhao_cmd_dma
     M_HDR_REQ, M_HDR_WAIT, M_HDR_CHK,
     M_PAY_REQ, M_PAY_WAIT,
     M_WALK,
-    M_PKT_DONE, M_STREAM,
-    M_BLIT_CHK,
-    M_BLIT_REQ, M_BLIT_WAIT, M_BLIT_COMMIT, M_BLIT_DATA
+    M_PKT_DONE, M_STREAM
   } dma_state_e;
 
   /* verilator lint_off PROCASSINIT */
   dma_state_e m = M_IDLE;
 
   logic [7:0]  slot_buf [0:SLOT_BUF_BYTES-1] = '{default: 8'h00};
-  // BLIT STAGING, ONE 64-BIT WORD PER ENTRY, not 245,760 bytes.
-  //
-  // This was `logic [7:0] blit_buf [0:BLIT_BUF_BYTES-1]`, and that shape is
-  // what made this block unsynthesizable. MEASURED 2026-08-20, the first time
-  // synthesis ever saw it: elaborating THIS MODULE ALONE peaked at 16.2 GB and
-  // had not finished in seven minutes, while zhao_sdram_ctrl and
-  // zhao_video_mode each finish in 0.26 GB. It is also the whole reason the
-  // composed shell fit committed 28.4 GB and thrashed.
-  //
-  // The byte granularity was never used: both sides move aligned 8-byte groups.
-  // ENFORCED-BY: tests/command/cmd_dma_directed.cpp — its blit cases drive
-  // whole canvases through fetch and commit and compare the emitted beat
-  // stream byte-for-byte against the oracle, so an unaligned move shows up as
-  // wrong data rather than as a passing test. If either side ever moved an
-  // unaligned group the word index would drop the low three bits and address
-  // the wrong word silently, which is why this is the load-bearing claim here.
-  // Reinforced by tests/command/cmd_random.cpp and tests/formal/
-  // cmd_dma_crc_gate.sby, whose CRC covers the same bytes this indexing picks.
-  //
-  // The shapes themselves:
-  //   - write: `wr_off <= wr_off + 32'd8` from zero, one hps_rsp_i.data word
-  //   - read:  `wdata_off = b_commit + (wbeat << 3)`, and b_commit advances by
-  //            glen_q which is a 64-byte multiple for a canvas blit
-  // So this is a 64-bit memory that was described as a byte array, and the
-  // description cost 245,760 elaboration entries instead of 30,720.
-  //
-  // Still NOT an M10K, and the contract says why: the write lives in an
-  // async-reset process and the read is combinational, and an M10K has no
-  // reset port and a registered read. Fixing that is a protocol change (the
-  // beat stream needs a one-cycle read lead) and is deliberately not done
-  // here. This commit makes the description honest and the block measurable;
-  // whether a 1.97 Mbit on-chip buffer should exist at all is the open design
-  // question in STATUS.md.
-  localparam int unsigned BLIT_BUF_WORDS = BLIT_BUF_BYTES / 8;
-  localparam int unsigned BLIT_IDX_W      = $clog2(BLIT_BUF_WORDS);  // 15
-  logic [63:0] blit_buf [0:BLIT_BUF_WORDS-1];
+
 
   // fetch latches
   logic [1:0]  f_slot = 2'd0;
@@ -280,34 +201,17 @@ module zhao_cmd_dma
   logic [31:0] done_bytes = 32'd36;
   logic [31:0] done_cmds = 32'd0;
 
-  // blit registers
-  logic [7:0]  b_dst = 8'd0;
-  logic [7:0]  b_mode = 8'd0;
-  logic [31:0] b_src = 32'd0;
-  logic [31:0] b_len = 32'd0;
-  logic [31:0] b_crc = 32'd0;
-  logic [31:0] b_fetched = 32'd0;
-  logic [31:0] b_commit = 32'd0;
-  logic        blit_done_v = 1'b0;
-  logic [7:0]  blit_status_r = 8'd0;
-  // write-data beat streaming (M_BLIT_DATA): beat index + the accepted
-  // request's length, latched at the guard acceptance edge
-  logic [2:0]  wbeat = 3'd0;
-  logic [6:0]  glen_q = 7'd0;
-
   // bridge request registers
   logic        hps_req_v = 1'b0;
   logic [31:0] hps_addr = 32'd0;
   logic [6:0]  hps_len = 7'd0;
-  logic        hps_blit = 1'b0;
 
   // gate flags (formal anchors): set ONLY by the matching CRC comparison
   // (consumed by the `ifdef FORMAL properties — lint anchor note)
   /* verilator lint_off UNUSEDSIGNAL */
   logic hdr_gate = 1'b0;   // header checks + header CRC passed
   logic pay_gate = 1'b0;   // payload CRC + record walk passed
-  logic blit_gate = 1'b0;
-  /* verilator lint_on UNUSEDSIGNAL */  // blit payload CRC passed
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // D9 counters (u64, saturate never wrap)
   logic [63:0] live_cmds = 64'd0;
@@ -358,55 +262,17 @@ module zhao_cmd_dma
 
   // ------------------------------------------------------ ready/valid -------
   assign fetch_req_ready_o = (m == M_IDLE);
-  assign blit_req_ready_o = (m == M_IDLE) && !fetch_req_valid_i;
 
   always_comb begin
     hps_req_o.valid  = hps_req_v;
     hps_req_o.write  = 1'b0;
-    hps_req_o.client = hps_blit ? zhao_pkg::ZHAO_CLIENT_BLIT_DMA
-                                : zhao_pkg::ZHAO_CLIENT_ENGINE0;
+    // Only the command-packet fetch reaches HPS from here now. The blit was
+    // the sole ZHAO_CLIENT_BLIT_DMA user and it has moved to DEBUG.FRAMEBLIT.
+    hps_req_o.client = zhao_pkg::ZHAO_CLIENT_ENGINE0;
     hps_req_o.addr   = hps_addr;
     hps_req_o.len    = hps_len;
   end
 
-  // VRAM commit requests: one guard write per 64 B (tail carried by len);
-  // the request's DATA follows as guard_wvalid_o beats (M_BLIT_DATA)
-  logic [31:0] g_base;
-  logic [31:0] g_left;
-  assign g_base = (b_dst == 8'd0) ? zhao_pkg::ZHAO_FB_SLOT0_BASE
-                                  : zhao_pkg::ZHAO_FB_SLOT1_BASE;
-  assign g_left = b_len - b_commit;
-  always_comb begin
-    guard_req_o.valid  = (m == M_BLIT_COMMIT) && blit_gate;
-    guard_req_o.write  = 1'b1;
-    guard_req_o.client = zhao_pkg::ZHAO_CLIENT_BLIT_DMA;
-    guard_req_o.addr   = 27'(g_base + b_commit);  // bases < 2^27: exact
-    guard_req_o.len    = (g_left >= 32'd64) ? 7'd64 : 7'(g_left);
-    guard_req_o.be     = 64'hFFFF_FFFF_FFFF_FFFF;
-  end
-
-  // write-data beat stream: beat `wbeat` of the accepted request during
-  // M_BLIT_DATA (the acceptance-cycle view shows beat 0; consumers must
-  // sample on guard_wvalid_o beats only)
-  // Kept 32 bits wide because it is an address arithmetic result; only bits
-  // [BLIT_IDX_W+2:3] index the word array, since the low three are the
-  // always-zero byte offset and everything above the index width cannot be
-  // reached inside a canvas-sized buffer.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [31:0] wdata_off;
-  /* verilator lint_on UNUSEDSIGNAL */
-  assign wdata_off = b_commit
-                   + ((m == M_BLIT_DATA) ? ({29'd0, wbeat} << 3) : 32'd0);
-  // One aligned word, not eight scattered bytes. Identical bits: byte i of the
-  // old read was blit_buf[wdata_off + i], and the word at wdata_off >> 3 holds
-  // exactly those eight bytes in the same order.
-  // The low three bits of wdata_off are the byte offset inside the word and
-  // are always zero here (both sides move aligned 8-byte groups, argued at the
-  // declaration). Slicing from bit 3 up gives exactly the index width the array
-  // needs; taking the whole word offset would be a 29-bit index into a
-  // 30,720-entry array.
-  assign guard_wdata_o = blit_buf[wdata_off[BLIT_IDX_W+2:3]];
-  assign guard_wvalid_o = (m == M_BLIT_DATA);
 
   assign pkt_valid_o = pkt_v;
   assign pkt_byte_o = slot_buf[rd_off];
@@ -418,8 +284,6 @@ module zhao_cmd_dma
   assign dma_bytes_consumed_o = done_bytes;
   assign dma_cmds_consumed_o = done_cmds;
 
-  assign blit_done_o = blit_done_v;
-  assign blit_status_o = blit_status_r;
 
   // ------------------------------------------------------ sequential ------
   always_ff @(posedge clk or negedge rst_n) begin
@@ -432,19 +296,14 @@ module zhao_cmd_dma
       walk_off <= 32'd0; walk_cnt <= 32'd0;
       rd_off <= 32'd0; pkt_v <= 1'b0; pkt_len_r <= 32'd0;
       done_v <= 1'b0; done_slot <= 2'd0; done_status <= 8'd0;
-      b_dst <= 8'd0; b_mode <= 8'd0; b_src <= 32'd0; b_len <= 32'd0;
-      b_crc <= 32'd0; b_fetched <= 32'd0; b_commit <= 32'd0;
-      blit_done_v <= 1'b0; blit_status_r <= 8'd0;
-      wbeat <= 3'd0; glen_q <= 7'd0;
-      hps_req_v <= 1'b0; hps_addr <= 32'd0; hps_len <= 7'd0; hps_blit <= 1'b0;
-      hdr_gate <= 1'b0; pay_gate <= 1'b0; blit_gate <= 1'b0;
+      hps_req_v <= 1'b0; hps_addr <= 32'd0; hps_len <= 7'd0;
+      hdr_gate <= 1'b0; pay_gate <= 1'b0;
       live_cmds <= 64'd0; live_bytes <= 64'd0; live_drops <= 64'd0;
       sh_cmds <= 64'd0; sh_bytes <= 64'd0; sh_drops <= 64'd0;
       snap_v <= 1'b0;
     end else begin
       // pulse defaults
       done_v <= 1'b0;
-      blit_done_v <= 1'b0;
       snap_v <= 1'b0;
       hps_req_v <= 1'b0;
 
@@ -458,7 +317,6 @@ module zhao_cmd_dma
         M_IDLE: begin
           hdr_gate <= 1'b0;
           pay_gate <= 1'b0;
-          blit_gate <= 1'b0;
           if (fetch_req_valid_i) begin
             f_slot <= fetch_slot_i;
             f_addr <= fetch_addr_i;
@@ -476,22 +334,11 @@ module zhao_cmd_dma
             end else begin
               m <= M_HDR_REQ;
             end
-          end else if (blit_req_valid_i) begin
-            crc_pay_r <= 32'hFFFF_FFFF;  // reused as the blit CRC register
-            b_dst <= blit_dst_slot_i;
-            b_mode <= blit_mode_i;
-            b_src <= blit_src_i;
-            b_len <= blit_len_i;
-            b_crc <= blit_crc_i;
-            b_fetched <= 32'd0;
-            b_commit <= 32'd0;
-            m <= M_BLIT_CHK;
           end
         end
 
         M_HDR_REQ: begin
           hps_req_v <= 1'b1;
-          hps_blit <= 1'b0;
           hps_addr <= f_addr;
           hps_len <= burst_len(f_len);
           wr_off <= 32'd0;
@@ -591,7 +438,6 @@ module zhao_cmd_dma
 
         M_PAY_REQ: begin
           hps_req_v <= 1'b1;
-          hps_blit <= 1'b0;
           hps_addr <= f_addr + fetched;
           hps_len <= burst_len(need_total - fetched);
           wr_off <= fetched;
@@ -703,93 +549,6 @@ module zhao_cmd_dma
           end
         end
 
-        // ------------------------------------------------ blit engine ------
-        M_BLIT_CHK: begin
-          // memory_rules.md 5: byte_len must equal canvas_bytes(mode) and
-          // dst_slot must be 0/1 — anything else rejected BEFORE any byte
-          // (blit_law_len == canvas_bytes outside `ifdef FORMAL)
-          if ((b_dst > 8'd1) || (b_len != blit_law_len(b_mode))
-              || (b_len == 32'd0) || (b_len > BLIT_BUF_BYTES)) begin
-            blit_done_v <= 1'b1;
-            blit_status_r <= ST_BLIT_REJECT;
-            m <= M_IDLE;
-          end else begin
-            m <= M_BLIT_REQ;
-          end
-        end
-
-        M_BLIT_REQ: begin
-          hps_req_v <= 1'b1;
-          hps_blit <= 1'b1;
-          hps_addr <= b_src + b_fetched;
-          hps_len <= burst_len(b_len - b_fetched);
-          wr_off <= b_fetched;
-          m <= M_BLIT_WAIT;
-        end
-
-        M_BLIT_WAIT: begin
-          if (hps_rsp_i.err) begin
-            blit_done_v <= 1'b1;
-            blit_status_r <= ST_BRIDGE_ERR;
-            m <= M_IDLE;  // zero guard writes: never entered M_BLIT_COMMIT
-          end else if (hps_rsp_i.beat_valid) begin
-            begin
-              logic [31:0] cnext;
-              cnext = crc_pay_r;
-              if (wr_off < BLIT_BUF_BYTES) begin
-                blit_buf[wr_off[BLIT_IDX_W+2:3]] <= hps_rsp_i.data;
-              end
-              for (int i = 0; i < 8; i++) begin
-                cnext = zhao_abi_pkg::zhao_crc32c_step(
-                    cnext, hps_rsp_i.data[8*i +: 8]);
-              end
-              crc_pay_r <= cnext;
-            end
-            wr_off <= wr_off + 32'd8;
-            b_fetched <= b_fetched + 32'd8;
-            if (hps_rsp_i.last) begin
-              if ((b_fetched + 32'd8) >= b_len) m <= M_BLIT_COMMIT;
-              else m <= M_BLIT_REQ;
-            end
-          end
-        end
-
-        M_BLIT_COMMIT: begin
-          // first cycle here: the blit payload CRC gate. On mismatch ZERO
-          // bytes commit to VRAM (memory_rules.md 4.3) and the blit faults.
-          if (!blit_gate && (b_commit == 32'd0)
-              && ({~crc_pay_r} != b_crc)) begin
-            blit_done_v <= 1'b1;
-            blit_status_r <= ST_BAD_PAYLOAD_CRC;
-            m <= M_IDLE;
-          end else if (!blit_gate) begin
-            blit_gate <= 1'b1;  // CRC passed: commit may start next cycle
-          end else if (guard_rsp_i.ready) begin
-            // request accepted: stream its ceil(len/8) data beats before
-            // advancing (the write-data seam law, header note)
-            glen_q <= guard_req_o.len;
-            wbeat  <= 3'd0;
-            m      <= M_BLIT_DATA;
-          end
-        end
-
-        M_BLIT_DATA: begin
-          // one guard_wdata_o beat per cycle (guard_wvalid_o high);
-          // beats = ceil(glen_q / 8), glen_q is 8..64 here (canvas bytes
-          // are 64-B multiples; the tail guard keeps the general law)
-          if ((4'(wbeat) + 4'd1) >= 4'((glen_q + 7'd7) >> 3)) begin
-            if ((b_commit + {25'd0, glen_q}) >= b_len) begin
-              blit_done_v <= 1'b1;
-              blit_status_r <= ST_OK;
-              m <= M_IDLE;
-            end else begin
-              b_commit <= b_commit + {25'd0, glen_q};
-              m <= M_BLIT_COMMIT;
-            end
-          end else begin
-            wbeat <= wbeat + 3'd1;
-          end
-        end
 
         default: m <= M_IDLE;
       endcase
@@ -835,7 +594,6 @@ module zhao_cmd_dma
   always_ff @(posedge clk) begin
     if (f_past_valid && !$past(rst_n)) begin
       assert(!pkt_valid_o);
-      assert(!guard_req_o.valid);
       assert(!hps_req_o.valid);
     end
   end
@@ -844,29 +602,30 @@ module zhao_cmd_dma
       if (pkt_valid_o) begin
         assert(hdr_gate && pay_gate);
       end
-      if (guard_req_o.valid) begin
-        assert(blit_gate);
-      end
     end
   end
 
   // ---- non-vacuity covers (V16: covers must prove the antecedents) --------
-  // Both assertions above are implications; a model that cannot raise
-  // pkt_valid_o or guard_req_o.valid satisfies them while proving nothing
-  // (the MEM.GUARD failure shape). c_guard is reachable ONLY because the
-  // harness sets FORMAL_BLIT_LEN — see the parameter note; without it the
-  // blit gate never opened in the formal cone and (b) was vacuous.
+  // The assertion above is an implication, and a model that cannot raise
+  // pkt_valid_o satisfies it while proving nothing (the MEM.GUARD failure
+  // shape), so the antecedent is covered explicitly.
+  //
+  // PROPERTY (b) AND ITS COVERS WENT WITH THE BLIT ENGINE (step 6). It said
+  // no VRAM write is offered before the blit payload CRC passed, and this
+  // module no longer offers VRAM writes at all -- it has no MEM.GUARD client.
+  // The same law now lives on DEBUG.FRAMEBLIT, whose own formal harness is
+  // tests/formal/debug_frameblit_safety.sby.
+  //
+  // Worth recording rather than quietly dropping: (b) was VACUOUS until the
+  // harness gained FORMAL_BLIT_LEN, because the smallest lawful canvas is
+  // 153,600 B and the blit gate never opened at a tractable BMC depth. The
+  // property that had to be rescued from vacuity is the one being deleted.
   always_ff @(posedge clk) begin
     if (f_past_valid && rst_n) begin
       c_pkt:      cover (pkt_valid_o);                 // (a) antecedent
       c_gates:    cover (hdr_gate && pay_gate);
-      c_guard:    cover (guard_req_o.valid);           // (b) antecedent
-      c_blitgate: cover (blit_gate);
       c_hdr_bad:  cover (dma_done_o
                          && (dma_status_o == ST_BAD_HEADER_CRC));
-      c_blit_ok:  cover (blit_done_o && (blit_status_o == ST_OK));
-      c_blit_bad: cover (blit_done_o
-                         && (blit_status_o == ST_BAD_PAYLOAD_CRC));
     end
   end
 `endif

@@ -385,12 +385,6 @@ module zhao_shell_top
   logic [7:0]  pkt_byte;
   logic [31:0] pkt_len;
 
-  // CMD.DMA's now-dead blit outputs, kept only until step 6 deletes them.
-  logic            dma_blit_ready_dead, dma_blit_done_dead, dma_blit_wvalid_dead;
-  logic [7:0]      dma_blit_status_dead;
-  logic [63:0]     dma_blit_wdata_dead;
-  zhao_guard_req_t dma_blit_guard_dead;
-
   logic        dpy_blit_valid, blit_req_ready;
   logic [7:0]  dpy_blit_dst, dpy_blit_mode;
   logic [31:0] dpy_blit_src, dpy_blit_len, dpy_blit_crc;
@@ -519,24 +513,10 @@ module zhao_shell_top
     .pkt_ready_i         (pkt_ready),
     .pkt_byte_o          (pkt_byte),
     .pkt_len_o           (pkt_len),
-    // CMD.DMA's in-house blitter is DEAD from here: the dispatch goes to
-    // DEBUG.FRAMEBLIT instead. Its ports are tied off rather than deleted so
-    // that this step changes WHO does the work and nothing else; step 6 of the
-    // integration order removes the machinery, including the whole-canvas
-    // staging buffer that is the entire point of the redesign.
-    .blit_req_valid_i    (1'b0),
-    .blit_req_ready_o    (dma_blit_ready_dead),
-    .blit_dst_slot_i     (8'd0),
-    .blit_mode_i         (8'd0),
-    .blit_src_i          (32'd0),
-    .blit_len_i          (32'd0),
-    .blit_crc_i          (32'd0),
-    .blit_done_o         (dma_blit_done_dead),
-    .blit_status_o       (dma_blit_status_dead),
-    .guard_req_o         (dma_blit_guard_dead),
-    .guard_rsp_i         ('0),
-    .guard_wdata_o       (dma_blit_wdata_dead),
-    .guard_wvalid_o      (dma_blit_wvalid_dead),
+    // CMD.DMA has no blitter and no MEM.GUARD client any more: step 6
+    // deleted the machinery, and with it the 1.97 Mbit whole-canvas staging
+    // buffer that was the entire point of the redesign. The blit dispatch is
+    // DEBUG.FRAMEBLIT's, and it stages 64 bytes.
     .frame_tick_i        (gpu_tick),
     .snap_cmds_o         (dma_snap_cmds),
     .snap_bytes_o        (dma_snap_bytes),
@@ -988,11 +968,6 @@ module zhao_shell_top
                     ^ ^client_rsp[2] ^ ^client_rsp[3]
                     ^ ^client_rsp[4] ^ ^{client_rsp[0].credits}
                     ^ client_rsp[0].grant ^ client_rsp[1].grant
-                    // CMD.DMA's blit outputs, dead since the dispatch moved to
-                    // DEBUG.FRAMEBLIT. Step 6 deletes the machinery behind them.
-                    ^ dma_blit_ready_dead ^ dma_blit_done_dead ^ dma_blit_wvalid_dead
-                    ^ ^dma_blit_status_dead ^ ^dma_blit_wdata_dead
-                    ^ ^dma_blit_guard_dead
                     // `guard_wlast_o` marks the last beat of a guard request.
                     // The write queue does not need it: it enqueues four words
                     // per beat and the controller pops them on its own schedule,
