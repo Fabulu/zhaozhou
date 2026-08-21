@@ -1593,12 +1593,16 @@ blocks:
     counters: [surface_texels_touched]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: 61c9d0f
         evidence: reference/include/zref/zref_surface.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: 1bc8f5f
+        evidence: tests/surface/surface_sheet_store_diff.cpp
 
 
 
