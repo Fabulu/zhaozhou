@@ -2632,12 +2632,16 @@ blocks:
     counters: [polygon_particles]
     source_ids: true
     budget_group: myriad_forge
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "986d3ef"
         evidence: reference/include/zref/zref_particle.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "0877f21"
+        evidence: tests/particles/part_expand_directed.cpp
 
     deferred: false
     cut_order: null
