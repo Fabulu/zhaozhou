@@ -85,8 +85,26 @@ Items 2 and 4 are the cheap ones: neither changes a throughput contract.
 Per-block fits are **upper bounds**. There is no cross-block sharing and no
 composed-design optimisation, and roughly 9,000 virtual pins across the measured
 set become plain wires once composed. The composed fit is the only thing that
-answers "does it fit", and it does not run on the development machine
-(`quartus_map` committed 28.4 GB against 24 GB) — see `reports/composed/`.
+answers "does it fit".
+
+> **CORRECTION 2026-08-21: the 28.4 GB figure this paragraph used to cite was a
+> BUG, not a requirement, and it was fixed on 2026-08-20.** The project's last
+> line was `set_instance_assignment -name VIRTUAL_PIN ON -to *`, and a wildcard
+> instance assignment is matched against every node name in the design rather
+> than the top-level ports it was written for (`d1a2b8a`). With the 101 ports
+> named explicitly, composed analysis and synthesis **run**: 42:33 at a 6.2 GB
+> peak (`f3506b6`).
+>
+> The composed fit is **not blocked on hardware**. It is blocked on Quartus
+> Error 276003 — registers that cannot convert to RAM megafunctions because two
+> memories have asynchronous read logic. `zhao_scanout_linebuf` has since been
+> given a registered read; `zhao_cmd_dma`'s `blit_buf` has not.
+>
+> Treat 6.2 GB with suspicion too. `9c693a9` measured that parsing the entire
+> source cone is free (0.24 GB) and that the cost is in ELABORATION, which is
+> superlinear in Quartus 17.0.2 Lite for a top of sixteen ordinary instances
+> with no generate blocks and no large arrays. **A newer Quartus is the
+> identified lever and has not been tried.**
 
 DSP is less likely than ALMs to shrink on composition, though: a multiplier is a
 multiplier whether or not its neighbours are present. Treat 171 as close to

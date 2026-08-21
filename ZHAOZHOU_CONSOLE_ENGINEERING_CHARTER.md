@@ -1825,6 +1825,26 @@ Do not freeze absolute ALM/DSP/M10K counts before Phase 0. Use percentage ceilin
 
 The reserve is not consumed because an exciting feature almost fits.
 
+### Latency is a budgeted resource (added 2026-08-21, owner ruling)
+
+Fabric is not the only thing that runs out. **Input-to-photon latency is a
+first-class budget** alongside ALM, DSP, M10K and bandwidth, and
+`design/budgets/latency.md` is its home.
+
+The rule, in short: **a change that moves latency must say so and by how much.**
+A change that reduces it is a win to be kept, not a test failure to revert — if
+a golden disagrees with a real improvement, the golden moves, and it moves
+loudly. A change that increases it needs a stated reason, and "it was easier" is
+not one. Latency and throughput are different resources and may not be traded
+without the trade being written down.
+
+This became a rule the hard way. A blitter redesign saved ~58,000 gpu cycles and
+arrived looking like a bug: 41 failing timing assertions, not one of them a wrong
+pixel. Treating those assertions as law rather than as a record of a measurement
+would have discarded a real improvement to keep a golden green.
+
+**A test that pins a measured property is a record, not a law.**
+
 ### Performance counters are mandatory
 
 At minimum:

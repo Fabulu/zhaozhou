@@ -1,5 +1,26 @@
 # Step 4 is built, works, and is faster — and that is the problem
 
+> ## DECIDED 2026-08-21: OPTION 1, TAKE IT.
+>
+> Fabian's call. The machine keeps the improvement and the record follows it:
+> the Duo golden is regenerated, the demo's per-tick timing expectations move
+> to the new phase, and D5 in `reports/status/phase2_wave2.md` is revised with
+> the newly measured cost.
+>
+> The practical upshot that decided it: **one frame less input latency** — the
+> content that used to appear at frame N+1 appears at frame N — plus ~58k gpu
+> cycles of freed budget per blit. No visual change; every displayed frame was
+> already the correct picture, which is why all 41 failing checks are timing
+> assertions and none is a pixel.
+>
+> What it does NOT do, stated so the record cannot be misread later: it does
+> not reach 60 Hz fresh frames. The commit phase still dominates against a
+> 318,592-cycle frame. It is a phase shift measured on the Duo demo's cadence,
+> not a rate improvement, and all of it is simulation.
+>
+> This unblocks steps 5-8 and the composed Quartus fit.
+
+
 > A decision for Fabian. Everything here is **simulation**; nothing has run on a
 > board.
 >

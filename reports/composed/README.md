@@ -1,5 +1,43 @@
 # Composed shell fit — brief for the machine that can hold it
 
+> # SUPERSEDED 2026-08-21. DO NOT ACT ON THIS BRIEF.
+>
+> **The handoff described below is not needed. The 28.4 GB was a bug, not a
+> requirement.**
+>
+> The project's last line was
+> `set_instance_assignment -name VIRTUAL_PIN ON -to *`. A wildcard instance
+> assignment is matched against **every node name in the design**, not the
+> top-level ports it was written for, so Quartus carried a VIRTUAL_PIN
+> candidacy — a pattern match and a database entry — for every internal net in
+> the cone. Fixed in `d1a2b8a` by naming the 101 ports of `zhao_shell_top`
+> explicitly.
+>
+> With that fix, composed analysis and synthesis **run on the development
+> machine**: 42:33 at a **6.2 GB** peak (`f3506b6`). The commit that landed it
+> says so directly: *"The work-PC handoff stays paused and is very likely
+> unnecessary now."*
+>
+> **What actually blocks the composed fit** is Quartus Error 276003 — registers
+> that cannot convert to RAM megafunctions, because two memories have
+> asynchronous read logic:
+> `zhao_scanout_linebuf|mem` (**since fixed**, it now uses `zhao_dc_sdp_ram`
+> with a registered read) and `zhao_cmd_dma|blit_buf` (**not fixed**; the
+> combinational read is still there). That is an RTL task, not a hardware one.
+>
+> **And treat 6.2 GB as unexplained rather than settled.** `9c693a9` measured
+> that parsing the entire source cone costs 0.24 GB — parsing is free — and
+> that the cost is in ELABORATION, which is superlinear here for a top of
+> sixteen ordinary instances with no generate blocks and no large arrays.
+> *"There is nothing pathological in the design."* The suspect is the Quartus
+> 17.0.2 Lite elaborator itself, and **trying a newer Quartus is the named
+> lever that nobody has pulled.**
+>
+> This file is kept rather than deleted because the false 28.4 GB figure
+> "was believed long enough to shape decisions" (`9c693a9`), and a deleted
+> file cannot warn the next person who half-remembers it.
+
+
 You have been handed this repository to answer **one question** that the primary
 development machine cannot: **does the composed `zhao_shell_top` fit the target
 device, and does it close timing?**

@@ -88,10 +88,12 @@ Measured: starvation exactly zero at every cadence.
 > D5's conclusion still holds — the commit phase still dominates against a
 > 318,592-cycle frame, and the Z60 raw-demand argument in the last bullet is
 > untouched by any of this, being a bandwidth proof rather than a scheduling
-> one. But the headline NUMBER is no longer the machine's number, and the
-> demo's timing expectations are pinned to the old one. Which of those moves
-> is Fabian's decision, recorded in that report; this note exists so the
-> figure is not read as current in the meantime.
+> one. But the headline NUMBER is no longer the machine's number.
+>
+> **DECIDED 2026-08-21: the machine keeps the improvement** and the demo's
+> timing expectations move to the new phase. The measured cost is revised
+> below once the merge lands; until then the ~338k figure stands as the
+> historical measurement it was, not as a current one.
 >
 > `duo_markers.cpp`'s own header already named "streaming blit CRC" as a
 > ratification-scale path that would close 60 Hz. It was right.

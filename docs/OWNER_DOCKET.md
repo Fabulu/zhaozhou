@@ -12,6 +12,29 @@ LOD/deformation first**, and entries below do not outrank that.
 
 ---
 
+## 2026-08-21 — latency is now a formal goal (RULING, not an ask)
+
+> "Less latency is an improvement. It should be a goal, really, as long as it
+> doesn't fuck up anything else. In fact I consider this a massive boon, a
+> gargantuan success, and an architectural oversight that this hadn't been made
+> a formal goal."
+
+**Acted on, not queued.** `design/budgets/latency.md` is the budget document and
+charter §25 now carries the rule. Latency joins ALM, DSP, M10K and bandwidth as
+a budgeted resource: a change that moves it must say so and by how much, a
+reduction is a win to be KEPT rather than a failing test to revert, and an
+increase needs a reason better than "it was easier".
+
+**Honest scope.** The blit path is measured — ~58k gpu cycles saved, one whole
+frame earlier, roughly 16.7 ms at the 60 Hz field rate. **End-to-end
+controller-sample to displayed-photon is NOT measured**, and nobody should quote
+a number for it yet. Three gaps are named in the budget document rather than
+guessed at, including whether `CMD.SCHEDULER`'s tick alignment costs a frame
+that nobody has ever costed.
+
+---
+
+
 ## 2026-08-21 — terrain rotated at arbitrary angles, and rotated in REAL TIME
 
 > "our terrains can be rotated at different [angles]. Would be great if terrains
