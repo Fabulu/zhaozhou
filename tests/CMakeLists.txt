@@ -2479,6 +2479,41 @@ set(ZHAO_SURFACE_STAMP_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
 
+# FIELD.WRITE.TAG, the op ops.yml declares and had no coverage for. Its cited
+# reference_function zref::fieldir::sink_write_tag is one of the twenty-five
+# phantoms; the law is real and lives in zref::surface::SheetStore, so the op is
+# tested against that rather than against a second implementation.
+add_executable(test_field_write_tag differential/field_write_tag.cpp)
+target_link_libraries(test_field_write_tag PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_field_write_tag PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface)
+verilate(test_field_write_tag
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${ZHAO_SURFACE_SHEET_SV})
+add_test(NAME field_write_tag COMMAND test_field_write_tag)
+set_tests_properties(field_write_tag PROPERTIES LABELS "fast;nightly" TIMEOUT 3600)
+
+# SURFACE.SHEET measured against its DECLARED oracle. surface_sheet_directed.cpp
+# checks what the block promises about itself and never touches SheetStore --
+# ledger V17 refused it as "an alias, not evidence", correctly. This runs the
+# real RTL and the real zref::surface::SheetStore over one operation stream and
+# requires them to agree on verdict, occupancy and every texel.
+add_executable(test_surface_sheet_store_diff surface/surface_sheet_store_diff.cpp)
+target_link_libraries(test_surface_sheet_store_diff PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_surface_sheet_store_diff PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface)
+verilate(test_surface_sheet_store_diff
+  PREFIX Vzhao_surface_sheet
+  TOP_MODULE zhao_surface_sheet
+  SOURCES ${ZHAO_SURFACE_SHEET_SV})
+add_test(NAME surface_sheet_store_diff COMMAND test_surface_sheet_store_diff)
+set_tests_properties(surface_sheet_store_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME surface_sheet_store_random COMMAND test_surface_sheet_store_diff --random 12)
+set_tests_properties(surface_sheet_store_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME surface_sheet_store_random_nightly COMMAND test_surface_sheet_store_diff --random 150)
+set_tests_properties(surface_sheet_store_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_surface_sheet_directed surface/surface_sheet_directed.cpp)
 target_link_libraries(test_surface_sheet_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_surface_sheet_directed PRIVATE

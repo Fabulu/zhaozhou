@@ -1588,13 +1588,18 @@ blocks:
     target_throughput: 1 sheet texel per clock
     reference_model: zref::surface::SheetStore
     tests:
-      directed: tests/surface/surface_sheet_directed.cpp
-      random: tests/surface/surface_sheet_random.cpp
+      directed: tests/surface/surface_sheet_store_diff.cpp
+      random: tests/surface/surface_sheet_store_diff.cpp
     counters: [surface_texels_touched]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-21"
+        commit: 61c9d0f
+        evidence: reference/include/zref/zref_surface.hpp
+
 
 
     deferred: false

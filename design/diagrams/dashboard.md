@@ -22,12 +22,12 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | particles | 7 | · | · | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | · | · | 5 | · | · | · | · | · | 5 |
-| surface | 1 | · | 1 | · | · | · | · | · | 2 |
+| surface | · | 1 | 1 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | 3 | · | 4 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 44 | 4 | 26 | 14 | · | · | · | 6 | 88 |
+| **all** | 43 | 5 | 26 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -86,6 +86,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | TERRAIN.LOD | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_lod_directed.cpp |
 | TERRAIN.PROJECT | REFERENCE_COMPLETE | 2026-08-21 | `16078f4` | reference/src/zrender/internal.hpp |
 | TERRAIN.PROJECT | UNIT_VERIFIED | 2026-08-21 | `0e4541f` | tests/terrain/terrain_project_directed.cpp |
+| SURFACE.SHEET | REFERENCE_COMPLETE | 2026-08-21 | `61c9d0f` | reference/include/zref/zref_surface.hpp |
 | SURFACE.STAMP | REFERENCE_COMPLETE | 2026-08-21 | `175c004` | reference/include/zref/zref_surface.hpp |
 | SURFACE.STAMP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/surface/surface_stamp_directed.cpp |
 | GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
