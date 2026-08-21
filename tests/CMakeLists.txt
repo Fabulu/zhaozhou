@@ -2947,6 +2947,8 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
 
 # synthesizable-cone lint (the model/tb are excluded by construction)
