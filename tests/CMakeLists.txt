@@ -884,6 +884,31 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# GEOM.POSE's quaternion step: quat16 -> 3x4 rotation, against
+# zref::creature::quat16_to_mat3. The no-renormalization rule (creature_rules
+# 2.2) is a law an "improved" implementation would break, so section 5 drives
+# deliberately non-unit quaternions.
+add_executable(test_geom_quat2mat_directed geometry/geom_quat2mat_directed.cpp)
+target_link_libraries(test_geom_quat2mat_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_quat2mat_directed
+  PREFIX Vzhao_geom_quat2mat
+  TOP_MODULE zhao_geom_quat2mat
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv)
+add_test(NAME geom_quat2mat_directed COMMAND test_geom_quat2mat_directed)
+set_tests_properties(geom_quat2mat_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_quat2mat_random COMMAND test_geom_quat2mat_directed --random 500)
+set_tests_properties(geom_quat2mat_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_quat2mat_random_nightly COMMAND test_geom_quat2mat_directed --random 20000)
+set_tests_properties(geom_quat2mat_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_geom_quat2mat
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_quat2mat
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv)
+set_tests_properties(lint_zhao_geom_quat2mat PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.SKIN: rigid and two-weight skinning against zref::skin_vertex -- the
 # shipped function every creature the reference renderer has drawn was skinned
 # with. The single-rounding law (one rescale by 22, never two by 16) is what
