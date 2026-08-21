@@ -5,6 +5,80 @@ at the top.*
 
 ---
 
+## 2026-08-22 — the frame blit is out of the command front end
+
+### Where the hardware stands
+
+**37 specified · 4 reference-complete · 34 unit-verified · 14 rtl-verified**, now
+across **89** blocks — one more than before, because DEBUG.FRAMEBLIT is a new
+block rather than a rewrite. `ctest -L fast`: **227/227**.
+
+### DEBUG.FRAMEBLIT — you were right, the design was sitting there
+
+`reports/CMD.DMA_Redesign_Proposal.md` Part 2 had it written up and nobody had
+built it. It is done now.
+
+The reason it matters is the one that was blocking the whole shell from fitting:
+the debug frame blit used to keep **a whole screen's worth of pixels** in a
+staging buffer inside the command front end, because the old rule said nothing
+may be written to video memory until the checksum has been verified. That single
+buffer is what made the design too big.
+
+The rule is now amended, and it is an amendment rather than a loosening:
+
+> Nothing becomes **visible** until every byte is written and the checksum
+> matches.
+
+Which is sound, because writing into a screen buffer nobody is looking at is not
+visible to anyone. So the screen buffer itself does the job the staging buffer
+was doing — that is what double buffering is *for* — and the staging buffer drops
+from about two million bits to **512**.
+
+Two details worth knowing:
+
+- **A failed blit leaves a dirty buffer behind, on purpose.** It is never shown.
+  The test asserts that rather than tidying it away.
+- **The buffer is now leased**, and the lease is checked every single cycle. The
+  compiler flagging one unused signal led to a real hole: a lease that drops and
+  is immediately re-granted for the *same* buffer looks exactly like one that
+  never lapsed, while the bytes already written belonged to somebody else. That
+  is closed.
+
+### Website
+
+Updated and live at **zhaozhou.pages.dev**. The ledger figures, the creature
+path, the projection block, the spell-program engine and an honest "what is left
+and who it is waiting on" section are all on it now. Phases 6–10 were showing
+"not started" while actually holding verified blocks; that is fixed.
+
+Two things from that pass you should know:
+
+- **`deploy.ps1` had a bug**: it passed a `--branch` flag that was never declared,
+  so it expanded to nothing — which is exactly the silent "deployed as a preview
+  instead of production" failure its own comment warns about. Fixed. `update.ps1`
+  still has the same shape and was left alone.
+- Several good numbers were **left off the site on purpose** because they only
+  exist in this file or in commit messages, not in a committed report: the pose
+  cache's 192 KB, the multiplier counts, the cycles-per-pose figures. If you want
+  them public they need a line in a report first.
+
+No new images. Those wait until the hardware can render end to end, as you said.
+
+### Also running
+
+An **hourly reminder** is set so I pick this up again if I stop. It carries the
+full working method, not just "continue" — check the reference exists first,
+mutation-sweep everything, discard any result where the binary did not actually
+rebuild. It lives only in this session, so if the session ends it goes with it.
+
+### Engine progress
+
+Length, distance and normalise-support landed: an exact integer square root,
+binary longhand, thirty-two fixed steps. Fixed latency on purpose — nothing
+downstream has to model a variable delay.
+
+---
+
 ## 2026-08-21 (late) — three more blocks, and an honest scope note
 
 ### Where the hardware stands
