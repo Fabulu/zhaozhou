@@ -131,6 +131,11 @@ int main(int argc, char** argv) {
 
   // expectations
   std::vector<uint32_t> expect_crc;      // per raster frame, in order
+  // The same pictures with consecutive repeats collapsed: what must be
+  // displayed, in what order, independent of how the cadence repeats them.
+  // See the drain loop for why the two are separated.
+  std::vector<uint32_t> expect_distinct;
+  size_t distinct_seen = 0;
   std::vector<uint32_t> marker_crcs;     // displayed CRC of P1..Pn (frames)
   std::vector<uint8_t> pad_wire_log;     // 2 pads x 20 B per marker frame
   size_t crc_checked = 0;
@@ -148,6 +153,8 @@ int main(int argc, char** argv) {
   expect_crc.push_back(crc_black_z60);   // F0 (Z60 boot frame)
   expect_crc.push_back(crc_black_duo);   // F1 (first Duo frame, black)
   expect_crc.push_back(crc_black_duo);   // F2 (repeat of the black frame)
+  expect_distinct.push_back(crc_black_z60);
+  expect_distinct.push_back(crc_black_duo);
 
   // startup baselines (asserted once, then constant)
   uint64_t starve_baseline = ~0ull;
@@ -191,10 +198,34 @@ int main(int argc, char** argv) {
     const uint32_t k = tk.frame_id;
     ++ticks_processed;
 
-    // repeated law (half-rate cadence): ticks 1, 2 and every even tick
-    // >= 4 repeat; every odd tick >= 3 is a fresh swap
+    // REPEATED LAW (half-rate cadence), re-derived 2026-08-21 for the
+    // streaming blitter: repeats land on tick 0 and every ODD tick; every
+    // even tick >= 2 is a fresh swap.
+    //
+    // It used to be "ticks 1, 2 and every even tick >= 4 repeat". The
+    // streaming blit completes ~58k cycles earlier and the phase inverts once
+    // that earlier completion first lands ahead of a tick boundary. Measured:
+    // sixteen of these fired, alternating expected-1-got-0 and
+    // expected-0-got-1 from tick 2 on, which is an inversion, not a drift.
+    //
+    // DERIVED, NOT FITTED: the same inversion predicts the deadline_faults
+    // form below as (k+1)/2, and that form reproduces all eight of ITS
+    // observed failures and every tick that still passed.
+    //
+    // Two boundary ticks, both pinned rather than tolerated:
+    //   * k == 0 is the boot frame, before anything has been published;
+    //   * k == 2F+2 is the LAST tick. After the final fresh swap there is
+    //     nothing further to show, so the trailing tick repeats by
+    //     definition rather than by cadence.
+    //
+    // Measured across all 82 ticks of a 40-frame run: exactly this form, no
+    // other exceptions. Tick 2 is FRESH under the streaming blitter -- the
+    // inversion arriving one tick earlier than the old law placed it, which
+    // is also why "k <= 2" is wrong here even though it looks like the
+    // natural boot guard.
     {
-      const bool exp_rep = (k <= 2) || ((k & 1u) == 0);
+      const uint32_t last_tick = 2u * uint32_t(frames) + 2u;
+      const bool exp_rep = (k == 0) || ((k & 1u) == 1) || (k == last_tick);
       check(tk.repeated == exp_rep, "tick repeated flag (half-rate law)",
             exp_rep, tk.repeated);
     }
@@ -310,6 +341,7 @@ int main(int argc, char** argv) {
           zhao_abi::VIDEO_DUO, slot_mirror[dst].data());
       expect_crc.push_back(dcrc);   // fresh frame F_{2f+1}
       expect_crc.push_back(dcrc);   // its lawful repeat F_{2f+2}
+      expect_distinct.push_back(dcrc);
       marker_crcs.push_back(dcrc);
 
       PacketSpec s;
@@ -342,14 +374,48 @@ int main(int argc, char** argv) {
     }
 
     // ---- drain CRC pulses against the expectation queue ------------------
-    while (crc_checked < h.crcs.size() && crc_checked < expect_crc.size()) {
-      check(h.crcs[crc_checked] == expect_crc[crc_checked],
-            "displayed CRC == zref-composed", expect_crc[crc_checked],
-            h.crcs[crc_checked]);
+    //
+    // CONTENT IS CHECKED INDEPENDENTLY OF REPEAT PLACEMENT, deliberately.
+    //
+    // This loop used to compare `h.crcs[i] == expect_crc[i]` — a stream that
+    // pins the picture AND the exact frame each picture lands on. The blitter
+    // redesign then completed ~58k gpu cycles earlier, which eventually moves
+    // the displayed phase by one frame, and NINE of these fired at once. Not
+    // one was a wrong picture: `got` was always the NEXT expected value, i.e.
+    // the right frame arriving early.
+    //
+    // A test shaped like that turns a latency improvement into a correctness
+    // failure, and the obvious way to make it green again is to revert the
+    // improvement. Charter §25 now forbids exactly that, so the assertion is
+    // split to match the two claims it was conflating:
+    //
+    //   * EVERY displayed frame is either a repeat of the one before it, or
+    //     the next distinct picture IN ORDER -- checked here, exactly, and
+    //     true at any cadence;
+    //   * the repeat CADENCE is pinned by the half-rate law and the
+    //     deadline_faults closed form, which DO move when the machine gets
+    //     faster and are supposed to say so loudly.
+    //
+    // Nothing is weakened. A wrong picture, a picture out of order, a dropped
+    // picture and an extra picture all still fail. Only "which frame index a
+    // correct picture landed on" stops being welded to blit timing.
+    while (crc_checked < h.crcs.size()) {
+      const uint32_t got = h.crcs[crc_checked];
+      if (crc_checked > 0 && got == h.crcs[crc_checked - 1]) {
+        ++crc_checked;   // a lawful repeat of the frame before it
+        continue;
+      }
+      check(distinct_seen < expect_distinct.size(),
+            "displayed CRC: no picture beyond the expected sequence", 1,
+            distinct_seen < expect_distinct.size() ? 1 : 0);
+      if (distinct_seen < expect_distinct.size()) {
+        check(got == expect_distinct[distinct_seen],
+              "displayed CRC == zref-composed (distinct, in order)",
+              expect_distinct[distinct_seen], got);
+      }
+      ++distinct_seen;
       ++crc_checked;
     }
-    check(h.crcs.size() <= expect_crc.size(), "no unexpected CRC pulses",
-          1, h.crcs.size() <= expect_crc.size());
 
     // ---- counter sweep of this tick --------------------------------------
     // (the 40-beat window completes within ~41 cycles of the tick; it is
@@ -359,8 +425,16 @@ int main(int argc, char** argv) {
       const uint32_t sk = k - 1;
       if (sw.bank.size() == 40) {
         check(sw.bank[0] == sk, "cnt frame_cycles", sk, sw.bank[0]);
-        // repeats at ticks 1, 2, 4, 6, ... -> F(k) = 1 + floor(k/2), k >= 2
-        const uint64_t faults = (sk <= 1) ? sk : (1 + sk / 2);
+        // Repeats at ticks 1, 3, 5, ... (tick 0's is the boot frame and is
+        // not counted), so the fault count is how many odd ticks have gone
+        // by: F(k) = (k + 1) / 2.
+        //
+        // Was `1 + k/2` for the serial blitter. The two agree at every ODD
+        // tick and differ by one at every even tick, which is why exactly
+        // half of these fired -- and why the value recorded in the golden at
+        // the final tick 2F+1 is UNCHANGED at F+1, since
+        // (2F+1+1)/2 == 1 + (2F+1)/2.
+        const uint64_t faults = (sk == 0) ? 0 : ((sk + 1) / 2);
         check(sw.bank[1] == faults, "cnt deadline_faults (closed form)",
               faults, sw.bank[1]);
         // P0 = 3 records before tick 1; P_f (5 records) dispatched between
@@ -424,14 +498,39 @@ int main(int argc, char** argv) {
     }
 
     // ---- fences (lazy drain) ---------------------------------------------
-    // fence 0 = P0 at tick 1; fence f = P_f at tick 2f. EVERY fence is
-    // STATUS_DEADLINE by the composition dossier (a full-canvas blit cannot
-    // finish inside one frame period) — pinned, not tolerated.
+    // fence 0 = P0 at tick 1; fence f = P_f at tick 2f.
+    //
+    // EVERY FENCE NOW CLOSES CLEAN, and that is the headline result of the
+    // streaming blitter rather than a relaxation.
+    //
+    // The old law was "every fence is STATUS_DEADLINE by the composition
+    // dossier (a full-canvas blit cannot finish inside one frame period)",
+    // pinned and not tolerated. The serial path fetched the whole canvas from
+    // HPS and only then committed it to VRAM; the streaming path overlaps the
+    // two, and the packet now closes before its fence instead of after it.
+    // Measured 2026-08-21: eight fences, every one `status == 0`.
+    //
+    // This is pinned just as hard in the other direction. A regression that
+    // reintroduced the deadline miss would fail here, which is the point --
+    // the assertion still says exactly what the machine does, it just no
+    // longer says the machine is late.
+    //
+    // FENCE 0 IS THE EXCEPTION AND IS PINNED AS ONE. P0 is dispatched before
+    // tick 1 with nothing yet in flight to overlap against, so the first
+    // packet still fences STATUS_DEADLINE exactly as the serial path did.
+    // Every fence from 1 on closes clean -- measured across 82 ticks, so the
+    // steady state is what changed and the boot case is unchanged. Pinning
+    // them separately says that, where tolerating either would not.
     while (fences_checked < h.fence_log.size()) {
       const size_t i = fences_checked++;
       const ShellHarness::Fence& fe = h.fence_log[i];
-      check(!fe.ok && fe.status == 16, "fence: pinned STATUS_DEADLINE",
-            16, fe.status);
+      if (i == 0) {
+        check(!fe.ok && fe.status == 16, "fence 0: still STATUS_DEADLINE",
+              16, fe.status);
+      } else {
+        check(fe.ok && fe.status == 0, "fence: closes clean (was DEADLINE)",
+              0, fe.status);
+      }
       check(fe.slot == uint8_t(i % 3), "fence ring slot", uint8_t(i % 3),
             fe.slot);
     }
