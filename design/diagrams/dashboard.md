@@ -15,7 +15,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | debug | · | · | 1 | 2 | · | · | · | · | 3 |
 | field | 6 | · | · | · | · | · | · | · | 6 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
-| geometry | 5 | 2 | 4 | · | · | · | · | · | 11 |
+| geometry | 5 | 1 | 5 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | · | · | 3 | · | · | · | 1 | 4 |
@@ -27,7 +27,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | · | 4 | · | · | · | · | 4 |
-| **all** | 40 | 5 | 29 | 14 | · | · | · | 6 | 88 |
+| **all** | 40 | 4 | 30 | 14 | · | · | · | 6 | 88 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -98,6 +98,7 @@ Blocks: **88** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | GEOM.SKIN | REFERENCE_COMPLETE | 2026-08-21 | `b6b5df4` | reference/src/zcreature/creature_core.cpp |
 | GEOM.SKIN | UNIT_VERIFIED | 2026-08-21 | `c51d910` | tests/geometry/geom_skin_directed.cpp |
 | GEOM.PROJECT | REFERENCE_COMPLETE | 2026-08-21 | `e0a7320` | reference/src/zrender/rast.cpp |
+| GEOM.PROJECT | UNIT_VERIFIED | 2026-08-21 | `21bc2cf` | tests/geometry/geom_project_directed.cpp |
 | GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
 | GEOM.CLIP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_clip_directed.cpp |
 | GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |

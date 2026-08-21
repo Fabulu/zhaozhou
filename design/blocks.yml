@@ -1935,12 +1935,16 @@ blocks:
     counters: [vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
         commit: "e0a7320"
         evidence: reference/src/zrender/rast.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-21"
+        commit: "21bc2cf"
+        evidence: tests/geometry/geom_project_directed.cpp
 
     deferred: false
     cut_order: null
