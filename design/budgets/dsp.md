@@ -1,5 +1,30 @@
 # DSP budget — the binding constraint, measured 2026-08-20
 
+> # THE CENSUS BELOW DOES NOT DESCRIBE THIS CONSOLE. Added 2026-08-21.
+>
+> `reports/synthesis/zhao_block_fit.json` records `rtlCleanAtHead: false` and
+> `sourceCommit: 96c0394a` — **93 commits old**, measured against a tree that
+> was not clean at HEAD.
+>
+> Verified module by module 2026-08-21: it measures **42 modules; the
+> repository contains 88.** Forty-six have never been fitted, and they include
+> the biggest multiplier consumers written since — `zhao_geom_project` (a
+> second nine-product projector), `zhao_geom_skin` (whose own header calls it
+> the largest multiplier count in the repo), the pose and matrix blocks, and
+> the entire Field IR engine.
+>
+> **So 171 is not the console's DSP count, and 133 is not a plan.** This
+> document warned that per-block fits are an UPPER bound; the sharper problem
+> is the opposite — the census is also an **under-count**, because half the
+> console is missing from it.
+>
+> `reports/DSP_Audit_2026-08-21.md` carries the owner's audit, the exact
+> algebra for cuts this document missed (TERRAIN.LOD 28 to 4-8, SURFACE.STAMP
+> 28 to 4-8 rather than 20, TEXTURE.TMU 28 to 8-12, GEOM.BINNER+SETUP 16 to 4,
+> RASTER.FRAGMENT 10 to 7), and the order of work. **Step 1 of that order is to
+> refresh this census at HEAD. Nothing below should be planned from until that
+> is done.**
+
 > Device `5CSEBA6U23I7`: **112 DSP blocks**, read from the fitter's own
 > `used / available` line rather than from a datasheet or from memory.
 

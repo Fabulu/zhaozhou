@@ -3,11 +3,11 @@ param(
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [switch]$NoPush,
     [switch]$KeepWorkspace,
-    # Default 1, deliberately. The composed map committed 28.4 GB with the
-    # project's NUM_PARALLEL_PROCESSORS 4; each worker carries its own working
-    # set, so this is the single biggest lever on peak memory. It costs wall
-    # time and changes nothing about the result.
-    # Raise it only if the run completes comfortably and you want it faster.
+    # Default 1 was chosen when the map was believed to peak at 28.4 GB, since
+    # each worker carries its own working set. That figure was a wildcard bug
+    # (see the header) and the real peak is 6.2 GB, so 1 is now merely
+    # conservative rather than necessary. It costs wall time and changes
+    # nothing about the result; raise it freely.
     [int]$Processors = 1
 )
 
@@ -17,15 +17,31 @@ $ErrorActionPreference = 'Stop'
 # ---------------------------------------------------------------------------
 # COMPOSED SHELL FIT, run on a machine that can actually hold it.
 #
-# WHY THIS EXISTS. The composed zhao_shell_top does not fit the primary
-# development machine: measured 2026-08-18, quartus_map committed 28.4 GB
-# against 24 GB of RAM and thrashed at near-zero CPU until it was killed. Every
-# synthesis number this project has is therefore a PER-BLOCK fit, and per-block
-# fits cannot answer the one question that matters before a device is frozen:
-# does the composed machine fit, and does it close timing. Twenty-two blocks
-# summing to some ALM count is an UPPER BOUND inflated by ~9,000 virtual pins
-# that become plain wires once composed, and by the absence of any cross-block
-# optimisation or resource sharing.
+# WHY THIS EXISTS. Per-block fits cannot answer the one question that matters
+# before a device is frozen: does the COMPOSED machine fit, and does it close
+# timing. Twenty-two blocks summing to some ALM count is an UPPER BOUND,
+# inflated by ~9,000 virtual pins that become plain wires once composed and by
+# the absence of any cross-block optimisation or resource sharing.
+#
+# CORRECTED 2026-08-21. This header used to say the composed fit "does not fit
+# the primary development machine", citing quartus_map committing 28.4 GB
+# against 24 GB. THAT WAS A BUG, NOT A REQUIREMENT. The project's last line was
+# `set_instance_assignment -name VIRTUAL_PIN ON -to *`, and a wildcard instance
+# assignment is matched against every node name in the design rather than the
+# top-level ports it was written for, so Quartus carried a VIRTUAL_PIN
+# candidacy for every internal net in the cone. Fixed in d1a2b8a by naming the
+# 101 ports explicitly; the composed run then completed analysis and synthesis
+# in 42:33 at a 6.2 GB peak (f3506b6).
+#
+# Two things followed from believing the false figure: this script was written
+# for a second machine that was never needed, and $Processors was defaulted to
+# 1 to cut a memory peak that had already gone away.
+#
+# 6.2 GB is still not fully explained. 9c693a9 measured that parsing the entire
+# source cone is free (0.24 GB) and that the cost is in ELABORATION, which is
+# superlinear here for a top of sixteen ordinary instances with no generate
+# blocks and no large arrays. The Quartus 17.0.2 Lite elaborator is the
+# suspect, and trying a newer Quartus is the named lever nobody has pulled.
 #
 # So this script runs on a second machine with more memory and brings the
 # answer back.
@@ -123,8 +139,8 @@ $machine = [ordered]@{
 [IO.File]::WriteAllText((Join-Path $runDir 'MACHINE.json'),
     (($machine | ConvertTo-Json -Depth 6) + "`n"), $Utf8NoBom)
 Write-Host ("RAM total {0:N1} GB, free at start {1:N1} GB" -f ($cs.TotalPhysicalMemory / 1GB), (($os.FreePhysicalMemory * 1KB) / 1GB))
-if ($cs.TotalPhysicalMemory -lt 30GB) {
-    Write-Host 'WARNING: the composed map peaked at 28.4 GB on the machine that could not hold it. Under ~30 GB this may thrash rather than fail cleanly.' -ForegroundColor Yellow
+if ($cs.TotalPhysicalMemory -lt 8GB) {
+    Write-Host 'WARNING: the composed map last peaked at 6.2 GB. Under ~8 GB this may thrash rather than fail cleanly.' -ForegroundColor Yellow
 }
 
 # ---- 4. run it -------------------------------------------------------------

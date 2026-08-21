@@ -157,6 +157,113 @@ why wrangler had nothing to infer. It is one now (2026-08-20) and sits on
 anyone works on a branch. deploy.ps1's comment still asserts the old fact; the
 new note says so rather than repeating it.
 
+## DEBUG.FRAMEBLIT integration, steps 4-6 (the DSP path)
+
+The owner asked why the DSP overrun was still sitting there. The honest answer
+was that the path to it ran through FRAMEBLIT, and I had been gating on a
+decision plus a blocker that turned out to be stale.
+
+### The decision, taken
+
+`reports/BLIT_INTEGRATION_PHASE_SHIFT.md`: **option 1, take the speedup.** The
+deciding fact was **one frame less input latency** — content that used to
+appear at frame N+1 appears at frame N, roughly 16.7 ms at the 60 Hz field
+rate — plus ~58k gpu cycles of freed budget. It does NOT reach 60 Hz; the
+commit phase still dominates a 318,592-cycle frame.
+
+### Step 4: rebased, not merged
+
+The branch was **13 commits behind main**, so `git diff main branch` showed
+main's newer files as deletions on the branch side. Merging it would have
+deleted the entire Field IR engine. Rebased forward instead; the branch then
+differed from main only in `zhao_shell_top.sv` and two CMake lines.
+
+### Step 5/7: the laws re-derived, and a test that was hiding a defect
+
+41 of 340 checks failed and not one was a wrong pixel. Every `got` was the NEXT
+expected value.
+
+**The structural fix matters more than the three closed forms.** The CRC check
+compared `h.crcs[i] == expect_crc[i]`, welding WHICH PICTURE to WHICH FRAME IT
+LANDED ON. That is what turned a latency win into nine correctness failures,
+and the obvious way to make it green was to revert the win — which charter
+§25 now forbids. Split into the two claims it conflated: every displayed frame
+is either a repeat of the one before it or the next distinct picture IN ORDER
+(exact, true at any cadence), while the cadence is pinned separately.
+
+That rewrite exposed a real defect: the old drain loop was bounded by
+`crc_checked < expect_crc.size()` and **silently stopped checking partway
+through**. The same 40-frame run went from 340 checks to 1,586.
+
+The three forms, each derived and then tested at frame counts they were not
+derived from (8, 20, 60; only 40 was used):
+
+- the half-rate cadence **inverted** — repeats move from ticks 1,2,4,6... to
+  tick 0 and every odd tick. Two boundary cases were found by MEASURING which
+  ticks disagreed rather than guessing, and I would have got both wrong: tick 2
+  is FRESH, and the final tick 2F+2 repeats because after the last publish
+  there is nothing further to show;
+- `deadline_faults` is `(k+1)/2`, was `1 + k/2`. They agree at every odd tick
+  and differ at every even one, which is why exactly half fired;
+- **every fence now closes CLEAN except fence 0.** The old law said every fence
+  is STATUS_DEADLINE because a full-canvas blit cannot finish inside one frame
+  period. In steady state that is now false, and that is the headline result.
+
+**The golden did not move.** Predicted algebraically first — the content CRCs
+are unchanged and `(2F+2)/2 == 1 + (2F+1)/2 == F+1` — then confirmed: the
+600-frame gate passed **23,430 checks** with the golden MD5 byte-identical
+(`db078abb...`) before and after. Taking the speedup cost zero golden churn.
+
+### Step 6: the 1.97 Mbit buffer is gone
+
+`zhao_cmd_dma.sv`, **874 -> 633 lines**. Removed: `blit_buf` (1,966,080 bits),
+the five `M_BLIT_*` states, the ENTIRE MEM.GUARD client (this block no longer
+writes VRAM at all), the `FORMAL_BLIT_LEN` override, the orphaned
+`ST_BLIT_REJECT`, and the shell's `_dead` tie-offs.
+
+That buffer is why the composed fit could not complete: it never inferred as an
+M10K — async-reset write, combinational read — so Quartus reported **Error
+276003**. It does not need a registered read now; it does not exist. It is also
+the module whose elaboration ALONE peaked at **16.2 GB** against 0.26 GB for
+ordinary blocks, which is a better suspect for the slow composed elaborate than
+the virtual-pin wildcard was.
+
+The contract's own deferred question — *"whether a 1.97 Mbit on-chip buffer
+should exist at all"* — is answered.
+
+Formal property (b) went with it, recorded rather than dropped: it said no VRAM
+write is offered before the blit CRC passed, and it was **VACUOUS** until the
+harness gained `FORMAL_BLIT_LEN`, because the smallest lawful canvas is
+153,600 B and no tractable BMC depth could open the gate. The property that had
+to be rescued from vacuity is the one now deleted.
+
+## Three documents were quoting a blocker that had been fixed
+
+`reports/composed/README.md`, `design/budgets/dsp.md` and
+`tools/quartus/run_composed_fit.ps1` all said the composed fit needs a machine
+with more than 24 GB, citing `quartus_map` committing 28.4 GB. **I repeated that
+to the owner as a current constraint. The owner remembered it had been fixed
+and was right.**
+
+It was a wildcard virtual-pin assignment matched against every node name in the
+design (`d1a2b8a`); with the 101 ports named, the composed run completes in
+42:33 at **6.2 GB** (`f3506b6`), whose own message says the work-PC handoff
+"is very likely unnecessary now".
+
+The script's staleness was not cosmetic: it exists to hand the job to a second
+machine that was never needed, its RAM warning tripped below 30 GB, and
+`$Processors` was defaulted to 1 purely to cut a peak that had already gone.
+
+And 6.2 GB is not settled either. `9c693a9` measured that parsing the whole
+source cone is free (0.24 GB) and the cost is in ELABORATION, superlinear for a
+top of sixteen ordinary instances with no generate blocks and no large arrays
+— *"there is nothing pathological in the design."* A newer Quartus is the
+named lever nobody has pulled.
+
+`9c693a9` had ALREADY warned this figure "was believed long enough to shape
+decisions". The warning was in the repo and I did not read it before repeating
+the mistake.
+
 ## The verification harness lied twice, in two new ways
 
 Recorded because the sweep is the evidence every RTL claim in this run rests
@@ -164,7 +271,8 @@ on, and it was weaker than it looked.
 
 **1. A failed apply was counted as a result.** Python on Windows printed the
 mutation names with CRLF; command substitution strips only the trailing
-newline, so 23 of 24 names reached `apply` with a `` attached and raised
+newline, so 23 of 24 names reached `apply` with a `
+` attached and raised
 KeyError. The script printed APPLY-FAILED, **continued**, and reported
 `caught=0 survived=1 discarded=0` with exit code 0.
 

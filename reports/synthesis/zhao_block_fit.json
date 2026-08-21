@@ -437,7 +437,8 @@
     "5CSEBA6U23I7 is a provisional capacity target, not board truth.",
     "All I/O is virtual: no package pins, no board I/O delays, no PLLs, no physical clocks.",
     "A per-block fit does not characterize the composed machine routing or timing closure.",
-    "The composed zhao_shell_top does not fit this machine: 28.4 GB committed against 24 GB of RAM on 2026-08-18.",
-    "Nothing here is a programmed device. This is not hardware proof."
+    "Nothing here is a programmed device. This is not hardware proof.",
+    "STALE AND INCOMPLETE (noted 2026-08-21): sourceCommit 96c0394a is 93 commits behind, rtlCleanAtHead is false, and this census covers 42 of the repository's 88 RTL modules. The 46 unmeasured ones include zhao_geom_project, zhao_geom_skin, the pose/matrix blocks and the whole Field IR engine. Do not total this file and call it the console. See reports/DSP_Audit_2026-08-21.md.",
+    "The composed fit is NOT blocked on machine memory: the 28.4 GB figure previously recorded here was a wildcard virtual-pin bug fixed in d1a2b8a; composed synthesis completes in 42:33 at a 6.2 GB peak (f3506b6)."
   ]
 }
