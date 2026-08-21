@@ -9,8 +9,15 @@ at the top.*
 
 ### Where the hardware stands
 
-**40 specified · 4 reference-complete · 30 unit-verified · 14 rtl-verified.**
-`ctest -L fast`: **205/205**. All pushed.
+**39 specified · 4 reference-complete · 31 unit-verified · 14 rtl-verified.**
+`ctest -L fast`: **208/208**, up from 180 this morning. All pushed.
+
+Two greenfield blocks tonight: **GEOM.PROJECT** (below) and **FIELD.PROGCACHE**,
+the cache that keeps validated spell programs resident so they are not
+re-checked every time they are cast. Its rule is the strict one — a program that
+fails validation is rejected and *never* runs — and it is tested with the three
+real compiled programs we have, plus deliberately corrupted copies of them, so
+the rejection cases are the loader's own verdicts rather than a flag I made up.
 
 Today moved seven blocks: the four creature-animation ones, the trace ring, the
 scar store, the terrain bake and velocity blocks, and tonight **GEOM.PROJECT** —
