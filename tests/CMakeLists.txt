@@ -884,6 +884,36 @@ verilate(test_cmd_scheduler_directed
 add_test(NAME cmd_scheduler_directed COMMAND test_cmd_scheduler_directed)
 set_tests_properties(cmd_scheduler_directed PROPERTIES LABELS "fast;nightly")
 
+# GEOM.POSE's decode chain: the first WHOLE-CHAIN differential in the creature
+# path -- one quaternion engine and one shared multiply engine over a real
+# skeleton, against zref::creature::decode_pose. The chain failures are
+# structural rather than arithmetic (bone 0 is not a multiply, the root
+# displacement is bone 0's alone, the ancestor store must survive depth).
+add_executable(test_geom_pose_decode_directed geometry/geom_pose_decode_directed.cpp)
+target_link_libraries(test_geom_pose_decode_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_pose_decode_directed
+  PREFIX Vzhao_geom_pose_decode
+  TOP_MODULE zhao_geom_pose_decode
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv)
+add_test(NAME geom_pose_decode_directed COMMAND test_geom_pose_decode_directed)
+set_tests_properties(geom_pose_decode_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_pose_decode_random COMMAND test_geom_pose_decode_directed --random 40)
+set_tests_properties(geom_pose_decode_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_pose_decode_random_nightly COMMAND test_geom_pose_decode_directed --random 600)
+set_tests_properties(geom_pose_decode_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_geom_pose_decode
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_pose_decode
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv)
+set_tests_properties(lint_zhao_geom_pose_decode PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.POSE's chain multiply: sequential, one element per cycle, three 32x32
 # products instead of thirty-six. The twelve-cycle walk is asserted as its own
 # law (section 7) -- correct arithmetic delivered in the wrong number of cycles,
