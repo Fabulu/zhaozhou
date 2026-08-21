@@ -964,6 +964,34 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# OP_RCP, the first Field IR op that needs a table. The seed table is GENERATED
+# into zhao_field_rcp_rom.sv from zref_tables.hpp rather than transcribed, and
+# section 1 checks all 256 entries against the reference -- a generated file goes
+# stale as easily as a copied one, the generator is not run by the build, and a
+# wrong seed does not fail loudly.
+add_executable(test_field_rcp_directed differential/field_rcp_directed.cpp)
+target_link_libraries(test_field_rcp_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_rcp_directed
+  PREFIX Vzhao_field_rcp
+  TOP_MODULE zhao_field_rcp
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
+add_test(NAME field_rcp_directed COMMAND test_field_rcp_directed)
+set_tests_properties(field_rcp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_rcp_random COMMAND test_field_rcp_directed --random 20000)
+set_tests_properties(field_rcp_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_rcp_random_nightly COMMAND test_field_rcp_directed --random 400000)
+set_tests_properties(field_rcp_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_field_rcp
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_rcp
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
+set_tests_properties(lint_zhao_field_rcp PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # The Field IR arithmetic core. One file covers FIELD.MOV, FIELD.ADD and
 # FIELD.SUB -- the three op differentials V10 names as blockers for ALL FOUR
 # FIELD.SEQ.* blocks -- plus the other twelve arithmetic ops, because they share
