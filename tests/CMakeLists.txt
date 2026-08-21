@@ -1119,7 +1119,11 @@ verilate(test_field_seq_directed
   PREFIX Vzhao_field_seq
   TOP_MODULE zhao_field_seq
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
 add_test(NAME field_seq_directed COMMAND test_field_seq_directed)
 set_tests_properties(field_seq_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_seq_random COMMAND test_field_seq_directed --random 600)
@@ -1131,7 +1135,11 @@ add_test(NAME lint_zhao_field_seq
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_field_seq
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
 set_tests_properties(lint_zhao_field_seq PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

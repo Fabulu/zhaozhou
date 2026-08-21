@@ -125,7 +125,56 @@ reads; the `c` operand via `MAD`/`CLAMP`/`SELECT`; registers in the top half of
 the file; a refused op; the liveness bound; and host writes attempted during a
 run.
 
-Mutation sweep: **19 mutations, 17 caught, 2 recorded equivalent, 0 discarded.**
+Mutation sweep, the walk itself: **19 mutations, 17 caught, 2 recorded
+equivalent, 0 discarded.** A second sweep covers the unit dispatch — see below.
+
+### The RCP / SIN / COS dispatch
+
+`OP_RCP`, `OP_SIN` and `OP_COS` are dispatched to `zhao_field_rcp` and
+`zhao_field_sin`, which are COMBINATIONAL blocks whose own contracts say the
+sequencer owns their pipeline. Here that means there is no pipeline: they sit
+beside the ALU in `Q_EXEC` and cost exactly what an `ADD` costs — no extra
+state, no extra cycle.
+
+They are wired first for that reason. The remaining blocks (length, normalise,
+table, noise, rotation, ring) are ready/valid and multi-cycle, and several write
+two or three CONSECUTIVE registers through a file with one write port; they need
+states this walk does not have.
+
+**Two ledger lanes arrive with RCP.** `sat_rcp` is a genuine saturation and is
+part of `Status.sat`, which the reference computes as
+`add || mul || rescale || unit || rcp`. **`rcp0` is not** — it records that a
+reciprocal was asked for zero, which has a DEFINED answer, and the reference
+keeps it in its own field so a defined answer does not read as an overflow.
+`diff()` checks the two separately, so a design that folded them together fails
+rather than looking correct. That folding was a real defect in `RING`.
+
+Tests: 305 directed (was 102) plus ~2,705 with `--random 600`. Section 7b covers
+the quadrant boundaries, both rails, the zero case, an early `rcp0` still
+reported at the end, `sin`/`cos` alternating to catch a selector latched from the
+previous instruction, and a unit result feeding the next instruction.
+
+**`sin` ignores the upper half of its register and does not reject it.** The law
+is `angle16{(uint16_t)reg[a]}`, so rubbish above bit 15 must produce the same
+defined answer the software gives. A design that fed the whole 32-bit register
+to the ROM passes every quadrant test and fails that one.
+
+Mutation sweep, the dispatch: **24 mutations, 21 caught, 3 recorded equivalent,
+0 discarded** — attempted, expected and accounted all 24.
+
+**The three equivalents are one fact about ANOTHER BLOCK.** `zhao_field_alu`'s
+`default:` case sets `op_unsupported_o` and clears `writes_o` but leaves its
+three saturation lanes at their block-initialised zero, so masking them for a
+unit op is provably a no-op today. The mask stays anyway, because the redundancy
+is a property of the ALU's default case rather than of this block, and depending
+on another module's unstated behaviour is exactly how the `abs` defect below
+survived weeks of green tests.
+
+**The refusal test no longer pins itself to whichever op is unimplemented.**
+Wiring RCP broke section 7, which had used `OP_RCP` as its example of an
+unsupported op. It now tests both a real-but-unwired op (`OP_ROT3`, which will
+break again when that lands, deliberately) and an opcode that is not in the enum
+at all and never will be — the stable statement of the law.
 
 **The two equivalents are a redundant PAIR, not dead code.** The write-back is
 guarded by `alu_writes && !alu_is_end && !alu_unsupported`, and the ALU clears

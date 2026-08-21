@@ -55,12 +55,26 @@
 // duplication, and 2,048 flops is the cheaper answer at this size.
 //
 // ---------------------------------------------------------------------------
-// WHAT THIS INCREMENT DOES NOT DO
+// DISPATCH: THE ARITHMETIC CORE, PLUS THE COMBINATIONAL UNITS
 // ---------------------------------------------------------------------------
-// Dispatch reaches the ARITHMETIC CORE only — `zhao_field_alu`, fifteen
-// opcodes. The multi-cycle blocks (reciprocal, sine, length, normalise, table,
-// noise, rotation, ring) are built and verified and are not yet wired to this
-// walk.
+// `zhao_field_alu` (fifteen opcodes) plus `zhao_field_rcp` and
+// `zhao_field_sin`, which are COMBINATIONAL blocks whose own headers say the
+// sequencer owns their pipeline. Here that means there is no pipeline: they
+// sit beside the ALU in Q_EXEC, cost no extra state and no extra cycle, and
+// are selected by opcode.
+//
+// That is the whole reason they are wired first. The remaining blocks —
+// length, normalise, table, noise, rotation, ring — are ready/valid and
+// multi-cycle, and several of them write two or three CONSECUTIVE registers
+// through a file with one write port. They need states this walk does not
+// have yet, so they are a separate increment rather than a bigger version of
+// this one.
+//
+// RCP BRINGS TWO LEDGER LANES THE WALK DID NOT HAVE. `sat_rcp` is a genuine
+// saturation. `rcp0` is NOT — it records that a reciprocal was asked for
+// zero, which has a defined answer, and the reference keeps it in its own
+// field precisely so that a defined answer does not read as an overflow.
+// They are carried out of here separately for the same reason.
 //
 // An op outside the core is REFUSED: `status_o` reports it and the run stops.
 // It does not return zero and it does not skip the instruction, because a
@@ -104,6 +118,8 @@ module zhao_field_seq (
     output logic sat_add_o,
     output logic sat_mul_o,
     output logic sat_rescale_o,
+    output logic sat_rcp_o,        // SatLedger::rcp — a real saturation
+    output logic rcp0_o,           // SatLedger::rcp0 — NOT one; see the header
     output logic instr_retired_o   // one pulse per executed instruction
 );
 
@@ -190,6 +206,84 @@ module zhao_field_seq (
       .sat_rescale_o    (alu_sat_rescale)
   );
 
+  // ---- the combinational op units -----------------------------------------
+  // Both blocks are pure combinational logic whose headers say "the sequencer
+  // owns the pipeline". They are fed the SAME latched operands the ALU sees and
+  // are selected in Q_EXEC, so RCP, SIN and COS cost exactly what an ADD costs.
+  localparam logic [7:0] OP_RCP = 8'h17;
+  localparam logic [7:0] OP_SIN = 8'h18;
+  localparam logic [7:0] OP_COS = 8'h19;
+
+  logic signed [31:0] rcp_result;
+  logic               rcp_sat, rcp_zero;
+
+  zhao_field_rcp u_rcp (
+      .a_i       (a0),
+      .result_o  (rcp_result),
+      .sat_rcp_o (rcp_sat),
+      .rcp0_o    (rcp_zero)
+  );
+
+  // Law: `fx_sin(angle16{(uint16_t)reg[a]})`. The angle is the LOW HALF of the
+  // register and the upper half is IGNORED, not rejected — the same defined
+  // answer the software gives for a caller that leaves rubbish up there.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [31:0] sin_result;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_field_sin u_sin (
+      .angle_i  (a0[15:0]),
+      .is_cos_i (i_op == OP_COS),
+      .result_o (sin_result)
+  );
+
+  // ---- opcode selection ---------------------------------------------------
+  // The ALU reports these three as unsupported, because to the ALU they ARE.
+  // The selection below is the only place that knows otherwise, so an opcode
+  // that no unit claims still reaches the refusal path untouched.
+  logic op_is_rcp, op_is_sin_cos, unit_handled;
+  assign op_is_rcp     = (i_op == OP_RCP);
+  assign op_is_sin_cos = (i_op == OP_SIN) || (i_op == OP_COS);
+  assign unit_handled  = op_is_rcp || op_is_sin_cos;
+
+  logic signed [31:0] exec_result;
+  logic               exec_writes, exec_unsupported;
+  logic               exec_sat_add, exec_sat_mul, exec_sat_rescale;
+  logic               exec_sat_rcp, exec_rcp0;
+
+  always_comb begin
+    if (op_is_rcp) begin
+      exec_result      = rcp_result;
+      exec_sat_rcp     = rcp_sat;
+      exec_rcp0        = rcp_zero;
+    end else if (op_is_sin_cos) begin
+      exec_result      = sin_result;
+      exec_sat_rcp     = 1'b0;
+      exec_rcp0        = 1'b0;
+    end else begin
+      exec_result      = alu_result;
+      exec_sat_rcp     = 1'b0;
+      exec_rcp0        = 1'b0;
+    end
+    // ASSUMPTION, and the assumption is about ANOTHER BLOCK. The three units
+    // report saturation only in the rcp lane, so the add/mul/rescale lanes
+    // belong to the ALU alone — and `zhao_field_alu`'s `default:` case already
+    // leaves those three at their block-initialised zero for an opcode it does
+    // not claim. That makes this mask PROVABLY REDUNDANT today, and the
+    // mutation sweep records all three removals as surviving equivalents
+    // rather than pretending they are covered.
+    //
+    // It stays because the redundancy is a fact about the ALU's default case,
+    // not about this block, and depending on another module's unstated
+    // behaviour is how the `abs` defect survived weeks of green tests.
+    // ENFORCED-BY: tests/differential/field_seq_directed.cpp
+    exec_sat_add     = unit_handled ? 1'b0 : alu_sat_add;
+    exec_sat_mul     = unit_handled ? 1'b0 : alu_sat_mul;
+    exec_sat_rescale = unit_handled ? 1'b0 : alu_sat_rescale;
+    exec_writes      = unit_handled ? 1'b1 : alu_writes;
+    exec_unsupported = unit_handled ? 1'b0 : alu_unsupported;
+  end
+
   assign busy_o = (state != Q_IDLE) && (state != Q_DONE);
   assign pc_o = pc;
 
@@ -206,6 +300,8 @@ module zhao_field_seq (
       sat_add_o <= 1'b0;
       sat_mul_o <= 1'b0;
       sat_rescale_o <= 1'b0;
+      sat_rcp_o <= 1'b0;
+      rcp0_o <= 1'b0;
       instr_retired_o <= 1'b0;
       for (int i = 0; i < 64; i++) rf[i] <= '0;
     end else begin
@@ -224,8 +320,8 @@ module zhao_field_seq (
         // The walk's write-back. The decoder has proved `dst` never overlaps
         // this instruction's own sources, which is why there is no bypass
         // network here and does not need to be one.
-        if ((state == Q_EXEC) && alu_writes && !alu_is_end && !alu_unsupported) begin
-          rf[i_dst] <= alu_result;
+        if ((state == Q_EXEC) && exec_writes && !alu_is_end && !exec_unsupported) begin
+          rf[i_dst] <= exec_result;
         end
       end else if (rf_we_i) begin
         rf[rf_waddr_i] <= rf_wdata_i;
@@ -239,6 +335,8 @@ module zhao_field_seq (
             sat_add_o <= 1'b0;
             sat_mul_o <= 1'b0;
             sat_rescale_o <= 1'b0;
+            sat_rcp_o <= 1'b0;
+            rcp0_o <= 1'b0;
             state <= Q_FETCH;
           end
         end
@@ -287,7 +385,7 @@ module zhao_field_seq (
         end
 
         Q_EXEC: begin
-          if (alu_unsupported) begin
+          if (exec_unsupported) begin
             // REFUSED, not skipped and not zero. A sequencer that quietly
             // ignores an opcode produces a plausible field and a wrong world.
             status_o <= ST_UNSUPPORTED_OP;
@@ -298,9 +396,11 @@ module zhao_field_seq (
           end else begin
             // The ledger accumulates across the WHOLE program, exactly as the
             // reference's single SatLedger does -- not per instruction.
-            sat_add_o <= sat_add_o || alu_sat_add;
-            sat_mul_o <= sat_mul_o || alu_sat_mul;
-            sat_rescale_o <= sat_rescale_o || alu_sat_rescale;
+            sat_add_o <= sat_add_o || exec_sat_add;
+            sat_mul_o <= sat_mul_o || exec_sat_mul;
+            sat_rescale_o <= sat_rescale_o || exec_sat_rescale;
+            sat_rcp_o <= sat_rcp_o || exec_sat_rcp;
+            rcp0_o <= rcp0_o || exec_rcp0;
             instr_retired_o <= 1'b1;
             pc <= pc + 8'd1;
             state <= Q_FETCH;

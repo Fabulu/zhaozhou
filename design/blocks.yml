@@ -696,7 +696,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "DISPATCH REACHES THE ARITHMETIC CORE ONLY (zhao_field_alu, fifteen opcodes). The multi-cycle blocks -- reciprocal, sine, length, normalise, table, noise, rotation, ring -- are built and verified and are NOT yet wired to this walk; an op outside the core is REFUSED with a status rather than skipped or zeroed. The five FIELD.SEQ.* profile blocks stay SPECIFIED until that dispatch is complete. This block does not validate: the decoder proves every register in range, no use-before-def, no dst overlapping an input or its own sources, and exactly one OP_END last -- re-checking here would be a second implementation of those rules."
+    notes: "DISPATCH REACHES THE ARITHMETIC CORE PLUS THE THREE COMBINATIONAL UNITS (zhao_field_alu's fifteen opcodes, plus OP_RCP/OP_SIN/OP_COS via zhao_field_rcp and zhao_field_sin, which are combinational and cost no extra cycle). The multi-cycle blocks -- reciprocal, sine, length, normalise, table, noise, rotation, ring -- are built and verified and are NOT yet wired to this walk; an op outside the core is REFUSED with a status rather than skipped or zeroed. The five FIELD.SEQ.* profile blocks stay SPECIFIED until that dispatch is complete. This block does not validate: the decoder proves every register in range, no use-before-def, no dst overlapping an input or its own sources, and exactly one OP_END last -- re-checking here would be a second implementation of those rules."
 
   - id: FIELD.SEQ.EARTH
     name: Earth8 field sequencer

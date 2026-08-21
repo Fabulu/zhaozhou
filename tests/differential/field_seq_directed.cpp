@@ -74,7 +74,8 @@ struct Prog {
   void end() { op(zfield::OP_END, 0); }
 };
 
-std::vector<int32_t> interp(const Prog& p, const std::vector<int32_t>& in, bool* sat) {
+std::vector<int32_t> interp(const Prog& p, const std::vector<int32_t>& in, bool* sat,
+                            bool* rcp0 = nullptr) {
   zfield::Decoded d;
   d.profile = 0;
   d.instrs = p.ins;
@@ -95,6 +96,7 @@ std::vector<int32_t> interp(const Prog& p, const std::vector<int32_t>& in, bool*
   std::vector<int32_t> out(p.out_regs.size(), 0);
   const zfield::Status st = zfield::interpret(d, in.data(), in.size(), out.data(), out.size());
   if (sat) *sat = st.sat;
+  if (rcp0) *rcp0 = st.rcp0;
   return out;
 }
 
@@ -192,7 +194,8 @@ struct Bench {
 
 void diff(Bench& b, const Prog& p, const std::vector<int32_t>& in, const char* what) {
   bool want_sat = false;
-  const std::vector<int32_t> want = interp(p, in, &want_sat);
+  bool want_rcp0 = false;
+  const std::vector<int32_t> want = interp(p, in, &want_sat, &want_rcp0);
   uint8_t status = 0xFF;
   const std::vector<int32_t> got = b.run(p, in, &status);
   const std::string t(what);
@@ -204,8 +207,15 @@ void diff(Bench& b, const Prog& p, const std::vector<int32_t>& in, const char* w
     check(i < got.size() && got[i] == want[i], nm, static_cast<uint32_t>(want[i]),
           i < got.size() ? static_cast<uint32_t>(got[i]) : 0u);
   }
-  const bool got_sat = b.dut.sat_add_o || b.dut.sat_mul_o || b.dut.sat_rescale_o;
+  // Status.sat is `add || mul || rescale || unit || RCP` -- the reciprocal
+  // saturation IS part of it. `rcp0` is NOT, and never has been: it records a
+  // reciprocal asked for zero, which has a defined answer. Folding it in would
+  // make a defined answer read as an overflow, which is exactly the bug the
+  // RING work found and the reason the two are separate fields here too.
+  const bool got_sat = b.dut.sat_add_o || b.dut.sat_mul_o || b.dut.sat_rescale_o || b.dut.sat_rcp_o;
   check(got_sat == want_sat, (t + ": Status.sat").c_str(), want_sat ? 1 : 0, got_sat ? 1 : 0);
+  const bool got_rcp0 = b.dut.rcp0_o;
+  check(got_rcp0 == want_rcp0, (t + ": Status.rcp0").c_str(), want_rcp0 ? 1 : 0, got_rcp0 ? 1 : 0);
 }
 
 struct Prng {
@@ -471,18 +481,159 @@ int main(int argc, char** argv) {
   }
 
   // ---- 7. LAW 6: an unsupported op is REFUSED ----------------------------
+  // Two cases, because they age differently.
+  //
+  // This check previously used OP_RCP, and wiring RCP into the dispatch broke
+  // it — correctly, but it meant the refusal law was pinned to whichever op
+  // happened to be unimplemented that week. So the SECOND case below uses an
+  // opcode that is not in the enum at all and never will be, which is the
+  // stable statement of the law. The first case keeps a real-but-unwired op,
+  // because "the walk refuses an op it has not been taught" is the thing that
+  // actually matters and it should be stated about a real opcode while any
+  // remain.
   {
+    // A real op that is built and verified as a block but not yet dispatched.
+    // Wiring ROT3 will break this line, and the fix is to move it to whatever
+    // is still unwired — or to delete it once nothing is.
     Prog p;
     p.in_regs = {0};
     p.op(zfield::OP_MOV, 3, 0);
-    p.op(zfield::OP_RCP, 4, 3);  // not in this increment's dispatch
+    p.op(zfield::OP_ROT3, 4, 3);
     p.end();
     p.out_regs = {3};
     uint8_t status = 0;
     int retired = 0;
     b.run(p, {kOne}, &status, nullptr, &retired);
-    check(status == 1, "7.an op outside the core is REFUSED with a status", 1, status);
+    check(status == 1, "7.a real op outside the dispatch is REFUSED", 1, status);
     check(retired == 1, "7.and the walk stopped there", 1, static_cast<uint32_t>(retired));
+
+    // An opcode that is not an opcode. The decoder would never let this reach
+    // hardware; the point is that if one ever did, the walk stops and says so
+    // rather than producing a plausible field.
+    Prog q;
+    q.in_regs = {0};
+    q.op(zfield::OP_MOV, 3, 0);
+    q.op(0xFE, 4, 3);
+    q.end();
+    q.out_regs = {3};
+    uint8_t st2 = 0;
+    int ret2 = 0;
+    b.run(q, {kOne}, &st2, nullptr, &ret2);
+    check(st2 == 1, "7.an opcode that is not an opcode is REFUSED", 1, st2);
+    check(ret2 == 1, "7.and that walk stopped there too", 1, static_cast<uint32_t>(ret2));
+
+    // The refusal must not be a silent zero: the register the refused
+    // instruction targeted keeps whatever it had, and the run reports.
+    Prog r;
+    r.in_regs = {0};
+    r.op(zfield::OP_MOV, 3, 0);
+    r.op(0xFE, 3, 3);
+    r.end();
+    r.out_regs = {3};
+    uint8_t st3 = 0;
+    const std::vector<int32_t> got = b.run(r, {0x1234ABCD}, &st3);
+    check(st3 == 1, "7.a refused write still reports", 1, st3);
+    check(!got.empty() && got[0] == 0x1234ABCD, "7.and did NOT write the destination", 0x1234ABCDu,
+          got.empty() ? 0u : static_cast<uint32_t>(got[0]));
+  }
+
+  // ---- 7b. THE COMBINATIONAL UNITS: RCP, SIN, COS -------------------------
+  // These three are dispatched to `zhao_field_rcp` and `zhao_field_sin` rather
+  // than to the ALU, in the SAME Q_EXEC cycle an ADD uses. Section 7 proves an
+  // op the walk does not claim is refused; this section proves these three ARE
+  // claimed, and that the claim produces the reference's answer rather than a
+  // plausible one.
+  {
+    Prog rcp;
+    rcp.in_regs = {0};
+    rcp.op(zfield::OP_RCP, 1, 0);
+    rcp.end();
+    rcp.out_regs = {1};
+    diff(b, rcp, {kOne}, "7b.rcp of one");
+    diff(b, rcp, {2 * kOne}, "7b.rcp of two");
+    diff(b, rcp, {-3 * kOne}, "7b.rcp of a negative");
+    diff(b, rcp, {1}, "7b.rcp of the smallest positive");
+    diff(b, rcp, {INT32_MAX}, "7b.rcp at the top rail");
+    diff(b, rcp, {INT32_MIN}, "7b.rcp at the bottom rail");
+
+    // THE ZERO CASE, which is the point of the second ledger lane. It has a
+    // DEFINED answer, so it must NOT set Status.sat -- only rcp0. `diff`
+    // checks both fields separately, so a design that folded them together
+    // fails here rather than looking correct.
+    diff(b, rcp, {0}, "7b.rcp of zero");
+
+    // ...and a program where a rcp0 happens EARLY and must still be reported
+    // at the end, exactly as the saturation lanes are.
+    Prog late;
+    late.in_regs = {0, 1};
+    late.op(zfield::OP_RCP, 2, 1);  // reg[1] is zero -> rcp0
+    for (int i = 0; i < 6; ++i) late.op(zfield::OP_ADD, static_cast<uint8_t>(3 + i), 0, 0);
+    late.end();
+    late.out_regs = {2, 8};
+    diff(b, late, {kOne, 0}, "7b.an early rcp0 is still reported at the end");
+
+    // A saturating rcp and a plain add in one program: sat must be the OR.
+    Prog both;
+    both.in_regs = {0, 1};
+    both.op(zfield::OP_RCP, 2, 0);
+    both.op(zfield::OP_ADD, 3, 1, 1);
+    both.end();
+    both.out_regs = {2, 3};
+    diff(b, both, {1, INT32_MAX}, "7b.rcp and add saturating together");
+
+    Prog sn;
+    sn.in_regs = {0};
+    sn.op(zfield::OP_SIN, 1, 0);
+    sn.end();
+    sn.out_regs = {1};
+    Prog cs;
+    cs.in_regs = {0};
+    cs.op(zfield::OP_COS, 1, 0);
+    cs.end();
+    cs.out_regs = {1};
+    // The quadrant boundaries, where a wrong table index or a wrong sign shows
+    // immediately, plus a sweep that no single boundary would catch.
+    for (int32_t a : {0, 0x1000, 0x2000, 0x3000, 0x4000, 0x6000, 0x8000, 0xA000, 0xC000, 0xFFFF,
+                      0x1234, 0x7FFF}) {
+      char nm[64];
+      std::snprintf(nm, sizeof nm, "7b.sin(0x%04X)", static_cast<unsigned>(a));
+      diff(b, sn, {a}, nm);
+      std::snprintf(nm, sizeof nm, "7b.cos(0x%04X)", static_cast<unsigned>(a));
+      diff(b, cs, {a}, nm);
+    }
+    // THE UPPER HALF IS IGNORED, NOT REJECTED. The law is
+    // `angle16{(uint16_t)reg[a]}`, so rubbish above bit 15 must not change the
+    // answer -- and must not be refused either. A design that fed the whole
+    // 32-bit register to the ROM passes every test above and fails this one.
+    diff(b, sn, {static_cast<int32_t>(0xDEAD1234)}, "7b.sin ignores the upper half");
+    diff(b, cs, {static_cast<int32_t>(0xDEAD1234)}, "7b.cos ignores the upper half");
+    diff(b, sn, {static_cast<int32_t>(0xFFFF8000)}, "7b.sin of a negative register");
+
+    // SIN and COS share one unit and are told apart by a single bit. A program
+    // that runs both back to back catches a selector latched from the previous
+    // instruction rather than this one.
+    Prog mix;
+    mix.in_regs = {0};
+    mix.op(zfield::OP_SIN, 1, 0);
+    mix.op(zfield::OP_COS, 2, 0);
+    mix.op(zfield::OP_SIN, 3, 0);
+    mix.op(zfield::OP_ADD, 4, 1, 2);
+    mix.end();
+    mix.out_regs = {1, 2, 3, 4};
+    diff(b, mix, {0x2000}, "7b.sin and cos alternating");
+    diff(b, mix, {0xC000}, "7b.sin and cos alternating, third quadrant");
+
+    // ...and a unit result feeding the ALU, which is the only thing that
+    // proves the write-back of a unit lands where the next instruction reads.
+    Prog chain;
+    chain.in_regs = {0};
+    chain.op(zfield::OP_SIN, 1, 0);
+    chain.op(zfield::OP_RCP, 2, 1);
+    chain.op(zfield::OP_MUL, 3, 1, 2);
+    chain.end();
+    chain.out_regs = {3, 2, 1};
+    diff(b, chain, {0x4000}, "7b.a unit result feeds the next instruction");
+    diff(b, chain, {0}, "7b.the same chain through a rcp0");
   }
 
   // ---- 8. the liveness bound ---------------------------------------------
@@ -551,8 +702,12 @@ int main(int argc, char** argv) {
   // ---- 10. random programs ------------------------------------------------
   if (random_iters > 0) {
     Prng rng(0x5E97u);
+    // The three combinational units are in the pool, so random programs mix
+    // them with arithmetic and the ledger has to come out right across a whole
+    // program rather than only in the directed cases above.
     const uint8_t pool[] = {zfield::OP_MOV, zfield::OP_ADD, zfield::OP_SUB, zfield::OP_MUL,
-                            zfield::OP_MIN, zfield::OP_MAX, zfield::OP_ABS};
+                            zfield::OP_MIN, zfield::OP_MAX, zfield::OP_ABS, zfield::OP_RCP,
+                            zfield::OP_SIN, zfield::OP_COS};
     for (int it = 0; it < random_iters; ++it) {
       Prog p;
       const int n_in = 1 + static_cast<int>(rng.below(4));
@@ -567,14 +722,26 @@ int main(int argc, char** argv) {
         const uint8_t bb = static_cast<uint8_t>(rng.below(defined_hi + 1));
         // MOV and ABS read one operand; the decoder requires unused operand
         // fields to be ZERO, so a stray `b` would be a malformed program.
-        const bool unary = (op == zfield::OP_MOV || op == zfield::OP_ABS);
+        const bool unary = (op == zfield::OP_MOV || op == zfield::OP_ABS || op == zfield::OP_RCP ||
+                            op == zfield::OP_SIN || op == zfield::OP_COS);
         p.op(op, dst, a, unary ? 0 : bb);
         defined_hi = dst;
       }
       p.end();
       p.out_regs = {static_cast<uint8_t>(defined_hi)};
       std::vector<int32_t> in;
-      for (int i = 0; i < n_in; ++i) in.push_back(static_cast<int32_t>(rng.next()));
+      for (int i = 0; i < n_in; ++i) {
+        // Full-range words almost never hit the interesting reciprocal inputs,
+        // so one input in eight is steered to a small magnitude or to ZERO.
+        // Without this the rcp0 lane is exercised only by the directed cases
+        // and the random lane silently proves nothing about it.
+        const uint32_t r = rng.next();
+        if ((r & 7u) == 0u) {
+          in.push_back(static_cast<int32_t>(r >> 29) - 3);
+        } else {
+          in.push_back(static_cast<int32_t>(r));
+        }
+      }
       char nm[64];
       std::snprintf(nm, sizeof nm, "10.random[%d]", it);
       diff(b, p, in, nm);
