@@ -1,0 +1,74 @@
+# debug_frameblit_safety.sby — DEBUG.FRAMEBLIT safety properties
+# (reports/DEBUG.FRAMEBLIT_Integration_Corrections.md §13).
+#
+# The three that matter:
+#
+#   publish_valid_o -> the lease was live, matching slot AND generation, at the
+#                      publication edge itself
+#   publish_valid_o -> every byte was issued AND RETIRED
+#   publish_valid_o -> the CRC matched and no failure was recorded
+#
+# and the ones that make failure safe:
+#
+#   release_valid_o -> the transaction had actually ACQUIRED that lease
+#   release_valid_o -> every accepted write had retired first
+#   publish and release are never both true
+#   guard_req.valid -> a live matching lease, and an ABSOLUTE address inside
+#                      the leased slot's window
+#   wvalid && !wready -> data and last are unchanged
+#   lease loss       -> no NEW HPS request, no NEW write beat, no publish
+#   reset            -> nothing half-done, nothing published
+#
+# The properties live in the DUT under `ifdef FORMAL (read with -DFORMAL); the
+# harness (debug_frameblit_safety_harness.sv) shrinks the canvas to 64 bytes —
+# one chunk — for BMC tractability. Every DUT input is FREE: the lease may
+# flicker, the bridge may err or stall its grant, the guard may deny or hold
+# ready low, and retirement credits may arrive arbitrarily. The properties must
+# hold against all of it, not against the sim profile.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the assertions hold to the depth below.
+#   cover — the antecedents are REACHABLE. Every assertion here is an
+#           implication, so a model that cannot publish, cannot release and
+#           cannot issue a guard request satisfies all of them while proving
+#           nothing. `c_publish` is reachable ONLY because the harness sets
+#           FORMAL_CANVAS_BYTES; at the real 184,320-byte canvas no bounded
+#           model reaches a publication and the whole lane would be vacuous.
+#
+# SCOPE (V19): a SINGLE-CHUNK transaction. The multi-chunk loop -- `off`
+# advancing through B_NEXT_CHUNK -> B_READ_REQUEST, and credits for chunk N
+# arriving while chunk N+1 is being read -- is NOT in this cone. The guard
+# `a_scope_single_chunk` FIRES if FORMAL_CANVAS_BYTES is raised past one chunk,
+# so a wider canvas forces a re-justified depth instead of a quietly larger
+# number. The multi-chunk path is covered by the ctest lane, which runs the real
+# 184,320-byte canvas: 2,880 chunks.
+#
+# Depth 44 covers: accept -> validate -> grant -> eight read beats -> guard
+# request/verdict -> eight write beats -> retirement -> decide -> publish.
+#
+# Run via `ctest -L formal` or by hand with cwd = tests/formal:
+#   sby -f --prefix <workdir> debug_frameblit_safety.sby
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 44
+cover: mode cover
+cover: depth 44
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --top zhao_debug_frameblit_safety_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_debug_frameblit.sv debug_frameblit_safety_harness.sv
+prep -top zhao_debug_frameblit_safety_harness
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/debug/zhao_debug_frameblit.sv
+debug_frameblit_safety_harness.sv

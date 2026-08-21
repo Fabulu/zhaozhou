@@ -134,7 +134,22 @@
 // one state and move on, assuming the bridge was idle and accepted it. It now
 // waits for `hps_req_grant_i`, and holds the request stable until then.
 //
-module zhao_debug_frameblit (
+module zhao_debug_frameblit
+`ifdef FORMAL
+#(
+  // FORMAL-ONLY (structurally absent outside `ifdef FORMAL, so synthesis and
+  // the Verilator lane always run the real law): a nonzero value overrides
+  // `canvas_bytes(mode)` so a WHOLE transaction fits a tractable BMC depth.
+  //
+  // Without it every publish property below would be vacuous. The smallest
+  // lawful canvas is 184,320 bytes -- 2,880 chunks, over 46,000 cycles -- so a
+  // bounded model can never reach `publish_valid_o` and would "prove" the
+  // publish properties by never raising their antecedent. That is exactly the
+  // failure shape MEM.GUARD hit, and the covers below exist to catch it.
+  parameter int unsigned FORMAL_CANVAS_BYTES = 0
+)
+`endif
+(
     input logic clk,
     input logic rst_n,
 
@@ -249,7 +264,13 @@ module zhao_debug_frameblit (
   logic        hps_inflight;  // a granted burst whose `last` has not arrived
 
   function automatic logic [31:0] canvas_bytes(input logic [7:0] m);
+`ifdef FORMAL
+    canvas_bytes = (FORMAL_CANVAS_BYTES != 0)
+                 ? 32'(FORMAL_CANVAS_BYTES)
+                 : zhao_pkg::zhao_canvas_bytes(zhao_pkg::zhao_mode_from_abi(m));
+`else
     canvas_bytes = zhao_pkg::zhao_canvas_bytes(zhao_pkg::zhao_mode_from_abi(m));
+`endif
   endfunction
 
   // CRC-32C (Castagnoli), the same polynomial the ABI's zhao_crc32c uses,
@@ -613,5 +634,128 @@ module zhao_debug_frameblit (
       endcase
     end
   end
+
+`ifdef FORMAL
+  // ---------------------------------------------------------------------------
+  // THE SAFETY PROPERTIES (reports/DEBUG.FRAMEBLIT_Integration_Corrections.md 13)
+  // ---------------------------------------------------------------------------
+  // Every one is a safety property over a small state machine, so all are within
+  // reach of a bounded proof. The three that matter are the first three: a
+  // publication implies a live matching lease, every byte issued AND retired,
+  // and a CRC that passed.
+  //
+  // The covers at the bottom are not decoration. Each assertion here is an
+  // IMPLICATION, and a model that cannot raise the antecedent satisfies it while
+  // proving nothing. `c_publish` is reachable ONLY because the harness sets
+  // FORMAL_CANVAS_BYTES.
+  logic f_past_valid = 1'b0;
+  always_ff @(posedge clk) f_past_valid <= 1'b1;
+
+  // The machine starts from a REAL reset. Without this the model begins with
+  // every register unconstrained -- including `state` and `fail` -- and the
+  // first counterexample is a fabricated state that publishes out of nowhere,
+  // which says nothing about the design. Once released, reset stays released.
+  always_ff @(posedge clk) begin
+    if (!f_past_valid) assume (!rst_n);
+    if (f_past_valid && $past(rst_n)) assume (rst_n);
+  end
+
+  // Reset leaves nothing half-done and, above all, publishes nothing.
+  always_ff @(posedge clk) begin
+    if (f_past_valid && !$past(rst_n)) begin
+      a_rst_no_publish: assert (!publish_valid_o);
+      a_rst_no_release: assert (!release_valid_o);
+      a_rst_no_guard:   assert (!guard_req_o.valid);
+      a_rst_no_hps:     assert (!hps_req_o.valid);
+      a_rst_no_wdata:   assert (!guard_wvalid_o);
+    end
+  end
+
+  always_ff @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      // ---- publication ----------------------------------------------------
+      if (publish_valid_o) begin
+        a_pub_lease:   assert ($past(lease_ok_now));
+        a_pub_slot:    assert (publish_slot_o == r_slot[0]);
+        a_pub_gen:     assert (publish_generation_o == r_gen);
+        a_pub_issued:  assert ($past(issued) == $past(r_len));
+        a_pub_retired: assert ($past(retired) == $past(r_len));
+        a_pub_crc:     assert (($past(crc_acc) ^ 32'hFFFF_FFFF) == $past(r_crc));
+        a_pub_nofail:  assert ($past(fail) == ST_OK);
+        a_pub_noabort: assert (!$past(abort_pending));
+      end
+
+      // ---- release ---------------------------------------------------------
+      if (release_valid_o) begin
+        // It released only what it had actually acquired, and only after every
+        // accepted write had retired.
+        a_rel_owned:   assert ($past(owns_lease));
+        a_rel_drained: assert ($past(retired) >= $past(issued));
+        a_rel_slot:    assert (release_slot_o == r_slot[0]);
+        a_rel_gen:     assert (release_generation_o == r_gen);
+      end
+
+      // The two terminal events are exclusive: one transaction, one outcome.
+      a_excl: assert (!(publish_valid_o && release_valid_o));
+
+      // ---- the guard request ----------------------------------------------
+      if (guard_req_o.valid) begin
+        a_gr_lease: assert (lease_ok_now);
+        a_gr_abort: assert (!abort_pending);
+        // Absolute, and inside the leased slot's window.
+        a_gr_lo: assert (32'(guard_req_o.addr) >= fb_base);
+        a_gr_hi: assert ((32'(guard_req_o.addr) + 32'(guard_req_o.len)) <= (fb_base + r_len));
+      end
+
+      // ---- write data is held while the consumer stalls --------------------
+      if ($past(guard_wvalid_o) && !$past(guard_wready_i) && guard_wvalid_o) begin
+        a_w_data: assert (guard_wdata_o == $past(guard_wdata_o));
+        a_w_last: assert (guard_wlast_o == $past(guard_wlast_o));
+      end
+
+      // ---- lease loss stops NEW side effects -------------------------------
+      // Not "stops side effects instantly": a request already on the wire is
+      // held until the bridge takes it, and a write beat already offered is
+      // allowed to finish, because withdrawing either mid-handshake is its own
+      // corruption. What must never happen is ENTERING those states afresh.
+      if ($past(abort_pending) && (state == B_READ_REQUEST)) begin
+        a_no_new_hps: assert ($past(state) == B_READ_REQUEST);
+      end
+      if ($past(abort_pending) && (state == B_WRITE_CHUNK)) begin
+        a_no_new_wbeat: assert ($past(state) == B_WRITE_CHUNK);
+      end
+      if (abort_pending) begin
+        a_abort_no_publish: assert (!publish_valid_o);
+      end
+
+      // ---- V19 scope guard -------------------------------------------------
+      // This proof covers a SINGLE-CHUNK transaction. The multi-chunk loop
+      // (B_NEXT_CHUNK -> B_READ_REQUEST with `off` advancing, and retirement
+      // credits arriving for chunk N while chunk N+1 is being read) is NOT in
+      // the cone at FORMAL_CANVAS_BYTES = 64.
+      //
+      // Raising the canvas to cover it makes this assertion FIRE, which is the
+      // point: the depth above was chosen for one chunk, and a wider canvas
+      // needs a re-justified depth rather than a quietly larger number.
+      if (owns_lease) begin
+        a_scope_single_chunk: assert (r_len <= 32'(CHUNK_BYTES));
+      end
+    end
+  end
+
+  // ---- non-vacuity covers (V16: the covers must prove the antecedents) -----
+  always_ff @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      c_publish:  cover (publish_valid_o);
+      c_release:  cover (release_valid_o);
+      c_guard:    cover (guard_req_o.valid);
+      c_wbeat:    cover (guard_wvalid_o);
+      c_wstall:   cover (guard_wvalid_o && !guard_wready_i);
+      c_abort:    cover (abort_pending);
+      c_crc_fail: cover (release_valid_o && (fail == ST_CRC));
+      c_drain:    cover (state == B_ABORT_DRAIN);
+    end
+  end
+`endif
 
 endmodule : zhao_debug_frameblit

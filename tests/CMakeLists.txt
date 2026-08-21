@@ -1509,7 +1509,7 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # Reuses the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
-  foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate)
+  foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

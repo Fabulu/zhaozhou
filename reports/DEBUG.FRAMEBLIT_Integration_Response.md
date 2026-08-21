@@ -39,7 +39,7 @@ wrong in six ways.
 | 7. HPS request grant | Done. The request is held until `hps_req_grant_i`. |
 | 8. Reference model release semantics | Done. `BlitOutcome::acquired`; the three pre-acquisition failures no longer report `released`. |
 | 9. Extended directed tests | Done — see below. |
-| 10. Formal properties | **Not done.** See "what remains". |
+| 10. Formal properties | Done. 27 assertions, depth 44, 8 covers all reached. |
 
 ### The harness now refuses things
 
@@ -89,11 +89,30 @@ One correction to my own harness surfaced while doing this: it inspected
 inputs it was comparing this cycle's lease against last cycle's request. That
 reports the violation one cycle late and misses the one that mattered.
 
+### Formal
+
+`tests/formal/debug_frameblit_safety.sby` proves the set in your §13 — **27
+assertions to depth 44, and 8 covers all reached**, which is the part that
+matters: every assertion is an implication, so a model that cannot publish would
+satisfy them all while proving nothing.
+
+A publication is reachable only because of a FORMAL-ONLY canvas shrink. At the
+real 184,320-byte canvas a transaction is 2,880 chunks and 46,000+ cycles, so no
+bounded model reaches one — the same trap that made MEM.GUARD's lane and
+CMD.DMA's assertion (b) vacuous. The scope guard `a_scope_single_chunk` fires if
+anyone widens the canvas without re-justifying the depth.
+
+Two findings from writing it:
+
+- `a_pub_nofail` failed at k = 2 until the model was constrained to start from a
+  real reset — unconstrained registers let it publish out of a fabricated state.
+- The state-level abort check in `B_GUARD_REQUEST` is provably redundant given
+  the combinational gate, which settles one of the two surviving mutations as
+  genuinely equivalent rather than a hole.
+
 ## What remains
 
-**Step 1's formal properties are not written.** The review names the right set
-and every one is a safety property over a small state machine, so all are within
-reach of a bounded proof. This is the outstanding half of Step 1.
+**Step 1 is complete.**
 
 **Steps 2–8 are not started**, and they are the larger part:
 

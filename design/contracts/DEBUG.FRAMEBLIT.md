@@ -258,7 +258,35 @@ the guard simultaneously, which is where a handshake bug would hide.
 
 ## Formal properties
 
-None yet. The proposal names the set, and they are the right ones:
+`tests/formal/debug_frameblit_safety.sby`, lane `formal_debug_frameblit_safety`,
+recorded green in `design/formal_runs.yml`. **27 assertions to depth 44**
+(btormc), **8 covers all reached** — `c_publish` at k = 18, `c_crc_fail` at
+k = 21.
+
+The covers are what make it mean anything. Every assertion is an implication, so
+a model that cannot publish satisfies the publish properties while proving
+nothing — the shape that made MEM.GUARD's whole lane and CMD.DMA's assertion (b)
+vacuous. A publication is reachable here ONLY because of the FORMAL-ONLY
+`FORMAL_CANVAS_BYTES = 64` parameter: at the real 184,320-byte canvas a
+transaction is 2,880 chunks and over 46,000 cycles, and no bounded model gets
+near it.
+
+**Scope (V19): a single-chunk transaction.** The multi-chunk loop is not in the
+cone; `a_scope_single_chunk` fires if the canvas is raised, so a wider proof
+needs a re-justified depth rather than a quietly larger number. The ctest lane
+runs the real canvas.
+
+Two things surfaced while writing it:
+
+- `a_pub_nofail` failed at k = 2 until the model was made to start from a REAL
+  reset. Without that constraint every register begins unconstrained and the
+  first counterexample is a fabricated state that publishes out of nowhere —
+  which says nothing about the design.
+- The state-level abort check in `B_GUARD_REQUEST` is provably redundant given
+  the combinational gate on `guard_req_o.valid`, which is why its mutation is
+  recorded as equivalent rather than as a hole.
+
+The proposal named the set and they are the right ones:
 
 - `publish → CRC matched`
 - `publish → issued_bytes == retired_bytes == expected_len`
@@ -270,7 +298,8 @@ None yet. The proposal names the set, and they are the right ones:
 - `wvalid && !wready → data and last remain stable`
 
 Every one is a safety property over a small state machine, so all are within
-reach of a bounded proof. The first three are the ones that matter.
+reach of a bounded proof. The first three are the ones that matter, and all
+three are now proven.
 
 ## Synthesis / resource ceiling
 

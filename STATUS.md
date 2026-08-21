@@ -46,13 +46,20 @@ and I have added it to the list.
 
 ### What is done
 
-**All of Step 1 except the formal proofs.** Absolute addressing, real
+**All of Step 1, formal proofs included.** Absolute addressing, real
 retirement, drain-before-release, publish/release carrying slot and generation,
 pre-acquisition failures releasing nothing, the lease checked at the exact
 publication edge, and the bridge grant.
 
 97 checks, up from 43. Mutation sweep on the thirteen defects your review names:
 **11 caught, 2 provably-cannot-differ, 0 unusable results.**
+
+The proofs are worth a sentence. There are 27 of them and they hold, but the
+part I actually care about is that **all 8 "can this even happen" checks are
+reachable**. A proof that a picture is never shown wrongly is worthless if the
+machine being proved can never show a picture at all — it passes by never
+getting there. That has already happened twice in this repo, so the lane now
+proves reachability first and the property second.
 
 ### What is not done, plainly
 

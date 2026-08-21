@@ -165,6 +165,36 @@ runs:
       claim — mutation-verified: removing the latch's <= 2 refusal fails
       the bmc at exactly this assertion); bmc + cover re-run green.
 
+  - property: tests/formal/debug_frameblit_safety.sby
+    status: green
+    date: "2026-08-21"
+    commit: "7cd9812"
+    lane: formal_debug_frameblit_safety
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      DEBUG.FRAMEBLIT safety, the set named in
+      reports/DEBUG.FRAMEBLIT_Integration_Corrections.md section 13. Twenty-seven
+      assertions to depth 44 (btormc): a publication implies a LIVE matching
+      lease at that same edge, every byte issued AND retired, a passing CRC and
+      no recorded failure; a release implies the transaction had actually
+      ACQUIRED that lease and that every accepted write had retired first;
+      publish and release are never both true; a guard request implies a live
+      matching lease and an ABSOLUTE address inside the leased slot; write data
+      is held while the consumer stalls; a lost lease admits no NEW HPS request,
+      no NEW write beat and no publication; reset leaves nothing half-done.
+      Eight covers, ALL reached -- c_publish at k = 18, c_crc_fail at k = 21 --
+      which is what makes the implications non-vacuous. Reachable ONLY because
+      of the FORMAL-ONLY FORMAL_CANVAS_BYTES = 64 DUT parameter: the smallest
+      lawful canvas is 184,320 bytes (2,880 chunks, 46,000+ cycles), so at the
+      real size no bounded model publishes and every publish property would be
+      green while proving nothing -- the same shape that made CMD.DMA's
+      assertion (b) and MEM.GUARD's whole lane vacuous. Two findings while
+      writing it: a_pub_nofail failed at k = 2 until the model was made to start
+      from a REAL reset (unconstrained registers let it publish out of a
+      fabricated state, which says nothing about the design), and the
+      state-level abort check in B_GUARD_REQUEST is redundant given the
+      combinational gate on guard_req_o.valid.
   - property: tests/formal/cmd_dma_crc_gate.sby
     status: green
     date: "2026-08-16"
