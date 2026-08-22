@@ -48,3 +48,6 @@ desktop.ini
 # built binaries never committed
 *.exe
 .scratch-reel/
+
+# Python bytecode from the sweep preflights
+__pycache__/
