@@ -1,0 +1,150 @@
+﻿PASS source parity: 27 ordered shell sources match tests/CMakeLists.txt.
+staged override: NUM_PARALLEL_PROCESSORS 1
+RUN analysisAndElaboration: quartus_map.exe zhao_shell_fit --analysis_and_elaboration
+Info: *******************************************************************
+Info: Running Quartus Prime Analysis & Elaboration
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sat Aug 22 09:31:42 2026
+Info: Command: quartus_map zhao_shell_fit --analysis_and_elaboration
+Warning (12473): User specified to use only one processors but 4 processors were detected which could be used to decrease run time.
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/generated/zhao_abi_pkg.sv
+    Info (12022): Found design unit 1: zhao_abi_pkg (SystemVerilog) File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/generated/zhao_abi_pkg.sv Line: 10
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_pkg.sv
+    Info (12022): Found design unit 1: zhao_pkg (SystemVerilog) File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_pkg.sv Line: 25
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+    Info (12022): Found design unit 1: zhao_sdram_params_pkg (SystemVerilog) File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_sdram_params_pkg.sv 
+Line: 26
+Error (10170): Verilog HDL syntax error at zhao_crc32c_fold.sv(89) near text: "genvar";  expecting an identifier ("genvar" is a 
+reserved keyword ). Check for and fix any syntax errors that appear immediately before or at the specified keyword. The Intel FPGA 
+Knowledge Database contains many articles with specific details on how to resolve this error. Visit the Knowledge Database at 
+https://www.altera.com/support/support-resources/knowledge-base/search.html and search for this specific error message number. 
+File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_crc32c_fold.sv Line: 89
+Error (10112): Ignored design unit "zhao_crc32c_fold" at zhao_crc32c_fold.sv(48) due to previous errors File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_crc32c_fold.sv Line: 48
+Info (12021): Found 0 design units, including 0 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_crc32c_fold.sv
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_mode.sv
+    Info (12023): Found entity 1: zhao_video_mode File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_mode.sv Line: 47
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_framectl.sv
+    Info (12023): Found entity 1: zhao_video_framectl File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_framectl.sv Line: 38
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_scaler.sv
+    Info (12023): Found entity 1: zhao_video_scaler File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_scaler.sv Line: 23
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_fetch.sv
+    Info (12023): Found entity 1: zhao_scanout_fetch File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_fetch.sv Line: 44
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_dc_sdp_ram.sv
+    Info (12023): Found entity 1: zhao_dc_sdp_ram File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_dc_sdp_ram.sv Line: 31
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_linebuf.sv
+    Info (12023): Found entity 1: zhao_scanout_linebuf File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_linebuf.sv Line: 
+69
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_serializer.sv
+    Info (12023): Found entity 1: zhao_scanout_serializer File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_scanout_serializer.sv 
+Line: 37
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_scanout.sv
+    Info (12023): Found entity 1: zhao_video_scanout File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_scanout.sv Line: 37
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/command/zhao_cmd_scheduler.sv
+    Info (12023): Found entity 1: zhao_cmd_scheduler File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/command/zhao_cmd_scheduler.sv Line: 
+46
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/command/zhao_cmd_dma.sv
+    Info (12023): Found entity 1: zhao_cmd_dma File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 64
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_counters.sv
+    Info (12023): Found entity 1: zhao_debug_counters File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_counters.sv Line: 41
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_crc.sv
+    Info (12023): Found entity 1: zhao_debug_crc File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_crc.sv Line: 29
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/input/zhao_input_snapshot.sv
+    Info (12023): Found entity 1: zhao_input_snapshot File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/input/zhao_input_snapshot.sv Line: 34
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/input/zhao_input_rumble.sv
+    Info (12023): Found entity 1: zhao_input_rumble File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/input/zhao_input_rumble.sv Line: 30
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/audio/zhao_audio_fifo.sv
+    Info (12023): Found entity 1: zhao_audio_fifo File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/audio/zhao_audio_fifo.sv Line: 49
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_sdram_ctrl.sv
+    Info (12023): Found entity 1: zhao_sdram_ctrl File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_sdram_ctrl.sv Line: 55
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_vram_arbiter.sv
+    Info (12023): Found entity 1: zhao_vram_arbiter File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_vram_arbiter.sv Line: 50
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_mem_guard.sv
+    Info (12023): Found entity 1: zhao_mem_guard File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_mem_guard.sv Line: 41
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_hps_bridge.sv
+    Info (12023): Found entity 1: zhao_hps_bridge File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_hps_bridge.sv Line: 29
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_hps_arbiter.sv
+    Info (12023): Found entity 1: zhao_hps_arbiter File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/memory/zhao_hps_arbiter.sv Line: 93
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_frameblit.sv
+    Info (12023): Found entity 1: zhao_debug_frameblit File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/debug/zhao_debug_frameblit.sv Line: 
+137
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_slotmgr.sv
+    Info (12023): Found entity 1: zhao_video_slotmgr File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/video/zhao_video_slotmgr.sv Line: 73
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabian 
+trunz/appdata/local/temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_shell_top.sv
+    Info (12023): Found entity 1: zhao_shell_top File: C:/Users/Fabian 
+Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3/source/fpga/rtl/common/zhao_shell_top.sv Line: 92
+Info (144001): Generated suppressed messages file C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-shell-fit-21736-f9e27e85c56f411dbd32
+d7944bd541e3/source/fpga/quartus/shell_fit/output_files/zhao_shell_fit.map.smsg
+Error: Quartus Prime Analysis & Elaboration was unsuccessful. 2 errors, 1 warning
+    Error: Peak virtual memory: 4787 megabytes
+    Error: Processing ended: Sat Aug 22 09:32:13 2026
+    Error: Elapsed time: 00:00:31
+    Error: Total CPU time (on all processors): 00:02:59
+EXCEPTION: Quartus stage 'analysisAndElaboration' failed with exit code 3; log: C:\Users\Fabian Trunz\AppData\Local\Temp\zhao-shell-fit-21736-f9e27e85c56f411dbd32d7944bd541e3\logs\analysisAndElaboration.log
