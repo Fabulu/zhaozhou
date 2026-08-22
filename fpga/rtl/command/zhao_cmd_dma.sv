@@ -184,6 +184,12 @@ module zhao_cmd_dma #(
   logic [31:0] fetched = 32'd0;    // packet bytes landed in slot_buf
   logic [31:0] need_total = 32'd0; // 40 + cb
   logic [31:0] wr_off = 32'd0;
+  // End offset of the burst IN FLIGHT. The bridge forwards `last` straight
+  // through from the external HPS without counting beats against the length
+  // it was asked for (zhao_hps_bridge.sv: `rsp.last <= hps_rd_last`), so a
+  // bridge that over-runs its own burst would otherwise keep landing beats
+  // here. This makes the burst end a fact THIS module knows.
+  logic [31:0] burst_end = 32'd0;
   logic [31:0] crc_pay_r = 32'hFFFF_FFFF;
 
   // record walk
@@ -293,6 +299,7 @@ module zhao_cmd_dma #(
       f_slot <= 2'd0; f_addr <= 32'd0; f_len <= 32'd0; f_epoch <= 32'd0;
       cb <= 32'd0; cc <= 32'd0; h_debug <= 1'b0;
       fetched <= 32'd0; need_total <= 32'd0; wr_off <= 32'd0;
+      burst_end <= 32'd0;
       crc_pay_r <= 32'hFFFF_FFFF;
       walk_off <= 32'd0; walk_cnt <= 32'd0;
       rd_off <= 32'd0; pkt_v <= 1'b0; pkt_len_r <= 32'd0;
@@ -343,6 +350,7 @@ module zhao_cmd_dma #(
           hps_addr <= f_addr;
           hps_len <= burst_len(f_len);
           wr_off <= 32'd0;
+          burst_end <= 32'(burst_len(f_len));
           m <= M_HDR_WAIT;
         end
 
@@ -360,7 +368,9 @@ module zhao_cmd_dma #(
             end
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
-            if (hps_rsp_i.last) m <= M_HDR_CHK;
+            if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin
+              m <= M_HDR_CHK;
+            end
           end
         end
 
@@ -479,6 +489,7 @@ module zhao_cmd_dma #(
           hps_addr <= f_addr + fetched;
           hps_len <= burst_len(need_total - fetched);
           wr_off <= fetched;
+          burst_end <= fetched + 32'(burst_len(need_total - fetched));
           m <= M_PAY_WAIT;
         end
 
@@ -509,7 +520,7 @@ module zhao_cmd_dma #(
             end
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
-            if (hps_rsp_i.last) begin
+            if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin
               if ((fetched + 32'd8) >= need_total) m <= M_PCRC;
               else m <= M_PAY_REQ;
             end

@@ -509,10 +509,37 @@ deliberately rather than having me invent it and record the invention as law.
 > 3. **one registered read port**, address muxed by state. The readers are
 >    already in four distinct states after the `M_PCRC` split, so they cannot
 >    collide;
-> 4. one cycle of lead in each consumer. The two CRC walks are the only real
->    additions: `crc_final()` covers bytes [0,32) = four words and the payload
->    seed covers [36,64) = four words, so each becomes a four-step read loop
->    rather than a combinational sweep.
+> 4. one cycle of lead in each consumer.
+>
+> ### CORRECTION, and it makes the change much smaller
+>
+> Point 4 above said the two CRC walks each become a four-step read loop. **That
+> is wrong, and reading the block properly is what showed it.** Both walks, and
+> every header field, live inside the first 64 bytes:
+>
+> * `crc_final()` covers bytes [0,32);
+> * the payload-CRC seed covers [36,64) — bounded at 64, proven reachable-max;
+> * every header field sits below offset 40;
+> * and the payload CRC for the REST of the packet is already computed from the
+>   BUS DATA as beats land (`M_PAY_WAIT`), never re-read from the array.
+>
+> So the entire header path reads only bytes 0..63. **Keep those 64 bytes in
+> registers as a header window — 512 registers, nothing — and `M_HDR_CHK` does
+> not change at all.** No read loop, no extra states, no re-timing of the check
+> ladder.
+>
+> Only THREE consumers then need the RAM, and each wants exactly one word:
+>
+> | state | read | address |
+> | --- | --- | --- |
+> | `M_PCRC` | `hget32(36 + cb)` | `(36+cb) >> 3` |
+> | `M_WALK` | both `hget16`s | `(36+walk_off) >> 3` — one read serves both |
+> | `M_STREAM` | `pkt_byte_o` | `rd_off >> 3`, a new word only every 8 bytes |
+>
+> `M_STREAM` gets seven cycles of lead on each next word, so only its first
+> read needs a stall. That is roughly 80 lines, not a rewrite of the packet
+> path, and the earlier estimate should not have been written before the block
+> had been read end to end.
 >
 > **Everything needed to write this is now known, and none of it is a design
 > decision** — the alignment argument above removed the one question that was.
