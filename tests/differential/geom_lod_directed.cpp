@@ -100,6 +100,14 @@ struct Step {
   uint8_t raw;
 };
 
+// THE BLOCK IS SEQUENCED, AND THIS FILE HAS TO KNOW IT. The five products in
+// the ladder walk through ONE multiplier, so the answer arrives on a `valid_o`
+// pulse some clocks after the edge that accepted the tick — not on that edge.
+// `zhao_geom_lod`'s header names the number and so does GEOM.MESHFETCH's
+// contract, so it is CHECKED here rather than merely waited out: a latency that
+// silently changes is a contract break even when the answer is still right.
+constexpr int kLodLatency = 5;
+
 /** One evaluation through the RTL. */
 Step dut_step(Vzhao_geom_lod& dut, const zc::CreatureType& t, int32_t proj, int32_t thresh,
               uint8_t rung_in, uint16_t hold_in) {
@@ -111,10 +119,23 @@ Step dut_step(Vzhao_geom_lod& dut, const zc::CreatureType& t, int32_t proj, int3
   dut.glint_error_i = t.glint_error;
   dut.rung_i = rung_in;
   dut.hold_i = hold_in;
+  dut.eval();
+  check(dut.ready_o != 0, "handshake: ready_o high before a tick", 1, dut.ready_o);
   dut.tick_i = 1;
   zhao::tick(dut);
   dut.tick_i = 0;
   dut.eval();
+  // Clock to the valid pulse. The bound is generous and exists so a block that
+  // never answers FAILS here instead of hanging a nightly lane forever.
+  int cycles = 1;
+  while (!dut.valid_o && cycles < 64) {
+    zhao::tick(dut);
+    ++cycles;
+  }
+  check(dut.valid_o != 0, "handshake: valid_o within 64 clocks of an accepted tick", 1,
+        dut.valid_o);
+  check(cycles == kLodLatency, "handshake: latency in clocks from accept to valid_o",
+        static_cast<uint64_t>(kLodLatency), static_cast<uint64_t>(cycles));
   Step s;
   s.rung = static_cast<uint8_t>(dut.rung_o);
   s.hold = static_cast<uint16_t>(dut.hold_o);

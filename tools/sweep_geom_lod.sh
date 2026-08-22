@@ -39,6 +39,36 @@
 #
 # And the baseline is checked before any mutant runs: if the PRISTINE build
 # does not pass its own test, every "caught" below would be meaningless.
+#
+# ---------------------------------------------------------------------------
+# THE ONE EQUIVALENT MUTANT, PROVED RATHER THAN LABELLED
+# ---------------------------------------------------------------------------
+#
+# M18 (`e == 0` refining always refused) survives, and it is not a hole. If
+# `e[rung_i] == 0` then that rung is ALWAYS legal, because its legality test is
+# `proj*0 + R/2 < (thresh+1)*R` and `R/2 < R <= (thresh+1)*R` for every
+# `R > 0, thresh >= 0`. `raw` is the COARSEST legal rung, so `raw >= rung_i`,
+# so the refining branch (`raw < rung_i`) that M18 changes is UNREACHABLE
+# whenever the branch it sits in (`e_sel == 0`) is taken. Expect 1 survivor,
+# and expect it to be this one.
+#
+# ---------------------------------------------------------------------------
+# WHAT SEQUENCING CHANGED HERE, 2026-08-23
+# ---------------------------------------------------------------------------
+#
+# The block's five products now walk through ONE multiplier over five clocks
+# instead of standing side by side. Eleven mutants moved with the code -- the
+# three legality products are no longer three expressions, so M01/M02/M03 land
+# on the ONE comparison they now share and M20/M21/M22 land on the operand the
+# STATE feeds the multiplier, which is where a rung can now silently borrow
+# another rung's error term. Six more (M06/M13/M15/M17/M18/M19) simply follow
+# their operand from a port to the register that latches it at accept.
+#
+# THREE ARE NEW, because the sequencer is new logic and no earlier mutant could
+# reach it: a legality bit latched into the wrong flop (M24), `valid_o` pulsing
+# before the answer is written (M25), and a rung's product skipped outright
+# (M26). A sweep that did not grow with the restructuring would have reported
+# the same score for strictly less coverage.
 # ---------------------------------------------------------------------------
 set -u
 
@@ -111,10 +141,10 @@ echo "   pristine model ${PRISTINE_MODEL:0:16}, directed lane green"
 
 # Each entry: name @@ old @@ new
 MUTS=(
-"M01 legality edge  (< becomes <=)@@assign legal_glint = (lhs_glint < legal_rhs);@@assign legal_glint = (lhs_glint <= legal_rhs);"
-"M23 legal_rhs drops the +R (shared product)@@assign legal_rhs = th_r + W'(bound_radius_i);@@assign legal_rhs = th_r;"
-"M02 rounding term dropped (micro)@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i));"
-"M03 rounding rounds down (glint)@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) - half_r;"
+"M01 legality edge  (< becomes <=)@@assign legal_next = ((mul_p + half_r) < legal_rhs);@@assign legal_next = ((mul_p + half_r) <= legal_rhs);"
+"M23 legal_rhs drops the +R (shared product)@@assign legal_rhs = th_r + W'(r_q);@@assign legal_rhs = th_r;"
+"M02 rounding term dropped@@assign half_r = W'(r_q) >>> 1;@@assign half_r = '0;"
+"M03 rounding rounds down@@assign half_r = W'(r_q) >>> 1;@@assign half_r = -(W'(r_q) >>> 1);"
 "M04 finest legal rung, not coarsest@@    if (legal_glint) raw = 2'd3;
     else if (legal_splat) raw = 2'd2;
     else if (legal_micro) raw = 2'd1;
@@ -123,25 +153,47 @@ MUTS=(
     else if (legal_glint) raw = 2'd3;
     else raw = 2'd0;"
 "M05 minimum hold 15 -> 14@@localparam logic [15:0] HOLD_TICKS = 16'd15;@@localparam logic [15:0] HOLD_TICKS = 16'd14;"
-"M06 minimum hold removed@@    end else if (hold_i < HOLD_TICKS) begin@@    end else if (hold_i < HOLD_TICKS && 1'b0) begin"
+"M06 minimum hold removed@@    end else if (hold_q < HOLD_TICKS) begin@@    end else if (hold_q < HOLD_TICKS && 1'b0) begin"
 "M07 coarsen boundary >= becomes >@@switch_ok = (bnd_num >= bnd_cmp);@@switch_ok = (bnd_num > bnd_cmp);"
 "M08 refine boundary < becomes <=@@switch_ok = (bnd_num < bnd_cmp);@@switch_ok = (bnd_num <= bnd_cmp);"
 "M09 ceil becomes floor (the +8)@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;@@assign k_ceil  = proj10 / 40'sd9;"
 "M10 hysteresis 9 becomes 10 (no band)@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd10;"
 "M11 hysteresis 11 becomes 10 (no band)@@assign m_floor = proj10 / 40'sd11;@@assign m_floor = proj10 / 40'sd10;"
 "M12 refine drops the +1@@assign bnd_mul_a = coarsening ? W'(k_ceil) : (W'(m_floor) + W'(1));@@assign bnd_mul_a = coarsening ? W'(k_ceil) : W'(m_floor);"
-"M13 boundary uses the wrong rung@@assign bnd_rung   = coarsening ? raw : rung_i;@@assign bnd_rung   = coarsening ? rung_i : raw;"
+"M13 boundary uses the wrong rung@@assign bnd_rung   = coarsening ? raw : rung_q;@@assign bnd_rung   = coarsening ? rung_q : raw;"
 "M14 boundary rounding term dropped@@assign bnd_num = th_r + (W'(e_sel) >>> 1);@@assign bnd_num = th_r;"
-"M15 hold does not saturate@@assign hold_inc = (hold_i == 16'hFFFF) ? 16'hFFFF : (hold_i + 16'd1);@@assign hold_inc = hold_i + 16'd1;"
+"M15 hold does not saturate@@assign hold_inc = (hold_q == 16'hFFFF) ? 16'hFFFF : (hold_q + 16'd1);@@assign hold_inc = hold_q + 16'd1;"
 "M16 hold not cleared on a switch@@      rung_next = raw;
       hold_next = 16'd0;@@      rung_next = raw;
       hold_next = hold_inc;"
-"M17 e==0 coarsening always allowed@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;@@switch_ok = 1'b1;"
-"M18 e==0 refining always refused@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b0;"
-"M19 coarsening test inverted@@assign coarsening = (raw > rung_i);@@assign coarsening = (raw < rung_i);"
-"M20 legality uses R where e belongs@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(splat_error_i)) + half_r;@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(bound_radius_i)) + half_r;"
-"M21 two rungs share one error term@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(splat_error_i)) + half_r;@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;"
-"M22 micro rung shares the glint term@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;"
+"M17 e==0 coarsening always allowed@@switch_ok = coarsening ? (proj_q == 32'sd0) : 1'b1;@@switch_ok = 1'b1;"
+"M18 e==0 refining always refused@@switch_ok = coarsening ? (proj_q == 32'sd0) : 1'b1;@@switch_ok = coarsening ? (proj_q == 32'sd0) : 1'b0;"
+"M19 coarsening test inverted@@assign coarsening = (raw > rung_q);@@assign coarsening = (raw < rung_q);"
+"M20 legality uses R where e belongs@@        mul_b = W'(e_splat_q);@@        mul_b = W'(r_q);"
+"M21 two rungs share one error term@@        mul_b = W'(e_splat_q);@@        mul_b = W'(e_glint_q);"
+"M22 micro rung shares the glint term@@        mul_b = W'(e_micro_q);@@        mul_b = W'(e_glint_q);"
+"M24 a legality bit lands in the wrong flop@@        S_SPLAT: begin
+          legal_splat <= legal_next;
+          state       <= S_GLINT;
+        end@@        S_SPLAT: begin
+          legal_micro <= legal_next;
+          state       <= S_GLINT;
+        end"
+"M25 valid_o pulses a cycle early@@        S_GLINT: begin
+          legal_glint <= legal_next;
+          state       <= S_BND;
+        end@@        S_GLINT: begin
+          legal_glint <= legal_next;
+          valid_o     <= 1'b1;
+          state       <= S_BND;
+        end"
+"M26 a rung's product is skipped entirely@@        S_SPLAT: begin
+          legal_splat <= legal_next;
+          state       <= S_GLINT;
+        end@@        S_SPLAT: begin
+          legal_splat <= legal_next;
+          state       <= S_BND;
+        end"
 )
 
 expected=${#MUTS[@]}
