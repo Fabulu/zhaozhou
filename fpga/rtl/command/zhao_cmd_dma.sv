@@ -156,7 +156,7 @@ module zhao_cmd_dma #(
   // ------------------------------------------------------------ state -----
   typedef enum logic [3:0] {
     M_IDLE,
-    M_HDR_REQ, M_HDR_WAIT, M_HDR_CHK,
+    M_HDR_REQ, M_HDR_WAIT, M_HCRC, M_HDR_CHK, M_SEED,
     M_PAY_REQ, M_PAY_WAIT,
     M_PCRC_RD, M_PCRC,
     M_WALK_RD, M_WALK,
@@ -221,6 +221,30 @@ module zhao_cmd_dma #(
   // bridge that over-runs its own burst would otherwise keep landing beats
   // here. This makes the burst end a fact THIS module knows.
   logic [31:0] burst_end = 32'd0;
+  // THE HEADER CRC AND THE PAYLOAD SEED ARE NOW WALKED, NOT SWEPT.
+  //
+  // Both used to run as single-cycle chains of bit-serial CRC-32C steps --
+  // 32 bytes for the header, up to 28 for the payload seed -- and the composed
+  // fit measured what that costs:
+  //
+  //   -55.199 ns  zhao_cmd_dma|hdr_win[28][4] -> zhao_cmd_dma|crc_pay_r[3]
+  //
+  // hdr_win[28] is command_bytes, so that path is: read cb, derive seed_end,
+  // then 28 dependent CRC steps. 224 XOR levels against a 10 ns budget.
+  //
+  // Now each walks its byte range EIGHT BYTES PER CYCLE through one shared
+  // zhao_crc32c_fold, which does eight bytes in one tree about seven levels
+  // deep. Four cycles each, eight cycles added per packet, on a path that runs
+  // once per packet and never per beat.
+  logic [1:0]  cw = 2'd0;        // which eight-byte group of the walk
+  logic [31:0] crc_hdr_r = 32'hFFFF_FFFF;
+  // LATCHED at the end of the header check, and read by nothing before it.
+  // The old worst path was hdr_win[28] -> crc_pay_r: command_bytes reached the
+  // CRC's loop bound in the same cycle as the CRC itself. These registers cut
+  // that, so M_SEED and M_PAY_WAIT decide from state, not from the window.
+  logic [31:0] payload_end_q = 32'd0;   // 36 + command_bytes
+  logic [5:0]  seed_bytes_q = 6'd0;     // 0, 16 or 28 -- and only those
+  logic [1:0]  seed_steps_q = 2'd0;     // 0, 2 or 4 folds
   logic [31:0] crc_pay_r = 32'hFFFF_FFFF;
 
   // record walk
@@ -282,14 +306,10 @@ module zhao_cmd_dma #(
   // header_crc32c covers bytes [0,32) — the ONLY use of this function, so
   // the loop bound is the constant 32; a parameter-bounded loop would put
   // SLOT_BUF_BYTES muxed CRC steps in the formal cone for nothing)
-  function automatic logic [31:0] crc_final();
-    logic [31:0] c;
-    c = 32'hFFFF_FFFF;
-    for (int unsigned i = 0; i < 32; i++) begin
-      c = zhao_abi_pkg::zhao_crc32c_step(c, hdr_win[i]);
-    end
-    crc_final = ~c;
-  endfunction
+  // crc_final() is gone. It swept 32 bytes of hdr_win in ONE cycle -- 32
+  // chained bit-serial steps, 256 dependent XOR levels -- and the header CRC
+  // is now accumulated in crc_hdr_r by the M_HCRC walk instead. The comparison
+  // in the ladder reads a register.
 
   // next burst length: multiple of 8, capped at 64, covering `left` bytes
   function automatic logic [6:0] burst_len(input logic [31:0] left);
@@ -311,6 +331,90 @@ module zhao_cmd_dma #(
     hps_req_o.len    = hps_len;
   end
 
+
+  // ---- the CRC folds, at CONSTANT byte counts -----------------------------
+  //
+  // TWO instances with n_i tied to constants, NOT one with a runtime n_i.
+  // The generic module elaborates nine matrices, one per byte count; with n_i
+  // constant Quartus discards the other eight, which is why DEBUG.FRAMEBLIT's
+  // fold cost 14 ALMs. A runtime n_i would keep all nine and put a nine-way
+  // mux AFTER the XOR trees -- the opposite of what is wanted on the path
+  // being shortened.
+  //
+  // Eight and four are the only counts this block needs, and that is a
+  // consequence of the header laws rather than a convenience:
+  //
+  //   * command_bytes % 16 == 0, so 36 + command_bytes is always 4 mod 8;
+  //     the final payload beat therefore contributes EXACTLY four bytes.
+  //   * the first burst is a multiple of 8 capped at 64, and 40 + cb <= f_len,
+  //     so the bytes of payload already present when the header is checked can
+  //     only be 0, 16 or 28 -- never an arbitrary count.
+  //
+  //     cb = 0   -> fetched 40, seed_end 36  ->  0 bytes
+  //     cb = 16  -> fetched >= 56, seed_end 52 -> 16 bytes
+  //     cb >= 32 -> fetched 64, seed_end 64  -> 28 bytes
+  //
+  // So the seed is 0, two folds of 8, or three of 8 plus one of 4. No shifter
+  // and no variable count anywhere.
+  logic [31:0] fold_c;
+  logic [63:0] fold_d;
+  logic [31:0] fold8_o;
+  logic [31:0] fold4_o;
+  logic        fold_is4;
+  logic [31:0] fold_o;
+
+  zhao_crc32c_fold u_fold8 (.c_i(fold_c), .d_i(fold_d), .n_i(4'd8), .c_o(fold8_o));
+  zhao_crc32c_fold u_fold4 (.c_i(fold_c), .d_i(fold_d), .n_i(4'd4), .c_o(fold4_o));
+  assign fold_o = fold_is4 ? fold4_o : fold8_o;
+
+  // the eight header-window bytes this walk step covers; the base is one of
+  // eight fixed offsets (0,8,16,24 for the header CRC, 36,44,52,60 for the
+  // seed), so this is a byte mux and not a shifter
+  logic [5:0]  fold_base;
+  logic [63:0] hw_word;
+  always_comb begin
+    // 0, 8, 16, 24 for the header CRC; 36, 44, 52, 60 for the seed. Six bits
+    // is exactly the hdr_win index width, and 36 + 24 = 60 is the largest base.
+    fold_base = (m == M_SEED) ? (6'd36 + {1'b0, cw, 3'd0}) : {1'b0, cw, 3'd0};
+    for (int k = 0; k < 8; k++) begin
+      hw_word[8*k +: 8] = hdr_win[fold_base + 6'(k)];
+    end
+  end
+
+  // The streaming case needs NO shifter. M_PAY_WAIT's wr_off starts at
+  // `fetched`, which is at least 40, and the payload starts at 36 -- so the
+  // LOWER bound never clips a beat. Only the upper one does, and it lands
+  // 4 mod 8, so the last payload beat is exactly a fold of four.
+  logic beat_full;    // this beat is entirely inside the payload
+  logic beat_tail;    // this beat holds the final four payload bytes
+  always_comb begin
+    beat_full = ((wr_off + 32'd8) <= payload_end_q);
+    beat_tail = !beat_full && (wr_off < payload_end_q);
+  end
+
+  always_comb begin
+    unique case (m)
+      M_HCRC: begin
+        fold_c   = crc_hdr_r;
+        fold_d   = hw_word;
+        fold_is4 = 1'b0;             // bytes 0..31, four whole groups
+      end
+      M_SEED: begin
+        fold_c = crc_pay_r;
+        fold_d = hw_word;
+        // Only the 28-byte seed has a tail, and it is its fourth step. The
+        // decision reads LATCHED controls, never hdr_win or command_bytes --
+        // the old worst path began at hdr_win[28] precisely because the loop
+        // bound was derived in the same cycle as the CRC.
+        fold_is4 = (seed_bytes_q == 6'd28) && (cw == 2'd3);
+      end
+      default: begin
+        fold_c   = crc_pay_r;
+        fold_d   = hps_rsp_i.data;
+        fold_is4 = beat_tail;
+      end
+    endcase
+  end
 
   // The read address, muxed by state. The four readers are in four DIFFERENT
   // states, which is what lets them share one port -- splitting the payload
@@ -356,6 +460,8 @@ module zhao_cmd_dma #(
       cb <= 32'd0; cc <= 32'd0; h_debug <= 1'b0;
       fetched <= 32'd0; need_total <= 32'd0; wr_off <= 32'd0;
       burst_end <= 32'd0;
+      cw <= 2'd0; crc_hdr_r <= 32'hFFFF_FFFF;
+      payload_end_q <= 32'd0; seed_bytes_q <= 6'd0; seed_steps_q <= 2'd0;
       crc_pay_r <= 32'hFFFF_FFFF;
       walk_off <= 32'd0; walk_cnt <= 32'd0;
       rd_off <= 32'd0; pkt_v <= 1'b0; pkt_len_r <= 32'd0;
@@ -426,8 +532,21 @@ module zhao_cmd_dma #(
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
             if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin
-              m <= M_HDR_CHK;
+              crc_hdr_r <= 32'hFFFF_FFFF;
+              cw <= 2'd0;
+              m <= M_HCRC;
             end
+          end
+        end
+
+        // Four cycles, eight bytes each, over hdr_win[0..31]. This is the
+        // header CRC that crc_final() used to sweep in one cycle.
+        M_HCRC: begin
+          crc_hdr_r <= fold_o;
+          cw <= cw + 2'd1;
+          if (cw == 2'd3) begin
+            cw <= 2'd0;
+            m <= M_HDR_CHK;
           end
         end
 
@@ -464,7 +583,7 @@ module zhao_cmd_dma #(
           end else if ((32'd40 + cb_v)
                        > (zhao_abi_pkg::FRAME_SLOT_BYTES - 32'd40)) begin
             ok_v = 1'b0; st_v = ST_BAD_LENGTH;      // FRAME_SLOT_BYTES law
-          end else if (crc_final() != hget32(zhao_abi_pkg::ZHAO_OFF_HEADER_CRC)) begin
+          end else if ({~crc_hdr_r} != hget32(zhao_abi_pkg::ZHAO_OFF_HEADER_CRC)) begin
             ok_v = 1'b0; st_v = ST_BAD_HEADER_CRC;  // THE header gate
           end else if (hget32(zhao_abi_pkg::ZHAO_OFF_RESOURCE_EPOCH) != f_epoch)
           begin
@@ -520,23 +639,47 @@ module zhao_cmd_dma #(
             // burst 1 actually landed -- where 64 would be a constant that
             // happens to work.
             // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
+            // The seed is WALKED now, in M_SEED. Everything it needs is
+            // latched HERE, in the cycle that already reads the header window,
+            // so the walk never touches command_bytes again.
+            //
+            // seed bytes can only be 0, 16 or 28: the first burst is a
+            // multiple of 8 capped at 64, 40 + cb <= f_len, and cb % 16 == 0.
             begin
               logic [31:0] seed_end;
-              logic [31:0] cseed;
               seed_end = fetched;
               if (seed_end > (32'd36 + cb_v)) seed_end = 32'd36 + cb_v;
-              cseed = 32'hFFFF_FFFF;
-              for (int unsigned k = 36; k < 64; k++) begin
-                if (k < seed_end) begin
-                  cseed = zhao_abi_pkg::zhao_crc32c_step(cseed, hdr_win[k]);
-                end
-              end
-              crc_pay_r <= cseed;
+              payload_end_q <= 32'd36 + cb_v;
+              seed_bytes_q  <= 6'(seed_end - 32'd36);
+              seed_steps_q  <= ((seed_end - 32'd36) >= 32'd28) ? 2'd0   // 4 folds
+                             : ((seed_end - 32'd36) >= 32'd16) ? 2'd2   // 2 folds
+                             : 2'd3;                                    // none
             end
-            if (fetched >= (32'd40 + cb_v)) begin
-              m <= M_PCRC_RD;  // tiny packet: one burst covered everything
-            end else begin
-              m <= M_PAY_REQ;
+            crc_pay_r <= 32'hFFFF_FFFF;
+            cw <= 2'd0;
+            m <= M_SEED;
+          end
+        end
+
+        // Four cycles over hdr_win[36..63], each folding however many of its
+        // eight bytes are still inside the payload. Where the old version put
+        // 28 dependent CRC steps behind a command_bytes-derived bound, this
+        // puts one fold behind it.
+        M_SEED: begin
+          // seed_steps_q encodes where the walk stops: 2'd0 means run all four
+          // groups (28 bytes, the last a fold of 4), 2'd2 means stop after two
+          // (16 bytes), 2'd3 means there is nothing to fold at all.
+          if (seed_steps_q == 2'd3) begin
+            cw <= 2'd0;
+            m  <= (fetched >= (32'd40 + cb)) ? M_PCRC_RD : M_PAY_REQ;
+          end else begin
+            crc_pay_r <= fold_o;
+            cw <= cw + 2'd1;
+            if ((seed_steps_q == 2'd0) ? (cw == 2'd3) : (cw == (seed_steps_q - 2'd1)))
+            begin
+              cw <= 2'd0;
+              // tiny packet: one burst covered everything
+              m <= (fetched >= (32'd40 + cb)) ? M_PCRC_RD : M_PAY_REQ;
             end
           end
         end
@@ -562,19 +705,11 @@ module zhao_cmd_dma #(
                 hdr_win[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
               end
             end
-            // payload CRC over this beat's bytes inside [36, 40+cb)
-            begin
-              logic [31:0] cnext;
-              cnext = crc_pay_r;
-              for (int i = 0; i < 8; i++) begin
-                if (((wr_off + 32'(i)) >= 32'd36)
-                    && ((wr_off + 32'(i)) < (32'd36 + cb))) begin
-                  cnext = zhao_abi_pkg::zhao_crc32c_step(
-                      cnext, hps_rsp_i.data[8*i +: 8]);
-                end
-              end
-              crc_pay_r <= cnext;
-            end
+            // payload CRC over this beat's bytes inside [36, 40+cb), in one
+            // fold rather than eight chained steps. beat_start shifts the beat
+            // so the first enabled byte sits at position zero, which is where
+            // the fold takes its bytes from; beat_n is how many are inside.
+            crc_pay_r <= fold_o;
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
             if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin

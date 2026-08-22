@@ -306,6 +306,14 @@ add_test(NAME source_list_parity
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/source_list_parity.cmake)
 set_tests_properties(source_list_parity PROPERTIES LABELS "lint;fast")
 
+# The per-beat CRC users may not chain the bit-serial byte step. Three lines
+# to write, obviously correct, passes every functional test, and costs 45 ns
+# on a path only a Quartus run would show. No tool needed, so it never skips.
+configure_file(lint/no_serial_crc.cmake.in lint/no_serial_crc.cmake @ONLY)
+add_test(NAME no_serial_crc
+         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/no_serial_crc.cmake)
+set_tests_properties(no_serial_crc PROPERTIES LABELS "lint;fast")
+
 find_program(ZHAO_CPPCHECK_BIN NAMES cppcheck cppcheck.exe)
 configure_file(lint/cppcheck_check.cmake.in lint/cppcheck_check.cmake @ONLY)
 add_test(NAME cppcheck_check
@@ -919,7 +927,9 @@ set_tests_properties(render_budget PROPERTIES LABELS "fast;nightly")
 set(ZHAO_CMD_INCLUDES ${CMAKE_SOURCE_DIR}/fpga/rtl/common
                       ${CMAKE_SOURCE_DIR}/fpga/rtl/generated)
 set(ZHAO_CMD_SCHEDULER_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_scheduler.sv)
-set(ZHAO_CMD_DMA_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv)
+# CMD.DMA now instantiates zhao_crc32c_fold, so the leaf travels with it
+set(ZHAO_CMD_DMA_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                    ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv)
 set(ZHAO_DEBUG_COUNTERS_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_counters.sv)
 set(ZHAO_DEBUG_CRC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv)
 

@@ -1,0 +1,51 @@
+# no_serial_crc.cmake — the CRC users may not call the bit-serial step.
+#
+# WHY THIS EXISTS. `zhao_abi_pkg::zhao_crc32c_step` folds ONE byte through
+# EIGHT dependent XOR levels. Chaining it is how CMD.DMA and DEBUG.FRAMEBLIT
+# came to hold the two worst timing families in the composed shell:
+#
+#   -55.199 ns  zhao_cmd_dma|hdr_win[28][4] -> zhao_cmd_dma|crc_pay_r[3]
+#   -28.778 ns  zhao_hps_arbiter|state      -> zhao_debug_frameblit|crc_acc
+#
+# against a 10 ns gpu_clk. Both now use `zhao_crc32c_fold`, which does eight
+# bytes in one tree about seven levels deep.
+#
+# Nothing stops the chain coming back. It is three lines to write, it is
+# obviously correct, every functional test passes with it, and the cost shows
+# up only in a Quartus run somebody has to remember to do. That is exactly the
+# shape of defect this project keeps finding, so it gets a gate rather than a
+# comment.
+#
+# The rule is deliberately narrow: it names the two blocks whose CRCs are on a
+# per-beat path. Elsewhere -- a one-off check on a slow path, or the reference
+# model -- the byte step is still the clearest way to say what is meant.
+set(_files
+  "@CMAKE_SOURCE_DIR@/fpga/rtl/command/zhao_cmd_dma.sv"
+  "@CMAKE_SOURCE_DIR@/fpga/rtl/debug/zhao_debug_frameblit.sv")
+
+set(_bad "")
+foreach(_f IN LISTS _files)
+  if(NOT EXISTS "${_f}")
+    message(FATAL_ERROR "no-serial-crc: missing ${_f}")
+  endif()
+  file(READ "${_f}" _txt)
+  # strip line comments so the explanation above each fold does not trip it
+  string(REGEX REPLACE "//[^\n]*" "" _code "${_txt}")
+  if(_code MATCHES "zhao_crc32c_step")
+    get_filename_component(_n "${_f}" NAME)
+    list(APPEND _bad "${_n}")
+  endif()
+endforeach()
+
+if(_bad)
+  message(FATAL_ERROR
+    "BIT-SERIAL CRC IS BACK IN: ${_bad}\n"
+    "zhao_crc32c_step folds one byte through eight dependent XOR levels. "
+    "Chaining it on a per-beat path is what put these blocks at -55 ns and "
+    "-28 ns against a 10 ns clock in the composed fit. Use zhao_crc32c_fold, "
+    "which does eight bytes in one tree and is bit-exact against the shipped "
+    "zhao_abi::zhao_crc32c (1,178 directed checks, 200,000 random folds, 18 of "
+    "18 mutations caught).")
+endif()
+
+message(STATUS "no-serial-crc OK: the per-beat CRC users fold, they do not chain")

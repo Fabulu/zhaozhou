@@ -54,11 +54,12 @@ expect pass
 btor btormc
 
 [script]
-read_slang --top zhao_cmd_dma_crc_gate_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_cmd_dma.sv cmd_dma_crc_gate_harness.sv
+read_slang --unroll-limit=200000 --top zhao_cmd_dma_crc_gate_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_crc32c_fold.sv zhao_cmd_dma.sv cmd_dma_crc_gate_harness.sv
 prep -top zhao_cmd_dma_crc_gate_harness
 
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/common/zhao_crc32c_fold.sv
 ../../fpga/rtl/command/zhao_cmd_dma.sv
 cmd_dma_crc_gate_harness.sv
