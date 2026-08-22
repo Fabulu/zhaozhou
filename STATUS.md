@@ -5,6 +5,73 @@ at the top.*
 
 ---
 
+## 2026-08-22 (later still) — the debug blitter is done, and the whole-chip
+## test is finally unblocked
+
+### DEBUG.FRAMEBLIT is finished and it is tiny
+
+This is the block that copies a debug picture from the computer's memory into
+the console's framebuffer. It was split out of the command block months ago
+precisely so a debug-only feature could never be the reason the console does
+not fit. It now measures **962 logic cells of 41,910 — 2.3% of the chip**, with
+no memory blocks and no multipliers.
+
+It has moved up a rung to RTL_VERIFIED.
+
+### What I actually tested, because "it copies pictures correctly" is not the
+### hard part
+
+This block's real job is a promise: **a half-written picture must never become
+visible.** If a transfer fails, gets interrupted, or arrives corrupted, the
+screen must keep showing the old frame rather than a torn one.
+
+The trouble is that a test which only checks "good picture in, good picture
+out" would pass no matter how badly that promise is broken, because a
+successful transfer looks the same either way.
+
+So I broke the promise twenty different ways and checked the tests noticed:
+publishing before the writes finish, publishing before the checksum is checked,
+publishing when the frame slot has already been given to someone else,
+releasing a slot while writes are still in flight, releasing a slot the block
+never owned, folding abandoned data into the checksum, ignoring a memory
+error. **All twenty were caught.**
+
+### The whole-chip test is unblocked for the first time
+
+Until today the record said the full-console compile was blocked by one thing:
+a memory inside the command block that the chip compiler could not turn into
+real memory. That is the exact defect fixed in the previous entry.
+
+**That blocker is gone**, so I am starting the full compile now. It takes hours
+and I will report what it says — including if it fails, which is itself a
+useful answer.
+
+To be clear about what that test is and is not: it asks whether the design
+fits the chip and runs fast enough **inside the compiler**. It is not a
+programmed board and not fabricated silicon. Nothing has run yet.
+
+### Two measuring instruments were broken, and both had been lying quietly
+
+Worth recording because both are the same shape — a check that looked like a
+guard while answering the same way regardless of the truth.
+
+1. The test runner reported **every one of 337 tests as failing**. Nothing was
+   wrong with the tests. The computer has two copies of the build tool
+   installed, and the wrong one was being picked up; it misreads Windows paths.
+   One wrong conclusion away from a day spent debugging nothing.
+
+2. Every chip-compile result ever recorded — **all 42 of them** — carried a
+   flag saying "the source code was not in a clean state when this was
+   measured", which would make every number unattributable. The flag had
+   **never once been true**, because it was asking a second copy of `git` that
+   disagrees about Windows line endings. It reads correctly now, and the 43rd
+   row is the first honest one.
+
+Neither broke anything that shipped. Both would have made a real problem
+invisible, which is worse.
+
+---
+
 ## 2026-08-22 (later) — the command block now fits, with room to spare
 
 Last section said `CMD.DMA` compiles but does not **fit** — it needed more of
