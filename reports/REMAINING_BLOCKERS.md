@@ -884,3 +884,61 @@ async-reset write process and a combinational read — so it will not infer as a
 RAM either, at 4,096 entries instead of 30,720.
 
 Both wanted the same treatment and only the large one got it.
+
+---
+
+## 2026-08-22 (night) — WHAT IS ACTUALLY LEFT, counted rather than estimated
+
+Twenty-three RTL blocks are still `SPECIFIED`. The instinct is to read that as
+twenty-three units of implementation work. **It is not.** Measured against the
+reference tree and the contract stubs:
+
+| | count |
+| --- | ---: |
+| RTL blocks still SPECIFIED | **23** |
+| ...whose declared oracle RESOLVES | **2** |
+| ...whose contract is fully filled | **3** |
+| ...with neither (all 15 sections still generated stubs) | **20** |
+
+Broken down by what each is actually waiting on:
+
+| what it needs | blocks | count |
+| --- | --- | ---: |
+| **an owner decision on game behaviour** (reserved by standing instruction) | `PART.STATE/UPDATE/COLLIDE/SPAWN/LADDER`, `TWOD.PLANE/SPRITE`, `POST.GATHER/COMPOSITE/ECHO`, `FORGE.PRIM` | **11** |
+| **a different KIND of evidence than the ledger can express** | `SYS.PLL`, `SYS.RESET`, `SYS.CDC` | **3** |
+| **a format or policy decision, then ordinary work** | `GEOM.VDECODE`, `GEOM.LOOM`, `GEOM.WARP`, `GEOM.WCACHE` | **4** |
+| **another block first** | `TERRAIN.PATCH` (the earth-field WRITE law), `MEM.SDRAM` (`blocked_on: hardware`) | **2** |
+| **a ratified law — the charter gives only a sketch** | `MEASURE.HISTOGRAM` | **1** |
+| **in flight** | `GEOM.MESHFETCH` (cull) | **1** |
+
+**So roughly half the remaining hardware is waiting on decisions that are the
+owner's by standing instruction, and almost none of it is waiting on typing.**
+
+### MEASURE.HISTOGRAM is Version 2, and Version 1 is already built
+
+The charter (§ error-bucket loop) gives it three bullets:
+
+> - FPGA builds a small histogram of candidate error buckets;
+> - a cutoff bucket is selected;
+> - eligible refinements above the cutoff are emitted.
+
+That is an ingredient list. It does not say how many buckets, how an error maps
+to a bucket, or how the cutoff is chosen — and each of those is a determinism-
+and budget-affecting choice. The same section explicitly labels this **Version 2**
+and says *"Do not begin with a global FPGA priority heap"*; **Version 1**
+(`MEASURE.GOVERNOR` + `MEASURE.TOKENS`) is implemented and `UNIT_VERIFIED`. So
+this block is neither blocked nor urgent — it is a deliberate future upgrade, and
+starting it would mean inventing the three numbers the charter left open.
+
+### The SYS.* three are a LEDGER defect, not a work item
+
+`reports/PHANTOM_REFERENCES.md` already called this out under kind 3: a PLL has
+no scalar model, and a reset sequencer's correctness is a timing and sequencing
+property, not a function from inputs to outputs. Naming a C++ function for them
+was a category error at specification time.
+
+The report's own recommendation was to fix `tools/ledger` **"before those blocks
+come up, not while they are being built."** They are phase 0 — they came up long
+ago, and all three still carry a fictional `reference_model` because the schema
+offers one evidence field and one ladder. That is the next piece of ledger work,
+and unlike the eleven above it needs no decision from anyone.
