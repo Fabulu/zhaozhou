@@ -10,6 +10,73 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- MEASURED: the FRAMEBLIT rewire removed its family and did not
+## move the headline
+
+Composed fit at clean HEAD `8ff73c9`, all four stages successful.
+
+### Before and after
+
+| | before (`d67621d`) | after (`8ff73c9`) |
+| --- | ---: | ---: |
+| ALMs | 9,167 | 9,181 (+14) |
+| registers | 9,171 | 9,576 |
+| setup worst | -55.199 ns | **-56.374 ns** |
+| setup failing endpoints | 3,595 | **3,746** |
+| hold worst | +0.247 ns | **-1.064 ns, 3 failing** |
+
+### What the rewire actually did, which the summary numbers hide
+
+The failing families, before:
+
+    33  cmd_dma|hdr_win        -> cmd_dma|crc_pay_r     -55.2 .. -53.3
+    33  hps_arbiter|state      -> frameblit|crc_acc     -28.8 .. -24.2
+     7  audio_fifo|cnt_gray_sync -> cnt_snap_o.value    -14.9 .. -10.6
+
+and after:
+
+    32  cmd_dma|hdr_win        -> cmd_dma|crc_pay_r     -56.4 .. ...
+    11  audio_fifo|cnt_gray_sync -> cnt_snap_o.value
+
+**The FRAMEBLIT CRC family is gone.** Thirty-three failing paths at -28.8 ns
+eliminated, for +14 ALMs. The fold does what it was built to do.
+
+### And the headline did not move, for a reason that was known in advance
+
+The worst path is CMD.DMA's payload-CRC seed loop, which **still calls the
+bit-serial chain** -- it was deliberately left for a second pass. Removing a
+-28 ns family cannot improve a -55 ns worst case. The -55.199 -> -56.374 drift
+is 2% on a path that was not touched: placement variation, not a regression.
+
+### Two things NOT fully explained, recorded as such
+
+1. **Failing endpoints rose 3,595 -> 3,746** even though a failing family was
+   removed. The top-100 path report cannot account for that; it holds 100 of
+   3,746. Unexplained.
+2. **Three hold violations appeared**, worst -1.064 ns, all of them
+   `vid_clk -> gpu_clk`:
+
+       vphase                        -> vph_q
+       zhao_video_scaler|stage2.y[6] -> crc_in_sof
+       zhao_video_mode|mode_cur[1]   -> eof_pend
+
+   None involves DEBUG.FRAMEBLIT. They sit on the GPU/video seam this project
+   deliberately leaves TIMED rather than false-pathed -- the timing report's own
+   `knownCdc` note says so -- so hold on them is placement-dependent and was
+   +0.247 ns by luck in the previous run rather than by construction. That is
+   an explanation of the mechanism, not a dismissal: three real hold
+   violations are recorded here and they need a constraint decision, not a
+   shrug.
+
+### The reading
+
+The approach is validated and the remaining work is located. CMD.DMA's seed
+loop is next, and it is a bigger change than FRAMEBLIT's drop-in: the seed
+folds a byte range that starts at 36 and ends wherever `command_bytes` says, so
+it needs a multi-cycle walk rather than one instance with `n_i` tied high.
+
+---
+
 ## 2026-08-22 -- the parallel CRC-32C fold, built and verified
 
 `fpga/rtl/common/zhao_crc32c_fold.sv`. Folds up to eight bytes in ONE shallow
