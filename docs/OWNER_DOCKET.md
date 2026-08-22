@@ -269,6 +269,29 @@ exactly what a caller that forgot to drive the signal would get. `CMD.SCHEDULER`
 is the obvious owner — it already knows whether the frame is Duo — but nothing
 says so.
 
+### 4. THE LOD LADDER NOW TAKES FIVE CLOCKS. Is that acceptable to whatever
+### ends up calling it?
+
+`zhao_geom_lod` was one combinational evaluation per clock and 18 DSPs. It is
+now five clocks and **6 DSPs**, because its five 32x32 products walk through one
+multiplier instead of standing side by side. Measured both ways on the same
+machine: 1,303 ALMs / 18 DSPs before, 1,183 ALMs / 6 DSPs after -- area fell
+too, so this is not the usual area-for-DSP trade.
+
+The rate argument is that the ladder runs **once per instance per frame**: ten
+thousand live creatures at 60 Hz is 600 k evaluations/s and the sequenced block
+sustains 10 M/s at 50 MHz, a 16x margin. That argument is sound but it rests on
+a number nobody has ruled: **how many creatures are live at once**. Charter §10
+does not say, and `zref::MeshFetch` resolves to nothing, so the consumer that
+would answer it is unbuilt.
+
+**What is being asked:** nothing, unless the instance count is far larger than
+assumed. If a future GEOM.MESHFETCH needs one LOD answer per clock, the parallel
+form is one commit back (`d8278bd`) and costs 18 of the device's 112 DSPs. This
+is recorded so the five is read as a *choice made against a stated rate*, not as
+an inherited property of the block.
+
+
 ---
 
 ## RULED 2026-08-22 — "visibility sectors" is deleted. MESHFETCH culls a

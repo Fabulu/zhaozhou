@@ -321,3 +321,74 @@ difference between a cull that costs work and one that deletes geometry.
 built because the format is unfrozen, and `zref::MeshFetch` stays a phantom.
 The block owes a Quartus fit -- every width in it is argued from its range, and
 `zhao_geom_lod` went 28 DSPs to 18 once measured.
+
+---
+
+## 2026-08-23 — the sequencing lever, piloted and MEASURED: 18 DSPs to 6
+
+The DSP blocker report named a lever and guessed at its size. It was pulled on
+`zhao_geom_lod`, the block whose own header had named it and declined it, and
+measured on both sides at a clean worktree on this machine.
+
+| | ALMs | DSPs | registers | latency |
+| --- | ---: | ---: | ---: | ---: |
+| before (`d8278bd`) | 1,303 | **18** | 21 | 1 clock |
+| after (`09bbe05`) | 1,183 | **6** | 271 | 5 clocks |
+
+**Six, not the estimated eight.** The estimate assumed only the three legality
+products would share one multiplier. All FIVE did — `thresh*R` and the boundary
+product too — because the cost of sequencing is the *sequencer*, and once it
+exists the other products have no reason to stay outside it. 16% of the device's
+DSPs down to 5.4%.
+
+**The ALMs fell too, which was not expected and matters more than the DSPs.**
++250 registers and −120 ALMs at once: a Cyclone V ALM carries flops whether the
+design uses them or not (this block was using 21), and the area was never mostly
+the multipliers — it was five parallel 64-bit product-and-compare datapaths
+collapsing into one. The standing objection to sequencing is that it trades area
+for DSPs. Measured here it does not. It returns both.
+
+**What it cost, said plainly:** five clocks instead of one, and a real `ready_o`
+that makes `tick_i` ignorable while busy. `design/blocks.yml` already declared
+GEOM.MESHFETCH `backpressure: ready_valid` and `latency: variable`; the RTL only
+just caught up to its own ledger row. The rate argument is a 16x margin — 10 M
+evaluations/s sustained against ~600 k/s for ten thousand live creatures — but
+that rests on an instance count nobody has ruled, so it went on the docket as
+item 4 rather than being treated as settled.
+
+**Verification grew rather than held.** The reference was NOT touched: 212,530
+evaluations / **1,267,100 checks** against the shipped `zref::lod_raw` /
+`lod_update`, `ctest -L fast` 262/262, ledger check green. The mutation sweep
+went **23 mutants to 26** — eleven re-aimed at where the arithmetic now lives,
+and three genuinely new because a sequencer is new logic no earlier mutant could
+reach (a legality bit latched into the wrong flop, `valid_o` pulsing before the
+answer is written, a rung's product skipped outright). All three caught.
+**26 attempted / 26 accounted / 25 caught / 1 equivalent**, the survivor still
+M18 and its proof moved into the sweep's own header where a reader of the sweep
+will see it.
+
+The preflight earned its keep again: M02 and M03, rewritten against the shared
+comparison, left `half_r` unused and failed `-Wall`. Caught before scoring,
+re-spelled onto `half_r`'s own assignment.
+
+**Where it generalises**, surveyed rather than assumed — and the decisive
+question is not whether the products are independent (they nearly always are)
+but whether the RATE consumes the parallelism:
+
+* `zhao_terrain_lod` (28) — **best target.** One decision per patch per *frame*;
+  30 products live permanently and consumed one cycle in 34, with 32 idle isqrt
+  cycles already sitting there.
+* `zhao_texture_tmu` (28) — **strong.** Its own header states the real rate is 1
+  sample per 4–6 clocks, not the ledger's 1/clock, and 12 of its 32 products are
+  literal duplicates across four bilerp instances.
+* `zhao_surface_stamp` (28) — **partial.** The two radius squares are per-stamp
+  constants latched in an already-idle acquire state and are free; the four
+  per-texel products are on the rate.
+* `zhao_terrain_project` (33) — **do not.** 6,144 clocks/patch already gives ~270
+  patches against a 256-patch budget. Its 33 DSPs buy a rate the design spends.
+  Sequencing it is an owner question about the patch budget, not a cleanup.
+
+Running per-block DSP total: **213 → 201** against a device with **112**. The
+lever works. It has to be pulled about ten more times.
+
+Full write-up: `FINDINGS-dsp-sequencing.md`.

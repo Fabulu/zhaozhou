@@ -94,7 +94,7 @@
 //
 //   first synthesis        1,436 ALMs   28 DSPs   -- 72-bit operands
 //   after narrowing        1,303 ALMs   18 DSPs   -- 64-bit, two products shared
-//   after SEQUENCING       PENDING ALMs   PENDING DSPs -- one multiplier, 5 cycles
+//   after SEQUENCING       1,183 ALMs    6 DSPs   -- one multiplier, 5 cycles
 //
 // The 72-bit slack was free in simulation and expensive in silicon: a 72-bit
 // operand asks for a 72x72 multiplier when the honest need is 32x32. Narrowing
@@ -116,6 +116,20 @@
 // and the block answers in five clocks instead of one. Nothing about the
 // arithmetic changed -- the same five products, the same widths, the same
 // comparisons, the same oracle -- only WHEN each one is evaluated.
+//
+// THE ESTIMATE ABOVE THIS COMMENT USED TO SAY "roughly 8", and it was wrong in
+// the cheap direction: it assumed only the three legality products would share.
+// Once a sequencer exists, thresh*R and the boundary product have no reason to
+// stay outside it, and all five went through one multiplier for 6.
+//
+// AND THE ALMs FELL TOO, which is the part worth carrying to the next block.
+// The obvious objection to sequencing is that it trades area for DSPs: 250 more
+// registers had to come from somewhere. They came from ALMs that already
+// existed -- a Cyclone V ALM carries registers whether or not the design uses
+// them -- while the five parallel 64-bit product-and-compare datapaths
+// collapsed into one. Net: -120 ALMs and -12 DSPs, at once. Sequencing is not a
+// trade here. It is a strict improvement bought with four clocks the rate was
+// never going to miss.
 //
 // ---------------------------------------------------------------------------
 // LATENCY AND HANDSHAKE

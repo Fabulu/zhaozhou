@@ -1045,3 +1045,60 @@ into the ledger that is supposed to be the schematic.
 The ALM side does not have this hole — V5 sums `alm_percent` per budget group
 and enforces a total ceiling, which is why ALM growth has never surprised
 anyone here. DSP has no equivalent.
+
+---
+
+## 2026-08-23 — MEASURED: the sequencing lever works, and it is bigger than the
+## estimate. 213 is now 201.
+
+The section above named the lever and guessed at its size: "sequencing them
+through one multiplier over three clocks should reach roughly 8." It was piloted
+on `zhao_geom_lod` and measured on both sides, same tool, same provisional
+device, clean worktree at each commit:
+
+| | ALMs | DSPs | registers | latency |
+| --- | ---: | ---: | ---: | ---: |
+| before (`d8278bd`) | 1,303 | **18** | 21 | 1 clock |
+| after (`09bbe05`) | 1,183 | **6** | 271 | 5 clocks |
+| delta | **-120** | **-12 (-67%)** | +250 | +4 |
+
+**Six, not eight.** The estimate assumed only the three legality products would
+be shared. All FIVE went through one multiplier -- thresh*R and the boundary
+product too -- because once a sequencer exists the other two are free to join
+it. The block fell from **16% of the device's DSPs to 5.4%**.
+
+### The ALMs went DOWN, which was not expected
+
++250 registers and -120 ALMs at the same time. Cyclone V ALMs carry registers
+that were sitting unused, so the flops packed into logic that already existed;
+and the five parallel 64-bit product/compare datapaths that the ALMs were
+actually spent on collapsed into one. **Sequencing did not trade area for
+DSPs here. It returned both.** That removes the objection that would otherwise
+have to be argued block by block.
+
+### What it cost, stated plainly
+
+The block answers in **5 clocks instead of 1**, and grew a real `ready_o`. Its
+rate is one evaluation per instance per frame; at 50 MHz that is 10 M
+evaluations/s against a demand of about 600 k/s for ten thousand live creatures.
+The parallelism was never bought by the rate.
+
+### Where this generalises, surveyed rather than assumed
+
+The decisive question for each remaining offender is whether its RATE consumes
+the parallelism, not whether the products are independent:
+
+| block | DSPs | stated rate | rate met? | slack |
+| --- | ---: | --- | --- | --- |
+| `zhao_terrain_lod` | 28 | 1 decision per patch per **frame** | yes, ~560 cyc/patch | **enormous** — 30 products live permanently, used 1 cycle in 34 |
+| `zhao_texture_tmu` | 28 | 1 sample/clock | **no — 1 per 4 or 6** | **large** — and 12 of its 32 products are literal duplicates across four bilerp instances |
+| `zhao_surface_stamp` | 28 | 1 texel/clock | yes, measured 4,102 cyc | **partial** — the 2 radius squares are per-stamp constants and free; the 4 per-texel ones are not |
+| `zhao_terrain_project` | 33 | 1 vertex/clock | **yes, and consumed** | **none** — 6,144 clocks/patch already gives ~270 patches against a 256-patch budget |
+
+So three of the four are open on the same argument that carried here, and
+`zhao_terrain_project` is the one where the rate is genuinely spent — sequencing
+it would need the contract re-argued first, not a restructuring.
+
+Applying only the measured result, the running total moves from **213 to 201**.
+That is still 1.8x the device. The lever works; it has to be pulled about ten
+more times.
