@@ -10,6 +10,59 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- un-sharing the folds made it WORSE, and is reverted
+
+The census after the -0.639 ns run named the worst path precisely:
+
+    -0.639 ns  hps_arbiter|held_req.client[0] -> cmd_dma|crc_pay_r[28]
+    -0.630 ns  hps_arbiter|held_req.client[0] -> cmd_dma|crc_hdr_r[28]
+
+The arbiter's routing decision reaching the CRC through the state-selected mux
+on the fold's DATA input -- the consequence of sharing one fold pair between
+the header/seed walk and the streaming path. The review Fabian relayed had
+warned against exactly that over-sharing, and I had done it anyway.
+
+So I split them: a walk pair on `hw_word`, a streaming pair taking
+`hps_rsp_i.data` directly with nothing in between.
+
+**Measured, and it is worse:**
+
+| | shared (`ae3ce73`) | un-shared (`9ac7881`) |
+| --- | ---: | ---: |
+| setup worst | **-0.639 ns** | -1.414 ns |
+| failing endpoints | **125** | 424 |
+| ALMs | **7,648** | 8,023 |
+
+Reverted in `692434f`.
+
+### Why this is not a contradiction of the advice
+
+The reasoning was right: a mux in the data path of the thing being shortened is
+a real cost, and removing it did shorten that path. But two extra fold
+instances are +375 ALMs, and at this margin the fitter's placement dominates.
+The design is 3.4x worse by endpoint count for a structurally cleaner circuit.
+
+**That is the second change this session that was well-motivated, did what it
+was designed to do, and made the headline worse.** The first was the header
+ladder split. Both are the same lesson: below about 1.5 ns, this design's
+timing is placement-bound, not structure-bound, and a change that removes real
+work can still lose.
+
+The difference in what I did with them: the ladder split was KEPT, because its
+own family improved and the degradation was in families it never touched. This
+one is REVERTED, because its own cost -- the area -- is what caused the
+regression, and the best measured state is the shared one.
+
+### The standing state is `ae3ce73`'s numbers
+
+    setup   -0.639 ns   125 failing endpoints   1,995 negative-slack paths
+    hold    +0.250 ns     0 failing
+    ALMs    7,648
+
+Worst path 10.64 ns against a 10 ns budget. Not closed.
+
+---
+
 ## 2026-08-22 -- MEASURED: -0.639 ns. Best of the campaign, and the census is
 ## down from 13,651 paths to 1,995.
 
