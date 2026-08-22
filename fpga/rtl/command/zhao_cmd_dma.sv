@@ -154,9 +154,12 @@ module zhao_cmd_dma #(
   // reachable within the BMC depth; everywhere else this IS canvas_bytes.
 
   // ------------------------------------------------------------ state -----
-  typedef enum logic [3:0] {
+  // FIVE bits, not four. Seventeen states now, and squeezing logic together to
+  // stay inside sixteen would be optimising the wrong thing during timing
+  // closure -- the encoding costs a flop or two.
+  typedef enum logic [4:0] {
     M_IDLE,
-    M_HDR_REQ, M_HDR_WAIT, M_HCRC, M_HDR_CHK, M_SEED,
+    M_HDR_REQ, M_HDR_WAIT, M_HCRC, M_HDR_CHK, M_SEED_PREP, M_SEED,
     M_PAY_REQ, M_PAY_WAIT,
     M_PCRC_RD, M_PCRC,
     M_WALK_RD, M_WALK,
@@ -639,26 +642,38 @@ module zhao_cmd_dma #(
             // burst 1 actually landed -- where 64 would be a constant that
             // happens to work.
             // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
-            // The seed is WALKED now, in M_SEED. Everything it needs is
-            // latched HERE, in the cycle that already reads the header window,
-            // so the walk never touches command_bytes again.
+            // The seed controls are derived in M_SEED_PREP, from the LATCHED
+            // cb, not here from the window.
             //
-            // seed bytes can only be 0, 16 or 28: the first burst is a
-            // multiple of 8 capped at 64, 40 + cb <= f_len, and cb % 16 == 0.
-            begin
-              logic [31:0] seed_end;
-              seed_end = fetched;
-              if (seed_end > (32'd36 + cb_v)) seed_end = 32'd36 + cb_v;
-              payload_end_q <= 32'd36 + cb_v;
-              seed_bytes_q  <= 6'(seed_end - 32'd36);
-              seed_steps_q  <= ((seed_end - 32'd36) >= 32'd28) ? 2'd0   // 4 folds
-                             : ((seed_end - 32'd36) >= 32'd16) ? 2'd2   // 2 folds
-                             : 2'd3;                                    // none
-            end
+            // This cycle already checks magic, ABI version, reserved flags,
+            // four length laws, the header CRC and the epoch. Deriving the
+            // seed controls here as well put command_bytes' own bits at the
+            // end of all of it, and the census named the result: 6,973 of the
+            // design's 13,651 negative-slack paths ran
+            // hdr_win -> seed_steps_q, worst -1.096 ns. Half the remaining
+            // timing problem was this one extra job in an already full cycle.
             crc_pay_r <= 32'hFFFF_FFFF;
             cw <= 2'd0;
-            m <= M_SEED;
+            m <= M_SEED_PREP;
           end
+        end
+
+        // One cycle, entirely from registers: cb and fetched were latched by
+        // the header check, so nothing here reads hdr_win.
+        M_SEED_PREP: begin
+          begin
+            logic [31:0] seed_end;
+            seed_end = fetched;
+            if (seed_end > (32'd36 + cb)) seed_end = 32'd36 + cb;
+            payload_end_q <= 32'd36 + cb;
+            seed_bytes_q  <= 6'(seed_end - 32'd36);
+            // 0, 16 or 28 bytes -- and only those, because the first burst is
+            // a multiple of 8 capped at 64, 40 + cb <= f_len, and cb % 16 == 0
+            seed_steps_q  <= ((seed_end - 32'd36) >= 32'd28) ? 2'd0   // 4 folds
+                           : ((seed_end - 32'd36) >= 32'd16) ? 2'd2   // 2 folds
+                           : 2'd3;                                    // none
+          end
+          m <= M_SEED;
         end
 
         // Four cycles over hdr_win[36..63], each folding however many of its
