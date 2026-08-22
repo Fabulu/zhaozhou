@@ -1,5 +1,55 @@
 # Phantom reference models — a full audit
 
+## 2026-08-22 — TEN PHANTOM TEST PATHS, found by trial-advancing a block
+
+`design/ops.yml` names a `differential_tests` path for all forty ops. **Ten of
+them pointed at files that do not exist.**
+
+They were invisible because ledger rule V10 only fires once an implementing
+block moves past SPECIFIED, and all five `FIELD.SEQ.*` profiles are still
+SPECIFIED. Trial-advancing `FIELD.SEQ.EARTH` to REFERENCE_COMPLETE in a scratch
+copy — the same method this report's original survey used — made the ledger say
+so immediately.
+
+### Seven were a NAMING failure: the test exists under another name
+
+| op | cited (missing) | corrected to |
+| --- | --- | --- |
+| FIELD.NORM.APPROX | `field_norm_approx.cpp` | `field_normalize_directed.cpp` |
+| FIELD.SIN | `field_sin.cpp` | `field_sin_directed.cpp` |
+| FIELD.COS | `field_cos.cpp` | `field_sin_directed.cpp` |
+| FIELD.LEN.APPROX | `field_len_approx.cpp` | `field_len_directed.cpp` |
+| FIELD.DIST.APPROX | `field_dist_approx.cpp` | `field_len_directed.cpp` |
+| FIELD.RCP | `field_rcp.cpp` | `field_rcp_directed.cpp` |
+| FIELD.SMOOTHSTEP | `field_smoothstep.cpp` | `field_ring_directed.cpp` |
+
+Each mapping was checked against the file's contents, not guessed from the
+name. COS shares SIN's file because COS *is* SIN a quarter turn on, in one
+block and one test. DIST2 shares LEN's because it is mode 2 of that block.
+SMOOTHSTEP has no opcode of its own — it is composed from MUL/MAD, and the
+place its law is actually exercised is RING's rising and falling halves, which
+that test states explicitly.
+
+### Three are a REAL GAP, and are recorded as one rather than papered over
+
+| op | cited (missing) | what tests it |
+| --- | --- | --- |
+| FIELD.WRITE.MATERIAL | `field_write_material.cpp` | **nothing** |
+| FIELD.WRITE.NAV | `field_write_nav.cpp` | **nothing** |
+| FIELD.WRITE.HAZARD | `field_write_hazard.cpp` | **nothing** |
+
+`field_write_tag.cpp` exists and it was tempting to point all three at it. That
+would have been wrong: it covers FIELD.WRITE.**TAG** — tag and strength into the
+Scar Scribe sheet — while these three write the material state, the navigation
+layer and the hazard layer of the *earth field output*. Different laws,
+different destinations. Pointing an op at a file that does not test it is worse
+than admitting no file does, because the ledger would then read green.
+
+**These three will block `FIELD.SEQ.EARTH` the moment it advances**, and that
+is the right time to write them: the precedent is `field_write_tag.cpp` itself,
+whose own header records that its path was declared before the file existed and
+that the fix was to write the test for the law ops.yml already stated.
+
 **Date:** 2026-08-21
 **Method:** every `reference_model` in `design/blocks.yml`, searched as a plain
 symbol across every `.hpp`/`.cpp`/`.h` under `reference/`.
