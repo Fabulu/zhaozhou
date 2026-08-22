@@ -162,7 +162,7 @@ module zhao_cmd_dma #(
     M_HDR_REQ, M_HDR_WAIT, M_HCRC, M_HDR_CHK, M_SEED_PREP, M_SEED,
     M_PAY_REQ, M_PAY_WAIT,
     M_PCRC_RD, M_PCRC,
-    M_WALK_RD, M_WALK,
+    M_WALK_RD, M_WALK_DEC, M_WALK,
     M_PKT_DONE,
     M_STREAM_RD, M_STREAM_LD, M_STREAM
   } dma_state_e;
@@ -251,6 +251,22 @@ module zhao_cmd_dma #(
   logic [31:0] crc_pay_r = 32'hFFFF_FFFF;
 
   // record walk
+  // THE RECORD'S FIELDS AND ITS EXPECTED SIZE, REGISTERED.
+  //
+  // M_WALK used to do all of this in the cycle the staging word arrived:
+  // extract the opcode and length from ram_q, look the opcode's lawful size up
+  // in rec_size() -- a case over the whole opcode space -- and then run the
+  // four-deep validity ladder into done_status, walk_off and walk_cnt. The
+  // census named it as the design's worst family once the CRCs were gone:
+  //
+  //   623 paths  slot_ram -> done_status   -1.472
+  //   1,138      slot_ram -> walk_off      -1.155
+  //   1,398      slot_ram -> walk_cnt      -1.082
+  //
+  // The lookup now ends at a register and the ladder starts from one.
+  logic [15:0] op_q = 16'd0;
+  logic [15:0] rb_q = 16'd0;
+  logic [15:0] rsz_q = 16'd0;      // rec_size(op_q), the lawful record length
   logic [31:0] walk_off = 32'd0;   // offset within the command stream
   logic [31:0] walk_cnt = 32'd0;
 
@@ -467,6 +483,7 @@ module zhao_cmd_dma #(
       payload_end_q <= 32'd0; seed_bytes_q <= 6'd0; seed_steps_q <= 2'd0;
       crc_pay_r <= 32'hFFFF_FFFF;
       walk_off <= 32'd0; walk_cnt <= 32'd0;
+      op_q <= 16'd0; rb_q <= 16'd0; rsz_q <= 16'd0;
       rd_off <= 32'd0; pkt_v <= 1'b0; pkt_len_r <= 32'd0;
       stream_w <= 64'd0;
       done_v <= 1'b0; done_slot <= 2'd0; done_status <= 8'd0;
@@ -774,8 +791,24 @@ module zhao_cmd_dma #(
           end
         end
 
-        // the walk reads one word per record: present, then evaluate
-        M_WALK_RD: m <= M_WALK;
+        // the walk reads one word per record: present, decode, then evaluate
+        M_WALK_RD: m <= M_WALK_DEC;
+
+        // The staging word is in ram_q now. Pull the two fields out and look
+        // the opcode's lawful size up -- and stop there. The ladder runs next
+        // cycle, from these registers.
+        M_WALK_DEC: begin
+          begin
+            logic [15:0] op_x;
+            // both 16-bit fields sit in the SAME word -- one read serves the
+            // pair, which is why the walk did not need a second access
+            op_x = (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[47:32] : ram_q[15:0];
+            op_q  <= op_x;
+            rb_q  <= (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[63:48] : ram_q[31:16];
+            rsz_q <= rec_size(op_x);
+          end
+          m <= M_WALK;
+        end
 
         M_WALK: begin
           // the record walk (5/9/10); the payload CRC passed in M_PCRC
@@ -800,17 +833,17 @@ module zhao_cmd_dma #(
             logic [15:0] rb_v;
             logic [7:0]  wst_v;
             logic        wok_v;
-            // both 16-bit fields sit in the SAME word -- one read serves the
-            // pair, which is why the walk did not need a second access
-            op_v = (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[47:32] : ram_q[15:0];
-            rb_v = (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[63:48] : ram_q[31:16];
+            // from REGISTERS now: M_WALK_DEC did the extraction and the
+            // rec_size lookup, so this ladder no longer starts at the RAM
+            op_v = op_q;
+            rb_v = rb_q;
             wok_v = 1'b1;
             wst_v = ST_OK;
             if ((rb_v & 16'h000F) != 16'd0 || rb_v < 16'd16) begin
               wok_v = 1'b0; wst_v = ST_BAD_LENGTH;
-            end else if (rec_size(op_v) == 16'd0) begin
+            end else if (rsz_q == 16'd0) begin
               wok_v = 1'b0; wst_v = ST_UNKNOWN_OPCODE;
-            end else if (rec_size(op_v) != rb_v) begin
+            end else if (rsz_q != rb_v) begin
               wok_v = 1'b0; wst_v = ST_BAD_LENGTH;
             end else if ((walk_off + 32'(rb_v)) > cb) begin
               wok_v = 1'b0; wst_v = ST_TRUNCATED;
