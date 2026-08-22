@@ -10,6 +10,61 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- THE FIT IS DETERMINISTIC. Every A/B this session was signal.
+
+I had been calling the later results "placement variation" without ever having
+measured whether this flow varies at all. That was an assumption doing load-
+bearing work, so I tested it: re-ran the composed fit on RTL byte-identical to
+`ae3ce73` (confirmed with `git diff ae3ce73 HEAD -- fpga/rtl/`, empty).
+
+| | `ae3ce73` | `e6b5fef`, same RTL |
+| --- | ---: | ---: |
+| setup worst | -0.639 ns | **-0.639 ns** |
+| failing endpoints | 125 | **125** |
+| hold worst | +0.250 ns | **+0.250 ns** |
+| ALMs | 7,648 | **7,648** |
+
+**Identical to the digit.** Quartus's placement is seeded deterministically
+here, so two fits of the same source give the same answer.
+
+### What that changes
+
+Every A/B comparison in this session was real signal:
+
+* the header-ladder split really did make the design worse (-1.096 -> -1.472),
+  not noise;
+* un-sharing the folds really did make it worse (-0.639 -> -1.414), not noise;
+* and the six improvements really were improvements.
+
+I had hedged both regressions as "placement variation". They were not variation
+-- they were consequences. The reasoning I gave for each still holds (the
+fitter's effort moved elsewhere; the extra area cost more than the removed mux
+saved), but "variation" was the wrong word and it let me off too lightly.
+
+### What it does NOT change
+
+The design is still placement-BOUND below ~1.5 ns: small structural changes
+move the number unpredictably in sign, even though each individual measurement
+is repeatable. Deterministic is not the same as insensitive.
+
+### The standing state
+
+    setup   -0.639 ns   125 failing endpoints   1,995 negative-slack paths
+    hold    +0.250 ns     0 failing
+    ALMs    7,648 of 41,910
+
+Worst path 10.64 ns against a 10 ns budget: 6.4% over. Not closed.
+
+The largest remaining family is 1,383 paths at -0.195 ns from
+`scanout|fetch -> mem_guard|guard_violations` -- the guard's range check. I
+have deliberately NOT touched it. It is 2% over, it is the one block whose
+entire contract is that no memory escape exists, its no-escape proof depends on
+the response timing, and the last two structural changes I made both made the
+headline worse. That trade is bad at this margin and it is Fabian's call, not
+one to make quietly at the end of a long session.
+
+---
+
 ## 2026-08-22 -- un-sharing the folds made it WORSE, and is reverted
 
 The census after the -0.639 ns run named the worst path precisely:
