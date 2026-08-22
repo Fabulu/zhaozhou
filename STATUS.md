@@ -5,6 +5,55 @@ at the top.*
 
 ---
 
+## 2026-08-22 — the speed problem is 95% solved, and the design got SMALLER
+
+Last entry said the console fit the chip but ran **6.5x too slow**, and that
+this was now the biggest open problem. Here is where it stands after the fix.
+
+| | before | after | target |
+| --- | ---: | ---: | ---: |
+| worst path | 65 ns | **13 ns** | 10 ns |
+| paths too slow | 3,746 | **584** | 0 |
+| logic cells used | 9,181 | **7,633** | 41,910 |
+
+**From 6.5x too slow to 1.29x too slow.** And it uses ~1,550 FEWER logic cells
+than before, because the slow thing was also the bulky thing.
+
+### What was wrong, in one sentence
+
+The checksum the console uses to verify every packet was computing **one bit at
+a time**, sixty-four steps deep for a single chunk of data — so the chip had to
+do sixty-four things in a row between two clock ticks. It now does the same
+arithmetic in one wide step about seven deep, which is the standard way to
+build these and is provably identical to what it replaced.
+
+### It is provably the same arithmetic
+
+That last point matters more than the speed. A faster checksum that computes a
+different number than the rest of the machine would be worse than a slow one.
+So the new one is checked against the shipped checksum on every possible
+single-bit input, on 200,000 random cases, and against twenty deliberate
+sabotages of its own logic — all caught.
+
+The command block's packet handling is unchanged: same tests, same results,
+same failure ordering, and the mathematical safety proof still passes.
+
+### Three side effects worth knowing
+
+* **The video/audio timing faults disappeared.** Three had appeared in the
+  previous run; with the checksum pressure gone the compiler no longer has to
+  contort around them. That is luck rather than a fix, and the underlying seam
+  still needs a real decision — see the docket.
+* **A guard now exists** so the slow checksum cannot quietly come back. It
+  would pass every functional test if it did; only a chip compile would notice.
+* **The remaining 13 ns path is ordinary work.** It is one register in the
+  debug blitter feeding four destinations through a subtract and an address
+  calculation. That is a pipelining job, not a redesign.
+
+Still simulation and compiler output only. No hardware has run any of this.
+
+---
+
 ## 2026-08-22 — THE WHOLE-CHIP TEST RAN. It fits. It is far too slow.
 
 The full-console compile completed for the first time. Two answers, and they

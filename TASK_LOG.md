@@ -10,6 +10,77 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- MEASURED: -56.374 ns -> -3.067 ns, and the design got SMALLER
+
+Composed fit at clean HEAD `fd262de`.
+
+| | before (`8ff73c9`) | after (`fd262de`) |
+| --- | ---: | ---: |
+| setup worst | -56.374 ns | **-3.067 ns** |
+| setup failing endpoints | 3,746 | **584** |
+| hold worst | -1.064 ns, **3 failing** | **+0.245 ns, 0 failing** |
+| ALMs | 9,181 | **7,633** |
+| registers | 9,576 | 9,704 |
+
+**An 18x reduction in the violation, and 1,548 FEWER ALMs.** The bit-serial CRC
+chains were expensive in logic as well as in depth; replacing 224 dependent XOR
+levels with two constant-width fold trees gave back area rather than costing it.
+
+**The three hold violations are gone too.** They were placement-dependent on the
+GPU/video seam, and with the CRC pressure removed the fitter no longer has to
+contort around it. That is an observation, not a fix -- the seam is still
+crossed directly and still deserves the architectural answer.
+
+### Every CRC family has left the report
+
+    before:  33  cmd_dma|hdr_win        -> cmd_dma|crc_pay_r      -55.2
+             33  hps_arbiter|state      -> frameblit|crc_acc      -28.8
+              7  audio_fifo|cnt_gray_sync -> cnt_snap_o.value     -14.9
+
+    after:   48  frameblit|r_len -> frameblit|off                  -3.067
+             30  frameblit|r_len -> mem_guard|guard_violations
+             15  frameblit|r_len -> mem_guard|fwd_req.addr
+              5  frameblit|r_len -> mem_guard|fwd_req.len
+              2  frameblit|r_len -> frameblit|state
+
+Not one CRC path remains. The audio Gray-decode family has also dropped out of
+the top 100 -- it was -14.9 ns and the new worst is -3.067, so it is either
+below the reporting threshold or was inflated by placement pressure. It should
+be re-checked in the full census rather than assumed fixed.
+
+### The new worst path is one register's fan-out
+
+    -3.067 ns  zhao_debug_frameblit|r_len[2] -> zhao_debug_frameblit|off[12]
+               12.866 ns against a 10 ns budget
+
+Every remaining failing family starts at `r_len`. That is the blit length
+feeding `remaining = r_len - off`, then `this_len`, then the offset update and
+the guard request's address and length. A subtract, a compare, a select and an
+address add, in one cycle, fanning out to four destinations.
+
+**12.9 ns is a 29% overrun, not a 6.5x one.** This is ordinary pipelining work
+rather than a structural defect: `remaining` and `this_len` can be registered a
+cycle ahead, since `off` only changes at chunk boundaries.
+
+### Credit where it is due
+
+The shape of this fix came from a review Fabian relayed, and two of its points
+were things I had got wrong:
+
+1. **Constant fold widths, not a runtime count.** My first cut shared one
+   generic instance with a runtime `n_i`, which keeps all nine matrices and
+   adds a nine-way mux after the XOR trees. Two instances at constant 8 and 4
+   let Quartus discard the rest.
+2. **The streaming path needs no shifter.** I had written one for a case that
+   cannot occur: `M_PAY_WAIT`'s `wr_off` starts at `fetched` >= 40 and the
+   payload starts at 36, so the lower bound never clips.
+
+I verified the load-bearing claim myself rather than taking it: with
+`command_bytes % 16 == 0` and the first burst capped at 64, the seed length can
+only be 0, 16 or 28 bytes, and `36 + cb` is always 4 mod 8. Both check out.
+
+---
+
 ## 2026-08-22 -- MEASURED: the FRAMEBLIT rewire removed its family and did not
 ## move the headline
 
