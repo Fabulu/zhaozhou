@@ -466,6 +466,106 @@ exactly the Verilator caching trap the sweeps guard against with forced
 regeneration, in the one place those guards were not running. Caught by
 comparing the RTL against the pristine copy before believing the result.
 
+## The Field IR dispatch is complete: 16 of 16
+
+CURVE, DCURVE and SPLINE landed last, and they are the only family needing
+something the walk did not already have: a **table port**. The sequencer names
+a table with the instruction's immediate and reads its entries, exactly as
+`zfield::interpret` does with `prog.tables[imm]`. It holds neither the program
+nor the tables — it names them and the shell owns the memory, which is the
+shape the instruction memory already had.
+
+**744 directed + 3,100 random checks** against the interpreter.
+
+**A HARNESS BUG WORE AN RTL BUG'S CLOTHES.** I modelled the table as a
+COMBINATIONAL read where the contract says REGISTERED. DCURVE — one entry —
+passed; CURVE and SPLINE — three entries across a multi-cycle segment search —
+returned zero, because a same-cycle answer hands the unit whatever index the
+walk has already advanced to. **The discrimination came from WHICH tests failed,
+not from reasoning**: read carelessly, that pattern says "the table ops are
+broken".
+
+The curve sweep was the most productive of the five run: every survivor pointed
+at a TEST gap, not the RTL.
+
+- `operand_from_b` — CURVE has one source group, so the decoder forces `b = 0`;
+  with `a = 0` too, both operands read the same register.
+- `curve_sat_rescale_dropped` — no test saturated at all; the rail inputs clamp
+  to a knot and come back clean.
+- `curve_sat_add_dropped` — survived even after a saturating table was added.
+  With x = 0, 1, 2 the SUBTRACTION cannot overflow, only the interpolation. The
+  input is clamped to [x0, xN], so the only way to saturate `a - x[i]` is a
+  table whose **X-SPAN is the full range**. That is the one I would have
+  written off as "probably equivalent".
+
+**The refusal test retired its maintenance half.** It named OP_RCP, then
+OP_ROT3, then OP_CURVE — each move caused by wiring that op. With CURVE
+dispatched there is no real opcode left outside the walk, so that half was
+deleted exactly as its own note instructed.
+
+## CMD.DMA: four theories, four measurements, none of them mine
+
+| shape | combinational nodes (device 83,820) |
+| --- | ---: |
+| baseline | 95,328 |
+| `slot_buf` as 512x64 words | 109,350 |
+| header window split out | broke 8 checks, reverted |
+| payload CRC in its own state | **95,306** |
+
+**Three separate attacks on read cost moved the total by +0.02%, -14.7% and
++0.02%.** The read muxes are not where the cost is.
+
+What dominates is NOT recorded, deliberately. The obvious candidate is the
+write decoder, but the word re-description should then have helped and it made
+things 14,022 nodes worse. That contradiction is unexplained, and a fifth guess
+written as fact would be the pattern.
+
+**Every one of the four theories was an inference about what the fitter was
+building rather than an observation of it.** The recommendation in
+`REMAINING_BLOCKERS.md` is now either the architectural change — have the
+record walk CONSUME the streamed bytes rather than re-read them, leaving one
+reader by construction — which is Fabian's design call, or get a real resource
+breakdown out of Quartus first.
+
+### What the attempts DID produce
+
+- **The bound fix**: `k < 192` where the reachable maximum is 64. That one
+  worked — it is why the block synthesises at all now.
+- **A hole in the payload CRC gate.** Nothing in the suite sent a SMALL packet
+  with a corrupt payload CRC: the existing test's packet is 72 bytes and takes
+  the multi-burst path, so the single-burst route to the gate was unguarded.
+  Closed, with both halves — rejecting a bad CRC is only half the law if the
+  path also accepts a good one.
+- **A coverage hole in the random lane.** `cmd_random` passed with an IDENTICAL
+  transcript hash on the broken header-window version: 139,113 checks agreeing
+  with a design the directed lane caught in 8, because the generator never
+  builds a packet whose record walk reaches past byte 64. Same shape as the
+  `abs` defect — the thing meant to catch you agreeing with you instead. Not
+  yet fixed; recorded.
+
+## The Verilator caching trap caught me twice, both times OUTSIDE the sweep
+
+The sweeps defeat it deliberately: forced regeneration plus a hash of the
+GENERATED MODEL, because Verilator elaborates at CONFIGURE time and
+`cmake --build` alone will happily serve a cached model.
+
+Both times it bit, it was in an **ad-hoc verification loop** where those guards
+were not running:
+
+1. Verifying the `field_seq` width mutations: a rebuild without clearing the
+   model directory left a reverted design still reporting the mutant's failure.
+2. Verifying `pcrc_skipped_tiny`: the same, and this one reached the FULL
+   SUITE — `cmd_dma_directed` failed there with the mutation's exact signature
+   while the RTL on disk was pristine and the binary passed when run directly.
+
+**The habit that caught both**: compare the RTL against the pristine copy
+before believing a failure. The RTL matched, so the build was the liar.
+
+The fix for the pattern: a manual verify loop must force regeneration **after
+the revert as well as before the apply**. Reverting the source is not enough;
+the model has to be rebuilt from it. This is the same lesson the sweep already
+encodes, learned again in the one place the sweep was not.
+
 ## Limitations
 
 - Everything is Verilator simulation. No synthesis, no fit, no board.

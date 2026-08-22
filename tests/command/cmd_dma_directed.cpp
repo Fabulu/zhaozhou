@@ -461,6 +461,45 @@ int main(int argc, char** argv) {
           t.pkt_bytes_.size());
   }
 
+  // ---- 3b. corrupt payload CRC on a TINY packet -------------------------------
+  // The packet above is 72 bytes, so it needs a second burst and reaches the
+  // CRC gate by the multi-burst path. A packet that fits ONE 64-byte burst
+  // takes a different transition, and NOTHING TESTED IT: a mutation that sent
+  // the tiny path straight past the CRC check survived the sweep.
+  //
+  // That is the gate that stops corrupt data reaching the decoder, so a hole
+  // in it is worth more than a missing case. 36-byte header + one 16-byte
+  // record + 4-byte CRC = 56 bytes, which one burst covers.
+  {
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(2, 0, 4, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    check(pkt.size() <= 64, "crc-p-tiny: the packet really is one burst", 1,
+          pkt.size() <= 64 ? 1 : 0);
+    pkt[40] ^= 0xAA;  // a payload byte, outside the header CRC window
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC,
+          "crc-p-tiny: status BAD_PAYLOAD_CRC", zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC,
+          t.verdicts_[0].status);
+    check(t.pkt_bytes_.empty(), "crc-p-tiny: ZERO bytes downstream", 0, t.pkt_bytes_.size());
+  }
+
+  // ---- 3c. a GOOD tiny packet still streams -----------------------------------
+  // The mirror of 3b: proving the tiny path rejects a bad CRC is only half the
+  // law if it also rejects a good one.
+  {
+    DmaBench t;
+    const std::vector<uint8_t> pkt = makePacket(2, 0, 4, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_[0].status == 0, "crc-p-tiny-ok: status 0", 0, t.verdicts_[0].status);
+    // `fetch` returns on the verdict, which lands BEFORE the stream drains --
+    // the same drain the happy-path case does.
+    t.idle(static_cast<int>(pkt.size()) + 8);
+    check(t.pkt_bytes_ == pkt, "crc-p-tiny-ok: whole packet streamed bit-exact", pkt.size(),
+          t.pkt_bytes_.size());
+  }
+
   // ---- 4. epoch mismatch ------------------------------------------------------
   {
     DmaBench t;

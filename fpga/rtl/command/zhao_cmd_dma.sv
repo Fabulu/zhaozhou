@@ -158,6 +158,7 @@ module zhao_cmd_dma #(
     M_IDLE,
     M_HDR_REQ, M_HDR_WAIT, M_HDR_CHK,
     M_PAY_REQ, M_PAY_WAIT,
+    M_PCRC,
     M_WALK,
     M_PKT_DONE, M_STREAM
   } dma_state_e;
@@ -466,7 +467,7 @@ module zhao_cmd_dma #(
               crc_pay_r <= cseed;
             end
             if (fetched >= (32'd40 + cb_v)) begin
-              m <= M_WALK;  // tiny packet: one burst covered everything
+              m <= M_PCRC;  // tiny packet: one burst covered everything
             end else begin
               m <= M_PAY_REQ;
             end
@@ -509,21 +510,48 @@ module zhao_cmd_dma #(
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
             if (hps_rsp_i.last) begin
-              if ((fetched + 32'd8) >= need_total) m <= M_WALK;
+              if ((fetched + 32'd8) >= need_total) m <= M_PCRC;
               else m <= M_PAY_REQ;
             end
           end
         end
 
-        M_WALK: begin
-          // payload CRC (check 4) then the record walk (5/9/10)
+        // THE PAYLOAD CRC, CHECKED ONCE, IN A STATE OF ITS OWN.
+        //
+        // This comparison used to sit at the top of M_WALK, so it was
+        // re-evaluated on EVERY walk cycle -- once per record -- for a value
+        // that only matters before the first one. Two costs, and the second is
+        // the one that mattered:
+        //
+        //   * `hget32(36 + cb)` is FOUR byte-wide 4,096:1 muxes into
+        //     `slot_buf`, live for the whole walk;
+        //   * being in the same state as the record walk's own `hget16` reads
+        //     made the two SIMULTANEOUS in hardware, even though only one is
+        //     ever used. Three variable-offset readers that are logically
+        //     exclusive could not share a port while two of them shared a
+        //     state.
+        //
+        // The fitter measured the consequence: 95,328 combinational nodes
+        // against a device holding 83,820, from this block alone.
+        //
+        // Splitting it out changes no behaviour -- the check happens before
+        // any record is walked either way, and on the same data -- and it is
+        // the precondition for the readers ever sharing a port.
+        M_PCRC: begin
           if ({~crc_pay_r} != hget32(36 + cb)) begin
             done_v <= 1'b1; done_slot <= f_slot;
             done_status <= ST_BAD_PAYLOAD_CRC;
             done_bytes <= need_total; done_cmds <= 32'd0;
             live_drops <= sat_add(live_drops, 64'd1);
             m <= M_IDLE;
-          end else if (walk_off >= cb) begin
+          end else begin
+            m <= M_WALK;
+          end
+        end
+
+        M_WALK: begin
+          // the record walk (5/9/10); the payload CRC passed in M_PCRC
+          if (walk_off >= cb) begin
             if (walk_cnt != cc) begin
               done_v <= 1'b1; done_slot <= f_slot;
               done_status <= ST_COUNT_MISMATCH;

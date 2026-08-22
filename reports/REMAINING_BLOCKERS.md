@@ -373,6 +373,51 @@ deliberately rather than having me invent it and record the invention as law.
 > and "words will shrink it" (they grew it). The pattern is consistent: the
 > measurements are reliable, the inferences from them are not, and each one
 > only fell over when something ran.
+>
+> ### ATTEMPT 3: share the variable-offset readers. NO EFFECT. Fourth theory
+> ### falsified.
+>
+> | shape | combinational nodes (device has 83,820) |
+> | --- | ---: |
+> | baseline: byte array, payload CRC inside `M_WALK` | 95,328 |
+> | `slot_buf` as 512 x 64 words | 109,350 |
+> | payload CRC lifted into its own state `M_PCRC` | **95,306** |
+>
+> **Twenty-two nodes.** The reasoning was that nine variable-offset byte muxes
+> could become four: `hget32(36 + cb)` is four, the two `hget16(36 + walk_off)`
+> calls are two each, the stream is one, and the CRC compare shared a state
+> with the walk so both were live at once. Splitting it is structurally right
+> and behaviourally identical, and it is **not where the cost is**.
+>
+> ### What is now known, and what is not
+>
+> **Known:** the read muxes do not dominate. Three separate attempts to reduce
+> read cost moved the total by 22 nodes, 0, and -14,022 respectively.
+>
+> **NOT known, and deliberately not asserted:** what does dominate. The
+> obvious remaining candidate is the WRITE — eight bytes at a variable offset
+> into a 4,096-entry array is a 4,096-way decoder — but the word
+> re-description should then have helped, and it made things 14,022 nodes
+> worse. **That contradiction is unexplained, and a fifth guess written down as
+> fact would be the pattern rather than the exception.**
+>
+> ### The recommendation
+>
+> **Stop reshaping the RTL and change the architecture, or measure what Quartus
+> is actually building.** Four attempts have moved the number by 0.02%,
+> -14.7%, and 0.02%. The block needs `slot_buf` to become a real memory, and it
+> cannot while three independent readers random-access it.
+>
+> The architectural fix is to stop random-accessing it: have the record walk
+> CONSUME the streamed bytes rather than re-read them, which is how a decoder
+> normally works and leaves one reader by construction. That changes `CMD.DMA`
+> and possibly the `CMD.DECODER` seam, so it is Fabian's design call and not a
+> repair to be made unilaterally.
+>
+> The cheaper diagnostic first step, if the call is deferred: get a resource
+> breakdown out of Quartus rather than inferring one from the source. Four
+> theories have now been wrong, and every one of them was an inference about
+> what the fitter was building.
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
