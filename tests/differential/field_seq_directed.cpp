@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,20 @@ namespace {
 using zhao::check;
 
 constexpr int32_t kOne = 1 << 16;
+
+/**
+ * Every opcode this test ever issues.
+ *
+ * The sequencer dispatches all THIRTY Field IR opcodes -- fifteen in the ALU,
+ * fifteen in the units -- and nothing checked that the test had actually
+ * driven each of them. "All thirty are handled" was a claim about the RTL that
+ * no gate enforced, so an op added to the decoder and forgotten here would
+ * read as covered. This set plus the check at the end of main() is the gate.
+ */
+std::set<uint8_t>& opsIssued() {
+  static std::set<uint8_t> s;
+  return s;
+}
 
 /** A program the test builds by hand, in the shape both oracles accept. */
 struct Prog {
@@ -72,6 +87,7 @@ struct Prog {
     i.b = b;
     i.c = c;
     i.imm = imm;
+    opsIssued().insert(o);
     ins.push_back(i);
   }
   void end() { op(zfield::OP_END, 0); }
@@ -307,6 +323,47 @@ int main(int argc, char** argv) {
     diff(b, p, {3 * kOne, 4 * kOne}, "1.one add");
     diff(b, p, {INT32_MAX, INT32_MAX}, "1.one add at the rail");
     diff(b, p, {INT32_MIN, -1}, "1.one add at the other rail");
+  }
+
+  // ---- 1b. the five ALU ops nothing here had ever issued ------------------
+  //
+  // The coverage gate at the end of this file found these: SUB, MIN, MAX and
+  // ABS lived ONLY in the random pool, so the directed lane never touched
+  // them, and CMP was in neither -- dispatched by the ALU, decoded by the
+  // reference, and never once executed by this differential.
+  {
+    Prog p;
+    p.in_regs = {0, 1};
+    p.op(zfield::OP_SUB, 2, 0, 1);
+    p.op(zfield::OP_MIN, 3, 0, 1);
+    p.op(zfield::OP_MAX, 4, 0, 1);
+    p.op(zfield::OP_ABS, 5, 0);
+    p.end();
+    p.out_regs = {2, 3, 4, 5};
+    diff(b, p, {3 * kOne, 4 * kOne}, "1b.sub/min/max/abs");
+    diff(b, p, {-3 * kOne, 4 * kOne}, "1b.sub/min/max/abs negative");
+    // the rails, where saturation and ABS(INT32_MIN) are decided
+    diff(b, p, {INT32_MIN, 1}, "1b.sub/min/max/abs at the low rail");
+    diff(b, p, {INT32_MAX, -1}, "1b.sub/min/max/abs at the high rail");
+    diff(b, p, {0, 0}, "1b.sub/min/max/abs at zero");
+  }
+
+  // every comparison mode, including the two that differ only on equality
+  for (uint32_t mode = 0; mode < 6; ++mode) {
+    Prog p;
+    p.in_regs = {0, 1};
+    p.op(zfield::OP_CMP, 2, 0, 1, 0, mode);
+    p.end();
+    p.out_regs = {2};
+    char nm[64];
+    std::snprintf(nm, sizeof nm, "1b.cmp mode %u", mode);
+    diff(b, p, {3 * kOne, 4 * kOne}, nm);
+    std::snprintf(nm, sizeof nm, "1b.cmp mode %u equal", mode);
+    diff(b, p, {4 * kOne, 4 * kOne}, nm);
+    std::snprintf(nm, sizeof nm, "1b.cmp mode %u greater", mode);
+    diff(b, p, {5 * kOne, 4 * kOne}, nm);
+    std::snprintf(nm, sizeof nm, "1b.cmp mode %u signs", mode);
+    diff(b, p, {-1, 1}, nm);
   }
 
   // ---- 2. LAW 1: the file starts at ZERO ---------------------------------
@@ -1303,7 +1360,7 @@ int main(int argc, char** argv) {
     // program rather than only in the directed cases above.
     const uint8_t pool[] = {zfield::OP_MOV, zfield::OP_ADD, zfield::OP_SUB, zfield::OP_MUL,
                             zfield::OP_MIN, zfield::OP_MAX, zfield::OP_ABS, zfield::OP_RCP,
-                            zfield::OP_SIN, zfield::OP_COS};
+                            zfield::OP_SIN, zfield::OP_COS, zfield::OP_CMP};
     for (int it = 0; it < random_iters; ++it) {
       Prog p;
       const int n_in = 1 + static_cast<int>(rng.below(4));
@@ -1320,7 +1377,10 @@ int main(int argc, char** argv) {
         // fields to be ZERO, so a stray `b` would be a malformed program.
         const bool unary = (op == zfield::OP_MOV || op == zfield::OP_ABS || op == zfield::OP_RCP ||
                             op == zfield::OP_SIN || op == zfield::OP_COS);
-        p.op(op, dst, a, unary ? 0 : bb);
+        // CMP's imm chooses the comparison, and the decoder requires it in
+        // range; every other op in this pool takes imm zero.
+        const uint32_t imm = (op == zfield::OP_CMP) ? rng.below(6) : 0u;
+        p.op(op, dst, a, unary ? 0 : bb, 0, imm);
         defined_hi = dst;
       }
       p.end();
@@ -1343,6 +1403,57 @@ int main(int argc, char** argv) {
       diff(b, p, in, nm);
     }
     std::printf("random: %d programs\n", random_iters);
+  }
+
+  // ---- 11. every opcode the sequencer claims to dispatch was issued --------
+  {
+    struct OpName {
+      uint8_t op;
+      const char* name;
+    };
+    static const OpName kAll[] = {
+        {zfield::OP_END, "END"},
+        {zfield::OP_MOV, "MOV"},
+        {zfield::OP_LDC, "LDC"},
+        {zfield::OP_ADD, "ADD"},
+        {zfield::OP_SUB, "SUB"},
+        {zfield::OP_MUL, "MUL"},
+        {zfield::OP_MAD, "MAD"},
+        {zfield::OP_MIN, "MIN"},
+        {zfield::OP_MAX, "MAX"},
+        {zfield::OP_ABS, "ABS"},
+        {zfield::OP_CLAMP, "CLAMP"},
+        {zfield::OP_SELECT, "SELECT"},
+        {zfield::OP_CMP, "CMP"},
+        {zfield::OP_DOT2, "DOT2"},
+        {zfield::OP_DOT3, "DOT3"},
+        {zfield::OP_LEN2, "LEN2"},
+        {zfield::OP_LEN3, "LEN3"},
+        {zfield::OP_DIST2, "DIST2"},
+        {zfield::OP_NORMALIZE2, "NORMALIZE2"},
+        {zfield::OP_NORMALIZE3, "NORMALIZE3"},
+        {zfield::OP_RCP, "RCP"},
+        {zfield::OP_SIN, "SIN"},
+        {zfield::OP_COS, "COS"},
+        {zfield::OP_CURVE, "CURVE"},
+        {zfield::OP_SPLINE, "SPLINE"},
+        {zfield::OP_NOISE2, "NOISE2"},
+        {zfield::OP_DCURVE, "DCURVE"},
+        {zfield::OP_RING, "RING"},
+        {zfield::OP_RIDGE, "RIDGE"},
+        {zfield::OP_ROT2, "ROT2"},
+        {zfield::OP_ROT3, "ROT3"},
+    };
+    for (const OpName& o : kAll) {
+      char nm[64];
+      std::snprintf(nm, sizeof nm, "11.coverage: %s issued", o.name);
+      zhao::check(opsIssued().count(o.op) == 1, nm, 1, static_cast<int>(opsIssued().count(o.op)));
+    }
+    // opsIssued() can exceed the required set: some cases issue a deliberately
+    // INVALID opcode to prove the unsupported path, and that is not a gap.
+    std::printf("coverage: all %d required opcodes issued (%d distinct seen)\n",
+                static_cast<int>(sizeof(kAll) / sizeof(kAll[0])),
+                static_cast<int>(opsIssued().size()));
   }
 
   return zhao::report_and_exit("field_seq_directed");

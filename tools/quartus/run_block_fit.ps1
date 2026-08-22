@@ -67,7 +67,19 @@ foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe')) {
 
 $head = (& git -C $RepoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') { throw 'Could not resolve HEAD.' }
-$dirtyRtl = (& git -C $RepoRoot status --porcelain -- fpga/rtl) -join ''
+# -c core.autocrlf=true, for the reason run_composed_fit.ps1 already documents
+# and this script did not inherit: PowerShell resolves `git` to whichever binary
+# is first on PATH, and c:\devkitPro\msys2\usr\bin\git.exe carries no
+# core.autocrlf. A status taken through it calls EVERY CRLF worktree file
+# modified -- 29 RTL files here, 279 insertions against 279 deletions on a
+# 279-line file, which is every line and therefore pure line-ending churn.
+#
+# THE COST OF NOT HAVING THIS: all 42 rows in zhao_block_fit.json carried
+# rtlCleanAtHead:false. The flag had NEVER once been true, so a field meant to
+# say whether a measurement can be trusted against its commit was answering the
+# same way regardless -- which is indistinguishable from not having it. Forcing
+# the setting makes the check answer the same way whichever git is first.
+$dirtyRtl = (& git -C $RepoRoot -c core.autocrlf=true status --porcelain -- fpga/rtl) -join ''
 $rtlClean = [string]::IsNullOrWhiteSpace($dirtyRtl)
 
 if (-not $Module -or $Module.Count -eq 0) {
