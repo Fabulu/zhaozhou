@@ -149,3 +149,45 @@ they could have been rejected, costing a little decode work and no geometry.
 
 None of this touches the repo's build tree; it is a standalone check written to
 answer the question before committing to an implementation.
+
+## 8. How the camera reaches the block: copy GEOM.PROJECT, do not invent
+
+`zhao_geom_project` already loads a per-view matrix, and the cull must use the
+same route or the shell ends up with two ways to say the same thing:
+
+```systemverilog
+input logic        cfg_we_i,
+input logic        cfg_view_i,    // which of the two views
+input logic [ 4:0] cfg_addr_i,
+input logic [31:0] cfg_data_i,
+```
+
+with the address map (zhao_geom_project.sv ~line 220):
+
+| addr | meaning |
+| --- | --- |
+| 0..15 | `mat[view][addr[3:0]]` -- the 4x4 fx16 matrix, row-major |
+| 16 | viewport x0 in bits 11:0, y0 in bits 27:16 |
+| 17 | viewport w in bits 11:0, h in bits 27:16 |
+
+**The cull needs 0..15 and NOT 16..17.** Rejection happens in CLIP space, and
+the viewport only maps NDC to pixels afterwards — a sphere outside the clip
+volume is outside it whatever the viewport does. Taking the viewport would be
+harmless but would imply a dependency that does not exist.
+
+### Where the plane extraction should live
+
+The five planes are per camera per frame, not per instance. Extract them ONCE
+when the matrix is written (or on the first evaluation after a write) and hold
+them, along with the five `len_hi` bounds — that is five sums of squares and
+five `isqrt` per view per frame, against potentially thousands of instances.
+Putting either on the per-instance path would be the same mistake the LOD
+ladder avoided by turning its divides into comparisons.
+
+### The block boundary
+
+Follow `zhao_geom_lod`: the caller owns the per-instance data. The cull takes
+`bound_centre` (three fx16) and `bound_radius` (fx16) as PORTS and returns a
+reject bit plus the two-bit per-camera visibility the owner ruled. It does not
+fetch descriptors — the descriptor FORMAT is still undecided, and a block that
+takes its bound as a port is not blocked on that decision.

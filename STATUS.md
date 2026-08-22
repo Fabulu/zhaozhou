@@ -5,6 +5,90 @@ at the top.*
 
 ---
 
+## 2026-08-22 (night) — the clock seam is fixed, and a test score I published was wrong
+
+### The seam between the two clocks is gone
+
+The graphics chip and the video output run on two different clocks. There was a
+piece of checking hardware straddling them: it sat on the graphics clock but
+reached across to grab **every single pixel as it went out to the screen** —
+122,880 grabs per frame — with nothing but a phase relationship holding it
+together.
+
+That worked in simulation for a reason that should worry anyone: the simulation
+runs the two clocks in perfect lockstep. A real board does not. This is the
+failure class that cannot be fixed by running slower — the data arrives at the
+wrong *time*, not too late, and there is no clock speed that repairs it.
+
+It now sits entirely on the video clock, and only one 32-bit number crosses,
+once per frame, with a proper handshake. **The picture is unchanged, byte for
+byte** — which is how we know it still does the same job.
+
+It also settled a disagreement between three documents: the contract said video,
+the ledger said graphics, and the hardware believed the ledger. They now agree.
+
+### A number I gave you was wrong, and here is the correction
+
+I have been reporting mutation-test scores — deliberately breaking the hardware
+in specific ways and checking the tests notice. For the detail-level block I told
+you **21 of 22 caught**.
+
+**The real figure is 22 of 23**, and the difference is not rounding. Three of
+those "caught" breakages **never compiled at all.** The test binary lives outside
+the folder that gets wiped between attempts, so when a broken version failed to
+build, the *previous* binary was still sitting there and ran instead. A build
+failure was being recorded as a successfully-caught bug — the most flattering
+possible way to be wrong.
+
+I did not find this. The agent working on the clock seam found it in its own
+work, and I checked mine against it. Two of my three were a typo in how I wrote
+the breakage; one was a comparison the compiler rejects.
+
+The fix is not just to notice sooner. Every deliberate breakage is now **compiled
+before any of them is scored**, and the run refuses to start if one of them
+doesn't build. A broken test is now a refusal rather than a quiet inflation.
+
+I have corrected the figures everywhere I published them rather than leaving them
+standing.
+
+### Runs — you were right, and it went back further than this session
+
+You pointed out I had stopped creating run records. It was worse than that: the
+script that creates them lives one folder *above* the project, and **that folder
+is not under version control at all.** Sixteen run records were sitting there
+unprotected, going back to the first day.
+
+All sixteen are now inside the project where they are backed up. Three days of
+work had no record at all and have been reconstructed from the commit history —
+marked clearly as reconstructions, because what a reconstruction *cannot* recover
+is exactly the valuable part: what you asked for in your own words, what I tried
+and abandoned, and what the agents found.
+
+The process is now written down inside the project, so it does not depend on
+anyone remembering that the tooling is somewhere else.
+
+### What is running right now
+
+- A full chip fit, to measure what the clock-seam change did to the speed. This
+  is the measurement you ruled had to come before any more speed tuning.
+- An agent building the object-culling hardware — the part that throws away
+  creatures the camera cannot see before spending any work on them.
+
+### Still waiting on you
+
+1. **The two clocks are still told to relate to each other** in the timing rules.
+   Cutting that relationship would improve the numbers, but only by telling the
+   tool to stop looking. That is your call, not mine.
+2. **One last crossing remains** — a counter read across the same seam. If the
+   two problems we measured were on *that* rather than the one I fixed, the
+   re-measure will still show them.
+3. The three earth-field write operations still have no defined behaviour, and
+   the terrain patch block sits behind them.
+4. The meshlet descriptor format — where an object's bounding sphere lives in
+   memory.
+
+---
+
 ## 2026-08-22 (late) — the speed change paid off, and your four rulings are in
 
 ### The measurement you were owed

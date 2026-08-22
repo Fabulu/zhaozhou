@@ -157,6 +157,8 @@ memory written, past runs being reconstructed.
 |-----------|----------|---------|--------|---------------|
 | 2026-08-22 ~20:30 | a69cac37667f114f8 | Fix the GPU/video CDC seam: move the displayed CRC into `vid_clk` rather than crossing per-pixel state (owner ruling) | **Complete** | [FINDINGS-cdc-seam.md](FINDINGS-cdc-seam.md) |
 
+| 2026-08-22 ~23:0x | afc4739019222418a | Build the GEOM.MESHFETCH conservative frustum cull: reference, RTL, differential, sweep | In Progress | `FINDINGS-meshfetch-cull.md` (agent to write) |
+
 Notes on this spawn:
 
 - Given the full method, the environment traps, and the instruction not to run a
@@ -266,3 +268,17 @@ it, so there is no second condition that could drift out of step.
 
 That is the second time in this run that V20 caught a claim of mine that was
 true but unenforced.
+
+Notes on the second spawn:
+
+- Handed the derivation and its validation rather than the task alone:
+  `MESHFETCH_CULL_DESIGN.md` and `cull_check.cpp` in this folder, with the
+  instruction to re-run the validation itself before trusting it.
+- Scoped to exclude the meshlet descriptor FETCH, because the descriptor format
+  is an open owner decision — the block takes its bound as a port, so it is not
+  blocked on that.
+- **Told to fill `FINDINGS-meshfetch-cull.md` from the template as it goes.**
+  This is the first agent to get the run-folder path in its brief; the previous
+  one predated the run and its findings had to be filed on its behalf.
+- Warned that a composed fit is running concurrently, and to retry rather than
+  delete a git `index.lock`.
