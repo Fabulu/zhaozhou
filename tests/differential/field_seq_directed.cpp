@@ -636,6 +636,229 @@ int main(int argc, char** argv) {
     diff(b, chain, {0}, "7b.the same chain through a rcp0");
   }
 
+  // ---- 7c. THE MULTI-CYCLE PATH: LEN2, LEN3, DIST2 -----------------------
+  // The first ops that do not finish in Q_EXEC. They hand operands to
+  // `zhao_field_len` over a ready/valid handshake, wait an unknown number of
+  // clocks, and write back. Everything before this section completed in one
+  // cycle, so this is the first exercise of Q_MISS / Q_MWAIT at all.
+  //
+  // The operands need no extra read state: the three-port walk has already
+  // latched a0/a1/a2 and b0/b1 by Q_EXEC, which is exactly LEN3's a..a+2 and
+  // DIST2's a..a+1 against b..b+1.
+  {
+    Prog l2;
+    l2.in_regs = {0, 1};
+    l2.op(zfield::OP_LEN2, 2, 0);
+    l2.end();
+    l2.out_regs = {2};
+    diff(b, l2, {3 * kOne, 4 * kOne}, "7c.len2 of a 3-4-5 triangle");
+    diff(b, l2, {0, 0}, "7c.len2 of the origin");
+    diff(b, l2, {kOne, 0}, "7c.len2 on the axis");
+    diff(b, l2, {-3 * kOne, -4 * kOne}, "7c.len2 with both negative");
+    diff(b, l2, {INT32_MAX, INT32_MAX}, "7c.len2 at the rails");
+    diff(b, l2, {INT32_MIN, INT32_MIN}, "7c.len2 at the bottom rails");
+    diff(b, l2, {1, 1}, "7c.len2 of the smallest nonzero");
+
+    Prog l3;
+    l3.in_regs = {0, 1, 2};
+    l3.op(zfield::OP_LEN3, 3, 0);
+    l3.end();
+    l3.out_regs = {3};
+    diff(b, l3, {kOne, 2 * kOne, 2 * kOne}, "7c.len3 of a 1-2-2 vector");
+    diff(b, l3, {0, 0, 0}, "7c.len3 of the origin");
+    diff(b, l3, {INT32_MAX, INT32_MAX, INT32_MAX}, "7c.len3 at the rails");
+    diff(b, l3, {-kOne, kOne, -kOne}, "7c.len3 with mixed signs");
+
+    // DIST2 reads TWO groups -- a..a+1 and b..b+1 -- so it is the case that
+    // proves the b-lane operands survived the walk into the slow path.
+    Prog d2;
+    d2.in_regs = {0, 1, 2, 3};
+    d2.op(zfield::OP_DIST2, 4, 0, 2);
+    d2.end();
+    d2.out_regs = {4};
+    diff(b, d2, {0, 0, 3 * kOne, 4 * kOne}, "7c.dist2 from the origin");
+    diff(b, d2, {kOne, kOne, kOne, kOne}, "7c.dist2 of a point from itself");
+    diff(b, d2, {5 * kOne, 5 * kOne, 2 * kOne, kOne}, "7c.dist2 general");
+    diff(b, d2, {INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX}, "7c.dist2 across the whole range");
+
+    // A multi-cycle op FEEDING a single-cycle one, and the reverse. This is
+    // what proves the write-back landed where the next instruction reads, and
+    // that pc advanced exactly once for the slow instruction.
+    Prog chain;
+    chain.in_regs = {0, 1};
+    chain.op(zfield::OP_LEN2, 2, 0);
+    chain.op(zfield::OP_ADD, 3, 2, 0);
+    chain.op(zfield::OP_LEN2, 4, 2);  // reads reg2,reg3 -- the previous results
+    chain.end();
+    chain.out_regs = {4, 3, 2};
+    diff(b, chain, {3 * kOne, 4 * kOne}, "7c.a slow result feeds a fast one");
+    diff(b, chain, {0, 0}, "7c.the same chain from zero");
+
+    // Two slow ops back to back: the handshake must re-arm, not latch open.
+    Prog twice;
+    twice.in_regs = {0, 1};
+    twice.op(zfield::OP_LEN2, 2, 0);
+    twice.op(zfield::OP_LEN3, 3, 0);  // reads reg0..reg2
+    twice.end();
+    twice.out_regs = {3, 2};
+    diff(b, twice, {3 * kOne, 4 * kOne}, "7c.two slow ops back to back");
+
+    // The ledger must cross the slow path: a saturating add BEFORE a slow op
+    // has to still be reported after it.
+    Prog led;
+    led.in_regs = {0, 1};
+    led.op(zfield::OP_ADD, 2, 0, 0);  // saturates at the rail
+    led.op(zfield::OP_LEN2, 3, 0);
+    led.end();
+    led.out_regs = {3, 2};
+    diff(b, led, {INT32_MAX, kOne}, "7c.a saturation survives the slow path");
+
+    // Retirement is once per instruction, not once per state.
+    {
+      Prog r;
+      r.in_regs = {0, 1};
+      r.op(zfield::OP_LEN2, 2, 0);
+      r.op(zfield::OP_LEN2, 3, 0);
+      r.op(zfield::OP_LEN2, 4, 0);
+      r.end();
+      r.out_regs = {4};
+      uint8_t st = 0;
+      int retired = 0;
+      b.run(r, {3 * kOne, 4 * kOne}, &st, nullptr, &retired);
+      check(st == 0, "7c.the three-slow-op program ran", 0, st);
+      // THREE, not four: OP_END does not retire. Q_EXEC's end branch goes
+      // straight to Q_DONE without pulsing instr_retired_o, which section 7's
+      // refused-op check relies on too. The point being made here is that a
+      // SLOW instruction retires ONCE despite occupying four states -- an
+      // earlier draft of this check expected four and was wrong about the
+      // convention, not about the walk.
+      check(retired == 3, "7c.a slow instruction retires once, not once per state", 3,
+            static_cast<uint32_t>(retired));
+    }
+  }
+
+  // ---- 7d. THE MULTI-LANE PATH: NORMALIZE2, NORMALIZE3 -------------------
+  // The first ops that write MORE THAN ONE register, so the first exercise of
+  // Q_WB1 and Q_WB2 -- the walk that exists because the file has one write
+  // port.
+  //
+  // Section 7c could not test any of that. With only LEN in the multi-cycle
+  // group -- one family, one output lane -- seven mutations of the handshake
+  // and the walk SURVIVED the sweep: a `multi_op` that ignored the opcode, a
+  // pc that advanced early, a per-lane action mistaken for a per-instruction
+  // one. None of those were equivalences; the group was simply too narrow to
+  // distinguish them. This section is the fix.
+  {
+    Prog n2;
+    n2.in_regs = {0, 1};
+    n2.op(zfield::OP_NORMALIZE2, 2, 0);
+    n2.end();
+    n2.out_regs = {2, 3};  // BOTH lanes, or the walk is untested
+    diff(b, n2, {3 * kOne, 4 * kOne}, "7d.normalize2 of a 3-4 vector");
+    diff(b, n2, {kOne, 0}, "7d.normalize2 on the axis");
+    diff(b, n2, {0, 0}, "7d.normalize2 of the zero vector");
+    diff(b, n2, {-kOne, -kOne}, "7d.normalize2 with both negative");
+    diff(b, n2, {INT32_MAX, INT32_MAX}, "7d.normalize2 at the rails");
+    diff(b, n2, {1, 1}, "7d.normalize2 of the smallest nonzero");
+
+    Prog n3;
+    n3.in_regs = {0, 1, 2};
+    n3.op(zfield::OP_NORMALIZE3, 3, 0);
+    n3.end();
+    n3.out_regs = {3, 4, 5};  // all THREE lanes
+    diff(b, n3, {kOne, 2 * kOne, 2 * kOne}, "7d.normalize3 of a 1-2-2 vector");
+    diff(b, n3, {0, 0, 0}, "7d.normalize3 of the zero vector");
+    diff(b, n3, {INT32_MIN, INT32_MAX, kOne}, "7d.normalize3 across the range");
+    diff(b, n3, {-kOne, kOne, -kOne}, "7d.normalize3 with mixed signs");
+
+    // THE LANE THE OP DOES NOT OWN MUST NOT MOVE. NORMALIZE2 writes dst and
+    // dst+1 and nothing else; if the walk ran one lane too far it would
+    // clobber dst+2, which the decoder considers untouched and a later
+    // instruction may be reading.
+    Prog guard;
+    guard.in_regs = {0, 1, 2};
+    guard.op(zfield::OP_MOV, 6, 2);         // a live value parked at dst+2
+    guard.op(zfield::OP_NORMALIZE2, 4, 0);  // writes 4 and 5 only
+    guard.end();
+    guard.out_regs = {6, 4, 5};
+    diff(b, guard, {3 * kOne, 4 * kOne, 0x5EED1234}, "7d.normalize2 leaves the third lane alone");
+
+    // ...and the same guard one lane further out for NORMALIZE3.
+    Prog guard3;
+    guard3.in_regs = {0, 1, 2, 3};
+    guard3.op(zfield::OP_MOV, 8, 3);
+    guard3.op(zfield::OP_NORMALIZE3, 5, 0);  // writes 5, 6, 7
+    guard3.end();
+    guard3.out_regs = {8, 5, 6, 7};
+    diff(b, guard3, {kOne, kOne, kOne, 0x0DDBA11}, "7d.normalize3 leaves the fourth lane alone");
+
+    // A multi-LANE op followed by a single-lane one, and the reverse: proves
+    // pc advanced exactly once across the whole walk.
+    Prog mix;
+    mix.in_regs = {0, 1};
+    mix.op(zfield::OP_NORMALIZE2, 2, 0);
+    mix.op(zfield::OP_LEN2, 4, 2);  // reads both normalize lanes
+    mix.op(zfield::OP_ADD, 5, 4, 0);
+    mix.end();
+    mix.out_regs = {5, 4, 3, 2};
+    diff(b, mix, {3 * kOne, 4 * kOne}, "7d.wide op feeding a narrow one");
+    diff(b, mix, {0, 0}, "7d.the same chain from zero");
+
+    // Retirement across a THREE-lane op: four states, one instruction.
+    {
+      Prog r;
+      r.in_regs = {0, 1, 2};
+      r.op(zfield::OP_NORMALIZE3, 3, 0);
+      r.op(zfield::OP_NORMALIZE3, 6, 0);
+      r.end();
+      r.out_regs = {6};
+      uint8_t st = 0;
+      int retired = 0;
+      b.run(r, {kOne, 2 * kOne, 2 * kOne}, &st, nullptr, &retired);
+      check(st == 0, "7d.the two-wide-op program ran", 0, st);
+      check(retired == 2, "7d.a three-lane op still retires once", 2,
+            static_cast<uint32_t>(retired));
+    }
+
+    // THE LEDGER MUST CROSS THE SLOW PATH, CHECKED PER LANE.
+    //
+    // `diff()` compares the COLLAPSED Status.sat -- add || mul || rescale ||
+    // unit || rcp -- so a slow op that clears the add lane while setting the
+    // rescale lane is invisible to it. The sweep proved that: replacing the
+    // accumulate with a plain assignment survived every check in 7c, because
+    // the LEN2 that followed a saturating ADD set `rescale` and the collapsed
+    // value stayed true either way.
+    //
+    // So this asks the lane directly, the way section 5 does. The ADD saturates
+    // the add lane; the LEN2 after it is a clean 3-4-5 triangle that saturates
+    // NOTHING. If the slow path assigned instead of accumulating, the add lane
+    // would be cleared by an op that never touched it.
+    {
+      Prog keep;
+      keep.in_regs = {0, 1};
+      keep.op(zfield::OP_ADD, 2, 0, 0);  // INT32_MAX + INT32_MAX -> saturates
+      keep.op(zfield::OP_LEN2, 3, 4);    // reg4/reg5 are zero: len2(0,0) = 0
+      keep.end();
+      keep.out_regs = {3, 2};
+      uint8_t st = 0;
+      b.run(keep, {INT32_MAX, kOne}, &st);
+      check(st == 0, "7d.the lane-crossing program ran", 0, st);
+      check(dut.sat_add_o, "7d.the ADD lane survives a slow op that does not touch it", 1,
+            dut.sat_add_o ? 1 : 0);
+      check(!dut.sat_mul_o, "7d.and the mul lane was never set", 0, dut.sat_mul_o ? 1 : 0);
+    }
+
+    // rcp0 is NORMALIZE2's alone (law 3 of the block). A NORMALIZE3 of the
+    // zero vector must NOT set it, and diff() checks that field separately
+    // from Status.sat.
+    Prog z3;
+    z3.in_regs = {0, 1, 2};
+    z3.op(zfield::OP_NORMALIZE3, 3, 0);
+    z3.end();
+    z3.out_regs = {3, 4, 5};
+    diff(b, z3, {0, 0, 0}, "7d.normalize3 of zero does not set rcp0");
+  }
+
   // ---- 8. the liveness bound ---------------------------------------------
   // A program with no reachable END must report rather than hang. The decoder
   // makes this unreachable for lawful programs; the bound is what turns a

@@ -127,16 +127,25 @@ module zhao_field_seq (
   localparam logic [7:0] ST_UNSUPPORTED_OP = 8'd1;
   localparam logic [7:0] ST_PC_OVERRUN = 8'd2;
 
-  localparam logic [2:0] Q_IDLE = 3'd0;
-  localparam logic [2:0] Q_FETCH = 3'd1;   // pc presented; the word lands next
-  localparam logic [2:0] Q_LATCH = 3'd2;   // the instruction word is here
-  localparam logic [2:0] Q_RD0 = 3'd3;     // a+0, b+0, c
-  localparam logic [2:0] Q_RD1 = 3'd4;     // a+1, b+1
-  localparam logic [2:0] Q_RD2 = 3'd5;     // a+2, b+2
-  localparam logic [2:0] Q_EXEC = 3'd6;
-  localparam logic [2:0] Q_DONE = 3'd7;
+  // FOUR BITS NOW, NOT THREE. The single-cycle walk used all eight codes; the
+  // multi-cycle ops need an issue state, a wait state and a write-back walk,
+  // because the register file has ONE write port and NORMALIZE3 and ROT3 each
+  // produce three lanes.
+  localparam logic [3:0] Q_IDLE = 4'd0;
+  localparam logic [3:0] Q_FETCH = 4'd1;   // pc presented; the word lands next
+  localparam logic [3:0] Q_LATCH = 4'd2;   // the instruction word is here
+  localparam logic [3:0] Q_RD0 = 4'd3;     // a+0, b+0, c
+  localparam logic [3:0] Q_RD1 = 4'd4;     // a+1, b+1
+  localparam logic [3:0] Q_RD2 = 4'd5;     // a+2, b+2
+  localparam logic [3:0] Q_EXEC = 4'd6;
+  localparam logic [3:0] Q_DONE = 4'd7;
+  // ---- the multi-cycle path ----
+  localparam logic [3:0] Q_MISS = 4'd8;    // hold v_valid until the unit takes it
+  localparam logic [3:0] Q_MWAIT = 4'd9;   // hold r_ready until the unit answers
+  localparam logic [3:0] Q_WB1 = 4'd10;    // second output lane, dst+1
+  localparam logic [3:0] Q_WB2 = 4'd11;    // third output lane, dst+2
 
-  logic [2:0] state;
+  logic [3:0] state;
   logic [7:0] pc;
 
   // The register file. Flops, not M10K -- see the header.
@@ -149,6 +158,10 @@ module zhao_field_seq (
   logic [31:0] i_imm;
 
   logic signed [31:0] a0, a1, a2, b0, b1, b2, cv;
+
+  // Output lanes 1 and 2 of a multi-cycle op, latched at the accepting edge so
+  // the write-back walk does not depend on the unit holding its outputs.
+  logic signed [31:0] m_o1, m_o2;
 
   // ---- the three read ports ----------------------------------------------
   // The file is flops, so a read is COMBINATIONAL: the address driven in a
@@ -237,6 +250,134 @@ module zhao_field_seq (
       .result_o (sin_result)
   );
 
+  // ---- the multi-cycle units ----------------------------------------------
+  // Unlike RCP/SIN/COS these are ready/valid and take several clocks, so they
+  // need states of their own. LEN2/LEN3/DIST2 come first because they write a
+  // SINGLE lane: the handshake is exercised without the write-back walk, and
+  // the walk arrives with NORMALIZE, NOISE, ROT.
+  //
+  // The operands are already in hand. The three-port read walk latched a0/a1/a2
+  // and b0/b1 by Q_EXEC, which is exactly what LEN3 (a..a+2) and DIST2 (a..a+1
+  // against b..b+1) need, so no extra read state is required for any of them.
+  localparam logic [7:0] OP_LEN2 = 8'h12;
+  localparam logic [7:0] OP_LEN3 = 8'h13;
+  localparam logic [7:0] OP_DIST2 = 8'h14;
+
+  logic op_is_len;
+  assign op_is_len = (i_op == OP_LEN2) || (i_op == OP_LEN3) || (i_op == OP_DIST2);
+
+  logic [1:0] len_mode;
+  always_comb begin
+    case (i_op)
+      OP_LEN3:  len_mode = 2'd1;
+      OP_DIST2: len_mode = 2'd2;
+      default:  len_mode = 2'd0;   // OP_LEN2
+    endcase
+  end
+
+  logic               len_vready, len_rvalid;
+  logic signed [31:0] len_result;
+  logic               len_sat_add, len_sat_rescale;
+
+  zhao_field_len u_len (
+      .clk           (clk),
+      .rst_n         (rst_n),
+      .v_valid_i     ((state == Q_MISS) && op_is_len),
+      .v_ready_o     (len_vready),
+      .mode_i        (len_mode),
+      .a0_i          (a0),
+      .a1_i          (a1),
+      .a2_i          (a2),
+      .b0_i          (b0),
+      .b1_i          (b1),
+      .r_valid_o     (len_rvalid),
+      .r_ready_i     ((state == Q_MWAIT) && op_is_len),
+      .result_o      (len_result),
+      .sat_add_o     (len_sat_add),
+      .sat_rescale_o (len_sat_rescale)
+  );
+
+  // ---- NORMALIZE2 / NORMALIZE3: the first MULTI-LANE ops -----------------
+  // These write two or three consecutive registers through a file with ONE
+  // write port, which is the whole reason Q_WB1 and Q_WB2 exist.
+  //
+  // They also make the machinery TESTABLE. With only LEN in the multi-cycle
+  // group -- one family, one output lane -- seven mutations of the handshake
+  // and the write-back walk survived the sweep, because `multi_op` was
+  // `op_is_len`, `multi_width` was always 1, and nothing distinguished a
+  // per-lane action from a per-instruction one. Those are not equivalences,
+  // they are consequences of a group too narrow to exercise its own states.
+  localparam logic [7:0] OP_NORMALIZE2 = 8'h15;
+  localparam logic [7:0] OP_NORMALIZE3 = 8'h16;
+
+  logic op_is_norm;
+  assign op_is_norm = (i_op == OP_NORMALIZE2) || (i_op == OP_NORMALIZE3);
+
+  logic               nrm_vready, nrm_rvalid;
+  logic signed [31:0] nrm_o0, nrm_o1, nrm_o2;
+  logic               nrm_rcp0, nrm_sat_rescale;
+
+  zhao_field_normalize u_norm (
+      .clk           (clk),
+      .rst_n         (rst_n),
+      .v_valid_i     ((state == Q_MISS) && op_is_norm),
+      .v_ready_o     (nrm_vready),
+      .is3_i         (i_op == OP_NORMALIZE3),
+      .a0_i          (a0),
+      .a1_i          (a1),
+      .a2_i          (a2),
+      .r_valid_o     (nrm_rvalid),
+      .r_ready_i     ((state == Q_MWAIT) && op_is_norm),
+      .o0_o          (nrm_o0),
+      .o1_o          (nrm_o1),
+      .o2_o          (nrm_o2),
+      .rcp0_o        (nrm_rcp0),
+      .sat_rescale_o (nrm_sat_rescale)
+  );
+
+  // The multi-cycle group, as one set of wires. Adding a family means adding
+  // its unit above and one arm here -- the states below do not change.
+  logic               multi_op;        // this opcode goes down the slow path
+  logic               multi_vready;    // the selected unit took the operands
+  logic               multi_rvalid;    // the selected unit has an answer
+  logic signed [31:0] multi_o0, multi_o1, multi_o2;
+  logic [1:0]         multi_width;     // output lanes: 1, 2 or 3
+  logic               multi_sat_add, multi_sat_mul, multi_sat_rescale;
+  logic               multi_sat_rcp, multi_rcp0;
+
+  always_comb begin
+    multi_op = op_is_len || op_is_norm;
+    if (op_is_norm) begin
+      multi_vready      = nrm_vready;
+      multi_rvalid      = nrm_rvalid;
+      multi_o0          = nrm_o0;
+      multi_o1          = nrm_o1;
+      multi_o2          = nrm_o2;
+      // dstW from field-ir 2, the same table the decoder enforces: 2 lanes for
+      // NORMALIZE2, 3 for NORMALIZE3. Writing a lane the decoder considers
+      // untouched would clobber a live register.
+      multi_width       = (i_op == OP_NORMALIZE3) ? 2'd3 : 2'd2;
+      multi_sat_add     = 1'b0;
+      multi_sat_mul     = 1'b0;
+      multi_sat_rescale = nrm_sat_rescale;
+      multi_sat_rcp     = 1'b0;
+      // NORMALIZE2 alone can report it -- law 3 of the block, not a quirk.
+      multi_rcp0        = nrm_rcp0;
+    end else begin
+      multi_vready      = len_vready;
+      multi_rvalid      = len_rvalid;
+      multi_o0          = len_result;
+      multi_o1          = '0;
+      multi_o2          = '0;
+      multi_width       = 2'd1;          // every LEN op writes one lane
+      multi_sat_add     = len_sat_add;
+      multi_sat_mul     = 1'b0;
+      multi_sat_rescale = len_sat_rescale;
+      multi_sat_rcp     = 1'b0;
+      multi_rcp0        = 1'b0;
+    end
+  end
+
   // ---- opcode selection ---------------------------------------------------
   // The ALU reports these three as unsupported, because to the ALU they ARE.
   // The selection below is the only place that knows otherwise, so an opcode
@@ -281,7 +422,9 @@ module zhao_field_seq (
     exec_sat_mul     = unit_handled ? 1'b0 : alu_sat_mul;
     exec_sat_rescale = unit_handled ? 1'b0 : alu_sat_rescale;
     exec_writes      = unit_handled ? 1'b1 : alu_writes;
-    exec_unsupported = unit_handled ? 1'b0 : alu_unsupported;
+    // A multi-cycle op is claimed here too, or Q_EXEC would refuse it
+    // before the slow path ever saw it.
+    exec_unsupported = (unit_handled || multi_op) ? 1'b0 : alu_unsupported;
   end
 
   assign busy_o = (state != Q_IDLE) && (state != Q_DONE);
@@ -295,6 +438,7 @@ module zhao_field_seq (
       i_dst <= 6'd0; i_a <= 6'd0; i_b <= 6'd0; i_c <= 6'd0;
       i_imm <= 32'd0;
       a0 <= '0; a1 <= '0; a2 <= '0; b0 <= '0; b1 <= '0; b2 <= '0; cv <= '0;
+      m_o1 <= '0; m_o2 <= '0;
       done_o <= 1'b0;
       status_o <= ST_OK;
       sat_add_o <= 1'b0;
@@ -320,8 +464,15 @@ module zhao_field_seq (
         // The walk's write-back. The decoder has proved `dst` never overlaps
         // this instruction's own sources, which is why there is no bypass
         // network here and does not need to be one.
-        if ((state == Q_EXEC) && exec_writes && !alu_is_end && !exec_unsupported) begin
+        if ((state == Q_EXEC) && exec_writes && !alu_is_end && !exec_unsupported
+             && !multi_op) begin
           rf[i_dst] <= exec_result;
+        end else if ((state == Q_MWAIT) && multi_rvalid) begin
+          rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge
+        end else if (state == Q_WB1) begin
+          rf[i_dst + 6'd1] <= m_o1;       // lane 1
+        end else if (state == Q_WB2) begin
+          rf[i_dst + 6'd2] <= m_o2;       // lane 2
         end
       end else if (rf_we_i) begin
         rf[rf_waddr_i] <= rf_wdata_i;
@@ -393,6 +544,11 @@ module zhao_field_seq (
           end else if (alu_is_end) begin
             status_o <= ST_OK;
             state <= Q_DONE;
+          end else if (multi_op) begin
+            // The slow path. Nothing is written and no counter moves here --
+            // the instruction has not executed yet, it has only been handed
+            // over. Retirement happens once, at the end of the write-back.
+            state <= Q_MISS;
           end else begin
             // The ledger accumulates across the WHOLE program, exactly as the
             // reference's single SatLedger does -- not per instruction.
@@ -405,6 +561,84 @@ module zhao_field_seq (
             pc <= pc + 8'd1;
             state <= Q_FETCH;
           end
+        end
+
+        // ---- the multi-cycle path ------------------------------------------
+        // Two handshakes and a write-back walk. The unit may stall on either
+        // side, so both are held rather than pulsed: `v_valid` stays up until
+        // `v_ready`, `r_ready` stays up until `r_valid`.
+        //
+        // FOUR EQUIVALENT MUTANTS LIVE HERE, and the condition matters more
+        // than the count. The sweep cannot tell these apart from the shipped
+        // code:
+        //
+        //   * `v_valid` asserted in Q_EXEC instead of Q_MISS;
+        //   * `r_ready` asserted in Q_MISS instead of Q_MWAIT;
+        //   * `r_ready` tied high;
+        //   * Q_MISS advancing without checking `v_ready` at all.
+        //
+        // They survive because THE HANDSHAKE IS NEVER EXERCISED in this
+        // composition. The sequencer issues one op and drains it before
+        // issuing another, so `v_ready` is always high when Q_MISS asks --
+        // `isqrt`'s `n_ready_o` is `(state == S_IDLE) && (!r_valid || r_ready)`
+        // and the unit is idle by construction -- and `r_valid` persists until
+        // consumed. `zhao_field_len` also carries a pipeline stage before the
+        // isqrt, so it tolerates a valid that arrives a cycle early.
+        //
+        // So the protocol is correct HERE and untested AS A PROTOCOL. The
+        // claim being made is narrow and it is the differential's, not this
+        // comment's: every dispatched op produces the interpreter's answer
+        // across this seam, which is what sections 7c and 7d assert for
+        // LEN2/LEN3/DIST2 and NORMALIZE2/3 including both write-back lanes and
+        // the untouched lane beyond them.
+        // ENFORCED-BY: tests/differential/field_seq_directed.cpp
+        //
+        // What would make it testable: a unit that genuinely stalls, or a
+        // sequencer that pipelines a second op behind the first. Neither
+        // exists yet. When either arrives these four stop being equivalent,
+        // and the sweep will say so -- which is the reason to write the
+        // condition down instead of the conclusion.
+        Q_MISS: begin
+          if (multi_vready) state <= Q_MWAIT;
+        end
+
+        Q_MWAIT: begin
+          if (multi_rvalid) begin
+            // Latch every lane on the accepting edge. The unit is free to drop
+            // its outputs once the handshake completes, so the walk below must
+            // read these registers and not the unit.
+            m_o1 <= multi_o1;
+            m_o2 <= multi_o2;
+            sat_add_o <= sat_add_o || multi_sat_add;
+            sat_mul_o <= sat_mul_o || multi_sat_mul;
+            sat_rescale_o <= sat_rescale_o || multi_sat_rescale;
+            sat_rcp_o <= sat_rcp_o || multi_sat_rcp;
+            rcp0_o <= rcp0_o || multi_rcp0;
+            // lane 0 is written by the file's writer below, this same edge
+            if (multi_width > 2'd1) begin
+              state <= Q_WB1;
+            end else begin
+              instr_retired_o <= 1'b1;
+              pc <= pc + 8'd1;
+              state <= Q_FETCH;
+            end
+          end
+        end
+
+        Q_WB1: begin
+          if (multi_width > 2'd2) begin
+            state <= Q_WB2;
+          end else begin
+            instr_retired_o <= 1'b1;
+            pc <= pc + 8'd1;
+            state <= Q_FETCH;
+          end
+        end
+
+        Q_WB2: begin
+          instr_retired_o <= 1'b1;
+          pc <= pc + 8'd1;
+          state <= Q_FETCH;
         end
 
         Q_DONE: begin
