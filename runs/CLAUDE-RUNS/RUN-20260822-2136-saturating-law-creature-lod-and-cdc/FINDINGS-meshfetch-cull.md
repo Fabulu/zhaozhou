@@ -3,7 +3,7 @@
 **Agent ID:** claude-meshfetch-cull
 **Created:** 2026-08-22
 **Parent Task:** RUN-20260822-2136
-**Status:** In Progress
+**Status:** Complete
 
 > Everything here is SIMULATION and synthesis-target design. No hardware has run
 > any of it, and this block has never been through a Quartus fit.
@@ -127,9 +127,76 @@ declared at exactly the widths their ranges need.
 
 ---
 
+## The mutation sweep, and the one prediction it falsified
+
+`tools/sweep_geom_cull.sh` (with `tools/sweep_geom_cull_preflight.py`), carrying
+all five phantom-run guards from the LOD sweep unchanged:
+
+```
+linted 32 mutants, 0 do not build
+attempted=32 expected=32 accounted=32 caught=30
+SURVIVOR: M08 top and bottom swapped (EXPECTED EQUIVALENT)
+SURVIVOR: M29 clear dominates set on the dirty bit
+```
+
+**The preflight earned its place on the first run.** M06 originally deleted the
+`d` term from the plane dot product, which leaves `pl_d` unused and fails
+`-Wall`. Under the old scheme that mutant would have been *discarded*; before
+guard 5 existed it would have been scored *caught*. The preflight refused to
+start instead, and M06 was restated as a sign flip on the same term — which is
+caught.
+
+### M08 is equivalent, as predicted
+
+The five planes are used only as a SET (outside a camera iff outside at least
+one), so relabelling two of them cannot change the answer:
+`{row3+row1, row3-row1}` is the same pair of half-spaces however they are named.
+The one thing that could still break it — the pairing of a plane with its stored
+length bound — cannot come apart, because extraction and evaluation reach the
+plane through the SAME `sel_plane` mux and index `len_ceil` with the same
+number.
+
+A plane built from the WRONG ROW is not a relabelling and dies: M02, M04 and M05
+are all caught, and the sheared cameras are why.
+
+### M29 was predicted CAUGHT, survived, and is the more useful of the two
+
+I wrote in the RTL that if the dirty-bit clear won over the set, "the write would
+be swallowed and the block would go on culling against a length bound belonging
+to the previous matrix". **The sweep disproved that.** The clear fires only when
+`prep_start` does — state S_IDLE, extraction about to begin — and a matrix write
+in that cycle commits on the same edge, while the extraction just started makes
+its first read of `mat` in the NEXT cycle through a combinational mux. So the
+write whose dirty bit was discarded is already in the matrix being extracted.
+Every later write lands while the state is not S_IDLE, where nothing is cleared.
+
+No input distinguishes the two orderings. The comment was rewritten to say what
+is actually true: the ordering is **defensive, not load-bearing**, and it matters
+only if the extraction ever latches `mat` at `prep_start` instead of reading it
+combinationally — which is exactly the change a timing pass would make. Both
+proofs are recorded in the sweep script's header, not as bare labels.
+
+This is the second time in this run that a claim of the form "correct by
+construction" turned out to be true for a different reason than the one written
+down.
+
+---
+
 ## Gates
 
-(filled in as the run proceeds)
+| gate | result |
+| --- | --- |
+| `ctest -L fast` | **262 / 262 passed**, including `geom_cull_directed`, `geom_cull_random`, `lint_zhao_geom_cull` |
+| `npm run ledger:check` | **OK** — 92 blocks / 40 ops, V1–V17 + V19–V22 green |
+| `verilator --lint-only -Wall` | clean |
+| pinned `clang-format` (LLVM 15) | clean |
+| directed differential | 11,090 instance verdicts, 17,212 checks |
+| mutation sweep | 32 attempted / 32 accounted / 30 caught / 2 equivalent (both proved) |
+
+`GEOM.MESHFETCH` stays **SPECIFIED**. Two of its three jobs now have RTL, but
+`zref::MeshFetch` still resolves to nothing and the meshlet schema is unfrozen;
+pointing the ledger's `reference_model` at `zref::cull` would be exactly the
+mistake `reports/PHANTOM_REFERENCES.md` exists to prevent.
 
 ---
 

@@ -210,6 +210,67 @@ floor.
 
 ---
 
+## 2026-08-22 — THE CULL IS BUILT. Three things it cannot decide for itself.
+
+`zhao_geom_cull` implements the ruling above: five planes out of the shipped
+view-projection, a bounding-sphere test with a CEILING length bound, and
+rejection only when no active camera can see the sphere. Reference
+(`zref::cull`), differential and mutation sweep are in. Simulation only — the
+block has never been through a Quartus fit.
+
+Three questions came out of building it. None is a blocker today, because the
+block takes its bound as ports; each becomes one the moment something consumes
+it.
+
+### 1. WHICH SPACE IS `bound_centre` IN? This is the load-bearing one.
+
+The whole reason the cull is cheap is that the five planes and their five square
+roots are extracted **once per camera per frame** — 185 cycles on a matrix
+write, against potentially thousands of instances. That is only true if the
+sphere centre arrives in the SAME space the configured matrix consumes.
+
+If instances instead carry a model transform and MESHFETCH were expected to
+compose model x view x projection per instance, the extraction would move onto
+the per-instance path and the block would cost 185 cycles *per instance*. It
+would still be correct and it would be useless.
+
+The cheap arrangement is for the caller to hand over a **world-space** sphere:
+transform the centre by the model matrix (three dot products) and scale the
+radius. The ruling above already contemplates this — "transform the bound into
+camera space" — so this is likely just confirmation. But **the radius scaling
+law is not specified anywhere**, and it must be conservative: for a non-uniform
+model transform, the radius has to grow by an upper bound on the transform's
+largest scale factor, and a floor there deletes geometry exactly as a floor on
+the plane length would. Options, cheapest first:
+
+* forbid non-uniform scale on culled instances and multiply by the uniform one;
+* multiply by an upper bound on the largest scale (e.g. the largest row norm,
+  rounded UP), which is loose but never wrong;
+* carry a pre-scaled world radius in the instance data and make it the asset
+  pipeline's problem.
+
+This matters more here than in most engines because the stated identity feature
+is terrain that rotates and deforms in real time.
+
+### 2. THE MESHLET DESCRIPTOR FORMAT is still the only thing missing.
+
+`blocks.yml` still says "Meshlet limits are Phase-0 data (P2 risk 1) — schema
+fields stay unfrozen", and `zref::MeshFetch` still resolves to nothing. Two of
+GEOM.MESHFETCH's three jobs now have RTL (the LOD ladder and the cull) and
+neither needed the format. The third IS the format. Nothing was invented to fill
+the gap.
+
+### 3. WHO DRIVES `active_i`, the two-bit active-camera mask?
+
+The block takes it as a port because the ruling makes rejection depend on it,
+and it deliberately has no default: with no camera active the verdict is
+"reject", which is correct (nothing is drawn, so nothing is lost) but is also
+exactly what a caller that forgot to drive the signal would get. `CMD.SCHEDULER`
+is the obvious owner — it already knows whether the frame is Duo — but nothing
+says so.
+
+---
+
 ## RULED 2026-08-22 — "visibility sectors" is deleted. MESHFETCH culls a
 ## bounding sphere against each camera frustum.
 

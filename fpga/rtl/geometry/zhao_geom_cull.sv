@@ -377,15 +377,34 @@ module zhao_geom_cull (
   assign outside_here = (dot < -slack);
 
   // ---------------------------------------------------------------------------
-  // the dirty bit, in its OWN block, because set must dominate clear
+  // the dirty bit, in its own block, with SET WRITTEN AFTER CLEAR
   // ---------------------------------------------------------------------------
-  // A write and the start of that view's extraction can land in the same cycle.
-  // If the clear won, the write would be swallowed and the block would go on
-  // culling against a length bound belonging to the previous matrix — the exact
-  // silent geometry-deleting failure this bit exists to prevent. Nonblocking
-  // assignments resolve LAST-WINS, so the set is written second and the losing
-  // case is unreachable rather than unlikely.
-  // ENFORCED-BY: fpga/rtl/geometry/zhao_geom_cull.sv:dirty
+  // A matrix write and the start of that view's extraction can land in the same
+  // cycle, and nonblocking assignments resolve LAST-WINS, so the order of these
+  // two lines decides which one survives.
+  //
+  // I FIRST WROTE THAT THE CLEAR WINNING WOULD SWALLOW THE WRITE AND LEAVE THE
+  // BLOCK CULLING AGAINST A STALE LENGTH BOUND. THE MUTATION SWEEP DISPROVED IT.
+  // Swapping these two lines (sweep M29) survives every test, and it survives
+  // because it cannot be wrong:
+  //
+  //   · the clear only fires when `prep_start` does, i.e. in a cycle where the
+  //     state is S_IDLE and an extraction is about to begin;
+  //   · a write in that cycle commits `mat` on the same edge;
+  //   · the extraction it just started makes its FIRST read of `mat` in the
+  //     NEXT cycle, through the combinational plane mux below — so the write
+  //     whose dirty bit was discarded is already in the matrix being extracted;
+  //   · every later write lands while the state is not S_IDLE, so `prep_start`
+  //     is low, nothing is cleared, and the view is re-extracted afterwards.
+  //
+  // So the two orderings are equivalent TODAY, and the honest description of
+  // this line is that it is defensive rather than load-bearing. It stays this
+  // way round because the argument above rests entirely on the matrix being
+  // read COMBINATIONALLY: latch `mat` into the extraction at `prep_start` —
+  // which is the obvious move if that mux ever sits on the critical path — and
+  // the clear-dominates form starts losing writes silently, in the direction
+  // that deletes geometry. The cheap ordering is the one that survives that
+  // change.
   logic cfg_mat_we;
   assign cfg_mat_we = cfg_we_i && (cfg_addr_i < 5'd16);
 

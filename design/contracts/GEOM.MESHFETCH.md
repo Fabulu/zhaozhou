@@ -49,7 +49,40 @@ differential-tested against the shipped `zref::creature::lod_raw` and
 accounted / 22 caught / 1 equivalent). It carries no divider: every quotient in
 the ladder feeds a comparison, and those are cross-multiplied exactly.
 
-The descriptor fetch and the frustum rejection described above are **not** built.
+The **cull third** exists too, as of 2026-08-22:
+`fpga/rtl/geometry/zhao_geom_cull.sv`, against `zref::cull`
+(`reference/include/zref/zref_cull.hpp`) in
+`tests/differential/geom_cull_directed.cpp` — 11,090 directed instance verdicts
+(17,212 checks), 4,000 random per fast run, mutation sweep **32 attempted / 32
+accounted / 30 caught / 2 equivalent**, both equivalences proved in
+`tools/sweep_geom_cull.sh`'s header rather than labelled.
+
+Three things about it are worth stating here because they are decisions, not
+transcription:
+
+* **FIVE planes, not six.** `project_vertex`'s only depth condition is
+  `clip.w > 0`; there is no z clip in this renderer, so `row2` is never read. A
+  sixth plane would reject geometry the renderer would have drawn.
+* **The length bound rounds UP.** The plane rows are not unit-length, so the
+  test compares against `radius * |normal|`, and the available primitive
+  (`isqrt_u64`) is an exact FLOOR square root. A floor makes rejection easier
+  and deletes visible geometry at the screen edges; the ceiling only wastes
+  decode work. The differential measures that it can see the difference: 1,015
+  of 1,775 boundary probes answer differently under a floor.
+* **The bound arrives as PORTS**, not from a descriptor. The five planes and
+  their five square roots are extracted once per camera per frame (185 cycles on
+  a matrix write); the per-instance path is 10 cycles and four multipliers.
+
+Both blocks are SIMULATION ONLY. `zhao_geom_lod` has a Quartus block fit
+(1,303 ALMs / 18 DSPs); `zhao_geom_cull` has **never been fitted**, so every
+width in it is argued from its range rather than measured.
+
+The **descriptor fetch** is still not built, and it is the reason this block
+stays SPECIFIED: `zref::MeshFetch` resolves to nothing and the meshlet schema is
+unfrozen. Nothing was invented to fill that gap. Three integration questions the
+cull cannot answer for itself — which space `bound_centre` arrives in and how a
+model transform scales the radius, the descriptor format, and who drives the
+active-camera mask — are on `docs/OWNER_DOCKET.md`.
 
 ## Clock and reset semantics
 

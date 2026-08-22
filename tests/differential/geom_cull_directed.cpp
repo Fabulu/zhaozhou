@@ -446,6 +446,38 @@ int main(int argc, char** argv) {
                 discriminating);
   }
 
+  // ---- 5b. dot == -r*len EXACTLY, which is the only place `<` differs from
+  // `<=` -------------------------------------------------------------------
+  // Section 5 finds the radius at which rejection switches, but it cannot make
+  // the two sides EQUAL: that needs the plane's length to divide the dot
+  // product, which never happens by accident. So the camera is BUILT to make it
+  // happen. With row0 = (n,0,0,0) and row3 = (0,0,0,k) the left plane is
+  // (n,0,0,k), its normal is (n,0,0) whose length is exactly n (a perfect
+  // square, so the ceiling is the length itself), and for a centre on the x
+  // axis the test reduces to
+  //
+  //     n*cx + k*2^16  <  -r*n      which with n = 2^16 is    cx + k < -r
+  //
+  // so cx = -r-k lands exactly on the boundary. Without this, a `<` widened to
+  // `<=` differs on nothing a random sweep would ever draw.
+  {
+    for (int32_t k : {0, 1, 5, -3, 100}) {
+      mat4fx m{};
+      m.m[0][0] = fx16{ONE};  // row0 = (1,0,0,0) in fx16
+      m.m[3][3] = fx16{k};    // row3 = (0,0,0,k)
+      const Rig rig = load(dut, m, m);
+      for (int32_t r : {0, 1, 2, 1000, ONE, 7 * ONE}) {
+        for (int32_t d = -2; d <= 2; ++d) {
+          const int32_t cx = -r - k + d;
+          one(dut, rig, "5b.exact", 0x3, vec3fx{fx16{cx}, fx16{0}, fx16{0}}, fx16{r});
+          // and the right plane's mirror, cx = +r-k
+          const int32_t cx2 = r - k + d;
+          one(dut, rig, "5b.exact", 0x3, vec3fx{fx16{cx2}, fx16{0}, fx16{0}}, fx16{r});
+        }
+      }
+    }
+  }
+
   // ---- 6. THE TWO-CAMERA LAW ----------------------------------------------
   // Reject only when the sphere is outside EVERY active camera. Two cameras
   // aimed opposite ways make "visible in exactly one" reachable, and each case
