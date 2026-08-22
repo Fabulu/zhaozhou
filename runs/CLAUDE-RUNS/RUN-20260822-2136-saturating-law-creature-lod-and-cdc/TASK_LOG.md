@@ -269,7 +269,7 @@ it, so there is no second condition that could drift out of step.
 That is the second time in this run that V20 caught a claim of mine that was
 true but unenforced.
 
-| 2026-08-23 ~00:3x | aadfdc4ae727b3230 | Pilot the DSP sequencing lever on zhao_geom_lod and MEASURE it | In Progress | `FINDINGS-dsp-sequencing.md` (agent to write) |
+| 2026-08-23 ~00:3x | aadfdc4ae727b3230 | Pilot the DSP sequencing lever on zhao_geom_lod and MEASURE it | **Complete** | [FINDINGS-dsp-sequencing.md](FINDINGS-dsp-sequencing.md) |
 
 Notes on the second spawn:
 
@@ -392,3 +392,54 @@ Running per-block DSP total: **213 → 201** against a device with **112**. The
 lever works. It has to be pulled about ten more times.
 
 Full write-up: `FINDINGS-dsp-sequencing.md`.
+
+### 01:1x - the DSP pilot paid, and it killed the objection to doing it again
+
+| | ALMs | DSPs | registers | latency |
+| --- | ---: | ---: | ---: | ---: |
+| before | 1,303 | **18** | 21 | 1 clock |
+| after | 1,183 | **6** | 271 | 5 clocks |
+| delta | **-120** | **-12 (-67%)** | +250 | +4 |
+
+Device share 16.1% -> 5.4% of 112 DSPs. Six, not the predicted eight: the
+estimate assumed only the three legality products would share, but ALL FIVE did
+-- once a sequencer exists, the other two products have no reason to stay
+outside it.
+
+**The standing objection to sequencing was that it trades area for DSPs. It
+does not.** ALMs fell by 120 at the same time registers rose by 250, because a
+Cyclone V ALM carries flops whether they are used or not (this block used 21 of
+them), and the area was never mostly the multipliers -- it was five parallel
+64-bit product-and-compare datapaths collapsing into one. Sequencing returned
+both resources.
+
+It also re-measured the BASELINE rather than quoting mine: the committed row
+said 1,303/18 but carried `rtlCleanAtHead: false`, a flag that had never once
+been true in 42 rows. It reproduced to the digit, was committed on its own
+first, and the new row reads `rtlCleanAtHead: true`.
+
+Latency 1 -> 5 clocks with a new `ready_o`, which moved the RTL TOWARD
+`design/blocks.yml` -- it already declared GEOM.MESHFETCH `backpressure:
+ready_valid`. Sustained 10 M evaluations/s at 50 MHz against ~600 k/s for ten
+thousand live creatures, a 16x margin resting on an instance count nobody has
+ruled, so that went on the docket rather than being treated as settled.
+
+Sweep grew 23 -> 26: eleven re-aimed at where the arithmetic now lives, three
+genuinely new for the sequencer (a legality bit into the wrong flop, `valid_o`
+early, a rung's product skipped), all three caught. 26 attempted / 26 accounted
+/ 25 caught / 1 equivalent. The preflight earned its keep again -- M02/M03,
+rewritten against the shared comparison, left `half_r` unused and failed
+-Wall before scoring.
+
+**The generalisation is the valuable part**, and it is sharper than "do this
+everywhere": the question is not whether the products are independent (they
+nearly always are) but whether the block's RATE consumes the parallelism.
+
+| block | DSPs | verdict |
+| --- | ---: | --- |
+| `zhao_terrain_lod` | 28 | **best next** -- one decision per patch per frame, 30 products consumed one cycle in 34, 32 idle isqrt cycles already present |
+| `zhao_texture_tmu` | 28 | **strong** -- its own header says the real rate is 1 sample per 4-6 clocks, and 12 of 32 products are literal duplicates across four bilerp instances |
+| `zhao_surface_stamp` | 28 | **partial** -- two radius squares are per-stamp constants in an already-idle state; four per-texel ones are on the rate |
+| `zhao_terrain_project` | 33 | **do NOT** -- 6,144 clocks/patch already yields ~270 against a 256-patch budget; its DSPs buy a rate the design spends |
+
+Running per-block total: **213 -> 201** against 112.
