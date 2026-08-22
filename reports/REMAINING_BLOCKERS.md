@@ -472,6 +472,53 @@ deliberately rather than having me invent it and record the invention as law.
 > **The estimate is worth stating: moving 32,768 bits into M10K removes on the
 > order of 95,000 ALUTs from a block that currently needs 2x the device.** That
 > is the whole gap, not a contribution to it.
+>
+> ### THE DESIGN, NOW FULLY SPECIFIED. A 512 x 64 RAM serves every access in
+> ### ONE read.
+>
+> The objection to a single port was that `hget16`/`hget32` want two to four
+> CONSECUTIVE bytes, so a byte-wide port would turn each into several
+> sequential reads. **Checked, and it does not arise:** every multi-byte access
+> in this block is contained in one 64-bit word.
+>
+> | access | offset | lands in |
+> | --- | --- | --- |
+> | header fields | 0, 4, 6, 8, 12, 16, 20, 24, 28, 32 | one word each |
+> | `hget32(36 + cb)` | `cb` is a multiple of 16 (records are 16-byte multiples, enforced by `rb_v & 0xF`), so the offset is 4 mod 8 | one word |
+> | `hget16(36+walk_off)` **and** `hget16(36+walk_off+2)` | same reasoning | **the SAME word** — one read serves both |
+> | the write | `wr_off` advances by 8 from zero | exactly one word |
+> | the stream | any byte | one word + byte select |
+>
+> A 32-bit field at an offset that is 0 or 4 mod 8 fits entirely inside one
+> 64-bit word; a 16-bit field at 0, 2, 4 or 6 likewise. **No access straddles a
+> word boundary**, so no access needs two reads.
+>
+> ### Why the earlier 512 x 64 attempt still failed
+>
+> It had the right SHAPE and none of the RAM properties. It kept the
+> initialiser, kept the write inside the async-reset process, and kept the read
+> combinational, so nothing inferred and the array stayed 32,768 registers with
+> the mux cost merely rearranged. **Width was never the missing piece;
+> inference was.**
+>
+> ### The remaining work, in full
+>
+> 1. `logic [63:0] slot_ram [0:511]`, **no initialiser**;
+> 2. the write in an `always_ff @(posedge clk)` with **no reset** — one word
+>    per bridge beat, which is what a beat already is;
+> 3. **one registered read port**, address muxed by state. The readers are
+>    already in four distinct states after the `M_PCRC` split, so they cannot
+>    collide;
+> 4. one cycle of lead in each consumer. The two CRC walks are the only real
+>    additions: `crc_final()` covers bytes [0,32) = four words and the payload
+>    seed covers [36,64) = four words, so each becomes a four-step read loop
+>    rather than a combinational sweep.
+>
+> **Everything needed to write this is now known, and none of it is a design
+> decision** — the alignment argument above removed the one question that was.
+> It is a substantial and delicate change to the packet path, so it wants a
+> fresh session rather than the tail of one that has already falsified four
+> theories about this block.
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
