@@ -333,11 +333,54 @@ does not re-derive the decision.
 
 ## Synthesis / resource ceiling
 
-**Not synthesized.** `fpga/files.qip` is untouched, this block has never been
-through Quartus, and nothing here has run on hardware. Structurally, from the
-RTL: six signed 33×33 multipliers for the two squared distances, two 64-bit
-compare-subtract root lanes, four 49-bit ladder comparators, and 16 × 43 bits of
-decision store.
+**MEASURED 2026-08-22**, Quartus 17.0.2 Lite, 5CSEBA6U23I7, at clean HEAD
+`d4f5bd2` (`reports/synthesis/zhao_block_fit.json`):
+
+| | measured | device |
+| --- | ---: | ---: |
+| ALMs | 2,086 | 41,910 (5.0%) |
+| registers | 1,257 | |
+| **DSP blocks** | **28** | **112 (25%)** |
+| block memory bits | 0 | |
+
+**A QUARTER OF THE DEVICE'S MULTIPLIERS, IN THIS ONE BLOCK.** That is the
+figure `reports/DSP_Audit_2026-08-21.md` estimated for TERRAIN.LOD, now
+confirmed by measurement rather than by counting operators.
+
+### What this section used to say, and why it was wrong
+
+> *Not synthesized... Structurally, from the RTL: six signed 33×33 multipliers
+> for the two squared distances, two 64-bit compare-subtract root lanes, four
+> 49-bit ladder comparators, and 16 × 43 bits of decision store.*
+
+The block had never been through Quartus, and the structural count was taken by
+reading the RTL. It undercounted badly, because it stopped at the `ladder()`
+function instead of at its call sites:
+
+* `ladder()` is called **four** times — `s0`, `r0`, `s1`, `r1`;
+* each call runs `ladder_ok()` **three** times, once per rung;
+* each `ladder_ok()` is **two** multiplies and **one** comparator.
+
+So the ladder alone is **12 comparators and 24 multiplies**, not four
+comparators and no multipliers. Together with the six for the squared distances
+that is 30 multiply operations, which the fitter packs into 28 DSPs.
+
+### The reduction that is visible from here
+
+The DSP audit's target for this block is 4–8. One lever is already documented
+two sections up in this very file:
+
+> `h` is **256** for the strict ladder and `hyst_i` for the relaxed one
+
+`rhs = dstv * h`, and for the strict ladder `h` is the constant 256 — which is
+a **shift**, not a multiply. Six of the twenty-four ladder multiplies (`s0` and
+`s1`, three rungs each) are multiplications by a compile-time power of two that
+are being spent as DSPs because `ladder_ok()` takes `h` as a parameter and the
+strict and relaxed cases share one function.
+
+Splitting the strict path from the relaxed one should return those six directly.
+That is a measurable experiment, not a certainty: it is written here as the next
+thing to try, not as a claim about what it will save.
 
 ## Integration capture cases
 

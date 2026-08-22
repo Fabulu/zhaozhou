@@ -70,8 +70,14 @@
 >   PROVEN safe rather than argued safe, which lowers the risk a lot.
 > * three Field IR pieces still unswept: reciprocal, sine/cosine,
 >   length/distance (`reports/FIELD_IR_ENGINE.md`).
-> * `TERRAIN.LOD.md` is wrong about its own block: it says 4 comparators and no
->   ladder multipliers; the RTL has 12 and 24.
+> * ~~`TERRAIN.LOD.md` is wrong about its own block~~ **DONE 2026-08-22.**
+>   Corrected, and the block MEASURED rather than counted: **2,086 ALMs and
+>   28 DSPs -- a quarter of the device's 112**, confirming the DSP audit's
+>   estimate for it. The old text said four ladder comparators and no ladder
+>   multipliers; it is 12 and 24, because the count stopped at the `ladder()`
+>   function instead of its four call sites. A reduction lever is recorded in
+>   the contract: the strict ladder's `h` is the constant 256, so six of the
+>   24 multiplies are shifts being spent as DSPs.
 >
 > ### A caveat that limits every timing number above
 >
