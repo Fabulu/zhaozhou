@@ -3107,7 +3107,7 @@ blocks:
     name: Tile/frame CRC
     kind: rtl
     subsystem: debug
-    clock_domain: gpu
+    clock_domain: video
     purpose: CRC-32C over resolved tiles and whole frames — the hardware-proven maturity evidence primitive (§20/§29-17).
     contract: design/contracts/DEBUG.CRC.md
     phase: 4
@@ -3118,13 +3118,20 @@ blocks:
     downstream: []
     backpressure: ready_valid
     latency: variable_bounded:4
-    target_throughput: 1 byte per clock per lane
+    target_throughput: 1 displayed pixel (2 bytes) per vid clock
     reference_model: zref::Crc32c
     tests:
       directed: tests/debug/debug_crc_directed.cpp
       random: tests/debug/debug_crc_directed.cpp
     counters: [tile_references]
     source_ids: true
+    # The block sits ON the video/GPU boundary by design: it consumes the
+    # DISPLAYED stream in vid_clk and publishes the finalized frame CRC to
+    # gpu_clk on a toggle with the value held stable beside it, and the
+    # Phase-4 tile lane arrives from RASTER.RESOLVE (gpu) the same way.
+    # DEBUG.CRC.md "Clock and reset semantics" is the documentation this
+    # flag points at.
+    async_bridge: true
     budget_group: command_debug
     maturity: RTL_VERIFIED
     maturity_log:
@@ -3152,7 +3159,20 @@ blocks:
       a real device defect at b64afe2 (a single-byte sof&&eof frame was
       silently dropped: neither published nor flagged). Oracle made real,
       defect fixed, nightly observed green at 768ce1a (9,000 checks, 0
-      failed).
+      failed). CLOCK DOMAIN CORRECTED 2026-08-22: this entry said `gpu`
+      while design/contracts/DEBUG.CRC.md had always said "`vid_clk` domain
+      for the displayed-stream lane", and the RTL had followed the ledger —
+      so the shell re-timed sixteen data bits plus position and validity
+      across `vid_clk -> gpu_clk` on every displayed pixel, which is where
+      both hold violations in the HIGH PERFORMANCE fit experiment landed.
+      Fabian ruled the contract's reading (docs/OWNER_DOCKET.md, "RULED
+      2026-08-22 — BALANCED stays authoritative"): the block now runs in
+      vid_clk, takes one displayed PIXEL per clock and folds its two bytes
+      through zhao_crc32c_fold, and only the finalized 32-bit CRC crosses
+      to gpu, once per frame, on a toggle. The differential is now
+      cross-granularity — the device is driven with pixels while the
+      SHIPPED byte-wise zref::Crc32c is driven with the same bytes — so a
+      byte-order slip in the pixel lane cannot pass.
 
   # DEBUG.FRAMEBLIT was split out of CMD.DMA by
   # reports/CMD.DMA_Redesign_Proposal.md Part 2: the blit path carried a

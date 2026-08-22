@@ -1,5 +1,69 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-22 — CDC seam DONE; two follow-on calls before the A/B remeasure
+
+The ruled move is implemented: **DEBUG.CRC now runs in `vid_clk`** and nothing
+per-pixel crosses the clock boundary any more. The block takes one displayed
+RGB565 pixel per video clock and folds its two bytes in one `zhao_crc32c_fold`
+tree; only the finalized 32-bit CRC crosses to `gpu_clk`, once per frame, on a
+toggle with the value held stable beside it — the same pattern
+`zhao_video_framectl` already uses and that
+`tests/formal/video_framectl_one_fence.sby` already proves. The document
+contradiction is closed the way you ruled: `design/blocks.yml` now says
+`clock_domain: video`, matching `DEBUG.CRC.md`, which had been right all along.
+
+Proven in **simulation only** — no fit was run for this change, because the
+composed fit is yours to run. What was measured: 54 directed checks and 2,100
+random checks on a cross-granularity differential (the device driven with
+PIXELS, the shipped `zref::Crc32c` driven with the same stream as BYTES), plus
+the whole shell lane green, plus a 22-mutant sweep.
+
+**Two things I did not decide, because deciding either would change what your
+A/B measures.**
+
+### 1. Should `gpu_clk` and `vid_clk` now be cut in the SDC?
+
+`fpga/quartus/shell_fit/zhao_shell_fit.sdc` says, deliberately:
+
+> GPU and video are deliberately NOT cut from one another: the known
+> phase-dependent displayed-byte crossing must remain visible in TimeQuest.
+
+That crossing no longer exists. Every remaining `vid_clk <-> gpu_clk` path
+except one (see 2) is a toggle handoff with its data held stable for a whole
+frame, which is exactly the shape a clock-group cut is FOR. Cutting them would
+almost certainly take the remaining vid/gpu hold analysis to zero.
+
+**That is the reason not to do it silently.** A cut makes numbers better by
+telling the tool to stop looking, and your A/B is specifically about hold. I
+left the SDC untouched so the run you make measures the RTL change alone. If
+you want the cut afterwards it is four lines, and the honest form is an
+asynchronous clock group plus `set_max_skew` on the toggle handoffs, not a
+blanket `set_false_path`.
+
+### 2. `starvation_o` is the last unstructured vid -> gpu crossing
+
+`zhao_shell_top` samples the video domain's 64-bit `scanout_starvation_cycles`
+counter straight into a GPU register for counter id 30. It is guarded by a
+PROTOCOL argument, not by structure: the counter only moves during active
+lines, the frame tick lands in vblank, and `shell_err_cdc_o` trips if the value
+ever moves across the sample window. The argument is sound, and it is still 64
+bits of asynchronous data with 64 timed paths behind it — the only remaining
+`vid_clk -> gpu_clk` family that is not a toggle handoff.
+
+If the two hold violations you saw were on THIS family rather than on the CRC,
+the remeasure will still show them. **Your call:**
+
+* **(a)** run the A/B now, on the ruled change alone, and see what is left; or
+* **(b)** let me convert the starvation sample to the same toggle handoff
+  first — latch the counter in vid at the frame tick, cross a toggle, drop the
+  tripwire to a redundant check — and run the A/B once against both fixes.
+
+I recommend **(a)**: it is one change per measurement, and if the holds are
+gone the second fix becomes optional rather than urgent. But (b) is the smaller
+number of 40-minute fits if the holds turn out to be there.
+
+---
+
 ## 2026-08-22 — CLOCK TARGETS: 120 MHz fabric + 150 MHz DDR (owner ask)
 
 **Fabian, first:** *"Stretch target for 120 MHz. Historical reasons — GeForce 256
@@ -277,6 +341,12 @@ disagree and the code picked one.**
 That is an architecture decision, not an SDC constraint. A false path would
 only stop the tool reporting a real crossing, and `set_max_delay` addresses
 setup rather than the hold failures actually seen.
+
+**RESOLVED 2026-08-22** — see the entry at the top of this file. The CRC moved
+into `vid_clk`, `design/blocks.yml` was corrected to `clock_domain: video`, and
+no per-pixel state crosses the boundary any more. What is still open is only
+whether to cut the two clocks in the SDC, and the 64-bit `starvation_o`
+sample.
 
 Feature asks from Fabian, newest first. This file exists because the asks were
 scattered across run `QUEUE-*.md` files and an agent's memory, which meant the

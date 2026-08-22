@@ -1,19 +1,39 @@
 // debug_crc_directed.cpp — DEBUG.CRC directed vectors (plan W2.6 /
 // design/contracts/DEBUG.CRC.md "Directed tests").
 //
-//   1. known-vector streams: the capture_format.md 2.1 CRC-32C test vectors
-//      replayed as displayed streams (the oracle is zhao_abi::zhao_crc32c —
-//      the same machine as the frame packet CRC, plan A3d)
+// THE DIFFERENTIAL IS CROSS-GRANULARITY, and that is deliberate. Since
+// 2026-08-22 the block lives in vid_clk and consumes ONE DISPLAYED PIXEL per
+// clock; the oracle it is measured against — the SHIPPED `zref::Crc32c` and
+// the generated `zhao_abi::zhao_crc32c` — still consumes BYTES, one at a
+// time, and neither was changed for this test. So every case here states the
+// displayed stream as bytes, hands those bytes to the oracle unchanged, packs
+// the same bytes into RGB565 pixels (low byte first, video_rules.md §3) for
+// the device, and demands bit-exact agreement. A byte-order slip inside the
+// pixel lane cannot pass: the oracle would be folding the two bytes in the
+// other order.
+//
+//   1. known-vector streams: the capture_format.md §2.1 CRC-32C test vectors
+//      replayed as displayed streams. The canonical `"123456789"` vector is
+//      NOT here — it is nine bytes, and a pixel-granular stream cannot be an
+//      odd number of bytes long. It is checked against the generated machine
+//      in tests/unit/test_crc.cpp and tests/fuzz/test_abi_fuzz_parity.cpp;
+//      what this file owns is the device's framing and publish law, not the
+//      polynomial.
 //   2. mode-dependent byte counts: full displayed canvases for all three
 //      modes (184,320 / 153,600 / 245,760 B) — PCG pixels, oracle bit-exact
 //   3. repeat law: the SAME canvas twice -> identical CRC (the 60 Hz law's
-//      mechanical proof, spec/video_rules.md 4); one flipped byte differs
+//      mechanical proof, spec/video_rules.md §4); one flipped byte differs
 //   4. mis-sized stream: wrong byte count -> size_err event, CRC NOT
-//      published; bytes outside any frame -> same violation path
+//      published; pixels outside any frame -> same violation path; and an
+//      ODD expectation, which a pixel-granular stream can never satisfy
+//   5. byte order and endianness, stated as its own case rather than left
+//      implicit in the random lane
+//   6. bytes_captured_o — the length the last event reported
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "verilated.h"
@@ -40,6 +60,16 @@ struct Pcg32 {
   uint32_t operator()(uint32_t bound) { return next() % bound; }
 };
 
+// The displayed stream as the serializer presents it: RGB565 little-endian
+// halfwords (video_rules.md §3), so byte 2i is the LOW byte of pixel i.
+std::vector<uint16_t> pack_pixels(const std::vector<uint8_t>& bytes) {
+  std::vector<uint16_t> px(bytes.size() / 2);
+  for (size_t i = 0; i < px.size(); ++i) {
+    px[i] = static_cast<uint16_t>(bytes[2 * i] | (bytes[2 * i + 1] << 8));
+  }
+  return px;
+}
+
 class CrcDev {
  public:
   CrcDev() : top_(new Vzhao_debug_crc) { reset(); }
@@ -61,52 +91,66 @@ class CrcDev {
 
   void park() {
     top_->in_valid_i = 0;
-    top_->in_byte_i = 0;
+    top_->in_px_i = 0;
     top_->in_sof_i = 0;
     top_->in_eof_i = 0;
     top_->expect_bytes_i = 0;
   }
 
-  // stream one displayed frame; returns {crc, valid, err}
   struct Result {
     uint32_t crc;
     bool valid;
     bool err;
+    uint32_t bytes_captured;
   };
-  Result stream(const std::vector<uint8_t>& bytes, uint32_t expect) {
-    Result r{0, false, false};
+
+  // stream one displayed frame, one PIXEL per clock. `expect_after_sof`, when
+  // given, is presented on every cycle EXCEPT the sof one — the device must
+  // have LATCHED the expectation at sof and must ignore whatever arrives
+  // afterwards (contract: "restarts the CRC, latches expect_bytes_i").
+  Result streamPx(const std::vector<uint16_t>& px, uint32_t expect,
+                  uint32_t expect_after_sof = 0, bool vary_expect = false) {
+    Result r{0, false, false, 0};
     size_t i = 0;
-    while (i < bytes.size()) {
+    while (i < px.size()) {
       top_->in_valid_i = 1;
-      top_->in_byte_i = bytes[i];
+      top_->in_px_i = px[i];
       top_->in_sof_i = (i == 0) ? 1 : 0;
-      top_->in_eof_i = (i + 1 == bytes.size()) ? 1 : 0;
-      top_->expect_bytes_i = expect;
+      top_->in_eof_i = (i + 1 == px.size()) ? 1 : 0;
+      top_->expect_bytes_i = (vary_expect && i != 0) ? expect_after_sof : expect;
       top_->eval();
       edge();
-      if (top_->frame_crc_valid_o) {
-        r.crc = top_->frame_crc_o;
-        r.valid = true;
-      }
-      if (top_->size_err_evt_o) r.err = true;
+      collect(r);
       ++i;
     }
-    top_->in_valid_i = 0;
-    top_->in_sof_i = 0;
-    top_->in_eof_i = 0;
+    park();
     top_->eval();
-    edge();  // the finalize pulse lands the cycle after the eof byte
-    if (top_->frame_crc_valid_o) {
-      r.crc = top_->frame_crc_o;
-      r.valid = true;
-    }
-    if (top_->size_err_evt_o) r.err = true;
+    edge();  // the finalize pulse lands the cycle after the eof pixel
+    collect(r);
     return r;
+  }
+
+  // stream one displayed frame stated as BYTES (must be an even count — a
+  // pixel-granular stream has no odd length)
+  Result stream(const std::vector<uint8_t>& bytes, uint32_t expect) {
+    return streamPx(pack_pixels(bytes), expect);
   }
 
   Vzhao_debug_crc* top_;
 
  private:
+  void collect(Result& r) {
+    if (top_->frame_crc_valid_o) {
+      r.crc = top_->frame_crc_o;
+      r.valid = true;
+      r.bytes_captured = top_->bytes_captured_o;
+    }
+    if (top_->size_err_evt_o) {
+      r.err = true;
+      r.bytes_captured = top_->bytes_captured_o;
+    }
+  }
+
   void edge() {
     top_->clk = 0;
     top_->eval();
@@ -124,17 +168,30 @@ static int runRandom(uint32_t frames, uint64_t seed) {
   Pcg32 rng{seed, (seed << 1) | 1u};
   CrcDev t;
   for (uint32_t f = 0; f < frames; ++f) {
-    const uint32_t n = 1 + rng(4096);
-    std::vector<uint8_t> bytes(n);
+    const uint32_t npx = 1 + rng(2048);
+    std::vector<uint8_t> bytes(size_t{npx} * 2);
     for (auto& b : bytes) b = static_cast<uint8_t>(rng.next());
-    const uint32_t want = zhao_abi::zhao_crc32c(0, bytes.data(), n);
-    const CrcDev::Result r = t.stream(bytes, n);
+    const uint32_t nb = static_cast<uint32_t>(bytes.size());
+    const uint32_t want = zhao_abi::zhao_crc32c(0, bytes.data(), nb);
+    const CrcDev::Result r = t.stream(bytes, nb);
     check(r.valid && !r.err, "rand: valid frame", 1, r.valid);
     check(r.crc == want, "rand: oracle bit-exact", want, r.crc);
+    check(r.bytes_captured == nb, "rand: bytes captured", nb, r.bytes_captured);
     zref::Crc32c model;
-    const zref::Crc32c::Result m = model.frame(bytes, n);
+    const zref::Crc32c::Result m = model.frame(bytes, nb);
     check(m.valid && !m.size_err && m.crc == r.crc, "rand: zref::Crc32c device oracle agrees",
           m.crc, r.crc);
+
+    // and the same stream against a WRONG expectation, chosen so it can never
+    // be met: the device must flag it and publish nothing, and the shipped
+    // oracle must say the same
+    const uint32_t bad = nb + 1 + rng(7);
+    const CrcDev::Result rb = t.stream(bytes, bad);
+    check(rb.err && !rb.valid, "rand: mis-sized flagged, nothing published", 1, rb.err);
+    check(rb.bytes_captured == nb, "rand: mis-sized length reported", nb, rb.bytes_captured);
+    zref::Crc32c bad_model;
+    const zref::Crc32c::Result bm = bad_model.frame(bytes, bad);
+    check(bm.size_err && !bm.valid, "rand: zref::Crc32c agrees on mis-sized", 1, bm.size_err);
   }
   std::printf("debug_crc random: %u frames\n", frames);
   return 0;
@@ -155,7 +212,7 @@ int main(int argc, char** argv) {
     return zhao::report_and_exit("debug_crc_random");
   }
 
-  // ---- 1. known vectors (capture_format.md 2.1) -----------------------------
+  // ---- 1. known vectors (capture_format.md §2.1) ----------------------------
   {
     CrcDev t;
     struct Vec {
@@ -169,7 +226,6 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 32; ++i) ramp.push_back(static_cast<uint8_t>(i));
     for (int i = 31; i >= 0; --i) ramp_r.push_back(static_cast<uint8_t>(i));
     const std::vector<Vec> vecs = {
-        {"empty-ish \"123456789\"", {'1', '2', '3', '4', '5', '6', '7', '8', '9'}, 0xE3069283u},
         {"32 x 00", zeros, 0x8A9136AAu},
         {"32 x FF", ones, 0x62A8AB43u},
         {"32 B 0x00..0x1F", ramp, 0x46DD794Eu},
@@ -211,6 +267,8 @@ int main(int argc, char** argv) {
       const CrcDev::Result r = t.stream(canvas, m.bytes);
       check(r.valid && !r.err, std::string(m.name).append(": valid").c_str(), 1, r.valid);
       check(r.crc == want, std::string(m.name).append(": oracle bit-exact").c_str(), want, r.crc);
+      check(r.bytes_captured == m.bytes, std::string(m.name).append(": bytes captured").c_str(),
+            m.bytes, r.bytes_captured);
       zref::Crc32c model;
       const zref::Crc32c::Result mr = model.frame(canvas, m.bytes);
       check(mr.valid && mr.crc == r.crc,
@@ -235,7 +293,7 @@ int main(int argc, char** argv) {
     check(rc.crc != ra.crc, "repeat: a changed frame CRCs differently", ra.crc, rc.crc);
   }
 
-  // ---- 4. mis-sized stream + stray bytes --------------------------------------
+  // ---- 4. mis-sized stream, stray pixels, odd expectations ---------------------
   {
     CrcDev t;
     std::vector<uint8_t> canvas(1024, 0x5A);
@@ -243,24 +301,130 @@ int main(int argc, char** argv) {
     CrcDev::Result r = t.stream(std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
     check(r.err, "size: mis-sized stream flagged", 1, r.err);
     check(!r.valid, "size: CRC not published", 0, r.valid);
+    check(r.bytes_captured == 1020, "size: the length actually captured", 1020, r.bytes_captured);
     zref::Crc32c model;
     const zref::Crc32c::Result m =
         model.frame(std::vector<uint8_t>(canvas.begin(), canvas.end() - 4), 1024);
     check(m.size_err && !m.valid, "size: zref::Crc32c agrees (err, no publish)", 1, m.size_err);
 
-    // a byte outside any frame (no sof since idle): raster violation
+    // an ODD expectation. A pixel-granular stream is always an even number of
+    // bytes long, so no stream can ever satisfy it — this is a statement about
+    // the expectation, not about the raster, and the device must refuse rather
+    // than round to the nearest pixel.
+    const CrcDev::Result ro = t.stream(canvas, 1023);
+    check(ro.err && !ro.valid, "size: odd expectation can never be met", 1, ro.err);
+    const CrcDev::Result ro2 = t.stream(canvas, 1025);
+    check(ro2.err && !ro2.valid, "size: odd expectation (above) refused too", 1, ro2.err);
+
+    // the smallest lawful frame: ONE pixel, expecting exactly two bytes
+    const std::vector<uint8_t> two = {0x9Cu, 0x3Fu};
+    const CrcDev::Result r1 = t.stream(two, 2);
+    check(r1.valid && !r1.err, "size: single-pixel frame publishes", 1, r1.valid);
+    check(r1.crc == zhao_abi::zhao_crc32c(0, two.data(), 2), "size: single-pixel CRC",
+          zhao_abi::zhao_crc32c(0, two.data(), 2), r1.crc);
+    check(r1.bytes_captured == 2, "size: single-pixel length", 2, r1.bytes_captured);
+    // the same single pixel against any other expectation is mis-sized
+    const CrcDev::Result r1b = t.stream(two, 4);
+    check(r1b.err && !r1b.valid, "size: single-pixel frame, wrong expectation", 1, r1b.err);
+
+    // a pixel outside any frame (no sof since idle): raster violation
     t.park();
     t.top_->in_valid_i = 1;
-    t.top_->in_byte_i = 0x42;
+    t.top_->in_px_i = 0x4243;
     t.top_->in_sof_i = 0;
     t.top_->in_eof_i = 0;
-    t.top_->expect_bytes_i = 1;
+    t.top_->expect_bytes_i = 2;
     t.top_->eval();
     t.top_->clk = 1;
     t.top_->eval();
     t.top_->clk = 0;
     t.top_->eval();
-    check(t.top_->size_err_evt_o != 0, "size: stray byte flagged", 1, t.top_->size_err_evt_o);
+    check(t.top_->size_err_evt_o != 0, "size: stray pixel flagged", 1, t.top_->size_err_evt_o);
+    check(t.top_->bytes_captured_o == 0, "size: a stray pixel captured no frame", 0,
+          t.top_->bytes_captured_o);
+    check(t.top_->frame_crc_valid_o == 0, "size: stray pixel publishes nothing", 0,
+          t.top_->frame_crc_valid_o);
+  }
+
+  // ---- 5. byte order: the LOW half of a pixel is the FIRST displayed byte ------
+  // This is the one law the move from a byte port to a pixel port could have
+  // silently inverted, so it is stated directly rather than left to the random
+  // lane. video_rules.md §3: RGB565 little-endian halfwords.
+  {
+    CrcDev t;
+    const std::vector<uint8_t> le = {0x34u, 0x12u, 0x78u, 0x56u};  // pixels 0x1234, 0x5678
+    const std::vector<uint8_t> be = {0x12u, 0x34u, 0x56u, 0x78u};  // the swapped reading
+    const CrcDev::Result r = t.stream(le, 4);
+    check(r.crc == zhao_abi::zhao_crc32c(0, le.data(), 4), "order: low byte first",
+          zhao_abi::zhao_crc32c(0, le.data(), 4), r.crc);
+    check(r.crc != zhao_abi::zhao_crc32c(0, be.data(), 4),
+          "order: NOT the byte-swapped reading (the vectors must differ)", 0, 1);
+    // drive the same pixels through the raw pixel port to prove the packing
+    // helper is not the thing under test
+    const std::vector<uint16_t> px = {0x1234u, 0x5678u};
+    const CrcDev::Result rp = t.streamPx(px, 4);
+    check(rp.crc == r.crc, "order: raw pixel port agrees with the byte statement", r.crc, rp.crc);
+  }
+
+  // ---- 6. expect_bytes_i is LATCHED at sof ------------------------------------
+  // The contract says sof "restarts the CRC, latches expect_bytes_i". Nothing
+  // in the shell can currently move that value mid-frame (the mode latch is a
+  // frame-start law), so without this case the latch is unobservable and a
+  // device that simply read the live input would look identical. It is the
+  // law, so it gets a test rather than a comment.
+  {
+    CrcDev t;
+    Pcg32 rng{0xBEEF0022u, 0xA5A5A5A5u};
+    std::vector<uint8_t> canvas(2048);
+    for (auto& b : canvas) b = static_cast<uint8_t>(rng.next());
+    const std::vector<uint16_t> px = pack_pixels(canvas);
+    const uint32_t nb = static_cast<uint32_t>(canvas.size());
+    const uint32_t want = zhao_abi::zhao_crc32c(0, canvas.data(), nb);
+
+    // right at sof, garbage afterwards: publishes, because the latch holds
+    const CrcDev::Result rl = t.streamPx(px, nb, 0xFFFFFFFFu, true);
+    check(rl.valid && !rl.err, "latch: sof value wins over later input", 1, rl.valid);
+    check(rl.crc == want, "latch: and the CRC is still the frame's", want, rl.crc);
+
+    // wrong at sof, right afterwards: refused, for the same reason
+    const CrcDev::Result rw = t.streamPx(px, nb + 2, nb, true);
+    check(rw.err && !rw.valid, "latch: a later correction does not rescue the frame", 1, rw.err);
+  }
+
+  // ---- 7. a sof INSIDE an open frame restarts it -------------------------------
+  // The contract says sof "restarts the CRC". A lawful raster never emits two
+  // sofs without an eof between them, so this is unreachable in the shell —
+  // which is exactly why it needs stating: without it, a device that ignored a
+  // second sof and kept accumulating would be indistinguishable. What the law
+  // means is that the LATER framing wins: the published CRC covers the tail
+  // from the second sof onward and nothing before it.
+  {
+    CrcDev t;
+    Pcg32 rng{0x5EC0ND50u, 0x13579BDFu};
+    std::vector<uint8_t> head(64), tail(96);
+    for (auto& b : head) b = static_cast<uint8_t>(rng.next());
+    for (auto& b : tail) b = static_cast<uint8_t>(rng.next());
+    const std::vector<uint16_t> hpx = pack_pixels(head), tpx = pack_pixels(tail);
+    const uint32_t want = zhao_abi::zhao_crc32c(0, tail.data(), tail.size());
+
+    // head pixels (sof on the first), then the tail with its own sof and eof
+    for (size_t i = 0; i < hpx.size(); ++i) {
+      t.top_->in_valid_i = 1;
+      t.top_->in_px_i = hpx[i];
+      t.top_->in_sof_i = (i == 0) ? 1 : 0;
+      t.top_->in_eof_i = 0;
+      t.top_->expect_bytes_i = 0xDEADBEEFu;  // a stale expectation the restart drops
+      t.top_->eval();
+      t.top_->clk = 1;
+      t.top_->eval();
+      t.top_->clk = 0;
+      t.top_->eval();
+    }
+    const CrcDev::Result r = t.streamPx(tpx, static_cast<uint32_t>(tail.size()));
+    check(r.valid && !r.err, "restart: the re-framed frame publishes", 1, r.valid);
+    check(r.crc == want, "restart: it covers only the pixels after the second sof", want, r.crc);
+    check(r.bytes_captured == tail.size(), "restart: and only their length",
+          static_cast<uint32_t>(tail.size()), r.bytes_captured);
   }
 
   return zhao::report_and_exit("debug_crc_directed");

@@ -10,15 +10,21 @@ Exclusions: not a general checksum engine — CRC-32C ONLY, identical polynomial
 
 ## Clock and reset semantics
 
-`vid_clk` domain for the displayed-stream lane (the CRC follows the serializer; reuses `zhao_crc32c_step` from the generated zhao_abi_pkg — the per-byte SV step, capture_format.md §2.2); gpu-domain lanes (later phases) cross via the standard toggles. Synchronous active-low `rst_n`; reset: CRC register 0x…seed, no frame in progress, `frame_crc` invalid.
+`vid_clk` domain for the displayed-stream lane (the CRC follows the serializer); gpu-domain lanes (later phases) cross via the standard toggles. Synchronous active-low `rst_n`; reset: CRC register 0x…seed, no frame in progress, `frame_crc` invalid.
+
+**This sentence and `design/blocks.yml` disagreed until 2026-08-22, and the code followed the ledger.** The ledger said `clock_domain: gpu`, so `zhao_debug_crc` ran on `gpu_clk` and `zhao_shell_top` re-timed the video pixel register — sixteen data bits plus x, y and validity — across `vid_clk -> gpu_clk` on every displayed pixel, correct only under the frozen simulation phase (`vid_clk = gpu_clk/2`, coincident posedges). Both hold violations measured in the HIGH PERFORMANCE fitter experiment were on that seam. Fabian ruled this contract's reading (`docs/OWNER_DOCKET.md`, "RULED 2026-08-22 — BALANCED stays authoritative"): the block moved into `vid_clk`, and the ledger was corrected to `clock_domain: video`.
+
+**What crosses to `gpu_clk` now**, and it is the whole crossing: the finalized 32-bit CRC, once per displayed frame, published on a toggle with the value registered beside it and held until the next frame. The gpu side synchronizes the toggle through three flops and edge-detects it into a one-cycle pulse. No per-pixel state leaves the video domain.
 
 ## Input and output packet layouts
 
-Input: the displayed byte stream from VIDEO.SCANOUT's serializer (2 × active_width bytes per line, RGB565 LE, border rows included in Duo — exactly the bytes FRAMEBUFFER_EXPECTED covers), with line/frame markers from the raster. Output: `{frame_crc_valid, frame_crc32c}` once per displayed frame, AFTER the repeat decision; consumed by the harness/captures and compared to EndFrame.expected_framebuffer_crc / FRAMEBUFFER_EXPECTED.
+Input: the displayed PIXEL stream from VIDEO.SCANOUT's serializer — one RGB565 pixel per `vid_clk`, `active_width` pixels per line, border rows included in Duo. Each pixel is two stream bytes, LITTLE-ENDIAN (`video_rules.md` §3): `in_px_i[7:0]` is the first byte on the wire and `in_px_i[15:8]` the second, so the covered bytes are exactly the bytes FRAMEBUFFER_EXPECTED covers. `in_sof_i` accompanies the first pixel of the frame (restart + latch `expect_bytes_i`), `in_eof_i` the last (finalize).
+
+Because the stream is pixel-granular its length is always EVEN. An ODD `expect_bytes_i` therefore cannot be satisfied by any frame; the device refuses it as mis-sized rather than rounding to the nearest pixel. That is a statement about the expectation, not about the raster. Output: `{frame_crc_valid, frame_crc32c}` once per displayed frame, AFTER the repeat decision; consumed by the harness/captures and compared to EndFrame.expected_framebuffer_crc / FRAMEBUFFER_EXPECTED.
 
 ## Backpressure rules
 
-`ready_valid` on the output register (single consumer, always ready in Phase 2); the input side has none — the displayed stream cannot stall (free-running raster), and the CRC is wide enough (1 byte/clock) by construction.
+`ready_valid` on the output register (single consumer, always ready in Phase 2); the input side has none — the displayed stream cannot stall (free-running raster), and the CRC is wide enough (2 bytes/clock) by construction.
 
 ## Memory ownership
 
@@ -28,13 +34,15 @@ None — streams only; never reads VRAM itself.
 
 None (byte stream, CRC arithmetic is the spec's own law: poly 0x82F63B78 reflected, init/xorout 0xFFFFFFFF).
 
+**One polynomial machine-wide still holds, by a different route.** A byte-serial step is eight dependent XOR levels, so two bytes per clock would be sixteen; this lane instead folds both bytes in ONE tree about seven levels deep, via `zhao_crc32c_fold` (`fpga/rtl/common/zhao_crc32c_fold.sv`). That module derives its columns at elaboration from the CRC-32C definition and is held to the SHIPPED `zhao_crc32c_step` by `tests/differential/crc32c_fold_directed.cpp`, so it is the same polynomial machine as the frame packet and .zcap CRC (plan A3d), not a variant.
+
 ## Latency (fixed or variable)
 
-Fixed: the finalized CRC is valid `variable_bounded:4` cycles after the last displayed byte (pipeline flush).
+Fixed: the finalized CRC is valid `variable_bounded:4` cycles after the last displayed pixel (this lane uses 1 `vid_clk`). The shell's gpu-facing pulse arrives a further three `gpu_clk` cycles later — the synchronizer depth on the once-per-frame crossing.
 
 ## Target throughput
 
-1 byte per clock per lane.
+1 displayed pixel — 2 bytes — per `vid_clk`.
 
 ## Overflow and malformed-input behaviour
 
@@ -50,11 +58,11 @@ None possible: the byte stream is raster-lawful by construction; the CRC registe
 
 ## Directed tests
 
-`tests/debug/debug_crc_directed.cpp` — known-vector frames (CRC-32C test vectors from capture_format.md §2.1 reused over pixel payloads); repeat ⇒ identical CRC; mode-dependent byte counts (184,320 / 153,600 / 245,760).
+`tests/debug/debug_crc_directed.cpp` — known-vector frames (the 32-byte CRC-32C test vectors from capture_format.md §2.1 reused over pixel payloads); repeat ⇒ identical CRC; mode-dependent byte counts (184,320 / 153,600 / 245,760); the smallest lawful frame (one pixel, two bytes); mis-sized and ODD expectations; a stray pixel outside any frame; and byte order stated directly, since that is the one law the byte→pixel port change could have silently inverted. The canonical nine-byte `"123456789"` vector is not here — an odd byte count is not a displayable stream; it guards the polynomial itself in `tests/unit/test_crc.cpp` and `tests/fuzz/test_abi_fuzz_parity.cpp`.
 
 ## Randomized differential tests
 
-`tests/debug/debug_crc_directed.cpp --random N` (CTest `debug_crc_random` / `debug_crc_random_nightly`) — PCG displayed streams vs `zref::Crc32c` (which delegates to the generated `zhao_abi::zhao_crc32c`), bit-exact.
+`tests/debug/debug_crc_directed.cpp --random N` (CTest `debug_crc_random` / `debug_crc_random_nightly`) — PCG displayed streams vs `zref::Crc32c` (which delegates to the generated `zhao_abi::zhao_crc32c`), bit-exact. **The differential is CROSS-GRANULARITY on purpose:** the device is driven one PIXEL per clock while the shipped oracle is driven the same stream one BYTE at a time, and neither the oracle nor the generated CRC was touched for the move. A byte-order slip inside the pixel lane cannot agree with an oracle folding the two bytes in the other order. Each frame is also replayed against an unsatisfiable expectation, so the publish gate is exercised as often as the arithmetic.
 
 ## Formal properties
 
@@ -62,7 +70,7 @@ No standalone SBY (the CRC step function is already golden-locked tri-language; 
 
 ## Synthesis / resource ceiling
 
-Budget group `command_debug` (§25 5% ceiling). One 32-bit XOR/shift lane per stream.
+Budget group `command_debug` (§25 5% ceiling). One two-byte `zhao_crc32c_fold` tree per stream.
 
 ## Integration capture cases
 

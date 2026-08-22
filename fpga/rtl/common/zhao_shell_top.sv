@@ -58,14 +58,18 @@
 //     at the tick) crossed with a 2FF + 2-cycle stability filter before a
 //     mode_we pulse; the filter removes the multi-bit skew hazard
 //     (STORM->DUO flips two bits) entirely.
-//  7. DISPLAYED-BYTE SERIALIZER (vid -> gpu) — the post-scaler pixel
-//     stream to DEBUG.CRC's byte port: one RGB565 pixel per vid cycle =
-//     two bytes per two gpu cycles (low byte first, §3 LE law).
-//     expect_bytes is zhao_displayed_bytes(mode) — NOT zhao_canvas_bytes:
-//     for Duo those differ (245,760 displayed vs 196,608 stored) and the
-//     canvas value here would be the documented silent-Duo bug.
-//     RELIES ON THE FROZEN SIM PHASE (vid_clk = gpu_clk/2, coincident
-//     posedges — plan R1); the hardware lane re-times this seam.
+//  7. DISPLAYED-FRAME CRC HANDOFF (vid -> gpu, ONCE PER FRAME) — DEBUG.CRC
+//     runs in vid_clk and consumes the post-scaler pixel stream natively
+//     (one RGB565 pixel per vid cycle = two bytes, low byte first, §3 LE
+//     law). expect_bytes is zhao_displayed_bytes(mode) — NOT
+//     zhao_canvas_bytes: for Duo those differ (245,760 displayed vs 196,608
+//     stored) and the canvas value here would be the documented silent-Duo
+//     bug. Only the FINALISED 32-bit CRC crosses to gpu, on a toggle with
+//     the value held stable beside it. Until 2026-08-22 this was a per-pixel
+//     re-timing that RELIED ON THE FROZEN SIM PHASE (vid_clk = gpu_clk/2,
+//     coincident posedges — plan R1) and produced the two `vid_clk ->
+//     gpu_clk` hold violations measured under HIGH PERFORMANCE effort; the
+//     owner ruled it be moved rather than re-timed (docs/OWNER_DOCKET.md).
 //  8. COUNTER PROVIDER ADAPTERS — spec/counters.md §5 owner table: the
 //     scheduler's 3 channels (ids 0/1/2) + AUDIO.FIFO (31) are native
 //     zhao_counter_snap_t providers; vram_bytes (28, summed over clients),
@@ -1115,27 +1119,35 @@ module zhao_shell_top
   end
 
   // ==========================================================================
-  // GLUE 7: displayed-byte serializer (vid -> gpu) + DEBUG.CRC
+  // GLUE 7: the displayed CRC, now ENTIRELY INSIDE vid_clk (2026-08-22)
   // ==========================================================================
-  // vid side: a phase toggle plus registered pixel snapshot (px_out is
-  // already a vid register; the toggle tells the gpu side which gpu cycle
-  // is the first half of each vid cycle)
-  logic vphase;
-  always_ff @(posedge vid_clk or negedge rst_n) begin
-    if (!rst_n) vphase <= 1'b0;
-    else        vphase <= ~vphase;
-  end
+  // WHAT USED TO BE HERE, and why it had to go. The CRC ran on gpu_clk, so
+  // this file sampled the vid-domain pixel register (px_out.valid, .rgb565,
+  // .x, .y) from GPU logic on a vid phase toggle and unpacked it into two
+  // gpu-cycle bytes. Per-pixel state crossed the clock boundary on every
+  // active pixel, and it was correct only because the SIMULATION freezes
+  // vid_clk = gpu_clk/2 with coincident posedges (plan R1). TimeQuest
+  // measured what that costs in silicon: the two hold violations reported on
+  // `vid_clk -> gpu_clk` under the HIGH PERFORMANCE fitter effort were both
+  // on this seam, and a hold violation is not a speed problem — no clock is
+  // slow enough to fix data that arrives too early.
+  //
+  // Fabian's ruling (docs/OWNER_DOCKET.md, "RULED 2026-08-22 — BALANCED stays
+  // authoritative"): move the displayed CRC into vid_clk rather than crossing
+  // per-pixel state. That also settled a standing contradiction —
+  // design/contracts/DEBUG.CRC.md had always said "`vid_clk` domain for the
+  // displayed-stream lane", design/blocks.yml said `clock_domain: gpu`, and
+  // the code had followed the ledger. The contract was right.
+  //
+  // What crosses now: nothing per-pixel. `zhao_debug_crc` sits in vid_clk and
+  // consumes the serializer's stream natively — one pixel per vid clock, two
+  // bytes folded in one XOR tree. Only the FINALISED result crosses, once per
+  // displayed frame, as a toggle with its value held stable beside it for the
+  // whole frame that follows: hundreds of thousands of clocks of settling
+  // against a three-flop synchronizer, instead of sixteen data bits re-timed
+  // every pixel.
 
-  // gpu side: emit low byte on the phase change, high byte the next cycle
-  logic vph_q;
-  logic        by_hi_pend;
-  logic [7:0]  by_hi;
-  logic        crc_in_valid;
-  logic [7:0]  crc_in_byte;
-  logic        crc_in_sof, crc_in_eof;
-  logic        eof_pend;
-  logic        sof_seen_q;   // a frame is open (sof consumed, eof not yet)
-
+  // ---- vid side: framing markers, from vid-domain signals only ------------
   logic [15:0] px_active_w;
   assign px_active_w = ZHAO_TIMING[vmode].h_active;
 
@@ -1144,59 +1156,86 @@ module zhao_shell_top
   assign px_is_eof = px_out.valid && (px_out.x == 10'(px_active_w - 16'd1))
                      && (px_out.y == 8'd239);
 
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
+  // expect_bytes is zhao_displayed_bytes(mode) — NOT zhao_canvas_bytes: for
+  // Duo those differ (245,760 displayed vs 196,608 stored) and the canvas
+  // value here would be the documented silent-Duo bug.
+  logic [31:0] crc_expect_bytes;
+  assign crc_expect_bytes = zhao_displayed_bytes(vmode);
+
+  logic [31:0] crc_frame_vid, crc_bytes_vid;
+  logic        crc_valid_vid, crc_err_vid;
+
+  zhao_debug_crc u_crc (
+    .clk               (vid_clk),
+    .rst_n             (rst_n),
+    .in_valid_i        (px_out.valid),
+    .in_px_i           (px_out.rgb565),
+    .in_sof_i          (px_is_sof),
+    .in_eof_i          (px_is_eof),
+    .expect_bytes_i    (crc_expect_bytes),
+    .frame_crc_o       (crc_frame_vid),
+    .frame_crc_valid_o (crc_valid_vid),
+    .bytes_captured_o  (crc_bytes_vid),
+    .size_err_evt_o    (crc_err_vid)
+  );
+
+  // ---- the only crossing left on this lane: vid -> gpu, once per frame ----
+  // A publish and a size-error each toggle their own bit; the reported values
+  // register beside them and then hold. Publish and size-error are mutually
+  // exclusive in the block (a frame either finalizes or is flagged), but they
+  // are carried separately so a burst of raster violations cannot be mistaken
+  // for a published frame.
+  logic        crc_pub_tog_vid, crc_err_tog_vid;
+  logic [31:0] crc_frame_hold, crc_bytes_hold;
+  always_ff @(posedge vid_clk or negedge rst_n) begin
     if (!rst_n) begin
-      vph_q        <= 1'b0;
-      by_hi_pend   <= 1'b0;
-      by_hi        <= 8'd0;
-      crc_in_valid <= 1'b0;
-      crc_in_byte  <= 8'd0;
-      crc_in_sof   <= 1'b0;
-      crc_in_eof   <= 1'b0;
-      eof_pend     <= 1'b0;
-      sof_seen_q   <= 1'b0;
+      crc_pub_tog_vid <= 1'b0;
+      crc_err_tog_vid <= 1'b0;
+      crc_frame_hold  <= 32'd0;
+      crc_bytes_hold  <= 32'd0;
     end else begin
-      crc_in_valid <= 1'b0;
-      crc_in_sof   <= 1'b0;
-      crc_in_eof   <= 1'b0;
-      vph_q        <= vphase;
-      if (by_hi_pend) begin
-        crc_in_valid <= 1'b1;
-        crc_in_byte  <= by_hi;
-        crc_in_eof   <= eof_pend;
-        if (eof_pend) sof_seen_q <= 1'b0;
-        by_hi_pend   <= 1'b0;
-        eof_pend     <= 1'b0;
-      end else if ((vph_q != vphase) && px_out.valid) begin
-        crc_in_valid <= 1'b1;
-        crc_in_byte  <= px_out.rgb565[7:0];
-        crc_in_sof   <= px_is_sof && !sof_seen_q;
-        if (px_is_sof) sof_seen_q <= 1'b1;
-        by_hi        <= px_out.rgb565[15:8];
-        by_hi_pend   <= 1'b1;
-        eof_pend     <= px_is_eof;
+      if (crc_valid_vid) begin
+        crc_pub_tog_vid <= ~crc_pub_tog_vid;
+        crc_frame_hold  <= crc_frame_vid;
+        crc_bytes_hold  <= crc_bytes_vid;
+      end
+      if (crc_err_vid) begin
+        crc_err_tog_vid <= ~crc_err_tog_vid;
+        crc_bytes_hold  <= crc_bytes_vid;
       end
     end
   end
 
-  // expect_bytes: the DISPLAYED stream length for the mode on the wire at
-  // sof — zhao_displayed_bytes, never zhao_canvas_bytes (header, glue 7)
-  logic [31:0] crc_expect_bytes;
-  assign crc_expect_bytes = zhao_displayed_bytes(vmode);
+  // gpu side: 3FF per toggle, edge-detected into a ONE-gpu-cycle pulse. The
+  // held value is sampled at the same edge as the pulse it belongs to, so the
+  // port pair {crc_valid_o, crc_frame_o} stays aligned for a consumer that
+  // reads both after a gpu edge (which is what the harness does).
+  logic cp_g1, cp_g2, cp_g3, ce_g1, ce_g2, ce_g3;
+  logic crc_pub_edge, crc_err_edge;
+  assign crc_pub_edge = (cp_g2 != cp_g3);
+  assign crc_err_edge = (ce_g2 != ce_g3);
 
-  zhao_debug_crc u_crc (
-    .clk               (gpu_clk),
-    .rst_n             (rst_n),
-    .in_valid_i        (crc_in_valid),
-    .in_byte_i         (crc_in_byte),
-    .in_sof_i          (crc_in_sof),
-    .in_eof_i          (crc_in_eof),
-    .expect_bytes_i    (crc_expect_bytes),
-    .frame_crc_o       (crc_frame_o),
-    .frame_crc_valid_o (crc_valid_o),
-    .bytes_captured_o  (crc_bytes_o),
-    .size_err_evt_o    (crc_size_err_o)
-  );
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cp_g1 <= 1'b0; cp_g2 <= 1'b0; cp_g3 <= 1'b0;
+      ce_g1 <= 1'b0; ce_g2 <= 1'b0; ce_g3 <= 1'b0;
+      crc_frame_o    <= 32'd0;
+      crc_bytes_o    <= 32'd0;
+      crc_valid_o    <= 1'b0;
+      crc_size_err_o <= 1'b0;
+    end else begin
+      cp_g1 <= crc_pub_tog_vid;
+      cp_g2 <= cp_g1;
+      cp_g3 <= cp_g2;
+      ce_g1 <= crc_err_tog_vid;
+      ce_g2 <= ce_g1;
+      ce_g3 <= ce_g2;
+      crc_valid_o    <= crc_pub_edge;
+      crc_size_err_o <= crc_err_edge;
+      if (crc_pub_edge) crc_frame_o <= crc_frame_hold;
+      if (crc_pub_edge || crc_err_edge) crc_bytes_o <= crc_bytes_hold;
+    end
+  end
 
   // ==========================================================================
   // GLUE 3: record framer (packet byte stream -> scheduler record port)

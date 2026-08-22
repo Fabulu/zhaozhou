@@ -931,7 +931,10 @@ set(ZHAO_CMD_SCHEDULER_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_schedule
 set(ZHAO_CMD_DMA_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
                     ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv)
 set(ZHAO_DEBUG_COUNTERS_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_counters.sv)
-set(ZHAO_DEBUG_CRC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv)
+# DEBUG.CRC folds two bytes per vid clock through zhao_crc32c_fold (one pixel
+# per clock is two bytes), so the leaf travels with it — same rule as CMD.DMA.
+set(ZHAO_DEBUG_CRC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                      ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv)
 
 add_executable(test_cmd_scheduler_directed command/cmd_scheduler_directed.cpp)
 target_link_libraries(test_cmd_scheduler_directed PRIVATE zhao_harness zhao_zref)
