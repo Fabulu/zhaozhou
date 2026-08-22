@@ -10,6 +10,181 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- the sweep harness could mis-attribute a verdict, and did
+
+### What happened
+
+The Field IR arithmetic-core sweep came back 31/34 with four mutations tagged
+"caught by the RANDOM lane only", meaning the directed cases supposedly could
+not tell them apart. One of the four was `sub_is_add` -- replacing `a - b` with
+`a + b` in the block's own subtract.
+
+That is not a plausible directed-lane miss, and it is not one. Applied by hand:
+
+    FAIL: FIELD.SUB: zero minus INT32_MIN saturates: value:
+          expected 0x7FFFFFFF, got 0x80000000
+    [field_alu_ops] 9/984 checks FAILED
+
+**The attribution was simply wrong.** All four were CONSECUTIVE in the
+mutation order, which is the tell: four independent coverage gaps do not
+arrive in a row.
+
+### The flaw in my own guard
+
+Every sweep in this project discards a result when the generated-model hash
+equals the BASELINE hash, on the reasoning that an unchanged hash means
+Verilator never re-ran. That catches the case it was written for and misses a
+worse one:
+
+**a build that silently serves the PREVIOUS mutant's model.** That hash differs
+from the baseline, so the guard passes it, and the verdict is recorded against
+the wrong mutation. The sweep was sharing the machine with a `quartus_fit` run
+at the time, which is exactly when such a race surfaces.
+
+So the guard proved "something was rebuilt", not "THIS mutation was built" --
+a weaker statement than the one it was making, which is the same defect shape
+as the parity gate earlier today.
+
+### Fixed
+
+The hash must now differ from the baseline **and** from the previous
+iteration's hash. A stale model is identical to the previous mutant's, so it is
+caught and the sweep aborts rather than reporting.
+
+    if h == base_hash:  DISCARD -- Verilator did not re-run
+    if h == prev_hash:  DISCARD -- this build served a stale model and the
+                        verdict would be attributed to the wrong mutation
+
+### Consequence for the result
+
+**The 31/34 figure is withdrawn, not corrected.** A sweep whose attribution
+cannot be trusted is not a weaker result, it is not a result. Re-running on a
+quiet machine once the composed fitter finishes, and only that run will be
+recorded.
+
+The three survivors are a separate matter and stand on proof rather than on
+the sweep: they are the `sat32` boundary mutations, equivalent because clamping
+a value already sitting exactly on the rail returns that same value. Written up
+in the RTL with the argument, and the ledger bound they do NOT affect lives in
+`sat32_fired`, whose own mutations were caught both ways.
+
+---
+
+## 2026-08-22 -- THE COMPOSED SHELL SYNTHESISES. First composed result this
+## project has ever had.
+
+    tools/quartus/run_composed_fit.ps1 -NoPush
+    run: wumen-f0e101b-20260822T051855Z
+    Quartus 17.0.2 Lite, 5CSEBA6U23I7, NUM_PARALLEL_PROCESSORS staged to 1
+
+    PASS source parity: 26 ordered shell sources match tests/CMakeLists.txt.
+    RUN analysisAndElaboration  47s    peak virtual memory 4,998 MB
+    RUN synthesis             3m26s    peak virtual memory 4,968 MB
+    RUN fitter                        peak virtual memory 5,359 MB
+    RUN timequest
+    exit=0 after 1679.3s   CLEAN_HEAD f0e101b
+
+### IT FITS. IT DOES NOT CLOSE TIMING.
+
+The script prints "PASS analysis/elaboration, synthesis, fitter, and
+TimeQuest", and that means the four STAGES ran, not that timing was met. The
+report is explicit: `"timingPassed": false`. Both statements are in the same
+run and only one of them is the answer to the device question.
+
+**Fitted resources** -- comfortable:
+
+| | composed shell | device |
+| --- | ---: | ---: |
+| Logic utilization (ALMs) | **9,167** | 41,910 (**21.9%**) |
+| registers | 9,571 | |
+| block memory bits | 114,688 | |
+| RAM blocks | 13 | 553 |
+| DSP blocks | 0 | 112 |
+| virtual pins | 2,336 | |
+
+**Timing** -- not close:
+
+| analysis | worst slack | failing endpoints |
+| --- | ---: | ---: |
+| setup | **-55.199 ns** | **3,595** |
+| hold | +0.247 ns | 0 |
+| recovery / removal | -- | 0 |
+
+And the failure is in ONE domain:
+
+    Slack       TNS         Clock
+    -55.199     -12870.651  gpu_clk
+      1.468          0.000  vid_clk
+     33.665          0.000  audio_clk
+
+`gpu_clk` is targeted at 10 ns. The worst path takes about 65 ns, so it misses
+by roughly 6.5x. `vid_clk` and `audio_clk` both pass.
+
+### The caveat, stated but not used as an excuse
+
+Three of the five critical warnings are the same one: the clock ports are fed
+by VIRTUAL PINS, so "timing analysis treats input to the clock port as a ripple
+clock" -- the clock arrives through general routing rather than a global clock
+network. That makes this pessimistic by an amount nobody has measured. It does
+not plausibly account for 55 ns.
+
+### What is NOT yet known, and will be measured rather than guessed
+
+Which paths. The obvious suspect is CMD.DMA's `M_HDR_CHK`, which evaluates
+`crc_final()` over 32 bytes -- 32 chained CRC-32C steps, on the order of 256
+dependent XOR/shift stages -- plus the payload-CRC seed loop over 28 more, all
+combinationally in ONE cycle. That is the same shape as the 192-iteration loop
+that made this block unsynthesisable, bounded but not shortened.
+
+**That is a hypothesis and it is written down as one.** Four hypotheses about
+this exact block were wrong earlier this week, every one an inference about
+what the fitter was building, and the thing that settled it was reading the
+report. The next step is `report_timing` on the failing endpoints with
+`-KeepWorkspace`, not another theory.
+
+### The numbers
+
+| | composed `zhao_shell_top` | device |
+| --- | ---: | ---: |
+| Estimate of Logic utilization (ALMs needed) | **9,440** | 41,910 (**22.5%**) |
+| Combinational ALUT usage for logic | 11,902 | |
+| Dedicated logic registers | 9,171 | |
+| Total block memory bits | **114,688** | |
+| Total MLAB memory bits | 0 | |
+| Total DSP Blocks | 0 | 112 |
+| Total virtual pins | 2,336 | |
+
+### What this settles
+
+`reports/composed/README.md` named the blocker precisely: **Quartus Error
+276003**, registers that cannot convert to RAM megafunctions, from two memories
+with asynchronous read logic -- `zhao_scanout_linebuf|mem` (fixed earlier) and
+`zhao_cmd_dma|blit_buf` (not fixed).
+
+`blit_buf` left with the blit engine, and `slot_buf` became `slot_ram` with a
+registered read earlier today. **No 276003 in this run.** 114,688 block memory
+bits, 0 MLAB bits -- the memories are real M10K.
+
+It also demolishes the memory story that shaped months of planning. The record
+said composed analysis + synthesis cost **42:33 at a 6.2 GB peak** and was the
+reason a second machine was briefed. Measured now: **4m13s total at a 5.0 GB
+peak**, on a 23.8 GB machine. The 28.4 GB figure was already known to be a
+wildcard-VIRTUAL_PIN bug; the residual 6.2 GB was recorded as "unexplained
+rather than settled", and a large part of it was CMD.DMA's 32,768-register
+staging array, which no longer exists.
+
+**The handoff brief in reports/composed/README.md is now doubly superseded:
+the machine was never needed and the RTL blocker it names is gone.**
+
+### Scope, stated plainly
+
+This is `zhao_shell_top` -- 26 modules: the command spine, video, memory,
+debug. It is NOT all 92 ledger blocks, and it is not a programmed board or
+fabricated silicon. A composed fit against a provisional device with virtual
+I/O says the design maps and closes timing IN THE TOOL. Nothing has run.
+
+---
+
 ## 2026-08-22 -- the composed fit's runner could never start, and the tooling
 ## environment is not reproducible
 

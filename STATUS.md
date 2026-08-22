@@ -5,6 +5,64 @@ at the top.*
 
 ---
 
+## 2026-08-22 — THE WHOLE-CHIP TEST RAN. It fits. It is far too slow.
+
+The full-console compile completed for the first time. Two answers, and they
+point in opposite directions.
+
+### It fits, with room to spare
+
+| | the design | the chip |
+| --- | ---: | ---: |
+| logic cells (ALMs) | **9,167** | 41,910 — **22%** |
+| registers | 9,571 | |
+| memory blocks | 13 | 553 |
+| multipliers (DSPs) | **0** | 112 |
+
+Under a quarter of the chip, and not one multiplier used yet. That is a lot of
+headroom for the rasteriser and creature work still to come.
+
+### It does not run fast enough. Not close.
+
+| | target | worst measured |
+| --- | ---: | ---: |
+| GPU clock | 10 ns (100 MHz) | **65 ns** |
+
+It misses by about **6.5x**, on **3,595** separate paths. The video and audio
+clocks both pass comfortably; the whole problem is in the GPU domain.
+
+**This is now the single biggest open problem in the hardware.** Fitting was
+the question everyone was worried about, and it turned out fine. Speed is the
+one that actually bites.
+
+To be clear about the flavour of the failure: nothing is broken and nothing is
+wrong. The design does what it should; some paths just do too much work between
+two clock ticks and need to be split across more ticks. That is ordinary
+hardware work, but there is a real amount of it.
+
+### What I will NOT tell you yet
+
+I have a strong suspicion about which part is responsible — the command
+block's checksum, which currently chews through 32 bytes in a single tick, and
+that is exactly the shape that made the same block uncompilable last week.
+
+I am not reporting that as the cause, because I have been wrong about this
+specific block four times in a row this week, every time by reasoning about the
+code instead of reading the compiler's report. The next step is to ask the tool
+which paths are slow and then say so.
+
+### One more measurement worth having
+
+The compile is also much cheaper than the record claimed. It was written down
+as taking 42 minutes and 6.2 GB, and was the reason a second, larger machine
+was once briefed for this job. Measured today: **4 minutes and 5 GB** for the
+same stages. A large part of that was the command-block memory defect fixed
+earlier today.
+
+Still simulation and compiler output only. No hardware has run any of this.
+
+---
+
 ## 2026-08-22 (later still) — the debug blitter is done, and the whole-chip
 ## test is finally unblocked
 

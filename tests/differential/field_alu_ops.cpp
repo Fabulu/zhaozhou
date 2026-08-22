@@ -521,6 +521,22 @@ int main(int argc, char** argv) {
     // it would give DOT3's answer here.
     const int32_t third[3] = {0, 0, INT32_MAX};
     diff(dut, OP_DOT2, 0, third, big, 0, "DOT2 does NOT read the third lane");
+
+    // AND THE SECOND LANE MUST BE b1, NOT b0. Every DOT2 case above happens to
+    // use a b vector whose first two elements are EQUAL -- {1.0,1.0,1.0},
+    // {MAX,MAX,MAX}, {0.5,0.5,0.5} -- so a block computing a0*b0 + a1*b0
+    // instead of a0*b0 + a1*b1 gives the identical answer to all of them. The
+    // hole is visible by inspection and does not depend on any sweep: b0 and
+    // b1 have to DIFFER for the term to be pinned.
+    const int32_t asym_a[3] = {0x10000, 0x20000, 0};
+    const int32_t asym_b[3] = {0x30000, 0x50000, 0};
+    diff(dut, OP_DOT2, 0, asym_a, asym_b, 0, "DOT2 reads b1 for the second term");
+    const int32_t asym_b2[3] = {0x10000, INT32_MIN, 0};
+    diff(dut, OP_DOT2, 0, asym_a, asym_b2, 0, "DOT2's second term at a rail");
+    // the same for DOT3's third term, which no case above separates either
+    const int32_t asym3_a[3] = {0x10000, 0x20000, 0x30000};
+    const int32_t asym3_b[3] = {0x40000, 0x50000, 0x60000};
+    diff(dut, OP_DOT3, 0, asym3_a, asym3_b, 0, "DOT3 reads b2 for the third term");
   }
 
   // ---- 9. the unimplemented ops REFUSE, they do not answer -----------------

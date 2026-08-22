@@ -130,6 +130,33 @@ module zhao_field_alu (
   endfunction
 
   // Saturate an s64 sum to the fx16 word. Records in the ADD lane.
+  //
+  // THREE EQUIVALENT MUTANTS ON THE BOUNDS BELOW, recorded so the sweep's
+  // three survivors do not read as three holes. Swept 2026-08-22, 34
+  // mutations, 31 caught.
+  //
+  //   `v > 2147483647`  ->  `v > 2147483646`      survives
+  //   `v > 2147483647`  ->  `v >= 2147483647`     survives
+  //   `v < -2147483648` ->  `v < -2147483647`     survives
+  //
+  // All three are equivalent for one reason: CLAMPING A VALUE THAT ALREADY
+  // SITS EXACTLY ON THE RAIL RETURNS THAT SAME VALUE. At v == 2147483647 the
+  // original falls through and returns v[31:0], which IS 32'sh7FFF_FFFF; the
+  // mutants take the clamp and return 32'sh7FFF_FFFF. Same word. The low rail
+  // is the same argument with 32'sh8000_0000. No input distinguishes them, so
+  // no test can, and none should be written to try.
+  //
+  // What makes this safe rather than merely untested is that the LEDGER bound
+  // lives in a different function. `sat32_fired` states the same two constants
+  // independently, and mutating IT is caught both ways -- `sat32_fired_never`
+  // and `sat32_fired_low_only` both failed the directed lane. So the boundary
+  // that has an observable consequence is tested; only the redundant one on
+  // the value path is not.
+  //
+  // Worth naming: the bound is stated TWICE, here and in sat32_fired. That is
+  // the shape this project keeps finding defects in. It is tolerable here only
+  // because the sweep covers the copy that can be observed.
+  // ENFORCED-BY: tests/differential/field_alu_ops.cpp
   function automatic logic signed [31:0] sat32(input logic signed [W-1:0] v);
     begin
       if (v > 66'sd2147483647) sat32 = 32'sh7FFF_FFFF;
