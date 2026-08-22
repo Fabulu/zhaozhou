@@ -250,11 +250,16 @@ module zhao_geom_lod (
   assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;
   assign m_floor = proj10 / 40'sd11;
 
-  // ONE BOUNDARY MULTIPLIER, NOT TWO. The coarsening and refining tests are
-  // mutually exclusive by construction -- `coarsening` is exactly
-  // `raw > rung_i` -- so they can never both need a product in the same
-  // evaluation. Selecting the operand before the multiply rather than after it
-  // is the same arithmetic with half the silicon.
+  // ONE BOUNDARY MULTIPLIER, NOT TWO. The coarsening and refining tests can
+  // never both need a product in the same evaluation, so selecting the operand
+  // BEFORE the multiply rather than after it is the same arithmetic with half
+  // the silicon.
+  //
+  // What makes that safe is not a comment: ONE signal, `coarsening`, selects
+  // both the operand below and the branch that consumes it. There is no second
+  // condition that could drift out of step with the first -- splitting them is
+  // the only way to break this, and it would take deleting the signal.
+  // ENFORCED-BY: fpga/rtl/geometry/zhao_geom_lod.sv:coarsening
   logic signed [W-1:0] bnd_mul_a;
   logic signed [W-1:0] bnd_cmp;
   assign bnd_mul_a = coarsening ? W'(k_ceil) : (W'(m_floor) + W'(1));

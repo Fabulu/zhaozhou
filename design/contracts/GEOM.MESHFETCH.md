@@ -45,8 +45,8 @@ later without changing this law.
 The **LOD third** of this block exists: `fpga/rtl/geometry/zhao_geom_lod.sv`,
 differential-tested against the shipped `zref::creature::lod_raw` and
 `zref::creature::lod_update` in `tests/differential/geom_lod_directed.cpp`
-(29,510 directed checks, 600,000 random, mutation sweep 22 attempted / 22
-accounted / 21 caught / 1 equivalent). It carries no divider: every quotient in
+(29,510 directed checks, 600,000 random, mutation sweep 23 attempted / 23
+accounted / 22 caught / 1 equivalent). It carries no divider: every quotient in
 the ladder feeds a comparison, and those are cross-multiplied exactly.
 
 The descriptor fetch and the frustum rejection described above are **not** built.

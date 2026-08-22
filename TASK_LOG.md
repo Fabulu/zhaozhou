@@ -337,7 +337,7 @@ charter 9, not parameterised. The loop bought nothing and hid the one class of
 bug a loop can hide. It is three named terms now, which cannot silently share a
 value, and two sweep mutants (M21, M22) exist to keep it dead.
 
-### 7. Mutation sweep: 22 attempted, 22 accounted, 19 caught, 1 equivalent
+### 7. Mutation sweep: 23 attempted, 23 accounted, 22 caught, 1 equivalent
 
 The three survivors of the first scored run were each dealt with on their
 merits, rather than all being filed as equivalent:

@@ -3,7 +3,7 @@
 #
 # ---------------------------------------------------------------------------
 # THE SWEEP VERIFIES ITS OWN BUILDS, and this file is mostly that machinery
-# rather than the mutations. FOUR separate ways of scoring a test that never
+# rather than the mutations. FIVE separate ways of scoring a test that never
 # ran were hit while writing it, all of them already in this project's history:
 #
 #   1. `verilate()` elaborates at CONFIGURE time, so `ninja` alone relinks a
@@ -21,6 +21,15 @@
 #      model can be linked against an OBJECT still compiled from a mutant —
 #      observed here as 994 failures against provably clean RTL. So the whole
 #      target directory is deleted each iteration, not just the model.
+#
+#   5. THE EXECUTABLE LIVES OUTSIDE THE TARGET DIRECTORY. Deleting
+#      `<target>.dir` does NOT delete `build/tests/<target>.exe`, so a mutant
+#      that fails to COMPILE leaves the previous binary in place and the sweep
+#      runs that instead. A build failure then scores as a caught mutant, which
+#      is the most flattering possible way to be wrong. Found by the CDC agent
+#      on 2026-08-22 when its sweep reported 0 caught / 22 survivors -- an
+#      impossible number that turned out to be its own test file not compiling.
+#      The guard: delete the EXE too, and require it to exist after the build.
 #
 # The scoring rule is therefore: after regeneration the model must EXIST and
 # its hash must DIFFER from the pristine model's. Anything else is discarded,
@@ -57,6 +66,7 @@ GOLDHASH=$(sha256sum <"$GOLD" | cut -d' ' -f1)
 
 rebuild() {
   rm -rf "$TARGETDIR"
+  rm -f "$EXE"   # guard 5: the executable lives OUTSIDE the target dir
   cmake -S . -B build >/dev/null 2>&1
   ninja -C build test_geom_lod_directed >/dev/null 2>&1
 }
@@ -73,10 +83,25 @@ restore() {
   return 1
 }
 
+# PREFLIGHT: EVERY MUTANT MUST BUILD BEFORE ANY OF THEM IS SCORED.
+#
+# Guard 5 discards a mutant that does not link, which is correct but late -- it
+# turns a broken mutation into a DISCARD rather than into evidence, and a sweep
+# that discards a third of its mutants has not tested what it claims to. Three
+# of the 23 here were malformed and had been scored as CAUGHT by every earlier
+# run: two used `W'sd0`, which is a syntax error, and one made `hold_i < 16'd0`,
+# which is always false and fails -Wall. Linting them up front turns that from a
+# silent inflation into a refusal to start.
+python3 tools/sweep_geom_lod_preflight.py || {
+  echo "ABORT: at least one mutant does not build -- fix the mutation, not the guard"
+  exit 8
+}
+
 echo "== establishing the pristine baseline"
 restore || { echo "ABORT: cannot establish pristine source"; exit 4; }
 rebuild
 [ -d "$MODELDIR" ] || { echo "ABORT: pristine model did not elaborate"; exit 6; }
+[ -x "$EXE" ] || { echo "ABORT: pristine target did not link"; exit 6; }
 PRISTINE_MODEL=$(model_hash)
 if ! "$EXE" >/dev/null 2>&1; then
   echo "ABORT: the PRISTINE build fails its own test — nothing below would mean anything"
@@ -88,7 +113,7 @@ echo "   pristine model ${PRISTINE_MODEL:0:16}, directed lane green"
 MUTS=(
 "M01 legality edge  (< becomes <=)@@assign legal_glint = (lhs_glint < legal_rhs);@@assign legal_glint = (lhs_glint <= legal_rhs);"
 "M23 legal_rhs drops the +R (shared product)@@assign legal_rhs = th_r + W'(bound_radius_i);@@assign legal_rhs = th_r;"
-"M02 rounding term dropped (micro)@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + W'sd0;"
+"M02 rounding term dropped (micro)@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i));"
 "M03 rounding rounds down (glint)@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) - half_r;"
 "M04 finest legal rung, not coarsest@@    if (legal_glint) raw = 2'd3;
     else if (legal_splat) raw = 2'd2;
@@ -98,7 +123,7 @@ MUTS=(
     else if (legal_glint) raw = 2'd3;
     else raw = 2'd0;"
 "M05 minimum hold 15 -> 14@@localparam logic [15:0] HOLD_TICKS = 16'd15;@@localparam logic [15:0] HOLD_TICKS = 16'd14;"
-"M06 minimum hold removed@@localparam logic [15:0] HOLD_TICKS = 16'd15;@@localparam logic [15:0] HOLD_TICKS = 16'd0;"
+"M06 minimum hold removed@@    end else if (hold_i < HOLD_TICKS) begin@@    end else if (hold_i < HOLD_TICKS && 1'b0) begin"
 "M07 coarsen boundary >= becomes >@@switch_ok = (bnd_num >= bnd_cmp);@@switch_ok = (bnd_num > bnd_cmp);"
 "M08 refine boundary < becomes <=@@switch_ok = (bnd_num < bnd_cmp);@@switch_ok = (bnd_num <= bnd_cmp);"
 "M09 ceil becomes floor (the +8)@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;@@assign k_ceil  = proj10 / 40'sd9;"
@@ -106,7 +131,7 @@ MUTS=(
 "M11 hysteresis 11 becomes 10 (no band)@@assign m_floor = proj10 / 40'sd11;@@assign m_floor = proj10 / 40'sd10;"
 "M12 refine drops the +1@@assign bnd_mul_a = coarsening ? W'(k_ceil) : (W'(m_floor) + W'(1));@@assign bnd_mul_a = coarsening ? W'(k_ceil) : W'(m_floor);"
 "M13 boundary uses the wrong rung@@assign bnd_rung   = coarsening ? raw : rung_i;@@assign bnd_rung   = coarsening ? rung_i : raw;"
-"M14 boundary rounding term dropped@@assign bnd_num = th_r + (W'(e_sel) >>> 1);@@assign bnd_num = th_r + W'sd0;"
+"M14 boundary rounding term dropped@@assign bnd_num = th_r + (W'(e_sel) >>> 1);@@assign bnd_num = th_r;"
 "M15 hold does not saturate@@assign hold_inc = (hold_i == 16'hFFFF) ? 16'hFFFF : (hold_i + 16'd1);@@assign hold_inc = hold_i + 16'd1;"
 "M16 hold not cleared on a switch@@      rung_next = raw;
       hold_next = 16'd0;@@      rung_next = raw;
@@ -165,6 +190,12 @@ PY
 
   if [ ! -d "$MODELDIR" ]; then
     echo "  $name  DISCARDED: model absent after regeneration"
+    restore || { echo "ABORT: revert failed"; exit 4; }
+    continue
+  fi
+  if [ ! -x "$EXE" ]; then
+    echo "  $name  DISCARDED: the target did not LINK (a build failure would"
+    echo "                    otherwise be scored as a caught mutant)"
     restore || { echo "ABORT: revert failed"; exit 4; }
     continue
   fi

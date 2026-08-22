@@ -155,7 +155,7 @@ memory written, past runs being reconstructed.
 
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
-| 2026-08-22 ~20:30 | a69cac37667f114f8 | Fix the GPU/video CDC seam: move the displayed CRC into `vid_clk` rather than crossing per-pixel state (owner ruling) | In Progress | pending — agent to write `FINDINGS.md` |
+| 2026-08-22 ~20:30 | a69cac37667f114f8 | Fix the GPU/video CDC seam: move the displayed CRC into `vid_clk` rather than crossing per-pixel state (owner ruling) | **Complete** | [FINDINGS-cdc-seam.md](FINDINGS-cdc-seam.md) |
 
 Notes on this spawn:
 
@@ -220,3 +220,49 @@ restructuring against a guessed throughput and then measuring is the wrong order
    and validation already done in this run.
 3. Re-run the composed fit after the CDC seam changes placement, then re-measure
    BALANCED against HIGH PERFORMANCE as ruled.
+
+### 22:0x - the agent landed, and it found a defect in MY sweep
+
+Commits `eefc432` (the CDC fix) and `a62d35a` (its sweep, plus a compile defect
+in its own test). Full record in [FINDINGS-cdc-seam.md](FINDINGS-cdc-seam.md).
+
+**A FIFTH way to score a run that never happened, and it had been inflating my
+numbers.** The executable lives OUTSIDE the target directory, so
+`rm -rf <target>.dir` leaves `build/tests/<target>.exe` in place: a mutant that
+fails to COMPILE runs the previous binary, and the build failure is scored as a
+CAUGHT MUTANT -- the most flattering possible way to be wrong.
+
+Applied to `tools/sweep_geom_lod.sh`, it immediately discarded THREE of the 23
+mutants that every earlier run had counted as caught:
+
+| mutant | why it never built |
+| --- | --- |
+| M02 rounding term dropped (micro) | `W'sd0` is a syntax error |
+| M14 boundary rounding term dropped | same |
+| M06 minimum hold removed | `hold_i < 16'd0` is always false, and -Wall refuses it |
+
+So the honest score was never 21 of 22. Restating the three mutants so they
+express the same defect and compile, the sweep now reads:
+
+**23 attempted, 23 accounted, 22 caught, 1 equivalent (M18, unreachable by
+proof).** The published figures in `design/contracts/GEOM.MESHFETCH.md` and the
+root `TASK_LOG.md` were corrected rather than left standing.
+
+**And the guard was made earlier rather than better.** Guard 5 turns a broken
+mutation into a DISCARD, which is correct but late -- a sweep that discards a
+third of its mutants has not tested what it claims to. `tools/
+sweep_geom_lod_preflight.py` now LINTS ALL 23 before the run starts and refuses
+to begin if any fails, so a malformed mutation is a refusal rather than a silent
+inflation.
+
+### 22:1x - the V20 the agent found in my own file
+
+`ledger_check` failed V20 on `zhao_geom_lod.sv`: I had written that the
+coarsening and refining tests are *mutually exclusive by construction* without
+naming an enforcer. The agent correctly refused to fix it, since only the author
+knows what the claim meant. The enforcer is real and is now named: ONE signal,
+`coarsening`, selects both the multiplier operand and the branch that consumes
+it, so there is no second condition that could drift out of step.
+
+That is the second time in this run that V20 caught a claim of mine that was
+true but unenforced.

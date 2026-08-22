@@ -92,6 +92,16 @@ Success for this run:
   splice it in.
 - **Do not start a comment with the word "Verilator"** in SystemVerilog —
   Verilator parses it as a pragma and fails the build.
+- **Do not trust a mutation sweep that does not delete the EXECUTABLE.** It
+  lives OUTSIDE the target directory, so `rm -rf <target>.dir` leaves it in
+  place; a mutant that fails to compile then runs the previous binary and the
+  build failure scores as a CAUGHT mutant. Three of 23 were inflated this way.
+- **Do not write `W'sd0` where W is a parameter** — it is a syntax error, not a
+  sized zero. And **do not write a comparison that is always false**
+  (`hold_i < 16'd0`); -Wall refuses it. Both produced mutants that had never
+  built and had been scored as caught for three runs.
+- **Do not lint mutants only when they fail.** Lint ALL of them before scoring
+  any, or a malformed mutation is a silent inflation rather than a refusal.
 - **Do not edit the shared working tree while a subagent is building in it.** It
   will absorb the in-progress files into its own commit.
 
