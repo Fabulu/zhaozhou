@@ -36,7 +36,7 @@ hash did not move is **discarded, never scored**.
 | Piece | Ops | RTL | Directed | Random (fast lane) | Mutations |
 | --- | --- | --- | ---: | ---: | ---: |
 | Arithmetic core | 15 opcodes, `0x00`–`0x0C`, `0x10`–`0x11` | `zhao_field_alu.sv` | 1,005 | 140,000 | **31 / 34**, 3 equivalent |
-| Reciprocal | `RCP` | `zhao_field_rcp.sv` + generated ROM | 329 | 60,000 | — |
+| Reciprocal | `RCP` | `zhao_field_rcp.sv` + generated ROM | 329 | 60,000 | **23 / 23** |
 | Sine / cosine | `SIN`, `COS` | `zhao_field_sin.sv` + generated ROM | 20 | exhaustive | — |
 | Length / distance | `LEN2`, `LEN3`, `DIST2` | `zhao_field_len.sv`, `zhao_field_isqrt.sv` | 159 | 9,000 | — |
 | Normalise | `NORMALIZE2`, `NORMALIZE3` | `zhao_field_normalize.sv` + generated ROM | 419 | 13,522 | **7 / 7** |
@@ -51,9 +51,27 @@ lane's `--random` argument, and each nightly lane runs the same test with a
 larger draw. The sine lane has no `--random` argument because it sweeps **all
 65,536 angles** and reports the sweep as one check.
 
-Mutation scores now exist for six of the nine pieces. **THREE REMAIN UNSWEPT** —
-Reciprocal, Sine/cosine, and Length/distance — built before the sweep harness
-existed. That is a gap, not a claim of coverage, and it is still worth closing.
+Mutation scores now exist for seven of the nine pieces. **TWO REMAIN UNSWEPT**
+— Sine/cosine and Length/distance — built before the sweep harness existed.
+That is a gap, not a claim of coverage, and it is still worth closing.
+
+### The reciprocal, swept 2026-08-22
+
+23 mutations, **23 caught, 0 survivors**, every one by the DIRECTED lane rather
+than only by the 20,000-case random draw. They attacked the parts a large
+random draw over a nearly-right implementation will happily agree with: the
+zero case and its own `rcp0` ledger lane, sign handling on both the magnitude
+and the result, the normalisation exponent, the seed-ROM index, the Newton
+correction's `2^48` constant and its sign, the `rescale_u(.,47)` round-half-up
+constant and shift, the Q16 shift, the exponent rescale's rounding, and the
+saturation bound with its lane.
+
+**The equivalent mutant the block already documents was confirmed, not
+rediscovered.** `zhao_field_rcp.sv` records that removing the `e == 0` guard
+survives the whole suite, and explains why: `e == 0` happens only for
+|a| == 1, and 1/(1/65536) is 2^32, which saturates whatever the shift did. That
+note was written before this sweep existed and it held up — which is the point
+of recording equivalents rather than leaving them to look like holes.
 
 ### The arithmetic core, swept 2026-08-22
 
