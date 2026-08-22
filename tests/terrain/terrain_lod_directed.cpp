@@ -200,6 +200,39 @@ int main(int argc, char** argv) {
       check(level_of(dev, j, buf) == want, buf, want, level_of(dev, j, buf));
       expect(dev, j, buf);
     }
+
+    // ---- AND THE RIGHT-HAND SIDE HAS A FLIP POINT OF ITS OWN --------------
+    // The three cases above all run with `scale = h = 256`, so BOTH sides of
+    // `dev · scale ≤ distance · h` are multiples of 256 and an off-by-one on the
+    // RIGHT is unreachable. The mutation sweep found exactly that hole on
+    // 2026-08-23: `rhs + 1` survived all 211 checks here and both random lanes,
+    // because random input hits a 40-bit exact equality with probability ~2^-40
+    // — i.e. never. An equality event has to be BUILT, which is the same
+    // argument this section already makes for `<` versus `<=`.
+    //
+    // dist = 255, so `distance · 256` = 65280, and with dev = 1:
+    //   scale = 65280 → lhs = 65280 = rhs           → equality PASSES → level 1
+    //   scale = 65281 → lhs = 65281 = rhs + 1        → one unit over  → level 0
+    // Neither side is a multiple of 256, so a ±1 on EITHER side moves one of
+    // these two answers.
+    {
+      const uint16_t scales[2] = {65280u, 65281u};
+      const uint8_t wants[2] = {1u, 0u};
+      for (int c = 0; c < 2; ++c) {
+        LodJob j = plain_job(255, scales[c]);
+        for (int n = 0; n < kNSub; ++n) {
+          j.sp[n].dev[1] = 1;
+          j.sp[n].dev[2] = 0xFFFFFFu;
+          j.sp[n].dev[3] = 0xFFFFFFu;
+        }
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "the right-hand side's flip point, scale = %u",
+                      static_cast<unsigned>(scales[c]));
+        const uint8_t got = level_of(dev, j, buf);
+        check(got == wants[c], buf, wants[c], got);
+        expect(dev, j, buf);
+      }
+    }
   }
 
   // =========================================================================
