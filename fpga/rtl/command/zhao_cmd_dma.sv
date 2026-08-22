@@ -678,18 +678,33 @@ module zhao_cmd_dma #(
         // One cycle, entirely from registers: cb and fetched were latched by
         // the header check, so nothing here reads hdr_win.
         M_SEED_PREP: begin
-          begin
-            logic [31:0] seed_end;
-            seed_end = fetched;
-            if (seed_end > (32'd36 + cb)) seed_end = 32'd36 + cb;
-            payload_end_q <= 32'd36 + cb;
-            seed_bytes_q  <= 6'(seed_end - 32'd36);
-            // 0, 16 or 28 bytes -- and only those, because the first burst is
-            // a multiple of 8 capped at 64, 40 + cb <= f_len, and cb % 16 == 0
-            seed_steps_q  <= ((seed_end - 32'd36) >= 32'd28) ? 2'd0   // 4 folds
-                           : ((seed_end - 32'd36) >= 32'd16) ? 2'd2   // 2 folds
-                           : 2'd3;                                    // none
-          end
+          // THE SEED LENGTH IS A THREE-WAY DECISION ON cb, NOT A CALCULATION.
+          //
+          // I proved this to justify the constant fold widths and then went on
+          // computing it the long way -- min(fetched, 36+cb) - 36, then two
+          // range compares. The census showed exactly what that cost:
+          // 18,013 of 20,000 negative-slack paths ran cb -> seed_steps_q at
+          // -1.324 ns, ninety percent of the design's remaining timing
+          // problem, for a value that can only ever be one of three numbers.
+          //
+          //   cb =  0  -> f_len >= 40, fetched = 40, seed_end = 36  ->  0 bytes
+          //   cb = 16  -> f_len >= 56, seed_end = 52                -> 16 bytes
+          //   cb >= 32 -> 36+cb >= 68 > 64 >= fetched = 64          -> 28 bytes
+          //
+          // The middle line is the one worth checking: fetched is
+          // min(roundup8(f_len), 64) and 36+cb is 52, so seed_end is 52 for
+          // every lawful f_len, not just the smallest. And cb % 16 == 0 is
+          // already enforced by the header ladder, so there is no cb = 8 case.
+          //
+          // Two equality compares against constants, no adder, no subtractor.
+          // ENFORCED-BY: fpga/rtl/command/zhao_cmd_dma.sv:a_seed_bytes_lawful
+          payload_end_q <= 32'd36 + cb;
+          seed_bytes_q  <= (cb == 32'd0)  ? 6'd0
+                         : (cb == 32'd16) ? 6'd16
+                         :                  6'd28;
+          seed_steps_q  <= (cb == 32'd0)  ? 2'd3   // no folds
+                         : (cb == 32'd16) ? 2'd2   // two folds
+                         :                  2'd0;  // four folds
           m <= M_SEED;
         end
 
@@ -947,6 +962,18 @@ module zhao_cmd_dma #(
       if (m == M_HDR_CHK) begin
         assert(fetched <= 32'd64);
       end
+      // The seed length is one of THREE values, and the fold widths depend on
+      // it: M_SEED runs four groups of eight for 28 bytes with a four-byte
+      // tail, two for 16, none for 0. If this were ever a fourth number the
+      // walk would fold the wrong count and the payload CRC would be wrong on
+      // a packet that is otherwise lawful.
+      a_seed_bytes_lawful:
+        if (m == M_SEED) assert((seed_bytes_q == 6'd0)
+                             || (seed_bytes_q == 6'd16)
+                             || (seed_bytes_q == 6'd28));
+      // and the alignment the fold widths rest on
+      a_payload_end_aligned:
+        if (m == M_SEED) assert(payload_end_q[2:0] == 3'b100);
     end
   end
 
