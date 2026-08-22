@@ -418,6 +418,60 @@ deliberately rather than having me invent it and record the invention as law.
 > breakdown out of Quartus rather than inferring one from the source. Four
 > theories have now been wrong, and every one of them was an inference about
 > what the fitter was building.
+>
+> ### THE MEASUREMENT, TAKEN. It settles the question.
+>
+> `blockfit.map.rpt`, from the run that synthesised cleanly:
+>
+> ```
+> Estimate of Logic utilization (ALMs needed) : 83,977      device has 41,910
+> Combinational ALUT usage for logic          : 94,698
+>     -- 6 input functions                    : 47,694
+>     -- <=3 input functions                  : 39,525
+> Dedicated logic registers                   : 33,680
+> Total block memory bits                     : 0
+> ```
+>
+> **Two lines settle it.**
+>
+> `Total block memory bits: 0` — **no RAM was inferred at all**, which is the
+> defect stated as a measurement rather than a suspicion.
+>
+> `Dedicated logic registers: 33,680` — and `slot_buf` is 4,096 x 8 =
+> **32,768** of them. The block is a 4,096-entry REGISTER FILE with a variable
+> read address and a variable write address, and that shape costs ~95k ALUTs on
+> a device holding ~42k ALMs. It needs **twice the device**.
+>
+> ### Why every mux attempt failed, now explainable
+>
+> The cost is not one shareable mux. It is the register file itself: 32,768
+> registers each needing hold/load selection (the 39,525 <=3-input functions
+> are about that size) plus the address decode and read trees (the 47,694
+> 6-input functions). Sharing readers moves a few thousand ALUTs around a
+> ~95,000 ALUT structure, which is exactly the 0.02% the two split attempts
+> measured.
+>
+> **No reshaping of the reads can fix this. `slot_buf` must become BLOCK
+> MEMORY**, and the target is unambiguous: `Total block memory bits` must go
+> from 0 to 32,768.
+>
+> ### What that requires, from the M10K rules already recorded in this repo
+>
+> 1. no initialiser on the array (`= '{default: 8'h00}` must go);
+> 2. the write in a process with **no async reset** — M10K has no reset port;
+> 3. a **registered** read, one per port, and at most two ports.
+>
+> Point 3 is the hard one and the reason this is a design change rather than a
+> repair: three readers random-access the array today. They are now in three
+> DIFFERENT states after the `M_PCRC` split, so they CAN share one port with a
+> state-muxed address — that split was not wasted, it is the precondition —
+> but each consumer must then wait a cycle for its answer, and `hget16`/`hget32`
+> need two to four CONSECUTIVE bytes, so a byte-wide port turns each into
+> several sequential reads and more states.
+>
+> **The estimate is worth stating: moving 32,768 bits into M10K removes on the
+> order of 95,000 ALUTs from a block that currently needs 2x the device.** That
+> is the whole gap, not a contribution to it.
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
