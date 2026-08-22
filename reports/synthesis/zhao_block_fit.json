@@ -88,6 +88,22 @@
                        "dspBlocksAvailable":  112
                    },
                    {
+                       "module":  "zhao_field_seq",
+                       "status":  "ok",
+                       "sourceCommit":  "47d607c9052e1c0e2c7d91aed7d731fa71a618ab",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  1765.6,
+                       "alms":  10623,
+                       "registers":  4510,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  79,
+                       "virtualPins":  318,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112
+                   },
+                   {
                        "module":  "zhao_forge_cliff",
                        "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
                        "rtlCleanAtHead":  false,

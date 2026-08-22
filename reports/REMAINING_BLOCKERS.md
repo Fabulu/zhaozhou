@@ -1102,3 +1102,75 @@ it would need the contract re-argued first, not a restructuring.
 Applying only the measured result, the running total moves from **213 to 201**.
 That is still 1.8x the device. The lever works; it has to be pulled about ten
 more times.
+
+---
+
+## 2026-08-23 — the Field IR engine had NEVER been synthesised, and it is 79 DSPs
+
+Half the design has never met Quartus. Counted:
+
+| | |
+| --- | ---: |
+| RTL modules on disk | 91 |
+| appearing in the block-fit report | 45 |
+| **never fitted at all** | **46** |
+
+Fifteen of those forty-six are `fpga/rtl/field/` — **the entire Field IR
+engine**, which this project has repeatedly described as complete. It is
+complete in *simulation*: every op has a differential and a mutation score, and
+`FIELD.SEQ.CORE` is `RTL_VERIFIED` on a formal proof. None of it had ever been
+through synthesis.
+
+So it was fitted, as one unit — `zhao_field_seq` with its fourteen dependencies,
+which is how the engine is actually used:
+
+| | measured |
+| --- | ---: |
+| ALMs | **10,623** |
+| **DSPs** | **79** |
+| registers | 4,510 |
+| M10K | 0 |
+| `rtlCleanAtHead` | true |
+
+**Seventy-nine DSPs is 71% of the device's 112, for one subsystem.** It is
+larger than `terrain_project` (33) and `surface_stamp` (28) put together.
+
+### What that does to the running totals
+
+| | measured | device |
+| --- | ---: | ---: |
+| DSPs | **280** | 112 |
+| ALMs | 47,003 | 41,910 |
+
+**2.5x over on DSPs**, up from 1.9x an hour ago, and that is still only 39 of 91
+modules. Treat the ALM row with more caution than the DSP row: per-block fits
+give every block its own I/O and no sharing, and ALMs inflate badly under that
+(the composed shell is 7,442 ALMs for blocks whose per-block sum is far higher).
+DSP inference is much less sensitive to that, because it follows the arithmetic
+rather than the boundary.
+
+### But it is the same pattern, at the largest scale in the design
+
+`zhao_field_seq` instantiates **every op unit in parallel** — ALU, reciprocal,
+sine, isqrt, length, normalise, curve, noise, ring, rotation — each with its own
+multipliers. And the sequencer **executes one instruction at a time**, six clocks
+per instruction.
+
+That is exactly the "parallel multipliers where the RATE does not require them"
+shape the `zhao_geom_lod` pilot just took from 18 DSPs to 6 — except here there
+are ten units idling instead of five products. A machine that retires one
+instruction every six clocks does not need ten multiplier sets live at once.
+
+So the worst measurement in the design is also the largest single opportunity in
+it. **This should be sequenced before any of the 28-DSP blocks**, because it is
+worth more than all of them combined.
+
+### The honest caveat
+
+Nobody has established that the engine's ten units *can* share without breaking
+the six-clock instruction cadence or the formal anti-hang bound
+(`tests/formal/field_seq_bound.sby`, proven at depth 140 under a shrunk
+instruction count). That proof would have to be re-established against a shared
+datapath. It is a bigger change than the LOD pilot, and it is the first
+sequencing target where the answer is genuinely unknown rather than merely
+unmeasured.
