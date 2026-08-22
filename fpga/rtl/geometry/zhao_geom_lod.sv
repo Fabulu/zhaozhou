@@ -85,6 +85,28 @@
 // ever worth the logic it needs an assertion that FIRES when the relation
 // breaks, not a silent assumption. Recorded so the opportunity is not lost and
 // so nobody rediscovers it later and applies it without the guard.
+// MEASURED COST (Quartus 17.0.2 Lite, 5CSEBA6U23I7, block fit at aec3c4c):
+//
+//   first synthesis   1,436 ALMs   28 DSPs   -- 72-bit operands
+//   after narrowing   1,303 ALMs   18 DSPs   -- 64-bit, two products shared
+//
+// The 72-bit slack was free in simulation and expensive in silicon: a 72-bit
+// operand asks for a 72x72 multiplier when the honest need is 32x32. Narrowing
+// to a proven-sufficient 64, computing thresh*R ONCE (it appears in both the
+// legality bound and the boundary numerator), and selecting the boundary
+// multiplier operand before the multiply rather than after it took a third of
+// the DSPs out.
+//
+// 18 DSPs is still 16% of the device for a block that evaluates ONCE PER
+// INSTANCE PER FRAME, and the reason is simply that five 32x32 products are
+// computed in parallel when the rate does not require it. THE NAMED NEXT LEVER
+// is to sequence the three legality products through one multiplier over three
+// clocks, which should take it to roughly 8. That is deliberately NOT done
+// here: this block has no consumer yet -- GEOM.MESHFETCH is unbuilt -- and the
+// throughput it must sustain is what decides whether sequencing is free or
+// costly. Restructuring against a guess, and then measuring, is the wrong
+// order. Recorded so the number is not mistaken for a floor.
+
 `default_nettype none
 
 module zhao_geom_lod (
@@ -121,12 +143,28 @@ module zhao_geom_lod (
   localparam logic [15:0] HOLD_TICKS = 16'd15;
 
   // ---- rung legality: proj*e_r + R/2 < (thresh+1)*R ------------------------
-  // 72 bits is deliberate slack. The widest real product is proj*e_r at
-  // 31+31 = 62 bits, and K*e below reaches about 64; carrying 72 costs nothing
-  // on a comparison and removes the need to re-derive the bound if the domain
-  // ever widens.
-  logic signed [71:0] legal_rhs;
-  assign legal_rhs = (72'(thresh_q8_i) + 72'sd1) * 72'(bound_radius_i);
+  //
+  // 64 BITS, NOT 72, AND THE WIDTH WAS MEASURED RATHER THAN GUESSED. The first
+  // synthesis of this block carried 72-bit operands as "deliberate slack" and
+  // cost **1,436 ALMs and 28 DSPs** — a quarter of the device's 112 DSPs for one
+  // LOD evaluator — because a 72-bit operand asks Quartus for a 72x72
+  // multiplier when the honest need is 32x32.
+  //
+  // 64 is provably enough. Every operand is bounded by 2^31, so the widest
+  // product is proj*e_r at under 4.61e18, and adding R/2 keeps it under
+  // 4.61e18 + 1.08e9 — comfortably inside the 9.22e18 a signed 64-bit holds.
+  // The widest term anywhere below is K*e_sel at about 5.13e18, still inside it.
+  localparam int W = 64;
+
+  // thresh*R IS COMPUTED ONCE. It appears in the legality bound as
+  // (thresh+1)*R and in the switch boundary's numerator as thresh*R + e/2, and
+  // (thresh+1)*R is just thresh*R + R — so the two shared a multiplier all
+  // along and were paying for it twice.
+  logic signed [W-1:0] th_r;
+  assign th_r = W'(thresh_q8_i) * W'(bound_radius_i);
+
+  logic signed [W-1:0] legal_rhs;
+  assign legal_rhs = th_r + W'(bound_radius_i);
 
   // THE THREE RUNGS ARE WRITTEN OUT, NOT LOOPED, AND THAT IS DELIBERATE.
   //
@@ -144,10 +182,13 @@ module zhao_geom_lod (
   //
   // Rung 0 (kMesh) has no error term on purpose: it is the fallback taken when
   // no coarser rung is legal, and the reference never evaluates an error for it.
-  logic signed [71:0] lhs_micro, lhs_splat, lhs_glint;
-  assign lhs_micro = (72'(proj_radius_q8_i) * 72'(micro_error_i)) + (72'(bound_radius_i) >>> 1);
-  assign lhs_splat = (72'(proj_radius_q8_i) * 72'(splat_error_i)) + (72'(bound_radius_i) >>> 1);
-  assign lhs_glint = (72'(proj_radius_q8_i) * 72'(glint_error_i)) + (72'(bound_radius_i) >>> 1);
+  logic signed [W-1:0] half_r;
+  assign half_r = W'(bound_radius_i) >>> 1;
+
+  logic signed [W-1:0] lhs_micro, lhs_splat, lhs_glint;
+  assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;
+  assign lhs_splat = (W'(proj_radius_q8_i) * W'(splat_error_i)) + half_r;
+  assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;
 
   logic legal_micro, legal_splat, legal_glint;
   assign legal_micro = (lhs_micro < legal_rhs);
@@ -182,15 +223,15 @@ module zhao_geom_lod (
   end
 
   // N = thresh*R + e/2 — the boundary's numerator, before the divide that is
-  // never performed.
-  logic signed [71:0] bnd_num;
-  assign bnd_num = (72'(thresh_q8_i) * 72'(bound_radius_i)) + (72'(e_sel) >>> 1);
+  // never performed. Reuses the shared thresh*R product above.
+  logic signed [W-1:0] bnd_num;
+  assign bnd_num = th_r + (W'(e_sel) >>> 1);
 
   // K = ceil(10*proj / 9) and M = floor(10*proj / 11): division by a CONSTANT,
   // which synthesis turns into a multiply and a shift.
   //
-  // THE DIVISION PATH IS 40 BITS, NOT 72, AND QUARTUS IS WHY. At 72 bits the
-  // block does not synthesise at all:
+  // THE DIVISION PATH IS 40 BITS, NOT 64, AND QUARTUS IS WHY. At 72 bits the
+  // block did not synthesise at all:
   //
   //   Error (272006): In lpm_divide megafunction, LPM_WIDTHN must be less
   //                   than or equals to 64
@@ -201,15 +242,24 @@ module zhao_geom_lod (
   // that three frontends agree.
   //
   // 40 bits is not a workaround, it is the honest width: `proj_radius_q8_i` is
-  // bounded by 2^31, so 10*proj < 2^35 and both quotients are under 2^32. The
-  // 72-bit form was slack carried in from the comparison arithmetic, where it
-  // costs nothing, into the one place that has a hard tool limit.
+  // bounded by 2^31, so 10*proj < 2^35 and both quotients are under 2^32.
   logic signed [39:0] proj10;
   logic signed [39:0] k_ceil;
   logic signed [39:0] m_floor;
   assign proj10  = 40'(proj_radius_q8_i) * 40'sd10;
   assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;
   assign m_floor = proj10 / 40'sd11;
+
+  // ONE BOUNDARY MULTIPLIER, NOT TWO. The coarsening and refining tests are
+  // mutually exclusive by construction -- `coarsening` is exactly
+  // `raw > rung_i` -- so they can never both need a product in the same
+  // evaluation. Selecting the operand before the multiply rather than after it
+  // is the same arithmetic with half the silicon.
+  logic signed [W-1:0] bnd_mul_a;
+  logic signed [W-1:0] bnd_cmp;
+  assign bnd_mul_a = coarsening ? W'(k_ceil) : (W'(m_floor) + W'(1));
+  assign bnd_cmp   = bnd_mul_a * W'(e_sel);
+
   // The reference special-cases e == 0 to a boundary of ZERO rather than
   // dividing, and the transformed tests must not be used there — they were
   // derived under e > 0. With bnd = 0 the two tests degenerate to
@@ -220,9 +270,9 @@ module zhao_geom_lod (
     if (e_sel == 32'sd0) begin
       switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;
     end else if (coarsening) begin
-      switch_ok = (bnd_num >= (72'(k_ceil) * 72'(e_sel)));
+      switch_ok = (bnd_num >= bnd_cmp);
     end else begin
-      switch_ok = (bnd_num < ((72'(m_floor) + 72'sd1) * 72'(e_sel)));
+      switch_ok = (bnd_num < bnd_cmp);
     end
   end
 

@@ -87,8 +87,9 @@ echo "   pristine model ${PRISTINE_MODEL:0:16}, directed lane green"
 # Each entry: name @@ old @@ new
 MUTS=(
 "M01 legality edge  (< becomes <=)@@assign legal_glint = (lhs_glint < legal_rhs);@@assign legal_glint = (lhs_glint <= legal_rhs);"
-"M02 rounding term dropped (micro)@@assign lhs_micro = (72'(proj_radius_q8_i) * 72'(micro_error_i)) + (72'(bound_radius_i) >>> 1);@@assign lhs_micro = (72'(proj_radius_q8_i) * 72'(micro_error_i)) + 72'sd0;"
-"M03 rounding rounds down (glint)@@assign lhs_glint = (72'(proj_radius_q8_i) * 72'(glint_error_i)) + (72'(bound_radius_i) >>> 1);@@assign lhs_glint = (72'(proj_radius_q8_i) * 72'(glint_error_i)) - (72'(bound_radius_i) >>> 1);"
+"M23 legal_rhs drops the +R (shared product)@@assign legal_rhs = th_r + W'(bound_radius_i);@@assign legal_rhs = th_r;"
+"M02 rounding term dropped (micro)@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + W'sd0;"
+"M03 rounding rounds down (glint)@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;@@assign lhs_glint = (W'(proj_radius_q8_i) * W'(glint_error_i)) - half_r;"
 "M04 finest legal rung, not coarsest@@    if (legal_glint) raw = 2'd3;
     else if (legal_splat) raw = 2'd2;
     else if (legal_micro) raw = 2'd1;
@@ -98,14 +99,14 @@ MUTS=(
     else raw = 2'd0;"
 "M05 minimum hold 15 -> 14@@localparam logic [15:0] HOLD_TICKS = 16'd15;@@localparam logic [15:0] HOLD_TICKS = 16'd14;"
 "M06 minimum hold removed@@localparam logic [15:0] HOLD_TICKS = 16'd15;@@localparam logic [15:0] HOLD_TICKS = 16'd0;"
-"M07 coarsen boundary >= becomes >@@switch_ok = (bnd_num >= (72'(k_ceil) * 72'(e_sel)));@@switch_ok = (bnd_num > (72'(k_ceil) * 72'(e_sel)));"
-"M08 refine boundary < becomes <=@@switch_ok = (bnd_num < ((72'(m_floor) + 72'sd1) * 72'(e_sel)));@@switch_ok = (bnd_num <= ((72'(m_floor) + 72'sd1) * 72'(e_sel)));"
+"M07 coarsen boundary >= becomes >@@switch_ok = (bnd_num >= bnd_cmp);@@switch_ok = (bnd_num > bnd_cmp);"
+"M08 refine boundary < becomes <=@@switch_ok = (bnd_num < bnd_cmp);@@switch_ok = (bnd_num <= bnd_cmp);"
 "M09 ceil becomes floor (the +8)@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;@@assign k_ceil  = proj10 / 40'sd9;"
 "M10 hysteresis 9 becomes 10 (no band)@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;@@assign k_ceil  = (proj10 + 40'sd8) / 40'sd10;"
 "M11 hysteresis 11 becomes 10 (no band)@@assign m_floor = proj10 / 40'sd11;@@assign m_floor = proj10 / 40'sd10;"
-"M12 refine drops the +1@@switch_ok = (bnd_num < ((72'(m_floor) + 72'sd1) * 72'(e_sel)));@@switch_ok = (bnd_num < (72'(m_floor) * 72'(e_sel)));"
+"M12 refine drops the +1@@assign bnd_mul_a = coarsening ? W'(k_ceil) : (W'(m_floor) + W'(1));@@assign bnd_mul_a = coarsening ? W'(k_ceil) : W'(m_floor);"
 "M13 boundary uses the wrong rung@@assign bnd_rung   = coarsening ? raw : rung_i;@@assign bnd_rung   = coarsening ? rung_i : raw;"
-"M14 boundary rounding term dropped@@+ (72'(e_sel) >>> 1);@@+ 72'sd0;"
+"M14 boundary rounding term dropped@@assign bnd_num = th_r + (W'(e_sel) >>> 1);@@assign bnd_num = th_r + W'sd0;"
 "M15 hold does not saturate@@assign hold_inc = (hold_i == 16'hFFFF) ? 16'hFFFF : (hold_i + 16'd1);@@assign hold_inc = hold_i + 16'd1;"
 "M16 hold not cleared on a switch@@      rung_next = raw;
       hold_next = 16'd0;@@      rung_next = raw;
@@ -113,9 +114,9 @@ MUTS=(
 "M17 e==0 coarsening always allowed@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;@@switch_ok = 1'b1;"
 "M18 e==0 refining always refused@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;@@switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b0;"
 "M19 coarsening test inverted@@assign coarsening = (raw > rung_i);@@assign coarsening = (raw < rung_i);"
-"M20 legality uses R where e belongs@@assign lhs_splat = (72'(proj_radius_q8_i) * 72'(splat_error_i)) + (72'(bound_radius_i) >>> 1);@@assign lhs_splat = (72'(proj_radius_q8_i) * 72'(bound_radius_i)) + (72'(bound_radius_i) >>> 1);"
-"M21 two rungs share one error term@@assign lhs_splat = (72'(proj_radius_q8_i) * 72'(splat_error_i)) + (72'(bound_radius_i) >>> 1);@@assign lhs_splat = (72'(proj_radius_q8_i) * 72'(glint_error_i)) + (72'(bound_radius_i) >>> 1);"
-"M22 micro rung shares the glint term@@assign lhs_micro = (72'(proj_radius_q8_i) * 72'(micro_error_i)) + (72'(bound_radius_i) >>> 1);@@assign lhs_micro = (72'(proj_radius_q8_i) * 72'(glint_error_i)) + (72'(bound_radius_i) >>> 1);"
+"M20 legality uses R where e belongs@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(splat_error_i)) + half_r;@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(bound_radius_i)) + half_r;"
+"M21 two rungs share one error term@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(splat_error_i)) + half_r;@@assign lhs_splat = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;"
+"M22 micro rung shares the glint term@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(micro_error_i)) + half_r;@@assign lhs_micro = (W'(proj_radius_q8_i) * W'(glint_error_i)) + half_r;"
 )
 
 expected=${#MUTS[@]}
