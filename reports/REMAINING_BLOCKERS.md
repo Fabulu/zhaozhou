@@ -1006,6 +1006,28 @@ per-block numbers were summed.**
 It moves DSP reduction from "a thing to do eventually" to **a gate on the design
 fitting at all**, alongside timing closure.
 
+### Is the 213 stale? Checked: no.
+
+Eleven of the fifteen rows were measured at `96c0394a`, **189 commits ago** —
+the 2026-08-20 session that first found DSP was the binding constraint. That is
+the obvious objection to the total, so it was tested rather than argued:
+
+```
+git rev-list --count 96c0394a..HEAD -- <the block's .sv>
+```
+
+returns **0 for every one of them** — `terrain_project`, `surface_stamp`,
+`texture_tmu`, `terrain_normals`, `geom_binner`, `raster_fragment`,
+`texture_bilerp`. Not one of those RTL files has been touched since it was
+measured. The measurements are old in wall-clock time and **current in the only
+sense that matters**.
+
+The other four are recent by construction: `terrain_lod` (33 commits),
+`geom_lod` (17), `geom_cull` (4).
+
+So the 213 is not an artifact of stale data. It is what the design asks for
+today, subject only to the per-block upper-bound caveat above.
+
 ### And the ledger is completely blind to it — checked, not assumed
 
 | | count |
