@@ -165,7 +165,7 @@ function cmdCheck(): number {
     return 1;
   }
   const blocked = blocks.doc.blocks.filter((b) => b.blocked_on === 'hardware').length;
-  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V17 + V19–V21 + staleness green (V18 reserved: sim-lane run registry)`);
+  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V17 + V19–V22 + staleness green (V18 reserved: sim-lane run registry)`);
   return 0;
 }
 

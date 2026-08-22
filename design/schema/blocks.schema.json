@@ -4,103 +4,302 @@
   "title": "Zhaozhou Design Ledger — blocks.yml",
   "description": "Structural schema for design/blocks.yml (charter §4). Relational rules V1-V14 live in tools/ledger (schema validates shape, the validator validates law).",
   "type": "object",
-  "required": ["schema_version", "counter_catalog", "blocks"],
+  "required": [
+    "schema_version",
+    "counter_catalog",
+    "blocks"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": {
+      "const": 1
+    },
     "counter_catalog": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/counterName" }
+      "items": {
+        "$ref": "#/$defs/counterName"
+      }
     },
     "blocks": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/block" }
+      "items": {
+        "$ref": "#/$defs/block"
+      }
     }
   },
   "$defs": {
-    "counterName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "counterName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
     "blockId": {
       "type": "string",
       "pattern": "^([A-Z][A-Z0-9]*)(\\.[A-Z][A-Z0-9]*)+$",
       "maxLength": 64
     },
-    "issueRef": { "type": "string", "pattern": "^ZH-[0-9]{3}$" },
-    "clockDomain": { "enum": ["hps", "gpu", "sdram", "video", "audio", "async"] },
+    "issueRef": {
+      "type": "string",
+      "pattern": "^ZH-[0-9]{3}$"
+    },
+    "clockDomain": {
+      "enum": [
+        "hps",
+        "gpu",
+        "sdram",
+        "video",
+        "audio",
+        "async"
+      ]
+    },
     "subsystemRtl": {
-      "enum": ["platform", "command", "memory", "field", "input", "audio", "video", "measure", "terrain", "surface", "geometry", "raster", "texture", "particles", "forge", "compositor", "debug"]
+      "enum": [
+        "platform",
+        "command",
+        "memory",
+        "field",
+        "input",
+        "audio",
+        "video",
+        "measure",
+        "terrain",
+        "surface",
+        "geometry",
+        "raster",
+        "texture",
+        "particles",
+        "forge",
+        "compositor",
+        "debug"
+      ]
     },
     "maturity": {
-      "enum": ["SPECIFIED", "REFERENCE_COMPLETE", "UNIT_VERIFIED", "RTL_VERIFIED", "SYNTHESIZED", "INTEGRATED", "HARDWARE_PROVEN"]
+      "enum": [
+        "SPECIFIED",
+        "REFERENCE_COMPLETE",
+        "UNIT_VERIFIED",
+        "RTL_VERIFIED",
+        "SYNTHESIZED",
+        "INTEGRATED",
+        "HARDWARE_PROVEN"
+      ]
     },
     "latency": {
       "type": "string",
       "pattern": "^(fixed:[0-9]+|variable|variable_bounded:[0-9]+|batch|n/a \\([^)]*\\))$"
     },
-    "path": { "type": "string", "minLength": 1 },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
     "block": {
       "type": "object",
-      "required": ["id", "name", "kind", "subsystem", "clock_domain", "purpose", "contract", "phase", "owner_issue", "inputs", "outputs", "upstream", "downstream", "backpressure", "latency", "target_throughput", "maturity", "maturity_log", "deferred", "superseded_by"],
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "subsystem",
+        "clock_domain",
+        "purpose",
+        "contract",
+        "phase",
+        "owner_issue",
+        "inputs",
+        "outputs",
+        "upstream",
+        "downstream",
+        "backpressure",
+        "latency",
+        "target_throughput",
+        "maturity",
+        "maturity_log",
+        "deferred",
+        "superseded_by"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/blockId" },
-        "name": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["rtl", "software", "profile"] },
+        "id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "rtl",
+            "software",
+            "profile"
+          ]
+        },
+        "evidence_kind": {
+          "enum": [
+            "scalar_reference",
+            "formal_timing"
+          ],
+          "description": "formal_timing: the block has no scalar model (a PLL, a reset sequencer, a CDC primitive). Rule V22 then FORBIDS reference_model and directed/random tests, and requires tests.formal."
+        },
         "subsystem": {
           "description": "Must match an fpga/rtl/ directory for kind=rtl (rule V1); 'sw' for software.",
-          "enum": ["platform", "command", "memory", "field", "input", "audio", "video", "measure", "terrain", "surface", "geometry", "raster", "texture", "particles", "forge", "compositor", "debug", "sw"]
+          "enum": [
+            "platform",
+            "command",
+            "memory",
+            "field",
+            "input",
+            "audio",
+            "video",
+            "measure",
+            "terrain",
+            "surface",
+            "geometry",
+            "raster",
+            "texture",
+            "particles",
+            "forge",
+            "compositor",
+            "debug",
+            "sw"
+          ]
         },
-        "clock_domain": { "$ref": "#/$defs/clockDomain" },
-        "purpose": { "type": "string", "minLength": 10 },
-        "contract": { "$ref": "#/$defs/path" },
-        "phase": { "type": "integer", "minimum": 0, "maximum": 12 },
-        "owner_issue": { "$ref": "#/$defs/issueRef" },
-        "inputs": { "type": "array", "items": { "type": "string" }, "minItems": 0 },
-        "outputs": { "type": "array", "items": { "type": "string" }, "minItems": 0 },
-        "upstream": { "type": "array", "items": { "$ref": "#/$defs/blockId" } },
-        "downstream": { "type": "array", "items": { "$ref": "#/$defs/blockId" } },
-        "backpressure": { "enum": ["ready_valid", "credit", "none"] },
-        "latency": { "$ref": "#/$defs/latency" },
-        "target_throughput": { "type": "string", "minLength": 1 },
+        "clock_domain": {
+          "$ref": "#/$defs/clockDomain"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 10
+        },
+        "contract": {
+          "$ref": "#/$defs/path"
+        },
+        "phase": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "owner_issue": {
+          "$ref": "#/$defs/issueRef"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 0
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 0
+        },
+        "upstream": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/blockId"
+          }
+        },
+        "downstream": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/blockId"
+          }
+        },
+        "backpressure": {
+          "enum": [
+            "ready_valid",
+            "credit",
+            "none"
+          ]
+        },
+        "latency": {
+          "$ref": "#/$defs/latency"
+        },
+        "target_throughput": {
+          "type": "string",
+          "minLength": 1
+        },
         "reference_model": {
           "description": "The block's oracle. Either a zref:: symbol (a scalar reference model), or rtl::<module> when the block has NO arithmetic and its correctness is a protocol relationship with another RTL module -- MEM.HPS.ARBITER routes bursts and is checked against the real zhao_hps_bridge composed in its test. Demanding a zref:: name where none exists is how this ledger accumulated phantom citations; rtl:: is checked for existence by V17 exactly as zref:: is, so it is a different claim and not a weaker one. A block whose semantics ARE the Field IR interpreter names zfield::interpret, the same answer design/ops.yml gives: field-ir.md 1 puts op semantics in exactly two places, and the sequencer's law is that interpreter and not a per-block paraphrase of it.",
           "type": "string",
           "pattern": "^(zref::[A-Za-z0-9_:]+|zfield::interpret|rtl::[a-z0-9_]+)$"
         },
-        "implementation": { "$ref": "#/$defs/path" },
+        "implementation": {
+          "$ref": "#/$defs/path"
+        },
         "tests": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "directed": { "$ref": "#/$defs/path" },
-            "random": { "$ref": "#/$defs/path" },
-            "formal": { "$ref": "#/$defs/path" },
-            "unit": { "$ref": "#/$defs/path" },
-            "differential": { "$ref": "#/$defs/path" }
+            "directed": {
+              "$ref": "#/$defs/path"
+            },
+            "random": {
+              "$ref": "#/$defs/path"
+            },
+            "formal": {
+              "$ref": "#/$defs/path"
+            },
+            "unit": {
+              "$ref": "#/$defs/path"
+            },
+            "differential": {
+              "$ref": "#/$defs/path"
+            }
           }
         },
         "counters": {
           "type": "array",
-          "items": { "$ref": "#/$defs/counterName" }
+          "items": {
+            "$ref": "#/$defs/counterName"
+          }
         },
-        "memory": { "type": "array", "items": { "$ref": "#/$defs/path" } },
-        "source_ids": { "type": "boolean" },
+        "memory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "source_ids": {
+          "type": "boolean"
+        },
         "async_bridge": {
           "description": "Marks a block that legitimately crosses clock domains itself (SYS.CDC instance or a documented bridge); rule V8 requires one on every clock-crossing edge.",
           "type": "boolean"
         },
         "budget_group": {
           "description": "§25 budget table row. Per-block alm/dsp/m10k percentages stay optional until Phase 0 freezes them (V5).",
-          "enum": ["platform", "command_debug", "field", "geometry_mantle", "tile", "myriad_forge", "twod_post"]
+          "enum": [
+            "platform",
+            "command_debug",
+            "field",
+            "geometry_mantle",
+            "tile",
+            "myriad_forge",
+            "twod_post"
+          ]
         },
         "resource_budget": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "alm_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
-            "dsp_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
-            "m10k_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+            "alm_percent": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            },
+            "dsp_percent": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            },
+            "m10k_percent": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
           }
         },
         "resource_actual": {
@@ -108,62 +307,206 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "source_report": { "$ref": "#/$defs/path" },
-            "alm": { "type": "number" },
-            "dsp": { "type": "number" },
-            "m10k": { "type": "number" },
-            "fmax_mhz": { "type": "number" }
+            "source_report": {
+              "$ref": "#/$defs/path"
+            },
+            "alm": {
+              "type": "number"
+            },
+            "dsp": {
+              "type": "number"
+            },
+            "m10k": {
+              "type": "number"
+            },
+            "fmax_mhz": {
+              "type": "number"
+            }
           }
         },
-        "maturity": { "$ref": "#/$defs/maturity" },
+        "maturity": {
+          "$ref": "#/$defs/maturity"
+        },
         "maturity_log": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["state", "date", "commit", "evidence"],
+            "required": [
+              "state",
+              "date",
+              "commit",
+              "evidence"
+            ],
             "additionalProperties": false,
             "properties": {
-              "state": { "$ref": "#/$defs/maturity" },
-              "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-              "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
-              "evidence": { "$ref": "#/$defs/path" },
-              "regression_reason": { "type": "string", "minLength": 10 }
+              "state": {
+                "$ref": "#/$defs/maturity"
+              },
+              "date": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "commit": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{7,40}$"
+              },
+              "evidence": {
+                "$ref": "#/$defs/path"
+              },
+              "regression_reason": {
+                "type": "string",
+                "minLength": 10
+              }
             }
           }
         },
-        "blocked_on": { "enum": ["hardware"] },
-        "deferred": { "type": "boolean" },
-        "cut_order": { "type": ["integer", "null"], "minimum": 1, "maximum": 8 },
-        "superseded_by": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$" },
-        "implemented_by": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$",
-          "description": "kind=profile only: the rtl block that implements this configuration (rule V21)." },
-        "leaf": { "type": "boolean" },
-        "runs_on_target_hardware": { "type": "boolean" },
-        "notes": { "type": ["string", "null"] }
+        "blocked_on": {
+          "enum": [
+            "hardware"
+          ]
+        },
+        "deferred": {
+          "type": "boolean"
+        },
+        "cut_order": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 8
+        },
+        "superseded_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$"
+        },
+        "implemented_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$",
+          "description": "kind=profile only: the rtl block that implements this configuration (rule V21)."
+        },
+        "leaf": {
+          "type": "boolean"
+        },
+        "runs_on_target_hardware": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "kind": { "const": "rtl" } } },
-          "then": {
-            "required": ["reference_model", "tests", "counters", "source_ids", "budget_group"],
+          "if": {
             "properties": {
-              "counters": { "minItems": 1 },
-              "tests": { "required": ["directed", "random"] },
-              "source_ids": { "const": true },
-              "subsystem": { "$ref": "#/$defs/subsystemRtl" }
+              "kind": {
+                "const": "rtl"
+              },
+              "evidence_kind": {
+                "not": {
+                  "const": "formal_timing"
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reference_model",
+              "tests",
+              "counters",
+              "source_ids",
+              "budget_group"
+            ],
+            "properties": {
+              "counters": {
+                "minItems": 1
+              },
+              "tests": {
+                "required": [
+                  "directed",
+                  "random"
+                ]
+              },
+              "source_ids": {
+                "const": true
+              },
+              "subsystem": {
+                "$ref": "#/$defs/subsystemRtl"
+              }
             }
           }
         },
         {
-          "if": { "properties": { "kind": { "const": "profile" } } },
-          "then": { "required": ["implemented_by"] }
+          "if": {
+            "properties": {
+              "evidence_kind": {
+                "const": "formal_timing"
+              }
+            },
+            "required": [
+              "evidence_kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "tests",
+              "counters",
+              "source_ids"
+            ],
+            "properties": {
+              "tests": {
+                "required": [
+                  "formal"
+                ]
+              },
+              "reference_model": {
+                "not": {}
+              },
+              "source_ids": {
+                "const": true
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "kind": { "const": "software" } } },
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "profile"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "implemented_by"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "software"
+              }
+            }
+          },
           "then": {
             "properties": {
-              "subsystem": { "const": "sw" },
-              "counters": { "maxItems": 0 },
+              "subsystem": {
+                "const": "sw"
+              },
+              "counters": {
+                "maxItems": 0
+              },
               "resource_budget": false,
               "budget_group": false,
               "reference_model": false

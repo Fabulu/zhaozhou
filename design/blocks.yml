@@ -95,6 +95,7 @@ blocks:
   - id: SYS.PLL
     name: Vendor PLL wrappers
     kind: rtl
+    evidence_kind: formal_timing
     subsystem: platform
     clock_domain: async
     purpose: Instantiate the Cyclone V PLL/IP wrappers producing the gpu/sdram/video/audio clock tree; nothing else may touch clock configuration.
@@ -108,10 +109,8 @@ blocks:
     backpressure: none
     latency: fixed:1
     target_throughput: n/a (configuration wrapper)
-    reference_model: zref::SysPll
     tests:
-      directed: tests/platform/sys_pll_directed.cpp
-      random: tests/platform/sys_pll_random.cpp
+      formal: tests/formal/sys_pll_lock.sby
     counters: [pll_lock_lost]
     source_ids: true
     budget_group: platform
@@ -126,6 +125,7 @@ blocks:
   - id: SYS.RESET
     name: Reset sequencer
     kind: rtl
+    evidence_kind: formal_timing
     subsystem: platform
     clock_domain: async
     purpose: Sequence per-domain resets after pll_locked; formal property reset-reaches-idle (every FSM returns to its idle state on reset assertion).
@@ -139,11 +139,8 @@ blocks:
     backpressure: none
     latency: variable_bounded:16
     target_throughput: n/a (sequencer)
-    reference_model: zref::ResetSequencer
     tests:
-      directed: tests/platform/sys_reset_directed.cpp
-      random: tests/platform/sys_reset_random.cpp
-      formal: tests/formal/sys_reset_reset_reaches_idle.sby
+      formal: tests/formal/sys_reset_sequence.sby
     counters: [reset_assertions]
     source_ids: true
     budget_group: platform
@@ -158,6 +155,7 @@ blocks:
   - id: SYS.CDC
     name: Ready/valid CDC FIFO library
     kind: rtl
+    evidence_kind: formal_timing
     subsystem: platform
     clock_domain: async
     purpose: "The ONLY general clock-domain-crossing primitive: parameterised ready/valid async FIFOs. Any edge crossing clock domains routes through this block or a block documented as its own async bridge (rule V8)."
@@ -171,11 +169,8 @@ blocks:
     backpressure: ready_valid
     latency: variable_bounded:4
     target_throughput: 1 word per clock per direction
-    reference_model: zref::CdcFifo
     tests:
-      directed: tests/platform/sys_cdc_directed.cpp
-      random: tests/platform/sys_cdc_random.cpp
-      formal: tests/formal/sys_cdc_no_data_loss.sby
+      formal: tests/formal/sys_cdc_handoff.sby
     counters: [cdc_drops]
     source_ids: true
     budget_group: platform

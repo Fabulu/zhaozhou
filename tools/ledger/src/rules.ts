@@ -158,10 +158,17 @@ export function checkBlocks(blocksDoc: BlocksDoc, opts: RuleOptions = {}): strin
     }
 
     // --- V4: RTL blocks carry contract + reference + tests + counters + source ids ---
-    if (b.kind === 'rtl') {
+    // A `formal_timing` block is exempt from the three scalar-reference fields
+    // and is held to V22 instead -- it has no function from inputs to outputs
+    // for a differential to compare. The exemption is narrow and it is paid
+    // for: V22 forbids such a block from declaring those fields at all.
+    const scalarEvidence = (b.evidence_kind ?? 'scalar_reference') === 'scalar_reference';
+    if (b.kind === 'rtl' && scalarEvidence) {
       if (!b.reference_model) errors.push(`V4: rtl block ${b.id} has no reference_model`);
       if (!b.tests?.directed) errors.push(`V4: rtl block ${b.id} has no tests.directed`);
       if (!b.tests?.random) errors.push(`V4: rtl block ${b.id} has no tests.random`);
+    }
+    if (b.kind === 'rtl') {
       if (!b.counters || b.counters.length < 1) errors.push(`V4: rtl block ${b.id} has no counters`);
       if (b.source_ids !== true) errors.push(`V4: rtl block ${b.id} must set source_ids: true`);
     }
@@ -267,6 +274,44 @@ export function checkBlocks(blocksDoc: BlocksDoc, opts: RuleOptions = {}): strin
             `V8: edge ${b.id} (${b.clock_domain}) -> ${d} (${dn.clock_domain}) crosses clock domains without SYS.CDC or a documented async bridge (async_bridge: true)`
           );
         }
+      }
+    }
+  }
+
+  // --- V22: a `formal_timing` block declares a property, never a fiction ----
+  //
+  // The exemption V4 grants is only honest if the block cannot ALSO keep the
+  // scalar-reference fields lying around. SYS.PLL declared
+  // `zref::SysPll` and two `tests/platform/sys_pll_*.cpp` paths, none of which
+  // has ever existed, purely so V4 would pass. Forbidding them is the point:
+  // the rule removes the fiction rather than tolerating it.
+  //
+  // What it does NOT do is invent a maturity ladder for these blocks. All
+  // three are SPECIFIED and nobody is building them yet; REFERENCE_COMPLETE and
+  // UNIT_VERIFIED both presuppose a scalar reference and mean nothing here, but
+  // that is a question to settle when one actually advances, not now. The
+  // formal property is required to EXIST and be green only once it does.
+  for (const b of blocks) {
+    if ((b.evidence_kind ?? 'scalar_reference') !== 'formal_timing') continue;
+    if (b.reference_model) {
+      errors.push(
+        `V22: ${b.id} is evidence_kind: formal_timing but still declares reference_model "${b.reference_model}" — a block with no scalar model may not name one`
+      );
+    }
+    if (b.tests?.directed || b.tests?.random) {
+      errors.push(
+        `V22: ${b.id} is evidence_kind: formal_timing but declares a directed/random differential — there is no function to differentiate against`
+      );
+    }
+    if (!b.tests?.formal) {
+      errors.push(`V22: ${b.id} is evidence_kind: formal_timing but names no tests.formal property`);
+      continue;
+    }
+    if (b.maturity !== 'SPECIFIED') {
+      if (!exists(b.tests.formal)) {
+        errors.push(
+          `V22: ${b.id} is past SPECIFIED but its formal property "${b.tests.formal}" does not exist on disk`
+        );
       }
     }
   }

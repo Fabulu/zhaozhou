@@ -683,3 +683,114 @@ test('V21: a profile may not book an ALM budget — the area belongs to the engi
     errors.join(' | ')
   );
 });
+
+// V22 — a `formal_timing` block declares a property, never a fiction.
+//
+// V4 lets such a block skip reference_model and the directed/random pair,
+// because it has no function from inputs to outputs for a differential to
+// compare. That exemption is only honest if the block cannot ALSO keep the
+// scalar-reference fields lying around: SYS.PLL declared `zref::SysPll` and two
+// `tests/platform/sys_pll_*.cpp` paths, none of which has ever existed, purely
+// so V4 would pass. These tests hold the exemption to that price.
+
+function formalTimingBlock(over: Partial<Block> = {}): Block {
+  return {
+    id: 'SYS.PLL',
+    name: 'clock tree',
+    kind: 'rtl',
+    evidence_kind: 'formal_timing',
+    subsystem: 'platform',
+    clock_domain: 'gpu',
+    purpose: 'instantiate the PLL wrappers producing the clock tree',
+    contract: 'design/contracts/SYS.PLL.md',
+    phase: 0,
+    owner_issue: 'ZH-001',
+    inputs: ['refclk'],
+    outputs: ['clocks'],
+    upstream: [],
+    downstream: [],
+    backpressure: 'none',
+    latency: 'variable',
+    target_throughput: 'n/a',
+    tests: { formal: 'tests/formal/sys_pll_lock.sby' },
+    counters: ['commands'],
+    source_ids: true,
+    maturity: 'SPECIFIED',
+    maturity_log: [],
+    deferred: false,
+    superseded_by: null,
+    leaf: true,
+    ...over,
+  };
+}
+
+test('V22: a formal_timing block with a property and no fiction passes', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks.push(formalTimingBlock());
+  const errors = checkAll(blocks, ops, { exists });
+  assert.deepEqual(errors, []);
+});
+
+test('V22: a formal_timing block may not keep a reference_model', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks.push(formalTimingBlock({ reference_model: 'zref::SysPll' }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V22:') && e.includes('may not name one')),
+    errors.join(' | ')
+  );
+});
+
+test('V22: a formal_timing block may not declare a differential', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks.push(
+    formalTimingBlock({
+      tests: { formal: 'tests/formal/sys_pll_lock.sby', directed: 'tests/platform/sys_pll_directed.cpp' },
+    })
+  );
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V22:') && e.includes('no function to differentiate')),
+    errors.join(' | ')
+  );
+});
+
+test('V22: a formal_timing block must name a formal property', () => {
+  const { blocks, ops } = baseline();
+  blocks.blocks.push(formalTimingBlock({ tests: {} }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V22:') && e.includes('names no tests.formal')),
+    errors.join(' | ')
+  );
+});
+
+test('V22: past SPECIFIED, the formal property must exist on disk', () => {
+  const { blocks, ops } = baseline();
+  // `exists` in these fixtures accepts tests/ and design/ paths, so point it elsewhere
+  blocks.blocks.push(
+    formalTimingBlock({
+      maturity: 'REFERENCE_COMPLETE',
+      maturity_log: [
+        { state: 'REFERENCE_COMPLETE', date: '2026-08-22', commit: 'abc1234', evidence: 'design/contracts/SYS.PLL.md' },
+      ],
+      tests: { formal: 'nowhere/sys_pll_lock.sby' },
+    })
+  );
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V22:') && e.includes('does not exist on disk')),
+    errors.join(' | ')
+  );
+});
+
+test('V22: an ordinary rtl block still owes its reference and differential', () => {
+  const { blocks, ops } = baseline();
+  // the exemption must not leak to blocks that did not claim it
+  blocks.blocks[1] = rtlBlock({ reference_model: undefined });
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V4:') && e.includes('no reference_model')),
+    errors.join(' | ')
+  );
+});

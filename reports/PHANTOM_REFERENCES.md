@@ -355,6 +355,67 @@ layout question rather than a missing law.
 
 ---
 
+## Correction + addendum, 2026-08-22 (later still): the cull is built, and the
+## addendum above says SIX planes where the machine has FIVE
+
+The addendum above ("step 1 for GEOM.MESHFETCH's cull") says:
+
+> **The six frustum planes are row combinations of that matrix.**
+
+**There are five.** The reasoning that produced "six" is the textbook frustum,
+which has near and far z planes. This machine has neither. `project_vertex`'s
+only depth condition is `clip.w.raw <= 0` — there is no z clip anywhere in the
+renderer — so the volume is `w > 0, -w <= x <= w, -w <= y <= w`, which is five
+half-spaces:
+
+    left = row3 + row0    right = row3 - row0
+    bottom = row3 + row1  top   = row3 - row1
+    near = row3           (this IS w > 0, and it is the only depth test)
+
+`row2` is never read, which is the same fact stated in arithmetic. The error was
+harmless only because it was caught before RTL: **inventing a sixth plane would
+have rejected geometry the renderer would have drawn**, which is the one failure
+direction a conservative cull must not have. It is corrected here rather than
+edited away, because the way it arose — reaching for the standard shape instead
+of reading this machine's own convention — is the interesting part.
+
+The same paragraph is right about everything else, and the equivalence is now
+measured: 360,000 random points across six cameras agree with `project_vertex`,
+`mat4_vec4` and `fx_div_exact` exactly, with zero points that the planes reject
+and the renderer would have drawn (`tests/differential/geom_cull_directed.cpp`,
+sections 2/3).
+
+### The normalisation question was answered option 2, and the ROUNDING has a direction
+
+That addendum offered two honest ways to handle non-unit plane normals and left
+the choice open. **Option 2 was taken**: the planes stay exact and the comparison
+is against `radius * |normal|`. Dividing four fx16 components by a length
+introduces four roundings per plane in a direction nobody had analysed; the
+bound needs one.
+
+And that one bound must round **UP**. The available primitive, `isqrt_u64`, is
+an exact FLOOR square root, and a floor makes the right-hand side less negative,
+which makes rejection easier, which rejects spheres that are visible — deleting
+geometry near the screen edges rather than costing performance. The ceiling is
+free in hardware: the restoring recurrence's own remainder is `n - res^2`, so
+"not a perfect square" needs no second computation.
+
+### What is now real, and what is still a phantom
+
+| GEOM.MESHFETCH's third | state |
+| --- | --- |
+| decide LOD per governor targets | `zhao_geom_lod.sv`, against the shipped `zref::lod_raw` / `lod_update` |
+| reject bounds outside every camera | `zhao_geom_cull.sv`, against `zref::cull` (new, and it IS the law for the sphere half) |
+| fetch meshlet descriptors | **still a phantom** — the schema is unfrozen |
+
+`zref::MeshFetch` therefore stays in the table above as unresolved, and
+GEOM.MESHFETCH stays SPECIFIED. Two thirds having RTL is not two thirds of a
+block: the reference model the ledger names still resolves to nothing, and
+pointing it at `zref::cull` would be exactly the mistake this report was written
+about — a name that reads green while the thing it names does not exist.
+
+---
+
 ## Correction, 2026-08-22: "all 25 are still SPECIFIED" is no longer true
 
 The section above the table says:

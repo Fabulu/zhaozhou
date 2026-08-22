@@ -76,6 +76,27 @@ export interface Block {
   backpressure: 'ready_valid' | 'credit' | 'none';
   latency: string;
   target_throughput: string;
+  /**
+   * WHAT KIND OF EVIDENCE THIS BLOCK CAN HAVE.
+   *
+   * `scalar_reference` (the default, and what every block assumed): the block
+   * computes a function from inputs to outputs, so a C++ reference is the
+   * oracle and a differential is the evidence.
+   *
+   * `formal_timing`: it does not. A PLL has no scalar model; a reset
+   * sequencer's correctness is a timing and sequencing property. Naming a C++
+   * function for them was a category error at specification time, recorded in
+   * reports/PHANTOM_REFERENCES.md as kind 3, which also predicted this would
+   * need fixing in the ledger BEFORE those blocks came up. They are phase 0,
+   * so it is overdue: SYS.PLL, SYS.RESET and SYS.CDC each carried THREE
+   * fictions -- a phantom `reference_model` plus two `tests/platform/*.cpp`
+   * paths that have never existed -- purely to satisfy V4.
+   *
+   * A `formal_timing` block declares a formal property instead, and rule V22
+   * FORBIDS it from declaring the scalar-reference fields at all, so the
+   * exemption cannot be used to make an ordinary block's obligations quiet.
+   */
+  evidence_kind?: 'scalar_reference' | 'formal_timing';
   reference_model?: string;
   implementation?: string;
   tests?: BlockTests;
