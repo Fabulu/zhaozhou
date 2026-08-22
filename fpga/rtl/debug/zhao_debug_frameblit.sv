@@ -300,11 +300,38 @@ module zhao_debug_frameblit
       .c_o (crc_next)
   );
 
-  logic [31:0] remaining;
-  assign remaining = r_len - off;
+  // HOW MANY BYTES ARE LEFT, AND HOW BIG THIS CHUNK IS -- BOTH REGISTERED.
+  //
+  // These used to be combinational off r_len:
+  //
+  //   remaining = r_len - off;
+  //   this_len  = (remaining >= 64) ? 64 : remaining[6:0];
+  //
+  // and `this_len` fans out to the HPS request length, the guard request's
+  // length and address, the beat counter and the offset update. After the CRC
+  // work removed every other family, that fan-out WAS the design's worst path:
+  //
+  //   -3.067 ns  zhao_debug_frameblit|r_len[2] -> zhao_debug_frameblit|off[12]
+  //              12.866 ns against a 10 ns budget
+  //
+  // and all 101 remaining failing endpoints started at r_len.
+  //
+  // `off` only moves at a chunk boundary, so neither value has to be derived
+  // in the cycle it is used. They are maintained incrementally instead: the
+  // subtract happens once per chunk into a register, and every reader sees a
+  // register.
+  logic [31:0] rem_q;    // bytes still to transfer  (== r_len - off)
+  logic [6:0]  tlen_q;   // bytes in the current chunk
+
+  function automatic logic [6:0] clamp_chunk(input logic [31:0] v);
+    clamp_chunk = (v >= 32'(CHUNK_BYTES)) ? 7'(CHUNK_BYTES) : 7'(v[6:0]);
+  endfunction
+
+  logic [31:0] rem_next;
+  assign rem_next = rem_q - 32'(tlen_q);
 
   logic [6:0] this_len;
-  assign this_len = (remaining >= 32'(CHUNK_BYTES)) ? 7'(CHUNK_BYTES) : 7'(remaining[6:0]);
+  assign this_len = tlen_q;
 
   assign req_ready_o = (state == B_IDLE);
 
@@ -383,6 +410,7 @@ module zhao_debug_frameblit
       state <= B_IDLE;
       beat <= '0;
       r_slot <= '0; r_mode <= '0; r_src <= '0; r_len <= '0; r_crc <= '0;
+      rem_q <= 32'd0; tlen_q <= 7'd0;
       r_gen <= '0;
       off <= '0; issued <= '0; retired <= '0;
       crc_acc <= 32'hFFFF_FFFF;
@@ -432,6 +460,8 @@ module zhao_debug_frameblit
             r_len <= req_len_i;
             r_crc <= req_crc_i;
             off <= '0;
+            rem_q <= req_len_i;
+            tlen_q <= clamp_chunk(req_len_i);
             issued <= '0;
             retired <= '0;
             crc_acc <= 32'hFFFF_FFFF;
@@ -553,11 +583,18 @@ module zhao_debug_frameblit
           // is not the SDRAM controller completing the write.
           if (abort_pending) begin
             state <= B_ABORT_STOP;
-          end else if (off + 32'(this_len) >= r_len) begin
+          // `tlen_q >= rem_q` is the same test as the old
+          // `off + this_len >= r_len`, read entirely from registers: tlen_q is
+          // min(rem_q, 64), so it reaches rem_q exactly on the last chunk.
+          end else if (32'(tlen_q) >= rem_q) begin
             off <= r_len;
+            rem_q <= 32'd0;
+            tlen_q <= 7'd0;
             state <= B_DECIDE;
           end else begin
             off <= off + 32'(this_len);
+            rem_q <= rem_next;
+            tlen_q <= clamp_chunk(rem_next);
             state <= B_READ_REQUEST;
           end
         end
