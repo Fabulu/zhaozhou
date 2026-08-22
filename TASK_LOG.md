@@ -10,6 +10,66 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- THE LADDER SPLIT WORKED AND THE DESIGN GOT WORSE. Both are true.
+
+| | before (`a0ef3ec`) | after (`14e5a21`) |
+| --- | ---: | ---: |
+| setup worst | -1.096 ns | **-1.472 ns** |
+| failing endpoints | 172 | **355** |
+| hold | +0.251, 0 failing | **-1.366, 1 failing** |
+| ALMs | 7,713 | 7,671 |
+
+**The headline moved the wrong way.** Recorded as such rather than buried.
+
+### The census says the change did what it was for
+
+Full negative-slack census both sides, via `quartus_sta` against the preserved
+fit:
+
+| family | before | after |
+| --- | ---: | ---: |
+| `hdr_win -> seed_steps_q` | 6,973 @ -1.096 | -- gone -- |
+| `cb -> seed_steps_q` | -- | 5,619 @ **-0.854** |
+| `slot_ram -> done_status` | 81 @ -0.466 | 623 @ **-1.472** |
+| `slot_ram -> walk_off` | @ -0.838 | @ **-1.155** |
+| `slot_ram -> walk_cnt` | @ -0.564 | @ **-1.082** |
+| `scanout\|fetch -> guard_scan` | 31 @ -0.019 | **3,862** @ -0.468 |
+
+The targeted family improved by 0.24 ns and shrank by 1,354 paths. It is no
+longer the worst. Every family that overtook it is one the change did not
+touch, and one of them -- the scanout-to-guard path -- went from 31 paths at
+essentially zero to 3,862.
+
+### What that actually means, and it is the useful finding
+
+**At this margin, fixing one family no longer monotonically improves the
+design.** The fitter had been spending its effort holding the header ladder
+together; relieved of that, it spent it elsewhere and three other families
+drifted past. Nothing regressed structurally -- the RTL those families run
+through is unchanged.
+
+The first three fixes were 6.5x, 4x and 3x overruns: real structural depth,
+where any improvement had to show. Everything left is within 1.5 ns of the
+target, which is placement territory. The remaining work is broad-front, not
+another hotspot hunt.
+
+### The change is kept
+
+It removes real work from a cycle that already does seven checks, and its own
+family improved. Reverting because an untouched family drifted would be
+choosing the number over the reasoning. But it is NOT an improvement to the
+design and is not recorded as one.
+
+### The honest state
+
+    setup   -1.472 ns   355 failing endpoints   13,585 negative-slack paths
+    hold    -1.366 ns     1 failing
+
+Timing is not closed and the last three measurements have been -3.067, -1.096,
+-1.472. The trend is no longer monotone.
+
+---
+
 ## 2026-08-22 -- MEASURED: -1.096 ns. The campaign in three steps.
 
 Composed fit at clean HEAD `a0ef3ec`.
