@@ -2603,6 +2603,45 @@ set_tests_properties(geom_lod_random PROPERTIES LABELS "fast;nightly" TIMEOUT 90
 add_test(NAME geom_lod_random_nightly COMMAND test_geom_lod_directed --random 200000)
 set_tests_properties(geom_lod_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# ---- GEOM.MESHFETCH: the conservative frustum cull -------------------------
+# The SECOND third of GEOM.MESHFETCH, ruled by the owner on 2026-08-22 when
+# "camera visibility sectors" was deleted from the purpose line. The remaining
+# third -- the descriptor fetch -- has no format yet and is not here.
+#
+# `zref::cull` is written for this and is therefore the law (kind 2), which is
+# a weaker position than the LOD ladder's shipped oracle. It is shored up two
+# ways. The CAMERA half is kind 1: sections 2/3 pin the five planes to
+# `zref::render::project_vertex`, `mat4_vec4` and `fx_div_exact` -- the shipped
+# renderer -- so the planes cannot describe a volume the renderer disagrees
+# with. The SPHERE half is defended by the direction of its rounding, and
+# section 5 measures that the test can actually distinguish the ceiling bound
+# from the floor rather than assuming a boundary was reached.
+#
+# reference/src for zrender/internal.hpp: white-box access to project_vertex,
+# the same access geom_project_directed already takes.
+add_executable(test_geom_cull_directed differential/geom_cull_directed.cpp)
+target_link_libraries(test_geom_cull_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_cull_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_geom_cull_directed
+  PREFIX Vzhao_geom_cull
+  TOP_MODULE zhao_geom_cull
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_cull.sv)
+add_test(NAME geom_cull_directed COMMAND test_geom_cull_directed)
+set_tests_properties(geom_cull_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_cull_random COMMAND test_geom_cull_directed --random 4000)
+set_tests_properties(geom_cull_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_cull_random_nightly COMMAND test_geom_cull_directed --random 120000)
+set_tests_properties(geom_cull_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_test(NAME lint_zhao_geom_cull
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_cull
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_cull.sv)
+set_tests_properties(lint_zhao_geom_cull PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 set(ZHAO_TERRAIN_PATCH_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
 
