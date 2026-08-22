@@ -5,6 +5,59 @@ at the top.*
 
 ---
 
+## 2026-08-22 (end of day) — the speed campaign, and where it stopped
+
+| | at the start | now | target |
+| --- | ---: | ---: | ---: |
+| worst path | 65 ns | **10.7 ns** | 10 ns |
+| slow paths | 13,651 | **245** | 0 |
+| endpoints too slow | 3,746 | **97** | 0 |
+| logic cells | 9,181 | **7,667** | 41,910 |
+
+**From 550% too slow to 7% too slow, with 98% of the slow paths gone, and the
+design about 1,500 logic cells SMALLER than when the day started.**
+
+### Seven fixes, and every one made it faster AND smaller
+
+The problems were all the same shape: arithmetic doing too much between two
+clock ticks. The checksum computing one bit at a time. A length recalculated
+every tick and sent four places at once. A validity check reading a memory,
+looking up a table and deciding, all in one tick. A counter whose enable was an
+entire address range-check fanning out to 32 flip-flops.
+
+None of them was a sign the design is too slow. They were accidents.
+
+### Where I stopped, and why
+
+No remaining problem is bigger than 0.75 ns, and they are spread across five
+different parts. That is fine-tuning, and each attempt costs a 25-minute
+compile to judge.
+
+More importantly: **the design is now placement-bound.** I proved the compiler
+is deterministic — identical input gives identical output — and then watched
+three well-reasoned changes each do exactly what they were designed to do while
+making the overall number worse. At this margin the compiler's layout decisions
+matter more than the logic, so further small changes are as likely to lose as
+win. Two of those three I reverted; one I kept, and the reasons are written down.
+
+The next useful moves are a different kind of work — the two decisions on your
+docket — not more of this.
+
+### What is waiting on you
+
+1. **Fitter effort.** Measured both ways: 97 slow endpoints with clean hold
+   timing, or 17 with two hold faults. Neither is finished. One line either way.
+2. **The GPU/video crossing.** Four hold faults keep appearing and disappearing
+   there across runs regardless of what I change — three separate compiles now.
+   They are not fixed, they are lucky. The documents disagree about which clock
+   that lane belongs to, and the code picked one.
+3. **The rasteriser, particles, compositor and 2D blocks** — game behaviour I
+   have deliberately not invented.
+
+Still simulation and compiler output only. No hardware has run any of this.
+
+---
+
 ## 2026-08-22 (late) — speed: from 550% too slow to 6% too slow
 
 | | at the start | now | target |

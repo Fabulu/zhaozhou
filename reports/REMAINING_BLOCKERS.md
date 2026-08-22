@@ -23,14 +23,34 @@
 >
 > ### What is left, from a full negative-slack census (not a top-100 report)
 >
->     1,383 paths  scanout|fetch  -> mem_guard|guard_violations   -0.195
->       144        cmd_dma|fetched -> cmd_dma|burst_end           -0.338
->        25        cmd_dma|pkt_len_r -> cmd_dma|stream_w          -0.298
->         9        cmd_dma|m.M_SEED -> cmd_dma|crc_hdr_r          -0.471
->         6        cmd_dma|m.M_SEED -> cmd_dma|crc_pay_r          -0.480
->     worst        hps_arbiter|held_req.client -> cmd_dma|crc_pay_r  -0.639
+> **245 negative-slack paths, down from 13,651.** 97 failing endpoints.
 >
-> Two thirds of it is one family at -0.195 ns, inside the guard's range check.
+>     38 paths  input_snapshot|seq   -> input_snapshot|gaps        -0.351
+>     28        scanout|fetch        -> mem_guard|fwd_req.addr     -0.143
+>     21        cmd_dma|hdr_win      -> cmd_dma|crc_pay_r          -0.342
+>     20        cmd_scheduler rq_rp  -> cmd_sched|dead_lim         -0.059
+>     11        hps_arbiter|state    -> cmd_dma|crc_pay_r          -0.729  (worst)
+>     11        hps_arbiter|state    -> cmd_dma|crc_hdr_r          -0.577
+>      9        cmd_dma|m.M_SEED     -> cmd_dma|crc_hdr_r          -0.219
+>      8        cmd_dma|pkt_len_r    -> recq                       -0.258
+>
+> **No family is over 0.75 ns and they are spread across five blocks.** This is
+> fine-tuning territory, not a structural problem, and each attempt costs a
+> ~25-minute fit to evaluate.
+>
+> ### Why I stopped here rather than continuing
+>
+> The design is **placement-bound below ~1.5 ns** -- proven by the determinism
+> check plus three principled changes that each did what they were designed to
+> do and moved the headline the wrong way. Two were reverted, one was kept for a
+> stated reason. Further sub-nanosecond RTL changes are as likely to lose as
+> win, and the next one on the list -- `input_snapshot|seq -> gaps` -- needs
+> semantic reasoning about which cycle's state a once-per-frame counter samples,
+> against a block carrying a documented "no gaps by construction" proof. That is
+> not a change to make quickly.
+>
+> **The productive next moves are different in kind:** the CDC seam (docket), the
+> fitter-effort basis (docket), or SDC work. Not more depth removal.
 >
 > ### Blockers that are GONE, and should not be re-derived
 >
@@ -63,13 +83,14 @@
 >    as needing game-behaviour decisions and deliberately not invented.
 >
 > **On nobody -- available work:**
-> * the guard range check (1,383 paths at -0.195). Deliberately untouched: 2%
->   over, in the block whose whole contract is that no memory escape exists,
->   with a formal proof that depends on its response timing. NOTE for whoever
->   takes it: `tests/formal/mem_guard_no_escape.sby` means a change here can be
->   PROVEN safe rather than argued safe, which lowers the risk a lot.
-> * three Field IR pieces still unswept: reciprocal, sine/cosine,
->   length/distance (`reports/FIELD_IR_ENGINE.md`).
+> * ~~the guard range check~~ **DONE 2026-08-22.** The violation counter now
+>   follows the registered pulse instead of the verdict, taking the range-check
+>   chain off a 32-bit register bank's enable: 1,383 paths -> 28, and 125
+>   failing endpoints -> 97. The no-escape proof still passes, which is what
+>   made it defensible to touch at all.
+> * ~~three Field IR pieces still unswept~~ **DONE 2026-08-22.** Reciprocal
+>   23/23, sine/cosine 20/20, length/distance 21/21, no survivors. Every piece
+>   of the Field IR engine now carries a mutation score.
 > * ~~`TERRAIN.LOD.md` is wrong about its own block~~ **DONE 2026-08-22.**
 >   Corrected, and the block MEASURED rather than counted: **2,086 ALMs and
 >   28 DSPs -- a quarter of the device's 112**, confirming the DSP audit's
