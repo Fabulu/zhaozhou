@@ -186,16 +186,30 @@ module zhao_geom_lod (
   logic signed [71:0] bnd_num;
   assign bnd_num = (72'(thresh_q8_i) * 72'(bound_radius_i)) + (72'(e_sel) >>> 1);
 
-  // K = ceil(10*proj / 9) and M = floor(10*proj / 11). Division by a CONSTANT,
-  // which synthesis turns into a multiply and a shift — there is no divider
-  // here. `+ 8` is the standard ceiling form for a non-negative numerator.
-  logic signed [71:0] proj10;
-  logic signed [71:0] k_ceil;
-  logic signed [71:0] m_floor;
-  assign proj10  = 72'(proj_radius_q8_i) * 72'sd10;
-  assign k_ceil  = (proj10 + 72'sd8) / 72'sd9;
-  assign m_floor = proj10 / 72'sd11;
-
+  // K = ceil(10*proj / 9) and M = floor(10*proj / 11): division by a CONSTANT,
+  // which synthesis turns into a multiply and a shift.
+  //
+  // THE DIVISION PATH IS 40 BITS, NOT 72, AND QUARTUS IS WHY. At 72 bits the
+  // block does not synthesise at all:
+  //
+  //   Error (272006): In lpm_divide megafunction, LPM_WIDTHN must be less
+  //                   than or equals to 64
+  //
+  // Three frontends and the differential were all perfectly happy with it --
+  // this is the same shape as the inline `genvar` that only the Quartus run
+  // caught, and it is the argument for running the fit rather than trusting
+  // that three frontends agree.
+  //
+  // 40 bits is not a workaround, it is the honest width: `proj_radius_q8_i` is
+  // bounded by 2^31, so 10*proj < 2^35 and both quotients are under 2^32. The
+  // 72-bit form was slack carried in from the comparison arithmetic, where it
+  // costs nothing, into the one place that has a hard tool limit.
+  logic signed [39:0] proj10;
+  logic signed [39:0] k_ceil;
+  logic signed [39:0] m_floor;
+  assign proj10  = 40'(proj_radius_q8_i) * 40'sd10;
+  assign k_ceil  = (proj10 + 40'sd8) / 40'sd9;
+  assign m_floor = proj10 / 40'sd11;
   // The reference special-cases e == 0 to a boundary of ZERO rather than
   // dividing, and the transformed tests must not be used there — they were
   // derived under e > 0. With bnd = 0 the two tests degenerate to
@@ -206,9 +220,9 @@ module zhao_geom_lod (
     if (e_sel == 32'sd0) begin
       switch_ok = coarsening ? (proj_radius_q8_i == 32'sd0) : 1'b1;
     end else if (coarsening) begin
-      switch_ok = (bnd_num >= (k_ceil * 72'(e_sel)));
+      switch_ok = (bnd_num >= (72'(k_ceil) * 72'(e_sel)));
     end else begin
-      switch_ok = (bnd_num < ((m_floor + 72'sd1) * 72'(e_sel)));
+      switch_ok = (bnd_num < ((72'(m_floor) + 72'sd1) * 72'(e_sel)));
     end
   end
 

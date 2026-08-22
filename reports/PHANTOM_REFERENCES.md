@@ -286,3 +286,109 @@ would be inventing behaviour, and it would be invisible afterwards -- an
 arbitrary spatial partition looks exactly like a designed one once it is written
 down in a contract.
 
+---
+
+## Addendum, 2026-08-22 (later): step 1 for GEOM.MESHFETCH's cull, now that the
+## law is ruled
+
+The owner ruled the cull law on 2026-08-22 (conservative per-camera frustum
+rejection of a bounding sphere before vertex decode; "visibility sectors"
+deleted). That answers *what* to build. This addendum answers the question the
+method demands **before any RTL**: does the reference resolve, and if not, which
+of the three kinds is it?
+
+**Answer: it is MIXED again, and the expensive-looking half is kind 1.**
+
+### The camera and the frustum are kind 1 — already shipped
+
+`grep` for "frustum" across `reference/` returns **nothing**, and the only camera
+types are `zref::measure::GovernorCamera` and `zref::terrain::LodCamera`, both of
+which are an eye position plus a scalar policy. On that evidence alone the cull
+looks like kind 2, needing a whole camera model written.
+
+It is not, because the renderer already has one: `project_vertex`
+(`reference/src/zrender/internal.hpp:95`, implemented in `rast.cpp:43`) takes a
+`mat4fx vp` — a **view-projection matrix** — plus a `Viewport`. `mat4fx` is
+ratified in `zref_fixp.hpp:309` with its multiplication law pinned in
+qformats §2 (A3b): four 32x32 products per row summed exactly, then ONE
+round-half-up rescale and saturate per row.
+
+**The six frustum planes are row combinations of that matrix.** They are not new
+law and not a second camera model — they are the same view-projection the
+renderer already projects with, read a different way. So a block that rejects
+against them cannot drift from what the renderer actually draws, which is the
+whole property a conservative cull needs.
+
+### What genuinely has to be written
+
+* the **sphere-vs-plane test** itself, in fx16 with the §2 rounding law;
+* the **descriptor's bound** — the owner ruled a bounding sphere, asset-generated
+  for static and rigid meshes, and a conservative animation-safe instance bound
+  for animated creatures.
+
+Both are small, and one piece is already shipped: `CreatureType::bound_radius`
+(`zref_creature.hpp`) is exactly such a radius, computed by `compile_creature`
+with `isqrt_u64` — the ratified exact floor square root of qformats §7.2.
+
+### One numerical decision worth making deliberately, not by accident
+
+A sphere-vs-plane test compares a distance against a radius, and the plane rows
+pulled out of a view-projection matrix are **not unit-length**. There are two
+honest ways to handle it:
+
+1. normalise each plane once (a square root per plane), or
+2. leave the planes unnormalised and compare `dot(plane, center)` against
+   `radius * |normal|`.
+
+Either way the square root is **per camera per frame, never per instance** —
+there are six planes and at most two cameras. Putting a root on the per-instance
+path would be a real cost and is not required by either form. Recorded here so
+nobody discovers it the expensive way, the same way the LOD ladder's two divides
+turned out to be comparisons and vanished.
+
+### Consequence for sequencing
+
+`GEOM.MESHFETCH` no longer has an unanswerable third. Its LOD third is built
+(`zhao_geom_lod.sv`); its cull third now has a ruled law and a resolving camera;
+only the meshlet **descriptor format** is still undecided, and that is a memory
+layout question rather than a missing law.
+
+---
+
+## Correction, 2026-08-22: "all 25 are still SPECIFIED" is no longer true
+
+The section above the table says:
+
+> V17 requires it to resolve before a block can pass `REFERENCE_COMPLETE`, so
+> none of these has blocked anything yet — all 25 are still `SPECIFIED`.
+
+**Four of them have since advanced to `UNIT_VERIFIED`**, each by the route this
+report recommends — the reference was written or the real name was found, and
+the ledger entry now names something that resolves:
+
+| block | declared then | names now | maturity |
+| --- | --- | --- | --- |
+| FIELD.PROGCACHE | `zref::ProgCache` | `zref::field::ProgCache` | UNIT_VERIFIED |
+| GEOM.PROJECT | `zref::GeomProject` | `zref::render::project_vertex` | UNIT_VERIFIED |
+| PART.EXPAND | `zref::ParticleExpand` | `zref::part::expand_polygon` | UNIT_VERIFIED |
+| PART.SOFT | `zref::SoftParticles` | `zref::part::soft_rect` | UNIT_VERIFIED |
+
+`GEOM.PROJECT` went the way this report predicted for it — it was listed under
+kind 1 as a candidate whose law was already shipped, and
+`zref::render::project_vertex` is exactly that. The two `PART.*` headers say so
+in their own first lines ("The ledger declared `zref::ParticleExpand` and that
+symbol never existed"), which is the honest record and the reason they are worth
+reading before anyone re-derives them.
+
+**The table itself is not wrong** — every name in it was a phantom when written,
+and the four rows above document what the fix looked like rather than an error.
+What is stale is only the claim that none of them has moved. **The live count is
+21 unresolved, not 25.**
+
+Verified 2026-08-22 by resolving each declared symbol against
+`reference/include` and `reference/src` and cross-checking maturity in
+`design/blocks.yml`. Two apparent resolutions were rejected on inspection:
+`ParticleExpand` and `SoftParticles` appear in those headers only inside prose
+saying the symbol never existed, which is a substring match rather than a
+declaration — a reminder that grepping for a name is not the same as resolving
+it.

@@ -277,8 +277,8 @@ int main(int argc, char** argv) {
     const zc::CreatureType t = compiled_type(4096, 512);
     for (uint16_t hold = 0; hold <= 20; ++hold) {
       for (uint8_t start = 0; start <= 3; ++start) {
-        one(dut, "6.hold", t, 30000, 8, start, hold);   // wants coarse
-        one(dut, "6.hold", t, 1, 20000, start, hold);   // wants fine
+        one(dut, "6.hold", t, 30000, 8, start, hold);  // wants coarse
+        one(dut, "6.hold", t, 1, 20000, start, hold);  // wants fine
       }
     }
     // and the saturation of `hold` itself, which must stick rather than wrap
@@ -378,7 +378,7 @@ int main(int argc, char** argv) {
   {
     const zc::CreatureType types[] = {
         compiled_type(4096, 512),
-        compiled_type(65535, 1),          // tiny micro_error: the overflow shape
+        compiled_type(65535, 1),            // tiny micro_error: the overflow shape
         make_type(59353, 32039, 16833, 1),  // the reproducer's geometry
         make_type(1000, 1, 500, 1000),
     };
