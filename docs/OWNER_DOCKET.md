@@ -1,5 +1,30 @@
 # Owner docket — Zhaozhou
 
+## Three earth-field write ops need their law pinned
+
+`FIELD.WRITE.MATERIAL`, `FIELD.WRITE.NAV` and `FIELD.WRITE.HAZARD` have no
+tests, no reference functions, and no RTL — and unlike every other gap I closed
+this session, these cannot be filled by working harder, because the law is not
+written down anywhere.
+
+Charter §11.2 names the layers and stops:
+
+* layer 4 — "Base material map — two candidate material IDs plus a weight"
+* layer 6 — "Gameplay state — heat, wetness, corruption, hazard and movement
+  cost at a lower resolution"
+
+`ops.yml`'s entries for NAV and HAZARD are one-liners pointing back at §11.2.
+What a differential needs and nobody has stated: the encoding and width of each
+layer, the resolution ("lower" — how much lower?), the blend or resolve rule
+when two writes land on one cell, and the saturation behaviour.
+
+MATERIAL is closest to reachable: layer 4 plus its ops.yml line ("2 candidate
+material IDs + blend weight per cell; resolved deterministically") may be
+enough to pin it. NAV and HAZARD are not.
+
+These three will block `FIELD.SEQ.EARTH` — and therefore `TERRAIN.PATCH`
+behind it — the moment either advances.
+
 ## Timing closure: two decisions, both measured, both yours
 
 ### 1. Fitter effort -- 125 failing endpoints, or 17 with two hold violations?

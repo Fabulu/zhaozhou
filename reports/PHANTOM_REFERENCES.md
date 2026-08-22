@@ -45,10 +45,39 @@ layer and the hazard layer of the *earth field output*. Different laws,
 different destinations. Pointing an op at a file that does not test it is worse
 than admitting no file does, because the ledger would then read green.
 
-**These three will block `FIELD.SEQ.EARTH` the moment it advances**, and that
-is the right time to write them: the precedent is `field_write_tag.cpp` itself,
-whose own header records that its path was declared before the file existed and
-that the fix was to write the test for the law ops.yml already stated.
+**These three will block `FIELD.SEQ.EARTH` the moment it advances.**
+
+### CORRECTION, same day: they cannot simply be written
+
+I first wrote that advancing EARTH "is the right time to write them", by
+analogy with `field_write_tag.cpp` — whose path was declared before the file
+existed, and where the fix was to write the test for the law ops.yml already
+stated. **That analogy does not hold, and I checked instead of assuming.**
+
+TAG worked because its law existed somewhere else: ops.yml states it fully
+("tag + strength into the Scar Scribe surface sheet, 64x64 per patch") and
+`zref::surface::SheetStore` is where that sheet lives. The phantom was the
+NAME, not the behaviour.
+
+For these three, three things are missing at once:
+
+| | MATERIAL | NAV | HAZARD |
+| --- | --- | --- | --- |
+| reference function exists | no | no | no |
+| implementing block has RTL | no — both `FIELD.SEQ.EARTH` and `TERRAIN.PATCH` are SPECIFIED | no | no |
+| law pinned anywhere | partly | **no** | **no** |
+
+Charter §11.2 NAMES the layers — "Base material map — two candidate material
+IDs plus a weight" (layer 4), "Gameplay state — heat, wetness, corruption,
+hazard and movement cost at a lower resolution" (layer 6) — and stops there.
+`ops.yml`'s entries for NAV and HAZARD are single lines that defer back to
+§11.2. So there is no encoding, no width, no saturation rule and no ordering:
+none of what a differential compares.
+
+**Writing these tests would mean inventing terrain semantics, which is a design
+decision and not mine to make.** It is on the docket rather than in the backlog
+for that reason. `MATERIAL` is the closest to specified of the three and might
+be reachable from layer 4 plus the ops.yml line; `NAV` and `HAZARD` are not.
 
 **Date:** 2026-08-21
 **Method:** every `reference_model` in `design/blocks.yml`, searched as a plain
