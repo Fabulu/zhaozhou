@@ -14,7 +14,19 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 # Reproducible fixed-seed characterization settings supported by Quartus 17.0.2.
 set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
 set_global_assignment -name SEED 1
-set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
+# EFFORT, RAISED FOR TIMING. The RTL campaign took the worst path from
+# 65 ns to 10.64 ns, and what is left is 125 endpoints at under 0.7 ns
+# over -- placement-bound rather than structure-bound, which is exactly
+# what fitter effort is for and had never been tried.
+#
+# This RAISES quality; it does not lower it. reports/composed/README.md
+# warns against the opposite -- "report back rather than lowering
+# synthesis quality to force a pass" -- because a fit that only completes
+# at reduced effort is a different measurement. So is one at raised
+# effort, which is why the change is recorded here rather than passed on
+# the command line: every future number in this project is now taken on
+# this basis, and the earlier ones were not.
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
