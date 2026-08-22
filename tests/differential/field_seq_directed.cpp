@@ -498,7 +498,13 @@ int main(int argc, char** argv) {
     Prog p;
     p.in_regs = {0};
     p.op(zfield::OP_MOV, 3, 0);
-    p.op(zfield::OP_ROT3, 4, 3);
+    // Was OP_RCP, then OP_ROT3. Each time the op was wired this line failed
+    // and was moved, which is the design working rather than churn. CURVE is
+    // the last family left -- the only one needing a TABLE PORT plumbed up
+    // through the sequencer, so it outlasts the others. When it lands, delete
+    // this half and keep the 0xFE case below: that one is the permanent
+    // statement of the law and never needs maintenance.
+    p.op(zfield::OP_CURVE, 4, 3);
     p.end();
     p.out_regs = {3};
     uint8_t status = 0;
@@ -857,6 +863,155 @@ int main(int argc, char** argv) {
     z3.end();
     z3.out_regs = {3, 4, 5};
     diff(b, z3, {0, 0, 0}, "7d.normalize3 of zero does not set rcp0");
+  }
+
+  // ---- 7e. NOISE2 / RIDGE, ROT2 / ROT3, RING -----------------------------
+  // The rest of the ready/valid families. Each reads a DIFFERENT operand
+  // shape, and the mapping is the interpreter's -- getting one wrong produces
+  // a plausible field and a wrong world, which is precisely what a test that
+  // only checked "it returned something" would miss.
+  {
+    // RIDGE takes its second lane from reg[b], NOT reg[a+1]. That is the one
+    // mapping in this group that would silently work-but-wrong if assumed, so
+    // the inputs are chosen to make a+1 and b DIFFERENT values.
+    Prog rg;
+    rg.in_regs = {0, 1, 2};
+    rg.op(zfield::OP_RIDGE, 3, 0, 2, 0, 0x1234u);
+    rg.end();
+    rg.out_regs = {3};
+    diff(b, rg, {kOne, 0x0BADF00D, 2 * kOne}, "7e.ridge reads b, not a+1");
+    diff(b, rg, {0, 0x5EED, 0}, "7e.ridge at the origin");
+    diff(b, rg, {INT32_MIN, 0x1111, INT32_MAX}, "7e.ridge across the range");
+
+    Prog nz;
+    nz.in_regs = {0, 1};
+    nz.op(zfield::OP_NOISE2, 2, 0, 0, 0, 0xC0FFEEu);
+    nz.end();
+    nz.out_regs = {2, 3};  // NOISE2 writes TWO lanes
+    diff(b, nz, {kOne, 2 * kOne}, "7e.noise2 general");
+    diff(b, nz, {0, 0}, "7e.noise2 at the origin");
+    diff(b, nz, {INT32_MIN, INT32_MAX}, "7e.noise2 at the rails");
+
+    // The seed is the instruction's imm: two identical coordinates with
+    // different seeds must differ, or the imm never reached the unit.
+    Prog nz2;
+    nz2.in_regs = {0, 1};
+    nz2.op(zfield::OP_NOISE2, 2, 0, 0, 0, 0x11111111u);
+    nz2.op(zfield::OP_NOISE2, 4, 0, 0, 0, 0x22222222u);
+    nz2.end();
+    nz2.out_regs = {2, 3, 4, 5};
+    diff(b, nz2, {kOne, kOne}, "7e.noise2 seeds reach the unit");
+
+    // ROT2 writes TWO lanes and takes its angle from reg[b].
+    Prog r2;
+    r2.in_regs = {0, 1, 2};
+    r2.op(zfield::OP_ROT2, 3, 0, 2);
+    r2.end();
+    r2.out_regs = {3, 4};
+    diff(b, r2, {kOne, 0, 0}, "7e.rot2 by zero");
+    diff(b, r2, {kOne, 0, 0x4000}, "7e.rot2 by a quarter turn");
+    diff(b, r2, {3 * kOne, 4 * kOne, 0x2000}, "7e.rot2 by an eighth");
+    diff(b, r2, {kOne, kOne, static_cast<int32_t>(0xDEAD8000u)},
+         "7e.rot2 ignores the angle's high half");
+
+    // ROT3 writes THREE lanes and takes its axis from the imm.
+    Prog r3;
+    r3.in_regs = {0, 1, 2, 3};
+    r3.op(zfield::OP_ROT3, 4, 0, 3, 0, 0);  // axis X
+    r3.end();
+    r3.out_regs = {4, 5, 6};
+    diff(b, r3, {kOne, 2 * kOne, 3 * kOne, 0x4000}, "7e.rot3 about X");
+
+    Prog r3y;
+    r3y.in_regs = {0, 1, 2, 3};
+    r3y.op(zfield::OP_ROT3, 4, 0, 3, 0, 1);  // axis Y
+    r3y.end();
+    r3y.out_regs = {4, 5, 6};
+    diff(b, r3y, {kOne, 2 * kOne, 3 * kOne, 0x4000}, "7e.rot3 about Y");
+
+    Prog r3z;
+    r3z.in_regs = {0, 1, 2, 3};
+    r3z.op(zfield::OP_ROT3, 4, 0, 3, 0, 2);  // axis Z
+    r3z.end();
+    r3z.out_regs = {4, 5, 6};
+    diff(b, r3z, {kOne, 2 * kOne, 3 * kOne, 0x4000}, "7e.rot3 about Z");
+
+    // ...and the axis must actually reach the unit: the same vector about
+    // three axes must give three different answers.
+    Prog axes;
+    axes.in_regs = {0, 1, 2, 3};
+    axes.op(zfield::OP_ROT3, 4, 0, 3, 0, 0);
+    axes.op(zfield::OP_ROT3, 7, 0, 3, 0, 1);
+    axes.op(zfield::OP_ROT3, 10, 0, 3, 0, 2);
+    axes.end();
+    axes.out_regs = {4, 5, 6, 7, 8, 9, 10, 11, 12};
+    diff(b, axes, {kOne, 2 * kOne, 3 * kOne, 0x3000}, "7e.the rot3 axis reaches the unit");
+
+    // ROT2 must NOT write a third lane: the block drives o2 to zero (its law
+    // 5), so only the WIDTH protects a live register at dst+2.
+    Prog r2g;
+    r2g.in_regs = {0, 1, 2, 3};
+    r2g.op(zfield::OP_MOV, 8, 3);
+    r2g.op(zfield::OP_ROT2, 6, 0, 2);
+    r2g.end();
+    r2g.out_regs = {8, 6, 7};
+    diff(b, r2g, {kOne, kOne, 0x2000, 0x1234ABCD}, "7e.rot2 leaves the third lane alone");
+
+    // RING reads THREE separate registers -- a, b and c -- so it is the only
+    // op in this group that exercises the c operand through the slow path.
+    Prog rn;
+    rn.in_regs = {0, 1, 2};
+    rn.op(zfield::OP_RING, 3, 0, 1, 2);
+    rn.end();
+    rn.out_regs = {3};
+    diff(b, rn, {kOne, 0, 2 * kOne}, "7e.ring inside the band");
+    diff(b, rn, {3 * kOne, kOne, 2 * kOne}, "7e.ring outside the band");
+    diff(b, rn, {kOne, kOne, kOne}, "7e.ring with a degenerate band");
+    diff(b, rn, {0, 0, 0}, "7e.ring all zero");
+    diff(b, rn, {INT32_MAX, INT32_MIN, INT32_MAX}, "7e.ring at the rails");
+
+    // THE ONE-LANE OPS MUST NOT WRITE A SECOND LANE EITHER.
+    //
+    // 7d guarded the wide ops at dst+2 and this was missed for the NARROW
+    // ones, so two mutations survived the sweep: RIDGE and RING declaring a
+    // width of two. Both write a correct value into dst and then clobber
+    // dst+1, which no test read. A live value parked there is the whole check.
+    Prog rgg;
+    rgg.in_regs = {0, 1, 2, 3};
+    rgg.op(zfield::OP_MOV, 9, 3);  // live value at RIDGE's dst+1
+    rgg.op(zfield::OP_RIDGE, 8, 0, 2, 0, 0x77u);
+    rgg.end();
+    rgg.out_regs = {9, 8};
+    diff(b, rgg, {kOne, 0x1234, 2 * kOne, 0x0C0FFEE}, "7e.ridge leaves the second lane alone");
+
+    Prog rng;
+    rng.in_regs = {0, 1, 2, 3};
+    rng.op(zfield::OP_MOV, 9, 3);  // live value at RING's dst+1
+    rng.op(zfield::OP_RING, 8, 0, 1, 2);
+    rng.end();
+    rng.out_regs = {9, 8};
+    diff(b, rng, {kOne, 0, 2 * kOne, 0x0FACADE}, "7e.ring leaves the second lane alone");
+
+    // ...and the same for the LEN family, which is also one lane. 7c never
+    // checked it either.
+    Prog lng;
+    lng.in_regs = {0, 1, 2};
+    lng.op(zfield::OP_MOV, 9, 2);
+    lng.op(zfield::OP_LEN2, 8, 0);
+    lng.end();
+    lng.out_regs = {9, 8};
+    diff(b, lng, {3 * kOne, 4 * kOne, 0x0B0BCAFE}, "7e.len2 leaves the second lane alone");
+
+    // A chain across three different families: every one must land where the
+    // next reads.
+    Prog chain;
+    chain.in_regs = {0, 1, 2};
+    chain.op(zfield::OP_ROT2, 3, 0, 2);  // 3,4
+    chain.op(zfield::OP_LEN2, 5, 3);     // reads 3,4
+    chain.op(zfield::OP_RING, 6, 5, 0, 1);
+    chain.end();
+    chain.out_regs = {6, 5, 4, 3};
+    diff(b, chain, {3 * kOne, 4 * kOne, 0x2000}, "7e.rot2 -> len2 -> ring");
   }
 
   // ---- 8. the liveness bound ---------------------------------------------

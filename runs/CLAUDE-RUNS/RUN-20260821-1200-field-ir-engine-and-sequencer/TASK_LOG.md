@@ -361,6 +361,111 @@ file now says which fact carries the weight and which does not.
 The corrected comment was proved inert: the generated model hashes identical to
 the sweep's baseline, so 10/1/0 describes the committed design.
 
+## CMD.DMA: three measurements, two of my conclusions wrong
+
+The block gating FRAMEBLIT step 8. It had NEVER been successfully processed.
+
+| attempt | result |
+| --- | --- |
+| census (`96c0394`, with `blit_buf`) | `failed:quartus_map`, 16.2 GB elaboration |
+| HEAD after step 6 | `timeout`, 4,838 s |
+| HEAD + bounded CRC loop | **synthesis 0 errors**, then `failed:quartus_fit` |
+| + `slot_buf` as 512x64 words | **worse**: 109,350 nodes vs 95,328 |
+
+**1. The CRC cone.** I wrote into `REMAINING_BLOCKERS.md` that this needed the
+payload CRC seed accumulated incrementally across cycles — a state-machine
+redesign. **It needed a bound check.** The loop is written `k < 192` and the
+reachable maximum is 64: `fetched` is zeroed at accept, `M_HDR_REQ` issues
+exactly ONE burst, `burst_len` caps at 64, `M_HDR_WAIT` adds 8 per beat and
+leaves on `last`. Iterations 64..191 had their guard false in every reachable
+state — 128 steps of unreachable logic that synthesis built a ~1,248-stage
+dependent chain for before discarding.
+
+"156 dependent CRC steps" was measured and true. "Therefore it needs a rewrite"
+was inferred and false. **A combinational cone that large is worth a bound
+check before it is worth a redesign.**
+
+**2. The word re-description.** Reasoning: aligned 8-byte groups mean one word
+per write, so the 4,096-way decoder disappears. Predicted a large reduction;
+measured **+14,022 nodes in the wrong direction**. The change was sound and
+bit-identical — `cmd_random`'s transcript hash unchanged at
+`0xb95b5f70a413bdbd` across 1,000 frames — and was reverted anyway, because
+**bit-identical is not the same as better**.
+
+Why it grew is NOT recorded, deliberately. Two inferences about this block were
+already wrong; a third guess written as fact would be the pattern.
+
+**What the measurements establish:** a re-description does not fix this, only a
+real memory does. The remedy has been in the RTL from the start — registered
+read, one-cycle beat-stream lead, initialiser dropped so it can infer as RAM,
+the cure `zhao_scanout_linebuf` got via `zhao_dc_sdp_ram`. **Three memories,
+one defect**, and `slot_buf` is the last.
+
+**3. A second blocker I had not found.** Step 4 wired three modules into the
+shell and into the CMake list — the one VERILATOR reads — and not into the
+QSF, the one QUARTUS reads. The suite was green for hours while Quartus could
+not elaborate the shell at all. So the step 6 commit's claim to be "the
+composed-fit unblock" was INCOMPLETE, not merely optimistic.
+`tests/lint/source_list_parity` now asserts the two lists agree, needs no
+external tool so it cannot skip, and was verified in both directions.
+
+## Field IR dispatch: 3 ops to 13
+
+The sequencer executed three opcodes at the start of this session and executes
+thirteen now.
+
+| | ops |
+| --- | --- |
+| single-cycle | RCP, SIN, COS |
+| multi-cycle, 1 lane | LEN2, LEN3, DIST2, RIDGE, RING |
+| 2 lanes | NORMALIZE2, NOISE2, ROT2 |
+| 3 lanes | NORMALIZE3, ROT3 |
+
+New machinery: `Q_MISS` holds `v_valid` until the unit takes the operands,
+`Q_MWAIT` holds `r_ready` until it answers, `Q_WB1`/`Q_WB2` walk the second and
+third output lanes because the file has ONE write port. The state encoding went
+3 bits to 4 — all eight codes were already used.
+
+**THE SWEEPS DROVE THE DESIGN THREE TIMES.**
+
+*First:* 16 mutations, 7 survived. Not equivalences — with only LEN in the
+group, `multi_op` WAS `op_is_len` and `multi_width` was always 1, so a mutation
+ignoring the opcode was indistinguishable BY CONSTRUCTION. The machinery could
+not be verified until a multi-lane op used it. Adding NORMALIZE killed two.
+
+*Second:* `slow_ledger_not_accumulated` survived because `diff()` compares the
+COLLAPSED `Status.sat`, so a cleared `add` lane was masked by `rescale` on the
+same op. Added a per-lane check and proved it in both directions.
+
+*Third:* two mutations survived where RIDGE and RING declared a width of two.
+I had written the "lane the op does not own must not move" guard for the WIDE
+ops at `dst+2` and never for the NARROW ones at `dst+1`. **A systematic blind
+spot in a whole class**, found by the sweep and closed for RIDGE, RING and
+LEN2.
+
+**Four recorded equivalences, with the condition rather than the conclusion.**
+The handshake mutations survive because the seam is never exercised: the
+sequencer drains each op before issuing the next, so `v_ready` is always high
+when `Q_MISS` asks, and `zhao_field_len` carries a pipeline stage tolerating an
+early valid. I predicted one would HANG, tested it, and was wrong. The RTL
+records what makes them equivalent and what would end it — a stalling unit, or
+a sequencer that pipelines.
+
+**Operand mappings came from the oracle, not the port names.** RIDGE takes its
+second lane from `reg[b]`, NOT `reg[a+1]`, unlike NOISE2 which shares its unit.
+Three mutations aim at that one.
+
+The refusal test has now moved three times — RCP, then ROT3, then CURVE — each
+time because wiring an op made it fail. CURVE will outlast the others: it is
+the only family needing a table port. The permanent half is the `0xFE` case,
+which never needs maintenance.
+
+**A stale build bit me during a manual check**: a rebuild without clearing the
+model directory left a reverted design still reporting the mutant's failure —
+exactly the Verilator caching trap the sweeps guard against with forced
+regeneration, in the one place those guards were not running. Caught by
+comparing the RTL against the pristine copy before believing the result.
+
 ## Limitations
 
 - Everything is Verilator simulation. No synthesis, no fit, no board.

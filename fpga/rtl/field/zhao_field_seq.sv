@@ -335,6 +335,97 @@ module zhao_field_seq (
       .sat_rescale_o (nrm_sat_rescale)
   );
 
+  // ---- NOISE2 / RIDGE, ROT2 / ROT3, RING ----------------------------------
+  // The rest of the ready/valid families. Each is an instantiation plus one arm
+  // in the mux below; none of them changes a state.
+  //
+  // THE OPERAND MAPPINGS ARE THE ORACLE'S, NOT GUESSES. `zfield::interpret`:
+  //   NOISE2  reads reg[a], reg[a+1]      -> a0, a1;      imm is the seed
+  //   RIDGE   reads reg[a], reg[b]        -> a0, b0       (NOT a+1)
+  //   ROT2    reads reg[a..a+1], reg[b]   -> a0/a1, angle b0
+  //   ROT3    reads reg[a..a+2], reg[b]   -> a0/a1/a2, angle b0; imm is the axis
+  //   RING    reads reg[a], reg[b], reg[c]-> d, r0, r1
+  // RIDGE taking its second lane from `b` rather than `a+1` is the one that
+  // would silently produce a plausible field if it were assumed instead of
+  // read; the noise block's own port comment says so too.
+  localparam logic [7:0] OP_NOISE2 = 8'h1C;
+  localparam logic [7:0] OP_RIDGE = 8'h22;
+  localparam logic [7:0] OP_ROT2 = 8'h28;
+  localparam logic [7:0] OP_ROT3 = 8'h29;
+  localparam logic [7:0] OP_RING = 8'h21;
+
+  logic op_is_noise, op_is_rot, op_is_ring;
+  assign op_is_noise = (i_op == OP_NOISE2) || (i_op == OP_RIDGE);
+  assign op_is_rot   = (i_op == OP_ROT2) || (i_op == OP_ROT3);
+  assign op_is_ring  = (i_op == OP_RING);
+
+  logic               nz_vready, nz_rvalid;
+  logic signed [31:0] nz_o0, nz_o1;
+  logic               nz_sat_add, nz_sat_rescale;
+
+  zhao_field_noise u_noise (
+      .clk           (clk),
+      .rst_n         (rst_n),
+      .v_valid_i     ((state == Q_MISS) && op_is_noise),
+      .v_ready_o     (nz_vready),
+      .is_ridge_i    (i_op == OP_RIDGE),
+      .a0_i          (a0),
+      .a1_i          ((i_op == OP_RIDGE) ? b0 : a1),
+      .seed_i        (i_imm),
+      .r_valid_o     (nz_rvalid),
+      .r_ready_i     ((state == Q_MWAIT) && op_is_noise),
+      .o0_o          (nz_o0),
+      .o1_o          (nz_o1),
+      .sat_add_o     (nz_sat_add),
+      .sat_rescale_o (nz_sat_rescale)
+  );
+
+  logic               rt_vready, rt_rvalid;
+  logic signed [31:0] rt_o0, rt_o1, rt_o2;
+  logic               rt_sat_add, rt_sat_mul;
+
+  zhao_field_rot u_rot (
+      .clk       (clk),
+      .rst_n     (rst_n),
+      .v_valid_i ((state == Q_MISS) && op_is_rot),
+      .v_ready_o (rt_vready),
+      .is_rot3_i (i_op == OP_ROT3),
+      .axis_i    (i_imm[1:0]),
+      .ang_i     (b0),
+      .a0_i      (a0),
+      .a1_i      (a1),
+      .a2_i      (a2),
+      .r_valid_o (rt_rvalid),
+      .r_ready_i ((state == Q_MWAIT) && op_is_rot),
+      .o0_o      (rt_o0),
+      .o1_o      (rt_o1),
+      .o2_o      (rt_o2),
+      .sat_add_o (rt_sat_add),
+      .sat_mul_o (rt_sat_mul)
+  );
+
+  logic               rg_vready, rg_rvalid;
+  logic signed [31:0] rg_result;
+  logic               rg_sat_add, rg_sat_mul, rg_sat_rescale, rg_sat_rcp, rg_rcp0;
+
+  zhao_field_ring u_ring (
+      .clk           (clk),
+      .rst_n         (rst_n),
+      .v_valid_i     ((state == Q_MISS) && op_is_ring),
+      .v_ready_o     (rg_vready),
+      .d_i           (a0),
+      .r0_i          (b0),
+      .r1_i          (cv),
+      .r_valid_o     (rg_rvalid),
+      .r_ready_i     ((state == Q_MWAIT) && op_is_ring),
+      .result_o      (rg_result),
+      .sat_add_o     (rg_sat_add),
+      .sat_mul_o     (rg_sat_mul),
+      .sat_rescale_o (rg_sat_rescale),
+      .sat_rcp_o     (rg_sat_rcp),
+      .rcp0_o        (rg_rcp0)
+  );
+
   // The multi-cycle group, as one set of wires. Adding a family means adding
   // its unit above and one arm here -- the states below do not change.
   logic               multi_op;        // this opcode goes down the slow path
@@ -346,8 +437,48 @@ module zhao_field_seq (
   logic               multi_sat_rcp, multi_rcp0;
 
   always_comb begin
-    multi_op = op_is_len || op_is_norm;
-    if (op_is_norm) begin
+    multi_op = op_is_len || op_is_norm || op_is_noise || op_is_rot || op_is_ring;
+    if (op_is_noise) begin
+      multi_vready      = nz_vready;
+      multi_rvalid      = nz_rvalid;
+      multi_o0          = nz_o0;
+      multi_o1          = nz_o1;
+      multi_o2          = '0;
+      // dstW from field-ir 2: NOISE2 writes two lanes, RIDGE one.
+      multi_width       = (i_op == OP_NOISE2) ? 2'd2 : 2'd1;
+      multi_sat_add     = nz_sat_add;
+      multi_sat_mul     = 1'b0;
+      multi_sat_rescale = nz_sat_rescale;
+      multi_sat_rcp     = 1'b0;
+      multi_rcp0        = 1'b0;
+    end else if (op_is_rot) begin
+      multi_vready      = rt_vready;
+      multi_rvalid      = rt_rvalid;
+      multi_o0          = rt_o0;
+      multi_o1          = rt_o1;
+      multi_o2          = rt_o2;
+      // ROT2 writes TWO lanes. The block drives o2 to zero for ROT2 (its law
+      // 5), but writing it would still clobber a register the decoder counts
+      // as untouched -- the width, not the value, is what protects it.
+      multi_width       = (i_op == OP_ROT3) ? 2'd3 : 2'd2;
+      multi_sat_add     = rt_sat_add;
+      multi_sat_mul     = rt_sat_mul;
+      multi_sat_rescale = 1'b0;
+      multi_sat_rcp     = 1'b0;
+      multi_rcp0        = 1'b0;
+    end else if (op_is_ring) begin
+      multi_vready      = rg_vready;
+      multi_rvalid      = rg_rvalid;
+      multi_o0          = rg_result;
+      multi_o1          = '0;
+      multi_o2          = '0;
+      multi_width       = 2'd1;
+      multi_sat_add     = rg_sat_add;
+      multi_sat_mul     = rg_sat_mul;
+      multi_sat_rescale = rg_sat_rescale;
+      multi_sat_rcp     = rg_sat_rcp;
+      multi_rcp0        = rg_rcp0;
+    end else if (op_is_norm) begin
       multi_vready      = nrm_vready;
       multi_rvalid      = nrm_rvalid;
       multi_o0          = nrm_o0;
