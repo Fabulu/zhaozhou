@@ -942,3 +942,68 @@ come up, not while they are being built."** They are phase 0 — they came up lo
 ago, and all three still carry a fictional `reference_model` because the schema
 offers one evidence field and one ladder. That is the next piece of ledger work,
 and unlike the eleven above it needs no decision from anyone.
+
+---
+
+## 2026-08-23 — MEASURED: the DSP demand is 213 against 112, and it is growing
+
+`zhao_geom_cull` fitted clean (1,102 ALMs, **15 DSPs**, 1,434 registers). Adding
+it to the per-block report makes the running total impossible to ignore:
+
+| block | DSPs |
+| --- | ---: |
+| `zhao_terrain_project` | 33 |
+| `zhao_surface_stamp` | 28 |
+| `zhao_terrain_lod` | 28 |
+| `zhao_texture_tmu` | 28 |
+| `zhao_geom_lod` | 18 |
+| `zhao_terrain_normals` | 18 |
+| `zhao_geom_cull` | **15** |
+| `zhao_geom_binner` | 12 |
+| `zhao_raster_fragment` | 10 |
+| `zhao_texture_bilerp` | 7 |
+| ...five more | 16 |
+| **total, 15 blocks measured** | **213** |
+| **device 5CSEBA6U23I7 has** | **112** |
+
+**Nearly twice the device, and only fifteen blocks have been measured.** The
+2026-08-20 session already found this ("DSP is the binding constraint: 171
+against 112, and it had no budget"); it is now 213, because `zhao_geom_lod` (18)
+and `zhao_geom_cull` (15) have been built since.
+
+### What this number is and is not
+
+**It is an UPPER BOUND, honestly.** `tools/quartus/run_composed_fit.ps1` says so
+about ALMs and the same applies here: per-block fits give each block its own
+multipliers with no cross-block sharing and no resource inference across a
+composed cone. The composed shell currently reports **0 DSPs**, because none of
+these geometry, terrain or texture blocks is integrated into it yet.
+
+**But it is not comfortable.** The blocks driving it are not alternatives —
+project, LOD, normals, the TMU, bilerp and the binner are all core rendering, all
+present at once in any frame that draws terrain. A 1.9x overshoot is not a
+rounding error that composition absorbs.
+
+### The lever, and it is known to work
+
+Every one of these numbers is *parallel multipliers where the rate does not
+require them*. `zhao_geom_lod` went from **28 DSPs to 18** simply by narrowing
+operands from a slack 72 bits to a proven-sufficient 64 and sharing two products
+that were being computed twice. Its remaining 18 come from five 32x32 products
+evaluated in parallel for a block that runs **once per instance per frame** —
+sequencing them through one multiplier over three clocks should reach roughly 8.
+
+`zhao_geom_cull` is the same shape: four multipliers on the instance path, which
+is 10 cycles for a block whose rate is per-instance, not per-pixel.
+
+So the honest reading is that the 213 is mostly slack rather than arithmetic, and
+the reduction work is known and mechanical — but it is real work across a dozen
+blocks, and **nobody has done it because nothing forced the question until the
+per-block numbers were summed.**
+
+### What this changes
+
+It moves DSP reduction from "a thing to do eventually" to **a gate on the design
+fitting at all**, alongside timing closure. It also gives the ledger a job it is
+not doing: `resource_budget` supports `dsp_percent`, and almost nothing declares
+one, which is exactly how a design arrives at 1.9x without a single rule firing.

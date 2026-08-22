@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "8d486083a2f2f448a55c359f026b3a75aa30d004",
-    "newestRunClean":  false,
+    "newestRunCommit":  "2a711f0fa2f856e926f5e4929d806c04eb6f3a42",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -132,6 +132,22 @@
                        "ramBlocks":  0,
                        "dspBlocks":  2,
                        "virtualPins":  539
+                   },
+                   {
+                       "module":  "zhao_geom_cull",
+                       "status":  "ok",
+                       "sourceCommit":  "2a711f0fa2f856e926f5e4929d806c04eb6f3a42",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  612.8,
+                       "alms":  1102,
+                       "registers":  1434,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  15,
+                       "virtualPins":  177,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112
                    },
                    {
                        "module":  "zhao_geom_lod",
