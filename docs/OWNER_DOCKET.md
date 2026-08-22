@@ -1,5 +1,35 @@
 # Owner docket — Zhaozhou
 
+## Are the five FIELD.SEQ profiles five blocks, or one used five ways?
+
+Nothing in the RTL distinguishes them. `zhao_field_seq` has no profile input
+and no profile-specific port. The thing that would distinguish them — which
+registers the input and output lanes bind to — is carried by the DECODED
+PROGRAM (`zfield::Decoded::in_lanes` / `out_lanes`, filled by the decoder from
+the image), not by the block.
+
+So a "profile" appears to be a program set plus shell wiring, not a hardware
+variant. The ledger models five blocks (`EARTH`, `WARP`, `FLOW`, `FORMATION`,
+`STAMP`), each wanting its own directed and random test.
+
+I cannot write those tests without first deciding what each profile's I/O
+contract is: `ops.yml` defines the profiles by name and description only, and
+every one of the five contracts still has a generated TODO under "## Input and
+output packet layouts". For FLOW that decision is particle behaviour, which is
+reserved to you anyway.
+
+**Two ways forward, and it is your call which:**
+
+1. Keep five blocks and specify each profile's lane binding — then the tests
+   are ordinary work.
+2. Collapse them: one sequencer block, with the profiles becoming shell
+   configuration and their ops attributed to the blocks that consume the
+   output (`TERRAIN.PATCH`, `SURFACE.SHEET`, and so on).
+
+Everything else about the sequencer is done: `FIELD.SEQ.CORE` is RTL_VERIFIED,
+all 31 opcodes dispatch with a coverage gate, every Field IR piece carries a
+mutation score, and the anti-hang law is formally proven.
+
 ## Three earth-field write ops need their law pinned
 
 `FIELD.WRITE.MATERIAL`, `FIELD.WRITE.NAV` and `FIELD.WRITE.HAZARD` have no

@@ -178,6 +178,40 @@ later is a trivial edit."* This is a kind-1 phantom with a proven neighbour.
 > Field IR differential — it is a check that this profile binds the right
 > registers to the right lanes.
 >
+> ### CORRECTION, same day: those four tests are NOT writable either
+>
+> I wrote above that four profiles "need only their tests" and said elsewhere
+> that those tests are writable because a lane binding is a structural property.
+> **Both halves are wrong, and checking is what showed it.**
+>
+> `in_lanes` and `out_lanes` are fields of `zfield::Decoded`, filled by the
+> DECODER from the program image (`zfield_decode.cpp` ~line 331). The lane
+> binding is a property of **the program**, not of the block. `zhao_field_seq`
+> has no profile input and no profile-specific port; `field_seq_directed.cpp`
+> supplies `in_regs`/`out_regs` per program, exactly as the reference does.
+>
+> So there is nothing in the sequencer that distinguishes W from F from M from
+> S. Whatever separates the five profiles lives in the SHELL — which programs
+> get loaded and what their lanes are wired to — and:
+>
+> * `ops.yml` defines each profile by name, description and sequencer, with **no
+>   lane bindings**;
+> * every profile contract's "## Input and output packet layouts" is still the
+>   generated TODO stub.
+>
+> Writing `field_seq_warp_directed.cpp` therefore means DECIDING what the W
+> profile's I/O contract is. That is specification, not testing, and for FLOW it
+> is particle behaviour explicitly reserved.
+>
+> ### The question this raises, which is Fabian's
+>
+> If a profile is a program set plus shell wiring rather than a hardware
+> variant, are these five blocks — or one block used five ways, with the
+> profiles belonging to the shell that instantiates it? The ledger currently
+> models five. Nothing in the RTL distinguishes them. Recorded on the docket
+> rather than answered here, because collapsing or keeping five ledger entries
+> is an architecture call.
+>
 > `FIELD.SEQ.EARTH` is the exception and it is NOT a test-writing job: see
 > `docs/OWNER_DOCKET.md`. Its `FIELD.WRITE.MATERIAL/NAV/HAZARD` ops have no
 > reference function, no RTL, and no law pinned beyond charter §11.2 naming the
