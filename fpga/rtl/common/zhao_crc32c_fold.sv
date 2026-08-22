@@ -85,8 +85,15 @@ module zhao_crc32c_fold (
   // the masked XOR reduction.
   logic [31:0] res [0:8];
 
+  // The genvar is declared SEPARATELY rather than inline in the for header.
+  // Quartus 17.0.2's Verilog parser rejects `for (genvar N = ...)` with
+  //   Error (10170): syntax error near text "genvar"
+  // while Verilator and slang both accept it, so this only surfaced in the
+  // composed fit -- which is the argument for running it rather than trusting
+  // that three frontends agree.
+  genvar N;
   generate
-    for (genvar N = 0; N <= 8; N++) begin : g_fold
+    for (N = 0; N <= 8; N++) begin : g_fold
       always_comb begin
         logic [31:0] acc;
         acc = 32'd0;
