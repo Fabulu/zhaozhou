@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "f5e067e6ef749e70f318ddc02b738194b83ebe95",
-    "newestRunClean":  false,
+    "newestRunCommit":  "7508adc075723a242d7c8d6f302bad0b0b63e04f",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -70,6 +70,22 @@
                        "ramBlocks":  0,
                        "dspBlocks":  0,
                        "virtualPins":  111
+                   },
+                   {
+                       "module":  "zhao_debug_frameblit",
+                       "status":  "ok",
+                       "sourceCommit":  "7508adc075723a242d7c8d6f302bad0b0b63e04f",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  590.9,
+                       "alms":  962,
+                       "registers":  909,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  536,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112
                    },
                    {
                        "module":  "zhao_forge_cliff",

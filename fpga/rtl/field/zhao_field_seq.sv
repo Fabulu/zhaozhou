@@ -636,6 +636,22 @@ module zhao_field_seq (
     exec_sat_add     = unit_handled ? 1'b0 : alu_sat_add;
     exec_sat_mul     = unit_handled ? 1'b0 : alu_sat_mul;
     exec_sat_rescale = unit_handled ? 1'b0 : alu_sat_rescale;
+    // ONE EQUIVALENT MUTANT, recorded so it does not read as an untested term.
+    // Replacing this whole expression with 1'b1 survives the sweep, and it is
+    // genuinely equivalent rather than merely uncaught.
+    //
+    // zhao_field_alu clears writes_o in exactly TWO places: OP_END, which also
+    // raises is_end_o, and the `default:` refusal, which also raises
+    // op_unsupported_o. The write-back guard below already carries
+    // `!alu_is_end && !exec_unsupported`, and for an ALU op exec_unsupported IS
+    // alu_unsupported -- so every case where alu_writes is 0 is excluded by a
+    // different term of the same condition. On the unit path the expression
+    // yields 1'b1 anyway.
+    //
+    // It stays because it says what the value MEANS -- does this op write its
+    // destination -- where 1'b1 would be a constant that happens to work, and
+    // it would stop working the moment the ALU learns a third non-writing op.
+    // ENFORCED-BY: fpga/rtl/field/zhao_field_alu.sv:writes_o
     exec_writes      = unit_handled ? 1'b1 : alu_writes;
     // A multi-cycle op is claimed here too, or Q_EXEC would refuse it
     // before the slow path ever saw it.
