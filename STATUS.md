@@ -5,6 +5,96 @@ at the top.*
 
 ---
 
+## 2026-08-22 (later) — the command block now fits, with room to spare
+
+Last section said `CMD.DMA` compiles but does not **fit** — it needed more of
+the chip than the chip has. That is fixed, and the size of the fix is worth
+stating plainly.
+
+|                        | before  | after      | the chip has |
+| ---------------------- | ------- | ---------- | ------------ |
+| logic cells (ALMs)     | 83,977  | **3,607**  | 41,910       |
+| registers              | 33,680  | **1,571**  |              |
+| dedicated memory bits  | 0       | **32,768** |              |
+
+From **twice the whole chip** to **8.6% of it**. The block went from the single
+worst thing in the design to a rounding error.
+
+Those are *fitted* numbers, not estimates — the chip compiler placed and routed
+it, which it had never once managed for this block before. It uses 4 of the
+chip's 553 memory blocks and none of its 112 multipliers.
+
+Still simulation and synthesis only. No hardware has run any of this.
+
+### What was actually wrong
+
+I had four theories about this block and every one of them was wrong. So I
+stopped theorising and asked the compiler what it had built.
+
+It had built the 4KB packet staging buffer out of **32,768 individual
+registers** — a filing cabinet made of 32,768 separate drawers, each with its
+own lock, when the chip has purpose-built memory blocks sitting unused. The
+giveaway was one line in the report: `Total block memory bits: 0`. Not "a bit
+too much memory used" — **none at all**.
+
+That also explains why my three attempts to simplify the wiring each moved the
+number by about 0.02%. I was rearranging the handles on the drawers.
+
+### Why it took four wrong guesses
+
+The chip compiler takes about 45 minutes per attempt on this block, so each
+theory was expensive, and I kept spending that time on *reasoning about the
+source code* instead of *reading the report the compiler had already written*.
+The report was there after the first run. I did not open it until the fifth.
+
+The lesson is cheap to state and I would rather have it written down than
+learned again: when a measurement is available, measure. Four inferences cost
+more than one look.
+
+### One real bug found on the way, which simulation could never have caught
+
+Setting up a clean baseline turned up a **failing proof** on this same block —
+one of the mathematical checks, as opposed to the run-it-and-see tests.
+
+It was mine. I had earlier bounded a loop at 64 steps and written that the
+bound was safe "because the memory bridge only ever delivers 64 bytes here."
+The proof disagreed: nothing in the hardware *makes* the bridge stop at 64. It
+passes the "this is the last piece" signal straight through from the outside
+world without counting. A bridge that misbehaved would overrun the buffer.
+
+The consequence was contained — the packet would fail its checksum and be
+rejected — so this was a false statement rather than a hole. It is still a
+false statement, and I had written it down as a proof.
+
+Fixed so the hardware no longer takes anyone's word for it: each transfer now
+records where it ends and stops there.
+
+**Then I checked which test would have caught it.** Answer: none of them.
+
+| test                          | result   |
+| ----------------------------- | -------- |
+| directed tests                | passed   |
+| random, 400 packets           | passed   |
+| random, 5,000 packets         | passed   |
+| the mathematical proof        | **caught it** |
+
+The simulated bridge is well-behaved by construction, so no amount of random
+testing could ever produce the misbehaving one. That is exactly what the proofs
+are for, and it is the first time this project has had one earn its keep on a
+bug I introduced.
+
+### And one test that was checking nothing
+
+While reworking the buffer I found the 5,000-packet random test **never
+checked the contents of the packets it streamed**. It verified the verdict,
+the byte count, and that broken packets produced nothing — but for good
+packets it never compared a single byte against what was sent.
+
+Now it does. To prove the new check actually works I deliberately broke the
+buffer logic: it now fails 60 of 1,542 checks. Before, it would have passed.
+
+---
+
 ## 2026-08-22 — the spell engine runs thirteen of sixteen instructions
 
 Two results, and one honest note about how often I was wrong on the way.

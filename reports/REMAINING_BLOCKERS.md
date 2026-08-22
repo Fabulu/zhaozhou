@@ -543,9 +543,53 @@ deliberately rather than having me invent it and record the invention as law.
 >
 > **Everything needed to write this is now known, and none of it is a design
 > decision** — the alignment argument above removed the one question that was.
-> It is a substantial and delicate change to the packet path, so it wants a
-> fresh session rather than the tail of one that has already falsified four
-> theories about this block.
+>
+> ### DONE, AND MEASURED. 2026-08-22.
+>
+> Built as described. `quartus_map`, same flow and same device as the
+> measurement that opened this section:
+>
+> | | before | after | device |
+> | --- | --- | --- | --- |
+> | Estimate of Logic utilization (ALMs needed) | 83,977 | **3,519** | 41,910 |
+> | Combinational ALUT usage for logic | 94,698 | **4,551** | |
+> | Dedicated logic registers | 33,680 | **1,521** | |
+> | **Total block memory bits** | **0** | **32,768** | |
+>
+> The target named above — block memory bits from 0 to 32,768 — was hit
+> exactly, and it took the logic with it: **24x fewer ALMs**, from 2.0x the
+> device to 8.4% of it. `Total MLAB memory bits: 0`, so the 32,768 bits are in
+> real M10K, not distributed memory pretending.
+>
+> A second confirmation that the array is genuinely gone: `quartus_map`'s log
+> for this block was 9.8-11 MB on every prior run and is **571 KB** now.
+>
+> ### AND IT FITTED. Not an estimate — the fitter placed and routed it.
+>
+> `quartus_fit`, 1,038 s, recorded in `reports/synthesis/zhao_block_fit.json`:
+>
+> ```
+> zhao_cmd_dma   ok   ALM 3607 / 41910      (8.6% of the device)
+>                     registers        1571
+>                     blockMemoryBits 32768
+>                     ramBlocks           4 / 553      M10K, not MLAB
+>                     dspBlocks           0
+> ```
+>
+> "Fitter placement was successful" is a line this block had never produced.
+> Router estimated **average interconnect usage 2%**, peak 28% in one region.
+> The block that could not fit is now one of the smallest in the design.
+>
+> The shape built: a 64-byte header window in registers serving the whole
+> header ladder unchanged, plus `slot_ram` 512 x 64b with one registered read
+> port, its address muxed across the four states that read it — `M_PCRC_RD`,
+> `M_WALK_RD`, `M_STREAM_RD` and the stream's own one-word lookahead. Reads
+> cost one cycle of lead each; the walk takes two cycles per record instead of
+> one, and the stream fetches a word every eight bytes with seven cycles of
+> slack.
+>
+> **This unblocks the composed fit and FRAMEBLIT step 8.** CMD.DMA was the
+> block that could not fit; it is now smaller than most of the design.
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 

@@ -158,15 +158,46 @@ module zhao_cmd_dma #(
     M_IDLE,
     M_HDR_REQ, M_HDR_WAIT, M_HDR_CHK,
     M_PAY_REQ, M_PAY_WAIT,
-    M_PCRC,
-    M_WALK,
-    M_PKT_DONE, M_STREAM
+    M_PCRC_RD, M_PCRC,
+    M_WALK_RD, M_WALK,
+    M_PKT_DONE,
+    M_STREAM_RD, M_STREAM_LD, M_STREAM
   } dma_state_e;
 
   /* verilator lint_off PROCASSINIT */
   dma_state_e m = M_IDLE;
 
-  logic [7:0]  slot_buf [0:SLOT_BUF_BYTES-1] = '{default: 8'h00};
+  // THE STAGING BUFFER, IN TWO PARTS.
+  //
+  // It used to be one 4,096-entry byte array with a variable read address and
+  // a variable write address. Quartus built exactly that: 94,698 combinational
+  // ALUTs and 33,680 registers -- 32,768 of them this array -- against a device
+  // holding ~41,910 ALMs, with `Total block memory bits: 0`. Twice the device,
+  // and no mux restructuring could touch it, because the cost WAS the register
+  // file.
+  //
+  // Split by who reads it:
+  //
+  //   hdr_win  the first 64 bytes, in registers. EVERY read on the header path
+  //            lands here -- the header fields (all below offset 40), the
+  //            header CRC over [0,32), and the payload-CRC seed over [36,64).
+  //            So M_HDR_CHK keeps its one-cycle ladder unchanged. 512 registers.
+  //
+  //   slot_ram the whole packet, 512 x 64b, for the three readers that need
+  //            arbitrary offsets: the payload-CRC word, the record walk, and
+  //            the verified stream. M10K rules: no initialiser, written by a
+  //            process with NO reset, one registered read port.
+  //
+  // Every multi-byte read is contained in ONE 64-bit word, so none of them
+  // costs a second access: command_bytes is a multiple of 16 and record
+  // lengths are multiples of 16, so 36+cb and 36+walk_off are both 4 mod 8,
+  // and a 32-bit field at 4 mod 8 -- or the walk's TWO 16-bit fields at 4 and
+  // 6 -- sits inside the word.
+  logic [7:0]  hdr_win [0:63];
+  logic [63:0] slot_ram [0:(SLOT_BUF_BYTES/8)-1];
+  logic [63:0] ram_q;
+  logic [8:0]  ram_addr;
+  logic [63:0] stream_w;
 
 
   // fetch latches
@@ -239,12 +270,12 @@ module zhao_cmd_dma #(
 
   // header field readers (little-endian, capture_format.md 3)
   function automatic logic [15:0] hget16(input int unsigned off);
-    hget16 = {slot_buf[off + 1], slot_buf[off]};
+    hget16 = {hdr_win[off + 1], hdr_win[off]};
   endfunction
 
   function automatic logic [31:0] hget32(input int unsigned off);
-    hget32 = {slot_buf[off + 3], slot_buf[off + 2], slot_buf[off + 1],
-              slot_buf[off]};
+    hget32 = {hdr_win[off + 3], hdr_win[off + 2], hdr_win[off + 1],
+              hdr_win[off]};
   endfunction
 
   // CRC-32C (finalized) over the 32-byte frame header (capture_format.md 3:
@@ -255,7 +286,7 @@ module zhao_cmd_dma #(
     logic [31:0] c;
     c = 32'hFFFF_FFFF;
     for (int unsigned i = 0; i < 32; i++) begin
-      c = zhao_abi_pkg::zhao_crc32c_step(c, slot_buf[i]);
+      c = zhao_abi_pkg::zhao_crc32c_step(c, hdr_win[i]);
     end
     crc_final = ~c;
   endfunction
@@ -281,8 +312,33 @@ module zhao_cmd_dma #(
   end
 
 
+  // The read address, muxed by state. The four readers are in four DIFFERENT
+  // states, which is what lets them share one port -- splitting the payload
+  // CRC into M_PCRC was the precondition for this, not a detour.
+  always_comb begin
+    case (m)
+      M_PCRC_RD:   ram_addr = 9'((32'd36 + cb) >> 3);
+      M_WALK_RD:   ram_addr = 9'((32'd36 + walk_off) >> 3);
+      M_STREAM_RD: ram_addr = 9'd0;
+      // one word of run-up: the stream reads a word every EIGHT bytes, so the
+      // next one is always fetched seven cycles before it is needed
+      default:     ram_addr = 9'((rd_off >> 3) + 32'd1);
+    endcase
+  end
+
+  // M10K: no initialiser on the array, no reset in this process, registered
+  // read. One word per bridge beat, which is exactly what a beat is.
+  always_ff @(posedge clk) begin
+    if (((m == M_HDR_WAIT) || (m == M_PAY_WAIT))
+        && hps_rsp_i.beat_valid && !hps_rsp_i.err
+        && (wr_off < SLOT_BUF_BYTES)) begin
+      slot_ram[wr_off[11:3]] <= hps_rsp_i.data;
+    end
+    ram_q <= slot_ram[ram_addr];
+  end
+
   assign pkt_valid_o = pkt_v;
-  assign pkt_byte_o = slot_buf[rd_off];
+  assign pkt_byte_o = stream_w[8*rd_off[2:0] +: 8];
   assign pkt_len_o = pkt_len_r;
 
   assign dma_done_o = done_v;
@@ -303,6 +359,7 @@ module zhao_cmd_dma #(
       crc_pay_r <= 32'hFFFF_FFFF;
       walk_off <= 32'd0; walk_cnt <= 32'd0;
       rd_off <= 32'd0; pkt_v <= 1'b0; pkt_len_r <= 32'd0;
+      stream_w <= 64'd0;
       done_v <= 1'b0; done_slot <= 2'd0; done_status <= 8'd0;
       hps_req_v <= 1'b0; hps_addr <= 32'd0; hps_len <= 7'd0;
       hdr_gate <= 1'b0; pay_gate <= 1'b0;
@@ -362,8 +419,8 @@ module zhao_cmd_dma #(
             m <= M_IDLE;
           end else if (hps_rsp_i.beat_valid) begin
             for (int i = 0; i < 8; i++) begin
-              if ((wr_off + 32'(i)) < SLOT_BUF_BYTES) begin
-                slot_buf[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
+              if ((wr_off + 32'(i)) < 32'd64) begin
+                hdr_win[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
               end
             end
             wr_off <= wr_off + 32'd8;
@@ -471,13 +528,13 @@ module zhao_cmd_dma #(
               cseed = 32'hFFFF_FFFF;
               for (int unsigned k = 36; k < 64; k++) begin
                 if (k < seed_end) begin
-                  cseed = zhao_abi_pkg::zhao_crc32c_step(cseed, slot_buf[k]);
+                  cseed = zhao_abi_pkg::zhao_crc32c_step(cseed, hdr_win[k]);
                 end
               end
               crc_pay_r <= cseed;
             end
             if (fetched >= (32'd40 + cb_v)) begin
-              m <= M_PCRC;  // tiny packet: one burst covered everything
+              m <= M_PCRC_RD;  // tiny packet: one burst covered everything
             end else begin
               m <= M_PAY_REQ;
             end
@@ -501,8 +558,8 @@ module zhao_cmd_dma #(
             m <= M_IDLE;
           end else if (hps_rsp_i.beat_valid) begin
             for (int i = 0; i < 8; i++) begin
-              if ((wr_off + 32'(i)) < SLOT_BUF_BYTES) begin
-                slot_buf[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
+              if ((wr_off + 32'(i)) < 32'd64) begin
+                hdr_win[wr_off + 32'(i)] <= hps_rsp_i.data[8*i +: 8];
               end
             end
             // payload CRC over this beat's bytes inside [36, 40+cb)
@@ -521,7 +578,7 @@ module zhao_cmd_dma #(
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
             if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin
-              if ((fetched + 32'd8) >= need_total) m <= M_PCRC;
+              if ((fetched + 32'd8) >= need_total) m <= M_PCRC_RD;
               else m <= M_PAY_REQ;
             end
           end
@@ -548,17 +605,27 @@ module zhao_cmd_dma #(
         // Splitting it out changes no behaviour -- the check happens before
         // any record is walked either way, and on the same data -- and it is
         // the precondition for the readers ever sharing a port.
+        // one cycle presenting the address; the word lands in ram_q
+        M_PCRC_RD: m <= M_PCRC;
+
         M_PCRC: begin
-          if ({~crc_pay_r} != hget32(36 + cb)) begin
+          // 36+cb is 4 mod 8 whenever cb is a multiple of 16, which the header
+          // ladder proved before this state is reachable; the other alignment
+          // is kept rather than assumed away.
+          if ({~crc_pay_r} != ((((32'd36 + cb) & 32'd4) != 32'd0) ? ram_q[63:32]
+                                                       : ram_q[31:0])) begin
             done_v <= 1'b1; done_slot <= f_slot;
             done_status <= ST_BAD_PAYLOAD_CRC;
             done_bytes <= need_total; done_cmds <= 32'd0;
             live_drops <= sat_add(live_drops, 64'd1);
             m <= M_IDLE;
           end else begin
-            m <= M_WALK;
+            m <= M_WALK_RD;
           end
         end
+
+        // the walk reads one word per record: present, then evaluate
+        M_WALK_RD: m <= M_WALK;
 
         M_WALK: begin
           // the record walk (5/9/10); the payload CRC passed in M_PCRC
@@ -574,18 +641,19 @@ module zhao_cmd_dma #(
               done_v <= 1'b1; done_slot <= f_slot; done_status <= ST_OK;
               done_bytes <= need_total; done_cmds <= walk_cnt;
               live_cmds <= sat_add(live_cmds, {32'd0, walk_cnt});
-              pkt_v <= 1'b1;          // the verified stream starts now
               pkt_len_r <= need_total;
               rd_off <= 32'd0;
-              m <= M_STREAM;
+              m <= M_STREAM_RD;   // fetch word 0 before offering a byte
             end
           end else begin
             logic [15:0] op_v;
             logic [15:0] rb_v;
             logic [7:0]  wst_v;
             logic        wok_v;
-            op_v = hget16(36 + walk_off);
-            rb_v = hget16(36 + walk_off + 2);
+            // both 16-bit fields sit in the SAME word -- one read serves the
+            // pair, which is why the walk did not need a second access
+            op_v = (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[47:32] : ram_q[15:0];
+            rb_v = (((32'd36 + walk_off) & 32'd4) != 32'd0) ? ram_q[63:48] : ram_q[31:16];
             wok_v = 1'b1;
             wst_v = ST_OK;
             if ((rb_v & 16'h000F) != 16'd0 || rb_v < 16'd16) begin
@@ -609,8 +677,17 @@ module zhao_cmd_dma #(
             end else begin
               walk_off <= walk_off + 32'(rb_v);
               walk_cnt <= walk_cnt + 32'd1;
+              m <= M_WALK_RD;
             end
           end
+        end
+
+        M_STREAM_RD: m <= M_STREAM_LD;
+
+        M_STREAM_LD: begin
+          stream_w <= ram_q;      // word 0 is in
+          pkt_v <= 1'b1;          // the verified stream starts now
+          m <= M_STREAM;
         end
 
         M_STREAM: begin
@@ -621,6 +698,9 @@ module zhao_cmd_dma #(
               m <= M_IDLE;
             end else begin
               rd_off <= rd_off + 32'd1;
+              // crossing into the next word: ram_q has held it for seven
+              // cycles by now
+              if (rd_off[2:0] == 3'd7) stream_w <= ram_q;
             end
           end
         end

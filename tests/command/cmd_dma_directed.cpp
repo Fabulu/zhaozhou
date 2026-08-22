@@ -107,8 +107,21 @@ class DmaBench {
     top_->frame_tick_i = 0;
   }
 
+  // A CONSUMER THAT STALLS. pkt_ready_i was hardwired to 1 for the whole
+  // suite, so the verified stream was only ever tested against a sink that
+  // never pauses. The stream fetches a staging word every EIGHT bytes, so a
+  // consumer that stops -- especially ON a word boundary -- is a different
+  // timing case, and it was the untested one.
+  bool stall_ = false;
+  uint32_t stall_lfsr_ = 0x1234567u;
+  bool nextReady() {
+    stall_lfsr_ = stall_lfsr_ * 1664525u + 1013904223u;
+    return ((stall_lfsr_ >> 16) & 3u) != 0u;  // ready 3 cycles in 4
+  }
+
   // one gpu cycle: the HPS responder runs before the edge
   void cycle() {
+    if (stall_) top_->pkt_ready_i = nextReady() ? 1 : 0;
     top_->eval();
     // service the bridge (D10 profile)
     const ReqView r = reqView(top_->hps_req_o);
@@ -324,6 +337,8 @@ int runRandom(uint32_t packets, uint64_t seed) {
       }
     }
     std::vector<uint8_t> pkt = makePacket(n, 0, 20, flags, recs);
+    t.stall_ = (n % 3u) == 0u;  // a third of packets meet a stalling sink
+    if (!t.stall_) t.park();
     const uint32_t cb = pkt.size() - 40;
     // one deterministic corruption per packet (the ladder oracle above
     // recomputes the verdict from the corrupted bytes — no hand-prediction)
@@ -366,6 +381,13 @@ int runRandom(uint32_t packets, uint64_t seed) {
       if (expect.status == 0) {
         zhao::check(t.verdicts_[0].cmds == expect.cmds_walked, "rand: cmds_consumed law",
                     expect.cmds_walked, t.verdicts_[0].cmds);
+        // THE STREAM'S CONTENT. This lane checked `empty()` on failures and
+        // nothing whatever on successes, so every byte the DMA actually
+        // emitted went unverified across 5,000 packets -- the widest lane in
+        // the block was blind to the thing it streamed.
+        t.idle(static_cast<int>(pkt.size()) * 3 + 32);  // room for the stalls
+        zhao::check(t.pkt_bytes_ == pkt, "rand: verified stream bit-exact", pkt.size(),
+                    t.pkt_bytes_.size());
       }
       if (expect.status != 0) {
         zhao::check(t.pkt_bytes_.empty(), "rand: ZERO bytes downstream on error", 0,
