@@ -5,6 +5,51 @@ at the top.*
 
 ---
 
+## 2026-08-22 (evening) — speed: 6.5x too slow, then 1.29x, now 1.11x
+
+Three fixes, each measured on the real chip compiler.
+
+| | at the start | now | target |
+| --- | ---: | ---: | ---: |
+| worst path | 65 ns | **10.9 ns** | 10 ns |
+| paths too slow | 3,746 | **172** | 0 |
+| logic cells | 9,181 | **7,713** | 41,910 |
+
+**The console is now 11% too slow instead of 550% too slow, and it uses about
+1,470 fewer logic cells than when the work started.** Every fix made it both
+faster and smaller, because the slow structures were also the bulky ones.
+
+### What the three fixes were
+
+1. The packet checksum computed one bit at a time, 64 steps deep per chunk.
+   Replaced with a wide version about seven deep — provably identical
+   arithmetic, checked on every single-bit input and 200,000 random cases.
+2. The same checksum in the debug blitter.
+3. A length calculation in the blitter that was redone from scratch every
+   clock tick and sent to four places at once. It only changes once per chunk,
+   so it is now remembered instead of recomputed.
+
+### What is left
+
+No single big thing. The remaining 172 slow paths are spread thin, and the
+worst of them is the packet header check: one clock tick that verifies the
+magic number, the version, the reserved flags, four length rules, the
+checksum, the frame epoch, and then sets up the next stage. That is too much
+for one tick and wants splitting in two.
+
+That is ordinary sequencing work. Nothing found so far suggests the design is
+inherently too slow — all three problems were accidental depth, not
+architecture.
+
+**One honest gap:** an audio counter path that measured badly early on has not
+appeared in any report since, but it has never been confirmed fixed. The
+reports only keep the worst 100 paths, so its absence is not proof. That needs
+a full listing rather than an assumption.
+
+Still simulation and compiler output only. No hardware has run any of this.
+
+---
+
 ## 2026-08-22 — the speed problem is 95% solved, and the design got SMALLER
 
 Last entry said the console fit the chip but ran **6.5x too slow**, and that

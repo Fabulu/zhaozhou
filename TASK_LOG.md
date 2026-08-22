@@ -10,6 +10,66 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- MEASURED: -1.096 ns. The campaign in three steps.
+
+Composed fit at clean HEAD `a0ef3ec`.
+
+| | start | after CRC folds | after r_len pipelining |
+| --- | ---: | ---: | ---: |
+| setup worst | -56.374 ns | -3.067 ns | **-1.096 ns** |
+| failing endpoints | 3,746 | 584 | **172** |
+| hold | -1.064, 3 failing | +0.245, 0 | **+0.251, 0** |
+| ALMs | 9,181 | 7,633 | 7,713 |
+
+**Worst path 65 ns -> 10.9 ns against a 10 ns budget.** A 6.5x overrun is now
+an 11% one, and the design is ~1,470 ALMs smaller than when it started.
+
+### What is left, and it is no longer one thing
+
+    29  slot_ram write-enable -> cmd_dma|walk_off      the record walk
+    29  slot_ram write-enable -> cmd_dma|walk_cnt
+     7  cmd_dma|wr_off        -> cmd_dma|hdr_win
+     7  cmd_dma|cw            -> cmd_dma|crc_pay_r     the folds themselves
+     5  cmd_dma|m.M_SEED      -> cmd_dma|crc_pay_r
+     5  cmd_dma|cw            -> cmd_dma|crc_hdr_r
+     4  cmd_dma|m.M_SEED      -> cmd_dma|crc_hdr_r
+     2  hps_arbiter|state     -> cmd_dma|crc_pay_r
+
+and the worst single path:
+
+    -1.096 ns  cmd_dma|hdr_win[29][1] -> cmd_dma|seed_steps_q[0]
+               10.902 ns
+
+`hdr_win[29]` is part of command_bytes again, but this time it is not a CRC:
+it is the header ladder itself. That one cycle checks magic, ABI version,
+reserved flags, four length laws, the header CRC, the epoch, AND now derives
+the seed controls. Splitting the ladder across two states is the obvious next
+move, and it is a sequencing change rather than an arithmetic one.
+
+The fold paths appear here for the first time at ~1 ns over, which is what a
+seven-level XOR tree plus its state mux should cost. They are no longer the
+problem; they are simply now visible above the others.
+
+### The shape of the whole campaign
+
+Three structural defects, each found by reading the tool's report rather than
+the source:
+
+1. a bit-serial CRC chained 8 bytes deep per beat and 28 deep for a seed;
+2. the same chain in a second block;
+3. a combinational subtract fanning out four ways in the cycle it was used.
+
+None of them was evidence that the architecture is too slow. All three were
+accidental depth, and the design got SMALLER when they were removed.
+
+### Still not closed
+
+172 endpoints fail. The report holds 100 of them. The audio Gray-decode family
+that was -14.9 ns has not appeared since the first fix and has never been
+confirmed fixed -- it needs the full census, not an inference from its absence.
+
+---
+
 ## 2026-08-22 -- MEASURED: -56.374 ns -> -3.067 ns, and the design got SMALLER
 
 Composed fit at clean HEAD `fd262de`.
