@@ -1004,6 +1004,22 @@ per-block numbers were summed.**
 ### What this changes
 
 It moves DSP reduction from "a thing to do eventually" to **a gate on the design
-fitting at all**, alongside timing closure. It also gives the ledger a job it is
-not doing: `resource_budget` supports `dsp_percent`, and almost nothing declares
-one, which is exactly how a design arrives at 1.9x without a single rule firing.
+fitting at all**, alongside timing closure.
+
+### And the ledger is completely blind to it — checked, not assumed
+
+| | count |
+| --- | ---: |
+| blocks declaring `resource_budget.dsp_percent` | **0** |
+| blocks recording `resource_actual.dsp` | **0** |
+| ledger rules that read a DSP figure | **0** — V5 sums ALM percentages only |
+
+Both fields exist in the schema and in `tools/ledger/src/types.ts`. Nothing
+writes them and no rule reads them. **That is exactly how a design reaches 1.9x
+the device's DSP capacity with every gate green**: the numbers were measured,
+written into `reports/synthesis/zhao_block_fit.json`, and never carried back
+into the ledger that is supposed to be the schematic.
+
+The ALM side does not have this hole — V5 sums `alm_percent` per budget group
+and enforces a total ceiling, which is why ALM growth has never surprised
+anyone here. DSP has no equivalent.
