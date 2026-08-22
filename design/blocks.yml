@@ -3197,7 +3197,7 @@ blocks:
     counters: [hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
@@ -3207,6 +3207,10 @@ blocks:
         date: "2026-08-21"
         commit: "7140733"
         evidence: tests/debug/debug_frameblit_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-22"
+        commit: "f8e36d4"
+        evidence: tests/shell/shell_golden.cpp
 
     deferred: false
     cut_order: null
@@ -3214,6 +3218,16 @@ blocks:
     notes: >-
       Amended atomicity law: no framebuffer slot becomes visible or READY before
       every byte has been written, all writes have retired, and the CRC matches.
+      RTL_VERIFIED on the composed path: instantiated in zhao_shell_top and
+      driven end to end by tests/shell/shell_golden.cpp, on top of the unit
+      differential against zref::debug::run_blit. The atomicity law itself was
+      mutation-swept 2026-08-22 -- 20 mutations attacking the law rather than
+      the copy (publish before retirement, publish before issue, publish with no
+      CRC, unfinalised CRC, publish on a lost lease, publish while aborting,
+      release before writes retire, release a lease never owned, ownership taken
+      before the checks, aborted beats folded into the CRC, either half of the
+      guard verdict ignored, a bridge error forgotten) -- 20 caught, 0
+      survivors, forced regeneration with a generated-model hash check.
       The slot itself is the transaction buffer, so the staging buffer collapses
       from 1,966,080 bits to 512. The two-pass DDR alternative was rejected as
       unsound - the pixel arena is a raw HPS address with no ownership state, so
