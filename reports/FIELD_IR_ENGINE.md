@@ -35,7 +35,7 @@ hash did not move is **discarded, never scored**.
 
 | Piece | Ops | RTL | Directed | Random (fast lane) | Mutations |
 | --- | --- | --- | ---: | ---: | ---: |
-| Arithmetic core | 15 opcodes, `0x00`–`0x0C`, `0x10`–`0x11` | `zhao_field_alu.sv` | 828 | 120,000 | — |
+| Arithmetic core | 15 opcodes, `0x00`–`0x0C`, `0x10`–`0x11` | `zhao_field_alu.sv` | 1,005 | 140,000 | **31 / 34**, 3 equivalent |
 | Reciprocal | `RCP` | `zhao_field_rcp.sv` + generated ROM | 329 | 60,000 | — |
 | Sine / cosine | `SIN`, `COS` | `zhao_field_sin.sv` + generated ROM | 20 | exhaustive | — |
 | Length / distance | `LEN2`, `LEN3`, `DIST2` | `zhao_field_len.sv`, `zhao_field_isqrt.sv` | 159 | 9,000 | — |
@@ -51,10 +51,43 @@ lane's `--random` argument, and each nightly lane runs the same test with a
 larger draw. The sine lane has no `--random` argument because it sweeps **all
 65,536 angles** and reports the sweep as one check.
 
-Mutation scores exist only for the two most recent pieces. The four earlier ones
-were built before the sweep harness was written and have not been swept; that is
-a gap, not a claim of coverage, and it is worth closing before the sequencer
-lands on top of them.
+Mutation scores now exist for six of the nine pieces. **THREE REMAIN UNSWEPT** —
+Reciprocal, Sine/cosine, and Length/distance — built before the sweep harness
+existed. That is a gap, not a claim of coverage, and it is still worth closing.
+
+### The arithmetic core, swept 2026-08-22
+
+34 mutations, **31 caught, 3 equivalent, 0 real gaps**, and every one of the 31
+was caught by the DIRECTED lane rather than only by the 20,000-program random
+draw. The mutations attacked the laws rather than the arithmetic: where
+saturation triggers, which direction rounding goes, which ledger lane records
+it, CLAMP's operand order, each CMP predicate's boundary, MAD's `c <<< 16`,
+DOT2/DOT3's per-lane terms.
+
+**Two directed-lane holes were found and closed.** Every DOT2 case used a `b`
+vector whose first two elements were equal — `{1.0,1.0,1.0}`, `{MAX,MAX,MAX}`,
+`{0.5,0.5,0.5}` — so a block computing `a0*b0 + a1*b0` instead of
+`a0*b0 + a1*b1` answered every one of them correctly. That is visible by
+inspection and needed no sweep to justify. Asymmetric cases added for both
+DOT2's second term and DOT3's third.
+
+**The three survivors are equivalent by algebra**, and the argument is in
+`zhao_field_alu.sv` beside the bound: clamping a value that already sits
+exactly on the rail returns that same value, so `v > MAX`, `v > MAX-1` and
+`v >= MAX` cannot be distinguished by any input. What makes that safe rather
+than merely untested is that the LEDGER bound lives in a separate function,
+`sat32_fired`, whose own mutations were caught both ways.
+
+**A warning about this sweep's method, because it nearly produced a confident
+wrong answer.** Three earlier runs of it reported different scores — 31/34 with
+four "caught only by the random lane", then a spurious equivalence, then a
+false staleness abort. All three were artefacts of ONE defect: `ninja` could
+not regenerate `build.ninja` (cmake reads `VERILATOR_ROOT` from the
+environment and it was unset), and when that happens **ninja builds nothing at
+all** while still printing plausible output. Every mutation then tested
+whatever binary was lying around. The harness now treats
+`rebuilding 'build.ninja'` as fatal. Only the fourth run, on a sound build, is
+recorded here.
 
 ## What is not built
 

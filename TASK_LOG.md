@@ -55,12 +55,60 @@ caught and the sweep aborts rather than reporting.
     if h == prev_hash:  DISCARD -- this build served a stale model and the
                         verdict would be attributed to the wrong mutation
 
-### Consequence for the result
+### The actual cause, found after two more wrong theories
 
-**The 31/34 figure is withdrawn, not corrected.** A sweep whose attribution
-cannot be trusted is not a weaker result, it is not a result. Re-running on a
-quiet machine once the composed fitter finishes, and only that run will be
-recorded.
+I blamed concurrency with the Quartus fitter. Then I blamed a stale-model
+race and strengthened the hash guard. Then the strengthened guard fired on a
+QUIET machine, which killed that theory too. Then I "proved" one mutation
+equivalent by diffing the generated C++ and getting zero lines.
+
+All four were wrong, and they were wrong about the same thing:
+
+    ninja: error: rebuilding 'build.ninja': subcommand failed
+
+**When ninja cannot regenerate build.ninja it builds NOTHING AT ALL**, and it
+says so in one line that scrolls past while the rest of its output looks
+ordinary. Every mutation was testing whatever binary happened to be lying
+around from an earlier build.
+
+Why it could not regenerate: `tests/CMakeLists.txt` reads
+`set(VERILATOR_ROOT "$ENV{VERILATOR_ROOT}")` -- from the ENVIRONMENT, at
+configure time. Editing `tests/lint/source_list_parity.cmake.in` earlier in the
+session marked `build.ninja` stale, and every subsequent build from a shell
+without `VERILATOR_ROOT` set tried to reconfigure, failed, and did nothing.
+
+**The zero-line diff that "proved" the equivalence proved only that the model
+had not been regenerated.** The equivalence is still true, but it is true by
+algebra -- clamping a value already on the rail returns that same value -- and
+that argument never needed the diff. The diff was evidence of nothing and it
+was quoted as if it were the stronger form.
+
+### Fixed
+
+`build()` sets `VERILATOR_ROOT` explicitly and treats
+`rebuilding 'build.ninja'` in ninja's output as FATAL. A sweep that cannot
+build must stop, not report.
+
+### Which earlier results this affects
+
+**None of the committed ones.** `build.ninja` only became stale when the
+parity-gate template was edited, in commit `f0e101b`. The CMD.DMA RAM sweep
+(19/19), the DEBUG.FRAMEBLIT atomicity sweep (20/20) and the sequencer
+ALU-dispatch sweep (10/11 + 1 equivalent) were all run and committed BEFORE
+that, on a build tree that regenerated normally. They stand.
+
+The arithmetic-core sweep is the only one affected, and its first three
+attempts are discarded. The fourth, on a sound build, is the one recorded:
+**34 attempted, 31 caught -- every one by the DIRECTED lane -- 3 equivalent by
+algebra, 0 real gaps.**
+
+### The lesson, which is the same one as the morning's
+
+Four theories about a failing measurement, each reasoned from the code, none
+from the tool's own output. The line that settled it had been printed on every
+single run. This is the second time today that reading what the tool actually
+said would have replaced an afternoon of inference -- the first was
+`Total block memory bits: 0` sitting in a report since the first CMD.DMA fit.
 
 The three survivors are a separate matter and stand on proof rather than on
 the sweep: they are the `sat32` boundary mutations, equivalent because clamping
