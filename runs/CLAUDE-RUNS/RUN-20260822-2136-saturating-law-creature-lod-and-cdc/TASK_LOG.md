@@ -157,7 +157,7 @@ memory written, past runs being reconstructed.
 |-----------|----------|---------|--------|---------------|
 | 2026-08-22 ~20:30 | a69cac37667f114f8 | Fix the GPU/video CDC seam: move the displayed CRC into `vid_clk` rather than crossing per-pixel state (owner ruling) | **Complete** | [FINDINGS-cdc-seam.md](FINDINGS-cdc-seam.md) |
 
-| 2026-08-22 ~23:0x | afc4739019222418a | Build the GEOM.MESHFETCH conservative frustum cull: reference, RTL, differential, sweep | In Progress | `FINDINGS-meshfetch-cull.md` (agent to write) |
+| 2026-08-22 ~23:0x | afc4739019222418a | Build the GEOM.MESHFETCH conservative frustum cull: reference, RTL, differential, sweep | **Complete** | [FINDINGS-meshfetch-cull.md](FINDINGS-meshfetch-cull.md) |
 
 Notes on this spawn:
 
@@ -282,3 +282,40 @@ Notes on the second spawn:
   one predated the run and its findings had to be filed on its behalf.
 - Warned that a composed fit is running concurrently, and to retry rather than
   delete a git `index.lock`.
+
+### 00:0x - the cull landed, and it corrected me twice
+
+Commits `60703e6` and `2a711f0`. It wrote its own findings from the template,
+which is the process working as intended for the first time.
+
+**It caught an error in my step-1 note.** I had written that the SIX frustum
+planes are row combinations of the view-projection. There are FIVE: this
+renderer's only depth condition is `w > 0`, so `row2` is never read. I found
+that myself later while deriving the detail and wrote five in the design note --
+but never went back to fix the earlier claim, so the repo carried both numbers
+and the wrong one came first. A sixth plane rejects geometry the renderer would
+have drawn, which is the exact failure the design note warns about.
+
+**And it found a width bound I had not.** A plane component is the SUM of two
+fx16 words, so it reaches 2^32 and `a^2+b^2+c^2` reaches 3*2^64 -- outside u64,
+which is what `isqrt_u64` takes. It widened qformats 7.2's own recurrence from
+4^31 to 4^32 rather than writing a second algorithm.
+
+**Its own two corrections, neither papered over:** the preflight I added caught
+its first malformed mutant (M06 left `pl_d` unused, failing -Wall), and M29
+falsified a comment it had written claiming a set-must-dominate-clear ordering
+was load-bearing. It is not -- the comment now says the ordering is defensive.
+
+**Numbers:** 11,090 instance verdicts / 17,212 checks; the kind-1 half pinned to
+the shipped renderer over 360,000 points across six cameras with 0 mismatches
+and 0 points rejected that the renderer would draw. Sweep 32 attempted / 32
+accounted / 30 caught / 2 equivalent. `ctest -L fast` 262/262.
+
+It also MEASURED the rounding direction rather than asserting it: **1,015 of
+1,775 boundary probes answer differently under a floor**, which is the
+difference between a cull that costs work and one that deletes geometry.
+
+**GEOM.MESHFETCH stays SPECIFIED**, correctly: the descriptor fetch is not
+built because the format is unfrozen, and `zref::MeshFetch` stays a phantom.
+The block owes a Quartus fit -- every width in it is argued from its range, and
+`zhao_geom_lod` went 28 DSPs to 18 once measured.
