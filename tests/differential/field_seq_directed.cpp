@@ -60,6 +60,9 @@ struct Prog {
   std::vector<zfield::Instr> ins;
   std::vector<uint8_t> in_regs;
   std::vector<uint8_t> out_regs;
+  // CURVE/DCURVE/SPLINE read prog.tables[imm]; the harness is the table
+  // memory just as it is the instruction memory.
+  std::vector<zfield::Table> tables;
 
   void op(uint8_t o, uint8_t dst, uint8_t a = 0, uint8_t b = 0, uint8_t c = 0, uint32_t imm = 0) {
     zfield::Instr i{};
@@ -79,6 +82,7 @@ std::vector<int32_t> interp(const Prog& p, const std::vector<int32_t>& in, bool*
   zfield::Decoded d;
   d.profile = 0;
   d.instrs = p.ins;
+  d.tables = p.tables;
   for (uint8_t r : p.in_regs) {
     zfield::IoLane l{};
     l.name = "i";
@@ -128,11 +132,49 @@ struct Bench {
       dut.ins_c_i = 0;
       dut.ins_imm_i = 0;
     }
+    // ---- the table memory -------------------------------------------------
+    // A REGISTERED read, and the lag is the whole point. The DUT drives
+    // `tbl_sel_o`/`tbl_idx_o` during a cycle and the three lanes must answer on
+    // the NEXT one -- the curve block's contract, and the M10K rule behind it.
+    //
+    // AN EARLIER VERSION OF THIS HARNESS ANSWERED COMBINATIONALLY, presenting
+    // the entry for the index the DUT was driving RIGHT NOW. That is not more
+    // generous, it is wrong: the unit samples in cycle N+1 the entry it asked
+    // for in cycle N, so a same-cycle answer hands it whatever index the walk
+    // had moved on to. CURVE and SPLINE returned zero and DCURVE -- which needs
+    // one entry, not three -- passed, which is exactly the shape that would
+    // have read as "the table ops are broken" rather than "the memory model
+    // is".
+    //
+    // So the address is captured at the end of a cycle and answered at the
+    // start of the next, which is what a registered read is.
+    const uint32_t tsel = tbl_sel_r;
+    const uint32_t tidx = tbl_idx_r;
+    if (prog && tsel < prog->tables.size()) {
+      const zfield::Table& t = prog->tables[tsel];
+      dut.tbl_n_i = static_cast<uint8_t>(t.x.size());
+      const size_t k = (tidx < t.x.size()) ? tidx : (t.x.empty() ? 0 : t.x.size() - 1);
+      dut.tbl_x_i = t.x.empty() ? 0 : static_cast<uint32_t>(t.x[k]);
+      dut.tbl_y_i = t.y.empty() ? 0 : static_cast<uint32_t>(t.y[k]);
+      dut.tbl_dy_i = t.dy.empty() ? 0 : static_cast<uint32_t>(t.dy[k]);
+    } else {
+      dut.tbl_n_i = 0;
+      dut.tbl_x_i = 0;
+      dut.tbl_y_i = 0;
+      dut.tbl_dy_i = 0;
+    }
     dut.eval();
   }
 
+  // The table memory's address registers: what the DUT asked for during the
+  // cycle that just ended, answered at the start of the next one.
+  uint32_t tbl_sel_r = 0;
+  uint32_t tbl_idx_r = 0;
+
   void step() {
     present();
+    tbl_sel_r = dut.tbl_sel_o;  // latched on this edge, like a real RAM
+    tbl_idx_r = dut.tbl_idx_o;
     zhao::tick(dut);
     dut.eval();
   }
@@ -481,38 +523,14 @@ int main(int argc, char** argv) {
   }
 
   // ---- 7. LAW 6: an unsupported op is REFUSED ----------------------------
-  // Two cases, because they age differently.
   //
-  // This check previously used OP_RCP, and wiring RCP into the dispatch broke
-  // it — correctly, but it meant the refusal law was pinned to whichever op
-  // happened to be unimplemented that week. So the SECOND case below uses an
-  // opcode that is not in the enum at all and never will be, which is the
-  // stable statement of the law. The first case keeps a real-but-unwired op,
-  // because "the walk refuses an op it has not been taught" is the thing that
-  // actually matters and it should be stated about a real opcode while any
-  // remain.
+  // THIS CHECK USED TO NAME A REAL OP, AND NOW IT CANNOT. It began as OP_RCP,
+  // moved to OP_ROT3, then to OP_CURVE, and each move happened because wiring
+  // that op made this line fail -- the design working, not churn. With CURVE
+  // dispatched there is no real opcode left outside the walk: all sixteen are
+  // in. So the real-op half is deleted, as its own note said to do, and what
+  // remains is the permanent statement of the law.
   {
-    // A real op that is built and verified as a block but not yet dispatched.
-    // Wiring ROT3 will break this line, and the fix is to move it to whatever
-    // is still unwired — or to delete it once nothing is.
-    Prog p;
-    p.in_regs = {0};
-    p.op(zfield::OP_MOV, 3, 0);
-    // Was OP_RCP, then OP_ROT3. Each time the op was wired this line failed
-    // and was moved, which is the design working rather than churn. CURVE is
-    // the last family left -- the only one needing a TABLE PORT plumbed up
-    // through the sequencer, so it outlasts the others. When it lands, delete
-    // this half and keep the 0xFE case below: that one is the permanent
-    // statement of the law and never needs maintenance.
-    p.op(zfield::OP_CURVE, 4, 3);
-    p.end();
-    p.out_regs = {3};
-    uint8_t status = 0;
-    int retired = 0;
-    b.run(p, {kOne}, &status, nullptr, &retired);
-    check(status == 1, "7.a real op outside the dispatch is REFUSED", 1, status);
-    check(retired == 1, "7.and the walk stopped there", 1, static_cast<uint32_t>(retired));
-
     // An opcode that is not an opcode. The decoder would never let this reach
     // hardware; the point is that if one ever did, the walk stops and says so
     // rather than producing a plausible field.
@@ -1012,6 +1030,206 @@ int main(int argc, char** argv) {
     chain.end();
     chain.out_regs = {6, 5, 4, 3};
     diff(b, chain, {3 * kOne, 4 * kOne, 0x2000}, "7e.rot2 -> len2 -> ring");
+  }
+
+  // ---- 7f. CURVE / DCURVE / SPLINE: the family with a table --------------
+  // The last three opcodes, and the only ones that read a SECOND memory. The
+  // sequencer names a table with the instruction's immediate and the shell
+  // answers on the next cycle -- a registered read, the same discipline the
+  // instruction memory follows.
+  //
+  // The harness is that memory. If it answered combinationally the unit would
+  // appear to work and the shipped shell would not, which is why the read lead
+  // is modelled rather than assumed away.
+  {
+    // A monotone table with known slopes: y = 2x over [0,4], so dy = 2 in
+    // fx16 and the answers are checkable by hand as well as by the oracle.
+    zfield::Table t0;
+    t0.kind = 0;
+    for (int k = 0; k <= 4; ++k) {
+      t0.x.push_back(k * kOne);
+      t0.y.push_back(2 * k * kOne);
+      t0.dy.push_back(2 * kOne);
+    }
+
+    // A second table with DIFFERENT contents, so an implementation that
+    // ignored the immediate and always read table 0 is visible.
+    zfield::Table t1;
+    t1.kind = 0;
+    for (int k = 0; k <= 4; ++k) {
+      t1.x.push_back(k * kOne);
+      t1.y.push_back(-3 * k * kOne);
+      t1.dy.push_back(-3 * kOne);
+    }
+
+    Prog c;
+    c.tables = {t0, t1};
+    c.in_regs = {0};
+    c.op(zfield::OP_CURVE, 1, 0, 0, 0, 0u);  // table 0
+    c.end();
+    c.out_regs = {1};
+    diff(b, c, {0}, "7f.curve at the first knot");
+    diff(b, c, {2 * kOne}, "7f.curve mid-table");
+    diff(b, c, {4 * kOne}, "7f.curve at the last knot");
+    diff(b, c, {kOne + (kOne / 2)}, "7f.curve between knots");
+    diff(b, c, {-kOne}, "7f.curve below the table clamps");
+    diff(b, c, {9 * kOne}, "7f.curve above the table clamps");
+    diff(b, c, {INT32_MIN}, "7f.curve at the bottom rail");
+    diff(b, c, {INT32_MAX}, "7f.curve at the top rail");
+
+    // THE IMMEDIATE MUST REACH THE TABLE SELECT. Same input, other table.
+    Prog c1;
+    c1.tables = {t0, t1};
+    c1.in_regs = {0};
+    c1.op(zfield::OP_CURVE, 1, 0, 0, 0, 1u);  // table 1
+    c1.end();
+    c1.out_regs = {1};
+    diff(b, c1, {2 * kOne}, "7f.curve reads the table the imm names");
+
+    // ...and both in ONE program, which also proves the selector is held for
+    // the whole instruction rather than latched once per run.
+    Prog cboth;
+    cboth.tables = {t0, t1};
+    cboth.in_regs = {0};
+    cboth.op(zfield::OP_CURVE, 1, 0, 0, 0, 0u);
+    cboth.op(zfield::OP_CURVE, 2, 0, 0, 0, 1u);
+    cboth.op(zfield::OP_ADD, 3, 1, 2);
+    cboth.end();
+    cboth.out_regs = {3, 2, 1};
+    diff(b, cboth, {2 * kOne}, "7f.two tables in one program");
+
+    Prog d;
+    d.tables = {t0, t1};
+    d.in_regs = {0};
+    d.op(zfield::OP_DCURVE, 1, 0, 0, 0, 0u);
+    d.end();
+    d.out_regs = {1};
+    diff(b, d, {kOne}, "7f.dcurve returns the slope");
+    diff(b, d, {0}, "7f.dcurve at the first knot");
+    diff(b, d, {9 * kOne}, "7f.dcurve above the table");
+    diff(b, d, {INT32_MIN}, "7f.dcurve at the bottom rail");
+
+    Prog sp;
+    sp.tables = {t0, t1};
+    sp.in_regs = {0};
+    sp.op(zfield::OP_SPLINE, 1, 0, 0, 0, 0u);
+    sp.end();
+    sp.out_regs = {1};
+    diff(b, sp, {0}, "7f.spline at the first knot");
+    diff(b, sp, {2 * kOne}, "7f.spline mid-table");
+    diff(b, sp, {kOne + (kOne / 2)}, "7f.spline between knots");
+    diff(b, sp, {4 * kOne}, "7f.spline at the last knot");
+    diff(b, sp, {9 * kOne}, "7f.spline above the table");
+
+    // A table op must not write a second lane either -- the guard the sweep
+    // caught missing for the other one-lane families.
+    Prog cg;
+    cg.tables = {t0};
+    cg.in_regs = {0, 1};
+    cg.op(zfield::OP_MOV, 6, 1);
+    cg.op(zfield::OP_CURVE, 5, 0, 0, 0, 0u);
+    cg.end();
+    cg.out_regs = {6, 5};
+    diff(b, cg, {2 * kOne, 0x0BADCAFE}, "7f.curve leaves the second lane alone");
+
+    // THE OPERAND IS reg[a], AND EVERY CURVE ABOVE USES a = 0.
+    //
+    // CURVE has ONE source group, so the decoder forces b and c to zero --
+    // which means `a0` and `b0` both read register 0 and a mutation feeding
+    // the unit from `b` is invisible. It survived the sweep for exactly that
+    // reason. Reading from a register that is NOT zero is the whole check.
+    Prog cfar;
+    cfar.tables = {t0, t1};
+    cfar.in_regs = {0, 1};
+    cfar.op(zfield::OP_MOV, 7, 1);  // the real input, far from reg0
+    cfar.op(zfield::OP_CURVE, 8, 7, 0, 0, 0u);
+    cfar.end();
+    cfar.out_regs = {8};
+    diff(b, cfar, {0, 2 * kOne}, "7f.curve reads reg[a], not reg[b]");
+    diff(b, cfar, {4 * kOne, kOne}, "7f.curve reads reg[a] with reg0 distinct");
+
+    // THE LEDGER LANES MUST CROSS THE TABLE PATH.
+    //
+    // None of the tables above can saturate: the rail inputs clamp to a knot
+    // and come back clean, so dropping the curve's sat lanes changed nothing
+    // and two mutations survived. This table's values are large enough that
+    // the interpolation itself overflows, which is what makes the lanes
+    // observable at all.
+    zfield::Table tbig;
+    tbig.kind = 0;
+    tbig.x.push_back(0);
+    tbig.y.push_back(INT32_MAX);
+    tbig.dy.push_back(INT32_MAX);
+    tbig.x.push_back(kOne);
+    tbig.y.push_back(INT32_MIN);
+    tbig.dy.push_back(INT32_MIN);
+    tbig.x.push_back(2 * kOne);
+    tbig.y.push_back(INT32_MAX);
+    tbig.dy.push_back(INT32_MAX);
+
+    Prog csat;
+    csat.tables = {tbig};
+    csat.in_regs = {0};
+    csat.op(zfield::OP_CURVE, 1, 0, 0, 0, 0u);
+    csat.end();
+    csat.out_regs = {1};
+    diff(b, csat, {kOne / 2}, "7f.curve saturates mid-segment");
+    diff(b, csat, {kOne + (kOne / 2)}, "7f.curve saturates in the second segment");
+    diff(b, csat, {2 * kOne}, "7f.curve saturates at the last knot");
+
+    // THE ADD LANE NEEDS A TABLE WHOSE X-SPAN SATURATES THE SUBTRACTION.
+    //
+    // `tbig` above has x = 0, 1, 2 in fx16, so `a - x[i]` never overflows and
+    // only the RESCALE lane fires -- which is why dropping the add lane still
+    // survived after that table was added. The input is clamped to [x0, xN],
+    // so the only way to make the difference saturate is to make the SPAN
+    // itself span the whole range.
+    zfield::Table twide;
+    twide.kind = 0;
+    twide.x.push_back(INT32_MIN);
+    twide.y.push_back(0);
+    twide.dy.push_back(kOne);
+    twide.x.push_back(INT32_MAX);
+    twide.y.push_back(kOne);
+    twide.dy.push_back(kOne);
+
+    Prog cadd;
+    cadd.tables = {twide};
+    cadd.in_regs = {0};
+    cadd.op(zfield::OP_CURVE, 1, 0, 0, 0, 0u);
+    cadd.end();
+    cadd.out_regs = {1};
+    diff(b, cadd, {0}, "7f.curve subtraction saturates at zero");
+    diff(b, cadd, {INT32_MAX}, "7f.curve subtraction saturates at the top");
+    diff(b, cadd, {kOne}, "7f.curve subtraction saturates near zero");
+
+    Prog dadd;
+    dadd.tables = {twide};
+    dadd.in_regs = {0};
+    dadd.op(zfield::OP_SPLINE, 1, 0, 0, 0, 0u);
+    dadd.end();
+    dadd.out_regs = {1};
+    diff(b, dadd, {0}, "7f.spline over a full-range table");
+
+    Prog ssat;
+    ssat.tables = {tbig};
+    ssat.in_regs = {0};
+    ssat.op(zfield::OP_SPLINE, 1, 0, 0, 0, 0u);
+    ssat.end();
+    ssat.out_regs = {1};
+    diff(b, ssat, {kOne / 2}, "7f.spline saturates mid-segment");
+    diff(b, ssat, {kOne + (kOne / 2)}, "7f.spline saturates in the second segment");
+
+    // A table op feeding the rest of the engine, and the reverse.
+    Prog chain;
+    chain.tables = {t0};
+    chain.in_regs = {0, 1};
+    chain.op(zfield::OP_CURVE, 2, 0, 0, 0, 0u);
+    chain.op(zfield::OP_LEN2, 4, 2);  // reads the curve result and reg3
+    chain.op(zfield::OP_DCURVE, 5, 4, 0, 0, 0u);
+    chain.end();
+    chain.out_regs = {5, 4, 2};
+    diff(b, chain, {2 * kOne, kOne}, "7f.curve -> len2 -> dcurve");
   }
 
   // ---- 8. the liveness bound ---------------------------------------------

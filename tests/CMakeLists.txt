@@ -1141,7 +1141,8 @@ verilate(test_field_seq_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv)
 add_test(NAME field_seq_directed COMMAND test_field_seq_directed)
 set_tests_properties(field_seq_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_seq_random COMMAND test_field_seq_directed --random 600)
@@ -1164,7 +1165,8 @@ add_test(NAME lint_zhao_field_seq
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv)
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv)
 set_tests_properties(lint_zhao_field_seq PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

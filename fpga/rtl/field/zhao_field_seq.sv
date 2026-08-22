@@ -114,6 +114,22 @@ module zhao_field_seq (
     input  logic [ 5:0] ins_c_i,
     input  logic [31:0] ins_imm_i,
 
+    // ---- table memory: the same shape as the instruction memory ------------
+    // CURVE, DCURVE and SPLINE read a table chosen by the instruction's
+    // immediate, exactly as `zfield::interpret` does with `prog.tables[imm]`.
+    // The sequencer does not hold the tables any more than it holds the
+    // program: it names one and reads it, and the shell owns the memory.
+    //
+    // A REGISTERED READ, per the M10K rules: `tbl_idx_o` is presented for a
+    // whole cycle and the three lanes answer on the NEXT one. That is the
+    // curve block's contract with its table, carried straight through.
+    output logic [31:0] tbl_sel_o,      // which table: the instruction's imm
+    output logic [ 5:0] tbl_idx_o,      // which entry inside it
+    input  logic [ 6:0] tbl_n_i,        // entry count of the selected table
+    input  logic signed [31:0] tbl_x_i,
+    input  logic signed [31:0] tbl_y_i,
+    input  logic signed [31:0] tbl_dy_i,
+
     // ---- the SatLedger, accumulated across the WHOLE program ---------------
     output logic sat_add_o,
     output logic sat_mul_o,
@@ -426,6 +442,61 @@ module zhao_field_seq (
       .rcp0_o        (rg_rcp0)
   );
 
+  // ---- CURVE / DCURVE / SPLINE: the family with a table -------------------
+  // The last of the sixteen ops, and the only one needing anything the walk
+  // did not already have. All three write a SINGLE lane; what makes them
+  // different is the second memory.
+  localparam logic [7:0] OP_CURVE = 8'h1A;
+  localparam logic [7:0] OP_SPLINE = 8'h1B;
+  localparam logic [7:0] OP_DCURVE = 8'h1D;
+
+  logic op_is_curve;
+  assign op_is_curve = (i_op == OP_CURVE) || (i_op == OP_DCURVE) || (i_op == OP_SPLINE);
+
+  logic [1:0] curve_mode;
+  always_comb begin
+    case (i_op)
+      OP_DCURVE: curve_mode = 2'd1;
+      OP_SPLINE: curve_mode = 2'd2;
+      default:   curve_mode = 2'd0;   // OP_CURVE
+    endcase
+  end
+
+  logic               cv_vready, cv_rvalid;
+  logic signed [31:0] cv_result;
+  logic        [ 5:0] cv_seg;
+  logic               cv_sat_add, cv_sat_mul, cv_sat_rescale;
+
+  // The table selector is the immediate, held for the whole instruction, so
+  // the shell sees a stable table while the unit walks its entries.
+  assign tbl_sel_o = i_imm;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [5:0] cv_seg_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign cv_seg_unused = cv_seg;
+
+  zhao_field_curve u_curve (
+      .clk           (clk),
+      .rst_n         (rst_n),
+      .v_valid_i     ((state == Q_MISS) && op_is_curve),
+      .v_ready_o     (cv_vready),
+      .mode_i        (curve_mode),
+      .a_i           (a0),
+      .tbl_n_i       (tbl_n_i),
+      .tbl_idx_o     (tbl_idx_o),
+      .tbl_x_i       (tbl_x_i),
+      .tbl_y_i       (tbl_y_i),
+      .tbl_dy_i      (tbl_dy_i),
+      .r_valid_o     (cv_rvalid),
+      .r_ready_i     ((state == Q_MWAIT) && op_is_curve),
+      .result_o      (cv_result),
+      .seg_idx_o     (cv_seg),
+      .sat_add_o     (cv_sat_add),
+      .sat_mul_o     (cv_sat_mul),
+      .sat_rescale_o (cv_sat_rescale)
+  );
+
   // The multi-cycle group, as one set of wires. Adding a family means adding
   // its unit above and one arm here -- the states below do not change.
   logic               multi_op;        // this opcode goes down the slow path
@@ -437,8 +508,21 @@ module zhao_field_seq (
   logic               multi_sat_rcp, multi_rcp0;
 
   always_comb begin
-    multi_op = op_is_len || op_is_norm || op_is_noise || op_is_rot || op_is_ring;
-    if (op_is_noise) begin
+    multi_op = op_is_len || op_is_norm || op_is_noise || op_is_rot || op_is_ring
+               || op_is_curve;
+    if (op_is_curve) begin
+      multi_vready      = cv_vready;
+      multi_rvalid      = cv_rvalid;
+      multi_o0          = cv_result;
+      multi_o1          = '0;
+      multi_o2          = '0;
+      multi_width       = 2'd1;        // CURVE, DCURVE and SPLINE all write one
+      multi_sat_add     = cv_sat_add;
+      multi_sat_mul     = cv_sat_mul;
+      multi_sat_rescale = cv_sat_rescale;
+      multi_sat_rcp     = 1'b0;
+      multi_rcp0        = 1'b0;
+    end else if (op_is_noise) begin
       multi_vready      = nz_vready;
       multi_rvalid      = nz_rvalid;
       multi_o0          = nz_o0;
@@ -723,6 +807,13 @@ module zhao_field_seq (
         // LEN2/LEN3/DIST2 and NORMALIZE2/3 including both write-back lanes and
         // the untouched lane beyond them.
         // ENFORCED-BY: tests/differential/field_seq_directed.cpp
+        //
+        // The curve family joined them: `r_ready` asserted in Q_MISS instead
+        // of Q_MWAIT survives there too, for the same reason and no other.
+        // Every OTHER curve mutation was caught once the tests reached the
+        // right inputs -- the operand needed a source register that is not
+        // zero, and the ledger lanes needed a table whose x-span saturates the
+        // subtraction rather than merely its interpolation.
         //
         // What would make it testable: a unit that genuinely stalls, or a
         // sequencer that pipelines a second op behind the first. Neither
