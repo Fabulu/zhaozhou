@@ -1411,6 +1411,31 @@ set_tests_properties(lint_zhao_debug_frameblit PROPERTIES
 # one ALU. The oracle is zfield::interpret's own arithmetic (the zref::fx_*
 # primitives it calls), so nothing is re-derived from spec prose and the block
 # stays on the right side of field-ir.md's grep-audit law.
+# ---- CRC-32C parallel fold ------------------------------------------------
+# Equivalence against the SHIPPED zhao_crc32c_step is the module's entire
+# contract: it exists to shorten a 64-level combinational chain that the
+# composed fit measured at ~38 ns against a 10 ns budget, and a faster CRC that
+# computes a different number than the rest of the machine is worse than the
+# slow one. The property is combinational, so the lane can be driven hard.
+add_executable(test_crc32c_fold differential/crc32c_fold_directed.cpp)
+target_link_libraries(test_crc32c_fold PRIVATE zhao_harness zhao_zref)
+verilate(test_crc32c_fold
+  PREFIX Vzhao_crc32c_fold
+  TOP_MODULE zhao_crc32c_fold
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv)
+add_test(NAME crc32c_fold_directed COMMAND test_crc32c_fold)
+set_tests_properties(crc32c_fold_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME crc32c_fold_random COMMAND test_crc32c_fold --random 200000)
+set_tests_properties(crc32c_fold_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME crc32c_fold_random_nightly COMMAND test_crc32c_fold --random 4000000)
+set_tests_properties(crc32c_fold_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
+add_test(NAME lint_zhao_crc32c_fold
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_crc32c_fold
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv)
+set_tests_properties(lint_zhao_crc32c_fold PROPERTIES LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_executable(test_field_alu_ops differential/field_alu_ops.cpp)
 target_link_libraries(test_field_alu_ops PRIVATE zhao_harness zhao_zref)
 verilate(test_field_alu_ops

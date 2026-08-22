@@ -10,6 +10,71 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- the parallel CRC-32C fold, built and verified
+
+`fpga/rtl/common/zhao_crc32c_fold.sv`. Folds up to eight bytes in ONE shallow
+XOR tree instead of sixty-four dependent levels.
+
+    fold_N(c, d) = XOR over set bits i of c of fold_N(1<<i, 0)
+               XOR XOR over set bits j of d of fold_N(0, 1<<j)
+
+CRC-32C is linear over GF(2) with no constant term, so each column is a
+compile-time constant and the runtime logic is 96 masked 32-bit XORs -- a tree
+about seven levels deep. **The columns are derived at elaboration by calling
+the bit-serial definition itself**, so the module cannot drift from what it
+replaces: change the polynomial and the columns change with it.
+
+`n_i` selects how many leading bytes participate, because no caller always has
+eight -- the seed walks a range ending wherever `command_bytes` says, and a
+final bridge beat can be partial. Nine matrices, muxed.
+
+### The oracle, and why it is not a restatement
+
+`zhao_abi::zhao_crc32c` wraps the raw running state in an inversion at each
+end, so
+
+    zhao_crc32c(c, buf, n) == ~raw_chain(~c, buf, n)
+
+and the raw transform is recovered exactly by undoing both. The test therefore
+compares against **the shipped function every other CRC user calls**, not a
+second copy of the algorithm written beside it. That distinction is not
+academic here: `zhao_field_alu`'s ABS returned the wrong answer for INT32_MIN
+and its test restated the law the same wrong way, so the two agreed with each
+other through 828 directed and 120,000 random checks.
+
+### Verification
+
+    crc32c_fold_directed        1,178 checks
+    crc32c_fold_random          200,000 folds
+    crc32c_fold_random_nightly  4,000,000
+
+The directed lane includes **every state basis vector and every data basis
+vector at every byte count** -- 32 + 64 columns x 9 counts -- because the module
+IS its columns, and a wrong column is exactly a wrong answer for one basis
+input that random traffic need never isolate. Plus: n=0 is the identity, bytes
+above the count do not participate, and a 256-byte message folded eight at a
+time matches the byte-at-a-time chain at every length.
+
+**Mutation sweep: 18 attempted, 18 caught, 0 survivors.** Wrong polynomial,
+wrong shift direction, wrong bit tested, seven rounds instead of eight, data
+not mixed in, data mixed at the top, high-byte-first ordering, every byte
+folded regardless of the count, count off by one, both basis derivations
+reversed, either column set dropped, data columns truncated, accumulator seeded
+wrong, columns OR-ed instead of XOR-ed, and both count-mux errors.
+
+### What remains
+
+**This is the primitive, verified in isolation. It is not yet wired in.**
+CMD.DMA's seed loop and streaming CRC, and DEBUG.FRAMEBLIT's `crc_acc`, still
+call the bit-serial chain. Wiring it in is the next step, and the composed fit
+is what will say whether it moves the -55.199 ns.
+
+Deliberately stopped here rather than rewiring two verified blocks at the tail
+of a long session: the primitive is worth having proven on its own, and the
+rewire wants its own differential run against unchanged packet behaviour.
+
+---
+
 ## 2026-08-22 -- TIMING DIAGNOSED. It is the CRC, and it is bit-serial.
 
 Re-ran the composed fit with `-KeepWorkspace` to keep `setup_paths.rpt`, on the
