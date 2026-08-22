@@ -10,6 +10,182 @@ any of it.**
 
 ---
 
+## 2026-08-22 (later) -- the GPU/video CDC seam, fixed structurally rather
+## than re-timed; and a sweep that caught my own test not compiling
+
+The ruled next move (`docs/OWNER_DOCKET.md`, "RULED 2026-08-22 -- BALANCED stays
+authoritative"): *"Fix the video/GPU seam structurally -- especially move
+displayed CRC into `vid_clk` rather than crossing per-pixel state."* Done.
+**Everything below is SIMULATION. No fit was run for this change** -- the
+composed fit is ~40 minutes and belongs to the owner's A/B.
+
+### 1. What the seam actually was
+
+`zhao_shell_top` glue 7 ran `zhao_debug_crc` on `gpu_clk` and re-timed the video
+pixel register into it:
+
+```
+  always_ff @(posedge gpu_clk ...)
+    ...
+    else if ((vph_q != vphase) && px_out.valid) begin
+      crc_in_byte <= px_out.rgb565[7:0];
+      by_hi       <= px_out.rgb565[15:8];
+```
+
+`px_out` is a `vid_clk` register. So sixteen data bits, plus `x`, `y` and
+`valid`, were sampled by GPU flops **on every displayed pixel** -- 122,880 of
+them per Duo frame -- fenced by nothing but a phase toggle. It was correct only
+because the simulation freezes `vid_clk = gpu_clk/2` with coincident posedges
+(plan R1), which is a property of the testbench and not of a board. That is the
+family both HIGH PERFORMANCE hold violations landed on.
+
+**And the documents disagreed about it.** `design/contracts/DEBUG.CRC.md` said
+"`vid_clk` domain for the displayed-stream lane"; `design/blocks.yml` said
+`clock_domain: gpu`; the RTL followed the ledger and built the crossing. The
+owner ruled the contract's reading, so `blocks.yml` is now `clock_domain: video`
+and all three agree. The ledger's V8 then correctly demanded the block declare
+itself a documented async bridge (`async_bridge: true`), which it now does --
+the block genuinely sits on the boundary.
+
+### 2. Step 1 of the method: does the oracle resolve?
+
+Checked before writing any RTL, against `reports/PHANTOM_REFERENCES.md`'s
+three-kind taxonomy.
+
+* `zref::Crc32c` -- **resolves**, `reference/include/zref/zref_cmd2.hpp:663`. A
+  real device oracle (sof/eof framing, publish-only-on-exact-size, `size_err`),
+  delegating the arithmetic to the generated `zhao_abi::zhao_crc32c`. Not a
+  phantom of any kind.
+* `zref::render::displayed_crc32c` -- **resolves**,
+  `reference/src/zrender/resolve.cpp:97`; the whole-shell oracle
+  `shell_golden` and `duo_markers` already compare against, including the Duo
+  two-cursor border law. Not a phantom either.
+
+**Neither was modified**, which is what makes the test below a differential
+rather than a restatement.
+
+### 3. What changed
+
+* `fpga/rtl/debug/zhao_debug_crc.sv` -- a `vid_clk` block with a PIXEL port.
+  One RGB565 pixel per clock is two stream bytes, which a byte-serial CRC
+  cannot keep up with, so the two bytes fold in ONE `zhao_crc32c_fold` tree
+  (about seven XOR levels) instead of two chained eight-level steps. Same
+  polynomial machine: the fold derives its columns from the CRC-32C definition
+  at elaboration and is held to the shipped `zhao_crc32c_step` by
+  `tests/differential/crc32c_fold_directed.cpp`.
+* `bytes_captured_o` now means "the length the last event reported", latched at
+  the eof pixel. It previously read the running counter, which the finalize
+  edge cleared on the same cycle -- so at the publish pulse it was always zero.
+  The old value could not have been wrong because it carried no information.
+* `fpga/rtl/common/zhao_shell_top.sv` glue 7 -- the serializer is gone. The CRC
+  sees `px_out` natively; what crosses to `gpu_clk` is the finalized 32-bit
+  value, once per frame, on a toggle with the data held stable beside it. Same
+  shape `zhao_video_framectl` uses for `gpu_tick`, which
+  `tests/formal/video_framectl_one_fence.sby:a_cdc_data_stable_unless_toggle`
+  already proves; three synchronizer flops and an edge detect on the gpu side.
+
+The displayed BYTE STREAM is unchanged byte-for-byte, which is why the golden
+captures still match: the old path emitted low byte then high byte on the two
+gpu cycles of each vid cycle, and the new path folds the same two bytes in the
+same order in one.
+
+### 4. The differential, and why it is cross-granularity
+
+`tests/debug/debug_crc_directed.cpp` drives the device with PIXELS and the
+SHIPPED `zref::Crc32c` with the SAME STREAM AS BYTES. A byte-order slip inside
+the pixel lane cannot pass a comparison against a model folding the two bytes
+in the other order -- which is the one law the port change could have inverted
+silently, so it also gets a directed case of its own.
+
+The nine-byte `"123456789"` vector left this file: an odd byte count is not a
+displayable stream. It still guards the polynomial in `tests/unit/test_crc.cpp`
+and `tests/fuzz/test_abi_fuzz_parity.cpp`.
+
+Three laws that had no test before and do now, because the sweep would
+otherwise have shown them as holes: `expect_bytes_i` is LATCHED at sof; an ODD
+expectation can never be satisfied by a pixel-granular stream; and a sof
+arriving inside an open frame RESTARTS it (unreachable in a lawful raster,
+which is exactly why a device ignoring it would have been indistinguishable).
+
+### 5. THE SWEEP CAUGHT MY OWN TEST NOT COMPILING, and that is the result
+### worth recording
+
+First run of `tools/sweep_debug_crc.sh`: **22 attempted, 22 accounted, 0
+caught, 22 survivors.** Every mutation of a CRC surviving a bit-exact CRC
+differential is not a test hole, it is an impossible number, so I went looking
+for the lie instead of writing it up.
+
+`tools/sweep_geom_lod.sh`'s header names four ways this build system scores a
+run that never happened. All four guards PASSED here: the source moved, the
+model re-elaborated, and its hash differed from pristine. **There is a fifth.**
+
+> The executable lives OUTSIDE the target directory. `rm -rf
+> build/tests/CMakeFiles/<target>.dir` removes the model and every object, so
+> ninja must rebuild them -- but `build/tests/<target>.exe` survives that
+> deletion. If the rebuild fails for any reason, the previous executable is
+> still sitting there and runs happily against RTL it was never built from.
+
+And what had failed to build was **my own test file**: `0x5EC0ND50u` is not a
+hex literal. It had been committed, because `ctest` does not build and a stale
+executable had been passing every run since I added the restart case. A test
+that cannot compile is not a test, and the directed lane had been reporting 54
+checks when it should have reported 57.
+
+The guard added: delete the EXE too, and require it to EXIST after the rebuild;
+a missing executable is DISCARDED, never scored. The pristine baseline now also
+has to link, not just elaborate.
+
+### 6. The sweep, re-run with the guard
+
+**22 attempted, 22 accounted, 20 caught, 2 survivors.** Both survivors are the
+two mutants named EQUIVALENT in the script before it ran, each with a proof in
+the file's footer that no input can distinguish them:
+
+* **M21, the reset value of `crc_r`.** `crc_r` is read in exactly one place,
+  `fold_c = in_sof_i ? SEED : crc_r`; the `crc_r` arm needs `in_sof_i` low, and
+  `fold_o` is consumed only inside `if (in_sof_i || running)`, so reaching it
+  needs `running = 1`. `running` is set only by that branch, on a cycle that
+  also writes `crc_r <= fold_o`. Every read sees a value the branch wrote.
+* **M22, clearing `n_bytes` at eof.** `n_bytes` is read only via `n_next`, and
+  `n_next` ignores it whenever `in_sof_i` is high. The eof clear runs on the
+  same cycle that clears `running`, so the value it writes can only be read
+  after a sof has re-opened the frame -- and a sof ignores `n_bytes`. Dead
+  code; keeping it is documentation.
+
+Both are still DRIVEN each run, so the proofs are re-checked rather than
+trusted. If a future change makes either reachable they stop surviving.
+
+### 7. Measured (all simulation)
+
+| lane | result |
+| --- | --- |
+| `debug_crc_directed` | 57 checks |
+| `debug_crc_random` (300 frames) | 2,100 checks |
+| `debug_crc_random_nightly` (3,000 frames) | green |
+| `lint_debug_crc`, `lint_shell_top` | green |
+| `shell_golden_replay` | green |
+| `shell_duo_markers_fast` | green |
+| mutation sweep | 22 / 22 / 20 caught / 2 equivalent |
+
+### 8. Two things left for the owner, and one for the main session
+
+Recorded in `docs/OWNER_DOCKET.md` rather than decided here: whether to cut
+`gpu_clk` and `vid_clk` in the SDC now that the per-pixel crossing is gone (the
+SDC deliberately keeps them timed, and cutting them would improve the A/B by
+telling the tool to stop looking), and the 64-bit `starvation_o` sample, which
+is the last `vid_clk -> gpu_clk` family that is not a toggle handoff -- guarded
+by a quiescence tripwire, which is a protocol argument rather than a structural
+one.
+
+**And a live gate failure that is not mine:** `npm run ledger:check` currently
+fails V20 on `fpga/rtl/geometry/zhao_geom_lod.sv:254` -- "mutually exclusive by
+construction" with no `ENFORCED-BY:` within ten lines. That claim arrived in
+`54ec158`. Verified attributable by restoring the file's pre-`54ec158` text and
+re-running the check, which then reported only my own V8 (since fixed). I left
+it alone because only its author knows which enforcer it meant to name.
+
+---
+
 ## 2026-08-22 (late) -- the fit measurement, four owner rulings, and a block
 ## whose test caught my own bug
 

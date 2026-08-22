@@ -108,8 +108,8 @@ class CrcDev {
   // given, is presented on every cycle EXCEPT the sof one — the device must
   // have LATCHED the expectation at sof and must ignore whatever arrives
   // afterwards (contract: "restarts the CRC, latches expect_bytes_i").
-  Result streamPx(const std::vector<uint16_t>& px, uint32_t expect,
-                  uint32_t expect_after_sof = 0, bool vary_expect = false) {
+  Result streamPx(const std::vector<uint16_t>& px, uint32_t expect, uint32_t expect_after_sof = 0,
+                  bool vary_expect = false) {
     Result r{0, false, false, 0};
     size_t i = 0;
     while (i < px.size()) {
@@ -400,7 +400,7 @@ int main(int argc, char** argv) {
   // from the second sof onward and nothing before it.
   {
     CrcDev t;
-    Pcg32 rng{0x5EC0ND50u, 0x13579BDFu};
+    Pcg32 rng{0x5EC02D50u, 0x13579BDFu};
     std::vector<uint8_t> head(64), tail(96);
     for (auto& b : head) b = static_cast<uint8_t>(rng.next());
     for (auto& b : tail) b = static_cast<uint8_t>(rng.next());

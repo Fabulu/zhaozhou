@@ -26,8 +26,10 @@ Ten pieces of real glue live in the shell, each a seam no block wave ever
 crossed (numbered in the module header): the SDRAM write-data queue, the
 read-beat packer, the record framer with its deadlock-breaking queue, the
 slot-ready pending registers, the frame-completion correlator, the mode
-CDC, the displayed-byte serializer feeding DEBUG.CRC
-(`zhao_displayed_bytes`, NEVER `zhao_canvas_bytes` — the named Duo trap),
+CDC, the displayed-frame CRC handoff (`zhao_displayed_bytes`, NEVER
+`zhao_canvas_bytes` — the named Duo trap; this was a per-pixel
+displayed-BYTE serializer into a gpu-domain CRC until 2026-08-22, when
+DEBUG.CRC moved into `vid_clk` and only the finalized frame CRC crosses),
 the counter provider adapters (spec/counters.md §5 owner table), the
 rumble edge converter, and the blit pacer.
 

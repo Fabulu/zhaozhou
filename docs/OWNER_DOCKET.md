@@ -13,10 +13,13 @@ contradiction is closed the way you ruled: `design/blocks.yml` now says
 `clock_domain: video`, matching `DEBUG.CRC.md`, which had been right all along.
 
 Proven in **simulation only** — no fit was run for this change, because the
-composed fit is yours to run. What was measured: 54 directed checks and 2,100
+composed fit is yours to run. What was measured: 57 directed checks and 2,100
 random checks on a cross-granularity differential (the device driven with
-PIXELS, the shipped `zref::Crc32c` driven with the same stream as BYTES), plus
-the whole shell lane green, plus a 22-mutant sweep.
+PIXELS, the shipped `zref::Crc32c` driven with the same stream as BYTES), the
+shell lane green (`shell_golden_replay`, `shell_duo_markers_fast`), and a
+22-mutant sweep: 22 attempted, 22 accounted, **20 caught**, 2 survivors, both
+of them mutants proven EQUIVALENT in `tools/sweep_debug_crc.sh` (no input can
+reach either).
 
 **Two things I did not decide, because deciding either would change what your
 A/B measures.**
