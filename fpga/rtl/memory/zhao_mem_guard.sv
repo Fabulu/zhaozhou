@@ -165,6 +165,26 @@ module zhao_mem_guard
       rsp_violation_q  <= 1'b0;
       guard_violation  <= 1'b0;
 
+      // THE COUNTER FOLLOWS THE PULSE, NOT THE DECISION.
+      //
+      // `guard_violations` used to increment in the same cycle as the verdict,
+      // which put the whole range-check chain -- the requester's address, the
+      // end address, four bounds compares, the client case -- on the ENABLE of
+      // a 32-bit register bank. The full negative-slack census made it the
+      // largest remaining family in the composed shell:
+      //
+      //   1,383 paths  scanout|fetch -> mem_guard|guard_violations   -0.195
+      //
+      // It counts the same events either way. `guard_violation` is already the
+      // registered one-cycle pulse for exactly this verdict, so counting off
+      // IT costs one cycle of latency on an observability counter and takes
+      // the comparison chain off the counter entirely.
+      //
+      // The SAFETY path is untouched: rsp_ok_q, rsp_violation_q, fwd_active
+      // and fwd_req still resolve in the accepting cycle, which is what
+      // tests/formal/mem_guard_no_escape.sby proves about.
+      if (guard_violation) guard_violations <= guard_violations + 32'd1;
+
       // forwarded request leaves when the arbiter accepts it
       if (fwd_active && arb_rsp.grant) fwd_active <= 1'b0;
 
@@ -180,7 +200,6 @@ module zhao_mem_guard
         end else begin
           rsp_violation_q     <= 1'b1;
           guard_violation     <= 1'b1;
-          guard_violations    <= guard_violations + 32'd1;
           guard_violation_req <= req;   // full request traced to the harness
         end
       end
