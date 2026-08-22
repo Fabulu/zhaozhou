@@ -10,6 +10,81 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- FIELD.SEQ.CORE to RTL_VERIFIED, on a formal proof of the
+## anti-hang law
+
+### Why a new artifact was needed at all
+
+I checked the convention before claiming the rung, and it settled a question I
+had left open earlier in the session: **no block in this ledger advances to
+RTL_VERIFIED citing the same file as its UNIT_VERIFIED.** Every one cites a
+distinct artifact -- a separate `*_random.cpp`, a formal property, or a
+system-level demo. So FIELD.SEQ.CORE could not advance on
+`field_seq_directed.cpp`, which is already its UNIT_VERIFIED evidence.
+
+### The law, which the design states twice and the differential cannot reach
+
+From the contract and again beside the port:
+
+> `instr_count_i` is a LIVENESS bound, not a semantic check. The decoder
+> guarantees exactly one OP_END and that it is last, so a lawful program never
+> reaches this limit. But the instruction MEMORY is the shell's to load, and a
+> walk with no bound turns a mis-loaded memory into a machine that hangs
+> forever instead of one that reports a status. **A hang is the worse failure,
+> and it is the one nobody can debug from a frame capture.**
+
+906 directed and 2,506 random programs cannot prove that, because every one of
+them is a program somebody chose, and a hang is what happens on the program
+nobody chose. In `tests/formal/field_seq_bound.sby` **every instruction word is
+free** -- `ins_op_i` may be an opcode that does not exist and may change every
+cycle -- which is exactly what a mis-loaded memory is.
+
+    a_pc_bounded   the walk never steps past its bound
+    a_progress     never busy for more than 120 consecutive clocks
+    four covers    it RUNS, finishes cleanly, OVERRUNS, and refuses
+
+bmc + cover green at depth 140.
+
+### THREE FALSE COUNTEREXAMPLES, all mine, all recorded beside their fixes
+
+Every one was the model being under-constrained rather than the design being
+wrong, and that distinction is the whole point:
+
+1. **`instr_count_i` free every cycle.** The solver lowered the bound out from
+   under an advancing pc. Fixed by assuming it stable while busy -- which is
+   what the contract already says.
+2. **No forced initial reset.** `zhao_field_seq` declares `logic [3:0] state;`
+   with no initialiser, which is correct RTL because reset assigns it -- but a
+   free `rst_n` lets the solver simply never reset and choose the start state
+   itself. It began mid-execute with a pc past the bound.
+3. **`a_pc_bounded` ungated.** `pc` is zeroed by `start_i` and KEPT after a run,
+   so an idle sequencer holds the last program's pc while the shell loads a new
+   count. The ungated assertion compared one run's pc against the next run's
+   bound and failed at k = 10 on a machine behaving perfectly.
+
+**"The property failed so I assumed the failure away" is the single easiest way
+to turn a formal lane into decoration.** The test I held each fix to: is this an
+assumption the CONTRACT already makes? All three were.
+
+### Two frontend limits worth knowing
+
+* `busy |-> ##[1:120] done` is rejected -- "unsupported SVA feature". The same
+  law is written as a counter and a bound, which is a safety property and
+  exactly as strong here: if the machine can hang, the counter runs away.
+* `initial assume (!rst_n)` is rejected -- "reading net state during design
+  initialization unsupported". The first cycle is constrained through
+  `f_past_valid` instead.
+
+### V19 scope guard
+
+The ledger refused the first attempt: a bounded proof must carry a guard that
+FIRES if the depth is raised past what was proven. Added
+`a_scope_short_program_window`, pinning depth 140 under the `instr_count_i <= 2`
+shrink. Raising either without re-deriving the other now fails loudly instead of
+quietly claiming more than was shown.
+
+---
+
 ## 2026-08-22 -- MEM.GUARD counter moved: 125 -> 97 failing endpoints, and the
 ## CDC seam surfaces again
 

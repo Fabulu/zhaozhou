@@ -679,11 +679,12 @@ blocks:
     reference_model: zfield::interpret
     tests:
       directed: tests/differential/field_seq_directed.cpp
+      formal: tests/formal/field_seq_bound.sby
       random: tests/differential/field_seq_directed.cpp
     counters: [field_instructions_by_profile]
     source_ids: true
     budget_group: field
-    maturity: UNIT_VERIFIED
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-21"
@@ -693,6 +694,10 @@ blocks:
         date: "2026-08-21"
         commit: "0b8e43a"
         evidence: tests/differential/field_seq_directed.cpp
+      - state: RTL_VERIFIED
+        date: "2026-08-22"
+        commit: "3fe40ed"
+        evidence: tests/formal/field_seq_bound.sby
     deferred: false
     cut_order: null
     superseded_by: null

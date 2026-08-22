@@ -1821,7 +1821,7 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
   foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety
-                           video_slotmgr_invariants)
+                           video_slotmgr_invariants field_seq_bound)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

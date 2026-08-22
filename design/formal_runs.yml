@@ -165,6 +165,39 @@ runs:
       claim — mutation-verified: removing the latch's <= 2 refusal fails
       the bmc at exactly this assertion); bmc + cover re-run green.
 
+  - property: tests/formal/field_seq_bound.sby
+    status: green
+    date: "2026-08-22"
+    commit: "3fe40ed"
+    lane: formal_field_seq_bound
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      FIELD.SEQ.CORE's anti-hang law, the one the contract states twice and the
+      differential cannot reach. `instr_count_i` is a LIVENESS bound, not a
+      semantic check: the decoder validates programs, but the instruction
+      MEMORY is the shell's to load, and an unbounded walk turns a mis-loaded
+      memory into a machine that hangs instead of reporting ST_PC_OVERRUN.
+      EVERY INSTRUCTION WORD IS FREE here -- ins_op_i may be an opcode that does
+      not exist and may change every cycle -- which is exactly what a mis-loaded
+      memory is, and exactly what 906 directed plus 2,506 random programs
+      cannot be. Two assertions to depth 140 (btormc): a_pc_bounded, the walk
+      never steps past its bound; a_progress, the machine is never busy for more
+      than 120 consecutive clocks, written as a counter because the frontend
+      refuses `##[1:120]`. Four covers, all reached: it RUNS, it finishes
+      cleanly, it OVERRUNS, and it refuses an unsupported opcode -- both
+      assertions are about a running machine and a model that never starts
+      would satisfy them while proving nothing. THREE FALSE COUNTEREXAMPLES ON
+      THE WAY, each a harness fault rather than a design one, and each recorded
+      in the harness beside the fix: instr_count_i left free every cycle (the
+      solver lowered the bound under an advancing pc); no forced initial reset,
+      so the solver chose the start state of a machine whose `state` register
+      correctly has no initialiser; and a_pc_bounded left ungated, comparing the
+      pc left over from one run against the next run's count. The lesson worth
+      keeping is that all three were the model being under-constrained, and
+      assuming a failure away is how a formal lane becomes decoration -- so each
+      assumption added is one the CONTRACT already makes.
+
   - property: tests/formal/debug_frameblit_safety.sby
     status: green
     date: "2026-08-21"

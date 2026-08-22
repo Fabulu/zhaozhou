@@ -1,0 +1,74 @@
+# field_seq_bound.sby — FIELD.SEQ.CORE's anti-hang law.
+#
+# The law is stated in design/contracts/FIELD.SEQ.CORE.md and again beside the
+# port itself: `instr_count_i` is a LIVENESS bound, not a semantic check. The
+# decoder validates programs; this block does not re-check them. But the
+# instruction MEMORY belongs to the shell, and a walk with no bound turns a
+# mis-loaded memory into a machine that hangs forever instead of one that
+# reports ST_PC_OVERRUN.
+#
+# THAT IS NOT SOMETHING THE DIFFERENTIAL CAN PROVE. tests/differential/
+# field_seq_directed.cpp runs 906 directed and 2,506 random programs, and every
+# one of them is a program somebody chose. A hang is what happens on the
+# program nobody chose. Here `ins_op_i` and every operand field are FREE, so
+# the solver may feed the sequencer opcodes that do not exist and operands
+# pointing anywhere, changing them every cycle — which is exactly what a
+# mis-loaded memory is.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc    — a_pc_bounded and a_progress hold to the depth below.
+#   cover  — the antecedents are REACHABLE. Both properties are implications
+#            over a busy machine, and a model that never starts satisfies them
+#            while proving nothing. That is the shape MEM.GUARD's lane failed
+#            in and DEBUG.FRAMEBLIT's nearly did; the covers here demand that
+#            the machine RUNS, that it finishes cleanly, that it OVERRUNS, and
+#            that it refuses an unsupported opcode.
+#
+# Depth 140 covers: start -> the six-clock walk -> two instructions, the
+# slowest of which spends 34 clocks in the integer square root -> Q_DONE.
+#
+# Frontend: read_slang reading the REAL frozen zhao_pkg.sv and the REAL
+# generated zhao_abi_pkg.sv, and the real unit blocks the sequencer
+# instantiates — no stubs. --unroll-limit is raised for zhao_crc32c_fold's
+# sibling reason: several of these blocks derive constants at elaboration.
+#
+# Run via `ctest -L formal` (test formal_field_seq_bound) or by hand with
+# cwd = tests/formal:
+#   sby -f --prefix <workdir> field_seq_bound.sby
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 140
+cover: mode cover
+cover: depth 140
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --unroll-limit=200000 --top zhao_field_seq_bound_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_field_rcp_rom.sv zhao_field_rcp24_rom.sv zhao_field_sin_rom.sv zhao_field_alu.sv zhao_field_rcp.sv zhao_field_sin.sv zhao_field_isqrt.sv zhao_field_len.sv zhao_field_normalize.sv zhao_field_curve.sv zhao_field_noise.sv zhao_field_ring.sv zhao_field_rot.sv zhao_field_seq.sv field_seq_bound_harness.sv
+prep -top zhao_field_seq_bound_harness
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/field/zhao_field_rcp_rom.sv
+../../fpga/rtl/field/zhao_field_rcp24_rom.sv
+../../fpga/rtl/field/zhao_field_sin_rom.sv
+../../fpga/rtl/field/zhao_field_alu.sv
+../../fpga/rtl/field/zhao_field_rcp.sv
+../../fpga/rtl/field/zhao_field_sin.sv
+../../fpga/rtl/field/zhao_field_isqrt.sv
+../../fpga/rtl/field/zhao_field_len.sv
+../../fpga/rtl/field/zhao_field_normalize.sv
+../../fpga/rtl/field/zhao_field_curve.sv
+../../fpga/rtl/field/zhao_field_noise.sv
+../../fpga/rtl/field/zhao_field_ring.sv
+../../fpga/rtl/field/zhao_field_rot.sv
+../../fpga/rtl/field/zhao_field_seq.sv
+field_seq_bound_harness.sv

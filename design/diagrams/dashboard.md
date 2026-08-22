@@ -13,7 +13,7 @@ Blocks: **92** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | command | · | · | 1 | 2 | · | · | · | · | 3 |
 | compositor | 5 | · | · | · | · | · | · | · | 5 |
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
-| field | 5 | · | 2 | · | · | · | · | · | 7 |
+| field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
 | geometry | 5 | 1 | 5 | · | · | · | · | · | 11 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
@@ -27,7 +27,7 @@ Blocks: **92** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | 1 | · | 6 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 37 | 4 | 36 | 15 | · | · | · | 6 | 92 |
+| **all** | 37 | 4 | 35 | 16 | · | · | · | 6 | 92 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -58,6 +58,7 @@ Blocks: **92** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | FIELD.PROGCACHE | UNIT_VERIFIED | 2026-08-21 | `832edc1` | tests/field/field_progcache_directed.cpp |
 | FIELD.SEQ.CORE | REFERENCE_COMPLETE | 2026-08-21 | `0b8e43a` | reference/src/zfield/zfield_interpret.cpp |
 | FIELD.SEQ.CORE | UNIT_VERIFIED | 2026-08-21 | `0b8e43a` | tests/differential/field_seq_directed.cpp |
+| FIELD.SEQ.CORE | RTL_VERIFIED | 2026-08-22 | `3fe40ed` | tests/formal/field_seq_bound.sby |
 | INPUT.SNAPSHOT | REFERENCE_COMPLETE | 2026-08-15 | `8400661` | reference/include/zref/zref_input.hpp |
 | INPUT.SNAPSHOT | UNIT_VERIFIED | 2026-08-15 | `bc94ced` | tests/input/input_snapshot_directed.cpp |
 | INPUT.SNAPSHOT | RTL_VERIFIED | 2026-08-15 | `7ed046a` | tests/input/input_random.cpp |
