@@ -37,8 +37,8 @@ hash did not move is **discarded, never scored**.
 | --- | --- | --- | ---: | ---: | ---: |
 | Arithmetic core | 15 opcodes, `0x00`–`0x0C`, `0x10`–`0x11` | `zhao_field_alu.sv` | 1,005 | 140,000 | **31 / 34**, 3 equivalent |
 | Reciprocal | `RCP` | `zhao_field_rcp.sv` + generated ROM | 329 | 60,000 | **23 / 23** |
-| Sine / cosine | `SIN`, `COS` | `zhao_field_sin.sv` + generated ROM | 20 | exhaustive | — |
-| Length / distance | `LEN2`, `LEN3`, `DIST2` | `zhao_field_len.sv`, `zhao_field_isqrt.sv` | 159 | 9,000 | — |
+| Sine / cosine | `SIN`, `COS` | `zhao_field_sin.sv` + generated ROM | 20 | exhaustive | **20 / 20** |
+| Length / distance | `LEN2`, `LEN3`, `DIST2` | `zhao_field_len.sv`, `zhao_field_isqrt.sv` | 159 | 9,000 | **21 / 21** |
 | Normalise | `NORMALIZE2`, `NORMALIZE3` | `zhao_field_normalize.sv` + generated ROM | 419 | 13,522 | **7 / 7** |
 | Table ops | `CURVE`, `DCURVE`, `SPLINE` | `zhao_field_curve.sv` | 11,863 | 21,000 | **18 / 18** |
 | Lattice noise | `NOISE2`, `RIDGE` | `zhao_field_noise.sv` | 346 | 12,000 | **15 / 17**, 2 equivalent |
@@ -51,9 +51,56 @@ lane's `--random` argument, and each nightly lane runs the same test with a
 larger draw. The sine lane has no `--random` argument because it sweeps **all
 65,536 angles** and reports the sweep as one check.
 
-Mutation scores now exist for seven of the nine pieces. **TWO REMAIN UNSWEPT**
-— Sine/cosine and Length/distance — built before the sweep harness existed.
-That is a gap, not a claim of coverage, and it is still worth closing.
+**EVERY PIECE IS NOW SWEPT.** The gap this section used to describe -- "built
+before the sweep harness was written and have not been swept" -- is closed.
+
+| piece | mutations | caught | survivors |
+| --- | ---: | ---: | ---: |
+| Arithmetic core | 34 | 31 | 3 equivalent |
+| Reciprocal | 23 | **23** | 0 |
+| Sine / cosine | 20 | **20** | 0 |
+| Length / distance | 21 | **21** | 0 |
+| Normalise | 7 | 7 | 0 |
+| Table ops | 18 | 18 | 0 |
+| Lattice noise | 17 | 15 | 2 equivalent |
+| Rotation | 17 | 17 | 0 |
+| Band | 18 | 17 | 1 equivalent |
+
+### Sine / cosine, 2026-08-22 -- 20 of 20
+
+COS is SIN a quarter turn on, the quadrant split, the mirror on odd quadrants,
+the sign on the upper half, the table index and its fraction, the endpoint
+clamp, and every part of the interpolation: slope direction, the round-half-up
+constant, the shift, and whether the interpolated term is added at all. The
+directed lane sweeps ALL 65,536 angles, so there is no random lane to hide in.
+
+### Length / distance, 2026-08-22 -- 21 of 21
+
+DIST2's subtract-before-square and its own `add` ledger lane, LEN2 vs LEN3's
+third component, the saturating difference at both rails, the absolute value
+before squaring, the sum of squares being unsigned and exact, the root's
+saturation bound, and both output ledger lanes including the flag that has to
+RIDE the 34-cycle root rather than be sampled at the end.
+
+### A CAVEAT ON THESE SWEEPS' LANE ATTRIBUTION, withdrawn rather than repeated
+
+The harness prints whether a mutation was caught by the directed lane or only
+by the random one. **That attribution is not reliable and is withdrawn.**
+
+On the length sweep it reported `len3_third_dropped` as caught only by the
+random lane. Applied by hand, the DIRECTED lane fails two checks on it:
+
+    FAIL: |(2,3,6)| is exactly 7.0: value: expected 0x70000, got 0x39B05
+    FAIL: |(3,4,12)| is exactly 13.0: value: expected 0xD0000, got 0x50000
+
+That is the second time the per-lane tag has been wrong while the
+caught/survived verdict held -- the first was on the arithmetic core, where the
+cause turned out to be a build that was not rebuilding. That cause is fixed and
+this one is not explained.
+
+**The caught/survived counts above are what these sweeps establish.** Which lane
+did the catching is not, and it is better to say so than to repeat a number I
+have twice found to be wrong.
 
 ### The reciprocal, swept 2026-08-22
 
