@@ -151,6 +151,38 @@ real, is what `TERRAIN.PROJECT` already uses, and `TERRAIN.PROJECT` is already
 separate: *"Kept separate from GEOM.PROJECT by architect ruling (1.D): merging
 later is a trivial edit."* This is a kind-1 phantom with a proven neighbour.
 
+> **UPDATE 2026-08-22.** This section's diagnosis is superseded. The three V10
+> op blockers it names (`FIELD.MOV`, `FIELD.ADD`, `FIELD.SUB`) are gone — every
+> op has a differential now — and the sequencer RTL it says does not exist is
+> `zhao_field_seq.sv`, RTL_VERIFIED as of today on a formal proof of its
+> anti-hang law.
+>
+> **Trial-advancing each profile now gives a precise, uniform answer:**
+>
+> | block | what actually blocks it |
+> | --- | --- |
+> | `FIELD.SEQ.WARP` | V6 only: `field_seq_warp_directed.cpp` / `_random.cpp` |
+> | `FIELD.SEQ.FLOW` | V6 only |
+> | `FIELD.SEQ.FORMATION` | V6 only |
+> | `FIELD.SEQ.STAMP` | V6 only |
+> | `FIELD.SEQ.EARTH` | V6 **plus** three ops whose law is unspecified — docket |
+>
+> V17 blocked all five this morning: their contracts carried a generated TODO
+> where the oracle belongs. Filled today with `zref::fieldir::interpret`, which
+> resolves — it forwards to `zfield::interpret`, and `zref_fieldir.hpp` names
+> WARP as one of its users. Four of the five now need **only their tests**.
+>
+> **What a profile test has to pin** is in each contract now: a profile is not a
+> different machine, it is the core sequencer wearing different I/O LANE
+> BINDINGS. The op semantics are the interpreter's. So the test is not a second
+> Field IR differential — it is a check that this profile binds the right
+> registers to the right lanes.
+>
+> `FIELD.SEQ.EARTH` is the exception and it is NOT a test-writing job: see
+> `docs/OWNER_DOCKET.md`. Its `FIELD.WRITE.MATERIAL/NAV/HAZARD` ops have no
+> reference function, no RTL, and no law pinned beyond charter §11.2 naming the
+> layers.
+
 ### B. Blocked on the Field IR sequencers — 5 blocks
 
 `FIELD.SEQ.EARTH`, `FIELD.SEQ.FLOW`, `FIELD.SEQ.FORMATION`, `FIELD.SEQ.STAMP`,
