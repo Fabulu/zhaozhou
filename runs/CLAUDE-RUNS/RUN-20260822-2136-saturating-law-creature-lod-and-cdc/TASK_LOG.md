@@ -271,6 +271,8 @@ true but unenforced.
 
 | 2026-08-23 ~00:3x | aadfdc4ae727b3230 | Pilot the DSP sequencing lever on zhao_geom_lod and MEASURE it | **Complete** | [FINDINGS-dsp-sequencing.md](FINDINGS-dsp-sequencing.md) |
 
+| 2026-08-23 ~01:2x | a18a997529e7c0ab4 | Apply the proven sequencing lever to zhao_terrain_lod (28 DSPs, the largest tractable target) | In Progress | `FINDINGS-dsp-terrain-lod.md` (agent to write) |
+
 Notes on the second spawn:
 
 - Handed the derivation and its validation rather than the task alone:
