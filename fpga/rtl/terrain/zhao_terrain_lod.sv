@@ -117,6 +117,44 @@
 // four NEIGHBOURS' levels, and a streaming block cannot know them. Sixteen
 // 2-bit levels is 32 flip-flops, which is the whole cost of knowing.
 //
+// ---------------------------------------------------------------------------
+// THIRTY PRODUCTS, ONE MULTIPLIER
+// ---------------------------------------------------------------------------
+// This block used to stand thirty multiplies side by side and it measured
+// 28 DSP blocks -- a QUARTER of the provisional device's 112 -- for a decision
+// the ledger asks for ONCE PER PATCH PER FRAME. They are all now sequenced
+// through a single 32x32 unsigned multiplier, on a schedule that mostly fits
+// inside time the block was already spending:
+//
+//   StSquare  6 clocks   |dx|^2 ... |dz|^2 for both eyes, accumulated in 66
+//                        bits and saturated exactly as before
+//   StSqrt   32 clocks   the §7.2 root, unchanged, both lanes concurrent
+//   StEval    8 clocks   two relaxed right-hand sides and six left-hand sides,
+//                        each compared the cycle its product appears
+//
+// Two things make this nearly free rather than a trade:
+//
+//   * |dx| for dx = c - e fits in 32 UNSIGNED bits exactly (both operands are
+//     s32, so the difference spans [-(2^32-1), 2^32-1]) and d^2 = |d|^2. So the
+//     one shared multiplier is 32x32 unsigned, NARROWER than the signed 33x33
+//     the parallel form needed, and it gives the same answer for every input
+//     word rather than inside a declared envelope.
+//
+//   * THE STRICT LADDER'S RIGHT-HAND SIDE IS NOT A MULTIPLY. `h` is the
+//     constant 256 there, so `dstv * h` is `dstv << 8`. Six of the twenty-four
+//     ladder multiplies the parallel form spent were multiplications by a
+//     compile-time power of two, spent as DSPs only because `ladder_ok()` took
+//     `h` as an argument and the strict and relaxed cases shared one function.
+//
+// What it costs, stated plainly: 34 clocks per descriptor became 48, so a patch
+// is ~784 clocks rather than ~560. Against `spec/terrain_rules.md` §4.2's 256
+// live patches that is still about 8x the required rate. See the contract's
+// Latency and Target throughput sections, which carry the arithmetic.
+//
+// The comparison ALSO collapsed: twelve parallel 49-bit comparators became two,
+// because a product that is consumed the cycle it appears does not need a
+// comparator of its own.
+//
 // Conservative SystemVerilog subset only (charter §2); no package deps.
 
 module zhao_terrain_lod (
@@ -198,12 +236,15 @@ module zhao_terrain_lod (
   localparam int unsigned SqrtSteps = 32;
   localparam logic [16:0] MorphOne = 17'd65536;
 
-  localparam logic [1:0] StFill = 2'd0;
-  localparam logic [1:0] StSqrt = 2'd1;
-  localparam logic [1:0] StDecide = 2'd2;
-  localparam logic [1:0] StEmit = 2'd3;
+  localparam logic [2:0] StFill = 3'd0;
+  localparam logic [2:0] StSquare = 3'd1;
+  localparam logic [2:0] StSqrt = 3'd2;
+  localparam logic [2:0] StEval = 3'd3;
+  localparam logic [2:0] StDecide = 3'd4;
+  localparam logic [2:0] StEmit = 3'd5;
 
-  logic [1:0] state;
+  logic [2:0] state;
+  logic [2:0] mul_step;      // the shared multiplier's schedule: 0-5 square, 0-7 eval
   logic [4:0] fill_idx;  // 0..15 while filling
   logic [4:0] emit_idx;
   logic       emit_surf;
@@ -215,6 +256,10 @@ module zhao_terrain_lod (
   logic [15:0] sid [0:NSub-1];
 
   // ---- the latched descriptor ----------------------------------------------
+  // The CENTRE is latched now too: the six squares are taken one per clock
+  // after the accept, and `sp_c*_i` is only guaranteed valid on the accepting
+  // edge (the caller sees `sp_ready_o` fall).
+  logic signed [31:0] d_cx, d_cy, d_cz;
   logic [23:0] d_dev1, d_dev2, d_dev3;
   logic [ 1:0] d_level;
   logic [16:0] d_morph;
@@ -222,21 +267,28 @@ module zhao_terrain_lod (
   logic [15:0] d_src;
 
   // ===========================================================================
-  // the squared distance — exact, then saturated to the 64-bit word the §7.2
-  // isqrt takes. |dx| ≤ 2^32 so a square is ≤ 2^64 and the three-term sum needs
-  // 66 bits; the reference forms the same sum in s128 and saturates the same
-  // way, so the two agree for EVERY input word rather than inside an envelope.
+  // THE ONE MULTIPLIER — every product in this block goes through it
   // ===========================================================================
-  function automatic logic signed [32:0] diff33(input logic signed [31:0] a,
-                                                input logic signed [31:0] b);
-    diff33 = $signed({a[31], a}) - $signed({b[31], b});
-  endfunction
+  logic [31:0] mul_a, mul_b;
+  wire  [63:0] mul_p = mul_a * mul_b;
 
-  function automatic logic [65:0] sq66(input logic signed [32:0] d);
-    logic signed [65:0] w;
+  // ===========================================================================
+  // the squared distance — exact, then saturated to the 64-bit word the §7.2
+  // isqrt takes. The three-term sum needs 66 bits; the reference forms the same
+  // sum in s128 and saturates the same way, so the two agree for EVERY input
+  // word rather than inside an envelope.
+  // ===========================================================================
+  // |d| FITS IN 32 UNSIGNED BITS, AND THAT IS WHAT MAKES ONE MULTIPLIER ENOUGH.
+  // `a` and `b` are both s32, so `a - b` spans [-(2^32-1), 2^32-1] and its
+  // magnitude never needs the 33rd bit. d^2 = |d|^2, so the widest operand this
+  // block has is 32x32 UNSIGNED — narrower than the signed 33x33 the parallel
+  // form used, and exact for every input word.
+  function automatic logic [31:0] absdiff32(input logic signed [31:0] a,
+                                            input logic signed [31:0] b);
+    logic signed [32:0] d;
     begin
-      w    = $signed({{33{d[32]}}, d}) * $signed({{33{d[32]}}, d});
-      sq66 = w[65:0];
+      d = $signed({a[31], a}) - $signed({b[31], b});
+      absdiff32 = d[32] ? (32'd0 - d[31:0]) : d[31:0];
     end
   endfunction
 
@@ -244,13 +296,41 @@ module zhao_terrain_lod (
     dsq_sat = (s[65:64] != 2'b00) ? 64'hFFFF_FFFF_FFFF_FFFF : s[63:0];
   endfunction
 
-  logic [63:0] dsq0, dsq1;
+  // one 66-bit accumulator, not two three-input 66-bit adder trees
+  logic [65:0] acc;
+  wire  [65:0] acc_next = acc + {2'b00, mul_p};
+
+  // which (coordinate, eye) pair the squaring step in flight needs
+  logic signed [31:0] sq_c, sq_e;
   always_comb begin
-    dsq0 = dsq_sat(sq66(diff33(sp_cx_i, cam0_x_i)) + sq66(diff33(sp_cy_i, cam0_y_i)) +
-                   sq66(diff33(sp_cz_i, cam0_z_i)));
-    dsq1 = dsq_sat(sq66(diff33(sp_cx_i, cam1_x_i)) + sq66(diff33(sp_cy_i, cam1_y_i)) +
-                   sq66(diff33(sp_cz_i, cam1_z_i)));
+    case (mul_step)
+      3'd0: begin
+        sq_c = d_cx;
+        sq_e = cam0_x_i;
+      end
+      3'd1: begin
+        sq_c = d_cy;
+        sq_e = cam0_y_i;
+      end
+      3'd2: begin
+        sq_c = d_cz;
+        sq_e = cam0_z_i;
+      end
+      3'd3: begin
+        sq_c = d_cx;
+        sq_e = cam1_x_i;
+      end
+      3'd4: begin
+        sq_c = d_cy;
+        sq_e = cam1_y_i;
+      end
+      default: begin
+        sq_c = d_cz;
+        sq_e = cam1_z_i;
+      end
+    endcase
   end
+  wire [31:0] sq_mag = absdiff32(sq_c, sq_e);
 
   // ===========================================================================
   // §7.2 isqrt, two lanes, thirty-two fixed steps
@@ -275,53 +355,77 @@ module zhao_terrain_lod (
   endfunction
 
   // ===========================================================================
-  // the ladder
+  // the ladder — eight steps on the one multiplier, two comparators
   // ===========================================================================
   // lhs = dev · scale ≤ 2^24 · 2^16 = 2^40; rhs = dstv · h ≤ 2^32 · 2^16 = 2^48.
-  // A 49-bit compare covers both with the sign-free headroom stated.
-  function automatic logic ladder_ok(input logic [23:0] dev, input logic [15:0] scale,
-                                     input logic [31:0] dstv, input logic [15:0] h);
-    logic [48:0] lhs;
-    logic [48:0] rhs;
-    begin
-      lhs       = {9'b0, dev} * {24'b0, scale};
-      rhs       = {17'b0, dstv} * {33'b0, h};
-      ladder_ok = (lhs <= rhs);
-    end
-  endfunction
-
-  function automatic logic [1:0] ladder(input logic [23:0] dev1, input logic [23:0] dev2,
-                                        input logic [23:0] dev3, input logic [15:0] scale,
-                                        input logic [31:0] dstv, input logic [15:0] h);
-    begin
-      // dev[0] is zero by definition, so level 0 always passes and the ladder
-      // always terminates. Coarsest wins; no monotonicity is assumed.
-      ladder = 2'd0;
-      if (ladder_ok(dev1, scale, dstv, h)) ladder = 2'd1;
-      if (ladder_ok(dev2, scale, dstv, h)) ladder = 2'd2;
-      if (ladder_ok(dev3, scale, dstv, h)) ladder = 2'd3;
-    end
-  endfunction
-
+  // A 49-bit compare covers both with the sign-free headroom stated. The
+  // arithmetic is UNCHANGED — the same integers are compared the same way, in a
+  // different order in time.
+  //
+  //   step 0  rhs_rel0 = dist0 · hyst        step 4  rhs_rel1 = dist1 · hyst
+  //   step 1  dev1 · cam0_scale              step 5  dev1 · cam1_scale
+  //   step 2  dev2 · cam0_scale              step 6  dev2 · cam1_scale
+  //   step 3  dev3 · cam0_scale              step 7  dev3 · cam1_scale
+  //
+  // THE STRICT LADDER'S RIGHT-HAND SIDE IS NOT A MULTIPLY AT ALL: `h` is the
+  // constant 256 there, so `dstv · h` is `dstv << 8`. That is why only the two
+  // RELAXED right-hand sides need a step.
+  //
+  // Each left-hand side is compared against BOTH of its camera's right-hand
+  // sides in the cycle its product appears, so nothing is stored but the four
+  // two-bit ladder answers. The rungs are walked 1, 2, 3 and a later pass
+  // overwrites an earlier one, which is exactly "coarsest that passes" — no
+  // monotonicity in dev is assumed, and level 0 needs no test because dev[0] is
+  // zero by definition, which is what makes the ladder total.
   wire [15:0] hyst_eff = (hyst_i < 16'd256) ? 16'd256 : hyst_i;
 
-  logic [1:0] t_strict, t_relaxed;
-  logic [1:0] s0, r0, s1, r1;
-  always_comb begin
-    s0 = ladder(d_dev1, d_dev2, d_dev3, cam0_scale_i, sq_res0[31:0], 16'd256);
-    r0 = ladder(d_dev1, d_dev2, d_dev3, cam0_scale_i, sq_res0[31:0], hyst_eff);
-    s1 = ladder(d_dev1, d_dev2, d_dev3, cam1_scale_i, sq_res1[31:0], 16'd256);
-    r1 = ladder(d_dev1, d_dev2, d_dev3, cam1_scale_i, sq_res1[31:0], hyst_eff);
+  logic [ 1:0] lad_s0, lad_r0, lad_s1, lad_r1;
+  logic [48:0] rhs_rel0, rhs_rel1;
 
+  wire        ev_cam = mul_step[2];    // 0 for steps 0-3, 1 for steps 4-7
+  wire [ 1:0] ev_rung = mul_step[1:0]; // 1, 2, 3 — and 0 marks the right-hand-side step
+  wire [31:0] ev_dst = ev_cam ? sq_res1[31:0] : sq_res0[31:0];
+  wire [15:0] ev_scale = ev_cam ? cam1_scale_i : cam0_scale_i;
+  wire [48:0] ev_rhs_str = {9'b0, ev_dst, 8'd0};  // dstv · 256 — a SHIFT, not a DSP
+  wire [48:0] ev_rhs_rel = ev_cam ? rhs_rel1 : rhs_rel0;
+  wire [48:0] ev_lhs = mul_p[48:0];
+  wire        ev_pass_str = (ev_lhs <= ev_rhs_str);
+  wire        ev_pass_rel = (ev_lhs <= ev_rhs_rel);
+
+  logic [23:0] ev_dev;
+  always_comb begin
+    case (ev_rung)
+      2'd1: ev_dev = d_dev1;
+      2'd2: ev_dev = d_dev2;
+      default: ev_dev = d_dev3;
+    endcase
+  end
+
+  // the one operand mux
+  always_comb begin
+    if (state == StSquare) begin
+      mul_a = sq_mag;
+      mul_b = sq_mag;
+    end else if (ev_rung == 2'd0) begin
+      mul_a = ev_dst;
+      mul_b = {16'b0, hyst_eff};
+    end else begin
+      mul_a = {8'b0, ev_dev};
+      mul_b = {16'b0, ev_scale};
+    end
+  end
+
+  logic [1:0] t_strict, t_relaxed;
+  always_comb begin
     if (cam0_en_i && cam1_en_i) begin
-      t_strict  = (s0 < s1) ? s0 : s1;
-      t_relaxed = (r0 < r1) ? r0 : r1;
+      t_strict  = (lad_s0 < lad_s1) ? lad_s0 : lad_s1;
+      t_relaxed = (lad_r0 < lad_r1) ? lad_r0 : lad_r1;
     end else if (cam0_en_i) begin
-      t_strict  = s0;
-      t_relaxed = r0;
+      t_strict  = lad_s0;
+      t_relaxed = lad_r0;
     end else if (cam1_en_i) begin
-      t_strict  = s1;
-      t_relaxed = r1;
+      t_strict  = lad_s1;
+      t_relaxed = lad_r1;
     end else begin
       // No camera: nothing is visible, so nothing changes.
       t_strict  = d_level;
@@ -422,6 +526,7 @@ module zhao_terrain_lod (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state <= StFill;
+      mul_step <= '0;
       fill_idx <= '0;
       emit_idx <= '0;
       emit_surf <= 1'b0;
@@ -431,6 +536,9 @@ module zhao_terrain_lod (
         hld[i] <= '0;
         sid[i] <= '0;
       end
+      d_cx <= '0;
+      d_cy <= '0;
+      d_cz <= '0;
       d_dev1 <= '0;
       d_dev2 <= '0;
       d_dev3 <= '0;
@@ -444,6 +552,13 @@ module zhao_terrain_lod (
       sq_res1 <= '0;
       sq_bit <= '0;
       sq_cnt <= '0;
+      acc <= '0;
+      lad_s0 <= '0;
+      lad_r0 <= '0;
+      lad_s1 <= '0;
+      lad_r1 <= '0;
+      rhs_rel0 <= '0;
+      rhs_rel1 <= '0;
       out_valid_o <= 1'b0;
       out_ox_o <= '0;
       out_oz_o <= '0;
@@ -468,6 +583,9 @@ module zhao_terrain_lod (
       case (state)
         StFill: begin
           if (sp_valid_i) begin
+            d_cx <= sp_cx_i;
+            d_cy <= sp_cy_i;
+            d_cz <= sp_cz_i;
             d_dev1 <= sp_dev1_i;
             d_dev2 <= sp_dev2_i;
             d_dev3 <= sp_dev3_i;
@@ -475,14 +593,32 @@ module zhao_terrain_lod (
             d_morph <= sp_prev_morph_i;
             d_hold <= sp_hold_i;
             d_src <= sp_src_id_i;
-            sq_num0 <= dsq0;
-            sq_num1 <= dsq1;
+            acc <= '0;
+            mul_step <= '0;
+            state <= StSquare;
+          end
+        end
+
+        StSquare: begin
+          // Six squares, one per clock, through the one multiplier. The two
+          // three-term sums land in the SAME 66-bit accumulator one after the
+          // other and are saturated exactly as the parallel form saturated
+          // them, so the number handed to the root does not move.
+          if (mul_step == 3'd2) begin
+            sq_num0 <= dsq_sat(acc_next);
+            acc     <= '0;
+          end else if (mul_step == 3'd5) begin
+            sq_num1 <= dsq_sat(acc_next);
+            acc     <= '0;
             sq_res0 <= '0;
             sq_res1 <= '0;
-            sq_bit <= 64'h4000_0000_0000_0000;  // 2^62
-            sq_cnt <= '0;
-            state <= StSqrt;
+            sq_bit  <= 64'h4000_0000_0000_0000;  // 2^62
+            sq_cnt  <= '0;
+            state   <= StSqrt;
+          end else begin
+            acc <= acc_next;
           end
+          mul_step <= mul_step + 3'd1;
         end
 
         StSqrt: begin
@@ -492,7 +628,37 @@ module zhao_terrain_lod (
           sq_res1 <= sqrt_next_res(sq_num1, sq_res1, sq_bit);
           sq_bit  <= sq_bit >> 2;
           sq_cnt  <= sq_cnt + 6'd1;
-          if (sq_cnt == SqrtSteps[5:0] - 6'd1) state <= StDecide;
+          if (sq_cnt == SqrtSteps[5:0] - 6'd1) begin
+            // The ladder answers start at level 0 — dev[0] is zero by
+            // definition, so level 0 always passes and never needs a step.
+            lad_s0 <= 2'd0;
+            lad_r0 <= 2'd0;
+            lad_s1 <= 2'd0;
+            lad_r1 <= 2'd0;
+            mul_step   <= '0;
+            state  <= StEval;
+          end
+        end
+
+        StEval: begin
+          if (ev_rung == 2'd0) begin
+            // the relaxed right-hand side for this camera; the strict one is a
+            // shift and needs no step
+            if (!ev_cam) rhs_rel0 <= mul_p[48:0];
+            else rhs_rel1 <= mul_p[48:0];
+          end else begin
+            // this rung's left-hand side, compared the cycle it appears
+            if (ev_pass_str) begin
+              if (!ev_cam) lad_s0 <= ev_rung;
+              else lad_s1 <= ev_rung;
+            end
+            if (ev_pass_rel) begin
+              if (!ev_cam) lad_r0 <= ev_rung;
+              else lad_r1 <= ev_rung;
+            end
+          end
+          mul_step <= mul_step + 3'd1;
+          if (mul_step == 3'd7) state <= StDecide;
         end
 
         StDecide: begin

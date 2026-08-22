@@ -96,8 +96,10 @@ random lanes stall on a pseudo-random schedule per job.
 ## Memory ownership
 
 **None.** No VRAM port, no cache, no M10K. The block's entire state is the
-sixteen-entry decision store (16 × 43 bits), one latched descriptor, the two
-square-root lanes and the output register.
+sixteen-entry decision store (16 × 43 bits), one latched descriptor (which now
+includes the subpatch centre, because the six squares are taken one per clock
+*after* the accept), the shared multiplier's 66-bit accumulator and its four
+two-bit ladder answers, the two square-root lanes and the output register.
 
 That is a consequence of Notes law 5, and it is the reason the law was chosen:
 an internal LOD history would be 1,024 patches × 16 subpatches × 27 bits ≈ 6.6 KB
@@ -126,15 +128,22 @@ law is really made of.
 root, the same one `terrain_rules` §3.7 already uses for a distance. Floor, not
 round: the flip therefore happens at the floored value, and
 `terrain_lod_directed` §2 pins it at `dev = distance − 1`, `= distance` (which
-PASSES, the comparison being `≤`) and `= distance + 1`.
+PASSES, the comparison being `≤`) and `= distance + 1` — and, since 2026-08-23,
+at the RIGHT-hand side's own boundary too, with an odd `scale` so that neither
+side is a multiple of 256. Without that case an off-by-one in `distance · h` is
+unreachable: the first three cases run at `scale = h = 256`, where both sides are
+multiples of 256. A mutation sweep found it.
 
 **Widths, stated rather than assumed.**
 
-- `dx = cx − ex` is a difference of two s32, so signed 33; a square is ≤ 2^64 and
-  the three-term sum needs **66 bits**. It is then saturated to the 64-bit word
-  the root takes. The reference forms the same sum in `__int128` and saturates
-  identically, so the two agree for **every input word** rather than inside a
-  declared envelope.
+- `dx = cx − ex` is a difference of two s32, so it spans
+  `[-(2^32 − 1), 2^32 − 1]` — which means **|dx| fits in 32 UNSIGNED bits
+  exactly**, and since `dx² = |dx|²` the widest operand this block has is
+  32 × 32 unsigned, not the signed 33 × 33 the parallel form used. A square is
+  ≤ 2^64 and the three-term sum needs **66 bits**; it is then saturated to the
+  64-bit word the root takes. The reference forms the same sum in `__int128`
+  and saturates identically, so the two agree for **every input word** rather
+  than inside a declared envelope.
 - The root recurrence's `res` never exceeds 2^33 (it is `2·root·2^k` at step
   *k*), so `res + bit` fits inside 64 bits with room over. 32 fixed steps from
   `bit = 2^62`; the reference's leading `while (bit > num)` normalisation is
@@ -149,18 +158,37 @@ saturating clamp at 65,536.
 
 ## Latency (fixed or variable)
 
-Variable, and dominated by one number: **32 cycles of square root per
-descriptor**. Per patch: 16 × (1 fill + 32 root + 1 decide) = 544 cycles, then 16
-(or 32) emit cycles, so about **560 cycles per patch** at full readiness.
+Variable, and still dominated by one number: **32 cycles of square root per
+descriptor**. Per patch:
 
-The two square-root lanes run concurrently, so a second camera is free.
+| phase | cycles per descriptor | what happens |
+|---|---:|---|
+| fill | 1 | the descriptor and the subpatch centre are latched |
+| square | 6 | \|dx\|² … \|dz\|² for both eyes, one per clock, through the one multiplier, accumulated in 66 bits and saturated |
+| root | 32 | the §7.2 exact floor root, both lanes concurrent |
+| eval | 8 | two relaxed right-hand sides and six left-hand sides, each compared the cycle its product appears |
+| decide | 1 | the band, the hold and the geomorph walk |
+| **total** | **48** | |
+
+So 16 × 48 = 768 cycles, then 16 (or 32) emit cycles: about **784 cycles per
+patch** at full readiness, against 560 before the products were sequenced.
+
+The two square-root lanes run concurrently, so a second camera is free *in the
+root*. It is no longer free in the multiplier: the eval phase spends four of its
+eight steps on the second eye, and the square phase three of its six. That is the
+price of one multiplier instead of thirty, and the throughput section prices it.
 
 ## Target throughput
 
-The ledger asks for **1 decision per patch per frame**. At ~560 cycles per patch
-this block sustains about 2,900 patches per 1.67 M-clock frame (100 MHz at
+The ledger asks for **1 decision per patch per frame**. At ~784 cycles per patch
+this block sustains about 2,100 patches per 1.67 M-clock frame (100 MHz at
 60 Hz), against `spec/terrain_rules.md` §4.2's 256 live/visible patches — roughly
-**11× the required rate**, and the ledger's target is met with a wide margin.
+**8× the required rate**, and the ledger's target is met with a wide margin.
+
+That margin was ~11× before the thirty products were sequenced through one
+multiplier. Spending three of those eleven multiples to give back **a fifth of
+the device's DSP blocks** is the trade this block makes, and it is recorded here
+rather than left implicit.
 `terrain_lod_directed` exercises the rate implicitly through its stall schedules;
 no separate rate case exists because the margin makes one uninformative.
 
@@ -241,14 +269,17 @@ with the oracle — see below.
 
 ## Directed tests
 
-`tests/terrain/terrain_lod_directed.cpp` — **211 checks**, ten sections:
+`tests/terrain/terrain_lod_directed.cpp` — **219 checks**, ten sections:
 
 1. **Every level is reachable**, and the ladder is coarsest-that-passes: four
    targets walked to rest, each asserted to take exactly *target* frames (one
    rung per frame), plus a deliberately non-monotonic `dev` vector.
 2. **The flip point is exact**, at `dev = distance − 1`, `= distance` (passes,
    the comparison being `≤`) and `= distance + 1`, with the distance first
-   confirmed to BE `zref::isqrt_u64` of the squared distance.
+   confirmed to BE `zref::isqrt_u64` of the squared distance — **and the
+   right-hand side's own boundary**, built with an odd `scale` (dist 255,
+   scale 65280 and 65281, dev 1) so that an off-by-one in `distance · h` is
+   reachable at all.
 3. **Hysteresis**, as a difference from the un-hysteretic answer: a level inside
    the band is retained, above it refines to the band's near edge, below it
    coarsens to the near edge, and a band below unity reads as unity.
