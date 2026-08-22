@@ -50,8 +50,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_bridge.
 # ZHAO_SHELL_RTL list must name the same files; nothing checks that they do,
 # which is why the drift went unnoticed until a fit was attempted.
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_arbiter.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_frameblit.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 
 # The simulation harness interface is intentionally virtual. This prevents the

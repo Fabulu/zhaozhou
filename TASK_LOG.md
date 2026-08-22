@@ -10,6 +10,75 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- the composed fit's runner could never start, and the tooling
+## environment is not reproducible
+
+### The composed fit has never run, and the reason is a two-line script bug
+
+`run_composed_fit.ps1` failed **after 0 seconds**:
+
+    EXCEPTION: Argument transformation for parameter "Processors":
+    cannot convert value "-ReportRoot" to type "System.Int32"
+
+Windows PowerShell 5.1 **array splatting supplies POSITIONAL arguments**. The
+strings that look like parameter names are handed over as values, so
+`@('-ReportRoot', $runDir, ...)` put the literal `-ReportRoot` into
+`run_shell_fit.ps1`'s first positional parameter, which is `[int]$Processors`.
+
+Reproduced directly, then fixed by switching to **hashtable splatting**, which
+binds by name. This script could not reach `quartus_map` on any invocation, so
+the composed fit's own runner had never started a fit.
+
+### Then it found a real defect: the two source lists disagree on ORDER
+
+    Shell source parity failed at index 23:
+      CMake='fpga/rtl/debug/zhao_debug_frameblit.sv',
+      QSF='fpga/rtl/video/zhao_video_slotmgr.sv'
+
+`zhao_debug_frameblit` and `zhao_video_slotmgr` are swapped between
+`tests/CMakeLists.txt` and the QSF.
+
+**And my own gate could not see it.** `source_list_parity` was written earlier
+this month to catch exactly this class, and its comment says: *"This gate does
+not merge the lists (Quartus needs an ORDER, CMake does not). It asserts the
+SETS match."* True of the tools, false of the project --
+`run_shell_fit.ps1` compares the lists INDEX BY INDEX and refuses to run.
+
+So a gate written to catch two-statements-of-one-fact was itself a weaker
+statement of the fact it guarded. Order checking added; verified with teeth by
+swapping the pair back (fails in 0.07 s naming index 22) and restoring.
+
+    PASS source parity: 26 ordered shell sources match tests/CMakeLists.txt.
+
+### FOURTH instance of the same environment defect
+
+Four different tools, one cause: **PowerShell's PATH resolves to a different
+toolchain than the one the build tree was created with.**
+
+| tool | resolved to | consequence |
+| --- | --- | --- |
+| `ctest` | msys2 | all 337 tests reported BAD_COMMAND |
+| `git` | msys2 (no autocrlf) | 29 RTL files called modified; `rtlCleanAtHead` never true in 42 rows |
+| `cmake` | msys2 | "CXX compiler is unknown", configure refused |
+| `verilator` | -- | a reconfigure in the wrong env emptied `VERILATOR_ROOT`, and every lint test fell back to a compiled-in `/yosyshq/...` path that does not exist here |
+
+The last one was self-inflicted: reconfiguring from PowerShell dropped
+`VERILATOR_ROOT`, because `tests/CMakeLists.txt` reads it from
+`$ENV{VERILATOR_ROOT}` at configure time. 68 lint tests failed until it was
+restored and the tree reconfigured with it set.
+
+**The working combination, recorded so it is not rediscovered:**
+
+    ctest    C:/Programmieren/dsstuff/mingw64/bin/ctest.exe
+    cmake    C:/Programmieren/dsstuff/mingw64/bin/cmake.exe
+    git      Bash's /mingw64/bin/git, or force -c core.autocrlf=true
+    configure with VERILATOR_ROOT set, and with the build dir spelled
+      exactly as CMakeCache.txt has it (the cache is case-sensitive about it)
+
+    ctest -L fast: 252/252 after the repair.
+
+---
+
 ## 2026-08-22 (later) -- DEBUG.FRAMEBLIT to RTL_VERIFIED; two sweeps; the clean flag proven
 
 ### DEBUG.FRAMEBLIT mutation sweep -- the atomicity law

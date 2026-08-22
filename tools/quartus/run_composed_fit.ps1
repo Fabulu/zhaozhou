@@ -151,9 +151,27 @@ $transcript = Join-Path $runDir 'run.log'
 try {
     # NOT $args: that is a PowerShell automatic variable and assigning to it
     # inside a script is a good way to get a confusing failure later.
-    $fitArgs = @('-ReportRoot', $runDir, '-QuartusBin', $QuartusBin,
-                 '-Processors', $Processors)
-    if ($KeepWorkspace) { $fitArgs += '-KeepWorkspace' }
+    #
+    # A HASHTABLE, NOT AN ARRAY, AND THAT IS THE WHOLE POINT. Windows
+    # PowerShell 5.1 array splatting supplies POSITIONAL arguments: the strings
+    # that look like parameter names are handed over as values. So the array
+    # form put the literal '-ReportRoot' into run_shell_fit.ps1's first
+    # positional parameter, which is [int]$Processors, and the run died in
+    # under a second with
+    #
+    #   Argument transformation for parameter "Processors": cannot convert
+    #   value "-ReportRoot" to type "System.Int32"
+    #
+    # Hashtable splatting binds by NAME, which is what was meant. Measured
+    # 2026-08-22: the array form fails on every invocation, so this script has
+    # never once reached quartus_map -- the composed fit's own runner could not
+    # start the fit.
+    $fitArgs = @{
+        ReportRoot = $runDir
+        QuartusBin = $QuartusBin
+        Processors = $Processors
+    }
+    if ($KeepWorkspace) { $fitArgs['KeepWorkspace'] = $true }
     & (Join-Path $PSScriptRoot 'run_shell_fit.ps1') @fitArgs *>&1 |
         Tee-Object -FilePath $transcript
     $rc = $LASTEXITCODE

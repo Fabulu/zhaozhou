@@ -23,9 +23,26 @@
 # the two are not even documents — they are two toolchains, which is why the
 # green suite proved nothing about the synthesis lane.
 #
-# This gate does not merge the lists (Quartus needs an ORDER, CMake does not,
-# and the generated package enters CMake by a different path). It asserts the
-# SETS match, which is the property that actually broke.
+# It asserts the SETS match AND that they are in the SAME ORDER.
+#
+# ORDER WAS ADDED 2026-08-22, and the reason is that leaving it out cost a fit
+# run. This gate originally checked sets only, on the stated reasoning that
+# "Quartus needs an ORDER, CMake does not". That is true of the tools and false
+# of the project: tools/quartus/run_shell_fit.ps1 refuses to run unless the two
+# lists match INDEX BY INDEX --
+#
+#   Shell source parity failed at index 23:
+#     CMake='fpga/rtl/debug/zhao_debug_frameblit.sv',
+#     QSF='fpga/rtl/video/zhao_video_slotmgr.sv'
+#
+# -- so a swapped pair passed ctest green and stopped the composed fit before
+# it reached Quartus at all. A gate that checks less than the thing it guards
+# is the same defect it was written to catch: two statements of one fact, and
+# the weaker one rots.
+#
+# zhao_abi_pkg is still excluded, and excluding it cannot hide an ordering
+# error among the rest: removing one element preserves the relative order of
+# every other.
 set(_qsf "@CMAKE_SOURCE_DIR@/fpga/quartus/shell_fit/zhao_shell_fit.qsf")
 set(_cml "@CMAKE_SOURCE_DIR@/tests/CMakeLists.txt")
 
@@ -91,5 +108,30 @@ if(_only_cmake OR _only_qsf)
     "same design.")
 endif()
 
+# ---- and in the SAME ORDER ------------------------------------------------
 list(LENGTH _cml_names _n)
-message(STATUS "source-list parity OK: ${_n} shell modules in both lists")
+list(LENGTH _qsf_names _nq)
+if(NOT _n EQUAL _nq)
+  message(FATAL_ERROR
+    "source-list parity: ${_n} modules in CMake, ${_nq} in the QSF after "
+    "removing the sanctioned zhao_abi_pkg asymmetry.")
+endif()
+
+math(EXPR _last "${_n} - 1")
+foreach(_i RANGE ${_last})
+  list(GET _cml_names ${_i} _a)
+  list(GET _qsf_names ${_i} _b)
+  if(NOT _a STREQUAL _b)
+    message(FATAL_ERROR
+      "SHELL SOURCE LISTS ARE IN A DIFFERENT ORDER.
+"
+      "  index ${_i}: tests/CMakeLists.txt has '${_a}', the QSF has '${_b}'
+"
+      "tools/quartus/run_shell_fit.ps1 compares these two lists index by index "
+      "and refuses to run the fit when they differ, so an ordering swap is "
+      "green here and fatal there. Reorder the QSF to match "
+      "tests/CMakeLists.txt (leaves before the shell).")
+  endif()
+endforeach()
+
+message(STATUS "source-list parity OK: ${_n} shell modules, same set and same order")
