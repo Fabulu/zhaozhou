@@ -269,6 +269,8 @@ it, so there is no second condition that could drift out of step.
 That is the second time in this run that V20 caught a claim of mine that was
 true but unenforced.
 
+| 2026-08-23 ~00:3x | aadfdc4ae727b3230 | Pilot the DSP sequencing lever on zhao_geom_lod and MEASURE it | In Progress | `FINDINGS-dsp-sequencing.md` (agent to write) |
+
 Notes on the second spawn:
 
 - Handed the derivation and its validation rather than the task alone:

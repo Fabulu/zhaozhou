@@ -5,6 +5,80 @@ at the top.*
 
 ---
 
+## 2026-08-23 — the chip may not have enough multipliers, and nothing was watching
+
+### The number
+
+The chip has **112 hardware multipliers** (DSP blocks). I measured the blocks
+built so far, one at a time:
+
+| | |
+| --- | ---: |
+| multipliers the design asks for, **15 blocks measured** | **213** |
+| multipliers the chip has | **112** |
+
+**Nearly twice the chip, and most blocks have not been measured yet.**
+
+### How much to worry
+
+Less than that number looks, but not nothing.
+
+Measuring blocks **one at a time gives each one its own multipliers**, and a real
+chip shares them. So 213 is an over-count — a ceiling, not a prediction. The full
+assembled chip currently reports **zero** multipliers used, because none of these
+particular blocks is wired into it yet.
+
+But the blocks driving the total are not alternatives to each other. Terrain
+projection, terrain detail-level, surface normals, the texture unit and the
+triangle binner are all working in any frame that draws ground. They will be
+present together.
+
+### The good news: it is mostly waste, not arithmetic
+
+Every one of these blocks computes several multiplications **at the same time**
+when it does not need to. The detail-level block runs **once per creature per
+frame** — a few thousand times a second at most — yet it does five multiplications
+simultaneously, as if it ran every clock tick.
+
+I already proved the fix works on that block by accident: it went from **28
+multipliers to 18** just by not asking for wider arithmetic than it needed and by
+noticing it computed the same product twice. An agent is now doing the real
+version — feeding those five through **one** multiplier over a few clock ticks —
+with instructions to revert and tell you if it does not pay off.
+
+If that works, the same lever applies to the four biggest offenders, which are
+28-33 multipliers each.
+
+### The part that is a process failure, not an engineering one
+
+**Nothing was watching this number.** The ledger — the file that is supposed to be
+the schematic — has fields for multiplier budgets and measured multiplier counts.
+
+- Blocks declaring a multiplier budget: **zero**
+- Blocks recording a measured multiplier count: **zero**
+- Rules checking either: **zero**
+
+The equivalent check for *logic area* has existed all along, which is why area has
+never surprised us. Multipliers had no such check, so the design walked to twice
+the chip's capacity with every gate green. The numbers were measured and written
+into a report — and never carried back into the ledger.
+
+I have not added the rule yet, on purpose: whether it should be a budget, a
+running total, or a hard stop depends on whether the pilot shows the 213 is waste
+or real work. Building the rule first would mean guessing.
+
+### Where this leaves "finished"
+
+There are now **three** gates in front of the design fitting the chip, not one:
+
+1. **Timing** — currently 20% too slow, and the measured blocker is one crossing
+   sitting on your desk.
+2. **Multipliers** — 1.9x over, newly discovered, pilot running.
+3. **Twenty-three blocks still unbuilt**, eleven of which are waiting on your
+   decisions about game behaviour rather than on any work.
+
+---
+
 ## 2026-08-22 (night) — the clock seam is fixed, and a test score I published was wrong
 
 ### The seam between the two clocks is gone
