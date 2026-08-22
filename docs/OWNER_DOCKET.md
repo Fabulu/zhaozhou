@@ -1,5 +1,43 @@
 # Owner docket — Zhaozhou
 
+## Timing closure: two decisions, both measured, both yours
+
+### 1. Fitter effort -- 125 failing endpoints, or 17 with two hold violations?
+
+The composed shell is 6.4% too fast-paced for its clock. Measured both ways:
+
+|                    | BALANCED (current) | HIGH PERFORMANCE EFFORT |
+| ------------------ | -----------------: | ----------------------: |
+| worst path         |     10.64 ns       |            11.39 ns     |
+| endpoints too slow |          125       |                 **17**  |
+| hold violations    |        **0**       |                   **2** |
+| logic cells        |        7,648       |                   8,147 |
+
+Neither closes. High effort leaves seven times fewer things to fix, but two of
+them are HOLD failures -- data arriving too EARLY, which no clock speed fixes
+and which needs a real repair.
+
+I reverted to BALANCED because every number this project has ever recorded was
+taken on it, and switching makes them all incomparable. If you would rather
+start closure from the 17-endpoint position, it is a one-line change.
+
+### 2. The GPU/video crossing
+
+Three hold violations appeared and vanished across this session's fits on the
+seam where video-domain signals are sampled directly into GPU registers. They
+come and go with placement, which means they are not fixed -- they are lucky.
+
+A review you relayed proposed the real answer: the displayed-frame checksum
+should live in the VIDEO clock domain, where the pixels already are, instead of
+crossing every pixel into the GPU domain to be counted. `DEBUG.CRC.md` already
+says the displayed lane is video-domain; `design/blocks.yml` says GPU; the
+implementation followed blocks.yml and built the crossing. **The documents
+disagree and the code picked one.**
+
+That is an architecture decision, not an SDC constraint. A false path would
+only stop the tool reporting a real crossing, and `set_max_delay` addresses
+setup rather than the hold failures actually seen.
+
 Feature asks from Fabian, newest first. This file exists because the asks were
 scattered across run `QUEUE-*.md` files and an agent's memory, which meant the
 only complete list lived outside the repo. Everything here is an **ask**, not a

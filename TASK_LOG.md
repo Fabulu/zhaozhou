@@ -10,6 +10,51 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- fitter effort: 7x fewer failing endpoints, a deeper worst
+## path, and two hold violations. FABIAN'S CALL.
+
+The project had been on `OPTIMIZATION_MODE "BALANCED"` / `FITTER_EFFORT
+"STANDARD FIT"` throughout. With the design shown to be placement-bound below
+~1.5 ns, effort is the obvious lever and it had never been pulled.
+
+| | BALANCED | HIGH PERFORMANCE EFFORT |
+| --- | ---: | ---: |
+| setup worst | **-0.639 ns** | -1.389 ns |
+| failing endpoints | 125 | **17** |
+| hold worst | **+0.250 ns, 0 failing** | -1.103 ns, **2 failing** |
+| ALMs | **7,648** | 8,147 |
+
+### Neither closes, and they fail differently
+
+High effort left **seven times fewer failing endpoints** -- 17 against 125,
+which is much closer to the zero that closure means. It also made the worst
+path deeper, cost 499 ALMs, and introduced **two hold violations**.
+
+That last item is why this is not a straightforward win. A setup failure means
+the clock is too fast and can be answered by slowing down or pipelining. A HOLD
+failure cannot: the data arrives too EARLY, and no clock speed fixes it. Two of
+them is a worse position to be in than 125 setup endpoints at under 0.7 ns.
+
+### Reverted, and why
+
+Back to BALANCED. Two reasons, and the second matters more:
+
+1. Every number recorded in this project -- every per-block fit, every composed
+   result in this session's history -- was taken on BALANCED. Switching makes
+   all of them incomparable with everything after.
+2. **It is a project-basis decision, not a fix.** The brief in
+   reports/composed/README.md is explicit that a fit at different effort is a
+   different measurement, and it says to report back rather than change the
+   basis to get a number. It says that about lowering effort; the principle is
+   the same raising it.
+
+So it is measured, recorded, and put to Fabian rather than decided quietly at
+the end of a long session. **If the 17-endpoint result is the better starting
+point for closure, the switch is one line and the two hold violations become
+the next problem.**
+
+---
+
 ## 2026-08-22 -- THE FIT IS DETERMINISTIC. Every A/B this session was signal.
 
 I had been calling the later results "placement variation" without ever having
