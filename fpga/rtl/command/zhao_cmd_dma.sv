@@ -375,16 +375,44 @@ module zhao_cmd_dma #(
   //
   // So the seed is 0, two folds of 8, or three of 8 plus one of 4. No shifter
   // and no variable count anywhere.
-  logic [31:0] fold_c;
-  logic [63:0] fold_d;
-  logic [31:0] fold8_o;
-  logic [31:0] fold4_o;
-  logic        fold_is4;
-  logic [31:0] fold_o;
+  // The streaming case needs NO shifter. M_PAY_WAIT's wr_off starts at
+  // `fetched`, which is at least 40, and the payload starts at 36 -- so the
+  // LOWER bound never clips a beat. Only the upper one does, and it lands
+  // 4 mod 8, so the last payload beat is exactly a fold of four.
+  logic beat_full;    // this beat is entirely inside the payload
+  logic beat_tail;    // this beat holds the final four payload bytes
+  always_comb begin
+    beat_full = ((wr_off + 32'd8) <= payload_end_q);
+    beat_tail = !beat_full && (wr_off < payload_end_q);
+  end
 
-  zhao_crc32c_fold u_fold8 (.c_i(fold_c), .d_i(fold_d), .n_i(4'd8), .c_o(fold8_o));
-  zhao_crc32c_fold u_fold4 (.c_i(fold_c), .d_i(fold_d), .n_i(4'd4), .c_o(fold4_o));
-  assign fold_o = fold_is4 ? fold4_o : fold8_o;
+  // TWO PAIRS, NOT ONE SHARED PAIR. The walk reads hdr_win; the stream reads
+  // the bridge beat. Sharing them put a state-selected mux on the fold's DATA
+  // input, and the census named the cost:
+  //
+  //   -0.639 ns  hps_arbiter|held_req.client[0] -> cmd_dma|crc_pay_r[28]
+  //
+  // the arbiter's routing decision reaching the CRC through that mux, and it
+  // was the design's worst path. A fold is about fourteen ALMs; a mux in front
+  // of the thing being shortened is not worth saving them.
+  logic [31:0] wfold_c;
+  logic [63:0] wfold_d;
+  logic        wfold_is4;
+  logic [31:0] wfold8_o, wfold4_o, wfold_o;
+
+  zhao_crc32c_fold u_wfold8 (.c_i(wfold_c), .d_i(wfold_d), .n_i(4'd8), .c_o(wfold8_o));
+  zhao_crc32c_fold u_wfold4 (.c_i(wfold_c), .d_i(wfold_d), .n_i(4'd4), .c_o(wfold4_o));
+  assign wfold_o = wfold_is4 ? wfold4_o : wfold8_o;
+
+  // the streaming pair takes the beat DIRECTLY -- no mux between the bridge
+  // and the XOR tree
+  logic [31:0] sfold8_o, sfold4_o, sfold_o;
+
+  zhao_crc32c_fold u_sfold8 (.c_i(crc_pay_r), .d_i(hps_rsp_i.data), .n_i(4'd8),
+                             .c_o(sfold8_o));
+  zhao_crc32c_fold u_sfold4 (.c_i(crc_pay_r), .d_i(hps_rsp_i.data), .n_i(4'd4),
+                             .c_o(sfold4_o));
+  assign sfold_o = beat_tail ? sfold4_o : sfold8_o;
 
   // the eight header-window bytes this walk step covers; the base is one of
   // eight fixed offsets (0,8,16,24 for the header CRC, 36,44,52,60 for the
@@ -400,39 +428,17 @@ module zhao_cmd_dma #(
     end
   end
 
-  // The streaming case needs NO shifter. M_PAY_WAIT's wr_off starts at
-  // `fetched`, which is at least 40, and the payload starts at 36 -- so the
-  // LOWER bound never clips a beat. Only the upper one does, and it lands
-  // 4 mod 8, so the last payload beat is exactly a fold of four.
-  logic beat_full;    // this beat is entirely inside the payload
-  logic beat_tail;    // this beat holds the final four payload bytes
+  // The walk pair's inputs. Only the accumulator and the tail flag are
+  // selected; the DATA is always the header window, so the window never
+  // competes with the bridge beat for a mux.
   always_comb begin
-    beat_full = ((wr_off + 32'd8) <= payload_end_q);
-    beat_tail = !beat_full && (wr_off < payload_end_q);
-  end
-
-  always_comb begin
-    unique case (m)
-      M_HCRC: begin
-        fold_c   = crc_hdr_r;
-        fold_d   = hw_word;
-        fold_is4 = 1'b0;             // bytes 0..31, four whole groups
-      end
-      M_SEED: begin
-        fold_c = crc_pay_r;
-        fold_d = hw_word;
-        // Only the 28-byte seed has a tail, and it is its fourth step. The
-        // decision reads LATCHED controls, never hdr_win or command_bytes --
-        // the old worst path began at hdr_win[28] precisely because the loop
-        // bound was derived in the same cycle as the CRC.
-        fold_is4 = (seed_bytes_q == 6'd28) && (cw == 2'd3);
-      end
-      default: begin
-        fold_c   = crc_pay_r;
-        fold_d   = hps_rsp_i.data;
-        fold_is4 = beat_tail;
-      end
-    endcase
+    wfold_d   = hw_word;
+    wfold_c   = (m == M_HCRC) ? crc_hdr_r : crc_pay_r;
+    // Only the 28-byte seed has a tail, and it is its fourth step. The
+    // decision reads LATCHED controls, never hdr_win or command_bytes -- the
+    // old worst path began at hdr_win[28] precisely because the loop bound was
+    // derived in the same cycle as the CRC.
+    wfold_is4 = (m == M_SEED) && (seed_bytes_q == 6'd28) && (cw == 2'd3);
   end
 
   // The read address, muxed by state. The four readers are in four DIFFERENT
@@ -562,7 +568,7 @@ module zhao_cmd_dma #(
         // Four cycles, eight bytes each, over hdr_win[0..31]. This is the
         // header CRC that crc_final() used to sweep in one cycle.
         M_HCRC: begin
-          crc_hdr_r <= fold_o;
+          crc_hdr_r <= wfold_o;
           cw <= cw + 2'd1;
           if (cw == 2'd3) begin
             cw <= 2'd0;
@@ -720,7 +726,7 @@ module zhao_cmd_dma #(
             cw <= 2'd0;
             m  <= (fetched >= (32'd40 + cb)) ? M_PCRC_RD : M_PAY_REQ;
           end else begin
-            crc_pay_r <= fold_o;
+            crc_pay_r <= wfold_o;
             cw <= cw + 2'd1;
             if ((seed_steps_q == 2'd0) ? (cw == 2'd3) : (cw == (seed_steps_q - 2'd1)))
             begin
@@ -756,7 +762,7 @@ module zhao_cmd_dma #(
             // fold rather than eight chained steps. beat_start shifts the beat
             // so the first enabled byte sits at position zero, which is where
             // the fold takes its bytes from; beat_n is how many are inside.
-            crc_pay_r <= fold_o;
+            crc_pay_r <= sfold_o;
             wr_off <= wr_off + 32'd8;
             fetched <= fetched + 32'd8;
             if (hps_rsp_i.last || ((wr_off + 32'd8) >= burst_end)) begin
