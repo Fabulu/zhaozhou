@@ -5,6 +5,71 @@ at the top.*
 
 ---
 
+## 2026-08-22 — the spell engine runs thirteen of sixteen instructions
+
+Two results, and one honest note about how often I was wrong on the way.
+
+### The Field IR engine can now run programs
+
+The thing that executes your terrain, weather and spell programs understood
+**three** instructions when this session started. It understands **thirteen**
+now. Everything except the three curve-table instructions, which need a piece
+of plumbing the others do not.
+
+That matters because the instructions were all built and tested individually
+weeks ago. What was missing was the part that actually *runs* them one after
+another — handing operands to a unit, waiting however many clocks it needs,
+and putting the answers back in the right registers. Several instructions
+produce **three** answers at once and there is only one place to put one at a
+time, so that had to be walked.
+
+Every instruction is checked against the software version of itself on the same
+program: **613 fixed tests and about 3,000 random ones**, all matching exactly.
+
+### The command block can be built at last
+
+`CMD.DMA` had never once made it through the chip compiler. Not "fitted badly"
+— never completed at all, in any form, ever. It does now.
+
+The cause turned out to be one number. A loop was written to run 192 times
+where **at most 28 iterations can ever happen**, and the compiler was building
+a chain of roughly 1,248 dependent stages in order to throw most of it away.
+Changing 192 to 64 fixed it, and I could prove the removed iterations were
+unreachable rather than merely unlikely.
+
+It still does not **fit** — the block needs more of the chip than the chip has,
+by itself. But that is now one precisely identified array with a known remedy,
+rather than a block nobody could compile.
+
+### Where I was wrong, three times
+
+Worth telling you plainly, because it is a pattern rather than an accident.
+
+Three times I wrote a conclusion into the repo and a measurement then
+contradicted it:
+
+- I recorded that the loop above needed a substantial redesign. **It needed a
+  bound check.**
+- I predicted a change would shrink that block. **It grew it by 14,000 units**,
+  and I reverted a change that was provably identical in behaviour — because
+  identical is not the same as better.
+- I predicted a test mutation would hang the machine. **It passed cleanly.**
+
+And the test sweep found something worse than any of those: I had written a
+safety check for the wide instructions and never written the same check for the
+narrow ones, so two of them could quietly overwrite a register they do not own
+and nothing would have noticed. That is a hole in a whole class, not a missing
+case.
+
+**I am reliably right about where a problem is and unreliable about what fixes
+it until something measures it.** That is an argument for the way you asked me
+to work, not against it — every one of those was caught by the rule that says
+measure before believing.
+
+Everything above is simulation. Nothing has run on a board.
+
+---
+
 ## 2026-08-21 (evening) — the blitter is in, and the DSP number was never real
 
 Three things. The first two are finished; the third is why the DSP work was
