@@ -5,6 +5,51 @@ at the top.*
 
 ---
 
+## 2026-08-22 (late) — speed: from 550% too slow to 6% too slow
+
+| | at the start | now | target |
+| --- | ---: | ---: | ---: |
+| worst path | 65 ns | **10.64 ns** | 10 ns |
+| paths too slow | 13,651 | **1,995** | 0 |
+| logic cells | 9,181 | **7,648** | 41,910 |
+
+**Six percent over, from 550% over.** And the design uses about 1,530 fewer
+logic cells than when this started — every single fix made it both faster and
+smaller.
+
+### Six fixes, all the same kind of problem
+
+Every one was a piece of arithmetic doing too much between two clock ticks.
+None was a sign that the design is fundamentally too slow.
+
+The last one is the one I would want you to know about, because it is the
+mistake rather than the fix. I had **proved** that a particular length can only
+ever be one of three values — 0, 16 or 28 — and used that proof to simplify
+something else, and wrote the proof down in a comment. Then the code went on
+computing that value the long way anyway: an addition, a comparison, a
+subtraction and two more comparisons, every time.
+
+**Eighteen thousand of the twenty thousand remaining slow paths ran through
+that gap.** Replacing it with two equality checks took the worst case from
+1.32 ns over to 0.64 ns over.
+
+A law you have proven is worth nothing until the logic is written in its terms.
+The law is now also machine-checked, so it cannot quietly stop being true.
+
+### What is left
+
+Two thirds of the remaining slow paths are a single video-to-guard connection
+sitting 0.195 ns over — close enough to be noise. The rest are small and
+shallow.
+
+Timing is **not** closed. Closed means zero paths too slow, and there are 125
+endpoints still failing. But there is no longer a big structural problem
+visible; it is fine-tuning from here.
+
+Still simulation and compiler output only. No hardware has run any of this.
+
+---
+
 ## 2026-08-22 (evening) — speed: 6.5x too slow, then 1.29x, now 1.11x
 
 Three fixes, each measured on the real chip compiler.

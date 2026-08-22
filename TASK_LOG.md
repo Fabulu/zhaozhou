@@ -10,6 +10,69 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- MEASURED: -0.639 ns. Best of the campaign, and the census is
+## down from 13,651 paths to 1,995.
+
+Composed fit at clean HEAD `ae3ce73`.
+
+| | start | best before | now |
+| --- | ---: | ---: | ---: |
+| setup worst | -56.374 ns | -1.096 ns | **-0.639 ns** |
+| failing endpoints | 3,746 | 172 | **125** |
+| negative-slack paths | -- | 13,651 | **1,995** |
+| hold | -1.064, 3 failing | +0.251, 0 | **+0.250, 0** |
+| ALMs | 9,181 | 7,713 | **7,648** |
+
+**Worst path 65 ns -> 10.64 ns against a 10 ns budget: a 6.5x overrun is now
+6.4%.** And the design is ~1,530 ALMs smaller than when the campaign started.
+
+### The remaining census, in full
+
+    1,383  scanout|fetch  -> guard_scan|guard_violations   -0.195
+      144  cmd_dma|fetched -> cmd_dma|burst_end            -0.338
+       25  cmd_dma|pkt_len_r -> cmd_dma|stream_w           -0.298
+        9  cmd_dma|m.M_SEED  -> cmd_dma|crc_hdr_r          -0.471
+        8  cmd_dma|need_total -> cmd_dma|burst_end         -0.032
+        6  cmd_dma|m.M_SEED  -> cmd_dma|crc_pay_r          -0.480
+
+The `cb -> seed_steps_q` family that was 18,013 paths at -1.324 is gone. Two
+thirds of what is left is one scanout-to-guard family at -0.195, which is
+within noise of the target.
+
+### The whole campaign, five fixes
+
+| fix | what it was | effect |
+| --- | --- | ---: |
+| parallel CRC fold | 8 dependent XOR levels per byte, 64 deep per beat | families eliminated |
+| FRAMEBLIT rewire | the same chain in a second block | -28 ns family gone |
+| CMD.DMA CRC walks | 224 XOR levels behind a command_bytes-derived bound | -55 -> -3 ns |
+| r_len pipelining | a subtract fanning out four ways in the cycle used | -3.067 -> -1.096 |
+| record-walk split | RAM output -> opcode lookup -> ladder in one cycle | family gone |
+| seed as a 3-way decision | an add, min, subtract and two compares for a value that is 0, 16 or 28 | -1.324 -> -0.639 |
+
+Every one was accidental combinational depth. None was evidence the
+architecture is too slow, and the design got SMALLER at every step.
+
+### The lesson that generalises
+
+The last fix is the one worth remembering. I had PROVEN the seed length can
+only be 0, 16 or 28, used that proof to justify constant fold widths, written
+it in a comment -- and then gone on computing the value the long way. The proof
+was in the file and the arithmetic ignored it. 18,013 of 20,000 negative-slack
+paths ran through that gap.
+
+**A law you have proven is worth nothing until the logic is written in its
+terms.** It is now, and the law itself is asserted:
+
+    a_seed_bytes_lawful    seed_bytes_q in {0, 16, 28} when m == M_SEED
+    a_payload_end_aligned  payload_end_q[2:0] == 3'b100
+
+### Not closed
+
+125 endpoints still fail. Timing closure means zero.
+
+---
+
 ## 2026-08-22 -- THE LADDER SPLIT WORKED AND THE DESIGN GOT WORSE. Both are true.
 
 | | before (`a0ef3ec`) | after (`14e5a21`) |
