@@ -10,6 +10,80 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- TIMING DIAGNOSED. It is the CRC, and it is bit-serial.
+
+Re-ran the composed fit with `-KeepWorkspace` to keep `setup_paths.rpt`, on the
+principle that cost four wrong theories earlier today: measure, do not infer.
+
+### The failing paths
+
+Worst path, and it names itself:
+
+    -55.199 ns   zhao_cmd_dma:u_dma|hdr_win[28][4]
+              -> zhao_cmd_dma:u_dma|crc_pay_r[3]      64.584 ns data delay
+
+`hdr_win[28]` is `command_bytes`. So the chain is: read `cb` out of the header
+window, compute `seed_end = 36 + cb`, run the 28 guarded CRC-32C steps of the
+payload-CRC seed, land in `crc_pay_r`. **The payload-CRC SEED LOOP**, not the
+`crc_final()` header sweep I had guessed at.
+
+Three families among the 100 worst, all on `gpu_clk`:
+
+| paths | from -> to | slack | delay |
+| ---: | --- | ---: | ---: |
+| 33 | `cmd_dma\|hdr_win` -> `cmd_dma\|crc_pay_r` | -55.2 .. -53.3 | ~63-65 ns |
+| 33 | `hps_arbiter\|state.A_IDLE` -> `frameblit\|crc_acc` | -28.8 .. -24.2 | ~34-39 ns |
+| 7 | `audio_fifo\|cnt_gray_sync` -> `cnt_snap_o.value` | -14.9 .. -10.6 | ~20-25 ns |
+
+### The cause, and it is one line of shared code
+
+`zhao_abi_pkg::zhao_crc32c_step` is **BIT-SERIAL**:
+
+    crc = c ^ {24'b0, d};
+    for (int i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ (crc[0] ? 32'h82F63B78 : 32'b0);
+
+Eight DEPENDENT XOR levels per byte. So:
+
+* FRAMEBLIT and `M_PAY_WAIT` fold 8 bytes per beat = **64 chained levels**
+  -> ~38 ns measured;
+* the seed loop folds 28 bytes in one cycle = **224 chained levels**
+  -> ~64 ns measured.
+
+Both against a 10 ns budget. This is not a placement problem or a fitter
+problem; it is a combinational depth problem in code every CRC user shares.
+
+**Spreading the seed loop over more cycles does NOT fix it.** FRAMEBLIT already
+does only 8 bytes per cycle and still costs 38 ns. At ~0.6 ns per level the
+budget is roughly 16 levels, which is TWO bytes per cycle -- and the streaming
+payload CRC has to keep up with 8 bytes per bridge beat, so it cannot be slowed
+down at all.
+
+### The fix, which is standard
+
+CRC-32C is a LINEAR function of its input, so folding N bytes is a fixed
+GF(2) matrix -- an XOR tree of depth ~log, not 8N dependent levels. Replacing
+the bit-serial loop with a parallel form makes 8 bytes per cycle cost a handful
+of levels instead of 64.
+
+It is verifiable bit-exactly against what exists: `zhao_crc32c_step` is itself
+the oracle, and equivalence over random `(c, data)` is a pure combinational
+check that can be driven very hard.
+
+### A caveat that matters, from the same run
+
+    Unconstrained Input Ports       609
+    Unconstrained Input Port Paths  13,920
+
+Paths that START at an input port are not analysed. The STREAMING CRC chains
+begin at `hps_rsp_i.data`, which is an input port of these blocks, so they fall
+in that class. **The -55.199 ns is a lower bound on the problem, not a
+measurement of all of it.** The harness's own limitations list already says
+unconstrained paths remain reportable; here it materially changes what the
+number means.
+
+---
+
 ## 2026-08-22 -- the sweep harness could mis-attribute a verdict, and did
 
 ### What happened
