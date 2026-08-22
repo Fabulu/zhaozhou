@@ -1,5 +1,61 @@
 # What is actually blocking every remaining block
 
+> ## STATE AS OF 2026-08-22 (late). This block supersedes the two survey
+> ## sections below it, which are now history.
+>
+> ### The composed shell after the saturating-counter rewrite
+>
+> | | previous run (`de2794d`) | now (`6d23c84`) |
+> | --- | ---: | ---: |
+> | setup worst | -0.729 ns | **-0.475 ns** |
+> | failing endpoints | 97 | **56** |
+> | ALMs | 7,667 | **7,415** |
+> | hold | 0 failing | **0 failing**, +0.253 ns |
+>
+> Worst path 10.475 ns against a 10 ns target: the machine is presently good
+> for about **95.5 MHz**. Five hand-written saturating counters became one
+> proven `zhao_pkg::zhao_sat_add{64,32}`, which removed five wide borrow chains
+> — including the `input_snapshot|seq -> gaps` family that had been the largest
+> remaining one at 38 paths.
+>
+> ### DO NOT chase the remaining setup paths yet — owner ruling
+>
+> The ruled order (see `docs/OWNER_DOCKET.md`) is: **fix the GPU/video CDC seam
+> first**, structurally, by moving the displayed CRC into `vid_clk` rather than
+> crossing per-pixel state. Only then re-measure BALANCED against HIGH
+> PERFORMANCE. Moving that logic changes placement enough that today's 56
+> endpoints may not be tomorrow's 56, so tuning before it is measuring the
+> wrong design. BALANCED remains the authoritative fitter configuration.
+>
+> ### Clock targets are now on record
+>
+> 120 MHz GPU fabric and a 150 MHz DDR memory interface — the GeForce 256 DDR
+> part, the card Sacrifice shipped against. 120 MHz is 20.4% beyond today, on a
+> design that is placement-bound rather than logic-bound, so it is architecture
+> work rather than cleanup. The memory number cannot be costed at all until the
+> board is frozen: the composed fit has zero package pins and all harness I/O is
+> virtual.
+>
+> ### Blockers REMOVED by the 2026-08-22 rulings
+>
+> * **The five `FIELD.SEQ.*` profiles are not blocked and never were blocks.**
+>   Ruled one engine, five profiles; they are `kind: profile` with
+>   `implemented_by: FIELD.SEQ.CORE` under new rule V21. What remains for them
+>   is lane binding, which is software and shell, not RTL.
+> * **`GEOM.MESHFETCH`'s cull law is now defined.** "Visibility sectors" is
+>   deleted — the phrase appeared only in the block's own purpose line. The law
+>   is conservative per-camera frustum rejection of a BOUNDING SPHERE before
+>   vertex decode, rejecting only when outside every active camera. Its LOD
+>   third is already built (`zhao_geom_lod.sv`).
+>
+> ### Still genuinely blocked on the owner
+>
+> * the three earth-field WRITE ops (`FIELD.WRITE.MATERIAL/NAV/HAZARD`), whose
+>   law is unspecified — and `TERRAIN.PATCH` sits downstream of them;
+> * particle-simulation, compositor and 2D behaviour, reserved by standing
+>   instruction.
+
+
 > ## STATE AS OF 2026-08-22 (evening). Read this first; the survey below is
 > ## from 2026-08-21 and parts of it are now history.
 >

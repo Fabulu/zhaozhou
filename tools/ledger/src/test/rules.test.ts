@@ -572,3 +572,114 @@ test('V16: a SPECIFIED block may cite a formal property that does not exist yet'
   const errors = checkAll(blocks, ops, { exists }, formalDoc());
   assert.deepEqual(errors, []);
 });
+
+// V21 — a `profile` block is a CONFIGURATION of another block, not hardware.
+//
+// It is exempt from V4 (its own reference model, its own directed and random
+// tests, its own counters) and from V5 (its own ALM budget), because the engine
+// it names carries both. Those exemptions are the whole risk: without
+// `implemented_by` a profile would just be an RTL block with its obligations
+// switched off, which is the "make the rule quiet by rewriting its input" shape
+// this project treats as a defect. These tests hold the exemptions to their
+// price.
+//
+// The fixture CONVERTS one of the five FIELD.SEQ entries rather than adding a
+// sixth, because that is exactly the change the owner ruling made in
+// design/blocks.yml.
+
+function asProfile(over: Partial<Block> = {}): Block {
+  return {
+    id: 'FIELD.SEQ.WARP',
+    name: 'Warp8 field sequencer',
+    kind: 'profile',
+    subsystem: 'field',
+    clock_domain: 'gpu',
+    purpose: 'the W profile of ops.yml, run on the shared sequencer',
+    contract: 'design/contracts/FIELD.SEQ.WARP.md',
+    phase: 9,
+    owner_issue: 'ZH-045',
+    inputs: ['cached_program'],
+    outputs: ['displaced_vertices'],
+    upstream: [],
+    downstream: [],
+    backpressure: 'ready_valid',
+    latency: 'variable',
+    target_throughput: '1 Field IR instruction per clock',
+    counters: ['commands'],
+    source_ids: true,
+    maturity: 'SPECIFIED',
+    maturity_log: [],
+    deferred: false,
+    superseded_by: null,
+    leaf: true,
+    implemented_by: 'CMD.DECODER', // an rtl block in the baseline fixture
+    ...over,
+  };
+}
+
+/** Replace the baseline's FIELD.SEQ.WARP with the given block. */
+function swapWarp(blocks: BlocksDoc, b: Block): void {
+  const i = blocks.blocks.findIndex((x) => x.id === 'FIELD.SEQ.WARP');
+  assert.ok(i >= 0, 'fixture should contain FIELD.SEQ.WARP');
+  blocks.blocks[i] = b;
+}
+
+test('V21: a profile naming a real rtl block passes, and owes no tests of its own', () => {
+  const { blocks, ops } = baseline();
+  swapWarp(blocks, asProfile());
+  const errors = checkAll(blocks, ops, { exists });
+  assert.deepEqual(errors, []);
+});
+
+test('V21: a profile with no implemented_by is rejected', () => {
+  const { blocks, ops } = baseline();
+  swapWarp(blocks, asProfile({ implemented_by: null }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V21:') && e.includes('names no implemented_by')),
+    errors.join(' | ')
+  );
+});
+
+test('V21: a profile pointing at a block that does not exist is rejected', () => {
+  const { blocks, ops } = baseline();
+  swapWarp(blocks, asProfile({ implemented_by: 'NO.SUCH.BLOCK' }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V21:') && e.includes('unknown block NO.SUCH.BLOCK')),
+    errors.join(' | ')
+  );
+});
+
+test('V21: a profile implemented by another profile is rejected', () => {
+  const { blocks, ops } = baseline();
+  swapWarp(blocks, asProfile());
+  const i = blocks.blocks.findIndex((x) => x.id === 'FIELD.SEQ.FLOW');
+  blocks.blocks[i] = asProfile({ id: 'FIELD.SEQ.FLOW', implemented_by: 'FIELD.SEQ.WARP' });
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V21:') && e.includes('must be implemented by an rtl block')),
+    errors.join(' | ')
+  );
+});
+
+test('V21: a profile may not out-claim the engine it configures', () => {
+  const { blocks, ops } = baseline();
+  // the engine (CMD.DECODER in this fixture) is SPECIFIED; the profile claims more
+  swapWarp(blocks, asProfile({ maturity: 'RTL_VERIFIED' }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V21:') && e.includes('out-claims its engine')),
+    errors.join(' | ')
+  );
+});
+
+test('V21: a profile may not book an ALM budget — the area belongs to the engine', () => {
+  const { blocks, ops } = baseline();
+  swapWarp(blocks, asProfile({ resource_budget: { alm_percent: 3 } }));
+  const errors = checkAll(blocks, ops, { exists });
+  assert.ok(
+    errors.some((e) => e.startsWith('V21:') && e.includes('books an ALM budget')),
+    errors.join(' | ')
+  );
+});

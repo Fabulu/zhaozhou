@@ -1,6 +1,115 @@
 # Owner docket — Zhaozhou
 
-## Are the five FIELD.SEQ profiles five blocks, or one used five ways?
+## 2026-08-22 — CLOCK TARGETS: 120 MHz fabric + 150 MHz DDR (owner ask)
+
+**Fabian, first:** *"Stretch target for 120 MHz. Historical reasons — GeForce 256
+had that and it went with Sacrifice."*
+
+**Fabian, clarifying:** *"That'd be 120 MHz GPU fabric, 150 MHz DDR interface.
+That's the GeForce 256."*
+
+So the target is the **GeForce 256 DDR** part, spelled out properly:
+
+| lane | target | period | today |
+| --- | ---: | ---: | --- |
+| GPU fabric (`gpu_clk`) | **120 MHz** | 8.333 ns | 10.475 ns measured = **95.5 MHz** |
+| memory interface | **150 MHz DDR** (300 MT/s) | 6.667 ns | **not characterized at all** |
+
+**On the fabric number.** 100 MHz is not closed yet: worst setup at `6d23c84` is
+10.475 ns, so the machine is good for about 95.5 MHz. 120 MHz is not 4.75% more,
+it is **20.4% more**, and the previous campaign already took the worst path from
+65 ns to 10.475 ns and ended placement-bound rather than logic-bound. The seven
+fixes that bought those 55 ns were all accidental combinational depth — real
+defects, now gone. Another 20% on a placement-bound design is pipelining,
+floorplanning or a faster device: architecture, not cleanup.
+
+**On the memory number, which is the more interesting half.** 150 MHz DDR is not
+an RTL target at all — it is the SDRAM controller, the I/O timing and the board.
+None of it is characterized today: the composed fit has **zero package pins**,
+all harness I/O is virtual, and `MEM.SDRAM` is SPECIFIED / blocked_on: hardware
+with a depth-900 refresh proof that has never finished. So this number cannot be
+costed, or even honestly estimated, until the board is frozen. Recorded as the
+target it is.
+
+**Sequence, unchanged by this.** 100 MHz first, and the CDC seam before that
+(the ruled next move) — moving that logic changes placement, so any 120 MHz
+measurement taken before it would be measuring the wrong design.
+
+**One thing worth flagging about the medium.** The GeForce 256 ran 120 MHz in
+1999 on 220 nm dedicated silicon. This is an FPGA, where the fabric is roughly
+an order of magnitude slower per gate — and the stated destination is
+**fabricated silicon**, where 120 MHz stops being ambitious at all. The honest
+reading of the ask is "match a GeForce 256 on the real device": a hard target on
+the FPGA lane, and a low bar on the silicon lane. Worth deciding which lane the
+number is meant to bind, because it changes whether it is a stretch goal or a
+floor.
+
+---
+
+## RULED 2026-08-22 — "visibility sectors" is deleted. MESHFETCH culls a
+## bounding sphere against each camera frustum.
+
+I asked what a "camera visibility sector" was, because the phrase appeared
+exactly twice in the repository and both were the block's own purpose line.
+Fabian's ruling, recorded as given:
+
+> "Somebody had a vague idea of spatial cells/portal sectors and wrote it into
+> the ledger before any such system existed. Since the phrase has no
+> corresponding data structure, algorithm, or format anywhere else, delete the
+> word 'sectors' rather than invent a subsystem to justify it."
+
+**THE LAW, as ruled:**
+
+* `GEOM.MESHFETCH` performs **conservative per-camera frustum rejection of an
+  instance/meshlet bound, before vertex decode**.
+* The bound is a **bounding sphere**: `bound_center` + `bound_radius` in the
+  descriptor. Not an AABB — a sphere is a few subtracts, multiplies and
+  compares with no corner-walking, and a loose bound only costs performance.
+* Per active camera: transform the bound into camera space, test the sphere
+  against the frustum planes.
+* **Reject only when the sphere is outside EVERY active camera.** In Duo, cull
+  only if outside both.
+* Optionally carry a **two-bit visibility result** (camera 0, camera 1)
+  downstream, so work that genuinely is camera-specific is not duplicated.
+* Static/rigid meshes take an **asset-generated** bound. Animated creatures take
+  a **conservative animation-safe instance bound** — per-pose exact bounds are
+  explicitly NOT required.
+* `GEOM.CLIP` remains the exact per-triangle screen rejection stage. The two are
+  complementary, not alternatives.
+* **"Visibility sectors" is deleted. No sector system exists.**
+
+**Explicitly forbidden for now:** meshlet occlusion sectors, BSP cells, portals,
+island visibility grids, Hi-Z occlusion. Each needs new scene-format laws,
+dynamic-update behaviour, memory structures and probably toolchain
+participation — and for a world of floating, deforming, rotating terrain a rigid
+baked visibility system could become actively annoying. Another rejection bit
+can be added in front of MESHFETCH later without changing this law.
+
+**Why here and not in GEOM.CLIP** (the option I had offered and Fabian rejected,
+correctly): MESHFETCH feeds `GEOM.VDECODE` and `GEOM.POSE`, so rejecting an
+invisible object here avoids compressed vertex fetch and decode, pose work,
+skinning, projection, setup, binning and rasterisation. `GEOM.CLIP` receives
+already-projected individual triangles — its cheap scissor test comes far too
+late to save any of that.
+
+**A correction to my own framing.** I had written that the existing projection
+code "defines it completely". It does not: projection defines the camera and the
+frustum, but the coarse BOUND REPRESENTATION was still an open choice, and the
+bounding-sphere ruling above is what closes it.
+
+---
+
+## RULED 2026-08-22 — ONE ENGINE, FIVE PROFILES.
+
+**Fabian's ruling: option 2 below.** One sequencer block; the five profiles
+become configuration, and their ops are attributed to the blocks that consume
+the output. `FIELD.SEQ.CORE` is already RTL_VERIFIED and is a complete engine,
+so this is a ledger and contract change rather than new RTL.
+
+What follows is the question as it stood, kept because it records WHY the
+profiles were never distinguishable in hardware.
+
+## (ruled) Are the five FIELD.SEQ profiles five blocks, or one used five ways?
 
 Nothing in the RTL distinguishes them. `zhao_field_seq` has no profile input
 and no profile-specific port. The thing that would distinguish them — which
@@ -55,7 +164,83 @@ enough to pin it. NAV and HAZARD are not.
 These three will block `FIELD.SEQ.EARTH` — and therefore `TERRAIN.PATCH`
 behind it — the moment either advances.
 
-## Timing closure: two decisions, both measured, both yours
+## RULED 2026-08-22 — BALANCED stays authoritative. Fix the CDC seam FIRST,
+## then remeasure both fitter efforts.
+
+**Fabian's ruling on fitter effort: defer, in a specific order.**
+
+> "Right now the comparison is contaminated by a known structural clock-domain
+> problem. A hold violation is qualitatively different from a setup miss. At
+> -0.475 ns the balanced design is saying 'I can presently do about 95.5 MHz
+> instead of 100 MHz'. A hold failure says 'this transfer is not physically safe
+> even if you run the GPU at 20 MHz'."
+
+The sequence, as ruled:
+
+1. **BALANCED remains the authoritative fitter configuration.** HIGH PERFORMANCE
+   is an experiment, not the shipping basis.
+2. **Fix the video/GPU seam structurally** — specifically, move the displayed
+   CRC into `vid_clk` rather than crossing per-pixel state.
+3. Then run the SAME RTL twice, BALANCED and HIGH PERFORMANCE, and compare worst
+   setup slack, TNS, failing endpoint count, worst hold slack and hold count,
+   ALMs, and compile time.
+4. Adopt HIGH PERFORMANCE only if it then has zero hold violations AND
+   materially better setup. Otherwise stay BALANCED.
+
+**And a direct instruction I am following:** do NOT spend time chasing the
+remaining -0.475 ns of setup paths before the CDC decision. Moving that logic
+changes placement enough that today's 56 endpoints may not be tomorrow's 56.
+
+Measured at commit `6d23c84` (BALANCED): worst setup **-0.475 ns**, **56**
+failing endpoints, **0** hold violations, **7,415** ALMs. The HIGH PERFORMANCE
+experiment measured 17 failing setup endpoints and 2 hold violations, both on
+the `vid_clk -> gpu_clk` seam.
+
+---
+
+## RULED 2026-08-22 — the creature-LOD boundary overflow: fix the law, never
+## bake the wrap into silicon.
+
+Found while building `zhao_geom_lod` against the shipped oracle: the random lane
+caught the RTL and the reference disagreeing at `R = 59353, thresh = 40818,
+e = 1, proj = 339695`. The cause was in the REFERENCE. `boundary_q8` computed
+`thresh * bound_radius` in `__int128` and then narrowed the quotient to
+`int32_t`; at 2,422,670,754 that wraps to **-1,872,296,542**, and a negative
+boundary makes the eager-coarsen test false for every projected radius. **The
+ladder refuses to coarsen and the creature stays pinned at a fine rung forever.**
+Reachable with a small `micro_error` and a large threshold — both ordinary.
+
+**Fabian's ruling, with an amendment I had missed:**
+
+> "Fix the reference, but do not merely change `boundary_q8()` to `int64_t` and
+> leave the following arithmetic unchanged. The quotient can approach 2^62, and
+> multiplying that by 9 or 11 can overflow signed 64-bit."
+
+That is correct, and it is why the fix is not a widening. **The boundary is now
+never formed at all.** Both tests are cross-multiplied in `__int128` using the
+same exact identity the RTL uses, so reference and hardware now evaluate ONE
+mathematical predicate rather than the reference dividing and the RTL proving an
+equivalent comparison by another route.
+
+**Clamping to `INT32_MAX` was considered and rejected**, on Fabian's reasoning:
+a clamp moves the 90% hysteresis threshold downward, so there are representable
+radii for which `proj <= 0.9 * true_boundary` holds but `proj <= 0.9 * INT32_MAX`
+does not. It fixes the catastrophic wrap while subtly changing the transition
+law — and there is no reason to keep an int32 here at all.
+
+**Regression cases added**, as directed: the exact reproducer; thresholds
+astride the old 2^31 boundary; the smallest error term with the largest legal
+radius and threshold; and the invariant that needs no oracle at all —
+
+> for a fixed creature and threshold, decreasing the projected radius must NEVER
+> produce a finer LOD decision.
+
+That invariant is what the overflow actually broke, and it would have caught it
+with no reference to compare against.
+
+---
+
+## (ruled) Timing closure: two decisions, both measured, both yours
 
 ### 1. Fitter effort -- 125 failing endpoints, or 17 with two hold violations?
 

@@ -154,23 +154,58 @@ void bulk_update(BulkState& b, uint8_t rate_shift) {
 
 // ------------------------------------------------------------------- LOD ----
 
-namespace {
-// err_px (S12.8) = rhu(proj_q8 * e_r, R) — the Measure's screen-error law
-int32_t rung_err_q8(int32_t proj_q8, int32_t e_r, int32_t bound_r) {
-  if (e_r == 0) return 0;
-  const __int128 num = static_cast<__int128>(proj_q8) * e_r;
-  const __int128 den = bound_r;
-  return static_cast<int32_t>((num + den / 2) / den);
-}
-}  // namespace
+// ---------------------------------------------------------------------------
+// NO QUOTIENT IS EVER MATERIALISED HERE, AND THAT IS A CORRECTNESS FIX.
+//
+// This code used to compute the two quantities the ladder is described in terms
+// of — the rung error and the rung boundary — and compare them. Both were
+// computed in __int128 and then NARROWED TO int32, and the boundary
+//
+//     B_r = round_half_up(thresh * R / e_r)
+//
+// exceeds int32 for perfectly reachable inputs: a small `micro_error` (an
+// accurately decimated rung) with a large threshold is enough. The narrowing
+// wrapped it NEGATIVE, and a negative boundary makes the eager-coarsen test
+// `10*proj <= 9*B` false for every projected radius — so the ladder REFUSED TO
+// COARSEN and the creature stayed pinned at a fine rung forever. Found by the
+// random lane of tests/differential/geom_lod_directed.cpp at
+// R = 59353, thresh = 40818, e = 1, proj = 339695, and ruled on by the owner on
+// 2026-08-22: fix the law, do not bake the wrap into hardware.
+//
+// WIDENING THE BOUNDARY TO int64 IS NOT ENOUGH, which is the part worth saying
+// out loud. The quotient can approach 2^62, and the tests then multiply it by 9
+// or 11 — so `bnd * 9` overflows signed 64-bit and the bug comes back wearing a
+// wider type.
+//
+// So the boundary is never formed at all. Every use of a quotient here is a
+// COMPARISON against an integer, and for integers N >= 0, e > 0 and integer T:
+//
+//     floor(N/e) <= T   <=>   N < (T+1)*e
+//     floor(N/e) >= T   <=>   N >= T*e
+//
+// Both are exact identities, so each division becomes a multiplication, and
+// every intermediate stays in __int128 where nothing can wrap. This is also the
+// same predicate `fpga/rtl/geometry/zhao_geom_lod.sv` evaluates, which is the
+// architectural point: the reference and the RTL now implement one mathematical
+// statement, rather than the reference dividing and the hardware proving an
+// equivalent comparison by a different route.
+//
+// The identities need a NON-NEGATIVE numerator (C++ integer division truncates
+// toward zero, which equals floor only there). That is the domain: a projected
+// radius, three error magnitudes, and a bound radius from `isqrt_u64`.
+// ---------------------------------------------------------------------------
 
 LodRung lod_raw(int32_t proj_radius_q8, int32_t thresh_q8, const CreatureType& type) {
-  const int32_t err[4] = {0, rung_err_q8(proj_radius_q8, type.micro_error, type.bound_radius),
-                          rung_err_q8(proj_radius_q8, type.splat_error, type.bound_radius),
-                          rung_err_q8(proj_radius_q8, type.glint_error, type.bound_radius)};
+  const __int128 R = type.bound_radius;
+  const __int128 p = proj_radius_q8;
+  // err_r <= thresh  <=>  proj*e_r + R/2 < (thresh + 1) * R
+  // e_r == 0 needs no special case: it gives R/2 < (thresh+1)*R, which agrees
+  // with the old `err = 0` short-circuit on both signs of thresh.
+  const __int128 rhs = (static_cast<__int128>(thresh_q8) + 1) * R;
+  const __int128 e[4] = {0, type.micro_error, type.splat_error, type.glint_error};
   // coarsest legal rung (fewest pixels that still meets the error budget)
   for (int r = 3; r >= 1; --r) {
-    if (err[r] <= thresh_q8) return static_cast<LodRung>(r);
+    if (p * e[r] + R / 2 < rhs) return static_cast<LodRung>(r);
   }
   return LodRung::kMesh;
 }
@@ -186,24 +221,32 @@ LodRung lod_update(LodState& st, int32_t proj_radius_q8, int32_t thresh_q8,
     ++st.hold;  // minimum hold not elapsed: stay (charter 9)
     return st.rung;
   }
-  // boundary between rung r and its FINER neighbour: the projected radius
-  // at which rung r's error equals the threshold (S12.8).
-  const auto boundary_q8 = [&](int r) -> int32_t {
-    const int32_t e[4] = {0, type.micro_error, type.splat_error, type.glint_error};
-    if (e[r] == 0) return 0;
-    // B = thresh * R / e_r
-    const __int128 num = static_cast<__int128>(thresh_q8) * type.bound_radius;
-    return static_cast<int32_t>((num + e[r] / 2) / e[r]);
-  };
+  // The boundary between rung r and its FINER neighbour is the projected radius
+  // at which rung r's error equals the threshold, B_r = thresh * R / e_r. It is
+  // NEVER FORMED — see the note above; forming it is what wrapped. Each test is
+  // cross-multiplied instead, exactly, in __int128.
+  const __int128 e[4] = {0, type.micro_error, type.splat_error, type.glint_error};
+  const __int128 e_sel = e[static_cast<int>(raw > st.rung ? raw : st.rung)];
+  // N = thresh*R + e/2, the boundary's numerator before the divide not taken
+  const __int128 N = static_cast<__int128>(thresh_q8) * type.bound_radius + e_sel / 2;
+  const __int128 p10 = static_cast<__int128>(proj_radius_q8) * 10;
+
   bool switch_ok = false;
-  if (raw > st.rung) {
-    // coarsening: eager — 10% BELOW the boundary of the target rung
-    const int32_t bnd = boundary_q8(static_cast<int>(raw));
-    switch_ok = static_cast<int64_t>(proj_radius_q8) * 10 <= static_cast<int64_t>(bnd) * 9;
+  if (e_sel == 0) {
+    // The boundary is defined as zero when the rung has no error term, so the
+    // two tests degenerate to `10*proj <= 0` and `10*proj >= 0`. Kept explicit
+    // because the identities above were derived under e > 0.
+    switch_ok = (raw > st.rung) ? (proj_radius_q8 <= 0) : true;
+  } else if (raw > st.rung) {
+    // coarsening: eager — 10% BELOW the boundary of the target rung.
+    //   10*proj <= 9*B  <=>  B >= ceil(10*proj/9)  <=>  N >= ceil(10*proj/9)*e
+    const __int128 k = (p10 + 8) / 9;  // ceil, valid for a non-negative numerator
+    switch_ok = (N >= k * e_sel);
   } else {
-    // refining: lazy — 10% ABOVE the boundary of the CURRENT (coarser) rung
-    const int32_t bnd = boundary_q8(static_cast<int>(st.rung));
-    switch_ok = static_cast<int64_t>(proj_radius_q8) * 10 >= static_cast<int64_t>(bnd) * 11;
+    // refining: lazy — 10% ABOVE the boundary of the CURRENT (coarser) rung.
+    //   10*proj >= 11*B  <=>  B <= floor(10*proj/11)  <=>  N < (floor+1)*e
+    const __int128 m = p10 / 11;
+    switch_ok = (N < (m + 1) * e_sel);
   }
   if (switch_ok) {
     st.rung = raw;

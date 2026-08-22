@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **92** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **92** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -178,7 +178,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 |---|---:|---:|---:|
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 8 | 0% |
-| field | 6% | 7 | 0% |
+| field | 6% | 2 | 0% |
 | geometry_mantle | 20% | 21 | 0% |
 | tile | 30% | 11 | 0% |
 | myriad_forge | 9% | 9 | 0% |

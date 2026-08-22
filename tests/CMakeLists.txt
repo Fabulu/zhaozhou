@@ -2575,6 +2575,31 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 # two real earth programs both ways and requiring all 1,089 vertices to agree —
 # without that cross-check the oracle would be a second implementation of 3.4
 # and charter 29-6 would be broken before the RTL was written.
+# ---- GEOM.MESHFETCH: the creature representation ladder --------------------
+# The LOD third of GEOM.MESHFETCH, and the only third with a law to implement.
+# `zref::MeshFetch` is a phantom (reports/PHANTOM_REFERENCES.md) but the ladder
+# is not: `zref::creature::lod_raw` / `lod_update` are shipped and are what the
+# reference simulation itself calls, so this is a real differential rather than
+# two implementations written by the same hand agreeing with each other.
+#
+# The RTL does not transcribe the reference -- it removes both of the
+# reference's divides with an exact integer identity -- so the differential is
+# checking an ALGEBRAIC REWRITE, not a retyping. That is why the directed lane
+# crowds the legality edge, the rounding half-step and the 9/11 hysteresis seam
+# rather than sampling uniformly.
+add_executable(test_geom_lod_directed differential/geom_lod_directed.cpp)
+target_link_libraries(test_geom_lod_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_lod_directed
+  PREFIX Vzhao_geom_lod
+  TOP_MODULE zhao_geom_lod
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_lod.sv)
+add_test(NAME geom_lod_directed COMMAND test_geom_lod_directed)
+set_tests_properties(geom_lod_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_lod_random COMMAND test_geom_lod_directed --random 4000)
+set_tests_properties(geom_lod_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_lod_random_nightly COMMAND test_geom_lod_directed --random 200000)
+set_tests_properties(geom_lod_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 set(ZHAO_TERRAIN_PATCH_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
 

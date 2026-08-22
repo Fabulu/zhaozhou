@@ -5,6 +5,76 @@ at the top.*
 
 ---
 
+## 2026-08-22 (late) — the speed change paid off, and your four rulings are in
+
+### The measurement you were owed
+
+| | before | now |
+| --- | ---: | ---: |
+| worst path | 10.729 ns | **10.475 ns** |
+| endpoints too slow | 97 | **56** |
+| logic cells | 7,667 | **7,415** |
+| hold problems | 0 | **0** |
+
+Faster, 42% fewer slow endpoints, and smaller again. That came from the five
+copies of one counter rule becoming a single proven piece — the change I could
+not test and had to prove instead.
+
+The machine currently runs at about **95.5 MHz**. Your 120 MHz target is on the
+docket with an honest costing: it is 20% further, not 5%, and the easy 55
+nanoseconds are already gone.
+
+### Your four rulings, all acted on
+
+1. **One engine, five profiles.** Done. The five FIELD.SEQ entries were each
+   demanding their own reference model, their own two test files, and their own
+   share of the chip — **five engines worth of area booked for one engine.**
+   They are now marked as configurations of the one real sequencer, and I added
+   a rule (with six tests) so nobody can quietly turn a configuration back into
+   a phantom block.
+2. **"Visibility sectors" deleted; bounding-sphere frustum culling instead.**
+   Recorded as the law, including your point that GEOM.CLIP is far too late in
+   the pipeline to save the work. I have not built it yet — the LOD third of
+   that block is what I built today.
+3. **The LOD overflow: fix the law, never bake the wrap into silicon.** Done,
+   and your amendment was the important half — widening it to 64-bit would
+   NOT have been enough, because the next line multiplies by 9 or 11 and
+   overflows again. The boundary is now never computed at all.
+4. **BALANCED stays; fix the CDC seam first.** Agreed and followed. I have
+   stopped chasing the remaining half-nanosecond.
+
+### The new piece: creature LOD, which is your top-priority area
+
+This is the part that decides how much detail a creature gets as it moves away
+from the camera — full mesh, reduced mesh, blob, speck — and it has to be
+*stable*: a creature that flickers between two levels of detail looks broken
+even though both frames are individually correct. So the rule holds a choice
+for a minimum time and only switches once you are 10% past the boundary.
+
+**It needed division, and division is expensive in hardware.** Two of them per
+creature per frame. I removed both — not by approximating, but because every
+one of those divisions was feeding a comparison, and "is A/B bigger than C" can
+always be rewritten as "is A bigger than C times B". Exact, and no divider.
+
+### Two bugs found, and one of them was mine
+
+**In the shipped reference:** the boundary calculation overflowed and went
+NEGATIVE for perfectly ordinary creatures — a well-decimated model with a
+generous error budget. A negative boundary means the detail level can never get
+coarser, so a creature walking into the distance stays at full detail forever.
+That is a frame-rate bug that would have been very hard to find by looking.
+
+**In my own new hardware:** I had written the three detail levels as a loop,
+and the loop silently gave all three the same error value — so the block could
+only ever answer "full detail" or "speck", never the two middle levels. It
+agreed with the reference on **27,618 of 29,459 checks** anyway, because most
+situations legitimately land on one of the two extremes.
+
+It was caught by the deliberately absurd test cases, not the realistic ones.
+There are exactly three detail levels and there always will be, so the loop was
+saving nothing and hiding something. It is three plain lines now.
+
+---
 ## 2026-08-22 — a subtraction that was never needed, and a law nothing was checking
 
 Two things came out of the same line of code today, and the second is the one

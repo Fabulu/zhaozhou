@@ -271,6 +271,49 @@ export function checkBlocks(blocksDoc: BlocksDoc, opts: RuleOptions = {}): strin
     }
   }
 
+  // --- V21: a `profile` block is configuration, and must say whose ---------
+  //
+  // A profile is not hardware. It is a named CONFIGURATION of a block that
+  // does exist, and it earns its exemptions from V4 (own reference model, own
+  // directed and random tests, own counters) and V5 (own ALM budget) by
+  // pointing at the block that carries them. Without `implemented_by` it is
+  // just an RTL block with its obligations switched off, which is exactly the
+  // shape of edit this project treats as a defect: making a rule quiet by
+  // rewriting its input.
+  //
+  // A profile may also not out-claim its engine. Its maturity is the engine's
+  // maturity or lower -- a configuration cannot be more proven than the thing
+  // it configures.
+  for (const b of blocks) {
+    if (b.kind !== 'profile') continue;
+    if (!b.implemented_by) {
+      errors.push(
+        `V21: profile block ${b.id} names no implemented_by — a profile must say which block implements it`
+      );
+      continue;
+    }
+    const impl = byId.get(b.implemented_by);
+    if (!impl) {
+      errors.push(`V21: profile block ${b.id} implemented_by references unknown block ${b.implemented_by}`);
+      continue;
+    }
+    if (impl.kind !== 'rtl') {
+      errors.push(
+        `V21: profile block ${b.id} is implemented_by ${impl.id}, which is kind ${impl.kind} — a profile must be implemented by an rtl block`
+      );
+    }
+    if (rank(b.maturity) > rank(impl.maturity)) {
+      errors.push(
+        `V21: profile block ${b.id} at ${b.maturity} out-claims its engine ${impl.id} at ${impl.maturity} — a configuration cannot be more proven than what it configures`
+      );
+    }
+    if (b.resource_budget?.alm_percent) {
+      errors.push(
+        `V21: profile block ${b.id} books an ALM budget — the area belongs to ${impl.id}, and counting it twice is what the profile collapse was for`
+      );
+    }
+  }
+
   // --- superseded_by must resolve ---
   for (const b of blocks) {
     if (b.superseded_by && !byId.has(b.superseded_by)) {

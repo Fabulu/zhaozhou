@@ -705,7 +705,7 @@ blocks:
 
   - id: FIELD.SEQ.EARTH
     name: Earth8 field sequencer
-    kind: rtl
+    kind: profile
     subsystem: field
     clock_domain: gpu
     purpose: Evaluate Earth8 patch programs (height/material/nav/hazard field semantics) against terrain patches; implements the E profile of ops.yml.
@@ -719,23 +719,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    reference_model: zref::fieldir::interpret
-    tests:
-      directed: tests/field/field_seq_earth_directed.cpp
-      random: tests/field/field_seq_earth_random.cpp
     counters: [field_instructions_by_profile, terrain_samples_evaluated]
     source_ids: true
-    budget_group: field
     maturity: SPECIFIED
     maturity_log: []
     deferred: false
     cut_order: null
     superseded_by: null
+    implemented_by: FIELD.SEQ.CORE
     notes: Golden semantics = the single C++ interpreter (W5); RTL is its differential pen-mate.
 
   - id: FIELD.SEQ.WARP
     name: Warp8 field sequencer
-    kind: rtl
+    kind: profile
     subsystem: field
     clock_domain: gpu
     purpose: Evaluate Warp8 vertex-deformation programs on mesh vertices; implements the W profile of ops.yml.
@@ -749,23 +745,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    reference_model: zref::fieldir::interpret
-    tests:
-      directed: tests/field/field_seq_warp_directed.cpp
-      random: tests/field/field_seq_warp_random.cpp
     counters: [field_instructions_by_profile]
     source_ids: true
-    budget_group: field
     maturity: SPECIFIED
     maturity_log: []
     deferred: true
     cut_order: 5
     superseded_by: null
+    implemented_by: FIELD.SEQ.CORE
     notes: Deferred (P9+); Warp8 throughput is cut-order 5 (§26).
 
   - id: FIELD.SEQ.FLOW
     name: Flow field sequencer
-    kind: rtl
+    kind: profile
     subsystem: field
     clock_domain: gpu
     purpose: Evaluate particle/force-field programs driving Myriad updates; implements the F profile of ops.yml.
@@ -779,23 +771,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    reference_model: zref::fieldir::interpret
-    tests:
-      directed: tests/field/field_seq_flow_directed.cpp
-      random: tests/field/field_seq_flow_random.cpp
     counters: [field_instructions_by_profile]
     source_ids: true
-    budget_group: field
     maturity: SPECIFIED
     maturity_log: []
     deferred: false
     cut_order: null
     superseded_by: null
+    implemented_by: FIELD.SEQ.CORE
     notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
 
   - id: FIELD.SEQ.FORMATION
     name: Formation field sequencer
-    kind: rtl
+    kind: profile
     subsystem: field
     clock_domain: gpu
     purpose: Evaluate transform-generation programs feeding the Transform Loom; implements the M profile of ops.yml.
@@ -809,23 +797,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    reference_model: zref::fieldir::interpret
-    tests:
-      directed: tests/field/field_seq_formation_directed.cpp
-      random: tests/field/field_seq_formation_random.cpp
     counters: [field_instructions_by_profile]
     source_ids: true
-    budget_group: field
     maturity: SPECIFIED
     maturity_log: []
     deferred: false
     cut_order: null
     superseded_by: null
+    implemented_by: FIELD.SEQ.CORE
     notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
 
   - id: FIELD.SEQ.STAMP
     name: Scar Scribe stamp sequencer
-    kind: rtl
+    kind: profile
     subsystem: field
     clock_domain: gpu
     purpose: Evaluate Scar Scribe sheet programs (stamp placement/conversion); implements the S profile of ops.yml.
@@ -839,18 +823,14 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    reference_model: zref::fieldir::interpret
-    tests:
-      directed: tests/field/field_seq_stamp_directed.cpp
-      random: tests/field/field_seq_stamp_random.cpp
     counters: [field_instructions_by_profile]
     source_ids: true
-    budget_group: field
     maturity: SPECIFIED
     maturity_log: []
     deferred: false
     cut_order: null
     superseded_by: null
+    implemented_by: FIELD.SEQ.CORE
     notes: Planning split; may share the Field ALU with EARTH post-synthesis (§6A).
 
   # ===========================================================================
@@ -1832,7 +1812,7 @@ blocks:
     kind: rtl
     subsystem: geometry
     clock_domain: gpu
-    purpose: Fetch meshlet descriptors, cull against camera visibility sectors and decide LOD per governor targets.
+    purpose: Fetch meshlet descriptors, reject instance bounding spheres outside every active camera frustum, and decide LOD per governor targets.
     contract: design/contracts/GEOM.MESHFETCH.md
     phase: 8
     owner_issue: ZH-037

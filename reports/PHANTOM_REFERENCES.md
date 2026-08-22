@@ -230,3 +230,59 @@ reasons:
 **Conclusion: TERRAIN.PATCH is legitimately blocked on FIELD.SEQ.EARTH**, and
 staying at `SPECIFIED` is the accurate state, not a missing chore. Three of its
 four op blockers are downstream of a block nobody has built.
+
+---
+
+## Addendum, 2026-08-22: GEOM.MESHFETCH is a MIXED case, and one third of it
+## names a mechanism this repository never defines
+
+`zref::MeshFetch` does not resolve, as the table above records. Classifying it
+against the three kinds turned out not to have a single answer -- the block's
+own purpose line describes **three jobs of three different kinds**:
+
+> "Fetch meshlet descriptors, cull against camera visibility sectors and decide
+> LOD per governor targets."
+
+| job | kind | state |
+| --- | --- | --- |
+| decide LOD per governor targets | **1** -- shipped under another name | buildable today |
+| fetch meshlet descriptors | **2** -- no implementation | needs a descriptor format |
+| cull against camera visibility sectors | **2**, and worse | **the term is undefined repo-wide** |
+
+**The LOD third is kind 1 and costs almost nothing.** The law is already
+implemented and shipped: `zref::lod_raw` and `zref::lod_update`
+(`reference/src/zcreature/creature_sim.cpp:167`), with the ladder, the
+screen-space error law, the 15-tick minimum hold and the eager-coarsen /
+lazy-refine 10% hysteresis all pinned to charter 9 and 10. The threshold it
+consumes comes from `MEASURE.GOVERNOR`, which is already `UNIT_VERIFIED`. So
+this part needs a forwarding view and a differential, not a new law -- and the
+trap kind 1 always carries applies: writing a *second* implementation and
+calling the agreement a verification.
+
+**The cull third is not a cost, it is a question.** `grep` for "visibility
+sector" across `spec/`, `docs/`, `design/` and `reference/` returns **two hits,
+and both are this block's own purpose line** -- once in `blocks.yml` and once in
+the contract that was generated from it. Nothing defines what a camera
+visibility sector is, how many there are, how a meshlet is assigned one, or what
+a camera's set is. There is no law here to implement, and no spec to read it
+out of.
+
+That is different from `DEBUG.TRACE`, the kind-2 example above, where the wire
+format was ratified and only the ring was unwritten. Here the *mechanism itself*
+is a phrase that appeared in a purpose line and was never followed up. Compare
+`zref_geom.hpp`'s own note that the GEOM.CLIP purpose line "names backface cull
+while no spec ratifies a winding" -- the same shape, caught the same way, and
+that one was resolved by making `kCullNone` the default and saying so.
+
+**What this means for sequencing.** GEOM.MESHFETCH cannot be finished as one
+piece. The LOD ladder can be built now against a real oracle; the descriptor
+fetch needs a format decision; and the cull needs Fabian to say what a
+visibility sector is, or to say that the phrase was aspirational and the block
+culls by some law that does exist. That question is on the docket rather than
+answered here.
+
+**Recorded rather than resolved by picking something.** Choosing a sector scheme
+would be inventing behaviour, and it would be invisible afterwards -- an
+arbitrary spatial partition looks exactly like a designed one once it is written
+down in a contract.
+

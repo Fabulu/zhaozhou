@@ -45,7 +45,24 @@ export interface BlockTests {
 export interface Block {
   id: string;
   name: string;
-  kind: 'rtl' | 'software';
+  /**
+   * `profile` is NOT a third kind of hardware. It is a block-shaped record for
+   * a CONFIGURATION of another block, and it exists because five entries in
+   * this ledger described one engine wearing five hats.
+   *
+   * The five FIELD.SEQ.* profiles (EARTH/WARP/FLOW/FORMATION/STAMP) each
+   * carried `kind: rtl`, which under V4 demanded five reference models and ten
+   * test files, and under V5 booked FIVE ENGINES' WORTH OF ALM BUDGET for one
+   * engine. Nothing in the RTL ever distinguished them: `zhao_field_seq` has no
+   * profile input and no profile-specific port, and the thing that would
+   * distinguish them -- which registers the input and output lanes bind to --
+   * is carried by the DECODED PROGRAM, not by the block.
+   *
+   * Owner ruling 2026-08-22: one engine, five profiles. A `profile` block must
+   * name `implemented_by`, carries no evidence obligations of its own, and
+   * books no area -- the engine it names carries both.
+   */
+  kind: 'rtl' | 'software' | 'profile';
   subsystem: string;
   clock_domain: 'hps' | 'gpu' | 'sdram' | 'video' | 'audio' | 'async';
   purpose: string;
@@ -75,6 +92,8 @@ export interface Block {
   deferred?: boolean;
   cut_order?: number | null;
   superseded_by?: string | null;
+  /** `profile` blocks only: the block that actually implements this. */
+  implemented_by?: string | null;
   leaf?: boolean;
   runs_on_target_hardware?: boolean;
   notes?: string | null;

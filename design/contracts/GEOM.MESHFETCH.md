@@ -4,7 +4,52 @@
 
 ## Purpose and exclusions
 
-Fetch meshlet descriptors, cull against camera visibility sectors and decide LOD per governor targets.
+Fetch meshlet descriptors, reject instance bounding spheres outside every active
+camera frustum, and decide LOD per governor targets.
+
+### The cull law (owner ruling, 2026-08-22)
+
+This block used to be specified to "cull against camera visibility sectors".
+That phrase appeared exactly twice in the repository — here and in the ledger
+line this file was generated from — and nothing defined what a sector was.
+**It is deleted. No sector system exists.** What replaces it:
+
+* the descriptor carries a conservative **bounding sphere**: `bound_center` and
+  `bound_radius`;
+* for each ACTIVE camera, transform the bound into camera space and test the
+  sphere against the frustum planes;
+* **reject only when the sphere is outside EVERY active camera.** In Duo, cull
+  only if outside both;
+* optionally carry a two-bit visibility result (camera 0, camera 1) downstream,
+  so work that genuinely is camera-specific is not duplicated;
+* static and rigid meshes take an **asset-generated** bound; animated creatures
+  take a **conservative animation-safe instance bound**. Per-pose exact bounds
+  are explicitly NOT required — a loose bound costs performance, never geometry.
+
+**Why the coarse cull belongs HERE and not in `GEOM.CLIP`.** This block feeds
+`GEOM.VDECODE` and `GEOM.POSE`, so rejecting an invisible instance here avoids
+compressed vertex fetch and decode, pose work, skinning, projection, setup,
+binning and rasterisation. `GEOM.CLIP` receives already-projected individual
+triangles; its scissor test is deliberately cheap and comes far too late to save
+any of that. The two are complementary stages, not alternatives.
+
+**Deliberately not built:** meshlet occlusion sectors, BSP cells, portals,
+island visibility grids, Hi-Z occlusion. Each needs new scene-format laws,
+dynamic-update behaviour and memory structures, and for a world of floating,
+deforming and rotating terrain a rigid baked visibility system could become
+actively unhelpful. Another rejection bit can be added in front of this block
+later without changing this law.
+
+### What is already built
+
+The **LOD third** of this block exists: `fpga/rtl/geometry/zhao_geom_lod.sv`,
+differential-tested against the shipped `zref::creature::lod_raw` and
+`zref::creature::lod_update` in `tests/differential/geom_lod_directed.cpp`
+(29,510 directed checks, 600,000 random, mutation sweep 22 attempted / 22
+accounted / 21 caught / 1 equivalent). It carries no divider: every quotient in
+the ladder feeds a comparison, and those are cross-multiplied exactly.
+
+The descriptor fetch and the frustum rejection described above are **not** built.
 
 ## Clock and reset semantics
 

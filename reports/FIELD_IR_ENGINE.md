@@ -156,15 +156,32 @@ recorded here.
 
 ## What is not built
 
-**Every op is built.** What remains is the sequencer itself: the register file
-and the instruction walk that turns a `.zprog` image into a run, and the five
-`FIELD.SEQ.*` blocks that are that sequencer wearing different profiles.
-Until the sequencer exists, the five `FIELD.SEQ.*` blocks in the ledger stay
-SPECIFIED, and so do the blocks downstream of them.
+**Every op is built, and so is the sequencer.** `FIELD.SEQ.CORE` is
+`RTL_VERIFIED`: all 31 opcodes dispatch under a coverage gate, and the anti-hang
+law is formally proven with every instruction word free
+(`tests/formal/field_seq_bound.sby`).
 
-None of the remaining engine work needs a decision from the owner. It is the
-only large group of blocks in that position.
+**The five `FIELD.SEQ.*` profiles are no longer waiting on anything to be**
+**built, because they are not blocks.** Owner ruling, 2026-08-22: *one engine,*
+*five profiles*. They are now `kind: profile` in the ledger with
+`implemented_by: FIELD.SEQ.CORE`, and rule V21 holds that exemption to its
+price — a profile must name its engine, may not out-claim its maturity, and may
+not book an ALM budget.
 
+This section used to say the five would "stay SPECIFIED until the sequencer
+exists". That framing was wrong in a way worth recording: nothing in the RTL
+ever distinguished them. `zhao_field_seq` has no profile input and no
+profile-specific port, and what would distinguish a profile — which registers
+the input and output lanes bind to — is carried by the DECODED PROGRAM, not by
+the block. Five ledger entries at `kind: rtl` were demanding five reference
+models and ten test files under V4, and booking **five engines worth of ALM
+budget for one engine** under V5.
+
+**What genuinely remains for the profiles is not hardware.** Each needs its lane
+binding written down — which registers the inputs arrive in and which the
+outputs are read from, per program. That is a software and shell question and it
+belongs with the blocks that consume the output. For FLOW it is particle
+behaviour, which is reserved to the owner in any case.
 ## Notes worth keeping
 
 ### There are two reciprocal tables and they are not interchangeable

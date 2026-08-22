@@ -46,7 +46,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/blockId" },
         "name": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["rtl", "software"] },
+        "kind": { "enum": ["rtl", "software", "profile"] },
         "subsystem": {
           "description": "Must match an fpga/rtl/ directory for kind=rtl (rule V1); 'sw' for software.",
           "enum": ["platform", "command", "memory", "field", "input", "audio", "video", "measure", "terrain", "surface", "geometry", "raster", "texture", "particles", "forge", "compositor", "debug", "sw"]
@@ -135,6 +135,8 @@
         "deferred": { "type": "boolean" },
         "cut_order": { "type": ["integer", "null"], "minimum": 1, "maximum": 8 },
         "superseded_by": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$" },
+        "implemented_by": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*(\\.[A-Z][A-Z0-9]*)+$",
+          "description": "kind=profile only: the rtl block that implements this configuration (rule V21)." },
         "leaf": { "type": "boolean" },
         "runs_on_target_hardware": { "type": "boolean" },
         "notes": { "type": ["string", "null"] }
@@ -151,6 +153,10 @@
               "subsystem": { "$ref": "#/$defs/subsystemRtl" }
             }
           }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "profile" } } },
+          "then": { "required": ["implemented_by"] }
         },
         {
           "if": { "properties": { "kind": { "const": "software" } } },

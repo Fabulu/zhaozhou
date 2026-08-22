@@ -10,6 +10,219 @@ any of it.**
 
 ---
 
+## 2026-08-22 (late) -- the fit measurement, four owner rulings, and a block
+## whose test caught my own bug
+
+### 1. The composed fit at `6d23c84`, which is the measurement I owed
+
+Run `wumen-6d23c84-20260822T164408Z`, compared against the immediately prior run
+`de2794d` rather than against any doc summary:
+
+| | `de2794d` | `6d23c84` |
+| --- | ---: | ---: |
+| setup worst | -0.729 ns | **-0.475 ns** |
+| failing endpoints | 97 | **56** |
+| ALMs | 7,667 | **7,415** |
+| hold | 0 failing | 0 failing, +0.253 ns |
+
+35% better on worst slack, 42% fewer failing endpoints, 252 ALMs smaller. The
+caveat I carried into it -- that the design is placement-bound below ~1.5 ns and
+this might not move the headline -- did not hold, because the change removed
+five real borrow chains rather than rearranging logic.
+
+**The per-path census is NOT available for this run.** `run_composed_fit.ps1`
+deletes its workspace unless `-KeepWorkspace` is passed, so `setup_paths.rpt` is
+gone and only the headline JSONs persist. Re-running with the flag costs another
+~40 minutes and is deferred, because the owner has ruled the CDC seam comes
+first and it will move the paths anyway.
+
+### 2. Four rulings from Fabian, and what each changed
+
+**(a) One engine, five profiles.** The five `FIELD.SEQ.*` entries were
+`kind: rtl`, which under V4 demanded five reference models and ten test files,
+and under V5 booked **five engines worth of ALM budget for one engine**. Nothing
+in the RTL ever distinguished them: `zhao_field_seq` has no profile input and no
+profile-specific port, and what would distinguish a profile is carried by the
+decoded program.
+
+Implemented as a new ledger kind rather than a comment: `kind: profile` plus
+`implemented_by`, JSON schema updated, and **rule V21** added -- a profile must
+name an `rtl` block, may not out-claim its engine maturity, and may not book an
+ALM budget. Six unit tests, ledger suite 46/46 green.
+
+The V4 and V5 exemptions are the whole risk, so V21 exists to charge for them.
+Without it a profile is just an RTL block with its obligations switched off,
+which is the "make the rule quiet by rewriting its input" shape this project
+already treats as a defect.
+
+**(b) "Camera visibility sectors" is deleted.** The phrase appeared exactly
+twice in the repository -- in `GEOM.MESHFETCH`'s purpose line and in the contract
+generated from it. Nothing defined it. Ruled: conservative per-camera frustum
+rejection of a BOUNDING SPHERE before vertex decode, rejecting only when outside
+every active camera, with an optional two-bit per-camera visibility result
+carried downstream. Static meshes take an asset-generated bound; animated
+creatures take a conservative animation-safe instance bound, with per-pose exact
+bounds explicitly not required. `GEOM.CLIP` stays the exact per-triangle stage.
+
+Fabian's reasoning for why CLIP cannot substitute is recorded in the docket: it
+receives already-projected triangles, far too late to save the decode, pose,
+skin, project, setup and bin work that rejecting at MESHFETCH avoids.
+
+I also corrected my own framing. I had claimed the existing projection code
+"defines it completely". It does not -- projection defines the frustum, but the
+coarse bound representation was still open, and the bounding-sphere ruling is
+what closes it.
+
+**(c) The LOD boundary overflow: fix the law.** See section 5.
+
+**(d) BALANCED stays authoritative; CDC seam first.** Recorded, and I have
+stopped tuning setup paths. The explicit instruction: moving the CDC logic
+changes placement enough that today's 56 endpoints may not be tomorrow's 56.
+
+### 3. GEOM.MESHFETCH, classified before anything was built
+
+`zref::MeshFetch` is one of the 25 phantom references. Classifying it against
+the three kinds gave three different answers for one block:
+
+| job | kind | state |
+| --- | --- | --- |
+| decide LOD per governor targets | 1 -- shipped under another name | built today |
+| fetch meshlet descriptors | 2 -- no implementation | needs a format |
+| cull against "visibility sectors" | 2, and the term was undefined | now ruled |
+
+The LOD third was kind 1 and cheap: `zref::creature::lod_raw` / `lod_update`
+already exist, are what the reference simulation itself calls, and are pinned to
+charter 9 and 10. Recorded as an addendum in `reports/PHANTOM_REFERENCES.md`.
+
+### 4. `zhao_geom_lod.sv` -- and there is no divider in it
+
+Written out directly, the law divides twice per evaluation: a rung error
+`rhu(proj*e_r/R)` and a boundary `rhu(thresh*R/e_r)`. That is two 64/32 variable
+dividers on a per-instance path.
+
+Neither is needed. Every use of a quotient here is a COMPARISON against an
+integer, and for integers N >= 0, e > 0:
+
+    floor(N/e) <= T   <=>   N < (T+1)*e
+    floor(N/e) >= T   <=>   N >= T*e
+
+So rung legality becomes `proj*e_r + R/2 < (thresh+1)*R` with no division at
+all, and the two hysteresis tests reduce to division by the CONSTANTS 9 and 11 --
+a multiply and a shift. The identities need a non-negative numerator, which is
+exactly the block's domain (a projected radius, three error magnitudes, a bound
+radius from `isqrt_u64`), asserted under FORMAL rather than assumed.
+
+**Deliberately NOT exploited:** `compile_creature` sets `splat_error =
+bound_radius/2` and `glint_error = bound_radius`, which would collapse two of
+the three products. That is a property of the software that compiles creature
+types; nothing in hardware enforces it, so a block assuming it would be wrong
+for any type built another way. Recorded in the RTL so the opportunity is not
+lost and nobody applies it later without a guard that fires.
+
+### 5. The overflow in the shipped reference, found by the random lane
+
+At `R = 59353, thresh = 40818, e = 1, proj = 339695` the RTL and the reference
+disagreed. The REFERENCE was wrong: `boundary_q8` computed `thresh * R` in
+`__int128` and then narrowed the quotient to `int32_t`. 2,422,670,754 wraps to
+**-1,872,296,542**, and a negative boundary makes the eager-coarsen test false
+for every projected radius -- **the ladder refuses to coarsen, and a creature
+walking into the distance stays pinned at a fine rung forever.** Reachable with
+a small `micro_error` and a large threshold, both ordinary.
+
+Fabian's amendment was the half I had missed: widening `boundary_q8` to
+`int64_t` is NOT a fix, because the quotient can approach 2^62 and the next line
+multiplies it by 9 or 11. So the boundary is now **never formed at all** -- the
+reference cross-multiplies in `__int128` using the same identity the RTL uses,
+which also means reference and hardware now evaluate one mathematical predicate
+instead of two routes to it.
+
+Clamping to `INT32_MAX` was considered and rejected on Fabian's reasoning: it
+moves the 90% hysteresis threshold downward, so there are representable radii
+where `proj <= 0.9 * true_boundary` holds but `proj <= 0.9 * INT32_MAX` does
+not. It fixes the catastrophic wrap while quietly changing the transition law.
+
+`creature_core`'s own anchors stayed green through the change, so nothing moved
+in the well-defined domain.
+
+### 6. The bug in MY OWN RTL, and what caught it
+
+The three rung error terms were an unpacked array indexed by a genvar inside a
+generate loop. **All three legality bits came out equal**, so the block could
+only ever return the coarsest rung or the finest -- never `kMicro` or `kSplat`.
+
+It agreed with the oracle on **27,618 of 29,459 checks** anyway, because most
+cases legitimately land on rung 3 or rung 0. What exposed it was the
+deliberately absurd corner sweep (ref=2, dut=0), and a magnitude bisect then
+showed it had nothing to do with magnitude at all -- it reproduced at
+`R = 65,536` just as well as at `INT32_MAX`.
+
+There are exactly three rungs and there always will be; the ladder is fixed by
+charter 9, not parameterised. The loop bought nothing and hid the one class of
+bug a loop can hide. It is three named terms now, which cannot silently share a
+value, and two sweep mutants (M21, M22) exist to keep it dead.
+
+### 7. Mutation sweep: 22 attempted, 22 accounted, 19 caught, 1 equivalent
+
+The three survivors of the first scored run were each dealt with on their
+merits, rather than all being filed as equivalent:
+
+* **M08, `<` widened to `<=` on the refine test -- REAL HOLE, now closed.** The
+  identity is `floor(N/e) <= M  <=>  N < (M+1)*e`, so the two spellings differ
+  at exactly one point, `N == (M+1)*e`, and random draws cannot land on a point.
+  It is constructed now: with `R = 1, e = 2k, thresh = k, proj = 1` we get
+  `N = 2k` and `(M+1)*e = 2k` exactly, swept for k = 1..8.
+* **M15, hold saturation deleted -- REAL HOLE, now closed.** It differs only at
+  `hold == 0xFFFF`, and only on a path that INCREMENTS the hold. Section 6 drove
+  the rail, but on inputs that switch rungs -- and a switch clears the hold to
+  zero, so the increment never ran at the rail at all. Now driven with
+  `rung_i == raw`, and on a refused switch.
+* **M18, `e == 0` refining always refused -- EQUIVALENT, with a proof.** If
+  `e[rung_i] == 0` then that rung is always legal, because legality is
+  `proj*0 + R/2 < (thresh+1)*R` and `R/2 < R <= (thresh+1)*R` for every
+  `R > 0, thresh >= 0`. `raw` is the COARSEST legal rung, so `raw >= rung_i`,
+  so the refining branch (`raw < rung_i`) is unreachable. Not a hole; recorded
+  so it does not read as one.
+
+### 8. FOUR distinct ways the sweep harness scored runs that never happened
+
+This took longer than the RTL did, and each one is a variant of something
+already in this project's history:
+
+1. **`verilate()` elaborates at CONFIGURE time**, so `ninja` alone relinks a
+   cached model against changed source. First run: all 20 mutants discarded.
+   That was the guard working, not a nuisance.
+2. **Future mtimes.** An early version stamped the mutated source forward to
+   force a rebuild, which made a model elaborated from a MUTANT look newer than
+   the pristine source restored after it, so the next elaboration was skipped.
+   `os.utime(p, None)` now -- never forward.
+3. **Model hash is necessary but not sufficient.** A pristine model can be
+   linked against an OBJECT still compiled from a mutant -- observed as 994
+   failures against provably clean RTL, after I deleted `.ninja_deps` to clear a
+   file lock and cost ninja its dependency information. The whole target
+   directory is deleted each iteration now.
+4. **Hashing the wrong file.** `Vzhao_geom_lod.cpp` is Verilator's WRAPPER and
+   is byte-identical between pristine and mutant; the logic lives in
+   `Vzhao_geom_lod___024root__0.cpp`. This one reported DISCARDED for work that
+   was actually fine -- the opposite failure from the other three, and the only
+   one that hides a real result rather than inventing one.
+
+The harness now also checks that the PRISTINE build passes its own test before
+any mutant runs, because otherwise every "caught" below it means nothing. That
+check fired once for real, after the `.ninja_deps` incident.
+
+### 9. A process note on the diagnosis
+
+The magnitude bisect that found the generate-loop bug took one 40-second
+rebuild. The two hours before it went into a standalone Verilator probe that
+never linked (libstdc++ ABI mismatch) and into three theories about signed width
+casts, none of which were right.
+
+**The tool said "dut returns only 0 or 3, never 1 or 2" the moment I asked it a
+question shaped like data instead of a hypothesis.** Same lesson as
+`Total block memory bits: 0` and `rebuilding 'build.ninja'`.
+
+---
+
 ## 2026-08-22 -- A subtractor that was a NOT, and the law underneath it that
 ## no test could reach
 
