@@ -10,6 +10,60 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- MEM.GUARD counter moved: 125 -> 97 failing endpoints, and the
+## CDC seam surfaces again
+
+| | before (`ae3ce73`) | after (`de2794d`) |
+| --- | ---: | ---: |
+| setup worst | -0.639 ns | -0.729 ns |
+| **failing endpoints** | 125 | **97** |
+| hold | +0.250, 0 failing | -1.596, **4 failing** |
+| ALMs | 7,648 | 7,667 |
+
+**22% fewer failing setup endpoints**, a slightly deeper worst path, +19 ALMs.
+
+### The change
+
+`guard_violations` incremented in the cycle of the verdict, putting the whole
+range-check chain on the ENABLE of a 32-bit register bank -- one decision
+fanning out to 32 flops, which is why the census showed 1,383 paths from one
+comparison. It now counts off `guard_violation`, the registered pulse that
+already exists for exactly this verdict.
+
+The safety path is untouched and `formal_mem_guard_no_escape` still passes.
+**That proof is why I did this at all**: I had twice declined to touch this
+block because its whole contract is that no memory escape exists, and what
+changed is not nerve -- it is that a change here can be PROVEN safe rather than
+argued safe, and this one is to a debug counter rather than the decision.
+
+### The four hold violations are NOT this change
+
+    -1.596  scanout_serializer|starve_q -> starve_samp   vid_clk -> gpu_clk
+    -0.575  video_scaler|stage2.y       -> eof_pend      vid_clk -> gpu_clk
+    -0.437  video_scaler|stage2.x       -> sof_seen_q    vid_clk -> gpu_clk
+    -0.255  video_scaler|stage2.x       -> crc_in_sof    vid_clk -> gpu_clk
+
+Every one is the GPU/video seam. The same families appeared at -1.064 with
+three failures earlier today, vanished when the CRC pressure came off, and are
+back now. They move with placement and have never been fixed -- which is
+precisely the docket item: `DEBUG.CRC.md` says the displayed lane is
+video-domain, `design/blocks.yml` says GPU, and the implementation followed
+blocks.yml and built a per-pixel crossing.
+
+**Three separate runs have now produced these, uncorrelated with what was
+changed.** That is as strong an argument as the timing reports can make that
+the seam needs the architectural fix rather than another placement roll.
+
+### Kept, unlike the fold un-sharing
+
+Both were principled and both left the worst path deeper. The difference: the
+fold split cost 375 ALMs and made *everything* worse (125 -> 424 endpoints);
+this one costs 19 ALMs and makes the endpoint count materially better. Where a
+change has a real benefit and the regression is in an unrelated, known-unfixed
+seam, keeping it is the honest call.
+
+---
+
 ## 2026-08-22 -- fitter effort: 7x fewer failing endpoints, a deeper worst
 ## path, and two hold violations. FABIAN'S CALL.
 
