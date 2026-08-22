@@ -198,6 +198,46 @@ runs:
       assuming a failure away is how a formal lane becomes decoration -- so each
       assumption added is one the CONTRACT already makes.
 
+  - property: tests/formal/sat_add.sby
+    status: green
+    date: "2026-08-22"
+    commit: "e59f34a"
+    lane: formal_sat_add
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      Run verified against the tree at e59f34a plus the change that lands
+      this property, which is the same pin convention the entries above use
+      (HEAD at run time, not the commit that introduces the file).
+      The D9 saturating-counter law (spec/counters.md 4), and the first
+      property here written because a law could NOT be tested rather than
+      because it was hard to test. Five sites implemented it by hand -- CMD.DMA
+      sat_add, INPUT.SNAPSHOT gap accumulator, two arms of HPS.BRIDGE, one of
+      VRAM.ARBITER -- and the saturating arm of every one of them is
+      unreachable in simulation: they are u64 counters incremented by small
+      amounts, so the rail is on the order of 2^64 events away and nothing
+      external can preload them. MEASURED, NOT SUPPOSED: replacing the headroom
+      test `~b` with plain `b`, which breaks saturation outright, passes
+      cmd_dma_directed AND its 5,000-packet random lane. A test that cannot
+      fail is not evidence, so the five copies became one
+      zhao_pkg::zhao_sat_add{64,32} and the evidence moved here. The oracle is
+      the (W+1)-bit sum, which cannot overflow and is therefore the true
+      arithmetic answer, so the properties say the W-bit result is that answer
+      CLAMPED -- a specification, not a second copy of the code, which is the
+      distinction the ABS defect in zhao_field_alu is this project standing
+      reminder about. Six assertions per width: the clamped-sum law, never
+      wraps, identity at b = 0, and the rail is absorbing (that last one is what
+      let INPUT.SNAPSHOT drop a second full-width compare). Five covers, all
+      reached with witness traces: it saturates, it hits the exact boundary
+      a + b == MAX, it lands one past, it does an ordinary carry-free add, and
+      the 32-bit width saturates too. SCOPE-TOTAL rather than an a_scope_*
+      guard: the harness is purely combinational with every input free, so
+      depth 1 already evaluates all 2^128 pairs symbolically and there is no
+      horizon for a guard to pin. Mutation sweep 7 attempted / 7 accounted /
+      6 caught / 1 equivalent -- the equivalent one widens `>` to `>=`, which
+      differs only at a == ~b, exactly where a + b == MAX and both spellings
+      return MAX, so no input distinguishes them; c_exact_boundary proves that
+      case is reachable rather than merely untested.
   - property: tests/formal/debug_frameblit_safety.sby
     status: green
     date: "2026-08-21"

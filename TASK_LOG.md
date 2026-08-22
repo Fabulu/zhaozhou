@@ -10,6 +10,116 @@ any of it.**
 
 ---
 
+## 2026-08-22 -- A subtractor that was a NOT, and the law underneath it that
+## no test could reach
+
+### What I was actually looking for
+
+The largest remaining timing family was `INPUT.SNAPSHOT`'s `seq -> gaps`, 38
+paths at -0.351 ns. Reading the block rather than the report, the saturation
+test was:
+
+```systemverilog
+if (((64'hFFFF_FFFF_FFFF_FFFF - gaps) >= {61'd0, gap_sum})) begin
+```
+
+**All-ones minus x is exactly `~x`.** For unsigned N-bit x, (2^N - 1) - x == ~x
+with no borrow, because every bit of the minuend is 1 and no column can borrow
+from its neighbour. Identity, not approximation. So a full 64-bit borrow chain
+sat in front of the compare doing the work of a free bitwise inversion.
+
+Grepping for the pattern found it FIVE times across four blocks: `CMD.DMA`'s
+`sat_add`, this one, two arms of `HPS.BRIDGE` and one of `VRAM.ARBITER`. Same
+law, five hand-written copies, and they did not even agree on the spelling --
+three tested overflow (`a > MAX - b`), one tested headroom (`MAX - b >= a`).
+
+### The part that mattered more than the timing
+
+Before claiming the rewrite was safe I checked whether anything would notice if
+it were wrong. Mutating `~b` back to plain `b` -- which removes the headroom
+test altogether and breaks saturation completely:
+
+```
+[cmd_dma_directed] 48 checks passed
+cmd_dma random: 5000 packets done[cmd_dma_random] 19015 checks passed
+```
+
+**The mutant passes the entire simulation suite.** And no amount of extra
+stimulus fixes that: these are u64 counters incremented by small amounts, so the
+rail is on the order of 2^64 events away and nothing external can preload them.
+The saturating arm is UNREACHABLE IN SIMULATION. Five copies of a law that no
+test can check is how a design acquires a defect nobody can find.
+
+That is a test gap the sweep exposed, so it got closed rather than noted.
+
+### What was done
+
+1. **One definition.** `zhao_pkg::zhao_sat_add64` / `zhao_sat_add32`. All five
+   sites now call it. `INPUT.SNAPSHOT` also dropped its outer
+   `gaps != all-ones` test -- a second full-width compare guarding a case the
+   saturating add already handles, which is only sound because the rail is
+   absorbing, which is now proven.
+2. **A proof instead of a test.** `tests/formal/sat_add.sby`. The oracle is the
+   (W+1)-bit sum, which cannot overflow and is therefore the true arithmetic
+   answer; the properties say the W-bit result is that answer CLAMPED. That is a
+   specification, not a second copy of the code -- the distinction the ABS
+   defect in `zhao_field_alu` is this project's standing reminder about.
+   Six assertions per width: clamped-sum, never-wraps, identity at b = 0, and
+   the rail is absorbing.
+3. **Non-vacuity.** Five covers, all reached with witness traces (`trace0`..
+   `trace4`): it saturates, it hits the exact boundary `a + b == MAX`, it lands
+   one past, it does an ordinary carry-free add, and the 32-bit width saturates.
+4. **SCOPE-TOTAL rather than an `a_scope_*` guard.** V19 asks a bounded proof to
+   pin its horizon. This harness is purely combinational with every input free,
+   so depth 1 already evaluates all 2^128 pairs symbolically; there is no
+   horizon to pin, which is the case the rule's explicit waiver is for.
+
+### Mutation sweep: 7 attempted, 7 accounted, 6 caught, 1 equivalent
+
+| mutant | result |
+| --- | --- |
+| M1 headroom test dropped (`~b` -> `b`) | CAUGHT (and passes the whole sim suite) |
+| M2 rail off by one, 64-bit | CAUGHT |
+| M3 boundary widened (`>` -> `>=`) | **EQUIVALENT** |
+| M4 saturation removed entirely | CAUGHT |
+| M5 headroom taken on the wrong operand | CAUGHT |
+| M6 `a` compared against itself | CAUGHT |
+| M7 rail off by one, 32-bit | CAUGHT |
+
+**M3 is equivalent, not a hole.** `a >= ~b` differs from `a > ~b` only at
+`a == ~b`, which is exactly `a + b == MAX`; there the original computes
+`a + b == MAX` and the mutant returns `MAX` -- the same value. No input
+distinguishes them, so no test can. And the case is not merely untested:
+`c_exact_boundary` produces a witness reaching it.
+
+### Two process failures on the way, both mine, both already-documented shapes
+
+**A sweep that reported six survivors without mutating anything.** The first
+harness called a script through a path the interpreter could not open, printed
+`*** SURVIVED ***` six times, and its "preflight" did not abort. Identical in
+shape to the `[String]::Replace($old,$new,1)` incident. Rewritten with a
+hash-compare that aborts, a byte-identical revert check, and an
+`attempted == expected == accounted` cross-check -- the numbers in the table
+above come from that version.
+
+**`ninja: error: rebuilding 'build.ninja': subcommand failed` -- again.** A
+`cmake -S . -B build` run from a shell without the mingw toolchain on PATH
+poisoned the cache; the next ctest reported **"100% tests passed, 256 tests"**
+against a completely stale tree. The tell was the count: 256, when registering
+`formal_sat_add` should have made it 257. This is the third time this exact
+failure has produced a green result that meant nothing, and the second time the
+count is what caught it.
+
+### Ledger
+
+The V20 rule caught my own comment: I had written that the guard "must be right
+BY CONSTRUCTION" with nothing named as its enforcer, and the check refused it.
+That was correct, and the fix was not to soften the sentence -- it was to build
+the enforcer. Every one of the five sites now carries
+`ENFORCED-BY: tests/formal/sat_add.sby`.
+
+---
+
 ## 2026-08-22 -- FIELD.SEQ.CORE to RTL_VERIFIED, on a formal proof of the
 ## anti-hang law
 

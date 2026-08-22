@@ -1821,7 +1821,7 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
   foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety
-                           video_slotmgr_invariants field_seq_bound)
+                           video_slotmgr_invariants field_seq_bound sat_add)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
@@ -1839,6 +1839,16 @@ if(ZHAO_SBY_BIN)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
+
+  # sat_add ALSO carries `fast`. Every other property in this lane is a heavy
+  # prover kept to nightly; this one is purely combinational at depth 1 and
+  # measures about a second, so there is no reason the cheapest lane should not
+  # run it. It is also the ONLY evidence the saturating-counter law has: the arm
+  # it proves is unreachable in simulation (u64 counters, ~2^64 events to the
+  # rail), and the mutant that deletes the headroom test passes cmd_dma_directed
+  # AND its 5,000-packet random lane while this proof fails it. Leaving it in
+  # nightly alone would mean the law is unguarded in the lane people watch.
+  set_tests_properties(formal_sat_add PROPERTIES LABELS "formal;nightly;fast")
 endif()
 
 # ---- W2.2: video -------------------------------------------------------------

@@ -275,9 +275,9 @@ module zhao_vram_arbiter
           pend_addr[k]   <= client_req[k].addr;
           pend_words[k]  <= w_k;
           // saturating byte counter (catalog vram_bytes_by_client)
-          vram_bytes[k]  <= (vram_bytes[k] > 32'hFFFF_FFFF - {25'b0, client_req[k].len})
-                            ? 32'hFFFF_FFFF
-                            : vram_bytes[k] + {25'b0, client_req[k].len};
+          // ENFORCED-BY: tests/formal/sat_add.sby
+          vram_bytes[k]  <= zhao_pkg::zhao_sat_add32(vram_bytes[k],
+                                                     {25'b0, client_req[k].len});
         end else if (ctrl_grant && offer_valid && (offer_client == 3'(k))) begin
           // the ctrl accepted the OFFERED burst (the port grant arm
           // dominates: a same-edge new request replaces the old one whole)

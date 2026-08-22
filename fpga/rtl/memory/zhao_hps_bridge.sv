@@ -136,10 +136,9 @@ module zhao_hps_bridge
         hps_wr_last  <= wr_last;
         if (wr_last) begin
           busy <= 1'b0;   // burst complete: count and free the port
+          // ENFORCED-BY: tests/formal/sat_add.sby
           hps_bytes[busy_client] <=
-            (hps_bytes[busy_client] > 32'hFFFF_FFFF - {25'b0, busy_len})
-            ? 32'hFFFF_FFFF
-            : hps_bytes[busy_client] + {25'b0, busy_len};
+            zhao_pkg::zhao_sat_add32(hps_bytes[busy_client], {25'b0, busy_len});
         end
       end
 
@@ -150,10 +149,9 @@ module zhao_hps_bridge
         rsp.last       <= hps_rd_last;
         if (hps_rd_last) begin
           busy <= 1'b0;
+          // ENFORCED-BY: tests/formal/sat_add.sby
           hps_bytes[busy_client] <=
-            (hps_bytes[busy_client] > 32'hFFFF_FFFF - {25'b0, busy_len})
-            ? 32'hFFFF_FFFF
-            : hps_bytes[busy_client] + {25'b0, busy_len};
+            zhao_pkg::zhao_sat_add32(hps_bytes[busy_client], {25'b0, busy_len});
         end
       end
     end

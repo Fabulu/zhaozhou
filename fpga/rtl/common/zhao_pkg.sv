@@ -147,6 +147,42 @@ package zhao_pkg;
                                                   : ZHAO_DISPLAYED_BYTES_DUO;
   endfunction
 
+  // --------------------------------------------------------------------------
+  // SATURATING UNSIGNED ADD (spec/counters.md 4) -- the D9 counter law.
+  //
+  // Five sites spelled this out by hand: zhao_cmd_dma's sat_add,
+  // zhao_input_snapshot's gap accumulator, two arms in zhao_hps_bridge and one
+  // in zhao_vram_arbiter. They agreed on the law and disagreed on the spelling
+  // -- some tested overflow (a > MAX - b), one tested headroom (MAX - b >= a)
+  // -- and every one of them wrote MAX - x as a SUBTRACT.
+  //
+  // ALL-ONES MINUS x IS EXACTLY ~x. For unsigned N-bit x, (2^N - 1) - x == ~x,
+  // with no borrow, because every bit of the minuend is 1 and so no column can
+  // borrow from its neighbour. Identity, not approximation. The subtract
+  // spelling put a full-width borrow chain in front of the compare for what is
+  // a free bitwise inversion; INPUT.SNAPSHOT's seq -> gaps was the design's
+  // largest remaining timing family at -0.351 ns across 38 paths.
+  //
+  // AND NO SIMULATION CAN CHECK THE SATURATION ARM. These are u64 counters, so
+  // reaching the rail takes on the order of 2^64 events and nothing external
+  // can preload them: replacing `~b` with plain `b`, which breaks the headroom
+  // test outright, passes cmd_dma_directed AND its 5,000-packet random lane.
+  // Checked, not assumed. That is not a hole more stimulus can close, which is
+  // why the law lives here as ONE definition with a proof over ALL inputs
+  // rather than as five hand-written copies backed by a green suite.
+  //
+  // ENFORCED-BY: tests/formal/sat_add.sby
+  function automatic logic [63:0] zhao_sat_add64(input logic [63:0] a,
+                                                 input logic [63:0] b);
+    zhao_sat_add64 = (a > ~b) ? 64'hFFFF_FFFF_FFFF_FFFF : (a + b);
+  endfunction
+
+  // ENFORCED-BY: tests/formal/sat_add.sby
+  function automatic logic [31:0] zhao_sat_add32(input logic [31:0] a,
+                                                 input logic [31:0] b);
+    zhao_sat_add32 = (a > ~b) ? 32'hFFFF_FFFF : (a + b);
+  endfunction
+
   function automatic logic [15:0] zhao_active_width(input zhao_mode_e m);
     zhao_active_width = ZHAO_TIMING[m].h_active;
   endfunction

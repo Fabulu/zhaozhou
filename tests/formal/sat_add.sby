@@ -1,0 +1,68 @@
+# sat_add.sby — the D9 saturating-counter law (spec/counters.md §4).
+#
+# Five sites implement it and none of them can be tested: the counters are u64
+# and the rail is ~2^64 events away, so the saturating arm is unreachable in
+# simulation. Measured, not supposed -- breaking the headroom test outright
+# passes cmd_dma_directed AND its 5,000-packet random lane. That is why the
+# five hand-written copies became one `zhao_pkg::zhao_sat_add{64,32}` and why
+# the evidence for it is here rather than in tests/differential/.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc    — the result is the exact sum clamped, never wraps, is identity at
+#            b = 0, and the rail is absorbing.
+#   cover  — the saturating arm is REACHABLE, along with the exact boundary
+#            (a + b == MAX) and one past it. Without this the properties are
+#            satisfied by an adder that never saturates, which is the shape
+#            MEM.GUARD's lane once failed in.
+#
+# MUTATION SWEEP: 7 attempted, 7 accounted, 6 caught, 1 EQUIVALENT.
+#
+# The one that matters is M1, `~b` replaced by plain `b`, which removes the
+# headroom test altogether: the bmc task fails it, and cmd_dma_directed plus a
+# 5,000-packet random lane both pass it. That gap is the reason this file
+# exists. Also caught: the rail off by one (both widths), saturation deleted
+# outright, the headroom test taken on the wrong operand, and `a` compared
+# against itself.
+#
+# M3, `>` widened to `>=`, SURVIVES AND IS EQUIVALENT -- recorded here rather
+# than left looking like a hole. The two spellings differ only at a == ~b,
+# which is exactly a + b == MAX; there the original computes a + b == MAX and
+# the mutant returns MAX, the same value. So no input distinguishes them and
+# no test can. That case is not merely untested, either: c_exact_boundary
+# covers it, so the solver produces a witness reaching it.
+## SCOPE-TOTAL: the harness is PURELY COMBINATIONAL and every input is free, so
+# depth 1 evaluates the properties over the ENTIRE input space -- all 2^128
+# pairs for the 64-bit law and 2^64 for the 32-bit one, symbolically. There is
+# no state, no horizon and nothing a deeper run could reach that depth 1 does
+# not, so the a_scope_*/a_horizon_* guard rule V19 asks for has nothing to pin;
+# this waiver is the alternative V19 allows for exactly that case.
+#
+# Frontend: read_slang reading the REAL frozen zhao_pkg.sv -- the proof is
+# about the shipped function, not a copy of it beside the test.
+#
+# Run via `ctest -L formal` (test formal_sat_add) or by hand with
+# cwd = tests/formal:
+#   sby -f --prefix <workdir> sat_add.sby
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 1
+cover: mode cover
+cover: depth 1
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --top zhao_sat_add_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv sat_add_harness.sv
+prep -top zhao_sat_add_harness
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+sat_add_harness.sv

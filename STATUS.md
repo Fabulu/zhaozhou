@@ -5,6 +5,73 @@ at the top.*
 
 ---
 
+## 2026-08-22 — a subtraction that was never needed, and a law nothing was checking
+
+Two things came out of the same line of code today, and the second is the one
+worth your attention.
+
+### The small one: a wide subtraction that was always a free operation
+
+The slowest remaining piece of the design was a counter in the controller-input
+block. It was written to ask "is there room left before this counter hits its
+maximum?" like this:
+
+> take the biggest number the counter can hold, subtract the current value, and
+> compare
+
+Subtracting from *all ones* is the same thing as flipping every bit — which
+hardware does for free, instantly. The subtraction was doing real work to
+produce an answer that was already sitting there. The same pattern appeared in
+**five places across four blocks**, and they had each been written out by hand,
+not even in the same style.
+
+They now all call one shared piece. Whether that actually moves the headline
+speed number is being measured; the design is at the point where the limit is
+mostly *distance across the chip*, not logic, so I will report the measurement
+rather than the reasoning.
+
+### The one that matters: the tests could not tell if it were wrong
+
+Before changing five places at once, I broke the rule deliberately — removed the
+"is there room?" check entirely, so the counter would wrap around to zero
+instead of stopping at its maximum — and ran everything:
+
+> **48 directed checks passed. 5,000 random packets, 19,015 checks, passed.**
+
+The broken version sails through the whole test suite.
+
+That is not a gap I could close by writing more tests. These counters are 64
+bits wide and go up by a few at a time, so reaching their maximum would take
+roughly **18 quintillion events**, and nothing outside can set them near the
+edge to check what happens. The one situation the safety check exists for is a
+situation no simulation can ever produce.
+
+So the evidence changed shape. Instead of another test, the rule is now handed
+to a **prover**: a tool that checks the law for *every possible pair of numbers
+at once*, mathematically, rather than for the examples someone thought to write
+down. It confirms the counters stop at the top instead of wrapping, that adding
+zero changes nothing, and that once stopped they stay stopped.
+
+Then I attacked the proof to make sure it was not just agreeing with me: seven
+deliberate breakages, **six caught**, including the exact one the entire test
+suite missed. The seventh turned out to be genuinely the same behaviour written
+a different way — recorded as such, not left looking like a hole.
+
+**Why this matters beyond one counter.** A counter that silently wraps reports a
+*lower* error rate than the truth. It is the failure that makes every other
+number you read untrustworthy, and it was sitting in five places with nothing
+checking it. The proof now runs in the fast lane, every time, in under three
+seconds.
+
+### Also worth saying: my own check caught me
+
+The repository has a rule that you may not state something is guaranteed
+without naming what guarantees it. I wrote a comment claiming this was "right by
+construction" — and the check refused the commit. It was right to. The fix was
+not to soften the sentence; it was to go build the thing that makes it true.
+
+---
+
 ## 2026-08-22 (end of day) — the speed campaign, and where it stopped
 
 | | at the start | now | target |

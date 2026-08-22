@@ -146,13 +146,13 @@ module zhao_input_snapshot
       end
       rd_sel   <= ~rd_sel;
       frame_id <= frame_tick.frame_id;
-      if (gaps != 64'hFFFF_FFFF_FFFF_FFFF) begin
-        if (((64'hFFFF_FFFF_FFFF_FFFF - gaps) >= {61'd0, gap_sum})) begin
-          gaps <= gaps + {61'd0, gap_sum};
-        end else begin
-          gaps <= 64'hFFFF_FFFF_FFFF_FFFF;
-        end
-      end
+      // This was the design's largest remaining timing family at -0.351 ns
+      // across 38 paths, and a 64-bit borrow chain was most of it. The outer
+      // `!= all-ones` test is gone too: it was a second full-width compare
+      // guarding a case the saturating add already handles (adding to the rail
+      // returns the rail).
+      // ENFORCED-BY: tests/formal/sat_add.sby
+      gaps <= zhao_pkg::zhao_sat_add64(gaps, {61'd0, gap_sum});
     end
   end
 

@@ -304,11 +304,13 @@ module zhao_cmd_dma #(
   logic        snap_v = 1'b0;
   /* verilator lint_on PROCASSINIT */
 
-  // saturating add (spec/counters.md 4)
+  // saturating add (spec/counters.md 4) -- ONE definition, in the package,
+  // proven over all inputs. See zhao_pkg::zhao_sat_add64 for why this stopped
+  // being written out by hand here.
+  // ENFORCED-BY: tests/formal/sat_add.sby
   function automatic logic [63:0] sat_add(input logic [63:0] a,
                                           input logic [63:0] b);
-    sat_add = (a > 64'hFFFF_FFFF_FFFF_FFFF - b) ? 64'hFFFF_FFFF_FFFF_FFFF
-                                                : (a + b);
+    sat_add = zhao_pkg::zhao_sat_add64(a, b);
   endfunction
 
   // header field readers (little-endian, capture_format.md 3)
