@@ -317,7 +317,62 @@ deliberately rather than having me invent it and record the invention as law.
 > change touching `CMD.DECODER`'s byte stream, which is why it was deferred
 > originally and why it is not a same-session edit.
 >
-> **Step 8 remains gated, on a task that is now precisely specified.**
+> **Step 8 remains gated.**
+>
+> ### ATTEMPT 2: split the readers so `slot_buf` can be a memory. FAILED, and
+> ### it corrects the recorded remedy.
+>
+> The remedy recorded above — and in the RTL since the block was written — is
+> "a registered read and a one-cycle lead in the beat stream". **That is
+> incomplete, and the reason is why this block resists becoming a memory at
+> all.**
+>
+> A RAM has one or two ports. `slot_buf` has **three independent
+> arbitrary-offset readers** plus the write:
+>
+> | reader | offset | line |
+> | --- | --- | --- |
+> | the streamed byte | `rd_off`, walks the packet | `pkt_byte_o` |
+> | header fields, header CRC, payload-CRC seed | below 64 | `hget*`, `crc_final` |
+> | **the payload CRC compare** | `36 + command_bytes` — anywhere | `hget32(36 + cb)` |
+> | **the RECORD WALK** | `36 + walk_off` — anywhere | `hget16(36 + walk_off)` |
+>
+> I attempted the obvious split: a 64-byte register window shadowing the
+> header, leaving `slot_buf` with the stream as its only reader. The premise
+> was that every non-streaming reader lives below byte 64. **It does not.** The
+> record walk random-accesses record headers throughout the payload, and the
+> payload CRC compare reads at an offset that depends on the packet's length.
+>
+> Measured: `cmd_dma_directed` 8 of 43 checks failed. Note that `cmd_random`
+> PASSED with an identical transcript hash, so the directed lane is what caught
+> it — the random lane never built a packet whose walk reached past the window.
+>
+> Reverted.
+>
+> ### What the remedy actually is
+>
+> Not one registered read but **three**, each needing a cycle of lead in the
+> state machine that uses it:
+>
+> 1. the streamed byte (`M_STREAM` pre-issues the next address);
+> 2. the record walk (`M_WALK` presents an address and waits a cycle before
+>    reading `op`/`rb`);
+> 3. the payload CRC compare.
+>
+> Plus the write moved into a process with no async reset and the initialiser
+> dropped, or the array cannot infer as RAM regardless of the reads.
+>
+> **The alternative worth weighing first** is to stop random-accessing the
+> buffer at all: have the record walk consume the streamed bytes rather than
+> re-read them, which is how a decoder normally works and would leave one
+> reader by construction. That is a larger change to `CMD.DMA` and possibly to
+> the `CMD.DECODER` seam, and it is a design decision rather than a repair.
+>
+> **This is the third theory about this block to be corrected by evidence** —
+> after "the CRC cone needs an incremental redesign" (it needed a bound check)
+> and "words will shrink it" (they grew it). The pattern is consistent: the
+> measurements are reliable, the inferences from them are not, and each one
+> only fell over when something ran.
 
 ## 2026-08-21 — CMD.DMA still cannot be fitted, and the cause is a design defect (SUPERSEDED, kept for the reasoning)
 
