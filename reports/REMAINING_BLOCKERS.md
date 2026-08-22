@@ -1,5 +1,87 @@
 # What is actually blocking every remaining block
 
+> ## STATE AS OF 2026-08-22 (evening). Read this first; the survey below is
+> ## from 2026-08-21 and parts of it are now history.
+>
+> ### The composed shell FITS and does NOT close timing
+>
+> | | measured | device |
+> | --- | ---: | ---: |
+> | ALMs | **7,648** | 41,910 (18%) |
+> | registers | 9,753 | |
+> | block memory bits | 114,688 (13 M10K) | 553 blocks |
+> | DSPs | **0** | 112 |
+> | setup worst | **-0.639 ns** | 10 ns target |
+> | failing endpoints | **125** | 0 for closure |
+> | hold | +0.250 ns, 0 failing | |
+>
+> Worst path 10.64 ns against 10 ns: **6.4% over**. At session start it was
+> 65 ns and 3,746 endpoints. `reports/composed/wumen-e6b5fef-*` is the run.
+>
+> **The composed fit is deterministic** -- identical RTL reproduces identical
+> numbers -- so every A/B in the log is signal, not noise.
+>
+> ### What is left, from a full negative-slack census (not a top-100 report)
+>
+>     1,383 paths  scanout|fetch  -> mem_guard|guard_violations   -0.195
+>       144        cmd_dma|fetched -> cmd_dma|burst_end           -0.338
+>        25        cmd_dma|pkt_len_r -> cmd_dma|stream_w          -0.298
+>         9        cmd_dma|m.M_SEED -> cmd_dma|crc_hdr_r          -0.471
+>         6        cmd_dma|m.M_SEED -> cmd_dma|crc_pay_r          -0.480
+>     worst        hps_arbiter|held_req.client -> cmd_dma|crc_pay_r  -0.639
+>
+> Two thirds of it is one family at -0.195 ns, inside the guard's range check.
+>
+> ### Blockers that are GONE, and should not be re-derived
+>
+> * **CMD.DMA could not be fitted.** It needed 83,977 ALMs against 41,910. Its
+>   staging buffer is real M10K now: 3,607 ALMs, and the block is 8.6% of the
+>   device. The `blit_buf` async-read defect that `reports/composed/README.md`
+>   names as THE composed-fit blocker no longer exists.
+> * **The composed fit needed a bigger machine.** It was briefed at 42:33 and a
+>   6.2 GB peak. Measured: ~4 minutes at 5.0 GB on this one. Both halves of
+>   that brief are superseded.
+> * **The bit-serial CRC.** `zhao_crc32c_step` chained 8 deep per beat and 28
+>   deep for the payload seed -- 224 XOR levels -- and owned the two worst
+>   timing families. Replaced by `zhao_crc32c_fold`, bit-exact against the
+>   shipped CRC, with a `no_serial_crc` gate so it cannot return.
+> * **The audio Gray-decode family.** Measured -14.9 ns once; absent from all
+>   13,651 paths of the full census. Confirmed gone, not merely unreported.
+>
+> ### What is genuinely blocked, and on whom
+>
+> **On Fabian, in `docs/OWNER_DOCKET.md`:**
+> 1. fitter effort -- 125 failing endpoints clean on hold, or 17 with two hold
+>    violations. Both measured. One line either way.
+> 2. the GPU/video crossing. `DEBUG.CRC.md` says the displayed lane is
+>    video-domain; `design/blocks.yml` says GPU; the implementation followed
+>    blocks.yml and built a direct per-pixel crossing. The documents disagree
+>    and the code picked one. This is architecture, not SDC: a false path only
+>    stops the tool reporting a real crossing, and `set_max_delay` addresses
+>    setup rather than the hold failures seen.
+> 3. the rasteriser, particle simulation, compositor and 2D blocks -- recorded
+>    as needing game-behaviour decisions and deliberately not invented.
+>
+> **On nobody -- available work:**
+> * the guard range check (1,383 paths at -0.195). Deliberately untouched: 2%
+>   over, in the block whose whole contract is that no memory escape exists,
+>   with a formal proof that depends on its response timing. NOTE for whoever
+>   takes it: `tests/formal/mem_guard_no_escape.sby` means a change here can be
+>   PROVEN safe rather than argued safe, which lowers the risk a lot.
+> * three Field IR pieces still unswept: reciprocal, sine/cosine,
+>   length/distance (`reports/FIELD_IR_ENGINE.md`).
+> * `TERRAIN.LOD.md` is wrong about its own block: it says 4 comparators and no
+>   ladder multipliers; the RTL has 12 and 24.
+>
+> ### A caveat that limits every timing number above
+>
+>     Unconstrained Input Ports       609
+>     Unconstrained Input Port Paths  13,920
+>
+> Paths that START at an input port are not analysed. **-0.639 ns is a lower
+> bound on the problem, not a measurement of all of it.**
+
+
 **Date:** 2026-08-21
 **Method:** each of the 24 remaining `SPECIFIED`, non-deferred, non-hardware-
 blocked RTL blocks was trial-advanced to `REFERENCE_COMPLETE` in a scratch copy
