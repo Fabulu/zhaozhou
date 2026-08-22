@@ -47,7 +47,9 @@ using zhao::check;
  * ABS defect in zhao_field_alu is the standing example of.
  */
 uint32_t oracle(uint32_t c, uint64_t d, unsigned n) {
-  uint8_t b[8];
+  uint8_t b[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // only the low n are read; zeroed so
+                                            // the intent is visible to a reader
+                                            // and to cppcheck
   for (unsigned k = 0; k < n; ++k) b[k] = static_cast<uint8_t>((d >> (8 * k)) & 0xFFu);
   return ~zhao_abi::zhao_crc32c(~c, b, n);
 }

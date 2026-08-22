@@ -273,28 +273,32 @@ module zhao_debug_frameblit
 `endif
   endfunction
 
-  // CRC-32C (Castagnoli), the same polynomial the ABI's zhao_crc32c uses,
-  // fed a byte at a time in stream order. The reflected form: the message bit
-  // enters at the LSB end.
-  function automatic logic [31:0] crc32c_byte(input logic [31:0] c, input logic [7:0] d);
-    logic [31:0] x;
-    int k;
-    begin
-      x = c ^ {24'd0, d};
-      for (k = 0; k < 8; k++) begin
-        x = x[0] ? ((x >> 1) ^ 32'h82F6_3B78) : (x >> 1);
-      end
-      crc32c_byte = x;
-    end
-  endfunction
-
+  // CRC-32C (Castagnoli), the same polynomial the ABI's zhao_crc32c uses, over
+  // the beat's eight bytes in stream order.
+  //
+  // THIS USED TO BE EIGHT CHAINED BYTE STEPS AND IT COST 38 ns. The bit-serial
+  // step is eight dependent XOR levels per byte, so a whole beat was 64 levels
+  // deep, and the composed fit measured the consequence directly:
+  //
+  //   -28.778 ns  zhao_hps_arbiter|state -> zhao_debug_frameblit|crc_acc
+  //
+  // against a 10 ns gpu_clk. Folding fewer bytes per cycle is not an option --
+  // this already folds only one beat per cycle and must keep up with the
+  // bridge -- so the depth itself had to go.
+  //
+  // zhao_crc32c_fold does the same eight bytes in ONE XOR tree about seven
+  // levels deep, by the linearity of CRC-32C over GF(2). It is bit-exact
+  // against the shipped zhao_abi::zhao_crc32c: 1,178 directed checks driving
+  // every basis column, 200,000 random folds, and a mutation sweep of 18 for
+  // 18. n_i is the constant 8 here because a blit beat is always whole; the
+  // port exists for CMD.DMA, whose payload range can start or end mid-beat.
   logic [31:0] crc_next;
-  always_comb begin
-    crc_next = crc_acc;
-    for (int k = 0; k < 8; k++) begin
-      crc_next = crc32c_byte(crc_next, hps_rsp_i.data[k*8 +: 8]);
-    end
-  end
+  zhao_crc32c_fold u_crc_fold (
+      .c_i (crc_acc),
+      .d_i (hps_rsp_i.data),
+      .n_i (4'd8),
+      .c_o (crc_next)
+  );
 
   logic [31:0] remaining;
   assign remaining = r_len - off;

@@ -21,6 +21,7 @@ set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/generated/zhao_abi_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_params_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_crc32c_fold.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_mode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_framectl.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_scaler.sv

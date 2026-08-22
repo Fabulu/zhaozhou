@@ -63,12 +63,19 @@ expect pass
 [engines]
 btor btormc
 
+# --unroll-limit: zhao_crc32c_fold derives its 9 x 96 matrix columns AT
+# ELABORATION by calling the bit-serial CRC definition, which is how it is
+# kept from drifting from the function it replaces. That is about 55,000
+# loop iterations for the constant folder -- free at runtime, and far past
+# slang's 4,000 default. Verilator elaborates it without complaint; slang
+# needs telling.
 [script]
-read_slang --top zhao_debug_frameblit_safety_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_debug_frameblit.sv debug_frameblit_safety_harness.sv
+read_slang --unroll-limit=200000 --top zhao_debug_frameblit_safety_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_crc32c_fold.sv zhao_debug_frameblit.sv debug_frameblit_safety_harness.sv
 prep -top zhao_debug_frameblit_safety_harness
 
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/common/zhao_crc32c_fold.sv
 ../../fpga/rtl/debug/zhao_debug_frameblit.sv
 debug_frameblit_safety_harness.sv

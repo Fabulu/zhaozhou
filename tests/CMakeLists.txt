@@ -1391,6 +1391,7 @@ verilate(test_debug_frameblit_directed
   TOP_MODULE zhao_debug_frameblit
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv)
 add_test(NAME debug_frameblit_directed COMMAND test_debug_frameblit_directed)
 set_tests_properties(debug_frameblit_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
@@ -1400,6 +1401,7 @@ add_test(NAME lint_zhao_debug_frameblit
                  --top-module zhao_debug_frameblit
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv)
 set_tests_properties(lint_zhao_debug_frameblit PROPERTIES
   LABELS "lint;fast"
@@ -2979,6 +2981,7 @@ set(ZHAO_SHELL_RTL
     ${ZHAO_ABI_PKG}
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv
