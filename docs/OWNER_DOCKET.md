@@ -67,6 +67,103 @@ number of 40-minute fits if the holds turn out to be there.
 
 ---
 
+## MEASURED 2026-08-22 (night) — the re-measure you were owed, and it answers
+## the (a)/(b) question the CDC agent left open
+
+The agent offered two ways forward after moving the displayed CRC into `vid_clk`:
+**(a)** measure now on the ruled change alone, or **(b)** let it convert
+`starvation_o` to the same toggle handoff first. I measured (a). Here is what it
+says.
+
+### The headline, and it is worse
+
+| | `6d23c84` (before) | `cbb6eab` (after the CDC fix) |
+| --- | ---: | ---: |
+| setup worst | **-0.475 ns** | **-1.991 ns** |
+| failing setup endpoints | **56** | **836** |
+| setup TNS | — | **-253.5 ns** |
+| hold worst | +0.253 ns | **-0.952 ns** |
+| hold failing endpoints | **0** | **1** |
+| ALMs | 7,415 | 7,442 |
+
+Reproduced exactly on a second run (`-1.991` / 836 again), so this is the design,
+not noise. The composed fit remains deterministic.
+
+### But the SHAPE of it is the finding
+
+Per clock:
+
+```
+setup:  gpu_clk  -1.991   TNS -253.490
+        vid_clk  +1.469   TNS    0.000     <- completely clean
+hold:   gpu_clk  -0.952
+        vid_clk  +0.366               <- clean
+```
+
+**`vid_clk` is spotless.** The CRC move did exactly what it was supposed to: the
+video domain now closes with 1.5 ns to spare and the 122,880-per-frame pixel
+crossing is gone. Every failure is in `gpu_clk`.
+
+### And the worst path is the crossing the agent TOLD US would still be there
+
+```
+-1.991 ns   zhao_video_scanout|zhao_scanout_serializer|starve_q[57]  ->  cdc_err
+            vid_clk -> gpu_clk
+```
+
+That is `starvation_o`: `shell_top` compares the whole 64-bit counter against a
+sampled copy across the domains —
+
+```systemverilog
+if (tick_d1 && (starvation_o != starve_samp)) cdc_err <= 1'b1;
+```
+
+— a 64-bit cross-domain compare guarded by a quiescence argument rather than a
+structure. It is **not new**: `cdc_err` dates to `3971d86`, the original Phase-2
+shell. It was always unsound; it simply was not the worst path while the CRC
+crossing existed.
+
+The agent predicted this outcome in its own words before the measurement: *"If
+the two hold violations were on that family rather than the CRC, the remeasure
+will still show them."* They were, and it does.
+
+### The rest of the 836
+
+The next families are GPU-internal and pre-existing, but worse than they were:
+
+| paths | family | worst |
+| ---: | --- | ---: |
+| 27 | `cmd_dma hdr_win -> crc_pay_r` | -0.875 |
+| many | `f_pos -> recq[2][*]` | -0.765 |
+
+**A caution on reading those.** Quartus optimises worst-path-first, and a
+-1.991 ns path consumes optimisation effort that the -0.7 ns families would
+otherwise have received. So the GPU-internal degradation may be a CONSEQUENCE of
+the starvation path rather than an independent regression. That is testable and
+it is exactly what option (b) tests.
+
+### What this changes about the recommendation
+
+**(b), and the evidence is now strong.** The remaining crossing is the worst path
+by a factor of 2.3, it is the same seam and the same class of defect the ruling
+already addressed, and converting it to the toggle handoff the CRC now uses is
+the same fix applied to the same problem rather than a new decision.
+
+**The SDC is still untouched and still yours.** `gpu_clk` and `vid_clk` remain in
+one group, which is why this path is visible at all. Worth noting the honest
+distinction: declaring the groups asynchronous once *every* crossing between them
+is properly synchronized is the CORRECT constraint, not a way of hiding — but
+that is only true once `starvation_o` is fixed too. Doing it now would hide a
+genuinely unsound path.
+
+**What the trade actually is.** The old arrangement measured better *because* it
+was sampling 122,880 pixels a frame across a seam that only works when a
+simulator holds two clocks in lockstep. Trading a fictitious 56 endpoints for a
+real 836 is not obviously a bad trade — but it is a trade, and the way out is to
+finish the seam rather than to re-hide it.
+
+---
+
 ## 2026-08-22 — CLOCK TARGETS: 120 MHz fabric + 150 MHz DDR (owner ask)
 
 **Fabian, first:** *"Stretch target for 120 MHz. Historical reasons — GeForce 256
