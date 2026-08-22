@@ -10,7 +10,91 @@ any of it.**
 
 ---
 
-## 2026-08-22 — CMD.DMA staging buffer to block memory; the block fits
+## 2026-08-22 (later) -- DEBUG.FRAMEBLIT to RTL_VERIFIED; two sweeps; the clean flag proven
+
+### DEBUG.FRAMEBLIT mutation sweep -- the atomicity law
+
+    scratchpad/mut_frameblit.py    20 mutations
+    attempted=20 caught=20 survived=0
+
+Aimed at the LAW, not the copy: publish before writes retire, publish before
+writes issue, publish with no byte check, publish with no CRC, unfinalised CRC,
+CRC never accumulated, publish on a lost lease, publish while aborting, release
+before writes retire, release a lease never owned, ownership taken before the
+checks, aborted beats folded into the CRC, accept any length, blit with no
+lease, ignore slot mismatch, ignore high slot bits, ignore a generation move,
+either half of the guard verdict ignored, a bridge error forgotten.
+
+Each leaves a working blit and an unsound machine, which is why a
+happy-path-only differential would have been green through all twenty.
+
+Advanced UNIT_VERIFIED -> RTL_VERIFIED. Justification against how this project
+has used the rung: unit differential against the shipped oracle
+`zref::debug::run_blit` **and** the composed path -- instantiated in
+`zhao_shell_top` at `u_frameblit`, driven end to end by
+`tests/shell/shell_golden.cpp`. Same shape as CMD.SCHEDULER's RTL_VERIFIED,
+which cites a system-level demo over its own directed test.
+
+Three lanes green including formal (27 assertions to depth 44, bmc + cover).
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_debug_frameblit
+    zhao_debug_frameblit   ok   ALM 962 / 41,910   (2.3%)
+                                registers      909
+                                blockMemoryBits  0
+                                DSPs             0
+
+The block extracted from CMD.DMA precisely so a debug path could not stop the
+shell fitting, and it is 2.3% of the device.
+
+### rtlCleanAtHead now carries information
+
+**`rtlCleanAtHead: true` for the first time in the file's history, on row 43.**
+
+All 42 prior rows said false. A field meant to say whether a fit result can be
+trusted against the commit it names was answering identically on clean and
+dirty trees -- indistinguishable from not having it.
+
+Cause, same class as this session's ctest finding: PowerShell resolves `git` to
+whichever binary is first on PATH -- the msys2 one under devkitPro -- which
+carries no `core.autocrlf`. A status through it calls every CRLF worktree file
+modified: 29 RTL files, **279 insertions against 279 deletions on a 279-line
+file**. Every line. Pure line-ending churn. Bash's mingw64 git, with
+`autocrlf=true`, calls the same tree clean.
+
+`run_composed_fit.ps1` already documented this exact failure and already forced
+`-c core.autocrlf=true`. `run_block_fit.ps1` never inherited it. Fixed.
+
+### Sequencer ALU-dispatch sweep -- does the new coverage discriminate?
+
+    scratchpad/mut_seq_alu.py    11 mutations
+    attempted=11 caught=10 survived=1
+
+The opcode-coverage gate had just found SUB/MIN/MAX/ABS issued only by the
+random pool and CMP by neither lane. A test written to close a coverage hole is
+worth exactly what it discriminates, so this sweep asked whether the new
+directed cases can tell a broken dispatch from a working one.
+
+**Every caught mutation was caught by the DIRECTED lane, not only the random
+one** -- including both immediate mutations, which is the path CMP's comparison
+mode rides on. The sweep reports which lane did the work precisely so "caught
+by the 400-program random lane" cannot be mistaken for "the directed case
+covers it".
+
+**ONE EQUIVALENT MUTANT, and it is genuinely equivalent.**
+`exec_writes = unit_handled ? 1'b1 : alu_writes` -> `1'b1` survives.
+`zhao_field_alu` clears `writes_o` in exactly two places: `OP_END`, which also
+raises `is_end_o`, and the `default:` refusal, which also raises
+`op_unsupported_o`. The write-back guard already carries
+`!alu_is_end && !exec_unsupported`, and for an ALU op `exec_unsupported` IS
+`alu_unsupported` -- so every case where `alu_writes` is 0 is excluded by a
+different term of the same condition. Recorded in the RTL with an ENFORCED-BY
+pointing at the source of the guarantee, so it does not read as a hole. The
+expression stays because it says what the value MEANS and would stop working
+the moment the ALU learns a third non-writing op.
+
+---
+
+## 2026-08-22 -- CMD.DMA staging buffer to block memory; the block fits
 
 ### State recovery
 
