@@ -641,9 +641,141 @@ console; a fabric-side capture arrives with the `TERRAIN.BAKE` seam above.
 
 ## Mutation evidence
 
-Each mutation was applied alone, rebuilt, and the **test binary re-hashed** to
-prove the relink actually happened before the result was believed. Every one
-changed the hash.
+Each mutation was applied alone, rebuilt, and the **whole model directory
+re-hashed** to prove the regeneration actually happened before the result was
+believed. Every consumer of the mutated file was cleaned, rebuilt and scored —
+the consumer set derived from `tests/CMakeLists.txt` at run time and
+cross-checked against a declared list, so a mutation that reaches no build
+aborts the sweep instead of scoring.
+
+### 2026-08-23 — the rearchitecture sweep
+
+    tools/sweep_surface_stamp.sh        (in a git worktree, per the standing ruling)
+    linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+    attempted=32 expected=32 accounted=32 caught=29
+    SURVIVOR: S02 the sign is read from the wrong bit
+    SURVIVOR: S05 each chain link's place value is one too high
+    SURVIVOR: S12 the addend is loaded pre-doubled
+
+**No mutant was discarded**, so `attempted == accounted == expected == 32`:
+every one re-elaborated and every one linked. Full log in the run directory.
+
+Twelve mutations target the shared squarer, sixteen the accumulators and the
+sequencing, four the blend — the last group carried over from the pre-2026-08-23
+table below so that **the behaviour this rearchitecture was forbidden to change
+is re-proved rather than assumed**. All four blend mutants were caught again.
+
+### THE FRONTIER BUILDS ARE COVERAGE, and here is the proof
+
+**S03 and S04 — "the addend shifts by one regardless of radix" and "the
+multiplier bits shift by one regardless of radix" — were CAUGHT, and the default
+build provably cannot catch them.** `sh_q << SQ_RADIX` and `sh_q << 1` are *the
+same expression* when `SQ_RADIX == 1`; the chain in `zhao_surface_sq` has exactly
+one link there, and the `b > 0` arms of its generate are never elaborated. Only
+`test_surface_stamp_radix2` and `test_surface_stamp_radix4` can tell them apart.
+Had the frontier existed only as fitted numbers, both would have been reported as
+survivors and someone would have gone hunting a test gap that does not exist.
+(`tools/sweep_geom_skin.sh` hit the identical shape on `MUL_LANES` and M27, and
+stated the rule this follows.)
+
+### THE REAL GAP THE SWEEP FOUND, and it is structural
+
+Two mutants — "each chain link tests the neighbouring multiplier bit" and "the
+LOW magnitude bit is dropped" — survived the first run. Both compute
+`(m^2 - m*m[0]) / 2`, which is a **uniform halving of every square** *while every
+magnitude is even*, and
+
+    covered = !(d2 > r_outer2 || d2 < r_inner2)
+
+**is scale-invariant**: `d2`, `r_outer2` and `r_inner2` all come out of the same
+squarer instance, so halving all three preserves every comparison.
+
+Every operand this suite drove **was** even, because every envelope, radius and
+translation in it is a whole number of metres or a binary fraction of one.
+Nothing about the block requires that — an fx16 raw word is an int32 and one raw
+unit is 15 micrometres of world. **The two mutants survived on an accident of
+parity, not on an equivalence**, and that is a genuine hole.
+
+Closed by `test_rim_exact_odd_leg` (see **Directed tests**), which constructs a
+Pythagorean triple at raw fx16 resolution so a texel sits exactly on the rim with
+an ODD `dx` and an EVEN `dz`. **Both mutants now fail.**
+
+**And a prediction that was wrong, recorded because the reasoning is the useful
+part.** "The square runs one step short, dropping the TOP magnitude bit" was
+predicted to survive, on the argument that the ±4,096 m domain bounds `|dx|`
+below 2^30 so the top steps are dead weight. It was **caught**. The argument
+considered `dx` and forgot `r_inner`, which is `max(r - rw, 0)` on two
+unconstrained int32 words and reaches 2^32. One of four operands is not the
+operand range.
+
+### THE THREE EQUIVALENTS, argued against named lines
+
+All three hide behind the same scale-invariance, and none is a defect the
+**stamp** can observe:
+
+- **S02** — `mag = a_i[MAG_W-2] ? ...` instead of `a_i[MAG_W-1]`, in
+  `zhao_surface_sq.sv`. `zhao_surface_stamp.sv`'s `dx` chain bounds `|dx|` below
+  2^34 for **any** int32 input: `qx = trunc128(numx_q)` is 34 bits so `|qx|` is
+  below 2^33, and `|ex0|` and `|tx|` are at most 2^31. So bits 35 and 34 of
+  `sq_a` are always both sign. The same holds for `r` (32-bit, sign-extended) and
+  `r_inner` (33-bit, never negative). **A true equivalent over the whole input
+  space** — and the measurement that `MAG_W = 36` is one bit wider than anything
+  the block can present.
+- **S05** — `chain[b+1] = chain[b] + (bits_q[b] ? (sh_q << (b+1)) : 0)`. Every
+  partial product doubles, so `sq_o` becomes `2*m^2 mod 2^64`.
+- **S12** — `sh_q <= {mag, 1'b0}` at start. The same doubling by another route.
+
+For S05 and S12 the argument is the comparison itself: **all four squares go
+through the single `u_sq` instance**, so `st_r_outer2`, `st_r_inner2`, `dz2_q`
+and the per-texel `sq_o` are doubled together, and the only consumer is
+`wire covered = !((d2 > st_r_outer2) || (d2 < st_r_inner2));`. Doubling both
+sides of a signed comparison preserves it **provided neither side wraps**, and
+inside the stated ±4,096 m domain `d2 < 2^61` and `r^2` is at most 2^57, so
+`2*d2 < 2^62`. **Equivalent within the stated domain**, which is the only region
+this contract defines behaviour for.
+
+### What the equivalents cost, and what was done about it
+
+Three unobservable mutants is not a comfortable result, and the reason is worth
+naming: **the squarer was being checked only where its value had already been
+reduced to a boolean.** That is precisely the mistake `zhao_surface_blend` was
+factored out to avoid, repeated on the module that replaced the DSP farm.
+
+So `tests/surface/surface_sq_directed.cpp` checks `sq_o` against the low 64 bits
+of the two's-complement product directly — which *is* the law, since the block
+used to compute `64'(dx) * 64'(dx)` and keep 64 bits. 104 values, each chosen
+against a way of being wrong: the sign rails including `-2^35` (where a naive
+signed negation returns a negative magnitude and the true square leaves the
+64-bit lane entirely); **every** single-bit magnitude, which is the only family
+that can tell one chain link's place value from its neighbour's; the bits the
+stamp cannot reach but the module must still get right; the operand ranges the
+stamp does present; and odd magnitudes at scale. Plus the handshake shape, the
+hold behaviour and reset. Built at `SQ_RADIX` 1 and 4.
+
+**Measured, not asserted.** The three were re-scored against the fixed suite
+using the sweep's own filtered mode:
+
+    ZHAO_SWEEP_ONLY="S02 S05 S12" tools/sweep_surface_stamp.sh
+    ########################################################################
+    ## FILTERED RUN — 3 of 32 mutants: S02 S05 S12
+    ## THIS IS NOT A SWEEP SCORE. It confirms a fix on named mutants only.
+    ########################################################################
+      S02 the sign is read from the wrong bit  caught
+      S05 each chain link's place value is one too high  caught
+      S12 the addend is loaded pre-doubled  caught
+    attempted=3 expected=3 accounted=3 caught=3 [FILTERED: S02 S05 S12 -- NOT a sweep score]
+
+**All three now fail.** The banner and the `[FILTERED]` tag are not decoration:
+a subset run produces a score line that looks exactly like a full run's, and
+this repository's whole failure history is partial evidence read as complete.
+
+The full sweep was then **re-run end to end** on the fixed suite, so the number
+below is one run and not a reconciliation of two:
+
+<!-- FINAL-SCORE -->
+
+
+### Before the rearchitecture (2026-08-21), kept for the record
 
 | # | Mutation | Caught by |
 |---|---|---|
@@ -666,6 +798,10 @@ reached, and the mutation now fails both random lanes as well. Two other lane-A
 counters (full coverage, residency rejection) turned out to be coin flips on a
 1-in-20 roll and read zero on the very next seed shift; both are now scheduled
 by stamp index. The same lesson, three times, in one file.
+
+**And it happened again in the 2026-08-23 sweep, in a different disguise** — the
+parity accident above. Twice now the same shape: *a lane that is green because
+it never sampled the thing.*
 
 ## Notes
 
