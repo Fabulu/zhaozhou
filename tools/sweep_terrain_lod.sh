@@ -26,6 +26,26 @@
 #      The table therefore lives in `tools/sweep_terrain_lod_mutants.py` and no
 #      shell ever reads a mutation. See that file's header.
 #
+#   7. ALSO NEW HERE, AND IT ESCAPED THE SWEEP AND BROKE main ON 2026-08-23.
+#      `cmake -S . -B build` re-elaborates EVERY target that verilates the
+#      mutated module, not just the ones this sweep scores. FOUR targets
+#      elaborate `zhao_terrain_lod`: the two lanes below, `test_terrain_lod_tess`
+#      and `test_measure_governor_lod`. An earlier version of this file deleted
+#      and rebuilt only the two it scored, so every iteration left MUTANT-derived
+#      model sources sitting in the other two targets' directories -- and the
+#      next person to run a build compiled a mutant into the composed tests.
+#      That is exactly what happened: `measure_governor_lod` failed 55 of 72
+#      checks on the Duo-fairness property, reproduced here bit for bit by
+#      applying M14 ("the cameras take the coarser strict decision"), against RTL
+#      that was provably correct.
+#
+#      THE RULE: clean and rebuild EVERY consumer of the mutated module, not
+#      every consumer you intend to score. A sweep must not leave the tree in a
+#      state it did not measure. `TARGETS` below is therefore the full consumer
+#      list, taken from `tests/CMakeLists.txt`, and all four are scored -- the
+#      marginal cost is small because `cmake` was already elaborating all four
+#      on every iteration anyway.
+#
 # The scoring rule: after regeneration BOTH models must EXIST, both executables
 # must LINK, and the model hash must DIFFER from pristine. Anything else is
 # discarded, never scored. The revert is verified byte-for-byte with retries,
@@ -132,7 +152,10 @@
 set -u
 
 RTL=fpga/rtl/terrain/zhao_terrain_lod.sv
-TARGETS="test_terrain_lod_directed test_terrain_lod_random"
+
+# EVERY target that verilates this module. If you add one in tests/CMakeLists.txt
+# you MUST add it here -- see guard 7. Checked against the build system below.
+TARGETS="test_terrain_lod_directed test_terrain_lod_random test_terrain_lod_tess test_measure_governor_lod"
 
 GOLD=$(mktemp)
 cp "$RTL" "$GOLD"
@@ -188,10 +211,37 @@ restore() {
 }
 
 run_lanes() {
-  ./build/tests/test_terrain_lod_directed.exe >/dev/null 2>&1 || return 1
-  ./build/tests/test_terrain_lod_random.exe >/dev/null 2>&1 || return 1
+  local t
+  for t in $TARGETS; do
+    "./build/tests/$t.exe" >/dev/null 2>&1 || return 1
+  done
   return 0
 }
+
+# GUARD 7's OWN CHECK: refuse to start if the build system knows about a consumer
+# of this module that TARGETS does not. Otherwise the next target someone adds
+# silently reverts this file to the behaviour that broke main.
+check_consumers() {
+  local declared found missing=""
+  declared=$(grep -B12 "TOP_MODULE zhao_terrain_lod" tests/CMakeLists.txt \
+             | grep -oE "verilate\(test_[a-z_]+" | sed 's/verilate(//' | sort -u)
+  for found in $declared; do
+    case " $TARGETS " in
+      *" $found "*) ;;
+      *) missing="$missing $found" ;;
+    esac
+  done
+  if [ -n "$missing" ]; then
+    echo "ABORT: tests/CMakeLists.txt elaborates zhao_terrain_lod into target(s)"
+    echo "      ,$missing, which TARGETS does not list. Every consumer must be"
+    echo "       cleaned and rebuilt or the sweep leaves mutant model sources on"
+    echo "       disk for someone else's build to compile. See guard 7."
+    return 1
+  fi
+  return 0
+}
+
+check_consumers || exit 9
 
 # PREFLIGHT: EVERY MUTANT MUST LINT BEFORE ANY OF THEM IS SCORED.
 python tools/sweep_terrain_lod_preflight.py || {
@@ -209,7 +259,7 @@ if ! run_lanes; then
   echo "ABORT: the PRISTINE build fails its own tests -- nothing below would mean anything"
   exit 7
 fi
-echo "   pristine model ${PRISTINE_MODEL:0:16}, both lanes green"
+echo "   pristine model ${PRISTINE_MODEL:0:16}, all lanes green"
 
 expected=$(python tools/sweep_terrain_lod_mutants.py --count)
 attempted=0
