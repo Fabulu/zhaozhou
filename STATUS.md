@@ -5,6 +5,114 @@ at the top.*
 
 ---
 
+## 2026-08-23 (midday) — the multiplier count is really down, and one decision needs you
+
+### The number that was wrong all morning is now right
+
+Main claimed the design wanted **327** multipliers against a chip that has 112.
+It now says **251**, and that is not a re-estimate — it is the Field engine's
+real measurement finally reaching the report. For most of the morning the code
+in main contained the 3-multiplier engine while the report still said 79, which
+is worse than a stale number, because the two disagreed.
+
+| | multipliers |
+| --- | ---: |
+| this morning | 327 |
+| **now, measured** | **251** |
+| once creature skinning lands | ~194 expected |
+| the policy ceiling | 85–90 |
+
+### One block in this entire design has a real speed number
+
+That block is the Field engine, and the number is **8.59 MHz** against a target
+of 100. Everything else — forty other measured blocks — still has no speed
+figure at all, because until yesterday the tool was never asked for one.
+
+The fix for the Field engine's slowness **is written and merged**. It is
+bit-identical to what it replaced: same answers, same clock counts, 419 directed
+plus 90,000 random cases agreeing, and the latency table unchanged to the byte.
+The measurement that says whether it worked is running now.
+
+**That measurement is the most important number in the project right now.** If
+it comes back near 100 MHz, this was one embarrassing bug. If it comes back at
+20 or 30, there is a queue of them and we have a timing campaign ahead. Nobody
+can tell which from here.
+
+To narrow where to look, I scanned the whole design's source for the same
+mistake — arithmetic written as a long chain the chip has to walk end to end in
+one tick. **Only one other candidate exists**, in the rasteriser, and I have
+deliberately not touched it: three things in this project have been "fixed" on
+suspicion and two of them were not broken. It gets measured first.
+
+### Creature skinning was over-provisioned by 13.9x
+
+The block uses 72 multipliers — 64% of the whole chip for one stage. It had
+never been queued for reduction, on the reasonable argument that vertices are
+the fastest-moving thing in the pipeline so the hardware might be earned.
+
+Your 120,000-vertices-per-frame number settled it. That allows 13.88 clocks per
+vertex; the block does 18 multiplies per vertex; so the honest requirement is
+**1.30 multipliers** and it was built with eighteen.
+
+It is being rebuilt with the width as a **dial** — 1, 3 and 6 — with all three
+actually built and tested, rather than picking one and declaring it right. The
+1-wide setting is kept deliberately **because it fails**, at 75,757 vertices per
+frame. A range with no failing end does not show you where the wall is.
+
+### THE DECISION — the skinning reference quietly truncates, and I did not fix it
+
+Full write-up in `docs/OWNER_DOCKET.md`. Short version:
+
+The reference renderer computes a skinned vertex in very wide arithmetic, which
+is correct and deliberate — then hands the result to a function that only takes
+half that width. Anything too large wraps. At the extreme it turns a maximum
+positive value into a maximum **negative** one.
+
+Three things say it is an accident, not a choice: the function's own comment is
+careful about exactly this, a wider version of it exists twenty lines below, and
+nothing depends on the wrap.
+
+**Nobody saw it because no real pose can reach it.** Across 24,000 random
+pose-range coordinates, zero left the region where both answers agree. It needs
+a creature bent into a shape none of them take.
+
+It is also **not** a regression — the old hardware diverged from the reference in
+exactly the same places, for as long as both have existed. Nothing had ever
+compared them there.
+
+I did not fix it, because all three fixes change arithmetic that either the
+reference pictures or the console were built on:
+
+* **fix the reference** — one line, correct, and it changes the function every
+  shipped picture was skinned with. Only in the unreachable region — but
+  "unreachable" is a measurement over the poses that exist today, not a proof;
+* **make the hardware copy the truncation** — hardware then matches the
+  reference exactly, at the cost of the console deliberately reproducing a C++
+  accident in silicon;
+* **leave the boundary pinned where it is** — which is the committed state: the
+  test checks the reference wherever the reference is well defined, and says so
+  by name where it cannot.
+
+I lean toward the first, but it is your call, and it is not urgent.
+
+### Housekeeping worth one line each
+
+**Runs stopped being losable.** The tool that creates them lived outside the
+repository, which the notes already blamed for four forgotten days — and the fix
+that had been prescribed, copying finished runs in by hand, was itself being
+forgotten. The tool now lives inside the repo and writes straight into the
+tracked folder.
+
+**The tests are green except one, and that one is honest.** 259 of 262. The
+failure is the ledger refusing to let the Field engine claim "verified" while
+its proof is still running. That is the gate doing its job, and it clears when
+the proof finishes.
+
+**An eighth Quartus trap is on record** — a piece of syntax three other tools
+accept and Quartus rejects outright.
+
+---
+
 ## 2026-08-23 (later) — the multipliers were never the problem with speed
 
 ### What we can now see, and could not before
