@@ -524,6 +524,63 @@ The two that matter are the guards: `variantOf: ""` or `null` must **not** erase
 a real measurement, and an all-variants report must yield `null` rather than
 printing "0 DSPs against 112" and looking healthy.
 
+### 13:15 - Merge landed: census 327 -> 251, RTL and report agree again  (`76c72bc`)
+
+`wp/field-dsp` merged once the GEOM.SKIN agent committed its report change
+(`b073652`). One conflict, in `reports/synthesis/zhao_block_fit.json`, where
+both branches had written rows. **Resolved per-ROW rather than by choosing a
+side** — which is precisely what per-row `sourceCommit` provenance was added to
+make possible:
+
+* `zhao_field_seq` from the branch: **3 DSPs / 8,901 ALMs / 8.59 MHz** at
+  `7a3e2a3`, harness-written through the STA stage;
+* `zhao_geom_skin` from main: it carries the `lastAttempt*` record of the
+  `quartus_map` failure its good 72-DSP row survived, and the branch predates
+  that;
+* `limitations` from main (superset, with the `variantOf` entry);
+* `newestRunCommit` from main — geom_skin's fits ran after the field census fit,
+  and `newestRunClean: false` is a **true** statement about that run.
+
+Ledger after the merge: still exactly **one** error, the same V16 formal-pending
+one. No new failures introduced by the merge.
+
+### 13:25 - STATUS.md updated for Fabian  (`1365e1f`)
+
+Priority (c) of the standing instruction. Written in his terms: the census
+correction and why a disagreeing RTL-and-report was worse than a stale number;
+that **exactly one block in this design has a real speed figure**; that the
+pending Fmax decides between one embarrassing bug and a timing campaign and
+nobody can tell which from here; GEOM.SKIN's 13.9x over-provisioning and the
+dial-not-setting approach with a deliberately failing end.
+
+And the one item that is genuinely his: the skinning reference truncation, with
+all three options and what each costs. Stated my lean (fix the reference) while
+leaving the call to him, and said plainly that it is not urgent.
+
+### 13:30 - Recorded the stopped-sweep hazard  (`12ee522`)
+
+From the GEOM.SKIN agent's run: **a mutation sweep was stopped by the harness
+and kept running**, rewriting `.sv` files under two live Quartus fits. Those
+fits were reading RTL that changed underneath them, so their numbers described
+neither the original nor the mutant.
+
+Worth generalising, and now in `docs/BUILD.md` beside the other build-state
+traps: a sweep's whole job is to edit RTL in place and put it back, so a sweep
+that outlives its stop signal is the most destructive background process it is
+possible to leave running. **A stop reaches the shell, not always what it
+spawned** — verify the children died. I relied on exactly this earlier when I
+killed my duplicate `zhao_field_seq` fit; I did check `tasklist` and the report
+afterwards, which is the only reason I can say nothing was lost.
+
+## Current outstanding numbers
+
+1. **The post-fix Field Fmax**, against 8.59 MHz and the 100 MHz target — the
+   decisive measurement.
+2. **GEOM.SKIN measured 72 -> ?**, with `MUL_LANES` 1/3/6 as a frontier.
+3. The depth-172 proof re-run on the **fixed** RTL (the finished run copied its
+   sources five minutes before the normalize edit, so it gives the timing number
+   but not the green).
+
 ---
 
 ## Subagent Spawns
