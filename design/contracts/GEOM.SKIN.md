@@ -9,9 +9,12 @@ Rigid and two-weight skinning of decoded vertices into world space.
 ## Clock and reset semantics
 
 Single clock `clk`. Asynchronous active-low reset `rst_n`, released synchronously
-by the shell. Reset clears the output register, its valid, and the
-`vertices_transformed` counter; it does not touch the matrix inputs, which are
-combinational and owned upstream.
+by the shell. Reset clears the output register, its valid, the
+`vertices_transformed` counter, and -- since 2026-08-23 -- the engine's own
+state: the latched palette copy, the six row-product accumulators and their
+done flags, the multiplier lanes' operand and product registers, the
+destination pipeline, and every walk counter. The matrix *inputs* remain
+upstream's, but the block now holds a copy of them and that copy is reset.
 
 There is no second clock domain in this block. The bone palette arrives on `clk`
 with the vertex, so no CDC applies here -- the palette's own crossing is
@@ -39,13 +42,24 @@ would dominate this block's timing for no gain.
 
 ## Backpressure rules
 
-`v_ready_o = !o_valid_o || o_ready_i` -- a single-entry skid. A vertex is
-accepted only when `v_valid_i && v_ready_o`; on any other cycle the held result
-and the counter are untouched.
+`v_ready_o = !busy && (!o_valid_o || o_ready_i)` -- a single-entry skid in front
+of a multi-cycle engine. A vertex is accepted only when `v_valid_i &&
+v_ready_o`; on any other cycle the held result and the counter are untouched.
 
-`o_valid_o` clears when the result is taken and sets when a vertex is accepted;
-both in the same cycle is a legal back-to-back beat, so a never-stalling consumer
-sees one vertex per clock.
+**`!busy` is the term the sequenced engine added, and it is load-bearing.**
+There is one accumulator bank, so a `v_ready_o` that ignored `busy` would let a
+second vertex overwrite the one in flight and emit a plausible skinned vertex
+belonging to neither. Pinned by section 6, which asserts `v_ready_o == 0` on
+*every* cycle between accept and result.
+
+`o_valid_o` clears when the result is taken and sets when the blend walk writes
+its last row; both in the same cycle is a legal back-to-back beat.
+
+**The matrix inputs are LATCHED on accept.** They were read combinationally
+when the block was one cycle deep, which was safe because the accept and the
+read were the same clock. A ready/valid producer is free to change its data the
+cycle after `v_ready_o` goes high, and the engine now reads the palette for up
+to eighteen cycles after that, so it takes a copy.
 
 Pinned by `tests/geometry/geom_skin_directed.cpp` section 6, which asserts that a
 stalled vertex is neither counted nor allowed to overwrite the held result.
@@ -54,7 +68,10 @@ stalled vertex is neither counted nor allowed to overwrite the held result.
 
 **None.** This block owns no memory, holds no cache, and never addresses the bus.
 The bone palette belongs to GEOM.POSE and is presented combinationally with the
-vertex.
+vertex; the block keeps a 24-word REGISTER copy of the two matrices for the
+duration of one vertex, which is a pipeline latch and not a cache -- it is
+overwritten by the next accept and is never addressed, indexed by bone, or
+reused across vertices.
 
 That is a deliberate split. Giving the skinner its own palette cache would
 duplicate storage GEOM.POSE already holds and would put a second reader on the
@@ -81,10 +98,32 @@ rounded before the blend; the whole expression is exact and is rounded once, by
 22 = 16 matrix fraction bits + 6 weight fraction bits. `rescale` is round-half-up
 then saturate to s32, per qformats sections 3 and 4.
 
-Widths, stated rather than assumed: a product is s64; three of them plus the s48
-translation needs s67; times a 7-bit weight gives s74; the sum of two is s75; the
-round-half-up add cannot overflow that; `>>> 22` leaves s53, which saturates to
-s32.
+Widths, **proven** rather than assumed (2026-08-23; they were merely *stated*
+before, and two of them were two bits wider than the proof supports).
+`QUARTUS_GOTCHAS` §5 is why this matters: 72-bit operands bought `zhao_geom_lod`
+a 72x72 multiplier where 32x32 was honest, at 28 DSPs instead of 18.
+
+| quantity | bound | signed bits | previously |
+| --- | --- | ---: | ---: |
+| `m*x` | <= 2^62 (both operands -2^31) | 64 | 64 |
+| `pa` = 3 products + `(m3 << 16)` | <= 3*2^62 + 2^47 = 1.3835e19 < 2^64 | **65** | 67 |
+| `pa - pb` | <= 2.767e19 < 2^65 | **66** | — |
+| `w0*(pa - pb)`, `w0 <= 63` | <= 1.743e21 < 2^71 | **72** | — |
+| `(pb << 6) + w0*(pa - pb)` | <= 2.629e21 < 2^72 | **73** | 75 |
+
+The round-half-up addend (2^21) cannot disturb the last of these. `>>> 22`
+leaves at most 2^50, which saturates to s32.
+
+These are adders, not multipliers, so narrowing them saves ALMs and not DSPs —
+but the rule §5 exists to enforce is *prove the width, then synthesise*, and an
+unproven width is exactly what it punished. The bounds come from the s32 input
+widths alone, not from the declared types; see the extremes section below,
+which is where that argument stopped being a paragraph and became a check.
+
+**The multiplier operands stay a full signed 32x32.** The DSP audit's
+suggestion that a bone matrix's 3x3 is a bounded rotation is true of the
+*content* and false of the *contract*: the oracle accepts any s32, so narrowing
+the multiplier would be a behavioural change wearing an optimisation's clothes.
 
 Double rounding is not a hypothetical risk. An RTL variant that rounds `pa` and
 `pb` separately by 16 and blends by 6 passed an earlier draft of the directed
@@ -94,33 +133,78 @@ The single-rounding wall section of the test exists to make that mutation fail
 
 ## Latency (fixed or variable)
 
-Fixed: one cycle from accept to result. The arithmetic is combinational and the
-output register is the only stage.
+**Variable, and it depends on the path and on `MUL_LANES`.** Rewritten
+2026-08-23 when the block was sequenced; it was fixed:1 before.
 
-This is a deliberately unpipelined first implementation. The 32x32 products are
-the long path and will need retiming before this block meets the shell clock; see
-the resource section, where that is an open item and not a solved one.
+| `MUL_LANES` | TL x RL | issue slots blend/rigid | latency blend/rigid |
+| ---: | :---: | ---: | ---: |
+| 1 | 1 x 1 | 18 / 9 | **22 / 13** |
+| 3 | 3 x 1 | 6 / 3 | **10 / 7** |
+| 6 | 3 x 2 | 3 / 2 | **8 / 7** |
+
+Latency is measured accept to `o_valid_o` and equals the sustained issue
+interval, because `busy` is still high in the completion cycle and the next
+vertex is therefore accepted on the following clock. Both numbers are asserted
+by `tests/geometry/geom_skin_directed.cpp` section 8 at all three settings, so
+a scheduling change that quietly costs three clocks turns a test red instead of
+turning a frame short.
+
+The rigid path is shorter because it forms three row-products, not six.
 
 ## Target throughput
 
-One vertex per clock when the consumer never stalls.
+**~120,000 skinned vertex instances per 60 Hz frame** (owner ruling,
+2026-08-23) — the point at which the Measure degrades. That is the number this
+block's multiplier count is derived from, and until it existed the earlier
+version of this section correctly refused to invent one.
 
-The frame-rate arithmetic that would turn this into a creature-count budget
-depends on the meshlet vertex counts and the LOD schedule, neither of which is
-settled. Stating a vertices-per-frame target before those are fixed would be
-inventing a number, so the target here is the per-clock rate the handshake
-actually delivers.
+    gpu_clk                 100 MHz (10.000 ns, fpga/quartus/shell_fit/zhao_shell_fit.sdc)
+    clocks per 60 Hz frame  1,666,666
+    demand                  120,000 vertices
+    clocks per vertex        13.88
+    products per vertex      18 two-weight, 9 rigid
+    honest multiplier count  18 / 13.88 = 1.30
+
+| `MUL_LANES` | sustained vertices/frame | vs. demand |
+| ---: | ---: | --- |
+| 1 | 75,757 | **fails, 63%** |
+| 3 | 166,666 | 1.39x |
+| 6 | 208,333 | 1.74x |
+
+`MUL_LANES = 3` is the intended setting. `MUL_LANES = 1` is kept, built and
+differentiated **because it fails**: a frontier with no failing end does not
+show where the wall is, and section 8 of the directed test asserts that this
+configuration is below the demand rather than letting it pass quietly.
+
+The old target — "one skinned vertex per clock" — was 13.9x the demand and cost
+72 DSP blocks on a 112-DSP device to deliver.
 
 ## Overflow and malformed-input behaviour
 
 Saturation, never wraparound: a result beyond s32 clamps to `0x7FFFFFFF` or
 `0x80000000`. Pinned by the saturation-rail cases in the directed test.
 
-`w0 > 64` is outside the contract. The RTL's `w1 = 64 - w0` would underflow its
-7-bit width, so the caller must not present it; `v_w0_i` is 7 bits because 64
-needs seven, not because 65..127 are meaningful. This is an upstream obligation
-and is **not** currently checked in hardware -- recorded here as a known hole
-rather than as a defended edge.
+`w0 > 64` is outside the contract, and the rewrite made that matter more rather
+than less. The old RTL's `w1 = 7'd64 - v_w0_i` wrapped to `192 - w0` there; the
+weight identity now in use reads `64 - w0` as negative. **Neither is right,
+because there is no right answer for an input the contract excludes** -- but
+the two are different wrong answers, so the exclusion had to stop being an
+assumption.
+
+ENFORCED-BY: `tests/geometry/geom_skin_directed.cpp`, `require_legal_w0()`. It
+runs on every vertex the differential drives and fails the suite if any driver
+presents `w0 > 64`, so every comparison this project makes against the oracle
+is knowingly a statement about the legal domain. The RTL header names this
+check, which is why it is a check and not a comment asserting one.
+
+**Owner docket / upstream obligation.** There is still no HARDWARE enforcer.
+`v_w0_i` is 7 bits because 64 needs seven, not because 65..127 are meaningful,
+and the upstream that must guarantee it -- GEOM.VDECODE -- is `SPECIFIED` with
+no RTL. When GEOM.VDECODE is built it must either clamp or reject `w0 > 64`,
+and this line is the record that the obligation was passed to it deliberately
+rather than forgotten. GEOM.SKIN deliberately does **not** clamp: adding a
+defensive clamp here would be inventing behaviour in the out-of-contract region
+and would hide the missing upstream check behind a plausible answer.
 
 A saturating result is not flagged. The reference threads a `SatLedger` for
 exactly this telemetry and the RTL has no equivalent; see Counters.
@@ -136,48 +220,55 @@ The reference records every clamped multiply; the RTL clamps silently. That gap
 matters because a silently saturating vertex is a creature limb snapped to the
 world edge -- visible on screen, and otherwise untraceable.
 
-## The weight identity, and the test gap that gates it
+## The weight identity, and the test gap that gated it
 
-**Not done. Recorded 2026-08-21 with the analysis, because the analysis is the
-part that was missing.**
-
-`reports/DSP_Audit_2026-08-21.md` proposes an exact reduction of the two weight
-products per row to one:
+**DONE 2026-08-23.** This section recorded an exact reduction, refused to take
+it, and named two things that had to be handled first. Both were handled; the
+reduction is in the shipped RTL. What follows is what was actually done, kept
+in the same order as the objections so each one can be checked off.
 
     blend = w0*pa + (64 - w0)*pb   ==   (pb << 6) + w0*(pa - pb)
 
-Six weight multiplies become three. **The identity holds exactly over the legal
-domain** and the shipped code permits it: `blend` is exact and unrounded at 75
-bits and `rescale_sat` is applied ONCE to the finished sum, which the header
-states as law (*"SINGLE ROUNDING IS THE LAW"*). Verified over `w0` 0..63 with
-wide operand pairs: zero differences. Width checked: the rewrite needs 74
-signed bits and the lane is 75.
+Six weight multiplies per vertex become three. The identity holds exactly over
+the legal domain and the code permits it: `blend` is exact and unrounded and
+`rescale_sat` is applied ONCE to the finished sum, which is the single-rounding
+law and not a relaxation of it.
 
-**Two things must be handled first, and neither is cosmetic.**
+**Correcting this section's own arithmetic while it is being closed:** the
+saving is **ALMs, not DSPs**. The block measured 72 DSP blocks and 72 = 18 x 4,
+the eighteen signed 32x32 matrix products at four blocks each. `w0` and `w1` are
+seven bits, and Quartus had already put both weight multiplies in logic. Any
+report crediting the DSP reduction to this identity would be crediting the
+wrong change; the DSP win is entirely in the multiplier farm.
 
-**1. The identity is FALSE outside the legal domain.** `w1` is a 7-bit unsigned
-wrap, `w1 = 7'd64 - v_w0_i`, so for `w0` in 65..127 the shipped form computes
-`192 - w0` while the identity reads `(64 - w0)` as negative: 223,020 mismatches
-in a sampled sweep. It is benign only because `w0 > 64` is out of contract and
-`w0 == 64` diverts to the rigid branch. That is an unstated cross-block
-guarantee, so the rewrite needs an `ENFORCED-BY:` naming who upholds `w0 <= 64`
-rather than a comment asserting it.
+**1. The identity is FALSE outside the legal domain. HANDLED.** See *Overflow
+and malformed-input behaviour* above: `require_legal_w0()` in the differential
+is the `ENFORCED-BY:` this section demanded, the RTL header names it, and the
+missing upstream hardware check is recorded as an obligation on GEOM.VDECODE
+rather than papered over.
 
-**2. THE DIFFERENTIAL DOES NOT REACH THE OPERAND EXTREMES.** The random lane
-shifts its inputs down -- matrices by 15 bits, vertices by 8 -- so `pa` and
-`pb` reach about 2^43 against a 67-bit lane that holds +/-2^66. The subtraction
-`pa - pb` is safe at 67 bits ONLY because the real range is bounded by the s32
-inputs: `row_product` sums three s32 x s32 products plus a shifted term, so
-|pa| < 2^64 and the difference needs 66 bits. **The declared types do not
-guarantee that; the input widths do.**
+**2. The differential did not reach the operand extremes. HANDLED, and it
+mattered more than expected.** The rewrite narrowed the accumulator from 67
+bits to 65 and the blend lane from 75 to 73 -- so the rewrite made the untested
+argument *load-bearing* instead of merely true. Closed by:
 
-So a 67-bit subtraction is correct and the lane would not wrap -- but nothing
-tests it, and the argument lives in this paragraph rather than in a check. The
-gap must be closed before the rewrite, not after: extend the random lane to
-full-range operands, or add directed extremes at the row-product rails.
+- **section 7, the row-product rails**: 9 rail values for the matrix elements
+  crossed with 9 for the vertex, with `B` set to the negative of `A` so
+  `pa - pb` reaches twice `|pa|` -- the bound the 66-bit difference lane is
+  sized for and the one nothing previously drove;
+- **the near-cancellation family**, which is the sensitive part. With `B = -A`
+  and `w0 == 32` the blend is `32*(pa + pb)`, so the ANSWER is small while
+  every intermediate sits at its bound. A lane one bit too narrow wraps and
+  gives a large wrong answer here, where anywhere else it would give the same
+  saturated rail as the correct one;
+- **section 7b, a full-range random lane** of 600 iterations drawing matrix and
+  vertex elements across the whole s32 word.
 
-**Found by checking the differential's coverage before writing the RTL.** The
-change would have passed the existing lane either way.
+7b is a **separate** lane rather than a widening of `--random`. The pose-range
+lane is deliberately aimed away from the rails and a recorded mutation property
+depends on that (the no-saturation mutation fails 6 directed checks and passes
+900 random ones). Widening it would have destroyed a known property of an
+existing lane to gain one the directed sections can carry.
 
 ## Scalar reference function
 
@@ -191,13 +282,24 @@ vertices exactly where the shipped pictures put them".
 
 ## Directed tests
 
-`tests/geometry/geom_skin_directed.cpp` -- 2,125 checks, differential against
-`zref::creature::skin_vertex` on every arithmetic case.
+`tests/geometry/geom_skin_directed.cpp` -- differential against
+`zref::creature::skin_vertex` on every arithmetic case. **It is built THREE
+times**, against `MUL_LANES` = 1, 3 and 6, as `test_geom_skin_directed`,
+`test_geom_skin_lanes1` and `test_geom_skin_lanes6`.
+
+Building the frontier's other points is not decoration. `MUL_LANES = 3`
+collapses the term walk (TSTEPS == 1), so the default build **never executes
+the multi-cycle accumulate path at all**; only the `MUL_LANES = 1` build does.
+The mutation sweep found this the hard way in the useful direction: two mutants
+are alive in one configuration and dead in another, and a sweep scored against
+the default build alone would have reported them as survivors and invented a
+test gap that does not exist.
 
 Sections: rigid identity and translation; the branch boundaries (`w0` = 0, 1, 32,
 63, 64, and `w0 == 64` with `b1 != b0`); the single-rounding wall; the rounding
-boundary at exact halves, positive and negative; the saturation rails; and the
-interface laws.
+boundary at exact halves, positive and negative; the saturation rails; the
+interface laws; **the row-product rails (section 7)**; **a full-range random
+lane (7b)**; and **the rate (section 8)**.
 
 The **single-rounding wall** is the section this file exists for, and it was not
 in the first draft. It sweeps every `w0` in 1..63 against eleven vertex residues
@@ -207,12 +309,30 @@ all 39 original checks.
 
 The **interface laws** section was added for the same reason: a mutation zeroing
 the `src_id` passthrough survived all 2,118 arithmetic checks, because every one
-of them compares coordinates and nothing else.
+of them compares coordinates and nothing else. Sequencing added one law to it --
+a busy engine must refuse a vertex -- which is checked on every cycle between
+accept and result rather than once.
+
+**Section 7, the row-product rails**, closes the gap this contract recorded as
+gating the weight identity. See that section above for what it drives and why
+the near-cancellation family is the sensitive part.
+
+**Section 8, the rate, is the section that keeps the DSP argument honest.** This
+block spends roughly a sixth of the multipliers it used to because the owner's
+demand is ~120,000 vertices per frame and the engine serves 166,666. That entire
+argument lives in the issue interval, so the issue interval is a LAW here:
+section 8 measures the accept-to-valid latency, measures the sustained interval
+of a never-stalling stream, requires the two to agree, and then requires the
+resulting vertices-per-frame to be on the correct side of the demand -- ABOVE
+for `MUL_LANES` 3 and 6, and **BELOW for 1**, which is the point of keeping 1.
+A scheduling change that quietly cost three clocks would otherwise leave every
+arithmetic check green and every frame short, and nothing in this repository
+would notice.
 
 ## Randomized differential tests
 
 `tests/geometry/geom_skin_directed.cpp --random N`. 500 iterations in the fast
-lane, 8,000 nightly; 24,000 checks clean at 8,000.
+lane for each of the three builds, 8,000 nightly.
 
 Matrix elements are drawn in a plausible pose range rather than across the full
 s32 word. A bone matrix is a rotation and a translation, and sampling the whole
@@ -220,6 +340,11 @@ word would spend nearly every iteration pinned to the saturation rails instead o
 exercising the arithmetic. The rails are covered by directed cases precisely
 because the random lane is aimed away from them -- confirmed by mutation, where
 the no-saturation mutation fails 6 directed checks and passes 900 random ones.
+
+That property is why the full-range lane added in 2026-08-23 is section **7b**
+of the directed test and **not** a widening of this one. Widening this lane
+would have destroyed a known property of it to gain one the directed sections
+can carry.
 
 `w0` is drawn from 0..64 inclusive so both rails of the weight are reachable, but
 the exact-equality boundaries are not left to chance; they are directed.
@@ -238,22 +363,58 @@ are the tractable ones.
 
 ## Synthesis / resource ceiling
 
-**Not yet characterised, and expected to be a problem.**
+**Measured, then rearchitected, then measured again.** Quartus Prime Lite
+17.0.2, device 5CSEBA6U23I7, constrained per-block fit (`clk` at 10.000 ns),
+virtual pins, via `tools/quartus/run_block_fit.ps1`.
 
-The blend path issues eighteen 32x32 products -- two matrices x three rows x three
-terms -- plus two 75-bit weight multiplies. That is the largest multiplier count
-of any block written so far, against a device with 112 DSPs of which the project
-already accounts for 171.
+### Before (commit 16df9ee, `rtlCleanAtHead: true`)
 
-This block must therefore be read as evidence for the DSP argument in
-`design/budgets/dsp.md`, not as a finished implementation. The obvious levers,
-none of them yet taken: share one row engine across three rows and three cycles
-(3x fewer products, 3x the latency); share one matrix engine across A and B (2x
-fewer, 2x the latency); or exploit that a bone matrix's 3x3 is a rotation, whose
-elements are bounded well inside s32 and may not need full-width multipliers.
+| | measured |
+| --- | ---: |
+| ALMs | 1,801 |
+| **DSP blocks** | **72** |
+| registers | 145 |
 
-No fit has been run for this block. Any resource number stated here would be
-invented.
+**64% of a 112-DSP device for one stage**, second only to the Field IR engine's
+79. The block header had predicted the problem and the block was fitted to
+confirm it; `reports/REMAINING_BLOCKERS.md` then left it un-queued because the
+rate question could not be answered without a vertex budget. It was the right
+call on the evidence available and the wrong conclusion once the budget existed:
+the demand needs 1.30 multipliers and the block had eighteen.
+
+72 = 18 x 4. A signed 32x32 in that combinational cone cost four DSP blocks, and
+the six 7-bit weight multiplies cost approximately none.
+
+### After
+
+Measured numbers for each `MUL_LANES` setting are recorded in
+`reports/synthesis/zhao_block_fit.json` and in the run log at
+`runs/CLAUDE-RUNS/RUN-20260823-0937-geom-skin-dsp-rearchitecture/TASK_LOG.md`.
+**Do not restate a number here that a fit did not produce** -- this section's
+previous version was honest about having none, and that is the standard to keep.
+
+The architecture is a `MUL_LANES`-wide farm of signed 32x32 lanes, LOCAL to
+this block, input- and output-registered so the DSP's own pipeline registers
+are the ones inferred. Lanes are bound to TERMS (x, y, z), not to rows, which
+removes the coordinate mux entirely and lets a whole row-product issue in one
+cycle; the blend is one shared shift-add unit walked across the three rows, and
+the walk overlaps the tail of the issue walk rather than following it.
+
+Sharing is **within this subsystem only**. A console-global multiplier farm was
+explicitly rejected; nothing outside GEOM.SKIN can reach these lanes.
+
+### The levers that were NOT taken, and why
+
+- **Sharing one bank across pose decode, skinning and projection.** This is the
+  DSP audit's "wider opportunity" and it is still open, but it is a
+  cross-block change and the ruling is smallest local farm per subsystem,
+  sharing only what is mutually exclusive inside it. Skinning and projection
+  are not mutually exclusive: they are consecutive stages of one pipeline.
+- **Narrowing the 32x32 multiplier to the range a rotation actually occupies.**
+  Rejected: see the Q formats section. The oracle accepts any s32.
+- **`(* multstyle = "logic" *)` on the weight multiply.** It is silently ignored
+  by this Quartus (`QUARTUS_GOTCHAS` §3). The multiply is written as an explicit
+  shift-add instead.
 
 ## Integration capture cases
 

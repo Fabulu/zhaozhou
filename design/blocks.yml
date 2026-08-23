@@ -1910,8 +1910,8 @@ blocks:
     upstream: [GEOM.VDECODE, GEOM.POSE]
     downstream: [GEOM.LOOM, GEOM.WCACHE]
     backpressure: ready_valid
-    latency: fixed:1
-    target_throughput: 1 skinned vertex per clock
+    latency: variable
+    target_throughput: 120,000 skinned vertex instances per 60 Hz frame (owner ruling 2026-08-23); 166,666 sustained at MUL_LANES=3, 100 MHz
     reference_model: zref::creature::skin_vertex
     tests:
       directed: tests/geometry/geom_skin_directed.cpp
@@ -1933,7 +1933,7 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Q formats per spec/qformats.md (A3c screen widths downstream).
+    notes: Q formats per spec/qformats.md (A3c screen widths downstream). Multiplier farm sized to the frame demand, not to a per-clock placeholder; MUL_LANES is a measured frontier (1, 3, 6) and 3 is the intended setting.
 
   - id: GEOM.LOOM
     name: Transform Loom

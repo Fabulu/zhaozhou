@@ -1646,6 +1646,51 @@ set_tests_properties(geom_skin_random PROPERTIES LABELS "fast;nightly" TIMEOUT 9
 add_test(NAME geom_skin_random_nightly COMMAND test_geom_skin_directed --random 8000)
 set_tests_properties(geom_skin_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 1800)
 
+# THE OTHER TWO POINTS ON THE FRONTIER, BUILT AND DIFFERENTIATED.
+#
+# zhao_geom_skin's MUL_LANES parameter is the deliverable, not one setting of
+# it: the block was rearchitected from 72 DSPs by sizing its multiplier farm to
+# the owner's ~120,000 skinned vertices per 60 Hz frame, and a parameter with
+# measured fits at each setting is what the survey of Raster I, RasterIX,
+# Vortex, eGPU and SIMTight asked for instead of "discovering the right point
+# one emergency at a time".
+#
+# Elaborating the other settings is not the same as verifying them, and one of
+# them is genuinely different code: MUL_LANES = 3 issues all three terms in one
+# cycle (TSTEPS == 1), so the DEFAULT BUILD NEVER EXECUTES the multi-cycle term
+# walk at all. Only MUL_LANES = 1 does. The same differential runs against all
+# three, with the frontier table's latencies as compile-time expectations.
+# Written out rather than looped: the mutation sweep's guard 7 derives the set
+# of consumers of a mutated .sv by grepping `verilate(<target> ... <file>)` out
+# of THIS file, and a `${lanes}` in the target name would leave it deriving a
+# literal that matches no build target. A guard that cannot see a consumer
+# cannot clean and re-score it.
+add_executable(test_geom_skin_lanes1 geometry/geom_skin_directed.cpp)
+target_link_libraries(test_geom_skin_lanes1 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_skin_lanes1 PRIVATE ZHAO_SKIN_LANES=1)
+verilate(test_geom_skin_lanes1
+  PREFIX Vzhao_geom_skin
+  TOP_MODULE zhao_geom_skin
+  VERILATOR_ARGS -GMUL_LANES=1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin.sv)
+add_test(NAME geom_skin_lanes1 COMMAND test_geom_skin_lanes1)
+set_tests_properties(geom_skin_lanes1 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_skin_lanes1_random COMMAND test_geom_skin_lanes1 --random 500)
+set_tests_properties(geom_skin_lanes1_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_geom_skin_lanes6 geometry/geom_skin_directed.cpp)
+target_link_libraries(test_geom_skin_lanes6 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_skin_lanes6 PRIVATE ZHAO_SKIN_LANES=6)
+verilate(test_geom_skin_lanes6
+  PREFIX Vzhao_geom_skin
+  TOP_MODULE zhao_geom_skin
+  VERILATOR_ARGS -GMUL_LANES=6
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin.sv)
+add_test(NAME geom_skin_lanes6 COMMAND test_geom_skin_lanes6)
+set_tests_properties(geom_skin_lanes6 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME geom_skin_lanes6_random COMMAND test_geom_skin_lanes6 --random 500)
+set_tests_properties(geom_skin_lanes6_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME lint_zhao_geom_skin
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_geom_skin
