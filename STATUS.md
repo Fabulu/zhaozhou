@@ -37,9 +37,20 @@ counter.** The real arithmetic had never been timed at all — not slowly, not a
 all — and the number I read as "twice its target" was measuring the one part of
 the block nobody cares about.
 
-Asked properly, the worst path is **37.0 ns** through the address generator —
-which is precisely what that block's own written specification has warned about
-since the day it was written.
+Asked properly, the block is slow — but **the 37.0 ns "address generator" figure
+I quoted was itself measured wrongly**, and I am correcting it in the same
+breath. It came from applying the new constraints to a layout that had been
+arranged with **no** such objective, so the tool had never once tried to make
+those paths fast. It is an upper bound on an unoptimised layout, not a real
+limit.
+
+Measured properly — arranged *with* the objective present — the real worst path
+is **21.4 ns**, and it runs from the format register through the decoder and the
+filter to the sample output. The address generator improves and comes second.
+
+**The reusable lesson: asking a timing question of a layout that was never
+optimised for it does not give you that layout's speed.** It gives you a bound,
+and bounds read like measurements if you are not careful.
 
 ### What this means for the other numbers
 
@@ -78,10 +89,42 @@ these one-offs. **The rule stands: a green number from a tool nobody has watched
 run is not evidence** — and now, explicitly, neither is a number from a tool
 that was asked the wrong question.
 
-### Meanwhile the actual work went well
+### And the texture unit has a SECOND problem, independent of speed
 
-The texture unit is **28 → 6 multipliers**, with the whole ladder measured at
-28 → 12 → 6 → 3 and the speed flat across all of it. Census **160 → 134**.
+It is not only slow. **It is also too slow in the other sense** — it takes six
+clocks to produce one sample on the terrain path.
+
+Even if it ran at the full 100 MHz it wants, six clocks per sample is **277,778
+samples per frame against the ~850,000 a frame of terrain needs — a third of
+it.** At its actual 36.11 MHz it manages about 102,000, an eighth.
+
+So no amount of clock fixes it. The block accepts one request, does everything
+for it, and only then accepts another. It is, as it stands, a calculator that
+can only hold one sum at a time.
+
+**The fix is to make it a conveyor**, and there is an unusually neat one
+available: the texture cache already has four independent lanes, and the terrain
+path uses only one. Putting a *new* texel lookup in lane 0 and an *older*
+sample's palette lookup in lane 1 lets one complete sample finish every clock
+after warm-up — **1.67 million per frame, twice what is needed**, rather than a
+third of it.
+
+Note also that the design's own existing proposal for this — two clocks per
+sample — would have given 833,333 against a true demand of 829,440. **0.47%
+headroom, and nothing at all for a cache miss.** That is the kind of number that
+looks like success and is not.
+
+### The good news, and it is real
+
+**Nothing expensive is wrong with it.** Across the whole ladder — 28, 12, 6 and
+3 multipliers — the speed barely moves. That is proof the multipliers were never
+what made it slow. It cannot be rescued by adding arithmetic back, and it does
+not need to be: it needs registers in the right places and a queue.
+
+The texture unit is **28 → 6 multipliers**, and the six-lane choice turns out to
+be not merely "within budget" but **the cheapest filter width that clears the
+workload** — one lane would need 2.2 million filter cycles a frame against 1.67
+million available. Census **160 → 134**.
 
 ---
 
