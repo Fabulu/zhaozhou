@@ -207,7 +207,10 @@ try {
                 try { $p.Kill() } catch { }
                 $row.status = 'timeout'
                 $row.timeoutSeconds = $TimeoutSeconds
-                Write-Warning ("{0}: quartus_map exceeded {1}s and was killed. This is a MEASUREMENT, not a verdict on the block -- run_block_fit.ps1's own header records a module that reported `timeout` at 900 s and then fitted cleanly in 749 s with a larger budget." -f $mod, $TimeoutSeconds)
+                # NOTE the doubled backticks: inside a double-quoted PowerShell string a
+                # single backtick is an ESCAPE, and the first version of this line
+                # printed "reported <TAB>imeout at 900 s".
+                Write-Warning ("{0}: quartus_map exceeded {1}s and was killed. This is a MEASUREMENT of the tool, not a verdict on the block -- run_block_fit.ps1's own header records a module that reported ``timeout`` at 900 s and then fitted cleanly in 749 s with a larger budget." -f $mod, $TimeoutSeconds)
             }
         } finally { Pop-Location }
         $sw.Stop()

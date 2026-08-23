@@ -124,3 +124,156 @@ WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json
 zhao_texture_aux                   ok                     156.8s   DSP 0     membits 0
 WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (41 row(s); 1 this run)
 [42/90] 23:38:09 zhao_texture_mosaic
+zhao_texture_mosaic                ok                      43.9s   DSP 4     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (42 row(s); 1 this run)
+[43/90] 23:38:54 zhao_texture_mod255
+zhao_texture_mod255                ok                      28.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (43 row(s); 1 this run)
+[44/90] 23:39:23 zhao_field_alu
+zhao_field_alu                     ok                      30.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (44 row(s); 1 this run)
+[45/90] 23:39:54 zhao_field_exec_shared
+zhao_field_exec_shared             ok                     179.8s   DSP 3     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (45 row(s); 1 this run)
+[46/90] 23:42:54 zhao_field_isqrt
+zhao_field_isqrt                   ok                      26.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (46 row(s); 1 this run)
+[47/90] 23:43:22 zhao_field_normalize
+-SkipMapped: 46 of 90 already have an ok row; 44 to go
+map sweep: 44 module(s), serial, one Quartus job at a time
+  EXCLUDED zhao_shell_top: composed top; elaboration exceeds 10 min / 16 GB in 17.0.2 Lite. Use run_composed_fit.ps1.
+[1/44] 23:45:37 zhao_field_normalize
+zhao_field_normalize               ok                      46.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (47 row(s); 1 this run)
+[2/44] 23:46:24 zhao_field_mul
+zhao_field_mul                     ok                      22.9s   DSP 3     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (48 row(s); 1 this run)
+[3/44] 23:46:48 zhao_field_len
+zhao_field_len                     ok                        32s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (49 row(s); 1 this run)
+[4/44] 23:47:20 zhao_field_rot
+zhao_field_rot                     ok                      34.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (50 row(s); 1 this run)
+[5/44] 23:47:55 zhao_field_curve
+zhao_field_curve                   ok                      41.1s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (51 row(s); 1 this run)
+[6/44] 23:48:37 zhao_field_noise
+zhao_field_noise                   ok                      36.9s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (52 row(s); 1 this run)
+[7/44] 23:49:15 zhao_field_sin
+zhao_field_sin                     ok                      74.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (53 row(s); 1 this run)
+[8/44] 23:50:31 zhao_field_sin_rom
+zhao_field_sin_rom                 ok                      77.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (54 row(s); 1 this run)
+[9/44] 23:51:50 zhao_field_rcp
+zhao_field_rcp                     ok                      82.2s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (55 row(s); 1 this run)
+[10/44] 23:53:15 zhao_field_rcp_rom
+zhao_field_rcp_rom                 ok                      57.6s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (56 row(s); 1 this run)
+[11/44] 23:54:14 zhao_field_rcp24_rom
+zhao_field_rcp24_rom               ok                      67.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (57 row(s); 1 this run)
+[12/44] 23:55:23 zhao_field_ring
+zhao_field_ring                    ok                      96.4s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (58 row(s); 1 this run)
+[13/44] 23:57:01 zhao_field_progcache
+zhao_field_progcache               ok                     110.4s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (59 row(s); 1 this run)
+[14/44] 23:58:52 zhao_part_expand
+zhao_part_expand                   ok                      29.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (60 row(s); 1 this run)
+[15/44] 23:59:22 zhao_part_soft
+zhao_part_soft                     ok                      30.2s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (61 row(s); 1 this run)
+[16/44] 23:59:53 zhao_cmd_dma
+zhao_cmd_dma                       ok                      82.5s   DSP 0     membits 32768
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (62 row(s); 1 this run)
+[17/44] 00:01:16 zhao_cmd_decoder
+zhao_cmd_decoder                   ok                      41.1s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (63 row(s); 1 this run)
+[18/44] 00:01:57 zhao_cmd_scheduler
+zhao_cmd_scheduler                 ok                      37.5s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (64 row(s); 1 this run)
+[19/44] 00:02:35 zhao_video_scanout
+zhao_video_scanout                 ok                      34.1s   DSP 0     membits 16384
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (65 row(s); 1 this run)
+[20/44] 00:03:10 zhao_video_framectl
+zhao_video_framectl                ok                      25.1s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (66 row(s); 1 this run)
+[21/44] 00:03:35 zhao_video_mode
+zhao_video_mode                    ok                        21s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (67 row(s); 1 this run)
+[22/44] 00:03:57 zhao_video_scaler
+zhao_video_scaler                  ok                      20.9s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (68 row(s); 1 this run)
+[23/44] 00:04:18 zhao_video_slotmgr
+zhao_video_slotmgr                 ok                        22s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (69 row(s); 1 this run)
+[24/44] 00:04:40 zhao_scanout_fetch
+zhao_scanout_fetch                 ok                      21.4s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (70 row(s); 1 this run)
+[25/44] 00:05:02 zhao_scanout_linebuf
+zhao_scanout_linebuf               ok                        21s   DSP 0     membits 16384
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (71 row(s); 1 this run)
+[26/44] 00:05:23 zhao_scanout_serializer
+zhao_scanout_serializer            ok                      20.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (72 row(s); 1 this run)
+[27/44] 00:05:44 zhao_sdram_ctrl
+zhao_sdram_ctrl                    ok                      22.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (73 row(s); 1 this run)
+[28/44] 00:06:07 zhao_vram_arbiter
+zhao_vram_arbiter                  ok                      28.1s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (74 row(s); 1 this run)
+[29/44] 00:06:35 zhao_mem_guard
+zhao_mem_guard                     ok                      23.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (75 row(s); 1 this run)
+[30/44] 00:06:59 zhao_hps_bridge
+zhao_hps_bridge                    ok                      23.5s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (76 row(s); 1 this run)
+[31/44] 00:07:23 zhao_hps_arbiter
+zhao_hps_arbiter                   ok                      21.6s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (77 row(s); 1 this run)
+[32/44] 00:07:45 zhao_audio_fifo
+zhao_audio_fifo                    ok                      21.4s   DSP 0     membits 65536
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (78 row(s); 1 this run)
+[33/44] 00:08:06 zhao_input_snapshot
+zhao_input_snapshot                ok                      33.7s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (79 row(s); 1 this run)
+[34/44] 00:08:40 zhao_input_rumble
+zhao_input_rumble                  ok                      25.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (80 row(s); 1 this run)
+[35/44] 00:09:06 zhao_debug_counters
+zhao_debug_counters                ok                      36.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (81 row(s); 1 this run)
+[36/44] 00:09:44 zhao_debug_crc
+zhao_debug_crc                     ok                      23.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (82 row(s); 1 this run)
+[37/44] 00:10:07 zhao_debug_frameblit
+zhao_debug_frameblit               ok                      33.7s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (83 row(s); 1 this run)
+[38/44] 00:10:41 zhao_debug_trace
+zhao_debug_trace                   ok                        22s   DSP 0     membits 14848
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (84 row(s); 1 this run)
+[39/44] 00:11:03 zhao_measure_governor
+zhao_measure_governor              ok                        29s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (85 row(s); 1 this run)
+[40/44] 00:11:33 zhao_measure_tokens
+zhao_measure_tokens                ok                      35.7s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (86 row(s); 1 this run)
+[41/44] 00:12:09 zhao_crc32c_fold
+zhao_crc32c_fold                   ok                      29.9s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (87 row(s); 1 this run)
+[42/44] 00:12:39 zhao_dc_sdp_ram
+zhao_dc_sdp_ram                    ok                      17.9s   DSP 0     membits 16384
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (88 row(s); 1 this run)
+[43/44] 00:12:57 zhao_synth_probe
+zhao_synth_probe                   ok                      20.2s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (89 row(s); 1 this run)
+[44/44] 00:13:18 zhao_stub_top
+zhao_stub_top: quartus_map exceeded 1800s and was killed. This is a MEASUREMENT, not a verdict on the block -- run_block_fit.ps1's 
+own header records a module that reported 	imeout at 900 s and then fitted cleanly in 749 s with a larger budget.
+zhao_stub_top                      timeout               1800.5s   DSP -     membits -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (90 row(s); 1 this run)
+map sweep complete
