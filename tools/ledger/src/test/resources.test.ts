@@ -131,3 +131,61 @@ test('census: a zero capacity cannot manufacture an over-capacity claim', () => 
   assert.equal(c.dsp.capacity, 0);
   assert.deepEqual(c.dsp.overCapacityBlocks, []);
 });
+
+test('census: a variantOf row is EXCLUDED from every total', () => {
+  // A frontier is two or three parameter settings of ONE block, measured to
+  // show where the wall is. Summing them counts that block twice or three
+  // times: a three-point frontier on a 72-DSP block would add ~150 phantom
+  // DSPs and read as a regression caused by measuring more carefully.
+  const c = resourceCensus({
+    blocks: [
+      row({ module: 'zhao_geom_skin', dspBlocks: 6, alms: 1800, ramBlocks: 2 }),
+      row({ module: 'zhao_geom_skin__lanes1', variantOf: 'zhao_geom_skin', dspBlocks: 2, alms: 900, ramBlocks: 1 }),
+      row({ module: 'zhao_geom_skin__lanes6', variantOf: 'zhao_geom_skin', dspBlocks: 12, alms: 2600, ramBlocks: 3 }),
+    ],
+  });
+  assert.ok(c);
+  assert.equal(c.measured, 1);
+  assert.equal(c.variants, 2);
+  assert.equal(c.dsp.total, 6);
+  assert.equal(c.alm.total, 1800);
+  assert.equal(c.m10k.total, 2);
+  // and they must not appear in `worst` either, or they read as separate blocks
+  assert.deepEqual(c.dsp.worst.map((w) => w.module), ['zhao_geom_skin']);
+});
+
+test('census: a variant is NOT flagged as unplaceable', () => {
+  // A frontier is allowed a deliberately infeasible end -- that is how it shows
+  // where the wall is. Failing on a point nobody proposed to ship is a false
+  // gate, and this file exists because false gates train people to pass them.
+  const c = resourceCensus({
+    blocks: [
+      row({ module: 'real', dspBlocks: 4 }),
+      row({ module: 'real__wide', variantOf: 'real', dspBlocks: 500 }),
+    ],
+  });
+  assert.ok(c);
+  assert.deepEqual(c.dsp.overCapacityBlocks, []);
+  assert.equal(c.dsp.total, 4);
+});
+
+test('census: an empty or non-string variantOf does not exclude the row', () => {
+  // Guard against a report that writes variantOf: "" or null and silently
+  // erases a real measurement from the total.
+  const c = resourceCensus({
+    blocks: [
+      row({ module: 'a', variantOf: '', dspBlocks: 5 }),
+      row({ module: 'b', variantOf: null, dspBlocks: 7 }),
+    ],
+  });
+  assert.ok(c);
+  assert.equal(c.measured, 2);
+  assert.equal(c.variants, 0);
+  assert.equal(c.dsp.total, 12);
+});
+
+test('census: a report of nothing but variants yields null, not a zero report', () => {
+  // Same reasoning as the all-timeouts case: "0 DSPs against 112" must never
+  // be printed by a run that measured no shippable block.
+  assert.equal(resourceCensus({ blocks: [row({ variantOf: 'other' })] }), null);
+});

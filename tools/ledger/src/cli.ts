@@ -184,6 +184,13 @@ function cmdCheck(): number {
           censusLines.push(
             'ledger: (per-block fits do not share, so every census total is an UPPER BOUND, not a prediction)'
           );
+          if (c.variants > 0) {
+            // Say it out loud. A census that quietly omits rows reads as
+            // "covered everything" when it did not.
+            censusLines.push(
+              `ledger: (${c.variants} variant row(s) excluded from every total — alternate parameter settings of a block already counted)`
+            );
+          }
         }
       } catch {
         // an unreadable report is not a ledger error; the fit lane owns it
