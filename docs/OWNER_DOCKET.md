@@ -67,6 +67,135 @@ number of 40-minute fits if the holds turn out to be there.
 
 ---
 
+## RULED 2026-08-23 — the DSP rearchitecture: per-subsystem multiplier farms,
+## and a vertex budget that finally exists
+
+Relayed by Fabian from a collaborator, and adopted. This supersedes my
+block-by-block improvisation with an architecture rule and a target table.
+
+### The rule, which is the important part
+
+> **Do not build one global multiplier for the entire console.** Terrain,
+> texture, Field and creature geometry genuinely run concurrently.
+>
+> Instead: give each major subsystem the smallest local multiplier farm that its
+> **sustained rate** actually needs. Share only operations that are **mutually
+> exclusive inside that subsystem**.
+>
+> That should become the DSP equivalent of the RAM-inference rule.
+
+And the framing that reorders everything: **DSP allocation is justified by
+sustained frame demand, not by preserving one-clock placeholder throughputs.**
+Several blocks in this design are one-clock because that is what the first
+handshake happened to deliver, not because anything measured a requirement.
+
+### The targets
+
+| subsystem | now | first credible target |
+| --- | ---: | ---: |
+| Field IR engine | 79 | **8–12** |
+| `GEOM.SKIN` | 72 | **12–18** |
+| `TERRAIN.PROJECT` | 33 | 12–18, *after* removing repeated projections |
+| `TEXTURE.TMU` | 28 | 8–12 |
+| `SURFACE.STAMP` | 28 | 4–6 |
+| `TERRAIN.NORMALS` | 18 | ~6 |
+| `GEOM.CULL` | 15 | 4–6 |
+| `GEOM.BINNER` + `SETUP` | 16 | 4–6 |
+| `RASTER.FRAGMENT` | 10 | ~7 |
+
+Landing these puts the currently-measured subset near **90–105 DSPs** — reserve
+rather than 112/112 desperation. Explicitly **not** a full-console prediction,
+because half the modules remain unfitted.
+
+### THE OWNER RULING THAT WAS MISSING: a vertex budget
+
+> **Zhaozhou v1 guarantees approximately 120,000 skinned vertex instances per
+> 60 Hz frame across all active views. The Measure must degrade before
+> exceeding that.**
+
+This is the number I said was needed and could not invent. `GEOM.SKIN` currently
+spends 64% of the device's DSPs on a "one vertex per clock" target that its own
+contract admits is unbacked. At 100 MHz an 11-clock weighted engine delivers
+~151,000 weighted vertices per frame; at 95 MHz, ~144,000. So 120,000 has real
+reserve. If it later proves too low, **duplicate the three-lane engine** — two
+15-DSP engines are still far cheaper than one 72-DSP combinational block.
+
+### The two designs that matter most
+
+**Field IR — one arithmetic engine, not ten idle calculators.** One registered
+signed 33×33 universal multiplier service, one shared isqrt, one shared sine
+table, one ordinary-RCP ROM and one normalize-RCP ROM. **No production op unit
+may keep a private nonconstant multiplier.** The three existing register-read
+cycles `Q_RD0/1/2` are free scheduling slots, so MUL, MAD, DOT2, DOT3 and the
+square-gathering for LEN/NORMALIZE stay at the **existing six-clock cadence**.
+Only genuinely complex ops lengthen; worst instruction must stay **≤96 clocks**,
+inside the present 120-cycle anti-hang window — and that bound must be re-proven
+from a named `MAX_OP_CYCLES` rather than left a magic constant.
+
+Staged, not one flattening commit: introduce the service; move NOISE, ROT, RING
+(which already walk a local multiplier) onto it; share isqrt between LEN and
+NORMALIZE; move ALU multiply/DOT into the read states; sequence NORMALIZE, RCP,
+CURVE; delete the orphaned multipliers and duplicate ROMs; refit.
+
+**GEOM.SKIN — three row lanes, not 24 simultaneous operators.** Three 32×32
+lanes, one per output row: matrix A in three cycles, B in three more only for
+weighted vertices, so a **rigid vertex stops paying for the two-bone circuit**
+(today it pays in full, because the rigid branch is only a result mux). And the
+blend uses the identity the contract already documents:
+
+```
+w0*pa + (64-w0)*pb  ==  (pb << 6) + w0*(pa-pb)
+```
+
+walked as shift-add or radix-4 digits through reused wide adders — **not another
+six DSP multiplies**. Exact, single final rounding preserved. Rigid ~4 clocks,
+weighted ~10–11.
+
+### TERRAIN.PROJECT: do NOT serialize it first
+
+The most important larger point, and it inverts the obvious move. The projector
+transforms **triangle** vertices, so a 33×33 patch does **6,144 projections for
+1,089 unique lattice vertices** — the source itself records the duplication as up
+to sixfold.
+
+```
+today:                6,144 projections x 1 clock = 6,144 clocks/patch
+cached + sequenced:   1,089 projections x 3 clocks = 3,267 clocks/patch
+```
+
+**A three-cycle projector with a projected-vertex cache is almost twice as fast
+per patch** while cutting nine simultaneous matrix products to three. A cached
+vertex is ~75 bits; a patch is ~82 kbit, roughly nine or ten M10K blocks per
+in-flight view against 553 available. Serializing before caching would be
+strictly worse. This is a separate architecture wave, not a local edit.
+
+### Process rulings adopted with it
+
+* **Mutation sweeps must run in separate git worktrees with separate build
+  directories.** The terrain sweep contaminated other targets with
+  mutant-generated Verilator sources and made clean RTL look broken — sharing one
+  build tree between agents "is no longer defensible". This is the standing
+  permission for worktrees that the project's own rule otherwise requires be
+  asked for each time.
+* Every block gets: clean baseline commit → baseline block fit → mutation
+  preflight → rearchitecture → direct + random + **composition** tests →
+  explicit **alone-vs-interleaved contamination** test → clean after commit →
+  after block fit → ledger/report update.
+
+### Order
+
+1. Field shared arithmetic engine
+2. Three-lane skin prototype, against the 120k budget
+3. `GEOM.CULL` one-lane
+4. `SURFACE.STAMP` one square lane + numerator recurrences
+5. TMU weight hoist, refit, then channel-walk if still needed
+6. `TERRAIN.NORMALS` over three clocks
+7. Projected-vertex cache + row-sequenced projector
+8. Binner/setup and fragment
+9. **Only then** a graphics-composed fit, and reassess what is genuinely left
+
+---
+
 ## MEASURED 2026-08-22 (night) — the re-measure you were owed, and it answers
 ## the (a)/(b) question the CDC agent left open
 
