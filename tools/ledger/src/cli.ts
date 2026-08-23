@@ -6,6 +6,7 @@
  *   gen-contracts  — scaffold missing design/contracts/<ID>.md stubs
  */
 import * as fs from 'node:fs';
+import { dspCensus } from './dsp';
 import * as path from 'node:path';
 import { loadLedger, loadYaml } from './load';
 import { checkAll, type RtlFile, type SbyTask } from './rules';
@@ -159,13 +160,40 @@ function cmdCheck(): number {
       }
     }
   }
+  // --- V23: the DSP census (see src/dsp.ts for why this does not gate) -----
+  let dspLine = '';
+  {
+    const rep = path.join(REPO_ROOT, 'reports', 'synthesis', 'zhao_block_fit.json');
+    if (fs.existsSync(rep)) {
+      try {
+        const c = dspCensus(JSON.parse(fs.readFileSync(rep, 'utf8')));
+        if (c) {
+          for (const b of c.overCapacityBlocks) {
+            errors.push(
+              `V23: ${b.module} alone infers ${b.dsp} DSPs against a device with ${c.capacity} — that is not an upper-bound artifact, it is a block that cannot be placed`
+            );
+          }
+          const pct = c.capacity > 0 ? Math.round((c.total / c.capacity) * 100) : 0;
+          const worst = c.worst.map((w) => `${w.module} ${w.dsp}`).join(', ');
+          dspLine =
+            `ledger: DSP census — ${c.total} inferred across ${c.measured} measured blocks ` +
+            `against ${c.capacity} on the device (${pct}%); worst: ${worst}. ` +
+            `Per-block fits do not share, so this is an UPPER BOUND, not a prediction.`;
+        }
+      } catch {
+        // an unreadable report is not a ledger error; the fit lane owns it
+      }
+    }
+  }
+
   if (errors.length > 0) {
     console.error(`ledger: CHECK FAILED — ${errors.length} error(s) against ${nBlocks} blocks / ${nOps} ops`);
     for (const e of errors) console.error(`  - ${e}`);
     return 1;
   }
   const blocked = blocks.doc.blocks.filter((b) => b.blocked_on === 'hardware').length;
-  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V17 + V19–V22 + staleness green (V18 reserved: sim-lane run registry)`);
+  if (dspLine) console.log(dspLine);
+  console.log(`ledger: check OK — ${nBlocks} blocks (${blocked} blocked_on: hardware) / ${nOps} ops; schemas + V1–V17 + V19–V23 + staleness green (V18 reserved: sim-lane run registry)`);
   return 0;
 }
 
