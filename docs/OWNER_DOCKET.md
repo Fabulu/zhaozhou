@@ -68,28 +68,66 @@ and *tile-exact frame height*, and one of them has to give.
 ### The resolution, which costs nothing
 
 **Decouple the tile grid from the displayed area.** Round the grid *up* to a
-multiple of 16 and scan out only the active rows:
+multiple of 16 and display a centred window inside it. Converged on
+independently from both directions, and refined in two ways worth taking:
+
+    stored / tiled canvas   384 × 224   = 24 × 14 = 336 complete tiles
+    ┌──────────────────────────────────┐  stored row   0
+    │ 4-row guard, outside the camera  │
+    ├──────────────────────────────────┤  stored row   4  = displayed row   0
+    │                                  │
+    │   visible  384 × 216   16:9      │
+    │                                  │
+    ├──────────────────────────────────┤  stored row 219  = displayed row 215
+    │ 4-row guard, outside the camera  │
+    └──────────────────────────────────┘  stored row 223
 
 | | value |
 | --- | ---: |
-| tile grid / framebuffer | **384 × 224** — 24 × 14 = **336 exact tiles** |
-| framebuffer bytes | **172,032 B** (fits the 245,760 B slot) |
-| viewport, and rows scanned out | **384 × 216** |
-| rows rendered but never displayed | 8 |
-| HDMI | 1920×1080 at exact 5× |
+| tile grid / stored canvas | **384 × 224** — 24 × 14 = **336 exact tiles** |
+| stored bytes | **172,032 B** (fits the 245,760 B slot unchanged) |
+| camera viewport | **x0 = 0, y0 = 4, w = 384, h = 216** |
+| active raster / displayed | **384 × 216**, 165,888 B |
+| scanout mapping | displayed row `y` fetches stored row `y + 4` |
+| stride, bursts per row | 768 B, **12** — both unchanged from Z60 |
+| HDMI | 1920×1080 at exact 5× nearest-neighbour |
 
 This needs **no partial-tile support anywhere**: the grid stays exactly
-divisible, every tile is a full 16×16, and the framebuffer is smaller than
-Z60's. The bottom eight rows fall outside the viewport, so the binner never
-places geometry there and they cost effectively nothing.
+divisible and every tile is a full 16×16.
+
+**Refinement 1 — centre the window rather than top-aligning it.** Four guard
+rows above and four below, instead of eight dead rows at the bottom. Verified
+to cost nothing: the visible span touches tile rows 0..13 either way, so the
+tile count is identical. The gain is that **neither visible edge coincides with
+a buffer edge**, so no clamp-at-row-0 or conservative-rasteriser spill can
+reach a displayed pixel.
+
+**Refinement 2 — and this is the important one — the camera is genuinely 16:9,
+not a cropped 16:10 image.** The projection matrix and the viewport are for
+384:216. The eight guard rows are simply *outside the camera viewport*; they
+exist to satisfy the tile machinery and nothing renders into them. Rendering a
+16:10 frame and chopping it afterwards would silently change what the player
+sees; this does not.
+
+**There is precedent for exactly this in the design already, which is the part
+that makes it cheap.** Duo stores two 256×192 canvases — 196,608 B — while
+emitting a 512×240 displayed stream of 245,760 B, with scanout manufacturing
+the border rows rather than storing them; the spec already distinguishes
+allocation, stored occupancy and displayed bytes. `zhao_scanout_fetch` already
+carries a **mode-specific mapping from displayed row to stored row** (in Duo,
+displayed rows 0–23 and 216–239 fetch nothing and displayed row `y` maps to
+stored `y − 24`). Wide needs the same mechanism with `y + 4`. *(This precedent
+is on the audit list below — it is the claim the cost estimate leans on hardest,
+so it gets checked rather than assumed.)*
 
 Tile count **falls** from Z60's 360 to 336. Pixels fall 10%. Scanout falls 10%
 (216 × 12 = 2,592 bursts/frame against 2,880). **Widescreen makes the
 renderer's job slightly easier, not harder** — the same conclusion the proposal
 reached, and it survives the correction.
 
-The identical trick sizes `320×180` later: grid 320×192 (20 × 12 = 240 tiles),
-viewport 180, exact 6× to 1080p.
+The identical trick sizes `320×180` later: stored 320×192 (20 × 12 = 240
+tiles), visible 320×180 with 6-row guards, exact 6× to 1080p — 57,600 displayed
+pixels against Z60's 92,160. A genuinely cheap, very chunky performance mode.
 
 ### Anamorphic fallback — worth having, but be honest about it at 1080p
 
@@ -121,7 +159,11 @@ rests on, rather than accepting them:
 5. **whether anything hardcodes or budgets 360 tiles**;
 6. whether the projector's viewport is genuinely configurable;
 7. `VIDEO.SCALER`'s contract really is native-stream-formatter-only;
-8. the full blast radius of a fourth mode.
+8. the full blast radius of a fourth mode;
+9. **the Duo precedent** — that `zhao_scanout_fetch` really does hold a
+   mode-specific displayed-row-to-stored-row mapping, and that stored occupancy
+   and displayed bytes really are already distinguished. The whole "this is not
+   a new architectural concept" argument rests on it.
 
 **Nothing above is a decision needed today.** The one thing worth confirming
 when convenient: **384×216 with a 384×224 tile grid**, versus the anamorphic
