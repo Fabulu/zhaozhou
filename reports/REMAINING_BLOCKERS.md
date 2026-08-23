@@ -83,7 +83,40 @@
 >   objective, not merely missing one;
 > * Fmax figures in those rows were never measurements.
 >
-> **Only three blocks have a real speed number:**
+> ### THE SDC DEFECT HAD A SECOND HALF, found 2026-08-23 night
+>
+> Fixing `create_clock` was necessary and **not sufficient**. The generated SDC
+> declared **no `set_input_delay` and no `set_output_delay`** — and TimeQuest
+> **silently excludes every pin-to-register and register-to-pin path when none
+> is declared.**
+>
+> Demonstrated on identical RTL, same tool, same device:
+>
+> | `zhao_texture_tmu@pre-rearch` | clock only | clock + I/O |
+> | --- | ---: | ---: |
+> | Fmax | **199.72 MHz** | **36.92 MHz** |
+>
+> A factor of **5.4**. That block's arithmetic runs from `req_*` pins to `smp_*`
+> pins, so almost nothing in it is register-to-register except a counter —
+> **199.72 MHz was the counter's speed**, and the arithmetic had never been timed
+> at all. Constrained properly the worst path is 37.0 ns through the address
+> generator, exactly where the block's own contract said it would be.
+>
+> **Fixed** in `tools/quartus/run_block_fit.ps1`: the generated SDC now declares
+> `set_input_delay -clock clk 0` on every non-clock input and
+> `set_output_delay -clock clk 0` on every output, guarded by a `get_ports clk`
+> test. Validated against a real database before being trusted.
+>
+> **CONSEQUENCE: every Fmax measured before that fix is SUSPECT.** How wrong
+> depends on how much of a block sits between registers rather than at its edges
+> — a deeply pipelined block barely moves, a mostly-combinational one moves 5×.
+> **Re-measure before quoting any of them.** Rows measured with I/O delays carry
+> an `-io` suffix or postdate the fix.
+>
+> **Not affected: every DSP count.** Those are inferred at Analysis & Synthesis,
+> which never reads the SDC. The census is sound.
+>
+> **Only these blocks have a speed number at all, and most are suspect:**
 >
 > | block | Fmax | meets its own budget? |
 > | --- | ---: | --- |
@@ -92,6 +125,13 @@
 > | `zhao_field_seq` | **33.86 MHz** | **no** — 3x short of 100 MHz |
 >
 > **Thirty-eight other blocks have no evidence either way.** Expect surprises.
+>
+> Two blocks are now known to have been holding `gpu_clk` far below its
+> constraint before rearchitecture — `zhao_surface_stamp` at **32%** (32.33 MHz)
+> and `zhao_texture_tmu` at **37%** (36.92 MHz). Both were reported as meeting
+> their throughput target, because those targets were counted in cycles. **The
+> emerging pattern is that pre-rearchitecture blocks are slow as a rule**, and
+> that the DSP campaign and the timing campaign are the same campaign.
 >
 > `zhao_field_seq` went 8.59 -> 33.86 MHz on one rewrite (two 64-iteration
 > combinational loops -> a six-stage leading-zero count, bit-identical). **That
