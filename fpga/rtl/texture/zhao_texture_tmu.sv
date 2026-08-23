@@ -301,11 +301,21 @@ module zhao_texture_tmu #(
   // twelve products would pack into about five.
   //
   // MEASURED: FILT_LANES = 4 is **12 DSPs**. Quartus 17.0.2 Lite packed
-  // NOTHING — one DSP block per `*` operator, whatever the operand widths.
-  // (The same tool behaviour this block's contract already recorded from the
-  // other side: the four instances' identical weight products "did not share".)
-  // So on this kit **DSP blocks = the number of `*` operators**, and the
-  // frontier is 12 / 6 / 3 at FILT_LANES 4 / 2 / 1.
+  // NOTHING — the twelve products became twelve DSP blocks, one each. (The
+  // same tool behaviour this block's contract already recorded from the other
+  // side: the four instances' identical weight products "did not share".) So
+  // the frontier is 12 / 6 / 3 at FILT_LANES 4 / 2 / 1.
+  //
+  // STATED CAREFULLY, because the loose version of this is wrong and someone
+  // will plan a cut from it: each nonconstant `*` creates ONE physical
+  // multiplier structure, and Quartus will not fuse two of them however small
+  // — but the COST of that structure depends discontinuously on operand width
+  // and signedness. QUARTUS_GOTCHAS.md §5 has the same zhao_geom_lod source
+  // costing 28 DSPs at 72-bit operands and 18 at 64-bit, which is impossible if
+  // width were irrelevant. **The operator count is a LOWER BOUND**, exact only
+  // while every operand stays inside one block's native width — which is the
+  // case here (9x9 and 18x9) and was NOT the case for the 25x25 form this
+  // replaced.
   //
   // 12 misses the 6–9 target the DSP campaign set; 6 is the bottom of it. The
   // cycle that buys it falls entirely on the DIRECT-COLOUR path (II 4 → 5) and

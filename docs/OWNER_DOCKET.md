@@ -552,9 +552,12 @@ Four notes back to this entry, because each corrects or sharpens it:
   channels and twelve products at full rate, six at half. The conclusion
   survives: half rate is 6 DSPs, which is what was measured.
 - **Half rate had to be spent, and the fit is why.** Quartus 17.0.2 Lite packs
-  **nothing**: twelve products fit at **12 DSPs**, one block per `*` operator
-  regardless of operand width. So the full-rate option missed the 6–9 target
-  and the multiplexed half-rate one hit its floor exactly.
+  **nothing**: twelve products fit at **12 DSPs**, one block each — it will not
+  fuse two small multiplies into one block however narrow they are. So the
+  full-rate option missed the 6–9 target and the multiplexed half-rate one hit
+  its floor exactly. (The operator count is a **lower** bound, not the whole
+  answer: cost also jumps with operand width — see `design/budgets/dsp.md`'s
+  correction and `reports/QUARTUS_GOTCHAS.md` §5.)
 - **The DSPs were never the block's worst number.** See the throughput and
   timing notes in `reports/REMAINING_BLOCKERS.md`: this block runs at **0.33× the
   demand above**, and its per-block Fmax had been measuring its sample counter.

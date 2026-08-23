@@ -492,17 +492,26 @@ these settings touches the cone that limits the block (see below), so the DSP
 axis is very nearly free in time, and the choice between points is a choice
 about *cycles*, not about clock.
 
-**ONE DSP BLOCK PER `*` OPERATOR. That is the general finding and it outlives
-this block.** Twelve products of 9×9 and 18×9 fitted at **twelve** DSP blocks,
-not the five a Cyclone V's "three 9×9 *or* two 18×19" modes would allow — and
-`zhao_texture_bilerp` fitted **on its own**, three products, at **3 DSPs and 60
-ALMs** (it was 7 DSPs and 38 ALMs before). Three measurements, one rule.
-Quartus 17.0.2 Lite packed nothing — the same tool behaviour this contract
-already recorded from the other side in 2026-08-21, when the four instances'
-*identical* weight products were not shared either. **Plan DSP cuts by counting
-multiply operators, not by counting the DSP-sized multipliers the operands would
-fit into.** (`reports/QUARTUS_GOTCHAS.md` §5 is the converse: width can still
-make it worse.)
+**QUARTUS WILL NOT FUSE TWO MULTIPLIES, HOWEVER SMALL.** Twelve products of 9×9
+and 18×9 fitted at **twelve** DSP blocks, not the five a Cyclone V's "three 9×9
+*or* two 18×19" modes would allow — and `zhao_texture_bilerp` fitted **on its
+own**, three products, at **3 DSPs and 60 ALMs** (it was 7 DSPs and 38 ALMs
+before). Four measurements, one behaviour: the same tool behaviour this contract
+recorded from the other side in 2026-08-21, when the four instances' *identical*
+weight products were not shared either.
+
+**Stated carefully, because the loose version is wrong and is what people plan
+cuts from.** Each nonconstant `*` creates **one physical multiplier structure**,
+and the tool will not merge two of them. But the **cost** of that structure
+jumps discontinuously with operand width and signedness: `reports/QUARTUS_GOTCHAS.md`
+§5 has the *same* `zhao_geom_lod` source costing **28** DSPs at 72-bit operands
+and **18** at 64-bit, which is impossible if width were irrelevant, and a 33×33
+signed product is several blocks rather than one.
+
+So **the operator count is a LOWER BOUND**, exact only while every operand stays
+inside one block's native width. That holds here (9×9 and 18×9) and did **not**
+hold for the 25×25 form this replaced — which is why the cut removed both a
+count *and* a width problem.
 
 **The default is 2, and the argument is the campaign's own principle applied
 carefully in both directions.** 12 misses the 6–9 target the DSP campaign set;
