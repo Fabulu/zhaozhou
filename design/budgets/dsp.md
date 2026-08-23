@@ -27,6 +27,26 @@
 > Plan cuts by counting operators, not by counting DSP-sized multipliers the
 > operands would fit into.
 >
+> **CORRECTION, 2026-08-23 night — "whatever the operand widths" is wrong.**
+> The measured half stands: Lite packs nothing, TEXTURE.TMU's 9x9 and 18x9
+> operators each took **one** DSP, and twelve products fitted at twelve DSPs. So
+> counting operators is the right way to plan a cut.
+>
+> But the width qualifier does not survive our own evidence.
+> `reports/QUARTUS_GOTCHAS.md` §5 records the **same `zhao_geom_lod` source**
+> costing **28 DSPs at 72-bit operands and 18 at 64-bit** — impossible if width
+> were irrelevant. A 33x33 signed product is several blocks, not one.
+>
+> > Each nonconstant `*` creates **one physical multiplier structure**. Its DSP
+> > cost depends **discontinuously** on operand width and signedness, and Lite
+> > has not been observed to pack two narrow operators into one block. **The
+> > operator count is a LOWER BOUND**, exact only while every operand stays
+> > inside one block's native width.
+>
+> Practical consequence, which §5 already states: **prove the width, then
+> synthesise.** "Free" slack in an operand is the difference between 18 DSPs and
+> 28 for identical logic.
+>
 > `reports/DSP_Audit_2026-08-21.md` carries the owner's audit, the exact
 > algebra for cuts this document missed (TERRAIN.LOD 28 to 4-8, SURFACE.STAMP
 > 28 to 4-8 rather than 20, TEXTURE.TMU 28 to 8-12, GEOM.BINNER+SETUP 16 to 4,
