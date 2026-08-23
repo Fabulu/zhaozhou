@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "generator": "tools/budget/build_manifest.py",
- "headCommit": "0d473e2bee61b0e87a22cae9fa39402902a69418",
+ "headCommit": "8a3f29f618e2e42edaf49641d82cd6c44e1475a9",
  "frameBudget": {
   "targetClockHz": 100000000,
   "frameRateHz": 60,
@@ -18,9 +18,9 @@
  },
  "coverage": {
   "modulesScanned": 91,
-  "modulesWithMapAtHead": 35,
+  "modulesWithMapAtHead": 41,
   "modulesWithFitAtHead": 0,
-  "modulesWithAnyMap": 35,
+  "modulesWithAnyMap": 41,
   "modulesWithAnyFit": 41,
   "modulesWithWorkload": 7,
   "calibrationPoints": 0
@@ -30,7 +30,7 @@
    "module": "zhao_geom_project",
    "sourceFile": "fpga/rtl/geometry/zhao_geom_project.sv",
    "severity": "RED",
-   "scanSeverity": "RED",
+   "scanSeverity": "ORANGE",
    "resources": {
     "mapDspBlocks": 33,
     "mapBlockMemoryBits": 2870,
@@ -53,7 +53,7 @@
     "multiplyOperatorsWritten": 3,
     "nonconstantMultiplyInstances": 11,
     "constantMultiplyInstances": 0,
-    "widestNonconstantOperand": 64,
+    "widestNonconstantOperand": 32,
     "signedNonconstant": 11,
     "muxBeforeMultiplyCandidates": 0,
     "variableShifts": 0,
@@ -95,7 +95,7 @@
     "productsToday": 11
    },
    "criticalPathFamily": [
-    "MULTIPLY(11, widest 64-bit)",
+    "MULTIPLY(11, widest 32-bit)",
     "COMB_LOOP(2)",
     "ASYNC_ARRAY_READ(13)"
    ],
@@ -111,10 +111,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -126,7 +126,7 @@
    "module": "zhao_terrain_project",
    "sourceFile": "fpga/rtl/terrain/zhao_terrain_project.sv",
    "severity": "RED",
-   "scanSeverity": "RED",
+   "scanSeverity": "ORANGE",
    "resources": {
     "mapDspBlocks": 33,
     "mapBlockMemoryBits": 3822,
@@ -156,7 +156,7 @@
     "multiplyOperatorsWritten": 3,
     "nonconstantMultiplyInstances": 11,
     "constantMultiplyInstances": 0,
-    "widestNonconstantOperand": 64,
+    "widestNonconstantOperand": 32,
     "signedNonconstant": 11,
     "muxBeforeMultiplyCandidates": 0,
     "variableShifts": 0,
@@ -198,7 +198,7 @@
     "productsToday": 11
    },
    "criticalPathFamily": [
-    "MULTIPLY(11, widest 64-bit)",
+    "MULTIPLY(11, widest 32-bit)",
     "COMB_LOOP(3)",
     "ASYNC_ARRAY_READ(17)"
    ],
@@ -215,10 +215,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -318,10 +318,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -407,10 +407,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -508,10 +508,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -598,10 +598,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -699,10 +699,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "2a711f0f",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -803,10 +803,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "56ef194b",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -902,10 +902,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "991f13c3",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -992,10 +992,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "09bbe059",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1085,10 +1085,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1185,10 +1185,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "1c98bb83",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1295,10 +1295,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "7a3e2a35",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1386,10 +1386,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "9f2928fc",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1468,10 +1468,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -1545,10 +1545,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -1628,10 +1628,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "f5e067e6",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -1697,10 +1697,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -1767,10 +1767,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -1855,10 +1855,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -1928,10 +1928,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2001,10 +2001,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2070,10 +2070,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2139,10 +2139,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2212,10 +2212,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2281,10 +2281,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2363,10 +2363,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -2461,10 +2461,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -2531,13 +2531,91 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
+   }
+  },
+  {
+   "module": "zhao_surface_sheet",
+   "sourceFile": "fpga/rtl/surface/zhao_surface_sheet.sv",
+   "severity": "RED",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 95947,
+    "mapRegisters": 131258,
+    "mapCommit": "991f13c3",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
+    "almPercentOfDevice": 228.9,
+    "dspPercentOfDevice": 0.0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 131136,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 131072,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 131072,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 131072,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 31,
+    "submodules": []
+   },
+   "debtFlags": [
+    "EXPECTED_RAM_NOT_INFERRED",
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC",
+    "PARETO_UNPROVEN"
+   ],
+   "provenance": {
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "991f13c3",
+    "fitCommit": null,
+    "headCommit": "8a3f29f6",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
     "fitRtlMatchesHead": false,
     "headRtlTree": "22d255155dd1"
    }
@@ -2615,10 +2693,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -2690,10 +2768,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -2707,6 +2785,13 @@
    "severity": "RED",
    "scanSeverity": "RED",
    "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 8192,
+    "mapEstimatedAlms": 1273,
+    "mapRegisters": 1737,
+    "mapCommit": "8a3f29f6",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 4,
     "fitDspBlocks": 0,
     "fitAlms": 1087,
     "fitRamBlocks": 4,
@@ -2745,8 +2830,8 @@
     "expectedAddressableBits": 0,
     "expectedConstRomBits": 0,
     "expectedTotalBits": 0,
-    "mapBlockMemoryBits": 0,
-    "mapInferredDesignMemories": 0
+    "mapBlockMemoryBits": 8192,
+    "mapInferredDesignMemories": 4
    },
    "rate": {
     "inferredMinII": 1
@@ -2763,18 +2848,17 @@
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
-    "NO_MAP",
     "NO_WORKLOAD",
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "8a3f29f6",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
     "fitRtlMatchesHead": false,
     "headRtlTree": "22d255155dd1"
    }
@@ -2862,10 +2946,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -2946,10 +3030,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -3026,10 +3110,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -3115,10 +3199,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -3195,10 +3279,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -3288,10 +3372,10 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -3366,10 +3450,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3437,10 +3521,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3517,10 +3601,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3598,10 +3682,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "7508adc0",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3666,10 +3750,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3734,10 +3818,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3803,10 +3887,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3873,10 +3957,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -3943,10 +4027,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4011,10 +4095,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4079,10 +4163,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4153,10 +4237,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -4230,10 +4314,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4300,10 +4384,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4377,10 +4461,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4453,10 +4537,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4530,80 +4614,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
-    "fitRtlMatchesHead": false,
-    "headRtlTree": "22d255155dd1"
-   }
-  },
-  {
-   "module": "zhao_surface_sheet",
-   "sourceFile": "fpga/rtl/surface/zhao_surface_sheet.sv",
-   "severity": "ORANGE",
-   "scanSeverity": "ORANGE",
-   "resources": {
-    "almPercentOfDevice": 0.0,
-    "dspPercentOfDevice": 0.0
-   },
-   "arithmetic": {
-    "multiplyOperatorsWritten": 0,
-    "nonconstantMultiplyInstances": 0,
-    "constantMultiplyInstances": 0,
-    "widestNonconstantOperand": 0,
-    "signedNonconstant": 0,
-    "muxBeforeMultiplyCandidates": 0,
-    "variableShifts": 0,
-    "divides": 0,
-    "combinationalLoops": 4,
-    "satChains": 0,
-    "duplicateExpressions": 0
-   },
-   "storage": {
-    "arrays": 2,
-    "totalArrayBits": 131136,
-    "arraysExpectingRam": 1,
-    "asyncReadArrays": 1,
-    "addressableArrays": 1,
-    "addressableBits": 131072,
-    "resetTouchedArrays": 1,
-    "constRomTables": 0,
-    "constRomBits": 0
-   },
-   "expectedVsInferredRam": {
-    "expectedAddressableBits": 131072,
-    "expectedConstRomBits": 0,
-    "expectedTotalBits": 131072,
-    "mapBlockMemoryBits": 0,
-    "mapInferredDesignMemories": 0
-   },
-   "rate": {
-    "inferredMinII": 1
-   },
-   "criticalPathFamily": [
-    "COMB_LOOP(4)",
-    "ASYNC_ARRAY_READ(1)"
-   ],
-   "composition": {
-    "directIoArithmeticPaths": 0,
-    "ports": 31,
-    "submodules": []
-   },
-   "debtFlags": [
-    "NO_CURRENT_FIT",
-    "NO_MAP",
-    "NO_WORKLOAD",
-    "OLD_SDC"
-   ],
-   "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
-    "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4695,10 +4709,10 @@
     "NO_SUBSYSTEM_FIT"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "991f13c3",
     "fitCommit": "753ca931",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -4712,7 +4726,14 @@
    "severity": "ORANGE",
    "scanSeverity": "ORANGE",
    "resources": {
-    "almPercentOfDevice": 0.0,
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1451,
+    "mapRegisters": 260,
+    "mapCommit": "8a3f29f6",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
+    "almPercentOfDevice": 3.5,
     "dspPercentOfDevice": 0.0
    },
    "arithmetic": {
@@ -4760,18 +4781,17 @@
    "debtFlags": [
     "NO_CURRENT_FIT",
     "NO_II_TEST",
-    "NO_MAP",
     "NO_WORKLOAD",
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "8a3f29f6",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
     "fitRtlMatchesHead": false,
     "headRtlTree": "22d255155dd1"
    }
@@ -4842,10 +4862,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -4929,10 +4949,96 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
+   }
+  },
+  {
+   "module": "zhao_texture_bilerp",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_bilerp.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "mapDspBlocks": 3,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 60,
+    "mapRegisters": 0,
+    "mapCommit": "8a3f29f6",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 1,
+     "Total number of DSP blocks": 3,
+     "Fixed Point Mixed Sign Multiplier": 3
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 3,
+    "fitAlms": 60,
+    "fitRamBlocks": 0,
+    "fitCommit": "1c98bb83",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null,
+    "almPercentOfDevice": 0.1,
+    "dspPercentOfDevice": 2.7
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 3,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 18,
+    "signedNonconstant": 3,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(3, widest 18-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 7,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "8a3f29f6",
+    "fitCommit": "1c98bb83",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -5015,10 +5121,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -5100,10 +5206,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -5167,10 +5273,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5234,10 +5340,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5301,10 +5407,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5368,10 +5474,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5448,10 +5554,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -5515,10 +5621,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5589,10 +5695,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5666,10 +5772,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5733,10 +5839,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5800,10 +5906,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -5873,10 +5979,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "991f13c3",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -5953,10 +6059,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -6026,10 +6132,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -6101,10 +6207,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -6187,10 +6293,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": true,
@@ -6261,10 +6367,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6332,10 +6438,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6406,10 +6512,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6423,6 +6529,13 @@
    "severity": "YELLOW",
    "scanSeverity": "YELLOW",
    "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 64,
+    "mapRegisters": 0,
+    "mapCommit": "8a3f29f6",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
     "fitDspBlocks": 0,
     "fitAlms": 64,
     "fitRamBlocks": 0,
@@ -6477,18 +6590,17 @@
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
-    "NO_MAP",
     "NO_WORKLOAD",
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "8a3f29f6",
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
     "fitRtlMatchesHead": false,
     "headRtlTree": "22d255155dd1"
    }
@@ -6499,7 +6611,14 @@
    "severity": "YELLOW",
    "scanSeverity": "GREEN",
    "resources": {
-    "almPercentOfDevice": 0.0,
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 150,
+    "mapRegisters": 173,
+    "mapCommit": "8a3f29f6",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
+    "almPercentOfDevice": 0.4,
     "dspPercentOfDevice": 0.0
    },
    "arithmetic": {
@@ -6546,18 +6665,17 @@
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
-    "NO_MAP",
     "NO_WORKLOAD",
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
+    "scanCommit": "8a3f29f6",
+    "mapCommit": "8a3f29f6",
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
     "fitRtlMatchesHead": false,
     "headRtlTree": "22d255155dd1"
    }
@@ -6620,86 +6738,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null,
-    "mapRtlMatchesHead": false,
-    "fitRtlMatchesHead": false,
-    "headRtlTree": "22d255155dd1"
-   }
-  },
-  {
-   "module": "zhao_texture_bilerp",
-   "sourceFile": "fpga/rtl/texture/zhao_texture_bilerp.sv",
-   "severity": "YELLOW",
-   "scanSeverity": "GREEN",
-   "resources": {
-    "fitDspBlocks": 3,
-    "fitAlms": 60,
-    "fitRamBlocks": 0,
-    "fitCommit": "1c98bb83",
-    "fitFmaxMhz": null,
-    "fitSetupSlackNs": null,
-    "fitHoldSlackNs": null,
-    "almPercentOfDevice": 0.1,
-    "dspPercentOfDevice": 2.7
-   },
-   "arithmetic": {
-    "multiplyOperatorsWritten": 3,
-    "nonconstantMultiplyInstances": 3,
-    "constantMultiplyInstances": 0,
-    "widestNonconstantOperand": 18,
-    "signedNonconstant": 3,
-    "muxBeforeMultiplyCandidates": 0,
-    "variableShifts": 0,
-    "divides": 0,
-    "combinationalLoops": 0,
-    "satChains": 0,
-    "duplicateExpressions": 0
-   },
-   "storage": {
-    "arrays": 0,
-    "totalArrayBits": 0,
-    "arraysExpectingRam": 0,
-    "asyncReadArrays": 0,
-    "addressableArrays": 0,
-    "addressableBits": 0,
-    "resetTouchedArrays": 0,
-    "constRomTables": 0,
-    "constRomBits": 0
-   },
-   "expectedVsInferredRam": {
-    "expectedAddressableBits": 0,
-    "expectedConstRomBits": 0,
-    "expectedTotalBits": 0,
-    "mapBlockMemoryBits": 0,
-    "mapInferredDesignMemories": 0
-   },
-   "rate": {
-    "inferredMinII": 1
-   },
-   "criticalPathFamily": [
-    "MULTIPLY(3, widest 18-bit)"
-   ],
-   "composition": {
-    "directIoArithmeticPaths": 0,
-    "ports": 7,
-    "submodules": []
-   },
-   "debtFlags": [
-    "NO_CURRENT_FIT",
-    "NO_MAP",
-    "NO_WORKLOAD",
-    "OLD_SDC"
-   ],
-   "provenance": {
-    "scanCommit": "c3277cbf",
-    "mapCommit": null,
-    "fitCommit": "1c98bb83",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6763,10 +6805,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6832,10 +6874,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6906,10 +6948,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -6980,10 +7022,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -7054,10 +7096,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -7128,10 +7170,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
@@ -7197,10 +7239,10 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "c3277cbf",
+    "scanCommit": "8a3f29f6",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "0d473e2b",
+    "headCommit": "8a3f29f6",
     "scanSourceListHash": "40e689de9f34a042",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,

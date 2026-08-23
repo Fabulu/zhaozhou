@@ -106,3 +106,21 @@ WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json
 zhao_surface_stamp                 ok                      42.8s   DSP 0     membits 0
 WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (35 row(s); 1 this run)
 [36/90] 23:12:12 zhao_surface_sheet
+zhao_surface_sheet                 ok                    1095.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (36 row(s); 1 this run)
+[37/90] 23:30:29 zhao_surface_blend
+zhao_surface_blend                 ok                        57s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (37 row(s); 1 this run)
+[38/90] 23:31:27 zhao_surface_sq
+zhao_surface_sq                    ok                        64s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (38 row(s); 1 this run)
+[39/90] 23:32:33 zhao_texture_cache
+zhao_texture_cache                 ok                     100.2s   DSP 0     membits 8192
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (39 row(s); 1 this run)
+[40/90] 23:34:15 zhao_texture_bilerp
+zhao_texture_bilerp                ok                      73.7s   DSP 3     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (40 row(s); 1 this run)
+[41/90] 23:35:31 zhao_texture_aux
+zhao_texture_aux                   ok                     156.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (41 row(s); 1 this run)
+[42/90] 23:38:09 zhao_texture_mosaic

@@ -311,43 +311,135 @@ def is_constant_cone(n):
     return True
 
 
-def peel_extension(n, types):
-    """Strip sign/zero extension to find an operand's HONEST width.
+def pure_extension_funcs(mnode, types):
+    """Functions whose entire body is a sign or zero extension of one argument.
+
+    WHY THIS IS NEEDED, and how the gap showed itself.
+
+    `zhao_geom_project` and `zhao_terrain_project` both write
+
+        mad_x = ext32m(s5_ndc_x) * $signed({... vp_w ..., 15'b0}) + ...
+
+    where `ext32m` is `$signed({{(MAD_W-32){v[31]}}, v})` -- a 32-bit value
+    widened to 64 by a function call. `peel_extension` could not see through
+    the FUNCREF, so it reported those two products as **64x64** and rated them
+    RED for carrying no peelable slack.
+
+    Measurement says otherwise, and says it exactly. Both modules map at 33 DSP
+    blocks for 11 products -- THREE each, uniformly, which is the 32x32
+    decomposition. A genuine 64x64 signed product is far more than three
+    blocks, so if two of the eleven were really 64-bit the total could not be
+    33. The extension is folded away by Quartus whether it is written inline or
+    behind a function.
+
+    This is the SAME false positive as the inline-extension rule that had to be
+    withdrawn earlier in this run, wearing a function call. Both were caught
+    the same way: by a measured number refusing to agree.
+    """
+    out = {}
+    for f in walk(mnode):
+        if f.get("type") != "FUNC":
+            continue
+        fvar = (f.get("fvarp") or [None])[0]
+        args = [v for v in walk(f) if v.get("type") == "VAR"
+                and v.get("direction") == "INPUT"]
+        if fvar is None or len(args) != 1:
+            continue
+        # Verilator prepends an `ext32m = CRESET` initialiser to every
+        # function body, so "the body is one assignment" is never literally
+        # true and the first version of this check rejected every candidate.
+        body = [s for s in walk(f) if s.get("type") in ("ASSIGN", "ASSIGNW")
+                and (only_child(s, "rhsp") or {}).get("type") != "CRESET"]
+        if len(body) != 1:
+            continue
+        lhs, rhs = only_child(body[0], "lhsp"), only_child(body[0], "rhsp")
+        if lhs is None or rhs is None or lhs.get("type") != "VARREF":
+            continue
+        if lhs.get("varp") != fvar.get("addr"):
+            continue
+        # NOTE: peel_extension returns the ORIGINAL node, not a peeled one --
+        # it computes a width, it does not rewrite the tree. An earlier version
+        # of this check compared the returned node against the argument and
+        # therefore matched nothing once the peel became a width recursion.
+        # The structural test is what it always should have been: the body is a
+        # widening, and the only signal it reads is the one argument.
+        _n, _d, _h, how = peel_extension(rhs, types)
+        if how == "none":
+            continue
+        refs = {v.get("varp") for v in walk(rhs) if v.get("type") == "VARREF"}
+        if refs != {args[0].get("addr")}:
+            continue
+        out[f["addr"]] = True
+    return out
+
+
+def peel_extension(n, types, ext_funcs=None):
+    """The HONEST width of a multiply operand, and how it differs from declared.
 
     QUARTUS_GOTCHAS 5 is the reason this exists: the SAME `zhao_geom_lod`
-    source cost 28 DSPs at 72-bit operands and 18 at 64-bit.  A 32-bit value
-    sign-extended to 64 asks Quartus for a 64x64 multiplier; the honest need is
-    32x32.  Verilator writes that extension as either an EXTEND/EXTENDS node or
-    as CONCAT{REPLICATE(sign-bit, k), value}, and both forms appear in this
-    repo, so both are peeled.
+    source cost **28 DSPs at 72-bit operands and 18 at 64-bit**.  A 32-bit
+    value widened to 64 asks Quartus for a 64x64 multiplier; the honest need is
+    32x32.  "Prove the width, then synthesise" needs something that can compute
+    the proven width, and the declared `dtypep` is not it.
 
-    Returns (honest_node, declared_width, honest_width, how).
+    Three widening forms appear in this repository and all three are folded:
+
+        {{32{a[31]}}, a}          sign extension, written inline
+        ext32m(x)                 sign extension, written as a function
+        {x, 15'b0}                a left SHIFT wearing a concatenation
+
+    The third is why this became a width RECURSION rather than a loop that
+    peels wrappers off one node.  `mad_x`'s right operand is
+    `{$unsigned(vp_w[view]), 15'b0}` inside a 64-bit lane: peeling wrappers
+    finds nothing to remove and reports 64, when the value is 12 + 15 = **27**
+    bits.  Measurement settles which is right -- both projectors map at 33 DSP
+    blocks for 11 products, three each, uniformly, and a genuine 64x64 signed
+    product is not three blocks.
+
+    Returns (representative_node, declared_width, honest_width, how).
     """
     declared = types.width(n)
-    cur, how = n, "none"
-    for _ in range(8):
-        t = cur.get("type")
+
+    def honest(node, depth=0):
+        if node is None or depth > 12:
+            return types.width(node) if node is not None else None, "none"
+        t = node.get("type")
+        if t == "CONST":
+            return types.width(node), "none"
         if t in ("EXTEND", "EXTENDS"):
-            nxt = only_child(cur, "lhsp") or only_child(cur, "srcp")
-            if nxt is None:
-                break
-            cur, how = nxt, "extend"
-            continue
+            sub = only_child(node, "lhsp") or only_child(node, "srcp")
+            w, _ = honest(sub, depth + 1)
+            return w, "extend"
+        if t == "FUNCREF" and ext_funcs and ext_funcs.get(node.get("taskp")):
+            args = node.get("argsp") or []
+            if args:
+                a0 = args[0]
+                inner = a0 if a0.get("type") != "ARG" else only_child(a0, "exprp")
+                w, _ = honest(inner, depth + 1)
+                return w, "extension-function"
         if t == "CONCAT":
-            lhs, rhs = only_child(cur, "lhsp"), only_child(cur, "rhsp")
-            # {{k{v[msb]}}, v} -- a REPLICATE of one bit on the left
-            if lhs is not None and rhs is not None and lhs.get("type") == "REPLICATE":
-                src = only_child(lhs, "srcp")
-                if src is not None and types.width(src) == 1:
-                    cur, how = rhs, "concat-replicate"
-                    continue
-            # {k'b0, v}
-            if lhs is not None and rhs is not None and lhs.get("type") == "CONST" \
-                    and re.match(r"^\d+'[hbd]?0+$", lhs.get("name", "")):
-                cur, how = rhs, "concat-zero"
-                continue
-        break
-    return cur, declared, types.width(cur), how
+            lhs, rhs = only_child(node, "lhsp"), only_child(node, "rhsp")
+            if lhs is not None and rhs is not None:
+                # {{k{v[msb]}}, v} -- sign extension
+                if lhs.get("type") == "REPLICATE":
+                    src = only_child(lhs, "srcp")
+                    if src is not None and types.width(src) == 1:
+                        w, _ = honest(rhs, depth + 1)
+                        return w, "concat-replicate"
+                # {k'b0, v} -- zero extension
+                if lhs.get("type") == "CONST" and re.match(r"^\d+'[hbdo]?0+$", lhs.get("name", "")):
+                    w, _ = honest(rhs, depth + 1)
+                    return w, "concat-zero"
+                # {v, k'b0} and every other pack -- a SHIFT, so the value needs
+                # the payload's honest width plus the padding, not the lane's.
+                lw, _ = honest(lhs, depth + 1)
+                rw = types.width(rhs)
+                if lw is not None and rw is not None:
+                    return lw + rw, "concat-shift"
+        return types.width(node), "none"
+
+    w, how = honest(n)
+    return n, declared, w, how
 
 
 def expr_depth(n, limit=64):
@@ -525,6 +617,7 @@ def instance_counts(root, top):
 def analyse_module(name, mnode, types, filemap):
     S = ModuleScan(name, types, filemap, {})
     funcs, call_counts, _direct = build_func_call_counts(mnode)
+    ext_funcs = pure_extension_funcs(mnode, types)
 
     # which FUNC (if any) lexically contains each node addr
     owner = {}
@@ -572,8 +665,8 @@ def analyse_module(name, mnode, types, filemap):
             continue
         lc, rc = is_constant_cone(lhs), is_constant_cone(rhs)
         inst = instances(n)
-        lnode, ldecl, lhon, lhow = peel_extension(lhs, types)
-        rnode, rdecl, rhon, rhow = peel_extension(rhs, types)
+        lnode, ldecl, lhon, lhow = peel_extension(lhs, types, ext_funcs)
+        rnode, rdecl, rhon, rhow = peel_extension(rhs, types, ext_funcs)
         rec = {
             "kind": "multiply",
             "signed": n.get("type") == "MULS",
