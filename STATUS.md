@@ -36,6 +36,29 @@ while reporting success, with no symptom except a number that never moved. That
 is now three times in two days, so I have stopped treating it as bad luck.
 **A green result from a tool nobody has watched run is not evidence.**
 
+### And then I checked whether it had already damaged anything. It had not.
+
+The obvious next question — *how many of our recorded test scores are worthless?*
+— deserved an answer rather than a reassurance, so I went through every sweep
+result in the repository looking for the empty-set signature.
+
+**Every recorded score parsed a real set:**
+
+| where | what it recorded |
+| --- | --- |
+| mesh-fetch cull sweep | linted **32** mutants, 32 accounted, 30 caught |
+| creature skinning sweep | linted **28** mutants at three settings, 0 failed to build |
+| Field engine sweep | 33 attempted, 33 accounted, 30 caught |
+
+The only `linted 0` lines anywhere are in the write-ups **describing** the bug,
+including the one above. Nothing to re-run, nothing withdrawn.
+
+The reason the blast radius is zero is worth keeping: the fault only bites in a
+**fresh** copy of the repository, and running sweeps in a fresh copy is a rule
+you introduced recently. So the very first run under the new rule hit it, which
+is the best possible time to find a fault of this kind — before it had a history
+to poison.
+
 ### Creature skinning: the 58 MHz problem is diagnosed exactly
 
 Not guessed. The timing tool named one wire, and **all 200 of the worst paths
