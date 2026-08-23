@@ -1,5 +1,171 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — STOP THE ONE-BLOCK-AT-A-TIME LOOP: build a budget compiler
+
+**Ruling: the next engineering run is a repo-wide audit, not another isolated
+rescue.** Every block so far has been chosen because its latest number looked
+horrifying. That is reactive, and it has cost roughly a day per block. The
+recurring disaster shapes are **mechanically detectable from source** — the exact
+DSP/ALM/Fmax still needs measurement, but *which blocks to suspect* does not.
+
+### Verified before accepting the premise
+
+| claim | verdict |
+| --- | --- |
+| the census is an undercount | **CONFIRMED** — 94 RTL files, **41 measured rows** |
+| `GEOM.PROJECT` is unfitted and duplicates `TERRAIN.PROJECT` (33 DSP) | **CONFIRMED unfitted** — not in the report at all; duplication asserted by its own header |
+| `FORGE.CLIFF`'s tables cannot infer as RAM | **CONFIRMED** — three `assign x = mem_r[idx]` async reads over ~120 kbit (2048x18, 2048x32, 1024x17), written from an async-reset process; its fit **timed out** |
+| a regex can inventory the arithmetic | **REFUTED — by me, twice.** Counting nonconstant multiplies in `geom_project` with grep gave 0, then gave line-counts. Both useless. **This is the argument for an elaborated-AST scanner rather than pattern matching.** |
+
+`design/budgets/dsp.md`'s rule has also been corrected: operator count is a
+**lower bound**, not the answer — width and signedness change the cost
+discontinuously, as §5's 72-bit/64-bit 28-vs-18 result proves.
+
+### The honest total
+
+    canonical measured census        134
+    probable hidden projector       +30..33
+    probable hidden pose arithmetic +14..18
+                                    -------
+    source-level warning total      ~178..185 DSP
+
+**Treat this as a ~180-DSP design that must become 85-90**, not a 134-DSP design
+needing twenty more removed. That is worse than it looked and still credible,
+because the same pass found enough architectural duplication to cover it.
+
+### The seven recurring failure classes
+
+Every block burned so far fits one or more. **All seven are gateable
+mechanically.**
+
+1. **A placeholder throughput becomes physical parallel hardware.** "One item
+   per clock" builds six or twenty-eight multipliers before anyone asks how many
+   items a frame contains.
+2. **Software-shaped combinational functions treated as one cycle.** Loops,
+   normalisation, decode→filter, add→compare→saturate, whole state-machine
+   finishes.
+3. **Things that are memories described as registers and muxes.** Async read,
+   reset-touched arrays, dynamic bank selection, giant constant case trees — all
+   prevent inference. Field spends 8,901 ALMs and **zero** M10Ks while 502 sit
+   idle.
+4. **The same arithmetic duplicated in adjacent blocks.** Both projectors;
+   Setup/Binner edge starts; ten Field op units; duplicated bilinear weights.
+5. **Leaf timing does not represent subsystem timing.** First clocks were
+   absent, then I/O paths were absent; even a corrected zero-delay leaf boundary
+   is not a real internal seam.
+6. **Latency, initiation interval and Fmax confused.** A block can have low
+   latency and terrible rate, or good II and miss the clock. Only
+   `min(Fmax, target) / II` answers capacity.
+7. **Correctness tests validate values, not physical realisation.** Simulation
+   cannot tell you that RAM became flops, that a directive was ignored, or that
+   narrow multiplies failed to pack.
+
+### The deliverable
+
+**`tools/budget/scan_rtl.py`** — an **elaborated-AST** scanner (Verilator XML,
+not regex), emitting one record per module: every nonconstant multiply with
+operand widths, signedness, result width and dependency chain; variable
+shifts/division/modulo; serial combinational loops; wide add/compare/saturate
+chains; repeated calls to identical expensive functions; arrays with total bits,
+read style, reset style, bank selection, port count and expected RAM/ROM;
+interface shape (direct input→arithmetic→output paths, ready-only-in-IDLE,
+dead return-to-IDLE cycles, max in-flight records); and counters whose enable
+depends on deep combinational logic. Severity RED/ORANGE/YELLOW/GREEN.
+
+**Quartus calibration microbenches** — stop guessing the multiplier mapping.
+Generated modules across widths 8/9/16/18/19/24/31/32/33/40/48/64, signed and
+unsigned, combinational / input-registered / input+output-registered, at 1–4
+operators. Same for RAM templates: sync vs async read, reset vs none, depths,
+widths, byte enables, one and two ports. Then the audit can say *"3 x signed
+33x32, input/output registered ~= 9 DSP on this exact tool and device"* instead
+of hand-waving from a datasheet.
+
+**Map-only pass over every module at HEAD.** Far cheaper than a full fit and it
+already answers DSP inference, RAM inference, ALM explosions and whether
+parameters actually elaborate differently. **The 41-of-94 gap becomes a CI
+failure rather than a historical footnote.**
+
+**Registered characterisation wrappers** — registered stimulus → DUT →
+registered hash sink. Raw leaf blocks with hundreds of virtual pins are poor
+physical models. And fit representative **pairs**, because the seam becomes
+internal: TMU+CACHE, FRAGMENT+TILESTORE, SETUP+BINNER, TESS+NORMALS,
+PROJECTOR+vertex cache, FIELD+terrain intake.
+
+**`design/budgets/workloads.yml`** — executable demand for every expensive
+block: invocations/frame, workload mix, measured II, latency, target clock,
+reserve. Capacity is generated, not asserted:
+
+    capacity = min(measured_fmax, target_clock) x frame_seconds / measured_II
+
+Field needs distributions rather than a scalar — opcode mix per profile.
+
+**`reports/budget_manifest.json` + `reports/BUDGET_HEATMAP.md`**, carrying per
+block: resources at HEAD, expected vs inferred RAM, corrected-I/O Fmax,
+WNS/TNS/hold, **critical-path family** (not just the headline number), II by work
+type, items/frame, demand ratio, latency, provenance, composition status, and
+**debt flags** — `NO_CURRENT_FIT`, `OLD_SDC`, `NO_WORKLOAD`, `NO_II_TEST`,
+`EXPECTED_RAM_NOT_INFERRED`, `NO_SUBSYSTEM_FIT`, `NO_RESERVE`.
+
+**Those flags would have exposed Field and the TMU before anyone read their
+misleading headline numbers.**
+
+### CI gates — hard failures
+
+* a new nonconstant multiply must appear in the arithmetic inventory with proven
+  widths and a resource owner;
+* any array above ~512–1,024 bits must declare expected RAM/ROM behaviour;
+  async-read or reset-touched storage is **rejected** unless explicitly waived;
+* **expected memory but zero inferred RAM blocks fails the fit even if every
+  differential passes**;
+* a throughput claim with no executable II test fails the ledger;
+* an Fmax without corrected clock+I/O constraints is **not recorded as Fmax**;
+* an Fmax without a named critical path is not accepted;
+* >5 DSPs or >5% ALMs requires two measured Pareto points, or a stated reason no
+  cheaper point exists;
+* `SYNTHESIZED` maturity requires a current-HEAD map, a corrected fit, zero hold
+  failures and provenance;
+* a boundary-heavy block requires a subsystem-wrapper fit before integration.
+
+`reports/TIMING_HAZARD_SCAN.md` remains useful but searches only long
+combinational **loops**, and says so itself. The scanner must also cover
+dataflow depth, memory shape and state-machine rate.
+
+### Predicted red list, to be confirmed not assumed
+
+| area | likely now | plausible target | return |
+| --- | ---: | ---: | ---: |
+| two projectors (shared core + projected-vertex cache) | ~63–66 | 9–12 | **~51–57** |
+| pose arithmetic (serialise quat and matrix lanes) | ~14–18 | 4–6 | 10–14 |
+| `TERRAIN.NORMALS` (six 33x33 products, 2,000/frame demand) | 18 | **3** | 15 |
+| `GEOM.CULL` (parallel plane dots, demand never derived) | 15 | 3–6 | 9–12 |
+| `SETUP`+`BINNER` (share edge starts; `E2 = area2 − E0 − E1`) | 16 | 4 | 12 |
+| `RASTER.FRAGMENT` (mux the left operand — two products per channel are mutually exclusive) | 10 | 4–7 | 3–6 |
+| `TERRAIN.TESS` (replace the 64-cell dynamic scan with an AND pyramid) | 6 | 2–3 | 3–4 |
+
+From ~180–190 that plausibly lands **~75–95 DSP**.
+
+**Two non-DSP bombs also predicted:** `FORGE.CLIFF`'s three async-read tables
+(confirmed above — fix the memories *before* another fit, the source already
+gives the answer), and the **pose palette** at 128 tuples x 32 bones x 12
+elements x 32 bits = **1,572,864 bits ~= 150 M10Ks, 28% of the device in one
+bite.** The current low M10K census creates a false sense of abundance.
+
+### Order — expose before optimising
+
+`GEOM.PROJECT` map+fit → composed `GEOM.POSE` wrapper → `FORGE.CLIFF`
+map-only inference check → `FRAGMENT`+`TILESTORE` subsystem fit →
+`TERRAIN.NORMALS` → `GEOM.CULL` → `SETUP`+`BINNER` → `RASTER.EDGEWALK` →
+`TERRAIN.TESS` → derive the Earth/Patch/Velocity/Field workload → decide the
+pose-palette memory frontier.
+
+**This run does NOT optimise blocks**, except where a map cannot complete because
+storage is clearly uninferable. Its deliverable is **evidence and ranked work**.
+
+Cost: perhaps a couple of agent-days plus substantial unattended Quartus time.
+It replaces weeks of rediscovering, one block at a time, that each "one-cycle"
+block was thirty pieces of hardware or one 25-nanosecond combinational sausage.
+
+
 ## 2026-08-23 — TEXTURE.TMU REARCHITECTURE RULING: it is a calculator wearing a
 ## one-request-at-a-time trench coat
 
