@@ -310,7 +310,36 @@ try {
             Write-Warning "existing $dest could not be parsed; it will be replaced rather than merged"
         }
     }
-    foreach ($row in $results) { $merged[$row.module] = $row }
+    # AND A FAILED RUN MUST NOT DESTROY A GOOD MEASUREMENT.
+    #
+    # The merge above keeps rows this run did not touch. It did NOT protect a
+    # row this run touched and FAILED to measure -- a timeout or a killed
+    # fitter produced a row with status set and every number null, which
+    # replaced a perfectly good prior measurement.
+    #
+    # Measured 2026-08-23, on this script's own author: zhao_geom_lod stood at
+    # 1,183 ALMs / 6 DSPs; a re-fit was killed by memory contention; the report
+    # then read status=failed with alm=null, dsp=null, and the real numbers were
+    # gone. Recoverable from another branch that time -- the point, again, is
+    # that nothing said it had happened.
+    #
+    # So a non-ok result KEEPS the prior measurement and records the failed
+    # attempt beside it. The failure is still visible (lastAttempt*), and the
+    # number is still there. Overwriting only happens ok -> ok, which is what
+    # re-running a block actually means.
+    foreach ($row in $results) {
+        $prior = $merged[$row.module]
+        if ($row.status -ne 'ok' -and $null -ne $prior -and $prior.status -eq 'ok') {
+            $kept = $prior | Select-Object *
+            $kept | Add-Member -NotePropertyName 'lastAttemptStatus'  -NotePropertyValue $row.status  -Force
+            $kept | Add-Member -NotePropertyName 'lastAttemptSeconds' -NotePropertyValue $row.seconds -Force
+            $kept | Add-Member -NotePropertyName 'lastAttemptCommit'  -NotePropertyValue $row.sourceCommit -Force
+            $merged[$row.module] = $kept
+            Write-Warning ("{0}: this run ended '{1}'; KEEPING the previous measurement ({2} ALM / {3} DSP) rather than erasing it" -f $row.module, $row.status, $prior.alms, $prior.dspBlocks)
+        } else {
+            $merged[$row.module] = $row
+        }
+    }
     $out.blocks = @($merged.Keys | Sort-Object | ForEach-Object { $merged[$_] })
 
     [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
