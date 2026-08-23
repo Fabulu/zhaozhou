@@ -67,6 +67,142 @@ number of 40-minute fits if the holds turn out to be there.
 
 ---
 
+## RULED 2026-08-23 — measure a Pareto frontier, not one point. And 105 DSPs is
+## not reserve, it is the ceiling.
+
+A survey of comparable FPGA GPU projects — Raster I, RasterIX, Vortex, eGPU,
+SIMTight, and the time-multiplexed FPGA overlay literature — relayed by Fabian
+and adopted. It **confirms** the direction taken today and **corrects the
+process** around it.
+
+### What it confirms
+
+Every one of those projects reaches the same conclusion Zhaozhou reached this
+week: *do not instantiate every mathematically independent operation in
+parallel; choose a sustained rate, build only enough arithmetic for it, and
+time-share the rest.*
+
+The overlay literature reports up to **85% resource reduction** from replacing
+spatial one-unit-per-operation hardware with time-multiplexed DSP functional
+units. So today's results are not flukes:
+
+```
+GEOM.LOD     18 DSP -> 6
+TERRAIN.LOD  28 DSP -> 3
+```
+
+It also independently validates the exact boundary already adopted: **time-share
+WITHIN a subsystem, never build a console-global multiplier.** Field ops are
+mutually exclusive with each other; they are not mutually exclusive with
+rasterisation, terrain projection or texture filtering.
+
+And it names the 72-bit mistake in `zhao_geom_lod` for what it was: **"slack on
+an operand is not free when it changes DSP decomposition"** — a textbook FPGA
+anti-pattern, caught here only by fitting the block.
+
+### THE CORRECTION THAT MATTERS MOST: one point is not an architecture
+
+> Do not let the agent implement only one "optimized" architecture per block.
+> Make it preserve two or three parameterized resource points and measure the
+> Pareto frontier.
+>
+> That is the clearest difference between Zhaozhou's work so far and mature FPGA
+> GPU research. **Zhaozhou has been discovering the right point one emergency at
+> a time.** Vortex, RasterIX and eGPU make the choice of point part of the
+> architecture.
+
+Vortex's own numbers show why guessing fails: 1 → 2 cache virtual ports cost 9%
+more LUTs; 4 ports cost 25%. They chose **2** — neither the fastest nor the
+smallest — and could only choose it because all three were measured.
+
+**Variants worth fitting, per subsystem:**
+
+| subsystem | variants |
+| --- | --- |
+| Field | 1 and 2 shared multiplier lanes |
+| Skin | 3 and 6 row lanes |
+| Cull | 1 and 2 arithmetic lanes |
+| TMU | 1, 2 and 4 channel accumulators |
+| Normals | 2 and 6 multipliers |
+| Stamp | 1 and 2 square lanes |
+| Project | cached 3-lane; cached 6-lane |
+| Raster | one and two fragment lanes |
+
+Each row records: source commit, device and tool version, DSP / ALM / registers
+/ M10K, WNS / TNS / hold, latency, sustained ops per clock, ops per 60 Hz frame,
+frame-budget utilisation. **The canonical build then selects the cheapest point
+that clears its workload with reserve** — not whichever version was coded last.
+
+### THE TARGET WAS TOO LOOSE
+
+I recorded 90–105 DSPs as the goal. On a 112-DSP device that is **80% to 94%** —
+not reserve, effectively the ceiling, before the ~40 still-unfitted modules,
+synthesis drift and physical placement.
+
+| resource | development target | warning line |
+| --- | --- | --- |
+| DSP | **≤85–90 / 112** | **>95** |
+| ALM | ≤70–75% | >80% |
+| M10K | ≤70–80% | >85% |
+| timing | positive slack with meaningful margin | "barely zero" |
+
+Raster I is the cautionary case: a real, working tile-based FPGA renderer at
+**69% LUT, 88% DSP, 97% BRAM** on an Arty A7-100T. It works — and it has
+essentially no room for the next required feature. Optional texture support
+"if enough BRAM remains" is acceptable in a research demo and is not a console
+architecture.
+
+### Three techniques to apply before sequencing anything
+
+1. **Ask whether the calculation should exist multiple times AT ALL, first.**
+   SIMTight cut register-file storage 68% by recognising genuinely shared values
+   instead of copying them per lane. This is the insight that turned
+   `TERRAIN.PROJECT` from "three times slower" into "almost twice as fast": the
+   projections were duplicated, not merely parallel. Live analogues here:
+   instances sharing a decoded pose; camera matrices and frustum-plane lengths
+   are per camera not per instance; Field constants are per program not per
+   sample; TMU weights are per sample not per RGBA channel; stamp radius squares
+   are per stamp not per texel; repeated texture addresses should issue once.
+2. **Share modes rather than duplicate machinery.** Vortex implements only
+   bilinear filtering — point sampling runs through the same sampler with zero
+   blend weights, because a separate one-cycle path was not worth the muxing,
+   and trilinear is a pseudo-instruction invoking the primitive twice. So:
+   nearest stays the bilinear identity; rare quality modes spend **cycles, not
+   permanent silicon**.
+3. **Spend M10K to avoid DSP and DDR traffic.** Universal across every design
+   surveyed. M10Ks are not merely storage — they replace arithmetic, ALM muxes
+   and bandwidth. The projected-vertex cache is the local example: ~82 kbit per
+   patch, nine or ten M10Ks against 553 available.
+
+### Two structural changes to consider (not yet ruled)
+
+**Build configurations, as RasterIX does.** It exposes hardware capability as a
+compile-time choice — 4.5k LUT minimal, 11k typical, 36k full — behind one
+unchanged OpenGL-facing API, with the driver parameterised to agree. The
+Zhaozhou analogue would be `ZH_COMPACT` / `ZH_BALANCED` / `ZH_THROUGHPUT`
+sharing one command ABI and one Form program set, with the Measure enforcing the
+capability the target declares. **Not three consoles — one console, three
+budgets, so a Pareto point is never lost by being overwritten.**
+
+**Placement zones, as eGPU does.** eGPU budgeted by physical FPGA sector (16,400
+ALMs / 164 DSPs / 237 M20Ks, four units per sector) and matched each unit's
+resource *proportions* to the device's, which is what let it replicate without
+losing frequency. The Zhaozhou analogue is grouping subsystem farms so they do
+not reach across the chip: terrain zone (projector, normals, terrain LOD,
+projected-vertex M10Ks); creature zone (pose staging, skin, cull, creature LOD);
+texture/raster zone; field/surface zone. Worth doing **before** an apparently
+legal 108-DSP machine fails routing.
+
+### Also worth noting: hardware/software partitioning is not cheating
+
+RasterIX runs its vertex pipeline in software. Vortex accelerates selectively.
+Neither treats CPU assistance as a compromise — they put regular, rate-sensitive
+work in hardware and irregular work where software is cheaper. For Zhaozhou the
+800 MHz ARM remains the right home for scene traversal, dynamic fracture,
+unusual mesh processing, command generation, gameplay and cache preparation.
+
+---
+
 ## RULED 2026-08-23 — the DSP rearchitecture: per-subsystem multiplier farms,
 ## and a vertex budget that finally exists
 
