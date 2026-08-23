@@ -47,6 +47,39 @@ not.** Stating that plainly is the point of a budget document.
 | Storm | 217,984 |
 | Duo | **318,592** |
 
+### WARNING: there are TWO "cycles per frame" numbers and they differ 6.6x
+
+Do not use the table above as a compute budget. It is a **video-domain**
+quantity.
+
+`frame_gpu_cycles` is exactly `2 x h_total x v_total` for every mode — verified:
+Z60 2 x 125,760 = 251,520; Storm 2 x 108,992 = 217,984; Duo 2 x 159,296 =
+318,592, a ratio of exactly 2.000 in all three cases, because
+`vid_clk = gpu_clk / 2` (`spec/video_rules.md:11`). It is the raster's own
+period, and the scheduler uses it as a **deadline** (`zhao_cmd_scheduler.sv:292`
+`dead_lim`).
+
+The **compute** budget is the one the cost models use:
+**1,666,667 cycles per 60 Hz frame at the 100 MHz placeholder**
+(`spec/terrain_rules.md:525,579`, `spec/sky_and_beams.md:162` — and note those
+say *placeholder*: **Phase 0 freezes the clock**, it is not frozen yet).
+
+| | cycles per frame |
+| --- | ---: |
+| `frame_gpu_cycles`, Z60 — **video/deadline** | 251,520 |
+| cost-model frame at 100 MHz — **compute** | 1,666,667 |
+
+**Which one is right is settled by arithmetic, not preference.** GEOM.SKIN's
+ruled demand is 120,000 vertices/frame at 10 cycles each = **1,200,000 cycles**.
+Against 251,520 that is 477% of the frame — impossible. Against 1,666,667 it is
+72% — tight but real. So the fabric clock is not the video-derived 15.09 MHz,
+and a block's throughput must be costed against the 100 MHz placeholder.
+
+This matters because a per-block cost summed against 251,520 is wrong by 6.6x in
+the direction that makes a block look **unaffordable when it is fine**, or a
+budget look met when it is not. Both numbers are called "gpu cycles" and both
+are correct for their own purpose.
+
 ### The Duo full-canvas blit
 
 | | first blit completes | period |
