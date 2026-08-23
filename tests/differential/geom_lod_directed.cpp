@@ -476,23 +476,28 @@ int main(int argc, char** argv) {
     }
   }
 
-
   // ---- 14. BACK-TO-BACK INSTANCES MUST NOT CONTAMINATE EACH OTHER ---------
   //
-  // WHY THIS EXISTS, and it is not a hypothetical. `zhao_terrain_lod` was
-  // sequenced the same way this block was — thirty parallel products folded
-  // onto one shared multiplier — and it broke the Duo fairness law: one view's
-  // degradation started removing the other view's triangles. Its own
-  // differential passed 219 checks throughout, because a block-level
-  // differential drives ONE stream and the defect only exists when two
-  // independent consumers share the hardware.
+  // WHY THIS EXISTS -- and the original reason turned out to be WRONG, which is
+  // recorded here rather than quietly edited out.
   //
-  // This block is structurally safer: its ladder state is the caller's
-  // (`rung_i`/`hold_i` in, `rung_o`/`hold_o` out), so there is no per-instance
-  // state inside to leak. But sequencing added an FSM, a shared multiplier and
-  // internal registers, and "structurally safer" is exactly the reasoning that
-  // failed next door. The property is cheap to test, so it is tested rather
-  // than argued.
+  // `zhao_terrain_lod` was sequenced the same way this block was, and a
+  // composed test (`measure_governor_lod`) then failed 55 of 72 checks on the
+  // Duo fairness law. I concluded the restructuring had broken it, and I
+  // "proved" it by reverting the .sv and watching the test pass.
+  //
+  // THAT PROOF WAS CONFOUNDED. Reverting the file forced a rebuild, and the
+  // rebuild regenerated the model from clean source -- which ALSO cleared
+  // mutant-derived model sources that a sweep had left behind in consumers it
+  // never scored. The pass tracked the rebuild, not the RTL. Built clean, the
+  // sequenced RTL passes 72/72 with a byte-identical trace to the block it
+  // replaced. It never broke anything.
+  //
+  // So this section is NOT evidence of a real defect in a sibling block. It is
+  // here because the sequencing pattern -- parallel products folded onto one
+  // shared multiplier -- makes cross-consumer contamination *possible* in
+  // principle, and this block is where that would be hardest to notice:
+  // GEOM.MESHFETCH is still SPECIFIED, so there is no composed test at all.
   //
   // THE PROPERTY: an evaluation's answer must not depend on what was evaluated
   // before it. Each instance is measured ALONE, then the same instances are
@@ -540,8 +545,8 @@ int main(int argc, char** argv) {
     Step alone[n];
     for (int i = 0; i < n; ++i) {
       reset_dut(dut);
-      alone[i] = dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung,
-                          insts[i].hold);
+      alone[i] =
+          dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung, insts[i].hold);
     }
 
     // 2. the same instances back-to-back, no reset between them, in several
@@ -557,8 +562,8 @@ int main(int argc, char** argv) {
       reset_dut(dut);
       for (int k = 0; k < n; ++k) {
         const int i = orders[o][k];
-        const Step got = dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung,
-                                  insts[i].hold);
+        const Step got =
+            dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung, insts[i].hold);
         char nm[160];
         std::snprintf(nm, sizeof nm, "14.order%d pos%d: %s rung is independent of what preceded it",
                       o, k, insts[i].name);
