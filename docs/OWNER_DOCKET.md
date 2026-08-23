@@ -58,7 +58,49 @@ ROT2/ROT3 from 24/25 clocks to about 16, for zero DSPs. I did not take it becaus
 no acceptance criterion moves and it would have invalidated a running mutation
 sweep. It is recorded here so it is a decision rather than an oversight.
 
-### 2. NO PER-BLOCK FIT HAS EVER CARRIED A TIMING NUMBER, AND NOW I KNOW WHY
+### 2. THE FIELD ENGINE CANNOT MEET THE CLOCK, AND THE PATH IS ONE WIRE
+
+Your SDC fix gave this block its first timing numbers, and they change what the
+next Field task should be.
+
+| | Fmax | WNS setup | TNS setup |
+| --- | ---: | ---: | ---: |
+| before | **7.72 MHz** | -119.5 ns | -2,389,303 ns |
+| after | **8.59 MHz** | -106.4 ns | -2,122,226 ns |
+
+Twelve times too slow against 10 ns, on BOTH sides. The DSP work bought 11% and
+was never going to buy more: it removed multipliers, and multipliers are not the
+path.
+
+I asked TimeQuest instead of guessing. All three worst paths are the same wire,
+with **78 levels of logic in one cycle**:
+
+```
+from  zhao_field_normalize|h_rt[41]      (the integer root's held answer)
+to    zhao_field_normalize|o1_o[1]       (a normalised output lane)
+```
+
+That is the exponent extraction, written as two SIXTY-FOUR-ITERATION
+combinational loops that unroll into 128 sequential compare-and-shift stages on
+a 64-bit value, feeding both the seed ROM index and the per-lane rescale shift
+in the same cycle. **The same loops are in the pre-change design**, which is why
+both sides sit at 8 MHz, and they were invisible for exactly the reason your
+census note gives: no per-block fit had ever been given a clock.
+
+**The fix is small and I did not make it.** `zhao_field_rcp` already does this
+correctly a few lines away — a leading-zero count, log depth instead of linear.
+Replacing the two loops with one, or simply registering `(m, e)` in a state of
+their own, costs **one clock on an operation with thirteen clocks of margin**
+under MAX_OP_CYCLES.
+
+I left it alone because it is a different change with its own verification cost
+— it would invalidate the mutation sweep and both fits — and because you should
+decide whether Field timing is worth a wave now or after the other DSP blocks.
+**My recommendation: do it with the next Field touch, not as a special trip.**
+It is bounded, it is cheap in latency, and until it is done no Field number
+about timing means anything except "not close".
+
+### 2b. NO PER-BLOCK FIT HAS EVER CARRIED A TIMING NUMBER, AND NOW I KNOW WHY
 
 This is the one that matters beyond this block.
 

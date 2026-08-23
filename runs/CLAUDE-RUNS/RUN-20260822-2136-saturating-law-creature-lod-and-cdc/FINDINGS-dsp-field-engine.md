@@ -28,13 +28,29 @@ is **67**, against a proven bound of 80 and a required ceiling of 96.
 
 ### 1. The measurement, both sides, measured by me
 
-| | ALMs | DSPs | registers | commit | worktree |
-| --- | ---: | ---: | ---: | --- | --- |
-| before, CONSTRAINED | 10,615 | **79** / 112 | 4,543 | `57352cf` | clean |
-| after, CONSTRAINED | **8,901** | **3** / 112 | 5,356 | `62d7b0e` | clean |
-| delta | **-1,714 (-16.1%)** | **-76 (-96%)** | +813 | | |
-| before, unconstrained (for contrast) | 10,623 | 79 | 4,510 | `57352cf` | clean |
-| after, unconstrained (4-DSP sine) | 8,832 | 4 | 5,367 | `e576625` | clean |
+The shape below is the one worth reusing for the rest of the DSP wave: all four
+resources, the timing the fit actually closed at, and the commit each row was
+measured at — because a row that cannot say which code it describes is a number
+somebody will quote wrongly later.
+
+| | ALMs | DSPs | M10K | registers | Fmax | WNS setup | TNS setup | commit | clean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| before, CONSTRAINED | 10,615 | **79** / 112 | 0 | 4,543 | 7.72 MHz | -119.5 ns | -2,389,303 ns | `57352cf` | yes |
+| after, CONSTRAINED | **8,901** | **3** / 112 | 0 | 5,356 | 8.59 MHz | -106.4 ns | -2,122,226 ns | `62d7b0e` | yes |
+| delta | **-1,714 (-16.1%)** | **-76 (-96%)** | 0 | +813 | +0.87 MHz | +13.1 ns | +267,077 ns | | |
+| before, unconstrained | 10,623 | 79 | 0 | 4,510 | 7.75 MHz | n/a | n/a | `57352cf` | yes |
+| after, unconstrained (4-DSP sine) | 8,832 | 4 | 0 | 5,367 | n/a | n/a | n/a | `e576625` | yes |
+
+**Sustained rate, which is what the DSP ruling says allocation must be justified
+by.** At 100 MHz a 60 Hz frame is 1,666,667 clocks, so the engine sustains
+277,778 simple instructions per frame (6 clocks), or 24,876 NORMALIZE3 per frame
+(67 clocks), on three DSP blocks. Whether that is enough is a Field-program
+question nobody has answered yet — but the number now exists, and it is the
+number a budget argument needs.
+
+**And the Fmax column is the reason finding 4c exists.** Neither side is within
+an order of magnitude of the 10 ns target, which no previous per-block fit could
+have shown.
 
 Quartus Prime Lite 17.0.2, 5CSEBA6U23I7 (provisional), virtual pins, no composed
 fit, `zhao_field_seq` plus its fourteen field sources as the cone. Nothing here
@@ -228,6 +244,64 @@ per-block SDC naming every clock-shaped port in `fpga/rtl`.
 **Both sides of this measurement were therefore re-taken with the fixed script**,
 and the unconstrained pair is kept beside them, because the difference between
 the two is itself the evidence for how much the old census understated.
+
+### 4c. THE ENGINE STILL CANNOT MEET THE CLOCK, AND NOW I KNOW WHICH WIRE
+
+The fixed script gave the Field engine its first timing numbers ever. They are
+bad on both sides, and the honest reading is that **the DSP rearchitecture was
+necessary and is not sufficient**:
+
+| | Fmax | WNS setup | TNS setup | WNS hold |
+| --- | ---: | ---: | ---: | ---: |
+| before (`57352cf`) | **7.72 MHz** | -119.519 ns | -2,389,303 ns | +0.343 ns |
+| after (`62d7b0e`) | **8.59 MHz** | -106.411 ns | -2,122,226 ns | +0.262 ns |
+
+Against a 10 ns target that is roughly **twelve times too slow, before and
+after**. Removing 76 DSPs and 1,714 ALMs bought 11% of Fmax, which is what you
+would expect from deleting some wide multiply paths while leaving the dominant
+one untouched.
+
+**So I asked the tool where the path is rather than guessing:**
+
+```
+slack        -106.411 ns
+from         zhao_field_exec_shared:u_exec|zhao_field_normalize:u_norm|h_rt[41]
+to           zhao_field_exec_shared:u_exec|zhao_field_normalize:u_norm|o1_o[1]
+logic levels 78
+```
+
+All three worst paths are the same wire. **Seventy-eight levels of logic in one
+cycle**, from the integer root's held result to a normalised output lane.
+
+That is `zhao_field_normalize`'s exponent extraction, and it is written as two
+SIXTY-FOUR-ITERATION combinational loops:
+
+```systemverilog
+for (int k = 0; k < 64; k++) if (t < (64'd1 << 23)) begin t = t << 1; ee = ee - 1; end
+for (int k = 0; k < 64; k++) if (t >= (64'd1 << 24)) begin t = t >> 1; ee = ee + 1; end
+```
+
+Unrolled, that is 128 sequential compare-and-shift stages on a 64-bit value,
+feeding the seed ROM index AND the per-lane rescale shift in the same cycle.
+
+**The DSP work neither caused this nor could have fixed it.** Those loops are
+identical in the before design, which is exactly why both sides sit at ~8 MHz.
+They were invisible for the same reason everything else was: no per-block fit
+had ever been given a clock.
+
+**The fix is cheap and I have not made it**, because it is a different change
+with its own verification cost and the owner should choose when to spend it:
+
+* register `(m_val, e_val)` in a state of their own, after the root lands
+  instead of combinationally every cycle. One extra clock on an operation that
+  has **thirteen clocks of margin** under `MAX_OP_CYCLES`; or
+* replace the two loops with a leading-zero count — a priority encoder, log
+  depth instead of linear — which `zhao_field_rcp` already does correctly a few
+  lines away and is the better answer.
+
+Both are bounded. Neither is in this task's acceptance criteria, and doing
+either would invalidate the sweep and both fits, so it is on the docket as a
+recommendation with the measurement attached rather than done quietly.
 
 ### 5. The anti-hang proof: 120 was a magic constant, and it was also wrong for this design
 
