@@ -1,5 +1,237 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — THE THREE DEMAND NUMBERS, derived from Sacrifice itself
+
+**These are DERIVED, not ruled.** Fabian asked for a best guess from evidence
+rather than a decision from him: *"Orient yourself on sacrifice… Find what
+resources we need. We look flashier, bigger, crazier, but our resolution is shit
+so we probably actually need less of everything."* Every figure below carries
+its source. Overturn any of them on sight.
+
+Evidence is a read-only survey of `sacengine` (a D reimplementation that parses
+the original formats) and the retail install, including symbols exported from
+`Sacrifice.exe`.
+
+### First, a corroboration worth more than the three answers
+
+**The 120,000 vertices/frame ruling is independently plausible.** Measured across
+**93 creature/wizard/hero models**: median **2,951 vertices** (min 1,498, max
+8,996). The engine's own caps give 10 groups × 12 creatures addressable, but the
+real limit is the soul economy — starting pools measured across all 32 retail
+maps are **4–12 souls, mode 8**, and creatures cost 1–5 souls each. A defensible
+scene is **40–60 skinned characters**.
+
+    40 x 2,951 = 118,040        60 x 2,951 = 177,060
+    the ruling of 120,000  ->  ~41 creatures at median detail
+
+So the number was well chosen. It was the one input that made GEOM.SKIN's 13.9x
+over-provisioning computable, and it now has a second, independent source.
+
+### The headline ratio
+
+Sacrifice shipped at **800×600×16bpp** (retail log `thaum.err`, build 0678,
+May 2001), falling back to 640×480, max 1024×768. We render **92,160** pixels
+against its **480,000** — **19%**. At equal cost per triangle that is roughly
+**5× the per-pixel budget to spend on "more stuff"**, which is exactly the brief.
+
+---
+
+### 1. SURFACE.STAMP — 28 DSPs, and it needs approximately none
+
+**The original's system is called SCAR and it is a texture stamp, exactly like
+this block.** `Sacrifice.exe` exports `ApplyScarring`, `ApplyScarringToTile`,
+`GetFreeScarTexture`, `ReleaseScarTexture`, `MakeScarLUT`, `ClearScars`,
+`SaveScars`. 19 SCAR assets exist; the format was decoded and validated against
+all 19 (`16 + 1024 + 2·W·H`): 8-bit palette index **plus 8-bit alpha**, sizes
+8×8 to 256×256, median 64×64. The five elemental god scars (`air_`, `deth`,
+`erth`, `fire`, `life`) are **128×128** — the bread-and-butter impact mark.
+
+Land tiles are 64×64, so a 128×128 scar dirties **at most 3×3 = 9 tiles =
+36,864 texels**, and that happens **once per spell impact, not per frame**:
+
+| | texels/s | texels/frame | share of a frame at 1 texel/clock |
+| --- | ---: | ---: | ---: |
+| 10 impacts/s (heavy barrage) | 368,640 | 6,144 | **0.37%** |
+| 30 impacts/s (absurd) | 1,105,920 | 18,432 | **1.11%** |
+
+**The block is provisioned for 1,666,667 texels/frame. It needs about 6,000.
+Over-provisioned by roughly 270×.**
+
+The multiplier count should fall further than the rate alone implies, because
+**the original composites through a lookup table — `MakeScarLUT` — not
+per-texel arithmetic.** A LUT-composited stamp at one texel per ~90 clocks
+plausibly needs **zero DSPs**.
+
+> **DERIVED DEMAND: 20,000 stamp texels per frame** (3× the heavy-barrage
+> figure, for headroom). **Proposed target: 0–2 DSPs.**
+
+**The real constraint is not bandwidth — it is the tile pool.**
+`GetFreeScarTexture` / `ReleaseScarTexture` prove a **finite pool of writable
+64×64 tiles**, copy-on-write: an unscarred tile shares the read-only static set
+and only gets a private mutable copy when first scarred. Scars are **permanent**
+(no fade path anywhere; serialised into savegames). **Size the pool, not the
+rate.** The pool's capacity is compiled into the original's private data and is
+*not* recoverable — a genuine open question, and an architecture one rather than
+a throughput one.
+
+---
+
+### 2. TEXTURE.TMU — 28 DSPs, needs roughly half-rate
+
+Terrain is layered **tile + detail + lightmap** (`sacmap.d:136-174`), so **at
+least 3 samples per terrain pixel**. Tiles are 64×64 8-bit paletted; detail
+textures 256×256, up to 7 per tileset; one 256×256 RGBA lightmap per map. **No
+alpha splatting between tile types** — the tile index is per-cell and hard-edged,
+which is a real simplification in our favour.
+
+| | samples/frame | samples/clock |
+| --- | ---: | ---: |
+| Z60 384×240, overdraw 2.0 | 552,960 | **0.33** |
+| Z60 384×240, overdraw 3.0 | 829,440 | **0.50** |
+| WIDE 384×216, overdraw 3.0 | 746,496 | **0.45** |
+
+> **DERIVED DEMAND: 850,000 samples per frame** — one sample every two clocks,
+> not one per clock. A bilinear tap is `a + (b−a)·w`: three lerps per channel,
+> three channels ≈ 9 products at full rate, so **about 5–6 DSPs at half rate.**
+> **Proposed target: 6–9 DSPs**, from 28.
+
+**Two structural warnings for whoever builds it**, both measured:
+
+* **Creature textures are 256 wide with *arbitrary* height, up to 799.** Only
+  **81 of 637 (12.7%)** are power-of-two in both dimensions. This is structural
+  rather than sloppy: each body-part texture is a **vertical atlas strip** whose
+  height is whatever that part needed (`saxs.d:90`, V = `ring.texture /
+  textureMax`). **A TMU that assumes square power-of-two breaks on the majority
+  of character art.** The natural hardware shape is 256 wide × up to 1024 tall.
+* **Everything else is strictly power-of-two and square**, and **nothing exceeds
+  256×256** — 390 of 626 are 256×256, the rest 128×128 or smaller.
+
+Mip-mapping is **proven present**: every `.MAPT` is 5,476 bytes, and
+`4096+1024+256+64+16+4+1 = 5,461` is a complete 64×64→1×1 chain. Verified
+empirically rather than by arithmetic alone — a palette-parent test gives a
+68.6% hit rate at offset 0 against 22.9% at offset 16, the signature of
+palette-space box filtering. **The shipped mips exist and sacengine throws them
+away** (`sacmap.d:361-368` reads only the first 4,096 bytes). We should not.
+
+---
+
+### 3. TERRAIN.NORMALS — 18 DSPs, needs almost nothing
+
+Terrain is a **regular 256×256 heightfield** — every one of the 32 retail maps
+is exactly 256×256, corroborated three ways in source. Grid spacing is 10 world
+units, so a map is 2,550 × 2,550.
+
+Runtime deformation is **permanent and tiny**. `PermanentDisplacement` holds
+`float[256][256]` (`state.d:6787`), CRC-hashed for network sync, with exactly
+two deformers:
+
+| source | radius | depth | grid cells touched |
+| --- | ---: | ---: | --- |
+| Bombardment | 15.0 units | 1.2 | ~3×3 |
+| Volcano | 25.0 units | 10.0 | ~5×5 |
+
+**A crater touches 9–25 vertices.** Neither fades.
+
+| | normals/frame |
+| --- | ---: |
+| 10 deform events/s × 25 vertices | **4.2** |
+| 30 events/s | 12.5 |
+| rebuilding the **entire** 65,536-vertex field once per second | **1,092** |
+
+**The block is provisioned for 1,666,667 per frame.** Even the pathological
+whole-field rebuild is 0.07% of that.
+
+> **DERIVED DEMAND: 2,000 normals per frame** — generous enough for a full field
+> rebuild every second plus heavy combat. **Proposed target: 1–2 DSPs**, from 18.
+
+There is a real optimisation here too: the reference backend only re-runs terrain
+displacement when the hash differs from `emptyHash` (`dagonBackend.d:2050-2058`)
+— **it is free until something actually digs.**
+
+---
+
+### If all three land, the census closes
+
+| block | now | derived target |
+| --- | ---: | ---: |
+| `zhao_surface_stamp` | 28 | **0–2** |
+| `zhao_texture_tmu` | 28 | **6–9** |
+| `zhao_terrain_normals` | 18 | **1–2** |
+| | **74** | **7–13** |
+
+**188 − 74 + ~10 = about 124**, before `terrain_project` (33), `geom_cull` (15)
+and `geom_binner` (12) are touched at all. **The 85–90 ceiling is reachable.**
+
+---
+
+### TWO CORRECTNESS FINDINGS that outrank all of the above
+
+**1. Skinning is 3-bone, not 2 — and our block does 2.**
+`saxs.d:23-42` — `struct Vertex { int[3] indices_; }`, with `-1` terminating.
+Measured over **317,234 ring-vertices across all 93 models**:
+
+| influences | share |
+| --- | ---: |
+| 1 bone | 65.07% |
+| 2 bones | 32.41% |
+| **3 bones** | **2.51%** |
+
+**Our 2-lane block is exact for 97.49% of vertices and clips 2.51%** — and the
+clipped ones are the *seam* vertices (shoulders, hips, neck), where the error is
+most visible. Options: accept and renormalise the two largest weights; widen to
+3 lanes; or split 3-influence vertices into a rare second pass. **The second pass
+is probably cheapest** given the tail is 1 vertex in 40. This is a decision, not
+a defect — but it has to be taken deliberately rather than discovered.
+
+**2. Sacrifice's weights do NOT sum to a constant, and our blend identity assumes
+they do.** Weights are a raw `ubyte` scaled by `weight/64.0f` (`sxmd.d:97`,
+`saxs.d:76`), and **all 256 raw values occur**. So the blend is an affine sum of
+independently-weighted bone-space offsets, **not a convex combination**. Our
+`(pb << 6) + w0·(pa − pb)` identity — the one that halved the multiply count — is
+valid only when `w0 + w1 = 64`.
+
+That is fine **if our content pipeline normalises on import**, and it means we
+cannot ingest Sacrifice meshes unmodified. Worth stating explicitly in
+`GEOM.SKIN.md` as a precondition on the asset pipeline, rather than discovering
+it when the first real creature loads.
+
+---
+
+### Also worth knowing
+
+* **Particles: no global cap exists** — all storage is dynamically grown, across
+  69 particle types. The largest single burst is the fireball explosion at
+  `state.d:15453-15490`: **1,375 particles in one frame** (200 + 800 additive,
+  300 ash, 75 smoke), living 0.52–2.1 s at 60 Hz. **Budget 2,000–3,000
+  simultaneous particles**; two overlapping fireballs alone reach ~2,750.
+  Particle *behaviour* remains owner-reserved and nothing here designs any.
+* **Terrain is sub-pixel dense at our resolution.** A full map is up to **130,050
+  triangles** against 92,160 pixels. The original used **ROAM** continuous LOD —
+  proven by `CalculateVariance`, `UpdateVariance` and `GetHeightMipMap` exported
+  from `Sacrifice.exe`. So `zhao_terrain_lod` is not optional polish; aggressive
+  terrain LOD is close to free visually.
+* **Creatures had no LOD** in the original (one mesh each), and the `lod` field
+  in the static-model format is **not** an LOD level — measured values are
+  near-unique and monotonically increasing, i.e. a face ordering index. The
+  reimplementer's field name is a guess; treat "static models have LOD" as
+  unproven.
+* Simulation ran at **60 Hz**, animation sampled at **30 Hz** (`state.d:13`,
+  `sacobject.d:19`), rotations stored as quantised `short[4]` quaternions, up to
+  64 named animation states per creature.
+* **No documented budget of any kind exists** in either tree — no draw-call or
+  polygon budgets, no design notes. The only quality knobs are `enableParticles`
+  and a `reduceParticles` divisor.
+
+### Not determinable, stated plainly
+
+The scar-texture **pool size** and maximum concurrent scar count; the actual
+stamp rate under combat; the global live-particle maximum; the texture filtering
+mode as an explicit setting; texture samples per pixel as a stated budget; the
+target frame rate (the string `Target framerate` exists in the binary, the value
+does not); the ROAM error threshold and its triangle reduction; and whether
+creatures were ever distance-culled or impostored.
+
+
 ## 2026-08-23 — THREE NUMBERS NEEDED to finish the multiplier campaign
 
 Not urgent, and nothing is blocked on them today. But they are the same *kind*
