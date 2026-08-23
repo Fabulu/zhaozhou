@@ -117,6 +117,26 @@ fits exhaust this 24 GB machine.
 
 ---
 
+---
+
+## Addendum: the same trap exists outside Quartus
+
+Entry 3 above — an attribute accepted and silently ignored — is not a Quartus
+quirk. It is a class, and it appeared twice in one night with two different
+tools.
+
+**yosys `cutpoint` without `opt_clean` is a silent no-op.** Cutting the shared
+multiplier's product wire for the Field engine's bounded proof produced a
+**byte-identical model** — the cut selects the wire, but the now-dead multiplier
+stays in the design until `opt_clean` removes it. No warning. The only symptom
+was a proof that did not get faster. Verified by counting cells: **4 `$mul` → 1**
+only once both passes ran.
+
+**So the rule for any directive that is supposed to change the hardware:**
+measure that it did. A DSP count that will not fall, a model that is
+byte-identical, a proof that does not speed up — these are the only symptoms you
+get, because the tool will not tell you it ignored you.
+
 ## The pattern, stated once
 
 Six of the seven were printed by the tool, in plain text, in runs nobody read.
