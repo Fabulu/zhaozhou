@@ -138,9 +138,15 @@ The single-rounding wall section of the test exists to make that mutation fail
 
 | `MUL_LANES` | TL x RL | issue slots blend/rigid | latency blend/rigid |
 | ---: | :---: | ---: | ---: |
-| 1 | 1 x 1 | 18 / 9 | **22 / 13** |
-| 3 | 3 x 1 | 6 / 3 | **10 / 7** |
-| 6 | 3 x 2 | 3 / 2 | **8 / 7** |
+| 1 | 1 x 1 | 18 / 9 | **24 / 15** |
+| 3 | 3 x 1 | 6 / 3 | **12 / 9** |
+| 6 | 3 x 2 | 3 / 2 | **10 / 9** |
+
+Two of those clocks are the blend pipeline's fill, added 2026-08-23 when the
+combinational blend measured 17.639 ns of data delay and had to be cut into
+three stages. The three rows are in flight together -- row 0 is in B2 while
+row 2 is in B0 -- so the walk still retires one row per clock and the pipeline
+costs two clocks of fill, not six.
 
 Latency is measured accept to `o_valid_o` and equals the sustained issue
 interval, because `busy` is still high in the completion cycle and the next
@@ -165,11 +171,22 @@ version of this section correctly refused to invent one.
     products per vertex      18 two-weight, 9 rigid
     honest multiplier count  18 / 13.88 = 1.30
 
-| `MUL_LANES` | sustained vertices/frame | vs. demand |
+| `MUL_LANES` | sustained vertices/frame @100 MHz | vs. demand |
 | ---: | ---: | --- |
-| 1 | 75,757 | **fails, 63%** |
-| 3 | 166,666 | 1.39x |
-| 6 | 208,333 | 1.74x |
+| 1 | 69,444 | **fails, 58%** |
+| 3 | 138,888 | 1.16x |
+| 6 | 166,666 | 1.39x |
+
+**The acceptance test is rate, not clock**, which is what makes those two extra
+pipeline clocks affordable:
+
+    required = 120,000 vertices x 60 Hz = 7,200,000 vertices/s
+    II = 12 needs 86.4 MHz ; II = 13 needs 93.6 MHz ; II = 14 fails at 100 MHz
+
+So II = 12 is comfortable and 13 is the absolute ceiling. Report
+vertices/frame from measured Fmax over measured II -- **and report raw Fmax
+too**, because `gpu_clk` is shared and a block that stops at 86 MHz caps every
+other block on the same clock.
 
 ### The verdicts do not depend on which clock number you believe
 
@@ -180,12 +197,13 @@ weak argument if it only held at one of them:
 
 | sustained vertices/frame | 95.5 MHz | 100 MHz | 120 MHz |
 | --- | ---: | ---: | ---: |
-| `MUL_LANES = 1` (22 clk) | 72,348 | 75,757 | 90,909 |
-| `MUL_LANES = 3` (10 clk) | **159,166** | **166,666** | **200,000** |
-| `MUL_LANES = 6` (8 clk) | 198,958 | 208,333 | 250,000 |
+| `MUL_LANES = 1` (24 clk) | 66,319 | 69,444 | 83,333 |
+| `MUL_LANES = 3` (12 clk) | **132,638** | **138,888** | **166,666** |
+| `MUL_LANES = 6` (10 clk) | 159,166 | 166,666 | 200,000 |
 
 **`MUL_LANES = 3` clears 120,000 at every one of them and `MUL_LANES = 1`
-fails at every one of them.** The frontier's verdicts are a property of the
+fails at every one of them** -- still true after the pipeline cost two clocks,
+and the margin at 95.5 MHz is 1.11x rather than 1.33x. The frontier's verdicts are a property of the
 architecture, not of an assumption about the clock. The directed test asserts
 against the 100 MHz figure because that is what the SDC constrains and what
 every fit is measured against; at 95.5 MHz the margin is 1.33x rather than
@@ -438,7 +456,7 @@ per-block SDC was fixed, so it was taken under no timing pressure. The
 comparison is a constrained fit against an unconstrained one and overstates the
 ALM cost by an unknown amount.
 
-### THE OPEN PROBLEM: Fmax 58.45 MHz, and the block misses its own demand
+### The Fmax problem, DIAGNOSED and FIXED IN RTL (re-fit pending)
 
 At 58.45 MHz a 10-cycle engine serves **97,417 vertices/frame against the
 120,000 required**. Diagnosed rather than guessed at:
@@ -464,12 +482,32 @@ output register`, all in one clock.
 
 **The acceptance test is Fmax / II, not Fmax.** 120,000 x 60 Hz = 7.2 M
 vertices/s; II = 13 still clears it at 93.6 MHz, so a fix that adds pipeline
-stages can still win. Today is 58.45/10 = 5.845 M/s. The planned three-stage
-blend (B0 registers pa/pb/diff/w0/rigid/row and takes the mux out of the path;
-B1 registers the numerator as one balanced 8-term tree; B2 replaces the wide
-comparators with a sign-extension test) takes II to 12, which needs 86.4 MHz.
+stages can still win. The combinational form was 58.45/10 = 5.845 M/s.
 
-Not implemented in the run that diagnosed it.
+**The fix is implemented.** The blend is three stages:
+
+- **B0** registers the accumulator pair, their difference, `w0`, `rigid` and
+  the row tag. This is the stage that matters most: `br` selected the pair, so
+  the 6:1 mux sat at the HEAD of the chain, and registering here takes the
+  counter and the mux out of the long path entirely.
+- **B1** registers the exact rounded numerator as ONE balanced 8-term tree --
+  six shifted difference terms, the base term, and the rounding constant as the
+  eighth. **Folding 2^21 into the tree is what keeps this a single rounding**:
+  the sum is exact and the shift in B2 is the only rounding, so A3b holds
+  exactly as stated above. Three adds deep instead of a seven-deep sequence.
+- **B2** replaces the two 73-bit saturating magnitude comparisons -- two full
+  carry chains at the very end of the longest path -- with a sign-extension
+  test. The shift is constant per path, so "does it fit signed 32" is exactly
+  "are the bits above the result all copies of its sign":
+  `(&num[72:53]) | (~|num[72:53])` selects `num[53:22]`; rigid uses `[72:47]`
+  and `[47:16]`. Identical answers by definition, not by approximation.
+
+Differentials are green and **bit-identical** at all three `MUL_LANES` settings
+after the change, with the same 3,976 oracle-checked / 1,778 beyond-the-
+narrowing split as before.
+
+**The re-fit has not been run at the time of writing**, so no Fmax is claimed
+for the pipelined form. II is 12, which needs 86.4 MHz.
 
 The architecture is a `MUL_LANES`-wide farm of signed 32x32 lanes, LOCAL to
 this block, input- and output-registered so the DSP's own pipeline registers
