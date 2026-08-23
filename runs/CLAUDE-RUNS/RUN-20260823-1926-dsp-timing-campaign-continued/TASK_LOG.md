@@ -154,13 +154,65 @@ same `zhao_geom_lod` source cost **28 DSPs at 72-bit operands and 18 at 64-bit**
 Operator count is a **lower bound**, exact only while operands stay inside one
 block's native width.
 
+### 22:26 - Budget audit wave 1 launched; the method changes here
+
+With the machine idle and no implementation agent running, started the audit
+rather than the next rescue. Its map-only pass is long unattended Quartus time,
+which is exactly what should occupy an idle machine overnight.
+
+**Scope is deliberately narrow: this run does NOT optimise anything.** The
+deliverable is evidence and ranked work — an elaborated-AST scanner, Quartus
+calibration microbenches, and a map-only pass to close the 41-of-94 gap.
+
+**The acceptance test is falsifiable on purpose:** run the heatmap against
+`zhao_field_seq` (zero M10Ks while spending 8,901 ALMs on a register file and
+three ROMs built from logic) and `zhao_texture_tmu` (II=6 against a demand
+needing II=1) and **confirm both light up red without anyone telling it the
+answer.** If the tool cannot rediscover what we already know, it will not find
+what we do not.
+
+### 22:40 - STATUS written for the day  (`770618b`)
+
+327 -> 134 measured; the honest ~180 stated rather than the flattering 134; the
+seven recurring mistakes; and both corrections I owe — the 199.72 MHz figure
+that was timing a counter, and the proof reported as passing that had not run.
+
+### Closing position
+
+| | |
+| --- | ---: |
+| census, measured | **134** DSPs / 112 |
+| census, honest source-level estimate | **~180-185** |
+| ceiling | 85-90 |
+| blocks rebuilt today | 4 — Field 79->3, skin 72->9, stamp 28->0, TMU 28->6 |
+| blocks meeting their frame budget | 1 — `zhao_geom_skin`, 124,514 vs 120,000 |
+| modules with any fit | **41 of 94** |
+| `ctest -L fast` | 271/272, sole failure the V16 baseline |
+
+**Two blocks have specified, unbuilt fixes**: the Field engine must stop
+building memories out of logic (6 M10Ks from 502 idle), and the TMU must accept
+more than one request at a time (the cache's four lanes make one CLUT sample per
+clock available, 1.67 M/frame against a 0.33x delivery today).
+
+**The lesson the day kept teaching, now at twelve instances:** an artifact can be
+real and still be an artifact of something other than what it was read as — an
+SDC that constrained no clock, then one that excluded every I/O path; a sweep
+that re-ran the previous binary; a preflight that scored an empty set; a proof
+whose sources predated the edit; a stopped sweep still rewriting RTL; a contract
+whose "met" meant cycles; a timing query on an unoptimised placement; and a
+green harness read as a green theorem.
+
+**A green result from a tool nobody has watched run is not evidence — and
+neither is a number from a tool that was asked the wrong question.**
+
 ---
 
 ## Subagent Spawns
 
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
-| 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134 | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
+| 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134, archived | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
+| 22:26 | `af363d9` | Budget audit wave 1 — scanner, calibration, map-only pass | Running | own run dir |
 
 ---
 
