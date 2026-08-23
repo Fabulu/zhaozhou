@@ -238,3 +238,73 @@ stalls the whole sweep indefinitely. Copied the parameter, did not copy the
 thing it was for. Not fixed mid-sweep - editing the harness while it is running
 is the same class of mistake as editing RTL under a running fit, which this
 repository has already disclosed twice.
+
+## 2026-08-23 23:35 - P1 CONFIRMED at the strongest level source evidence allows
+
+The two projectors do not merely implement the same law. Their **arithmetic
+signatures are byte-identical**:
+
+| | `zhao_geom_project` | `zhao_terrain_project` |
+| --- | --- | --- |
+| `*` operators written | 3 | 3 |
+| nonconstant products | **11** | **11** |
+| shape | 9x (32x32 -> 64) + 2x (32x27 -> 64) | identical |
+| functions and call counts | mul32:9, ext64:9, ext32r:3, ext32m:2, rescale16_row:3, rescale16_mad:2, to_screen_xy:2, mag32:2 | **identical, all eight** |
+| **mapped DSP blocks** | **33** | **33** |
+
+Eight functions, same names, same instance counts, same products, same
+measured resource. **33 DSP blocks of pure redundancy** - 29% of the device's
+112, and the largest single item on the board.
+
+## 2026-08-23 23:36 - a rule withdrawn for the SECOND time, same shape
+
+The scanner reported both projectors' `mad_x`/`mad_y` products as **64x64** and
+rated them RED. Measurement disagrees, and disagrees exactly: 33 blocks for 11
+products is **three each, uniformly**, and a real 64x64 signed product is not
+three blocks - if two of the eleven were 64-bit the total could not be 33.
+
+Three widening forms live in this repo and Quartus folds all three:
+
+    {{32{a[31]}}, a}      sign extension, inline
+    ext32m(x)             sign extension, behind a FUNCTION CALL
+    {x, 15'b0}            a left SHIFT wearing a concatenation
+
+The third is why operand width had to become a **recursion** rather than a loop
+that peels wrappers off one node. `{vp_w[view], 15'b0}` in a 64-bit lane has
+nothing to peel and is 12 + 15 = **27** bits.
+
+With all three folded, the widest nonconstant operand anywhere in the
+repository is 36 bits, and **exactly one product is still RED for width**:
+`zhao_geom_lod:387`, 64x64 with nothing to peel - which is the block
+QUARTUS_GOTCHAS 5 was written about. One RED, in the right place.
+
+That is now the third rule this run has had to withdraw, and all three had the
+same shape: **I reasoned about what the tool would do, and the tool disagreed.**
+
+## 2026-08-23 23:40 - THE BIGGEST FINDING OF THE RUN HAS NO DSPs
+
+    zhao_surface_sheet   95,947 estimated ALMs   229% OF THE DEVICE   0 DSP
+    zhao_forge_cliff     33,109 estimated ALMs    79% of the device   2 DSP
+
+`zhao_surface_sheet` declares `logic [15:0] mem[8192]` - 131,072 bits, two
+64x64 sheets of {tag u8, strength u8} - and Analysis & Synthesis infers **ZERO
+block memory bits** for it. Its map took **1,096 seconds**, which is why its
+fit had previously come back `failed:quartus_fit.exe` with nothing recorded but
+the word "failed".
+
+**Neither block would ever have surfaced in a DSP-shaped audit.** Both carry no
+fit row and no DSPs. The whole week's campaign has been counting the resource
+that was not the largest problem.
+
+## 2026-08-23 23:42 - P3, and the answer is more interesting than the prediction
+
+`zhao_forge_cliff` maps: **2 DSP, 82,944 block memory bits, 2 design memories
+inferred** against 119,808 expected.
+
+So the docket's "three `assign x = mem_r[idx]` async reads ... cannot infer as
+RAM" is **one-third right**. Quartus 17.0.2 converted **two** of the three to
+Simple Dual Port RAM - `prio_mem_r` 2048x32 and `run_mem_r` 1024x17. It refused
+`edge_mem_r`, 2048x18, and **36,864 bits in logic is most of that 79%.**
+
+The map COMPLETED, so the ruling's stop-and-report exception does not apply and
+nothing was fixed here.
