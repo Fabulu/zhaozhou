@@ -1,5 +1,76 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — THREE NUMBERS NEEDED to finish the multiplier campaign
+
+Not urgent, and nothing is blocked on them today. But they are the same *kind*
+of number as the 120,000 vertices/frame ruling, and that one ruling is what
+turned GEOM.SKIN from an argument into a measurement.
+
+### Why a number is needed at all
+
+Every reduction so far came from one calculation: **sustained demand per frame,
+against products per item.** GEOM.SKIN had 18 multipliers; 120,000 vertices at
+13.88 clocks each made the honest requirement **1.30**, so it was
+over-provisioned 13.9x. That is the whole method, and it cannot be run without
+a demand figure.
+
+The compute budget it runs against is now pinned down:
+**1,666,667 clocks per 60 Hz frame** at the 100 MHz placeholder. (Note: *not*
+`frame_gpu_cycles` = 251,520, which is the raster period and the scheduler's
+deadline — the two differ by 6.6x and both are called "gpu cycles". Written up
+in `design/budgets/latency.md`.)
+
+### Where the remaining 188 multipliers sit
+
+| block | DSPs | has a ruled demand? |
+| --- | ---: | --- |
+| `zhao_terrain_project` | 33 | **yes** — ~270 patches/frame, already costed against the 1.67 M budget |
+| `zhao_surface_stamp` | 28 | **NO** |
+| `zhao_texture_tmu` | 28 | **NO** |
+| `zhao_terrain_normals` | 18 | **NO** |
+| `zhao_geom_cull` (the cull third of GEOM.MESHFETCH) | 15 | **yes** — one evaluation per five clocks |
+| `zhao_geom_binner` | 12 | **yes** — per-triangle costs plus hard caps (`TRI_CAP` 128, `CHUNKS` 256) |
+
+**Three blocks, 74 of the 188 remaining multipliers, have no demand figure.**
+What `design/blocks.yml` records for them instead is a **one-clock placeholder** —
+"1 stamp texel per clock", "1 sample per clock", "1 normal per vertex per
+clock". That is precisely the input the architecture ruling rejected, and it is
+where the original 327 came from: a block told to do one item per clock is
+built to do one item per clock, whether or not anything ever asks it to.
+
+### The three questions
+
+1. **SURFACE.STAMP — how many stamp texels per frame, sustained?** Burn marks,
+   craters, blood, spell scarring. The figure that matters is the *sustained*
+   one, not the worst single frame — a Bore collapse can be allowed to take two
+   frames if that is cheaper than building for the peak.
+
+2. **TEXTURE.TMU — how many texture samples per frame, sustained?** This is
+   close to fragments-per-frame times samples-per-fragment. Z60 is 92,160
+   pixels; with overdraw and bilinear the honest figure could be anywhere from
+   ~100,000 to ~500,000, and the difference is roughly 5x of multiplier budget.
+
+3. **TERRAIN.NORMALS — how many normals per frame, sustained?** Only deformed
+   terrain needs recomputing. If it is "the patches that changed this frame"
+   rather than "the whole field", the number could be very small — and this
+   block is 18 multipliers on the strength of a placeholder.
+
+### What a ruling unlocks, and what a refusal costs
+
+With a number, each block gets the GEOM.SKIN treatment and the campaign can
+finish. Without one, the honest options are to leave them at their current
+counts, or to guess — and guessing is what produced a design wanting 2.9x the
+chip's multipliers with every gate green.
+
+**If any of these depends on game content that is not decided yet, say so and it
+stays open.** A recorded "not decided" is worth more than an invented rate; that
+is why the particle-simulation, compositor and 2D blocks are still empty in this
+docket rather than filled with plausible behaviour.
+
+One follow-up regardless of the answers: **`design/blocks.yml` should carry
+sustained demand rather than one-clock rates**, so the next block sized from it
+starts from the real number.
+
 ## 2026-08-23 — WIDESCREEN: accepted in principle, and the arithmetic has one
 ## problem the proposal did not catch
 
