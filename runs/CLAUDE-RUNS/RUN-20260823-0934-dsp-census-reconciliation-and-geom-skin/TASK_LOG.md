@@ -794,6 +794,41 @@ and 2,880 — cheaper than every mode the console currently has.**
 * the post-fix Field Fmax; sweep at 29/38, all caught.
 * the depth-172 proof re-run on the **fixed** RTL, and its budget number.
 
+### 15:40 - Field sweep closed: 38/38 accounted, 33 caught, 0 discarded
+
+Every contamination mutant caught (M05, M23, M25), all four mux mutants, all
+schedule mutants, and **M34/M35/M37 — exponent offset, shift direction, and the
+last stage of the binary search — all caught.** Those three are the core of the
+new leading-zero code, so the replacement is covered where it matters.
+
+**Both survivors are proved, not labelled** — the house form, an argument
+checkable against a named line rather than an assertion:
+
+* **M36, zero-length guard dropped — equivalent twice over.** *(i)* The value is
+  identical: with `h_rt == 0` the search is guarded off, `lz` stays 0, `d_exp` is
+  40, `rsh` is 40, and `(0 >> 40) << 0` **is** 0 — exactly what the guard
+  returns. *(ii)* It is never read: `is_zero` is `n2 == 0`, which implies
+  `len == isqrt(0) == 0`, so the walk takes the zero branch at `N_WAIT` and the
+  reciprocal chain consuming `m_val`/`e_val` never runs.
+* **M38, a search stage tests the wrong half — equivalent by range, computed
+  rather than estimated.** `h_rt = isqrt(n2)` where `n2` is a sum of three
+  squares of s32 values, so `n2 <= 3·2^62` and
+  `h_rt <= isqrt(3·2^62) = 3,719,550,786 < 2^32`. **The MSB is at index 31 at
+  most**, so bits [63:32] of the root's answer are always zero, the first
+  stage's test is true for every reachable input, and testing [63:33] instead
+  cannot change the answer either.
+
+**And that proof has a consequence the agent recorded rather than acted on: the
+first stage is dead weight — a 32-bit leading-zero count would do, one stage
+shorter.** It stays at 64 because that is the width of the root's port, and a
+search narrower than its input is a latent defect the day the root widens. That
+is the right call, and it is the same reasoning that made the `zref_video.cpp`
+`kTable[mode & 3u]` mask a bug: a mask or a width that implies a range wider
+than the thing behind it.
+
+Tree verified pristine after the sweep's restore. **The post-fix Fmax is now the
+single open number in the Field lane.**
+
 ---
 
 ## Subagent Spawns
