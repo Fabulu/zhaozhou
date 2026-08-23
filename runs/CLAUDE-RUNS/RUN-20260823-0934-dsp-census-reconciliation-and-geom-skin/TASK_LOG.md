@@ -339,6 +339,51 @@ was copied in to make that work. Verified end to end by generating a run and
 deleting it. `ARCHIVE.md` is tracked now too — the index of the archive had been
 the one file the archive could not protect.
 
+### 12:10 - Asked whether the Field defect is anywhere else. Mostly no.  (`7fbc4da`)
+
+With both agents holding the tools (btormc at 5.4 GB on the depth-172 proof,
+quartus_fit on the census row), the useful non-colliding work was the question
+the Field finding raises: **does a 78-logic-level serially dependent
+combinational chain occur elsewhere?** Fits cost 10-30 minutes each and there
+are 91 modules, so knowing where to look first is worth having.
+
+Classified every `for` loop in `fpga/rtl` with trip count >= 16, plus a scan for
+non-constant `/` and `%`. Written up in `reports/TIMING_HAZARD_SCAN.md`.
+
+**Result: one candidate, not a plague.**
+
+* `zhao_field_normalize.sv:173,179` — the known defect, already being replaced.
+* `zhao_raster_edgewalk.sv:324` — **the only other serially dependent
+  combinational chain**: a 16-bit popcount written as sixteen dependent 5-bit
+  adds. Worst case ~16 ripple adders end to end; a balanced tree is depth 4.
+  Quartus often reassociates adder chains, so it may already be fine. It sits on
+  the per-pixel raster path, so its Fmax bounds the whole rasteriser.
+* Everything else classified safe: reset loops in `always_ff`
+  (`zhao_field_seq`, `zhao_geom_cull`, `zhao_geom_project`,
+  `zhao_terrain_project`, `zhao_geom_skin`), `generate` blocks, and
+  `zhao_scanout_linebuf`'s 256-iteration loop, which is inside `initial` under
+  `` `ifdef FORMAL `` and never synthesises.
+* `zhao_mem_guard.sv:71` looks bad at 64 iterations and is not — `mask_of[b] =
+  (b < len_b)` has no loop-carried dependency, so it is 64 parallel comparators
+  at depth ~1.
+* `zhao_crc32c_fold.sv:100` looks worst of all and is the clearest false alarm:
+  every `foldn` argument is a compile-time constant (`32'd1 << i`,
+  `64'd1 << j`, `N` a genvar), so all 96 calls constant-fold and what remains is
+  a masked XOR reduction, which balances to log depth.
+* **No non-constant `/` or `%` anywhere** — the last combinational divider left
+  with `zhao_geom_lod`'s width narrowing.
+
+**Deliberately did not rewrite the candidate.** Acting on suspicion rather than
+measurement is exactly how `(* multstyle = "logic" *)` was believed for weeks
+while Quartus silently ignored it. Fit it, read the logic levels, then decide.
+
+The report states its own limit, which matters more than its findings: a long
+combinational chain does not need a loop. The Field engine also had
+`zhao_field_rcp` fully combinational and a 24x31 multiply plus two more and
+saturating rescales in one cycle. **A block can be absent from that table and
+still be 12x too slow.** This narrows where to look first; it does not replace
+STA.
+
 ---
 
 ## Subagent Spawns

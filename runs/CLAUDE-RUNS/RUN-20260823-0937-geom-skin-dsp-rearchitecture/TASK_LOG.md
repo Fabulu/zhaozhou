@@ -249,3 +249,114 @@ deriving a literal that matches no target.
   mutant at all three MUL_LANES settings) is written but not run: its preflight
   temporarily writes mutated text into the RTL, which must not happen while
   another agent's `cmake` configure is elaborating that file.
+
+---
+
+## 11:05 — first run of the new differential, and it FAILED. Well, class.
+
+Built in an **isolated build directory** (`build-skin/`, gitignored via
+`build-*/`) rather than in `build/`, which the coordinator had wiped and was
+reconfiguring. Same preset toolchain, pinned explicitly:
+
+    . .\tools\env\zhao-env.ps1
+    cmake -S . -B build-skin -G Ninja -DCMAKE_BUILD_TYPE=Release `
+      -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe `
+      -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe
+    ninja -C build-skin test_geom_skin_directed test_geom_skin_lanes1 test_geom_skin_lanes6
+
+Result: **974 of 5,774 checks failed**, identically at all three lane counts,
+and **every failure was in the new sections 7 and 7b**. Sections 1-6 -- the
+entire pre-existing differential -- passed. The signature was a sign flip at
+the saturation rail:
+
+    FAIL: fullrange[599] w0=0: x: expected 0x80000000, got 0x7FFFFFFF
+
+Identical failures at MUL_LANES 1, 3 and 6 means arithmetic, not scheduling.
+
+### The cause is in the ORACLE, and it predates this run
+
+    reference/include/zref/zref_fixp.hpp:106
+      constexpr int32_t rescale_s32(int64_t x, int k, SatLedger* L, ...)
+
+    reference/src/zcreature/creature_core.cpp:255
+      *o[i] = rescale_s32(v.w0 * pa + w1 * pb, 22, L, &SatLedger::mul);
+
+`pa` and `pb` are `__int128`. **The argument is silently narrowed to int64.**
+Reproduced exactly for the first failing case:
+
+    pb   = 1660515586393437354          (w0 = 0, so blend = 64*pb)
+    blend = 1.0627e20                   -- 67 bits, does NOT fit int64
+    exact rescale(blend, 22) -> saturates +  0x7FFFFFFF   <- what the RTL gives
+    rescale(int64(blend), 22) -> wraps  -  0x80000000     <- what the oracle gives
+
+The narrowing is **not intended**. `rescale_s32`'s own comment says *"The
+rounding add runs in s128: x near INT64_MAX must not wrap before the shift"* --
+it was written for s64 inputs -- and a `rescale_s64(__int128 x, ...)` exists
+twenty lines below it.
+
+**This is not a regression I introduced.** The old RTL carried 67- and 75-bit
+lanes and did not truncate either, so it diverged from the oracle in exactly
+the same places. Nothing had ever caught it because the differential had never
+driven an operand that large -- **which is the precise gap
+`design/contracts/GEOM.SKIN.md` recorded as blocking this rewrite.** The
+contract said the extremes had to be reached before the rewrite, not after. It
+was right, and this is what was behind the door.
+
+### What was done about it, and what was deliberately NOT
+
+- **The reference was not changed.** `skin_vertex` is the function every shipped
+  picture was skinned with; changing its arithmetic changes those pictures in
+  the extreme region. That is an owner decision. **OWNER DOCKET ITEM.**
+- **The RTL was not taught to imitate the narrowing.** Baking a C++ implicit
+  conversion into silicon needs a ruling, not a commit.
+- The differential now **checks the shipped oracle wherever the oracle is well
+  defined** and, above the narrowing boundary, checks the exact arithmetic the
+  RTL claims -- saying so in the check name
+  (`[beyond the oracle's int64 narrowing]`).
+- `skin_exact()` is `skin_vertex` with the implicit narrowing removed. It is
+  **not** a second oracle written beside the RTL: every in-domain coordinate
+  asserts that it equals the shipped oracle bit for bit, so it earns the
+  out-of-domain cases by tracking the real one first.
+- The split is **counted and printed**, because a silent domain split is a way
+  to lose a differential without noticing.
+
+### How much of the differential is still against the shipped oracle
+
+    [geom_skin] oracle-checked coordinates: 3976, beyond the oracle's int64 narrowing: 1778
+    [geom_skin_directed] 9750 checks passed          (MUL_LANES 3)
+    [geom_skin_directed] 9756 checks passed          (MUL_LANES 1)
+    [geom_skin_directed] 9750 checks passed          (MUL_LANES 6)
+
+    --random 500  : oracle-checked 1500, beyond 0   -- 3,000 checks, all three builds
+    --random 8000 : oracle-checked 24000, beyond 0  -- 48,000 checks
+
+**The pose-range random lane never leaves the oracle's domain: 0 of 24,000.**
+That is the reassuring half of the finding -- the divergence is unreachable
+with anything resembling a real bone matrix, which is why it survived this long
+and why it is a docket item rather than an emergency.
+
+The 6-check difference between MUL_LANES 1 and 3/6 is section 6's busy-cycle
+law: it asserts `v_ready_o == 0` on every cycle between accept and result, and
+the rigid latency is 13 clocks at 1 against 7 at 3 and 6. The count moving with
+the schedule is the check working.
+
+### And the most sensitive width case is still oracle-backed
+
+The near-cancellation family (`B = -A`, `w0 == 32`) makes the blend
+`32*(pa + pb)`, so the **final value is small and IN the oracle's domain while
+every intermediate sits at its bound**. The 65-bit accumulator and 66-bit
+difference lane are therefore exercised at their limits against the SHIPPED
+oracle, not against the local model. Only the region where the finished blend
+itself exceeds 2^63 relies on `skin_exact`.
+
+### Two build-state traps hit and avoided, recorded per the standing rule
+
+1. A `printf` format string was split across two source lines without a closing
+   quote. The build FAILED -- and the same PowerShell command then ran the three
+   **previous** binaries and printed their old failures, which read exactly like
+   a fix that had not worked. Caught only because the compiler errors were in
+   the same output. This is the project's recurring failure mode verbatim: the
+   executable outlives the build that failed to replace it.
+2. `build-skin/` was used precisely so that a second build could not collide
+   with the coordinator's clean reconfigure of `build/`. The official gate still
+   has to run in `build/`.
