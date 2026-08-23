@@ -829,6 +829,68 @@ than the thing behind it.
 Tree verified pristine after the sweep's restore. **The post-fix Fmax is now the
 single open number in the Field lane.**
 
+### 16:00 - The 58.45 MHz ruling, and a hypothesis of mine withdrawn
+
+**My suggested cause was already implemented.** I proposed using the DSP
+block's own output register. `a_q <= mul_a; b_q <= mul_b; p_q <= a_q * b_q;`
+already exists and the constrained fit reports those registers **packed into the
+DSP machinery**. The standard advice was in place before I gave it. The
+"hypothesis to test, not adopt" framing is the only reason no time was lost —
+and it is a small vindication of the rule.
+
+**Two better candidates, and `MUL_LANES=1` separates them because it changes one
+and not the other:**
+
+* **A — blend and final rescale.** One output row traverses, in a single clock:
+  accumulator select → 66-bit `pa - pb` → six-term 73-bit shift/add weight
+  multiply → 73-bit base add → rounding add → **two wide saturation
+  comparisons** → output register.
+* **B — product reduction into the accumulator.** At `MUL_LANES=3` each row does
+  two 65-bit adds to form `lane_sum` and then a third into `acc[row]` — three
+  wide additions in one cycle.
+
+`MUL_LANES=1` leaves A untouched while collapsing B to a single product, so the
+result reads directly: still ~58 MHz with `acc -> o_x/y/z` worst paths means A;
+a sharp jump with the `p_q -> acc` family gone means B; a virtual-pin endpoint
+means the wrapper is distorting the measurement; `take`/`busy`/enable paths mean
+high-fanout control.
+
+**Top 20 setup paths requested, not the single worst** — grouped by endpoint
+family, with logic levels and **cell versus routing delay**. One path diagnosed
+the Field engine; twenty say whether this is one path or a family.
+
+**THE ACCEPTANCE TEST IS TWO CONSTRAINTS, and the arithmetic is verified:**
+
+    required rate = 120,000 x 60 = 7,200,000 vertices/s
+
+    II    min clock for 120k/frame    at 100 MHz yields
+    10        72.0 MHz                 166,666/frame
+    11        79.2 MHz                 151,515/frame
+    12        86.4 MHz                 138,888/frame
+    13        93.6 MHz                 128,205/frame
+    14       100.8 MHz                 119,047/frame   <-- FAILS
+
+**There is room for up to 13 cycles.** Today is 58.45/10 = 5.845 M/s; 90 MHz at
+II=12 would be 7.5 M/s — a clear win **despite** two extra stages. The quantity
+to optimise is `Fmax / II`, never Fmax alone.
+
+**But `gpu_clk` is shared**, so a block that stops at 72 MHz drags every other
+block's throughput down with it. Meeting the block's own vertex budget is
+necessary and not sufficient; both numbers get reported.
+
+**One measurement caveat to settle before any RTL change:** the standalone fit
+carries **1,038 virtual pins and ~520 ALMs of virtual-pin infrastructure**. If
+the worst path begins or ends at a virtual-pin node rather than a real internal
+register, a characterisation wrapper (registered stimulus -> block -> registered
+hash sink) comes first — as a diagnostic, never as a substitute for the composed
+fit. This is the same class as every other measurement artifact this project has
+been caught by.
+
+Fitter settings explicitly deprioritised: physical synthesis, retiming and
+register duplication are off and may buy margin later, but they will not turn 58
+into 100 MHz while the RTL holds chains of 65-73-bit additions. Cut the path
+structurally, then use fitter effort for headroom.
+
 ---
 
 ## Subagent Spawns
