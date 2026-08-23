@@ -271,7 +271,9 @@ true but unenforced.
 
 | 2026-08-23 ~00:3x | aadfdc4ae727b3230 | Pilot the DSP sequencing lever on zhao_geom_lod and MEASURE it | **Complete** | [FINDINGS-dsp-sequencing.md](FINDINGS-dsp-sequencing.md) |
 
-| 2026-08-23 ~01:2x | a18a997529e7c0ab4 | Apply the proven sequencing lever to zhao_terrain_lod (28 DSPs, the largest tractable target) | In Progress | `FINDINGS-dsp-terrain-lod.md` (agent to write) |
+| 2026-08-23 ~01:2x | a18a997529e7c0ab4 | Apply the proven sequencing lever to zhao_terrain_lod (28 DSPs, the largest tractable target) | **Complete** | [FINDINGS-dsp-terrain-lod.md](FINDINGS-dsp-terrain-lod.md) |
+
+| 2026-08-23 ~03:4x | (field engine) | Rearchitect the Field IR arithmetic to one shared multiplier service, per the owner ruling. OWN WORKTREE `.worktrees/field-dsp` | In Progress | `FINDINGS-dsp-field-engine.md` (agent to write) |
 
 Notes on the second spawn:
 
@@ -560,3 +562,49 @@ not leak. Neither has a guard against acquiring one — which is exactly how thi
 happened here, since TERRAIN.LOD landed in phase 6 with three block-level lanes
 and gained the phase 8 composition afterwards. Port `check_consumers` to both
 when either is next touched.
+
+### 03:0x - terrain_lod 28 -> 3, and then I MISDIAGNOSED it
+
+The sequencing paid harder than the pilot: **28 DSPs -> 3**, ALMs 2,086 ->
+1,759, latency 34 -> 48 clocks per descriptor with no port or handshake change.
+Six of the 28 were the constant-shift multiplies the contract had already
+predicted; the other 19 came from twelve of the twenty-four left-hand sides
+being exact duplicates, and from the shared multiplier being NARROWER than what
+it replaced.
+
+**Then I reported it as broken, and it was not.** `measure_governor_lod` failed
+55 of 72 checks on the Duo fairness law. I concluded the restructuring had
+broken it and I "proved" it by reverting the .sv and watching the test pass.
+
+**The proof was confounded.** Reverting forced a rebuild, and the rebuild
+regenerated the model from clean source -- which ALSO cleared mutant-derived
+model sources the sweep had left in two consumers it never scored. The pass
+tracked the rebuild, not the RTL. I changed two things and attributed the
+result to one.
+
+Verified properly -- wipe all four consumers, models AND binaries, reconfigure,
+rebuild -- the sequenced RTL passes 72/72 with a byte-identical trace. The agent
+found it first, and reproduced the corruption deliberately with mutant M14
+rather than deducing it.
+
+**The real defect was the sweep**: `cmake` re-elaborates EVERY target that
+verilates a mutated module, and the sweep cleaned only the two it scored. That
+is guard 7, and the sweep now refuses to start unless every consumer is listed.
+
+The lesson is not about mutation sweeps. It is that **build state can
+masquerade as design behaviour**, and that reverting a file changes two things
+at once -- the file and the build. This project has now hit that class of error
+seven distinct ways.
+
+### 03:4x - the owner ruling replaced my improvisation
+
+Fabian relayed a collaborator's architecture brief and it is now the ruling on
+the docket. It supplies the rule (smallest local farm per subsystem, share only
+what is mutually exclusive inside it), the target table, the **120,000 skinned
+vertices per 60 Hz frame** budget I had said I could not invent, and the
+correction that `TERRAIN.PROJECT` should be CACHED before being sequenced --
+1,089 unique projections at three clocks beating 6,144 repeated ones at one.
+I had that block filed as untouchable, which was the wrong conclusion.
+
+It also rules that sweeps run in separate worktrees with separate build
+directories, which is exactly the incident above.
