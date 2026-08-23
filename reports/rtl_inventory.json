@@ -2,7 +2,7 @@
  "schemaVersion": 1,
  "tool": "tools/budget/scan_rtl.py",
  "frontend": "Verilator --json-only (elaborated AST)",
- "sourceCommit": "74fd6b096b680116d37dac342999e5f640a13d43",
+ "sourceCommit": "c3277cbf13cfb2f54a596df3cb4f5c09ce9ad8ac",
  "rtlCleanAtHead": true,
  "sourceListHash": "40e689de9f34a042",
  "moduleCount": 91,
@@ -290,7 +290,7 @@
      "inferredMinII": 19,
      "file": "fpga/rtl/command/zhao_cmd_dma.sv",
      "line": 171,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`fetch_req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 19 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 19
@@ -489,7 +489,7 @@
      "inferredMinII": 19,
      "file": "fpga/rtl/command/zhao_cmd_dma.sv",
      "line": 171,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`fetch_req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 19 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -2728,7 +2728,7 @@
   },
   {
    "module": "zhao_debug_frameblit",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -2766,7 +2766,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/debug/zhao_debug_frameblit.sv",
      "line": 236,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 12
@@ -2821,7 +2821,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/debug/zhao_debug_frameblit.sv",
      "line": 236,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -2857,7 +2857,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": [
@@ -3568,7 +3568,7 @@
      "inferredMinII": 24,
      "file": "fpga/rtl/field/zhao_field_curve.sv",
      "line": 140,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 24 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 24
@@ -3731,7 +3731,7 @@
      "inferredMinII": 24,
      "file": "fpga/rtl/field/zhao_field_curve.sv",
      "line": 140,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 24 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -3970,7 +3970,7 @@
      "inferredMinII": 24,
      "file": "fpga/rtl/field/zhao_field_curve.sv",
      "line": 140,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 24 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_curve",
      "instancesOfModule": 1
@@ -4000,7 +4000,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/field/zhao_field_len.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_len",
      "instancesOfModule": 1
@@ -4054,7 +4054,7 @@
      "inferredMinII": 11,
      "file": "fpga/rtl/field/zhao_field_noise.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 11 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_noise",
      "instancesOfModule": 1
@@ -4186,7 +4186,7 @@
      "inferredMinII": 14,
      "file": "fpga/rtl/field/zhao_field_normalize.sv",
      "line": 134,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 14 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_normalize",
      "instancesOfModule": 1
@@ -4240,7 +4240,7 @@
      "inferredMinII": 7,
      "file": "fpga/rtl/field/zhao_field_rcp.sv",
      "line": 132,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 7 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_rcp",
      "instancesOfModule": 1
@@ -4255,7 +4255,7 @@
      "inferredMinII": 15,
      "file": "fpga/rtl/field/zhao_field_ring.sv",
      "line": 152,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`rcp_rready_o` is asserted only while the state variable equals one constant, and the walk visits 15 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_ring",
      "instancesOfModule": 1
@@ -4270,7 +4270,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/field/zhao_field_rot.sv",
      "line": 125,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_rot",
      "instancesOfModule": 1
@@ -4432,7 +4432,7 @@
   },
   {
    "module": "zhao_field_len",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -4470,7 +4470,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/field/zhao_field_len.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -4494,7 +4494,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/field/zhao_field_len.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -4526,7 +4526,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -4630,7 +4630,7 @@
   },
   {
    "module": "zhao_field_noise",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -4668,7 +4668,7 @@
      "inferredMinII": 11,
      "file": "fpga/rtl/field/zhao_field_noise.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 11 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 11
@@ -4706,7 +4706,7 @@
      "inferredMinII": 11,
      "file": "fpga/rtl/field/zhao_field_noise.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 11 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -4738,7 +4738,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -4783,7 +4783,7 @@
      "inferredMinII": 14,
      "file": "fpga/rtl/field/zhao_field_normalize.sv",
      "line": 134,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 14 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 14
@@ -4907,7 +4907,7 @@
      "inferredMinII": 14,
      "file": "fpga/rtl/field/zhao_field_normalize.sv",
      "line": 134,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 14 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -5163,7 +5163,7 @@
      "inferredMinII": 7,
      "file": "fpga/rtl/field/zhao_field_rcp.sv",
      "line": 132,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 7 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 7
@@ -5217,7 +5217,7 @@
      "inferredMinII": 7,
      "file": "fpga/rtl/field/zhao_field_rcp.sv",
      "line": 132,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 7 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -5445,7 +5445,7 @@
   },
   {
    "module": "zhao_field_ring",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -5483,7 +5483,7 @@
      "inferredMinII": 15,
      "file": "fpga/rtl/field/zhao_field_ring.sv",
      "line": 152,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`rcp_rready_o` is asserted only while the state variable equals one constant, and the walk visits 15 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 15
@@ -5509,7 +5509,7 @@
      "inferredMinII": 15,
      "file": "fpga/rtl/field/zhao_field_ring.sv",
      "line": 152,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`rcp_rready_o` is asserted only while the state variable equals one constant, and the walk visits 15 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -5541,14 +5541,14 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
   },
   {
    "module": "zhao_field_rot",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -5586,7 +5586,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/field/zhao_field_rot.sv",
      "line": 125,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 12
@@ -5614,7 +5614,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/field/zhao_field_rot.sv",
      "line": 125,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -5646,7 +5646,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -5897,7 +5897,7 @@
      "inferredMinII": 24,
      "file": "fpga/rtl/field/zhao_field_curve.sv",
      "line": 140,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 24 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_curve",
      "instancesOfModule": 1
@@ -5927,7 +5927,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/field/zhao_field_len.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_len",
      "instancesOfModule": 1
@@ -5981,7 +5981,7 @@
      "inferredMinII": 11,
      "file": "fpga/rtl/field/zhao_field_noise.sv",
      "line": 154,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 11 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_noise",
      "instancesOfModule": 1
@@ -6113,7 +6113,7 @@
      "inferredMinII": 14,
      "file": "fpga/rtl/field/zhao_field_normalize.sv",
      "line": 134,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sqrt_rready_o` is asserted only while the state variable equals one constant, and the walk visits 14 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_normalize",
      "instancesOfModule": 1
@@ -6167,7 +6167,7 @@
      "inferredMinII": 7,
      "file": "fpga/rtl/field/zhao_field_rcp.sv",
      "line": 132,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 7 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_rcp",
      "instancesOfModule": 1
@@ -6182,7 +6182,7 @@
      "inferredMinII": 15,
      "file": "fpga/rtl/field/zhao_field_ring.sv",
      "line": 152,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`rcp_rready_o` is asserted only while the state variable equals one constant, and the walk visits 15 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_ring",
      "instancesOfModule": 1
@@ -6197,7 +6197,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/field/zhao_field_rot.sv",
      "line": 125,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`v_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_field_rot",
      "instancesOfModule": 1
@@ -6498,7 +6498,7 @@
      "inferredMinII": 13,
      "file": "fpga/rtl/forge/zhao_forge_cliff.sv",
      "line": 285,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`cmd_ready_o` is asserted only while the state variable equals one constant, and the walk visits 13 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 13
@@ -6660,7 +6660,7 @@
      "inferredMinII": 13,
      "file": "fpga/rtl/forge/zhao_forge_cliff.sv",
      "line": 285,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`cmd_ready_o` is asserted only while the state variable equals one constant, and the walk visits 13 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -6997,7 +6997,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/geometry/zhao_geom_binner.sv",
      "line": 317,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`tri_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_geom_binner",
      "instancesOfModule": 1
@@ -7025,7 +7025,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
      "line": 228,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_raster_tile_pipe",
      "instancesOfModule": 1
@@ -7066,7 +7066,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_raster_edgewalk",
      "instancesOfModule": 1
@@ -7132,7 +7132,7 @@
   },
   {
    "module": "zhao_geom_binner",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 5,
     "nonconstantMultiplyInstances": 4,
@@ -7170,7 +7170,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/geometry/zhao_geom_binner.sv",
      "line": 317,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`tri_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 12
@@ -7602,7 +7602,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/geometry/zhao_geom_binner.sv",
      "line": 317,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`tri_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -7640,7 +7640,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -7773,7 +7773,7 @@
   },
   {
    "module": "zhao_geom_cull",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 3,
     "nonconstantMultiplyInstances": 5,
@@ -7811,7 +7811,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_cull.sv",
      "line": 232,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -7990,7 +7990,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_cull.sv",
      "line": 232,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -8022,7 +8022,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -8067,7 +8067,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_lod.sv",
      "line": 213,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -8156,7 +8156,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_lod.sv",
      "line": 213,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -8489,7 +8489,7 @@
   },
   {
    "module": "zhao_geom_pose_cache",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -8527,7 +8527,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_pose_cache.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`acq_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -8568,7 +8568,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/geometry/zhao_geom_pose_cache.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`acq_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -8600,14 +8600,14 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
   },
   {
    "module": "zhao_geom_pose_decode",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 2,
     "nonconstantMultiplyInstances": 0,
@@ -8645,7 +8645,7 @@
      "inferredMinII": 13,
      "file": "fpga/rtl/geometry/zhao_geom_pose_decode.sv",
      "line": 120,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`qm_ready` is asserted only while the state variable equals one constant, and the walk visits 13 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 13
@@ -9038,7 +9038,7 @@
      "inferredMinII": 13,
      "file": "fpga/rtl/geometry/zhao_geom_pose_decode.sv",
      "line": 120,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`qm_ready` is asserted only while the state variable equals one constant, and the walk visits 13 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -9076,7 +9076,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": [
@@ -12597,7 +12597,7 @@
   },
   {
    "module": "zhao_raster_edgewalk",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 2,
     "nonconstantMultiplyInstances": 2,
@@ -12635,7 +12635,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 8
@@ -12772,7 +12772,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -12808,7 +12808,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -13286,7 +13286,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
      "line": 228,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 4
@@ -13329,7 +13329,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
      "line": 228,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -13423,7 +13423,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
      "line": 149,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`job_ready_o` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_raster_edgewalk",
      "instancesOfModule": 1
@@ -13946,7 +13946,7 @@
   },
   {
    "module": "zhao_sdram_ctrl",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -13984,7 +13984,7 @@
      "inferredMinII": 16,
      "file": "fpga/rtl/memory/zhao_sdram_ctrl.sv",
      "line": 114,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`accept` is asserted only while the state variable equals one constant, and the walk visits 16 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 16
@@ -14025,7 +14025,7 @@
      "inferredMinII": 16,
      "file": "fpga/rtl/memory/zhao_sdram_ctrl.sv",
      "line": 114,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`accept` is asserted only while the state variable equals one constant, and the walk visits 16 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -14057,7 +14057,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -14102,7 +14102,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/common/zhao_shell_top.sv",
      "line": 809,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`blit_req_ready` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 4
@@ -14489,7 +14489,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/common/zhao_shell_top.sv",
      "line": 809,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`blit_req_ready` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -14705,7 +14705,7 @@
      "inferredMinII": 19,
      "file": "fpga/rtl/command/zhao_cmd_dma.sv",
      "line": 171,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`fetch_req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 19 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_cmd_dma",
      "instancesOfModule": 1
@@ -14772,7 +14772,7 @@
      "inferredMinII": 12,
      "file": "fpga/rtl/debug/zhao_debug_frameblit.sv",
      "line": 236,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 12 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_debug_frameblit",
      "instancesOfModule": 1
@@ -14839,7 +14839,7 @@
      "inferredMinII": 16,
      "file": "fpga/rtl/memory/zhao_sdram_ctrl.sv",
      "line": 114,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`accept` is asserted only while the state variable equals one constant, and the walk visits 16 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate",
      "module": "zhao_sdram_ctrl",
      "instancesOfModule": 1
@@ -15454,7 +15454,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/common/zhao_stub_top.sv",
      "line": 58,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`in_ready` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 4
@@ -15495,7 +15495,7 @@
      "inferredMinII": 4,
      "file": "fpga/rtl/common/zhao_stub_top.sv",
      "line": 58,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`in_ready` is asserted only while the state variable equals one constant, and the walk visits 4 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -15934,7 +15934,7 @@
   },
   {
    "module": "zhao_surface_stamp",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -15972,7 +15972,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/surface/zhao_surface_stamp.sv",
      "line": 368,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`geom_ready` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 8
@@ -15995,7 +15995,7 @@
      "inferredMinII": 8,
      "file": "fpga/rtl/surface/zhao_surface_stamp.sv",
      "line": 368,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`geom_ready` is asserted only while the state variable equals one constant, and the walk visits 8 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -16033,7 +16033,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -16182,7 +16182,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/terrain/zhao_terrain_bake.sv",
      "line": 251,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`vtx_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -16360,7 +16360,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/terrain/zhao_terrain_bake.sv",
      "line": 251,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`vtx_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -16615,7 +16615,7 @@
      "inferredMinII": 6,
      "file": "fpga/rtl/terrain/zhao_terrain_lod.sv",
      "line": 246,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sp_ready_o` is asserted only while the state variable equals one constant, and the walk visits 6 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 6
@@ -16780,7 +16780,7 @@
      "inferredMinII": 6,
      "file": "fpga/rtl/terrain/zhao_terrain_lod.sv",
      "line": 246,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`sp_ready_o` is asserted only while the state variable equals one constant, and the walk visits 6 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -18926,7 +18926,7 @@
   },
   {
    "module": "zhao_texture_aux",
-   "severity": "RED",
+   "severity": "ORANGE",
    "arithmetic": {
     "multiplyOperatorsWritten": 0,
     "nonconstantMultiplyInstances": 0,
@@ -18964,7 +18964,7 @@
      "inferredMinII": 6,
      "file": "fpga/rtl/texture/zhao_texture_aux.sv",
      "line": 259,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 6 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 6
@@ -19010,7 +19010,7 @@
      "inferredMinII": 6,
      "file": "fpga/rtl/texture/zhao_texture_aux.sv",
      "line": 259,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 6 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],
@@ -19042,7 +19042,7 @@
      "constRomTables": 0,
      "constRomBits": 0
     },
-    "severity": "RED",
+    "severity": "ORANGE",
     "note": "own module plus every instance of every submodule in its cone, weighted by instance count from the elaborated CELL graph"
    },
    "submoduleFindings": []
@@ -19866,7 +19866,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/texture/zhao_texture_tmu.sv",
      "line": 616,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     },
     "inferredMinII": 5
@@ -20222,7 +20222,7 @@
      "inferredMinII": 5,
      "file": "fpga/rtl/texture/zhao_texture_tmu.sv",
      "line": 616,
-     "severity": "RED",
+     "severity": "ORANGE",
      "reason": "`req_ready_o` is asserted only while the state variable equals one constant, and the walk visits 5 distinct states -- so no new record can enter for at least that many clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a demand needing II=1, and NOTHING in its suite had ever measured the rate"
     }
    ],

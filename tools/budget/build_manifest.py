@@ -382,6 +382,12 @@ def main():
             flags.append("PARETO_UNPROVEN")
             sev = sev_max(sev, "ORANGE" if alm_pct <= 15.0 else "RED")
 
+        # A long initiation interval becomes RED only where a DEMAND FIGURE
+        # proves it cannot be afforded. The scanner reports the II as a fact at
+        # ORANGE; this is where the fact meets items/frame.
+        if ii >= 4 and rate.get("demandRatio") and rate["demandRatio"] > 1.0:
+            sev = sev_max(sev, "RED")
+
         for f in flags:
             if f in ("EXPECTED_RAM_NOT_INFERRED",):
                 sev = sev_max(sev, "RED")
@@ -560,7 +566,11 @@ def write_heatmap(path, man, calib, wl):
         L.append("## %s (%d)" % (level, len(rows)))
         L.append("")
         if not rows:
-            L.append("*none*")
+            L.append("*none* -- and for GREEN that is a statement about the EVIDENCE, not the")
+            L.append("blocks. Not one of the 41 fitted rows describes the RTL at HEAD, so every")
+            L.append("module in the design carries `NO_CURRENT_FIT` and no module can currently")
+            L.append("reach GREEN however clean its source is. Closing that is a re-fit campaign,")
+            L.append("which this run deliberately does not start.")
             L.append("")
             continue
         L.append("| block | map DSP | II | critical-path family | debt flags |")

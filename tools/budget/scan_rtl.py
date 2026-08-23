@@ -1222,8 +1222,23 @@ def analyse_module(name, mnode, types, filemap):
             "inferredMinII": inferred_ii,
         }
         fsm.update(S.loc(v))
+        # SEVERITY STOPS AT ORANGE HERE, DELIBERATELY, AND THE FIRST DRAFT
+        # GOT THIS WRONG. Rating a gated multi-state walk RED from source alone
+        # turned 13 modules RED on this rule and nothing else -- including
+        # `zhao_sdram_ctrl`, where a sixteen-state walk IS the design, and
+        # `zhao_surface_stamp`, which was rearchitected to 0 DSPs and 87.54 MHz
+        # this afternoon. 42 of 91 modules RED is not a heatmap, it is a
+        # uniform colour.
+        #
+        # A long II is a FACT. Whether it is a DEFECT depends on items/frame,
+        # which lives in design/budgets/workloads.yml and which this scanner
+        # deliberately does not read. So the fact is reported here at ORANGE
+        # with the number attached, and tools/budget/build_manifest.py
+        # escalates to RED where a demand figure proves it. TEXTURE.TMU still
+        # comes out RED, via NO_RESERVE at 3.06x, which is a measured rate
+        # problem rather than a shape that resembles one.
         if state_gated_ready and inferred_ii >= 4:
-            fsm["severity"] = "RED"
+            fsm["severity"] = "ORANGE"
             fsm["reason"] = ("`%s` is asserted only while the state variable equals one constant, and the walk "
                              "visits %d distinct states -- so no new record can enter for at least that many "
                              "clocks whatever the clock rate. TEXTURE.TMU is exactly this shape: II=6 against a "

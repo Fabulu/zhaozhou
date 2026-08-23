@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `b619d2cc`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `0d473e2b`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -40,7 +40,6 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_terrain_normals` | 18 | 18 | - | **0** | 1 | 0.0012x | `NO_CURRENT_FIT`, `NO_II_TEST`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_bake` | 17 | - | 1,089 | **0** | 5 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_cull` | 15 | 15 | - | **0** | 5 | 1.00x | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_RESERVE`, `OLD_SDC`, `PARETO_UNPROVEN` |
-| `zhao_geom_binner` | 12 | 12 | 42,944 | 42,944 (4 design) | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_skin` | 9 | 9 | - | **0** | 1 | 0.07x | `NO_CURRENT_FIT`, `NO_II_TEST`, `PARETO_UNPROVEN` |
 | `zhao_raster_tile_pipe` | 9 | - | 32,768 | 32,768 (2 design) | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_lod` | 6 | 6 | - | **0** | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
@@ -49,53 +48,54 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_field_seq` | 3 | 3 | 22,865 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `PARETO_UNPROVEN` |
 | `zhao_terrain_lod` | 3 | 3 | - | **0** | 6 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_forge_cliff` | 2 | - | 119,808 | 82,944 (2 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
-| `zhao_raster_edgewalk` | 2 | 2 | - | **0** | 8 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_audio_fifo` | - | 0 | 65,536 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_cmd_dma` | - | 0 | 33,280 | - | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_debug_counters` | - | - | 2,560 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_debug_frameblit` | - | 0 | - | - | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_curve` | - | - | - | - | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_exec_shared` | - | - | 20,817 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_len` | - | - | - | - | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_noise` | - | - | - | - | 11 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_normalize` | - | - | 7,967 | - | 14 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp` | - | - | 4,112 | - | 7 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp24_rom` | - | - | 7,967 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp_rom` | - | - | 4,112 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_ring` | - | - | - | - | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_rot` | - | - | - | - | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_sin` | - | - | 8,738 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_sin_rom` | - | - | 4,369 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_geom_pose_cache` | 0 | - | 12,288 | 12,288 (1 design) | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_tilestore` | 0 | 0 | 32,768 | 32,768 (2 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_sdram_ctrl` | - | 0 | - | - | 16 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_shell_top` | - | - | 118,784 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_stub_top` | - | - | 8,388,608 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_surface_stamp` | 0 | 0 | - | **0** | 8 | 0.10x | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT` |
 | `zhao_terrain_patch` | 0 | 0 | - | **0** | 1 | - | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_terrain_velocity` | 0 | - | - | **0** | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_texture_aux` | - | - | - | - | 6 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_texture_cache` | - | 0 | - | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 
-## ORANGE (16)
+## ORANGE (27)
 
 | block | map DSP | II | critical-path family | debt flags |
 | --- | ---: | ---: | --- | --- |
+| `zhao_geom_binner` | 12 | 12 | MULTIPLY(4, widest 36-bit); ASYNC_ARRAY_READ(6) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OL |
 | `zhao_geom_mat3x4_mul` | 9 | 1 | MULTIPLY(3, widest 32-bit); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_quat2mat` | 9 | 1 | MULTIPLY(9, widest 16-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_raster_fragment` | 7 | 1 | MULTIPLY(7, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_bake_delta` | 4 | 1 | MULTIPLY(2, widest 32-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_raster_edgewalk` | 2 | 8 | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPR |
 | `zhao_cmd_scheduler` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SD |
 | `zhao_crc32c_fold` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_debug_crc` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_debug_frameblit` | - | 12 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_isqrt` | - | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_len` | - | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_mul` | - | 1 | MULTIPLY(1, widest 33-bit) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_noise` | - | 11 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_progcache` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_ring` | - | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_rot` | - | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_geom_pose_cache` | 0 | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_input_rumble` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_input_snapshot` | - | 1 | COMB_LOOP(2); ASYNC_ARRAY_READ(11) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_measure_governor` | - | 1 | VARSHIFT(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_mem_guard` | - | 1 | COMB_LOOP(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_sdram_ctrl` | - | 16 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_sheet` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_surface_stamp` | 0 | 8 | VARSHIFT(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT` |
+| `zhao_texture_aux` | - | 6 | VARSHIFT(24) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_vram_arbiter` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 
 ## YELLOW (32)
@@ -137,7 +137,11 @@ II=1. Both must come out RED from mechanical rules alone.
 
 ## GREEN (0)
 
-*none*
+*none* -- and for GREEN that is a statement about the EVIDENCE, not the
+blocks. Not one of the 41 fitted rows describes the RTL at HEAD, so every
+module in the design carries `NO_CURRENT_FIT` and no module can currently
+reach GREEN however clean its source is. Closing that is a re-fit campaign,
+which this run deliberately does not start.
 
 ## Is the map lane trustworthy? Measured, not assumed
 
@@ -150,18 +154,18 @@ fit agree, so every block holding both a map row and a fit row is compared here.
 | `zhao_terrain_project` | 33 | 33 | `7395d793` | `96c0394a` |  |
 | `zhao_terrain_normals` | 18 | 18 | `7395d793` | `96c0394a` |  |
 | `zhao_geom_cull` | 15 | 15 | `de11ce9b` | `2a711f0f` |  |
-| `zhao_geom_binner` | 12 | 12 | `de11ce9b` | `96c0394a` |  |
 | `zhao_geom_skin` | 9 | 9 | `de11ce9b` | `56ef194b` |  |
 | `zhao_geom_lod` | 6 | 6 | `de11ce9b` | `09bbe059` |  |
 | `zhao_terrain_tess` | 6 | 6 | `7395d793` | `96c0394a` |  |
 | `zhao_texture_tmu` | 6 | 6 | `7395d793` | `1c98bb83` |  |
 | `zhao_field_seq` | 3 | 3 | `7395d793` | `7a3e2a35` |  |
 | `zhao_terrain_lod` | 3 | 3 | `de11ce9b` | `9f2928fc` |  |
-| `zhao_raster_edgewalk` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_tilestore` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
-| `zhao_surface_stamp` | 0 | 0 | `991f13c3` | `753ca931` |  |
 | `zhao_terrain_patch` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_geom_binner` | 12 | 12 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_fragment` | 7 | 10 | `7395d793` | `96c0394a` | **differs** |
+| `zhao_raster_edgewalk` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
+| `zhao_surface_stamp` | 0 | 0 | `991f13c3` | `753ca931` |  |
 | `zhao_geom_setup` | 4 | 4 | `de11ce9b` | `96c0394a` |  |
 | `zhao_geom_clip` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_blend` | 1 | 2 | `de11ce9b` | `96c0394a` | **differs** |
@@ -198,7 +202,6 @@ costs no throughput, because the spare cycles are already in the frame.
 | `zhao_geom_pose_decode` | 18 | 12 | - | - | - | - | - |
 | `zhao_terrain_bake` | 17 | 7 | - | - | - | - | - |
 | `zhao_geom_cull` | 15 | 5 | 1.00x | 1x | - | - | - |
-| `zhao_geom_binner` | 12 | 4 | - | - | - | - | - |
 | `zhao_geom_skin` | 9 | 1 | 0.07x | 14x | 1 | 9 | - |
 | `zhao_raster_tile_pipe` | 9 | 9 | - | - | - | - | - |
 | `zhao_geom_lod` | 6 | 1 | - | - | - | - | - |
@@ -207,11 +210,12 @@ costs no throughput, because the spare cycles are already in the frame.
 | `zhao_field_seq` | 3 | 1 | - | - | - | - | - |
 | `zhao_terrain_lod` | 3 | 1 | - | - | - | - | - |
 | `zhao_forge_cliff` | 2 | 2 | - | - | - | - | - |
-| `zhao_raster_edgewalk` | 2 | 2 | - | - | - | - | - |
+| `zhao_geom_binner` | 12 | 4 | - | - | - | - | - |
 | `zhao_geom_mat3x4_mul` | 9 | 3 | - | - | - | - | - |
 | `zhao_geom_quat2mat` | 9 | 9 | - | - | - | - | - |
 | `zhao_raster_fragment` | 7 | 7 | - | - | - | - | - |
 | `zhao_terrain_bake_delta` | 4 | 2 | - | - | - | - | - |
+| `zhao_raster_edgewalk` | 2 | 2 | - | - | - | - | - |
 | `zhao_geom_setup` | 4 | 4 | - | - | - | - | - |
 | `zhao_geom_clip` | 2 | 2 | - | - | - | - | - |
 | `zhao_raster_blend` | 1 | 1 | - | - | - | - | - |
@@ -280,24 +284,24 @@ measurements.
 | `zhao_terrain_project` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(11, widest 64-bit); COMB_LOOP(3); ASYNC_ARRAY_READ(17) |
 | `zhao_terrain_normals` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(6, widest 33-bit) |
 | `zhao_geom_cull` | *never timed* | - | - | `2a711f0f` | **no** | MULTIPLY(5, widest 34-bit); ASYNC_ARRAY_READ(2) |
-| `zhao_geom_binner` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(4, widest 36-bit); ASYNC_ARRAY_READ(6) |
 | `zhao_geom_lod` | *never timed* | - | - | `09bbe059` | **no** | MULTIPLY(1, widest 64-bit); DIVIDE(2) |
 | `zhao_terrain_tess` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(7, widest 34-bit); VARSHIFT(26); COMB_LOOP(4); ASYNC_ARRAY_RE |
 | `zhao_terrain_lod` | *never timed* | - | - | `9f2928fc` | **no** | MULTIPLY(1, widest 32-bit); ADD_COMPARE_SATURATE(2); ASYNC_ARRAY_READ( |
-| `zhao_raster_edgewalk` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_REA |
 | `zhao_audio_fifo` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(2); ASYNC_ARRAY_READ(1) |
 | `zhao_cmd_dma` | *never timed* | - | - | `f5e067e6` | **no** | VARSHIFT(36); ADD_COMPARE_SATURATE(3); COMB_LOOP(41); ASYNC_ARRAY_READ |
-| `zhao_debug_frameblit` | *never timed* | - | - | `7508adc0` | **no** | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) |
 | `zhao_raster_tilestore` | *never timed* | - | - | `96c0394a` | **no** | ADD_COMPARE_SATURATE(1) |
-| `zhao_sdram_ctrl` | *never timed* | - | - | `96c0394a` | **no** | ASYNC_ARRAY_READ(1) |
 | `zhao_terrain_patch` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(2); ASYNC_ARRAY_READ(4) |
 | `zhao_texture_cache` | *never timed* | - | - | `96c0394a` | **no** | ADD_COMPARE_SATURATE(2); COMB_LOOP(6); ASYNC_ARRAY_READ(5) |
+| `zhao_geom_binner` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(4, widest 36-bit); ASYNC_ARRAY_READ(6) |
 | `zhao_raster_fragment` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(7, widest 18-bit) |
+| `zhao_raster_edgewalk` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_REA |
 | `zhao_cmd_scheduler` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(4); ASYNC_ARRAY_READ(4) |
 | `zhao_debug_crc` | *never timed* | - | - | `96c0394a` | **no** | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) |
+| `zhao_debug_frameblit` | *never timed* | - | - | `7508adc0` | **no** | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) |
 | `zhao_input_rumble` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(1); ASYNC_ARRAY_READ(1) |
 | `zhao_measure_governor` | *never timed* | - | - | `96c0394a` | **no** | VARSHIFT(2); ASYNC_ARRAY_READ(1) |
 | `zhao_mem_guard` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(1) |
+| `zhao_sdram_ctrl` | *never timed* | - | - | `96c0394a` | **no** | ASYNC_ARRAY_READ(1) |
 | `zhao_vram_arbiter` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(4); ASYNC_ARRAY_READ(4) |
 | `zhao_geom_setup` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(4, widest 21-bit) |
 | `zhao_geom_clip` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(2, widest 23-bit) |
