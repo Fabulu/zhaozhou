@@ -526,3 +526,84 @@ energy and issue slots, not the answer.
 
 **Recording a prediction that was wrong, because a sweep whose surprises are
 edited out afterwards is a sweep that taught nothing.**
+
+---
+
+## 11:44 — MEASURED: the constrained fit at MUL_LANES = 3
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_geom_skin `
+      -ExtraSources fpga/rtl/geometry/zhao_geom_skin.sv
+
+Quartus Prime Lite 17.0.2, 5CSEBA6U23I7, virtual pins, sourceCommit `2e013e2`,
+`rtlCleanAtHead: true`, 2,912 s. **Constrained** — evidence captured live from
+the workspace before the harness deleted it, and saved beside this log at
+`fit-evidence/lanes3_constraint.txt`:
+
+    Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111):   10.000          clk
+
+| | before (16df9ee) | after (2e013e2) | delta |
+| --- | ---: | ---: | ---: |
+| **DSP blocks** | **72** | **9** | **-63 (-87.5%)** |
+| ALMs | 1,801 | 2,187 | **+386 (+21%)** |
+| registers | 145 | 1,448 | +1,303 |
+| virtual pins | 1,038 | 1,038 | 0 |
+| Fmax | *never measured* | **58.45 MHz** | — |
+
+**9 DSP blocks against a 12-18 target, on a 112-DSP device: 8%.** Three
+registered signed 32x32 lanes at three DSP blocks each. The old combinational
+form cost four per multiply and eighteen multiplies; registering the operands
+takes each lane to three.
+
+### THE CLAIM THIS BLOCK DOES NOT SUPPORT
+
+`TASK_LOG.md` records, for the three blocks rearchitected before this one:
+
+> **ALMs fell every time as well** -- 1,303 -> 1,183 and 2,086 -> 1,759 --
+> which kills the standing objection that sequencing trades area for DSPs.
+
+**That is not true here. ALMs rose, by 386.** The claim must not be repeated as
+a general law of this campaign, and I am not going to round it off.
+
+The reason is structural rather than surprising. `zhao_field_seq`,
+`zhao_terrain_lod` and `zhao_geom_lod` were parallel *datapaths* that collapsed
+into one: the area was wide product-and-compare logic, and sequencing deleted
+copies of it. GEOM.SKIN was **already minimal in logic** — its area was
+eighteen multipliers, which live in DSP blocks, not ALMs. Sequencing it did not
+delete a datapath; it added STATE: a 24-word palette latch (768 flops), six
+65-bit accumulators (390), the lane and destination pipelines, and the walk
+counters. 145 registers became 1,448, and those flops need ALMs to live in.
+
+**The trade is still overwhelmingly worth taking**, and the reason is that the
+two resources are not scarce in the same way:
+
+    63 DSP blocks freed   = 56% of the device's entire DSP budget
+    386 ALMs spent        = 0.9% of the device's ALM budget
+
+but "sequencing is free in area" is a claim about the other three blocks, not
+about this one.
+
+### AND THE NUMBER THAT IS NOT GOOD: Fmax 58.45 MHz
+
+The block does **not** meet its 10 ns constraint standalone. At 58.45 MHz a
+10-clock engine serves 97,417 vertices/frame — **below the 120,000 demand.**
+
+I am not going to guess at the cause. The old row has no Fmax to compare
+against (it is one of the 47 rows measured before the per-block SDC was fixed,
+so its area numbers were taken with no timing pressure at all and it has no
+timing number *at all* — which also means the +386 ALM comparison above is
+between a constrained fit and an unconstrained one, and is therefore an
+over-statement of the ALM cost by an unknown amount).
+
+The suspects, in order, are the blend walk's combinational depth (a 66-bit
+subtract, a three-level 73-bit shift-add tree, a 73-bit add, a round-add and a
+saturating compare, all between the accumulator registers and the output
+register) and the 1,038 virtual pins. **QUARTUS_GOTCHAS' whole lesson is to
+read what the tool says rather than to reason about what it probably said**, so
+the next fit runs with `-KeepWorkspace` to capture the STA report. The blend
+logic is identical at every lane count, so the MUL_LANES = 1 frontier point
+serves as the diagnosis run as well.
+
+**Recorded before the diagnosis, so the number cannot be quietly improved
+after the fact.**
