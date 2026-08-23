@@ -167,4 +167,38 @@ implemented.
 
 ---
 
+## RUN-20260823-0934 — DSP census reconciliation, GEOM.SKIN, and the timing axis
+
+**Date:** 2026-08-23
+**Branch:** main
+
+**Summary:**
+Reconciled the machine-readable resource census with the RTL, rearchitected
+`zhao_geom_skin`, and — unplanned — opened the timing axis that had been
+invisible while every per-block fit ran with no timing objective.
+
+**Deliverables:**
+- census **327 -> 160 DSPs**, every reduction measured under a constrained fit
+- `zhao_field_seq` 79 -> 3 DSPs, 8.59 -> 33.86 MHz, 10,615 -> 7,750 ALMs
+- `zhao_geom_skin` 72 -> 9 DSPs, 58.45 -> 89.65 MHz, **124,514 vertices/frame
+  against the 120,000 demand** — meets its budget
+- `zhao_surface_stamp` 28 -> 0 DSPs, 32.33 -> 87.54 MHz
+- V23 census taught about `variantOf` **before** the first frontier row existed
+- mutation preflight's empty-set pass fixed; audit proved zero blast radius
+- run tooling moved into the repo; `docs/BUILD.md` written
+- widescreen ruled and proved viable; `REMAINING_BLOCKERS.md` brought current
+- three demand numbers derived from Sacrifice; three asset preconditions found
+- latent out-of-bounds read fixed in the reference oracle
+
+**Notes:**
+Ten separate instances of an artifact being real while being an artifact of
+something other than what it was read as. The rule that came out of it:
+**a green result from a tool nobody has watched run is not evidence.**
+
+**Outcome:** Complete. Continuing campaign moved to a fresh run — remaining
+blocks are `terrain_project` 33, `texture_tmu` 28 (in flight), `terrain_normals`
+18, `geom_cull` 15, `geom_binner` 12, against an 85-90 ceiling.
+
+---
+
 <!-- Entries go above this line, newest first -->

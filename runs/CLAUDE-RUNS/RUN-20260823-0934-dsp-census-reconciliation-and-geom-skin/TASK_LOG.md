@@ -1137,6 +1137,132 @@ budget), Field engine 33.86 MHz (does not). Two blocks fixed today landing 2.6x
 apart — **the design is not uniformly slow**, which is the strongest evidence
 yet against the pessimistic reading of this morning's discovery.
 
+### 20:00 - SURFACE.STAMP complete: 28 -> 0 DSPs, and a systemic finding
+
+| | before (`@pre-rearch`) | after |
+| --- | ---: | ---: |
+| DSPs | **28** | **0** |
+| ALMs | 947 | 993 |
+| Fmax | **32.33 MHz** | **87.54 MHz** |
+| texels/frame | 538,045 | 37,784 (**1.89x** the 20,000 demand) |
+
+Sweep **32/32 caught, 0 discarded**. Census **188 -> 160**.
+
+**The systemic finding, now in `REMAINING_BLOCKERS.md` (`d284a86`):** the
+contract recorded this block's throughput target as *"met, measured"* — **true
+about cycles, false about time.** It closed at 32.33 MHz, holding the shared
+`gpu_clk` at a third of its constraint, and its 28 DSPs had bought a *cycle
+count* on a block that could not run fast enough to spend it. **Every contract
+predates the SDC fix, so every "met" is cycles-per-item until someone measures
+seconds-per-item.**
+
+The test gap it found was genuinely subtle and worth keeping:
+`covered = !(d2 > r_outer2 || d2 < r_inner2)` is **scale-invariant**, and all
+three terms come from the same squarer — so a *uniformly scaled* squarer is
+invisible. Two mutants halved everything uniformly, and every operand the suite
+drove happened to be **even**. Closed by a constructed Pythagorean triple
+putting one texel exactly on the rim with an **odd** leg.
+
+Six failures disclosed plainly, including a hang guard that produced **15
+confident, specific, wrong failures**; a fit harness keying its scratch
+directory on `$PID` alone, silently destroying two-thirds of the
+`-KeepWorkspace` evidence; and four wrong published figures corrected across 25
+occurrences. That standard of self-reporting is worth more than the result.
+
+### 20:15 - TEXTURE.TMU launched, and its baseline changes the shape of the task
+
+Briefed with both lessons from SURFACE.STAMP: **re-fit the old RTL under the
+corrected SDC first**, and **look for the multipliers in the boring places**
+(SURFACE.STAMP's 28 were *all* in coverage geometry, two of them per-stamp
+**constants** that got silicon because nothing in the RTL said they were rare).
+
+The agent applied the first on its first move. `@pre-rearch`:
+**28 DSPs, 1,844 ALMs, 199.72 MHz.**
+
+**That is nearly 2x the 100 MHz target**, and it reframes the block: unlike
+SURFACE.STAMP (32.33) and Field (33.86), the TMU has large timing headroom to
+spend on sequencing, so halving its rate should be comfortable rather than a
+fight. It is also the fourth block with a real Fmax — **three of four are
+comfortably fast, and only Field is genuinely slow.**
+
+### 20:30 - FIELD REARCHITECTURE RULING docketed  (`8e7f974`, `8754bd2`)
+
+**Verified before accepting any of it:** `zhao_field_seq` reports
+**`ramBlocks = 0` and `blockMemoryBits = 0`** while consuming 8,901 ALMs — and
+the whole design uses **51 of 553 M10Ks**. **502 idle block memories** while
+Field builds a 64x32 register file from flip-flops behind 64:1 async muxes,
+emits three constant tables as `always_comb` case trees, and instantiates the
+sine table **twice** to obtain `base` and `next`.
+
+> **Field is starved for timing while refusing to spend the one resource it has
+> in abundance.** Six of those 502 would hold everything listed.
+
+So 33.86 MHz is **not** evidence the instruction set is too ambitious. The
+79 -> 3 rewrite was right, the loop fix was right, and together they exposed
+that the engine is still shaped like *software translated literally into RTL*
+rather than like a synchronous processor. Keep the arithmetic; rebuild the
+plumbing. Six independently measurable waves; the single-agent "fix everything"
+pattern explicitly rejected.
+
+Two silent traps recorded, both of the class this project keeps being caught by:
+**"Allow Any RAM Size For Recognition" is disabled**, so a small array may stay
+in logic — hence the acceptance rule that **a fit still reporting
+`ramBlocks = 0` is a FAILED implementation even if every test passes** — and
+read-during-write must be don't-care or Quartus inserts a bypass network.
+
+**And the unresolved question is the important one:** no Field profile has a
+derived per-frame workload; several still claim "one instruction per clock", the
+same placeholder that produced 327 DSPs. One plausible profile alone works out
+to **7.68 M clocks/frame against 1,666,667** — 4.6x over. If that holds it means
+one physical instance was the wrong *quantity*, not that the design failed:
+three identical cores are **nine DSPs** against the original seventy-nine, and
+that preserves the "one engine, five profiles" ruling rather than breaking it.
+
+---
+
+## Run closed
+
+**This run's SPEC was census reconciliation and GEOM.SKIN. Both are complete**,
+and the work has since moved through SURFACE.STAMP, TEXTURE.TMU and the Field
+rearchitecture ruling — beyond what this run was scoped for. Closing it here and
+opening a fresh one for the continuing campaign, rather than letting one run
+accrete a whole day.
+
+### What this run delivered
+
+* census **327 -> 160 DSPs**, every reduction measured, none estimated;
+* `zhao_field_seq` **79 -> 3** DSPs and **8.59 -> 33.86 MHz**;
+* `zhao_geom_skin` **72 -> 9** DSPs, **58.45 -> 89.65 MHz**, and **124,514
+  vertices/frame against the 120,000 demand** — it meets its budget;
+* `zhao_surface_stamp` **28 -> 0** DSPs and **32.33 -> 87.54 MHz**;
+* `zhao_geom_lod`'s destroyed row recovered from git rather than retyped;
+* **V23 taught about `variantOf`** before the first frontier row existed —
+  without it three GEOM.SKIN and three SURFACE.STAMP variants would have added
+  ~150 phantom DSPs and read as a regression caused by measuring more carefully;
+* the mutation preflight's **empty-set pass** found and fixed, with an audit
+  proving the blast radius was zero;
+* the run tooling **moved into the repo** so runs stop being created outside it;
+* widescreen **ruled** and proved viable, including an impossibility proof
+  (1080 = 2^3 x 3^3 x 5, so no integer scale to 1080p yields a tile-exact
+  height) and the discovery that 416 px would have silently corrupted the binner;
+* the three demand numbers **derived from Sacrifice itself**, corroborating the
+  120,000-vertex ruling independently at ~41 creatures of median size;
+* three **asset preconditions** identified, one of them found by checking rather
+  than by being bitten;
+* a latent out-of-bounds read fixed in the reference oracle;
+* `docs/BUILD.md` written, and `REMAINING_BLOCKERS.md` brought current.
+
+### The lesson this run kept teaching
+
+**Ten instances of an artifact being real and being an artifact of something
+other than what it was read as** — the SDC that constrained no clock across 47
+fits, the sweep that re-ran the previous binary, the preflight that scored an
+empty set, the proof whose sources predated the edit (in its result *and* its
+wall time), the stopped sweep that kept rewriting RTL under two live fits, the
+contract whose "met" was cycles and not seconds.
+
+**A green result from a tool nobody has watched run is not evidence.**
+
 ---
 
 ## Subagent Spawns
