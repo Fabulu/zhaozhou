@@ -608,3 +608,76 @@ I had that block filed as untouchable, which was the wrong conclusion.
 
 It also rules that sweeps run in separate worktrees with separate build
 directories, which is exactly the incident above.
+
+---
+
+## 2026-08-23 — Field IR engine: one shared arithmetic engine (claude-dsp-field-engine)
+
+Implemented the DSP ruling of 2026-08-23 on `FIELD.SEQ.CORE`. Ten op units, each
+with its own multiplier, beside a sequencer that retires one instruction at a
+time, became one `zhao_field_exec_shared` holding one signed 33x33 lane, one
+integer square root, one sine table, one reciprocal and the two (different)
+reciprocal seed ROMs.
+
+**Measured, both sides, on this machine, in a worktree with its own build dir:**
+
+| | ALMs | DSPs | registers | commit |
+| --- | ---: | ---: | ---: | --- |
+| before | 10,623 | **79** / 112 | 4,510 | 57352cf |
+| after | 8,901 | **3** / 112 | 5,356 | 62d7b0e |
+
+The before row reproduced the committed one to the digit before a line was
+changed.
+
+Simple ops still retire in **six clocks** — the three register-read cycles became
+the lane's issue slots, and the first operand group moved into `Q_LATCH` so that
+with a two-cycle lane DOT3's third product lands in `Q_EXEC`. Worst op is
+NORMALIZE3 at **67**, against the 96 ceiling.
+
+### Four things worth carrying forward
+
+**1. The anti-hang bound was a magic constant and is now derived.**
+`zhao_field_seq_pkg::MAX_OP_CYCLES = 80` lives in a package in the sequencer's
+own file, so every consumer that already compiles it gets the constant and no
+source list had to grow. The formal harness IMPORTS it and computes its own run
+bound and scope window from it. A new assertion came with it — `a_op_bounded`,
+that no single instruction exceeds that ceiling for ANY instruction memory —
+which is the property this rearchitecture actually needs, because every op now
+waits on shared resources and every wait is an `if (valid)` that a bad schedule
+turns into a spin.
+
+**2. NO PER-BLOCK FIT HAS EVER BEEN TIMING-CONSTRAINED.** `run_block_fit.ps1`
+copies the shell SDC, which clocks ports named `gpu_clk`/`vid_clk`/`audio_clk`;
+every leaf block's clock port is `clk` and all I/O is virtual. Quartus says so
+in its own log: "Ignored create_clock ... Argument <targets> is an empty
+collection", three times per run. **All 47 rows in
+`reports/synthesis/zhao_block_fit.json` were fitted with no timing objective.**
+The area numbers stand; anything anyone infers about block timing from that file
+does not. Raised on the docket with two options rather than fixed unilaterally,
+because fixing it changes what every future row means.
+
+**3. Three mutants survived and all three are the same equivalence.** The lane's
+operand hold (M01), the read-slot shadow's depth (M07), and the write-back guard
+excluding multi-cycle ops (M20) all produce a transient wrong value that is
+ALWAYS overwritten before anything reads it — because the walk's read points are
+fixed. Each is proven equivalent rather than labelled, and each stays in the RTL
+because it stops being equivalent the moment the schedule changes.
+
+**4. Guard 7 is derived here rather than declared.** This sweep spans eleven
+files with different consumer sets, and a hand-maintained list across eleven
+files is a list that drifts. `consumers_of` reads `tests/CMakeLists.txt` at run
+time; the declared union is cross-checked against it and the run refuses to
+start on a mismatch. It caught one immediately — `test_field_alu_ops` was in the
+declared list and unreachable from any mutant, which meant the ALU's new seam
+had no mutant at all.
+
+### One thing I did not do, with the number that says why
+
+The mid-flight architecture brief asked for `MUL_LANES` as a parameter with 1
+and 2 both fitted. I did not build it. **Neither axis binds**: DSPs are at
+3 against a target of 8, worst op is 67 against a ceiling of
+96. And the latency a second lane could buy is small, because the multiplier is
+not what the long ops wait for — **36 of NORMALIZE3's 67 clocks and 36 of LEN's
+48 are the integer square root, which contains no multiplier at all.** Cycle
+accounting per op is in the FINDINGS. If the long ops need to be shorter, the
+lever is a two-bit-per-cycle root, not a second multiplier.

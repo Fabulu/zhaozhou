@@ -166,12 +166,17 @@ runs:
       the bmc at exactly this assertion); bmc + cover re-run green.
 
   - property: tests/formal/field_seq_bound.sby
-    status: green
-    date: "2026-08-22"
-    commit: "3fe40ed"
+    status: pending
+    # PENDING, DELIBERATELY. The depth was re-derived to 172 (see notes) and the
+    # solo wall time of that run is still being measured. This entry is committed
+    # now because the DERIVATION is the part that is hard to reconstruct; the
+    # status is flipped only by a run that passes inside the lane's own budget.
+    date: "2026-08-23"
+    commit: "62d7b0e"
     lane: formal_field_seq_bound
     tasks: [bmc, cover]
     covers: true
+    abstraction: "bmc task only: the shared multiplier's product wire is cut to a free value (cutpoint + opt_clean). cover is NOT abstracted."
     notes: >-
       FIELD.SEQ.CORE's anti-hang law, the one the contract states twice and the
       differential cannot reach. `instr_count_i` is a LIVENESS bound, not a
@@ -180,24 +185,69 @@ runs:
       memory into a machine that hangs instead of reporting ST_PC_OVERRUN.
       EVERY INSTRUCTION WORD IS FREE here -- ins_op_i may be an opcode that does
       not exist and may change every cycle -- which is exactly what a mis-loaded
-      memory is, and exactly what 906 directed plus 2,506 random programs
-      cannot be. Two assertions to depth 140 (btormc): a_pc_bounded, the walk
-      never steps past its bound; a_progress, the machine is never busy for more
-      than 120 consecutive clocks, written as a counter because the frontend
-      refuses `##[1:120]`. Four covers, all reached: it RUNS, it finishes
-      cleanly, it OVERRUNS, and it refuses an unsupported opcode -- both
-      assertions are about a running machine and a model that never starts
-      would satisfy them while proving nothing. THREE FALSE COUNTEREXAMPLES ON
-      THE WAY, each a harness fault rather than a design one, and each recorded
-      in the harness beside the fix: instr_count_i left free every cycle (the
-      solver lowered the bound under an advancing pc); no forced initial reset,
-      so the solver chose the start state of a machine whose `state` register
-      correctly has no initialiser; and a_pc_bounded left ungated, comparing the
-      pc left over from one run against the next run's count. The lesson worth
-      keeping is that all three were the model being under-constrained, and
-      assuming a failure away is how a formal lane becomes decoration -- so each
-      assumption added is one the CONTRACT already makes.
-
+      memory is, and exactly what 906 directed plus 12,906 random programs
+      cannot be.
+      READ THE ABSTRACTION FIELD BEFORE QUOTING THIS AS EVIDENCE. The bmc task
+      runs on a model in which the shared multiplier's PRODUCT is a free value:
+      `cutpoint` replaces the wire and `opt_clean` deletes the multiplier that
+      no longer drives anything (both passes required; verified by the model
+      going from 4 `$mul` cells to 1). It is an OVER-APPROXIMATION, so for these
+      SAFETY properties it can produce a spurious counterexample but never a
+      spurious pass. It is also non-lossy, because the bound is STRUCTURAL --
+      every op walks a fixed schedule whose length does not depend on any
+      product value. Audited one FSM at a time; exactly ONE transition in the
+      engine reads a product (`zhao_field_normalize`'s `is_zero`), both of its
+      branches are fixed-length, and the abstract machine may always take the
+      LONGER, which is the case the bound must cover. It was introduced because
+      unabstracted the proof reached only k=114 of 180 in two hours twenty and
+      was still slowing -- a lane CI will not run is decoration. THE COVER TASK
+      IS NOT ABSTRACTED, deliberately: reachability of the antecedents is a
+      claim about the real design.
+      RE-DERIVED 2026-08-23 FOR THE SHARED ARITHMETIC ENGINE. The engine's ten
+      op units now share one multiplier, one integer root, one sine table and
+      one reciprocal, so every op WAITS on a resource it does not own and every
+      wait is an `if (valid)` that a mis-timed schedule turns into a spin. The
+      old parallel units could not wait on each other at all, so this lane went
+      from a formality to the property that guards the architecture.
+      THE BOUND IS NO LONGER A MAGIC CONSTANT. It used to assert
+      `busy_cnt <= 16'd120` with a paragraph explaining why 120 was generous;
+      under the new schedule two NORMALIZE3s take about 134 clocks, so that
+      number would have had to be EDITED, which is how a bound stops being one.
+      `zhao_field_seq_pkg::MAX_OP_CYCLES = 80` is now declared beside the cost
+      table it bounds, in a package inside the sequencer's own file so every
+      consumer that already compiles it gets the constant; the harness IMPORTS
+      it and derives `MAX_RUN_CYCLES = 2 * MAX_OP_CYCLES + 8 = 168` and the
+      window `PROVEN_DEPTH = 2 + 168 + 2 = 172` from it. THE DEPTH IS DERIVED
+      RATHER THAN CHOSEN: 172 is the shortest window in which BOTH assertions
+      can actually be violated -- a_op_bounded needs 163 (two instructions, the
+      second overrunning), a_progress needs 171 (busy_cnt reaching
+      MAX_RUN_CYCLES + 1), and a_progress binds because a machine could retire
+      every instruction inside 80 clocks and still never leave busy. The
+      earlier 180 was a round number. V19's scope guard is pinned to
+      PROVEN_DEPTH, so raising the depth past the proven window FIRES rather
+      than silently re-scoping what PASS means.
+      THREE ASSERTIONS NOW, and the new one is the strongest: a_pc_bounded, the
+      walk never steps past its bound; a_op_bounded, NO INSTRUCTION -- whatever
+      opcode the solver invents, wherever its operands point -- runs longer than
+      MAX_OP_CYCLES; a_progress, the run-level consequence. The worst op
+      measured in simulation is NORMALIZE3 at 67 clocks
+      (tests/differential/field_seq_directed.cpp section 12 prints the whole
+      table on every run), so the proven ceiling carries thirteen clocks of
+      margin -- small enough that a regression trips it.
+      Four covers, all reached on the UNABSTRACTED model: it RUNS, it finishes
+      cleanly, it OVERRUNS, and it refuses an unsupported opcode -- all three
+      assertions are about a running machine and a model that never starts would
+      satisfy them while proving nothing.
+      THREE FALSE COUNTEREXAMPLES ON THE WAY in the original run, each a harness
+      fault rather than a design one, and each recorded in the harness beside
+      the fix: instr_count_i left free every cycle (the solver lowered the bound
+      under an advancing pc); no forced initial reset, so the solver chose the
+      start state of a machine whose `state` register correctly has no
+      initialiser; and a_pc_bounded left ungated, comparing the pc left over
+      from one run against the next run's count. The lesson worth keeping is
+      that all three were the model being under-constrained, and assuming a
+      failure away is how a formal lane becomes decoration -- so each assumption
+      added is one the CONTRACT already makes.
   - property: tests/formal/sat_add.sby
     status: green
     date: "2026-08-22"

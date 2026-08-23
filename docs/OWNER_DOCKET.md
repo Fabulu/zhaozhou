@@ -1,5 +1,106 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — Field IR engine done: 79 DSPs -> 3. Two things
+## for you, one of them a defect in how every block fit has ever been measured
+
+The ruled rearchitecture is implemented and measured. `zhao_field_seq` plus its
+dependencies went from **79 DSP blocks of 112** to **3**, with
+ALMs 10,615 -> 8,901. Simple ops still retire in
+**six clocks**; the worst op is **67** against the 96 you set. All 31 opcodes are
+bit-exact against `zfield::interpret`, the anti-hang proof is green with a
+derived bound, and the alone-versus-interleaved contamination test is green and
+proven non-vacuous by a mutant.
+
+Detail in
+`runs/CLAUDE-RUNS/RUN-20260822-2136-.../FINDINGS-dsp-field-engine.md`.
+
+### 1. I did NOT build the parameterized two-lane variant, and here is the number
+
+The mid-flight brief asked for `MUL_LANES` as a parameter with 1 and 2 both
+fitted, so the Pareto point is measured rather than guessed. I have not built
+it, and this is the reason rather than an excuse.
+
+**Neither axis binds.** DSPs are at 3 against a target of 8. Worst
+op is 67 against a ceiling of 96. A Pareto frontier is information about a trade,
+and there is no trade here: a second lane spends the entire remaining DSP budget
+to buy latency on a constraint that is already met with 30% margin.
+
+**And the latency it would buy is small, because the multiplier is not what the
+long ops are waiting for.** Cycle accounting per op, derived from the state
+machines and cross-checked against the measured totals that section 12 of the
+differential prints:
+
+| op | measured | ceiling with UNLIMITED multipliers | what the rest is |
+| --- | ---: | ---: | --- |
+| MUL / MAD / DOT2 / DOT3 | 6 | **6** | fetch, latch, three register reads, execute |
+| RCP | 15 | 14 | two dependent product stages |
+| NOISE2 | 29 | 29 | a strict hash chain: mix -> LCG -> xor-shift |
+| SPLINE | 45 | 45 | 12 clocks of binary search, then a strict Horner chain |
+| LEN3 | 48 | 46 | **36 of the 48 are the integer square root** |
+| RING | 54 | 52 | nine products, every one dependent on the last |
+| NORMALIZE3 | 67 | 63 | **36 are the root**; the correction is a 4-step chain |
+
+The binding resource in the two most expensive ops is `zhao_field_isqrt` --
+thirty-four clocks of restoring digit recurrence with **no multiplier in it at
+all**. A second multiplier lane cannot touch it.
+
+So the honest reading of the brief's own principle -- measure the frontier, pick
+the cheapest point that clears the workload with reserve -- is that the frontier
+in this block has one interesting point and I have fitted it. **If you want the
+long ops shorter, the lever is a two-bit-per-cycle integer root (34 clocks -> 17,
+zero DSPs, roughly double the compare-and-subtract logic), not a second
+multiplier.** That is a separate change and I have not made it, because nothing
+requires it.
+
+**One free win is measured and unspent.** ROT issues its four products serially
+although they are independent; issuing them back to back on the SAME lane takes
+ROT2/ROT3 from 24/25 clocks to about 16, for zero DSPs. I did not take it because
+no acceptance criterion moves and it would have invalidated a running mutation
+sweep. It is recorded here so it is a decision rather than an oversight.
+
+### 2. NO PER-BLOCK FIT HAS EVER CARRIED A TIMING NUMBER, AND NOW I KNOW WHY
+
+This is the one that matters beyond this block.
+
+`tools/quartus/run_block_fit.ps1` copies `zhao_shell_fit.sdc`, which says:
+
+```
+create_clock -name gpu_clk -period 10.000 [get_ports {gpu_clk}]
+```
+
+Every leaf block's clock port is called **`clk`**, and the block flow makes all
+I/O virtual. So `get_ports {gpu_clk}` matches nothing, no clock is created, and
+**every one of the 47 rows in `reports/synthesis/zhao_block_fit.json` was fitted
+UNCONSTRAINED.** The fitter had no timing objective. That is why no row has ever
+carried WNS, TNS or Fmax: there was never a clock to report against.
+
+What that does and does not invalidate:
+
+* **The ALM and DSP numbers stand.** Those are placement and resource counts and
+  they are what the census was built for.
+* **Anything anyone infers about block-level timing from that file is void**, and
+  more subtly, an unconstrained fit optimises for area rather than speed -- so
+  the ALM numbers are, if anything, the optimistic end for a design that will
+  later be asked to close timing.
+
+I measured Fmax for both sides of this block separately, with `derive_clocks`
+against the real fitted netlist, and both numbers are in the FINDINGS. I have
+**not** changed `run_block_fit.ps1`, because doing so would change what every
+future row means and half the existing rows would no longer be comparable to the
+new ones. That is your call:
+
+* **(a)** leave it, and treat the census as an area census only, saying so in the
+  file's `limitations` list; or
+* **(b)** add a per-block SDC that clocks `clk` at the gpu period, re-measure the
+  blocks that matter, and accept that old and new rows are not comparable.
+
+I recommend **(b) for the blocks still to be rearchitected** and leaving the rest
+alone -- the DSP wave is going to re-fit them anyway, so the re-measure is nearly
+free, and a timing number is exactly what you will want when the composed fit's
+setup slack is the open question.
+
+---
+
 ## 2026-08-22 — CDC seam DONE; two follow-on calls before the A/B remeasure
 
 The ruled move is implemented: **DEBUG.CRC now runs in `vid_clk`** and nothing

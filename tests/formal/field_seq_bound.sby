@@ -24,29 +24,52 @@
 #            the machine RUNS, that it finishes cleanly, that it OVERRUNS, and
 #            that it refuses an unsupported opcode.
 #
-# THE DEPTH IS DERIVED FROM THE DESIGN, 2026-08-23. `zhao_field_seq_pkg`
-# declares MAX_OP_CYCLES = 80 -- the ceiling on ONE instruction, measured at 67
-# for the worst of them (NORMALIZE3) by section 12 of
-# tests/differential/field_seq_directed.cpp. The harness imports that constant
-# and computes
+# THE DEPTH IS DERIVED FROM THE PROPERTIES, 2026-08-23 -- AND IT IS 172, NOT 180.
 #
-#     MAX_RUN_CYCLES = 2 * MAX_OP_CYCLES + 8 = 168
-#     SCOPE_STEPS    = MAX_RUN_CYCLES + 22   = 190
+# 180 was a round number, which is the proof-side version of carrying a 72-bit
+# operand because slack looks free. The question a depth has to answer is: what
+# is the SHORTEST window in which each assertion can actually be VIOLATED?
+# Shallower and the assertion is decoration; deeper and the extra steps buy
+# nothing while costing solver time superlinearly.
 #
-# so `depth` must sit between the run bound it has to exercise and the scope
-# guard that pins the proven window: 168 < 180 < 190. Raising MAX_OP_CYCLES
-# without raising this depth makes a_scope_short_program_window fail, which is
-# the forced re-derivation rather than a silent re-scope of what PASS means.
+# `zhao_field_seq_pkg` declares MAX_OP_CYCLES = 80 -- the ceiling on ONE
+# instruction, measured at 67 for the worst of them (NORMALIZE3) by section 12
+# of tests/differential/field_seq_directed.cpp. The harness imports it and
+# derives everything else:
+#
+#     FORMAL_PROLOGUE  = 2                                   (see below)
+#     MAX_RUN_CYCLES   = 2 * MAX_OP_CYCLES + 8       = 168
+#     PROVEN_DEPTH     = FORMAL_PROLOGUE + MAX_RUN_CYCLES + 2 = 172
+#
+# THE PROLOGUE IS TWO CYCLES AND BOTH ARE FORCED BY THE HARNESS. Step 0 has
+# `f_past_valid == 0`, which assumes `!rst_n`: nothing is asserted and the
+# machine is held in reset. Step 1 is the earliest `rst_n` may rise, and the
+# sequencer sits in Q_IDLE waiting for `start_i`. So the walk cannot be busy
+# before step 2.
+#
+# WHICH ASSERTION BINDS, and it is not the obvious one:
+#
+#   a_op_bounded  needs the LAST of two instructions to be able to reach
+#                 MAX_OP_CYCLES + 1. The worst ordering is instruction one
+#                 taking its full allowance and instruction two overrunning:
+#                 2 + 80 + 81 = 163.
+#   a_progress    needs `busy_cnt` to be able to reach MAX_RUN_CYCLES + 1:
+#                 2 + 169 = 171. THIS IS THE BINDING ONE, and it is not
+#                 redundant with the first -- a machine could retire every
+#                 instruction inside 80 clocks and still never leave `busy`,
+#                 and only this counter would see that.
+#
+# 171 plus one cycle to reach Q_DONE and one of slack is 172.
+#
+# V19: `a_scope_short_program_window` is pinned to PROVEN_DEPTH, so raising the
+# depth past the window it was derived for FIRES rather than silently re-scoping
+# what PASS means. The reduced window asserts itself.
 #
 # It used to be a bare `busy_cnt <= 120` at depth 140, with a paragraph
-# explaining why 120 was generous. The DSP rearchitecture of 2026-08-23 made
-# the ops longer -- every one of them now waits on a shared multiplier, a shared
-# root and a shared reciprocal -- so a number chosen against the old schedule
-# would have had to be edited, which is exactly how a bound stops being one.
-#
-# Depth 180 covers: reset -> start -> two instructions at their real cost, the
-# slowest of which spends 34 clocks in the integer square root and 3 clocks per
-# dependent product -> Q_DONE.
+# explaining why 120 was generous. The DSP rearchitecture of 2026-08-23 made the
+# ops longer -- every one now waits on a shared multiplier, a shared root and a
+# shared reciprocal -- so a number chosen against the old schedule would have had
+# to be EDITED, which is how a bound stops being one.
 #
 # Frontend: read_slang reading the REAL frozen zhao_pkg.sv and the REAL
 # generated zhao_abi_pkg.sv, and the real unit blocks the sequencer
@@ -63,9 +86,9 @@ cover
 
 [options]
 bmc:   mode bmc
-bmc:   depth 180
+bmc:   depth 172
 cover: mode cover
-cover: depth 180
+cover: depth 172
 expect pass
 
 [engines]
@@ -74,6 +97,70 @@ btor btormc
 [script]
 read_slang --unroll-limit=200000 --top zhao_field_seq_bound_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_field_rcp_rom.sv zhao_field_rcp24_rom.sv zhao_field_sin_rom.sv zhao_field_mul.sv zhao_field_exec_shared.sv zhao_field_alu.sv zhao_field_rcp.sv zhao_field_sin.sv zhao_field_isqrt.sv zhao_field_len.sv zhao_field_normalize.sv zhao_field_curve.sv zhao_field_noise.sv zhao_field_ring.sv zhao_field_rot.sv zhao_field_seq.sv field_seq_bound_harness.sv
 prep -top zhao_field_seq_bound_harness
+
+# =============================================================================
+# THE bmc TASK RUNS ON AN ABSTRACTED MODEL. THE cover TASK DOES NOT.
+# =============================================================================
+# READ THIS BEFORE QUOTING THIS LANE AS EVIDENCE. An abstracted proof that does
+# not announce itself reads as stronger than it is, which is worse than no proof
+# at all. `design/formal_runs.yml` says the same thing in its notes, so a
+# reviewer deciding whether a maturity claim is backed sees it there too.
+#
+# WHAT IS ABSTRACTED. `cutpoint` replaces the shared multiplier's product wire
+# with a value the solver may choose freely every cycle, and `opt_clean` then
+# deletes the multiplier that no longer drives anything. BOTH PASSES ARE
+# REQUIRED: without the opt_clean the dead multiplier stays in the netlist and
+# nothing is saved. Verified rather than assumed — the model goes from 4 `$mul`
+# cells to 1, and the survivor is a multiply by a constant.
+#
+# WHY. The 2026-08-23 rearchitecture put a registered signed 33x33 multiplier in
+# this cone, and a bounded model checker must reason about every bit of it at
+# every unrolled step. Unabstracted, this proof took two hours and twenty
+# minutes to reach k = 114 of 180 and was still slowing down. That is a lane CI
+# will not run, and a lane nobody runs is decoration — this project has already
+# been bitten once by a gate that skipped itself and hid weeks of drift.
+#
+# WHY THE DIRECTION IS SOUND. A free product is an OVER-APPROXIMATION: the
+# abstract machine does everything the real one does and more. For a SAFETY
+# property — `pc <= instr_count_i`, `op_cnt <= MAX_OP_CYCLES`, `busy_cnt <=
+# MAX_RUN_CYCLES` — a proof over the superset proves it over the design. The
+# abstraction can produce a SPURIOUS COUNTEREXAMPLE; it cannot produce a
+# spurious PASS. That is the correct direction here.
+#
+# WHY IT IS ALSO NON-LOSSY, WHICH IS THE PART THAT MATTERS. The bound is
+# STRUCTURAL: every operation walks a FIXED schedule, so its cycle count does
+# not depend on any product's value. RCP is three issues; the integer root is
+# thirty-four iterations whatever the operand; CURVE's binary search is six
+# steps counted by `k`, and the comparison inside it moves `lo`, not the state;
+# RING walks nine products and two reciprocal calls; NOISE branches on the
+# opcode and on a lane counter; ROT and LEN are straight-line. Audited, one FSM
+# at a time, by reading every `state <=` in the cone.
+#
+# THERE IS EXACTLY ONE EXCEPTION AND IT IS WORTH NAMING. `zhao_field_normalize`
+# branches on `is_zero`, which is `n2 == 0` — and `n2` IS a sum of products. So
+# one transition in the engine does depend on a product value. It is harmless
+# here for a reason that has to be checked rather than hoped: BOTH branches are
+# fixed-length, and the zero branch is the SHORT one (straight to N_OUT) while
+# the non-zero branch is the long one (the reciprocal walk). The abstract
+# machine may take either, so it may always take the LONGER — which is exactly
+# the case the bound has to cover. The abstraction therefore cannot hide a
+# violation; it can only offer the solver the worst case more freely.
+#
+# WHAT WOULD MAKE THIS UNSOUND — or rather, sound but useless. If any operation
+# terminated on a DATA-DEPENDENT condition — a convergence test, an early-out on
+# a comparison against a product, a normalise loop that iterates until a bit is
+# set — then a free product could spin it forever and the proof would fail with
+# a counterexample that cannot happen. Passing would then be luck. No operation
+# in this engine is written that way, and if one ever is, this comment is the
+# place that stops being true.
+#
+# THE cover TASK IS DELIBERATELY NOT ABSTRACTED. Its whole job is to show the
+# antecedents are reachable in the REAL design; reaching them with a product the
+# multiplier could never produce would prove nothing, and would be precisely the
+# vacuity the covers exist to rule out. The `bmc:` prefixes below are what keep
+# the two apart.
+bmc: cutpoint w:u_seq.u_exec.u_mul.p_o
+bmc: opt_clean -purge
 
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv

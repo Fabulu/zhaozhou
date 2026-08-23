@@ -215,6 +215,34 @@ module zhao_field_seq_bound_harness
   localparam int unsigned MAX_FORMAL_INSTRS = 2;
   localparam int unsigned MAX_RUN_CYCLES = MAX_FORMAL_INSTRS * MAX_OP_CYCLES + 8;
 
+  // ---- THE DEPTH IS DERIVED FROM THE PROPERTIES, NOT CHOSEN ---------------
+  // A depth picked because it is large is the proof-side version of a 72-bit
+  // operand carried because slack looks free, and that habit cost this project
+  // ten DSPs. So: what is the SHORTEST depth at which each assertion can
+  // actually be violated? Below that the assertion is decoration; above it the
+  // extra steps buy nothing and cost solver time superlinearly.
+  //
+  // The prologue is two cycles and both are forced by this harness. Step 0 has
+  // `f_past_valid == 0`, which assumes `!rst_n`, so nothing is asserted and the
+  // machine is held in reset. Step 1 is the earliest `rst_n` may rise, and the
+  // sequencer is in Q_IDLE waiting for `start_i`. The walk therefore cannot
+  // become busy before step 2.
+  localparam int unsigned FORMAL_PROLOGUE = 2;
+  //
+  //   a_op_bounded  needs the LAST of the two instructions to be able to reach
+  //                 MAX_OP_CYCLES + 1. Worst ordering is instruction one taking
+  //                 its full allowance and instruction two overrunning:
+  //                 2 + 80 + 81 = 163.
+  //   a_progress    needs `busy_cnt` to be able to reach MAX_RUN_CYCLES + 1,
+  //                 which is 2 + 169 = 171. This is the BINDING one, and it is
+  //                 worth saying why it is not redundant with the first: a
+  //                 machine could retire every instruction inside 80 clocks and
+  //                 still never leave `busy`, and only this counter sees that.
+  //
+  // So the window is the larger of the two, plus a cycle for Q_DONE to be
+  // reached and one of slack. 172, not 180.
+  localparam int unsigned PROVEN_DEPTH = FORMAL_PROLOGUE + MAX_RUN_CYCLES + 2;
+
   always_ff @(posedge clk) begin
     if (f_past_valid && rst_n) begin
       // ---- the walk never steps past the bound it was given ---------------
@@ -268,18 +296,18 @@ module zhao_field_seq_bound_harness
   // depth goes past it, forcing that re-derivation instead of a silent
   // re-scope of what "PASS" means here.
   //
-  // THE WINDOW IS DERIVED TOO. `MAX_RUN_CYCLES` plus the reset cycles and the
-  // idle cycle before `start_i`, rounded up to the depth the .sby asks for. If
-  // `MAX_OP_CYCLES` grows, this grows with it and the .sby's `depth` must be
-  // raised to match -- which is the forced re-derivation, rather than a silent
-  // re-scope of what PASS means here.
-  localparam int unsigned SCOPE_STEPS = MAX_RUN_CYCLES + 22;
+  // IT IS PINNED TO `PROVEN_DEPTH`, WHICH IS THE POINT. The guard fires the
+  // moment someone runs this harness deeper than the window the depth was
+  // derived for, so the reduced window is SELF-ASSERTING rather than a comment
+  // that goes stale. If `MAX_OP_CYCLES` grows, `PROVEN_DEPTH` grows with it and
+  // the .sby's `depth` must be raised to match -- a forced re-derivation, not a
+  // silent re-scope of what PASS means here.
   logic [15:0] f_steps = 16'd0;
   always_ff @(posedge clk) begin
     if (f_steps != 16'hFFFF) f_steps <= f_steps + 16'd1;
   end
   always_comb begin
-    a_scope_short_program_window : assert (f_steps <= 16'(SCOPE_STEPS));
+    a_scope_short_program_window : assert (f_steps <= 16'(PROVEN_DEPTH));
   end
 
   // ---- non-vacuity (V16): the antecedents are REACHABLE -------------------

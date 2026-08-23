@@ -44,6 +44,44 @@ hash did not move is **discarded, never scored**.
 | Lattice noise | `NOISE2`, `RIDGE` | `zhao_field_noise.sv` | 346 | 12,000 | **15 / 17**, 2 equivalent |
 | Rotation | `ROT2`, `ROT3` | `zhao_field_rot.sv` | 3,495 | 15,000 | **17 / 17** |
 | Band | `RING` | `zhao_field_ring.sv` | 572 | 24,000 | **17 / 18**, 1 equivalent |
+| Shared engine | all 31 opcodes | `zhao_field_exec_shared.sv`, `zhao_field_mul.sv` | 1,127 | 12,906 | see below |
+
+## 2026-08-23: ten calculators became one engine
+
+Every row above was built as an independent block with its own multiplier, and
+that was the right way to build them -- each one was verified against the
+interpreter before it was wired to anything. It was the wrong way to SHIP them.
+
+`zhao_field_seq` retires **one instruction at a time**, so nine of the ten units
+were idle at every instant while holding silicon. The first synthesis ever run
+on this subsystem measured **79 DSP blocks of a 112-block device** -- 71% of the
+chip for one subsystem.
+
+They now share `zhao_field_exec_shared`: one signed 33x33 multiplier lane, one
+integer square root, one sine table, one reciprocal, and the two DIFFERENT
+reciprocal seed ROMs (`FIELD_RCP_T0` seeds a 32-bit reciprocal with one
+correction step, `RCP24_T0` a 24-bit one with two; feeding either function the
+other's table would be invisible until some normalised vector came out short).
+
+**79 DSP blocks -> 3.** The production Field cone contains exactly one
+nonconstant `*`.
+
+**And simple ops still cost six clocks.** The three register-read cycles were
+idle; they are now the lane's issue slots, and the first operand group is read
+in `Q_LATCH` from the instruction memory's own outputs rather than a cycle later
+from the latched fields -- which, with a two-cycle lane, puts DOT3's third
+product in `Q_EXEC`, the state that consumes it. MUL, MAD, DOT2 and DOT3 retire
+in six clocks on a machine with one multiplier; the ops that lengthened are the
+per-sample ones, worst case NORMALIZE3 at 67 clocks.
+
+Each block's differential still drives that block, through a harness wrapper in
+`tests/rtl/` that supplies the shared resources and no semantics. What is new is
+what a shared engine newly admits and a parallel one could not: an operation
+leaving state behind for the next one. `field_seq_directed` section 13 runs every
+operation ALONE and then interleaved in both directions and requires every answer
+and each of the five saturation ledger lanes to match; section 14 pins WHEN a
+long operation commits, because with sequenced units that is part of the contract
+too. Both are proven non-vacuous by mutants written to break exactly them.
 
 Tests are `tests/differential/field_<piece>_directed.cpp`. The "directed" column
 is the check count with no arguments; "random" is the count added by the fast
