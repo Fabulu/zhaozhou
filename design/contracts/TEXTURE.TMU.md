@@ -434,6 +434,19 @@ trying next, cheapest first: a different SMT engine (the lane pins
 `a_s`/`b_s` so the solver chains three easy equalities instead of one hard one.
 Neither was attempted here.
 
+`design/formal_runs.yml` now records this property as **`banked`**, not `green`
+— on the precedent of `mem_sdram_refresh_bound` and `terrain_bake_delta`, whose
+covers also pass while their bmc tasks do not finish. **The old `green` was not
+transferable**: it was measured at `186546e` on the eight-product filter, which
+no longer exists.
+
+**A decision is left to the owner rather than taken here:** the CTest lane
+`formal_texture_bilerp` is **left in place and will therefore fail the nightly
+gate**. That is honest and noisy. The alternatives are to fix the proof, or to
+take the lane out of the automated set as `mem_sdram_refresh_bound` was —
+and removing it *silently* would hide a regression that a future fix should
+restore.
+
 **Proved (P1–P4):** the output is exactly the derived single-rounded weighted sum computed in a wide lane — which catches all three named one-LSB traps at once and, because that wide law is compared against an **8-bit** output, also proves the weighted sum can never leave the field; the weights are a **partition of unity**, `Σw = 65,536` exactly, which together with P1 makes a flat footprint filter to itself by arithmetic; `fu = fv = 0` is the exact identity on `t00`, which is what makes nearest sampling the same datapath; and the 8-bit field holds with no clamp anywhere in the module.
 
 **Covered:** an **exact rounding tie** firing (without it the exactness theorem also holds for a truncating filter on every non-tie input, which is almost all of them), the result landing strictly **inside** its own footprint (without which P1 would also hold for a filter that never left tap 0), both far corners, the 128/128 centre, and a flat footprint at a non-trivial fraction filtering to itself.

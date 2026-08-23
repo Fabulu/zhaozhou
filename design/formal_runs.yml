@@ -652,9 +652,49 @@ runs:
       table in design/contracts/RASTER.FRAGMENT.md.
 
   - property: tests/formal/texture_bilerp.sby
-    status: green
-    date: "2026-08-18"
-    commit: 186546e
+    status: banked
+    date: "2026-08-23"
+    commit: 2f2722b
+    bmc_status_note: >-
+      WAS green at 186546e (2026-08-18) and that entry described the
+      EIGHT-PRODUCT filter. RUN-20260823-1736 factored the arithmetic to three
+      products a channel, and the bmc task STOPPED CLOSING: 3,300 s on
+      boolector with no answer, against 741 s standalone / 1,264 s as the lane
+      before. So P1-P4 are UNPROVED on the shipping bytes and the old green is
+      NOT transferable -- it was measured on RTL that no longer exists. Banked
+      rather than deleted, on the precedent of mem_sdram_refresh_bound and
+      terrain_bake_delta, because the COVER task still passes non-vacuously in
+      ~1 s and reaches every corner it claims, including the exact rounding tie
+      and the strictly-inside-the-footprint case that stop P1 holding vacuously.
+
+      WHY IT GOT HARDER, which is the same fact that makes the theorem worth
+      having: texture_bilerp_fv.sv computes the law as t00*w00 + ... + t11*w11,
+      and until the factoring the DUT computed THAT SAME EXPRESSION, so a_exact
+      was very nearly a syntactic identity between two structurally identical
+      circuits. It is now a real distributive-law identity across three
+      multiplies of three different widths, one of whose operands is another's
+      result.
+
+      WHAT CARRIES IT MEANWHILE, and it is TOTAL rather than sampled:
+      runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/
+      total_equivalence_check.py settles the identity over all 2^48 inputs in
+      two halves -- (1) no lane truncates, proved by enumerating all 16 texel
+      CORNERS (each intermediate is monotone in each texel, so corners bound the
+      byte domain) against all 65,536 (fu, fv), 0 violations; and (2) given no
+      truncation the pre-rounding sum is exactly LINEAR in the four texels, so
+      the four basis vectors at every (fu, fv) determine the whole map, and they
+      equal w00/w10/w01/w11 exactly, 0 mismatches. Plus the differential lanes
+      against zref::Tmu and 13 sweep mutants aimed at this arithmetic, all 13
+      caught.
+
+      DECISION NEEDED FROM THE OWNER, deliberately not taken here: the CTest
+      lane formal_texture_bilerp is LEFT IN PLACE and will therefore FAIL the
+      nightly gate. That is honest but noisy. The alternatives are to fix the
+      proof (a different SMT engine -- the lane pins smtbmc boolector -- or
+      decomposing P1 into white-box lemmas on the DUT's own a_s/b_s so the
+      solver chains three easy equalities instead of one hard one), or to take
+      the lane out of the automated set as mem_sdram_refresh_bound was. Removing
+      it silently would hide a regression a future fix should restore.
     lane: formal_texture_bilerp
     tasks: [bmc, cover]
     covers: true
