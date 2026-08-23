@@ -65,6 +65,23 @@ plausibly needs **zero DSPs**.
 > **DERIVED DEMAND: 20,000 stamp texels per frame** (3× the heavy-barrage
 > figure, for headroom). **Proposed target: 0–2 DSPs.**
 
+**OUTCOME, 2026-08-23 (RUN-20260823-1415): 0 DSPs, measured, constrained fit.**
+Two notes back to this entry, because both correct it:
+
+- **The LUT was not needed and would not have helped.** The guess above was that
+  zero DSPs would come from copying `MakeScarLUT`. It did not: `zhao_surface_blend`
+  — where all five stamp modes, the ABI mapping and age/decay live — **never
+  contained a multiply at all** and fits on its own at 64 ALMs / 0 DSPs. Every
+  one of the 28 DSPs was in the **coverage geometry** (`dx²+dz²`, `r²`,
+  `r_inner²` and two texel-centre products), which a LUT does not touch. They
+  came out by making the four squares share one sequential shift-add squarer and
+  turning the two texel-centre products into accumulators.
+- **The 270× figure was right about the ratio and understated the problem.** The
+  block did not merely spend DSPs on a rate nobody asked for; the constrained fit
+  it bought closed at **32.33 MHz against a 100 MHz `gpu_clk`**. It was holding
+  the console's shared clock to a third of its constraint. After: **87.54 MHz**,
+  at 37,791 texels/frame — 1.89× the derived demand.
+
 **The real constraint is not bandwidth — it is the tile pool.**
 `GetFreeScarTexture` / `ReleaseScarTexture` prove a **finite pool of writable
 64×64 tiles**, copy-on-write: an unscarred tile shares the read-only static set
@@ -257,13 +274,15 @@ in `design/budgets/latency.md`.)
 | block | DSPs | has a ruled demand? |
 | --- | ---: | --- |
 | `zhao_terrain_project` | 33 | **yes** — ~270 patches/frame, already costed against the 1.67 M budget |
-| `zhao_surface_stamp` | 28 | **NO** |
+| ~~`zhao_surface_stamp`~~ | ~~28~~ → **0** | **DONE 2026-08-23** — demand derived above, block rearchitected, measured 0 DSPs at 87.54 MHz (RUN-20260823-1415) |
 | `zhao_texture_tmu` | 28 | **NO** |
 | `zhao_terrain_normals` | 18 | **NO** |
 | `zhao_geom_cull` (the cull third of GEOM.MESHFETCH) | 15 | **yes** — one evaluation per five clocks |
 | `zhao_geom_binner` | 12 | **yes** — per-triangle costs plus hard caps (`TRI_CAP` 128, `CHUNKS` 256) |
 
 **Three blocks, 74 of the 188 remaining multipliers, have no demand figure.**
+*(SURFACE.STAMP's 28 are now gone — see the row above. 46 remain unruled, in
+`zhao_texture_tmu` and `zhao_terrain_normals`.)*
 What `design/blocks.yml` records for them instead is a **one-clock placeholder** —
 "1 stamp texel per clock", "1 sample per clock", "1 normal per vertex per
 clock". That is precisely the input the architecture ruling rejected, and it is

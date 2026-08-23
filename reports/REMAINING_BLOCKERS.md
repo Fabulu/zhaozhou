@@ -1092,12 +1092,34 @@ the parallelism, not whether the products are independent:
 | --- | ---: | --- | --- | --- |
 | `zhao_terrain_lod` | 28 | 1 decision per patch per **frame** | yes, ~560 cyc/patch | **enormous** — 30 products live permanently, used 1 cycle in 34 |
 | `zhao_texture_tmu` | 28 | 1 sample/clock | **no — 1 per 4 or 6** | **large** — and 12 of its 32 products are literal duplicates across four bilerp instances |
-| `zhao_surface_stamp` | 28 | 1 texel/clock | yes, measured 4,102 cyc | **partial** — the 2 radius squares are per-stamp constants and free; the 4 per-texel ones are not |
+| ~~`zhao_surface_stamp`~~ | ~~28~~ → **0** | ~~1 texel/clock~~ → 20,000 texels/frame | **CLOSED 2026-08-23** | see below |
 | `zhao_terrain_project` | 33 | 1 vertex/clock | **yes, and consumed** | **none** — 6,144 clocks/patch already gives ~270 patches against a 256-patch budget |
 
 So three of the four are open on the same argument that carried here, and
 `zhao_terrain_project` is the one where the rate is genuinely spent — sequencing
 it would need the contract re-argued first, not a restructuring.
+
+**`zhao_surface_stamp` CLOSED, 2026-08-23** (RUN-20260823-1415). The "slack:
+partial" verdict above was **too cautious in one direction and wrong in the
+other**, and both halves are worth correcting because the same reasoning is
+about to be applied to `zhao_texture_tmu` and `zhao_terrain_normals`:
+
+- **Too cautious.** The four per-texel products were judged "on the rate". They
+  were not. The stated rate was a **placeholder**, and the demand derived from
+  Sacrifice's SCAR system is 20,000 texels/frame — one texel per 83 clocks, not
+  one per clock. The block was over-provisioned ~83x on that path.
+- **Wrong.** The two radius squares were called "per-stamp constants and free".
+  They were not free. They were written as combinational expressions off the
+  command port, and Quartus gave them silicon like any other multiply. *Nothing
+  in the RTL said they were rare*, so nothing in the fitter treated them as
+  rare. **A rate that lives only in a comment is not a rate.**
+
+Two of the six multiplies became first-order accumulators (exact mod 2⁴¹, no
+domain argument owed); the four squares now share one sequential shift-add
+squarer. **Measured, constrained: 28 → 0 DSP blocks, and Fmax 32.33 → 87.54 MHz**
+— because the old block did not meet `gpu_clk` either, which the "rate met?
+yes" column above could not see. Throughput 538,833 → 37,791 texels/frame,
+still 1.89x the demand.
 
 Applying only the measured result, the running total moves from **213 to 201**.
 That is still 1.8x the device. The lever works; it has to be pulled about ten

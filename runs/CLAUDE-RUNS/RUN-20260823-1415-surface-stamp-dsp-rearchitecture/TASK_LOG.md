@@ -312,6 +312,32 @@ Two things worth recording:
   pipeline reported 0. Recorded so the final score is read out of the log's own
   cross-check line and not from a shell status.
 
+### 2026-08-23 16:0x — I edited RTL under a running fit. Recorded, not hidden.
+
+While the radix-2 fit was in `quartus_fit`, I edited
+`fpga/rtl/surface/zhao_surface_stamp.sv` to bring its ledger citation in line
+with the amended `target_throughput`. **That is precisely the run brief's named
+failure mode** — *a fit running while something rewrites `.sv` files describes
+neither version* — and I did it to myself about forty minutes after writing the
+constraint into my own SPEC.
+
+What actually happened, checked rather than assumed:
+
+- the edit was **comment-only**, so no netlist could differ;
+- `quartus_fit` for radix 2 reads the database `quartus_map` already built, not
+  the source;
+- **the radix-4 `quartus_map` had not started** (verified: one `quartus_fit.exe`
+  running, no `quartus_map.exe`);
+- reverted with `git checkout --` within about a minute, and
+  `git -c core.autocrlf=true status --porcelain -- fpga/rtl` is empty again.
+
+So no measurement is contaminated, and `rtlCleanAtHead` is verified on the
+radix-4 row after the fact rather than trusted. **The rule for the rest of this
+run: nothing under `fpga/rtl` is touched in the main tree while any Quartus
+process is alive.** Recorded because the point of that rule is that it has to
+hold when the edit looks harmless — every one of the ten prior instances looked
+harmless too.
+
 ---
 
 ## Subagent Spawns

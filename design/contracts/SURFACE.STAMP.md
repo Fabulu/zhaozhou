@@ -8,7 +8,8 @@ The Scar Scribe stamp engine: it walks a patch's 64×64 surface sheet, decides
 coverage from the `SurfaceStamp` command's circle or annulus, blends the source
 strength into every covered texel and writes the result back to
 `SURFACE.SHEET`. RTL: `fpga/rtl/surface/zhao_surface_stamp.sv`, with the blend
-arithmetic in `fpga/rtl/surface/zhao_surface_blend.sv`.
+arithmetic in `fpga/rtl/surface/zhao_surface_blend.sv` and the coverage
+geometry's shared sequential squarer in `fpga/rtl/surface/zhao_surface_sq.sv`.
 
 **Out of scope, deliberately:** no height16 scar and no breach law
 (`TERRAIN.BAKE` owns layers B and D — see **The seam that could not be closed**
@@ -249,9 +250,23 @@ vanished tiles in `GEOM.BINNER` (`design/contracts/GEOM.CLIP.md`).
 
 ## Latency (fixed or variable)
 
-**Variable**, as the ledger records: one ACQUIRE round trip, then 4,096 cursor
-steps (one per texel, covered or not), then a two-deep drain. A rejected stamp
-returns without entering the loop.
+**Variable**, as the ledger records: one ACQUIRE round trip, then the two
+per-stamp radius squares, then 4,096 cursor steps (one per texel, covered or
+not), then a two-deep drain. A rejected stamp returns without entering either
+the squares or the loop, so **the reject path is unchanged by the 2026-08-23
+rearchitecture** — the chain suite still measures it under 200 cycles.
+
+A cursor step is no longer one clock. The coverage geometry is computed by one
+shared sequential squarer (`zhao_surface_sq`), so a step costs
+`ceil(36 / SQ_RADIX) + 2` cycles, and `dz` is squared once per ROW while `dx` is
+squared once per texel — 65 squarer passes per 64-texel row. **Measured**, on the
+full-cover stamp the directed suite drives:
+
+| `SQ_RADIX` | pass | cycles for 4,096 texels | clk/texel |
+| ---: | ---: | ---: | ---: |
+| 1 (default) | 38 | **158,162** | 38.61 |
+| 2 | 20 | **83,246** | 20.32 |
+| 4 | 11 | **45,788** | 11.18 |
 
 ## Target throughput
 

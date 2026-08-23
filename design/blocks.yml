@@ -1766,7 +1766,7 @@ blocks:
     downstream: [TERRAIN.BAKE]
     backpressure: ready_valid
     latency: variable
-    target_throughput: 1 stamp texel per clock
+    target_throughput: 20,000 stamp texels per frame (one texel per ~83 clocks at the 100 MHz gpu_clk placeholder)
     reference_model: zref::surface::stamp_apply
     tests:
       directed: tests/surface/surface_stamp_directed.cpp
@@ -1797,6 +1797,15 @@ blocks:
       `zref::render::stamp_surface`, of which `zref::surface::stamp_apply` is
       the per-texel VIEW (proved faithful by
       tests/surface/surface_stamp_directed.cpp). Argued in the contract."
+      2026-08-23: `target_throughput` AMENDED from "1 stamp texel per clock".
+      That was a PLACEHOLDER, not a demand — it was the rate the block happened
+      to have, written down. It cost 28 of the device's 112 DSP blocks, and the
+      constrained fit it bought closed at 32.33 MHz, so the block did not meet
+      the gpu_clk it was over-provisioned against. The replacement is derived
+      from Sacrifice's SCAR system (docs/OWNER_DOCKET.md, "THE THREE DEMAND
+      NUMBERS"). The coverage geometry now runs on one shared sequential
+      squarer: 0 DSP blocks, 87.54 MHz, 37,791 texels/frame at the default
+      SQ_RADIX = 1, which is 1.89× the demand. Argued in the contract.
 
   # ===========================================================================
   # GEOM — Ten Thousand Forms (fpga/rtl/geometry)
