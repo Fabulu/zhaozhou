@@ -360,3 +360,97 @@ itself exceeds 2^63 relies on `skin_exact`.
 2. `build-skin/` was used precisely so that a second build could not collide
    with the coordinator's clean reconfigure of `build/`. The official gate still
    has to run in `build/`.
+
+---
+
+## 11:40 — the owner's worktree ruling, and the three things it uncovered
+
+`docs/OWNER_DOCKET.md` (RULED 2026-08-23) carries a standing process ruling I
+had not complied with:
+
+> **Mutation sweeps must run in separate git worktrees with separate build
+> directories.** The terrain sweep contaminated other targets with
+> mutant-generated Verilator sources and made clean RTL look broken — sharing
+> one build tree between agents "is no longer defensible".
+
+I had a separate build directory but not a separate worktree, so the sweep was
+mutating `fpga/rtl/geometry/zhao_geom_skin.sv` **in the tree every other agent
+reads**. I stopped the sweep, restored, committed the tooling, and made a
+worktree. Three defects fell out of doing it properly, and none of them would
+ever have surfaced in the tree the sweeps were authored in.
+
+### (a) Every mutation sweep in this repository is broken in a fresh checkout
+
+`.gitattributes` did not pin `*.sh`, so a worktree checkout gave
+`tools/sweep_*.sh` **CRLF** endings. The failure was silent, which is the part
+that matters:
+
+    linted 0 mutants at MUL_LANES (1, 3, 6), 0 do not build     <- exit 0
+
+The preflight parses the mutant table with `^"(.*?)"$` in MULTILINE mode. Under
+CRLF the character before each newline is `\r`, not the closing quote, so it
+matched **nothing** and reported a clean pass over an empty set. Bash reading
+`#!/usr/bin/env bash\r` and CRLF array entries would then have carried `\r` into
+every anchor.
+
+**This affected `sweep_geom_cull.sh`, `sweep_geom_lod.sh`, `sweep_field_dsp.sh`
+and `sweep_terrain_lod.sh` too** — verified: `sweep_geom_cull.sh` checks out
+CRLF as well. They had only ever been run in the tree they were authored in,
+where the working copy was already LF, so no checkout of them had ever been
+exercised. Fixed repo-wide with `*.sh text eol=lf`.
+
+And the guard that should have caught it: **a preflight that lints nothing must
+FAIL.** It now aborts on an empty mutant table.
+
+### (b) A `TaskStop`ped sweep KEPT RUNNING and rewrote the RTL under two fits
+
+This is the project's recurring failure mode, and I walked into it.
+
+Two Quartus fits failed at `quartus_map` with a syntax error at line 223. I
+fixed the cause (see (c)), verified the fix with Verilator at all three lane
+settings, launched a third fit — and it failed **at the same line 223**. The
+file no longer contained my fix.
+
+    git diff fpga/rtl/geometry/zhao_geom_skin.sv
+    -          vertices_transformed_o <= vertices_transformed_o + 32'd1;
+    +          vertices_transformed_o <= vertices_transformed_o + 32'd2;
+
+**Mutant M22 was applied to the RTL.** Two `sweep_geom_skin.sh` processes I had
+stopped were still alive:
+
+    Get-CimInstance Win32_Process | ? { $_.CommandLine -match "sweep_geom_skin" }
+      21744  bash.exe  ... tools/sweep_geom_skin.sh
+      28312  bash.exe  ... tools/sweep_geom_skin.sh
+
+Stopping the task killed the shell that launched them, not the sweep itself. Each
+zombie kept marching through its mutant table, and `restore()` copies a GOLD
+snapshot taken at **sweep start** — which is what silently reverted my edit and
+fed a mutant to a Quartus run.
+
+Two fits and one code change were destroyed by a process I believed was dead.
+**Killed by PID and verified gone**, then `git checkout --` and a hash check
+before restarting anything.
+
+The lesson generalises past this incident: *stopping a background task is not
+the same as the work stopping*, and the symptom was indistinguishable from "my
+fix did not work".
+
+### (c) QUARTUS_GOTCHAS §8 — a module-scope `if` generate needs `generate`
+
+    if (!(MUL_LANES == 1 || MUL_LANES == 3 || MUL_LANES == 6)) begin : g_illegal
+      ZHAO_GEOM_SKIN_MUL_LANES_MUST_BE_1_3_OR_6 u_static_assert ();
+    end
+
+    Error (10170): Verilog HDL syntax error at zhao_geom_skin.sv(223) near
+                   text: "if";  expecting "endmodule"
+    Error (10112): Ignored design unit "zhao_geom_skin" due to previous errors
+
+Verilator, slang and the LRM all accept it. Quartus 17.0.2 does not. The block
+linted clean under `-Wall` at MUL_LANES 1, 3 and 6 and then died in analysis and
+synthesis at 44 s.
+
+This is §1 with a different keyword — both are generate-region syntax that three
+frontends accept — and the irony is sharp: `$error` was avoided *because* this
+tool's support for elaboration system tasks was unknown, and the `if` was the
+part it could not parse. Recorded as §8, and the file's closing tally corrected
+from "six of the seven" to "seven of the eight".

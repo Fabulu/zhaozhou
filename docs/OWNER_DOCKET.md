@@ -1,5 +1,90 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — GEOM.SKIN done, and ONE DECISION FOR YOU: the shipped
+## skinning reference silently truncates to 64 bits
+
+`zhao_geom_skin` is rearchitected against your 120,000-vertex budget. That part
+is reported with the run. **This section is the one thing I could not decide.**
+
+### What was found
+
+`reference/include/zref/zref_fixp.hpp:106`
+
+    constexpr int32_t rescale_s32(int64_t x, int k, SatLedger* L, ...)
+
+`reference/src/zcreature/creature_core.cpp:255`, inside `skin_vertex`
+
+    *o[i] = rescale_s32(v.w0 * pa + w1 * pb, 22, L, &SatLedger::mul);
+
+`pa` and `pb` are `__int128`, and the whole blend is formed in `__int128` — that
+is the single-rounding law working exactly as intended. **Then the argument is
+narrowed to `int64_t` by an implicit conversion**, and anything that does not
+fit wraps.
+
+It is not subtle where it bites. A blend of 1.0627e20 rescales to a saturating
+`+0x7FFFFFFF` exactly; narrowed first, it wraps and saturates to `0x80000000`.
+A sign flip at the rail.
+
+Three things say the narrowing is unintended rather than a design choice:
+
+1. `rescale_s32`'s own comment is *"The rounding add runs in s128: x near
+   INT64_MAX must not wrap before the shift"* — it was written for s64 inputs
+   and is careful about them;
+2. a `rescale_s64(__int128 x, int k, ...)` exists twenty lines below it;
+3. nothing anywhere depends on the wrap.
+
+### Why nobody had seen it
+
+**Because it is unreachable with a real bone matrix.** Measured: across 24,000
+random pose-range coordinates, **zero** left the domain where the exact and
+narrowed results agree. It needs |blend| >= 2^63, which needs matrix elements
+and vertex coordinates near the s32 rails simultaneously — a pose no creature
+has.
+
+It surfaced only because `GEOM.SKIN.md` had recorded, correctly, that the
+differential never reached the operand extremes and that this had to be fixed
+**before** the weight-identity rewrite. It was fixed first, and this was behind
+the door.
+
+### It is NOT a regression from the rearchitecture
+
+The old RTL carried 67- and 75-bit lanes and did not truncate either, so the
+shipped block diverged from the shipped oracle in exactly the same places, for
+as long as both have existed. Nothing had ever compared them there.
+
+### THE DECISION, and I have not taken it
+
+Three options, and I deliberately took none of them because all three change
+either the reference renderer's arithmetic or the console's:
+
+**(a) Fix the reference** — change `skin_vertex` to call `rescale_s64`, or add a
+`__int128` overload of `rescale_s32`. Correct, one line, and it changes the
+arithmetic of the function **every shipped picture was skinned with**. In the
+unreachable region only — but "unreachable" is a measurement over the poses that
+exist today, not a proof.
+
+**(b) Make the RTL imitate the narrowing** — truncate to signed 64 before the
+rescale, and the hardware matches the oracle bit for bit everywhere including
+the wraps. Also correct, in the sense that the oracle is the law. It bakes a C++
+implicit conversion into silicon, and it makes the block WRAP where its contract
+says "saturation, never wraparound".
+
+**(c) Leave both, and pin the boundary** — which is what is committed now. The
+differential checks the shipped oracle wherever the oracle is well defined
+(3,976 coordinates in the directed lane, all 24,000 in the random lane) and
+above the boundary it checks the exact arithmetic the RTL claims, saying so in
+the check name. The divergence is documented in the contract and counted in the
+test output.
+
+My recommendation is **(a)**, because the narrowing is an accident in a helper's
+signature rather than a rule anyone chose, and because (b) commits silicon to
+reproducing it forever. But (a) touches the reference renderer, and that is
+yours.
+
+Whichever you pick, the RTL does not change under (a) or (c).
+
+---
+
 ## 2026-08-23 — Field IR engine done: 79 DSPs -> 3. Two things
 ## for you, one of them a defect in how every block fit has ever been measured
 

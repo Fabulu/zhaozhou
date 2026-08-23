@@ -115,6 +115,36 @@ Info (332111):   10.000          clk
 the whole unconstrained fit used to take about ten minutes. Three concurrent
 fits exhaust this 24 GB machine.
 
+## 8. A module-scope `if` generate needs the `generate` keywords
+
+```systemverilog
+// Verilator: fine. slang: fine. IEEE 1800: fine.
+if (!(MUL_LANES == 1 || MUL_LANES == 3 || MUL_LANES == 6)) begin : g_illegal
+  ZHAO_GEOM_SKIN_MUL_LANES_MUST_BE_1_3_OR_6 u_static_assert ();
+end
+```
+```
+Error (10170): Verilog HDL syntax error at zhao_geom_skin.sv(223) near
+               text: "if";  expecting "endmodule"
+Error (10112): Ignored design unit "zhao_geom_skin" due to previous errors
+```
+
+Wrap it in `generate` / `endgenerate`. Found in `zhao_geom_skin` (2026-08-23),
+which had linted clean under `-Wall` at all three of its `MUL_LANES` settings
+and then died in analysis and synthesis at 44 seconds.
+
+This is §1 again with a different keyword, and it is worth counting twice: both
+are **generate-region syntax that three frontends accept**. The rule that
+generalises them is that Quartus 17.0.2's parser predates SystemVerilog's
+relaxations around generate blocks, so anything clever at module scope is worth
+a cheap `quartus_map` before it is worth a fit.
+
+The construct itself is a portable static assertion -- an unresolved module
+reference inside a generate-if, which errors in every tool when the condition
+holds and is never elaborated when it does not. `$error` was avoided precisely
+because this tool's support for elaboration system tasks was unknown; the
+irony is that the `if` was the part it could not parse.
+
 ---
 
 ---
@@ -139,8 +169,8 @@ get, because the tool will not tell you it ignored you.
 
 ## The pattern, stated once
 
-Six of the seven were printed by the tool, in plain text, in runs nobody read.
-The seventh (§5) was invisible until the number was compared against a target.
+Seven of the eight were printed by the tool, in plain text, in runs nobody read.
+§5 was invisible until the number was compared against a target.
 
 **Run the fit. Read what it says.** A green differential and a clean mutation
 sweep say the logic is right; they say nothing at all about whether the thing
