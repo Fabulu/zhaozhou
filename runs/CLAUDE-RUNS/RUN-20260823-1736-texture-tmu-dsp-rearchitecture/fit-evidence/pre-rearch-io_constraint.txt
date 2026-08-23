@@ -1,0 +1,45 @@
+# zhao_texture_tmu @pre-rearch-io — the SHIPPED (pre-rearchitecture) RTL
+# under the CORRECTED SDC (clock + set_input_delay/set_output_delay).
+# rtlCleanAtHead FALSE, deliberately: the tree held 8e7f974's RTL so that
+# the before/after is like-for-like. 1275.9 s.
+
+== the clock objective ==
+Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+
+== and the I/O objective, which is the point of this row ==
+3
+   (2 = both present; the @pre-rearch row above was fitted with 0)
+
+== resources ==
+; Logic utilization (in ALMs)     ; 1,844 / 41,910 ( 4 % )                      ;
+; Total registers                 ; 342                                         ;
+; Total pins                      ; 0 / 314 ( 0 % )                             ;
+; Total virtual pins              ; 496                                         ;
+; Total block memory bits         ; 0 / 5,662,720 ( 0 % )                       ;
+; Total RAM Blocks                ; 0 / 553 ( 0 % )                             ;
+; Total DSP Blocks                ; 28 / 112 ( 25 % )                           ;
+
+== Fmax ==
+
++-------------------------------------------------+
+; Slow 1100mV 100C Model Fmax Summary             ;
++-----------+-----------------+------------+------+
+; Fmax      ; Restricted Fmax ; Clock Name ; Note ;
++-----------+-----------------+------------+------+
+; 36.92 MHz ; 36.92 MHz       ; clk        ;      ;
+--
+
+== the worst path, named (pre-rearch under the corrected SDC) ==
+; Summary of Paths                                                                                                    ;
++---------+------------------------+------------+--------------+-------------+--------------+------------+------------+
+; Slack   ; From Node              ; To Node    ; Launch Clock ; Latch Clock ; Relationship ; Clock Skew ; Data Delay ;
++---------+------------------------+------------+--------------+-------------+--------------+------------+------------+
+; -17.083 ; q_fv_r[1]~_Duplicate_8 ; smp_a_o[1] ; clk          ; clk         ; 10.000       ; -6.110     ; 20.913     ;
+; -17.083 ; q_fv_r[1]~_Duplicate_8 ; smp_a_o[1] ; clk          ; clk         ; 10.000       ; -6.110     ; 20.913     ;
+; -17.078 ; q_fv_r[1]~_Duplicate_8 ; smp_a_o[1] ; clk          ; clk         ; 10.000       ; -6.110     ; 20.908     ;
++---------+------------------------+------------+--------------+-------------+--------------+------------+------------+
+
+Path #1: Setup slack is -17.083 (VIOLATED)

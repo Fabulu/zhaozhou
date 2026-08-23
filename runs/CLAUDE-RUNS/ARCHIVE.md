@@ -34,6 +34,99 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260823-1736] TEXTURE.TMU: the bilinear law factored, 28 -> 6 DSPs -- and the Fmax column was measuring a counter
+
+**Archived:** 2026-08-23 UTC+02:00
+**Created:** 2026-08-23 17:36 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/`
+**Branch:** main
+
+**Summary:**
+`zhao_texture_tmu` fitted at 28 DSP blocks, all of them in one 114-line file.
+Unlike SURFACE.STAMP there was nothing hiding in the boring places, and the
+reason is worth naming: LOG2W/LOG2H make texel conversion, the mip level offset
+and the row-major index all SHIFTS. Every one would be a multiply if texture
+dimensions were arbitrary, which is the concrete reason non-power-of-two support
+belongs in the asset pipeline and not here.
+
+The filter computed the contract's four-weight law LITERALLY -- four weights,
+each a product, times four texels -- as eight multiplies a channel, with the
+texel products declared 25x25 where the honest need was 8x17. Four instances
+made 32 products, twelve of them literal duplicates.
+
+Factor the same integer instead: A = (t00<<8) + (t10-t00)*fu, B likewise,
+S = (A<<8) + (B-A)*fv, ONE rescale. Three products a channel. This is NOT the
+staged-rounding form spec/qformats.md 3 refuses -- nothing intermediate is
+rounded -- and it is bit-identical, verified by brute force over all 65,536
+(fu,fv) plus 400,000 random footprints before a line was built.
+
+zhao_texture_bilerp's PORTS DID NOT CHANGE, so tests/formal/texture_bilerp.sby
+proved the new arithmetic with **no edit at all**: P1 derives the four weights
+in the harness and asserts them against the shipping module, so it now proves
+the factored form equals the law over all 2^48 inputs. That is why factoring was
+chosen over the weight hoist the contract had sanctioned, which would have
+changed ports, tests, the harness and the contract to remove 12 products where
+this removes 20.
+
+FILT_LANES (4, 2, 1) is the measured frontier: 12 / 6 / 3 products, 12 / 6 / 3
+DSPs, direct-colour II 4 / 5 / 7. Default 2 -- the OPPOSITE of SURFACE.STAMP
+defaulting to its cheapest setting, for the opposite reason: that block met its
+demand 26.9x over, this one meets 0.33x of it, so throughput is scarce here and
+the cycle is spent only where it buys the target.
+
+**Deliverables:**
+- `fpga/rtl/texture/zhao_texture_bilerp.sv` -- the factored arithmetic
+- `fpga/rtl/texture/zhao_texture_tmu.sv` -- FILT_LANES, the channel mux, ST_FILT
+- `tests/texture/texture_tmu_directed.cpp` -- the throughput case the block never had
+- `tests/texture/texture_tmu_dev.hpp` -- the cache model now honours cac_en_o
+- `tools/sweep_texture_tmu.sh` + preflight -- 30 mutants, 3 settings
+- `tools/quartus/run_block_fit.ps1` -- per-block SDC now declares I/O delays
+- `tests/formal/mem_formal_lane.cmake.in` -- wrapper timeout parameterised
+- `reports/QUARTUS_GOTCHAS.md` 9 -- new entry
+- contract, `design/blocks.yml`, `design/budgets/dsp.md`, docket, blockers
+
+**Notes:**
+THREE FINDINGS BEYOND THE BLOCK.
+
+1. ON THIS KIT, DSP BLOCKS = THE NUMBER OF `*` OPERATORS. Quartus 17.0.2 Lite
+   packs nothing: twelve 9x9-and-18x9 products fit at twelve DSP blocks, not the
+   five a Cyclone V's three-9x9-or-two-18x19 modes allow, and the bare bilerp's
+   three products fit at three. Plan cuts by counting operators.
+
+2. THE PER-BLOCK Fmax COLUMN WAS MEASURING WHATEVER REGISTER-TO-REGISTER PATH
+   HAPPENED TO EXIST. The SDC constrained the clock and nothing else, so every
+   pin-to-register and register-to-pin path was excluded -- and this block's
+   arithmetic runs from its input pins to its output pins. The 199.72 MHz it
+   reported was its 32-bit sample counter's carry chain. With I/O delays
+   declared the same RTL closes at **36.92 MHz**: 37% of gpu_clk, within noise
+   of the 32% SURFACE.STAMP was holding it to. Every row measured before this
+   carries the old meaning.
+
+3. THE BLOCK RUNS AT 0.33x ITS DERIVED DEMAND AND NOTHING HAD MEASURED THAT.
+   The rate lived in prose in the ledger and the contract. Now asserted exactly
+   by a directed case. The II = 2 fix is designed and written down; not built.
+
+FOUR OF MY OWN FAILURES, all recorded in the TASK_LOG: three of five written
+predictions were wrong (Fmax direction, ALM direction, DSP packing); `git add
+-A` staged 288 files of line-ending churn; a `git checkout <rev> -- <paths>`
+staged a temporary RTL revert that a later commit about YAML then landed,
+silently undoing the whole rearchitecture until a grep caught it; and I edited
+RTL under a running fit chain, which is the brief's own named failure mode.
+
+**Outcome:**
+28 -> 6 DSPs measured under a constrained fit with I/O delays; census 144 -> 134.
+Mutation sweep 30/30/30, caught 29 -- the one survivor is a true equivalent no
+input can distinguish, argued against a named line, and the sweep's OTHER
+survivor was a real hole in the test harness that was fixed rather than argued.
+Samples bit-identical at all three FILT_LANES settings.
+
+TWO PROBLEMS LEFT OPEN AND NAMED: the block does not close timing at 100 MHz
+(36.11 MHz, limited by the filter-to-output cone), and it delivers 0.33x its
+demand. Both want the same fix -- a pipeline register and the II = 2 restructure
+-- and both are specified in the contract rather than left to be rediscovered.
+
+---
+
 ### [RUN-20260823-1415] SURFACE.STAMP: the coverage geometry off the DSP farm, 28 -> 0 DSPs
 
 **Archived:** 2026-08-23 UTC+02:00

@@ -18,6 +18,15 @@
 > is the opposite — the census is also an **under-count**, because half the
 > console is missing from it.
 >
+> **TEXTURE.TMU CLOSED 2026-08-23 (RUN-20260823-1736): 28 → 6 DSPs**, by
+> factoring the bilinear law (`A = (t00<<8) + (t10−t00)·fu`, and so on — 3
+> products a channel instead of 8) and multiplexing two channels at a time.
+> Samples bit-identical. **And the fit taught a general rule worth more than the
+> row:** Quartus 17.0.2 Lite packs nothing — **DSP blocks = the number of `*`
+> operators**, whatever the operand widths. Twelve products fit at twelve DSPs.
+> Plan cuts by counting operators, not by counting DSP-sized multipliers the
+> operands would fit into.
+>
 > `reports/DSP_Audit_2026-08-21.md` carries the owner's audit, the exact
 > algebra for cuts this document missed (TERRAIN.LOD 28 to 4-8, SURFACE.STAMP
 > 28 to 4-8 rather than 20, TEXTURE.TMU 28 to 8-12, GEOM.BINNER+SETUP 16 to 4,
@@ -46,7 +55,7 @@ against `5CSEBA6U23I7`.
 | block | DSP | ALMs |
 |---|---:|---:|
 | `TERRAIN.PROJECT` | **33** | 6,068 |
-| `TEXTURE.TMU` | 28 | 1,839 |
+| ~~`TEXTURE.TMU`~~ | ~~28~~ → **6** | 1,839 → see below |
 | `TERRAIN.LOD` | 28 | 2,086 |
 | `SURFACE.STAMP` | 28 | 950 |
 | `TERRAIN.NORMALS` | 18 | 789 |

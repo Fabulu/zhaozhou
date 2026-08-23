@@ -373,6 +373,29 @@ which is a real simplification in our favour.
 > three channels ≈ 9 products at full rate, so **about 5–6 DSPs at half rate.**
 > **Proposed target: 6–9 DSPs**, from 28.
 
+**OUTCOME, 2026-08-23 (RUN-20260823-1736): 6 DSPs, measured, constrained fit.**
+Four notes back to this entry, because each corrects or sharpens it:
+
+- **The arithmetic guess was right and the route to it was not what this entry
+  imagined.** `a + (b−a)·w` is exactly the form that landed — but as an
+  *algebraic factoring of the existing four-weight law*, not as a new law:
+  `A = (t00<<8) + (t10−t00)·fu`, `B = (t01<<8) + (t11−t01)·fu`,
+  `S = (A<<8) + (B−A)·fv`, one rescale at the end. Three products a channel,
+  **twelve across the block against the shipped thirty-two**, and bit-identical
+  to `zref::Tmu` for every input. Crucially it is **not** the staged-rounding
+  form `spec/qformats.md` §3 refuses — nothing intermediate is rounded.
+- **"Three channels ≈ 9 products" undercounts by one channel.** ARGB4444 and
+  ARGB1555 carry a real alpha that has to survive the filter, so it is four
+  channels and twelve products at full rate, six at half. The conclusion
+  survives: half rate is 6 DSPs, which is what was measured.
+- **Half rate had to be spent, and the fit is why.** Quartus 17.0.2 Lite packs
+  **nothing**: twelve products fit at **12 DSPs**, one block per `*` operator
+  regardless of operand width. So the full-rate option missed the 6–9 target
+  and the multiplexed half-rate one hit its floor exactly.
+- **The DSPs were never the block's worst number.** See the throughput and
+  timing notes in `reports/REMAINING_BLOCKERS.md`: this block runs at **0.33× the
+  demand above**, and its per-block Fmax had been measuring its sample counter.
+
 **Two structural warnings for whoever builds it**, both measured:
 
 * **Creature textures are 256 wide with *arbitrary* height, up to 799.** Only
@@ -432,10 +455,10 @@ displacement when the hash differs from `emptyHash` (`dagonBackend.d:2050-2058`)
 
 | block | now | derived target |
 | --- | ---: | ---: |
-| `zhao_surface_stamp` | 28 | **0–2** |
-| `zhao_texture_tmu` | 28 | **6–9** |
+| ~~`zhao_surface_stamp`~~ | ~~28~~ → **0** | ~~0–2~~ **LANDED** |
+| ~~`zhao_texture_tmu`~~ | ~~28~~ → **6** | ~~6–9~~ **LANDED** |
 | `zhao_terrain_normals` | 18 | **1–2** |
-| | **74** | **7–13** |
+| | **74** → **24** | **7–13** |
 
 **188 − 74 + ~10 = about 124**, before `terrain_project` (33), `geom_cull` (15)
 and `geom_binner` (12) are touched at all. **The 85–90 ceiling is reachable.**
@@ -536,7 +559,7 @@ in `design/budgets/latency.md`.)
 | --- | ---: | --- |
 | `zhao_terrain_project` | 33 | **yes** — ~270 patches/frame, already costed against the 1.67 M budget |
 | ~~`zhao_surface_stamp`~~ | ~~28~~ → **0** | **DONE 2026-08-23** — demand derived above, block rearchitected, measured 0 DSPs at 87.54 MHz (RUN-20260823-1415) |
-| `zhao_texture_tmu` | 28 | **NO** |
+| ~~`zhao_texture_tmu`~~ | ~~28~~ → **6** | **DONE 2026-08-23** — demand derived above, filter factored 32 products to 12 and multiplexed to 6, measured 6 DSPs (RUN-20260823-1736) |
 | `zhao_terrain_normals` | 18 | **NO** |
 | `zhao_geom_cull` (the cull third of GEOM.MESHFETCH) | 15 | **yes** — one evaluation per five clocks |
 | `zhao_geom_binner` | 12 | **yes** — per-triangle costs plus hard caps (`TRI_CAP` 128, `CHUNKS` 256) |
@@ -1423,7 +1446,7 @@ handshake happened to deliver, not because anything measured a requirement.
 | Field IR engine | 79 | **8–12** |
 | `GEOM.SKIN` | 72 | **12–18** |
 | `TERRAIN.PROJECT` | 33 | 12–18, *after* removing repeated projections |
-| `TEXTURE.TMU` | 28 | 8–12 |
+| ~~`TEXTURE.TMU`~~ | ~~28~~ → **6** | ~~8–12~~ — **landed at 6**, below this audit's estimate |
 | `SURFACE.STAMP` | 28 | 4–6 |
 | `TERRAIN.NORMALS` | 18 | ~6 |
 | `GEOM.CULL` | 15 | 4–6 |

@@ -1,0 +1,44 @@
+# zhao_texture_tmu — THE SHIPPING DEFAULT (FILT_LANES = 2), corrected SDC.
+# sourceCommit 1c98bb8, rtlCleanAtHead true, 675.9 s. This is the census row.
+
+== clock objective ==
+Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+
+== I/O objective ==
+# an unguarded set_input_delay against a clock that does not exist is an
+        set_input_delay -clock clk 0.000 $_zhao_datain
+        set_output_delay -clock clk 0.000 [all_outputs]
+
+== resources ==
+; Logic utilization (in ALMs)     ; 1,921 / 41,910 ( 5 % )                      ;
+; Total registers                 ; 350                                         ;
+; Total pins                      ; 0 / 314 ( 0 % )                             ;
+; Total virtual pins              ; 496                                         ;
+; Total block memory bits         ; 0 / 5,662,720 ( 0 % )                       ;
+; Total RAM Blocks                ; 0 / 553 ( 0 % )                             ;
+; Total DSP Blocks                ; 6 / 112 ( 5 % )                             ;
+
+== Fmax ==
+
++-------------------------------------------------+
+; Slow 1100mV 100C Model Fmax Summary             ;
++-----------+-----------------+------------+------+
+; Fmax      ; Restricted Fmax ; Clock Name ; Note ;
++-----------+-----------------+------------+------+
+; 36.11 MHz ; 36.11 MHz       ; clk        ;      ;
+--
+
+== the worst path, named ==
+; Summary of Paths                                                                                        ;
++---------+------------+------------+--------------+-------------+--------------+------------+------------+
+; Slack   ; From Node  ; To Node    ; Launch Clock ; Latch Clock ; Relationship ; Clock Skew ; Data Delay ;
++---------+------------+------------+--------------+-------------+--------------+------------+------------+
+; -17.691 ; q_fmt_r[0] ; smp_a_o[4] ; clk          ; clk         ; 10.000       ; -6.199     ; 21.432     ;
+; -17.689 ; q_fmt_r[0] ; smp_a_o[4] ; clk          ; clk         ; 10.000       ; -6.199     ; 21.430     ;
+; -17.689 ; q_fmt_r[0] ; smp_a_o[4] ; clk          ; clk         ; 10.000       ; -6.199     ; 21.430     ;
++---------+------------+------------+--------------+-------------+--------------+------------+------------+
+
+Path #1: Setup slack is -17.691 (VIOLATED)

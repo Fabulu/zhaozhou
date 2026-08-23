@@ -260,7 +260,92 @@ Cases: all five formats with their expansions pinned by value (0xF800 → pure r
 
 The lanes assert their own coverage and fail if any bucket is empty; at the fast setting they fire **3,749 bilinear samples (476 exactly at a rounding tie, 26 exactly at a texel centre), 2,052 mipped samples, all three wrap modes (8,588 / 2,036 / 1,535), all five formats, and 1,122 malformed against 5,499 clean modes**. Default 260 + 80 + 80 batches (CTest `fast`); `--nightly` 60,000 + 18,000 + 18,000, which runs in **9 s** and fires 1,518,128 samples — 859,582 of them bilinear, 116,681 exactly at a rounding tie — across 470,478 mipped samples, all three wraps and 260,993 malformed modes. Failing vectors are serialized per charter §29-17.
 
-## Mutation evidence (2026-08-18)
+## Mutation evidence (2026-08-23) — 30 mutants, 29 caught, one true equivalent
+
+`tools/sweep_texture_tmu.sh`, run detached in a git worktree at the shipping
+commit, against **all four consumers** of both RTL files — the directed suite at
+`FILT_LANES` 4, 2 and 1, plus the random lane. Guards 1–7 carried unchanged from
+`tools/sweep_surface_stamp.sh`; every mutant preflight-linted at all three
+settings before any was scored.
+
+    linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build
+    pristine models 59747279bbfe/59747279bbfe, 4 lanes green
+    attempted=30 expected=30 accounted=30 caught=29
+
+`attempted == accounted == expected == 30`: every mutant re-elaborated (its
+model-directory hash differed from pristine), every one linked, no discards, and
+the worktree's RTL was restored byte-identically afterwards.
+
+**13 on `zhao_texture_bilerp`** — the three named one-LSB traps in the shapes
+they take in the factored form (rounding dropped, halved, or shifted 15), the
+transposed footprint, both differences reversed, both place values reduced to
+128, the two fractions crossed, and the wrong tap or row seeding each lerp.
+**All 13 caught.**
+
+**17 on `zhao_texture_tmu`** — six on the channel mux and pass counter, three on
+the sample assembly, eight re-running the behaviour the 2026-08-18 table
+covered (the wrap folds, the mip level and its offset, the CLUT index, the
+half-texel bias, the stars §1 palette override, the four-lane fetch). **16
+caught.**
+
+### The frontier builds are what caught six of them, and no single setting reaches all six
+
+At `FILT_LANES = 4`, `PASSES` is 1, so `ST_FILT` is never entered (the ST_TEX
+transition is `st_r <= (PASSES > 1) ? ST_FILT : ST_OUT`), `pass_r` is therefore
+provably 0 for ever, `pass_c` is the constant `PASSES−1 = 0`, and
+`sel_base = 0 << LANE_SHIFT` is constantly 0. Each of the six is then invisible
+for a reason that can be checked against one line rather than assumed:
+
+| mutant | why it cannot be observed at `FILT_LANES = 4` |
+| --- | --- |
+| M11 `ch_pack[sel_base \| gj]` → `ch_pack[gj]` | `sel_base ≡ 0`, and `0 \| gj == gj` |
+| M12 `pass_c = pass_r` instead of `PASSES−1` | `pass_r ≡ 0` and `PASSES−1 = 0` |
+| M13 `pass_c << LANE_SHIFT` → `>>` | `0 << 2` and `0 >> 2` are both 0 |
+| M14 the `fres_r` write index | inside `ST_FILT`, which is unreachable |
+| M15 the pass counter never advances | inside `ST_FILT`, which is unreachable |
+| M16 `LAST_FILT_PASS` forced to 0 | that localparam **already** evaluates to 0 |
+
+**M16 is invisible at `FILT_LANES = 2` as well** — `LAST_FILT_PASS = PASSES − 2`
+is 0 at `PASSES = 2` — so it is a real defect only at `FILT_LANES = 1`.
+**No single setting reaches all six.** Scoring one would have produced six
+phantom survivors and sent someone hunting a test gap that is not there.
+
+### M27 was a real hole in the test harness, and it was FIXED rather than argued
+
+"A bilinear request fetches one tap instead of four" (`q_en_r <= 4'b0001`)
+**survived the first run**. `tests/texture/texture_tmu_dev.hpp`'s modelled cache
+ignored `cac_en_o` and returned four lanes of correct data unconditionally —
+**strictly more generous than the block it stands for.** `zhao_texture_cache.sv`
+lines 75–76 say the opposite: lanes 1–3 of a nearest access are "not looked up,
+not counted, and not filled".
+
+The model now returns the **complement** of the texel on a disabled lane:
+deterministic, so a failing vector stays reproducible, and guaranteed different,
+which a fixed poison constant would not be. It is safe for a correct block for a
+*proved* reason — only nearest requests disable lanes, nearest forces
+`fu = fv = 0`, and there the filter is the exact identity on tap 0 (formal P3),
+so lanes 1–3 cannot reach the output. All four lanes stayed green; M27 is dead.
+
+### M18 is the one survivor, and no test can kill it
+
+"A CLUT texel reports the filter's alpha instead of the law's 255" —
+`smp_a_o = fin[3]` in place of `smp_a_o = q_clut_r ? 8'd255 : fin[3]`.
+
+**Equivalent for every input, and the argument is a line in the same file.**
+`decode16`'s `default` branch — the one CLUT8 (format 0) and CLUT4 (format 2)
+fall into, because the case names only ARGB1555 and ARGB4444 — sets
+`a_ = 8'd255`. So on a CLUT sample all four alpha taps are 255, and a flat
+footprint filters to itself exactly (P1 with P2: `Σ 255·w = 255 << 16`). A test
+that killed it would need a CLUT sample whose `fin[3] ≠ 255`; the input does not
+exist.
+
+**What the sweep found is worth more than the score:** "a CLUT texel's alpha is
+255" is enforced **twice** — once by the documented mux, once accidentally by
+`decode16`. The mux is defence in depth, not the sole mechanism. Recorded so
+nobody later simplifies it away believing it is load-bearing, or adds a CLUT arm
+to `decode16` believing it is free.
+
+## Mutation evidence (2026-08-18, the pre-rearchitecture table)
 
 Nine deliberate RTL defects, injected **one at a time**, each under a harness that (a) asserts the built `.exe`'s **SHA-256** changed before believing any result, and (b) asserts the reverted tree is **GREEN again** before the next mutation runs.
 
@@ -288,6 +373,16 @@ Nine deliberate RTL defects, injected **one at a time**, each under a harness th
 
 Free inputs are the four texel bytes and the two unit8 fractions — 48 bits, which is **total rather than sampled**: a texel channel *is* a byte (every charter §15 format decodes to charter §8's 8-bit lanes) and a fraction *is* a unit8. The harness is purely combinational, so depth 2 **is** the full state space, not a bound.
 
+**THE PROOF DID NOT MOVE WHEN THE ARITHMETIC DID (2026-08-23).** The filter was
+rewritten from eight products a channel to three (see THE FACTORED FORM above)
+and **not one line of `texture_bilerp.sby` or `texture_bilerp_fv.sv` changed**,
+because the harness derives the four weights *itself* from free
+`fu_free`/`fv_free` and asserts `out == law` against the shipping module's
+output. P1 therefore now proves the **factored** form equals the four-weight law
+over the whole 2^48 input space — a stronger statement than it was making
+before, obtained for free. This is exactly what the 2026-08-21 note predicted
+would survive a hoist, and it is why factoring was chosen over hoisting.
+
 **Proved (P1–P4):** the output is exactly the derived single-rounded weighted sum computed in a wide lane — which catches all three named one-LSB traps at once and, because that wide law is compared against an **8-bit** output, also proves the weighted sum can never leave the field; the weights are a **partition of unity**, `Σw = 65,536` exactly, which together with P1 makes a flat footprint filter to itself by arithmetic; `fu = fv = 0` is the exact identity on `t00`, which is what makes nearest sampling the same datapath; and the 8-bit field holds with no clamp anywhere in the module.
 
 **Covered:** an **exact rounding tie** firing (without it the exactness theorem also holds for a truncating filter on every non-tie input, which is almost all of them), the result landing strictly **inside** its own footprint (without which P1 would also hold for a filter that never left tap 0), both far corners, the 128/128 centre, and a flat footprint at a non-trivial fraction filtering to itself.
@@ -297,29 +392,164 @@ Free inputs are the four texel bytes and the two unit8 fractions — 48 bits, wh
 - **Convexity / no-overshoot** (`min(t) ≤ out ≤ max(t)`). A real theorem and the one most worth having, but genuinely **nonlinear**: the solver would have to know `t_i·w_i ≤ max·w_i`, which bit-blasting does not get cheaply.
 - **Monotonicity in `fu`.** Needs a second DUT instance at `fu+1`, doubling the eight bit-blasted multipliers.
 
-Measured on this kit (boolector, depth 2, 32-bit law lane): the exactness theorem alone closes in **339 s**, the four shipped laws in **741 s** standalone and **1,264 s** as the CTest lane (`formal_texture_bilerp`, Passed, both tasks) — which is why that lane carries `TIMEOUT 3600` and not the 2100 the other formal lanes use. With convexity added the task ran past **25 minutes twice** without an answer. What is lost is the statement that the result stays inside its own footprint; the safety half of it (the sum never leaves the 8-bit field) survives through P1, and the rest is covered by the differential lanes and the mutation table. The gap is named here and in the harness rather than assumed away.
+Measured on this kit (boolector, depth 2, 32-bit law lane): the exactness theorem alone closes in **339 s**, the four shipped laws in **741 s** standalone and **1,264 s** as the CTest lane (`formal_texture_bilerp`, Passed, both tasks) — which is why that lane carries `TIMEOUT 3600` and not the 2100 the other formal lanes use.
+
+**And a budget stated in one file was enforced in another, which cost a run.** That `TIMEOUT 3600` is a CTest property; `tests/formal/mem_formal_lane.cmake.in` hard-coded the *wrapper's* `execute_process` timeout at **1800**, so the real budget was 1800 and the comment describing 3600's headroom described headroom the lane did not have. On 2026-08-23, with a Quartus fit and a mutation sweep competing for the machine, the lane died at **1,800.88 s and was reported as a FAILED proof**. It was not a failed proof — the cover task had already passed in 2 s and the bmc task was still solving. The wrapper timeout is now a variable (`ZHAO_FORMAL_WRAPPER_TIMEOUT`, default 1800 unchanged for all nineteen other lanes) and this lane sets **3300**, inside the 3600 so the wrapper still fails with a readable sby message before CTest kills it from outside. With convexity added the task ran past **25 minutes twice** without an answer. What is lost is the statement that the result stays inside its own footprint; the safety half of it (the sum never leaves the 8-bit field) survives through P1, and the rest is covered by the differential lanes and the mutation table. The gap is named here and in the harness rather than assumed away.
 
 **Not proved here:** the address generation, the wrap folds, the mip selection and its closed form, the format decodes, the palette pass, the cache handshake, the mode-error rules and the state machine — those are the differential lanes' and the mutation table's job.
 
 ## Synthesis / resource ceiling
 
-Budget group `tile`. Estimate only — **this block has not been synthesized**; no Quartus fit, no timing closure, no device numbers, and it is deliberately not in `fpga/files.qip`. The shape is ~300 flops (the four latched addresses at 128 bits dominate, plus four 16-bit halfwords, the mode fields and a 32-bit counter), no RAM, and the multipliers: four `zhao_texture_bilerp` instances, each computing four 9×9 weight products and four 8×17 texel products. The **weights are identical across all four instances** (they depend only on `fu`/`fv`), so a synthesiser will share them and the real cost is **4 weight multiplies + 16 texel multiplies**, not 32 — a DSP question the fit will answer.
+Budget group `tile`. Device `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2, virtual
+pins, `-KeepWorkspace` evidence kept for every row. **Not in `fpga/files.qip`**
+— this block is characterised on its own and has never been in a composed fit.
 
-The weight computation is deliberately left inside `zhao_texture_bilerp` rather than hoisted into the TMU, even though hoisting would make the sharing explicit: the weights are part of what `tests/formal/texture_bilerp.sby` PROVES (`a_wsum`), and a module that took its weights as inputs would move that theorem out of the proved bytes. If the fit ever says the sharing did not happen, hoisting is the fix and the proof follows the weights.
+### The DSP frontier, measured (2026-08-23, RUN-20260823-1736)
 
-> **THE FIT SAID IT DID NOT HAPPEN. Recorded 2026-08-21; the hoist is now sanctioned by the condition above, not yet done.**
->
-> `reports/synthesis/zhao_block_fit.json`: `zhao_texture_bilerp` = **7 DSP**, `zhao_texture_tmu` = **28 DSP**. That is **4 x 7 exactly, with no discount** — the four instances did not share their weight products. The paragraph above predicted "4 weight multiplies + 16 texel multiplies, not 32"; the measurement is 32.
->
-> The row is trustworthy despite the census being stale overall: **neither `zhao_texture_tmu.sv` nor `zhao_texture_bilerp.sv` has changed since the census commit `96c0394`** (checked file by file), so this measurement describes the current RTL exactly.
->
-> All four instances are driven by the SAME `q_fu_r`/`q_fv_r`, so `w00..w11` are bit-identical across them: **12 of the 32 products are literal duplicates.**
->
-> **The proof cost is smaller than this paragraph feared.** `a_wsum` is asserted on weights the HARNESS derives itself from free `fu_free`/`fv_free` (`tests/formal/texture_bilerp_fv.sv:130-135`), not on anything the DUT computes — it is a check on the derivation formula, and it survives a DUT that takes weights as inputs. What actually moves is the OBLIGATION that the weights are well-formed: today it is structural (the bilerp derives them and cannot be fed bad ones), and after a hoist it becomes a duty on the TMU. That is a real transfer and it is what "the proof follows the weights" has to mean in practice: the TMU would need its own partition-of-unity property.
->
-> Not done yet because it is the most structurally invasive of the available DSP cuts — it changes a module's ports, its directed tests, its formal harness and this contract — while `RASTER.FRAGMENT`'s blend (landed) and `GEOM.SKIN`'s weight identity are self-contained. Sequenced accordingly, not dismissed.
+`FILT_LANES` instances of `zhao_texture_bilerp`, with the four colour channels
+time-multiplexed through them in `4 / FILT_LANES` passes:
 
-Two things to watch, neither measured: the address generator is a 48-bit shift, a wrap fold and a `(v << log2w) + u` in one combinational cone from `req_valid_i` to the latched address, which is the longest path in the file; and the 32 multiplies are all in the sample cone. If either becomes critical the honest fix is a register between address generation and the cache request, which costs one cycle of the already-variable latency.
+| `FILT_LANES` | products | passes | direct-colour II | **DSP blocks** |
+| ---: | ---: | ---: | ---: | ---: |
+| *(pre-rearchitecture)* | *32* | *1* | *4* | ***28*** |
+| 4 | 12 | 1 | 4 | **12** |
+| **2 (default)** | **6** | **2** | **5** | **6** |
+| 1 | 3 | 4 | 7 | *fitting* |
+
+**ONE DSP BLOCK PER `*` OPERATOR. That is the general finding and it outlives
+this block.** Twelve products of 9×9 and 18×9 fitted at **twelve** DSP blocks,
+not the five a Cyclone V's "three 9×9 *or* two 18×19" modes would allow — and
+`zhao_texture_bilerp` fitted **on its own**, three products, at **3 DSPs and 60
+ALMs** (it was 7 DSPs and 38 ALMs before). Three measurements, one rule.
+Quartus 17.0.2 Lite packed nothing — the same tool behaviour this contract
+already recorded from the other side in 2026-08-21, when the four instances'
+*identical* weight products were not shared either. **Plan DSP cuts by counting
+multiply operators, not by counting the DSP-sized multipliers the operands would
+fit into.** (`reports/QUARTUS_GOTCHAS.md` §5 is the converse: width can still
+make it worse.)
+
+**The default is 2, and the argument is the campaign's own principle applied
+carefully in both directions.** 12 misses the 6–9 target the DSP campaign set;
+6 is the bottom of it. The cycle that buys it falls **entirely on the
+direct-colour path** (II 4 → 5) and not at all on CLUT, because a palette is
+never filtered and the CLUT path therefore never enters `ST_FILT` — and CLUT is
+the demand-critical path, since terrain is CLUT8. `FILT_LANES = 1` is measured
+and deliberately **not** the default: it would spend two more cycles of a rate
+already at 0.33× to save three DSPs below a target already met, which is the
+same over-provisioning error the 28 DSPs came from, pointed the other way.
+
+### THE Fmax COLUMN WAS MEASURING THE SAMPLE COUNTER
+
+**Read `reports/QUARTUS_GOTCHAS.md` §9 before quoting any per-block Fmax,
+including this block's own earlier rows.**
+
+The per-block SDC constrains the clock and nothing else — no `set_input_delay`,
+no `set_output_delay` — so TimeQuest excludes every pin-to-register and
+register-to-pin path. This block's arithmetic runs **from `req_*` pins** and
+**to `smp_*` pins**, so almost none of it was ever timed. Verified by
+re-running `quartus_sta` on three kept workspaces, no re-fit:
+
+| row | reported Fmax | the path that produced it |
+| --- | ---: | --- |
+| `@pre-rearch` | 199.72 MHz | `texture_samples_o[19] → [27]`, 4.818 ns |
+| `FILT_LANES = 4` | 192.46 MHz | `texture_samples_o[3] → [21]`, 4.634 ns |
+
+Both are the 32-bit saturating counter's carry chain. The `FILT_LANES = 2` row
+reported 48.45 MHz for one accidental reason — `fres_r` is a real register, so
+one filter output finally terminated somewhere TimeQuest would look, at
+`q_fmt_r → decode16 → ch_pack → the channel mux → the filter → fres_r`,
+**20.462 ns over 8 logic levels.** That is not a regression the multiplexing
+introduced; it is the first time this block's arithmetic had been timed at all.
+
+### And with I/O delays declared, the honest Fmax is 36 MHz — before AND after
+
+`tools/quartus/run_block_fit.ps1` now emits `set_input_delay` /
+`set_output_delay 0` against `clk` — *same clock, no external budget*, which is
+optimistic about inter-block routing and exact about the logic inside the block.
+Two fits under it, like for like, the "before" taken by checking `8e7f974`'s RTL
+back into the tree so that only the arithmetic differs:
+
+| | `@pre-rearch-io` | **shipping default (`FILT_LANES = 2`)** |
+| --- | ---: | ---: |
+| ALMs | 1,844 | **1,921** (+77, +4.2%) |
+| registers | 342 | **350** |
+| **DSP blocks** | **28** | **6** (−22, **−79%**) |
+| **Fmax** | **36.92 MHz** | **36.11 MHz** (−2.2%) |
+| worst path | `q_fv_r[1] → smp_a_o[1]`, 20.913 ns | `q_fmt_r[0] → smp_a_o[4]`, 21.432 ns |
+
+**Same RTL as the 199.72 MHz row, same tool, same device; a factor of 5.4
+between them, and the only difference is whether the SDC declared I/O delays.**
+So the answer to "was this block holding `gpu_clk` down, like `SURFACE.STAMP`?"
+is **yes** — 36.92 MHz is 37% of the 100 MHz constraint, within noise of the 32%
+`SURFACE.STAMP` was holding it to. The first re-fit said 199.72 MHz and that
+reading was wrong.
+
+**And the DSP rearchitecture does not move it, because it is not the same cone
+being cut.** Before and after are limited by the *same* path in kind — a
+registered mode/fraction bit, through `decode16` and the filter, to `smp_a_o` —
+and the factored form is **0.5 ns slower** on it, which is exactly what the
+shape predicts: the old filter was four *parallel* multiplies into one adder
+tree, the new one is serial (mult → add → sub → mult → add). Fewer, narrower
+multipliers; a longer chain. It costs nothing that was not already lost.
+
+**A number that must NOT be quoted as a fitted result.** Applying the I/O
+constraints *post hoc* to the earlier `FILT_LANES = 2` database — one placed
+with no I/O objective at all — reports `req_mode_i[8] → q_addr_r[55]` at
+**37.004 ns**, the address generator. That is an **upper bound on an
+unoptimised placement**, not a critical path: once the fitter actually has the
+objective, the address generator comes down and the filter-to-output cone leads
+at ~21 ns. The 37 ns figure is worth keeping only because of *what* it named:
+
+> the address generator is a 48-bit shift, a wrap fold and a `(v << log2w) + u`
+> in one combinational cone from `req_valid_i` to the latched address, which is
+> **the longest path in the file**
+
+— this section's own claim, unmeasured since the day it was written, and the
+first evidence in either direction. It is a **near** miss rather than the
+limiter, and it contains no multiply and never did, because `LOG2W`/`LOG2H` make
+every step of it a shift.
+
+**The honest fix for the 36 MHz is a pipeline register**, which is what this
+section originally proposed and what the II = 2 rearchitecture under Target
+throughput needs anyway. **Not built**, and named here rather than left for a
+reader to discover.
+
+### ALMs went UP, and the prediction that they would fall was wrong
+
++77 at the shipping default, +107 at `FILT_LANES = 4` against the old row. The
+four 25-bit adder trees did go away; what replaced them is two 9-bit subtracts,
+two 17-bit adds and a 27-bit add per channel, plus the channel multiplexer. The
+removals were counted and the additions were not. At 1,921 of 41,910 ALMs it
+buys 22 DSP blocks of a 112-block device, which is the trade this whole campaign
+exists to make.
+
+The `{17'd0, t00_i} * {8'd0, w00}` form this replaced declared a **25×25**
+multiply where the honest need was 8×17 — `reports/QUARTUS_GOTCHAS.md` §5 in the
+wild, four times over, and §5 measured that same class of slack costing
+`zhao_geom_lod` ten DSP blocks.
+
+### The history this supersedes, kept because it is the same lesson twice
+
+This section used to say the block "has not been synthesized" and to predict
+that a synthesiser would share the four instances' identical weight products, so
+the real cost would be "4 weight multiplies + 16 texel multiplies, not 32". A
+2026-08-21 note then recorded, in capitals, **THE FIT SAID IT DID NOT HAPPEN**:
+`zhao_texture_bilerp` = 7 DSP, `zhao_texture_tmu` = 28 DSP, *4 × 7 exactly, with
+no discount*. Twelve of the thirty-two products were bit-identical duplicates
+and every one got its own silicon.
+
+That note also sanctioned **hoisting the weights** into the TMU as the fix, and
+called it "the most structurally invasive of the available DSP cuts" because it
+changes a module's ports, its directed tests, its formal harness and this
+contract. **Factoring superseded it**: it removes 20 of the 32 products where
+hoisting would have removed 12, it changes no interface at all, and the formal
+proof followed for free rather than having its partition-of-unity obligation
+transferred to the TMU.
+
+**And the 2026-08-23 fit is the same lesson a second time.** 2026-08-21 learned
+that Quartus will not share two identical products. 2026-08-23 learned that it
+will not pack two *different* small ones either. Both are the one rule stated
+above: on this kit, DSP blocks are counted in `*` operators.
 
 ## Integration capture cases
 

@@ -22,7 +22,7 @@
 > | --- | ---: | --- | ---: |
 > | `zhao_terrain_project` | 33 | ~270 patches/frame, costed against 1.67 M clocks | cache-then-sequence |
 > | `zhao_surface_stamp` | 28 | **20,000 texels/frame** (derived) | **0-2** |
-> | `zhao_texture_tmu` | 28 | **850,000 samples/frame** (derived) | **6-9** |
+> | ~~`zhao_texture_tmu`~~ | ~~28~~ **-> 6** | **850,000 samples/frame** (derived) | ~~6-9~~ **LANDED** |
 > | `zhao_terrain_normals` | 18 | **2,000 normals/frame** (derived) | **1-2** |
 > | `zhao_geom_cull` | 15 | one evaluation per five clocks | 4-6 |
 > | `zhao_geom_binner` | 12 | per-triangle costs + arena caps | — |
@@ -31,6 +31,44 @@
 > plus the retail install; full working in `docs/OWNER_DOCKET.md`). They are
 > derived, not ruled — overturn on sight. If they land the census reaches ~124
 > before the other three are touched.
+
+> ### TEXTURE.TMU CLOSED, and it left TWO OPEN PROBLEMS BEHIND IT (2026-08-23, RUN-20260823-1736)
+>
+> **28 -> 6 DSPs**, constrained fit, samples bit-identical to `zref::Tmu`. The
+> filter's four-weight law was FACTORED — `A = (t00<<8) + (t10-t00)*fu`,
+> `B` likewise, `S = (A<<8) + (B-A)*fv`, one rescale — which is 3 products a
+> channel instead of 8, and then multiplexed 2 channels at a time. 32 products
+> became 6. `zhao_texture_bilerp`'s ports did not change, so
+> `tests/formal/texture_bilerp.sby` proved the new form with no edit at all.
+>
+> **PROBLEM 1 — the block runs at 0.33x its derived demand, and nothing had ever
+> measured that.** The suite asserted accept-to-retire latency and byte
+> stability; the rate lived in prose. Measured now, and asserted exactly:
+> **6 clocks per CLUT sample = 277,778/frame against 850,000.** Terrain is
+> CLUT8, so that is the demand-critical figure. The fix is designed and written
+> into `design/contracts/TEXTURE.TMU.md` (II = 2 needs a 2-entry in-flight
+> record, an issue arbiter over the single cache port, and in-order completion;
+> II = 2 is the port's own floor because a CLUT sample needs two serial
+> accesses). **Not built.** It is orthogonal to the DSP work: every multiplier
+> was in the filter and the CLUT path never touches the filter.
+>
+> **PROBLEM 2 — the per-block Fmax column has been measuring whatever
+> register-to-register path happened to exist, which for this block was its
+> sample counter.** See `reports/QUARTUS_GOTCHAS.md` §9. The per-block SDC
+> constrained the clock and nothing else: no `set_input_delay`, no
+> `set_output_delay`, so every pin-to-register and register-to-pin path was
+> excluded. This block reported 199.72 MHz before and 192.46 MHz after; **both
+> are `texture_samples_o`'s carry chain.** With I/O delays applied the worst
+> path is `req_mode_i[8] -> q_addr_r[55]` at **37.004 ns** — the address
+> generator, which this block's contract has named "the longest path in the
+> file" since the day it was written.
+>
+> `tools/quartus/run_block_fit.ps1` now emits the I/O constraints. **Every row
+> in `reports/synthesis/zhao_block_fit.json` measured before 2026-08-23 evening
+> carries the old meaning**, exactly as 47 rows carried the pre-§7 meaning. A
+> row's Fmax is trustworthy only where that block's critical logic happens to be
+> register-to-register. Re-measuring the census under the corrected SDC is a
+> campaign-sized job and is **not** RUN-20260823-1736's; it is docketed here.
 >
 > ### THE NEW AXIS: timing. Every block before 2026-08-23 was fitted with no
 > ### timing objective at all.
@@ -1244,7 +1282,7 @@ the parallelism, not whether the products are independent:
 | block | DSPs | stated rate | rate met? | slack |
 | --- | ---: | --- | --- | --- |
 | `zhao_terrain_lod` | 28 | 1 decision per patch per **frame** | yes, ~560 cyc/patch | **enormous** — 30 products live permanently, used 1 cycle in 34 |
-| `zhao_texture_tmu` | 28 | 1 sample/clock | **no — 1 per 4 or 6** | **large** — and 12 of its 32 products are literal duplicates across four bilerp instances |
+| ~~`zhao_texture_tmu`~~ | ~~28~~ → **6** | ~~1 sample/clock~~ → 850,000 samples/frame | **CLOSED 2026-08-23** for DSPs; the RATE is still 0.33× and is now measured rather than assumed | — |
 | ~~`zhao_surface_stamp`~~ | ~~28~~ → **0** | ~~1 texel/clock~~ → 20,000 texels/frame | **CLOSED 2026-08-23** | see below |
 | `zhao_terrain_project` | 33 | 1 vertex/clock | **yes, and consumed** | **none** — 6,144 clocks/patch already gives ~270 patches against a 256-patch budget |
 

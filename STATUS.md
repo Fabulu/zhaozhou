@@ -5,6 +5,83 @@ at the top.*
 
 ---
 
+## 2026-08-23 (late night) — the texture unit cost 28 multipliers and now costs
+## 6; and the speed number I have been reporting for every block was wrong
+
+### The good news first
+
+The texture unit is the thing that reads pictures off memory and paints them
+onto triangles. It was using **28 of the chip's 112 multipliers** — a quarter of
+them, for one block.
+
+**It now uses 6.** Every picture it produces is byte-for-byte identical to
+before; this is the same arithmetic written differently.
+
+What it was doing: blending four neighbouring dots of a picture needs four
+weights, and each weight is itself a multiply, so the obvious way to write it is
+eight multiplies per colour channel. Four channels, four copies of the circuit —
+32 multiplies, twelve of them computing exactly the same numbers as their
+neighbours.
+
+Written the other way round it is **three multiplies a channel**, and then the
+four channels can take turns through one pair of circuits instead of each having
+its own. Same answer, every time, for every possible input — which is not a
+claim I am making from taste: the formal proof that already guarded this
+arithmetic **needed no change at all**, so it now proves the new form is the
+same as the old one for all 281 trillion possible inputs.
+
+Running total: the multiplier demand across measured blocks is now **134**
+against the chip's 112, down from 327 this morning.
+
+### The bad news, and it is worse than the good news is good
+
+**Every speed number in the per-block reports has been measuring the wrong
+thing, and I only found out because one number looked absurd.**
+
+To ask "how fast can this block run?", you have to tell the tool which paths to
+measure. We were telling it about the clock and nothing else — so it measured
+only the paths that start and end inside the block, and ignored everything
+running from the block's inputs or to its outputs. For a block like this one,
+whose entire job sits *between* its inputs and outputs, that is almost the whole
+block.
+
+The texture unit reported **199.72 MHz**. I checked which path produced it. It
+was the **counter that tallies how many texels the block has drawn** — a piece
+of bookkeeping. Its actual arithmetic appeared in no measurement at all.
+
+With the tool told about the input and output paths, the same unchanged block
+reports **36.92 MHz**. The console is designed around 100 MHz.
+
+That is the same disease SURFACE.STAMP had last week (32 MHz), which I reported
+as found-and-fixed. **I also reported, this afternoon, that the texture unit was
+clear of it — because I had re-measured and got 199.72 MHz.** That reading was
+wrong, and the reason it was wrong is the paragraph above.
+
+The measurement tool is fixed. What it means:
+
+* **Every per-block speed number recorded before tonight is suspect**, in the
+  same way and for the same reason as the batch that was invalidated a few days
+  ago. Re-measuring them is a job of its own and I have not done it.
+* **This block does not run fast enough**, and cutting its multipliers did not
+  change that — 36.92 before, 36.11 after. The slow part is a different piece of
+  it, and the fix is a known one (a pipeline stage) that I have specified but not
+  built, because it is the same change as the throughput fix below.
+
+### And a third thing, which is smaller but the same shape
+
+The block is supposed to produce about **850,000 texture reads a frame** — a
+figure derived from Sacrifice's own terrain, which layers three pictures on every
+patch of ground. **It produces about a third of that.**
+
+Nothing had ever measured it. The ledger said "1 sample per clock", the block's
+own contract said that was not met, and both were prose. There is now a test that
+measures it and fails if it moves.
+
+None of this is a regression. All three were true this morning; two of them were
+invisible and one was written down and unchecked.
+
+---
+
 ## 2026-08-23 (late night) — we know why the Field engine is slow, and the fix
 ## is to use the memory we already have and aren't touching
 

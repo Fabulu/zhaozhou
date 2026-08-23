@@ -47,7 +47,17 @@ execute_process(
   RESULT_VARIABLE _rc
   OUTPUT_VARIABLE _out
   ERROR_VARIABLE _err
-  TIMEOUT 1800
+  # THE WRAPPER'S BUDGET, and it is the one that BINDS. Parameterised
+  # 2026-08-23 because it silently outranked a CTest property that had been
+  # raised deliberately: formal_texture_bilerp carries `TIMEOUT 3600` with a
+  # comment explaining that its bmc task measures 1,264 s and needs headroom --
+  # and then died at 1,800.88 s, killed by this line, reported as a FAILED
+  # test rather than as a timeout. A budget stated in one file and enforced in
+  # another is not a budget.
+  #
+  # Default unchanged at 1800 so every lane that does not set it behaves
+  # exactly as before.
+  TIMEOUT @ZHAO_FORMAL_WRAPPER_TIMEOUT@
 )
 if(_rc EQUAL 0)
   message(STATUS "formal @PROP@: PASS (bmc + cover)")

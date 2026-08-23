@@ -61,6 +61,13 @@ set_tests_properties(lint_stub_top PROPERTIES
 # ---- formal: SymbiYosys lane smoke (SKIP when sby absent) -----------------
 # W1 wires the lane only; real properties land with the blocks that own them.
 find_program(ZHAO_SBY_BIN NAMES sby sby.exe)
+# The formal WRAPPER's own budget, consumed by formal/mem_formal_lane.cmake.in.
+# It is the one that BINDS: a lane's CTest TIMEOUT is only a backstop, and when
+# the two disagreed (formal_texture_bilerp: CTest 3600, wrapper 1800) the lane
+# died at 1,800.88 s and reported FAILED rather than "timed out". Default
+# unchanged; a lane that needs more sets it before its configure_file and puts
+# it back afterwards.
+set(ZHAO_FORMAL_WRAPPER_TIMEOUT 1800)
 configure_file(formal/formal_lane.cmake.in formal/formal_lane.cmake @ONLY)
 add_test(NAME formal_lane
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/formal/formal_lane.cmake)
@@ -2524,8 +2531,16 @@ if(ZHAO_SBY_BIN)
   set(PROP "texture_bilerp")
   set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
   set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  # 3300, INSIDE the 3600 CTest property below so the wrapper still fails with a
+  # readable sby message before CTest kills it from outside. The two used to
+  # disagree -- CTest 3600, wrapper 1800 -- and on 2026-08-23 this lane died at
+  # 1,800.88 s under a loaded machine and was reported as a FAILED proof. It was
+  # not a failed proof. The cover task had already passed in 2 s; the bmc task
+  # was still solving.
+  set(ZHAO_FORMAL_WRAPPER_TIMEOUT 3300)
   configure_file(formal/mem_formal_lane.cmake.in
                  formal/texture_bilerp_lane.cmake @ONLY)
+  set(ZHAO_FORMAL_WRAPPER_TIMEOUT 1800)
   set(zhao_formal_script
       "${CMAKE_CURRENT_BINARY_DIR}/formal/texture_bilerp_lane.cmake")
   string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
@@ -2535,6 +2550,11 @@ if(ZHAO_SBY_BIN)
   # bmc task closes in 741 s standalone on this kit (boolector, depth 2) and
   # 1,264 s as this lane, because the partition-of-unity identity is nonlinear
   # over four bit-blasted 9x9 multipliers.
+  #
+  # AND THE WRAPPER HAS TO AGREE, which it did not until 2026-08-23: this
+  # property said 3600 while formal/mem_formal_lane.cmake.in hard-coded 1800,
+  # so the real budget was 1800 and the comment above described a headroom the
+  # lane did not have. See ZHAO_FORMAL_WRAPPER_TIMEOUT at the top of this file.
   set_tests_properties(formal_texture_bilerp PROPERTIES
     LABELS "formal;nightly"
     RUN_SERIAL TRUE

@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "8754bd2d6566f526dbd1a97c531d0fec5ecd32ff",
+    "newestRunCommit":  "1c98bb83bba0c8902f2fdd96252c255cb553cda6",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -620,16 +620,19 @@
                    },
                    {
                        "module":  "zhao_texture_bilerp",
-                       "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
-                       "rtlCleanAtHead":  false,
                        "status":  "ok",
-                       "seconds":  176.3,
-                       "alms":  38,
+                       "sourceCommit":  "1c98bb83bba0c8902f2fdd96252c255cb553cda6",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  162.4,
+                       "alms":  60,
                        "registers":  0,
                        "blockMemoryBits":  0,
                        "ramBlocks":  0,
-                       "dspBlocks":  7,
-                       "virtualPins":  56
+                       "dspBlocks":  3,
+                       "virtualPins":  56,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112
                    },
                    {
                        "module":  "zhao_texture_cache",
@@ -650,19 +653,19 @@
                    {
                        "module":  "zhao_texture_tmu",
                        "status":  "ok",
-                       "sourceCommit":  "7403deba3d7ace9bc9863525f9642bff6f51bf9d",
+                       "sourceCommit":  "1c98bb83bba0c8902f2fdd96252c255cb553cda6",
                        "rtlCleanAtHead":  true,
-                       "seconds":  894.9,
-                       "alms":  1951,
-                       "registers":  294,
+                       "seconds":  675.9,
+                       "alms":  1921,
+                       "registers":  350,
                        "blockMemoryBits":  0,
                        "ramBlocks":  0,
-                       "dspBlocks":  12,
+                       "dspBlocks":  6,
                        "virtualPins":  496,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  192.46,
+                       "fmaxMhz":  36.11,
                        "fmaxClock":  "clk"
                    },
                    {
@@ -702,6 +705,25 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  199.72,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_tmu@pre-rearch-io",
+                       "status":  "ok",
+                       "sourceCommit":  "1590bb63eab301c47249616a0cbc760cd824d1f6",
+                       "rtlCleanAtHead":  false,
+                       "variantOf":  "zhao_texture_tmu",
+                       "seconds":  1275.9,
+                       "alms":  1844,
+                       "registers":  342,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  28,
+                       "virtualPins":  496,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  36.92,
                        "fmaxClock":  "clk"
                    },
                    {

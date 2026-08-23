@@ -459,3 +459,297 @@ hold — unspecified, and almost never the texel.
 So the model was **strictly more generous than the block it stands for**, which
 is the one direction a model must never be wrong in. Fixing it, not arguing it —
 the brief's own preference, and here it is not even a close call.
+
+### 2026-08-23 19:4x — MEASURED at FILT_LANES = 2: 6 DSPs — and an Fmax of 48.45 MHz that turned out to be the real story
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_texture_tmu ... `
+      -TopParameters FILT_LANES=2 -RowLabel "@lanes2" -KeepWorkspace
+
+sourceCommit `8754bd2`, `rtlCleanAtHead: true`, 1,748.7 s.
+
+| | @pre-rearch | LANES = 4 | LANES = 2 |
+| --- | ---: | ---: | ---: |
+| ALMs | 1,844 | 1,951 | 1,917 |
+| registers | 310 | 294 | 313 |
+| **DSP blocks** | **28** | **12** | **6** |
+| **reported Fmax** | 199.72 | 192.46 | **48.45** |
+
+**Six DSPs — the bottom of the 6–9 target, and exactly what "one DSP per `*`"
+predicts from six products.** The docket's own guess ("about 5–6 DSPs at half
+rate") was right.
+
+**A four-fold Fmax collapse from adding a 4:1 byte mux is not believable, so I
+did not believe it.** `-KeepWorkspace` means the fitted database survives, so
+the question is answerable for the cost of a two-second `quartus_sta` re-run
+rather than another fit:
+
+    report_timing -setup -npaths 3 -detail path_only
+
+    ; -10.641 ; q_fmt_r[2] ; fres_r[6] ; clk ; clk ; 10.000 ; -0.119 ; 20.462 ;
+
+The worst path is `q_fmt_r → decode16 → ch_pack → the channel mux → the filter
+→ fres_r`. **20.462 ns, 8 logic levels.** So I ran the same query against the
+other two workspaces, expecting to see the same cone one mux shorter.
+
+**It was not there at all.**
+
+    FILT_LANES = 4 : texture_samples_o[3]  -> texture_samples_o[21]  4.634 ns
+    @pre-rearch    : texture_samples_o[19] -> texture_samples_o[27]  4.818 ns
+
+### 2026-08-23 19:5x — THE FINDING: the Fmax column has been measuring the sample counter
+
+Both of those "~195 MHz" figures are the **32-bit saturating sample counter's
+carry chain**. Not the filter. Not the address generator. Not the wrap folds.
+**The 32 multiplies of the shipped design appear in no timed path whatsoever.**
+
+The reason is in the generated SDC, which I read rather than assumed
+(`fit-evidence/sdc_has_no_io_delays.txt` has it in full): it contains eight
+`create_clock` lines, `derive_clock_uncertainty`, and **nothing else**. No
+`set_input_delay`. No `set_output_delay`. TimeQuest excludes every
+pin-to-register and register-to-pin path when none is declared — and this block's
+arithmetic runs **from `req_*` pins** and **to `smp_*` pins**. There is almost
+nothing in it that is register-to-register except the counter.
+
+`FILT_LANES = 2` differs in exactly one accidental way: `fres_r` is a real
+register, so one filter output finally terminates somewhere TimeQuest will look.
+**The 48.45 MHz is not a regression I introduced. It is the first time this
+block's arithmetic has ever been timed.**
+
+**This is `QUARTUS_GOTCHAS.md` §7 one layer down.** That entry found
+`create_clock` resolving to an empty collection, fixed it, and concluded the
+Fmax column was real at last. It is real only for register-to-register logic —
+and the run brief's lesson 1, which sent me to re-fit the old RTL under the
+corrected SDC, is only half-satisfied by doing that. I did it, got 199.72 MHz,
+and wrote "suspected, measured, and cleared" in this log two hours ago.
+**That sentence was wrong**, and it was wrong in precisely the way the brief
+warns about: a number reported confidently, from the right tool, answering a
+question I had not checked it was asking.
+
+**Then I asked what a real constraint says.** Applying `set_input_delay` /
+`set_output_delay 0` to the *existing* `FILT_LANES = 2` database — again no
+re-fit, the same placement — moves the worst path again:
+
+    ; -23.704 ; req_mode_i[8] ; q_addr_r[55] ; clk ; clk ; 10.000 ; 3.360 ; 37.004 ;
+
+**37.004 ns: the address generator.** Which is exactly what this block's
+contract has said since the day it was written —
+
+> "the address generator is a 48-bit shift, a wrap fold and a `(v << log2w) + u`
+> in one combinational cone from `req_valid_i` to the latched address, **which
+> is the longest path in the file**"
+
+— and which nothing had ever measured. The contract was right, the number is
+27 MHz, and it is **pre-existing**: that cone is unchanged by this run's work.
+
+Fixed in `tools/quartus/run_block_fit.ps1`: the generated SDC now declares
+`set_input_delay -clock clk 0` on every non-clock input and
+`set_output_delay -clock clk 0` on every output — the *same clock, no external
+budget* model, guarded by a `get_ports clk` test because eight of this design's
+71 clock ports are not called `clk`. Validated against a real database before
+being trusted (`quartus_sta` accepted it and reported the path above). Recorded
+as `QUARTUS_GOTCHAS.md` §9.
+
+**Every other row in `reports/synthesis/zhao_block_fit.json` predates this**, in
+exactly the way 47 rows predated §7's fix. That is not this run's to repair, and
+it is docketed rather than mentioned.
+
+### 2026-08-23 20:0x — MEASURED: the OLD block, properly constrained, is **36.92 MHz**
+
+`@pre-rearch-io` — the *shipped* pre-rearchitecture RTL (checked out from
+`8e7f974`), fitted under the corrected SDC. 1,275.9 s, `rtlCleanAtHead: false`
+**deliberately and correctly** (the tree was holding older RTL on purpose, and
+the harness said so rather than hiding it).
+
+| | @pre-rearch (clock only) | @pre-rearch-io (clock + I/O) |
+| --- | ---: | ---: |
+| ALMs | 1,844 | 1,844 |
+| registers | 310 | 342 |
+| DSP blocks | 28 | 28 |
+| **Fmax** | **199.72 MHz** | **36.92 MHz** |
+
+**Same RTL. Same tool. Same device. A factor of 5.4 between them, and the only
+difference is whether the SDC declared I/O delays.**
+
+So the answer to the run brief's first lesson, on this block, is **yes after
+all**. Two hours ago I wrote "suspected, measured, and cleared — this block
+closes at 199.72 MHz, twice its constraint" and drew the conclusion that unlike
+SURFACE.STAMP there was no second problem hiding behind the first. **There was.
+It is the same problem, and the measurement I used to rule it out was measuring
+the sample counter.** `zhao_texture_tmu` was holding `gpu_clk` to **37% of its
+constraint**, which is within noise of the 32% SURFACE.STAMP was holding it to.
+
+The correction is in this log rather than replacing what it corrects, because
+the wrong reading and the reason for it are the useful part.
+
+### 2026-08-23 20:0x — SWEEP RUN 2 (the shipping RTL): 30 / 30 / 30, caught 29
+
+    linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build
+    pristine models 59747279bbfe/59747279bbfe, 4 lanes green
+    ...
+    attempted=30 expected=30 accounted=30 caught=29
+    SURVIVOR: M18 a CLUT texel reports the filter's alpha instead of the law's 255
+    SWEEP-EXIT=0
+
+Scored against `1590bb6` — the shipping default `FILT_LANES = 2` — in the
+worktree, detached, with the mutant count verified non-zero before anything was
+scored. Kept as `sweep_run2_final_29of30.log`.
+
+**M27 is dead**, killed by the harness fix rather than argued away: the modelled
+cache now returns the complement of the texel on a lane `cac_en_o` did not
+enable, which is the direction the real block behaves in.
+
+**M18 survives and is the one true equivalent**, argued above against
+`zhao_texture_tmu.sv:632-633`. No input exists that can distinguish it.
+
+**Both sweep logs are kept**, deliberately: run 1 (28/30) is the *evidence for
+why the harness changed*, and a repository that kept only the final number would
+have lost the reason.
+
+### 2026-08-23 20:1x — I REVERTED MY OWN REARCHITECTURE IN A COMMIT ABOUT YAML
+
+`git show --stat 5f5ffbf` — a commit whose message is one paragraph about a
+`target_throughput` value breaking a YAML parse:
+
+    design/blocks.yml                       |   9 +-
+    fpga/rtl/texture/zhao_texture_bilerp.sv | 145 +++++-----------
+    fpga/rtl/texture/zhao_texture_tmu.sv    | 293 ++++++--------------------
+
+**All of 7403deb and 1590bb6, undone.**
+
+The mechanism, and it is entirely mine: `@pre-rearch-io` needs the OLD RTL in
+the working tree, so it was put there with
+
+    git checkout 8e7f974 -- fpga/rtl/texture/zhao_texture_{bilerp,tmu}.sv
+
+`git checkout <rev> -- <paths>` **stages**; it does not merely update the
+working tree. Twenty minutes later `git add -- design/blocks.yml && git commit`
+committed the whole index, revert included. Then `git checkout HEAD -- <rtl>`,
+intended to restore the rearchitecture, faithfully restored the revert.
+
+**What it did NOT invalidate, checked rather than hoped:**
+
+- the mutation sweep — its worktree was checked out at `1590bb6` and scored
+  those bytes;
+- the fits — `@pre-rearch-io` was *supposed* to see the old RTL, and its row
+  correctly carries `rtlCleanAtHead: false`;
+- the differential lanes — all four were run and green before the checkout.
+
+Restored from `1590bb6` and verified with `git diff 1590bb6 -- fpga/rtl`, which
+is empty. Committed with `-o <paths>` so the diffstat could not exceed the
+message.
+
+**Caught by grepping the shipped file for a symbol that had to be in it**, while
+checking something unrelated. Nothing in the build, the tests or the tools would
+have noticed: everything still compiled, because the reverted RTL is *also*
+correct RTL — it is just the wrong one.
+
+**Second git default in one run to do something reasonable and unrequested**;
+`git add -A` staging 288 files of line-ending churn was the first. Both were
+caught by looking at what was actually staged rather than at what was intended.
+The rules now written into the restore commit:
+
+  · `git checkout <rev> -- <paths>` is a STAGING operation. Follow it with
+    `git reset -- <paths>` when the intent was the working tree only.
+  · Commit with `-o <paths>`, or read `git diff --cached --stat`, so the
+    diffstat has to match the message before anything lands.
+
+### 2026-08-23 20:3x — I edited RTL under a running fit chain. Third instance, and it is the brief's named one.
+
+While a four-fit chain was running I added the measured DSP column to
+`zhao_texture_tmu.sv`'s `FILT_LANES` table. **That is precisely the run brief's
+named failure mode** — *a fit running while something rewrites `.sv` files
+describes neither version* — and the SURFACE.STAMP run recorded doing the same
+thing about forty minutes after writing the rule into its own SPEC. I did it
+about four hours after reading theirs.
+
+What actually happened, checked rather than assumed:
+
+- the edit is **comment-only**, so no netlist can differ;
+- fit 1 of the chain was already past `quartus_map` (its placement preparation
+  had finished 1m52s in), so its netlist was read before the edit existed;
+- fits 2–4 had **not started**, so none of them read the edited file;
+- **but they would have**, and every one of them would then have carried
+  `rtlCleanAtHead: false` against an uncommitted working tree — four rows whose
+  provenance says "this describes something not in git".
+
+Reverted within about a minute with `git checkout HEAD -- <file>`, the copy kept
+in the scratchpad to be re-applied after the chain finishes. `git -c
+core.autocrlf=true status --porcelain -- fpga/rtl` is empty again, and the index
+was checked too, because the *last* thing that bit this run was a staged file
+nobody looked at.
+
+**The tell was not the edit; it was that I had stopped counting what was
+running.** The rule for the rest of this run: before touching anything under
+`fpga/rtl`, `Get-Process quartus_*` first — the same check that is already
+mandatory before *starting* a fit, applied to the other end.
+
+### 2026-08-23 20:4x — samples/frame has TWO honest values now, and quoting one would be the wrong-number failure again
+
+SURFACE.STAMP published `items/frame = (Fmax / 60) / (cycles per item)`. Earlier
+in this run I generalised that to `min(Fmax, 100 MHz) / (60 × II)`, because that
+block's Fmax was 87.54 — below the shared `gpu_clk` — while this block's looked
+like 199.72 and the constraint was clearly the binding term.
+
+**With the corrected SDC that reasoning inverts, and the two formulas now
+disagree by 2.7×.** At `@pre-rearch-io`'s measured **36.92 MHz**:
+
+| | at the 100 MHz `gpu_clk` the console is designed around | at this block's own measured Fmax |
+| --- | ---: | ---: |
+| direct colour, II 4 | 416,667 | 153,833 |
+| **CLUT, II 6** | **277,778** | **102,556** |
+| vs. the 850,000 demand | 0.33× | **0.12×** |
+
+**Both are true and neither alone is honest.** The left column is the rate the
+block would deliver *if it closed timing*, and it does not — 36.92 MHz is 37% of
+its constraint, so composing it as-is would not slow the console down to 0.33×,
+it would fail timing. The right column is what the console would deliver if
+`gpu_clk` were dropped to what this block can actually take, which is not a
+decision anyone has made or should.
+
+Reported as a pair, with the timing failure named, rather than collapsed into
+one figure. The directed test prints the left column because that is the one an
+RTL change can move; the timing half is the fit's to report and is now in the
+contract's Synthesis section and in `reports/REMAINING_BLOCKERS.md`.
+
+### 2026-08-23 21:0x — MEASURED, like for like: **28 → 6 DSPs, 36.92 → 36.11 MHz**
+
+The census row: shipping default `FILT_LANES = 2`, corrected SDC, sourceCommit
+`1c98bb8`, `rtlCleanAtHead: true`, 675.9 s. Constraint and worst path saved as
+`fit-evidence/default_lanes2_io_constraint.txt`.
+
+| | `@pre-rearch-io` | shipping default | delta |
+| --- | ---: | ---: | ---: |
+| ALMs | 1,844 | **1,921** | +77 (+4.2%) |
+| registers | 342 | **350** | +8 |
+| **DSP blocks** | **28** | **6** | **−22 (−79%)** |
+| **Fmax** | **36.92 MHz** | **36.11 MHz** | −2.2% |
+
+**And the worst path is the same cone before and after**, which is the finding
+that makes the −2.2% legible rather than mysterious:
+
+    before : q_fv_r[1] -> smp_a_o[1]   20.913 ns
+    after  : q_fmt_r[0] -> smp_a_o[4]  21.432 ns
+
+Both are a registered mode-or-fraction bit, through `decode16` and the filter,
+to the sample output. The factored form is **0.5 ns slower on it**, and the
+shape says why: the old filter was four *parallel* multiplies into one adder
+tree; the new one is serial — mult → add → sub → mult → add — because the V lerp
+cannot start until the U lerps finish. Fewer, narrower multipliers; a longer
+chain. **It costs nothing that was not already lost**, because the block was
+already at 37% of its clock.
+
+**A correction to what I wrote an hour ago.** I recorded the 37.004 ns
+`req_mode_i[8] → q_addr_r[55]` result as "the honest number is the address
+generator". It is not a critical path — it was measured by applying the I/O
+constraints *post hoc* to a database that had been **placed with no I/O
+objective at all**, so the fitter had never once optimised those paths. With the
+objective actually present during the fit, the address generator comes down and
+the filter-to-output cone leads at ~21 ns. **37 ns is an upper bound on an
+unoptimised placement.** What it is still worth is *what it named*: this
+contract's unmeasured claim that the address generator is "the longest path in
+the file" now has evidence in both directions, and it is a near miss rather than
+the limiter.
+
+Recorded as a correction rather than by editing the earlier entry, because the
+distinction — a post-hoc timing query on an unoptimised placement is not a
+fitted critical path — is the reusable part.

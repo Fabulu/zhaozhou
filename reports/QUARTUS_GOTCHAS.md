@@ -145,6 +145,54 @@ holds and is never elaborated when it does not. `$error` was avoided precisely
 because this tool's support for elaboration system tasks was unknown; the
 irony is that the `if` was the part it could not parse.
 
+## 9. Constraining the CLOCK does not constrain the BLOCK
+
+§7 fixed `create_clock` resolving to an empty collection and concluded the Fmax
+column was a real measurement at last. **It is real only for
+register-to-register logic.** The generated per-block SDC has no
+`set_input_delay` and no `set_output_delay`, and TimeQuest excludes every
+pin-to-register and register-to-pin path when none is declared. For a leaf block
+whose arithmetic sits **between** its ports — which is most of them — that is
+most of the block.
+
+Found 2026-08-23 on `zhao_texture_tmu`, by re-running `quartus_sta` on three
+kept workspaces. No re-fit; the same databases the fits had already produced:
+
+| workspace | reported Fmax | actual worst timed path |
+| --- | ---: | --- |
+| `@pre-rearch` | 199.72 MHz | `texture_samples_o[19] → texture_samples_o[27]`, 4.818 ns |
+| `FILT_LANES=4` | 192.46 MHz | `texture_samples_o[3] → texture_samples_o[21]`, 4.634 ns |
+
+**Both numbers are the 32-bit saturating sample counter's carry chain.** The
+block's 32 multiplies, its five format decodes, its 48-bit address generator and
+its three wrap folds appeared in **no timed path at all**.
+
+The third workspace differs in one accidental way — at `FILT_LANES = 2` one
+filter output lands in a real register — and there the worst path is
+**20.462 ns**, through the very arithmetic the other two rows called fast.
+
+Applying `set_input_delay`/`set_output_delay 0` to that same database moves the
+worst path again, to **`req_mode_i[8] → q_addr_r[55]` at 37.004 ns** — the
+address generator, which that block's own contract had named "the longest path
+in the file" and which nothing had ever measured.
+
+**Fixed** in `tools/quartus/run_block_fit.ps1`: the generated SDC now declares
+`set_input_delay -clock clk 0` on every non-clock input and
+`set_output_delay -clock clk 0` on every output, guarded by a `get_ports clk`
+test because eight of this design's clock ports are not called `clk`. The model
+is *same clock, no external budget* — optimistic about inter-block routing,
+exact about the logic inside the block, which is what a per-block
+characterisation is for.
+
+**Every row measured before 2026-08-23 evening carries the old meaning**, in
+exactly the way 47 rows carried §7's. A row's Fmax is trustworthy only if that
+block's critical logic happens to run register-to-register.
+
+The rule that generalises §7 and §9 together: **a constraint file is not a
+timing objective until you have read which path it actually reported.** Both
+entries were found the same way — by disbelieving an implausible Fmax and asking
+the tool which path produced it.
+
 ---
 
 ---
