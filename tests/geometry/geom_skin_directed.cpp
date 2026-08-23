@@ -66,18 +66,21 @@ namespace zc = zref::creature;
 #endif
 
 // The frontier table from the RTL header, as numbers this file will fail on.
+// Updated 2026-08-23 when the blend became a three-stage pipeline: the fit
+// measured 17.639 ns of data delay from `br[1]` to `o_y_o[14]~reg0`, so the
+// chain had to be cut and each row now costs two more clocks of fill.
 #if ZHAO_SKIN_LANES == 1
-constexpr int kLatencyBlend = 22;
-constexpr int kLatencyRigid = 13;
-constexpr bool kMeetsDemand = false;  // 75,757 vertices/frame: BELOW the demand
+constexpr int kLatencyBlend = 24;
+constexpr int kLatencyRigid = 15;
+constexpr bool kMeetsDemand = false;  // 69,444 vertices/frame: BELOW the demand
 #elif ZHAO_SKIN_LANES == 3
-constexpr int kLatencyBlend = 10;
-constexpr int kLatencyRigid = 7;
-constexpr bool kMeetsDemand = true;  // 166,666 vertices/frame, 1.39x
+constexpr int kLatencyBlend = 12;
+constexpr int kLatencyRigid = 9;
+constexpr bool kMeetsDemand = true;  // 138,888 vertices/frame, 1.16x at 100 MHz
 #elif ZHAO_SKIN_LANES == 6
-constexpr int kLatencyBlend = 8;
-constexpr int kLatencyRigid = 7;
-constexpr bool kMeetsDemand = true;  // 208,333 vertices/frame, 1.74x
+constexpr int kLatencyBlend = 10;
+constexpr int kLatencyRigid = 9;
+constexpr bool kMeetsDemand = true;  // 166,666 vertices/frame, 1.39x at 100 MHz
 #else
 #error "ZHAO_SKIN_LANES must be 1, 3 or 6 -- see zhao_geom_skin.sv's frontier table"
 #endif

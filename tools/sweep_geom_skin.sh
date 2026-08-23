@@ -39,6 +39,21 @@
 # scored only the default build would have reported them as survivors and
 # invented a test gap that does not exist.
 #
+# THE RULE THIS ESTABLISHED, stated here because this is where the next
+# person hits it: A PARAMETERISED BLOCK'S FRONTIER BUILDS ARE COVERAGE, NOT
+# JUST DATA POINTS. Measured 2026-08-23: M27 (acc_done set by the FIRST
+# term rather than the last) is EXACTLY equivalent at MUL_LANES 3 and 6,
+# because TSTEPS collapses to 1 there and 'first term' and 'last term' are
+# the same cycle. Only the MUL_LANES = 1 build walks the three terms over
+# three cycles, and only that build kills the mutant.
+#
+# So the default elaboration NEVER EXECUTES the multi-cycle accumulate path
+# at all. Had the frontier existed only as fitted numbers, the sweep would
+# have called M27 a survivor and someone would have gone looking for a test
+# gap that is not there -- while the real gap, an entire unexercised
+# datapath, stayed invisible. Build every setting a parameter admits, and
+# score the sweep against all of them.
+#
 # The scoring rule: after regeneration every model must EXIST and the hash of
 # the whole set must DIFFER from the pristine set's. Anything else is
 # discarded, never scored.
@@ -164,15 +179,15 @@ echo "   pristine model ${PRISTINE_MODEL:0:16}, all $(echo $ALL | wc -w) lanes g
 # Each entry: name @@ old @@ new
 MUTS=(
 "M01 the rigid boundary is w0 == 63, not 64@@        rigid_q <= v_rigid_i || (v_w0_i == 7'd64);@@        rigid_q <= v_rigid_i || (v_w0_i == 7'd63);"
-"M02 rigid path rescales by 22, not 16@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 22);@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 22) : rescale_sat(blend_v, 22);"
-"M03 blend rescales by 16, not 22@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 22);@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 16);"
-"M04 round-half-up becomes a floor@@      r = (v + (73'sd1 <<< (sh - 1))) >>> sh;@@      r = v >>> sh;"
-"M05 the positive saturation rail is off by one@@      if (r > 73'sd2147483647) rescale_sat = 32'sh7FFF_FFFF;@@      if (r > 73'sd2147483647) rescale_sat = 32'sh7FFF_FFFE;"
-"M06 the negative saturation rail is off by one@@      else if (r < -73'sd2147483648) rescale_sat = 32'sh8000_0000;@@      else if (r < -73'sd2147483648) rescale_sat = 32'sh8000_0001;"
-"M07 the pb term is scaled by 2^5, not 2^6@@  assign blend_v = (BLENDW'(pb_sel) <<< 6) + wprod;@@  assign blend_v = (BLENDW'(pb_sel) <<< 5) + wprod;"
-"M08 the weight difference is reversed@@  assign pdiff  = DIFFW'(pa_sel) - DIFFW'(pb_sel);@@  assign pdiff  = DIFFW'(pb_sel) - DIFFW'(pa_sel);"
-"M09 weight bit 0 contributes 2^1@@    wp0 = (w0_q[0] ? pd_ext : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);@@    wp0 = (w0_q[0] ? (pd_ext <<< 1) : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);"
-"M10 weight bit 5 contributes 2^4@@    wp2 = (w0_q[4] ? (pd_ext <<< 4) : ZERO_B) + (w0_q[5] ? (pd_ext <<< 5) : ZERO_B);@@    wp2 = (w0_q[4] ? (pd_ext <<< 4) : ZERO_B) + (w0_q[5] ? (pd_ext <<< 4) : ZERO_B);"
+"M02 rigid and blend swap rounding constants@@    nt[7] = b0_rigid ? RND_RIGID : RND_BLEND;@@    nt[7] = b0_rigid ? RND_BLEND : RND_RIGID;"
+"M03 rigid and blend swap result field selects@@      2'b10, 2'b11: res_row = b1_rigid ? b1_num[47:16] : b1_num[53:22];@@      2'b10, 2'b11: res_row = b1_rigid ? b1_num[53:22] : b1_num[47:16];"
+"M04 the blend's rounding constant is halved@@    nt[7] = b0_rigid ? RND_RIGID : RND_BLEND;@@    nt[7] = b0_rigid ? RND_RIGID : (RND_BLEND >>> 1);"
+"M05 the fit test drops the result's own sign bit@@  assign fit_blend = (&b1_num[72:53]) | (~|b1_num[72:53]);@@  assign fit_blend = (&b1_num[72:54]) | (~|b1_num[72:54]);"
+"M06 the saturation rail is chosen by the inverted sign@@  assign sat_pick  = {fits, b1_num[BLENDW-1]};@@  assign sat_pick  = {fits, ~b1_num[BLENDW-1]};"
+"M07 the base term is scaled by 2^5, not 2^6@@    nt[6] = b0_rigid ? base_ext : (base_ext <<< 6);@@    nt[6] = b0_rigid ? base_ext : (base_ext <<< 5);"
+"M08 the weight difference is reversed@@        b0_diff  <= DIFFW'(acc[br_a]) - DIFFW'(acc[br_b]);@@        b0_diff  <= DIFFW'(acc[br_b]) - DIFFW'(acc[br_a]);"
+"M09 every weight bit contributes twice its place value@@      nt[b] = (!b0_rigid && b0_w0[b]) ? (d_ext <<< b) : ZERO_B;@@      nt[b] = (!b0_rigid && b0_w0[b]) ? (d_ext <<< (b + 1)) : ZERO_B;"
+"M10 rigid and blend swap which accumulator is the base@@        b0_base  <= rigid_q ? acc[br_a] : acc[br_b];@@        b0_base  <= rigid_q ? acc[br_b] : acc[br_a];"
 "M11 the weight is truncated to five bits@@        w0_q <= v_w0_i[5:0];@@        w0_q <= {1'b0, v_w0_i[4:0]};"
 "M12 the translation is not pre-shifted into the accumulator@@          acc[rp]     <= ACCW'(a_m_i[rp*4 + 3]) <<< 16;@@          acc[rp]     <= ACCW'(a_m_i[rp*4 + 3]);"
 "M13 B's accumulator is seeded from A's translation@@          acc[rp + 3] <= ACCW'(b_m_i[rp*4 + 3]) <<< 16;@@          acc[rp + 3] <= ACCW'(a_m_i[rp*4 + 3]) <<< 16;"
@@ -191,6 +206,9 @@ MUTS=(
 "M26 a landed product goes to the neighbouring accumulator@@        dst_d2[r]   <= dst_d1[r];@@        dst_d2[r]   <= dst_d1[r] ^ 3'd1;"
 "M27 acc_done is set by the FIRST term, not the last (EQUIVALENT at MUL_LANES 3 and 6)@@          if (dlast_d2[r]) acc_done[dst_d2[r]] <= 1'b1;@@          if (dlast_d2[r] || dv_d2[r]) acc_done[dst_d2[r]] <= 1'b1;"
 "M28 rigid still issues six row-products (EQUIVALENT at MUL_LANES 1 and 3)@@  assign n_rp     = rigid_q ? 3'd3 : 3'd6;@@  assign n_rp     = 3'd6;"
+"M29 B1 is fed from row_ready, collapsing a pipeline stage@@      b1_v <= b0_v;@@      b1_v <= row_ready;"
+"M30 the last-row flag fires on row 1@@        b0_last  <= (br == 2'd2);@@        b0_last  <= (br == 2'd1);"
+"M31 the row tag is corrupted crossing B1@@        b1_row   <= b0_row;@@        b1_row   <= b0_row + 2'd1;"
 )
 
 expected=${#MUTS[@]}

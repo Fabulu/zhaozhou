@@ -93,9 +93,19 @@
 //
 //   MUL_LANES | TL | RL | issue slots | latency blend/rigid | vertices/frame
 //   ----------+----+----+-------------+---------------------+---------------
-//       1     |  1 |  1 |   18 /  9   |      22 / 13        |  75,757   FAILS
-//       3     |  3 |  1 |    6 /  3   |      10 /  7        | 166,666   1.39x
-//       6     |  3 |  2 |    3 /  2   |       8 /  7        | 208,333   1.74x
+//       1     |  1 |  1 |   18 /  9   |      24 / 15        |  69,444   FAILS
+//       3     |  3 |  1 |    6 /  3   |      12 /  9        | 138,888   1.16x
+//       6     |  3 |  2 |    3 /  2   |      10 /  9        | 166,666   1.39x
+//
+// Those latencies include the blend pipeline's two clocks of fill (see the
+// three-stage blend below). THE ACCEPTANCE TEST IS RATE, NOT CLOCK:
+//
+//   required = 120,000 vertices x 60 Hz = 7,200,000 vertices/s
+//   II = 12 needs 86.4 MHz ; II = 13 needs 93.6 MHz ; II = 14 fails at 100 MHz
+//
+// so II = 12 is comfortable and 13 is the ceiling. `gpu_clk` is shared, though,
+// so the raw Fmax matters too: a block that stops at 86 MHz caps every other
+// block on the same clock.
 //
 // **MUL_LANES = 1 is on this list precisely because it FAILS the demand.** A
 // frontier with no failing end does not show where the wall is. 3 is the
@@ -237,22 +247,6 @@ module zhao_geom_skin #(
     end
   endgenerate
 
-  // ---- round-half-up shift then saturate, qformats §3/§4 ------------------
-  // Round-half-up on a NEGATIVE value is the trap: adding the half and shifting
-  // arithmetically gives round-half-up (toward +inf), which is what
-  // rescale_s32 does. A shift alone would floor, and the two disagree at every
-  // exact half.
-  function automatic logic signed [31:0] rescale_sat(input logic signed [BLENDW-1:0] v,
-                                                     input int unsigned sh);
-    logic signed [BLENDW-1:0] r;
-    begin
-      r = (v + (73'sd1 <<< (sh - 1))) >>> sh;
-      if (r > 73'sd2147483647) rescale_sat = 32'sh7FFF_FFFF;
-      else if (r < -73'sd2147483648) rescale_sat = 32'sh8000_0000;
-      else rescale_sat = r[31:0];
-    end
-  endfunction
-
   // ---- latched vertex and palette ----------------------------------------
   // m_q[0..11] is A, m_q[12..23] is B, so row-product `rp` in 0..5 reads its
   // three matrix elements at m_q[rp*4 + term] and its translation at
@@ -339,48 +333,134 @@ module zhao_geom_skin #(
     end
   end
 
-  // ---- the blend, one shared unit walked across the three rows ------------
-  // One unit, not three. The walk costs no extra cycles: `pa[r]` and `pb[r]`
-  // become final one cycle apart in the natural issue order, which is exactly
-  // the cadence a one-row-per-cycle walk consumes them at.
+  // ---- the blend, THREE PIPELINE STAGES walked across the three rows ------
+  //
+  // MEASURED 2026-08-23, and this is why it is three stages and not one.
+  // The first sequenced draft did the whole blend combinationally between the
+  // accumulators and the output register, and the constrained fit said:
+  //
+  //   from   br[1]              the blend-walk row counter
+  //   to     o_y_o[14]~reg0     the output register for row 1
+  //          10 logic levels
+  //          Data Delay  17.639 ns   against a 10.000 ns period
+  //          slack       -7.823 VIOLATED
+  //          Cell 9.452 ns (54%) / interconnect 8.187 ns (46%)
+  //
+  // ALL 200 worst setup paths ended at `o_y_o[*]~reg0` -- one endpoint family,
+  // not twenty problems. Neither end was a virtual-pin node, so the
+  // characterisation wrapper was not distorting it, and 54% cell delay is
+  // genuine logic depth, so no amount of fitter effort was going to save it.
+  //
+  // The chain was: `br` -> the acc[] 6:1 mux -> a 66-bit subtract -> a six-term
+  // 73-bit shift-add tree -> the base add -> the rounding add -> TWO 73-bit
+  // saturating magnitude comparisons -> the output register. In one clock.
+  //
+  // MUL_LANES = 1 was run as the discriminating experiment: it leaves this path
+  // bit-identical and collapses the accumulator reduction from three 65-bit
+  // adds to one. Fmax did not move (58.45 -> 56.11), so the accumulator
+  // reduction is exonerated by measurement, and so is "give the multiply the
+  // DSP's own output register", which was already done.
+  //
+  // 17.639 ns cut three ways is ~5.9 ns a stage. The issue interval goes from
+  // 10 clocks to 12, and THAT IS THE RIGHT TRADE because the acceptance test is
+  // rate, not clock:
+  //
+  //   required = 120,000 vertices x 60 Hz = 7,200,000 vertices/s
+  //   II = 12 needs 86.4 MHz ; II = 13 needs 93.6 MHz ; II = 14 fails at 100
+  //
+  // So a fix that ADDS latency still wins as long as it buys enough clock.
   logic [2:0] br_a, br_b;
-  logic signed [ACCW-1:0]   pa_sel, pb_sel;
-  logic signed [DIFFW-1:0]  pdiff;
-  logic signed [BLENDW-1:0] pd_ext, wp0, wp1, wp2, wprod, blend_v;
-  logic signed [31:0]       res_row;
-  logic                     row_ready;
+  logic       row_ready;
 
-  // br == 3 means "finished"; clamping keeps `br_b` inside acc[6] in that
-  // cycle, where nothing reads the result anyway.
+  // br == 3 means "the walk has issued all three rows"; clamping keeps `br_b`
+  // inside acc[6] in that cycle, where nothing reads the result anyway.
   assign br_a = (br == 2'd3) ? 3'd0 : {1'b0, br};
   assign br_b = br_a + 3'd3;
 
-  assign pa_sel = acc[br_a];
-  assign pb_sel = acc[br_b];
-  assign pdiff  = DIFFW'(pa_sel) - DIFFW'(pb_sel);
-  assign pd_ext = BLENDW'(pdiff);
-
-  // w0 * pdiff as a six-term shift-add in a three-level tree. Not a `*`: see
-  // QUARTUS_GOTCHAS §3. The zero arms are SIGNED literals — an unsigned arm
-  // would make the whole conditional expression unsigned and silently turn a
-  // negative partial product into a huge positive one.
-  always_comb begin
-    wp0 = (w0_q[0] ? pd_ext : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);
-    wp1 = (w0_q[2] ? (pd_ext <<< 2) : ZERO_B) + (w0_q[3] ? (pd_ext <<< 3) : ZERO_B);
-    wp2 = (w0_q[4] ? (pd_ext <<< 4) : ZERO_B) + (w0_q[5] ? (pd_ext <<< 5) : ZERO_B);
-    wprod = (wp0 + wp1) + wp2;
-  end
-
-  assign blend_v = (BLENDW'(pb_sel) <<< 6) + wprod;
-
-  // The branch the reference takes, for the reason it takes it: the rigid path
-  // carries no weight scale, so it rescales by 16 and never forms the blend.
-  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 22);
-
-  // A row may be blended as soon as ITS OWN operands are final — not when the
-  // whole engine is finished. That is what lets the walk overlap the issue
+  // A row enters the pipeline as soon as ITS OWN operands are final -- not when
+  // the whole engine is finished. That is what lets the walk overlap the issue
   // tail instead of queueing behind it.
   assign row_ready = busy && (br != 2'd3) && acc_done[br_a] && (rigid_q || acc_done[br_b]);
+
+  // ---- B0: take the accumulators out of the arithmetic path ---------------
+  // This stage exists to put a register between `br` and everything after it.
+  // `br` selected the accumulator pair, so the 6:1 mux sat at the HEAD of the
+  // 17.6 ns chain; registering here removes the counter and the mux from the
+  // long path entirely and leaves B0 as mux + one 66-bit subtract.
+  //
+  // `b0_base` is the one operand the two paths disagree about -- rigid needs
+  // `pa`, the blend needs `pb` -- so the choice is made HERE and one 65-bit
+  // register carries it, rather than carrying both and muxing later.
+  logic                     b0_v, b0_rigid, b0_last;
+  logic [1:0]               b0_row;
+  logic [5:0]               b0_w0;
+  logic signed [ACCW-1:0]   b0_base;
+  logic signed [DIFFW-1:0]  b0_diff;
+
+  // ---- B1: the exact rounded numerator, as ONE balanced 8-term tree -------
+  // Six shifted difference terms, the base term, and the rounding constant --
+  // summed together instead of in the old four-deep sequence of separate adds.
+  // THE ROUNDING CONSTANT IS ONE OF THE EIGHT TERMS, which is what keeps this a
+  // SINGLE rounding: the sum is exact, the shift in B2 is the only rounding,
+  // and qformats A3b is preserved exactly as the header states it.
+  logic                     b1_v, b1_rigid, b1_last;
+  logic [1:0]               b1_row;
+  logic signed [BLENDW-1:0] b1_num;
+
+  localparam logic signed [BLENDW-1:0] RND_BLEND = 73'sd2097152;  // 2^21, rescale by 22
+  localparam logic signed [BLENDW-1:0] RND_RIGID = 73'sd32768;    // 2^15, rescale by 16
+
+  logic signed [BLENDW-1:0] d_ext, base_ext, nt [8], num_next;
+
+  assign d_ext    = BLENDW'(b0_diff);
+  assign base_ext = BLENDW'(b0_base);
+
+  // w0 * (pa - pb) as a six-term shift-add. Not a `*`: QUARTUS_GOTCHAS §3 --
+  // `(* multstyle = "logic" *)` is accepted and silently ignored, so a
+  // narrow-operand multiply has to be written as what it is. The zero arms are
+  // SIGNED literals; an unsigned arm would make the conditional expression
+  // unsigned and turn a negative partial product into a huge positive one.
+  //
+  // The rigid path masks all six to zero and takes `pa + 2^15` through the same
+  // adder tree, so there is one numerator network rather than two.
+  always_comb begin
+    for (int b = 0; b < 6; b++) begin
+      nt[b] = (!b0_rigid && b0_w0[b]) ? (d_ext <<< b) : ZERO_B;
+    end
+    nt[6] = b0_rigid ? base_ext : (base_ext <<< 6);
+    nt[7] = b0_rigid ? RND_RIGID : RND_BLEND;
+    // Balanced, so the tree is three adds deep rather than seven.
+    num_next = ((nt[0] + nt[1]) + (nt[2] + nt[3])) + ((nt[4] + nt[5]) + (nt[6] + nt[7]));
+  end
+
+  // ---- B2: shift and saturate, WITHOUT a wide magnitude comparison --------
+  // The old form asked `r > 2^31-1` and `r < -2^31` on 73-bit values: two full
+  // carry chains at the very end of the longest path in the block.
+  //
+  // The shift is a CONSTANT on each path, so the same question is a plain
+  // sign-extension test. `r = num >>> 22` fits signed 32 exactly when the bits
+  // above the result are all copies of its sign bit -- that is, when
+  // num[72:53] are all equal -- and the result is then num[53:22] verbatim.
+  // Rigid shifts by 16, so the test is num[72:47] and the result num[47:16].
+  //
+  // Two AND/OR reductions replace two 73-bit comparators. Identical answers:
+  // this is the definition of "fits in the word", not an approximation of it.
+  logic       fit_blend, fit_rigid, fits;
+  logic [1:0] sat_pick;
+  logic signed [31:0] res_row;
+
+  assign fit_blend = (&b1_num[72:53]) | (~|b1_num[72:53]);
+  assign fit_rigid = (&b1_num[72:47]) | (~|b1_num[72:47]);
+  assign fits      = b1_rigid ? fit_rigid : fit_blend;
+  assign sat_pick  = {fits, b1_num[BLENDW-1]};
+
+  always_comb begin
+    unique case (sat_pick)
+      2'b10, 2'b11: res_row = b1_rigid ? b1_num[47:16] : b1_num[53:22];
+      2'b01:        res_row = 32'sh8000_0000;  // out of range and negative
+      default:      res_row = 32'sh7FFF_FFFF;  // out of range and positive
+    endcase
+  end
 
   // ---- handshake ----------------------------------------------------------
   // A single-entry skid in front of a multi-cycle engine: a vertex is accepted
@@ -419,6 +499,10 @@ module zhao_geom_skin #(
         dv_d1[r] <= 1'b0; dv_d2[r] <= 1'b0;
         dlast_d1[r] <= 1'b0; dlast_d2[r] <= 1'b0;
       end
+      b0_v <= 1'b0; b0_rigid <= 1'b0; b0_last <= 1'b0;
+      b0_row <= '0; b0_w0 <= '0; b0_base <= '0; b0_diff <= '0;
+      b1_v <= 1'b0; b1_rigid <= 1'b0; b1_last <= 1'b0;
+      b1_row <= '0; b1_num <= '0;
     end else begin
       if (o_valid_o && o_ready_i) o_valid_o <= 1'b0;
 
@@ -468,23 +552,48 @@ module zhao_geom_skin #(
         end
       end
 
-      // ---- the blend walk -------------------------------------------------
+      // ---- the blend pipeline: B0 -> B1 -> B2 ----------------------------
+      // Each stage is one clock and each row flows through all three, so the
+      // three rows are IN FLIGHT TOGETHER: row 0 is in B2 while row 2 is in B0.
+      // The walk therefore still retires one row per clock and the pipeline
+      // costs two clocks of fill, not six.
+      b0_v <= row_ready;
       if (row_ready) begin
-        case (br)
+        b0_row   <= br;
+        b0_last  <= (br == 2'd2);
+        b0_rigid <= rigid_q;
+        b0_w0    <= w0_q;
+        // The one operand the two paths disagree about, chosen here so B1
+        // carries one register instead of two.
+        b0_base  <= rigid_q ? acc[br_a] : acc[br_b];
+        b0_diff  <= DIFFW'(acc[br_a]) - DIFFW'(acc[br_b]);
+        // `br` advances when the row is ISSUED into the pipeline, not when it
+        // retires; `busy` is what holds the engine until B2 drains.
+        br <= (br == 2'd2) ? 2'd3 : (br + 2'd1);
+      end
+
+      b1_v <= b0_v;
+      if (b0_v) begin
+        b1_row   <= b0_row;
+        b1_last  <= b0_last;
+        b1_rigid <= b0_rigid;
+        b1_num   <= num_next;
+      end
+
+      if (b1_v) begin
+        case (b1_row)
           2'd0: o_x_o <= res_row;
           2'd1: o_y_o <= res_row;
           default: o_z_o <= res_row;
         endcase
-        if (br == 2'd2) begin
-          // Last row: the vertex is finished this cycle. `busy` drops here, so
-          // the next vertex is accepted on the FOLLOWING cycle -- which is why
-          // the latency table's number is also the issue interval.
-          br <= 2'd3;
+        if (b1_last) begin
+          // The vertex is finished as the LAST ROW LEAVES B2, not as it enters
+          // B0. `busy` drops here, so the next vertex is accepted on the
+          // following cycle -- which is why the latency table's number is also
+          // the issue interval.
           busy <= 1'b0;
           o_src_id_o <= src_q;
           o_valid_o <= 1'b1;
-        end else begin
-          br <= br + 2'd1;
         end
       end
 
@@ -520,6 +629,12 @@ module zhao_geom_skin #(
         rp_grp <= '0;
         t_grp <= '0;
         br <= '0;
+        // Provably dead: `v_ready_o` requires !busy and `busy` holds
+        // until the last row LEAVES B2, so both are already low here.
+        // Written anyway, because the cost is nothing and the failure
+        // it prevents is a stale row landing in the next vertex.
+        b0_v <= 1'b0;
+        b1_v <= 1'b0;
 
         // `vertices_transformed` is the shared catalog counter GEOM.LOOM and
         // GEOM.WARP also carry, so this stage reports under the same name
