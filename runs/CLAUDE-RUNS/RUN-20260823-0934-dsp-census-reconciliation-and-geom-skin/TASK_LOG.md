@@ -1025,6 +1025,72 @@ known what rate it must sustain.
 
 **Working autonomously from here.** Fabian has left.
 
+### 18:00 - GEOM.SKIN COMPLETE: 89.65 MHz, II=12, 124,514 vertices/frame
+
+| | before campaign | combinational blend | **shipping 3-stage** |
+| --- | ---: | ---: | ---: |
+| DSPs | 72 | 9 | **9** |
+| ALMs | 1,801 | 2,187 | **2,225** |
+| Fmax | never measured | 58.45 MHz | **89.65 MHz** |
+| II | 1 (claimed) | 10 | **12** |
+| vertices/frame | — | 97,417 **FAILS** | **124,514 PASSES** |
+
+**7,470,833 vertices/s against 7,200,000 required — 103.8%.** Two extra clocks
+bought **31 MHz** for **38 ALMs and zero DSPs**. That is precisely what the
+rate-not-clock acceptance test was written to find, and it would have been
+invisible to a "maximise Fmax" objective.
+
+**The critical path MOVED, which is what a real fix looks like** — now
+`Mult1~add_lh_hlmac_pl[0][3] -> acc[5][64]` at 10.283 ns, slack -1.155, all 200
+worst paths `Mult* -> acc[*]`. The blend family that owned every one of the top
+200 is gone.
+
+**And the agent handled a subtlety I would have got wrong.** That new family is
+candidate B — the accumulator reduction the `MUL_LANES=1` experiment had
+"exonerated". It does **not** contradict the experiment: B was never the
+critical path *while A existed at 17.6 ns*, and the experiment only ever claimed
+that. **B was second-longest all along.** Killing the worst path reveals the
+next one — exactly what the reviewer said would happen, now observed.
+
+**The frontier paid for itself, and this is the case for measuring three points:**
+
+| `MUL_LANES` | DSPs | ALMs | Fmax | II | vertices/frame |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 3 | 1,530 | 56.11* | 24 | 38,965 **fails** |
+| **3** | **9** | **2,225** | **89.65** | **12** | **124,514 passes** |
+| 6 | 18 | 2,595 | 84.61 | 10 | 141,017 passes |
+
+\* pre-pipeline RTL, flagged rather than silently mixed in.
+
+**Doubling the farm to 18 DSPs buys 13% more throughput AND a worse clock**
+(89.65 -> 84.61), because `MUL_LANES=6` writes two accumulators per cycle and so
+pressures exactly the path that now limits the block. 16% of the device's DSP
+budget for 13% more of something already met. **One measured point could never
+have shown that.**
+
+Sweep 31/31 accounted, 29 caught, 2 equivalent (the same proven M21/M28). Nine
+mutants whose anchors the rewrite consumed were **replaced** with nine aimed at
+the new arithmetic, plus three pipeline-control mutants — all caught.
+Differentials bit-identical at all three settings. `ctest -L fast` 265/266, sole
+failure the Field agent's V16.
+
+**Open:** 89.65 MHz would cap the shared `gpu_clk` below 100. Margin 3.8% —
+thin but real, and honestly reported. Registering the remaining three wide adds
+pushes II to 13, which needs 93.6 MHz and would **fail** at 89.65; worth taking
+only if it buys >4 MHz, and that must be measured.
+
+### 18:20 - SURFACE.STAMP launched against a DERIVED demand, not a placeholder
+
+First block in the campaign sized from evidence rather than from a ruling or a
+guess. Target **28 -> 0-2 DSPs** against **20,000 texels/frame**, with the note
+that the original composites through a **lookup table** (`MakeScarLUT`), so zero
+DSPs is plausible rather than aspirational.
+
+Emphasised in the brief: the block's *behaviour* — five stamp modes, material
+conversion, age/decay, capture-exact ordering — is already specified in
+`SURFACE.STAMP.md` and `ops.yml` and **is not in scope**. Only the rate was a
+placeholder.
+
 ---
 
 ## Subagent Spawns
@@ -1032,7 +1098,9 @@ known what rate it must sustain.
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
 | 09:30 | (prior) `abb3ab5` | Field IR shared arithmetic engine, 79 -> 3 DSPs | Completed, merged at `d7691db` | `reports/FIELD_IR_ENGINE.md` |
-| 09:55 | `a7a69ac` | GEOM.SKIN 72 -> 12-18 DSPs | RTL + frontier committed `74e495c`; fit outstanding | `runs/CLAUDE-RUNS/RUN-20260823-0937-geom-skin-dsp-rearchitecture/` |
+| 09:55 | `a7a69ac` | GEOM.SKIN 72 -> 12-18 DSPs | **COMPLETE** — 9 DSPs, 89.65 MHz, 124,514 verts/frame | `runs/CLAUDE-RUNS/RUN-20260823-0937-geom-skin-dsp-rearchitecture/` |
+| 17:35 | `a7d0ef7` | Sacrifice resource survey (read-only) | Complete — three demand numbers derived | `docs/OWNER_DOCKET.md` |
+| 18:20 | `aeee4ad` | SURFACE.STAMP 28 -> 0-2 DSPs | Running | own run dir |
 
 ---
 
