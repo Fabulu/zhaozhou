@@ -5,6 +5,88 @@ at the top.*
 
 ---
 
+## 2026-08-23 (evening) — creature skinning is finished, and Sacrifice answered your three questions
+
+### Skinning: 72 multipliers to 9, and it now meets its own budget
+
+| | before | after |
+| --- | ---: | ---: |
+| multipliers | 72 | **9** |
+| speed | never measured | **89.65 MHz** |
+| clocks per vertex | 1 (claimed) | 12 |
+| **vertices per frame** | — | **124,514** |
+
+You required 120,000. It delivers **124,514 — 103.8%**. Earlier today it was at
+97,417 and failing; splitting the slow arithmetic across two more steps bought
+31 MHz for **38 logic cells and no extra multipliers**.
+
+The thing that made this work is worth keeping: the test was never "how fast is
+the clock" but **"how many vertices per frame"**. A fix that adds steps can win,
+and a fix that buys megahertz can lose. Both numbers get reported now.
+
+**We also measured the width dial at all three settings, and it saved us from a
+bad trade:**
+
+| width | multipliers | speed | vertices/frame |
+| ---: | ---: | ---: | ---: |
+| 1 | 3 | 56 MHz | 38,965 — **fails** |
+| **3 (shipping)** | **9** | **89.65 MHz** | **124,514 — passes** |
+| 6 | 18 | 84.61 MHz | 141,017 — passes |
+
+Doubling to 18 multipliers buys 13% more throughput **and makes the clock
+worse.** 16% of the chip's multiplier budget for 13% more of something we
+already have is not a trade worth making. A single measurement could never have
+shown that — this is what "measure two or three points" was for.
+
+**One thing left open:** at 89.65 MHz this block would cap the shared GPU clock
+below 100 MHz. Margin is 3.8%. Thin, but real, and honestly reported.
+
+### Your three questions: answered from Sacrifice itself
+
+You pointed me at the game rather than answering, which was the better move —
+these are evidence now, not policy. Full working in `docs/OWNER_DOCKET.md`.
+
+**And your 120,000-vertex ruling checks out independently.** 93 creature models
+measured: median 2,951 vertices. The real limit on army size is the soul
+economy — 4 to 12 souls per wizard across all 32 shipped maps, creatures costing
+1 to 5 — which puts a realistic battle at **40 to 60 characters**. That is
+118,000 to 177,000 vertices. Your number is about 41 creatures at typical
+detail. It was well chosen.
+
+**The ratio that governs everything else:** Sacrifice ran at 800×600. We render
+**19% of its pixels**. So roughly five times the per-pixel budget to spend on
+more stuff, exactly as you guessed.
+
+| block | multipliers now | derived target | why |
+| --- | ---: | ---: | --- |
+| surface stamping | 28 | **0–2** | a big spell scar marks 36,864 texels **once per impact**. A heavy barrage needs 6,144 per frame; it is built for 1,666,667. **Over-built about 270×** — and the original did it with a lookup table, no arithmetic at all |
+| texture unit | 28 | **6–9** | terrain needs three samples per pixel; at our resolution that is **one sample every two clocks**, not one per clock |
+| terrain normals | 18 | **1–2** | craters are tiny — 9 to 25 grid points each. Rebuilding the **entire** landscape every second would still be 0.07% of what the block is built for |
+
+**If those land: about 124 multipliers**, before three more blocks are even
+touched. The ceiling of 85–90 is reachable.
+
+### Two things that are wrong and need your eye eventually
+
+**Sacrifice skins to three bones. We built for two.** Measured across 317,234
+vertices: 65% use one bone, 32% use two, and **2.5% use three**. Ours handles
+97.5% exactly and clips the rest — and the clipped ones are precisely the seam
+vertices at shoulders, hips and necks, where a mistake shows most. Cheapest fix
+is probably a rare second pass for that 1-in-40. **Not urgent, but it is a
+decision, not an oversight.**
+
+**Sacrifice's bone weights do not add up to a fixed total** — and our clever
+arithmetic shortcut, the one that halved the multiplier count, assumes they do.
+Fine if our own asset pipeline normalises them on import, but that is now a
+written requirement rather than a silent assumption.
+
+And one for whoever builds the texture unit: **character textures are 256 wide
+with arbitrary heights up to 799** — only 13% are the neat power-of-two sizes
+hardware usually assumes. Each is a vertical strip. A texture unit built for
+square power-of-two art breaks on most of the creatures.
+
+---
+
 ## 2026-08-23 (late afternoon) — the mutation tests were checking nothing
 
 ### Read this one first
