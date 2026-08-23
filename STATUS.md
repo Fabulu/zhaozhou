@@ -32,21 +32,48 @@ same wire, with **78 levels of logic in a single clock tick**. It is inside the
 normalise block: a piece of arithmetic written as two sixty-four-step loops that
 the hardware has to lay out end to end, 128 stages deep, all inside one tick.
 
+To be exact about what is proven and what is inferred: there is no other route
+through that block from the input to the output, so the loops are certainly on
+the path and certainly **dominate** it — but nobody walked all 78 cells, and the
+rounding step at the end is worth perhaps 8 to 10 of them. "Dominated by the
+loops" is the honest phrasing; "is the loops" would be one step further than the
+evidence goes.
+
 The fix is cheap and already exists a few lines away — a neighbouring block does
-the same job the right way, in a handful of steps instead of 128. Doing it costs
-**one extra clock on an operation that has thirteen clocks of slack.**
+the same job the right way, in a handful of steps instead of 128. **It costs
+nothing.** There are two ways to do it: one parks the intermediate result in an
+extra step, and costs one clock on an operation that has thirteen clocks of
+slack; the other simply counts the leading zeros the way the neighbouring block
+already does, and costs **no clocks at all**. Take the second. I originally
+wrote this as "costs one clock", which invites the question "is it worth a
+clock?" — and the good answer does not cost one.
 
 **We deliberately did not do it in this pass.** It is a different change, and it
 would invalidate the mutation sweep and both chip measurements that were just
 taken. It is on the docket with the measurement attached, to be picked up with
 the next piece of Field work rather than as a special trip.
 
+### What we cannot tell you yet, and it is the whole question
+
+Killing the worst path does not give you the target — it reveals the
+second-worst path. After this fix the engine could land at 30 MHz with another
+monster behind it, or at 90 MHz with nothing much behind it. **There is no way
+to know until it is re-measured**, and that single number decides whether this
+is one embarrassing bug or a timing-rearchitecture campaign across the whole
+design. It is the most informative measurement available to us right now, which
+is why it has moved to the front of the queue.
+
 ### The part you should actually weigh
 
-Every one of the 47 block measurements was taken with no speed objective. Area
-was the only column anyone was reading, and area is the column least affected.
+Every one of the 47 block measurements was taken with no speed objective.
 **We now have good reason to think other blocks are also far from closing, and
 no evidence either way until they are re-measured.**
+
+And the area column is worse off than "missing a speed column" suggests. With no
+speed to hit, the tool spends its whole effort making the design *small*. So
+those 47 area numbers are not neutral — they are the **optimistic end** for
+designs that will later be asked to run fast. The census is not merely missing a
+column; the column it does have was measured against the wrong objective.
 
 That is a new line of work, not a continuation of the current one. It does not
 change the multiplier plan; it sits beside it.
