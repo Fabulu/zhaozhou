@@ -5,6 +5,96 @@ at the top.*
 
 ---
 
+## 2026-08-23 (late night) — we know why the Field engine is slow, and the fix
+## is to use the memory we already have and aren't touching
+
+### The finding
+
+The Field engine uses **none** of the chip's 553 block memories. Not a few —
+none. Zero. And it spends **8,901 logic cells**, a large part of them on things
+that are memories in everything but name:
+
+* a 64-entry register file built out of raw flip-flops, read through several
+  enormous 64-way selectors — the block's own documentation already names those
+  selectors as its biggest cost;
+* three constant lookup tables written as giant `if/else` trees in logic;
+* a sine table **built twice**, because the maths needs two entries from it at
+  once.
+
+Meanwhile the whole design uses **51 of 553** block memories. **502 sit idle.**
+
+The chip's block memories are exactly the right home for all of that: they are
+synchronous, dual-ported, and can ship pre-loaded with constant data.
+
+> **The Field engine is starving for speed while refusing to spend the one
+> resource it has in abundance.**
+
+Six of those 502 would hold everything listed above.
+
+### Why this is good news
+
+This morning 8.59 MHz looked like it might mean the Field instruction set was
+too ambitious for the chip. It does not. The multiplier rewrite (79 → 3) was
+right, the loop fix (8.59 → 33.86 MHz) was right, and what they have exposed is
+that the engine is still shaped like **software translated literally into
+hardware** rather than like a small processor.
+
+The plan is to keep the arithmetic exactly as it is and rebuild the plumbing
+around it: memories where memories belong, and results parked in registers
+instead of racing through several stages of logic in a single tick. Estimated
+outcome — and these are estimates, not measurements — **3,500–5,000 logic cells
+(from 7,750), still 3 multipliers, and 100–120 MHz.**
+
+### Why it can afford to be slower per instruction
+
+Because the trade is measured in **real time**, not clock ticks:
+
+| | today | proposed |
+| --- | ---: | ---: |
+| a simple operation | 6 ticks at 33.86 MHz = **5.6 M/s** | 7 ticks at 100 MHz = **14.3 M/s** |
+| a normalise | 67 ticks = **0.51 M/s** | ~80 ticks = **1.25 M/s** |
+
+**Even taking eight ticks instead of six, the rebuilt engine would do more than
+twice the real work.** This is the same lesson that turned creature skinning
+from failing into passing: the number that matters is work per second, never
+megahertz.
+
+### The question I cannot answer without you, eventually
+
+**Nobody has ever worked out how much Field work a frame actually needs.**
+Several of its five uses still claim "one instruction per clock" — the same
+placeholder that had this console asking for three times the multipliers it has.
+
+The sum each one owes is simply: *how often it runs* × *how long its program is*
+× *how many ticks each instruction takes*. To show why it matters, a plausible
+guess for just one of the five uses:
+
+    120,000 deformed vertices x 8 instructions x 8 ticks = 7.7 million ticks
+
+against **1.7 million ticks in a frame**. That is four and a half times over on
+one use out of five.
+
+If that turns out to be true, it does **not** mean the design failed. It means
+one engine was the wrong quantity. Three copies of the same verified engine
+would be **nine multipliers** — the original single engine used seventy-nine.
+That stays faithful to your "one engine, five profiles" ruling: identical
+instances, not five different designs.
+
+**Nothing is blocked on this today.** But when you want to think about it, the
+question is: roughly how much procedural maths does a frame of Zhaozhou need —
+craters, deformation, particle forces, formations, scars?
+
+### Elsewhere
+
+The texture unit's *existing* design was just measured properly for the first
+time: **199.72 MHz**, nearly twice what it needs. So of the four blocks now
+measured against a real clock, three are comfortably fast and only the Field
+engine is genuinely slow. That is a much better picture than this morning's.
+
+Multiplier count still **160**, down from 327.
+
+---
+
 ## 2026-08-23 (late) — surface stamping: 28 multipliers to zero, and 160 total
 
 ### The block needs no multipliers at all
