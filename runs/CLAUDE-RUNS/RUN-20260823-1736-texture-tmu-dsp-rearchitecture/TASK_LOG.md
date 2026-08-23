@@ -1,0 +1,294 @@
+# Task Log: RUN-20260823-1736 — TEXTURE.TMU DSP rearchitecture
+
+**Created:** 2026-08-23 17:36 UTC+02:00
+**Status:** In Progress
+**Working Directory:** runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/
+
+---
+
+## Objective
+
+Take `zhao_texture_tmu` from a measured **28 DSPs** to the derived target of
+**6–9**, without moving a single sample by one LSB, and report **Fmax** and
+**samples/frame** against the derived demand of **850,000 samples/frame**.
+
+Full argument in `SPEC_v1.md`.
+
+---
+
+## Progress Timeline
+
+### 2026-08-23 17:36 — Task started
+
+- Run ID from the in-repo `runs/CLAUDE-RUNS/init-run.ps1`.
+- HEAD `0f3245a`. `git -c core.autocrlf=true status --porcelain -- fpga/rtl` is
+  **empty** — the tree is clean where it matters.
+  (A first `git status` without `core.autocrlf=true` listed ~40 files as
+  modified. They are line-ending phantoms; recorded because a dirty tree is the
+  first thing that would invalidate a fit's `rtlCleanAtHead`.)
+- Baseline read from `reports/synthesis/zhao_block_fit.json`:
+  `zhao_texture_tmu` = **1,839 ALMs / 310 registers / 28 DSPs / 0 RAM**,
+  `zhao_texture_bilerp` = **38 ALMs / 0 registers / 7 DSPs**, both at
+  `sourceCommit 96c0394`, `rtlCleanAtHead: false`, and **no `fmaxMhz` field on
+  either** — those rows predate the constrained-SDC fix (`QUARTUS_GOTCHAS.md` §7).
+
+### 2026-08-23 17:4x — Reading, before any RTL
+
+Read in full: `design/contracts/TEXTURE.TMU.md` (the whole file — several of its
+properties are load-bearing and stated nowhere else),
+`fpga/rtl/texture/zhao_texture_tmu.sv` (707 lines),
+`fpga/rtl/texture/zhao_texture_bilerp.sv` (114),
+`tests/formal/texture_bilerp.sby` + `texture_bilerp_fv.sv`,
+`tests/texture/texture_tmu_dev.hpp`, `reports/QUARTUS_GOTCHAS.md`,
+`design/budgets/dsp.md`, `design/budgets/latency.md`, the `THE THREE DEMAND
+NUMBERS` docket entry, `tools/sweep_surface_stamp.sh`,
+`tools/quartus/run_block_fit.ps1`, and
+`runs/CLAUDE-RUNS/RUN-20260823-1415-surface-stamp-dsp-rearchitecture/TASK_LOG.md`
+as the depth model.
+
+### 2026-08-23 17:5x — **Step 1, ledger rule V17: the oracle resolves**
+
+Run *before* any RTL, as the rule requires:
+
+    npm run ledger:check
+    => CHECK FAILED — 1 error(s) against 92 blocks / 40 ops
+       V16: FIELD.SEQ.CORE is RTL_VERIFIED but formal
+            "tests/formal/field_seq_bound.sby" is recorded as "pending"
+
+**Same single error SURFACE.STAMP and GEOM.SKIN baselined against — the Field
+agent's gate, not mine.** V17 is green. Ledger baseline for this run = 1 error.
+
+Checked this block's cited symbols by hand rather than trusting the aggregate:
+
+| cited symbol | resolves to |
+| --- | --- |
+| `zref::Tmu` | `reference/include/zref/zref_texture.hpp:122` |
+| `zref::Tmu::plan` | `reference/include/zref/zref_texture.hpp:209` |
+| `zref::Tmu::level_offset_texels` | `reference/src/zrender/texture.cpp:154` |
+| `zref::sky::rgb565::to_rgb888` | `reference/include/zref/zref_sky.hpp:202` |
+| `zref::terrain::mirror_texel` | `reference/include/zref/zref_terrain.hpp:202` |
+| `zref::FragmentPipeline::star_disc_masked` | `reference/src/zrender/fragment.cpp:178` |
+| `zref::render::TerrainTileset` | **DOES NOT EXIST** |
+
+**A defect found by doing this by hand.** The contract, the RTL header and
+`reference/src/zrender/texture.cpp:224` all cite `zref::render::TerrainTileset`
+as the authority for the row-major layout choice. The struct is
+`zref::render::Tileset` (`reference/include/zref/zref_render.hpp:166`).
+Everything the citation *claims* is exact — `uint16_t palette[256]`,
+`uint8_t tiles[256][64*64]`, and `rast.cpp:250` reading it as
+`tiles[tile][(ty << 6) + tx]` — so the argument stands and only the name is
+wrong. It is a documentation defect in three files and it is fixed in this run,
+because a citation that does not resolve is exactly what V17 exists to catch and
+this one slipped past by living in prose rather than in the ledger.
+
+### 2026-08-23 17:5x — Where the 28 DSPs are. Answer: all of them, in one 114-line file
+
+The run brief's second lesson is "look for multipliers in the boring places",
+because SURFACE.STAMP's 28 were all in coverage geometry and two were per-stamp
+constants that got silicon anyway. **I looked, and here the answer is the boring
+one — which is itself the finding.**
+
+    grep -n " \* " fpga/rtl/texture/zhao_texture_tmu.sv     -> nothing
+    grep -n " \* " fpga/rtl/texture/zhao_texture_bilerp.sv  -> 8 lines
+
+The only `*` in the 707-line TMU are `32*k` / `16*k` inside `+:` part-selects.
+And the shipped fit agrees to the digit: bilerp = 7 DSP, TMU = 28 DSP,
+**28 = 4 × 7 exactly**. The contract already recorded that as a failed
+prediction on 2026-08-21 ("THE FIT SAID IT DID NOT HAPPEN") — it expected the
+four instances' identical weight products to be shared and they were not.
+
+**Why the addressing costs nothing is worth naming**, because it is the reason
+the brief's second lesson does not bite here: `LOG2W`/`LOG2H` make texel
+conversion a shift (`u_raw << log2s`), the mip level offset a repunit table plus
+**one** variable shift, and the row-major index `(v << log2w) + u` another
+shift. Every one would be a multiply if texture dimensions were arbitrary.
+**That is the concrete reason the brief forbids non-power-of-two support**, and
+it is load-bearing rather than stylistic.
+
+**Found while counting: `QUARTUS_GOTCHAS.md` §5 in the wild, four times over.**
+The four texel products are declared `{17'd0, t00_i} * {8'd0, w00}` — a **25×25**
+multiply whose honest need is **8×17**. The zero-extensions were written to make
+widths line up for the addition. §5 measured that same mistake costing
+`zhao_geom_lod` ten DSP blocks.
+
+### 2026-08-23 18:0x — Design fixed (details in SPEC_v1.md)
+
+**Move 1 — factor the exact integer expression.** `A = (t00<<8) + (t10−t00)·fu`,
+`B = (t01<<8) + (t11−t01)·fu`, `S = (A<<8) + (B−A)·fv`, `out = (S+32768)>>16`.
+Expanding `S` gives the contract's four-weight law term for term. **Three
+products per channel instead of eight; 12 across the block instead of 32.**
+
+**This is NOT the form `spec/qformats.md` §3 refuses, and the distinction is the
+whole argument.** The single-rounding law rejects "two lerps then a lerp"
+because the textbook writes each lerp as a *rounded* unit8 blend — three
+`rescale` calls. The form above is the same algebraic factoring with **no
+intermediate rescale at all**: `A` and `B` are exact integers, `S` is the exact
+25-bit weighted sum, and there is exactly one `(S + 32768) >> 16`.
+
+**The decisive consequence: `zhao_texture_bilerp`'s ports do not change**, so
+`tests/formal/texture_bilerp.sby` needs not one line changed and P1–P4 keep
+meaning what they meant. P1 computes the law in the harness from free
+`fu_free`/`fv_free` and asserts it against the shipping module's output — so it
+proves the *factored* form equals the four-product law over all 2^48 inputs,
+with no edit. The contract's sanctioned fix (hoisting the weights into the TMU)
+would have changed ports, directed tests, the formal harness and the contract,
+and would have removed only 12 of the 32 products. **Factoring removes 20 and
+touches no interface.**
+
+**Move 2 — `FILT_LANES` ∈ {4, 2, 1}** as the measured frontier: 4 / 2 / 1
+instances of the unchanged bilerp module, with the four channels time-multiplexed
+through them in 1 / 2 / 4 passes, for 12 / 6 / 3 products. The frontier is also
+coverage: a mutation in the pass counter or the channel mux is invisible at
+`FILT_LANES = 4` (one pass, the mux degenerates) and visible at 2 and 1 — the
+same shape as SURFACE.STAMP's S03/S04.
+
+### 2026-08-23 18:0x — THE OTHER PROBLEM, which is not a DSP problem
+
+The brief asks for samples/frame against the 850,000 demand. **The answer today
+is 0.33× and the contract already says so** — under "Target throughput" it
+records the ledger's "1 sample per clock" as "**NOT met by this increment**",
+at one sample per 4 clocks (direct) and per 6 (CLUT).
+
+| path | II today | samples/frame at 100 MHz | vs. 850,000 |
+| --- | ---: | ---: | ---: |
+| direct colour | 4 | 416,667 | 0.49× |
+| **CLUT — the terrain path** | **6** | **277,778** | **0.33×** |
+
+**And the DSP problem and the throughput problem do not touch.** Every DSP is in
+the filter; the filter is bypassed entirely for CLUT, which is the path that
+misses demand worst. So the work splits into two commits — **A: the arithmetic,
+B: the pipeline** — and A is committed and pushed before B is started, so that
+the assigned target lands even if B cannot be closed.
+
+### 2026-08-23 18:1x — MEASURED: the pristine baseline, and **my prediction was wrong**
+
+Fit from the **untouched** tree, before a line of RTL moved, because the shipped
+row carries no Fmax at all:
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_texture_tmu `
+      -ExtraSources fpga/rtl/texture/zhao_texture_bilerp.sv,fpga/rtl/texture/zhao_texture_tmu.sv `
+      -RowLabel "@pre-rearch" -KeepWorkspace
+
+Quartus Prime Lite 17.0.2, 5CSEBA6U23I7, virtual pins, sourceCommit `d284a86`,
+`rtlCleanAtHead: true`, 335.3 s. **Constrained** — evidence captured live from
+the workspace before the harness deleted it, saved beside this log at
+`fit-evidence/pre-rearch_constraint.txt`:
+
+    Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+
+| | measured |
+| --- | ---: |
+| ALMs | 1,844 / 41,910 |
+| registers | 310 |
+| **DSP blocks** | **28 / 112 (25%)** |
+| RAM blocks | 0 |
+| **Fmax (Slow 1100mV 100C)** | **199.72 MHz** |
+
+**SPEC_v1.md predicted 45–70 MHz and named the suspect. It was wrong, and being
+wrong here is the useful result.** The whole reason the brief ordered a
+`@pre-rearch` re-fit is that SURFACE.STAMP's "met, measured" throughput claim
+turned out to be true about cycles and false about time — that block was holding
+`gpu_clk` to 32.33 MHz. `reports/REMAINING_BLOCKERS.md` was amended at `d284a86`
+to say every contract's "met" should be suspected until someone measures
+seconds-per-item.
+
+**Suspected, measured, and cleared: this block closes at 199.72 MHz, twice its
+100 MHz constraint.** The contract's two named worries — the 48-bit shift and
+wrap fold in one combinational cone, and "the 32 multiplies are all in the
+sample cone" — are real cones and neither is critical. That is worth as much as
+a confirmation would have been: it says the 28 DSPs were **not** buying a
+degraded clock, so unlike SURFACE.STAMP there is no second problem hiding behind
+the first, and it changes what the throughput number means (see below).
+
+**Which changes the samples/frame formula, and I am changing it in the open.**
+SURFACE.STAMP published `(Fmax / 60) / (cycles per item)`. That is right only
+while `Fmax < 100 MHz`, because the block cannot be clocked above the shared
+`gpu_clk` however fast it closes. The general form is
+
+    items/frame = min(Fmax, 100 MHz) / (60 x II)
+
+which reproduces every figure SURFACE.STAMP published (its Fmax was 87.54) and
+gives this block **1,666,667 / II** rather than 3,328,667 / II. Using the raw
+Fmax here would have overstated the block by exactly 2x — the same category of
+error as quoting a nominal rate for a measured one, which is the mistake that
+run corrected four published numbers for.
+
+### 2026-08-23 18:2x — RTL landed, and the differential passed FIRST TRY at all three settings
+
+`zhao_texture_bilerp.sv` rewritten to the factored form (ports unchanged);
+`zhao_texture_tmu.sv` given `FILT_LANES`, the channel multiplex, `ST_FILT` and a
+3-bit state. **Verified before building** that the factoring is the same integer
+as the law, by brute force over all 65,536 `(fu, fv)` against eight corner
+footprints plus 400,000 random ones, with the width bounds asserted at every
+step: **0 mismatches**, the nearest identity holds for all 256 texel values, and
+the named tie `t = (0,255), fu = 128, fv = 0` still gives **128, not 127**.
+
+    test_texture_tmu_directed  (FILT_LANES = 4)   76 / 76
+    test_texture_tmu_lanes2    (FILT_LANES = 2)   76 / 76
+    test_texture_tmu_lanes1    (FILT_LANES = 1)   76 / 76
+    test_texture_tmu_random                        8 / 8
+      3,749 bilinear samples (476 at a rounding tie, 26 at the identity),
+      2,052 mipped, wraps 8,588/2,036/1,535, 1,122 mode errors, 5,499 clean
+
+Not one sampled byte moved at any setting — which is the point: `FILT_LANES` is
+a resource axis, not a behaviour axis.
+
+### 2026-08-23 18:2x — the block had NO throughput test at all, and now it has one
+
+`test_backpressure_and_latency` asserted accept-to-retire ≤ 16 and byte
+stability across nine timing patterns. **Nothing anywhere measured the sustained
+rate.** The ledger's "1 sample per clock" and the contract's "one per 4 / one
+per 6" were both prose. That is precisely the shape `REMAINING_BLOCKERS.md` now
+warns about, sitting in the suite that was supposed to catch it.
+
+`test_throughput_against_the_derived_demand` measures both initiation intervals
+on an always-hit cache and asserts them **exactly**, so neither can drift
+unnoticed:
+
+| FILT_LANES | CLUT II | direct II | CLUT samples/frame | vs. 850,000 |
+| ---: | ---: | ---: | ---: | ---: |
+| **4 (default)** | 6 | **4** | 277,777 | **0.33x** |
+| 2 | 6 | 5 | 277,777 | 0.33x |
+| 1 | 6 | 7 | 277,777 | 0.33x |
+
+The integer division is exact rather than approximate and the test says why: the
+drain is strictly less than the interval on every path (3 < 4, 5 < 6, 6 < 7).
+
+**The CLUT interval does not move with FILT_LANES, and that is the finding.** A
+palette is never filtered, so the demand-critical path — terrain is CLUT8 —
+does not touch the filter at all. The DSP problem and the throughput problem
+live in different halves of the block.
+
+### 2026-08-23 18:3x — the default is FILT_LANES = 4, which is the OPPOSITE of SURFACE.STAMP's choice, for the opposite reason
+
+SURFACE.STAMP defaulted to its **cheapest** setting because its demand was met
+26.9x over and provisioning past a met demand is the error its 28 DSPs came
+from. Here the demand is **not** met — 0.33x — so throughput is the scarce
+resource and DSPs are not. Four lanes cost **zero** cycles and (predicted) still
+land inside the 6–9 target; two lanes would trade a cycle this block does not
+have for DSPs it does not need to save. Same principle, opposite answer, and the
+answer is only knowable because both numbers were measured.
+
+**This is provisional until the three fits report.** If FILT_LANES = 4 lands
+above 9 DSPs the default drops to 2 and the cycle is paid.
+
+### 2026-08-23 18:3x — the mutation preflight rejected four of my own mutations
+
+    linted 30 mutants at FILT_LANES (4, 2, 1), 4 do not build
+      B07 the two sub-texel fractions are swapped        UNUSEDSIGNAL
+      B13 the unit8 complement never reaches 256         UNUSEDSIGNAL
+      M13 the lane base does not scale with FILT_LANES   UNUSEDPARAM
+      M16 ST_FILT leaves one pass early                  UNUSEDPARAM
+
+Same shape as SURFACE.STAMP's five: each orphaned a signal or a parameter and
+tripped `-Wall`. Under guard 5 they would have read as "discarded"; before guard
+5 existed they would have read as **caught**. **Fixed the mutations, not the
+guard**, and one of the rewrites is better than what it replaced: M16 became
+"`LAST_FILT_PASS` is always 0", which is **textually identical in effect at
+FILT_LANES 4 and 2** and a real defect only at 1 — the deepest frontier mutant
+in the table, and one no default build could ever reach.
+
+    linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build

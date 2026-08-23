@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "753ca931b8abb3f818309eecc12dc55daf61ac76",
+    "newestRunCommit":  "d284a86cbaebcc72a5ac4923069eef13f4ea8c9e",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -659,6 +659,25 @@
                        "ramBlocks":  0,
                        "dspBlocks":  28,
                        "virtualPins":  496
+                   },
+                   {
+                       "module":  "zhao_texture_tmu@pre-rearch",
+                       "status":  "ok",
+                       "sourceCommit":  "d284a86cbaebcc72a5ac4923069eef13f4ea8c9e",
+                       "rtlCleanAtHead":  true,
+                       "variantOf":  "zhao_texture_tmu",
+                       "seconds":  335.3,
+                       "alms":  1844,
+                       "registers":  310,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  28,
+                       "virtualPins":  496,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  199.72,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_video_framectl",

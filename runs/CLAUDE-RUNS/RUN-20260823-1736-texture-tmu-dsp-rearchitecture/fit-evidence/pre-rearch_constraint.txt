@@ -1,0 +1,37 @@
+# zhao_texture_tmu @pre-rearch — constraint + resource evidence
+# captured from the -KeepWorkspace fit workspace before deletion
+# sourceCommit d284a86, rtlCleanAtHead true, 335.3 s
+
+== the timing objective actually existed (QUARTUS_GOTCHAS 7) ==
+Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+Info (176235): Finished register packing
+
+== resources ==
+67:; Logic utilization (in ALMs)     ; 1,844 / 41,910 ( 4 % )                      ;
+68:; Total registers                 ; 310                                         ;
+71:; Total block memory bits         ; 0 / 5,662,720 ( 0 % )                       ;
+72:; Total RAM Blocks                ; 0 / 553 ( 0 % )                             ;
+73:; Total DSP Blocks                ; 28 / 112 ( 25 % )                           ;
+478:; Logic utilization (ALMs needed / total ALMs on device)      ; 1,844 / 41,910        ; 4 %   ;
+479:; ALMs needed [=A-B+C]                                        ; 1,844                 ;       ;
+548:; Total block memory bits                                     ; 0 / 5,662,720         ; 0 %   ;
+551:; Total DSP Blocks                                            ; 28 / 112              ; 25 %  ;
+581:; Logic utilization (ALMs needed / total ALMs on device)      ; 1844 / 41910 ( 4 % )  ; 0 / 41910 ( 0 % )              ;
+582:; ALMs needed [=A-B+C]                                        ; 1844                  ; 0                              ;
+624:; Total block memory bits                                     ; 0                     ; 0                              ;
+
+== restricted Fmax ==
+14:  6. Slow 1100mV 100C Model Fmax Summary
+15-  7. Timing Closure Recommendations
+16-  8. Slow 1100mV 100C Model Setup Summary
+17-  9. Slow 1100mV 100C Model Hold Summary
+18- 10. Slow 1100mV 100C Model Recovery Summary
+--
+134:; Slow 1100mV 100C Model Fmax Summary              ;
+135-+------------+-----------------+------------+------+
+136-; Fmax       ; Restricted Fmax ; Clock Name ; Note ;
+137-+------------+-----------------+------------+------+
+138-; 199.72 MHz ; 199.72 MHz      ; clk        ;      ;

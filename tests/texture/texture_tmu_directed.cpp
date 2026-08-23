@@ -640,6 +640,107 @@ void test_backpressure_and_latency() {
         worst_hit_latency);
 }
 
+// -------------------------------------------------------------------- 12 ---
+// THROUGHPUT, MEASURED — because until 2026-08-23 nothing measured it.
+//
+// The ledger says "1 sample per clock (bilinear = 1 request)" and the contract
+// says half of that is not met. Neither claim had a test: this suite asserted
+// LATENCY (accept-to-retire <= 16) and byte-stability across timing patterns,
+// and nothing at all about the sustained RATE. That is the same shape as the
+// "met, measured" claims REMAINING_BLOCKERS.md now tells every block to
+// distrust -- a number believed because it was written down.
+//
+// So this case measures the initiation interval on an always-hit cache with no
+// backpressure, and prints it against the DERIVED demand rather than against
+// the ledger's placeholder:
+//
+//   docs/OWNER_DOCKET.md, "THE THREE DEMAND NUMBERS" -- terrain is layered
+//   tile + detail + lightmap (sacmap.d:136-174), so >= 3 samples a terrain
+//   pixel; 92,160 pixels (Z60) at 3x overdraw = 829,440 samples/frame, rounded
+//   up to 850,000 for headroom. Against design/budgets/latency.md's COMPUTE
+//   budget of 1,666,667 clocks/frame -- NOT the 251,520 raster period, which
+//   is 6.6x smaller and is also called "gpu cycles" -- that is one sample
+//   every two clocks.
+//
+// TWO INITIATION INTERVALS, because the block has two paths and they differ:
+//
+//   CLUT    -- two SERIAL cache accesses (the palette address is a function of
+//              the returned index), no filter at all. SIX cycles, and it does
+//              not move with FILT_LANES because a palette is never filtered.
+//              THIS IS THE DEMAND-CRITICAL ONE: terrain is CLUT8.
+//   direct  -- one cache access plus the filter. FOUR cycles plus one for each
+//              filter pass after the first, so 4 / 5 / 7 at FILT_LANES 4 / 2 / 1.
+//
+// The assertions are EXACT rather than bounds, so that a change in either
+// number has to be noticed and explained. They do not assert the demand is
+// met, because it is not -- that gap is recorded in the contract's Target
+// throughput section and in reports/REMAINING_BLOCKERS.md rather than hidden
+// behind a bound this block happens to pass.
+#ifndef ZHAO_FILT_LANES
+// Must match zhao_texture_tmu.sv's `parameter int unsigned FILT_LANES`. If the
+// two drift, the direct-colour assertion below fails loudly, which is the
+// point of asserting the exact number.
+#define ZHAO_FILT_LANES 4
+#endif
+
+void test_throughput_against_the_derived_demand() {
+  constexpr uint32_t kDemandSamplesPerFrame = 850000u;   // docket, rounded up
+  constexpr uint32_t kDerivedSamplesPerFrame = 829440u;  // docket, before rounding
+  constexpr uint32_t kComputeClocksPerFrame = 1666667u;  // design/budgets/latency.md
+  constexpr uint32_t kPasses = 4u / static_cast<uint32_t>(ZHAO_FILT_LANES);
+  constexpr int kN = 64;
+
+  const Mode c8 = mk_mode(Fmt::kClut8, false, Wrap::kRepeat, Wrap::kRepeat, 3, 3);
+  const Mode d565 = mk_mode(Fmt::kRgb565, true, Wrap::kRepeat, Wrap::kRepeat, 1, 1);
+
+  std::vector<TmuReq> clut, direct;
+  uint32_t s = 0x7E17u;
+  for (int i = 0; i < kN; ++i) {
+    s = s * 747796405u + 2891336453u;
+    const int32_t u = static_cast<int32_t>(s);
+    s = s * 747796405u + 2891336453u;
+    const int32_t v = static_cast<int32_t>(s);
+    clut.push_back(mk(u, v, kTexIdent, c8));
+    direct.push_back(mk(u, v, kTex565, d565));
+  }
+
+  TmuRun gc, gd;
+  const bool okc = run(clut, "throughput/clut", 0, 0, 0, 1, &gc);
+  const bool okd = run(direct, "throughput/direct", 0, 0, 0, 1, &gd);
+  check(okc && okd, "throughput: both batches still match zref::Tmu", 1, (okc && okd) ? 1 : 0);
+
+  // `cycles` counts from the first offer to the last retire, so the last
+  // sample's drain (accept-to-retire) is in it exactly once. The integer
+  // division below is therefore EXACT rather than approximate, and for a
+  // stated reason: the drain is always strictly less than the interval on this
+  // block (3 < 4, 5 < 6, 6 < 7), so `N*II <= cycles < N*II + II`.
+  const uint32_t clut_ii = gc.cycles / static_cast<uint32_t>(kN);
+  const uint32_t direct_ii = gd.cycles / static_cast<uint32_t>(kN);
+  const uint32_t want_direct_ii = 3u + kPasses;
+
+  const uint32_t clut_per_frame = kComputeClocksPerFrame / clut_ii;
+  const uint32_t direct_per_frame = kComputeClocksPerFrame / direct_ii;
+
+  std::printf(
+      "texture_tmu throughput at FILT_LANES=%d: CLUT %u clk/sample (%u samples/frame), "
+      "direct %u clk/sample (%u samples/frame); derived demand %u\n",
+      ZHAO_FILT_LANES, clut_ii, clut_per_frame, direct_ii, direct_per_frame,
+      kDemandSamplesPerFrame);
+  std::printf(
+      "texture_tmu throughput: the demand-critical path is CLUT (terrain is CLUT8) at %.2fx "
+      "the 850,000 demand and %.2fx the 829,440 it was rounded up from\n",
+      static_cast<double>(clut_per_frame) / kDemandSamplesPerFrame,
+      static_cast<double>(clut_per_frame) / kDerivedSamplesPerFrame);
+
+  check(clut_ii == 6u,
+        "throughput: a CLUT sample is SIX clocks -- two serial cache accesses, no filter, and "
+        "FILT_LANES does not move it",
+        6, clut_ii);
+  check(direct_ii == want_direct_ii,
+        "throughput: a direct-colour sample is 3 + PASSES clocks (4/5/7 at FILT_LANES 4/2/1)",
+        want_direct_ii, direct_ii);
+}
+
 }  // namespace
 
 int main() {
@@ -654,5 +755,6 @@ int main() {
   test_mode_errors();
   test_non_square();
   test_backpressure_and_latency();
+  test_throughput_against_the_derived_demand();
   return zhao::report_and_exit("texture_tmu_directed");
 }
