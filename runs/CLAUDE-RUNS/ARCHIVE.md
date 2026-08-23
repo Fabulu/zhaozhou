@@ -90,11 +90,14 @@ the same error the 28 DSPs came from.
   `docs/OWNER_DOCKET.md`, `reports/REMAINING_BLOCKERS.md`
 
 **Notes:**
-Mutation sweep 32 attempted / 32 accounted / 29 caught / 0 discarded on the
-first complete run; the three survivors were then re-scored against the fixed
-suite and all three fail (`ZHAO_SWEEP_ONLY`, 3/3), and a full re-run confirms it
-as one number rather than a reconciliation of two. The
-three survivors were not careless: `covered = !(d2 > r_outer2 || d2 < r_inner2)`
+Mutation sweep **32 attempted / 32 accounted / 32 caught / 0 discarded**, one
+run end to end. The first complete run scored 29/32; the three survivors are
+what produced the squarer's own suite, and both logs are kept because a
+repository that keeps only the final number loses the reason the suite exists.
+`ctest -L fast` 269/270, the one failure being the pre-existing V16 ledger
+baseline that was red at run start.
+
+The three survivors were not careless: `covered = !(d2 > r_outer2 || d2 < r_inner2)`
 is SCALE-INVARIANT and all three terms come from the same squarer instance, so a
 uniformly doubled or halved squarer is invisible from the stamp. Two of them
 were a real gap -- a uniform halving that only holds while every magnitude is

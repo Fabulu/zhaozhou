@@ -1,7 +1,7 @@
 # Task Log: RUN-20260823-1415 — SURFACE.STAMP DSP rearchitecture
 
 **Created:** 2026-08-23 14:15 UTC+02:00
-**Status:** In Progress
+**Status:** COMPLETE
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260823-1415-surface-stamp-dsp-rearchitecture/
 
 ---
@@ -530,6 +530,69 @@ comment, so nobody later "fixes" the RTL to reconcile them.
 **All three now fail.** A full sweep was then re-run end to end so the final
 number is one run rather than a reconciliation of two.
 
+### 2026-08-23 19:2x — FINAL SWEEP: 32 / 32 / 32, no survivors, no discards
+
+    tools/sweep_surface_stamp.sh            (worktree, detached, full 32)
+    linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+    pristine models 1fc7e04464fc/603d48fba2cf/3f149747542e, 8 lanes green
+    ...
+    attempted=32 expected=32 accounted=32 caught=32
+    SWEEP-EXIT=0
+
+`attempted == accounted == expected == 32`, so the cross-check passes: every
+mutant re-elaborated, every one linked, and the worktree's RTL was restored
+byte-identically afterwards — checked with
+`git -c core.autocrlf=true status --porcelain -- fpga/rtl`, not assumed.
+
+**Three complete sweep logs are kept in this directory, deliberately:**
+
+| log | what it is |
+| --- | --- |
+| `sweep_run1_partial.log` | killed by the harness at 22/32; contains the two FALSE results that killed it |
+| `sweep_run2_pre_sq_test.log` | the first complete run — 29/32, three survivors |
+| `sweep_run3_final.log` | after `surface_sq_directed` — **32/32** |
+| `sweep_survivors_recheck.log` | the filtered `ZHAO_SWEEP_ONLY` re-score, 3/3 |
+
+Run 2 is not superseded by run 3; it is the *evidence for why run 3's suite
+exists*. A repository that kept only the final number would have lost the reason.
+
+### 2026-08-23 19:3x — `ctest -L fast` and the ledger
+
+    269/270 tests passed
+      4 - ledger_check (Failed)   fast
+
+**The single failure is `ledger_check`, and it is this run's baseline**:
+
+    ledger: CHECK FAILED — 1 error(s) against 92 blocks / 40 ops
+      - V16: FIELD.SEQ.CORE is RTL_VERIFIED but formal
+             "tests/formal/field_seq_bound.sby" is recorded as "pending"
+
+Same single error as at run start, the Field agent's gate, not mine. Checked at
+the start (before any RTL), after the `blocks.yml` amendment, and again at the
+end: **one error every time.**
+
+The suite went from 268 tests to 270 — the two `surface_sq_directed` builds.
+`surface_stamp_random` went from about 2 s to 69 s and `surface_stamp_chain` to
+57 s, because the sequential geometry is 38x more simulated cycles; the fast
+gate's CI budget is 60 minutes, so this is not close to a problem, but it is
+recorded because it is a real cost of the change.
+
+### 2026-08-23 19:4x — one last RTL edit, and its provenance stated plainly
+
+The RTL's law-citation block still quoted the ledger's OLD
+`target_throughput` ("1 stamp texel per clock") after `design/blocks.yml` was
+amended. Fixed — **comment-only**, verified against no running Quartus this
+time, and the four surface suites re-run after it (107 / 20 / 34 / 8, all green)
+because a comment change still forces a re-verilation and "it is only a comment"
+is exactly the reasoning that lets a real change through.
+
+**Provenance, stated so nobody has to reconstruct it:** the final sweep scored
+`fpga/rtl` at commit `104b43d`. The only later change under `fpga/rtl` is this
+comment — checkable with `git diff 104b43d HEAD -- fpga/rtl`, which shows three
+inserted comment lines and nothing else. The four fits were taken at `7caf1dc`,
+`753ca93`, `5b6d4cd` and `3ad9caa`, all with `rtlCleanAtHead: true`, and
+`fpga/rtl`'s tracked content is identical across all of them.
+
 ---
 
 ## Subagent Spawns
@@ -559,12 +622,32 @@ number is one run rather than a reconciliation of two.
 
 ---
 
-## Next Steps
+## Next Steps — all closed
 
-1. Write `zhao_surface_sq.sv` + rearchitect `zhao_surface_stamp.sv`.
-2. Baseline pristine fit from a worktree at HEAD (machine is clear).
-3. Differential + `ctest -L fast`.
-4. Mutation sweep in a worktree, **verified non-zero mutant count**.
-5. Fits at `SQ_RADIX` = 1, 2, 4.
-6. Contract + `blocks.yml` update, ARCHIVE.md entry.
+1. ~~Write `zhao_surface_sq.sv` + rearchitect `zhao_surface_stamp.sv`.~~ done
+2. ~~Baseline pristine fit.~~ done — 947 ALM / 496 reg / 28 DSP / **32.33 MHz**
+3. ~~Differential + `ctest -L fast`.~~ 107/20/34/8 green; **269/270 fast**, the
+   one failure being the pre-existing V16 ledger baseline
+4. ~~Mutation sweep in a worktree, verified non-zero mutant count.~~
+   **32 linted, 32 attempted, 32 accounted, 32 caught**
+5. ~~Fits at `SQ_RADIX` = 1, 2, 4.~~ done, all constrained, all 0 DSPs
+6. ~~Contract + `blocks.yml` update, ARCHIVE.md entry.~~ done
+
+### What I could not close
+
+- **`design/blocks.yml` maturity is left at `UNIT_VERIFIED`.** The block now has
+  a directed suite, two random lanes, a composition test, a formal proof on the
+  blend, a 32/32 sweep and four constrained fits, which looks like more than
+  UNIT_VERIFIED — but advancing a maturity claim is exactly what ledger rule V16
+  polices, and it is not in this run's scope. Left for the owner, deliberately.
+- **`zhao_surface_sq` has no FORMAL target.** `zhao_surface_blend` has one and is
+  proved TOTAL because its input space is 22 bits. The squarer's is 36 plus
+  sequential state, so a proof would be bounded rather than total, and a bounded
+  proof over 36 bits is weaker evidence than the 104 chosen values already
+  driving it. Recorded as a judgement, not an omission.
+- **`SURFACE.SHEET → TERRAIN.BAKE` is still open**, exactly as the contract's
+  "The seam that could not be closed" records. Nothing in this run touched it.
+- **The 14% of the initiation interval that the ±4,096 m domain does not need.**
+  Measured, argued, and declined: `SQ_RADIX = 2` buys twice as much for 0.1% of
+  the clock and no domain risk.
 

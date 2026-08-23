@@ -652,9 +652,9 @@ aborts the sweep instead of scoring.
 
 ### 2026-08-23 — the rearchitecture sweep
 
-    tools/sweep_surface_stamp.sh        (in a git worktree, per the standing ruling)
+    tools/sweep_surface_stamp.sh    (in a git worktree, per the standing ruling)
     linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
-    attempted=32 expected=32 accounted=32 caught=29
+    attempted=32 expected=32 accounted=32 caught=29     <- the FIRST complete run
     SURVIVOR: S02 the sign is read from the wrong bit
     SURVIVOR: S05 each chain link's place value is one too high
     SURVIVOR: S12 the addend is loaded pre-doubled
@@ -774,7 +774,18 @@ this repository's whole failure history is partial evidence read as complete.
 The full sweep was then **re-run end to end** on the fixed suite, so the number
 below is one run and not a reconciliation of two:
 
-<!-- FINAL-SCORE -->
+    tools/sweep_surface_stamp.sh            (worktree, detached, full 32)
+    linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+    pristine models 1fc7e04464fc/603d48fba2cf/3f149747542e, 8 lanes green
+    ...
+    attempted=32 expected=32 accounted=32 caught=32
+    SWEEP-EXIT=0
+
+**32 of 32, no survivors and no discards**, with the worktree's RTL restored
+byte-identically afterwards. That is the number this contract stands on; the
+29-of-32 above is kept because the three it missed are what produced the
+squarer's own suite, and a table that showed only the final figure would have
+hidden the reason the suite exists.
 
 
 ### Before the rearchitecture (2026-08-21), kept for the record

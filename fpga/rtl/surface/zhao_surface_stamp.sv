@@ -5,7 +5,9 @@
 //   design/contracts/SURFACE.STAMP.md — the block contract.
 //   design/blocks.yml — `inputs: [dispatch, stamp_field_results, sheet_pages]`,
 //       `outputs: [stamp_results]`, `backpressure: ready_valid`,
-//       `latency: variable`, "1 stamp texel per clock", counters
+//       `latency: variable`, "20,000 stamp texels per frame" (AMENDED
+//       2026-08-23 from "1 stamp texel per clock", which was a PLACEHOLDER --
+//       see the rearchitecture note below), counters
 //       `surface_stamps` + `surface_texels_touched`, `source_ids: true`, and
 //       the note "Capture-exact: identical inputs replay to identical sheets".
 //   spec/commands.zidl SurfaceStamp 0x0210 — the FROZEN wire field set
