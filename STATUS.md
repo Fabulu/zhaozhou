@@ -5,6 +5,94 @@ at the top.*
 
 ---
 
+## 2026-08-23 (end of day) — 327 → 134 multipliers, and a change of method
+
+### The day
+
+| | multipliers |
+| --- | ---: |
+| this morning | **327** against a 112-multiplier chip |
+| **tonight** | **134** |
+| the ceiling | 85–90 |
+
+Four blocks rebuilt, every number measured rather than estimated:
+
+| block | before | after |
+| --- | ---: | ---: |
+| Field engine | 79 | **3** |
+| creature skinning | 72 | **9** |
+| surface stamping | 28 | **0** |
+| texture unit | 28 | **6** |
+
+Creature skinning also **meets its frame budget** — 124,514 vertices against the
+120,000 you ruled.
+
+### But I have to widen the estimate, not narrow it
+
+The census covers **41 of 94** hardware files. Two significant blocks have never
+been measured at all, and one of them almost certainly duplicates a block we
+have already paid for:
+
+* the **geometry projector** is absent from every report, and implements the
+  same projection maths as the terrain projector we measured at 33 multipliers.
+  Its own header calls the duplication "a cost, not a feature";
+* the **pose maths** looks like another 14–18.
+
+So the honest picture is **roughly 180 multipliers, not 134** — a design that has
+to lose 95 more rather than 45. That sounds worse and I think it is better news
+than it reads, because **about 50 of those are two copies of the same
+arithmetic**, which is a cheaper thing to remove than real work.
+
+### The change of method, which is the actual news
+
+Every block so far was picked because its latest number looked alarming. That is
+reactive, it has cost about a day each, and **the same seven mistakes keep
+producing it**:
+
+1. a placeholder "one per clock" becomes real parallel hardware before anyone
+   counts how many items a frame needs;
+2. software-shaped maths treated as one clock tick;
+3. things that are memories built out of logic — **the Field engine uses none of
+   the chip's 553 memories while 502 sit idle**;
+4. the same arithmetic duplicated in neighbouring blocks;
+5. measuring a block alone and calling it the speed it will have when connected;
+6. confusing latency, rate and clock — only *work per second* answers anything;
+7. tests that check the answers are right but cannot see that the hardware
+   built was not the hardware described.
+
+**All seven are detectable from the source before a chip tool finishes.** So the
+next run is not another rescue — it is a tool that reads every block and produces
+a ranked heatmap of which ones are lying, with hard gates so each mistake fails
+the build rather than being rediscovered in a week.
+
+The test I set for it: run it against the two blocks we already know are bad and
+confirm they light up **without anyone telling it the answer.**
+
+### Two corrections I owe you from today
+
+**I gave you a speed number that was measuring a counter.** The texture unit was
+reported at 199.72 MHz; it is 36.92. The timing file said nothing about paths
+entering or leaving the block, so the tool silently ignored almost all of them —
+and that block's arithmetic runs edge to edge. **Every speed figure taken before
+this was fixed is suspect.** Multiplier counts are unaffected; they come from a
+stage that never reads that file.
+
+**And a proof I said had passed had not run.** The texture filter's mathematical
+proof no longer completes — the rewrite made it a genuinely harder theorem rather
+than the near-restatement it had been. What stands in its place is stronger, not
+weaker: an exhaustive argument covering **every possible input**, rather than a
+solver's word for it. But "the test harness needed no changes" is not the same
+sentence as "the theorem still holds", and it was written down as though it were.
+
+### Where the effort goes next
+
+The two blocks that miss their targets both have specified fixes and neither is
+mysterious. The **Field engine** needs to stop building memories out of logic.
+The **texture unit** needs to accept more than one request at a time — it is
+currently a calculator that can only hold one sum. Both are written up in full.
+
+---
+
 ## 2026-08-23 (night, correction) — I gave you a speed figure that was measuring
 ## the wrong thing, and it affects every speed figure I have given you
 
