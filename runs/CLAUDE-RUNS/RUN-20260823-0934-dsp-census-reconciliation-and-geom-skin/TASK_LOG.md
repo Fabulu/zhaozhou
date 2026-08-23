@@ -485,6 +485,45 @@ width is now proven from the s32 inputs (67 -> 65, 75 -> 73, per
 **No DSP measurement yet** — the fitter has been occupied by the Field census
 row. The 72 -> ? number is still outstanding and is the point of the exercise.
 
+### 12:50 - V23 learns about frontier rows, before the first one lands  (`1457140`)
+
+Tried to merge `wp/field-dsp` (which carries the corrected Field census row and
+the normalize fix) and the merge **aborted**: the GEOM.SKIN agent has
+`reports/synthesis/zhao_block_fit.json` modified in the working tree.
+
+**Did not stash or check out over it.** Inspected it instead, and it holds real
+content, not churn:
+
+* `lastAttemptStatus/Commit/Seconds` on `zhao_geom_skin` recording that
+  `quartus_map` failed at `3ec0fee` **while the good 72-DSP row survived** —
+  the failed-fit protection added in `0561323` working exactly as intended, on
+  a block whose row was previously destroyed by this same mechanism;
+* a new `limitations` entry declaring that rows carrying `variantOf` are
+  alternate **parameter settings** of the row they name and must be excluded
+  from any total.
+
+That second one is a live hazard, so it got closed immediately. `variantOf`
+was documented in the report but **`tools/ledger/src/resources.ts` did not know
+about it**, and there are zero variant rows today — so the fix lands *before*
+the first one rather than after somebody reads a wrong number.
+
+Arithmetic of the hazard: `MUL_LANES` at 1, 3 and 6 each measured would have
+counted `zhao_geom_skin` three times, adding roughly **150 phantom DSPs** to a
+census currently reading 327 — and it would have looked like a regression caused
+by measuring more carefully. That is a number someone would have acted on.
+
+Behaviour now: variant rows are excluded from every total, from `worst` and from
+`measured`; they are **not** tested for single-block over-capacity, because a
+frontier is allowed a deliberately infeasible end and failing on a point nobody
+proposed to ship is precisely the false gate this file was written to avoid; and
+the excluded count is **printed**, because a census that quietly omits rows reads
+as "covered everything" when it did not.
+
+Four regression tests, 12 in the census file, 64 in the ledger suite, all green.
+The two that matter are the guards: `variantOf: ""` or `null` must **not** erase
+a real measurement, and an all-variants report must yield `null` rather than
+printing "0 DSPs against 112" and looking healthy.
+
 ---
 
 ## Subagent Spawns
