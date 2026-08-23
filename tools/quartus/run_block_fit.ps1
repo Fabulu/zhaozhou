@@ -136,6 +136,47 @@ $results = New-Object 'System.Collections.Generic.List[object]'
 # 1,422 ALMs without being able to say whether the design fits anything. This
 # takes the DENOMINATOR from the same line, so the device's capacity travels
 # with the measurement instead of being looked up separately and misremembered.
+# ---------------------------------------------------------------------------
+# WNS AND TNS, FROM THE TABLE THE TOOL ACTUALLY WRITES
+#
+# This script used to extract slack with
+#
+#     '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)'
+#
+# and that regex HAS NEVER ONCE MATCHED. Found 2026-08-23 (RUN-20260823-2226)
+# by asking reports/synthesis/zhao_block_fit.json how many of its 41 rows carry
+# a slack figure: ZERO -- including the four rows that carry an Fmax read out
+# of the very same .sta.rpt. Quartus 17.0.2's STA report has no such line. What
+# it has is a summary table per analysis:
+#
+#     +--------------------------------------------------+
+#     ; Setup Summary                                    ;
+#     +-------+-------+---------------+------------------+
+#     ; Clock ; Slack ; End Point TNS ; ...
+#     +-------+-------+---------------+
+#     ; clk   ; -17.691 ; -8901.234   ;
+#
+# So the fix reads the table -- and the table carries TOTAL NEGATIVE SLACK as
+# well, which the ledger has never had at all. A block holding one path at
+# -0.1 ns and one holding four hundred were previously indistinguishable.
+#
+# Same failure shape as every entry in reports/QUARTUS_GOTCHAS.md: an
+# extraction that fails silently, whose only symptom is a number that never
+# appears. Do not trust a new field here until a real report has been read.
+# ---------------------------------------------------------------------------
+function Get-StaSummary([string]$Text, [string]$Section) {
+    $i = $Text.IndexOf("; $Section")
+    if ($i -lt 0) { return $null }
+    $tail = $Text.Substring($i, [Math]::Min(2000, $Text.Length - $i))
+    # First data row after the header separator: `; <clock> ; <slack> ; <tns> ;`
+    $m = [regex]::Match($tail, '(?m)^;\s*[^;]+;\s*(-?[0-9]+\.[0-9]+)\s*;\s*(-?[0-9]+\.[0-9]+)\s*;')
+    if (-not $m.Success) { return $null }
+    return [ordered]@{
+        slackNs = [double]$m.Groups[1].Value
+        tnsNs   = [double]$m.Groups[2].Value
+    }
+}
+
 function Get-Capacity([string]$Text, [string[]]$Labels) {
     foreach ($label in $Labels) {
         $m = [regex]::Match($Text, "(?im)^\s*" + [regex]::Escape($label) + "\s*:\s*([^
@@ -363,10 +404,16 @@ try {
                     $row.fmaxMhz = [double]$m.Groups[2].Value   # restricted Fmax
                     $row.fmaxClock = $m.Groups[3].Value
                 }
-                $w = [regex]::Match($s, '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)')
-                if ($w.Success) { $row.setupSlackNs = [double]$w.Groups[1].Value }
-                $h = [regex]::Match($s, '(?m)^\s*Worst-case Hold Slack\D+(-?[0-9.]+)')
-                if ($h.Success) { $row.holdSlackNs = [double]$h.Groups[1].Value }
+                $setup = Get-StaSummary $s 'Setup Summary'
+                if ($null -ne $setup) {
+                    $row.setupSlackNs = $setup.slackNs
+                    $row.setupTnsNs   = $setup.tnsNs
+                }
+                $hold = Get-StaSummary $s 'Hold Summary'
+                if ($null -ne $hold) {
+                    $row.holdSlackNs = $hold.slackNs
+                    $row.holdTnsNs   = $hold.tnsNs
+                }
             }
         } elseif ($row.status -eq 'unknown') {
             $row.status = 'no-summary'
