@@ -3,7 +3,10 @@ param(
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$Family = '',
     [switch]$Fit,
-    [switch]$KeepWorkspace
+    [switch]$KeepWorkspace,
+    # Resume. See the Save-Calibration note below -- this lane lost 97
+    # measurements once and will not do it twice.
+    [switch]$SkipMeasured
 )
 
 Set-StrictMode -Version Latest
