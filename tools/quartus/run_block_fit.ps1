@@ -58,7 +58,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $SrcQsf = Join-Path $RepoRoot 'fpga\quartus\shell_fit\zhao_shell_fit.qsf'
 $SrcSdc = Join-Path $RepoRoot 'fpga\quartus\shell_fit\zhao_shell_fit.sdc'
 
-foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe')) {
+foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
     $full = Join-Path $QuartusBin $exe
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
         throw "Required Quartus executable not found: $full"
@@ -227,7 +227,13 @@ try {
         # measured and recorded in this file's header.
         Push-Location $dir
         try {
-            foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe')) {
+            # quartus_sta IS A STAGE, not an extra. Without it the lane fits a
+            # block against a clock and then never asks whether it met it: the
+            # fitter summary carries area and DSPs and NO timing at all. Fixing
+            # the SDC (see the block-SDC comment above) made the fitter OPTIMISE
+            # for a clock; this is what makes the answer visible. Before both
+            # changes there was no Fmax for any of 47 rows, and no way to get one.
+            foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
                 & (Join-Path $QuartusBin $exe) 'blockfit' *> (Join-Path $dir "$exe.log")
                 if ($LASTEXITCODE -ne 0) { $row.status = "failed:$exe"; $ok = $false; break }
                 if ($sw.Elapsed.TotalSeconds -gt $TimeoutSeconds) {
@@ -253,6 +259,25 @@ try {
             $row.almsAvailable = Get-Capacity $t @('Logic utilization (in ALMs)', 'Logic utilization')
             $row.ramBlocksAvailable = Get-Capacity $t @('Total RAM Blocks')
             $row.dspBlocksAvailable = Get-Capacity $t @('Total DSP Blocks')
+
+            # ---- the timing answer, from the STA report ----------------------
+            # Slow 1100mV 85C is the corner the shell fit reports against, so
+            # the two lanes stay comparable. Fmax here is the block ALONE with
+            # virtual I/O -- it is an upper bound on what the block contributes
+            # composed, never a claim about the machine.
+            $sta = Join-Path $dir ('output_files' + [char]92 + 'blockfit.sta.rpt')
+            if (Test-Path -LiteralPath $sta) {
+                $s = [IO.File]::ReadAllText($sta)
+                $m = [regex]::Match($s, '(?m)^;\s*([0-9.]+)\s*MHz\s*;\s*([0-9.]+)\s*MHz\s*;\s*(\S+)')
+                if ($m.Success) {
+                    $row.fmaxMhz = [double]$m.Groups[2].Value   # restricted Fmax
+                    $row.fmaxClock = $m.Groups[3].Value
+                }
+                $w = [regex]::Match($s, '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)')
+                if ($w.Success) { $row.setupSlackNs = [double]$w.Groups[1].Value }
+                $h = [regex]::Match($s, '(?m)^\s*Worst-case Hold Slack\D+(-?[0-9.]+)')
+                if ($h.Success) { $row.holdSlackNs = [double]$h.Groups[1].Value }
+            }
         } elseif ($row.status -eq 'unknown') {
             $row.status = 'no-summary'
         }
