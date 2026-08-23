@@ -186,6 +186,122 @@ it alone because only its author knows which enforcer it meant to name.
 
 ---
 
+## 2026-08-23 -- the DSP campaign, and the measurement that was never taken
+
+### What started it
+
+`zhao_geom_cull` was fitted, came back at 15 DSPs, and summing the block-fit
+report gave **213 against a device with 112**. The 2026-08-20 session had already
+recorded that figure as 171 and noted DSP "had no budget"; nobody had summed it
+since.
+
+Then two blocks that had never been synthesised at all were measured:
+
+| block | | |
+| --- | ---: | --- |
+| `zhao_field_seq` (the whole Field IR engine) | **79 DSPs** | 71% of the device |
+| `zhao_geom_skin` | **72 DSPs** | 64% |
+
+Running total **327 against 112**, with 46 of 91 RTL modules still never fitted.
+
+### The cause, and it was the same in every case
+
+Parallel multipliers where the block's RATE does not require them. The Field
+engine instantiates ten op units side by side, each owning silicon, while the
+sequencer retires **one instruction every six clocks**. `zhao_geom_lod` ran once
+per instance per frame with five parallel products. `zhao_terrain_lod` made one
+decision per patch per frame with thirty.
+
+### Results
+
+| block | before | after |
+| --- | ---: | ---: |
+| `zhao_field_seq` | 79 | **3** |
+| `zhao_terrain_lod` | 28 | **3** |
+| `zhao_geom_lod` | 18 | **6** |
+
+**ALMs fell every time as well** -- 1,303 -> 1,183 and 2,086 -> 1,759 -- which
+kills the standing objection that sequencing trades area for DSPs. A Cyclone V
+ALM carries flops whether they are used or not, and the area was never mostly the
+multipliers; it was parallel wide product-and-compare datapaths collapsing into
+one.
+
+### THE MEASUREMENT THAT WAS NEVER TAKEN
+
+`tools/quartus/run_block_fit.ps1` copied the SHELL's SDC into every leaf-block
+fit. That file constrains ports named `gpu_clk`/`vid_clk`/`audio_clk`; **63 of
+this design's 71 clock ports are named `clk`**. Quartus resolved every
+`create_clock` to an empty collection and said so, three times, in every run:
+
+```
+Warning: Ignored create_clock at blockfit.sdc(4):
+         Argument <targets> is an empty collection
+```
+
+**Every per-block fit ever run had no timing objective.** By column: DSP counts
+stand (inferred at Analysis & Synthesis, before the SDC is read); ALM counts are
+OPTIMISTIC, because no timing pressure understates what a constrained fit needs;
+Fmax figures are not measurements at all, across 47 rows.
+
+Found by an agent that disbelieved an Fmax on a block it had just rebuilt.
+Reproduced here before accepting it. Fixed by generating a per-block SDC, and
+verified by re-fit -- Quartus now reports `10.000 clk`, the line missing from
+every previous run.
+
+### Rulings adopted, and one correction to my own reading
+
+The owner ruled the architecture: smallest local multiplier farm per subsystem,
+share only what is mutually exclusive INSIDE it, never console-global; DSP
+allocation justified by sustained frame demand rather than by one-clock
+placeholder throughputs. And the number I had said I could not invent:
+**~120,000 skinned vertex instances per 60 Hz frame**, with the Measure
+degrading before it.
+
+A second ruling, from a survey of Raster I, RasterIX, Vortex, eGPU and SIMTight,
+corrected the process: **preserve two or three parameterised resource points and
+measure the frontier, rather than implementing one architecture per block.**
+"Zhaozhou has been discovering the right point one emergency at a time." The
+target was also too loose -- 90-105 DSPs on a 112-DSP device is the ceiling, not
+reserve; the policy is now <=85-90 with a >95 warning line.
+
+And one thing I had backwards: I filed `TERRAIN.PROJECT` as untouchable. It
+projects TRIANGLE corners, so a 33x33 patch does 6,144 projections for 1,089
+unique lattice vertices. Cached and row-sequenced is 3,267 clocks against 6,144
+-- a **slower** projector that finishes a patch in half the time on a third of
+the multipliers. Sequencing it before caching would have been strictly worse.
+
+### Two corrections I published and had to withdraw
+
+**I reported that sequencing `terrain_lod` broke the Duo fairness law**, and
+"proved" it by reverting the file and watching the test pass. The proof was
+confounded: reverting forced a rebuild, and the rebuild also cleared
+mutant-derived model sources a sweep had left in consumers it never scored. The
+pass tracked the rebuild, not the RTL. Verified properly, the sequenced version
+passes 72/72 with a byte-identical trace. **28 -> 3 stands and no repair was
+needed.**
+
+**And I reported the sweep score as 21 of 22 caught.** Three of those "caught"
+had never compiled -- the executable lives outside the target directory, so a
+mutant that fails to build runs the previous binary and the build failure scores
+as a caught mutant. Honest figure: 22 of 23. The sweep now lints every mutant
+before scoring any.
+
+### Infrastructure this produced
+
+* **V23**, a resource census printing DSP/ALM/M10K against device capacity on
+  every ledger run, failing only when a SINGLE block exceeds the whole device --
+  because per-block sums are upper bounds and a false gate is worse than none.
+  Eight regression tests.
+* **V22** and `evidence_kind: formal_timing`, which let `SYS.PLL`, `SYS.RESET`
+  and `SYS.CDC` stop carrying nine dead paths between them.
+* **`reports/QUARTUS_GOTCHAS.md`**, collecting seven findings that each cost a
+  day, including two directives that are silently ignored with no diagnostic at
+  all.
+* **Sweep guards 5, 6 and 7**, and a preflight that lints every mutant before
+  scoring.
+
+---
+
 ## 2026-08-22 (late) -- the fit measurement, four owner rulings, and a block
 ## whose test caught my own bug
 
