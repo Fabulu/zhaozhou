@@ -165,3 +165,76 @@ rule was written knowing the answer:
 | --- | --- | --- |
 | `zhao_field_seq` | **RED** | `EXPECTED_RAM_NOT_INFERRED` - 22,865 expected bits (2,048 addressable + 20,817 const-ROM), zero design memories inferred by the map |
 | `zhao_texture_tmu` | **RED** | `NO_RESERVE` - 850,000 samples/frame against 1,666,667/6 = 277,778 capacity, **3.06x** |
+
+## 2026-08-23 23:20 - the detector that never fired
+
+The full scan reported **zero** mux-before-multiply candidates across all 91
+modules. That is either a real result - `zhao_raster_blend`'s header says in
+capitals that it already carries the fix - or a detector that cannot fire. From
+the output alone the two are indistinguishable, and the difference decides
+whether RASTER.FRAGMENT's predicted 6 -> 3 DSP saving is banked or still owed.
+
+`runs/.../validate_detectors.py` gives each detector a synthetic POSITIVE it
+must find and, where the distinction matters, a NEGATIVE it must not flag. The
+mux detector **FAILED its positive.** It looked only inside the ternary's arms,
+and nobody writes two products inline in a ternary:
+
+    always_comb p_alpha  = (src_i - dst_i) * a_i;
+    always_comb p_addmod = src_i * a_i;
+    assign y_o = mode_i ? p_alpha : p_addmod;
+
+That is RASTER.BLEND's own description of its former self, and the detector
+could never have seen it. It now follows a bare VARREF back to its
+combinational driver. **Six of six controls pass.**
+
+With the instrument proved, zero is a RESULT: **P4 is already implemented at
+HEAD** and the 10-DSP census row is stale. Map confirms **7** at HEAD.
+
+## 2026-08-23 23:25 - two findings about the EVIDENCE, not the blocks
+
+**1. Not one of the 41 fit rows describes the RTL at HEAD.** Found by changing
+the provenance test from commit equality to `git rev-parse <commit>:fpga/rtl` -
+the RTL directory's tree hash. Commit equality had reported
+`modulesWithMapAtHead: 0` while 35 rows had just been measured against the tree
+in the working directory, because every commit since was tooling. Tree-hash
+equality means byte-identical RTL whatever else changed.
+
+**2. ZERO rows in the whole fit census carry a setup or hold slack figure.**
+`run_block_fit.ps1` does try:
+
+    '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)'
+
+and it has **never once matched** - not even in the four rows that carry an
+Fmax out of the very same report file. The ruling asks this heatmap for **WNS,
+TNS and hold**; the fit lane supplies **none of the three**. Same shape as
+everything in QUARTUS_GOTCHAS: an extraction that fails silently whose only
+symptom is a number that never appears.
+
+## 2026-08-23 23:28 - 42 of 91 RED is not a heatmap, it is a uniform colour
+
+Rating a gated multi-state walk RED from source alone turned **13 modules RED
+on that rule and nothing else** - including `zhao_sdram_ctrl`, where a
+sixteen-state walk IS the design, and `zhao_surface_stamp`, which was
+rearchitected to 0 DSPs at 87.54 MHz this afternoon.
+
+A long II is a **fact**; whether it is a **defect** depends on items/frame. The
+scanner now reports it at ORANGE with the number attached and the manifest
+escalates to RED where a demand figure proves it. RED falls 42 -> 32 and both
+calibration blocks stay RED - TEXTURE.TMU via `NO_RESERVE` at 3.06x, which is a
+measured rate problem rather than a shape that resembles one.
+
+## 2026-08-23 23:12-23:35 - `zhao_surface_sheet`, and a bug in my own sweep
+
+`zhao_surface_sheet` has now held the Quartus lane for over twenty minutes on a
+MAP. It is the block whose fit previously came back `failed:quartus_fit.exe`,
+and the scanner says why: **131,072 addressable bits** (64x64 texels x 16 bits x
+2 buffers) in one array, plus four combinational loops. It is the largest single
+array in the design.
+
+**And `tools/quartus/run_block_map.ps1` accepts a `-TimeoutSeconds` parameter
+that it never enforces.** The fit lane checks elapsed time between stages;
+the map lane has one stage and no check at all, so a module that never finishes
+stalls the whole sweep indefinitely. Copied the parameter, did not copy the
+thing it was for. Not fixed mid-sweep - editing the harness while it is running
+is the same class of mistake as editing RTL under a running fit, which this
+repository has already disclosed twice.
