@@ -5,6 +5,76 @@ at the top.*
 
 ---
 
+## 2026-08-23 — I have been calling the Field IR engine "done", and it had never been built
+
+### What I found
+
+The Field IR engine is the little instruction set that terrain, deformation and
+formation programs are written in. I have reported it complete for days: every
+operation has a test against the reference, every one has a score for how many
+deliberate bugs the tests catch, and the sequencer that runs the programs is
+verified with a mathematical proof.
+
+All of that is true. **All of it is simulation.**
+
+I checked how much of the design has ever been through the chip-building tool at
+all. **46 of the 91 pieces have never been through it once** — and fifteen of
+those are the whole Field IR engine.
+
+So I put it through, as one unit, the way it actually gets used:
+
+| | |
+| --- | ---: |
+| logic area | 10,623 cells |
+| **hardware multipliers** | **79** |
+| the chip has | **112** |
+
+**One subsystem wants 71% of the chip's multipliers.** More than the terrain
+projector and the surface stamper put together.
+
+The running total is now **280 multipliers wanted against 112 available** — up
+from 213 this morning — and half the design still has not been measured.
+
+### Why this happened, and it is not a coding mistake
+
+The engine contains ten calculating units — arithmetic, reciprocal, sine, square
+root, length, normalise, curve, noise, ring, rotation. All ten are built side by
+side, each with its own multipliers, permanently powered.
+
+And the sequencer that drives them **runs one instruction at a time**, taking six
+clock ticks each. So at any moment, nine of the ten are doing nothing while
+holding their multipliers.
+
+It is the same waste I described this morning, at the largest scale in the
+design. The detail-level block had five idle multipliers and went from 18 to 6.
+This has ten idle *units*.
+
+**So the worst number in the design is also the biggest opportunity in it** —
+worth more than the next three offenders combined.
+
+### What I am not promising
+
+Nobody has established that those ten units *can* share. The sequencer's
+six-clocks-per-instruction pace and its mathematical anti-hang proof both assume
+the current shape, and the proof would have to be redone against a shared design.
+Every other block I have sequenced had an obvious answer; this one does not.
+
+### What this means for "the Field IR engine is finished"
+
+It is finished as a *design* and finished as *tested behaviour*. It is not
+finished as *hardware*, and I should have been clearer about that distinction
+before now. The same caveat applies to everything else in this project that I
+have called complete: **nothing here has run on a physical board, and until
+tonight, half of it had never even been asked whether it fits.**
+
+### Meanwhile
+
+The terrain detail-level block is being sequenced now by the same method, and
+writing it a mutation sweep — which it did not have — immediately found a hole in
+its tests.
+
+---
+
 ## 2026-08-23 — the chip may not have enough multipliers, and nothing was watching
 
 ### The number
