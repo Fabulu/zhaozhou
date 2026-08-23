@@ -270,6 +270,32 @@ MUTS = [
           rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge""",
      """        end else if ((state == Q_MISS) || ((state == Q_MWAIT) && multi_rvalid)) begin
           rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge"""),
+
+    # ---- the leading-zero count that replaced the critical path -------------
+    #
+    # The two 64-iteration loops these five mutants replace were the whole
+    # design's worst setup path (78 logic levels, 8.59 MHz). The closed form is
+    # bit-identical to them by an argument written out in the block, and an
+    # argument is exactly the kind of thing that is wrong in one corner. These
+    # aim at the corners: the exponent offset, the direction of the shift, the
+    # zero guard, and the binary search's stages.
+    ("M34 exponent offset off by one", F_NRM,
+     """    d_exp = 8'sd40 - $signed({2'd0, lz});""",
+     """    d_exp = 8'sd39 - $signed({2'd0, lz});"""),
+    ("M35 the normalise shifts go the wrong way", F_NRM,
+     """    rsh = (d_exp > 8'sd0) ? 6'(d_exp) : 6'd0;
+    lsh = (d_exp < 8'sd0) ? 6'(-d_exp) : 6'd0;""",
+     """    rsh = (d_exp < 8'sd0) ? 6'(-d_exp) : 6'd0;
+    lsh = (d_exp > 8'sd0) ? 6'(d_exp) : 6'd0;"""),
+    ("M36 the zero-length guard is dropped", F_NRM,
+     """  assign m_val = (h_rt == 64'd0) ? 24'd0 : 24'((h_rt >> rsh) << lsh);""",
+     """  assign m_val = 24'((h_rt >> rsh) << lsh);"""),
+    ("M37 the leading-zero search loses its last stage", F_NRM,
+     """      if (lz_t[63] == 1'b0)     begin lz = lz + 6'd1;  lz_t = lz_t << 1;  end""",
+     """      if (lz_t[63] == 1'b0)     begin lz = lz + 6'd0;  lz_t = lz_t << 1;  end"""),
+    ("M38 a leading-zero stage tests the wrong half", F_NRM,
+     """      if (lz_t[63:32] == 32'd0) begin lz = lz + 6'd32; lz_t = lz_t << 32; end""",
+     """      if (lz_t[63:33] == 31'd0) begin lz = lz + 6'd32; lz_t = lz_t << 32; end"""),
 ]
 
 
