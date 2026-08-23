@@ -847,3 +847,38 @@ if it buys more than 4 MHz, and it must be measured rather than assumed.
 
 **Not attempted in this run. The block passes its acceptance test as it
 stands.**
+
+---
+
+## 15:0x — THE FRONTIER IS COMPLETE, and it is a real Pareto curve
+
+`MUL_LANES = 6` was the hole. Filled:
+
+| `MUL_LANES` | DSPs | ALMs | registers | Fmax | II | vertices/frame | vs. 120,000 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | 3 | 1,530 | 1,449 | 56.11 MHz* | 24 | 38,965 | **fails, 32%** |
+| **3** | **9** | **2,225** | **1,696** | **89.65 MHz** | **12** | **124,514** | **passes, 104%** |
+| 6 | 18 | 2,595 | 1,683 | 84.61 MHz | 10 | 141,017 | passes, 118% |
+
+\* pre-pipeline RTL (`e7591e8`), measured as the diagnosis experiment. Its II is
+quoted for the current design, so its vertices/frame is a lower bound rather
+than a matched measurement. Flagged rather than silently mixed in.
+
+### What the curve says that one point never could
+
+**Doubling the farm from 9 DSPs to 18 buys 13% more throughput — and buys it
+while the CLOCK GETS WORSE**, 89.65 -> 84.61 MHz.
+
+That is not noise and it is not a surprise once the new critical path is known.
+`MUL_LANES = 6` has RL = 2, so it writes **two accumulators per cycle**, and
+the path that now limits the block is `Mult* -> acc[*]`. More lanes put more
+pressure on exactly the thing that is already tightest. The shorter II (10 vs
+12) more than compensates, so the rate still goes up — but sixteen percent of
+the device's DSP budget for 13% of a throughput that is **already met** is not
+a trade worth making.
+
+**`MUL_LANES = 3` is the shipping point, and now it is backed by the shape of
+the curve on both sides of it rather than by an argument.** That is what the
+survey of Raster I, RasterIX, Vortex, eGPU and SIMTight asked for, and it is
+the thing "discovering the right point one emergency at a time" cannot give
+you: the knowledge that the next point along is *worse value*, measured.
