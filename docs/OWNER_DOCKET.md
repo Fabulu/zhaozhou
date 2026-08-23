@@ -1,5 +1,175 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — FIELD TIMING REARCHITECTURE RULING: it needs to become a real
+## little processor
+
+**The DSP emergency is over for Field. The 79 → 3 architecture stays.** What
+33.86 MHz exposes is not an over-ambitious instruction set — it is that Field is
+still built like a collection of software functions translated literally into
+combinational RTL, rather than like a synchronous FPGA processor.
+
+Queued as the next Field wave. **Not started** — `TEXTURE.TMU` holds the
+implementation slot.
+
+### The central finding, verified before anything else was accepted
+
+**Field reports ZERO block memories while consuming 8,901 ALMs.**
+
+    zhao_field_seq:  ramBlocks = 0,  blockMemoryBits = 0,  alms = 8,901
+
+And across all 47 measured blocks the whole design uses **51 of 553 M10Ks —
+9%.** There are **502 idle block memories** on the device.
+
+Meanwhile the Field cone contains, in logic:
+
+* a **64×32 register file** — 2,048 flip-flops behind several 64:1 asynchronous
+  read muxes, which the contract itself already names as the dominant cost;
+* a **256×16** reciprocal seed table, as an `always_comb` case tree;
+* a **256×31** normalisation reciprocal table, likewise;
+* a **257×17 sine table instantiated TWICE**, to obtain `base` and `next`.
+
+Cyclone V M10Ks are synchronous true-dual-port memories with initialised
+contents. This is precisely what they are for.
+
+> **Field is starved for timing while refusing to spend the one resource it has
+> in abundance.** That is the architectural mistake now, and it is a much better
+> problem than the one we thought we had.
+
+Proposed storage budget: **3 register-file copies + 1 dual-port sine + 1 RCP +
+1 RCP24 = 6 M10Ks**, from 502 free.
+
+### Waves, each independently measurable
+
+Deliberately **not** one "fix everything" job. The 500k-token single-agent
+pattern is explicitly rejected.
+
+**Wave 0 — evidence.** Preserve the 33.86 MHz netlist. Save the **top 200**
+setup paths grouped into `RF_READ`, `CONST_ROM`, `ISQRT`, `SIN`, `ALU_FINISH`,
+`NORMALIZE_RESCALE`, `UNIT_REQUEST_MUX`, `RESULT_WRITEBACK`, with cell delay,
+routing delay and logic levels for each.
+
+**Wave 1 — NORMALIZE.** The root is proven `< 2^32` (`isqrt(3·2^62) =
+3,719,550,786`), so no dynamic shift is needed at all:
+
+    norm32 = h_rt[31:0] << lz32
+    m      = norm32[31:8]
+    e      = 8 - lz32
+
+replacing `(h_rt >> rsh) << lsh`, which describes two dynamic shifts in series
+and leaves the simplification to Quartus. Register `m`/`e` before the ROM
+lookup; make RCP24 a synchronous ROM; replace the `resc_s` / `resc_s_fired`
+duplication — which computes the same 66-bit rounded value **twice**, once only
+for a ledger bit — with one tagged rescale pipeline at one lane per clock.
+Narrow `shift_amt` from 8 bits to 6 (proven range 8–39).
+
+**Wave 2 — ISQRT.** Replace the 64-bit add → compare → subtract recurrence with
+the digit-by-digit remainder form: `rem_shift = (rem << 2) | pair`,
+`trial = (root << 2) | 1`, `diff = rem_shift − trial`, `take = no borrow`. Still
+exactly 32 iterations, still exact floor, still bit-identical for every u64 —
+but one ~34-bit subtractor instead of a wide compare *and* a wide subtract, and
+the new root bit is a concatenation rather than an add.
+
+**Wave 3 — MEMORIES.** Three replicated synchronous simple-dual-port RF copies
+(read `a`, `b`, `c`/host), every write broadcast to all three. **Keep one-cycle
+clear via a 64-bit `rf_valid` bitmap** rather than walking 64 entries — which is
+also exactly right after reset, when M10K contents are undefined. Convert the
+sine table to **one dual-port ROM** (port A `base`, port B `next`) and the two
+reciprocal tables to synchronous ROMs.
+
+> **Two traps recorded here because they are silent:** "Allow Any RAM Size For
+> Recognition" is **disabled** in the current Quartus settings, so a 64×32 array
+> may quietly stay in logic — use an explicit wrapper, not hopeful inference,
+> and **treat a fit that still reports `ramBlocks = 0` as a FAILED
+> implementation even if every test passes.** And prove no same-address
+> read/write occurs, then set read-during-write to don't-care, or Quartus
+> inserts a bypass network that costs area and speed.
+
+**Wave 4 — registered finish.** A registered result state before the RF write;
+`WB0` before the existing `WB1`/`WB2` walk, which removes the selected-unit mux
+from the write path at one clock per instruction rather than per lane. For fixed
+rescales, replace two wide magnitude comparisons with a **sign-extension fit
+test** — `fits = (&r[65:48]) || (~|r[65:48])` — the same identity that fixed the
+skinner's 73-bit saturation tail.
+
+**Wave 5 — SIN.** Synchronous dual-port table, balanced six-term `d·t` tree
+(currently a procedural accumulator loop that may synthesise as a serial adder
+chain), pipelined ROM → tree → round/sign, one request per clock so ROT can
+issue cosine and sine on consecutive clocks.
+
+### Acceptance
+
+* 3 DSPs preferred, ≤4 only with measured justification; **≤8 M10Ks**;
+* **standalone Fmax ≥110 MHz preferred, ≥100 MHz required** — a leaf block
+  barely reaching 100 will not hold 100 after composition;
+* zero hold violations; every result **bit-identical to `zfield::interpret`**;
+* **report Fmax / measured opcode cycles, never Fmax alone**;
+* **no false-path or multicycle exemption used to hide functional logic**, and
+  "Quartus accepted the attribute" is not evidence.
+
+### Why extra clocks are affordable — the arithmetic that makes this safe
+
+The trade is real time, not cycles:
+
+| | today | proposed |
+| --- | ---: | ---: |
+| simple op | 6 clk @ 33.86 MHz = **5.64 M/s** | 7 clk @ 100 MHz = **14.29 M/s** |
+| NORMALIZE3 | 67 clk = **0.505 M/s** | ~80 clk = **1.25 M/s** |
+
+**Even at 8 clocks per simple op the new engine is 2.2× today's real
+throughput.** Estimated targets (not measurements): ALMs 7,750 → ~3,500–5,000,
+M10Ks 0 → 5–8, DSPs unchanged at 3.
+
+### THE UNRESOLVED QUESTION, and it is the important one
+
+**No profile has a derived per-frame workload.** Several still claim "one Field
+IR instruction per clock" — the same one-clock placeholder that produced 327
+DSPs, and exactly what the three demand numbers replaced elsewhere.
+
+The budget each profile owes is:
+
+    invocations/frame  x  instructions/program  x  measured clocks/instruction
+
+summed across Earth + Warp + Flow + Formation + Stamp against **1,666,667
+clocks/frame**. A worked example shows why this matters:
+
+    120,000 warped vertices x 8 instructions x 8 clocks = 7,680,000 clocks/frame
+
+**One core cannot do that however well it closes timing** — it is 4.6× the
+whole frame.
+
+That would not mean the architecture failed; it would mean **one physical
+instance was the wrong quantity.** At ~3 DSPs, ~4–5k ALMs and ~6 M10Ks per core,
+a plausible arrangement is core A = Earth + Stamp, core B = Warp + Formation,
+core C = Flow. **Three cores are nine DSPs — the original single engine used
+79.** They remain instances of one verified engine, which preserves the "one
+engine, five profiles" ruling (V21 `kind: profile`, `implemented_by`) rather
+than becoming five specified implementations.
+
+**Derive the demand before deciding the count.** Instantiating by rate class is
+the answer if the numbers say so; widening the arithmetic farm is not.
+
+### What Field is for, recorded because it justifies keeping it
+
+Field is the console's small programmable math engine — not a scripting
+language, not a renderer. It answers *"given a point in the world, what should
+happen there?"* in deterministic fixed-point that matches the software reference
+bit-for-bit, across five bindings: **EARTH** → `TERRAIN.PATCH` (crater height,
+ridge, material, hazard), **WARP** → `GEOM.WARP` (vertex deformation),
+**FLOW** → `PART.UPDATE` (wind, vortex, explosion force), **FORMATION** →
+`GEOM.LOOM` (procedural placement), **STAMP** → `SURFACE.STAMP` (what a scar
+should be, before SURFACE.STAMP walks the texels).
+
+The point is that effects are **data rather than hardwired blocks**: a new spell
+recombines the primitives without redesigning the FPGA. It is also why the
+original was 79 DSPs — a single-threaded machine with ten FPUs bolted on, nine
+idle on every instruction.
+
+This is the piece most directly connected to the "Sacrifice but bigger, crazier,
+more deformable" identity. Rasterisation makes pixels, geometry makes triangles,
+terrain owns the land, particles own the particles — **Field supplies the maths
+that tells all of them how to misbehave.**
+
+
 ## 2026-08-23 — A PATTERN: our blocks are cheap because they assume normalised
 ## content, and nobody has written down what "normalised" means
 
