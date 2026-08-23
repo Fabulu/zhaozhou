@@ -429,15 +429,40 @@ the demand needs 1.30 multipliers and the block had eighteen.
 72 = 18 x 4. A signed 32x32 in that combinational cone cost four DSP blocks, and
 the six 7-bit weight multiplies cost approximately none.
 
-### After (measured 2026-08-23, both constrained)
+### After (measured 2026-08-23, all constrained)
 
-| | before | `MUL_LANES=1` | `MUL_LANES=3` |
+| | before | combinational blend | **shipping: 3 lanes, pipelined** |
 | --- | ---: | ---: | ---: |
-| **DSP blocks** | **72** | **3** | **9** |
-| ALMs | 1,801 | 1,530 | 2,187 |
-| registers | 145 | 1,449 | 1,448 |
-| Fmax | *never measured* | 56.11 MHz | 58.45 MHz |
-| sourceCommit | 16df9ee | e7591e8 | 2e013e2 |
+| **DSP blocks** | **72** | 9 | **9** |
+| ALMs | 1,801 | 2,187 | **2,225** |
+| registers | 145 | 1,448 | **1,696** |
+| **Fmax** | *never measured* | 58.45 MHz | **89.65 MHz** |
+| **II (blend)** | 1 | 10 | **12** |
+| **vertices/frame** | *n/a* | 97,417 **FAILS** | **124,514 PASSES** |
+| sourceCommit | 16df9ee | 2e013e2 | 56ef194 |
+
+Frontier points, same RTL, parameter only (`variantOf` rows in the census, and
+they must be **excluded from any DSP total** -- they are the same block):
+
+| `MUL_LANES` | DSPs | ALMs | registers | Fmax | II | vertices/frame | vs. 120,000 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | 3 | 1,530 | 1,449 | 56.11 MHz* | 24 | 38,965 | **fails, 32%** |
+| **3** | **9** | **2,225** | **1,696** | **89.65 MHz** | **12** | **124,514** | **passes, 104%** |
+| 6 | 18 | 2,595 | 1,683 | 84.61 MHz | 10 | 141,017 | passes, 118% |
+
+**This is a real Pareto curve and it settles the choice.** Doubling the farm
+from 9 DSPs to 18 buys **13% more throughput** -- and it buys it while the
+clock gets WORSE (89.65 -> 84.61 MHz), because `MUL_LANES = 6` writes two
+accumulators per cycle and the `Mult -> acc` path that now limits the block
+gets more pressure, not less. Sixteen percent of the device's DSP budget for
+13% of a throughput that is already met is not a trade worth making.
+
+`MUL_LANES = 3` is the shipping point. `MUL_LANES = 1` is kept because it
+fails, and it fails by a mile once the pipeline's fill is spread over only one
+lane's 18 issue slots.
+
+\* the `MUL_LANES = 1` row was measured on the pre-pipeline RTL (`e7591e8`) as
+the diagnosis experiment; it has not been re-fitted since.
 
 **9 DSP blocks against a 12-18 target: 8% of the device for the stage that was
 64%.** Three registered signed 32x32 lanes at three blocks each.
