@@ -436,6 +436,55 @@ proof clears, with the 38-mutant sweep running **alongside** it rather than
 serialised in front of it. The Fmax is the deliverable; the sweep does not gate
 it.
 
+### 12:35 - GEOM.SKIN first commit  (`74e495c`)
+
+The block fitted at **72 DSPs on a 112-DSP device — 64% of the chip for one
+stage.** `REMAINING_BLOCKERS` had deliberately *not* queued it, on the good
+argument that vertices are the highest-rate object in the geometry pipeline and
+the parallelism might be earned. **That question needed a number nobody had.**
+
+The owner's ruling supplied it: ~120,000 skinned vertex instances per 60 Hz
+frame. At 100 MHz that is 13.88 clocks per vertex against 18 products, so the
+honest multiplier count is **1.30** and the block had eighteen — over-provisioned
+**13.9x**. This is the campaign's thesis stated cleanly: parallel multipliers
+where the block's RATE does not require them.
+
+Lanes are bound to **terms** rather than rows, which deletes the coordinate mux
+entirely and lets a whole row-product issue in one cycle, so the blend walk
+overlaps the issue tail instead of queueing behind it — which is why one shared
+shift-add blend unit costs nothing against three parallel ones.
+
+**`MUL_LANES` is a frontier, not a setting.** 1, 3 and 6 are each elaborated
+*and* differentiated (`tests/CMakeLists.txt` builds the same differential three
+times). `MUL_LANES = 1` is deliberately kept **because it FAILS** the demand at
+75,757 vertices/frame, and section 8 asserts that it fails — *a frontier with no
+failing end does not show where the wall is.* That is the survey ruling
+(Raster I / RasterIX / Vortex / eGPU / SIMTight) honoured properly rather than
+implementing one architecture and calling it the answer.
+
+**And driving the operand extremes found a bug in the shipped oracle.**
+`zref::rescale_s32` takes an `int64_t` while `skin_vertex` hands it an
+`__int128`, so the reference **silently narrows**: a blend of 1.06e20 saturates
+to `+0x7FFFFFFF` and wraps to `0x80000000` after the conversion. This predates
+the rearchitecture — the old RTL carried 67- and 75-bit lanes and diverged in
+the same places; nothing caught it because nothing had ever driven an operand
+that large.
+
+Handled correctly and worth recording as the precedent: **the reference is NOT
+changed** (owner docket) and **the RTL is NOT taught to imitate a C++
+conversion.** The differential checks the shipped oracle wherever the oracle is
+well defined, and says so in the check name where it cannot.
+
+Both contract blockers against the weight identity were closed first, as the
+contract required: `w0 <= 64` now has an `ENFORCED-BY` that executes
+(`require_legal_w0`), with the upstream hardware obligation docketed against
+`GEOM.VDECODE` rather than papered over with a defensive clamp; and every lane
+width is now proven from the s32 inputs (67 -> 65, 75 -> 73, per
+`QUARTUS_GOTCHAS` 5) as a check rather than a paragraph.
+
+**No DSP measurement yet** — the fitter has been occupied by the Field census
+row. The 72 -> ? number is still outstanding and is the point of the exercise.
+
 ---
 
 ## Subagent Spawns
@@ -443,7 +492,7 @@ it.
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
 | 09:30 | (prior) `abb3ab5` | Field IR shared arithmetic engine, 79 -> 3 DSPs | Completed, merged at `d7691db` | `reports/FIELD_IR_ENGINE.md` |
-| 09:55 | `a7a69ac` | GEOM.SKIN 72 -> 12-18 DSPs | Running | own run dir |
+| 09:55 | `a7a69ac` | GEOM.SKIN 72 -> 12-18 DSPs | RTL + frontier committed `74e495c`; fit outstanding | `runs/CLAUDE-RUNS/RUN-20260823-0937-geom-skin-dsp-rearchitecture/` |
 
 ---
 
