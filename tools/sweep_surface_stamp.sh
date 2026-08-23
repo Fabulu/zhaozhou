@@ -211,13 +211,50 @@ MUTS=(
         out_o = acc[7:0];"
 )
 
-expected=${#MUTS[@]}
+# ---------------------------------------------------------------------------
+# ZHAO_SWEEP_ONLY — re-score a NAMED SUBSET, for confirming a fix.
+#
+# Added 2026-08-23 after this sweep's first run left five survivors. Two of them
+# were a real test gap (see the contract's mutation table); the fix is a new
+# directed case, and the honest way to show a fix works is to re-run the
+# mutants it was written for. Re-running all 32 to check two is 100 minutes of
+# machine time to learn nothing new about the other 30.
+#
+# THE BANNER BELOW IS NOT DECORATION. A filtered run produces a score line that
+# looks exactly like a full run's, and this repository's whole failure history
+# is partial evidence read as complete. The banner, the [FILTERED] tag on the
+# score line and the refusal to match nothing are all there so a filtered log
+# cannot be mistaken for a sweep.
+ONLY=${ZHAO_SWEEP_ONLY:-}
+SEL=()
+for entry in "${MUTS[@]}"; do
+  nm=${entry%%@@*}; id=${nm%% *}
+  if [ -z "$ONLY" ]; then
+    SEL+=("$entry")
+  else
+    case " $ONLY " in *" $id "*) SEL+=("$entry") ;; esac
+  fi
+done
+if [ -n "$ONLY" ]; then
+  if [ ${#SEL[@]} -eq 0 ]; then
+    echo "ABORT: ZHAO_SWEEP_ONLY='$ONLY' matched no mutant. A filtered run that"
+    echo "       scores an empty set is the failure this sweep's preflight exists"
+    echo "       to prevent; it is not allowed here either."
+    exit 10
+  fi
+  echo "########################################################################"
+  echo "## FILTERED RUN — ${#SEL[@]} of ${#MUTS[@]} mutants: $ONLY"
+  echo "## THIS IS NOT A SWEEP SCORE. It confirms a fix on named mutants only."
+  echo "########################################################################"
+fi
+
+expected=${#SEL[@]}
 attempted=0
 accounted=0
 caught=0
 survivors=()
 
-for entry in "${MUTS[@]}"; do
+for entry in "${SEL[@]}"; do
   name=${entry%%@@*}
   rest=${entry#*@@}
   file=${rest%%@@*}
@@ -298,7 +335,9 @@ restore_all || { echo "ABORT: final restore failed"; exit 4; }
 rebuild "$UNION"
 
 echo "----"
-echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught"
+TAG=""
+if [ -n "$ONLY" ]; then TAG=" [FILTERED: $ONLY -- NOT a sweep score]"; fi
+echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught$TAG"
 for s in "${survivors[@]:-}"; do [ -n "$s" ] && echo "SURVIVOR: $s"; done
 if [ "$attempted" != "$expected" ] || [ "$accounted" != "$expected" ]; then
   echo "CROSS-CHECK FAILED (attempted/accounted must both equal $expected)"

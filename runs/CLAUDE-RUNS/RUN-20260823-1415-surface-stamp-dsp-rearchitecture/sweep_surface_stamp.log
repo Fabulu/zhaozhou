@@ -9,3 +9,13 @@ linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
   S02 the sign is read from the wrong bit  *** SURVIVED ***
   S03 the addend shifts by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught
   S04 the multiplier bits shift by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught
+  S05 each chain link's place value is one too high  *** SURVIVED ***
+  S06 each chain link tests the neighbouring multiplier bit  *** SURVIVED ***
+  S07 the square runs one step short, dropping the TOP magnitude bit  caught
+  S08 the LOW magnitude bit is dropped  *** SURVIVED ***
+  S09 the accumulator is not cleared, so squares accumulate across calls  caught
+  S10 vld_o is asserted one step early  caught
+  S11 a fresh start does not clear the previous result's valid  caught
+  S12 the addend is loaded pre-doubled  *** SURVIVED ***
+  T01 the texel-centre accumulator steps by span, not 2*span  caught
+  T02 the row accumulator steps by span, not 2*span  caught

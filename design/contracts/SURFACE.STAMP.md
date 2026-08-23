@@ -270,9 +270,40 @@ full-cover stamp the directed suite drives:
 
 ## Target throughput
 
-Ledger: **1 stamp texel per clock**. **Met, measured:** a full-cover stamp
-(radius 32 m over the ±8 m envelope, all 4,096 texels written) takes **4,102
-cycles** — 4,096 texels plus the acquire and the drain.
+Ledger: **20,000 stamp texels per frame**, i.e. one texel per ~83 clocks at the
+100 MHz `gpu_clk` placeholder (1,666,667 clocks per 60 Hz frame).
+
+**AMENDED 2026-08-23, from "1 stamp texel per clock".** That was a
+**placeholder** — the rate the block happened to have, written down — and this
+section used to report it as "met, measured: 4,102 cycles". That sentence was
+true about *cycles* and silently false about *time*: the constrained fit the
+placeholder bought closed at **32.33 MHz**, so the block never met the shared
+`gpu_clk` it was over-provisioned against. **A cycle count is not a throughput
+until it is multiplied by a clock that was measured.**
+
+The demand is derived from Sacrifice's own SCAR system (`docs/OWNER_DOCKET.md`,
+"THE THREE DEMAND NUMBERS"): the five elemental god scars are 128×128 texels
+over 64×64 land tiles, so one impact dirties at most 3×3 = 9 tiles = 36,864
+texels **once**, not per frame. A heavy barrage of 10 impacts/s is 6,144
+texels/frame; the derived demand is 3× that. Note the unit: chosen law S2 makes
+a stamp visit **all 4,096 texels of its patch** whether covered or not, so
+20,000 is a *visited*-texel budget — about 4.9 stamps per frame.
+
+**Do not use `frame_gpu_cycles` (251,520, `design/budgets/latency.md`) as the
+budget here.** That is the raster period. The compute budget is 1,666,667. They
+differ by 6.6× and both are called "gpu cycles".
+
+**Met, measured**, on a full-cover stamp (radius 32 m over the ±8 m envelope,
+all 4,096 texels written), at all three `SQ_RADIX` settings:
+
+| `SQ_RADIX` | cycles | clk/texel | texels/frame at its own measured Fmax | vs. demand |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 (default) | 158,162 | 38.61 | **37,791** @ 87.54 MHz | **1.89×** |
+| 2 | 83,246 | 20.32 | see the frontier table below | |
+| 4 | 45,788 | 11.18 | see the frontier table below | |
+
+The old design's number, for comparison: 4,102 cycles at 32.33 MHz is 538,833
+texels/frame, **26.9× the demand, and 32% of the shared clock.**
 
 ## Overflow and malformed-input behaviour
 
@@ -417,25 +448,126 @@ sweep's job, and they are not bounded arithmetic cores.
 
 ## Synthesis / resource ceiling
 
-Budget group `geometry_mantle`. **Estimate only — this block has not been
-synthesized:** no Quartus fit, no timing closure, no device numbers, and it is
-deliberately not in `fpga/files.qip`.
+Budget group `geometry_mantle`. **MEASURED**, Quartus Prime Lite 17.0.2 on the
+provisional `5CSEBA6U23I7`, virtual I/O, constrained at 10.000 ns on `clk`
+(`Info (332111)` captured live for every row and saved in the run directory
+`runs/CLAUDE-RUNS/RUN-20260823-1415-surface-stamp-dsp-rearchitecture/fit-evidence/`).
+This section used to say "estimate only — this block has not been synthesized";
+it now says what the fitter said.
 
-Shape: **two 64×64 signed multipliers** for `dx²` and `dz²`, evaluated every
-cycle in the cursor path; two more for `r*r` and `r_inner*r_inner`, evaluated
-**once per stamp** at command accept; two small 41-bit multiplies for the texel
-centres; three wide (64/72-bit) comparators; the `zhao_surface_blend` instance
-(one 9-bit adder, one 9-bit subtractor, one comparator, one barrel shifter); and
-roughly 400 flops of per-stamp constants, two pipeline stages and two counters.
+### Before, and why it was wrong twice
 
-**The two per-cycle squares are the cost, and they are honestly oversized.** The
-stated ±4,096 m domain bounds `|dx|` at 2³⁰, so a 31×31 multiplier and a 62-bit
-compare would suffice; the datapath is written at 64 bits to match the
-reference's `int64` exactly rather than to be small. Narrowing it is a real
-optimisation and a real risk (it changes what happens outside the domain), which
-is why it is recorded here rather than done blind. `dx` also changes only with
-`i` and `dz` only with `j`, so an incremental form exists — the truncating
-divide is what makes it non-obvious, and it was not attempted.
+| | measured |
+| --- | ---: |
+| ALMs | 947 / 41,910 |
+| registers | 496 |
+| **DSP blocks** | **28 / 112 (25%)** |
+| **Fmax** | **32.33 MHz** |
+
+Six multiply operators, **all of them in the coverage geometry**: `r*r` and
+`r_inner*r_inner` (signed 64×64, once per stamp), the two 41-bit texel-centre
+products and `dx*dx + dz*dz` (two signed 64×64), the last four evaluated every
+clock. **None was in the blend, the material conversion or the age/decay path** —
+`zhao_surface_blend` has no multiply at all and fits on its own at 64 ALMs /
+0 DSPs, and AGE's rate is a shift *precisely because* the `unit_mul` form would
+have cost a multiplier. The block's own contract had already refused to spend a
+DSP on behaviour.
+
+Two things this section previously got wrong, both worth keeping visible:
+
+1. **"The two per-stamp squares are free."** They were not. They were written as
+   combinational expressions hanging off the command port, and nothing in the
+   RTL said they were rare, so the fitter gave them silicon like any other
+   multiply. **A rate that lives only in a comment is not a rate.**
+2. **"Target throughput met."** Met in *cycles*, at **32.33 MHz** — a third of
+   the `gpu_clk` the whole console shares. The 28 DSPs bought a cycle count on a
+   block that was three times too slow.
+
+### After — the coverage geometry on one shared sequential squarer
+
+The two texel-centre products are **first-order accumulators** (`numx` advances
+by `2*spanx` per `i`), exact mod 2⁴¹ for every input with **no domain argument
+owed**. The four remaining squares share one `zhao_surface_sq`, which
+accumulates mod 2⁶⁴ — exactly the truncation the shipped product already
+performed — so it is a drop-in on every input, including `v = −2³⁵`. **One
+shared unit, local to this block**, per the standing "smallest local farm"
+ruling. There is no `*` operator left in any of the three files, which is the
+only reliable way to not get a DSP: `reports/QUARTUS_GOTCHAS.md` §3 records that
+`(* multstyle = "logic" *)` is accepted and silently ignored.
+
+| | @pre-rearch | SQ_RADIX = 1 | delta |
+| --- | ---: | ---: | ---: |
+| ALMs | 947 | **993** | +46 (+4.9%) |
+| registers | 496 | **1,018** | +522 |
+| **DSP blocks** | **28** | **0** | **−28** |
+| RAM blocks | 0 | 0 | — |
+| **Fmax** | **32.33 MHz** | **87.54 MHz** | **+171%** |
+| texels/frame | 538,833 | **37,791** | 0.070× |
+| vs. the 20,000 demand | 26.9× | **1.89×** | — |
+
+The +522 registers are the honest cost of going sequential — a 64-bit
+accumulator, a 64-bit shifting addend, the multiplier-bit register, the held
+`dz²`, the two texel-centre accumulators and the two registered radius operands.
+They cost only 46 ALMs, because registers pack into ALMs the logic already
+needed.
+
+### The frontier, measured rather than argued
+
+`SQ_RADIX` retires that many magnitude bits per cycle through a chain of that
+many conditional 64-bit adds. **Every setting meets the texel demand**, so
+unlike GEOM.SKIN's `MUL_LANES` this frontier has no failing end on the
+throughput axis — its wall is on the **Fmax** axis, which is the axis that
+matters because `gpu_clk` is shared.
+
+| `SQ_RADIX` | squarer cycles | clk/texel | ALMs | registers | DSPs | **Fmax** | **texels/frame** | vs. demand |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33 MHz*** | *538,833* | *26.9×* |
+| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54 MHz** | **37,791** | **1.89×** |
+| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 MHz | 71,720 | 3.59× |
+| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 MHz | 122,796 | 6.14× |
+
+All four rows are **constrained** fits — `Info (332111): 10.000 clk` captured
+live from each workspace and saved under `fit-evidence/` in the run directory —
+on Quartus Prime Lite 17.0.2, `5CSEBA6U23I7`, virtual I/O, Slow 1100mV 100C.
+
+**What the frontier says, and it is not what the SPEC predicted.** The
+prediction was that `SQ_RADIX = 4`'s four-deep adder chain would be the wall.
+It is, but a soft one: **4 costs 5.9% of the clock and buys 3.25× the
+throughput**, and **2 costs 0.1% of the clock — inside measurement noise — and
+buys 1.90×.** The adder chain is simply not the critical path at radix 2.
+
+**The default stays at 1 anyway, and that is the whole point of this campaign.**
+`SQ_RADIX = 2` is very nearly free, but the demand is 20,000 texels/frame and
+radix 1 delivers 37,791. Spending 36 more ALMs to reach 3.59× would be
+**provisioning past the demand** — the exact error the 28 DSPs came from,
+committed again at 1/100th the scale. The frontier's value is that raising the
+throughput is now a **measured one-parameter lever** rather than a rewrite, if
+the demand is ever revised upward.
+
+**`SQ_RADIX = 1` also uses 26 MORE registers than 2 and 31 more than 4**, which
+is placement noise around an identical register set (the counter, the shift
+registers and the accumulator do not depend on the radix). Recorded so nobody
+reads a trend into it.
+
+### The datapath is NOT narrowed, and the sweep measured exactly how much is left
+
+The stated ±4,096 m domain bounds `|dx|` below 2³⁰, so a 31-bit magnitude would
+be exact inside it and the squarer's `MAG_W = 36` is five bits wider than the
+domain requires — about 14% of the initiation interval. **Narrowing is
+declined**, for the reason this section already gave (it changes what happens
+outside the domain) and one more: `SQ_RADIX = 2` buys **twice** the throughput
+with **no** domain risk at all, so the narrowing is a worse lever than the one
+already on the table. Recorded, measured, not taken.
+
+<!-- WIDTH-EVIDENCE -->
+
+### Rejected: the 64-entry `dx²` table
+
+`dx` depends only on `i`, so 64 values cover a whole stamp and a table would
+restore one texel per clock at 0 DSPs. **Rejected:** ~4,000 flops plus a 62-bit
+64:1 mux (estimated 2,000+ ALMs) to buy 37× the throughput of a block that
+already meets its demand — the same over-provisioning error in a different
+resource — and it would give up this block's "Memory ownership: **None**".
 
 ## Integration capture cases
 

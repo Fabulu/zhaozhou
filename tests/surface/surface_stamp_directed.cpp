@@ -362,6 +362,115 @@ void test_zero_radius(Vzhao_surface_stamp& dut) {
         sheet_diff(o.want, o.got));
 }
 
+void test_rim_exact_odd_leg(Vzhao_surface_stamp& dut) {
+  // WHY THIS EXISTS. The 2026-08-23 mutation sweep found the gap, and the gap
+  // is structural rather than careless.
+  //
+  // The coverage test compares `d2` against `r_outer2`, and since the DSP farm
+  // came out of this block BOTH are produced by the SAME shared squarer. Any
+  // mutation that scales that engine's output UNIFORMLY is therefore invisible
+  // through coverage: `2*m^2` and `m^2/2` order exactly as `m^2` does. Four
+  // sweep mutants exploited that, and two of them — "each chain link tests the
+  // neighbouring multiplier bit" and "the LOW magnitude bit is dropped" —
+  // compute `(m^2 - m*m[0]) / 2`, which is a uniform halving **only while every
+  // magnitude is even**.
+  //
+  // Every operand this suite drove WAS even, because every envelope, radius and
+  // translation in it is a whole number of metres or a binary fraction of one.
+  // Those two mutants survived on that accident and not on any equivalence.
+  //
+  // So this case breaks the parity deliberately, and it is CONSTRUCTED rather
+  // than rolled — the same discipline the rim-exact case in
+  // surface_stamp_random.cpp adopted after mutation 6, and for the same reason:
+  // a texel exactly on the rim is a measure-zero event that random sampling
+  // over metre-scale radii will never hit.
+  //
+  // THE CONSTRUCTION. On kEnv8 the centre of texel 32 sits at kM/8 raw on both
+  // axes. Putting the translation 3 raw units to one side and 4 to the other
+  // makes texel (32,32) sit at dx = 3, dz = 4 — a Pythagorean triple — so a
+  // radius of 5 puts it EXACTLY on the outer rim, which the reference covers
+  // (its outer test is `>`, not `>=`). The next texel centre is kM/4 = 16,384
+  // raw units away, so a radius of 5 raw units — about 76 micrometres of world —
+  // can reach nothing else. That is why the expected count is exactly one and
+  // not approximately one.
+  //
+  // WHY IT KILLS THE HALVING. dx = 3 and r = 5 are odd while dz = 4 is even, so
+  // the halving stops being uniform: `d2` becomes (r^2 - dx)/2 = 11 while
+  // `r_outer2` becomes (r^2 - r)/2 = 10, and since a leg is always shorter than
+  // its hypotenuse the texel falls OUTSIDE. Coverage flips from one texel to
+  // none.
+  //
+  // WHY IT DOES NOT KILL THE DOUBLING. `2*d2` against `2*r_outer2` still orders
+  // the same way, and it always will — see the contract's mutation table, where
+  // the two doubling mutants are recorded as EQUIVALENT within the stated
+  // ±4,096 m domain rather than as a gap.
+  const int32_t centre32 = -8 * kM + 65 * (kM / 8);  // texel 32's centre, both axes
+  Rng rng(23);
+
+  // (a) odd dx, even dz.
+  {
+    StampCmd c;
+    c.env = kEnv8;
+    c.tag = 61;
+    c.strength = 0xFF00;
+    c.tx = centre32 - 3;
+    c.ty = centre32 - 4;
+    c.radius = 5;
+    const zs::Sheet empty;
+    const Outcome o = run_one(dut, c, empty, rng);
+    check(o.oracle_texels == 1, "rim-exact odd leg: the ORACLE covers exactly one texel", 1,
+          o.oracle_texels);
+    check(o.texels_written == 1, "rim-exact odd leg (dx odd): exactly one texel is stamped", 1,
+          o.texels_written);
+    check(o.got.tag[32 * 64 + 32] == 61, "rim-exact odd leg: and it is texel (32,32)", 61,
+          o.got.tag[32 * 64 + 32]);
+    check(sheet_diff(o.want, o.got) == 0, "rim-exact odd leg (dx odd) matches the oracle", 0,
+          sheet_diff(o.want, o.got));
+  }
+
+  // (b) the legs swapped, so the dz lane is pinned the same way. dz = 3 is now
+  // the odd one; a mutation confined to the per-ROW square dies here and not
+  // in (a).
+  {
+    StampCmd c;
+    c.env = kEnv8;
+    c.tag = 62;
+    c.strength = 0xFF00;
+    c.tx = centre32 - 4;
+    c.ty = centre32 - 3;
+    c.radius = 5;
+    const zs::Sheet empty;
+    const Outcome o = run_one(dut, c, empty, rng);
+    check(o.oracle_texels == 1, "rim-exact odd leg (swapped): the ORACLE covers one texel", 1,
+          o.oracle_texels);
+    check(o.texels_written == 1, "rim-exact odd leg (dz odd): exactly one texel is stamped", 1,
+          o.texels_written);
+    check(sheet_diff(o.want, o.got) == 0, "rim-exact odd leg (dz odd) matches the oracle", 0,
+          sheet_diff(o.want, o.got));
+  }
+
+  // (c) An ODD-magnitude operand that is NOT on a rim, so the parity is
+  // exercised across a whole disc rather than at a single texel. This one is
+  // not expected to kill the halving mutants on its own — it is here so that
+  // "no odd operand ever reaches the squarer" can never become true again by
+  // accident if (a) and (b) are ever edited.
+  {
+    StampCmd c;
+    c.env = kEnv8;
+    c.tag = 63;
+    c.strength = 0xFF00;
+    c.tx = centre32 + 12345;  // odd translation, odd radius, odd ring width
+    c.ty = centre32 - 6789;
+    c.radius = 3 * kM + 1;
+    c.ring_width = kM + 1;
+    const zs::Sheet empty;
+    const Outcome o = run_one(dut, c, empty, rng);
+    check(o.texels_written > 100, "odd-raw annulus covers a real ring", 1, o.texels_written);
+    check(sheet_diff(o.want, o.got) == 0, "odd-raw annulus matches the oracle", 0,
+          sheet_diff(o.want, o.got));
+  }
+}
+
 void test_negative_radius(Vzhao_surface_stamp& dut) {
   // The reference squares the SIGNED radius, so -6 m covers like +6 m. Kept
   // because a capture with a negative radius must replay identically.
@@ -724,6 +833,7 @@ int main(int argc, char** argv) {
   test_edges_and_corners(dut);
   test_stamp_entirely_outside(dut);
   test_zero_radius(dut);
+  test_rim_exact_odd_leg(dut);
   test_negative_radius(dut);
   test_inverted_envelope(dut);
   test_saturation(dut);
