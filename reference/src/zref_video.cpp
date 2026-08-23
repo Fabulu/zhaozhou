@@ -24,7 +24,21 @@ const VidTiming& vid_timing(uint32_t mode) {
       // Duo: 512x240 (2 x 256x192), H 608, 318,592
       {512, 8, 48, 40, 608, 240, 4, 4, 14, 262, 318592},
   };
-  return kTable[mode & 3u];
+  // NOT `kTable[mode & 3u]`. That mask admits 0..3 while the table has three
+  // entries, so mode 3 was an out-of-bounds read -- and for mode >= 4 it wrapped,
+  // making mode 4 read as Z60 and mode 5 as Storm, which is NOT what the RTL
+  // does: zhao_pkg.sv:191-194 `zhao_mode_from_abi` maps every value >= 2 to DUO.
+  // So the oracle and the hardware disagreed for every mode >= 3.
+  //
+  // Both halves are unreachable today: mode 3+ is rejected as ZH_ABI_BAD_VALUE by
+  // all three generated validators and hard-rejected twice more in RTL
+  // (zhao_video_mode.sv:133, zhao_cmd_scheduler.sv:370). That unreachability is
+  // exactly why this change is safe: no capture can contain mode 3, the mapping
+  // is byte-identical for 0/1/2, and therefore no golden CRC can move.
+  //
+  // Clamped to match the RTL rather than defaulting to Z60, so that if a fourth
+  // mode is ever added the two sides fail the same way instead of differently.
+  return kTable[mode < 2u ? mode : 2u];
 }
 
 uint32_t canvas_bytes(uint32_t mode) {
