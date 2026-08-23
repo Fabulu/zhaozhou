@@ -753,3 +753,58 @@ the limiter.
 Recorded as a correction rather than by editing the earlier entry, because the
 distinction — a post-hoc timing query on an unoptimised placement is not a
 fitted critical path — is the reusable part.
+
+### 2026-08-23 21:2x — my own edit script wrote 2,934 changed lines into a 40-line edit
+
+`git diff --cached --stat` on the documentation commit:
+
+    reports/REMAINING_BLOCKERS.md   | 2934 ++++++++++--------
+
+For an edit that inserts one section and changes two table rows. Checked instead
+of committed, and the file was **fully CRLF plus two bare CR characters** where
+git's stored blob is LF — so git could not match a single line of context and
+staged a whole-file replacement.
+
+The two bare CRs are the tell and they are mine. The edit script builds its
+insert as `anchor + NL + NL + body` and then applies `.replace('\n', NL)` to the
+result — so the `NL` already inside it becomes `\r\r\n`. Every other edit in
+this run applied the conversion to a string that had not been converted yet;
+this one did it twice.
+
+Normalised the file, re-staged: **40 insertions, 2 deletions.** Then scanned
+**every** staged file for the same artefact — none had it.
+
+**Third git-shaped near-miss in one run**, and the same lesson each time: the
+staging summary is a measurement, and it is free. `git add -A` staging 288
+files, a `git checkout -- <paths>` staging an RTL revert, and now a text
+transform whose output nobody looked at. All three were caught by reading
+`git diff --cached --stat` or `--numstat` before committing, and none would have
+been caught by any test — the reverted RTL still compiled and the CRLF file
+still rendered.
+
+### 2026-08-23 21:4x — the five SPEC predictions, scored
+
+`SPEC_v1.md` wrote five predictions down before any RTL existed, "so they can be
+wrong in public". **Two right, three wrong**, and the wrong ones were more
+useful than the right ones.
+
+| # | prediction | outcome |
+| ---: | --- | --- |
+| 1 | pristine Fmax **45–70 MHz**; the address generator is the suspect | **WRONG twice over.** It reported 199.72 (the sample counter). Under a real constraint it is **36.92** — below my range, and the address generator is a near miss rather than the limiter. |
+| 2 | `FILT_LANES = 4` lands at **4–8 DSPs**, probably 5, because a Cyclone V block does three 9×9 or two 18×19 | **WRONG. 12.** Quartus packs nothing; one block per `*` operator. |
+| 3 | 2 lands at 2–4, 1 lands at 1–2; **identical DSP counts across settings would mean the parameter was ignored** | **HALF RIGHT.** The counts differ (12 / 6 / 3, so the parameter took), but every one is at the top of or above my range, by the same factor-of-2 error as #2. |
+| 4 | Fmax will **improve** at every setting | **WRONG.** 36.92 → 36.11, and 199.72 → 192.46 under the old SDC. The factored form is *serial* where the old one was parallel; I had counted multipliers and not chain depth. |
+| 5 | ALMs will **fall** | **WRONG.** +77 at the default, +107 at `FILT_LANES = 4`. I counted the four 25-bit adder trees removed and not the subtracts, adds and mux added. |
+
+**The one that paid was #3's guard clause**, which is not a prediction at all but
+a falsifiability condition: *if two settings report the same DSP count, the
+parameter was ignored* (`QUARTUS_GOTCHAS.md` §3). Writing it down meant the
+12 / 6 / 3 sequence was evidence the parameter took, rather than three numbers I
+would have believed either way.
+
+**Three of the four failures share one shape: I reasoned about what was
+*removed* and not about what replaced it.** Fewer multipliers, so fewer DSPs
+(no — one per operator); fewer multipliers, so faster (no — a longer chain);
+fewer adder trees, so fewer ALMs (no — subtracts and a mux). The arithmetic
+argument for the factoring was airtight and every *physical* consequence I drew
+from it was wrong.

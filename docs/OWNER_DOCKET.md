@@ -407,6 +407,19 @@ Four notes back to this entry, because each corrects or sharpens it:
 * **Everything else is strictly power-of-two and square**, and **nothing exceeds
   256×256** — 390 of 626 are 256×256, the rest 128×128 or smaller.
 
+**ANSWERED by whoever built it (2026-08-23, RUN-20260823-1736), and the answer
+is "keep the repack docketed, and here is what it is actually buying".** The
+warning above is right that the block assumes power-of-two, and the cost of
+relaxing that is now measurable rather than notional: `LOG2W`/`LOG2H` are what
+make texel conversion (`u_raw << log2s`), the mip level offset (a base-4-repunit
+table plus **one** variable shift) and the row-major index (`(v << log2w) + u`)
+all **shifts**. Every one becomes a **multiply on the per-sample address path**
+if dimensions are arbitrary — on the block whose entire rearchitecture was
+removing multiplies from that cone, and on a kit where **one `*` operator = one
+DSP block**, measured three ways. A 256×799 sampler would put the DSPs straight
+back. The asset-pipeline repack is not the cheap option; it is the only one that
+does not undo the cut.
+
 Mip-mapping is **proven present**: every `.MAPT` is 5,476 bytes, and
 `4096+1024+256+64+16+4+1 = 5,461` is a complete 64×64→1×1 chain. Verified
 empirically rather than by arithmetic alone — a palette-parent test gives a
