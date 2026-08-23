@@ -1,0 +1,38 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_geom_skin.sv                        test_geom_skin_directed test_geom_skin_lanes1 test_geom_skin_lanes6
+linted 28 mutants at MUL_LANES (1, 3, 6), 0 do not build
+== establishing the pristine baseline
+   pristine model dffdc37a30454df6, all 3 lanes green
+  M01 the rigid boundary is w0 == 63, not 64  caught
+  M02 rigid path rescales by 22, not 16  caught
+  M03 blend rescales by 16, not 22  caught
+  M04 round-half-up becomes a floor  caught
+  M05 the positive saturation rail is off by one  caught
+  M06 the negative saturation rail is off by one  caught
+  M07 the pb term is scaled by 2^5, not 2^6  caught
+  M08 the weight difference is reversed  caught
+  M09 weight bit 0 contributes 2^1  caught
+  M10 weight bit 5 contributes 2^4  caught
+  M11 the weight is truncated to five bits  caught
+  M12 the translation is not pre-shifted into the accumulator  caught
+  M13 B's accumulator is seeded from A's translation  caught
+  M14 the B palette is never latched  caught
+  M15 the y and z lane operands are swapped  caught
+  M16 the matrix row stride is three, not four  caught
+  M17 the accumulator is LOADED rather than accumulated  caught
+  M18 a busy engine still offers ready  caught
+  M19 a full output register still offers ready  caught
+  M20 the src_id passthrough is off by one  caught
+  M21 the counter loses its saturation (EXPECTED EQUIVALENT)  *** SURVIVED ***
+  M22 the counter advances by two  caught
+  M23 the blend row waits only on pa  caught
+  M24 every row is blended against B's row 0  caught
+  M25 the issue walk stops one group early  caught
+  M26 a landed product goes to the neighbouring accumulator  caught
+  M27 acc_done is set by the FIRST term, not the last (EQUIVALENT at MUL_LANES 3 and 6)  caught
+  M28 rigid still issues six row-products (EQUIVALENT at MUL_LANES 1 and 3)  *** SURVIVED ***
+== restoring the pristine build
+----
+attempted=28 expected=28 accounted=28 caught=26
+SURVIVOR: M21 the counter loses its saturation (EXPECTED EQUIVALENT)
+SURVIVOR: M28 rigid still issues six row-products (EQUIVALENT at MUL_LANES 1 and 3)

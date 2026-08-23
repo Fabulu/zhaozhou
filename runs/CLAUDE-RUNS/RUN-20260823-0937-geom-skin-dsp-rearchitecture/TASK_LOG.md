@@ -454,3 +454,75 @@ frontends accept — and the irony is sharp: `$error` was avoided *because* this
 tool's support for elaboration system tasks was unknown, and the `if` was the
 part it could not parse. Recorded as §8, and the file's closing tally corrected
 from "six of the seven" to "seven of the eight".
+
+---
+
+## 11:35 — MUTATION SWEEP: 28 attempted, 28 accounted, 26 caught, 2 equivalent
+
+Run in the worktree `C:\programmieren\zencrifice\zhaozhou-sweep-skin` with its
+own build tree, per the owner ruling. Full log:
+`sweep_geom_skin.log` beside this file.
+
+    == guard 7: consumers, derived from tests/CMakeLists.txt
+       zhao_geom_skin.sv   test_geom_skin_directed test_geom_skin_lanes1 test_geom_skin_lanes6
+    linted 28 mutants at MUL_LANES (1, 3, 6), 0 do not build
+    == establishing the pristine baseline
+       pristine model dffdc37a30454df6, all 3 lanes green
+    ...
+    attempted=28 expected=28 accounted=28 caught=26
+    SURVIVOR: M21 the counter loses its saturation (EXPECTED EQUIVALENT)
+    SURVIVOR: M28 rigid still issues six row-products (EQUIVALENT at MUL_LANES 1 and 3)
+
+**No mutant was discarded.** `attempted == accounted == expected == 28`, so the
+cross-check passes and every mutant re-elaborated (the model-directory hash
+differed from pristine each time) and linked (all three executables present
+after every rebuild). The RTL was restored byte-identically after each one, and
+the worktree is clean.
+
+### GUARD 7 EARNED ITS KEEP, and this is the concrete proof
+
+**M27 — `acc_done` set by the FIRST term rather than the last — was CAUGHT, and
+it could only be caught by the `MUL_LANES = 1` build.**
+
+At `MUL_LANES` 3 and 6 the term walk collapses (TSTEPS == 1): all three terms of
+a row-product issue in one cycle, so "first term" and "last term" are the same
+cycle and the mutation is exactly equivalent. Only the one-lane build walks the
+three terms over three cycles, where setting `acc_done` on the first term makes
+the blend read an accumulator that is two products short.
+
+I predicted this one as an equivalent mutant and it is not. **A sweep scored
+against the default build alone would have reported M27 as a survivor and
+invented a test gap that does not exist** — and, worse, would have left the
+multi-cycle accumulate path genuinely unexercised while claiming coverage.
+
+That is the whole argument for building the frontier rather than arguing it.
+
+### The two survivors, both equivalent with a proof
+
+**M21 — the counter loses its saturation.**
+`if (vertices_transformed_o != 32'hFFFF_FFFF)` becomes `if (1'b1)`. Equivalent
+**under simulation** and only under simulation: reaching the rail needs 2^32
+accepted vertices, about 12 hours of continuous 10-clock beats at 100 MHz. No
+differential can reach it. Predicted as equivalent before the run and it is;
+this is the same class the project proved elsewhere by the all-ones-minus-x
+identity rather than by test, and the same remedy would apply here.
+
+**M28 — rigid still issues six row-products.**
+`n_rp = rigid_q ? 3'd3 : 3'd6` becomes `n_rp = 3'd6`. Equivalent — **but my
+stated reason was WRONG and the correction matters.**
+
+I predicted it would be caught by the `MUL_LANES = 6` build, on the grounds that
+RL == 2 makes rigid group 1 contain `rp = 3`, which the mask discards. It is not
+caught, and it cannot be: **for a rigid vertex the B accumulators are never
+read.** `row_ready` requires only `acc_done[br_a]`, and `res_row` takes
+`pa_sel = acc[br_a]` with `br_a` in 0..2. Writing acc[3] costs a multiply issue
+and changes nothing observable.
+
+So the `n_rp` mask is **defensive, not load-bearing**, and it is worth keeping
+for exactly that reason: it stops a rigid vertex from spending a multiplier
+slot, which is throughput rather than correctness. The RTL comment claiming it
+guards the masked lane is accurate; the sweep merely shows the guard's value is
+energy and issue slots, not the answer.
+
+**Recording a prediction that was wrong, because a sweep whose surprises are
+edited out afterwards is a sweep that taught nothing.**

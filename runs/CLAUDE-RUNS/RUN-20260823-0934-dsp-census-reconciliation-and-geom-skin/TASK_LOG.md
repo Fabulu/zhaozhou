@@ -581,6 +581,49 @@ afterwards, which is the only reason I can say nothing was lost.
    sources five minutes before the normalize edit, so it gives the timing number
    but not the green).
 
+### 13:45 - The formal timeout: raise it, but say why it is not the last case
+
+The depth-172 solo run will land near **5,000 s against an 1,800 s lane budget**
+(k=117 at 90 min). The agent proposed raising the budget with the measured time
+as the reason. Checked two things before agreeing, because raising a budget
+looks identical whether it is justified or lazy.
+
+**The cost is acceptable.** The heavy formal lane runs under `ctest -L nightly`
+on a schedule (`ci.yml:230`), not in the PR path — the fast lane carries only a
+formal smoke (6.48 s*proc over 2 tests). ~5,000 s lands on a nightly, not on
+anyone's turnaround. **If it were the fast lane the answer would be different.**
+
+**But there is a precedent and it went the other way.**
+`formal_video_framectl_one_fence` (`formal_runs.yml:428`): an unbounded
+`abc-pdr` prove completed green once, cost 45+ min with large run-to-run
+variance, and **twice blew the 1800 s budget**. The recorded lane task was
+changed to the *bounded* one — **scope reduced to fit the budget rather than the
+budget raised** — with the reason recorded as *"a flaky-green"*.
+
+Two things distinguish this case, and the note must state both or it reads as
+budget creep:
+
+1. **The precedent's problem was variance, not duration.** A run that sometimes
+   finishes and sometimes times out yields a green that means nothing. This one
+   is a predictable ~5,000 s at a measured rate, and it is `RUN_SERIAL` so wall
+   time approximates solo. **A predictable long run is a cost; a variable one is
+   a lie.**
+2. **The precedent had a cheaper task that still proved something.**
+   Bounded-at-depth-60 was a real alternative. Here there is none: 172 is
+   **derived** — the shortest window in which both `a_op_bounded` and
+   `a_progress` are falsifiable, from `MAX_RUN_CYCLES = 2*MAX_OP_CYCLES + 8`.
+   Trimming it would be choosing the answer, and V19's guard is pinned to
+   `PROVEN_DEPTH` exactly so a shortened window fires rather than silently
+   re-scoping the PASS.
+
+Asked for it to be paired with the corroboration measurement already in hand —
+5,473 s at depth **100** unabstracted, and the depth-172 unabstracted run
+abandoned at k=114 after 2h20 — because together those say **there is no cheaper
+honest configuration**, not merely that this one is slow. And asked that the
+note record the figure as **pessimistic** (measured with a Quartus fit running
+alongside), since being explicit that a number is the bad case is what stops the
+next person shaving it.
+
 ---
 
 ## Subagent Spawns
