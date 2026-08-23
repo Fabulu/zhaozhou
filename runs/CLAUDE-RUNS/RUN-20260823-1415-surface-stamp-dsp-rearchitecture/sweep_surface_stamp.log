@@ -5,3 +5,7 @@
 linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
 == establishing the pristine baseline
    pristine models 1fc7e04464fc/1fc7e04464fc/3f149747542e, 6 lanes green
+  S01 the magnitude negation drops its +1  caught
+  S02 the sign is read from the wrong bit  *** SURVIVED ***
+  S03 the addend shifts by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught
+  S04 the multiplier bits shift by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught

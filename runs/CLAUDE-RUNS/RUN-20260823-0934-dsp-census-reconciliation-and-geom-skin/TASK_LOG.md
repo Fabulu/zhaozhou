@@ -1091,6 +1091,52 @@ conversion, age/decay, capture-exact ordering — is already specified in
 `SURFACE.STAMP.md` and `ops.yml` and **is not in scope**. Only the rate was a
 placeholder.
 
+### 19:00 - THE FIELD ANSWER: 8.59 -> 33.86 MHz, and it is a campaign
+
+| | before | after |
+| --- | ---: | ---: |
+| Fmax | 8.59 MHz | **33.86 MHz** (3.94x) |
+| WNS setup | -106.411 ns | **-19.532 ns** (5.4x) |
+| TNS setup | -2,122,226 ns | **-45,290 ns** (**47x**) |
+| ALMs | 8,901 | **7,750** |
+| DSPs | 3 | 3 |
+
+Measured on `866448d`, same flow, same device, same virtual-pin setup as the
+8.59 baseline — so the comparison is like-for-like.
+
+**The two framed scenarios were "maybe 28 MHz, not 100" or "everything else is
+at 8-9 ns and we're basically done". The answer is 33.86 — squarely the first.**
+The loop really was the dominant term rather than a symptom (a 3.94x return
+proves that), but the block still misses 100 MHz by 3x and there is a second
+path to name. **Recorded as a campaign, not a one-off**, in `STATUS.md`
+(`18a7cf0`), rather than letting the headline imply we are closer than we are.
+
+**The asymmetry is the useful signal, and it deserves stating as a general
+diagnostic.** WNS improved 5.4x while TNS improved **47x**. A single freak path
+would have moved WNS and left TNS roughly alone. A whole *population* of paths
+collapsing together is what 128 stacked stages feeding several destinations
+looks like — so the fix removed a **systemic** cost rather than clipping an
+outlier, and that is why the remaining work is likely ordinary. **TNS/WNS ratio
+change is a cheap test for "one bad path" versus "a bad neighbourhood", and it
+cost nothing to read.**
+
+Area moved again too: the 128 unrolled stages were worth ~1,151 ALMs. Overall
+this block is **10,615 -> 7,750 (-27%)** and **79 -> 3 DSPs (-96%)**.
+
+**Two disciplines held that had lapsed earlier today**, both worth noting
+because they are the ones that cost rows:
+
+* the agent had the **fitted netlist**, so it ran STA directly and **never
+  touched the fitter** while SURFACE.STAMP's fit was running — no competing fit;
+* it holds the post-fix ALM/DSP/Fmax figures and **deliberately did not
+  hand-edit them into the report**. The row stays stale-but-honest at
+  `sourceCommit 7a3e2a3` until the harness rewrites it.
+
+**Read against the day's other block:** creature skinning 89.65 MHz (meets its
+budget), Field engine 33.86 MHz (does not). Two blocks fixed today landing 2.6x
+apart — **the design is not uniformly slow**, which is the strongest evidence
+yet against the pessimistic reading of this morning's discovery.
+
 ---
 
 ## Subagent Spawns
