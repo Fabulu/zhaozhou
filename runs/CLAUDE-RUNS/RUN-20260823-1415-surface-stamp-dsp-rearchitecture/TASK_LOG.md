@@ -338,6 +338,121 @@ process is alive.** Recorded because the point of that rule is that it has to
 hold when the edit looks harmless — every one of the ten prior instances looked
 harmless too.
 
+### 2026-08-23 16:3x — THE FRONTIER, COMPLETE AND MEASURED
+
+Four constrained fits, `Info (332111): 10.000 clk` captured for every one and
+saved under `fit-evidence/`.
+
+| `SQ_RADIX` | sq cycles | clk/texel | ALMs | regs | DSPs | **Fmax** | **texels/frame** | vs. demand |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33*** | *538,833* | *26.9×* |
+| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54** | **37,791** | **1.89×** |
+| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 | 71,720 | 3.59× |
+| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 | 122,796 | 6.14× |
+
+**The SPEC's prediction about the frontier's shape was wrong, and the wrong part
+is the interesting part.** I predicted `SQ_RADIX = 4`'s four-deep adder chain
+would be the wall. It is a wall, but a soft one — 4 costs **5.9%** of the clock
+and buys **3.25×** the throughput; 2 costs **0.1%**, which is inside noise, and
+buys **1.90×**. The adder chain is simply not the critical path at radix 2.
+
+**The default stays at 1 anyway**, and that is the campaign's own principle
+applied to myself: `SQ_RADIX = 2` is very nearly free, but the demand is 20,000
+texels/frame and radix 1 delivers 37,791. Spending 36 more ALMs to reach 3.59×
+would be **provisioning past the demand** — the exact error the 28 DSPs came
+from, committed again at a hundredth of the scale. What the frontier buys is
+that raising throughput is now a measured one-parameter lever instead of a
+rewrite.
+
+**The default row was fitted TWICE**, at `04e3c3f` (490.3 s) and again at
+`753ca93` (867.8 s) after the workspace-collision fix, to recover the evidence
+the collision destroyed. **Both produced 993 ALMs / 1,018 registers / 0 DSPs /
+87.54 MHz — identical to the last digit.** An unintended independent
+reproduction, and a useful one.
+
+### 2026-08-23 16:4x — MUTATION SWEEP, RUN 1: killed by the harness, and it took two false results with it
+
+Run 1 scored 22 of 32 mutants and then produced **two results that were
+artefacts, not measurements** — kept in full as `sweep_run1_partial.log`:
+
+    T07 ...  DISCARDED: a target did not LINK
+    T09 ...  DISCARDED: models identical to pristine (did not re-elaborate)
+
+**Neither was true.** The agent harness killed the background command's
+*wrapper* at its timeout while the bash process itself kept running. T07's "did
+not LINK" was that kill landing mid-rebuild. Then, believing the sweep dead
+because the harness said so, I reset the worktree's RTL underneath it — so T09
+really was scored against restored source, and said so.
+
+This is the run brief's oldest failure mode, third instance in this run:
+**build/harness state masquerading as design behaviour**. Twice now the tell was
+the same — a result that was *specific and confident and wrong* — and both times
+the sweep's own guards caught it and refused to score it. **The guards worked.
+My reading of the harness did not.**
+
+Fixed by launching the sweep **detached** (`run_sweep.sh` in the worktree) and
+checking liveness by looking for the process, never by trusting a wrapper's exit
+status. Run 1's log is kept rather than deleted, because those two false lines
+are the evidence for why.
+
+### 2026-08-23 16:2x — WHAT RUN 1 DID ESTABLISH: five survivors, three mechanisms
+
+Before it was killed, run 1 scored all twelve squarer mutants and eight of the
+sixteen stamp mutants. **S03 and S04 were CAUGHT**, which is the frontier builds
+earning their keep exactly as designed: `sh_q << SQ_RADIX` and `sh_q << 1` are
+*the same expression* when `SQ_RADIX == 1`, so the default build cannot
+distinguish them — only the radix-2 and radix-4 elaborations can.
+
+Five survived, in three mechanisms, all traceable to **one structural fact**:
+the coverage test compares `d2` against `r_outer2`, and since the DSP farm came
+out **both are produced by the same shared squarer**. A mutation that scales
+that engine's output uniformly is invisible through coverage, because `2m²` and
+`m²/2` order exactly as `m²` does.
+
+| mutant | mechanism | verdict |
+| --- | --- | --- |
+| **S05** place value one too high | uniform **×2** on all four squares | **EQUIVALENT** |
+| **S12** addend loaded pre-doubled | uniform **×2**, the same thing by another route | **EQUIVALENT** |
+| **S02** sign read from bit 34, not 35 | bits 35:34 are always equal | **EQUIVALENT** |
+| **S06** chain tests the neighbouring bit | `(m² − m·m[0])/2` — uniform **÷2 only while every magnitude is EVEN** | **REAL GAP** |
+| **S08** low magnitude bit dropped | identical arithmetic to S06 | **REAL GAP** |
+
+**S07 was CAUGHT, and I had predicted it would survive.** I reasoned that the
+±4,096 m domain bounds `|dx|` below 2³⁰, so the top magnitude bits are dead.
+That is true of `dx` and false of `r_inner`, which is `max(r − rw, 0)` on two
+unconstrained int32 words and reaches 2³². The prediction was wrong because it
+considered one of the squarer's four operands instead of all four.
+
+### 2026-08-23 16:5x — THE GAP, AND THE CASE THAT CLOSES IT
+
+S06 and S08 survived on an **accident of parity**: every operand the suite ever
+drove was even, because every envelope, radius and translation in it is a whole
+number of metres or a binary fraction of one. Nothing about the block requires
+that — an fx16 raw word is an int32, and one raw unit is 15 micrometres of world.
+
+`test_rim_exact_odd_leg` breaks it **by construction**, in the same discipline
+the contract already records for mutation 6 (which random sampling could not
+reach, because a texel exactly on a rim is a measure-zero event):
+
+- On the canonical ±8 m envelope, texel 32's centre is at `kM/8` raw on both
+  axes. Placing the translation 3 raw units off in x and 4 in z puts texel
+  (32,32) at `dx = 3, dz = 4` — a Pythagorean triple — so **radius 5 puts it
+  exactly on the outer rim**, which the reference covers (its outer test is `>`).
+- The next texel centre is `kM/4` = 16,384 raw units away, so a radius of 5 raw
+  units can reach nothing else. **"Exactly one texel" is constructed, not
+  approximate**, and the oracle is asserted to agree on the count so the case
+  cannot be vacuous.
+- Under the halving mutants `dx = 3` and `r = 5` are odd while `dz = 4` is even,
+  so the halving stops being uniform: `d2` becomes `(r² − dx)/2 = 11` while
+  `r_outer2` becomes `(r² − r)/2 = 10`, and a leg is always shorter than its
+  hypotenuse. **Coverage flips from one texel to none.**
+- Both leg orders are driven, so the per-row `dz` square is pinned as well as
+  the per-texel `dx` one, plus an odd-raw annulus so the parity cannot quietly
+  become even again if the first two are ever edited.
+
+**107/107 directed checks pass** with the new case. Run 2 of the sweep, on the
+fixed suite, is where the final score comes from.
+
 ---
 
 ## Subagent Spawns

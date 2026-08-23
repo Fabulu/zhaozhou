@@ -1,9 +1,28 @@
-# zhao_surface_stamp @ SQ_RADIX=1 (DEFAULT, post-rearchitecture) — constraint + timing
-# captured 2026-08-23, sourceCommit 04e3c3f, rtlCleanAtHead: true
+# zhao_surface_stamp @ SQ_RADIX=1 (DEFAULT) — constraint + timing evidence
+# captured 2026-08-23 from /c/Users/FABIAN~1/AppData/Local/Temp/zhao-block-fit-26812-639230887395335317/zhao_surface_stamp, sourceCommit 753ca93, rtlCleanAtHead: true
+#
+# NOTE ON PROVENANCE: this is the SECOND fit of the default. The first
+# (sourceCommit 04e3c3f, 490.3 s) produced identical numbers -- 993 ALMs,
+# 1,018 registers, 0 DSPs, 87.54 MHz -- but its workspace was overwritten
+# by the SQ_RADIX=2 fit before its logs could be saved, because
+# run_block_fit.ps1 keyed the workspace on $PID alone and all three fits
+# ran in one PowerShell process. The harness now uniquifies the name; this
+# re-fit exists to recover the evidence, and its agreement with the first
+# to the last digit is an independent reproduction rather than a copy.
 
---- quartus_fit.exe.log, Info (332111) ---
+--- quartus_fit.exe.log, Info (332111): the clock the fit optimised against ---
+Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+Info (170189): Fitter placement preparation operations beginning
 
---- Slow model Fmax ---
+--- blockfit.sta.rpt, Clocks table ---
+; Clock Name ; Type ; Period ; Frequency ; Rise  ; Fall  ; Duty Cycle ; Divide by ; Multiply by ; Phase ; Offset ; Edge List ; Edge Shift ; Inverted ; Master ; Source ; Targets ;
++------------+------+--------+-----------+-------+-------+------------+-----------+-------------+-------+--------+-----------+------------+----------+--------+--------+---------+
+; clk        ; Base ; 10.000 ; 100.0 MHz ; 0.000 ; 5.000 ;            ;           ;             ;       ;        ;           ;            ;          ;        ;        ; { clk } ;
+
+--- blockfit.sta.rpt, Slow 1100mV 100C Fmax ---
 
 +-------------------------------------------------+
 ; Slow 1100mV 100C Model Fmax Summary             ;
@@ -13,12 +32,8 @@
 ; 87.54 MHz ; 87.54 MHz       ; clk        ;      ;
 --
 
-+-------------------------------------------------+
-; Slow 1100mV -40C Model Fmax Summary             ;
-+-----------+-----------------+------------+------+
-
 --- fit summary ---
-Fitter Status : Successful - Sun Aug 23 14:46:53 2026
+Fitter Status : Successful - Sun Aug 23 15:46:18 2026
 Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 Revision Name : blockfit
 Top-level Entity Name : zhao_surface_stamp
