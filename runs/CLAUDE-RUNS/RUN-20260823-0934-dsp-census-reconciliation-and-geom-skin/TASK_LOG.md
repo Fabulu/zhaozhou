@@ -891,6 +891,85 @@ register duplication are off and may buy margin later, but they will not turn 58
 into 100 MHz while the RTL holds chains of 65-73-bit additions. Cut the path
 structurally, then use fitter effort for headroom.
 
+### 17:00 - GEOM.SKIN diagnosis complete, and the sweep breakage behind it
+
+**The Fmax path, named:**
+
+    from  br[1]            the blend-walk row counter
+    to    o_y_o[14]~reg0   the output register for row 1
+          10 logic levels, 17.639 ns data delay against 10.000 ns, slack -7.823
+          Cell 9.452 ns (54%) / IC 8.187 ns (46%)
+
+**All 200 worst setup paths in one family.** Three questions close at once:
+the blend/rescale path is the culprit; **54% cell delay means fitter effort
+cannot fix it**; and neither endpoint is a virtual-pin node, so the
+characterisation wrapper is not needed.
+
+**The alternative was exonerated by controlled experiment, not by argument.**
+`MUL_LANES=1` leaves the suspect path bit-identical while collapsing the
+accumulator reduction from three 65-bit adds to one — and Fmax did not move
+(58.45 -> 56.11). That is precisely the experiment this project has previously
+been burned for skipping (the `terrain_lod` false regression).
+
+Frontier now has two measured points, and the `variantOf` census work landed in
+time: `zhao_geom_skin@MUL_LANES=1` = **3 DSPs / 1,530 ALMs / 56.11 MHz**,
+excluded from the total, census stays **188** rather than jumping to 191.
+
+**A mutant was caught only by the `MUL_LANES=1` build** (M27 — at 3 and 6 the
+term walk collapses to one cycle). So frontier builds are extra **coverage**,
+not merely extra data points. Asked for that to be written where the next
+person will hit it.
+
+### THE SWEEP BREAKAGE - the most serious finding of the session
+
+**Every mutation sweep in the repo was scoring an empty set and reporting
+success.** In a fresh checkout, CRLF endings made `^"(.*?)"$` match nothing —
+the character before each newline was `\r`, not the closing quote — so the
+preflight printed
+
+    linted 0 mutants, 0 do not build
+
+and **exited 0**. A clean pass over an empty set, which is the most flattering
+possible failure. Every sweep run that way was a green tick for work never done.
+
+Found only because the standing ruling requires sweeps to run in a fresh
+worktree. **Verified independently before publishing**: `.gitattributes:68-69`
+pins `*.sh` and `tools/*.py` to LF, and
+`tools/sweep_geom_skin_preflight.py:44-48` now aborts on fewer than two parsed
+mutants — *"a guard that lints nothing must fail, not pass"*.
+
+**Third instance in two days of a tool doing nothing while reporting success**,
+after the SDC that constrained no clock across 47 fits and the sweep that
+re-ran the previous binary. Recorded in `STATUS.md` (`f80a454`) as a pattern
+rather than bad luck: **a green result from a tool nobody has watched run is not
+evidence.**
+
+### 17:10 - Field: the LZ fix bought area as well
+
+| | ALMs | DSPs | registers |
+| --- | ---: | ---: | ---: |
+| original | 10,615 | 79 | 4,543 |
+| after DSP sharing | 8,901 | 3 | 5,356 |
+| **after the LZ fix** | **7,750** | **3** | 5,449 |
+
+**-27% ALMs overall**, with **-1,151 from the leading-zero count alone**. The
+128 unrolled 64-bit compare-and-shift stages were not free in area either — a
+point worth carrying into the GEOM.SKIN blend fix, which is the same kind of
+change.
+
+Sweep: 38 attempted, 38 accounted, **33 caught, 0 discarded**; M34/M35/M37 (the
+new code's core) all caught, M36 and M38 proved equivalent.
+
+**The failed-fit guard proved itself a second time.** The harness run hit its
+own 6,000 s budget after map+fit took 6,161 s, so STA never ran — and the guard
+**kept the previous row rather than erasing it to `timeout`**. The census row
+still honestly reads `7a3e2a3` (8,901 / 3 / 8.59 MHz) until a full harness run
+at the new commit lands. That guard has now saved a row twice today
+(`zhao_geom_skin`'s `quartus_map` failure being the first).
+
+**The post-fix Fmax remains the one open number**, with STA running directly
+against the fitted netlist rather than repeating a 100-minute map+fit.
+
 ---
 
 ## Subagent Spawns
