@@ -637,10 +637,46 @@ void test_counters_and_throughput(Vzhao_surface_stamp& dut) {
   check(dut.surface_texels_touched_o == 4096, "surface_texels_touched counts them", 4096,
         dut.surface_texels_touched_o);
   check(dut.surface_stamps_o == 1, "surface_stamps counts the stamp", 1, dut.surface_stamps_o);
-  // Ledger target: 1 stamp texel per clock. 4,096 texels + acquire + a two-deep
-  // drain; anything under 4,110 is the target met.
-  std::printf("surface_stamp_directed: full-cover stamp took %d cycles for 4,096 texels\n", cyc);
-  check(cyc > 0 && cyc <= 4110, "1 stamp texel per clock (ledger target)", 4110,
+  // ---- THROUGHPUT, against the DERIVED DEMAND rather than a placeholder ----
+  //
+  // The ledger used to say "1 stamp texel per clock" and this check used to
+  // assert 4,110 cycles. That number was never a demand: it was the rate the
+  // block happened to have, written down. It cost 28 DSP blocks, and the
+  // constrained fit it bought closed at 32.33 MHz -- so the block did not even
+  // meet the gpu_clk it was over-provisioned against.
+  //
+  // The demand is derived from Sacrifice's own SCAR system
+  // (docs/OWNER_DOCKET.md, "THE THREE DEMAND NUMBERS"): 20,000 stamp texels per
+  // frame. At the 100 MHz gpu_clk placeholder a 60 Hz frame is 1,666,667
+  // clocks, so the budget is 83 clocks per texel.
+  const int kClocksPerFrame = 1666667;  // 100e6 / 60 -- the COMPUTE budget.
+                                        // NOT frame_gpu_cycles (251,520), which
+                                        // is the raster period, 6.6x smaller.
+  const int kTexelsPerFrame = 20000;    // owner-derived sustained demand
+  const int kBudgetPerTexel = kClocksPerFrame / kTexelsPerFrame;  // 83
+  std::printf(
+      "surface_stamp_directed: full-cover stamp took %d cycles for 4,096 texels "
+      "(%.2f clk/texel, budget %d; %.0f texels/frame at 100 MHz)\n",
+      cyc, cyc / 4096.0, kBudgetPerTexel, kClocksPerFrame / (cyc / 4096.0));
+  check(cyc > 0 && cyc <= 4096 * kBudgetPerTexel,
+        "the derived 20,000 texel/frame demand is met", 4096 * kBudgetPerTexel,
+        static_cast<uint64_t>(cyc));
+
+  // And the SHAPE of the sequence, so a regression in the geometry engine shows
+  // up as more than "still under budget". At the default SQ_RADIX = 1 the
+  // squarer retires one magnitude bit per cycle over 36 bits, so a square takes
+  // 36 steps and its result lands one cycle after the last: 37 cycles from the
+  // start pulse, plus the start cycle itself = 38. dz is squared once per ROW
+  // and dx once per texel, so a row of 64 texels costs 65 passes:
+  //
+  //     64 rows * 65 passes * 38 cycles = 158,080
+  //
+  // plus the acquire round trip, the two per-stamp radius squares and the
+  // two-deep drain. Measured: 158,162.
+  const int kPassCycles = 38;               // SQ_RADIX = 1
+  const int kScan = 64 * 65 * kPassCycles;  // 158,080
+  check(cyc >= kScan && cyc <= kScan + 4 * kPassCycles,
+        "the geometry sequence has the predicted shape (SQ_RADIX = 1)", kScan,
         static_cast<uint64_t>(cyc));
 
   // A rejected stamp must not move either counter.

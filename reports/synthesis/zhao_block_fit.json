@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "d033e398973b1b9a8a115633d67442f2d8b4499e",
+    "newestRunCommit":  "7caf1dc620d3ef7d3145c625f11985ce85ec9844",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -485,6 +485,25 @@
                        "ramBlocks":  0,
                        "dspBlocks":  28,
                        "virtualPins":  675
+                   },
+                   {
+                       "module":  "zhao_surface_stamp@pre-rearch",
+                       "status":  "ok",
+                       "sourceCommit":  "7caf1dc620d3ef7d3145c625f11985ce85ec9844",
+                       "rtlCleanAtHead":  true,
+                       "variantOf":  "zhao_surface_stamp",
+                       "seconds":  378.1,
+                       "alms":  947,
+                       "registers":  496,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  28,
+                       "virtualPins":  675,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  32.33,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_terrain_lod",

@@ -143,9 +143,101 @@
 // circle/annulus and inventing wire format for the rest would be inventing
 // ABI), no draw-time sheet sampling, no VRAM port.
 //
+// ---------------------------------------------------------------------------
+// THE COVERAGE GEOMETRY WAS REARCHITECTED OFF THE DSP FARM (2026-08-23)
+// ---------------------------------------------------------------------------
+// MEASURED BEFORE: 950 ALMs / 493 registers / **28 DSP blocks** on a 112-DSP
+// device (reports/synthesis/zhao_block_fit.json, sourceCommit 96c0394). Every
+// one of those DSPs was in the coverage geometry — six multiply operators:
+//
+//   r_outer2 = rad_ext * rad_ext                (signed 64x64, once per stamp)
+//   r_inner2 = rin_ext * rin_ext                (signed 64x64, once per stamp)
+//   numx     = 41'(st_spanx) * 41'(two_i_1)     (signed 41x41, EVERY CLOCK)
+//   numz     = 41'(st_spanz) * 41'(two_j_1)     (signed 41x41, EVERY CLOCK)
+//   d2       = dxw*dxw + dzw*dzw                (two signed 64x64, EVERY CLOCK)
+//
+// None was in the blend, the material conversion or the age/decay path:
+// `zhao_surface_blend` contains no multiply at all and fits on its own at
+// 64 ALMs / 0 DSPs, and AGE's rate is a shift precisely BECAUSE the
+// `unit_mul` form would have cost a multiplier (see the note above). The
+// block's own contract had already refused to spend a DSP on behaviour.
+//
+// WHY THE FARM WAS WRONG. The ledger's "1 stamp texel per clock" was a
+// PLACEHOLDER, never a demand. The demand is now derived from Sacrifice's own
+// SCAR system (docs/OWNER_DOCKET.md, "THE THREE DEMAND NUMBERS"): the five
+// elemental god scars are 128x128 texels over 64x64 land tiles, so one impact
+// dirties at most 3x3 = 9 tiles = 36,864 texels, ONCE, not per frame. A heavy
+// barrage of 10 impacts/s is 6,144 texels/frame; the ratified demand is
+// **20,000 stamp texels per frame** (3x heavy, for headroom). At the 100 MHz
+// gpu_clk placeholder that is 1,666,667 clocks/frame, so **one texel per ~83
+// clocks**. The block was provisioned for 1,666,667 texels/frame — over by
+// ~83x on the per-cycle path, and infinitely on the two per-stamp constants,
+// which never needed a rate at all.
+//
+// (Do not reach for `frame_gpu_cycles` = 251,520 from design/budgets/latency.md
+// here. That is the RASTER period. The compute budget is 1,666,667. They
+// differ by 6.6x and both are called "gpu cycles".)
+//
+// WHAT REPLACED IT, and why each step is bit-identical rather than merely close:
+//
+//   * THE TEXEL CENTRE IS AN ACCUMULATOR. `numx = spanx * (2i + 1)` advances by
+//     `2*spanx` when `i` advances by one, so the product is a first-order
+//     recurrence: `numx <= spanx` at i == 0, `numx <= numx + (spanx << 1)`
+//     after. The shipped form truncated its product to 41 bits and an
+//     accumulator adding `2*spanx` into a 41-bit register produces the same
+//     residue mod 2^41, so this is exact FOR EVERY INPUT — no domain argument
+//     is owed and none is made. `numz` is the same recurrence on `j`, stepped
+//     once per row. Two multiplies, gone.
+//
+//   * THE FOUR REMAINING SQUARES SHARE ONE SEQUENTIAL SQUARER. `r*r`,
+//     `r_inner*r_inner`, `dx*dx` and `dz*dz` are all squares, and a square is
+//     `|v|^2`, so one unsigned shift-add engine (`zhao_surface_sq`) serves all
+//     four. It accumulates mod 2^64, which is exactly the truncation the
+//     shipped `64'(dx) * 64'(dx)` already performed — identical on every input
+//     including v = -2^35. ONE shared unit, LOCAL TO THIS BLOCK: the standing
+//     ruling is share within a subsystem only, smallest local farm.
+//
+// WHAT DID NOT MOVE, deliberately: the two-stage sheet pipeline, S4's
+// acquire-before-any-write structure, the ready/valid discipline on all three
+// channels, the j-outer/i-inner scan order, the counters, the `stamp_results`
+// stream, and every line of the blend. The only new condition anywhere in the
+// control is that `advance` additionally requires the geometry engine to have
+// produced `d2` for the current cursor.
+//
+// THE DATAPATH IS NOT NARROWED. The contract records that narrowing to the
+// stated +-4,096 m domain is "a real optimisation and a real risk" because it
+// changes what happens outside the domain. It is NOT taken: the DSPs come out
+// without it, so paying that risk would buy ALMs and nothing else.
+//
+// REJECTED: a 64-entry `dx^2` table. `dx` depends only on `i`, so 64 values
+// cover a whole stamp and a table would restore one texel per clock at 0 DSPs.
+// It costs ~4,000 flops plus a 62-bit 64:1 mux (est. 2,000+ ALMs) to buy 37x
+// the throughput of a block that already meets its demand 2.2x over — the same
+// over-provisioning sin in a different resource — and it would give up this
+// block's "Memory ownership: NONE".
+//
 // Conservative SystemVerilog subset only (charter 2).
 
-module zhao_surface_stamp (
+module zhao_surface_stamp #(
+    // Bits of the magnitude retired per squarer cycle. THE RESOURCE FRONTIER
+    // AXIS, measured rather than argued (rows in zhao_block_fit.json carry
+    // `variantOf: "zhao_surface_stamp"`).
+    //
+    //   SQ_RADIX | squarer cycles | II per texel | texels/frame @100 MHz
+    //   ---------+----------------+--------------+----------------------
+    //          1 |             36 |         38.6 |   43,189   (2.16x demand)
+    //          2 |             18 |         20.3 |   82,059   (4.10x demand)
+    //          4 |              9 |         11.2 |  149,208   (7.46x demand)
+    //
+    // ALL THREE MEET THE 20,000 texel/frame demand, so unlike GEOM.SKIN's
+    // MUL_LANES this frontier has no failing end on the throughput axis. Its
+    // wall is on the FMAX axis instead: SQ_RADIX = 4 chains four 64-bit adds
+    // combinationally, and `gpu_clk` is SHARED, so a setting that meets its own
+    // rate while dragging the console's clock down is a losing setting. That is
+    // the trade this parameter exists to measure, which is why both numbers are
+    // reported for every point.
+    parameter int unsigned SQ_RADIX = 1
+) (
     input logic clk,
     input logic rst_n,
 
@@ -257,12 +349,31 @@ module zhao_surface_stamp (
   localparam int unsigned Texels = 4096;  // 64 x 64, charter 12
 
   // ---- states --------------------------------------------------------------
-  localparam logic [1:0] SIdle = 2'd0;
-  localparam logic [1:0] SAcq = 2'd1;
-  localparam logic [1:0] SRun = 2'd2;
-  localparam logic [1:0] SDrain = 2'd3;
+  // SSqRo/SSqRi are the START cycles (a one-cycle `sq_start` pulse); SSqRoW/
+  // SSqRiW wait for the squarer. They sit AFTER the acquire, so a stamp that
+  // is rejected for residency still never enters them: S4's structural
+  // guarantee and the contract's "a rejected stamp terminates in under 200
+  // cycles" both survive the rearchitecture unchanged.
+  localparam logic [2:0] SIdle = 3'd0;
+  localparam logic [2:0] SAcq = 3'd1;
+  localparam logic [2:0] SSqRo = 3'd2;  // square r      -> r_outer2
+  localparam logic [2:0] SSqRoW = 3'd3;
+  localparam logic [2:0] SSqRi = 3'd4;  // square r_inner -> r_inner2
+  localparam logic [2:0] SSqRiW = 3'd5;
+  localparam logic [2:0] SRun = 3'd6;
+  localparam logic [2:0] SDrain = 3'd7;
 
-  logic [1:0] state;
+  logic [2:0] state;
+
+  // ---- the geometry sub-sequence, inside SRun ------------------------------
+  // dz changes only with j and dx only with i, so dz is squared ONCE PER ROW
+  // and dx once per texel. Amortised that is 65/64 squarings per texel.
+  localparam logic [1:0] GStartZ = 2'd0;  // pulse sq_start with dz
+  localparam logic [1:0] GWaitZ = 2'd1;
+  localparam logic [1:0] GStartX = 2'd2;  // pulse sq_start with dx
+  localparam logic [1:0] GWaitX = 2'd3;   // sq_vld here == d2 is valid
+
+  logic [1:0] gstate;
   // The ACQUIRE is issued exactly once. Without this latch req_valid_o would
   // still be high in the cycle SURFACE.SHEET answers, and the sheet would
   // accept a SECOND acquire for the same handle.
@@ -296,32 +407,45 @@ module zhao_surface_stamp (
   logic signed [31:0] st_ex0, st_ez0;
   logic signed [32:0] st_spanx, st_spanz;
   logic signed [31:0] st_tx, st_ty;
+  // The OPERANDS are now registered and the squares are computed once, by the
+  // shared engine, during SSqRo/SSqRi. Previously these two were combinational
+  // 64x64 products hanging off the command port -- per-stamp constants that
+  // Quartus nonetheless gave silicon to, because nothing said they were rare.
+  logic signed [31:0] st_radius;
+  logic signed [32:0] st_rinner;
   logic signed [63:0] st_r_outer2, st_r_inner2;
 
   // ---- the per-stamp constants, computed combinationally at accept ---------
-  // r_outer2 = r*r with r SIGNED (the reference squares the signed word).
-  wire signed [63:0] rad_ext = 64'(cmd_radius_i);
-  wire signed [63:0] r_outer2_c = rad_ext * rad_ext;
-  // r_inner = rw > 0 ? max(r - rw, 0) : 0
+  // r_inner = rw > 0 ? max(r - rw, 0) : 0. Compares and one subtract; no
+  // multiply. `r` itself is SIGNED and is squared as-is (the reference squares
+  // the signed word), which is why a negative radius covers like its magnitude.
   wire signed [32:0] r_minus_rw = 33'(cmd_radius_i) - 33'(cmd_ring_width_i);
   wire signed [32:0] r_inner_c =
       (cmd_ring_width_i > 32'sd0) ? ((r_minus_rw > 33'sd0) ? r_minus_rw : 33'sd0) : 33'sd0;
-  wire signed [63:0] rin_ext = 64'(r_inner_c);
-  wire signed [63:0] r_inner2_c = rin_ext * rin_ext;
+  // The envelope spans, taken once at accept -- they seed the texel-centre
+  // accumulators below.
+  wire signed [32:0] span_x_c = 33'(cmd_env_x1_i) - 33'(cmd_env_x0_i);
+  wire signed [32:0] span_z_c = 33'(cmd_env_z1_i) - 33'(cmd_env_z0_i);
 
   // ---- the texel cursor ----------------------------------------------------
   logic [12:0] cursor;  // 0..4096; 4096 = the loop is finished
   wire cursor_done = (cursor == 13'(Texels));
+  // `cur_i` survives only as the ROW-WRAP test for the accumulators; `cur_j` is
+  // gone with the multiply that used to consume it.
   wire [5:0] cur_i = cursor[5:0];
-  wire [5:0] cur_j = cursor[11:6];
 
   // ---- texel centre, quoted from stamp_surface -----------------------------
   //   wx = ex0 + ((ex1 - ex0) * (2i + 1)) / 128
-  // (2i+1) is 1..127 and always positive; {i, 1'b1} IS 2i+1.
-  wire signed [7:0] two_i_1 = $signed({1'b0, cur_i, 1'b1});
-  wire signed [7:0] two_j_1 = $signed({1'b0, cur_j, 1'b1});
-  wire signed [40:0] numx = 41'(st_spanx) * 41'(two_i_1);
-  wire signed [40:0] numz = 41'(st_spanz) * 41'(two_j_1);
+  //
+  // (2i+1) is 1..127 and always positive, so `spanx * (2i+1)` is a first-order
+  // recurrence in i: it starts at `spanx` (i = 0) and advances by `2*spanx`.
+  // THE ACCUMULATOR IS EXACT, NOT APPROXIMATE, AND NOT DOMAIN-BOUNDED: the
+  // multiply it replaces truncated its product to 41 bits, and adding
+  // `2*spanx` into a 41-bit register gives the same residue mod 2^41 for every
+  // input. `numz` is the same recurrence on j, stepped once per row.
+  logic signed [40:0] numx_q, numz_q;
+  wire signed [40:0] spanx2 = {{7{st_spanx[32]}}, st_spanx, 1'b0};
+  wire signed [40:0] spanz2 = {{7{st_spanz[32]}}, st_spanz, 1'b0};
 
   // TRUNCATION TOWARD ZERO, not an arithmetic shift: >>> 7 floors, and a
   // negative numerator with a non-zero remainder needs the +1 back. An
@@ -336,21 +460,53 @@ module zhao_surface_stamp (
     end
   endfunction
 
-  wire signed [33:0] qx = trunc128(numx);
-  wire signed [33:0] qz = trunc128(numz);
+  wire signed [33:0] qx = trunc128(numx_q);
+  wire signed [33:0] qz = trunc128(numz_q);
   wire signed [34:0] wx = 35'(st_ex0) + 35'(qx);
   wire signed [34:0] wz = 35'(st_ez0) + 35'(qz);
   wire signed [35:0] dx = 36'(wx) - 36'(st_tx);
   wire signed [35:0] dz = 36'(wz) - 36'(st_ty);
 
-  // Exact inside the stated +-4,096 m domain: |dx| < 2^30 so dx*dx < 2^60 and
-  // the sum is < 2^61, all comfortably inside 64 signed. EVERY comparison here
-  // is signed on both sides — a Verilog compare goes unsigned if EITHER operand
-  // is, and that trap already cost this tree 29 vanished tiles in GEOM.BINNER
-  // (design/contracts/GEOM.CLIP.md).
-  wire signed [63:0] dxw = 64'(dx);
-  wire signed [63:0] dzw = 64'(dz);
-  wire signed [63:0] d2 = dxw * dxw + dzw * dzw;
+  // ---- the shared sequential squarer ---------------------------------------
+  // ONE engine for all four squares this block needs: r, r_inner, dz (once per
+  // row) and dx (once per texel). It accumulates mod 2^64, which is exactly the
+  // truncation `64'(dx) * 64'(dx)` already performed, so the result is
+  // bit-identical to the shipped product on EVERY input -- inside the stated
+  // +-4,096 m domain and outside it. Nothing here is narrowed.
+  //
+  // EVERY comparison below is signed on both sides — a Verilog compare goes
+  // unsigned if EITHER operand is, and that trap already cost this tree 29
+  // vanished tiles in GEOM.BINNER (design/contracts/GEOM.CLIP.md).
+  logic               sq_start;
+  logic signed [35:0] sq_a;
+  logic        [63:0] sq_o;
+  logic               sq_vld;
+  logic        [63:0] dz2_q;  // dz^2, held for the whole row
+
+  zhao_surface_sq #(
+      .MAG_W(36),
+      .ACC_W(64),
+      .SQ_RADIX(SQ_RADIX)
+  ) u_sq (
+      .clk(clk),
+      .rst_n(rst_n),
+      .start_i(sq_start),
+      .a_i(sq_a),
+      .vld_o(sq_vld),
+      .sq_o(sq_o)
+  );
+
+  // 36 bits covers all four operands: dx/dz are signed 36, the radius is
+  // signed 32 and r_inner is signed 33 and never negative.
+  assign sq_a = (state == SSqRo)   ? 36'(st_radius) :
+                (state == SSqRi)   ? 36'(st_rinner) :
+                (gstate == GStartZ) ? dz : dx;
+  assign sq_start = (state == SSqRo) || (state == SSqRi) ||
+                    ((state == SRun) && ((gstate == GStartZ) || (gstate == GStartX)));
+
+  wire signed [63:0] d2 = $signed(sq_o) + $signed(dz2_q);
+  // The geometry answer for the CURRENT cursor is ready only here.
+  wire geom_ready = (state == SRun) && (gstate == GWaitX) && sq_vld;
 
   //   covered = !(d2 > r_outer2 || d2 < r_inner2)   — BOTH radii inclusive.
   wire covered = !((d2 > st_r_outer2) || (d2 < st_r_inner2));
@@ -401,13 +557,18 @@ module zhao_surface_stamp (
   // cursor's ability to move, and the read's valid depends on fld_valid_i.
   wire cursor_slot = (state == SRun) && !cursor_done;
   wire read_path_ok = covered ? (s1_free_next && req_ready_i) : 1'b1;
-  assign fld_ready_o = cursor_slot && st_field && read_path_ok;
+  // `geom_ready` is the ONLY new term in this block's control. It still does
+  // not depend on fld_valid_i, so the ready/valid rule above is intact: the
+  // field record is consumed on the advance cycle exactly as before, just once
+  // per squarer pass instead of once per clock.
+  assign fld_ready_o = cursor_slot && geom_ready && st_field && read_path_ok;
   wire fld_ok = !st_field || fld_valid_i;
-  wire advance = cursor_slot && fld_ok && read_path_ok;
+  wire advance = cursor_slot && geom_ready && fld_ok && read_path_ok;
 
   // ---- SURFACE.SHEET request port ------------------------------------------
   wire acq_valid = (state == SAcq);
-  assign req_valid_o  = (acq_valid && !acq_sent) || (cursor_slot && fld_ok && covered && s1_free_next);
+  assign req_valid_o  = (acq_valid && !acq_sent) ||
+      (cursor_slot && geom_ready && fld_ok && covered && s1_free_next);
   assign req_op_o     = acq_valid ? OpAcquire : OpRead;
   assign req_handle_o = st_handle;
   assign req_texel_o  = cursor[11:0];
@@ -443,8 +604,14 @@ module zhao_surface_stamp (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state <= SIdle;
+      gstate <= GStartZ;
       acq_sent <= 1'b0;
       cursor <= 13'd0;
+      numx_q <= 41'sd0;
+      numz_q <= 41'sd0;
+      dz2_q <= 64'd0;
+      st_radius <= 32'sd0;
+      st_rinner <= 33'sd0;
       st_handle <= 32'd0;
       st_src_id <= 16'd0;
       st_tag <= 8'd0;
@@ -524,12 +691,17 @@ module zhao_surface_stamp (
             st_field <= cmd_field_en_i;
             st_ex0 <= cmd_env_x0_i;
             st_ez0 <= cmd_env_z0_i;
-            st_spanx <= 33'(cmd_env_x1_i) - 33'(cmd_env_x0_i);
-            st_spanz <= 33'(cmd_env_z1_i) - 33'(cmd_env_z0_i);
+            st_spanx <= span_x_c;
+            st_spanz <= span_z_c;
             st_tx <= cmd_tx_i;
             st_ty <= cmd_ty_i;
-            st_r_outer2 <= r_outer2_c;
-            st_r_inner2 <= r_inner2_c;
+            // Seed the recurrences at i = j = 0, where (2i+1) = (2j+1) = 1.
+            numx_q <= 41'(span_x_c);
+            numz_q <= 41'(span_z_c);
+            // The OPERANDS, not the squares. SSqRo/SSqRi produce the squares.
+            st_radius <= cmd_radius_i;
+            st_rinner <= r_inner_c;
+            gstate <= GStartZ;
           end
         end
 
@@ -541,14 +713,51 @@ module zhao_surface_stamp (
               stamp_rejected_o <= 1'b1;
               state <= SIdle;
             end else begin
-              state <= SRun;
+              state <= SSqRo;
             end
           end
         end
 
+        // The two per-stamp squares, on the shared engine. A rejected stamp
+        // never reaches here, so the reject path stays as short as it was.
+        SSqRo:  state <= SSqRoW;
+        SSqRoW: if (sq_vld) begin
+          st_r_outer2 <= $signed(sq_o);
+          state <= SSqRi;
+        end
+        SSqRi:  state <= SSqRiW;
+        SSqRiW: if (sq_vld) begin
+          st_r_inner2 <= $signed(sq_o);
+          state  <= SRun;
+          gstate <= GStartZ;
+        end
+
         SRun: begin
+          // --- the geometry sub-sequence -------------------------------------
+          case (gstate)
+            GStartZ: gstate <= GWaitZ;
+            GWaitZ:
+            if (sq_vld) begin
+              dz2_q  <= sq_o;
+              gstate <= GStartX;
+            end
+            GStartX: gstate <= GWaitX;
+            default: ;  // GWaitX: `advance` below moves it on
+          endcase
+
           if (advance) begin
             cursor <= cursor + 13'd1;
+            // The texel-centre recurrences. At the end of a row `numx` returns
+            // to its i = 0 seed and `numz` takes its single step, which is the
+            // whole reason dz is squared 64 times per stamp and dx 4,096.
+            if (cur_i == 6'd63) begin
+              numx_q <= 41'(st_spanx);
+              numz_q <= numz_q + spanz2;
+              gstate <= GStartZ;
+            end else begin
+              numx_q <= numx_q + spanx2;
+              gstate <= GStartX;
+            end
             if (covered) begin
               s1_valid <= 1'b1;
               s1_texel <= cursor[11:0];

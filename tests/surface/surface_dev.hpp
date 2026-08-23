@@ -371,11 +371,26 @@ struct SheetSim {
   }
 };
 
+// THE HANG GUARD, derived rather than guessed.
+//
+// SURFACE.STAMP's coverage geometry is sequential since the DSP farm came out
+// of it (28 -> 0 DSPs, 2026-08-23). At the default SQ_RADIX = 1 one square
+// costs 38 cycles, dz is squared once per row and dx once per texel, so a
+// 4,096-texel scan is 64 * 65 * 38 = 158,080 cycles plus setup and drain --
+// measured 158,162. The guard is 2.5x that, because the stalled runs stretch it
+// and a guard that trips is indistinguishable from a design that hangs.
+//
+// It was 200,000, which was 1.26x and survived only by luck; the chain's own
+// guard was 40,000 and DID trip, producing fifteen "wrong sheet" failures that
+// were nothing of the kind. Recorded because a too-tight guard reads exactly
+// like a correctness bug.
+constexpr int kStampHangGuard = 400000;
+
 /** Drive one stamp to completion against `SheetSim`. Returns cycles spent. */
 template <typename Top>
 int run_stamp(Top& top, SheetSim& sim, const StampCmd& c, Rng& rng,
               const std::vector<zref::surface::FieldResult>* fld = nullptr,
-              int max_cycles = 200000) {
+              int max_cycles = kStampHangGuard) {
   drive_cmd(top, c);
   top.cmd_valid_i = 1;
   size_t fld_cursor = 0;

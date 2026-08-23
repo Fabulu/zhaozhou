@@ -155,3 +155,107 @@ contract's "Memory ownership: **None**".
 4. Mutation sweep in a worktree, **verified non-zero mutant count**.
 5. Fits at `SQ_RADIX` = 1, 2, 4.
 6. Contract + `blocks.yml` update, ARCHIVE.md entry.
+
+### 2026-08-23 14:29 — MEASURED: the pristine baseline, and it is worse than the ledger says
+
+Fit run from the **untouched** tree at HEAD, before a line of RTL moved, because
+the shipped row carries no Fmax at all:
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_surface_stamp `
+      -ExtraSources fpga/rtl/surface/zhao_surface_stamp.sv,fpga/rtl/surface/zhao_surface_blend.sv `
+      -RowLabel "@pre-rearch" -KeepWorkspace
+
+Quartus Prime Lite 17.0.2, 5CSEBA6U23I7, virtual pins, sourceCommit `7caf1dc`,
+`rtlCleanAtHead: true`, 378.1 s. **Constrained** — evidence captured live from
+the workspace before the harness deleted it, saved beside this log at
+`fit-evidence/pre-rearch_constraint.txt`:
+
+    Info (332111): Found 1 clocks
+    Info (332111):   Period   Clock Name
+    Info (332111): ======== ============
+    Info (332111):   10.000          clk
+
+| | measured |
+| --- | ---: |
+| ALMs | 947 / 41,910 |
+| registers | 496 |
+| **DSP blocks** | **28 / 112 (25%)** |
+| RAM blocks | 0 |
+| **Fmax (Slow 1100mV 100C)** | **32.33 MHz** |
+
+**THE FINDING THIS RUN DID NOT EXPECT: 32.33 MHz.** The contract's "Target
+throughput" section says "1 stamp texel per clock. **Met, measured:** a
+full-cover stamp takes 4,102 cycles". That sentence is true about *cycles* and
+silently false about *time*. `gpu_clk` is constrained at 100 MHz and this block
+closes at **32.33 MHz — 32% of the shared clock**. So the 28 DSPs did not buy a
+met target; they bought a *cycle count* on a block that was **3.1x over the
+clock period the whole console runs on**.
+
+That reframes the task. It was "spend fewer DSPs on a rate nobody needs". It is
+also "stop this block holding gpu_clk at a third of its constraint". Both
+numbers get reported, for exactly this reason.
+
+The `@pre-rearch` row is deliberately labelled and carries
+`variantOf: "zhao_surface_stamp"`, so the V23 census excludes it from totals
+while the before/after stays legible in one file.
+
+### 2026-08-23 15:1x — RTL landed. 14 replacements, every other line untouched
+
+Applied as a script of **exact-string replacements** against the pristine file
+(`patch_stamp.py`, kept in the scratchpad), each asserting it matched exactly
+once, so every line not listed is provably unchanged:
+
+  header+parameter · states · per-stamp registers · per-stamp constants ·
+  cursor · texel centre accumulators · trunc128 operands · shared squarer ·
+  control conditions · req_valid · reset · command accept ·
+  acquire handoff + radius squares · SRun body
+
+New leaf: `fpga/rtl/surface/zhao_surface_sq.sv`.
+**There is now no `*` operator anywhere in either file** — checked by regex, not
+by intention, because QUARTUS_GOTCHAS §3 says `multstyle = "logic"` is accepted
+and ignored and the only symptom is a DSP count that will not fall.
+
+### 2026-08-23 15:2x — the differential: 96 of 97 checks passed FIRST TRY
+
+The single failure was the placeholder itself:
+
+    surface_stamp_directed: full-cover stamp took 158162 cycles for 4,096 texels
+    FAIL: 1 stamp texel per clock (ledger target): expected 0x100E, got 0x269D2
+
+**158,162 cycles against a prediction of 158,160**, written into SPEC_v1.md
+before the RTL existed (64 rows x 65 squarer passes x 38 cycles = 158,080, plus
+acquire, the two radius squares and the drain). Every behavioural check — the
+faithfulness cross-check against `zref::render::stamp_surface`, the truncating
+`>> 8`, the annulus fixture, the rims, all six blends, the field brush, the
+`stamp_results` stream, the counters, the backpressure paths — passed unchanged.
+
+The throughput check was rewritten to assert **the derived demand** (83 clocks
+per texel) plus a tight band on the sequence's predicted *shape*, so a
+regression in the geometry engine shows up as more than "still under budget".
+
+    surface_stamp_directed: full-cover stamp took 158162 cycles for 4,096 texels
+      (38.61 clk/texel, budget 83; 43163 texels/frame at 100 MHz)
+
+**43,163 texels/frame against a 20,000 demand — 2.16x.**
+
+### 2026-08-23 15:3x — a too-tight hang guard that reads exactly like a bug
+
+`surface_stamp_chain` then reported **15 of 34 checks failed**, all of them
+"the sheet does not match the reference". None was a correctness failure. Its
+local `max_cycles = 40000` was written when the block placed one texel per
+clock; the sequential geometry needs 158k, so **every stamp was truncated
+mid-scan** and the test was comparing half a stamp against a whole one.
+
+Recorded rather than quietly fixed, because this is the run brief's named
+failure mode wearing a different coat: *build/harness state masquerading as
+design behaviour*. A guard that trips is indistinguishable from a design that
+hangs, and it produced fifteen confident, specific, completely wrong failures.
+
+Fixed by deriving the guard once, in `surface_dev.hpp`, as
+`kStampHangGuard = 400000` (2.5x the measured 158,162), with the derivation in
+the comment. The old `run_stamp` default of 200,000 was **1.26x** and had
+survived on luck alone.
+
+**All three suites green:** directed 98/98, random 20/20 (lane A and lane B
+coverage counters all non-zero, including the constructed rim-exact case 18/8),
+chain 34/34.

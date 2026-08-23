@@ -146,8 +146,15 @@ struct Chain {
     tick();
   }
 
-  /** Drive one stamp end to end; returns cycles, or -1 on a hang. */
-  int run(const StampCmd& c, int max_cycles = 40000) {
+  /** Drive one stamp end to end; returns cycles, or -1 on a hang.
+   *
+   * The guard is `sdev::kStampHangGuard` and NOT a local number: this loop also
+   * stalls `stamp_results` on a random schedule, so it is the slowest driver in
+   * the suite. Its old local 40,000 was written when the block placed one texel
+   * per clock; after the geometry went sequential it truncated every stamp
+   * mid-scan and reported fifteen "the sheet does not match the reference"
+   * failures that were entirely the guard's doing. */
+  int run(const StampCmd& c, int max_cycles = sdev::kStampHangGuard) {
     sdev::drive_cmd(stamp, c);
     stamp.cmd_valid_i = 1;
     bool accepted = false;

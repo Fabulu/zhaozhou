@@ -3259,6 +3259,7 @@ set(ZHAO_SURFACE_BLEND_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv)
 set(ZHAO_SURFACE_STAMP_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sq.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
 
 # FIELD.WRITE.TAG, the op ops.yml declares and had no coverage for. Its cited
