@@ -607,3 +607,75 @@ serves as the diagnosis run as well.
 
 **Recorded before the diagnosis, so the number cannot be quietly improved
 after the fact.**
+
+---
+
+## 12:5x — the Fmax is the priority, and the diagnosis is set up as an EXPERIMENT
+
+Owner's verdict on 58.45 MHz was blunt and correct: at that clock a 10-cycle
+engine serves 97,417 vertices/frame against a 120,000 demand, so **the block
+does not meet its own budget** and the DSP win does not pay for it.
+
+### The acceptance test is Fmax / II, not Fmax
+
+    required rate = 120,000 x 60 Hz = 7,200,000 vertices/s
+
+| II (cycles/vertex) | min clock for 120k/frame | at 100 MHz gives |
+| ---: | ---: | ---: |
+| 10 | 72.0 MHz | 166,666 |
+| 11 | 79.2 MHz | 151,515 |
+| 12 | 86.4 MHz | 138,888 |
+| 13 | 93.6 MHz | 128,205 |
+| **14** | **100.8 MHz** | **119,047 — FAILS** |
+
+**There is room for up to 13 cycles.** Today is 58.45/10 = **5.845 M vertices/s**
+against 7.2 M required. 90 MHz at II = 12 would be 7.5 M/s — a clear win *despite
+two extra pipeline stages*. So a fix that adds latency can still be the right
+fix, and the number that decides it is vertices/frame, not MHz.
+
+**But `gpu_clk` is shared**, so a block that tops out at 72 MHz drags every
+other block down with it. Both numbers get reported.
+
+### The hypothesis I was handed and am NOT spending a cycle on
+
+"Use the DSP block's own output register" — already implemented. `a_q <= mul_a;
+b_q <= mul_b; p_q <= a_q * b_q;` is exactly that, and the constrained fit
+reports those registers packed into the DSP. Recorded because a plausible fix
+that is already in the design is the most expensive kind to chase.
+
+### The two real candidates, and why MUL_LANES = 1 separates them
+
+**A — the blend and final rescale.** One output row traverses, in one clock:
+accumulator select -> 66-bit `pa - pb` -> six-term 73-bit shift-add ->
+73-bit base add -> rounding add -> **two 73-bit saturation comparisons** ->
+output register.
+
+**B — the product reduction into each accumulator.** At MUL_LANES = 3 each row
+does two 65-bit adds to form `lane_sum` and **a third** into `acc[row]` — three
+wide additions in one clock.
+
+`MUL_LANES = 1` leaves **A unchanged** and turns B's three-product reduction
+into a single product. So:
+
+| result | verdict |
+| --- | --- |
+| still ~58 MHz, worst paths `acc -> o_x/o_y/o_z` | **A**, the blend/rescale |
+| jumps sharply, `p_q -> acc` family gone | **B**, the accumulator reduction |
+| worst path starts/ends at a virtual-pin node | the standalone wrapper is distorting it |
+| worst paths involve `take`/`busy`/enables | high-fanout control |
+
+Capture the **top 20 setup paths grouped by endpoint family**, with from/to
+register names, logic levels, cell versus routing delay, and WNS/TNS. One path
+diagnosed the Field engine; twenty say whether this is one path or a family.
+
+**Nothing is changed until that report is read.** Not fitter settings either —
+physical synthesis and retiming are off and may buy headroom later, but they
+will not turn 58 into 100 while the RTL contains chains of 65-73-bit adds. Cut
+the path structurally first.
+
+### Status at the time of writing
+
+The MUL_LANES = 1 fit is in the fitter. An earlier attempt at it was killed
+mid-placement and had to be restarted; the machine has been carrying two
+Quartus fits and a full 1,592-target rebuild concurrently, and a constrained
+fit of this block takes ~50 minutes alone.
