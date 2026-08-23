@@ -5,6 +5,85 @@ at the top.*
 
 ---
 
+## 2026-08-23 (afternoon) — 188 multipliers, and the second speed number
+
+### The multiplier problem is nearly solved
+
+| | multipliers |
+| --- | ---: |
+| this morning | 327 |
+| after the Field engine | 251 |
+| **now, after creature skinning** | **188** |
+| the policy ceiling | 85–90 |
+
+Creature skinning went **72 → 9** against a target of 12–18. It was 64% of the
+whole chip; it is now 8%. That is 139 multipliers removed today, measured, from
+a design that wanted three times what the chip has.
+
+**One honest correction to something I told you earlier.** I have been saying
+that shrinking these blocks also shrank their logic every time — that sequencing
+does not trade area for multipliers. That was true of the three blocks it had
+been true of, and it is **not** true here: creature skinning's logic went
+1,801 → 2,187, up 21%. The earlier blocks were wide parallel datapaths that
+collapsed into one. This block was already lean, and its size genuinely *was*
+the multipliers, so sequencing it had to add bookkeeping instead. The trade is
+still overwhelmingly worth it — 63 multipliers is 56% of the chip's multiplier
+budget, 386 logic cells is 0.9% of its logic budget — but the general claim was
+too broad and I am withdrawing it.
+
+### The second speed measurement, and it is not good enough
+
+| block | speed | target |
+| --- | ---: | ---: |
+| Field engine | 8.59 MHz | 100 |
+| **creature skinning** | **58.45 MHz** | 100 |
+
+**58 MHz is not acceptable and it is being diagnosed now.** At that clock the
+block serves about 97,000 skinned vertices per frame against the 120,000 you
+ruled. So it misses its own budget, and the multiplier win does not matter if
+the clock cannot deliver the vertices.
+
+The diagnosis run is already set up: the timing tool will be asked to name the
+exact wire, in the same form that turned the Field engine's problem from
+alarming into a one-line fix. There is a prime suspect — sequencing this block
+added six very wide accumulators, and if a multiply, a wide addition and a
+saturation all happen between two clock ticks, that is about the delay observed.
+**But nothing will be changed until the tool confirms it.** Acting on a
+plausible cause instead of a measured one is the single most expensive habit
+this project has had.
+
+### What two measurements tell us that one did not
+
+Both blocks measured so far miss the clock. That is the bad reading.
+
+The good reading is that **they miss it in completely different regimes** —
+8.59 against 58.45 is not one systemic fault, it is two separate problems. The
+Field engine's cause was a piece of arithmetic written as a 128-step chain; a
+scan of the entire design found only one other place with that shape, and
+creature skinning was not one of them. So the second block's problem is
+ordinary arithmetic depth, which is the routine kind.
+
+It remains true that **thirty-nine other blocks still have no speed figure at
+all** and that nobody should be surprised by what they say.
+
+### Widescreen is on the docket
+
+Fully written up in `docs/OWNER_DOCKET.md`, not implemented, and deliberately
+not interrupting this work.
+
+The short version: a genuine 16:9 square-pixel mode at **384×216**, which is an
+exact 5× enlargement to a 1080p television — every console pixel becomes a
+perfect 5×5 block, and scanlines land identically on every row. It stores into a
+384×224 canvas so the tile machinery stays exact, and displays a centred 216-row
+window, which turns out to cost **fewer** tiles and **less** memory traffic than
+the current mode. The camera is genuinely 16:9 rather than a cropped 16:10
+picture.
+
+One decision for you when convenient, and it is not urgent: that mode, versus
+simply stretching the existing picture to 16:9.
+
+---
+
 ## 2026-08-23 (midday) — the multiplier count is really down, and one decision needs you
 
 ### The number that was wrong all morning is now right
