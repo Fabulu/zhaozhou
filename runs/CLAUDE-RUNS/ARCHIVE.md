@@ -34,6 +34,88 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260823-1415] SURFACE.STAMP: the coverage geometry off the DSP farm, 28 -> 0 DSPs
+
+**Archived:** 2026-08-23 UTC+02:00
+**Created:** 2026-08-23 14:15 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260823-1415-surface-stamp-dsp-rearchitecture/`
+**Branch:** main
+
+**Summary:**
+`zhao_surface_stamp` fitted at 28 DSP blocks on a 112-DSP device, against a
+ledger target of "1 stamp texel per clock" that was a PLACEHOLDER rather than a
+demand. Sacrifice's own SCAR system gives the real figure -- 128x128 god scars
+over 64x64 land tiles, 9 tiles per impact, once per impact -- so the derived
+demand is 20,000 stamp texels per frame, one texel per ~83 clocks. The block was
+provisioned for one per clock.
+
+All six multiplies were in the COVERAGE GEOMETRY; none in the blend, the
+material conversion or the age/decay path, which the block's own contract had
+already kept multiplier-free on purpose. Two of the six were per-stamp constants
+that still got silicon, because they were written as combinational expressions
+off the command port and nothing in the RTL said they were rare.
+
+Rearchitected: the two texel-centre products become first-order accumulators
+(exact mod 2^41 for EVERY input -- no domain argument owed), and the four
+squares -- r*r, r_inner*r_inner, dx*dx, dz*dz -- share one sequential shift-add
+squarer accumulating mod 2^64, which is exactly the truncation the shipped
+product already performed. No `*` operator survives in any of the three files.
+The datapath is NOT narrowed to the stated domain: the DSPs come out without
+paying that risk.
+
+**MEASURED, four constrained fits (Info 332111 captured for each):**
+28 -> **0 DSP blocks**, and **Fmax 32.33 -> 87.54 MHz**. The second number is the
+finding the run did not expect: the contract said the throughput target was "met,
+measured", which was true about CYCLES and false about TIME -- the block was
+holding the shared gpu_clk at 32% of its constraint. ALMs 947 -> 993, registers
+496 -> 1,018. Throughput 538,833 -> 37,791 texels/frame, still 1.89x the demand.
+The SQ_RADIX frontier: 1 / 2 / 4 give 87.54 / 87.44 / 82.37 MHz at 37,791 /
+71,720 / 122,796 texels/frame, so radix 2 is nearly free on the clock -- and the
+default stays at 1 anyway, because spending 36 ALMs to exceed a met demand is
+the same error the 28 DSPs came from.
+
+**Deliverables:**
+- `fpga/rtl/surface/zhao_surface_sq.sv` -- new, the shared sequential squarer
+- `fpga/rtl/surface/zhao_surface_stamp.sv` -- rearchitected, `SQ_RADIX` in {1,2,4}
+- `tests/surface/surface_sq_directed.cpp` -- the squarer checked where its VALUE
+  is visible, not where it has been reduced to a boolean
+- `tests/surface/surface_stamp_directed.cpp` -- the odd-leg rim-exact case, and
+  the throughput asserted against the DERIVED DEMAND rather than a cycle count
+- `tests/surface/surface_dev.hpp` -- the hang guard derived once, not guessed
+- `tests/CMakeLists.txt` -- the frontier BUILT at three settings, not argued
+- `tools/sweep_surface_stamp.sh` + preflight + `..._consumers.py` -- 32 mutants,
+  seven guards, a variable-aware guard 7, and `ZHAO_SWEEP_ONLY`
+- `tools/quartus/run_block_fit.ps1` -- per-invocation workspace uniquifier
+- `design/contracts/SURFACE.STAMP.md`, `design/blocks.yml`,
+  `docs/OWNER_DOCKET.md`, `reports/REMAINING_BLOCKERS.md`
+
+**Notes:**
+Mutation sweep 32 attempted / 32 accounted / 29 caught / 0 discarded on the
+first complete run; the three survivors were then re-scored against the fixed
+suite and all three fail (`ZHAO_SWEEP_ONLY`, 3/3), and a full re-run confirms it
+as one number rather than a reconciliation of two. The
+three survivors were not careless: `covered = !(d2 > r_outer2 || d2 < r_inner2)`
+is SCALE-INVARIANT and all three terms come from the same squarer instance, so a
+uniformly doubled or halved squarer is invisible from the stamp. Two of them
+were a real gap -- a uniform halving that only holds while every magnitude is
+even, and every operand the suite drove WAS even -- closed by a constructed
+Pythagorean-triple rim case with an odd leg.
+
+Three separate instances of build/harness state masquerading as design
+behaviour, all logged: a hang guard written for the old one-texel-per-clock rate
+that truncated every stamp and produced fifteen confident wrong failures; a fit
+harness that keyed its workspace on $PID alone and silently destroyed the
+evidence for two of three fits; and a background sweep whose wrapper the agent
+harness killed while the process kept running, producing two false DISCARDED
+lines. Every time, the guards refused to score the bad result.
+
+**Outcome:** DSP target met with margin (0 against a 0-2 target), and the
+console-wide census falls 188 -> 160. Fmax nearly tripled, which was not the
+task but is the more valuable half. `texture_tmu` (28) and `terrain_normals`
+(18) remain, and the docket's "three blocks with no demand figure" is now two.
+
+---
+
 ### [RUN-20260823-0937] GEOM.SKIN: multiplier farm sized to the frame demand, 72 -> 9 DSPs
 
 **Archived:** 2026-08-23 13:10 UTC+02:00
