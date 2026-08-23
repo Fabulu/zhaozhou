@@ -227,85 +227,10 @@
 //   [20]     MIP_EN      0 = level 0 always (`req_lod_i` ignored)
 //   [31:21]  reserved — must be zero
 //
-// ---------------------------------------------------------------------------
-// FILT_LANES — THE FILTER'S RESOURCE FRONTIER, AND WHY IT IS A PARAMETER
-// ---------------------------------------------------------------------------
-// Every multiplier this block has ever had is in zhao_texture_bilerp. Checked
-// by regex rather than by intention: there is no `*` operator anywhere in THIS
-// file (the `32*k` / `16*k` that appear are constant-folded `+:` part-select
-// bases), and the fit agreed to the digit — bilerp 7 DSP, this block 28, which
-// is 4 × 7 with no discount.
-//
-// THE ADDRESSING COSTS NOTHING BECAUSE LOG2W/LOG2H EXIST. Texel conversion is
-// `u_raw << log2s`, the mip level offset is a base-4-repunit table and ONE
-// variable shift, and the row-major index is `(v << log2w) + u`. Every one of
-// those would be a MULTIPLY if texture dimensions were arbitrary. That is the
-// concrete reason non-power-of-two support is refused here and pushed to the
-// asset pipeline: it would put a multiplier on the per-sample address path of
-// the block that exists to have as few as possible.
-//
-// So the frontier axis is the filter, and it is the number of bilerp instances:
-//
-//     FILT_LANES │ instances │ products │ passes │ direct-colour II
-//     ───────────┼───────────┼──────────┼────────┼──────────────────
-//          4     │     4     │    12    │   1    │        4
-//          2     │     2     │     6    │   2    │        5
-//          1     │     1     │     3    │   4    │        7
-//
-// The four channels (R, G, B, A) are time-multiplexed through the lanes in
-// `4 / FILT_LANES` passes. Passes 0 .. PASSES−2 run in ST_FILT and register
-// their bytes; the LAST pass runs combinationally in ST_OUT, exactly as the
-// whole filter used to. So at FILT_LANES = 4 there is no ST_FILT, no pass
-// counter movement and no extra cycle — the timing is identical to the shape
-// this file shipped with.
-//
-// CLUT NEVER FILTERS (spec/stars_and_flares.md §1, enforced in the fabric
-// below), so a CLUT sample skips ST_FILT entirely and its II does not move at
-// any setting.
-//
-// THE FRONTIER IS COVERAGE, NOT JUST DATA. At FILT_LANES = 4 there is one
-// pass, `pass_c` is the constant PASSES−1, and the channel mux degenerates to
-// a wire — so a mutation in the pass counter or the mux selector is textually
-// live and behaviourally INVISIBLE at the default. It is visible at 2 and at
-// 1. zhao_surface_sq's S03/S04 were the identical shape on SQ_RADIX.
-//
 // Conservative SystemVerilog subset only (charter §2). Depends on
 // zhao_texture_bilerp. Lint: clean under `-Wall` (lint_texture_tmu).
 
-module zhao_texture_tmu #(
-  // 1, 2 or 4 — see FILT_LANES above. Enforced by a generate-if static
-  // assertion below, wrapped in `generate`/`endgenerate` because
-  // QUARTUS_GOTCHAS.md §8 records that Quartus 17.0.2 rejects a module-scope
-  // `if` generate without them while three other frontends accept it.
-  //
-  // THE DEFAULT IS 2, AND IT WAS 4 UNTIL THE FIT ANSWERED. Recorded because the
-  // reasoning that picked 4 was sound and the premise under it was false.
-  //
-  // The argument for 4 was that this block's demand is NOT met (the CLUT path
-  // runs at 0.33× the derived 850,000 samples/frame), so throughput is the
-  // scarce resource and DSPs are not — the opposite of SURFACE.STAMP, which
-  // defaulted to its cheapest setting because its demand was met 26.9× over.
-  // That argument still holds. What was wrong was the estimate it rested on:
-  // FILT_LANES = 4 was predicted to cost 4–8 DSPs, on the reasoning that a
-  // Cyclone V variable-precision block does three 9×9 or two 18×19 and the
-  // twelve products would pack into about five.
-  //
-  // MEASURED: FILT_LANES = 4 is **12 DSPs**. Quartus 17.0.2 Lite packed
-  // NOTHING — one DSP block per `*` operator, whatever the operand widths.
-  // (The same tool behaviour this block's contract already recorded from the
-  // other side: the four instances' identical weight products "did not share".)
-  // So on this kit **DSP blocks = the number of `*` operators**, and the
-  // frontier is 12 / 6 / 3 at FILT_LANES 4 / 2 / 1.
-  //
-  // 12 misses the 6–9 target the DSP campaign set; 6 is the bottom of it. The
-  // cycle that buys it falls entirely on the DIRECT-COLOUR path (II 4 → 5) and
-  // not at all on CLUT, which is the demand-critical one because terrain is
-  // CLUT8. FILT_LANES = 1 is measured and available and is NOT the default:
-  // it would spend two more cycles of a rate already short to save three DSPs
-  // below a target already met, which is the same over-provisioning error the
-  // 28 DSPs came from, pointed the other way.
-  parameter int unsigned FILT_LANES = 2
-) (
+module zhao_texture_tmu (
   input  logic clk,
   input  logic rst_n,
 
@@ -351,33 +276,6 @@ module zhao_texture_tmu #(
   output logic [31:0] texture_samples_o
 );
 
-  // Illegal settings die in analysis and synthesis rather than silently
-  // elaborating something that does not filter four channels. The construct is
-  // an unresolved module reference inside a generate-if: it errors in every
-  // tool when the condition holds and is never elaborated when it does not.
-  generate
-    if (!(FILT_LANES == 1 || FILT_LANES == 2 || FILT_LANES == 4)) begin : g_illegal
-      ZHAO_TEXTURE_TMU_FILT_LANES_MUST_BE_1_2_OR_4 u_static_assert ();
-    end
-  endgenerate
-
-  // 4 / FILT_LANES, and log2(FILT_LANES) — both exact for the three legal
-  // settings, which is why they are localparams and not $clog2 of a variable.
-  localparam int unsigned PASSES     = 4 / FILT_LANES;
-  localparam int unsigned LANE_SHIFT = (FILT_LANES == 4) ? 2 : ((FILT_LANES == 2) ? 1 : 0);
-  // The first channel index the LAST pass covers. Channels below it were
-  // filtered on an earlier pass and come out of `fres_r`; channels at or above
-  // it are combinational in ST_OUT.
-  // (PASSES − 1)·FILT_LANES, written as 4 − FILT_LANES so that no `*` appears
-  // in this file at all: QUARTUS_GOTCHAS.md §3 says the only symptom of an
-  // ignored multstyle directive is a DSP count that will not fall, so "there
-  // is no multiply operator here" is a property worth keeping checkable by
-  // regex rather than by reading.
-  localparam int unsigned LAST_BASE  = 4 - FILT_LANES;
-  // The last pass ST_FILT itself runs. Guarded so PASSES = 1 does not compute
-  // an unsigned 0 − 2; ST_FILT is unreachable there and the value is unused.
-  localparam int unsigned LAST_FILT_PASS = (PASSES > 1) ? (PASSES - 2) : 0;
-
   localparam logic [31:0] CNT_MAX = 32'hFFFF_FFFF;
 
   localparam logic [2:0] FMT_CLUT8    = 3'd0;
@@ -390,15 +288,10 @@ module zhao_texture_tmu #(
   localparam logic [1:0] WRAP_CLAMP  = 2'd1;
   localparam logic [1:0] WRAP_MIRROR = 2'd2;
 
-  // Three bits, because ST_FILT joins the original four. ST_FILT is entered
-  // only when PASSES > 1 AND the sample is direct colour; at FILT_LANES = 4 it
-  // is unreachable and the state graph is exactly the one this file shipped
-  // with.
-  localparam logic [2:0] ST_IDLE = 3'd0;
-  localparam logic [2:0] ST_TEX  = 3'd1;
-  localparam logic [2:0] ST_PAL  = 3'd2;
-  localparam logic [2:0] ST_OUT  = 3'd3;
-  localparam logic [2:0] ST_FILT = 3'd4;
+  localparam logic [1:0] ST_IDLE = 2'd0;
+  localparam logic [1:0] ST_TEX  = 2'd1;
+  localparam logic [1:0] ST_PAL  = 2'd2;
+  localparam logic [1:0] ST_OUT  = 2'd3;
 
   // (4^L − 1)/3, the base-4 repunits — see WHERE A LEVEL LIVES.
   localparam logic [31:0] REP4 [0:15] = '{
@@ -549,47 +442,29 @@ module zhao_texture_tmu #(
 
 
   // ======================================================= the request =====
-  // Four states plus ST_FILT, and NO PIPELINE. A sample is one texel access
-  // (four lanes for bilinear, one for nearest) plus, for the CLUT formats
-  // only, a second access for the palette entry — the index is not known until
-  // the first one answers, so the two are unavoidably serial.
+  // Four states and NO PIPELINE. A sample is one texel access (four lanes for
+  // bilinear, one for nearest) plus, for the CLUT formats only, a second
+  // access for the palette entry — the index is not known until the first one
+  // answers, so the two are unavoidably serial.
   //
   // WHAT THIS COSTS, measured rather than papered over. Against a cache that
   // answers in one cycle: accept in cycle N, sample retired in N+3 for direct
-  // colour (plus PASSES−1 for the filter's early passes) and N+5 for CLUT, and
-  // the next request is accepted the cycle after that, because `req_ready_o`
-  // is `st_r == ST_IDLE` and nothing overlaps. So the sustained rate is ONE
-  // SAMPLE PER FOUR CLOCKS at FILT_LANES = 4 (five at 2, seven at 1) for
-  // direct colour, and PER SIX for CLUT at every setting — not the ledger's
-  // "1 sample per clock". The half of that line this block DOES meet is
-  // "bilinear = 1 request": four taps are one request beat and one cache
-  // access, never four serialised lookups.
+  // colour and N+5 for CLUT, and the next request is accepted the cycle after
+  // that, because `req_ready_o` is `st_r == ST_IDLE` and nothing overlaps. So
+  // the sustained rate is ONE SAMPLE PER FOUR CLOCKS (direct) or PER SIX
+  // (CLUT), not the ledger's "1 sample per clock". The half of that line this
+  // block DOES meet is "bilinear = 1 request": four taps are one request beat
+  // and one cache access, never four serialised lookups.
   //
-  // AND IT IS SHORT OF THE DERIVED DEMAND, which is a separate defect from the
-  // DSP one and is NOT fixed by the FILT_LANES rearchitecture. docs/
-  // OWNER_DOCKET.md's "THE THREE DEMAND NUMBERS" derives 850,000 samples per
-  // frame from Sacrifice's layered terrain (tile + detail + lightmap, so ≥3
-  // samples a terrain pixel; 92,160 pixels at 3× overdraw = 829,440). Against
-  // design/budgets/latency.md's compute budget of 1,666,667 clocks a frame —
-  // NOT the 251,520 raster period, which is 6.6× smaller and is also called
-  // "gpu cycles" — that is one sample every two clocks. This block does one
-  // every four (direct) or six (CLUT), and terrain is CLUT8, so the
-  // demand-critical figure is 277,778 samples/frame against 850,000: 0.33×.
-  //
-  // Reaching one per two clocks needs a pipelined address → fetch → filter
-  // chain with two requests in flight and an arbiter over the single cache
-  // access port (a CLUT sample needs two accesses and zhao_texture_cache
-  // accepts one per clock, so II = 2 is the port's own floor and matches the
-  // demand exactly). That is a change to THIS FILE only — the ports, the mode
-  // word and zref::Tmu are all unaffected — and it is stated in
-  // design/contracts/TEXTURE.TMU.md's Target throughput section rather than
-  // left for a reader to discover.
+  // Reaching one per clock needs a pipelined address → fetch → filter chain
+  // with a separate palette stage. That is a change to THIS FILE only — the
+  // ports, the mode word and zref::Tmu are all unaffected — and it is stated
+  // in design/contracts/TEXTURE.TMU.md's Target throughput section rather
+  // than left for a reader to discover.
   // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp:test_backpressure_and_latency
   // (the worst accept-to-retire is measured and asserted ≤ 16, the ledger's
   // `variable_bounded:16`).
-  logic [2:0]   st_r;
-  logic [1:0]   pass_r;      // which filter pass ST_FILT is on (0 .. PASSES−2)
-  logic [31:0]  fres_r;      // channel c's filtered byte at [8*c +: 8]
+  logic [1:0]   st_r;
   logic         sent_r;      // this state's cache request has been taken
   logic [127:0] q_addr_r;
   logic [3:0]   q_en_r;
@@ -656,74 +531,40 @@ module zhao_texture_tmu #(
     end
   endfunction
 
-  // One packed 4-tap footprint per CHANNEL, in the order the filter lanes are
-  // multiplexed over: 0 = R, 1 = G, 2 = B, 3 = A. Tap k sits at [8*k +: 8], so
-  // a lane's four inputs are one 32-bit select away.
-  logic [31:0] dec_c   [0:3];
-  logic [31:0] ch_pack [0:3];
+  logic [7:0] ch_a [0:3];
+  logic [7:0] ch_r [0:3];
+  logic [7:0] ch_g [0:3];
+  logic [7:0] ch_b [0:3];
+  logic [31:0] dec_c [0:3];
   always_comb begin
     for (int unsigned k = 0; k < 4; k++) begin
       dec_c[k] = decode16(hw_r[k], q_fmt_r);
-      ch_pack[0][8*k +: 8] = dec_c[k][23:16];  // R
-      ch_pack[1][8*k +: 8] = dec_c[k][15:8];   // G
-      ch_pack[2][8*k +: 8] = dec_c[k][7:0];    // B
-      ch_pack[3][8*k +: 8] = dec_c[k][31:24];  // A
+      ch_a[k]  = dec_c[k][31:24];
+      ch_r[k]  = dec_c[k][23:16];
+      ch_g[k]  = dec_c[k][15:8];
+      ch_b[k]  = dec_c[k][7:0];
     end
   end
 
-  // ---- the filter: FILT_LANES channels at a time -------------------------
-  // The arithmetic, its factored form and its single rounding live in
+  // ---- the filter: four channels, one module each ------------------------
+  // The arithmetic, its weights and its single rounding live in
   // zhao_texture_bilerp, which is a separate file for the same reason
   // zhao_raster_blend is: tests/formal/texture_bilerp.sby proves the SHIPPING
-  // filter, not a copy of it. This block instantiates FILT_LANES of it and
-  // walks the four channels past them; the module itself is unparameterised
-  // and unchanged, so the proof covers every lane at every setting.
-  //
-  // `pass_c` is the pass the COMBINATIONAL lanes are computing right now:
-  // ST_OUT is always the LAST pass, which is what makes FILT_LANES = 4 cost
-  // exactly zero extra cycles.
-  logic [1:0] pass_c, sel_base;
-  always_comb begin
-    pass_c   = (st_r == ST_OUT) ? 2'(PASSES - 1) : pass_r;
-    sel_base = 2'(pass_c << LANE_SHIFT);
-  end
+  // filter, not a copy of it.
+  logic [7:0] bl_r, bl_g, bl_b, bl_a;
+  zhao_texture_bilerp u_br (.t00_i(ch_r[0]), .t10_i(ch_r[1]), .t01_i(ch_r[2]), .t11_i(ch_r[3]),
+                            .fu_i(q_fu_r), .fv_i(q_fv_r), .out_o(bl_r));
+  zhao_texture_bilerp u_bg (.t00_i(ch_g[0]), .t10_i(ch_g[1]), .t01_i(ch_g[2]), .t11_i(ch_g[3]),
+                            .fu_i(q_fu_r), .fv_i(q_fv_r), .out_o(bl_g));
+  zhao_texture_bilerp u_bb (.t00_i(ch_b[0]), .t10_i(ch_b[1]), .t01_i(ch_b[2]), .t11_i(ch_b[3]),
+                            .fu_i(q_fu_r), .fv_i(q_fv_r), .out_o(bl_b));
+  zhao_texture_bilerp u_ba (.t00_i(ch_a[0]), .t10_i(ch_a[1]), .t01_i(ch_a[2]), .t11_i(ch_a[3]),
+                            .fu_i(q_fu_r), .fv_i(q_fv_r), .out_o(bl_a));
 
-  logic [FILT_LANES*8-1:0] bl_out;
-  genvar gj;
-  generate
-    for (gj = 0; gj < int'(FILT_LANES); gj++) begin : g_lane
-      logic [31:0] tsel;
-      assign tsel = ch_pack[sel_base | 2'(gj)];
-      zhao_texture_bilerp u_bl (.t00_i(tsel[7:0]),
-                                .t10_i(tsel[15:8]),
-                                .t01_i(tsel[23:16]),
-                                .t11_i(tsel[31:24]),
-                                .fu_i (q_fu_r),
-                                .fv_i (q_fv_r),
-                                .out_o(bl_out[8*gj +: 8]));
-    end
-  endgenerate
-
-  // The whole filtered texel: the last pass's channels straight off the lanes,
-  // the earlier passes' out of `fres_r`. Both selectors are elaboration-time
-  // constants, so this is wiring, not a mux.
-  logic [7:0] fin [0:3];
-  genvar gc;
-  generate
-    for (gc = 0; gc < 4; gc++) begin : g_fin
-      if (gc >= int'(LAST_BASE)) begin : g_now
-        assign fin[gc] = bl_out[8*(gc - int'(LAST_BASE)) +: 8];
-      end else begin : g_held
-        assign fin[gc] = fres_r[8*gc +: 8];
-      end
-    end
-  endgenerate
-
-  // With FILTER_NEAREST the fractions are forced to 0, so A = t00<<8 and
-  // S = t00<<16 and the filter is the exact identity on tap 0 (see
-  // zhao_texture_bilerp's ENDPOINTS). Nearest therefore takes the SAME
-  // datapath as bilinear rather than a parallel one, and the same number of
-  // passes — one sampler, which is the §26 shape.
+  // With FILTER_NEAREST the fractions are forced to 0, so w00 = 65,536 and
+  // the filter is the exact identity on tap 0 (see zhao_texture_bilerp's
+  // ENDPOINTS). Nearest therefore takes the SAME datapath as bilinear rather
+  // than a parallel one — one sampler, which is the §26 shape.
   // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp:test_nearest_is_the_bilinear_identity
 
   // ---- the CLUT index, taken off the cache bus ---------------------------
@@ -761,16 +602,9 @@ module zhao_texture_tmu #(
   //     low 8 bits of a Q16.16 texel coordinate are below the weight's LSB.
   //   · `pal_dec[31:24]` — the alpha lane of the palette decode. A CLUT
   //     texel's alpha is its index's business, never the palette entry's.
-  //   · `fres_r` and `pass_r` AT FILT_LANES = 4 ONLY. There is one filter
-  //     pass there, so ST_FILT is unreachable and the held-channel register
-  //     bank has no reader. It is still DRIVEN, deliberately, rather than
-  //     generated away: keeping one sequential body for all three settings is
-  //     what makes the mutation sweep's frontier builds comparable, and a
-  //     register with no reader costs nothing after synthesis.
   logic unused_ok;
   always_comb begin
-    unused_ok = |req_lod_i[3:0] | |tu_b[7:0] | |tv_b[7:0] | |pal_dec[31:24]
-              | |fres_r | |pass_r;
+    unused_ok = |req_lod_i[3:0] | |tu_b[7:0] | |tv_b[7:0] | |pal_dec[31:24];
     unused_ok = unused_ok & 1'b0;
   end
 
@@ -779,8 +613,8 @@ module zhao_texture_tmu #(
   // A CLUT texel's alpha is 255: its transparency is a property of its INDEX,
   // tested by RASTER.FRAGMENT (its contract's THE ALPHA TEST IS AN INDEX
   // TEST), never of a palette alpha the RGB565 page has no room for.
-  assign smp_rgb_o    = q_clut_r ? pal_dec[23:0] : {fin[0], fin[1], fin[2]};
-  assign smp_a_o      = q_clut_r ? 8'd255 : fin[3];
+  assign smp_rgb_o    = q_clut_r ? pal_dec[23:0] : {bl_r, bl_g, bl_b};
+  assign smp_a_o      = q_clut_r ? 8'd255 : bl_a;
   // A direct-colour texel HAS no index. It is reported as 0, and the two
   // state bits that read it (RASTER.FRAGMENT's ATEST_EN and TAG_FROM_TEXEL)
   // are set by no direct-colour recipe.
@@ -790,8 +624,6 @@ module zhao_texture_tmu #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st_r              <= ST_IDLE;
-      pass_r            <= 2'd0;
-      fres_r            <= 32'd0;
       sent_r            <= 1'b0;
       q_addr_r          <= 128'd0;
       q_en_r            <= 4'd0;
@@ -845,35 +677,12 @@ module zhao_texture_tmu #(
               sent_r            <= 1'b0;
               st_r              <= ST_PAL;
             end else begin
-              // Direct colour: the texels are here, so the filter can run. At
-              // FILT_LANES = 4 there is exactly one pass and it is ST_OUT's,
-              // so this goes straight to ST_OUT and the cycle count does not
-              // move from the shape this file shipped with.
-              pass_r <= 2'd0;
-              st_r   <= (PASSES > 1) ? ST_FILT : ST_OUT;
+              st_r <= ST_OUT;
             end
           end
         end
 
-        // ---- the filter's early passes ----------------------------------
-        // PASSES − 1 cycles, registering FILT_LANES channels each. The LAST
-        // pass is not run here: it is combinational in ST_OUT.
-        ST_FILT: begin
-          for (int unsigned j = 0; j < FILT_LANES; j++) begin
-            // channel index (sel_base | j), byte-aligned by the 3'd0 concat —
-            // a shift, so no `*` reaches the RTL.
-            fres_r[{(sel_base | 2'(j)), 3'd0} +: 8] <= bl_out[8*j +: 8];
-          end
-          if (pass_r == 2'(LAST_FILT_PASS)) begin
-            st_r <= ST_OUT;
-          end else begin
-            pass_r <= pass_r + 2'd1;
-          end
-        end
-
         // ---- the palette access -----------------------------------------
-        // A CLUT texel is never filtered (stars §1), so this path does not
-        // visit ST_FILT at any FILT_LANES setting and its II does not move.
         ST_PAL: begin
           if (cac_valid_o && cac_ready_i) sent_r <= 1'b1;
           if (cac_rsp) begin

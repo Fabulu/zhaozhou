@@ -2421,7 +2421,14 @@ blocks:
     downstream: []
     backpressure: ready_valid
     latency: variable_bounded:16
-    target_throughput: 850,000 texture samples per frame (one sample every two clocks at the 100 MHz gpu_clk placeholder); bilinear = 1 request. NOT MET: the block sustains one sample per 6 clocks on the CLUT path and one per 4 direct, so 277,778/frame, 0.33x. Derived in docs/OWNER_DOCKET.md from Sacrifice's layered terrain; measured by tests/texture/texture_tmu_directed.cpp:test_throughput_against_the_derived_demand.
+    target_throughput: >-
+      850,000 texture samples per frame (one sample every two clocks at the
+      100 MHz gpu_clk placeholder); bilinear = 1 request. NOT MET - the block
+      sustains one sample per 6 clocks on the CLUT path and one per 5 direct,
+      so 277,778/frame, 0.33x. Derived in docs/OWNER_DOCKET.md from Sacrifice's
+      layered terrain (tile + detail + lightmap, sacmap.d:136-174); measured by
+      tests/texture/texture_tmu_directed.cpp
+      test_throughput_against_the_derived_demand.
     reference_model: zref::Tmu
     tests:
       directed: tests/texture/texture_tmu_directed.cpp
