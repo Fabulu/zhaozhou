@@ -2,7 +2,7 @@
  "schemaVersion": 1,
  "tool": "tools/budget/scan_rtl.py",
  "frontend": "Verilator --json-only (elaborated AST)",
- "sourceCommit": "de11ce9bf10579d2b38c0487c67027500eff5c47",
+ "sourceCommit": "74fd6b096b680116d37dac342999e5f640a13d43",
  "rtlCleanAtHead": true,
  "sourceListHash": "40e689de9f34a042",
  "moduleCount": 91,

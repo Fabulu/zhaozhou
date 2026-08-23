@@ -79,3 +79,30 @@ WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json
 zhao_raster_edgewalk               ok                      42.7s   DSP 2     membits 0
 WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (26 row(s); 1 this run)
 [27/90] 23:07:28 zhao_raster_blend
+zhao_raster_blend                  ok                        21s   DSP 1     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (27 row(s); 1 this run)
+[28/90] 23:07:49 zhao_raster_earlyz
+zhao_raster_earlyz                 ok                      26.9s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (28 row(s); 1 this run)
+[29/90] 23:08:16 zhao_raster_fill
+zhao_raster_fill                   ok                      18.5s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (29 row(s); 1 this run)
+[30/90] 23:08:35 zhao_raster_quant
+zhao_raster_quant                  ok                      16.6s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (30 row(s); 1 this run)
+[31/90] 23:08:52 zhao_raster_resolve
+zhao_raster_resolve                ok                      23.3s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (31 row(s); 1 this run)
+[32/90] 23:09:15 zhao_raster_tilestore
+zhao_raster_tilestore              ok                      35.4s   DSP 0     membits 32768
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (32 row(s); 1 this run)
+[33/90] 23:09:51 zhao_raster_tile_pipe
+zhao_raster_tile_pipe              ok                      75.3s   DSP 9     membits 32768
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (33 row(s); 1 this run)
+[34/90] 23:11:07 zhao_raster_div255
+zhao_raster_div255                 ok                      21.5s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (34 row(s); 1 this run)
+[35/90] 23:11:29 zhao_surface_stamp
+zhao_surface_stamp                 ok                      42.8s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (35 row(s); 1 this run)
+[36/90] 23:12:12 zhao_surface_sheet

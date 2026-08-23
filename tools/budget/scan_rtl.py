@@ -649,11 +649,51 @@ def analyse_module(name, mnode, types, filemap):
     # EXCLUSIVE modes.  Muxing the left operand before ONE multiplier halves
     # them.  Detected structurally: a COND whose two arms each contain a
     # multiply, and whose two multiplies share an operand signature.
+    #
+    # AND IT MUST FOLLOW NAMED SIGNALS, which the first draft did not.
+    # A positive control caught this: the detector reported ZERO candidates
+    # across all 91 modules, which is indistinguishable from "the repository
+    # has none". A synthetic module in exactly the shape RASTER.BLEND's own
+    # header describes its former self --
+    #
+    #   always_comb p_alpha  = (src_i - dst_i) * a_i;
+    #   always_comb p_addmod = src_i * a_i;
+    #   assign y_o = mode_i ? p_alpha : p_addmod;
+    #
+    # -- was also reported clean, because the multiplies are not INSIDE the
+    # COND's arms. Each arm is a bare VARREF and the product is one level
+    # behind it. Nobody writes two products inline in a ternary; they write
+    # them into named signals, which is why a detector that only looks inside
+    # the arms can never fire on real RTL.
+    comb_driver = {}
+    for n in walk(mnode):
+        if n.get("type") not in ("ASSIGN", "ASSIGNW"):
+            continue
+        if n.get("addr") in clocked_nodes:
+            continue
+        lhs, rhs = only_child(n, "lhsp"), only_child(n, "rhsp")
+        if lhs is None or rhs is None or lhs.get("type") != "VARREF":
+            continue
+        v = lhs.get("varp")
+        if v in comb_driver:
+            comb_driver[v] = None      # driven from several places; ambiguous
+        else:
+            comb_driver[v] = rhs
+
+    def resolve(node, depth=0):
+        """Follow a bare VARREF back to its combinational driver."""
+        while depth < 4 and node is not None and node.get("type") == "VARREF":
+            nxt = comb_driver.get(node.get("varp"))
+            if nxt is None:
+                break
+            node, depth = nxt, depth + 1
+        return node
+
     mux_candidates = []
     for n in walk(mnode):
         if n.get("type") != "COND":
             continue
-        thenp, elsep = only_child(n, "thenp"), only_child(n, "elsep")
+        thenp, elsep = resolve(only_child(n, "thenp")), resolve(only_child(n, "elsep"))
         if thenp is None or elsep is None:
             continue
         tm = [x for x in walk(thenp) if x.get("type") in MUL_TYPES]
