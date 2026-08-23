@@ -72,6 +72,10 @@
 // `n` is u32 with bit 31 set, so `n` is in [2^31, 2^32). The seed is 16 bits, in
 // [0x8020, 0xFF80]. So `p = n * x` is at most about 2^48 — 49 bits — and
 // `2^48 - p` stays non-negative because the seed is by construction near 2^47/n.
+// That is a property of the TABLE rather than of this arithmetic, and the test
+// walks every entry of it; the same claim is restated with its full argument at
+// the end of this section.
+// ENFORCED-BY: tests/differential/field_rcp_directed.cpp:main
 //
 // A 49-bit operand does not fit the shared lane's 33 signed bits, so `corr` is
 // SPLIT at bit 32 and issued twice:

@@ -36,7 +36,9 @@
 // project's own notes. The covers prove the machine both RUNS and OVERRUNS.
 `default_nettype none
 
-module zhao_field_seq_bound_harness (
+module zhao_field_seq_bound_harness
+  import zhao_field_seq_pkg::MAX_OP_CYCLES;
+(
     input logic clk,
     input logic rst_n,
 
@@ -192,6 +194,27 @@ module zhao_field_seq_bound_harness (
     else busy_cnt <= busy_cnt + 16'd1;
   end
 
+  // AND HOW LONG THE CURRENT INSTRUCTION HAS BEEN RUNNING, which is the bound
+  // the DESIGN states. `MAX_OP_CYCLES` is `zhao_field_seq_pkg`'s, imported
+  // above rather than copied here: there is one definition of this number in
+  // the tree and the proof reads it.
+  //
+  // This counter restarts at every retirement and at every start, so it
+  // measures exactly what the design's cost table measures -- fetch to retire.
+  logic [15:0] op_cnt;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) op_cnt <= 16'd0;
+    else if (!busy || retired) op_cnt <= 16'd0;
+    else op_cnt <= op_cnt + 16'd1;
+  end
+
+  // THE RUN-LEVEL BOUND IS DERIVED, NOT CHOSEN. The count shrink below holds
+  // `instr_count_i <= 2`, so a run walks at most two instructions; add the
+  // fetch that discovers the overrun and the Q_DONE that ends it, with six
+  // clocks of slack for the walk states either side.
+  localparam int unsigned MAX_FORMAL_INSTRS = 2;
+  localparam int unsigned MAX_RUN_CYCLES = MAX_FORMAL_INSTRS * MAX_OP_CYCLES + 8;
+
   always_ff @(posedge clk) begin
     if (f_past_valid && rst_n) begin
       // ---- the walk never steps past the bound it was given ---------------
@@ -210,11 +233,28 @@ module zhao_field_seq_bound_harness (
       if (busy) a_pc_bounded: assert (pc <= instr_count_i);
 
       // ---- THE ANTI-HANG LAW ITSELF ---------------------------------------
-      // Two instructions, the slowest of which spends 34 clocks in the integer
-      // root, plus the six-clock walk and the handshake states. 120 is
-      // generous; the point is that SOME bound holds for EVERY instruction
-      // memory, not that this particular number is tight.
-      a_progress: assert (busy_cnt <= 16'd120);
+      // TWO ASSERTIONS NOW, AND THE FIRST IS THE ONE WITH MEANING.
+      //
+      // `a_op_bounded` is the design's own claim: NO INSTRUCTION, whatever
+      // opcode the solver invents and whatever the operands point at, runs
+      // longer than `MAX_OP_CYCLES`. That is the number
+      // `fpga/rtl/field/zhao_field_seq.sv` states in its cost table and that
+      // section 12 of the differential measures; here it is proven for the
+      // instruction memory nobody thought of.
+      //
+      // It matters more since the DSP rearchitecture than it did before. Every
+      // op now waits on shared resources -- one multiplier, one integer root,
+      // one reciprocal -- and every wait is an `if (valid)` that a mis-timed
+      // schedule turns into a spin. The old design's units could not wait on
+      // each other at all.
+      //
+      // `a_progress` is then the run-level consequence, DERIVED above rather
+      // than picked: two instructions at the per-instruction bound, plus the
+      // fetch that overruns and the state that finishes. It used to be a bare
+      // 120 with a paragraph explaining why 120 was generous, which is what a
+      // magic constant looks like when it is behaving.
+      a_op_bounded: assert (op_cnt <= 16'(MAX_OP_CYCLES));
+      a_progress: assert (busy_cnt <= 16'(MAX_RUN_CYCLES));
     end
   end
 
@@ -227,12 +267,19 @@ module zhao_field_seq_bound_harness (
   // together -- so this guard PINS the proven window and FIRES the moment the
   // depth goes past it, forcing that re-derivation instead of a silent
   // re-scope of what "PASS" means here.
-  logic [7:0] f_steps = 8'd0;
+  //
+  // THE WINDOW IS DERIVED TOO. `MAX_RUN_CYCLES` plus the reset cycles and the
+  // idle cycle before `start_i`, rounded up to the depth the .sby asks for. If
+  // `MAX_OP_CYCLES` grows, this grows with it and the .sby's `depth` must be
+  // raised to match -- which is the forced re-derivation, rather than a silent
+  // re-scope of what PASS means here.
+  localparam int unsigned SCOPE_STEPS = MAX_RUN_CYCLES + 22;
+  logic [15:0] f_steps = 16'd0;
   always_ff @(posedge clk) begin
-    if (f_steps != 8'hFF) f_steps <= f_steps + 8'd1;
+    if (f_steps != 16'hFFFF) f_steps <= f_steps + 16'd1;
   end
   always_comb begin
-    a_scope_short_program_window : assert (f_steps <= 8'd140);
+    a_scope_short_program_window : assert (f_steps <= 16'(SCOPE_STEPS));
   end
 
   // ---- non-vacuity (V16): the antecedents are REACHABLE -------------------

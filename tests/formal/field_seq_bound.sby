@@ -16,7 +16,7 @@
 # mis-loaded memory is.
 #
 # TWO TASKS, both required (ledger rule V16):
-#   bmc    — a_pc_bounded and a_progress hold to the depth below.
+#   bmc    — a_pc_bounded, a_op_bounded and a_progress hold to the depth below.
 #   cover  — the antecedents are REACHABLE. Both properties are implications
 #            over a busy machine, and a model that never starts satisfies them
 #            while proving nothing. That is the shape MEM.GUARD's lane failed
@@ -24,8 +24,29 @@
 #            the machine RUNS, that it finishes cleanly, that it OVERRUNS, and
 #            that it refuses an unsupported opcode.
 #
-# Depth 140 covers: start -> the six-clock walk -> two instructions, the
-# slowest of which spends 34 clocks in the integer square root -> Q_DONE.
+# THE DEPTH IS DERIVED FROM THE DESIGN, 2026-08-23. `zhao_field_seq_pkg`
+# declares MAX_OP_CYCLES = 80 -- the ceiling on ONE instruction, measured at 67
+# for the worst of them (NORMALIZE3) by section 12 of
+# tests/differential/field_seq_directed.cpp. The harness imports that constant
+# and computes
+#
+#     MAX_RUN_CYCLES = 2 * MAX_OP_CYCLES + 8 = 168
+#     SCOPE_STEPS    = MAX_RUN_CYCLES + 22   = 190
+#
+# so `depth` must sit between the run bound it has to exercise and the scope
+# guard that pins the proven window: 168 < 180 < 190. Raising MAX_OP_CYCLES
+# without raising this depth makes a_scope_short_program_window fail, which is
+# the forced re-derivation rather than a silent re-scope of what PASS means.
+#
+# It used to be a bare `busy_cnt <= 120` at depth 140, with a paragraph
+# explaining why 120 was generous. The DSP rearchitecture of 2026-08-23 made
+# the ops longer -- every one of them now waits on a shared multiplier, a shared
+# root and a shared reciprocal -- so a number chosen against the old schedule
+# would have had to be edited, which is exactly how a bound stops being one.
+#
+# Depth 180 covers: reset -> start -> two instructions at their real cost, the
+# slowest of which spends 34 clocks in the integer square root and 3 clocks per
+# dependent product -> Q_DONE.
 #
 # Frontend: read_slang reading the REAL frozen zhao_pkg.sv and the REAL
 # generated zhao_abi_pkg.sv, and the real unit blocks the sequencer
@@ -42,21 +63,23 @@ cover
 
 [options]
 bmc:   mode bmc
-bmc:   depth 140
+bmc:   depth 180
 cover: mode cover
-cover: depth 140
+cover: depth 180
 expect pass
 
 [engines]
 btor btormc
 
 [script]
-read_slang --unroll-limit=200000 --top zhao_field_seq_bound_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_field_rcp_rom.sv zhao_field_rcp24_rom.sv zhao_field_sin_rom.sv zhao_field_alu.sv zhao_field_rcp.sv zhao_field_sin.sv zhao_field_isqrt.sv zhao_field_len.sv zhao_field_normalize.sv zhao_field_curve.sv zhao_field_noise.sv zhao_field_ring.sv zhao_field_rot.sv zhao_field_seq.sv field_seq_bound_harness.sv
+read_slang --unroll-limit=200000 --top zhao_field_seq_bound_harness -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_field_rcp_rom.sv zhao_field_rcp24_rom.sv zhao_field_sin_rom.sv zhao_field_mul.sv zhao_field_exec_shared.sv zhao_field_alu.sv zhao_field_rcp.sv zhao_field_sin.sv zhao_field_isqrt.sv zhao_field_len.sv zhao_field_normalize.sv zhao_field_curve.sv zhao_field_noise.sv zhao_field_ring.sv zhao_field_rot.sv zhao_field_seq.sv field_seq_bound_harness.sv
 prep -top zhao_field_seq_bound_harness
 
 [files]
 ../../fpga/rtl/generated/zhao_abi_pkg.sv
 ../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/field/zhao_field_mul.sv
+../../fpga/rtl/field/zhao_field_exec_shared.sv
 ../../fpga/rtl/field/zhao_field_rcp_rom.sv
 ../../fpga/rtl/field/zhao_field_rcp24_rom.sv
 ../../fpga/rtl/field/zhao_field_sin_rom.sv

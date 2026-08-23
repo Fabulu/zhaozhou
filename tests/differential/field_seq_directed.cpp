@@ -220,6 +220,13 @@ struct Bench {
   }
 
   /** Zero, load, run, read back -- the reference's own order. */
+  // The WORST number of clocks any single instruction of the last run took,
+  // measured from the cycle after the previous retirement (or after start) to
+  // the cycle its own `instr_retired_o` pulses. This is the quantity
+  // `MAX_OP_CYCLES` bounds and the formal harness proves, so it is measured
+  // rather than assumed.
+  int max_op_cycles = 0;
+
   std::vector<int32_t> run(const Prog& p, const std::vector<int32_t>& in, uint8_t* status,
                            int* cycles = nullptr, int* retired = nullptr) {
     prog = &p;
@@ -235,9 +242,16 @@ struct Bench {
     dut.eval();
 
     int n = 0, ret = 0;
+    int since = 0;
+    max_op_cycles = 0;
     while (!dut.done_o && n < 20000) {
       step();
-      if (dut.instr_retired_o) ++ret;
+      ++since;
+      if (dut.instr_retired_o) {
+        ++ret;
+        if (since > max_op_cycles) max_op_cycles = since;
+        since = 0;
+      }
       ++n;
     }
     if (status) *status = static_cast<uint8_t>(dut.status_o);
@@ -1454,6 +1468,430 @@ int main(int argc, char** argv) {
     std::printf("coverage: all %d required opcodes issued (%d distinct seen)\n",
                 static_cast<int>(sizeof(kAll) / sizeof(kAll[0])),
                 static_cast<int>(opsIssued().size()));
+  }
+
+  // ---- 12. THE LATENCY TABLE, MEASURED ------------------------------------
+  // The engine has ONE multiplier now, so what each op costs is a property of
+  // the schedule rather than of its silicon, and two numbers in the contract
+  // depend on it:
+  //
+  //   * MUL, MAD, DOT2 and DOT3 still retire in SIX CLOCKS. That is the whole
+  //     reason the first operand group is read in Q_LATCH: with a two-cycle
+  //     lane it puts DOT3's third product in Q_EXEC. If a future change moves
+  //     the issue back to Q_RD1, DOT3 silently costs seven and this catches it.
+  //   * NO op exceeds MAX_OP_CYCLES, which is what tests/formal/field_seq_bound
+  //     proves for an arbitrary instruction memory. The formal lane proves the
+  //     bound holds; this section is where the MARGIN is visible, so that a
+  //     bound quietly grown to fit a regression is a diff rather than a habit.
+  {
+    const int kMaxOpCycles = 80;   // zhao_field_seq_pkg::MAX_OP_CYCLES
+
+    struct Case {
+      const char* name;
+      uint8_t op;
+      bool simple;          // must retire in exactly six clocks
+      int lanes;            // how many registers it writes
+    };
+    // Operand registers are loaded as input lanes so nothing is read before it
+    // is written, and every destination is well clear of every source.
+    static const Case kCases[] = {
+        {"MOV", zfield::OP_MOV, true, 1},
+        {"ADD", zfield::OP_ADD, true, 1},
+        {"MUL", zfield::OP_MUL, true, 1},
+        {"MAD", zfield::OP_MAD, true, 1},
+        {"DOT2", zfield::OP_DOT2, true, 1},
+        {"DOT3", zfield::OP_DOT3, true, 1},
+        {"SIN", zfield::OP_SIN, true, 1},
+        {"COS", zfield::OP_COS, true, 1},
+        {"RCP", zfield::OP_RCP, false, 1},
+        {"LEN2", zfield::OP_LEN2, false, 1},
+        {"LEN3", zfield::OP_LEN3, false, 1},
+        {"DIST2", zfield::OP_DIST2, false, 1},
+        {"NORMALIZE2", zfield::OP_NORMALIZE2, false, 2},
+        {"NORMALIZE3", zfield::OP_NORMALIZE3, false, 3},
+        {"NOISE2", zfield::OP_NOISE2, false, 2},
+        {"RIDGE", zfield::OP_RIDGE, false, 1},
+        {"ROT2", zfield::OP_ROT2, false, 2},
+        {"ROT3", zfield::OP_ROT3, false, 3},
+        {"RING", zfield::OP_RING, false, 1},
+        {"CURVE", zfield::OP_CURVE, false, 1},
+        {"DCURVE", zfield::OP_DCURVE, false, 1},
+        {"SPLINE", zfield::OP_SPLINE, false, 1},
+    };
+
+    zfield::Table tbl;
+    for (int i = 0; i < 8; ++i) {
+      tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
+      tbl.y.push_back(static_cast<int32_t>(i) * 1234 - 3000);
+      tbl.dy.push_back(kOne / 3);
+    }
+
+    int worst = 0;
+    const char* worst_name = "";
+    std::printf("latency (clocks per instruction, measured):\n");
+    for (const Case& cs : kCases) {
+      Prog p;
+      p.in_regs = {0, 1, 2, 3, 4, 5, 6};
+      p.tables.push_back(tbl);
+      // a = r0..r2, b = r3..r5, c = r6, dst = r16..r18.
+      p.op(cs.op, 16, 0, 3, 6, (cs.op == zfield::OP_ROT3) ? 1u : 0u);
+      p.end();
+      for (int k = 0; k < cs.lanes; ++k) p.out_regs.push_back(static_cast<uint8_t>(16 + k));
+
+      uint8_t status = 0xFF;
+      b.run(p, {kOne, kOne * 2, kOne * 3, kOne / 2, kOne, kOne * 5, kOne * 9}, &status);
+      const int got = b.max_op_cycles;
+      std::printf("    %-12s %3d\n", cs.name, got);
+
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "12.%s ran to END", cs.name);
+      check(status == 0, nm, 0, status);
+      if (cs.simple) {
+        std::snprintf(nm, sizeof nm, "12.%s still retires in six clocks", cs.name);
+        check(got == 6, nm, 6, static_cast<uint32_t>(got));
+      }
+      std::snprintf(nm, sizeof nm, "12.%s within MAX_OP_CYCLES", cs.name);
+      check(got <= kMaxOpCycles, nm, 1, got <= kMaxOpCycles ? 1 : 0);
+      if (got > worst) {
+        worst = got;
+        worst_name = cs.name;
+      }
+    }
+    std::printf("    worst op: %s at %d clocks (MAX_OP_CYCLES = %d)\n", worst_name, worst,
+                kMaxOpCycles);
+    // A bound with no margin left is a bound about to be edited. This is not a
+    // correctness law, it is a tripwire on the habit.
+    check(worst <= kMaxOpCycles, "12.the worst op fits MAX_OP_CYCLES", 1,
+          worst <= kMaxOpCycles ? 1 : 0);
+  }
+
+  // ---- 13. CROSS-OP CONTAMINATION: alone versus interleaved ---------------
+  // THE DEFECT THIS SECTION EXISTS FOR IS ONE THE OLD DESIGN COULD NOT HAVE
+  // HAD. When every op owned its own multiplier and its own accumulator,
+  // nothing an op left behind could reach another one. They now share a 66-bit
+  // product register, a wide accumulator, an integer square root, a sine table
+  // and a reciprocal -- and a leftover in any of them is invisible to every
+  // test that runs one op at a time, which is every other section of this file
+  // and every block-level differential in the tree.
+  //
+  // So: run each op ALONE, then run hostile sequences of the same ops, and
+  // require every answer AND EVERY SATURATION LEDGER LANE to equal what the
+  // isolated run produced. The ledger is the half that matters most -- a shared
+  // accumulator not cleared between ops can produce the right number and the
+  // wrong `mul` lane, and Status.sat collapses all five into one bit, so the
+  // five are compared separately here.
+  //
+  // The sequences are chosen to put the deepest sharers next to each other:
+  // NORMALIZE (root + reciprocal walk + three lane products) beside RCP (the
+  // split correction product) beside RING (nine products and TWO reciprocal
+  // calls) beside DOT3 (the read-walk accumulator) beside NOISE (six products
+  // through the same lane).
+  {
+    struct Step {
+      const char* name;
+      uint8_t op;
+      uint8_t dst;
+      uint8_t a, b, c;
+      uint32_t imm;
+      int lanes;
+    };
+    // Sources are input lanes r0..r15, loaded before the run. Destinations are
+    // r20 upward, three apart, so no op can write into another's answer even if
+    // the width logic were wrong.
+    static const Step kSteps[] = {
+        {"NORMALIZE3", zfield::OP_NORMALIZE3, 20, 0, 0, 0, 0, 3},
+        {"RCP", zfield::OP_RCP, 24, 3, 0, 0, 0, 1},
+        {"RING", zfield::OP_RING, 28, 4, 5, 6, 0, 1},
+        {"DOT3", zfield::OP_DOT3, 32, 0, 8, 0, 0, 1},
+        {"NOISE2", zfield::OP_NOISE2, 36, 11, 0, 0, 0x5EEDu, 2},
+        {"ROT3", zfield::OP_ROT3, 40, 13, 7, 0, 2u, 3},
+        {"LEN3", zfield::OP_LEN3, 44, 0, 0, 0, 0, 1},
+        {"SPLINE", zfield::OP_SPLINE, 48, 3, 0, 0, 0u, 1},
+        {"MUL", zfield::OP_MUL, 52, 3, 4, 0, 0, 1},
+        {"NORMALIZE2", zfield::OP_NORMALIZE2, 56, 8, 0, 0, 0, 2},
+    };
+    const int kN = static_cast<int>(sizeof(kSteps) / sizeof(kSteps[0]));
+
+    zfield::Table tbl;
+    for (int i = 0; i < 8; ++i) {
+      tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
+      tbl.y.push_back(static_cast<int32_t>(i) * 4321 - 9000);
+      tbl.dy.push_back(kOne / 3);
+    }
+
+    const std::vector<uint8_t> srcs = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    // Values chosen so the deep ops actually do work: a non-degenerate ring, a
+    // vector that needs normalising, an angle that is not a quadrant boundary,
+    // and a reciprocal operand small enough to exercise the correction.
+    const std::vector<int32_t> vals = {
+        kOne * 3, -kOne * 4, kOne * 12, kOne / 7,  kOne * 2,  kOne * 5,
+        kOne * 9, 0x2A7Fu,   -kOne,     kOne * 6,  kOne / 3,  -kOne * 11,
+        kOne * 8, kOne * 2,  -kOne * 3, kOne * 4};
+
+    struct Lanes {
+      bool add = false, mul = false, rescale = false, rcp = false, rcp0 = false;
+    };
+
+    // ---- each op ALONE -----------------------------------------------------
+    std::vector<std::vector<int32_t>> alone(kN);
+    std::vector<Lanes> alone_lanes(kN);
+    for (int i = 0; i < kN; ++i) {
+      const Step& st = kSteps[i];
+      Prog p;
+      p.in_regs = srcs;
+      p.tables.push_back(tbl);
+      p.op(st.op, st.dst, st.a, st.b, st.c, st.imm);
+      p.end();
+      for (int k = 0; k < st.lanes; ++k) p.out_regs.push_back(static_cast<uint8_t>(st.dst + k));
+      uint8_t status = 0xFF;
+      alone[i] = b.run(p, vals, &status);
+      alone_lanes[i].add = dut.sat_add_o != 0;
+      alone_lanes[i].mul = dut.sat_mul_o != 0;
+      alone_lanes[i].rescale = dut.sat_rescale_o != 0;
+      alone_lanes[i].rcp = dut.sat_rcp_o != 0;
+      alone_lanes[i].rcp0 = dut.rcp0_o != 0;
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "13.%s alone ran to END", st.name);
+      check(status == 0, nm, 0, status);
+      // The isolated answer is itself checked against the oracle, so a shared
+      // sequence agreeing with a wrong isolated run is not a pass.
+      std::snprintf(nm, sizeof nm, "13.%s alone", st.name);
+      diff(b, p, vals, nm);
+    }
+
+    // ---- the same ops, INTERLEAVED -----------------------------------------
+    // Two orders. Reversing them moves every op to a different neighbour, and a
+    // leftover that only travels forwards would survive one order and not the
+    // other.
+    for (int pass = 0; pass < 2; ++pass) {
+      const bool reversed = (pass == 1);
+      Prog p;
+      p.in_regs = srcs;
+      p.tables.push_back(tbl);
+      std::vector<int> order;
+      for (int i = 0; i < kN; ++i) order.push_back(reversed ? (kN - 1 - i) : i);
+      for (int i : order) {
+        const Step& st = kSteps[i];
+        p.op(st.op, st.dst, st.a, st.b, st.c, st.imm);
+      }
+      p.end();
+      for (int i = 0; i < kN; ++i) {
+        for (int k = 0; k < kSteps[i].lanes; ++k) {
+          p.out_regs.push_back(static_cast<uint8_t>(kSteps[i].dst + k));
+        }
+      }
+
+      uint8_t status = 0xFF;
+      const std::vector<int32_t> got = b.run(p, vals, &status);
+      Lanes seq;
+      seq.add = dut.sat_add_o != 0;
+      seq.mul = dut.sat_mul_o != 0;
+      seq.rescale = dut.sat_rescale_o != 0;
+      seq.rcp = dut.sat_rcp_o != 0;
+      seq.rcp0 = dut.rcp0_o != 0;
+
+      char nm[128];
+      std::snprintf(nm, sizeof nm, "13.%s sequence ran to END", reversed ? "reversed" : "forward");
+      check(status == 0, nm, 0, status);
+
+      size_t at = 0;
+      for (int i = 0; i < kN; ++i) {
+        for (int k = 0; k < kSteps[i].lanes; ++k, ++at) {
+          std::snprintf(nm, sizeof nm, "13.%s %s lane %d equals its isolated answer",
+                        reversed ? "reversed" : "forward", kSteps[i].name, k);
+          check(at < got.size() && static_cast<size_t>(k) < alone[i].size() &&
+                    got[at] == alone[i][k],
+                nm, static_cast<uint32_t>(alone[i][k]),
+                at < got.size() ? static_cast<uint32_t>(got[at]) : 0u);
+        }
+      }
+
+      // The ledger is sticky across the whole program, so the sequence's lanes
+      // must be exactly the OR of the isolated runs' lanes -- no more (a lane
+      // that only fires because of a leftover) and no less (a lane lost because
+      // a shared register was overwritten before it was read).
+      Lanes want;
+      for (int i = 0; i < kN; ++i) {
+        want.add |= alone_lanes[i].add;
+        want.mul |= alone_lanes[i].mul;
+        want.rescale |= alone_lanes[i].rescale;
+        want.rcp |= alone_lanes[i].rcp;
+        want.rcp0 |= alone_lanes[i].rcp0;
+      }
+      const char* tag = reversed ? "reversed" : "forward";
+      std::snprintf(nm, sizeof nm, "13.%s ledger add", tag);
+      check(seq.add == want.add, nm, want.add ? 1 : 0, seq.add ? 1 : 0);
+      std::snprintf(nm, sizeof nm, "13.%s ledger mul", tag);
+      check(seq.mul == want.mul, nm, want.mul ? 1 : 0, seq.mul ? 1 : 0);
+      std::snprintf(nm, sizeof nm, "13.%s ledger rescale", tag);
+      check(seq.rescale == want.rescale, nm, want.rescale ? 1 : 0, seq.rescale ? 1 : 0);
+      std::snprintf(nm, sizeof nm, "13.%s ledger rcp", tag);
+      check(seq.rcp == want.rcp, nm, want.rcp ? 1 : 0, seq.rcp ? 1 : 0);
+      std::snprintf(nm, sizeof nm, "13.%s ledger rcp0", tag);
+      check(seq.rcp0 == want.rcp0, nm, want.rcp0 ? 1 : 0, seq.rcp0 ? 1 : 0);
+
+      // And the whole sequence against the interpreter, which is what makes the
+      // agreement above mean the RIGHT answer rather than a consistent one.
+      std::snprintf(nm, sizeof nm, "13.%s sequence", tag);
+      diff(b, p, vals, nm);
+    }
+
+    // ---- the adversarial pair: the same op twice, back to back -------------
+    // A shared accumulator that is ADDED to rather than LOADED shows up here
+    // even when every op in the sequence is different does not: two identical
+    // DOT3s in a row must give the same answer twice.
+    {
+      Prog p;
+      p.in_regs = srcs;
+      p.tables.push_back(tbl);
+      p.op(zfield::OP_DOT3, 20, 0, 8, 0, 0);
+      p.op(zfield::OP_DOT3, 24, 0, 8, 0, 0);
+      p.op(zfield::OP_DOT3, 28, 0, 8, 0, 0);
+      p.end();
+      p.out_regs = {20, 24, 28};
+      uint8_t status = 0xFF;
+      const std::vector<int32_t> got = b.run(p, vals, &status);
+      check(status == 0, "13.repeated DOT3 ran to END", 0, status);
+      check(got.size() == 3 && got[0] == got[1], "13.DOT3 twice gives the same answer",
+            static_cast<uint32_t>(got.size() > 0 ? got[0] : 0),
+            static_cast<uint32_t>(got.size() > 1 ? got[1] : 0));
+      check(got.size() == 3 && got[1] == got[2], "13.DOT3 three times gives the same answer",
+            static_cast<uint32_t>(got.size() > 1 ? got[1] : 0),
+            static_cast<uint32_t>(got.size() > 2 ? got[2] : 0));
+      diff(b, p, vals, "13.repeated DOT3");
+    }
+  }
+
+  // ---- 14. WHEN A LONG OPERATION COMMITS ----------------------------------
+  // THE GAP THIS CLOSES was found by the mutation sweep, not by review. M20
+  // deletes `&& !multi_op` from the write-back guard, so a multi-cycle op ALSO
+  // writes reg[dst] in Q_EXEC -- forty clocks before it has an answer -- and
+  // every test in this file passed anyway.
+  //
+  // It passed because the early write is immediately WRONG but eventually
+  // OVERWRITTEN: Q_MWAIT writes the real lane-0 value to the same register, and
+  // nothing in between reads it. The decoder guarantees `dst` does not overlap
+  // this instruction's own sources, and the next instruction does not read the
+  // file until after retirement. So every ANSWER stays correct and the defect
+  // is invisible to a test that only looks at answers.
+  //
+  // That is a real hole rather than an equivalence, and the reason it matters
+  // is sequencing: once operations take tens of clocks, WHEN a result becomes
+  // visible is part of the contract, not an implementation detail. A future
+  // reader of the register file mid-run -- a debug port, a second engine, an
+  // interrupted run -- would see a zero that the design never promised.
+  //
+  // So this section watches the file DURING the walk. `rf_rdata_o` is
+  // combinational and is readable at any time; reading it disturbs nothing,
+  // because `rf_we_i` stays low and the walk owns the write port.
+  //
+  // The sentinel is what makes it observable. `clear()` leaves the file at
+  // zero and M20's early write is also zero, so a cleared register cannot tell
+  // them apart. The program therefore WRITES a distinctive value into the
+  // destination first, and the law is: that value survives, untouched, until
+  // the long operation retires.
+  {
+    // COMMITMENT IS NOT ATOMIC FOR A MULTI-LANE OP, and the law has to say so
+    // or it is wrong rather than strict. The register file has ONE write port:
+    // lane 0 lands on the cycle the unit's answer is accepted (Q_MWAIT), lane 1
+    // on the next (Q_WB1), lane 2 on the one after (Q_WB2), and
+    // `instr_retired_o` pulses with the LAST of them. So reg[dst] legitimately
+    // changes `lanes - 1` cycles before retirement.
+    //
+    // The law is therefore: reg[dst] holds its previous value until at most
+    // `lanes - 1` cycles before the operation retires. For a single-lane op
+    // that is exact -- the sentinel must survive to the retiring edge itself --
+    // and single-lane ops are what pin M20, which writes lane 0 in Q_EXEC, tens
+    // of clocks early.
+    struct Case {
+      const char* name;
+      uint8_t op;
+      uint8_t a, b;
+      int lanes;
+    };
+    // One per multi-cycle family, so the guard is pinned for each dispatch arm
+    // rather than for whichever one happened to be tested.
+    static const Case kCases[] = {
+        {"LEN2", zfield::OP_LEN2, 0, 0, 1},
+        {"RCP", zfield::OP_RCP, 0, 0, 1},
+        {"NORMALIZE2", zfield::OP_NORMALIZE2, 0, 0, 2},
+        {"NOISE2", zfield::OP_NOISE2, 0, 0, 2},
+        {"ROT2", zfield::OP_ROT2, 0, 3, 2},
+        {"RING", zfield::OP_RING, 0, 3, 1},
+        {"CURVE", zfield::OP_CURVE, 0, 0, 1},
+    };
+
+    zfield::Table tbl;
+    for (int i = 0; i < 8; ++i) {
+      tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
+      tbl.y.push_back(static_cast<int32_t>(i) * 777 - 1500);
+      tbl.dy.push_back(kOne / 3);
+    }
+
+    const int32_t kSentinel = static_cast<int32_t>(0x5A5A5A5A);
+
+    for (const Case& cs : kCases) {
+      Prog p;
+      p.in_regs = {0, 1, 2, 3, 4, 5};
+      p.tables.push_back(tbl);
+      // Instruction 0 plants the sentinel in the destination. Instruction 1 is
+      // the long op writing the same register -- legal, because `dst` overlaps
+      // neither an input lane nor its own sources.
+      p.op(zfield::OP_LDC, 20, 0, 0, 0, static_cast<uint32_t>(kSentinel));
+      p.op(cs.op, 20, cs.a, cs.b, 5, 0);
+      p.end();
+      p.out_regs = {20};
+
+      // Drive the run by hand so the file can be watched every cycle.
+      b.prog = &p;
+      b.clear();
+      const int32_t in[6] = {kOne * 2, kOne * 3, kOne * 5, 0x1234, kOne, kOne * 7};
+      for (size_t i = 0; i < p.in_regs.size(); ++i) b.write_reg(p.in_regs[i], in[i]);
+      dut.instr_count_i = static_cast<uint8_t>(p.ins.size());
+      dut.start_i = 1;
+      b.present();
+      zhao::tick(dut);
+      dut.start_i = 0;
+      dut.eval();
+
+      int retires = 0;
+      bool planted = false;
+      bool changed_early = false;
+      int change_cycle = -1;
+      int retire_cycle = -1;
+      for (int n = 0; n < 4000 && !dut.done_o; ++n) {
+        b.step();
+        const int32_t now = b.read_reg(20);
+        if (dut.instr_retired_o) {
+          ++retires;
+          if (retires == 1) planted = true;        // the LDC has committed
+          if (retires == 2) retire_cycle = n;      // the long op has committed
+        }
+        // Between the sentinel landing and the long op retiring, reg[20] is the
+        // sentinel and nothing else. `retires == 1` is exactly that window.
+        if (planted && retires == 1 && now != kSentinel && !changed_early) {
+          changed_early = true;
+          change_cycle = n;
+        }
+      }
+
+      // The write-back walk is allowed to touch reg[dst] at most `lanes - 1`
+      // cycles before retirement, and not one cycle earlier.
+      const int slack = cs.lanes - 1;
+      const bool too_early = changed_early && (retire_cycle < 0 ||
+                                               change_cycle < (retire_cycle - slack));
+      char nm[128];
+      std::snprintf(nm, sizeof nm, "14.%s: reg[dst] is not written before the write-back walk",
+                    cs.name);
+      check(!too_early, nm, static_cast<uint32_t>(retire_cycle - slack),
+            too_early ? static_cast<uint32_t>(change_cycle)
+                      : static_cast<uint32_t>(retire_cycle - slack));
+      std::snprintf(nm, sizeof nm, "14.%s: both instructions retired", cs.name);
+      check(retires == 2, nm, 2, static_cast<uint32_t>(retires));
+      std::snprintf(nm, sizeof nm, "14.%s: the answer is not the sentinel", cs.name);
+      check(b.read_reg(20) != kSentinel || retire_cycle < 0, nm, 1,
+            b.read_reg(20) != kSentinel ? 1 : 0);
+    }
   }
 
   return zhao::report_and_exit("field_seq_directed");

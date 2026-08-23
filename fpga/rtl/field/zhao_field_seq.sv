@@ -96,21 +96,44 @@
 // below is DERIVED from the longest of them rather than chosen, because the
 // anti-hang proof needs a number it can defend:
 //
-//   MOV / ADD / MUL / MAD / DOT2 / DOT3 / SIN / COS ......  6
-//   RCP ................................................. ~13
-//   LEN2 / LEN3 / DIST2 ................................. ~48
-//   CURVE / DCURVE ...................................... ~30
-//   SPLINE .............................................. ~50
-//   NOISE2 / RIDGE ...................................... ~30
-//   ROT2 / ROT3 ......................................... ~24
-//   RING ................................................ ~64
-//   NORMALIZE2 / NORMALIZE3 ............................. ~76
+// MEASURED, every one of them, by section 12 of
+// tests/differential/field_seq_directed.cpp -- which prints this table on every
+// run so a regression is visible rather than inferred:
 //
-// `MAX_OP_CYCLES` is the ceiling on ONE instruction, measured from the cycle it
-// is fetched to the cycle it retires, and `tests/formal/field_seq_bound.sby`
-// proves it for an ARBITRARY instruction memory rather than for the programs
-// anyone thought of. It is exported as a localparam so the harness derives its
-// window from the design instead of restating a magic constant.
+//   MOV / ADD / MUL / MAD / DOT2 / DOT3 / SIN / COS ......  6
+//   RCP .................................................. 15
+//   LEN2 / LEN3 / DIST2 .................................. 48
+//   RIDGE ................................................ 22
+//   ROT2 / ROT3 ....................................... 24-25
+//   DCURVE / CURVE .................................... 26-29
+//   NOISE2 ............................................... 29
+//   SPLINE ............................................... 45
+//   RING ................................................. 54
+//   NORMALIZE2 / NORMALIZE3 ........................... 66-67
+//
+// `MAX_OP_CYCLES` is the ceiling on ONE instruction, from the cycle it is
+// fetched to the cycle it retires. It is 80 because the worst measured op is 67
+// and thirteen clocks is enough margin for a schedule change but not enough to
+// absorb a hang -- a bound with a factor of two in it is not a bound, it is a
+// number that will never fire.
+//
+// IT LIVES IN A PACKAGE IN THIS FILE so that the anti-hang proof DERIVES its
+// window from the design rather than restating a constant. Every consumer of
+// the sequencer already compiles this file, so the package costs no source list
+// anywhere: `tests/formal/field_seq_bound_harness.sv` imports it and computes
+// its own bound as `2 * MAX_OP_CYCLES + 8` -- two instructions, which is what
+// the proof's count shrink allows, plus the fetch that overruns and Q_DONE.
+// The linter is right that the DESIGN does not consume this and wrong that it
+// is therefore dead: its whole purpose is to be read from outside, by the
+// formal harness and by the differential's cost table.
+/* verilator lint_off DECLFILENAME */
+/* verilator lint_off UNUSEDPARAM */
+package zhao_field_seq_pkg;
+  localparam int unsigned MAX_OP_CYCLES = 80;
+endpackage : zhao_field_seq_pkg
+/* verilator lint_on UNUSEDPARAM */
+/* verilator lint_on DECLFILENAME */
+
 module zhao_field_seq (
     input logic clk,
     input logic rst_n,
@@ -173,24 +196,6 @@ module zhao_field_seq (
   localparam logic [7:0] ST_OK = 8'd0;
   localparam logic [7:0] ST_UNSUPPORTED_OP = 8'd1;
   localparam logic [7:0] ST_PC_OVERRUN = 8'd2;
-
-  // ---- THE ANTI-HANG BOUND, DERIVED ---------------------------------------
-  // The ceiling on ONE instruction, from the cycle it is fetched to the cycle
-  // it retires. NORMALIZE3 is the longest: six walk states, the handshake, the
-  // three squares, the 34-clock root, four dependent reciprocal-correction
-  // products at three clocks each, three pipelined lane products, and two
-  // write-back lanes. Measured at 76 in simulation
-  // (tests/differential/field_seq_directed.cpp reports the worst it saw); the
-  // margin here is deliberate and small enough that a regression trips it.
-  //
-  // NOT A MAGIC NUMBER, and not one the formal harness restates: it is exported
-  // so `tests/formal/field_seq_bound.sby` derives its own window from it.
-  // Read by tests/formal/field_seq_bound_harness.sv, which is the whole point
-  // of exporting it, and by nothing inside this module -- so the linter is
-  // right that the DESIGN does not consume it, and wrong that it is dead.
-  /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned MAX_OP_CYCLES = 96;
-  /* verilator lint_on UNUSEDPARAM */
 
   // FOUR BITS. The walk needs a gather state on top of the read states, and the
   // multi-cycle ops need an issue state, a wait state and a write-back walk,

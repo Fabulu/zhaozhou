@@ -48,6 +48,22 @@ Flops rather than M10K because a 64-entry file with three read ports and one
 write port does not map onto a block RAM without duplicating it, and at this
 size the flops are the cheaper answer.
 
+**MULTIPLIERS: ONE.** Measured 2026-08-23 on Quartus 17.0.2 against
+5CSEBA6U23I7: this cone was **79 DSP blocks of 112** when each of ten op units
+owned its own multiplier, and is **4** now that they share
+`zhao_field_mul` — one signed 33×33 lane, input- and output-registered.
+
+That is the DSP ruling of 2026-08-23 applied here: share only operations that
+are mutually exclusive INSIDE the subsystem, and inside this one every operation
+is mutually exclusive with every other, because the walk retires one instruction
+at a time. `zhao_field_exec_shared` therefore holds one lane, one
+`zhao_field_isqrt` (LEN and NORMALIZE), one `zhao_field_sin` (OP_SIN, OP_COS and
+ROT's two reads), one `zhao_field_rcp` (OP_RCP and RING's two spans) and the two
+reciprocal seed ROMs — which are different tables and are not interchangeable.
+
+**No production op unit keeps a private nonconstant multiplier.** The only `*`
+on a nonconstant pair in the Field cone is inside `zhao_field_mul`.
+
 ## Q formats and rounding
 
 **None of its own.** Every value it moves is `fx16` and every rounding decision
@@ -55,13 +71,43 @@ belongs to the op block that made it.
 
 ## Latency (fixed or variable)
 
-Six clocks per instruction: fetch, latch, three operand-group reads, execute.
-Variable overall, since it depends on the program length.
+**Per instruction, and it now depends on the opcode.** Six clocks for anything
+that finishes in `Q_EXEC` — fetch, latch, three operand-group reads, execute —
+and longer for the ops that walk the shared lane. MEASURED by section 12 of
+`tests/differential/field_seq_directed.cpp`, which prints the table on every run:
+
+| op | clocks |
+| --- | ---: |
+| MOV, LDC, ADD, SUB, MUL, MAD, MIN, MAX, ABS, CLAMP, SELECT, CMP, DOT2, DOT3, SIN, COS | **6** |
+| RCP | 15 |
+| RIDGE | 22 |
+| ROT2, ROT3 | 24–25 |
+| DCURVE, CURVE | 26–29 |
+| NOISE2 | 29 |
+| LEN2, LEN3, DIST2 | 48 |
+| SPLINE | 45 |
+| RING | 54 |
+| NORMALIZE2, NORMALIZE3 | 66–67 |
+
+**MUL, MAD, DOT2 and DOT3 still cost six clocks on a machine with ONE
+multiplier**, and that is the point of the schedule rather than a coincidence:
+the three register-read cycles were idle, so they became issue slots, and the
+first operand group is read in `Q_LATCH` from the instruction memory's own
+outputs rather than a cycle later from the latched fields. With a two-cycle lane
+that puts DOT3's third product in `Q_EXEC`, the state that consumes it.
+
+`zhao_field_seq_pkg::MAX_OP_CYCLES` = **80** is the ceiling on one instruction.
+It is not a comment: `tests/formal/field_seq_bound.sby` imports it and proves
+`op_cnt <= MAX_OP_CYCLES` for an ARBITRARY instruction memory, and derives its
+run-level bound and its BMC depth from the same constant.
+
+Variable overall, since it depends on the program.
 
 ## Target throughput
 
-One instruction per six clocks. This is a per-sample field engine, not a
-per-pixel path.
+Six clocks for a simple instruction; see the table above for the rest. This is a
+per-sample field engine, not a per-pixel path, which is the whole reason a
+NORMALIZE3 costing 67 clocks is a better trade than ten idle multipliers.
 
 ## Overflow and malformed-input behaviour
 
@@ -128,18 +174,27 @@ run.
 Mutation sweep, the walk itself: **19 mutations, 17 caught, 2 recorded
 equivalent, 0 discarded.** A second sweep covers the unit dispatch — see below.
 
-### The RCP / SIN / COS dispatch
+### The dispatch, and why there is no arbiter
 
-`OP_RCP`, `OP_SIN` and `OP_COS` are dispatched to `zhao_field_rcp` and
-`zhao_field_sin`, which are COMBINATIONAL blocks whose own contracts say the
-sequencer owns their pipeline. Here that means there is no pipeline: they sit
-beside the ALU in `Q_EXEC` and cost exactly what an `ADD` costs — no extra
-state, no extra cycle.
+Every opcode is dispatched into `zhao_field_exec_shared`, which owns all the
+arithmetic and muxes it on the EXECUTING OPCODE. `OP_SIN` and `OP_COS` still
+finish in `Q_EXEC` — the sine table is combinational, so they cost exactly what
+an `ADD` costs. `OP_RCP` no longer does: its two products walk the shared lane,
+so it became ready/valid like the rest.
 
-They are wired first for that reason. The remaining blocks (length, normalise,
-table, noise, rotation, ring) are ready/valid and multi-cycle, and several write
-two or three CONSECUTIVE registers through a file with one write port; they need
-states this walk does not have.
+**There is no arbiter and none is needed**, because the walk has exactly one
+instruction in flight: an op is handed over in `Q_MISS` and drained in `Q_MWAIT`
+before the next fetch, and the read slots finish issuing in `Q_RD2`, two cycles
+before the earliest a multi-cycle unit can be accepted.
+
+That fact used to be a scheduling convenience and is now the safety argument for
+the whole engine, so it is tested as one rather than asserted. Section 13 of the
+differential runs each operation ALONE, then in hostile sequences in both
+directions, and requires every answer AND every one of the five saturation
+ledger lanes to equal its isolated result — plus the same operation three times
+in a row, which is what an accumulator that is added to rather than loaded
+fails. The mutation sweep proves that section is not decoration: M05 makes
+exactly that change and is caught.
 
 **Two ledger lanes arrive with RCP.** `sat_rcp` is a genuine saturation and is
 part of `Status.sat`, which the reference computes as

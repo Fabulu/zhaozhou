@@ -108,7 +108,27 @@ module zhao_field_sin (
   // subtraction is written signed anyway because nothing here should depend on
   // the table's monotonicity being remembered.
   logic signed [17:0] d;
-  logic signed [24:0] interp;
+
+  // THE ONE NONCONSTANT MULTIPLY OUTSIDE `zhao_field_mul`, AND IT COSTS A DSP.
+  //
+  // Measured 2026-08-23: the Field cone fits in 4 DSP blocks, of which
+  // `zhao_field_mul` is 3 and THIS interpolation is the fourth. The DSP ruling
+  // says no production op unit keeps a private nonconstant multiplier, and an
+  // 18x6 product is one.
+  //
+  // Routing it through the shared lane would be the literal fix and a bad one:
+  // the sine table is combinational, so OP_SIN and OP_COS cost exactly what an
+  // ADD costs, and both of ROT's table reads sit inside its walk. Sequencing
+  // this product would make SIN and COS multi-cycle and lengthen every rotation
+  // by six clocks, to save a DSP on a device with 108 spare.
+  //
+  // So the multiplier is kept and the DSP is not: `multstyle = "logic"` is a
+  // Quartus synthesis directive that builds the product from ALMs instead. Six
+  // bits of multiplier is a six-term shift-add; the fitter is better at that
+  // than a DSP block is. The attribute is invisible to Verilator and to slang,
+  // so simulation and the formal proof see exactly the same arithmetic.
+  // ENFORCED-BY: tests/differential/field_sin_directed.cpp:main
+  (* multstyle = "logic" *) logic signed [24:0] interp;
   logic signed [31:0] s_quarter;
   always_comb begin
     d = $signed({1'b0, next_v}) - $signed({1'b0, base});
