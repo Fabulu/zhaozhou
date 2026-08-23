@@ -80,6 +80,65 @@ something that only changes on an event.**
    was answering the wrong question — it was sized against a workload that no
    architecture can serve, rather than against the workload the game generates.
 
+### FOLLOW-UP: I costed FLOW too, and my own flag was wrong
+
+I wrote that FLOW was "the profile most likely to be genuinely per-frame" and so
+the one most likely to need its own core. **The first half is right and the
+second half is wrong.** FLOW *is* per-frame — particle forces really are
+evaluated every frame — but it is **cheap**.
+
+Sacrifice's measured particle scale (from the survey): the largest single burst
+is **1,375 particles in one frame** (the fireball: 200 + 800 additive, 300 ash,
+75 smoke), and the recommended standing budget is **2,000–3,000 simultaneous**.
+
+One Field evaluation per live particle per frame:
+
+| particles | instrs | clocks/instr | clocks/frame | share |
+| ---: | ---: | ---: | ---: | ---: |
+| 1,375 | 8 | 6 | 66,000 | **4.0%** |
+| 3,000 | 8 | 6 | 144,000 | **8.6%** |
+| 3,000 | 16 | 6 | 288,000 | 17.3% |
+| 6,000 | 16 | 7 | 672,000 | 40.3% |
+
+**Even double Sacrifice's peak with double-length programs on the rebuilt engine
+is 40% of a frame.** FLOW fits on one core with room to spare.
+
+The contrast is the whole point:
+
+    EARTH, per-frame over the visible set   847% of a frame
+    FLOW,  per-frame at 3,000 particles       8.6% of a frame
+                                            ---------
+                                            about 98x apart
+
+**Both are "per-frame profiles". One is affordable and one is off by an order of
+magnitude** — and the difference is not the engine, it is that a particle is an
+*entity* (thousands) while a patch vertex is a *sample of a function* (hundreds
+of thousands). Entity-scaled work fits. Sample-scaled work has to be cached.
+
+### The core-count question, answered as far as evidence allows
+
+**One core, provided EARTH becomes event-driven.** The Field ruling's proposal —
+three cores by rate class, A = Earth + Stamp, B = Warp + Formation, C = Flow —
+was sized against an EARTH figure that no core count can serve. Three cores do
+not fix 847%; thirty do not.
+
+* **EARTH** — must be incremental and cached, in which case its steady state is
+  **zero** and its cost is a few hundred evaluations when a spell lands;
+* **FLOW** — genuinely per-frame, **4–20%** of a frame at realistic particle
+  counts;
+* **STAMP** — already known event-driven (`SURFACE.STAMP` is 36,864 texels *once
+  per impact*, and the block itself needs **zero** DSPs);
+* **WARP** and **FORMATION** — uncosted. WARP is the one to watch, because vertex
+  deformation is sample-scaled like EARTH rather than entity-scaled like FLOW.
+  120,000 deformed vertices × 8 instrs × 6 clocks is **5.76 M clocks, 3.5× a
+  frame**, so **if WARP is used on whole meshes every frame it has EARTH's
+  problem**, and the same answer: deform on change, or restrict it to a bounded
+  set of vertices.
+
+**So the open question is not "how many cores" but "which profiles are
+sample-scaled".** That is a much cheaper question, and three of the five are
+already answered.
+
 ### Still genuinely open, and now sharper
 
 * the **event rate**: dirty patches per second under heavy combat;
