@@ -489,7 +489,9 @@ provisional `5CSEBA6U23I7`, virtual I/O, constrained at 10.000 ns on `clk`
 (`Info (332111)` captured live for every row and saved in the run directory
 `runs/CLAUDE-RUNS/RUN-20260823-1415-surface-stamp-dsp-rearchitecture/fit-evidence/`).
 This section used to say "estimate only — this block has not been synthesized";
-it now says what the fitter said.
+it now says what the fitter said. **The block is still deliberately absent from
+`fpga/files.qip`**, so every number here is a per-block characterization and
+says nothing about the composed machine's routing or timing closure.
 
 ### Before, and why it was wrong twice
 
