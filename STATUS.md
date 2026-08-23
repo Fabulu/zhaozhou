@@ -5,6 +5,80 @@ at the top.*
 
 ---
 
+## 2026-08-23 — every speed measurement I have given you was never taken
+
+### The defect
+
+When I measure one block on its own, I hand the chip tool a file saying *"this
+clock must run at 100 MHz — now place the design so it does."*
+
+That file names three clocks: `gpu_clk`, `vid_clk`, `audio_clk`. Those are the
+names used at the **top level** of the console. Individual blocks call their
+clock simply `clk`. Sixty-three of the design's seventy-one clock connections
+are named `clk`.
+
+So the tool looked for something to constrain, found nothing, and said so —
+three times, in **every measurement run this project has ever done**:
+
+> Ignored create_clock: Argument <targets> is an empty collection
+
+**No block was ever asked to hit a speed.** Not one of the 47 measurements.
+
+### What that does to the numbers
+
+| what I told you | status |
+| --- | --- |
+| multiplier counts | **still good** — those come from an earlier stage that does not use the timing file |
+| logic area | **optimistic** — measured with no speed pressure; meeting a real speed usually costs more area |
+| speed (MHz) | **not slow measurements. Not measurements at all.** |
+
+The multiplier story — 327 wanted against 112, and the reductions to 6, to 3,
+and the Field engine to 4 — is the part that survives, which is fortunate,
+because it is the part driving the current work.
+
+The one real casualty: **nobody knows how fast any individual block is.** The
+old Field engine showed 7.75 MHz, but the tool had no reason to try, so that
+number means very little either. It is measurable now for the first time.
+
+### How it was found, which is the part worth keeping
+
+Not by me, and not by inspection. An agent rebuilding the Field engine saw an
+Fmax it did not believe and went looking for why. The warning had been printed
+in every run for weeks; nobody read it.
+
+That is the same lesson this project keeps relearning, and I have now written it
+down enough times that it should be a rule: **the tool usually says what is
+wrong, in plain text, and the failures come from not reading it.**
+
+I reproduced the finding myself before accepting it, then fixed the script so
+each block gets its own timing file naming the clock it actually has. Verified:
+the tool now reports `10.000 clk` — the line that was missing every previous
+time.
+
+### Two side-effects worth knowing
+
+**Real measurements are much slower.** One small block spent seven and a half
+minutes just preparing placement, where the whole unconstrained measurement used
+to take ten. Re-measuring everything is now hours, not minutes.
+
+**And the machine cannot do three at once.** Running three measurements
+concurrently exhausted it and two were killed. That is a scheduling constraint,
+not a fault.
+
+### Where the multiplier work stands
+
+| block | before | after |
+| --- | ---: | ---: |
+| terrain detail | 28 | **3** |
+| creature detail | 18 | **6** |
+| Field IR engine | 79 | **4** (being re-measured properly) |
+
+If the Field number survives the honest re-measurement, that is about **164 of
+the 327 multipliers removed** — from a design that wanted three times what the
+chip has.
+
+---
+
 ## 2026-08-23 — I told you a block was broken. It wasn't. And the plan is now much better than mine.
 
 ### The correction first
