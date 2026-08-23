@@ -41,13 +41,126 @@ In flight: `zhao_texture_tmu`, 28 -> 6-9 DSPs against a demand of 850,000
 samples/frame derived from Sacrifice. Its `@pre-rearch` baseline is already
 recorded, which is the SURFACE.STAMP lesson applied on the first move.
 
+### 21:30 - TEXTURE.TMU complete: 28 -> 6 DSPs, census 134
+
+Both fits under the corrected SDC, so like-for-like:
+
+| | before | after |
+| --- | ---: | ---: |
+| DSPs | **28** | **6** (-79%) |
+| ALMs | 1,844 | 1,921 (+4.2%) |
+| Fmax | 36.92 MHz | 36.11 MHz |
+| worst path | `q_fv_r[1]->smp_a_o[1]` 20.913 ns | `q_fmt_r[0]->smp_a_o[4]` 21.432 ns |
+
+Frontier **28 / 12 / 6 / 3** at pre-rearch and `FILT_LANES` 4/2/1, with **Fmax
+flat at 35.62-36.92 MHz** — none of these settings touches the limiting cone, so
+**the DSP axis is nearly free in time on this block.** `zhao_texture_bilerp`
+alone 7 -> 3.
+
+Method: factor the contract's four-weight law —
+`A=(t00<<8)+(t10-t00)*fu`, `B` likewise, `S=(A<<8)+(B-A)*fv`, one rescale. Same
+integer, three products per channel instead of eight, two channels multiplexed.
+**Not** the staged-rounding form `qformats §3` refuses; nothing intermediate is
+rounded.
+
+Sweep 30/30/30, caught 29. Run 1 (28/30) kept as the evidence for the harness
+change: **M27 was a real hole** — the modelled cache ignored `cac_en_o` and was
+strictly more generous than the real block. M18 is a true equivalent argued
+against a named line. `ctest -L fast` **271/272**, the one failure the
+pre-existing V16 baseline.
+
+### Three findings from this block that outlive it
+
+**1. THE SDC DEFECT HAD A SECOND HALF, and I published the bad number.**
+The harness declared no `set_input_delay`/`set_output_delay`, and TimeQuest
+**silently excludes every pin-to-register and register-to-pin path when none is
+declared.** Same RTL, same tool, same device: **199.72 MHz clock-only vs 36.92
+MHz with I/O** — a factor of **5.4**. This block's arithmetic runs pin-to-pin, so
+199.72 was **the sample counter's speed** and the arithmetic had never been timed
+at all. Harness fixed (`QUARTUS_GOTCHAS` §9). **Every Fmax measured before the
+fix is suspect**; DSP counts are unaffected, since synthesis never reads the SDC.
+
+**2. A post-hoc timing query on an unoptimised placement is not a critical
+path.** I then published *37.004 ns, the address generator* as the honest worst
+path. It was measured by applying I/O constraints to a database **placed with no
+I/O objective at all**, so the fitter had never once optimised those paths. It is
+an upper bound. Fitted properly the filter/output cone leads at 21.4 ns and the
+address generator comes second. **Left uncorrected, the next implementer would
+have pipelined the second-worst cone.**
+
+**3. A GREEN HARNESS IS NOT A GREEN THEOREM.** The formal proof **does not close
+on the factored form** — cover passes in ~1 s, bmc ran 3,300 s with no answer
+against 741 s for the arithmetic it replaced. The opposite had been committed in
+three places, all derived from "the harness needed no edit", which is true and is
+a different claim. The run log had even noticed the proof was *slow* and read it
+as more work rather than as the solver failing.
+
+The cause is the same fact that makes the theorem worth having: the checker
+states the law as `t00*w00 + ... + t11*w11`, and until now the DUT computed
+**that same expression**, so the assertion was nearly a syntactic identity. It is
+now a real distributive-law identity across three multiplies of three widths, one
+feeding another.
+
+**What replaced it is stronger and total, not sampled:** (i) no lane truncates —
+every intermediate is monotone in each texel, so extremes over the byte domain
+fall at texel **corners**, and 16 corners x 65,536 `(fu,fv)` bounds the whole
+domain exactly, 0 violations; (ii) given no truncation the pre-rounding sum is
+**exactly linear** in the four texels, so four basis vectors per `(fu,fv)`
+determine the entire map, and the recovered coefficients equal `w00/w10/w01/w11`
+exactly — settling it for **every integer texel quadruple**, not merely every
+byte one. Script kept and runnable.
+
+### Deliberately left open, named rather than closed quietly
+
+1. the formal lane **left failing** so the regression stays visible — banked in
+   `formal_runs.yml`; fixing the proof versus removing the lane is the owner's
+   call;
+2. the block **does not close 100 MHz** (36.11) — pre-existing, unrelated to the
+   DSPs, fix specified;
+3. it delivers **0.33x its derived demand** — the II=2 design is written into the
+   contract, **not built**.
+
+The agent also disclosed five process failures, including **three of five
+predictions wrong** (Fmax direction, ALM direction, DSP packing) — all, by its
+own diagnosis, from reasoning about what was *removed* rather than what
+*replaced* it. And it re-ran its own tamper check after HEAD moved under it
+twice, which is how it had earlier caught a silent revert of its own
+rearchitecture (`git checkout <rev> -- <paths>` **stages**).
+
+### 21:45 - RULING: the next run is a repo-wide audit, not another rescue
+
+Docketed (`1390b7d`). Premise verified before acceptance:
+
+* census covers **41 of 94** RTL files;
+* **`zhao_geom_project` is not in the report at all**, despite duplicating
+  `terrain_project`'s 33-DSP projection law;
+* **`FORGE.CLIFF` confirmed** — three `assign x = mem_r[idx]` async reads over
+  ~120 kbit written from an async-reset process, which is why its fit timed out.
+  Diagnosable from source without spending another fit.
+
+**And the fourth check refuted my own method:** counting nonconstant multiplies
+in `geom_project` with grep gave 0, then gave line-counts. Both useless. That is
+the argument for an **elaborated-AST scanner** rather than pattern matching, and
+it is recorded as such rather than quietly dropped.
+
+Honest total is **~180-185 DSP, not 134** — hidden projector plus pose
+arithmetic. **Treat this as a 180-DSP design that must reach 85-90.** Worse than
+it looked, and still credible: the two projectors alone are ~50 DSPs of pure
+duplication.
+
+`design/budgets/dsp.md` corrected too: "DSP blocks = the number of `*` operators,
+**whatever the operand widths**" is contradicted by our own §5 evidence — the
+same `zhao_geom_lod` source cost **28 DSPs at 72-bit operands and 18 at 64-bit**.
+Operator count is a **lower bound**, exact only while operands stay inside one
+block's native width.
+
 ---
 
 ## Subagent Spawns
 
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
-| 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | Running | own run dir |
+| 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134 | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
 
 ---
 
