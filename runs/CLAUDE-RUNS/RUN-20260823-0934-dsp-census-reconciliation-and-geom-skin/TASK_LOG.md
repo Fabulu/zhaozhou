@@ -313,13 +313,30 @@ the agent's.
 Line 1522 declares `zfield::Table tbl;`, fills `x`, `y` and `dy`, and **never
 sets `kind`** — then pushes it into `p.tables` at three sites (1535, 1642, 1836).
 
-The `kCases` list at 1505-1519 contains **CURVE, DCURVE and SPLINE sharing that
-one table.** So the per-opcode latency figures that block prints may be
-attributed to opcodes run against the wrong kind of table. It presumably passes
-because oracle and DUT read the same indeterminate byte and agree — which is
-precisely the shape of a test that looks green while proving less than it
-claims. Handed to the Field agent, which owns the file and has it open;
-editing it from here would only have caused a conflict.
+Handed to the Field agent, which owns the file and has it open; editing it from
+here would only have caused a conflict.
+
+**CORRECTION, 12:30 — my reading of why it mattered was wrong.** I wrote that
+the per-opcode latency figures might be attributed to opcodes run against the
+wrong kind of table, and that oracle and DUT were probably agreeing on the same
+garbage byte. The agent traced it: **`zfield::interpret` never reads
+`Table::kind` at all** — it dispatches CURVE/DCURVE/SPLINE on the *opcode*
+(`zfield_interpret.cpp:227/235/241`). The latency figures are therefore correct,
+and nobody was reading the indeterminate byte on that path.
+
+It is still a genuine defect, one level further out. `Table::kind` **is**
+validated by the decoder: `kind > 1` is rejected outright and `kind == 1`
+additionally requires uniform x spacing (`zfield_decode.cpp:241,259`). So the
+test was handing `interpret` a `Decoded` that the decoder would have **refused**
+— it was not running a program, it was running something that happens to agree.
+Same shape as a test that looks green while proving less than it claims, but for
+a different reason than I gave.
+
+Fixed by setting `kind = 1` at all three sites: the tables really are uniformly
+spaced (`i * kOne/4`), so the stricter kind is the honest label and is the one
+the SPLINE cases need. Verified with the gate's own command
+(`cppcheck --enable=warning --std=c++17 --inline-suppr ... --error-exitcode=2`,
+rc=0).
 
 ### 11:45 - Run tooling moved INTO the repo  (`2286e82`)
 
@@ -383,6 +400,41 @@ combinational chain does not need a loop. The Field engine also had
 saturating rescales in one cycle. **A block can be absent from that table and
 still be 12x too slow.** This narrows where to look first; it does not replace
 STA.
+
+### 12:30 - Field lane: two lint failures closed, and a reordering
+
+`cppcheck_check` and `format_check` both fixed by the Field agent (see the
+correction above for what the cppcheck defect actually was). `format_check` was
+fixed with the **pinned** formatter — `node_modules/clang-format` 15.0.0, the
+one CMake searches first — not a system binary. That distinction is the whole
+point of the "local gates must match CI" rule: a system formatter of a different
+version would have produced a diff that CI then rejects.
+
+`ledger_check` remains the single honest red until the proof lands.
+
+**Two things that change the plan:**
+
+**The running depth-172 proof is on the PRE-FIX RTL.** sby copied its sources at
+10:00:57; `zhao_field_normalize.sv` was edited at ~10:05. So this run yields the
+**timing** number — which is still the number the timeout decision needs, since
+the leading-zero version has strictly less logic and cannot be slower — but the
+**green must be re-run against the fixed RTL.** Worth recording explicitly,
+because a proof that passed on almost-the-right sources is exactly the kind of
+evidence that gets banked by mistake.
+
+**It is trending over budget:** k=82 at 30 minutes, ~2.7 steps/min with the
+census fit running alongside, extrapolating to ~63 min against an 1,800 s lane
+budget. The contention biases the measurement **pessimistic**, which is the safe
+direction for choosing a timeout. Resolution is to raise the budget with the
+measured number as the stated reason, rather than to trim the derived depth —
+the depth is derived from `MAX_RUN_CYCLES`, not chosen, so trimming it would be
+choosing the answer.
+
+**Reordering, and it is the right call:** differential green is enough to trust
+the RTL for a fit, so the constrained fit + STA launches immediately once the
+proof clears, with the 38-mutant sweep running **alongside** it rather than
+serialised in front of it. The Fmax is the deliverable; the sweep does not gate
+it.
 
 ---
 
