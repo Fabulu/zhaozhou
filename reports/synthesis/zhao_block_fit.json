@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1c98bb83bba0c8902f2fdd96252c255cb553cda6",
+    "newestRunCommit":  "6ae88c503dbcbfb541d9d747548453f545c96d89",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -669,6 +669,26 @@
                        "fmaxClock":  "clk"
                    },
                    {
+                       "module":  "zhao_texture_tmu@lanes1-io",
+                       "status":  "ok",
+                       "sourceCommit":  "6ae88c503dbcbfb541d9d747548453f545c96d89",
+                       "rtlCleanAtHead":  true,
+                       "topParameters":  "FILT_LANES=1",
+                       "variantOf":  "zhao_texture_tmu",
+                       "seconds":  955.1,
+                       "alms":  1902,
+                       "registers":  373,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  3,
+                       "virtualPins":  496,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  35.62,
+                       "fmaxClock":  "clk"
+                   },
+                   {
                        "module":  "zhao_texture_tmu@lanes2",
                        "status":  "ok",
                        "sourceCommit":  "8754bd2d6566f526dbd1a97c531d0fec5ecd32ff",
@@ -686,6 +706,26 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  48.45,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_tmu@lanes4-io",
+                       "status":  "ok",
+                       "sourceCommit":  "1c98bb83bba0c8902f2fdd96252c255cb553cda6",
+                       "rtlCleanAtHead":  true,
+                       "topParameters":  "FILT_LANES=4",
+                       "variantOf":  "zhao_texture_tmu",
+                       "seconds":  919.8,
+                       "alms":  1958,
+                       "registers":  319,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  12,
+                       "virtualPins":  496,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  36.38,
                        "fmaxClock":  "clk"
                    },
                    {

@@ -246,11 +246,18 @@
 //
 // So the frontier axis is the filter, and it is the number of bilerp instances:
 //
-//     FILT_LANES │ instances │ products │ passes │ direct-colour II
-//     ───────────┼───────────┼──────────┼────────┼──────────────────
-//          4     │     4     │    12    │   1    │        4
-//          2     │     2     │     6    │   2    │        5
-//          1     │     1     │     3    │   4    │        7
+//     FILT_LANES │ instances │ products │ passes │ direct II │ DSPs (fitted)
+//     ───────────┼───────────┼──────────┼────────┼───────────┼──────────────
+//          4     │     4     │    12    │   1    │     4     │      12
+//     ==>  2     │     2     │     6    │   2    │     5     │       6
+//          1     │     1     │     3    │   4    │     7     │       3
+//
+// ONE DSP BLOCK PER PRODUCT, measured. Quartus 17.0.2 Lite packs nothing here:
+// the twelve 9x9-and-18x9 products of FILT_LANES = 4 fit at twelve DSP blocks,
+// not the five a Cyclone V's three-9x9-or-two-18x19 modes would allow. Plan
+// cuts by counting `*` operators, not by counting the DSP-sized multipliers the
+// operands would fit into. (QUARTUS_GOTCHAS.md 5 is the converse: width can
+// still make it WORSE.)
 //
 // The four channels (R, G, B, A) are time-multiplexed through the lanes in
 // `4 / FILT_LANES` passes. Passes 0 .. PASSES−2 run in ST_FILT and register
@@ -266,8 +273,11 @@
 // THE FRONTIER IS COVERAGE, NOT JUST DATA. At FILT_LANES = 4 there is one
 // pass, `pass_c` is the constant PASSES−1, and the channel mux degenerates to
 // a wire — so a mutation in the pass counter or the mux selector is textually
-// live and behaviourally INVISIBLE at the default. It is visible at 2 and at
-// 1. zhao_surface_sq's S03/S04 were the identical shape on SQ_RADIX.
+// live and behaviourally INVISIBLE there. It is visible at 2 and at 1. And one
+// mutant is stronger still: forcing LAST_FILT_PASS to 0 is what that localparam
+// ALREADY evaluates to at BOTH 4 and 2, so it is a real defect only at 1.
+// NO SINGLE SETTING REACHES ALL SIX. zhao_surface_sq's S03/S04 were the
+// identical shape on SQ_RADIX.
 //
 // Conservative SystemVerilog subset only (charter §2). Depends on
 // zhao_texture_bilerp. Lint: clean under `-Wall` (lint_texture_tmu).

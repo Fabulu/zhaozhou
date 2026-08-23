@@ -808,3 +808,116 @@ would have believed either way.
 fewer adder trees, so fewer ALMs (no — subtracts and a mux). The arithmetic
 argument for the factoring was airtight and every *physical* consequence I drew
 from it was wrong.
+
+---
+
+## Subagent Spawns
+
+| Timestamp | Agent ID | Purpose | Status | Findings Link |
+|-----------|----------|---------|--------|---------------|
+| — | — | none; the run was serial by instruction | — | — |
+
+---
+
+## Files Created
+
+- `SPEC_v1.md` — filled before any RTL was written; its five predictions scored above.
+- `tools/sweep_texture_tmu.sh`, `tools/sweep_texture_tmu_preflight.py` — 30 mutants, three `FILT_LANES` settings.
+- `fit-evidence/` — the constraint line, resources and named worst path for every fit, captured before the harness could delete the workspace.
+- `sweep_run1_28of30.log` (why the harness changed) and `sweep_run2_final_29of30.log` (the score).
+
+---
+
+## Decisions Made
+
+| # | Decision | Reason |
+| ---: | --- | --- |
+| 1 | **Factor** the four-weight law rather than hoist the weights | Removes 20 of 32 products where hoisting removes 12, changes **no interface**, and leaves `tests/formal/texture_bilerp.sby` proving the new form with zero edits. The contract had sanctioned hoisting; this supersedes it. |
+| 2 | Verify the factoring **before** writing RTL | All 65,536 `(fu,fv)` × 8 corner footprints + 400,000 random, with every width bound asserted. 0 mismatches. A day's work does not rest on algebra nobody checked. |
+| 3 | `FILT_LANES ∈ {4,2,1}` as the frontier axis | It is the only axis this block has, it is coverage as well as data, and DSP counts differing across settings is the falsifiability check for `QUARTUS_GOTCHAS.md` §3. |
+| 4 | Default **2**, not 4 and not 1 | 12 misses the 6–9 target; 6 is its floor; 1 spends two more cycles of a rate already at 0.33× to go below a target already met. |
+| 5 | Fix the harness for M27 rather than argue it | The model was **more generous** than the block it stands for — the one direction a model may never be wrong in. |
+| 6 | Argue M18 rather than kill it | No input exists that can distinguish it; `decode16`'s default arm already forces a CLUT alpha to 255. |
+| 7 | Fix the per-block SDC, not just report it | An Fmax that measures a counter is worse than no Fmax, and §7 set the precedent for changing the harness when it is measuring the wrong thing. |
+| 8 | **Do not** build the II = 2 pipeline in this run | It is a second rearchitecture (2-entry in-flight record, cache-port arbiter, in-order completion) that would invalidate the sweep and every fit. Designed, written into the contract, and left. |
+
+---
+
+## Next Steps
+
+1. ~~Factor `zhao_texture_bilerp`; add `FILT_LANES` and the channel mux.~~ done
+2. ~~Baseline fit.~~ done — and re-done, because the first one measured a counter
+3. ~~Differential at all three settings + the throughput case the block never had.~~ 76/76 × 3, 8/8 random
+4. ~~Mutation sweep in the worktree, non-zero count verified.~~ **30/30/30, caught 29**
+5. ~~Fits at every frontier point.~~ done, all constrained, evidence kept
+6. ~~Contract, ledger, budget, docket, blockers, gotchas, ARCHIVE.~~ done
+
+### What I could not close
+
+- **The II = 2 pipeline.** Designed in full and written into the contract; not
+  built. The block delivers **0.33×** its derived demand.
+- **The 36 MHz.** The block does not close timing at 100 MHz and the DSP work
+  does not change that — 36.92 before, 36.11 after, same limiting cone. The fix
+  is a pipeline register and it is the same change as the point above.
+- **Re-measuring the census under the corrected SDC.** Every row but this
+  block's carries the old meaning. A campaign-sized job, docketed in
+  `reports/REMAINING_BLOCKERS.md`, not attempted here.
+- **`design/blocks.yml` maturity left at `UNIT_VERIFIED`**, deliberately, exactly
+  as SURFACE.STAMP left it: advancing a maturity claim is what ledger rule V16
+  polices and is not this run's.
+
+---
+
+### 2026-08-23 20:2x — THE FRONTIER, COMPLETE AND MEASURED
+
+Four constrained fits under the corrected SDC (clock **and** I/O delays), the
+`Info (332111): 10.000 clk` line plus both `set_*_delay` lines captured for every
+one and saved under `fit-evidence/`.
+
+| `FILT_LANES` | products | direct II | ALMs | regs | **DSPs** | **Fmax** | CLUT samples/frame @100 MHz |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| *(pre-rearch)* | *32* | *4* | *1,844* | *342* | ***28*** | *36.92* | *277,778* |
+| 4 | 12 | 4 | 1,958 | 319 | **12** | 36.38 | 277,778 |
+| **2 (default)** | **6** | **5** | **1,921** | **350** | **6** | **36.11** | **277,778** |
+| 1 | 3 | 7 | 1,902 | 373 | **3** | 35.62 | 277,778 |
+
+**Fmax is flat across the whole frontier — 35.62 to 36.92 MHz, a 3.6% spread —
+while DSPs fall 28 → 12 → 6 → 3.** That is the most useful thing the frontier
+says and I did not predict it: none of these settings touches the cone that
+limits the block, so **the DSP axis is very nearly free in time** and the choice
+between points is a choice about *cycles*, not about clock.
+
+**And the CLUT column does not move at all**, at any setting, which is the
+structural fact this whole run rests on: a palette is never filtered, so the
+demand-critical path never enters `ST_FILT`.
+
+`zhao_texture_bilerp` refitted on its own: **7 → 3 DSPs, 38 → 60 ALMs.** With
+12/6/3 at the TMU that is four independent confirmations of one rule — **on this
+kit, DSP blocks = the number of `*` operators.**
+
+**DSP census: 144 → 134** (summing non-`variantOf` rows of
+`reports/synthesis/zhao_block_fit.json`), of which 22 are this block and 4 the
+stale standalone `bilerp` row this run refreshed.
+
+### 2026-08-23 20:3x — `ctest -L fast`: 271 / 272, and the one failure is the baseline
+
+    99% tests passed, 1 tests failed out of 272
+    The following tests FAILED:
+      4 - ledger_check (Failed)   fast
+
+    ledger: CHECK FAILED — 1 error(s) against 92 blocks / 40 ops
+      - V16: FIELD.SEQ.CORE is RTL_VERIFIED but formal
+             "tests/formal/field_seq_bound.sby" is recorded as "pending"
+
+**The same single error this run baselined against before touching anything** —
+the Field agent's gate, not mine. Checked three times: at run start, after the
+`blocks.yml` amendment, and here. One error every time.
+
+The suite went from 270 tests to 272: the two `FILT_LANES` frontier builds.
+
+**One ledger failure in this run WAS mine and was caught by running the check
+rather than assuming.** The amended `target_throughput` value contained
+`NOT MET:` and YAML read the colon as a nested mapping, so the whole file failed
+to parse before a single rule ran. Rewritten as a `>-` folded scalar with the
+colon removed (`5f5ffbf` — the same commit that, unrelatedly and much worse,
+carried the staged RTL revert).

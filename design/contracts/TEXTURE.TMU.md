@@ -411,12 +411,22 @@ pins, `-KeepWorkspace` evidence kept for every row. **Not in `fpga/files.qip`**
 `FILT_LANES` instances of `zhao_texture_bilerp`, with the four colour channels
 time-multiplexed through them in `4 / FILT_LANES` passes:
 
-| `FILT_LANES` | products | passes | direct-colour II | **DSP blocks** |
-| ---: | ---: | ---: | ---: | ---: |
-| *(pre-rearchitecture)* | *32* | *1* | *4* | ***28*** |
-| 4 | 12 | 1 | 4 | **12** |
-| **2 (default)** | **6** | **2** | **5** | **6** |
-| 1 | 3 | 4 | 7 | *fitting* |
+All four rows below are constrained fits under the corrected SDC (clock **and**
+I/O delays — see the next section, and `reports/QUARTUS_GOTCHAS.md` §9), so they
+are comparable to each other and to the "before".
+
+| `FILT_LANES` | products | passes | direct II | ALMs | regs | **DSPs** | **Fmax** |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| *(pre-rearch)* | *32* | *1* | *4* | *1,844* | *342* | ***28*** | *36.92* |
+| 4 | 12 | 1 | 4 | 1,958 | 319 | **12** | 36.38 |
+| **2 (default)** | **6** | **2** | **5** | **1,921** | **350** | **6** | **36.11** |
+| 1 | 3 | 4 | 7 | 1,902 | 373 | **3** | 35.62 |
+
+**Fmax is FLAT across the entire frontier — 35.6 to 36.9 MHz, a spread of 3.6% —
+while DSPs fall 28 → 12 → 6 → 3.** That is the single most useful thing the frontier says: none of
+these settings touches the cone that limits the block (see below), so the DSP
+axis is very nearly free in time, and the choice between points is a choice
+about *cycles*, not about clock.
 
 **ONE DSP BLOCK PER `*` OPERATOR. That is the general finding and it outlives
 this block.** Twelve products of 9×9 and 18×9 fitted at **twelve** DSP blocks,
@@ -436,9 +446,12 @@ carefully in both directions.** 12 misses the 6–9 target the DSP campaign set;
 direct-colour path** (II 4 → 5) and not at all on CLUT, because a palette is
 never filtered and the CLUT path therefore never enters `ST_FILT` — and CLUT is
 the demand-critical path, since terrain is CLUT8. `FILT_LANES = 1` is measured
-and deliberately **not** the default: it would spend two more cycles of a rate
-already at 0.33× to save three DSPs below a target already met, which is the
-same over-provisioning error the 28 DSPs came from, pointed the other way.
+(3 DSPs, 35.62 MHz) and deliberately **not** the default: it would spend two
+more cycles of a rate already at 0.33× to save three DSPs below a target already
+met, which is the same over-provisioning error the 28 DSPs came from, pointed
+the other way. **If the census ever needs those three blocks more than the
+direct-colour path needs its two cycles, it is one parameter away and already
+measured.**
 
 ### THE Fmax COLUMN WAS MEASURING THE SAMPLE COUNTER
 
