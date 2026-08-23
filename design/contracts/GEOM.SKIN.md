@@ -411,13 +411,65 @@ the demand needs 1.30 multipliers and the block had eighteen.
 72 = 18 x 4. A signed 32x32 in that combinational cone cost four DSP blocks, and
 the six 7-bit weight multiplies cost approximately none.
 
-### After
+### After (measured 2026-08-23, both constrained)
 
-Measured numbers for each `MUL_LANES` setting are recorded in
-`reports/synthesis/zhao_block_fit.json` and in the run log at
-`runs/CLAUDE-RUNS/RUN-20260823-0937-geom-skin-dsp-rearchitecture/TASK_LOG.md`.
-**Do not restate a number here that a fit did not produce** -- this section's
-previous version was honest about having none, and that is the standard to keep.
+| | before | `MUL_LANES=1` | `MUL_LANES=3` |
+| --- | ---: | ---: | ---: |
+| **DSP blocks** | **72** | **3** | **9** |
+| ALMs | 1,801 | 1,530 | 2,187 |
+| registers | 145 | 1,449 | 1,448 |
+| Fmax | *never measured* | 56.11 MHz | 58.45 MHz |
+| sourceCommit | 16df9ee | e7591e8 | 2e013e2 |
+
+**9 DSP blocks against a 12-18 target: 8% of the device for the stage that was
+64%.** Three registered signed 32x32 lanes at three blocks each.
+
+**ALMs ROSE, and the campaign's standing claim does not extend here.**
+`TASK_LOG.md` records that ALMs fell for `field_seq`, `terrain_lod` and
+`geom_lod`. Those were parallel datapaths collapsing into one; GEOM.SKIN was
+already minimal in logic and its area WAS the multipliers, so sequencing added
+state instead (145 registers -> 1,448: a 24-word palette latch, six 65-bit
+accumulators, the lane and destination pipelines). The trade is still
+overwhelming -- 63 DSPs is 56% of the device's DSP budget against 386 ALMs at
+0.9% of its ALM budget -- but it is a trade here and was not there.
+
+Caveat on that ALM delta: the *before* row is one of the 47 measured before the
+per-block SDC was fixed, so it was taken under no timing pressure. The
+comparison is a constrained fit against an unconstrained one and overstates the
+ALM cost by an unknown amount.
+
+### THE OPEN PROBLEM: Fmax 58.45 MHz, and the block misses its own demand
+
+At 58.45 MHz a 10-cycle engine serves **97,417 vertices/frame against the
+120,000 required**. Diagnosed rather than guessed at:
+
+    from   br[1]              the blend-walk row counter
+    to     o_y_o[14]~reg0     the output register for row 1
+           10 logic levels
+           Data Delay  17.639 ns  against a 10.000 ns period
+           slack       -7.823 VIOLATED
+           Cell 9.452 ns (54%) / interconnect 8.187 ns (46%)
+
+All 200 worst setup paths end at `o_y_o[*]~reg0` -- one endpoint family. Neither
+end is a virtual-pin node, and 54% cell delay is genuine logic depth, so this is
+structural and not a placement or wrapper artifact.
+
+`MUL_LANES = 1` was run as the discriminating experiment: it leaves this path
+bit-identical and collapses the accumulator reduction from three 65-bit adds to
+one. Fmax did not move (56.11), so the accumulator reduction is exonerated.
+
+The chain is `br -> acc[] 6:1 mux -> 66-bit (pa - pb) -> six-term 73-bit
+shift-add tree -> + (pb << 6) -> + 2^21 -> two 73-bit saturation compares ->
+output register`, all in one clock.
+
+**The acceptance test is Fmax / II, not Fmax.** 120,000 x 60 Hz = 7.2 M
+vertices/s; II = 13 still clears it at 93.6 MHz, so a fix that adds pipeline
+stages can still win. Today is 58.45/10 = 5.845 M/s. The planned three-stage
+blend (B0 registers pa/pb/diff/w0/rigid/row and takes the mux out of the path;
+B1 registers the numerator as one balanced 8-term tree; B2 replaces the wide
+comparators with a sign-extension test) takes II to 12, which needs 86.4 MHz.
+
+Not implemented in the run that diagnosed it.
 
 The architecture is a `MUL_LANES`-wide farm of signed 32x32 lanes, LOCAL to
 this block, input- and output-registered so the DSP's own pipeline registers
