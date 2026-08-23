@@ -129,6 +129,78 @@ The identical trick sizes `320×180` later: stored 320×192 (20 × 12 = 240
 tiles), visible 320×180 with 6-row guards, exact 6× to 1080p — 57,600 displayed
 pixels against Z60's 92,160. A genuinely cheap, very chunky performance mode.
 
+### WIDE DUO — split screen, and it is cheaper than every mode that exists
+
+Docketed alongside `VIDEO_WIDE`. The arithmetic was checked and it holds
+throughout; the structure below is one step better than proposed, for a reason
+the audit turned up.
+
+Two **192×144** views side by side inside the 384×216 window:
+
+    384 x 216 displayed
+    +------------------------------------------+
+    |            36 rows, black                 |
+    | +--------------------+------------------+ |
+    | |   P1  192x144      |   P2  192x144    | |
+    | |      exactly 4:3   |     exactly 4:3  | |
+    | +--------------------+------------------+ |
+    |            36 rows, black                 |
+    +------------------------------------------+
+
+Everything lands exactly:
+
+* 192 × 2 = **384** — fills the width with no remainder;
+* 192 / 144 = **4:3 exactly**;
+* 192/16 = 12 and 144/16 = 9 — **tile-exact in both axes**, 108 tiles per view;
+* (216 − 144) / 2 = **36 top and 36 bottom** — symmetric, no rounding;
+* at 1080p each view is **960 × 720** with 180-pixel borders, every source
+  pixel still a perfect 5 × 5 block.
+
+**Store the two views only and manufacture the borders at scanout — do not
+build a shared canvas.** This is the structural improvement, and it is exactly
+what Duo already does (stores 2 × 256×192 = 196,608 B, displays 512×240 =
+245,760 B, with border rows fetching nothing —
+`zhao_pkg.sv:100`, `zhao_scanout_fetch.sv:125-140`). Structuring WIDE DUO the
+same way means **each view is its own 12×9 grid at its own origin**, so the
+question of whether the views sit on tile boundaries inside a larger canvas
+never arises. Had they been placed in a shared 384×224 canvas they would
+*not* have been tile-aligned vertically, and each view would have cost 10 tile
+rows instead of 9.
+
+| | Duo today | **WIDE DUO** | Z60 |
+| --- | ---: | ---: | ---: |
+| per view | 256×192 | **192×144** | — |
+| tiles per view | 192 | **108** | — |
+| **total tiles** | 384 | **216** | 360 |
+| stored bytes | 196,608 | **110,592** | 184,320 |
+| displayed bytes | 245,760 | **165,888** | 184,320 |
+| bursts per active row | 16 | **12** | 12 |
+| **bursts per frame** | 3,072 | **1,728** | 2,880 |
+
+**44% fewer tiles and 44% fewer memory bursts than Duo, and fewer than Z60 on
+both counts.** It is cheaper than every mode the console currently has.
+
+Two details that matter given what the audit found:
+
+* **192 px is 384 B per row = exactly 6 bursts.** The fetch client issues only
+  whole 64-byte bursts with all byte enables set and **has no masked-tail
+  path** (`zhao_scanout_fetch.sv:149-155`), so any width that is not a multiple
+  of 32 pixels would be unbuildable. 192 is.
+* **A 12-column grid is within `GRID_W = 24`.** The binner's compile-time
+  parameter is a ceiling, and Duo already runs a 16-column grid against it, so
+  12 needs no change — unlike the 26 columns that 416 px would have required,
+  which would have aliased tile rows silently.
+
+The Measure gains a great deal of room here: 216 tiles against Duo's 384, with
+the same two-player workload.
+
+**Not a replacement for the existing Duo.** Keep 2 × 256×192 as the
+big-views option if the budget ever allows it. WIDE DUO is the high-performance
+default, and two proper chunky 4:3 mini-screens side by side is arguably the
+better look anyway. The 36-row bands are black by default and are the natural
+home for restrained shared UI later — boss health, timer, spell state — without
+shrinking either player's image.
+
 ### Anamorphic fallback — worth having, but be honest about it at 1080p
 
 384×240 stretched to 16:9 is genuinely almost free and should exist. But at
