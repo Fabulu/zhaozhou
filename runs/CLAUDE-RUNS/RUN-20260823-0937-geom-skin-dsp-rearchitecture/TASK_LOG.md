@@ -784,3 +784,66 @@ implementing it is an RTL change across three elaborations plus a re-run of the
 re-fits. Recorded as the next step rather than started at the end of a long
 session, because a large rewrite verified in a hurry is exactly how this
 project's build-state failures have happened.
+
+---
+
+## 14:2x — THE FIX WORKS: 58.45 -> 89.65 MHz, and the block now MEETS its budget
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_geom_skin `
+      -ExtraSources fpga/rtl/geometry/zhao_geom_skin.sv -KeepWorkspace
+
+Constrained (`Info (332111): 10.000 clk`, saved as
+`fit-evidence/lanes3_pipelined_constraint.txt`), sourceCommit `56ef194`,
+1,703.4 s.
+
+| | combinational blend | **three-stage blend** |
+| --- | ---: | ---: |
+| **Fmax** | 58.45 MHz | **89.65 MHz** (+53.4%) |
+| **II (blend)** | 10 | 12 |
+| **vertices/s** | 5,845,000 | **7,470,833** |
+| **vertices/frame** | 97,417 | **124,514** |
+| **vs. 120,000 demand** | **FAILS, 81%** | **PASSES, 103.8%** |
+| ALMs | 2,187 | 2,225 (+38) |
+| registers | 1,448 | 1,696 (+248) |
+| DSP blocks | 9 | **9 (unchanged)** |
+
+**The two extra clocks bought 31 MHz and the trade was worth it**, which is
+exactly what the rate-not-clock acceptance test predicted: II went UP and the
+delivered rate went up with it, from 5.85 M vertices/s to 7.47 M against the
+7.2 M required.
+
+The fix cost **38 ALMs and no DSPs**. The 248 registers are the three stages.
+
+### The critical path MOVED, which is what a real fix looks like
+
+    from   Mult1~add_lh_hlmac_pl[0][3]      a DSP block's internal adder output
+    to     acc[5][64]                       the row-product accumulator
+           Data Delay  10.283 ns
+           slack       -1.155 ns
+
+**All 200 worst paths are now `Mult* -> acc[*]`.** The blend endpoint family
+that owned every one of the top 200 before does not appear at all.
+
+**That is candidate B, and it does not contradict the experiment that
+exonerated it.** MUL_LANES = 1 proved B was not the critical path *while A
+existed at 17.6 ns* -- and it wasn't. B was the SECOND longest path all along,
+at 10.283 ns. Cutting A by 7.4 ns surfaced it. The measurement was right and so
+was the conclusion drawn from it; what changed is which path is longest.
+
+### Honest reading of the margin
+
+3.8% over the demand, and **89.65 MHz is still below the 100 MHz `gpu_clk` is
+constrained at**, so this block caps the shared clock. Both numbers are
+reported because both matter: the block meets its own vertex budget, and it
+would still hold the rest of the console to ~90 MHz.
+
+The remaining 1.155 ns is one path family with an obvious shape: at
+MUL_LANES = 3 the accumulate is `acc + (p0 + p1 + p2)`, three wide adds between
+the DSP output and the accumulator register. Registering the lane sum before
+the accumulate would cut it -- **but that pushes acc_done one cycle later and
+II to 13, and II = 13 needs 93.6 MHz to clear the demand.** At today's 89.65
+that would FAIL (114,936 vertices/frame). So the next step is only worth taking
+if it buys more than 4 MHz, and it must be measured rather than assumed.
+
+**Not attempted in this run. The block passes its acceptance test as it
+stands.**
