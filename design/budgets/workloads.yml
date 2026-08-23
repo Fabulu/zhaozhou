@@ -1,0 +1,168 @@
+# design/budgets/workloads.yml -- executable demand, per block.
+#
+# WHY THIS FILE EXISTS
+# ====================
+# `docs/OWNER_DOCKET.md` (2026-08-23): "Capacity is generated, not asserted."
+#
+#     capacity = min(measured_fmax, target_clock) x frame_seconds / measured_II
+#
+# Every DSP reduction landed so far came from one calculation -- sustained
+# demand per frame against the frame budget -- and every block that was
+# over-provisioned was over-provisioned because nobody had done it. A block
+# with no row here gets the debt flag `NO_WORKLOAD` in
+# `reports/BUDGET_HEATMAP.md`, which is the honest state, not an omission.
+#
+# THE FRAME BUDGET, AND THE NUMBER THAT IS NOT IT
+# ===============================================
+# `design/budgets/latency.md` lines 63-78:
+#
+#   compute budget                       1,666,667 clocks/frame (100 MHz, 60 Hz)
+#   frame_gpu_cycles, Z60                  251,520 -- the VIDEO/DEADLINE period,
+#                                                     2 x h_total x v_total
+#
+# Summing per-block cost against 251,520 is wrong by 6.6x. That mistake is
+# recorded in latency.md because it was made.
+#
+# EVERY NUMBER BELOW IS TRANSCRIBED, NOT INVENTED
+# ===============================================
+# Each row carries `source`. The three figures marked `derived` come from the
+# owner's read-only survey of `sacengine` and the retail Sacrifice install, are
+# recorded in full in `docs/OWNER_DOCKET.md`, and the docket says of them:
+# "They are derived, not ruled -- overturn on sight."
+
+schemaVersion: 1
+
+frame:
+  targetClockHz: 100000000
+  frameRateHz: 60
+  # 100e6 / 60, rounded down. THE COMPUTE BUDGET.
+  computeClocksPerFrame: 1666667
+  # 2 x h_total x v_total for Z60. THE VIDEO DEADLINE. Not a compute budget.
+  videoClocksPerFrameZ60: 251520
+  note: >-
+    Cost a block against computeClocksPerFrame. videoClocksPerFrameZ60 is the
+    scanout period and answers a different question.
+
+blocks:
+
+  zhao_texture_tmu:
+    unit: samples
+    itemsPerFrame: 850000
+    confidence: derived
+    source: >-
+      docs/OWNER_DOCKET.md 2026-08-23, TEXTURE.TMU demand table: Z60 384x240 at
+      overdraw 3.0 is 829,440 samples/frame; 850,000 is the ruled figure with
+      headroom. Terrain is CLUT8, so the CLUT path is the demand-critical one.
+    measuredII: 6
+    measuredIISource: >-
+      RUN-20260823-1736, asserted in the suite: 6 clocks per CLUT sample.
+      277,778/frame against 850,000 = 0.33x.
+    requiredII: 1
+    reserve: 0.20
+
+  zhao_surface_stamp:
+    unit: texels
+    itemsPerFrame: 20000
+    confidence: derived
+    source: >-
+      docs/OWNER_DOCKET.md 2026-08-23: heavy-barrage measurement is ~6,000
+      texels/frame; 20,000 is 3x that as the ruled demand.
+    measuredII: null
+    requiredII: 1
+    reserve: 0.20
+
+  zhao_terrain_normals:
+    unit: normals
+    itemsPerFrame: 2000
+    confidence: derived
+    source: >-
+      docs/OWNER_DOCKET.md 2026-08-23: 10 deform events/s x 25 vertices is 4.2
+      normals/frame; rebuilding the entire 65,536-vertex field once per second
+      is 1,092. 2,000 is the ruled demand, generous against both.
+    measuredII: null
+    requiredII: 1
+    reserve: 0.20
+
+  zhao_terrain_project:
+    unit: patches
+    itemsPerFrame: 270
+    confidence: ruled
+    source: >-
+      docs/OWNER_DOCKET.md 2026-08-23, "Where the remaining 188 multipliers
+      sit": ~270 patches/frame, already costed against the 1.67 M budget.
+    verticesPerItem: 3
+    measuredII: null
+    requiredII: 1
+    reserve: 0.20
+
+  zhao_geom_cull:
+    unit: evaluations
+    # One evaluation per five clocks against the compute budget.
+    itemsPerFrame: 333333
+    confidence: ruled
+    source: >-
+      docs/OWNER_DOCKET.md 2026-08-23: "one evaluation per five clocks".
+      1,666,667 / 5 = 333,333.
+    measuredII: null
+    requiredII: 5
+    reserve: 0.20
+
+  zhao_geom_skin:
+    unit: vertices
+    itemsPerFrame: 120000
+    confidence: ruled
+    source: >-
+      The 120,000 weighted vertices/frame ruling, independently corroborated in
+      docs/OWNER_DOCKET.md 2026-08-23 across 93 retail creature models (median
+      2,951 vertices; a defensible scene is 40-60 skinned characters, so
+      40 x 2,951 = 118,040).
+    measuredII: null
+    requiredII: 1
+    reserve: 0.20
+
+  zhao_geom_project:
+    unit: vertices
+    itemsPerFrame: 120000
+    confidence: inherited
+    source: >-
+      Same population as zhao_geom_skin -- this is the projector the skinned
+      and warped vertices reach the screen through, per its own header. NOT a
+      separately derived figure, and it is the number that makes the duplication
+      with zhao_terrain_project expensive: 120,000 vertices at one per clock is
+      7.2% of the frame, so a SHARED projector is affordable and two are not
+      justified by rate.
+    measuredII: null
+    requiredII: 1
+    reserve: 0.20
+
+# ---------------------------------------------------------------------------
+# NO DEMAND FIGURE. Listed rather than omitted, because a missing row and an
+# unanswered question look identical in a generated report otherwise.
+# ---------------------------------------------------------------------------
+unruled:
+  - module: zhao_geom_binner
+    note: >-
+      docs/OWNER_DOCKET.md records "per-triangle costs plus hard caps
+      (TRI_CAP 128, CHUNKS 256)" but no items/frame. The caps bound the arena,
+      not the rate.
+  - module: zhao_geom_pose_decode
+    note: >-
+      The pose path has no derived invocation count. It is the block the docket
+      predicts hides 14-18 DSPs, so this is the demand figure most worth
+      deriving next.
+  - module: zhao_field_seq
+    note: >-
+      Needs DISTRIBUTIONS, not a scalar -- opcode mix per profile across Earth,
+      Warp, Flow, Formation and Stamp, summed against 1,666,667. The docket's
+      worked example (120,000 warped vertices x 8 instructions x 8 clocks =
+      7,680,000 clocks, i.e. 4.6x the whole frame) is why one scalar cannot
+      express it.
+  - module: zhao_terrain_tess
+  - module: zhao_terrain_patch
+  - module: zhao_terrain_velocity
+  - module: zhao_terrain_bake
+  - module: zhao_raster_edgewalk
+  - module: zhao_raster_fragment
+  - module: zhao_raster_tile_pipe
+  - module: zhao_geom_bin_pipe
+  - module: zhao_forge_cliff

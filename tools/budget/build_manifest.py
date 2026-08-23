@@ -1,0 +1,608 @@
+#!/usr/bin/env python3
+"""build_manifest.py -- fuse the audit's evidence into one ranked ledger.
+
+INPUTS (each one measured or analysed by a different lane, none of them by hand)
+  reports/rtl_inventory.json          tools/budget/scan_rtl.py, elaborated AST
+  reports/synthesis/zhao_block_map.json   quartus_map, this HEAD
+  reports/synthesis/zhao_block_fit.json   quartus_fit, various commits
+  design/budgets/workloads.yml        transcribed demand, with provenance
+  tools/budget/calibration.json       measured shape -> resource mapping
+
+OUTPUTS
+  reports/budget_manifest.json        one record per block
+  reports/BUDGET_HEATMAP.md           the readable ranking
+
+THE DEBT FLAGS ARE THE POINT
+============================
+`docs/OWNER_DOCKET.md`: "Those flags would have exposed Field and the TMU
+before anyone read their misleading headline numbers."
+
+  NO_CURRENT_FIT             no fit at HEAD's commit
+  OLD_SDC                    fit predates the corrected clock+I/O SDC, so its
+                             Fmax is not a measurement of this block
+  NO_WORKLOAD                no items/frame, so no demand ratio can exist
+  NO_II_TEST                 throughput asserted nowhere executable
+  EXPECTED_RAM_NOT_INFERRED  the source declares addressable storage and the
+                             map reports zero block memory bits
+  NO_SUBSYSTEM_FIT           boundary-heavy block never fitted with a neighbour
+  NO_RESERVE                 demand ratio above 1.0 with nothing spare
+
+THE FALSIFIABLE TEST
+====================
+Run against `zhao_field_seq` (0 M10Ks while spending 8,901 ALMs on a register
+file and three ROMs built from logic) and `zhao_texture_tmu` (II = 6 against a
+demand needing II = 1). Both must come out RED from mechanical rules alone. If
+they do not, the heatmap does not work and nothing else in it should be
+believed either.
+
+NOTHING HERE IS HAND-EDITED. Every number is copied from a tool's own output
+file, and every row says which file and which commit it came from.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+# The corrected-SDC boundary. QUARTUS_GOTCHAS 7 fixed create_clock resolving to
+# an empty collection; 9 added set_input_delay/set_output_delay. Rows measured
+# before the second fix carry an Fmax that is not this block's.
+CORRECTED_SDC_COMMITS = None  # resolved from the fit file's own row labels
+
+SEV_ORDER = {"GREEN": 0, "YELLOW": 1, "ORANGE": 2, "RED": 3}
+
+
+def load(path, default=None):
+    p = os.path.join(REPO, path)
+    if not os.path.exists(p):
+        return default
+    with open(p, encoding="utf-8", errors="replace") as fh:
+        return json.load(fh)
+
+
+def load_workloads(path="design/budgets/workloads.yml"):
+    """A deliberately small YAML reader.
+
+    The repo has no yaml dependency and adding one to run an audit would be a
+    new install on the critical path. This handles exactly the shape of
+    workloads.yml -- two levels of mapping, scalars, `-` lists and `>-` folded
+    blocks.
+
+    ITS LIMIT, STATED BECAUSE THE FAILURE WOULD BE SILENT: it SKIPS a
+    construct it does not recognise rather than raising, so a workloads.yml
+    written with anchors, flow mappings or multi-document separators would
+    lose rows and turn a RED block GREEN by omission. The file it reads is
+    checked in beside it and uses none of those. If workloads.yml grows, either
+    keep it inside this subset or take the pyyaml dependency -- do not let this
+    reader guess.
+    """
+    p = os.path.join(REPO, path)
+    if not os.path.exists(p):
+        return {"frame": {}, "blocks": {}, "unruled": []}
+    lines = open(p, encoding="utf-8").read().split("\n")
+    root = {}
+    stack = [(-1, root)]
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        i += 1
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        s = raw.strip()
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        parent = stack[-1][1]
+        if s.startswith("- "):
+            body = s[2:].strip()
+            if not isinstance(parent, list):
+                continue
+            if ":" in body:
+                k, v = body.split(":", 1)
+                d = {k.strip(): parse_scalar(v.strip())}
+                parent.append(d)
+                stack.append((indent, d))
+            else:
+                parent.append(parse_scalar(body))
+            continue
+        if ":" not in s:
+            continue
+        k, v = s.split(":", 1)
+        k, v = k.strip(), v.strip()
+        if v in (">-", ">", "|", "|-"):
+            buf = []
+            while i < len(lines):
+                nxt = lines[i]
+                if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= indent:
+                    break
+                buf.append(nxt.strip())
+                i += 1
+            parent[k] = " ".join(x for x in buf if x)
+        elif v == "":
+            # container: list if the next meaningful line is a `- `
+            j = i
+            nxt = None
+            while j < len(lines):
+                if lines[j].strip() and not lines[j].lstrip().startswith("#"):
+                    nxt = lines[j]
+                    break
+                j += 1
+            child = [] if (nxt is not None and nxt.strip().startswith("- ")) else {}
+            parent[k] = child
+            stack.append((indent, child))
+        else:
+            parent[k] = parse_scalar(v)
+    return root
+
+
+def parse_scalar(v):
+    v = v.strip()
+    if v in ("null", "~", ""):
+        return None
+    if v in ("true", "True"):
+        return True
+    if v in ("false", "False"):
+        return False
+    if re.match(r"^-?\d+$", v):
+        return int(v)
+    if re.match(r"^-?\d*\.\d+$", v):
+        return float(v)
+    return v.strip("'\"")
+
+
+def sev_max(a, b):
+    return a if SEV_ORDER[a] >= SEV_ORDER[b] else b
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--json-out", default="reports/budget_manifest.json")
+    ap.add_argument("--md-out", default="reports/BUDGET_HEATMAP.md")
+    args = ap.parse_args()
+
+    inv = load("reports/rtl_inventory.json")
+    mapd = load("reports/synthesis/zhao_block_map.json", {"blocks": []})
+    fitd = load("reports/synthesis/zhao_block_fit.json", {"blocks": []})
+    calib = load("tools/budget/calibration.json", {"points": []})
+    wl = load_workloads()
+    if inv is None:
+        raise SystemExit("reports/rtl_inventory.json missing -- run tools/budget/scan_rtl.py first")
+
+    head = subprocess.run(["git", "-C", REPO, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+
+    maps = {b["module"]: b for b in mapd.get("blocks", [])}
+    fits = {b["module"]: b for b in fitd.get("blocks", [])
+            if not b.get("variantOf")}
+    fit_variants = {}
+    for b in fitd.get("blocks", []):
+        if b.get("variantOf"):
+            fit_variants.setdefault(b["variantOf"], []).append(b)
+
+    frame = wl.get("frame") or {}
+    budget = frame.get("computeClocksPerFrame") or 1666667
+    wblocks = wl.get("blocks") or {}
+
+    records = []
+    for m in inv["modules"]:
+        name = m["module"]
+        h = m["hierarchical"]
+        a, s = h["arithmetic"], h["storage"]
+        mp = maps.get(name)
+        ft = fits.get(name)
+        w = wblocks.get(name)
+
+        flags = []
+
+        # ---- resources at HEAD ------------------------------------------
+        res = {}
+        if mp and mp.get("status") == "ok":
+            res["mapDspBlocks"] = mp.get("dspBlocks")
+            res["mapBlockMemoryBits"] = mp.get("blockMemoryBits")
+            res["mapEstimatedAlms"] = mp.get("estimatedAlms")
+            res["mapRegisters"] = mp.get("registers")
+            res["mapCommit"] = (mp.get("sourceCommit") or "")[:8]
+            res["mapDspDecomposition"] = mp.get("dspDecomposition")
+            res["mapInferredDesignMemories"] = mp.get("inferredDesignMemoryCount")
+        else:
+            flags.append("NO_MAP")
+
+        if ft and ft.get("status") == "ok":
+            res["fitDspBlocks"] = ft.get("dspBlocks")
+            res["fitAlms"] = ft.get("alms")
+            res["fitRamBlocks"] = ft.get("ramBlocks")
+            res["fitCommit"] = (ft.get("sourceCommit") or "")[:8]
+            res["fitFmaxMhz"] = ft.get("fmaxMhz")
+            res["fitSetupSlackNs"] = ft.get("setupSlackNs")
+            res["fitHoldSlackNs"] = ft.get("holdSlackNs")
+            if (ft.get("sourceCommit") or "")[:8] != head[:8]:
+                flags.append("NO_CURRENT_FIT")
+            # OLD_SDC: an Fmax exists but predates the corrected constraints.
+            # A row measured under the fixed harness HAS an fmaxMhz AND a
+            # holdSlackNs, because quartus_sta only became a stage at the same
+            # time. A row with no fmax at all was fitted with no timing
+            # objective whatsoever -- 47 of them were.
+            if ft.get("fmaxMhz") is None:
+                flags.append("OLD_SDC")
+        else:
+            flags.append("NO_CURRENT_FIT")
+            flags.append("OLD_SDC")
+
+        # ---- expected vs inferred RAM -----------------------------------
+        expected_bits = s.get("addressableBits", 0) + s.get("constRomBits", 0)
+        inferred_design = (mp or {}).get("inferredDesignMemoryCount", 0) or 0
+        map_bits = (mp or {}).get("blockMemoryBits") or 0
+        ram = {
+            "expectedAddressableBits": s.get("addressableBits", 0),
+            "expectedConstRomBits": s.get("constRomBits", 0),
+            "expectedTotalBits": expected_bits,
+            "mapBlockMemoryBits": map_bits,
+            "mapInferredDesignMemories": inferred_design,
+        }
+        if expected_bits >= 512 and mp and mp.get("status") == "ok" and inferred_design == 0:
+            flags.append("EXPECTED_RAM_NOT_INFERRED")
+
+        # ---- rate --------------------------------------------------------
+        ii = m["interface"]["inferredMinII"]
+        rate = {"inferredMinII": ii}
+        if w:
+            rate["itemsPerFrame"] = w.get("itemsPerFrame")
+            rate["demandConfidence"] = w.get("confidence")
+            rate["workloadSource"] = w.get("source")
+            rate["measuredII"] = w.get("measuredII")
+            eff_ii = w.get("measuredII") or ii
+            rate["iiUsed"] = eff_ii
+            rate["iiUsedIsMeasured"] = w.get("measuredII") is not None
+            cap = budget // max(1, eff_ii)
+            rate["capacityPerFrame"] = cap
+            items = w.get("itemsPerFrame") or 0
+            rate["demandRatio"] = round(items / cap, 4) if cap else None
+            if w.get("measuredII") is None:
+                flags.append("NO_II_TEST")
+            if rate["demandRatio"] and rate["demandRatio"] > 1.0:
+                flags.append("NO_RESERVE")
+            elif rate["demandRatio"] and rate["demandRatio"] > (1.0 - (w.get("reserve") or 0.0)):
+                flags.append("NO_RESERVE")
+        else:
+            flags.append("NO_WORKLOAD")
+            if ii > 1:
+                flags.append("NO_II_TEST")
+
+        # ---- composition -------------------------------------------------
+        # A block whose arithmetic runs from its own pins is not represented by
+        # a leaf fit. QUARTUS_GOTCHAS 9 measured a 5.4x error from exactly this.
+        boundary_heavy = m["interface"]["directIoArithmeticPaths"] > 0 or m["interface"]["ports"] > 40
+        composition = {
+            "directIoArithmeticPaths": m["interface"]["directIoArithmeticPaths"],
+            "ports": m["interface"]["ports"],
+            "submodules": m.get("submodules", []),
+        }
+        if boundary_heavy:
+            flags.append("NO_SUBSYSTEM_FIT")
+
+        # ---- critical-path family ---------------------------------------
+        # Named from the source shapes present, because no per-block STA report
+        # in this repo carries a path family and inventing one would be worse
+        # than saying which cones EXIST.
+        fam = []
+        if a["nonconstantMultiplyInstances"]:
+            fam.append("MULTIPLY(%d, widest %d-bit)" % (
+                a["nonconstantMultiplyInstances"], a["widestNonconstantOperand"]))
+        if a["divides"]:
+            fam.append("DIVIDE(%d)" % a["divides"])
+        if a["variableShifts"]:
+            fam.append("VARSHIFT(%d)" % a["variableShifts"])
+        if a["satChains"]:
+            fam.append("ADD_COMPARE_SATURATE(%d)" % a["satChains"])
+        if a["combinationalLoops"]:
+            fam.append("COMB_LOOP(%d)" % a["combinationalLoops"])
+        if s.get("asyncReadArrays"):
+            fam.append("ASYNC_ARRAY_READ(%d)" % s["asyncReadArrays"])
+        if s.get("constRomTables"):
+            fam.append("CONST_ROM(%d tables, %d bits)" % (s["constRomTables"], s["constRomBits"]))
+        if m["interface"]["directIoArithmeticPaths"]:
+            fam.append("PIN_TO_PIN_ARITHMETIC(%d)" % m["interface"]["directIoArithmeticPaths"])
+
+        # ---- severity ----------------------------------------------------
+        sev = m["severity"]
+        for f in flags:
+            if f in ("EXPECTED_RAM_NOT_INFERRED",):
+                sev = sev_max(sev, "RED")
+            elif f in ("NO_RESERVE",):
+                sev = sev_max(sev, "RED")
+            elif f in ("NO_CURRENT_FIT", "OLD_SDC", "NO_WORKLOAD", "NO_II_TEST",
+                       "NO_SUBSYSTEM_FIT"):
+                sev = sev_max(sev, "YELLOW")
+
+        records.append({
+            "module": name,
+            "sourceFile": m["sourceFile"],
+            "severity": sev,
+            "scanSeverity": m["severity"],
+            "resources": res,
+            "arithmetic": a,
+            "storage": s,
+            "expectedVsInferredRam": ram,
+            "rate": rate,
+            "criticalPathFamily": fam,
+            "composition": composition,
+            "debtFlags": sorted(set(flags)),
+            "provenance": {
+                "scanCommit": (inv.get("sourceCommit") or "")[:8],
+                "mapCommit": res.get("mapCommit"),
+                "fitCommit": res.get("fitCommit"),
+                "headCommit": head[:8],
+                "scanSourceListHash": inv.get("sourceListHash"),
+                "mapSourceListHash": (mp or {}).get("sourceListHash"),
+            },
+        })
+
+    records.sort(key=lambda r: (-SEV_ORDER[r["severity"]],
+                                -(r["resources"].get("mapDspBlocks") or 0),
+                                r["module"]))
+
+    manifest = {
+        "schemaVersion": 1,
+        "generator": "tools/budget/build_manifest.py",
+        "headCommit": head,
+        "frameBudget": frame,
+        "inputs": {
+            "scan": "reports/rtl_inventory.json",
+            "map": "reports/synthesis/zhao_block_map.json",
+            "fit": "reports/synthesis/zhao_block_fit.json",
+            "workloads": "design/budgets/workloads.yml",
+            "calibration": "tools/budget/calibration.json",
+        },
+        "coverage": {
+            "modulesScanned": len(records),
+            "modulesWithMapAtHead": sum(1 for r in records
+                                        if r["provenance"]["mapCommit"] == head[:8]),
+            "modulesWithAnyMap": sum(1 for r in records if r["resources"].get("mapDspBlocks") is not None),
+            "modulesWithAnyFit": sum(1 for r in records if r["resources"].get("fitAlms") is not None),
+            "modulesWithWorkload": sum(1 for r in records if "NO_WORKLOAD" not in r["debtFlags"]),
+            "calibrationPoints": len(calib.get("points", [])),
+        },
+        "blocks": records,
+        "limitations": [
+            "No number in this file was typed. Each is copied from reports/rtl_inventory.json, reports/synthesis/zhao_block_map.json, reports/synthesis/zhao_block_fit.json or design/budgets/workloads.yml, and each row names the commit its measurement came from.",
+            "mapDspBlocks and mapEstimatedAlms come from Analysis and Synthesis. The DSP figure matched the fitter on every block cross-checked; the ALM figure is an estimate and is NOT comparable to fitAlms.",
+            "A map row carries NO timing. Every Fmax and slack in this file comes from the fit lane, at the commit named in fitCommit.",
+            "criticalPathFamily names the expensive cones the SOURCE contains. It is not an STA result -- no per-block STA report in this repo carries a path family, and naming one from the source is honest where inventing one would not be.",
+            "inferredMinII is a lower bound derived from the state graph. Where a measured II exists in workloads.yml it is used instead and the row says which.",
+        ],
+    }
+
+    out = os.path.join(REPO, args.json_out)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(manifest, fh, indent=1)
+        fh.write("\n")
+    print("WROTE %s (%d block(s))" % (args.json_out, len(records)))
+
+    write_heatmap(os.path.join(REPO, args.md_out), manifest, calib, wl)
+    print("WROTE %s" % args.md_out)
+
+
+def fmt(v, dash="-"):
+    return dash if v is None else (("%,d" % v).replace(",", ",") if isinstance(v, int) else str(v))
+
+
+def write_heatmap(path, man, calib, wl):
+    R = man["blocks"]
+    cov = man["coverage"]
+    L = []
+    L.append("# BUDGET HEATMAP")
+    L.append("")
+    L.append("> Generated by `tools/budget/build_manifest.py` from")
+    L.append("> `reports/budget_manifest.json`. **Nothing in this file was typed by hand.**")
+    L.append("> Regenerate rather than edit; a hand-corrected number here is indistinguishable")
+    L.append("> from a measured one, which is the failure this whole audit exists to stop.")
+    L.append("")
+    L.append("HEAD `%s`. Frame budget **%s clocks** (compute), *not* the 251,520 raster period." %
+             (man["headCommit"][:8], "{:,}".format(man["frameBudget"].get("computeClocksPerFrame", 0))))
+    L.append("")
+    L.append("| coverage | |")
+    L.append("| --- | ---: |")
+    L.append("| modules scanned (elaborated AST) | **%d** |" % cov["modulesScanned"])
+    L.append("| modules with a map at HEAD | **%d** |" % cov["modulesWithMapAtHead"])
+    L.append("| modules with any map | %d |" % cov["modulesWithAnyMap"])
+    L.append("| modules with any fit | %d |" % cov["modulesWithAnyFit"])
+    L.append("| modules with a demand figure | **%d** |" % cov["modulesWithWorkload"])
+    L.append("| calibration points measured | %d |" % cov["calibrationPoints"])
+    L.append("")
+
+    # ---- the falsifiable test ------------------------------------------
+    L.append("## The test of whether this works")
+    L.append("")
+    L.append("`docs/OWNER_DOCKET.md` set two blocks as the calibration of the flags themselves:")
+    L.append("`zhao_field_seq` spends 8,901 ALMs and **zero** M10Ks on a register file and three")
+    L.append("ROMs built from logic, and `zhao_texture_tmu` runs at II=6 against a demand needing")
+    L.append("II=1. Both must come out RED from mechanical rules alone.")
+    L.append("")
+    L.append("| block | severity | why, mechanically |")
+    L.append("| --- | --- | --- |")
+    for nm in ("zhao_field_seq", "zhao_texture_tmu"):
+        r = next((x for x in R if x["module"] == nm), None)
+        if not r:
+            L.append("| `%s` | **ABSENT** | not scanned |" % nm)
+            continue
+        why = "; ".join(r["debtFlags"][:4]) or "-"
+        L.append("| `%s` | **%s** | %s |" % (nm, r["severity"], why))
+    L.append("")
+
+    # ---- the red list ---------------------------------------------------
+    L.append("## RED")
+    L.append("")
+    L.append("| block | map DSP | fit DSP | expected RAM bits | inferred | II | demand | debt flags |")
+    L.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+    for r in R:
+        if r["severity"] != "RED":
+            continue
+        res, ram, rate = r["resources"], r["expectedVsInferredRam"], r["rate"]
+        dr = rate.get("demandRatio")
+        L.append("| `%s` | %s | %s | %s | %s | %s | %s | %s |" % (
+            r["module"],
+            res.get("mapDspBlocks", "-"),
+            res.get("fitDspBlocks", "-"),
+            "{:,}".format(ram["expectedTotalBits"]) if ram["expectedTotalBits"] else "-",
+            ("%s (%d design)" % ("{:,}".format(ram["mapBlockMemoryBits"]), ram["mapInferredDesignMemories"] or 0)
+             if ram["mapBlockMemoryBits"] else ("**0**" if res.get("mapDspBlocks") is not None else "-")),
+            rate.get("iiUsed", rate["inferredMinII"]),
+            ("%.2fx" % dr) if dr else "-",
+            ", ".join("`%s`" % f for f in r["debtFlags"]) or "-",
+        ))
+    L.append("")
+
+    for level in ("ORANGE", "YELLOW", "GREEN"):
+        rows = [r for r in R if r["severity"] == level]
+        L.append("## %s (%d)" % (level, len(rows)))
+        L.append("")
+        if not rows:
+            L.append("*none*")
+            L.append("")
+            continue
+        L.append("| block | map DSP | II | critical-path family | debt flags |")
+        L.append("| --- | ---: | ---: | --- | --- |")
+        for r in rows:
+            L.append("| `%s` | %s | %s | %s | %s |" % (
+                r["module"], r["resources"].get("mapDspBlocks", "-"),
+                r["rate"].get("iiUsed", r["rate"]["inferredMinII"]),
+                "; ".join(r["criticalPathFamily"])[:90] or "-",
+                ", ".join("`%s`" % f for f in r["debtFlags"])[:70] or "-"))
+        L.append("")
+
+    # ---- DSP ledger -----------------------------------------------------
+    L.append("## DSP ledger at HEAD, from the map lane")
+    L.append("")
+    L.append("Leaf modules only -- a module that instantiates another would double-count it.")
+    L.append("`instantiatedBy` marks rows that are inside another measured row.")
+    L.append("")
+    inside = set()
+    for r in R:
+        for sub in r["composition"]["submodules"]:
+            inside.add(sub)
+    total = 0
+    L.append("| block | map DSP | inside another row? |")
+    L.append("| --- | ---: | --- |")
+    for r in sorted(R, key=lambda x: -(x["resources"].get("mapDspBlocks") or 0)):
+        d = r["resources"].get("mapDspBlocks")
+        if not d:
+            continue
+        ins = r["module"] in inside
+        if not ins:
+            total += d
+        L.append("| `%s` | %d | %s |" % (r["module"], d, "yes" if ins else ""))
+    L.append("")
+    L.append("**Top-level total: %d DSP** against a 112-DSP device and a policy ceiling of 85-90." % total)
+    L.append("")
+    L.append("This total is not the console's number. It sums per-module maps, which share")
+    L.append("nothing, and it counts every module that is not textually inside another --")
+    L.append("including blocks that will never be instantiated together. Read it as the")
+    L.append("**arithmetic that exists in the repository**, which is the quantity this audit")
+    L.append("was asked to stop guessing at.")
+    L.append("")
+
+    # ---- calibration ----------------------------------------------------
+    pts = [p for p in calib.get("points", []) if p.get("status") == "ok"]
+    L.append("## Calibration: measured shape -> resources")
+    L.append("")
+    if not pts:
+        L.append("*Not yet measured.* Run `python tools/budget/gen_calib.py` then")
+        L.append("`tools/quartus/run_calib.ps1`.")
+        L.append("")
+    else:
+        muls = [p for p in pts if p.get("family") == "multiply"]
+        if muls:
+            L.append("### Multipliers")
+            L.append("")
+            L.append("Cyclone V `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2, input+output registered")
+            L.append("unless the style column says otherwise. **DSP is per module, so divide by the")
+            L.append("operator count to get cost per product.**")
+            L.append("")
+            L.append("| operand width | signed | operators | style | DSP | DSP/product | est. ALM | decomposition |")
+            L.append("| ---: | :--: | ---: | --- | ---: | ---: | ---: | --- |")
+            for p in sorted(muls, key=lambda x: (x.get("width", 0), x.get("signed"), x.get("operators", 0), x.get("style", ""))):
+                d = p.get("dspBlocks")
+                n = p.get("operators") or 1
+                dec = p.get("dspDecomposition") or {}
+                decs = ", ".join("%s=%s" % (k.replace("Fixed Point ", "").replace(" Multiplier", ""), v)
+                                 for k, v in dec.items() if v and k != "Total number of DSP blocks")
+                L.append("| %s | %s | %d | %s | %s | %s | %s | %s |" % (
+                    p.get("width"), "S" if p.get("signed") else "U", n, p.get("style"),
+                    d if d is not None else "-",
+                    ("%.2f" % (d / n)) if d is not None else "-",
+                    p.get("estimatedAlms", "-"), decs or "-"))
+            L.append("")
+        wid = [p for p in pts if p.get("family") == "widening"]
+        if wid:
+            L.append("### The widening-multiply idiom")
+            L.append("")
+            L.append("`zhao_geom_project` writes nine products as")
+            L.append("`$signed({{32{a[31]}}, a}) * $signed({{32{b[31]}}, b})`. The first draft of")
+            L.append("`scan_rtl.py` called that extension slack and flagged it RED. These two rows")
+            L.append("settle it by measurement rather than by argument.")
+            L.append("")
+            L.append("| form | DSP | est. ALM |")
+            L.append("| --- | ---: | ---: |")
+            for p in wid:
+                L.append("| %s | %s | %s |" % (p.get("note") or p["module"],
+                                               p.get("dspBlocks", "-"), p.get("estimatedAlms", "-")))
+            L.append("")
+        rams = [p for p in pts if p.get("family") == "ram"]
+        if rams:
+            L.append("### Storage templates")
+            L.append("")
+            L.append("`blockMemoryBits > 0` is the ONLY evidence an array became a memory.")
+            L.append("")
+            L.append("| depth x width | read | reset | ports | byte-en | expected bits | block mem bits | INFERRED? | est. ALM |")
+            L.append("| --- | --- | --- | ---: | :--: | ---: | ---: | :--: | ---: |")
+            for p in sorted(rams, key=lambda x: (x.get("depth", 0), x.get("width", 0),
+                                                 x.get("readStyle", ""), bool(x.get("reset")), x.get("ports", 0))):
+                bmb = p.get("blockMemoryBits") or 0
+                L.append("| %sx%s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
+                    p.get("depth"), p.get("width"), p.get("readStyle"),
+                    "yes" if p.get("reset") else "no", p.get("ports"),
+                    "yes" if p.get("byteEnables") else "no",
+                    "{:,}".format(p.get("expectedBits") or 0),
+                    "{:,}".format(bmb),
+                    "**yes**" if bmb > 0 else "**NO**",
+                    p.get("estimatedAlms", "-")))
+            L.append("")
+
+    # ---- workload coverage ---------------------------------------------
+    L.append("## Blocks with no demand figure")
+    L.append("")
+    L.append("`design/budgets/workloads.yml` lists these explicitly rather than omitting them,")
+    L.append("because a missing row and an unanswered question look identical otherwise.")
+    L.append("")
+    for u in (wl.get("unruled") or []):
+        if isinstance(u, dict):
+            L.append("* `%s`%s" % (u.get("module"), (" -- " + u["note"]) if u.get("note") else ""))
+    L.append("")
+
+    L.append("## What every flag means")
+    L.append("")
+    for f, why in [
+        ("NO_MAP", "no `quartus_map` row exists for this module at any commit"),
+        ("NO_CURRENT_FIT", "no fit at HEAD; the resource columns describe older source"),
+        ("OLD_SDC", "the fit carries no Fmax at all, so it ran with no timing objective -- QUARTUS_GOTCHAS 7 and 9"),
+        ("NO_WORKLOAD", "no items/frame, so no demand ratio can be computed for this block"),
+        ("NO_II_TEST", "throughput is asserted nowhere executable; the II shown is inferred from the state graph"),
+        ("EXPECTED_RAM_NOT_INFERRED", "the source declares addressable storage or a large constant table and the map reports zero design memories"),
+        ("NO_SUBSYSTEM_FIT", "arithmetic runs from this block's own pins, so a leaf fit misrepresents it -- measured at 5.4x once"),
+        ("NO_RESERVE", "demand ratio leaves less headroom than workloads.yml asks for"),
+    ]:
+        L.append("* **`%s`** -- %s" % (f, why))
+    L.append("")
+
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(L) + "\n")
+
+
+if __name__ == "__main__":
+    main()

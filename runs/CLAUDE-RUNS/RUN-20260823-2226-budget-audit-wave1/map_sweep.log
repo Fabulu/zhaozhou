@@ -1,0 +1,81 @@
+﻿map sweep: 90 module(s), serial, one Quartus job at a time
+  EXCLUDED zhao_shell_top: composed top; elaboration exceeds 10 min / 16 GB in 17.0.2 Lite. Use run_composed_fit.ps1.
+[1/90] 22:43:29 zhao_geom_project
+zhao_geom_project                  ok                     133.3s   DSP 33    membits 2870
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (1 row(s); 1 this run)
+[2/90] 22:45:43 zhao_geom_quat2mat
+zhao_geom_quat2mat                 ok                      24.6s   DSP 9     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (2 row(s); 1 this run)
+[3/90] 22:46:08 zhao_geom_mat3x4_mul
+zhao_geom_mat3x4_mul               ok                      32.4s   DSP 9     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (3 row(s); 1 this run)
+[4/90] 22:46:41 zhao_geom_pose_decode
+zhao_geom_pose_decode              ok                      35.6s   DSP 18    membits 12288
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (4 row(s); 1 this run)
+[5/90] 22:47:17 zhao_geom_pose_cache
+zhao_geom_pose_cache               ok                      28.3s   DSP 0     membits 12288
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (5 row(s); 1 this run)
+[6/90] 22:47:45 zhao_forge_cliff
+zhao_forge_cliff                   ok                     247.2s   DSP 2     membits 82944
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (6 row(s); 1 this run)
+[7/90] 22:51:53 zhao_raster_fragment
+zhao_raster_fragment               ok                      29.1s   DSP 7     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (7 row(s); 1 this run)
+[8/90] 22:52:23 zhao_terrain_normals
+zhao_terrain_normals               ok                      26.9s   DSP 18    membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (8 row(s); 1 this run)
+[9/90] 22:52:50 zhao_field_seq
+zhao_field_seq                     ok                     112.1s   DSP 3     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (9 row(s); 1 this run)
+[10/90] 22:54:43 zhao_texture_tmu
+zhao_texture_tmu                   ok                      51.1s   DSP 6     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (10 row(s); 1 this run)
+[11/90] 22:55:35 zhao_terrain_project
+zhao_terrain_project               ok                     141.9s   DSP 33    membits 3822
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (11 row(s); 1 this run)
+[12/90] 22:57:58 zhao_terrain_tess
+zhao_terrain_tess                  ok                      40.3s   DSP 6     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (12 row(s); 1 this run)
+[13/90] 22:58:38 zhao_terrain_patch
+zhao_terrain_patch                 ok                      34.5s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (13 row(s); 1 this run)
+[14/90] 22:59:13 zhao_terrain_lod
+zhao_terrain_lod                   ok                      34.3s   DSP 3     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (14 row(s); 1 this run)
+[15/90] 22:59:48 zhao_terrain_bake
+zhao_terrain_bake                  ok                      43.7s   DSP 17    membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (15 row(s); 1 this run)
+[16/90] 23:00:32 zhao_terrain_bake_delta
+zhao_terrain_bake_delta            ok                      21.9s   DSP 4     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (16 row(s); 1 this run)
+[17/90] 23:00:54 zhao_terrain_velocity
+zhao_terrain_velocity              ok                      28.4s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (17 row(s); 1 this run)
+[18/90] 23:01:23 zhao_geom_skin
+zhao_geom_skin                     ok                      40.2s   DSP 9     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (18 row(s); 1 this run)
+[19/90] 23:02:03 zhao_geom_cull
+zhao_geom_cull                     ok                      33.9s   DSP 15    membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (19 row(s); 1 this run)
+[20/90] 23:02:37 zhao_geom_clip
+zhao_geom_clip                     ok                        34s   DSP 2     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (20 row(s); 1 this run)
+[21/90] 23:03:12 zhao_geom_lod
+zhao_geom_lod                      ok                      33.6s   DSP 6     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (21 row(s); 1 this run)
+[22/90] 23:03:46 zhao_geom_setup
+zhao_geom_setup                    ok                      23.6s   DSP 4     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (22 row(s); 1 this run)
+[23/90] 23:04:10 zhao_geom_binner
+zhao_geom_binner                   ok                        32s   DSP 12    membits 42944
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (23 row(s); 1 this run)
+[24/90] 23:04:42 zhao_geom_bin_pipe
+zhao_geom_bin_pipe                 ok                      98.3s   DSP 21    membits 75712
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (24 row(s); 1 this run)
+[25/90] 23:06:21 zhao_geom_arena
+zhao_geom_arena                    ok                      23.4s   DSP 0     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (25 row(s); 1 this run)
+[26/90] 23:06:45 zhao_raster_edgewalk
+zhao_raster_edgewalk               ok                      42.7s   DSP 2     membits 0
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_map.json (26 row(s); 1 this run)
+[27/90] 23:07:28 zhao_raster_blend

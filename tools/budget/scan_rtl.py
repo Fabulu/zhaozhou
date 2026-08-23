@@ -892,13 +892,33 @@ def analyse_module(name, mnode, types, filemap):
         # such pipelines RED in that one module. Storage is DYNAMICALLY
         # ADDRESSED and deep; a two-entry config bank selected by a view bit is
         # a mux however many bits it holds.
-        addressable = dynamic > 0 and elems >= 32
+        #
+        # AND ONE MORE DISCRIMINATOR, ADDED AFTER THE FIRST RUN FLAGGED BOTH
+        # PROJECTORS. `dstep_dv[0:31][0:2]` is a 32-stage divider pipeline
+        # written from a genvar loop, and two of its reads use a loop variable
+        # Verilator had not yet folded -- so `dynamic > 0` was true and 6,048
+        # bits of pipeline registered as an uninferred memory in the two
+        # largest rows on the board. Wrong twice over: the alarm is false, and
+        # it sits exactly where a real one would be missed.
+        #
+        # ACCESS SITES PER ELEMENT separates them cleanly. A memory has O(1)
+        # access sites however deep it is; a pipeline has one write and one
+        # read PER STAGE. Measured on this repo:
+        #
+        #   zhao_field_seq   rf          64 elems,   11 sites   -> memory
+        #   zhao_forge_cliff prio_mem_r  2048 elems,  2 sites   -> memory
+        #   pose_cache       tags        128 elems,   2 sites   -> memory
+        #   geom_project     dstep_dv    32 elems,  754 sites   -> pipeline
+        sites = async_reads + sync_reads + writes
+        addressable = dynamic > 0 and elems >= 32 and sites <= elems
         expects_ram = addressable and total >= 512
+        rec_sites = sites
         rec = {
             "kind": "array", "name": v.get("origName") or v.get("name"),
             "elements": elems, "elementWidth": ew, "totalBits": total,
             "asyncReadSites": async_reads, "syncReadSites": sync_reads,
             "writeSites": writes, "dynamicIndexSites": dynamic,
+            "accessSites": rec_sites, "sitesPerElement": round(rec_sites / elems, 2),
             "dynamicallyAddressed": bool(dynamic),
             "resetTouched": addr in reset_written,
             "expectedStorage": ("RAM" if expects_ram else "registers"),
@@ -924,6 +944,12 @@ def analyse_module(name, mnode, types, filemap):
             rec["severity"] = "YELLOW"
             rec["reason"] = ("%d addressable bits; expects RAM inference. Confirm blockMemoryBits > 0 in the "
                              "map row -- a passing test is not evidence that an array became a memory" % total)
+        elif total >= 2048 and sites > elems:
+            rec["severity"] = "YELLOW"
+            rec["reason"] = ("%d bits across %d access sites for %d elements -- %0.1f sites per element, so "
+                             "this is a PIPELINE or unrolled vector rather than a memory that failed to "
+                             "infer. It is still %d flops and belongs in the block's own budget"
+                             % (total, sites, elems, sites / elems, total))
         elif total >= 2048 and not dynamic:
             rec["severity"] = "YELLOW"
             rec["reason"] = ("%d bits of CONSTANT-indexed array: a pipeline or unrolled vector, so flops by "

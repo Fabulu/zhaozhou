@@ -1,0 +1,6625 @@
+{
+ "schemaVersion": 1,
+ "generator": "tools/budget/build_manifest.py",
+ "headCommit": "de11ce9bf10579d2b38c0487c67027500eff5c47",
+ "frameBudget": {
+  "targetClockHz": 100000000,
+  "frameRateHz": 60,
+  "computeClocksPerFrame": 1666667,
+  "videoClocksPerFrameZ60": 251520,
+  "note": "Cost a block against computeClocksPerFrame. videoClocksPerFrameZ60 is the scanout period and answers a different question."
+ },
+ "inputs": {
+  "scan": "reports/rtl_inventory.json",
+  "map": "reports/synthesis/zhao_block_map.json",
+  "fit": "reports/synthesis/zhao_block_fit.json",
+  "workloads": "design/budgets/workloads.yml",
+  "calibration": "tools/budget/calibration.json"
+ },
+ "coverage": {
+  "modulesScanned": 91,
+  "modulesWithMapAtHead": 14,
+  "modulesWithAnyMap": 26,
+  "modulesWithAnyFit": 41,
+  "modulesWithWorkload": 7,
+  "calibrationPoints": 0
+ },
+ "blocks": [
+  {
+   "module": "zhao_geom_project",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_project.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 33,
+    "mapBlockMemoryBits": 2870,
+    "mapEstimatedAlms": 5028,
+    "mapRegisters": 5956,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 22,
+     "Sum of two 18x18": 11,
+     "Total number of DSP blocks": 33,
+     "Fixed Point Signed Multiplier": 9,
+     "Fixed Point Unsigned Multiplier": 13,
+     "Fixed Point Mixed Sign Multiplier": 22
+    },
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 11,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 64,
+    "signedNonconstant": 11,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 18,
+    "totalArrayBits": 9629,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 13,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 6,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 2870,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1,
+    "itemsPerFrame": 120000,
+    "demandConfidence": "inherited",
+    "workloadSource": "Same population as zhao_geom_skin -- this is the projector the skinned and warped vertices reach the screen through, per its own header. NOT a separately derived figure, and it is the number that makes the duplication with zhao_terrain_project expensive: 120,000 vertices at one per clock is 7.2% of the frame, so a SHARED projector is affordable and two are not justified by rate.",
+    "measuredII": null,
+    "iiUsed": 1,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 1666667,
+    "demandRatio": 0.072
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(11, widest 64-bit)",
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(13)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 21,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_project",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_project.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 33,
+    "mapBlockMemoryBits": 3822,
+    "mapEstimatedAlms": 5503,
+    "mapRegisters": 6685,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 22,
+     "Sum of two 18x18": 11,
+     "Total number of DSP blocks": 33,
+     "Fixed Point Signed Multiplier": 9,
+     "Fixed Point Unsigned Multiplier": 13,
+     "Fixed Point Mixed Sign Multiplier": 22
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 33,
+    "fitAlms": 6068,
+    "fitRamBlocks": 23,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 11,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 64,
+    "signedNonconstant": 11,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 3,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 28,
+    "totalArrayBits": 10971,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 17,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 12,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 3822,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1,
+    "itemsPerFrame": 270,
+    "demandConfidence": "ruled",
+    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23, \"Where the remaining 188 multipliers sit\": ~270 patches/frame, already costed against the 1.67 M budget.",
+    "measuredII": null,
+    "iiUsed": 1,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 1666667,
+    "demandRatio": 0.0002
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(11, widest 64-bit)",
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(17)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 41,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_bin_pipe",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_bin_pipe.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 21,
+    "mapBlockMemoryBits": 75712,
+    "mapEstimatedAlms": 5299,
+    "mapRegisters": 3704,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 6,
+     "Independent 27x27": 2,
+     "Total number of DSP blocks": 21,
+     "Fixed Point Signed Multiplier": 2,
+     "Fixed Point Unsigned Multiplier": 10,
+     "Fixed Point Mixed Sign Multiplier": 9
+    },
+    "mapInferredDesignMemories": 6
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 14,
+    "nonconstantMultiplyInstances": 13,
+    "constantMultiplyInstances": 4,
+    "widestNonconstantOperand": 36,
+    "signedNonconstant": 9,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 2,
+    "divides": 0,
+    "combinationalLoops": 3,
+    "satChains": 1,
+    "duplicateExpressions": 1
+   },
+   "storage": {
+    "arrays": 15,
+    "totalArrayBits": 76826,
+    "arraysExpectingRam": 6,
+    "asyncReadArrays": 8,
+    "addressableArrays": 6,
+    "addressableBits": 75712,
+    "resetTouchedArrays": 10,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 75712,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 75712,
+    "mapBlockMemoryBits": 75712,
+    "mapInferredDesignMemories": 6
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(13, widest 36-bit)",
+    "VARSHIFT(2)",
+    "ADD_COMPARE_SATURATE(1)",
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(8)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 58,
+    "submodules": [
+     "zhao_geom_arena",
+     "zhao_geom_binner",
+     "zhao_raster_blend",
+     "zhao_raster_div255",
+     "zhao_raster_earlyz",
+     "zhao_raster_edgewalk",
+     "zhao_raster_fill",
+     "zhao_raster_fill__W24",
+     "zhao_raster_fragment",
+     "zhao_raster_quant",
+     "zhao_raster_quant__M3f_Q6",
+     "zhao_raster_resolve",
+     "zhao_raster_tile_pipe",
+     "zhao_raster_tilestore"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_pose_decode",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_pose_decode.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 18,
+    "mapBlockMemoryBits": 12288,
+    "mapEstimatedAlms": 2520,
+    "mapRegisters": 3764,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 15,
+     "Sum of two 18x18": 3,
+     "Total number of DSP blocks": 18,
+     "Fixed Point Signed Multiplier": 12,
+     "Fixed Point Unsigned Multiplier": 3,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 1
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 14,
+    "nonconstantMultiplyInstances": 12,
+    "constantMultiplyInstances": 2,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 12,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 19,
+    "totalArrayBits": 19200,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 6,
+    "addressableArrays": 1,
+    "addressableBits": 12288,
+    "resetTouchedArrays": 10,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 12288,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 12288,
+    "mapBlockMemoryBits": 12288,
+    "mapInferredDesignMemories": 1
+   },
+   "rate": {
+    "inferredMinII": 13
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(12, widest 32-bit)",
+    "COMB_LOOP(1)",
+    "ASYNC_ARRAY_READ(6)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 24,
+    "submodules": [
+     "zhao_geom_mat3x4_mul",
+     "zhao_geom_quat2mat"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_bake",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_bake.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 17,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 2324,
+    "mapRegisters": 1928,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 10,
+     "Sum of two 18x18": 3,
+     "Total number of DSP blocks": 17,
+     "Fixed Point Signed Multiplier": 3,
+     "Fixed Point Unsigned Multiplier": 7,
+     "Fixed Point Mixed Sign Multiplier": 10
+    },
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 6,
+    "nonconstantMultiplyInstances": 7,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 33,
+    "signedNonconstant": 7,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 2,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 1089,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 1089,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 1089,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 1089,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 5
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(7, widest 33-bit)",
+    "VARSHIFT(2)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 59,
+    "submodules": [
+     "zhao_terrain_bake_delta"
+    ]
+   },
+   "debtFlags": [
+    "EXPECTED_RAM_NOT_INFERRED",
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_cull",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_cull.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 15,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1254,
+    "mapRegisters": 1498,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 10,
+     "Sum of two 18x18": 5,
+     "Total number of DSP blocks": 15,
+     "Fixed Point Signed Multiplier": 4,
+     "Fixed Point Unsigned Multiplier": 6,
+     "Fixed Point Mixed Sign Multiplier": 10
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 15,
+    "fitAlms": 1102,
+    "fitRamBlocks": 0,
+    "fitCommit": "2a711f0f",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 5,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 34,
+    "signedNonconstant": 5,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 1364,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 2,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 5,
+    "itemsPerFrame": 333333,
+    "demandConfidence": "ruled",
+    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23: \"one evaluation per five clocks\". 1,666,667 / 5 = 333,333.",
+    "measuredII": null,
+    "iiUsed": 5,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 333333,
+    "demandRatio": 1.0
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(5, widest 34-bit)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 16,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_RESERVE",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "2a711f0f",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_binner",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_binner.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 12,
+    "mapBlockMemoryBits": 42944,
+    "mapEstimatedAlms": 1392,
+    "mapRegisters": 937,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 6,
+     "Total number of DSP blocks": 12,
+     "Fixed Point Unsigned Multiplier": 6,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 4,
+    "fitDspBlocks": 12,
+    "fitAlms": 1303,
+    "fitRamBlocks": 9,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 5,
+    "nonconstantMultiplyInstances": 4,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 36,
+    "signedNonconstant": 4,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 1
+   },
+   "storage": {
+    "arrays": 11,
+    "totalArrayBits": 43736,
+    "arraysExpectingRam": 4,
+    "asyncReadArrays": 6,
+    "addressableArrays": 4,
+    "addressableBits": 42944,
+    "resetTouchedArrays": 6,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 42944,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 42944,
+    "mapBlockMemoryBits": 42944,
+    "mapInferredDesignMemories": 4
+   },
+   "rate": {
+    "inferredMinII": 12
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(4, widest 36-bit)",
+    "ASYNC_ARRAY_READ(6)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 50,
+    "submodules": [
+     "zhao_geom_arena",
+     "zhao_raster_fill__W24"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_skin",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_skin.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 9,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 2494,
+    "mapRegisters": 2134,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 6,
+     "Sum of two 18x18": 3,
+     "Total number of DSP blocks": 9,
+     "Fixed Point Signed Multiplier": 3,
+     "Fixed Point Unsigned Multiplier": 3,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 9,
+    "fitAlms": 2225,
+    "fitRamBlocks": 0,
+    "fitCommit": "56ef194b",
+    "fitFmaxMhz": 89.65,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 6,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 5,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 2,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 20,
+    "totalArrayBits": 3171,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 6,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 12,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1,
+    "itemsPerFrame": 120000,
+    "demandConfidence": "ruled",
+    "workloadSource": "The 120,000 weighted vertices/frame ruling, independently corroborated in docs/OWNER_DOCKET.md 2026-08-23 across 93 retail creature models (median 2,951 vertices; a defensible scene is 40-60 skinned characters, so 40 x 2,951 = 118,040).",
+    "measuredII": null,
+    "iiUsed": 1,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 1666667,
+    "demandRatio": 0.072
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 32-bit)",
+    "DIVIDE(2)",
+    "VARSHIFT(1)",
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(6)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 19,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "56ef194b",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_lod",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_lod.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 6,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1264,
+    "mapRegisters": 271,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Independent 27x27": 6,
+     "Total number of DSP blocks": 6,
+     "Fixed Point Unsigned Multiplier": 4,
+     "Fixed Point Mixed Sign Multiplier": 2
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 6,
+    "fitAlms": 1183,
+    "fitRamBlocks": 0,
+    "fitCommit": "09bbe059",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 64,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 2,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 5
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 64-bit)",
+    "DIVIDE(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 16,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "09bbe059",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_tess",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_tess.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 6,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1433,
+    "mapRegisters": 986,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 1,
+     "Total number of DSP blocks": 6,
+     "Fixed Point Unsigned Multiplier": 5,
+     "Fixed Point Mixed Sign Multiplier": 1
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 6,
+    "fitAlms": 1311,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 7,
+    "nonconstantMultiplyInstances": 7,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 34,
+    "signedNonconstant": 5,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 26,
+    "divides": 0,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 9,
+    "totalArrayBits": 450,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 8,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 6,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 3
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(7, widest 34-bit)",
+    "VARSHIFT(26)",
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(8)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 44,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_texture_tmu",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_tmu.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 6,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1984,
+    "mapRegisters": 329,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 2,
+     "Total number of DSP blocks": 6,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 6,
+    "fitAlms": 1921,
+    "fitRamBlocks": 0,
+    "fitCommit": "1c98bb83",
+    "fitFmaxMhz": 36.11,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 6,
+    "nonconstantMultiplyInstances": 6,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 18,
+    "signedNonconstant": 6,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 6,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 10,
+    "totalArrayBits": 1504,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 9,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 5,
+    "itemsPerFrame": 850000,
+    "demandConfidence": "derived",
+    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23, TEXTURE.TMU demand table: Z60 384x240 at overdraw 3.0 is 829,440 samples/frame; 850,000 is the ruled figure with headroom. Terrain is CLUT8, so the CLUT path is the demand-critical one.",
+    "measuredII": 6,
+    "iiUsed": 6,
+    "iiUsedIsMeasured": true,
+    "capacityPerFrame": 277777,
+    "demandRatio": 3.06
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(6, widest 18-bit)",
+    "VARSHIFT(6)",
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(9)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 28,
+    "submodules": [
+     "zhao_texture_bilerp"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_RESERVE"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "1c98bb83",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_field_seq",
+   "sourceFile": "fpga/rtl/field/zhao_field_seq.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 3,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 7958,
+    "mapRegisters": 5288,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 2,
+     "Sum of two 18x18": 1,
+     "Total number of DSP blocks": 3,
+     "Fixed Point Signed Multiplier": 1,
+     "Fixed Point Unsigned Multiplier": 1,
+     "Fixed Point Mixed Sign Multiplier": 2
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 3,
+    "fitAlms": 8901,
+    "fitRamBlocks": 0,
+    "fitCommit": "7a3e2a35",
+    "fitFmaxMhz": 8.59,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 4,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 33,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 46,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 2
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 2048,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 2048,
+    "resetTouchedArrays": 1,
+    "constRomTables": 4,
+    "constRomBits": 20817
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 2048,
+    "expectedConstRomBits": 20817,
+    "expectedTotalBits": 22865,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 33-bit)",
+    "VARSHIFT(46)",
+    "COMB_LOOP(1)",
+    "ASYNC_ARRAY_READ(1)",
+    "CONST_ROM(4 tables, 20817 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 32,
+    "submodules": [
+     "zhao_field_alu",
+     "zhao_field_curve",
+     "zhao_field_exec_shared",
+     "zhao_field_isqrt",
+     "zhao_field_len",
+     "zhao_field_mul",
+     "zhao_field_noise",
+     "zhao_field_normalize",
+     "zhao_field_rcp",
+     "zhao_field_rcp24_rom",
+     "zhao_field_rcp_rom",
+     "zhao_field_ring",
+     "zhao_field_rot",
+     "zhao_field_sin",
+     "zhao_field_sin_rom"
+    ]
+   },
+   "debtFlags": [
+    "EXPECTED_RAM_NOT_INFERRED",
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "7a3e2a35",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_lod",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_lod.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 3,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1816,
+    "mapRegisters": 1601,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 2,
+     "Sum of two 18x18": 1,
+     "Total number of DSP blocks": 3,
+     "Fixed Point Unsigned Multiplier": 4
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 3,
+    "fitAlms": 1759,
+    "fitRamBlocks": 0,
+    "fitCommit": "9f2928fc",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 2,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 688,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 4,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 6
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 32-bit)",
+    "ADD_COMPARE_SATURATE(2)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 52,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "9f2928fc",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_forge_cliff",
+   "sourceFile": "fpga/rtl/forge/zhao_forge_cliff.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 2,
+    "mapBlockMemoryBits": 82944,
+    "mapEstimatedAlms": 33109,
+    "mapRegisters": 40655,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Total number of DSP blocks": 2,
+     "Fixed Point Unsigned Multiplier": 2
+    },
+    "mapInferredDesignMemories": 2
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 2,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 16,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 3,
+    "totalArrayBits": 119808,
+    "arraysExpectingRam": 3,
+    "asyncReadArrays": 3,
+    "addressableArrays": 3,
+    "addressableBits": 119808,
+    "resetTouchedArrays": 3,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 119808,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 119808,
+    "mapBlockMemoryBits": 82944,
+    "mapInferredDesignMemories": 2
+   },
+   "rate": {
+    "inferredMinII": 13
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(2, widest 16-bit)",
+    "VARSHIFT(1)",
+    "ASYNC_ARRAY_READ(3)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 29,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_raster_edgewalk",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 2,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 2308,
+    "mapRegisters": 600,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Independent 27x27": 2,
+     "Total number of DSP blocks": 2,
+     "Fixed Point Signed Multiplier": 2
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 2,
+    "fitAlms": 2286,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 2,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 23,
+    "signedNonconstant": 2,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 256,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 8
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(2, widest 23-bit)",
+    "VARSHIFT(1)",
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 22,
+    "submodules": [
+     "zhao_raster_fill"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_audio_fifo",
+   "sourceFile": "fpga/rtl/audio/zhao_audio_fifo.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 222,
+    "fitRamBlocks": 7,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 65536,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 65536,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 65536,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 65536,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 17,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_cmd_dma",
+   "sourceFile": "fpga/rtl/command/zhao_cmd_dma.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 3607,
+    "fitRamBlocks": 4,
+    "fitCommit": "f5e067e6",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 36,
+    "divides": 0,
+    "combinationalLoops": 41,
+    "satChains": 3,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 33856,
+    "arraysExpectingRam": 2,
+    "asyncReadArrays": 3,
+    "addressableArrays": 2,
+    "addressableBits": 33280,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 33280,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 33280,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 19
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(36)",
+    "ADD_COMPARE_SATURATE(3)",
+    "COMB_LOOP(41)",
+    "ASYNC_ARRAY_READ(3)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": [
+     "zhao_crc32c_fold"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "f5e067e6",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_debug_counters",
+   "sourceFile": "fpga/rtl/debug/zhao_debug_counters.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 2884,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 2560,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 2560,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 2560,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 9,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_debug_frameblit",
+   "sourceFile": "fpga/rtl/debug/zhao_debug_frameblit.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 962,
+    "fitRamBlocks": 0,
+    "fitCommit": "7508adc0",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 18,
+    "divides": 0,
+    "combinationalLoops": 20,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 800,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 2,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 12
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(18)",
+    "COMB_LOOP(20)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 32,
+    "submodules": [
+     "zhao_crc32c_fold"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "7508adc0",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_curve",
+   "sourceFile": "fpga/rtl/field/zhao_field_curve.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 25,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 1
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 24
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(25)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_exec_shared",
+   "sourceFile": "fpga/rtl/field/zhao_field_exec_shared.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 4,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 33,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 46,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 2
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 4,
+    "constRomBits": 20817
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 20817,
+    "expectedTotalBits": 20817,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 33-bit)",
+    "VARSHIFT(46)",
+    "COMB_LOOP(1)",
+    "CONST_ROM(4 tables, 20817 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 41,
+    "submodules": [
+     "zhao_field_alu",
+     "zhao_field_curve",
+     "zhao_field_isqrt",
+     "zhao_field_len",
+     "zhao_field_mul",
+     "zhao_field_noise",
+     "zhao_field_normalize",
+     "zhao_field_rcp",
+     "zhao_field_rcp24_rom",
+     "zhao_field_rcp_rom",
+     "zhao_field_ring",
+     "zhao_field_rot",
+     "zhao_field_sin",
+     "zhao_field_sin_rom"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_len",
+   "sourceFile": "fpga/rtl/field/zhao_field_len.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 5
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 26,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_noise",
+   "sourceFile": "fpga/rtl/field/zhao_field_noise.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 11
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 19,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_normalize",
+   "sourceFile": "fpga/rtl/field/zhao_field_normalize.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 16,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 1
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 1,
+    "constRomBits": 7967
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 7967,
+    "expectedTotalBits": 7967,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 14
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(16)",
+    "CONST_ROM(1 tables, 7967 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 26,
+    "submodules": [
+     "zhao_field_rcp24_rom"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_rcp",
+   "sourceFile": "fpga/rtl/field/zhao_field_rcp.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 3,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 1,
+    "constRomBits": 4112
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 4112,
+    "expectedTotalBits": 4112,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 7
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(3)",
+    "CONST_ROM(1 tables, 4112 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 15,
+    "submodules": [
+     "zhao_field_rcp_rom"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_rcp24_rom",
+   "sourceFile": "fpga/rtl/field/zhao_field_rcp24_rom.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 1,
+    "constRomBits": 7967
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 7967,
+    "expectedTotalBits": 7967,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "CONST_ROM(1 tables, 7967 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 2,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_rcp_rom",
+   "sourceFile": "fpga/rtl/field/zhao_field_rcp_rom.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 1,
+    "constRomBits": 4112
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 4112,
+    "expectedTotalBits": 4112,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "CONST_ROM(1 tables, 4112 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 2,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_ring",
+   "sourceFile": "fpga/rtl/field/zhao_field_ring.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 15
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 28,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_rot",
+   "sourceFile": "fpga/rtl/field/zhao_field_rot.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 12
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 25,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_sin",
+   "sourceFile": "fpga/rtl/field/zhao_field_sin.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 2,
+    "constRomBits": 8738
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 8738,
+    "expectedTotalBits": 8738,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(1)",
+    "COMB_LOOP(1)",
+    "CONST_ROM(2 tables, 8738 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 3,
+    "submodules": [
+     "zhao_field_sin_rom"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_sin_rom",
+   "sourceFile": "fpga/rtl/field/zhao_field_sin_rom.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 1,
+    "constRomBits": 4369
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 4369,
+    "expectedTotalBits": 4369,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "CONST_ROM(1 tables, 4369 bits)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 2,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_geom_pose_cache",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_pose_cache.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 12288,
+    "mapEstimatedAlms": 773,
+    "mapRegisters": 662,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 1
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 12288,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 0,
+    "addressableArrays": 1,
+    "addressableBits": 12288,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 12288,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 12288,
+    "mapBlockMemoryBits": 12288,
+    "mapInferredDesignMemories": 1
+   },
+   "rate": {
+    "inferredMinII": 5
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 18,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_raster_tile_pipe",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 9,
+    "nonconstantMultiplyInstances": 9,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 23,
+    "signedNonconstant": 5,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 2,
+    "divides": 0,
+    "combinationalLoops": 3,
+    "satChains": 1,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 33090,
+    "arraysExpectingRam": 2,
+    "asyncReadArrays": 2,
+    "addressableArrays": 2,
+    "addressableBits": 32768,
+    "resetTouchedArrays": 4,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 32768,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 32768,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 4
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(9, widest 23-bit)",
+    "VARSHIFT(2)",
+    "ADD_COMPARE_SATURATE(1)",
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 45,
+    "submodules": [
+     "zhao_raster_blend",
+     "zhao_raster_div255",
+     "zhao_raster_earlyz",
+     "zhao_raster_edgewalk",
+     "zhao_raster_fill",
+     "zhao_raster_fragment",
+     "zhao_raster_quant",
+     "zhao_raster_quant__M3f_Q6",
+     "zhao_raster_resolve",
+     "zhao_raster_tilestore"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_tilestore",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_tilestore.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 929,
+    "fitRamBlocks": 4,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 1,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 32768,
+    "arraysExpectingRam": 2,
+    "asyncReadArrays": 0,
+    "addressableArrays": 2,
+    "addressableBits": 32768,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 32768,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 32768,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ADD_COMPARE_SATURATE(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 25,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_sdram_ctrl",
+   "sourceFile": "fpga/rtl/memory/zhao_sdram_ctrl.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 238,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 52,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 16
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_shell_top",
+   "sourceFile": "fpga/rtl/common/zhao_shell_top.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 13,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 13,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 72,
+    "divides": 0,
+    "combinationalLoops": 98,
+    "satChains": 3,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 58,
+    "totalArrayBits": 128167,
+    "arraysExpectingRam": 6,
+    "asyncReadArrays": 37,
+    "addressableArrays": 6,
+    "addressableBits": 118784,
+    "resetTouchedArrays": 26,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 118784,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 118784,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 4
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(72)",
+    "ADD_COMPARE_SATURATE(3)",
+    "COMB_LOOP(98)",
+    "ASYNC_ARRAY_READ(37)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 101,
+    "submodules": [
+     "zhao_audio_fifo",
+     "zhao_cmd_dma",
+     "zhao_cmd_scheduler",
+     "zhao_crc32c_fold",
+     "zhao_dc_sdp_ram",
+     "zhao_debug_counters__P9",
+     "zhao_debug_crc",
+     "zhao_debug_frameblit",
+     "zhao_hps_arbiter",
+     "zhao_hps_bridge",
+     "zhao_input_rumble",
+     "zhao_input_snapshot",
+     "zhao_mem_guard",
+     "zhao_scanout_fetch",
+     "zhao_scanout_linebuf",
+     "zhao_scanout_serializer",
+     "zhao_sdram_ctrl",
+     "zhao_video_framectl",
+     "zhao_video_mode",
+     "zhao_video_scaler",
+     "zhao_video_scanout",
+     "zhao_video_slotmgr",
+     "zhao_vram_arbiter"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_stub_top",
+   "sourceFile": "fpga/rtl/common/zhao_stub_top.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 8388608,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 8388608,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 8388608,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 8388608,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 4
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 12,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_surface_stamp",
+   "sourceFile": "fpga/rtl/surface/zhao_surface_stamp.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 993,
+    "fitRamBlocks": 0,
+    "fitCommit": "753ca931",
+    "fitFmaxMhz": 87.54,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 128,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 8,
+    "itemsPerFrame": 20000,
+    "demandConfidence": "derived",
+    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23: heavy-barrage measurement is ~6,000 texels/frame; 20,000 is 3x that as the ruled demand.",
+    "measuredII": null,
+    "iiUsed": 8,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 208333,
+    "demandRatio": 0.096
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(1)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 56,
+    "submodules": [
+     "zhao_surface_blend",
+     "zhao_surface_sq"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "753ca931",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_terrain_patch",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_patch.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1952,
+    "mapRegisters": 2483,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 0,
+    "fitAlms": 1584,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 2,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 2048,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 4,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 4,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(4)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 44,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_velocity",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_velocity.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 341,
+    "mapRegisters": 250,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 28,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_texture_aux",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_aux.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 24,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 6
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(24)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 34,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_texture_cache",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_cache.sv",
+   "severity": "RED",
+   "scanSeverity": "RED",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 1087,
+    "fitRamBlocks": 4,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 6,
+    "satChains": 2,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 10,
+    "totalArrayBits": 9980,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 5,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ADD_COMPARE_SATURATE(2)",
+    "COMB_LOOP(6)",
+    "ASYNC_ARRAY_READ(5)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_terrain_normals",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_normals.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 18,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 799,
+    "mapRegisters": 319,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 12,
+     "Sum of two 18x18": 6,
+     "Total number of DSP blocks": 18,
+     "Fixed Point Signed Multiplier": 6,
+     "Fixed Point Unsigned Multiplier": 6,
+     "Fixed Point Mixed Sign Multiplier": 12
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 18,
+    "fitAlms": 789,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 6,
+    "nonconstantMultiplyInstances": 6,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 33,
+    "signedNonconstant": 6,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1,
+    "itemsPerFrame": 2000,
+    "demandConfidence": "derived",
+    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23: 10 deform events/s x 25 vertices is 4.2 normals/frame; rebuilding the entire 65,536-vertex field once per second is 1,092. 2,000 is the ruled demand, generous against both.",
+    "measuredII": null,
+    "iiUsed": 1,
+    "iiUsedIsMeasured": false,
+    "capacityPerFrame": 1666667,
+    "demandRatio": 0.0012
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(6, widest 33-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_mat3x4_mul",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 9,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 1414,
+    "mapRegisters": 1206,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 6,
+     "Sum of two 18x18": 3,
+     "Total number of DSP blocks": 9,
+     "Fixed Point Signed Multiplier": 3,
+     "Fixed Point Unsigned Multiplier": 3,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 3,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 3,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 5,
+    "totalArrayBits": 1920,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 2,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 3,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(3, widest 32-bit)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 12,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_terrain_bake_delta",
+   "sourceFile": "fpga/rtl/terrain/zhao_terrain_bake_delta.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 4,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 131,
+    "mapRegisters": 0,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 2,
+     "Total number of DSP blocks": 4,
+     "Fixed Point Unsigned Multiplier": 2,
+     "Fixed Point Mixed Sign Multiplier": 2
+    },
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 2,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 2,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(2, widest 32-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 5,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_cmd_scheduler",
+   "sourceFile": "fpga/rtl/command/zhao_cmd_scheduler.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 815,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 8,
+    "totalArrayBits": 321,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 4,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 5,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(4)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 48,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_crc32c_fold",
+   "sourceFile": "fpga/rtl/common/zhao_crc32c_fold.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 18,
+    "divides": 0,
+    "combinationalLoops": 20,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 288,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(18)",
+    "COMB_LOOP(20)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 4,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_debug_crc",
+   "sourceFile": "fpga/rtl/debug/zhao_debug_crc.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 158,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 18,
+    "divides": 0,
+    "combinationalLoops": 20,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 288,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(18)",
+    "COMB_LOOP(20)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 11,
+    "submodules": [
+     "zhao_crc32c_fold"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_isqrt",
+   "sourceFile": "fpga/rtl/field/zhao_field_isqrt.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 3
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 8,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_mul",
+   "sourceFile": "fpga/rtl/field/zhao_field_mul.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 33,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 33-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 7,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_progcache",
+   "sourceFile": "fpga/rtl/field/zhao_field_progcache.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 1280,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 2,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(1)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_input_rumble",
+   "sourceFile": "fpga/rtl/input/zhao_input_rumble.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 171,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 3,
+    "totalArrayBits": 96,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(1)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 11,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_input_snapshot",
+   "sourceFile": "fpga/rtl/input/zhao_input_snapshot.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 2,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 12,
+    "totalArrayBits": 3136,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 11,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 4,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(2)",
+    "ASYNC_ARRAY_READ(11)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 15,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_measure_governor",
+   "sourceFile": "fpga/rtl/measure/zhao_measure_governor.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 589,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 2,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 128,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(2)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 27,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_mem_guard",
+   "sourceFile": "fpga/rtl/memory/zhao_mem_guard.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 302,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 1,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 12,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_surface_sheet",
+   "sourceFile": "fpga/rtl/surface/zhao_surface_sheet.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 131136,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 131072,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 131072,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 131072,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 31,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_vram_arbiter",
+   "sourceFile": "fpga/rtl/memory/zhao_vram_arbiter.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 776,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 6,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 6,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 4,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 225,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 4,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 4,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "COMB_LOOP(4)",
+    "ASYNC_ARRAY_READ(4)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 11,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_geom_quat2mat",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_quat2mat.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "mapDspBlocks": 9,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 479,
+    "mapRegisters": 329,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 9,
+     "Total number of DSP blocks": 9,
+     "Fixed Point Signed Multiplier": 9
+    },
+    "mapInferredDesignMemories": 0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 9,
+    "nonconstantMultiplyInstances": 9,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 16,
+    "signedNonconstant": 9,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 768,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(9, widest 16-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 14,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_raster_fragment",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_fragment.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "mapDspBlocks": 7,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 584,
+    "mapRegisters": 402,
+    "mapCommit": "7395d793",
+    "mapDspDecomposition": {
+     "Total number of DSP blocks": 7,
+     "Fixed Point Unsigned Multiplier": 4,
+     "Fixed Point Mixed Sign Multiplier": 3
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 10,
+    "fitAlms": 485,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 4,
+    "nonconstantMultiplyInstances": 7,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 18,
+    "signedNonconstant": 3,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(7, widest 18-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 29,
+    "submodules": [
+     "zhao_raster_blend"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "7395d793",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_setup",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_setup.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {
+    "mapDspBlocks": 4,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 938,
+    "mapRegisters": 1340,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Independent 27x27": 4,
+     "Total number of DSP blocks": 4,
+     "Fixed Point Signed Multiplier": 4
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 4,
+    "fitAlms": 743,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 4,
+    "nonconstantMultiplyInstances": 4,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 21,
+    "signedNonconstant": 4,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(4, widest 21-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 41,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_geom_clip",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_clip.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {
+    "mapDspBlocks": 2,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 912,
+    "mapRegisters": 891,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": {
+     "Independent 27x27": 2,
+     "Total number of DSP blocks": 2,
+     "Fixed Point Signed Multiplier": 2
+    },
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 2,
+    "fitAlms": 764,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 2,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 23,
+    "signedNonconstant": 2,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(2, widest 23-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 36,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_cmd_decoder",
+   "sourceFile": "fpga/rtl/command/zhao_cmd_decoder.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 16,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_dc_sdp_ram",
+   "sourceFile": "fpga/rtl/common/zhao_dc_sdp_ram.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 16384,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 0,
+    "addressableArrays": 1,
+    "addressableBits": 16384,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 16384,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 16384,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 8,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_debug_trace",
+   "sourceFile": "fpga/rtl/debug/zhao_debug_trace.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 16384,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 0,
+    "addressableArrays": 1,
+    "addressableBits": 16384,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 16384,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 16384,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 19,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_field_alu",
+   "sourceFile": "fpga/rtl/field/zhao_field_alu.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 19,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_geom_arena",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_arena.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 0,
+    "mapEstimatedAlms": 19,
+    "mapRegisters": 9,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 0,
+    "fitDspBlocks": 0,
+    "fitAlms": 19,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 8,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": "9a53f278725c7224"
+   }
+  },
+  {
+   "module": "zhao_hps_arbiter",
+   "sourceFile": "fpga/rtl/memory/zhao_hps_arbiter.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_hps_bridge",
+   "sourceFile": "fpga/rtl/memory/zhao_hps_bridge.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 555,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_measure_tokens",
+   "sourceFile": "fpga/rtl/measure/zhao_measure_tokens.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 1422,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 256,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 43,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_part_expand",
+   "sourceFile": "fpga/rtl/particles/zhao_part_expand.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 29,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_part_soft",
+   "sourceFile": "fpga/rtl/particles/zhao_part_soft.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 31,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_blend",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_blend.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 2,
+    "fitAlms": 53,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 1,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 18,
+    "signedNonconstant": 1,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(1, widest 18-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 5,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_div255",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_div255.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 2,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_earlyz",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_earlyz.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 677,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 25,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_fill",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_fill.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 4,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_quant",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_quant.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 3,
+    "submodules": [
+     "zhao_raster_div255"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_raster_resolve",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_resolve.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 344,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 66,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 24,
+    "submodules": [
+     "zhao_raster_div255",
+     "zhao_raster_quant",
+     "zhao_raster_quant__M3f_Q6"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_scanout_fetch",
+   "sourceFile": "fpga/rtl/video/zhao_scanout_fetch.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 208,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 2,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 20,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_scanout_linebuf",
+   "sourceFile": "fpga/rtl/video/zhao_scanout_linebuf.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 16388,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 16384,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 16384,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 16384,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 17,
+    "submodules": [
+     "zhao_dc_sdp_ram"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_scanout_serializer",
+   "sourceFile": "fpga/rtl/video/zhao_scanout_serializer.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 228,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 20,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_surface_blend",
+   "sourceFile": "fpga/rtl/surface/zhao_surface_blend.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 64,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 1,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "VARSHIFT(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 5,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_surface_sq",
+   "sourceFile": "fpga/rtl/surface/zhao_surface_sq.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 128,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 6,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_synth_probe",
+   "sourceFile": "fpga/rtl/common/zhao_synth_probe.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 1,
+    "totalArrayBits": 32,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 1,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 8,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_texture_bilerp",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_bilerp.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 3,
+    "fitAlms": 60,
+    "fitRamBlocks": 0,
+    "fitCommit": "1c98bb83",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 3,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 18,
+    "signedNonconstant": 3,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(3, widest 18-bit)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 7,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "1c98bb83",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_texture_mod255",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_mod255.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 2,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_texture_mosaic",
+   "sourceFile": "fpga/rtl/texture/zhao_texture_mosaic.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 2,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 19,
+    "submodules": [
+     "zhao_texture_mod255"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_video_framectl",
+   "sourceFile": "fpga/rtl/video/zhao_video_framectl.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 301,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 22,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_video_mode",
+   "sourceFile": "fpga/rtl/video/zhao_video_mode.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 70,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 15,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_video_scaler",
+   "sourceFile": "fpga/rtl/video/zhao_video_scaler.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {
+    "fitDspBlocks": 0,
+    "fitAlms": 52,
+    "fitRamBlocks": 0,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 0,
+    "totalArrayBits": 0,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 0,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 6,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": "96c0394a",
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_video_scanout",
+   "sourceFile": "fpga/rtl/video/zhao_video_scanout.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "YELLOW",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 2,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 2,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 16388,
+    "arraysExpectingRam": 1,
+    "asyncReadArrays": 1,
+    "addressableArrays": 1,
+    "addressableBits": 16384,
+    "resetTouchedArrays": 1,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 16384,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 16384,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": [
+     "zhao_dc_sdp_ram",
+     "zhao_scanout_fetch",
+     "zhao_scanout_linebuf",
+     "zhao_scanout_serializer"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  },
+  {
+   "module": "zhao_video_slotmgr",
+   "sourceFile": "fpga/rtl/video/zhao_video_slotmgr.sv",
+   "severity": "YELLOW",
+   "scanSeverity": "GREEN",
+   "resources": {},
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 3,
+    "totalArrayBits": 40,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 2,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 0,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 23,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_MAP",
+    "NO_WORKLOAD",
+    "OLD_SDC"
+   ],
+   "provenance": {
+    "scanCommit": "de11ce9b",
+    "mapCommit": null,
+    "fitCommit": null,
+    "headCommit": "de11ce9b",
+    "scanSourceListHash": "40e689de9f34a042",
+    "mapSourceListHash": null
+   }
+  }
+ ],
+ "limitations": [
+  "No number in this file was typed. Each is copied from reports/rtl_inventory.json, reports/synthesis/zhao_block_map.json, reports/synthesis/zhao_block_fit.json or design/budgets/workloads.yml, and each row names the commit its measurement came from.",
+  "mapDspBlocks and mapEstimatedAlms come from Analysis and Synthesis. The DSP figure matched the fitter on every block cross-checked; the ALM figure is an estimate and is NOT comparable to fitAlms.",
+  "A map row carries NO timing. Every Fmax and slack in this file comes from the fit lane, at the commit named in fitCommit.",
+  "criticalPathFamily names the expensive cones the SOURCE contains. It is not an STA result -- no per-block STA report in this repo carries a path family, and naming one from the source is honest where inventing one would not be.",
+  "inferredMinII is a lower bound derived from the state graph. Where a measured II exists in workloads.yml it is used instead and the row says which."
+ ]
+}
