@@ -23,6 +23,15 @@
 #include "zref/zref_surface.hpp"
 #include "zrender/internal.hpp"  // white-box: zref::render::stamp_surface
 
+// The SQ_RADIX this translation unit's model was elaborated at. The frontier
+// builds (test_surface_stamp_radix2/radix4) set it to match their
+// `-GSQ_RADIX=`; the default build leaves it at the RTL's own default. A
+// mismatch would make the sequence-shape check below fail loudly, which is the
+// intent -- a silently-skipped check is worse than a failing one.
+#ifndef ZHAO_SQ_RADIX
+#define ZHAO_SQ_RADIX 1
+#endif
+
 using sdev::Rng;
 using sdev::SheetSim;
 using sdev::StampCmd;
@@ -663,20 +672,25 @@ void test_counters_and_throughput(Vzhao_surface_stamp& dut) {
         static_cast<uint64_t>(cyc));
 
   // And the SHAPE of the sequence, so a regression in the geometry engine shows
-  // up as more than "still under budget". At the default SQ_RADIX = 1 the
-  // squarer retires one magnitude bit per cycle over 36 bits, so a square takes
-  // 36 steps and its result lands one cycle after the last: 37 cycles from the
-  // start pulse, plus the start cycle itself = 38. dz is squared once per ROW
-  // and dx once per texel, so a row of 64 texels costs 65 passes:
+  // up as more than "still under budget". The squarer retires ZHAO_SQ_RADIX
+  // magnitude bits per cycle over 36 bits, so a square takes
+  // ceil(36 / ZHAO_SQ_RADIX) steps and its result lands one cycle after the
+  // last, plus the start cycle itself. dz is squared once per ROW and dx once
+  // per texel, so a row of 64 texels costs 65 passes:
   //
-  //     64 rows * 65 passes * 38 cycles = 158,080
+  //     SQ_RADIX 1: 64 rows * 65 passes * 38 cycles = 158,080  (measured 158,162)
+  //     SQ_RADIX 2: 64 * 65 * 20                    =  83,200
+  //     SQ_RADIX 4: 64 * 65 * 11                    =  45,760
   //
   // plus the acquire round trip, the two per-stamp radius squares and the
-  // two-deep drain. Measured: 158,162.
-  const int kPassCycles = 38;               // SQ_RADIX = 1
-  const int kScan = 64 * 65 * kPassCycles;  // 158,080
+  // two-deep drain. THE BOUND IS DERIVED FROM THE PARAMETER, not written down
+  // per build: this file is compiled at three SQ_RADIX settings and a check
+  // that only held at the default would be silently vacuous at the other two.
+  const int kSqSteps = (36 + ZHAO_SQ_RADIX - 1) / ZHAO_SQ_RADIX;
+  const int kPassCycles = kSqSteps + 2;     // start + steps + the landing cycle
+  const int kScan = 64 * 65 * kPassCycles;  // dz once per row, dx once per texel
   check(cyc >= kScan && cyc <= kScan + 4 * kPassCycles,
-        "the geometry sequence has the predicted shape (SQ_RADIX = 1)", kScan,
+        "the geometry sequence has the predicted shape for this SQ_RADIX", kScan,
         static_cast<uint64_t>(cyc));
 
   // A rejected stamp must not move either counter.

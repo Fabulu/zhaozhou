@@ -3333,6 +3333,57 @@ verilate(test_surface_stamp_directed
 add_test(NAME surface_stamp_directed COMMAND test_surface_stamp_directed)
 set_tests_properties(surface_stamp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
 
+# ---------------------------------------------------------------------------
+# THE SQ_RADIX FRONTIER, BUILT AS COVERAGE AND NOT ONLY AS FITTED NUMBERS.
+#
+# zhao_surface_sq retires SQ_RADIX magnitude bits per cycle through a chain of
+# SQ_RADIX conditional 64-bit adds. At the default SQ_RADIX = 1 that chain has
+# EXACTLY ONE LINK, so `chain[b+1] = chain[b] + (bits_q[b] ? sh_q << b : 0)` is
+# only ever instantiated at b = 0 -- the b > 0 arms of the generate, and every
+# way of getting the per-bit place value wrong inside them, are NEVER
+# ELABORATED by the default build.
+#
+# tools/sweep_geom_skin.sh learned this the expensive way on MUL_LANES and
+# stated the rule: A PARAMETERISED BLOCK'S FRONTIER BUILDS ARE COVERAGE, NOT
+# JUST DATA POINTS. These two targets exist so the mutation sweep can score
+# every setting the parameter admits.
+#
+# The target names carry the setting LITERALLY, and SOURCES is spelled out
+# rather than using ${ZHAO_SURFACE_STAMP_SV}: the sweep derives its consumer
+# set out of this file, and a name or a path it cannot see is a target it
+# cannot clean and re-score.
+add_executable(test_surface_stamp_radix2 surface/surface_stamp_directed.cpp)
+target_link_libraries(test_surface_stamp_radix2 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_surface_stamp_radix2 PRIVATE ZHAO_SQ_RADIX=2)
+target_include_directories(test_surface_stamp_radix2 PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_surface_stamp_radix2
+  PREFIX Vzhao_surface_stamp
+  TOP_MODULE zhao_surface_stamp
+  VERILATOR_ARGS -GSQ_RADIX=2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
+add_test(NAME surface_stamp_radix2 COMMAND test_surface_stamp_radix2)
+set_tests_properties(surface_stamp_radix2 PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
+add_executable(test_surface_stamp_radix4 surface/surface_stamp_directed.cpp)
+target_link_libraries(test_surface_stamp_radix4 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_surface_stamp_radix4 PRIVATE ZHAO_SQ_RADIX=4)
+target_include_directories(test_surface_stamp_radix4 PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/surface
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_surface_stamp_radix4
+  PREFIX Vzhao_surface_stamp
+  TOP_MODULE zhao_surface_stamp
+  VERILATOR_ARGS -GSQ_RADIX=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_stamp.sv)
+add_test(NAME surface_stamp_radix4 COMMAND test_surface_stamp_radix4)
+set_tests_properties(surface_stamp_radix4 PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 add_executable(test_surface_stamp_random surface/surface_stamp_random.cpp)
 target_link_libraries(test_surface_stamp_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_surface_stamp_random PRIVATE
