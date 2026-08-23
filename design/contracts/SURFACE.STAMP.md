@@ -367,6 +367,42 @@ blends plus the ABI's `operation = 7 → MAX` else-branch; the field brush; the
 `stamp_results` stream compared record for record and asserted strictly
 ascending; and the counters and throughput.
 
+**`test_rim_exact_odd_leg`, added 2026-08-23 because the mutation sweep found
+the hole it fills.** Since the coverage geometry went sequential, `d2` and
+`r_outer2` come from the **same** shared squarer, so any mutation that scales
+that engine's output uniformly is invisible through coverage — `2m²` and `m²/2`
+order exactly as `m²` does. Two sweep mutants computed `(m² − m·m[0])/2`, which
+is a uniform halving **only while every magnitude is even**, and every operand
+this suite drove *was* even, because every envelope, radius and translation in
+it is a whole number of metres or a binary fraction of one.
+
+The case is **constructed, not rolled**, in the same discipline mutation 6
+forced on the random lanes. On the canonical ±8 m envelope texel 32's centre is
+at `kM/8` raw on both axes; placing the translation 3 raw units off in x and 4
+in z puts texel (32,32) at `dx = 3, dz = 4`, so **radius 5 puts it exactly on
+the outer rim**, which the reference covers. The next texel centre is 16,384 raw
+units away, so "exactly one texel" is a fact and not an approximation — and the
+**oracle's** count is asserted too, so the case cannot go vacuous. Under the
+halving mutants `dx` and `r` are odd while `dz` is even, the halving stops being
+uniform, and the texel falls outside: coverage flips from one to none. Both leg
+orders are driven, so the per-row `dz` square is pinned as well as the per-texel
+`dx` one, plus an odd-raw annulus so the parity cannot silently become even
+again.
+
+**The throughput check now asserts the DERIVED DEMAND** (4,096 × 83 clocks)
+rather than a cycle count, plus a tight band on the sequence's predicted
+*shape*, and that band is computed from `ZHAO_SQ_RADIX` rather than written
+down — this file is compiled at three settings and a bound that only held at the
+default would be silently vacuous at the other two.
+
+**The frontier is BUILT, not only fitted.** `test_surface_stamp_radix2` and
+`test_surface_stamp_radix4` compile this same suite against `-GSQ_RADIX=2` and
+`-GSQ_RADIX=4`. That is coverage and not decoration: `zhao_surface_sq`'s adder
+chain has exactly **one** link at the default, so the `b > 0` arms of its
+generate are never elaborated there, and `sh_q << SQ_RADIX` is
+*indistinguishable from* `sh_q << 1`. Two sweep mutants are exactly that pair,
+alive at the default and dead at 2 and 4.
+
 ## Randomized differential tests
 
 `tests/surface/surface_stamp_random.cpp`, two lanes against
