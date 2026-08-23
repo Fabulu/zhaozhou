@@ -78,3 +78,29 @@ A clean reconfigure fixes it. Prefer that to hand-deleting subdirectories —
 it also clears any mutant-derived sources a mutation sweep left behind in
 consumers it never scored, which is a recurring source of tests that appear to
 prove things about RTL they are not actually exercising.
+
+## A stopped background task is not necessarily a stopped process
+
+Observed 2026-08-23. A mutation sweep was stopped by the harness — and **kept
+running**, rewriting `.sv` files under two live Quartus fits. The fits were
+therefore reading RTL that changed underneath them, and their numbers described
+neither the original nor the mutant.
+
+This is the same family as everything else in this file: **build state that
+looks like design behaviour.** A mutation sweep's whole job is to edit RTL in
+place and put it back, so a sweep that outlives its stop signal is the most
+destructive possible background process to leave running.
+
+Before starting any fit or any long measurement:
+
+```powershell
+Get-Process | Where-Object { $_.Name -match 'quartus|verilator|python|btormc|yosys' }
+```
+
+and confirm nothing is holding the files you are about to measure. After
+stopping a task, **verify the child processes actually died** rather than
+trusting the stop — a stop signal reaches the shell, not always what it spawned.
+
+The same check applies in the other direction: `git status` before a fit. A fit
+started against a dirty tree records `rtlCleanAtHead: false`, which is the
+report telling you the row may not describe any commit.
