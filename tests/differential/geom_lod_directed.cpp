@@ -476,6 +476,104 @@ int main(int argc, char** argv) {
     }
   }
 
+
+  // ---- 14. BACK-TO-BACK INSTANCES MUST NOT CONTAMINATE EACH OTHER ---------
+  //
+  // WHY THIS EXISTS, and it is not a hypothetical. `zhao_terrain_lod` was
+  // sequenced the same way this block was — thirty parallel products folded
+  // onto one shared multiplier — and it broke the Duo fairness law: one view's
+  // degradation started removing the other view's triangles. Its own
+  // differential passed 219 checks throughout, because a block-level
+  // differential drives ONE stream and the defect only exists when two
+  // independent consumers share the hardware.
+  //
+  // This block is structurally safer: its ladder state is the caller's
+  // (`rung_i`/`hold_i` in, `rung_o`/`hold_o` out), so there is no per-instance
+  // state inside to leak. But sequencing added an FSM, a shared multiplier and
+  // internal registers, and "structurally safer" is exactly the reasoning that
+  // failed next door. The property is cheap to test, so it is tested rather
+  // than argued.
+  //
+  // THE PROPERTY: an evaluation's answer must not depend on what was evaluated
+  // before it. Each instance is measured ALONE, then the same instances are
+  // driven back-to-back in an interleaved order, and every answer must match
+  // its alone-answer exactly.
+  //
+  // WHAT THIS SECTION IS AND IS NOT WORTH, measured rather than claimed. A
+  // contamination mutant was written to check it has teeth -- `e_micro_q` made
+  // sticky, so an evaluation keeps the previous one's micro term -- and it is
+  // caught: 340 checks fail. But the failures break down as 269 in section 2,
+  // 56 in section 5, 13 HERE and 2 in section 7. **The existing sections
+  // already caught it**, because they drive varied types back-to-back without
+  // resetting between them, so they test non-contamination incidentally.
+  //
+  // This section is kept anyway, and the reason is not coverage: it states the
+  // property EXPLICITLY, with a controlled alone-versus-interleaved comparison
+  // and deliberate orderings (repeats, and the most extreme case immediately
+  // before the most delicate). Incidental coverage disappears the moment
+  // somebody reorders or trims the sections above it. After what happened next
+  // door, this property should not depend on that.
+  //
+  // Note this block has no composed test to catch such a defect the way
+  // measure_governor_lod caught it for terrain_lod: GEOM.MESHFETCH, its only
+  // consumer, is still SPECIFIED. Until it exists, this is the only place the
+  // property is checked at all.
+  {
+    struct Inst {
+      const char* name;
+      zc::CreatureType t;
+      int32_t proj, thresh;
+      uint8_t rung;
+      uint16_t hold;
+    };
+    const Inst insts[] = {
+        {"A near/fine", compiled_type(4096, 512), 6000, 32, 0, 60000},
+        {"B far/coarse", compiled_type(4096, 512), 40, 32, 3, 60000},
+        {"C tiny radius", make_type(1, 0, 0, 2), 1, 1, 3, 60000},
+        {"D huge", make_type(2147483647, 1, 1073741823, 2147483647), 1048576, 1000000, 2, 60000},
+        {"E zero terms", make_type(1000, 0, 0, 0), 1000, 0, 1, 20},
+        {"F mid-hold", compiled_type(65535, 1), 30000, 8, 1, 3},
+    };
+    const int n = static_cast<int>(sizeof insts / sizeof insts[0]);
+
+    // 1. each instance ALONE, from a freshly reset block
+    Step alone[n];
+    for (int i = 0; i < n; ++i) {
+      reset_dut(dut);
+      alone[i] = dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung,
+                          insts[i].hold);
+    }
+
+    // 2. the same instances back-to-back, no reset between them, in several
+    //    orders — including one that puts the most extreme case immediately
+    //    before the most delicate one.
+    const int orders[][6] = {
+        {0, 1, 2, 3, 4, 5}, {5, 4, 3, 2, 1, 0}, {3, 2, 3, 2, 0, 1},
+        {2, 3, 0, 5, 1, 4}, {4, 4, 4, 3, 3, 3}, {3, 0, 3, 1, 3, 2},
+    };
+    const int n_orders = static_cast<int>(sizeof orders / sizeof orders[0]);
+
+    for (int o = 0; o < n_orders; ++o) {
+      reset_dut(dut);
+      for (int k = 0; k < n; ++k) {
+        const int i = orders[o][k];
+        const Step got = dut_step(dut, insts[i].t, insts[i].proj, insts[i].thresh, insts[i].rung,
+                                  insts[i].hold);
+        char nm[160];
+        std::snprintf(nm, sizeof nm, "14.order%d pos%d: %s rung is independent of what preceded it",
+                      o, k, insts[i].name);
+        check(got.rung == alone[i].rung, nm, alone[i].rung, got.rung);
+        std::snprintf(nm, sizeof nm, "14.order%d pos%d: %s raw is independent of what preceded it",
+                      o, k, insts[i].name);
+        check(got.raw == alone[i].raw, nm, alone[i].raw, got.raw);
+        std::snprintf(nm, sizeof nm, "14.order%d pos%d: %s hold is independent of what preceded it",
+                      o, k, insts[i].name);
+        check(got.hold == alone[i].hold, nm, alone[i].hold, got.hold);
+        ++g_cases;
+      }
+    }
+  }
+
   // ---- 13. random over the whole domain -----------------------------------
   if (random_iters > 0) {
     Prng rng(0x10D5EEDu);
