@@ -72,6 +72,22 @@
 > raster path. Deliberately not rewritten on suspicion — fit it, read the logic
 > levels, then decide.
 >
+> ### AND SUSPECT EVERY "THROUGHPUT MET" CLAIM IN EVERY CONTRACT
+>
+> `SURFACE.STAMP.md` recorded its throughput target as **"met, measured"**. That
+> was **true about cycles and false about time**: the block closed at
+> **32.33 MHz**, holding the shared `gpu_clk` at a third of its constraint, and
+> its 28 DSPs had bought a *cycle count* on a block that could not run fast
+> enough to spend it. Nobody knew, because the original fit had no timing
+> objective.
+>
+> Every contract in `design/contracts/` predates the SDC fix. **Assume every
+> "met" is cycles-per-item until someone has measured seconds-per-item.** The
+> cheap check is a `variantOf` `@pre-rearch` re-fit of the unmodified RTL under
+> the corrected SDC *before* changing anything — it costs one fit, and it is the
+> only way a before/after is like-for-like rather than a constrained fit
+> measured against an unconstrained one.
+>
 > ### The acceptance test is a RATE, never a clock
 >
 > `Fmax / initiation interval`, not Fmax. On GEOM.SKIN, +2 pipeline stages bought
