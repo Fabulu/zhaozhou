@@ -1,0 +1,7 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_surface_stamp.sv        test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+   zhao_surface_sq.sv           test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+   zhao_surface_blend.sv        test_field_stamp_modes test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+== establishing the pristine baseline
+ABORT: a pristine model did not elaborate

@@ -178,19 +178,23 @@ MUTS=(
       vld_o  <= vld_o;"
 "S12 the addend is loaded pre-doubled@@fpga/rtl/surface/zhao_surface_sq.sv@@      sh_q   <= {{(ACC_W - MAG_W) {1'b0}}, mag};@@      sh_q   <= {{(ACC_W - MAG_W - 1) {1'b0}}, mag, 1'b0};"
 # ---- zhao_surface_stamp.sv : the accumulators and the sequencing ------------
-"T01 the texel-centre accumulator steps by span, not 2*span@@fpga/rtl/surface/zhao_surface_stamp.sv@@              numx_q <= numx_q + spanx2;@@              numx_q <= numx_q + 41'(st_spanx);"
-"T02 the row accumulator steps by span, not 2*span@@fpga/rtl/surface/zhao_surface_stamp.sv@@              numz_q <= numz_q + spanz2;@@              numz_q <= numz_q + 41'(st_spanz);"
+"T01 the texel-centre accumulator steps by span, not 2*span@@fpga/rtl/surface/zhao_surface_stamp.sv@@              numx_q <= numx_q + spanx2;@@              numx_q <= numx_q + (spanx2 >>> 1);"
+"T02 the row accumulator steps by span, not 2*span@@fpga/rtl/surface/zhao_surface_stamp.sv@@              numz_q <= numz_q + spanz2;@@              numz_q <= numz_q + (spanz2 >>> 1);"
 "T03 the row reset seeds numx at zero, making (2i+1) into 2i@@fpga/rtl/surface/zhao_surface_stamp.sv@@              numx_q <= 41'(st_spanx);@@              numx_q <= 41'sd0;"
 "T04 the row wraps one texel early@@fpga/rtl/surface/zhao_surface_stamp.sv@@            if (cur_i == 6'd63) begin@@            if (cur_i == 6'd62) begin"
 "T05 the z seed is taken from the x span@@fpga/rtl/surface/zhao_surface_stamp.sv@@            numz_q <= 41'(span_z_c);@@            numz_q <= 41'(span_x_c);"
 "T06 the coverage sum becomes a difference@@fpga/rtl/surface/zhao_surface_stamp.sv@@  wire signed [63:0] d2 = \$signed(sq_o) + \$signed(dz2_q);@@  wire signed [63:0] d2 = \$signed(sq_o) - \$signed(dz2_q);"
 "T07 the geometry answer is taken without waiting for the squarer@@fpga/rtl/surface/zhao_surface_stamp.sv@@  wire geom_ready = (state == SRun) && (gstate == GWaitX) && sq_vld;@@  wire geom_ready = (state == SRun) && (gstate == GWaitX);"
-"T08 the per-row operand is dx, so dz never reaches the squarer@@fpga/rtl/surface/zhao_surface_stamp.sv@@                (gstate == GStartZ) ? dz : dx;@@                (gstate == GStartZ) ? dx : dx;"
+"T08 the squarer's dx and dz operands are swapped@@fpga/rtl/surface/zhao_surface_stamp.sv@@                (gstate == GStartZ) ? dz : dx;@@                (gstate == GStartZ) ? dx : dz;"
 "T09 the outer radius square lands in the inner register@@fpga/rtl/surface/zhao_surface_stamp.sv@@          st_r_outer2 <= \$signed(sq_o);@@          st_r_inner2 <= \$signed(sq_o);"
-"T10 the inner radius is squared from the OUTER operand@@fpga/rtl/surface/zhao_surface_stamp.sv@@                (state == SSqRi)   ? 36'(st_rinner) :@@                (state == SSqRi)   ? 36'(st_radius) :"
+"T10 the two radius operands are swapped, so the annulus inverts@@fpga/rtl/surface/zhao_surface_stamp.sv@@  assign sq_a = (state == SSqRo)   ? 36'(st_radius) :
+                (state == SSqRi)   ? 36'(st_rinner) :@@  assign sq_a = (state == SSqRo)   ? 36'(st_rinner) :
+                (state == SSqRi)   ? 36'(st_radius) :"
 "T11 dz^2 is dropped, collapsing the disc to a vertical band@@fpga/rtl/surface/zhao_surface_stamp.sv@@              dz2_q  <= sq_o;@@              dz2_q  <= 64'd0;"
 "T12 the write texel index is transposed@@fpga/rtl/surface/zhao_surface_stamp.sv@@  assign wr_texel_o = s2_texel;@@  assign wr_texel_o = {s2_texel[5:0], s2_texel[11:6]};"
-"T13 stamp_results loses the pre-blend strength TERRAIN.BAKE needs@@fpga/rtl/surface/zhao_surface_stamp.sv@@  assign res_before_o = s2_before;@@  assign res_before_o = s2_after;"
+"T13 stamp_results transposes before and after, losing the delta TERRAIN.BAKE needs@@fpga/rtl/surface/zhao_surface_stamp.sv@@  assign res_strength_o = s2_after;
+  assign res_before_o = s2_before;@@  assign res_strength_o = s2_before;
+  assign res_before_o = s2_after;"
 "T14 the outer rim is made exclusive, clipping the edge texel@@fpga/rtl/surface/zhao_surface_stamp.sv@@  wire covered = !((d2 > st_r_outer2) || (d2 < st_r_inner2));@@  wire covered = !((d2 >= st_r_outer2) || (d2 < st_r_inner2));"
 "T15 the cursor advances without the geometry@@fpga/rtl/surface/zhao_surface_stamp.sv@@  wire advance = cursor_slot && geom_ready && fld_ok && read_path_ok;@@  wire advance = cursor_slot && fld_ok && read_path_ok;"
 "T16 the sheet read fires without the geometry@@fpga/rtl/surface/zhao_surface_stamp.sv@@      (cursor_slot && geom_ready && fld_ok && covered && s1_free_next);@@      (cursor_slot && fld_ok && covered && s1_free_next);"

@@ -118,44 +118,6 @@ buy 37× the throughput of a block that already meets demand 2.2× over — the 
 over-provisioning sin in a different resource — and it would give up the
 contract's "Memory ownership: **None**".
 
----
-
-## Subagent Spawns
-
-| Timestamp | Agent ID | Purpose | Status | Findings Link |
-|-----------|----------|---------|--------|---------------|
-| — | — | none yet | — | — |
-
----
-
-## Files Created
-
-- `SPEC_v1.md` — filled before any RTL was written.
-
----
-
-## Decisions Made
-
-| # | Decision | Reason |
-| ---: | --- | --- |
-| 1 | Target 0 DSPs, not 2 | No `*` survives; a DSP can then only appear by accident, and its appearance is a *diagnostic*. |
-| 2 | Accumulator, not narrowed multiply, for the texel centres | Bit-identical mod 2⁴¹ with no domain argument owed. |
-| 3 | One shared squarer, block-local | Standing ruling: share within a subsystem only, smallest local farm. |
-| 4 | No domain narrowing | Contract calls it a real risk; it buys no DSPs here. |
-| 5 | `SQ_RADIX ∈ {1,2,4}` as the frontier axis | All three meet the texel demand, so the frontier's wall is on the **Fmax** axis — which is the axis that matters, since `gpu_clk` is shared. |
-| 6 | Re-fit the pristine baseline | The shipped row has **no Fmax at all**; without re-fitting there is no honest "before". |
-
----
-
-## Next Steps
-
-1. Write `zhao_surface_sq.sv` + rearchitect `zhao_surface_stamp.sv`.
-2. Baseline pristine fit from a worktree at HEAD (machine is clear).
-3. Differential + `ctest -L fast`.
-4. Mutation sweep in a worktree, **verified non-zero mutant count**.
-5. Fits at `SQ_RADIX` = 1, 2, 4.
-6. Contract + `blocks.yml` update, ARCHIVE.md entry.
-
 ### 2026-08-23 14:29 — MEASURED: the pristine baseline, and it is worse than the ledger says
 
 Fit run from the **untouched** tree at HEAD, before a line of RTL moved, because
@@ -259,3 +221,132 @@ survived on luck alone.
 **All three suites green:** directed 98/98, random 20/20 (lane A and lane B
 coverage counters all non-zero, including the constructed rim-exact case 18/8),
 chain 34/34.
+
+
+### 2026-08-23 14:46 — MEASURED: 28 -> 0 DSPs, and Fmax 32.33 -> 87.54 MHz
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_surface_stamp `
+      -ExtraSources fpga/rtl/surface/zhao_surface_stamp.sv, `
+                    fpga/rtl/surface/zhao_surface_blend.sv, `
+                    fpga/rtl/surface/zhao_surface_sq.sv -KeepWorkspace
+
+sourceCommit `04e3c3f`, `rtlCleanAtHead: true`, 490.3 s. `git diff 04e3c3f HEAD --
+fpga/rtl` is empty, so the row describes the RTL as it stands.
+
+| | @pre-rearch | SQ_RADIX = 1 | delta |
+| --- | ---: | ---: | ---: |
+| ALMs | 947 | **993** | +46 (+4.9%) |
+| registers | 496 | **1,018** | +522 |
+| **DSP blocks** | **28** | **0** | **-28** |
+| RAM blocks | 0 | 0 | — |
+| **Fmax** | **32.33 MHz** | **87.54 MHz** | **+171%** |
+| initiation interval | 1.0 clk/texel | 38.61 clk/texel | 38.6x |
+| **texels/frame** | 538,833 | **37,791** | 0.070x |
+| vs. the 20,000 demand | 26.9x | **1.89x** | — |
+
+**Both numbers, as the brief requires, and they point opposite ways.** Raw
+throughput fell 14x. It is still 1.89x the demand, and the clock the whole
+console shares went from 32.33 MHz to 87.54 MHz — from 32% of its constraint to
+88% of it. The 28 DSPs were buying 26.9x more texels than the game will ever
+ask for, at the price of holding `gpu_clk` to a third of its target.
+
+The +522 registers are the honest cost of going sequential: a 64-bit
+accumulator, a 64-bit shifting addend, a 36-bit multiplier-bit register, the
+held `dz2`, the two texel-centre accumulators and the two registered radius
+operands. They cost **46 ALMs**, because registers pack into ALMs that were
+already there for the logic.
+
+### 2026-08-23 14:47 — THE HARNESS DESTROYED MY OWN EVIDENCE, and I did it to myself
+
+`run_block_fit.ps1` names its scratch workspace `zhao-block-fit-$PID`, and the
+per-module subdirectory after the module. I issued all three frontier fits from
+**one** PowerShell process, so all three had the same `$PID` and the same module
+name — **one directory, each fit overwriting the previous one's
+`quartus_map/fit/sta` logs.**
+
+`-KeepWorkspace` exists exactly so the `Info (332111): 10.000 clk` constraint
+line can be captured before the harness deletes the workspace. It kept only the
+last fit's. I caught it because the 332111 grep for SQ_RADIX = 1 came back
+**empty** while the fit summary in the same directory still read 993 ALMs / 0
+DSPs — the summary from fit 1, the logs already half-rewritten by fit 2.
+
+The JSON rows are unaffected (each run writes its own), so the loss was
+**silent**: three good measurements, one surviving set of evidence, and nothing
+saying so. That is the run brief's named failure mode again — *build state
+masquerading as design behaviour* — and it would have let me report three
+constrained fits while being able to show only one.
+
+Fixed in `tools/quartus/run_block_fit.ps1`: the workspace name now carries a
+per-invocation tick count. It changes nothing about what is measured; it changes
+whether the measurement can be shown. The affected fits are being **re-run one
+process at a time** to recover their evidence.
+
+### 2026-08-23 15:5x — the sweep's first run aborted, and the abort was invisible
+
+    == guard 7: consumers, derived from tests/CMakeLists.txt
+       zhao_surface_stamp.sv   test_surface_stamp_chain test_surface_stamp_directed
+                               test_surface_stamp_radix2 test_surface_stamp_radix4
+                               test_surface_stamp_random
+       zhao_surface_sq.sv      (the same five)
+       zhao_surface_blend.sv   test_field_stamp_modes + the same five
+    linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+    == establishing the pristine baseline
+    ABORT: a pristine model did not elaborate
+
+**Guard 7 and the preflight both worked.** Consumers derived correctly through
+the CMake variable, and **32 mutants parsed — non-zero, so the empty-set failure
+mode the brief warns about is ruled out for this sweep.** The abort was the
+worktree's build tree, which had never been configured.
+
+Two things worth recording:
+
+- **The preflight caught five malformed mutations on its first run**, all the
+  same shape: T01/T02/T08/T10/T13 each orphaned a signal (`spanx2`, `spanz2`,
+  `dz`, `st_rinner`, `s2_before`) and tripped `-Wall UNUSEDSIGNAL`. Under guard
+  5 they would have read as "discarded"; before guard 5 existed they would have
+  read as **caught**. Fixed the *mutations*, not the guard: each was rewritten
+  to keep the signal live and still be a real defect — e.g. T08 became "dx and
+  dz are swapped" rather than "dz is replaced by dx", and T13 became "before and
+  after are transposed" rather than "before is dropped".
+- **`| tee` masked the sweep's exit code.** It aborted with `exit 6` and the
+  pipeline reported 0. Recorded so the final score is read out of the log's own
+  cross-check line and not from a shell status.
+
+---
+
+## Subagent Spawns
+
+| Timestamp | Agent ID | Purpose | Status | Findings Link |
+|-----------|----------|---------|--------|---------------|
+| — | — | none yet | — | — |
+
+---
+
+## Files Created
+
+- `SPEC_v1.md` — filled before any RTL was written.
+
+---
+
+## Decisions Made
+
+| # | Decision | Reason |
+| ---: | --- | --- |
+| 1 | Target 0 DSPs, not 2 | No `*` survives; a DSP can then only appear by accident, and its appearance is a *diagnostic*. |
+| 2 | Accumulator, not narrowed multiply, for the texel centres | Bit-identical mod 2⁴¹ with no domain argument owed. |
+| 3 | One shared squarer, block-local | Standing ruling: share within a subsystem only, smallest local farm. |
+| 4 | No domain narrowing | Contract calls it a real risk; it buys no DSPs here. |
+| 5 | `SQ_RADIX ∈ {1,2,4}` as the frontier axis | All three meet the texel demand, so the frontier's wall is on the **Fmax** axis — which is the axis that matters, since `gpu_clk` is shared. |
+| 6 | Re-fit the pristine baseline | The shipped row has **no Fmax at all**; without re-fitting there is no honest "before". |
+
+---
+
+## Next Steps
+
+1. Write `zhao_surface_sq.sv` + rearchitect `zhao_surface_stamp.sv`.
+2. Baseline pristine fit from a worktree at HEAD (machine is clear).
+3. Differential + `ctest -L fast`.
+4. Mutation sweep in a worktree, **verified non-zero mutant count**.
+5. Fits at `SQ_RADIX` = 1, 2, 4.
+6. Contract + `blocks.yml` update, ARCHIVE.md entry.
+

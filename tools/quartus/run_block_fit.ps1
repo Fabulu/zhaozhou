@@ -108,7 +108,26 @@ if (-not $Module -or $Module.Count -eq 0) {
     )
 }
 
-$Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-block-fit-{0}" -f $PID)
+# THE WORKSPACE NAME CARRIES A PER-INVOCATION UNIQUIFIER, not just $PID.
+#
+# MEASURED 2026-08-23, SURFACE.STAMP frontier run. Three fits of the SAME module
+# at three parameter settings were issued from ONE PowerShell process:
+#
+#   run_block_fit.ps1 -Module zhao_surface_stamp -KeepWorkspace
+#   run_block_fit.ps1 -Module zhao_surface_stamp -TopParameters SQ_RADIX=2 ... -KeepWorkspace
+#   run_block_fit.ps1 -Module zhao_surface_stamp -TopParameters SQ_RADIX=4 ... -KeepWorkspace
+#
+# $PID is the same for all three, and the per-module subdirectory is named after
+# the module -- so all three landed in ONE directory and each overwrote the
+# previous one's quartus_map/fit/sta logs and output_files. `-KeepWorkspace`
+# exists precisely so the `Info (332111): 10.000 clk` constraint evidence can be
+# captured before the harness deletes it, and it kept only the LAST fit's. The
+# JSON rows were unaffected (they are written per run), so the loss was silent:
+# three good measurements, one surviving set of evidence, and nothing saying so.
+#
+# The ticks-based suffix makes each invocation its own directory. It does not
+# change what is measured; it changes whether the measurement can be shown.
+$Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-block-fit-{0}-{1}" -f $PID, [DateTime]::UtcNow.Ticks)
 New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
 $results = New-Object 'System.Collections.Generic.List[object]'
 
