@@ -5,6 +5,93 @@ at the top.*
 
 ---
 
+## 2026-08-23 (late afternoon) — the mutation tests were checking nothing
+
+### Read this one first
+
+Our strongest quality tool is the **mutation sweep**: deliberately break the
+hardware in one small way, then confirm a test notices. It is how we know the
+tests are worth anything.
+
+**In a fresh copy of the repository, it was testing nothing at all — and
+reporting success.**
+
+The mutant list is read from a text file. On a fresh checkout on Windows those
+lines gain an invisible extra character at the end, the pattern that reads them
+matched nothing, and the tool printed
+
+> linted 0 mutants, 0 do not build
+
+and **exited successfully.** A clean pass over an empty set. Every sweep run
+that way was a green tick for work never done.
+
+Found by an agent running a sweep in a fresh worktree for the first time,
+because that is what the rules require. Fixed two ways, deliberately — the file
+endings are now pinned so it cannot recur, **and** the tool now refuses to
+score fewer than two mutants, on the principle that a guard which checks nothing
+must fail rather than pass.
+
+This is the same shape as the timing defect from yesterday: a tool doing nothing
+while reporting success, with no symptom except a number that never moved. That
+is now three times in two days, so I have stopped treating it as bad luck.
+**A green result from a tool nobody has watched run is not evidence.**
+
+### Creature skinning: the 58 MHz problem is diagnosed exactly
+
+Not guessed. The timing tool named one wire, and **all 200 of the worst paths
+end at the same place**:
+
+    from  the blend-walk row counter
+    to    the output register for row 1
+          10 levels of logic, 17.6 ns of delay against a 10 ns budget
+
+Two things that follow, both of which save wasted work:
+
+* **Over half the delay is real logic, not wiring.** So no amount of tuning the
+  chip tool will fix it — the arithmetic has to be split across more steps.
+* **Neither end of the path is an artefact of measuring the block on its own.**
+  That was a genuine worry and it is now ruled out, so no test scaffolding is
+  needed first.
+
+The suspected alternative — the multiplier accumulation — was **exonerated by
+experiment rather than by argument.** Building a 1-multiplier-wide version
+leaves the suspect path untouched while collapsing the accumulation, and the
+speed did not move (58.45 → 56.11). That is what a controlled experiment looks
+like, and this project has previously been burned by skipping exactly that.
+
+The repair is specified and being implemented: split the final blend across two
+more steps. That costs two clocks and the budget has room for three — **the
+block needs 86.4 MHz at twelve steps, and would still pass at thirteen.** The
+number to judge it by is vertices per frame, not megahertz.
+
+### The dial has a second measured setting
+
+The width dial now has two real points on record:
+
+| setting | multipliers | logic | speed |
+| --- | ---: | ---: | ---: |
+| 3 wide (shipping) | **9** | 2,187 | 58.45 MHz |
+| 1 wide | **3** | 1,530 | 56.11 MHz |
+
+The 1-wide point is kept precisely **because it fails** the vertex budget. A
+range with no failing end does not show where the wall is. The third point,
+6-wide, is not measured yet.
+
+And one unglamorous but real benefit: **a mutant was caught only by the 1-wide
+build.** At the wider settings that piece of logic collapses into a single step
+and the test cannot see it. So building several settings is extra *coverage*,
+not just extra data.
+
+### Where the multiplier count stands
+
+**188** against a chip with 112, from 327 this morning. The ceiling is 85–90.
+
+Three of the remaining blocks — 74 multipliers between them — cannot be sized
+because nobody has ever said how much work they must do per frame. Three
+questions for you are on the docket; none is urgent.
+
+---
+
 ## 2026-08-23 (afternoon) — 188 multipliers, and the second speed number
 
 ### The multiplier problem is nearly solved
