@@ -19,10 +19,14 @@ datasheet or from memory.
 WHAT IT GENERATES
 =================
 multiply grid
-  widths 8/9/16/18/19/24/31/32/33/40/48/64, signed and unsigned, at 1 and 4
-  operators, input+output registered.  The 1-vs-4 pair is the PACKING test: if
-  four operators cost four times one, Lite packs nothing at that width, which
-  is what the corrected rule claims and what this either confirms or refutes.
+  widths 8/9/16/18/19/24/26/27/28/31/32/33/40/48/64, signed and unsigned, at 1
+  and 4 operators, input+output registered.  The 1-vs-4 pair is the PACKING
+  test: if four operators cost four times one, Lite packs nothing at that
+  width, which is what the corrected rule claims and what this either confirms
+  or refutes.  The 26/27/28 cluster locates the cliff -- the design-derived
+  curve in reports/BUDGET_HEATMAP.md shows 21- and 23-bit products taking ONE
+  DSP block in the tool's `Independent 27x27` mode and 32-bit products taking
+  THREE, so the interesting boundary is between 27 and 32, not at 18.
 
 register grid
   widths 18/32/64 signed, one operator, combinational vs input-registered vs
@@ -58,7 +62,13 @@ import os
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTDIR = os.path.join(REPO, "build-budget", "calib")
 
-WIDTHS = [8, 9, 16, 18, 19, 24, 31, 32, 33, 40, 48, 64]
+# 26/27/28 were added after the design-derived cost curve showed the boundary
+# is NOT at 18. zhao_geom_setup's 21-bit and zhao_raster_edgewalk's 23-bit
+# products each take ONE DSP block and the tool's own decomposition calls them
+# `Independent 27x27` -- so Cyclone V has a 27x27 mode and the interesting
+# cliff is between 27 and 32, not between 18 and 19. Sampling only 24 and 31
+# would have bracketed it without locating it.
+WIDTHS = [8, 9, 16, 18, 19, 24, 26, 27, 28, 31, 32, 33, 40, 48, 64]
 REG_WIDTHS = [18, 32, 64]
 
 
