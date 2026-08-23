@@ -133,7 +133,45 @@ try {
     foreach ($mod in $Module) {
         $dir = Join-Path $Workspace $mod
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Copy-Item $SrcSdc (Join-Path $dir 'blockfit.sdc')
+        # ---- THE BLOCK SDC, WRITTEN RATHER THAN COPIED -----------------------
+        #
+        # This used to `Copy-Item $SrcSdc`, i.e. hand every leaf block the SHELL's
+        # SDC. That file constrains ports named gpu_clk / vid_clk / audio_clk --
+        # and 63 of this design's 71 clock ports are simply named `clk`. So for
+        # every leaf block Quartus resolved all three create_clock statements to
+        # an empty collection and said so, three times, in every single run:
+        #
+        #   Warning: Ignored create_clock at blockfit.sdc(4):
+        #            Argument <targets> is an empty collection
+        #
+        # WHICH MEANS EVERY PER-BLOCK FIT EVER RUN IN THIS PROJECT HAD NO TIMING
+        # OBJECTIVE. The Fmax column of reports/synthesis/zhao_block_fit.json is
+        # not a slow measurement, it is not a measurement at all -- and the area
+        # columns were obtained with the fitter under no timing pressure, which
+        # understates rather than overstates what a constrained fit needs. It is
+        # why the old Field engine's 7.75 MHz was invisible for 47 rows.
+        #
+        # Found 2026-08-23 by an agent that went looking for why a block it had
+        # just rebuilt reported an implausible Fmax.
+        #
+        # Every clock-shaped port name in fpga/rtl is covered below. A name a
+        # given block does not have still logs the empty-collection warning, which
+        # is harmless -- what was NOT harmless was covering none of them.
+        $blockSdc = @(
+            '# Generated per block by tools/quartus/run_block_fit.ps1.',
+            '# The shell SDC is deliberately NOT used here: it names gpu_clk/vid_clk/',
+            '# audio_clk, and leaf blocks name their clock port `clk`.',
+            'create_clock -name clk        -period 10.000 [get_ports {clk}]',
+            'create_clock -name clk_gpu    -period 10.000 [get_ports {clk_gpu}]',
+            'create_clock -name gpu_clk    -period 10.000 [get_ports {gpu_clk}]',
+            'create_clock -name vid_clk    -period 20.000 [get_ports {vid_clk}]',
+            'create_clock -name clk_audio  -period 40.000 [get_ports {clk_audio}]',
+            'create_clock -name audio_clk  -period 40.000 [get_ports {audio_clk}]',
+            'create_clock -name wr_clk     -period 10.000 [get_ports {wr_clk}]',
+            'create_clock -name rd_clk     -period 10.000 [get_ports {rd_clk}]',
+            'derive_clock_uncertainty'
+        )
+        $blockSdc | Set-Content -LiteralPath (Join-Path $dir 'blockfit.sdc') -Encoding ascii
         'PROJECT_REVISION = "blockfit"' | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qpf') -Encoding ascii
 
         # The same ordered source cone with absolute paths; only the top moves.
