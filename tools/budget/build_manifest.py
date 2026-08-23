@@ -26,6 +26,7 @@ before anyone read their misleading headline numbers."
                              map reports zero block memory bits
   NO_SUBSYSTEM_FIT           boundary-heavy block never fitted with a neighbour
   NO_RESERVE                 demand ratio above 1.0 with nothing spare
+  PARETO_UNPROVEN            >5 DSPs or >5% ALMs with no second measured point
 
 THE FALSIFIABLE TEST
 ====================
@@ -261,7 +262,32 @@ def main():
             cap = budget // max(1, eff_ii)
             rate["capacityPerFrame"] = cap
             items = w.get("itemsPerFrame") or 0
-            rate["demandRatio"] = round(items / cap, 4) if cap else None
+            rate["demandRatio"] = round(items / cap, 6) if cap else None
+
+            # ---- THE RETURN, DERIVED RATHER THAN GUESSED -----------------
+            # Every DSP reduction landed so far came from the same move: a
+            # block builds N products in parallel to hit one item per clock,
+            # the demand is a fraction of one item per clock, so the products
+            # are time-multiplexed by the over-provisioning factor.
+            #
+            # overProvision = capacity / demand. Serialising by up to that
+            # factor costs no throughput at all, because the spare cycles are
+            # already there. TERRAIN.NORMALS is the clean case: 2,000
+            # normals/frame against 1,666,667 capacity is 833x over-provisioned
+            # and its six products could share one multiplier.
+            #
+            # This is an ESTIMATE and the manifest says so. It assumes the
+            # products are independent and the block can be pipelined; the
+            # docket's own gate still demands two MEASURED Pareto points before
+            # any of it counts.
+            if items > 0 and cap:
+                over = cap / items
+                rate["overProvisionFactor"] = round(over, 1)
+                prods = a["nonconstantMultiplyInstances"]
+                if prods > 0 and over > 1.5:
+                    lanes = max(1, int(prods / min(over, prods)) or 1)
+                    rate["serialisableToLanes"] = lanes
+                    rate["productsToday"] = prods
             if w.get("measuredII") is None:
                 flags.append("NO_II_TEST")
             if rate["demandRatio"] and rate["demandRatio"] > 1.0:
@@ -310,6 +336,28 @@ def main():
 
         # ---- severity ----------------------------------------------------
         sev = m["severity"]
+
+        # THE DOCKET'S OWN CI GATE, applied to the measured number rather than
+        # to the source: ">5 DSPs or >5% ALMs requires two measured Pareto
+        # points, or a stated reason no cheaper point exists."
+        #
+        # This exists because the scanner rates each multiply on its own and is
+        # right to: `zhao_geom_quat2mat`'s nine products are 16x16, one DSP
+        # each, and every one of them is a perfectly ordinary GREEN. Nine DSPs
+        # in one block is not. Severity has to see the TOTAL, or a block builds
+        # a fifth of the DSP budget out of findings that are individually fine.
+        d = res.get("mapDspBlocks") or res.get("fitDspBlocks") or 0
+        alm = res.get("fitAlms") or res.get("mapEstimatedAlms") or 0
+        alm_pct = round(100.0 * alm / 41910, 1) if alm else 0.0
+        res["almPercentOfDevice"] = alm_pct
+        res["dspPercentOfDevice"] = round(100.0 * d / 112, 1) if d else 0.0
+        if d > 5:
+            flags.append("PARETO_UNPROVEN")
+            sev = sev_max(sev, "ORANGE" if d <= 12 else "RED")
+        if alm_pct > 5.0:
+            flags.append("PARETO_UNPROVEN")
+            sev = sev_max(sev, "ORANGE" if alm_pct <= 15.0 else "RED")
+
         for f in flags:
             if f in ("EXPECTED_RAM_NOT_INFERRED",):
                 sev = sev_max(sev, "RED")
@@ -388,6 +436,21 @@ def main():
     print("WROTE %s" % args.md_out)
 
 
+def fmt_ratio(dr):
+    """Demand ratios in this design span five orders of magnitude.
+
+    TERRAIN.NORMALS is 2,000 items against a 1,666,667 capacity -- 0.0012 --
+    and printing that as `0.00x` next to TEXTURE.TMU's `3.06x` hides the single
+    most useful fact about it: it is over-provisioned by a factor of 833. Two
+    significant figures, always.
+    """
+    if dr is None:
+        return "-"
+    if dr >= 0.01:
+        return "%.2fx" % dr
+    return "%.2gx" % dr
+
+
 def fmt(v, dash="-"):
     return dash if v is None else (("%,d" % v).replace(",", ",") if isinstance(v, int) else str(v))
 
@@ -453,7 +516,7 @@ def write_heatmap(path, man, calib, wl):
             ("%s (%d design)" % ("{:,}".format(ram["mapBlockMemoryBits"]), ram["mapInferredDesignMemories"] or 0)
              if ram["mapBlockMemoryBits"] else ("**0**" if res.get("mapDspBlocks") is not None else "-")),
             rate.get("iiUsed", rate["inferredMinII"]),
-            ("%.2fx" % dr) if dr else "-",
+            fmt_ratio(dr),
             ", ".join("`%s`" % f for f in r["debtFlags"]) or "-",
         ))
     L.append("")
@@ -475,6 +538,50 @@ def write_heatmap(path, man, calib, wl):
                 "; ".join(r["criticalPathFamily"])[:90] or "-",
                 ", ".join("`%s`" % f for f in r["debtFlags"])[:70] or "-"))
         L.append("")
+
+    # ---- ranked returns -------------------------------------------------
+    L.append("## Ranked by estimated return")
+    L.append("")
+    L.append("**Estimates, and the docket's own gate still applies**: over 5 DSPs needs two")
+    L.append("MEASURED Pareto points before any of this counts. What is measured here is the")
+    L.append("DSP figure and the products; what is derived is the over-provisioning factor, and")
+    L.append("what is estimated is the landing point.")
+    L.append("")
+    L.append("`overProvision = capacity / demand`. Serialising a block by up to that factor")
+    L.append("costs no throughput, because the spare cycles are already in the frame.")
+    L.append("")
+    L.append("| block | DSP now | products | demand | over-provision | lanes that clear demand | est. DSP after | est. return |")
+    L.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    ranked = []
+    for r in R:
+        d = r["resources"].get("mapDspBlocks") or r["resources"].get("fitDspBlocks")
+        rt = r["rate"]
+        prods = r["arithmetic"]["nonconstantMultiplyInstances"]
+        if not d or not prods:
+            continue
+        over = rt.get("overProvisionFactor")
+        lanes = rt.get("serialisableToLanes")
+        if over is None or lanes is None:
+            ranked.append((0, r, d, prods, over, None, None, None))
+            continue
+        per = d / prods
+        after = max(1, int(round(per * lanes)))
+        ranked.append((d - after, r, d, prods, over, lanes, after, d - after))
+    ranked.sort(key=lambda x: -x[0])
+    for gain, r, d, prods, over, lanes, after, ret in ranked:
+        rt = r["rate"]
+        L.append("| `%s` | %d | %d | %s | %s | %s | %s | %s |" % (
+            r["module"], d, prods, fmt_ratio(rt.get("demandRatio")),
+            (("%.0fx" % over) if over and over >= 1 else
+             ("**%.2fx UNDER**" % over) if over else "-"),
+            lanes if lanes else "-",
+            after if after else "-",
+            ("**%d**" % ret) if ret else "-"))
+    L.append("")
+    L.append("Blocks with `-` in the demand columns have **no items/frame figure**, so no")
+    L.append("return can be derived for them at all. That is the gap `design/budgets/workloads.yml`")
+    L.append("names explicitly, and it is where the next cheap win is.")
+    L.append("")
 
     # ---- DSP ledger -----------------------------------------------------
     L.append("## DSP ledger at HEAD, from the map lane")
@@ -596,6 +703,7 @@ def write_heatmap(path, man, calib, wl):
         ("EXPECTED_RAM_NOT_INFERRED", "the source declares addressable storage or a large constant table and the map reports zero design memories"),
         ("NO_SUBSYSTEM_FIT", "arithmetic runs from this block's own pins, so a leaf fit misrepresents it -- measured at 5.4x once"),
         ("NO_RESERVE", "demand ratio leaves less headroom than workloads.yml asks for"),
+        ("PARETO_UNPROVEN", "over 5 DSPs or over 5% of the device's ALMs with no second measured operating point -- the docket's own CI gate, applied to the measured number"),
     ]:
         L.append("* **`%s`** -- %s" % (f, why))
     L.append("")

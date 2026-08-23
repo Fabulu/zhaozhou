@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "de11ce9bf10579d2b38c0487c67027500eff5c47",
+    "newestRunCommit":  "991f13c3ebf54704f1b14a588d3ea689d7d5791c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -832,6 +832,34 @@
                        "critical":  0
                    },
                    {
+                       "module":  "zhao_raster_div255",
+                       "status":  "ok",
+                       "sourceCommit":  "991f13c3ebf54704f1b14a588d3ea689d7d5791c",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  21.5,
+                       "dspBlocks":  0,
+                       "registers":  0,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  30,
+                       "pins":  0,
+                       "estimatedAlms":  23,
+                       "combAluts":  16,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  0
+                   },
+                   {
                        "module":  "zhao_raster_earlyz",
                        "status":  "ok",
                        "sourceCommit":  "de11ce9bf10579d2b38c0487c67027500eff5c47",
@@ -999,6 +1027,127 @@
                        "pins":  0,
                        "estimatedAlms":  373,
                        "combAluts":  407,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_raster_tile_pipe",
+                       "status":  "ok",
+                       "sourceCommit":  "991f13c3ebf54704f1b14a588d3ea689d7d5791c",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  75.3,
+                       "dspBlocks":  9,
+                       "registers":  3028,
+                       "blockMemoryBits":  32768,
+                       "virtualPins":  754,
+                       "pins":  0,
+                       "estimatedAlms":  4465,
+                       "combAluts":  6515,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
+                       "dspDecomposition":  {
+                                                "Independent 27x27":  2,
+                                                "Total number of DSP blocks":  9,
+                                                "Fixed Point Signed Multiplier":  2,
+                                                "Fixed Point Unsigned Multiplier":  4,
+                                                "Fixed Point Mixed Sign Multiplier":  3
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_raster_tilestore",
+                       "status":  "ok",
+                       "sourceCommit":  "de11ce9bf10579d2b38c0487c67027500eff5c47",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  35.4,
+                       "dspBlocks":  0,
+                       "registers":  890,
+                       "blockMemoryBits":  32768,
+                       "virtualPins":  359,
+                       "pins":  0,
+                       "estimatedAlms":  1013,
+                       "combAluts":  1143,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_surface_stamp",
+                       "status":  "ok",
+                       "sourceCommit":  "991f13c3ebf54704f1b14a588d3ea689d7d5791c",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  42.8,
+                       "dspBlocks":  0,
+                       "registers":  942,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  675,
+                       "pins":  0,
+                       "estimatedAlms":  1101,
+                       "combAluts":  1029,
                        "mlabMemoryBits":  null,
                        "inferredMemories":  [
 
