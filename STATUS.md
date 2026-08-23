@@ -5,6 +5,72 @@ at the top.*
 
 ---
 
+## 2026-08-23 (night) — the answer on the Field engine: 8.59 → 33.86 MHz
+
+### The number you were waiting for
+
+This morning the Field engine measured **8.59 MHz** against a 100 MHz target,
+and the cause was one piece of arithmetic written as a 128-step chain. The fix
+is in, and it is bit-identical to what it replaced.
+
+| | before | after |
+| --- | ---: | ---: |
+| speed | 8.59 MHz | **33.86 MHz** |
+| worst path overshoot | −106.4 ns | **−19.5 ns** |
+| **total overshoot across all paths** | −2,122,226 ns | **−45,290 ns** |
+| logic area | 10,615 | **7,750** cells |
+| multipliers | 79 | **3** |
+
+**3.94× faster from one rewrite.** And the area fell again — the 128-step chain
+was costing about 1,151 logic cells as well as the clock. Overall this block is
+**27% smaller and 96% cheaper in multipliers** than it started.
+
+### But be clear: this is not "fixed"
+
+**33.86 MHz still misses 100 MHz by three times.** The two possibilities we
+framed this morning were *"maybe 28 MHz, not 100"* or *"everything else is fine
+and we're basically done"*. **It is squarely the first.** There is a second slow
+path and it has not been named yet.
+
+So the honest reading: the loop really was the dominant problem, not a symptom —
+a 3.94× return proves that — but the Field engine needs at least one more round.
+**This is a campaign, not a one-off bug.** I would rather say that now than
+imply we are closer than we are.
+
+### One detail worth your attention, because it tells us what kind of problem this is
+
+The worst single path improved 5.4×, but the **total** overshoot across every
+failing path improved **47×**.
+
+That asymmetry is informative. If the old design had contained one freak slow
+path, fixing it would have moved the worst-case number and left the total
+roughly alone. Instead a whole *population* of paths improved together — which
+is exactly what you would expect from 128 stacked stages feeding several
+destinations at once. **It means the fix removed a systemic cost rather than
+clipping an outlier**, and it is the reason the remaining work is likely to be
+ordinary rather than another crisis.
+
+### Read it against the other block we measured
+
+| block | speed | meets its own budget? |
+| --- | ---: | --- |
+| creature skinning | **89.65 MHz** | **yes** — 124,514 vertices/frame against 120,000 |
+| Field engine | **33.86 MHz** | not yet |
+
+Two blocks, both fixed today, landing 2.6× apart. That is genuinely reassuring:
+**the design is not uniformly slow.** One block is essentially there; the other
+needs another pass. A scan of the whole design for the same 128-step mistake
+found only one other candidate, and it is not in either of these.
+
+### What happens next
+
+The critical-path query is running on the fixed design and will name the new
+worst wire in the same form that made the first one a one-line fix. **Nobody is
+calling 33.86 good or bad news until we can say what is now limiting it** —
+which is the discipline that produced every real result today.
+
+---
+
 ## 2026-08-23 (evening) — creature skinning is finished, and Sacrifice answered your three questions
 
 ### Skinning: 72 multipliers to 9, and it now meets its own budget
