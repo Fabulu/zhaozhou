@@ -221,7 +221,7 @@ Tmu::Plan Tmu::plan(const Req& r) {
     const uint32_t wu = wrap(iu, m.wrap_u, mask_u);
     const uint32_t wv = wrap(iv, m.wrap_v, mask_v);
     // ROW-MAJOR, matching the only concrete texture layout in this repository
-    // (zref::render::TerrainTileset); charter 15's Morton bullet has no
+    // (zref::render::Tileset, zref_render.hpp:166); charter 15's Morton bullet has no
     // ratified formula anywhere. Recorded as a choice in the contract.
     const uint32_t total = lvl_off + (wv << lw) + wu;
     if (is16) {

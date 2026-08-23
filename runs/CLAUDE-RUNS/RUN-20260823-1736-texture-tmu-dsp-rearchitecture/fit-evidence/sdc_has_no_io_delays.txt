@@ -1,0 +1,36 @@
+# THE PER-BLOCK SDC CONSTRAINS THE CLOCK AND NOTHING ELSE.
+# Evidence gathered 2026-08-23 by re-running quartus_sta on three kept
+# workspaces with report_timing -setup. Same tool, same databases, no re-fit.
+
+== the generated per-block SDC, in full ==
+# Generated per block by tools/quartus/run_block_fit.ps1.
+# The shell SDC is deliberately NOT used here: it names gpu_clk/vid_clk/
+# audio_clk, and leaf blocks name their clock port `clk`.
+create_clock -name clk        -period 10.000 [get_ports {clk}]
+create_clock -name clk_gpu    -period 10.000 [get_ports {clk_gpu}]
+create_clock -name gpu_clk    -period 10.000 [get_ports {gpu_clk}]
+create_clock -name vid_clk    -period 20.000 [get_ports {vid_clk}]
+create_clock -name clk_audio  -period 40.000 [get_ports {clk_audio}]
+create_clock -name audio_clk  -period 40.000 [get_ports {audio_clk}]
+create_clock -name wr_clk     -period 10.000 [get_ports {wr_clk}]
+create_clock -name rd_clk     -period 10.000 [get_ports {rd_clk}]
+derive_clock_uncertainty
+
+== there is no set_input_delay and no set_output_delay ==
+0
+   (0 = neither appears, so every pin->register and register->pin path is UNTIMED)
+
+== FILT_LANES = 2: worst path 20.462 ns, and it runs THROUGH THE FILTER ==
+; Summary of Paths                                                                                       ;
++---------+------------+-----------+--------------+-------------+--------------+------------+------------+
+; Slack   ; From Node  ; To Node   ; Launch Clock ; Latch Clock ; Relationship ; Clock Skew ; Data Delay ;
++---------+------------+-----------+--------------+-------------+--------------+------------+------------+
+; -10.641 ; q_fmt_r[2] ; fres_r[6] ; clk          ; clk         ; 10.000       ; -0.119     ; 20.462     ;
+; -10.639 ; q_fmt_r[2] ; fres_r[6] ; clk          ; clk         ; 10.000       ; -0.119     ; 20.460     ;
+; -10.639 ; q_fmt_r[2] ; fres_r[6] ; clk          ; clk         ; 10.000       ; -0.119     ; 20.460     ;
++---------+------------+-----------+--------------+-------------+--------------+------------+------------+
+
+Path #1: Setup slack is -10.641 (VIOLATED)
+
+== FILT_LANES = 4 and @pre-rearch: the worst path is the SAMPLE COUNTER ==
+   (captured in lanes4_counter_path.txt / pre-rearch_counter_path.txt)

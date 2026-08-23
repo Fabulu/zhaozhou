@@ -35,12 +35,14 @@
 # THE FRONTIER BUILDS ARE COVERAGE, NOT DATA, and here that is the load-bearing
 # half of the sweep. `zhao_texture_tmu` multiplexes its four colour channels
 # through FILT_LANES instances of `zhao_texture_bilerp` in 4/FILT_LANES passes.
-# At the DEFAULT FILT_LANES = 4 there is exactly ONE pass: `pass_c` is the
-# constant PASSES-1, `sel_base` is constantly zero, ST_FILT is unreachable and
-# the channel mux degenerates to a wire. Mutants M11..M16 damage precisely that
-# machinery, and every one of them is ALIVE at the default and dead at 2 and 1.
-# Scoring only the default build would have called six mutants survivors and
-# sent someone hunting a test gap that is not there.
+# At FILT_LANES = 4 there is exactly ONE pass: `pass_c` is the constant
+# PASSES-1, `sel_base` is constantly zero, ST_FILT is unreachable and the
+# channel mux degenerates to a wire. Mutants M11..M15 damage precisely that
+# machinery and every one of them is ALIVE there. M16 is stronger still: it
+# forces `LAST_FILT_PASS` to 0, which is what that localparam ALREADY evaluates
+# to at both 4 and 2, so it is a real defect only at FILT_LANES = 1.
+# Scoring one setting would have called six mutants survivors and sent someone
+# hunting a test gap that is not there -- and no single setting reaches all six.
 # (sweep_surface_stamp.sh hit the identical shape on SQ_RADIX and S03/S04, and
 # sweep_geom_skin.sh on MUL_LANES and M27.)
 #
@@ -60,7 +62,7 @@ BUILD=${ZHAO_BUILD_DIR:-build}
 # have the SAME consumer set -- unlike SURFACE.STAMP's three files, whose sets
 # differed. Declared separately anyway, so that a future target which takes only
 # one of them cannot drift past unnoticed.
-DECLARED_TMU="test_texture_tmu_directed test_texture_tmu_lanes1 test_texture_tmu_lanes2 test_texture_tmu_random"
+DECLARED_TMU="test_texture_tmu_directed test_texture_tmu_lanes1 test_texture_tmu_lanes4 test_texture_tmu_random"
 DECLARED_BIL="$DECLARED_TMU"
 
 declare -A GOLD GOLDHASH

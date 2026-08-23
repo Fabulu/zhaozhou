@@ -278,17 +278,33 @@ module zhao_texture_tmu #(
   // QUARTUS_GOTCHAS.md §8 records that Quartus 17.0.2 rejects a module-scope
   // `if` generate without them while three other frontends accept it.
   //
-  // THE DEFAULT IS 4, AND IT IS THE OPPOSITE CHOICE FROM SURFACE.STAMP'S FOR
-  // THE OPPOSITE REASON. That block defaulted to its CHEAPEST setting because
-  // its demand was met 26.9× over and spending resource past a met demand is
-  // the error its 28 DSPs came from. This block's demand is NOT met — the CLUT
-  // path runs at 0.33× the derived 850,000 samples/frame — so throughput is
-  // the scarce resource here and DSPs are not: 4 lanes cost no cycles at all
-  // and still land inside the 6–9 target. Trading cycles this block does not
-  // have for DSPs it does not need to save would be the same error in the
-  // other direction. If a future pipeline meets the demand with headroom, 2
-  // becomes the right default and it is one parameter away.
-  parameter int unsigned FILT_LANES = 4
+  // THE DEFAULT IS 2, AND IT WAS 4 UNTIL THE FIT ANSWERED. Recorded because the
+  // reasoning that picked 4 was sound and the premise under it was false.
+  //
+  // The argument for 4 was that this block's demand is NOT met (the CLUT path
+  // runs at 0.33× the derived 850,000 samples/frame), so throughput is the
+  // scarce resource and DSPs are not — the opposite of SURFACE.STAMP, which
+  // defaulted to its cheapest setting because its demand was met 26.9× over.
+  // That argument still holds. What was wrong was the estimate it rested on:
+  // FILT_LANES = 4 was predicted to cost 4–8 DSPs, on the reasoning that a
+  // Cyclone V variable-precision block does three 9×9 or two 18×19 and the
+  // twelve products would pack into about five.
+  //
+  // MEASURED: FILT_LANES = 4 is **12 DSPs**. Quartus 17.0.2 Lite packed
+  // NOTHING — one DSP block per `*` operator, whatever the operand widths.
+  // (The same tool behaviour this block's contract already recorded from the
+  // other side: the four instances' identical weight products "did not share".)
+  // So on this kit **DSP blocks = the number of `*` operators**, and the
+  // frontier is 12 / 6 / 3 at FILT_LANES 4 / 2 / 1.
+  //
+  // 12 misses the 6–9 target the DSP campaign set; 6 is the bottom of it. The
+  // cycle that buys it falls entirely on the DIRECT-COLOUR path (II 4 → 5) and
+  // not at all on CLUT, which is the demand-critical one because terrain is
+  // CLUT8. FILT_LANES = 1 is measured and available and is NOT the default:
+  // it would spend two more cycles of a rate already short to save three DSPs
+  // below a target already met, which is the same over-provisioning error the
+  // 28 DSPs came from, pointed the other way.
+  parameter int unsigned FILT_LANES = 2
 ) (
   input  logic clk,
   input  logic rst_n,

@@ -292,3 +292,170 @@ FILT_LANES 4 and 2** and a real defect only at 1 — the deepest frontier mutant
 in the table, and one no default build could ever reach.
 
     linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build
+
+### 2026-08-23 18:1x — `git add -A` staged 288 files, and it nearly went in
+
+Committing move 1 with `git add -A` staged **288 files, 91,980 insertions and
+90,431 deletions**. None of it was mine. The repository's working tree is full
+of **line-ending phantoms**: `git status` without `core.autocrlf=true` reports
+about forty files as modified when their content is identical, and `git add -A`
+does not merely report them, it **normalises and stages** them.
+
+Caught by reading `git diff --cached --stat` before committing rather than
+after. Reset, then staged the ten paths of this run **by name**. The rule for
+the rest of this run, and it costs nothing: `git add -- <explicit paths>`, never
+`-A`.
+
+This is the same failure class as everything in `reports/QUARTUS_GOTCHAS.md` —
+a tool doing something reasonable and unrequested, with no symptom except a
+number nobody looked at. Here the number was in the staging summary.
+
+(Separately: the first `git commit -m @'…'@` PowerShell here-string died with
+`fatal: /: '/' is outside repository`, git having parsed part of the message as
+a pathspec. Switched to `git commit -F -` with a heredoc. Recorded because a
+commit that fails *loudly* is the good case and it still cost a cycle.)
+
+### 2026-08-23 18:1x — another session is committing to this repo, concurrently
+
+HEAD moved twice underneath this run without my touching it: `0f3245a` →
+`d284a86` ("BLOCKERS: suspect every 'throughput met' claim in every contract")
+→ `8e7f974` ("Docket the Field rearchitecture ruling"). Both are by the owner's
+account with a Claude co-author trailer, and **neither touches `fpga/rtl`** —
+checked, not assumed, because a fit's `rtlCleanAtHead` and `sourceCommit` are
+only meaningful if nothing else is moving the RTL.
+
+Recorded because the `@pre-rearch` fit row carries `sourceCommit d284a86`, which
+is **not** the commit that was HEAD when this run started, and a reader
+reconstructing the timeline later would otherwise find that inexplicable.
+
+### 2026-08-23 18:5x — MEASURED at FILT_LANES = 4: 28 → 12 DSPs, and **THREE of my five predictions were wrong**
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_texture_tmu `
+      -ExtraSources fpga/rtl/texture/zhao_texture_bilerp.sv,fpga/rtl/texture/zhao_texture_tmu.sv `
+      -KeepWorkspace
+
+sourceCommit `7403deb`, `rtlCleanAtHead: true`, 894.9 s, **constrained**
+(`Info (332111): 10.000 clk`, saved as `fit-evidence/lanes4_constraint.txt`).
+
+| | @pre-rearch | FILT_LANES = 4 | delta |
+| --- | ---: | ---: | ---: |
+| ALMs | 1,844 | **1,951** | **+107** |
+| registers | 310 | **294** | −16 |
+| **DSP blocks** | **28** | **12** | **−16** |
+| **Fmax** | **199.72 MHz** | **192.46 MHz** | **−3.6%** |
+
+**THE FINDING: twelve products became twelve DSP blocks. One each. No packing
+at all.** SPEC_v1.md predicted 4–8 and reasoned that a Cyclone V
+variable-precision block does three 9×9 *or* two 18×19, so eight 9×9s and four
+18×9s should have packed into about five. **Quartus 17.0.2 Lite packed
+nothing.** Every inferred `*` got its own block regardless of operand width.
+
+That is the same tool behaviour this contract already recorded once, from the
+other side: the four bilerp instances' identical weight products "did not share"
+either. The generalisation, and it is the useful output of this fit:
+
+> **On this kit, DSP blocks = the number of `*` operators in the elaborated
+> design.** Not the number of distinct products, and not the number of DSP-sized
+> multipliers the operands would fit into. Operand width buys nothing back once
+> the operator exists (`QUARTUS_GOTCHAS.md` §5 is the converse — width can make
+> it *worse*).
+
+**Which falsifies the default choice I recorded an hour ago.** 12 misses the
+6–9 target. `FILT_LANES = 2` is 6 products, so by the rule above it should be
+**6 DSPs** — the bottom of the target — and the docket's own prediction ("about
+5–6 DSPs at half rate") was right where mine was wrong. Fitting to confirm
+rather than asserting it.
+
+**The other two wrong predictions, both about direction:**
+
+- **ALMs went UP, +107, where I predicted a fall.** The four 25-bit adder trees
+  did go away; what replaced them is two 9-bit subtracts, two 17-bit adds and a
+  27-bit add per channel, plus the channel multiplexer. I had counted the
+  removals and not the additions.
+- **Fmax went DOWN 3.6%, where I predicted it would improve.** The reason is
+  structural and I should have seen it: the old filter was four *parallel*
+  multiplies feeding one adder tree, depth ≈ mult + 2 adds. The factored form is
+  **serial** — mult → add → sub → mult → add — because the V lerp cannot start
+  until the U lerps finish. Fewer, narrower multipliers, longer path.
+  199.72 → 192.46 MHz is still **1.92× the 100 MHz constraint**, so it costs
+  nothing real; but "fewer multipliers must be faster" was an assumption, not an
+  argument, and it was wrong.
+
+**Registers fell 16**, which is the two `bl_*` byte groups the old code held
+versus... actually no: nothing in the sequential block changed except `pass_r`
+and `fres_r` being *added*. −16 with two registers added is a fitter packing
+difference, not a design one, and I am recording it as unexplained rather than
+inventing a reason for it.
+
+### 2026-08-23 19:1x — SWEEP RUN 1: one survivor, M18, and it is a TRUE equivalent no test can kill
+
+    M18 a CLUT texel reports the filter's alpha instead of the law's 255  *** SURVIVED ***
+
+The mutation replaces `smp_a_o = q_clut_r ? 8'd255 : fin[3]` with
+`smp_a_o = fin[3]`. **It is equivalent for every input this block can be
+handed, and the reason is a line in the same file:**
+
+`zhao_texture_tmu.sv:632-633`, `decode16`'s `default` branch — the one CLUT8
+(format 0) and CLUT4 (format 2) fall into, because the case only names
+ARGB1555 and ARGB4444 — sets **`a_ = 8'd255`**. So on a CLUT sample all four
+alpha taps entering the filter are 255, and a flat footprint filters to itself
+exactly (formal P1 with P2: `Σw = 65,536`, so `Σ 255·w = 255 << 16` and the
+single rescale returns 255). `fin[3]` **is** 255, by two independent
+mechanisms, and removing either leaves the other.
+
+**I tried to find a test that kills it and there is none.** A test would need a
+CLUT sample whose `fin[3] ≠ 255`; `fin[3]` is `bilerp` of four bytes that
+`decode16` has already forced to 255 for every CLUT format code. The input does
+not exist. So this is not a coverage gap — the brief's preference for killing an
+equivalent over arguing it does not apply, because there is nothing to kill it
+with.
+
+**What the sweep actually found is a real fact about the design, and it is worth
+more than the score:** the "a CLUT texel's alpha is 255" law is enforced
+**twice** — once by the mux the contract documents, and once, accidentally, by
+`decode16`'s default arm. The mux is defence in depth, not the sole mechanism.
+That is fine and it stays; recording it means nobody later "simplifies" the mux
+away believing it is load-bearing, or adds a CLUT arm to `decode16` believing it
+is free.
+
+**Not rewritten into a killable mutant.** Replacing M18 with the inverted mux
+(`q_clut_r ? fin[3] : 8'd255`) would be caught instantly on the direct-colour
+path and would score 30/30 — and would delete the finding. A score bought by
+deleting the evidence for it is the failure mode this repository's whole log is
+about.
+
+### 2026-08-23 19:2x — SWEEP RUN 1 COMPLETE: 30 / 30 / 30, caught 28, and the second survivor is a REAL GAP
+
+    linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build
+    pristine models 82607e77dbbe/82607e77dbbe, 4 lanes green
+    ...
+    attempted=30 expected=30 accounted=30 caught=28
+    SURVIVOR: M18 a CLUT texel reports the filter's alpha instead of the law's 255
+    SURVIVOR: M27 a bilinear request fetches one tap instead of four
+    SWEEP-EXIT=0
+
+`attempted == accounted == expected == 30`, so the cross-check passes: every
+mutant re-elaborated, every one linked, no discards. Kept as
+`sweep_run1_28of30.log`.
+
+**M18 is the argued equivalent above. M27 is NOT — it is a hole in the test
+harness, and it is the kind that would have shipped.**
+
+The mutation forces `q_en_r <= 4'b0001`, so a **bilinear** request enables one
+cache lane instead of four. On real hardware three of the four taps would then
+be garbage. `tests/texture/texture_tmu_dev.hpp` did not notice, because its
+modelled cache **ignores `cac_en_o` entirely**:
+
+    for (int k = 0; k < 4; ++k)
+      cac_hw[k] = mem.halfword(static_cast<uint32_t>(top_.cac_addr_o[k]));
+
+Four lanes of correct data, always, enabled or not. The **real**
+`zhao_texture_cache` says the opposite in its own header
+(`zhao_texture_cache.sv:75-76`): "A nearest sample enables lane 0 only
+(`acc_en_i = 4'b0001`); lanes 1–3 are then **not looked up, not counted, and
+not filled**." A disabled lane's halfword is whatever line that lane happens to
+hold — unspecified, and almost never the texel.
+
+So the model was **strictly more generous than the block it stands for**, which
+is the one direction a model must never be wrong in. Fixing it, not arguing it —
+the brief's own preference, and here it is not even a close call.

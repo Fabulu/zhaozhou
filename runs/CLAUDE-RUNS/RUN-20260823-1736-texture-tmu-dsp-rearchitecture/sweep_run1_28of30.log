@@ -1,0 +1,42 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_texture_tmu.sv            test_texture_tmu_directed test_texture_tmu_lanes1 test_texture_tmu_lanes2 test_texture_tmu_random
+   zhao_texture_bilerp.sv         test_texture_tmu_directed test_texture_tmu_lanes1 test_texture_tmu_lanes2 test_texture_tmu_random
+linted 30 mutants at FILT_LANES (4, 2, 1), 0 do not build
+== establishing the pristine baseline
+   pristine models 82607e77dbbe/82607e77dbbe, 4 lanes green
+  B01 the single rounding is truncated (+32768 dropped)  caught
+  B02 the rounding constant is half of what rescale asks for  caught
+  B03 the final rescale shifts 15, i.e. a /255-shaped scale error  caught
+  B04 the U-lerp taps are transposed (the swapped-weight trap)  caught
+  B05 the u difference runs the wrong way  caught
+  B06 the v difference runs the wrong way  caught
+  B07 the A row's u lerp uses the v fraction  caught
+  B08 the v lerp uses the u fraction in BOTH stages  caught
+  B09 the U-stage place value is 128, not 256  caught
+  B10 the B lerp is seeded from the wrong tap  caught
+  B11 the V-stage place value is 128, not 256  caught
+  B12 the V lerp drops its A term, so the filter forgets the u row  caught
+  B13 the v lerp is based on the wrong u row  caught
+  M11 the channel select ignores the pass, so pass 0's channels are filtered every pass  caught
+  M12 ST_OUT filters the pass ST_FILT last ran instead of the LAST pass  caught
+  M13 the lane base shifts the wrong way  caught
+  M14 the held-channel bank is written at the wrong channel index  caught
+  M15 the pass counter never advances  caught
+  M16 ST_FILT always leaves after the FIRST pass (EQUIVALENT at FILT_LANES 4 and 2)  caught
+  M17 red and blue are transposed on the way into the filter  caught
+  M18 a CLUT texel reports the filter's alpha instead of the law's 255  *** SURVIVED ***
+  M19 the held channels are ignored, so only the last pass survives  caught
+  M20 wrap MIRROR clamps instead of folding  caught
+  M21 wrap REPEAT clamps instead of repeating  caught
+  M22 the mip level is off by one  caught
+  M23 the level offset closed form reads the next repunit  caught
+  M24 the CLUT index is forced to zero (the alpha-test case lost)  caught
+  M25 the half-texel bias is dropped  caught
+  M26 stars 1 is not enforced in the fabric: a palette IS filtered  caught
+  M27 a bilinear request fetches one tap instead of four  *** SURVIVED ***
+== restoring the pristine build
+----
+attempted=30 expected=30 accounted=30 caught=28
+SURVIVOR: M18 a CLUT texel reports the filter's alpha instead of the law's 255
+SURVIVOR: M27 a bilinear request fetches one tap instead of four
+SWEEP-EXIT=0

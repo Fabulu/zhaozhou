@@ -2429,7 +2429,7 @@ target_link_libraries(test_texture_tmu_directed PRIVATE zhao_harness zhao_zref)
 # Must match zhao_texture_tmu.sv's FILT_LANES default. The throughput case
 # asserts the exact cycle count the parameter implies, so a drift between the
 # two fails the lane rather than silently measuring the wrong shape.
-target_compile_definitions(test_texture_tmu_directed PRIVATE ZHAO_FILT_LANES=4)
+target_compile_definitions(test_texture_tmu_directed PRIVATE ZHAO_FILT_LANES=2)
 target_include_directories(test_texture_tmu_directed PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/texture)
 verilate(test_texture_tmu_directed
@@ -2454,33 +2454,35 @@ add_test(NAME texture_tmu_random_nightly COMMAND test_texture_tmu_random --night
 set_tests_properties(texture_tmu_random_nightly PROPERTIES
   LABELS "nightly" TIMEOUT 3600)
 
-# THE FILT_LANES FRONTIER — 2 and 1 beside the default 4.
+# THE FILT_LANES FRONTIER — 4 and 1 beside the default 2.
 #
 # zhao_texture_tmu time-multiplexes its four colour channels through
 # FILT_LANES instances of zhao_texture_bilerp, in 4/FILT_LANES passes. The
 # SAMPLES ARE BIT-IDENTICAL at every setting -- the same directed suite runs
 # against the same oracle -- so these two targets are not extra behaviour.
-# They are COVERAGE, and the reason is structural: at FILT_LANES = 4 there is
-# exactly ONE pass, so `pass_c` is the constant PASSES-1, ST_FILT is
-# unreachable, and the channel mux degenerates to a wire. A mutation in the
-# pass counter or in the mux selector is textually live and behaviourally
-# INVISIBLE at that setting and visible at 2 and 1.
+# They are COVERAGE, and the reason is structural. At FILT_LANES = 4 there is
+# exactly ONE pass, so `pass_c` is the constant PASSES-1, `sel_base` is
+# constantly zero, ST_FILT is unreachable and the channel mux degenerates to a
+# wire: six of the thirty sweep mutants are textually live and behaviourally
+# INVISIBLE there. At FILT_LANES = 1 the pass counter runs its full range, and
+# one mutant (LAST_FILT_PASS forced to 0) is invisible at BOTH 4 and 2 and a
+# real defect only at 1. Neither end can be dropped.
 #
 # zhao_surface_sq's S03/S04 were the identical shape on SQ_RADIX, and the
 # SURFACE.STAMP sweep would have scored them as survivors and sent someone
 # hunting a test gap that was not there.
-add_executable(test_texture_tmu_lanes2 texture/texture_tmu_directed.cpp)
-target_link_libraries(test_texture_tmu_lanes2 PRIVATE zhao_harness zhao_zref)
-target_compile_definitions(test_texture_tmu_lanes2 PRIVATE ZHAO_FILT_LANES=2)
-target_include_directories(test_texture_tmu_lanes2 PRIVATE
+add_executable(test_texture_tmu_lanes4 texture/texture_tmu_directed.cpp)
+target_link_libraries(test_texture_tmu_lanes4 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_texture_tmu_lanes4 PRIVATE ZHAO_FILT_LANES=4)
+target_include_directories(test_texture_tmu_lanes4 PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/texture)
-verilate(test_texture_tmu_lanes2
+verilate(test_texture_tmu_lanes4
   PREFIX Vzhao_texture_tmu
   TOP_MODULE zhao_texture_tmu
-  VERILATOR_ARGS -GFILT_LANES=2
+  VERILATOR_ARGS -GFILT_LANES=4
   SOURCES ${ZHAO_TEXTURE_TMU_SV})
-add_test(NAME texture_tmu_lanes2 COMMAND test_texture_tmu_lanes2)
-set_tests_properties(texture_tmu_lanes2 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME texture_tmu_lanes4 COMMAND test_texture_tmu_lanes4)
+set_tests_properties(texture_tmu_lanes4 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 add_executable(test_texture_tmu_lanes1 texture/texture_tmu_directed.cpp)
 target_link_libraries(test_texture_tmu_lanes1 PRIVATE zhao_harness zhao_zref)

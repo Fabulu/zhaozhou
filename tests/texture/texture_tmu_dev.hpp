@@ -150,8 +150,35 @@ class TmuDev {
         if (cac_busy) add(err, "a cache access while one was outstanding");
         cac_busy = true;
         cac_wait = cac_lat;
-        for (int k = 0; k < 4; ++k)
-          cac_hw[k] = mem.halfword(static_cast<uint32_t>(top_.cac_addr_o[k]));
+        // A DISABLED LANE DOES NOT RETURN THE TEXEL, and modelling it as if it
+        // did is how a real defect survived a mutation sweep (2026-08-23,
+        // mutant M27: `q_en_r <= 4'b0001` on a BILINEAR request, i.e. three of
+        // the four taps never fetched). This loop used to ignore `cac_en_o`
+        // and hand back four lanes of correct data unconditionally, which is
+        // STRICTLY MORE GENEROUS than the block it stands for — the one
+        // direction a model must never be wrong in.
+        //
+        // zhao_texture_cache.sv:75-76 states the real semantics: "A nearest
+        // sample enables lane 0 only (`acc_en_i = 4'b0001`); lanes 1-3 are then
+        // not looked up, not counted, and not filled." A disabled lane's
+        // halfword is whatever line that lane happens to hold — unspecified.
+        //
+        // So the model returns the COMPLEMENT of the texel on a disabled lane:
+        // deterministic (a failing vector stays reproducible), and guaranteed
+        // different from the right answer (`~x != x` for every x), which a
+        // fixed poison constant would not be.
+        //
+        // This is safe for a correct block, and the reason is a proved one:
+        // the only requests that disable lanes are nearest ones, nearest
+        // forces `fu = fv = 0`, and at those fractions the filter is the exact
+        // identity on tap 0 (tests/formal/texture_bilerp.sby's P3). Lanes 1-3
+        // cannot reach the output. A block that reads them is defective, and
+        // now it says so.
+        const uint32_t en = top_.cac_en_o;
+        for (int k = 0; k < 4; ++k) {
+          const uint16_t hw = mem.halfword(static_cast<uint32_t>(top_.cac_addr_o[k]));
+          cac_hw[k] = ((en >> k) & 1u) ? hw : static_cast<uint16_t>(~hw);
+        }
       }
       const bool cac_taken = (top_.cac_valid_i != 0) && (top_.cac_ready_o != 0);
 

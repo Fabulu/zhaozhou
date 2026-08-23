@@ -99,6 +99,27 @@ The same Q16 shape is already shipping in this repository — the software raste
 
 **Endpoints, stated because they surprise people:** `fu = fv = 0` gives `w00 = 65,536` and the result is **exactly** `t00` — the filter is the identity at a texel's own sample point, which is what lets `FILTER_NEAREST` force both fractions to zero and take **the same datapath** rather than a parallel one. `fu = 255` is 255/256, **not** 1.0, so `t10` is never weighted fully — the identical unit8 endpoint `zhao_raster_blend` documents for `a = 255`.
 
+### How it is COMPUTED — the factored form, 8 products to 3 (2026-08-23)
+
+The law above is what the filter must equal. It is not how the filter is built, and the difference is 20 multipliers.
+
+Written literally, each channel is four texel-by-weight products plus four weight products — **eight multiplies**, four instances, **32 products of which 12 are literal duplicates**. `zhao_texture_bilerp` now computes the identical integer by factoring:
+
+```
+A = t00·(256−fu) + t10·fu  =  (t00 << 8) + (t10 − t00)·fu    1 product
+B = t01·(256−fu) + t11·fu  =  (t01 << 8) + (t11 − t01)·fu    1 product
+S = A·(256−fv)   + B·fv    =  (A   << 8) + (B   − A  )·fv    1 product
+out = (S + 32768) >> 16                                      1 rescale
+```
+
+Expanding `S` gives `t00·w00 + t10·w10 + t01·w01 + t11·w11` term for term. **Three products a channel, twelve across the block, and there are no weights left to duplicate — `w00` does not exist any more.**
+
+**THIS IS NOT THE FORM §3 REFUSES, and the distinction is the whole argument.** The single-rounding law rejects "two lerps then a lerp" because the textbook writes each lerp as a **rounded** unit8 blend — three `rescale` calls, bits lost at every stage. Nothing above is rounded: `A` and `B` are exact integers in a signed-18 lane (their true range is `[0, 65,280]`), `S` is the exact weighted sum in a signed-27 lane, and there is **exactly one** `(S + 32768) >> 16`, on the whole sum. This is algebraic factoring of the wide-integer expression §3 *demands*, not staged rounding of it.
+
+**The operand widths are the honest ones**, which is `reports/QUARTUS_GOTCHAS.md` §5 applied rather than quoted: `(t10 − t00)` is a signed 9, `fu`/`fv` are signed 9s (a unit8 with its sign bit clear), `(B − A)` is a signed 18. So the three multiplies are **9×9, 9×9 and 18×9**. The form this replaced declared its texel products as `{17'd0, t00_i} * {8'd0, w00}` — a **25×25** multiply whose real need was 8×17, and §5 measured that exact class of slack costing `zhao_geom_lod` ten DSP blocks.
+
+**The proof did not have to move, and that is why this was chosen over the weight hoist this contract sanctioned in 2026-08-21.** `zhao_texture_bilerp`'s ports are unchanged, so `tests/formal/texture_bilerp.sby` and `texture_bilerp_fv.sv` needed **not one line changed**: P1 derives the four weights *in the harness* from free `fu_free`/`fv_free` and asserts `out == law`, so it now proves the **factored** form equals the four-weight law over all 2^48 inputs. Hoisting would have changed a module's ports, its directed tests, its formal harness and this contract to remove 12 products; factoring removes 20 and changes no interface.
+
 **The one-LSB traps, named so the tests can aim at them:** truncate instead of round (the tie `t = (0,255), fu = 128, fv = 0` gives `Σ + 32768 = 8,388,608` exactly, so round gives 128 and truncate gives 127 — pinned by name); swapped weights (`w10` paired with `t01`, invisible whenever `fu == fv` or the footprint is symmetric, so the tests use asymmetric fractions); a `/255` scale (weights are unit8 **products**, so the scale is 256·256 — the same /256-vs-/255 distinction `zhao_raster_blend` argues at length: this is a **weighting**, not a quantizer).
 
 ### Colour expansions
@@ -132,7 +153,7 @@ with `REP4[L] = (4^L − 1)/3` = 0, 1, 5, 21, 85, 341, … — the base-4 repuni
 
 ### Texture layout — ROW-MAJOR, a CHOICE
 
-Charter §15's Layout bullet asks for "swizzled/Morton-order small blocks", but **no Morton formula is ratified anywhere in this repository**, while the only concrete texture layout that exists — `zref::render::TerrainTileset` (`tiles[t][(ty<<6)+tx]`, consumed by `reference/src/zrender/rast.cpp`) — is row-major. Matching the shipping reference beats inventing a swizzle the asset compiler does not emit. Changing it later is a change in this block's address generator and in the asset compiler, and nothing else.
+Charter §15's Layout bullet asks for "swizzled/Morton-order small blocks", but **no Morton formula is ratified anywhere in this repository**, while the only concrete texture layout that exists — `zref::render::Tileset` (`reference/include/zref/zref_render.hpp:166` — `tiles[t][(ty<<6)+tx]`, consumed by `reference/src/zrender/rast.cpp:250`) — is row-major. Matching the shipping reference beats inventing a swizzle the asset compiler does not emit. Changing it later is a change in this block's address generator and in the asset compiler, and nothing else.
 
 ## Wrap modes
 
@@ -157,7 +178,42 @@ Applied to the integer texel coordinate at the selected level, per axis, per tap
 **The ledger says "1 sample per clock (bilinear = 1 request)". Half of that is met and half is not, and the shortfall is stated rather than papered over.**
 
 - **"bilinear = 1 request" — met.** One request beat produces one sample beat; the four taps are one cache access on four lanes, not four serialised lookups.
-- **"1 sample per clock" — NOT met by this increment.** The block is a four-state machine with no pipelining, so on an always-hit cache it sustains **one sample per 4 clocks** for direct colour and **one per 6** for CLUT (the palette pass). Reaching one per clock needs a pipelined address→fetch→filter chain and a cache that accepts an access every cycle while a miss is being serviced; the cache side of that already exists (its response stage is one deep and it accepts on the cycle the previous response is taken), the TMU side does not. That is a datapath change to this file, not an interface change: the ports, the mode word and the oracle are unaffected.
+- **"1 sample per clock" — NOT met, and the ledger's number is not the one that matters anyway.** The block is a state machine with no pipelining, so on an always-hit cache it sustains **one sample per 4 clocks** for direct colour at `FILT_LANES = 4` (5 at 2, 7 at 1) and **one per 6** for CLUT at every setting, because a palette is never filtered and the CLUT path therefore never enters `ST_FILT`.
+
+### The demand is DERIVED from Sacrifice, and it is not one per clock — it is one per two
+
+`docs/OWNER_DOCKET.md`, "THE THREE DEMAND NUMBERS", entry 2. Terrain is layered **tile + detail + lightmap** (`sacmap.d:136-174`), so **≥3 samples per terrain pixel**; tiles are 64×64 CLUT8, detail textures 256×256, one 256×256 lightmap per map, and there is **no alpha splatting between tile types** — the tile index is per-cell and hard-edged, which is a simplification in our favour. At 92,160 pixels (Z60) with 3× overdraw that is **829,440 samples/frame**, rounded up to **850,000** for headroom.
+
+Against `design/budgets/latency.md`'s **compute** budget of **1,666,667 clocks/frame** — *not* the 251,520 raster period, which is 6.6× smaller and is also called "gpu cycles" — the demand is **one sample every two clocks.**
+
+### Measured against it, and the shortfall is 3×
+
+**MEASURED 2026-08-23 by `tests/texture/texture_tmu_directed.cpp:test_throughput_against_the_derived_demand`**, which asserts both intervals *exactly* so neither can drift. Samples/frame is `min(Fmax, 100 MHz) / (60 × II)`; this block's constrained Fmax is 199.72 MHz, so the shared `gpu_clk` is the binding term and the figure is `1,666,667 / II`:
+
+| path | II | samples/frame | vs. 850,000 |
+| --- | ---: | ---: | ---: |
+| direct colour (`FILT_LANES` 4 / 2 / 1) | 4 / 5 / 7 | 416,667 / 333,333 / 238,095 | 0.49× / 0.39× / 0.28× |
+| **CLUT — the demand-critical path** | **6** | **277,778** | **0.33×** |
+
+**Terrain is CLUT8, so the 0.33× row is the one to read.** Note also that this shortfall is **not** what the 28 DSPs were buying: every multiplier was in the filter, and the CLUT path does not use the filter at all.
+
+### What reaching the demand takes, designed but not built
+
+**II = 2 is the cache access port's own floor, and it coincides exactly with the demand.** A CLUT sample needs two accesses — texel then palette, unavoidably serial because the palette address is a function of the returned index — and `zhao_texture_cache` accepts one access per clock (`acc_ready_o = (need_c == 0) && !fill_busy_r && (!s1_v_r || smp_ready_i)`, a 1-deep response pipeline). Two accesses through a one-per-clock port is II = 2, which is 833,333 samples/frame: **1.005× the derived 829,440 and 0.98× the 850,000 it was rounded up to.**
+
+The three things that needs, which this block does not have:
+
+1. a **2-entry in-flight record** — format, CLUT flag, the two fractions, byte/nibble select, palette base, source id and the four returned halfwords, about 134 bits an entry. The 128-bit address bank is *dead* once the access is issued and would not be duplicated;
+2. an **issue arbiter** over the single cache port, palette-before-texel so that order is preserved;
+3. an **in-order completion**, because a direct-colour request behind a CLUT one would otherwise finish first and the sample channel would go out of order.
+
+`mode_error_o` would keep pulsing in the cycle after acceptance, which is how `tests/texture/texture_tmu_dev.hpp` attributes it; at II = 2 acceptances are two cycles apart, so attribution stays unambiguous.
+
+**One thing outside this block would also have to move, and it is a test, not RTL.** `texture_tmu_dev.hpp` models a **strictly one-outstanding** cache (`if (cac_busy) add(err, "a cache access while one was outstanding")`), which the real `zhao_texture_cache` is not. Bringing the model up to the real block's 1-deep pipeline is a faithfulness *improvement*; it is named here in advance so it cannot later be mistaken for a test relaxed to fit an RTL bug.
+
+**It is a datapath change to this file only** — the ports, the mode word and `zref::Tmu` are all unaffected.
+
+**One cycle of it is nearly free and is deliberately NOT taken on its own.** `req_ready_o = (st_r == ST_IDLE)` refuses the next request during `ST_OUT`, so every sample pays a cycle for a handshake that could overlap; `(st_r == ST_IDLE) || (st_r == ST_OUT && smp_ready_i)` would make it 3 and 5 instead of 4 and 6, and the ready-depends-on-ready path it creates is one `zhao_texture_cache` already has and documents (`acc_ready_o` line 331). It is left alone because it is **not enough to change the answer** — 5 clocks is still 0.39× the demand — while it *is* enough to change the Backpressure rules section above, the `variable_bounded` measurement and every mutation score. It belongs in the II = 2 change, as one line of it, not as a separate increment that buys 20% and costs a full re-verification.
 
 ## Overflow and malformed-input behaviour — it is LOUD
 
@@ -186,9 +242,11 @@ It restates no arithmetic it can delegate: the RGB565 expansion is `zref::sky::r
 
 ## Directed tests
 
-`tests/texture/texture_tmu_directed.cpp` (driver `tests/texture/texture_tmu_dev.hpp`) — **73 checks**, every one stepped through the RTL and `zref::Tmu` with the RGB, the alpha, the CLUT index, the source id and the `mode_error` verdict compared.
+`tests/texture/texture_tmu_directed.cpp` (driver `tests/texture/texture_tmu_dev.hpp`) — **76 checks**, every one stepped through the RTL and `zref::Tmu` with the RGB, the alpha, the CLUT index, the source id and the `mode_error` verdict compared. **The same file is built three times**, at `FILT_LANES` 4, 2 and 1 (`texture_tmu_directed`, `texture_tmu_lanes2`, `texture_tmu_lanes1`); not one sampled byte differs between them, which is what makes `FILT_LANES` a resource axis rather than a behaviour one.
 
 Cases: all five formats with their expansions pinned by value (0xF800 → pure red, 0xFFFF → full white, 0x1234 ARGB4444 → 11/22/33/44, ARGB1555's alpha bit → 0 or 255, CLUT4's nibble selection across all four texels of a row); **CLUT index 0 end to end** — the eight texels of a row report indices 0..7 exactly, and feeding those three fields into `zref::FragmentPipeline::star_disc_masked` kills exactly one fragment, writes seven, and gives each survivor a glow tag carrying **its own** CLUT intensity; the three wrap modes at every boundary including negative coordinates, plus the sky drum's per-axis `u-mirror / v-clamp`; **MIRROR against `zref::terrain::mirror_texel`** over 280 coordinates spanning a full period at a third of a texel a step; nearest as the bilinear identity at a fractional coordinate; the bilinear **rounding tie** by name, both endpoints, and 24 asymmetric footprints that a weight swap would move; the half-texel bias (bilinear == nearest at all four texel centres); mip selection boundaries (0x0F → level 0, 0x10 → level 1, 0x1F → 1, 0x20 → 2, 0x30 → 3), the `MAX_LEVEL` clamp, `MIP_EN` off, and the level-offset closed form against the summation loop at every legal `(LOG2W, LOG2H, level)`; all four mode-error cases including the proof that the bilinear-on-palette case really does sample nearest; the non-square 16×64 beam ramp; and **nine timing patterns** that must agree byte for byte, with the `variable_bounded:16` claim measured.
+
+**And, since 2026-08-23, the THROUGHPUT — which nothing measured before.** `test_backpressure_and_latency` asserted accept-to-retire and byte stability; the ledger's "1 sample per clock" and this contract's "one per 4 / one per 6" were **prose**, which is precisely the shape `reports/REMAINING_BLOCKERS.md` now tells every block to distrust, sitting inside the suite that was supposed to catch it. `test_throughput_against_the_derived_demand` measures both initiation intervals on an always-hit cache and asserts them **exactly** — 6 for CLUT at every setting, `3 + PASSES` for direct colour — and prints samples/frame against the docket's derived 850,000. The integer division it uses is exact rather than approximate, and the case says why: the drain is strictly less than the interval on every path (3 < 4, 5 < 6, 6 < 7).
 
 ## Randomized differential tests
 
@@ -278,4 +336,6 @@ None on hardware. **Not composed with TEXTURE.CACHE in RTL**: the ledger registe
 
 Sample modes are spec constants; secondary decal modes are cut-order 7 (§26).
 
-Deliberately not built in this block, so the next wave knows: no trilinear and no LOD derivation; no anisotropic (§26 refuses it); no block-compressed formats; no border colour; no texture writes; no second sampler of any kind (§26); no `mosaic_pick` port (it rides `req_base_i`); no `frame_tick` shadow latch or catalog-id binding; and no pipelining — the throughput shortfall is stated under Target throughput rather than hidden.
+Deliberately not built in this block, so the next wave knows: no trilinear and no LOD derivation; no anisotropic (§26 refuses it); no block-compressed formats; no border colour; no texture writes; no second sampler of any kind (§26); no `mosaic_pick` port (it rides `req_base_i`); no `frame_tick` shadow latch or catalog-id binding; and no pipelining — the throughput shortfall is stated under Target throughput rather than hidden, with the II = 2 design that would close it written down beside it.
+
+**And NOT non-power-of-two textures, which is the one exclusion on this list that is a resource decision rather than a scope one.** `docs/OWNER_DOCKET.md` measures that Sacrifice's creature textures are 256 wide with *arbitrary* height up to 799 — only **81 of 637 (12.7%)** are power-of-two in both axes, because each body-part texture is a vertical atlas strip whose height is whatever that part needed (`saxs.d:90`). The fix is an **asset-pipeline repack**, already docketed, and it is a fix rather than a workaround for a specific reason: `LOG2W`/`LOG2H` are what make texel conversion, the mip level offset and the row-major index all *shifts*. Arbitrary dimensions would put a **multiply on the per-sample address path** of the block whose entire 2026-08-23 rearchitecture was removing multiplies from the sample cone. Everything else Sacrifice ships is strictly power-of-two and square, and nothing exceeds 256×256.
