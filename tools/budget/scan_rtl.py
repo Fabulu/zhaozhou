@@ -49,7 +49,11 @@ One record per module, covering what the ruling asked for:
                   (SURFACE.STAMP computed one 66-bit rescale twice, the second
                   time only for a ledger bit)
   arrays          total bits, read style (SYNC/ASYNC), reset-touched, dynamic
-                  bank selection, read/write port counts, expected RAM/ROM
+                  bank selection, read/write port counts, ACCESS SITES PER
+                  ELEMENT (which separates storage from a pipeline), and the
+                  expected RAM/ROM behaviour
+  const_roms      combinational selects over many constants -- a ROM built from
+                  LUTs, which no array check can see because it is not an array
   interface       direct input->arithmetic->output paths, FSM state count,
                   ready-only-in-IDLE, inferred minimum initiation interval
   counters        counters whose enable depends on deep combinational logic
@@ -63,6 +67,11 @@ WHAT IT DOES NOT DO, stated so nobody reads more into a GREEN
   signedness change that cost discontinuously.  Use
   `tools/budget/calibration.json` to turn these counts into resources.
 * It does not time anything.  Depth here is AST depth, not nanoseconds.
+* Its detectors are validated by positive and negative controls in
+  `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/validate_detectors.py`.
+  Run them after changing a rule.  ONE OF THEM HAS ALREADY CAUGHT A DETECTOR
+  THAT COULD NEVER FIRE, and a detector that never fires is indistinguishable
+  from a clean repository.
 * The inferred initiation interval is derived from the state-transition graph.
   It is an upper bound on throughput, not a measurement, and a block whose II
   matters still needs an executable II test -- which is why `NO_II_TEST`
