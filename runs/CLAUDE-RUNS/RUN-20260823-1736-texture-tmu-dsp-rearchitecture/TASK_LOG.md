@@ -1013,3 +1013,37 @@ pins `smtbmc boolector`), or decomposing P1 into white-box lemmas on the DUT's
 own `a_s`/`b_s` so the solver chains three easy equalities instead of one hard
 one. Neither attempted here — it is a session's work and the honest state is
 recorded instead of a guess at the outcome.
+
+### 2026-08-23 21:3x — a concurrent session reviewed this run and caught a rule I had overstated
+
+`9edcabf`, from the other session active in this repo tonight: **"DSP blocks =
+the number of `*` operators, whatever the operand widths"** — the first half is
+measured, **the qualifier is contradicted by our own evidence**.
+`reports/QUARTUS_GOTCHAS.md` §5 records the *same* `zhao_geom_lod` source costing
+**28** DSPs at 72-bit operands and **18** at 64-bit, which is impossible if width
+were irrelevant, and a 33×33 signed product is several blocks rather than one.
+
+I had written the loose version in **four** places — `design/budgets/dsp.md`
+(which they fixed), the RTL header, the contract and the docket (which I have
+now fixed to match). Corrected to:
+
+> each nonconstant `*` creates **one physical multiplier structure** and the
+> tool will not merge two of them however small; but that structure's **cost**
+> jumps discontinuously with operand width and signedness. **The operator count
+> is a LOWER BOUND**, exact only while every operand stays inside one block's
+> native width.
+
+**Which is a better account of this block's own result, not just a caveat.** The
+25×25 form that was replaced violated the width half; the 9×9 and 18×9 form
+satisfies it. So the cut removed a *count* problem **and** a *width* problem, and
+saying only the first understates why it worked.
+
+Recorded here because it is the third correction in this run's final hour —
+after the 37 ns figure and the formal proof — and all three have the same shape:
+**a true observation generalised one clause too far.** The observations were
+measured; the clauses were not.
+
+The other session also independently re-derived and published the SDC finding
+(`5837e02`), the 37 ns correction (`9753473`) and a docket entry for the two
+open TMU failures (`5387aba`), which is a useful independent check on the parts
+of this run that matter most.
