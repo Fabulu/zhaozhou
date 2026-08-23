@@ -671,6 +671,129 @@ Both have the same shape as the `terrain_lod` false regression, the inflated
 21/22 sweep score, and the 47 fits with no timing objective: **the artifact was
 real, and it was an artifact of something other than what it was read as.**
 
+### 14:30 - GEOM.SKIN MEASURED: 72 -> 9 DSPs, census 251 -> 188  (`e5b7fc7`)
+
+Constrained, `Info (332111): 10.000 clk` captured live from the workspace
+before the harness deleted it and saved as evidence.
+
+| | before | after |
+| --- | ---: | ---: |
+| DSP blocks | 72 | **9**  (-63, -87.5%) |
+| ALMs | 1,801 | 2,187  (**+386**) |
+| registers | 145 | 1,448 |
+| Fmax | never measured | **58.45 MHz** |
+
+9 against a 12-18 target: **8% of the device for the block that was 64%.**
+
+**The agent recorded two pieces of bad news rather than rounding them off, and
+both are more useful than the headline.**
+
+**(a) ALMs ROSE, which falsifies a standing claim of this campaign.** I have
+been repeating that "ALMs fell every time as well, which kills the objection
+that sequencing trades area for DSPs". True of `field_seq`, `terrain_lod` and
+`geom_lod`; **not true here.** Those were wide parallel datapaths collapsing
+into one. GEOM.SKIN was already lean and its area genuinely **was** the
+multipliers, so sequencing had to add bookkeeping instead — 145 registers became
+1,448 (a 24-word palette latch, six 65-bit accumulators, lane and destination
+pipelines). The trade is still overwhelming — 63 DSPs is 56% of the DSP budget,
+386 ALMs is 0.9% of the ALM budget — but **the general claim was too broad and
+is withdrawn** in `STATUS.md` (`a450fe0`).
+
+**(b) 58.45 MHz does not meet the block's own demand.** At that clock a
+10-cycle engine serves **97,417 vertices/frame against the ruled 120,000**. The
+DSP win does not matter if the clock cannot deliver the vertices. **No guess at
+the cause was recorded**, which is the right discipline.
+
+Sweep: 28 attempted, 28 accounted, **26 caught, 2 equivalent** — and one is
+reported as a **failed prediction** (M28, the rigid `n_rp` mask; the agent
+expected `MUL_LANES=6` to catch it and says plainly it was wrong).
+
+### 14:40 - Fabian: "58 mhz is pure ass" — promoted to top priority
+
+Asked for the worst path in the **same from/to/logic-levels form** that turned
+the Field finding from alarming into a one-line fix. The `-KeepWorkspace`
+diagnosis run was already planned, with `MUL_LANES=1` doubling as the diagnosis
+point since the blend logic is identical at every lane count.
+
+Gave a hypothesis explicitly **to test, not adopt**: six 65-bit accumulators,
+and if a DSP product reaches that adder combinationally and is saturated before
+being registered — multiply, wide add, saturate in one clock — that is a
+plausible ~17 ns; the standard fix being the DSP's own output register, which
+costs no ALMs and no DSPs on Cyclone V. **Explicitly told not to act on it
+until STA confirms**, citing the three most expensive mistakes this project has
+made, all of which were acting on a plausible cause instead of a measured one.
+
+**And flagged an arithmetic trap in the fix:** vertices/frame is
+`clock / cycles`. Going 58.45 -> 100 MHz while 10 -> 11 cycles nets +71% and
+clears 120,000 — but a fix that adds two stages to reach 90 MHz comes out
+**behind**. The number that decides success is **vertices/frame, not MHz**, and
+that is what must be reported.
+
+**What two measurements tell us that one did not:** both blocks miss the clock,
+but in completely different regimes. 8.59 against 58.45 is not one systemic
+fault — it is two separate problems, and the hazard scan found GEOM.SKIN does
+not carry the Field engine's shape at all. Thirty-nine blocks still have no
+speed figure.
+
+### 15:00 - WIDESCREEN: docketed, and proved viable  (`3b5551b`, `61a9db0`, `6591003`, `c5e9ba9`)
+
+Owner asked for widescreen on the docket **and a viability proof**. Full write-up
+in `docs/OWNER_DOCKET.md`. The proof found three things the proposal had not.
+
+**(1) An impossibility the proposal missed.** 16x16 tiles do not divide 216
+(13.5), 234 (14.625) or 180 (11.25). And it cannot be fixed by choosing a better
+number: for an integer scale `s` to 1920x1080 the source height is `1080/s`, and
+for that to be a multiple of 16, 1080 must be divisible by `16s` — but
+**1080 = 2^3 x 3^3 x 5 has only three factors of two.** No integer scale to
+1080p yields a tile-exact height, at any resolution. Verified by enumeration as
+well as by factorisation.
+
+Resolved by decoupling the tile grid from the displayed area: store 384x224
+(24 x 14 = 336 exact tiles, 172,032 B), display a **centred** 384x216 window
+with 4-row guards. Centring verified free — same 14 tile rows either way — and
+it means **neither visible edge coincides with a buffer edge**. The camera is
+genuinely 16:9 rather than a cropped 16:10 image.
+
+**(2) 416 px width would have SILENTLY CORRUPTED the binner.**
+`zhao_geom_binner.sv:205-217` has `GRID_W = 24` as a compile-time constant
+**inside the tile-RAM address arithmetic**. 416 px needs 26 columns; the row
+stride goes wrong by 2 and tile rows alias. 390 entries still fits the 576-entry
+RAM, so it corrupts rather than overflows. **384 needs no binner change** — this
+settles 384x216 on its own, for a reason nobody had raised.
+
+**(3) A LIVE BUG, unrelated to widescreen.**
+`reference/src/zref_video.cpp:18-27` declares `kTable[3]` and returns
+`kTable[mode & 3u]`. The mask admits 0..3; the table has three entries.
+**Verified by reading the file directly.** Unreachable today because every entry
+point rejects mode 3 — **and that unreachability is exactly what makes the fix
+provably golden-neutral**, since no capture can contain it. Worth fixing before
+a fourth mode turns it live. *(Open item.)*
+
+Also disproved "value 3 is available": three `else-is-DUO` ternaries,
+`ZHAO_TIMING[0:2]` out of bounds (already guarded by an assertion added after a
+real defect), and a `default:` arm that would make a fourth mode **silently
+fetch nothing**. Blast radius ~61 live files; `zhao_pkg.sv` is frozen with 18
+sites and the ABI is generated.
+
+**WIDE DUO** docketed too: two 192x144 views (exactly 4:3, exactly 12x9 tiles,
+symmetric 36/36 borders) inside the 384x216 window. Structured like today's Duo
+— **store the two views only, manufacture the borders at scanout** — so each
+view is its own grid at its own origin and shared-canvas tile alignment never
+arises. Had they gone into a shared 384x224 canvas they would not have been
+tile-aligned and each would have cost 10 tile rows instead of 9.
+**216 tiles against Duo's 384 and Z60's 360; 1,728 bursts/frame against 3,072
+and 2,880 — cheaper than every mode the console currently has.**
+192 px = 384 B = exactly 6 bursts, which matters because the fetch client has
+**no masked-tail path**.
+
+## Open items
+
+* **`reference/src/zref_video.cpp:18-27` OOB read** — one line, provably
+  golden-neutral, not yet fixed.
+* `zhao_geom_skin` at 58.45 MHz — diagnosis in flight, top priority.
+* the post-fix Field Fmax; sweep at 29/38, all caught.
+* the depth-172 proof re-run on the **fixed** RTL, and its budget number.
+
 ---
 
 ## Subagent Spawns
