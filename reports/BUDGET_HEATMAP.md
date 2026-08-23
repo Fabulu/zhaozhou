@@ -5,14 +5,14 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `8a3f29f6`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `7b776762`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **41** |
+| modules with a map of **this exact RTL** | **45** |
 | modules with a fit of this exact RTL | 0 |
-| modules with any map | 41 |
+| modules with any map | 45 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
 | calibration points measured | 0 |
@@ -45,6 +45,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_geom_lod` | 6 | 6 | - | **0** | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_tess` | 6 | 6 | - | **0** | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_texture_tmu` | 6 | 6 | - | **0** | 6 | 3.06x | `NO_CURRENT_FIT`, `NO_RESERVE`, `PARETO_UNPROVEN` |
+| `zhao_field_exec_shared` | 3 | - | 20,817 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_field_seq` | 3 | 3 | 22,865 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `PARETO_UNPROVEN` |
 | `zhao_terrain_lod` | 3 | 3 | - | **0** | 6 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_forge_cliff` | 2 | - | 119,808 | 82,944 (2 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
@@ -52,7 +53,6 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_cmd_dma` | - | 0 | 33,280 | - | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_debug_counters` | - | - | 2,560 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_curve` | - | - | - | - | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_exec_shared` | - | - | 20,817 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_normalize` | - | - | 7,967 | - | 14 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp` | - | - | 4,112 | - | 7 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp24_rom` | - | - | 7,967 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -103,13 +103,14 @@ II=1. Both must come out RED from mechanical rules alone.
 | block | map DSP | II | critical-path family | debt flags |
 | --- | ---: | ---: | --- | --- |
 | `zhao_geom_setup` | 4 | 1 | MULTIPLY(4, widest 21-bit) | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_texture_mosaic` | 4 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_texture_bilerp` | 3 | 1 | MULTIPLY(3, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_clip` | 2 | 1 | MULTIPLY(2, widest 23-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_blend` | 1 | 1 | MULTIPLY(1, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_cmd_decoder` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_dc_sdp_ram` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_debug_trace` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_alu` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_alu` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_arena` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_hps_arbiter` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_hps_bridge` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -127,8 +128,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_surface_blend` | 0 | 1 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_sq` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_synth_probe` | - | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_texture_mod255` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_texture_mosaic` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_texture_mod255` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_video_framectl` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_video_mode` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_video_scaler` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -142,6 +142,33 @@ blocks. Not one of the 41 fitted rows describes the RTL at HEAD, so every
 module in the design carries `NO_CURRENT_FIT` and no module can currently
 reach GREEN however clean its source is. Closing that is a re-fit campaign,
 which this run deliberately does not start.
+
+## ALMs, and the resource nobody was counting
+
+The DSP campaign has had this project's attention for a week. **The two largest
+resource items in the repository have no DSPs at all**, carry no fit row, and
+therefore appear in no census: they are storage described as logic.
+
+Device: **41,910 ALMs**. `mapEstimatedAlms` is Analysis and Synthesis' own
+estimate, and it is an estimate -- but a block estimating over twice the whole
+device is not a question of estimator error.
+
+| block | est. ALM | % of device | DSP | expected storage bits | inferred |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `zhao_surface_sheet` | 95,947 | **229%** | 0 | 131,072 | **0** |
+| `zhao_forge_cliff` | 33,109 | **79%** | 2 | 119,808 | 82,944 |
+| `zhao_field_seq` | 7,958 | 19.0% | 3 | 22,865 | **0** |
+| `zhao_terrain_project` | 5,503 | 13.1% | 33 | - | 3,822 |
+| `zhao_geom_bin_pipe` | 5,299 | 12.6% | 21 | 75,712 | 75,712 |
+| `zhao_geom_project` | 5,028 | 12.0% | 33 | - | 2,870 |
+| `zhao_field_exec_shared` | 4,793 | 11.4% | 3 | 20,817 | **0** |
+| `zhao_raster_tile_pipe` | 4,465 | 10.7% | 9 | 32,768 | 32,768 |
+| `zhao_geom_pose_decode` | 2,520 | 6.0% | 18 | 12,288 | 12,288 |
+| `zhao_geom_skin` | 2,494 | 6.0% | 9 | - | **0** |
+| `zhao_terrain_bake` | 2,324 | 5.5% | 17 | 1,089 | **0** |
+| `zhao_raster_edgewalk` | 2,308 | 5.5% | 2 | - | **0** |
+| `zhao_texture_tmu` | 1,984 | 4.7% | 6 | - | **0** |
+| `zhao_terrain_patch` | 1,952 | 4.7% | 0 | - | **0** |
 
 ## Is the map lane trustworthy? Measured, not assumed
 
@@ -210,6 +237,7 @@ costs no throughput, because the spare cycles are already in the frame.
 | `zhao_geom_lod` | 6 | 1 | - | - | - | - | - |
 | `zhao_terrain_tess` | 6 | 7 | - | - | - | - | - |
 | `zhao_texture_tmu` | 6 | 6 | 3.06x | **0.30x UNDER** | - | - | - |
+| `zhao_field_exec_shared` | 3 | 1 | - | - | - | - | - |
 | `zhao_field_seq` | 3 | 1 | - | - | - | - | - |
 | `zhao_terrain_lod` | 3 | 1 | - | - | - | - | - |
 | `zhao_forge_cliff` | 2 | 2 | - | - | - | - | - |
@@ -253,6 +281,8 @@ Leaf modules only -- a module that instantiates another would double-count it.
 | `zhao_texture_tmu` | 6 |  |
 | `zhao_terrain_bake_delta` | 4 | yes |
 | `zhao_geom_setup` | 4 |  |
+| `zhao_texture_mosaic` | 4 |  |
+| `zhao_field_exec_shared` | 3 | yes |
 | `zhao_field_seq` | 3 |  |
 | `zhao_terrain_lod` | 3 |  |
 | `zhao_texture_bilerp` | 3 | yes |
@@ -261,7 +291,7 @@ Leaf modules only -- a module that instantiates another would double-count it.
 | `zhao_geom_clip` | 2 |  |
 | `zhao_raster_blend` | 1 | yes |
 
-**Top-level total: 196 DSP** against a 112-DSP device and a policy ceiling of 85-90.
+**Top-level total: 200 DSP** against a 112-DSP device and a policy ceiling of 85-90.
 
 This total is not the console's number. It sums per-module maps, which share
 nothing, and it counts every module that is not textually inside another --

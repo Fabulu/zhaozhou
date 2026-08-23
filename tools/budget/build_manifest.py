@@ -583,6 +583,33 @@ def write_heatmap(path, man, calib, wl):
                 ", ".join("`%s`" % f for f in r["debtFlags"])[:70] or "-"))
         L.append("")
 
+    # ---- ALM ledger -----------------------------------------------------
+    L.append("## ALMs, and the resource nobody was counting")
+    L.append("")
+    L.append("The DSP campaign has had this project's attention for a week. **The two largest")
+    L.append("resource items in the repository have no DSPs at all**, carry no fit row, and")
+    L.append("therefore appear in no census: they are storage described as logic.")
+    L.append("")
+    L.append("Device: **41,910 ALMs**. `mapEstimatedAlms` is Analysis and Synthesis' own")
+    L.append("estimate, and it is an estimate -- but a block estimating over twice the whole")
+    L.append("device is not a question of estimator error.")
+    L.append("")
+    L.append("| block | est. ALM | % of device | DSP | expected storage bits | inferred |")
+    L.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+    for r in sorted(R, key=lambda x: -(x["resources"].get("mapEstimatedAlms") or 0))[:14]:
+        res, ram = r["resources"], r["expectedVsInferredRam"]
+        a = res.get("mapEstimatedAlms")
+        if not a:
+            continue
+        pct = 100.0 * a / 41910
+        L.append("| `%s` | %s | %s | %s | %s | %s |" % (
+            r["module"], "{:,}".format(a),
+            ("**%.0f%%**" % pct) if pct > 25 else ("%.1f%%" % pct),
+            res.get("mapDspBlocks", "-"),
+            "{:,}".format(ram["expectedTotalBits"]) if ram["expectedTotalBits"] else "-",
+            "{:,}".format(ram["mapBlockMemoryBits"]) if ram["mapBlockMemoryBits"] else "**0**"))
+    L.append("")
+
     # ---- map-vs-fit agreement -------------------------------------------
     L.append("## Is the map lane trustworthy? Measured, not assumed")
     L.append("")
