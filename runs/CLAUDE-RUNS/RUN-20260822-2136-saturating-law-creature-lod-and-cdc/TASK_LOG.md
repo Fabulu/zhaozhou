@@ -445,3 +445,72 @@ nearly always are) but whether the block's RATE consumes the parallelism.
 | `zhao_terrain_project` | 33 | **do NOT** -- 6,144 clocks/patch already yields ~270 against a 256-patch budget; its DSPs buy a rate the design spends |
 
 Running per-block total: **213 -> 201** against 112.
+
+---
+
+## 2026-08-23 — TERRAIN.LOD sequenced: 28 DSPs -> 3, and the ALMs fell again
+
+The block the pilot named "best next" was pulled, and it beat the pilot's ratio.
+
+| | ALMs | DSPs | registers | fit s | commit |
+| --- | ---: | ---: | ---: | ---: | --- |
+| before | 2,086 | **28** | 1,257 | 434.3 | `47d607c` |
+| after | 1,759 | **3** | 1,634 | 673.2 | `9f2928f` |
+
+Both sides measured on this machine at a clean worktree; the BEFORE was re-run
+rather than quoted and reproduced the committed row to the digit. Device share
+**25% -> 2.7%** of 112. The DSP audit's target for this block was 4-8.
+
+**The area fell for the second time out of two.** That is a pattern now, not an
+anecdote: the parallel form's cost was never mostly the multipliers, it was the
+wide datapaths beside them — here six 66-bit squarers, two three-term 66-bit
+adder trees and TWELVE 49-bit comparators, collapsed to one multiplier, one
+accumulator and TWO comparators.
+
+Why 3 rather than the contract's predicted 22:
+
+1. **Six were constant shifts, exactly as the contract predicted.** `h` is the
+   literal 256 in the strict ladder, so `dstv * h` is `dstv << 8`. The lever the
+   contract had already named was REAL — and worth 6 of 28, not 25.
+2. **Twelve of the twenty-four left-hand sides were exact duplicates.** `s0`/`r0`
+   and `s1`/`r1` are the same ladder at a different `h`, so only SIX distinct
+   left-hand sides exist.
+3. **The one shared multiplier is NARROWER than what it replaced.** `|c - e|`
+   fits in 32 unsigned bits exactly and `d^2 = |d|^2`, so 32x32 unsigned covers
+   the squares that used to need signed 33x33.
+
+Points 2 and 3 are visible by READING, not by measuring, and neither is in the
+pilot's generalisation. The rule for the remaining blocks is therefore: look for
+constant operands and duplicate products first, then ask whether the shared
+multiplier can be narrower than the widest thing it replaces.
+
+Cost: 34 clocks per descriptor -> 48, so ~560 -> ~784 clocks per patch and the
+margin over the ledger's rate falls from ~11x to ~8x against a spec-stated
+256-patch budget. Still met with a wide margin, so nothing went on the docket.
+**No port and no handshake changed** — the block already had ready/valid on both
+sides — so not one test driver needed editing.
+
+Verification grew rather than weakened. The block **had no mutation sweep**; it
+has one now, written against the PRE-change RTL first, and it found a real hole
+on its first run: `rhs + 1` survived all 211 directed checks and both random
+lanes, because section 2 pins the flip point at `scale = h = 256` where both
+sides are multiples of 256 and an off-by-one on the right is unreachable.
+Section 2 now builds that equality by hand with an odd scale. 211 -> 219 checks.
+The other two survivors are equivalent and are PROVED in the sweep header.
+
+Sweep grew 34 -> 40: ten re-aimed at where the arithmetic now lives, six
+genuinely new for the sequencer (a ladder answer into the wrong flop, either
+phase ending a step early, the accumulator not cleared between the two eyes, a
+right-hand side filed under the wrong camera, the ladder starting at level 1).
+All six caught. 40 attempted / 40 accounted / 38 caught / 2 equivalent.
+
+The sweep machinery gained a **sixth** guard against scoring a run that never
+happened: a mutation containing `$` cannot live in a double-quoted bash array,
+and this block uses `$signed(...)`. The mutant table lives in a Python module no
+shell reads. The preflight then paid twice — six malformed mutants across the two
+tables, none ever scored.
+
+`ctest -L fast` 262/262, nightly lane 5,413 checks, LOD->TESS still crack-free,
+ledger check green.
+
+Running per-block total: **201 -> 176** against 112.
