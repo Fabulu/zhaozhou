@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "generator": "tools/budget/build_manifest.py",
- "headCommit": "74fd6b096b680116d37dac342999e5f640a13d43",
+ "headCommit": "8a122496d963f1aa245e45cc0d1273c23a558e1a",
  "frameBudget": {
   "targetClockHz": 100000000,
   "frameRateHz": 60,
@@ -18,7 +18,8 @@
  },
  "coverage": {
   "modulesScanned": 91,
-  "modulesWithMapAtHead": 0,
+  "modulesWithMapAtHead": 35,
+  "modulesWithFitAtHead": 0,
   "modulesWithAnyMap": 35,
   "modulesWithAnyFit": 41,
   "modulesWithWorkload": 7,
@@ -113,9 +114,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -214,9 +218,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -314,9 +321,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -400,9 +410,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -498,9 +511,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -585,9 +601,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -683,9 +702,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "2a711f0f",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -774,9 +796,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -875,9 +900,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "56ef194b",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -971,9 +999,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "991f13c3",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1058,9 +1089,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "09bbe059",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1148,9 +1182,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1245,9 +1282,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "1c98bb83",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1352,9 +1392,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "7a3e2a35",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1440,9 +1483,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "9f2928fc",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1519,9 +1565,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1609,9 +1658,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1683,9 +1735,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1763,9 +1818,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "f5e067e6",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1829,9 +1887,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1907,9 +1968,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "7508adc0",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -1974,9 +2038,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2059,9 +2126,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2124,9 +2194,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2191,9 +2264,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2261,9 +2337,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2331,9 +2410,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2397,9 +2479,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2463,9 +2548,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2528,9 +2616,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2593,9 +2684,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2663,9 +2757,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2729,9 +2826,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2800,9 +2900,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2879,9 +2982,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -2953,9 +3059,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3048,9 +3157,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3115,9 +3227,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3207,9 +3322,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "991f13c3",
     "fitCommit": "753ca931",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3288,9 +3406,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3360,9 +3481,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3427,9 +3551,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3502,9 +3629,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3583,9 +3713,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3660,9 +3793,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3746,9 +3882,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3823,9 +3962,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3898,9 +4040,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -3966,9 +4111,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4043,9 +4191,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4108,9 +4259,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4174,9 +4328,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4241,9 +4398,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4315,9 +4475,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4382,9 +4545,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4456,9 +4622,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4529,9 +4698,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4596,9 +4768,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4670,9 +4845,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4754,9 +4932,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4837,9 +5018,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4919,9 +5103,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -4983,9 +5170,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5047,9 +5237,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5111,9 +5304,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5175,9 +5371,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5252,9 +5451,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5316,9 +5518,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5387,9 +5592,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5461,9 +5669,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5525,9 +5736,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5589,9 +5803,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5659,9 +5876,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "991f13c3",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5736,9 +5956,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5806,9 +6029,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5878,9 +6104,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -5961,9 +6190,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224"
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": true,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6032,9 +6264,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6100,9 +6335,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6171,9 +6409,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6244,9 +6485,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6310,9 +6554,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6376,9 +6623,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6449,9 +6699,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "1c98bb83",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6513,9 +6766,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6579,9 +6835,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6650,9 +6909,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6721,9 +6983,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6792,9 +7057,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": "96c0394a",
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6863,9 +7131,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   },
   {
@@ -6929,9 +7200,12 @@
     "scanCommit": "74fd6b09",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "74fd6b09",
+    "headCommit": "8a122496",
     "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": null
+    "mapSourceListHash": null,
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "22d255155dd1"
    }
   }
  ],

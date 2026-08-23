@@ -177,6 +177,30 @@ def main():
     head = subprocess.run(["git", "-C", REPO, "rev-parse", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
 
+    # ---- "AT HEAD" MEANS THE RTL, NOT THE COMMIT -------------------------
+    # A map taken during this run is a measurement of the CURRENT RTL even
+    # though the commit has moved on since -- because everything committed
+    # since was tooling and reports. Comparing bare commit ids reported
+    # `modulesWithMapAtHead: 0` while 35 rows had just been measured against
+    # the very tree in the working directory, which is a provenance check that
+    # answers "no" regardless and is therefore worth nothing.
+    #
+    # `git rev-parse <commit>:fpga/rtl` is the tree hash of the RTL directory
+    # at that commit. Equal tree hash means byte-identical RTL, whatever else
+    # changed. Exact, cheap, and it cannot be fooled by a docs commit.
+    _tree_cache = {}
+
+    def rtl_tree(commit):
+        if not commit:
+            return None
+        if commit not in _tree_cache:
+            r = subprocess.run(["git", "-C", REPO, "rev-parse", "%s:fpga/rtl" % commit],
+                               capture_output=True, text=True)
+            _tree_cache[commit] = r.stdout.strip() if r.returncode == 0 else None
+        return _tree_cache[commit]
+
+    head_rtl = rtl_tree(head)
+
     maps = {b["module"]: b for b in mapd.get("blocks", [])}
     fits = {b["module"]: b for b in fitd.get("blocks", [])
             if not b.get("variantOf")}
@@ -221,7 +245,7 @@ def main():
             res["fitFmaxMhz"] = ft.get("fmaxMhz")
             res["fitSetupSlackNs"] = ft.get("setupSlackNs")
             res["fitHoldSlackNs"] = ft.get("holdSlackNs")
-            if (ft.get("sourceCommit") or "")[:8] != head[:8]:
+            if rtl_tree(ft.get("sourceCommit")) != head_rtl or not ft.get("rtlCleanAtHead", True):
                 flags.append("NO_CURRENT_FIT")
             # OLD_SDC: an Fmax exists but predates the corrected constraints.
             # A row measured under the fixed harness HAS an fmaxMhz AND a
@@ -387,6 +411,13 @@ def main():
                 "headCommit": head[:8],
                 "scanSourceListHash": inv.get("sourceListHash"),
                 "mapSourceListHash": (mp or {}).get("sourceListHash"),
+                "mapRtlMatchesHead": (mp is not None
+                                      and rtl_tree(mp.get("sourceCommit")) == head_rtl
+                                      and bool(mp.get("rtlCleanAtHead"))),
+                "fitRtlMatchesHead": (ft is not None
+                                      and rtl_tree(ft.get("sourceCommit")) == head_rtl
+                                      and bool(ft.get("rtlCleanAtHead"))),
+                "headRtlTree": (head_rtl or "")[:12],
             },
         })
 
@@ -409,7 +440,9 @@ def main():
         "coverage": {
             "modulesScanned": len(records),
             "modulesWithMapAtHead": sum(1 for r in records
-                                        if r["provenance"]["mapCommit"] == head[:8]),
+                                        if r["provenance"]["mapRtlMatchesHead"]),
+            "modulesWithFitAtHead": sum(1 for r in records
+                                        if r["provenance"]["fitRtlMatchesHead"]),
             "modulesWithAnyMap": sum(1 for r in records if r["resources"].get("mapDspBlocks") is not None),
             "modulesWithAnyFit": sum(1 for r in records if r["resources"].get("fitAlms") is not None),
             "modulesWithWorkload": sum(1 for r in records if "NO_WORKLOAD" not in r["debtFlags"]),
@@ -472,7 +505,8 @@ def write_heatmap(path, man, calib, wl):
     L.append("| coverage | |")
     L.append("| --- | ---: |")
     L.append("| modules scanned (elaborated AST) | **%d** |" % cov["modulesScanned"])
-    L.append("| modules with a map at HEAD | **%d** |" % cov["modulesWithMapAtHead"])
+    L.append("| modules with a map of **this exact RTL** | **%d** |" % cov["modulesWithMapAtHead"])
+    L.append("| modules with a fit of this exact RTL | %d |" % cov.get("modulesWithFitAtHead", 0))
     L.append("| modules with any map | %d |" % cov["modulesWithAnyMap"])
     L.append("| modules with any fit | %d |" % cov["modulesWithAnyFit"])
     L.append("| modules with a demand figure | **%d** |" % cov["modulesWithWorkload"])
@@ -538,6 +572,39 @@ def write_heatmap(path, man, calib, wl):
                 "; ".join(r["criticalPathFamily"])[:90] or "-",
                 ", ".join("`%s`" % f for f in r["debtFlags"])[:70] or "-"))
         L.append("")
+
+    # ---- map-vs-fit agreement -------------------------------------------
+    L.append("## Is the map lane trustworthy? Measured, not assumed")
+    L.append("")
+    L.append("This audit reads DSP counts out of `quartus_map` because a constrained fit costs")
+    L.append("300-1300 s and 90 of them are not affordable. That is only legitimate if map and")
+    L.append("fit agree, so every block holding both a map row and a fit row is compared here.")
+    L.append("")
+    L.append("| block | map DSP | fit DSP | map commit | fit commit | |")
+    L.append("| --- | ---: | ---: | --- | --- | --- |")
+    agree = dis = 0
+    for r in R:
+        md, fd = r["resources"].get("mapDspBlocks"), r["resources"].get("fitDspBlocks")
+        if md is None or fd is None:
+            continue
+        same = (md == fd)
+        agree += same
+        dis += (not same)
+        L.append("| `%s` | %d | %d | `%s` | `%s` | %s |" % (
+            r["module"], md, fd, r["provenance"].get("mapCommit"),
+            r["provenance"].get("fitCommit"), "" if same else "**differs**"))
+    L.append("")
+    L.append("**%d agree exactly, %d differ.**" % (agree, dis))
+    if dis:
+        L.append("")
+        L.append("Every difference above is a block whose map and fit were taken at DIFFERENT")
+        L.append("commits, which is what `NO_CURRENT_FIT` exists to say. Read the commit columns")
+        L.append("before reading the difference as a tool disagreement.")
+    L.append("")
+    L.append("The ALM columns are NOT comparable and are deliberately absent from this table:")
+    L.append("map reports an Analysis and Synthesis estimate, the fitter reports a placed count,")
+    L.append("and they run about 10-20% apart on this design.")
+    L.append("")
 
     # ---- ranked returns -------------------------------------------------
     L.append("## Ranked by estimated return")

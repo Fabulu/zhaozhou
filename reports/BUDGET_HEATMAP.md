@@ -5,12 +5,13 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `74fd6b09`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `8a122496`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map at HEAD | **0** |
+| modules with a map of **this exact RTL** | **35** |
+| modules with a fit of this exact RTL | 0 |
 | modules with any map | 35 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
@@ -137,6 +138,46 @@ II=1. Both must come out RED from mechanical rules alone.
 ## GREEN (0)
 
 *none*
+
+## Is the map lane trustworthy? Measured, not assumed
+
+This audit reads DSP counts out of `quartus_map` because a constrained fit costs
+300-1300 s and 90 of them are not affordable. That is only legitimate if map and
+fit agree, so every block holding both a map row and a fit row is compared here.
+
+| block | map DSP | fit DSP | map commit | fit commit | |
+| --- | ---: | ---: | --- | --- | --- |
+| `zhao_terrain_project` | 33 | 33 | `7395d793` | `96c0394a` |  |
+| `zhao_terrain_normals` | 18 | 18 | `7395d793` | `96c0394a` |  |
+| `zhao_geom_cull` | 15 | 15 | `de11ce9b` | `2a711f0f` |  |
+| `zhao_geom_binner` | 12 | 12 | `de11ce9b` | `96c0394a` |  |
+| `zhao_geom_skin` | 9 | 9 | `de11ce9b` | `56ef194b` |  |
+| `zhao_geom_lod` | 6 | 6 | `de11ce9b` | `09bbe059` |  |
+| `zhao_terrain_tess` | 6 | 6 | `7395d793` | `96c0394a` |  |
+| `zhao_texture_tmu` | 6 | 6 | `7395d793` | `1c98bb83` |  |
+| `zhao_field_seq` | 3 | 3 | `7395d793` | `7a3e2a35` |  |
+| `zhao_terrain_lod` | 3 | 3 | `de11ce9b` | `9f2928fc` |  |
+| `zhao_raster_edgewalk` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
+| `zhao_raster_tilestore` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_surface_stamp` | 0 | 0 | `991f13c3` | `753ca931` |  |
+| `zhao_terrain_patch` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_raster_fragment` | 7 | 10 | `7395d793` | `96c0394a` | **differs** |
+| `zhao_geom_setup` | 4 | 4 | `de11ce9b` | `96c0394a` |  |
+| `zhao_geom_clip` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
+| `zhao_raster_blend` | 1 | 2 | `de11ce9b` | `96c0394a` | **differs** |
+| `zhao_geom_arena` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_raster_earlyz` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_raster_resolve` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+
+**19 agree exactly, 2 differ.**
+
+Every difference above is a block whose map and fit were taken at DIFFERENT
+commits, which is what `NO_CURRENT_FIT` exists to say. Read the commit columns
+before reading the difference as a tool disagreement.
+
+The ALM columns are NOT comparable and are deliberately absent from this table:
+map reports an Analysis and Synthesis estimate, the fitter reports a placed count,
+and they run about 10-20% apart on this design.
 
 ## Ranked by estimated return
 
