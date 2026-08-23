@@ -273,7 +273,7 @@ true but unenforced.
 
 | 2026-08-23 ~01:2x | a18a997529e7c0ab4 | Apply the proven sequencing lever to zhao_terrain_lod (28 DSPs, the largest tractable target) | **Complete** | [FINDINGS-dsp-terrain-lod.md](FINDINGS-dsp-terrain-lod.md) |
 
-| 2026-08-23 ~03:4x | (field engine) | Rearchitect the Field IR arithmetic to one shared multiplier service, per the owner ruling. OWN WORKTREE `.worktrees/field-dsp` | In Progress | `FINDINGS-dsp-field-engine.md` (agent to write) |
+| 2026-08-23 ~03:4x | abb3ab5006dc5b02e | Rearchitect the Field IR arithmetic to one shared multiplier service, per the owner ruling. OWN WORKTREE `.worktrees/field-dsp` | In Progress (79 -> 4 DSPs; re-measuring under real constraints) | `FINDINGS-dsp-field-engine.md` |
 
 Notes on the second spawn:
 
@@ -608,6 +608,56 @@ I had that block filed as untouchable, which was the wrong conclusion.
 
 It also rules that sweeps run in separate worktrees with separate build
 directories, which is exactly the incident above.
+
+### 05:0x - the Field engine, and a defect that outgrew it
+
+**79 -> 3 DSPs** (this log first recorded 4; the fourth was `zhao_field_sin`'s
+18x6 interpolation, a private nonconstant multiply the ruling forbids, and it
+is now a six-term shift-add -- see the entry below), inside the <=8 stretch,
+from one shared registered multiplier
+service replacing ten units that each owned silicon while the sequencer retires
+one instruction every six clocks.
+
+**The Pareto instruction got the right kind of answer: a MEASURED refusal.** I
+told the agent to parameterise the lane count and fit both points rather than
+pick one. It did not build the second lane, and gave cycle accounting for why:
+**36 of NORMALIZE3's 67 clocks and 36 of LEN3's 48 are the integer square root,
+which contains no multiplier at all**, and the remaining length is strict
+dependency chains (RING's nine products, CURVE's Horner, NOISE's hash). Ceiling
+with UNLIMITED multipliers: DOT3 6->6, RCP 15->14, LEN3 48->46, RING 54->52,
+NORMALIZE3 67->63. The second point is dominated, and the real lever for long-op
+latency is a two-bit-per-cycle root. That is the frontier being measured rather
+than a point being guessed, which is exactly what the ruling asked for.
+
+### 05:1x - NO PER-BLOCK FIT HAS EVER BEEN TIMING-CONSTRAINED
+
+The agent went looking for why a block it had just rebuilt reported an
+implausible Fmax, and found that `run_block_fit.ps1` copies the SHELL's SDC.
+That file constrains `gpu_clk`/`vid_clk`/`audio_clk`; **63 of the design's 71
+clock ports are named `clk`**. Quartus resolved every create_clock to an empty
+collection and printed the warning three times per run, in every run, for weeks.
+
+Reproduced independently before accepting it. Consequences, by column:
+
+| column | status |
+| --- | --- |
+| DSP | **stands** -- inferred at Analysis & Synthesis, before the SDC is read |
+| ALM | **optimistic** -- no timing pressure understates what a constrained fit needs |
+| Fmax | **not a measurement at all**, 47 rows |
+
+Fixed: the script writes its own per-block SDC covering every clock-shaped port
+name in the RTL. Verified by re-fit -- Quartus now reports `10.000 clk`, the
+line missing from every previous run.
+
+Two side-effects recorded because they change how measurement is scheduled: a
+constrained fit is far heavier (7m27s in placement preparation alone for a small
+block, against ~10 minutes for a whole unconstrained fit), and three concurrent
+Quartus runs exhaust this 24 GB machine -- terrain_bake hit its 3000 s timeout
+and two others were killed. Re-measurement must be sequential.
+
+**The lesson is the one this project keeps relearning**: the tool said what was
+wrong, in plain text, in every single run, and nobody read it. That is now the
+eighth distinct instance recorded in this run alone.
 
 ---
 

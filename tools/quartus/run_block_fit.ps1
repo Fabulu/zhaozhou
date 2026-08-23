@@ -58,7 +58,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $SrcQsf = Join-Path $RepoRoot 'fpga\quartus\shell_fit\zhao_shell_fit.qsf'
 $SrcSdc = Join-Path $RepoRoot 'fpga\quartus\shell_fit\zhao_shell_fit.sdc'
 
-foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe')) {
+foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
     $full = Join-Path $QuartusBin $exe
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
         throw "Required Quartus executable not found: $full"
@@ -133,7 +133,45 @@ try {
     foreach ($mod in $Module) {
         $dir = Join-Path $Workspace $mod
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Copy-Item $SrcSdc (Join-Path $dir 'blockfit.sdc')
+        # ---- THE BLOCK SDC, WRITTEN RATHER THAN COPIED -----------------------
+        #
+        # This used to `Copy-Item $SrcSdc`, i.e. hand every leaf block the SHELL's
+        # SDC. That file constrains ports named gpu_clk / vid_clk / audio_clk --
+        # and 63 of this design's 71 clock ports are simply named `clk`. So for
+        # every leaf block Quartus resolved all three create_clock statements to
+        # an empty collection and said so, three times, in every single run:
+        #
+        #   Warning: Ignored create_clock at blockfit.sdc(4):
+        #            Argument <targets> is an empty collection
+        #
+        # WHICH MEANS EVERY PER-BLOCK FIT EVER RUN IN THIS PROJECT HAD NO TIMING
+        # OBJECTIVE. The Fmax column of reports/synthesis/zhao_block_fit.json is
+        # not a slow measurement, it is not a measurement at all -- and the area
+        # columns were obtained with the fitter under no timing pressure, which
+        # understates rather than overstates what a constrained fit needs. It is
+        # why the old Field engine's 7.75 MHz was invisible for 47 rows.
+        #
+        # Found 2026-08-23 by an agent that went looking for why a block it had
+        # just rebuilt reported an implausible Fmax.
+        #
+        # Every clock-shaped port name in fpga/rtl is covered below. A name a
+        # given block does not have still logs the empty-collection warning, which
+        # is harmless -- what was NOT harmless was covering none of them.
+        $blockSdc = @(
+            '# Generated per block by tools/quartus/run_block_fit.ps1.',
+            '# The shell SDC is deliberately NOT used here: it names gpu_clk/vid_clk/',
+            '# audio_clk, and leaf blocks name their clock port `clk`.',
+            'create_clock -name clk        -period 10.000 [get_ports {clk}]',
+            'create_clock -name clk_gpu    -period 10.000 [get_ports {clk_gpu}]',
+            'create_clock -name gpu_clk    -period 10.000 [get_ports {gpu_clk}]',
+            'create_clock -name vid_clk    -period 20.000 [get_ports {vid_clk}]',
+            'create_clock -name clk_audio  -period 40.000 [get_ports {clk_audio}]',
+            'create_clock -name audio_clk  -period 40.000 [get_ports {audio_clk}]',
+            'create_clock -name wr_clk     -period 10.000 [get_ports {wr_clk}]',
+            'create_clock -name rd_clk     -period 10.000 [get_ports {rd_clk}]',
+            'derive_clock_uncertainty'
+        )
+        $blockSdc | Set-Content -LiteralPath (Join-Path $dir 'blockfit.sdc') -Encoding ascii
         'PROJECT_REVISION = "blockfit"' | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qpf') -Encoding ascii
 
         # The same ordered source cone with absolute paths; only the top moves.
@@ -189,7 +227,13 @@ try {
         # measured and recorded in this file's header.
         Push-Location $dir
         try {
-            foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe')) {
+            # quartus_sta IS A STAGE, not an extra. Without it the lane fits a
+            # block against a clock and then never asks whether it met it: the
+            # fitter summary carries area and DSPs and NO timing at all. Fixing
+            # the SDC (see the block-SDC comment above) made the fitter OPTIMISE
+            # for a clock; this is what makes the answer visible. Before both
+            # changes there was no Fmax for any of 47 rows, and no way to get one.
+            foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
                 & (Join-Path $QuartusBin $exe) 'blockfit' *> (Join-Path $dir "$exe.log")
                 if ($LASTEXITCODE -ne 0) { $row.status = "failed:$exe"; $ok = $false; break }
                 if ($sw.Elapsed.TotalSeconds -gt $TimeoutSeconds) {
@@ -215,6 +259,25 @@ try {
             $row.almsAvailable = Get-Capacity $t @('Logic utilization (in ALMs)', 'Logic utilization')
             $row.ramBlocksAvailable = Get-Capacity $t @('Total RAM Blocks')
             $row.dspBlocksAvailable = Get-Capacity $t @('Total DSP Blocks')
+
+            # ---- the timing answer, from the STA report ----------------------
+            # Slow 1100mV 85C is the corner the shell fit reports against, so
+            # the two lanes stay comparable. Fmax here is the block ALONE with
+            # virtual I/O -- it is an upper bound on what the block contributes
+            # composed, never a claim about the machine.
+            $sta = Join-Path $dir ('output_files' + [char]92 + 'blockfit.sta.rpt')
+            if (Test-Path -LiteralPath $sta) {
+                $s = [IO.File]::ReadAllText($sta)
+                $m = [regex]::Match($s, '(?m)^;\s*([0-9.]+)\s*MHz\s*;\s*([0-9.]+)\s*MHz\s*;\s*(\S+)')
+                if ($m.Success) {
+                    $row.fmaxMhz = [double]$m.Groups[2].Value   # restricted Fmax
+                    $row.fmaxClock = $m.Groups[3].Value
+                }
+                $w = [regex]::Match($s, '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)')
+                if ($w.Success) { $row.setupSlackNs = [double]$w.Groups[1].Value }
+                $h = [regex]::Match($s, '(?m)^\s*Worst-case Hold Slack\D+(-?[0-9.]+)')
+                if ($h.Success) { $row.holdSlackNs = [double]$h.Groups[1].Value }
+            }
         } elseif ($row.status -eq 'unknown') {
             $row.status = 'no-summary'
         }
@@ -272,7 +335,36 @@ try {
             Write-Warning "existing $dest could not be parsed; it will be replaced rather than merged"
         }
     }
-    foreach ($row in $results) { $merged[$row.module] = $row }
+    # AND A FAILED RUN MUST NOT DESTROY A GOOD MEASUREMENT.
+    #
+    # The merge above keeps rows this run did not touch. It did NOT protect a
+    # row this run touched and FAILED to measure -- a timeout or a killed
+    # fitter produced a row with status set and every number null, which
+    # replaced a perfectly good prior measurement.
+    #
+    # Measured 2026-08-23, on this script's own author: zhao_geom_lod stood at
+    # 1,183 ALMs / 6 DSPs; a re-fit was killed by memory contention; the report
+    # then read status=failed with alm=null, dsp=null, and the real numbers were
+    # gone. Recoverable from another branch that time -- the point, again, is
+    # that nothing said it had happened.
+    #
+    # So a non-ok result KEEPS the prior measurement and records the failed
+    # attempt beside it. The failure is still visible (lastAttempt*), and the
+    # number is still there. Overwriting only happens ok -> ok, which is what
+    # re-running a block actually means.
+    foreach ($row in $results) {
+        $prior = $merged[$row.module]
+        if ($row.status -ne 'ok' -and $null -ne $prior -and $prior.status -eq 'ok') {
+            $kept = $prior | Select-Object *
+            $kept | Add-Member -NotePropertyName 'lastAttemptStatus'  -NotePropertyValue $row.status  -Force
+            $kept | Add-Member -NotePropertyName 'lastAttemptSeconds' -NotePropertyValue $row.seconds -Force
+            $kept | Add-Member -NotePropertyName 'lastAttemptCommit'  -NotePropertyValue $row.sourceCommit -Force
+            $merged[$row.module] = $kept
+            Write-Warning ("{0}: this run ended '{1}'; KEEPING the previous measurement ({2} ALM / {3} DSP) rather than erasing it" -f $row.module, $row.status, $prior.alms, $prior.dspBlocks)
+        } else {
+            $merged[$row.module] = $row
+        }
+    }
     $out.blocks = @($merged.Keys | Sort-Object | ForEach-Object { $merged[$_] })
 
     [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
