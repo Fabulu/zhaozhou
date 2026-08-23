@@ -551,15 +551,44 @@ reads a trend into it.
 
 ### The datapath is NOT narrowed, and the sweep measured exactly how much is left
 
-The stated ±4,096 m domain bounds `|dx|` below 2³⁰, so a 31-bit magnitude would
-be exact inside it and the squarer's `MAG_W = 36` is five bits wider than the
-domain requires — about 14% of the initiation interval. **Narrowing is
-declined**, for the reason this section already gave (it changes what happens
-outside the domain) and one more: `SQ_RADIX = 2` buys **twice** the throughput
-with **no** domain risk at all, so the narrowing is a worse lever than the one
-already on the table. Recorded, measured, not taken.
+The stated ±4,096 m domain bounds every one of the squarer's four operands below
+2³¹, so a 31-bit magnitude would be exact inside it and `MAG_W = 36` is five
+bits wider than the domain requires — about 14% of the initiation interval.
+**Narrowing is declined**, for the reason this section already gave (it changes
+what happens outside the domain) and one more: `SQ_RADIX = 2` buys **twice** the
+throughput at **0.1% of the clock** and with **no** domain risk at all, so the
+narrowing is a strictly worse lever than the one already on the table.
 
-<!-- WIDTH-EVIDENCE -->
+**The sweep measured this, rather than leaving it as a paragraph.** Two of its
+squarer mutations are confined to bits the datapath cannot reach, and their fate
+is the evidence:
+
+| operand | width fed to the squarer | reachable magnitude |
+| --- | ---: | --- |
+| `dx`, `dz` | signed 36 | `< 2³⁴` for **any** int32 input (`|qx| < 2³³`, `|ex0|`, `|tx| ≤ 2³¹`); `< 2³⁰` inside the stated ±4,096 m domain |
+| `r` | signed 32 | `≤ 2³¹` for any input; `≤ 2²⁸` in-domain |
+| `r_inner` | signed 33, never negative | `≤ 2³²` for any input (`max(r − rw, 0)` on two unconstrained int32 words); `≤ 2²⁸` in-domain |
+
+- **S02 — "the sign is read from bit 34 instead of 35" — SURVIVED, and it is a
+  true equivalent over the WHOLE input space**, not merely in-domain: `|dx| < 2³⁴`
+  for every int32 input, so bits 35 and 34 of the squarer's operand are always
+  both sign. `MAG_W = 36` is one bit wider than any input can use.
+- **S07 — "the square runs one step short, dropping the TOP magnitude bit" —
+  was CAUGHT**, and I had predicted it would survive. The prediction considered
+  `dx` (bounded below 2³⁰ in-domain) and forgot `r_inner`, which reaches 2³².
+  Being caught proves the differential **does** drive magnitudes past bit 31 —
+  which means it drives radius/ring_width **outside** the stated domain, and the
+  RTL still matched the reference there bit for bit. That is an unplanned
+  confirmation of the thing the no-narrowing decision was meant to buy: the
+  sequential squarer is a drop-in for the shipped 64×64 multiply well beyond the
+  domain, not only inside it.
+
+So the honest statement is: **in-domain, all four operands fit 31 bits and five
+of the 36 steps are dead weight — about 14% of the initiation interval — but the
+differential deliberately runs outside the domain, where they are not.**
+Narrowing would therefore also mean narrowing what the tests are allowed to
+drive. Declined, and now declined on measurement rather than on caution.
+
 
 ### Rejected: the 64-entry `dx²` table
 
