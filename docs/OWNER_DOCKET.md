@@ -420,9 +420,36 @@ The claims that were checked:
    and displayed bytes really are already distinguished. The whole "this is not
    a new architectural concept" argument rests on it.
 
-**Nothing above is a decision needed today.** The one thing worth confirming
-when convenient: **384×216 with a 384×224 tile grid**, versus the anamorphic
-mode alone.
+### RULED, 2026-08-23 — the native mode, not anamorphic alone
+
+Fabian: *"I confirm the widescreen, pick the better one we figured out."*
+
+So the ruling is the **native square-pixel path**:
+
+* **`VIDEO_WIDE`** — stored/tiled canvas **384 × 224** (24 × 14 = 336 exact
+  tiles, 172,032 B), camera viewport and displayed raster **384 × 216** centred
+  with 4-row guards, scanout mapping `displayed y -> stored y + 4`, 12 × 64 B
+  bursts per row unchanged, presented as **1920 × 1080 at exact 5×**.
+* **`WIDE_DUO`** — two **192 × 144** views (exactly 4:3, exactly 12 × 9 tiles),
+  stored as two canvases with the 36-row bands manufactured at scanout the way
+  Duo already does. 216 tiles and 1,728 bursts/frame — **cheaper than every mode
+  the console currently has.**
+* The **anamorphic 384×240** presentation is kept as a fallback for adapters
+  that cannot do better, and is explicitly **not** the shipping presentation:
+  at 1080p it is 5× horizontally but 4.5× vertically, so its scanlines cannot
+  be uniform.
+* Scanlines and CRT treatment live in the output scaler, never in the render
+  framebuffer. `320×180` (stored 320×192, exact 6×) stays available as a very
+  chunky performance mode later.
+* **No native mode exceeds the existing 512×240 storage/scanout envelope in
+  v1.** 416×234 is rejected outright — it would silently corrupt the binner's
+  tile RAM (`GRID_W = 24` is a compile-time constant in the address
+  arithmetic).
+
+**Still not scheduled.** The DSP and timing campaign continues; this is the
+target when a video wave opens. Prerequisite recorded above: the four
+`else-is-DUO` assumptions and the three-entry `ZHAO_TIMING` table must be
+amended deliberately, because "enum value 3 is free" is false in practice.
 
 ## 2026-08-23 — GEOM.SKIN done, and ONE DECISION FOR YOU: the shipped
 ## skinning reference silently truncates to 64 bits
