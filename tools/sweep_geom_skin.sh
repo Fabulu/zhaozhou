@@ -47,6 +47,13 @@ set -u
 
 RTL=fpga/rtl/geometry/zhao_geom_skin.sv
 
+# The build tree. Defaults to the gate's own `build`, which is what CI and every
+# other sweep use. It is overridable ONLY because this repository runs several
+# agents at once and a second agent reconfiguring `build` mid-sweep would make
+# every result meaningless -- the sweep is the same either way, since the guards
+# are about regeneration and not about which directory it happens in.
+BUILD=${ZHAO_BUILD_DIR:-build}
+
 # Guard 7's human-readable half. The derived set must equal this exactly.
 DECLARED_TARGETS="test_geom_skin_directed test_geom_skin_lanes1 test_geom_skin_lanes6"
 
@@ -82,24 +89,24 @@ PY
 model_hash() {
   local t h=""
   for t in $1; do
-    h="$h$(find "build/tests/CMakeFiles/$t.dir" -type f \( -name "*.cpp" -o -name "*.h" \) \
+    h="$h$(find "$BUILD/tests/CMakeFiles/$t.dir" -type f \( -name "*.cpp" -o -name "*.h" \) \
              2>/dev/null | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
   printf '%s' "$h" | sha256sum | cut -d" " -f1
 }
 
-models_present() { local t; for t in $1; do [ -d "build/tests/CMakeFiles/$t.dir" ] || return 1; done; return 0; }
-exes_present()   { local t; for t in $1; do [ -x "build/tests/$t.exe" ]           || return 1; done; return 0; }
+models_present() { local t; for t in $1; do [ -d "$BUILD/tests/CMakeFiles/$t.dir" ] || return 1; done; return 0; }
+exes_present()   { local t; for t in $1; do [ -x "$BUILD/tests/$t.exe" ]           || return 1; done; return 0; }
 
 rebuild() {
   local t
   for t in $1; do
-    rm -rf "build/tests/CMakeFiles/$t.dir"
-    rm -f "build/tests/$t.exe"    # guard 5
+    rm -rf "$BUILD/tests/CMakeFiles/$t.dir"
+    rm -f "$BUILD/tests/$t.exe"    # guard 5
   done
-  cmake -S . -B build >/dev/null 2>&1
+  cmake -S . -B "$BUILD" >/dev/null 2>&1
   # shellcheck disable=SC2086
-  ninja -C build $1 >/dev/null 2>&1
+  ninja -C "$BUILD" $1 >/dev/null 2>&1
 }
 
 # The directed lane AND the pose-range random lane, for every consumer. A
@@ -108,8 +115,8 @@ rebuild() {
 run_lanes() {
   local t
   for t in $1; do
-    "./build/tests/$t.exe" >/dev/null 2>&1 || return 1
-    "./build/tests/$t.exe" --random 2000 >/dev/null 2>&1 || return 1
+    "./$BUILD/tests/$t.exe" >/dev/null 2>&1 || return 1
+    "./$BUILD/tests/$t.exe" --random 2000 >/dev/null 2>&1 || return 1
   done
   return 0
 }
@@ -156,7 +163,7 @@ echo "   pristine model ${PRISTINE_MODEL:0:16}, all $(echo $ALL | wc -w) lanes g
 
 # Each entry: name @@ old @@ new
 MUTS=(
-"M01 rigid branch ignores w0 == 64@@        rigid_q <= v_rigid_i || (v_w0_i == 7'd64);@@        rigid_q <= v_rigid_i;"
+"M01 the rigid boundary is w0 == 63, not 64@@        rigid_q <= v_rigid_i || (v_w0_i == 7'd64);@@        rigid_q <= v_rigid_i || (v_w0_i == 7'd63);"
 "M02 rigid path rescales by 22, not 16@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 22);@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 22) : rescale_sat(blend_v, 22);"
 "M03 blend rescales by 16, not 22@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 22);@@  assign res_row = rigid_q ? rescale_sat(BLENDW'(pa_sel), 16) : rescale_sat(blend_v, 16);"
 "M04 round-half-up becomes a floor@@      r = (v + (73'sd1 <<< (sh - 1))) >>> sh;@@      r = v >>> sh;"
@@ -164,7 +171,7 @@ MUTS=(
 "M06 the negative saturation rail is off by one@@      else if (r < -73'sd2147483648) rescale_sat = 32'sh8000_0000;@@      else if (r < -73'sd2147483648) rescale_sat = 32'sh8000_0001;"
 "M07 the pb term is scaled by 2^5, not 2^6@@  assign blend_v = (BLENDW'(pb_sel) <<< 6) + wprod;@@  assign blend_v = (BLENDW'(pb_sel) <<< 5) + wprod;"
 "M08 the weight difference is reversed@@  assign pdiff  = DIFFW'(pa_sel) - DIFFW'(pb_sel);@@  assign pdiff  = DIFFW'(pb_sel) - DIFFW'(pa_sel);"
-"M09 weight bit 0 is dropped from the shift-add@@    wp0 = (w0_q[0] ? pd_ext : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);@@    wp0 = ZERO_B + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);"
+"M09 weight bit 0 contributes 2^1@@    wp0 = (w0_q[0] ? pd_ext : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);@@    wp0 = (w0_q[0] ? (pd_ext <<< 1) : ZERO_B) + (w0_q[1] ? (pd_ext <<< 1) : ZERO_B);"
 "M10 weight bit 5 contributes 2^4@@    wp2 = (w0_q[4] ? (pd_ext <<< 4) : ZERO_B) + (w0_q[5] ? (pd_ext <<< 5) : ZERO_B);@@    wp2 = (w0_q[4] ? (pd_ext <<< 4) : ZERO_B) + (w0_q[5] ? (pd_ext <<< 4) : ZERO_B);"
 "M11 the weight is truncated to five bits@@        w0_q <= v_w0_i[5:0];@@        w0_q <= {1'b0, v_w0_i[4:0]};"
 "M12 the translation is not pre-shifted into the accumulator@@          acc[rp]     <= ACCW'(a_m_i[rp*4 + 3]) <<< 16;@@          acc[rp]     <= ACCW'(a_m_i[rp*4 + 3]);"
@@ -175,18 +182,14 @@ MUTS=(
 "M17 the accumulator is LOADED rather than accumulated@@          acc[dst_d2[r]] <= acc[dst_d2[r]] + lane_sum[r];@@          acc[dst_d2[r]] <= lane_sum[r];"
 "M18 a busy engine still offers ready@@  assign v_ready_o = !busy && (!o_valid_o || o_ready_i);@@  assign v_ready_o = (!o_valid_o || o_ready_i);"
 "M19 a full output register still offers ready@@  assign v_ready_o = !busy && (!o_valid_o || o_ready_i);@@  assign v_ready_o = !busy;"
-"M20 the src_id passthrough is dropped@@          o_src_id_o <= src_q;@@          o_src_id_o <= 16'd0;"
+"M20 the src_id passthrough is off by one@@          o_src_id_o <= src_q;@@          o_src_id_o <= src_q + 16'd1;"
 "M21 the counter loses its saturation (EXPECTED EQUIVALENT)@@        if (vertices_transformed_o != 32'hFFFF_FFFF)@@        if (1'b1)"
 "M22 the counter advances by two@@          vertices_transformed_o <= vertices_transformed_o + 32'd1;@@          vertices_transformed_o <= vertices_transformed_o + 32'd2;"
 "M23 the blend row waits only on pa@@  assign row_ready = busy && (br != 2'd3) && acc_done[br_a] && (rigid_q || acc_done[br_b]);@@  assign row_ready = busy && (br != 2'd3) && acc_done[br_a];"
 "M24 every row is blended against B's row 0@@  assign br_b = br_a + 3'd3;@@  assign br_b = 3'd3;"
 "M25 the issue walk stops one group early@@          if (rp_grp == n_groups - 3'd1) issuing <= 1'b0;@@          if (rp_grp == n_groups - 3'd2) issuing <= 1'b0;"
-"M26 the destination pipeline is one stage deep@@        dst_d2[r]   <= dst_d1[r];
-        dv_d2[r]    <= dv_d1[r];
-        dlast_d2[r] <= dlast_d1[r];@@        dst_d2[r]   <= rp_issue[r];
-        dv_d2[r]    <= dv_issue[r];
-        dlast_d2[r] <= dlast_issue;"
-"M27 acc_done is set by the FIRST term, not the last (EQUIVALENT at MUL_LANES 3 and 6)@@          if (dlast_d2[r]) acc_done[dst_d2[r]] <= 1'b1;@@          acc_done[dst_d2[r]] <= 1'b1;"
+"M26 a landed product goes to the neighbouring accumulator@@        dst_d2[r]   <= dst_d1[r];@@        dst_d2[r]   <= dst_d1[r] ^ 3'd1;"
+"M27 acc_done is set by the FIRST term, not the last (EQUIVALENT at MUL_LANES 3 and 6)@@          if (dlast_d2[r]) acc_done[dst_d2[r]] <= 1'b1;@@          if (dlast_d2[r] || dv_d2[r]) acc_done[dst_d2[r]] <= 1'b1;"
 "M28 rigid still issues six row-products (EQUIVALENT at MUL_LANES 1 and 3)@@  assign n_rp     = rigid_q ? 3'd3 : 3'd6;@@  assign n_rp     = 3'd6;"
 )
 

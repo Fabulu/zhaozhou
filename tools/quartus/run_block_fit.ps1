@@ -13,6 +13,21 @@ param(
     # "we did not wait". Ten rows in the committed report carry that status and
     # every one of them is suspect for the same reason.
     [int]$TimeoutSeconds = 3000,
+    # Top-level parameter overrides, NAME=VALUE, emitted into the generated
+    # QSF as `set_parameter`. A parameterised block's resource frontier is only
+    # measurable if each setting can be fitted, and editing the RTL's default
+    # between fits would label every row with a commit that no longer describes
+    # what was measured.
+    #
+    # VERIFY THAT IT TOOK. QUARTUS_GOTCHAS 3: this tool accepts directives and
+    # silently ignores them, and the only symptom is a number that does not
+    # move. Two settings that differ in multiplier count MUST produce different
+    # DSP counts; identical rows mean the parameter was ignored, not that the
+    # parameter does not matter.
+    [string[]]$TopParameters,
+    # Suffix for the JSON row's `module` key, so parameter points do not
+    # overwrite each other in a file that merges by module name.
+    [string]$RowLabel = '',
     [switch]$KeepWorkspace
 )
 
@@ -205,6 +220,11 @@ try {
                 $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $abs"
             }
         }
+        foreach ($tp in $TopParameters) {
+            $kv = $tp -split '=', 2
+            if ($kv.Count -ne 2) { throw "TopParameters entry '$tp' is not NAME=VALUE" }
+            $qsf += "set_parameter -name $($kv[0]) $($kv[1])"
+        }
         $qsf | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qsf') -Encoding ascii
 
         # PER-ROW PROVENANCE. This file MERGES rows across runs (see the merge
@@ -213,7 +233,9 @@ try {
         # commit. Measured 2026-08-21, a one-module run relabelled 41 rows
         # from 96c0394 as HEAD. Each row now carries the commit it was
         # actually measured at, and rows without one predate this change.
-        $row = [ordered]@{ module = $mod; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
+        $rowModule = if ($RowLabel) { "$mod$RowLabel" } else { $mod }
+        $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
+        if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $ok = $true
 
@@ -285,7 +307,7 @@ try {
         $results.Add([pscustomobject]$row)
         # StrictMode: a failed or timed-out fit never gains the resource keys.
         $almShow = if ($row.Contains('alms') -and $null -ne $row.alms) { $row.alms } else { '-' }
-        Write-Host ("{0,-28} {1,-16} {2,7}s   ALM {3}" -f $mod, $row.status, $row.seconds, $almShow)
+        Write-Host ("{0,-34} {1,-16} {2,7}s   ALM {3}" -f $rowModule, $row.status, $row.seconds, $almShow)
         if (-not $KeepWorkspace) {
             Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
         }
