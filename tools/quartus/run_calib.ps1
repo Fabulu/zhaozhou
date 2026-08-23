@@ -41,6 +41,18 @@ $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
 $points = $manifest.points
 if ($Family) { $points = @($points | Where-Object { $_.family -eq $Family }) }
 
+if ($SkipMeasured) {
+    $done = @{}
+    $destPath = Join-Path $RepoRoot 'toolsudget\calibration.json'
+    if (Test-Path -LiteralPath $destPath) {
+        $prior = [IO.File]::ReadAllText($destPath) | ConvertFrom-Json
+        foreach ($r in $prior.points) { if ($r.status -eq 'ok') { $done[$r.module] = $true } }
+    }
+    $before = $points.Count
+    $points = @($points | Where-Object { -not $done.ContainsKey($_.module) })
+    Write-Host ("-SkipMeasured: {0} of {1} already ok; {2} to go" -f ($before - $points.Count), $before, $points.Count)
+}
+
 $head = (& git -C $RepoRoot rev-parse HEAD).Trim()
 $Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-calib-{0}-{1}" -f $PID, [DateTime]::UtcNow.Ticks)
 New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
@@ -102,6 +114,50 @@ function Get-SummaryField([string]$Text, [string[]]$Labels) {
         }
     }
     return $null
+}
+
+
+# ---------------------------------------------------------------------------
+# WRITE AFTER EVERY POINT, NOT AT THE END.
+#
+# The first version of this script accumulated 102 measurements in memory and
+# serialised them once, after the loop. Measured 2026-08-24: the background
+# harness hosting it hit its lifetime limit at point 97 of 102 and **all 97
+# measurements were lost** -- forty minutes of Quartus time, and every one of
+# them already printed to the console where they could be read but not merged.
+#
+# tools/quartus/map_sweep.ps1 was written the same night specifically to avoid
+# this, by invoking its runner once per module. The lesson did not travel the
+# ten metres to this file. So: merge-and-write after every single point, which
+# costs a few milliseconds and makes any kill recoverable.
+# ---------------------------------------------------------------------------
+function Save-Calibration([object[]]$NewRows) {
+    $dest = Join-Path $RepoRoot 'tools\budget\calibration.json'
+    $merged = [ordered]@{}
+    if (Test-Path -LiteralPath $dest) {
+        try {
+            $prior = [IO.File]::ReadAllText($dest) | ConvertFrom-Json
+            foreach ($r in $prior.points) { $merged[($r.module + ':' + $r.stage)] = $r }
+        } catch { Write-Warning "existing $dest unparseable; replacing" }
+    }
+    foreach ($r in $NewRows) { $merged[($r.module + ':' + $r.stage)] = $r }
+    $out = [ordered]@{
+        schemaVersion = 1
+        purpose = 'Measured mapping from RTL arithmetic and storage shapes to Cyclone V resources, on THIS tool and THIS device.'
+        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = '17.0.2' }
+        device = '5CSEBA6U23I7'
+        sourceCommit = $head
+        generator = 'tools/budget/gen_calib.py + tools/quartus/run_calib.ps1'
+        points = @($merged.Keys | Sort-Object | ForEach-Object { $merged[$_] })
+        limitations = @(
+            'Rows with stage=map-only carry NO timing. estimatedAlms is an Analysis and Synthesis estimate, not a placed ALM count.',
+            'Each microbench is a lone module with virtual pins. It characterises the SHAPE, not what the same shape costs surrounded by a real design.',
+            'Allow Any RAM Size For Recognition is DISABLED in the project settings these were run under, matching the design lane. A RAM result here is what the design would get, not what a permissive setting could get.',
+            'Nothing here is a programmed device.'
+        )
+    }
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($dest)) -Force | Out-Null
+    [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
 }
 
 $rows = New-Object 'System.Collections.Generic.List[object]'
@@ -229,36 +285,11 @@ try {
         $alm = if ($row.Contains('estimatedAlms') -and $null -ne $row.estimatedAlms) { $row.estimatedAlms } else { '-' }
         Write-Host ("[{0}/{1}] {2,-38} {3,-12} {4,6}s  DSP {5,-4} memBits {6,-7} ALM~ {7}" -f
             $i, $points.Count, $mod, $row.status, $row.seconds, $dsp, $bmb, $alm)
+        Save-Calibration $rows
         if (-not $KeepWorkspace) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
-    $dest = Join-Path $RepoRoot 'tools\budget\calibration.json'
-    $merged = [ordered]@{}
-    if (Test-Path -LiteralPath $dest) {
-        try {
-            $prior = [IO.File]::ReadAllText($dest) | ConvertFrom-Json
-            foreach ($r in $prior.points) { $merged[($r.module + ':' + $r.stage)] = $r }
-        } catch { Write-Warning "existing $dest unparseable; replacing" }
-    }
-    foreach ($r in $rows) { $merged[($r.module + ':' + $r.stage)] = $r }
-
-    $out = [ordered]@{
-        schemaVersion = 1
-        purpose = 'Measured mapping from RTL arithmetic and storage shapes to Cyclone V resources, on THIS tool and THIS device.'
-        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = '17.0.2' }
-        device = '5CSEBA6U23I7'
-        sourceCommit = $head
-        generator = 'tools/budget/gen_calib.py + tools/quartus/run_calib.ps1'
-        points = @($merged.Keys | Sort-Object | ForEach-Object { $merged[$_] })
-        limitations = @(
-            'Rows with stage=map-only carry NO timing. estimatedAlms is an Analysis and Synthesis estimate, not a placed ALM count.',
-            'Each microbench is a lone module with virtual pins. It characterises the SHAPE, not what the same shape costs surrounded by a real design.',
-            'Allow Any RAM Size For Recognition is DISABLED in the project settings these were run under, matching the design lane. A RAM result here is what the design would get, not what a permissive setting could get.',
-            'Nothing here is a programmed device.'
-        )
-    }
-    [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
-    Write-Host ("WROTE {0} ({1} point(s); {2} this run)" -f $dest, $out.points.Count, $rows.Count)
+    Save-Calibration $rows
 } finally {
     if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
         Remove-Item -LiteralPath $Workspace -Recurse -Force -ErrorAction SilentlyContinue
