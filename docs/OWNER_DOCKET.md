@@ -1,5 +1,96 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — A PATTERN: our blocks are cheap because they assume normalised
+## content, and nobody has written down what "normalised" means
+
+Three findings today share one shape, and the third was found by checking rather
+than by being bitten. **Each is a hardware law that is correct and efficient,
+which silently imposes a precondition on the asset pipeline that Sacrifice's own
+art violates.** None is a defect. All three become defects the day real content
+is loaded and nobody remembers the assumption.
+
+### 1. Bone weights must sum to 64
+
+`zhao_geom_skin` blends with `(pb << 6) + w0·(pa − pb)`, which is exact **only
+when `w0 + w1 = 64`.** That identity is what halved the multiply count.
+
+Sacrifice's weights are a raw `ubyte` scaled by `weight/64.0f` (`sxmd.d:97`,
+`saxs.d:76`) and **all 256 raw values occur**, so its blend is an *affine* sum of
+independently-weighted bone-space offsets, not a convex combination.
+
+**Precondition: the importer must normalise each vertex's weights to sum to 64.**
+
+### 2. At most two bone influences per vertex
+
+Sacrifice stores **three** (`saxs.d:23-42`, `int[3] indices_`). Measured over
+317,234 ring-vertices: 65.07% use one bone, 32.41% two, **2.51% three** — and
+the three-influence vertices are the seams (shoulders, hips, neck) where error
+is most visible.
+
+**Precondition: the importer must reduce to two influences (dropping the
+smallest and renormalising), or the block needs a second pass for the 1-in-40.**
+
+### 3. Texture dimensions must be powers of two — NEW
+
+`TEXTURE.TMU.md:62-63` — `LOG2W`/`LOG2H` are 4-bit fields and level-0 width is
+`1 << LOG2W`. **Non-square is supported** (that is why the 16×64 beam ramp
+works, and the contract says so explicitly), but **non-power-of-two is not
+representable at all.**
+
+That restriction is load-bearing, not incidental. The contract at `:74`: with
+`size = 1 << log2s`, converting to texels is *"a **shift, not a multiply**"*.
+Making dimensions arbitrary would put a multiply on the per-sample path — adding
+DSPs to the very block we are trying to cut from 28 to 6–9 — and would break the
+closed-form mip level offset, whose exactness depends on the same property
+(`:116-121`).
+
+**Sacrifice's creature art violates this.** Measured over 637 `.SXTX` assets:
+width is essentially always 256, but **height is arbitrary — 9 to 799** (269,
+287, 331, … are typical), and **only 81 of 637 (12.7%) are power-of-two in both
+axes.** It is structural rather than sloppy: each is a **vertical atlas strip**
+whose height is whatever that body part needed, with V computed as
+`ring.texture / textureMax` (`saxs.d:90`).
+
+Everything else in the game is already compliant — all 626 `.TXTR` assets are
+strictly power-of-two and square, **nothing exceeds 256×256**, and land tiles are
+64×64.
+
+**Precondition, and there is a good and a bad way to meet it:**
+
+* **Bad:** pad each strip up to the next power of two. 799 → 1024 wastes 28%,
+  and a 256×1024 texture is 512 KB at 16bpp — for one creature.
+* **Good:** the strips are already a **concatenation of per-body-part regions**.
+  Split them at body-part boundaries into power-of-two tiles at import. That is
+  a repack, not a resample, so **no texel is altered and nothing is lost** — and
+  it matches how the geometry addresses them, since each ring already carries
+  its own `texture` offset.
+
+**Recommend the split.** It costs importer complexity and nothing at runtime.
+
+---
+
+### Why this is worth a docket entry rather than three scattered notes
+
+Every one of these is the same trade: **the hardware is cheaper because it
+assumes something about the content**, and each assumption was made for a good
+reason that is documented *in the block* — and nowhere in a place the asset
+pipeline would ever look.
+
+The failure mode is specific and predictable: the first real creature loads,
+something is subtly wrong at the shoulders or the texture is off by a row, and
+the search starts in the RTL — which is correct — rather than in the importer,
+which was never told.
+
+**Proposed: `design/contracts/` grows an `ASSET_PRECONDITIONS.md`**, listing
+every content invariant the hardware relies on, each pointing at the block and
+the line that relies on it. Three entries today. There will be more — every
+block sized against a demand figure is also a block making assumptions about the
+shape of its input.
+
+**None of this is urgent and none blocks current work.** But it is much cheaper
+to write down now, while the reasons are fresh, than to rediscover from a
+rendering artefact later.
+
 ## 2026-08-23 — THE THREE DEMAND NUMBERS, derived from Sacrifice itself
 
 **These are DERIVED, not ruled.** Fabian asked for a best guess from evidence
