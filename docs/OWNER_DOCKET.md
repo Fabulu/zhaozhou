@@ -171,7 +171,7 @@ Two notes back to this entry, because both correct it:
   block did not merely spend DSPs on a rate nobody asked for; the constrained fit
   it bought closed at **32.33 MHz against a 100 MHz `gpu_clk`**. It was holding
   the console's shared clock to a third of its constraint. After: **87.54 MHz**,
-  at 37,791 texels/frame — 1.89× the derived demand.
+  at 37,784 texels/frame — 1.89× the derived demand.
 
 **The real constraint is not bandwidth — it is the tile pool.**
 `GetFreeScarTexture` / `ReleaseScarTexture` prove a **finite pool of writable

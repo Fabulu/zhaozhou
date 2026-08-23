@@ -298,11 +298,11 @@ all 4,096 texels written), at all three `SQ_RADIX` settings:
 
 | `SQ_RADIX` | cycles | clk/texel | texels/frame at its own measured Fmax | vs. demand |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 (default) | 158,162 | 38.61 | **37,791** @ 87.54 MHz | **1.89×** |
+| 1 (default) | 158,162 | 38.61 | **37,784** @ 87.54 MHz | **1.89×** |
 | 2 | 83,246 | 20.32 | see the frontier table below | |
 | 4 | 45,788 | 11.18 | see the frontier table below | |
 
-The old design's number, for comparison: 4,102 cycles at 32.33 MHz is 538,833
+The old design's number, for comparison: 4,102 cycles at 32.33 MHz is 538,045
 texels/frame, **26.9× the demand, and 32% of the shared clock.**
 
 ## Overflow and malformed-input behaviour
@@ -540,7 +540,7 @@ only reliable way to not get a DSP: `reports/QUARTUS_GOTCHAS.md` §3 records tha
 | **DSP blocks** | **28** | **0** | **−28** |
 | RAM blocks | 0 | 0 | — |
 | **Fmax** | **32.33 MHz** | **87.54 MHz** | **+171%** |
-| texels/frame | 538,833 | **37,791** | 0.070× |
+| texels/frame | 538,045 | **37,784** | 0.070× |
 | vs. the 20,000 demand | 26.9× | **1.89×** | — |
 
 The +522 registers are the honest cost of going sequential — a 64-bit
@@ -559,10 +559,10 @@ matters because `gpu_clk` is shared.
 
 | `SQ_RADIX` | squarer cycles | clk/texel | ALMs | registers | DSPs | **Fmax** | **texels/frame** | vs. demand |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33 MHz*** | *538,833* | *26.9×* |
-| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54 MHz** | **37,791** | **1.89×** |
-| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 MHz | 71,720 | 3.59× |
-| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 MHz | 122,796 | 6.14× |
+| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33 MHz*** | *538,045* | *26.9×* |
+| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54 MHz** | **37,784** | **1.89×** |
+| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 MHz | 71,706 | 3.59× |
+| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 MHz | 122,808 | 6.14× |
 
 All four rows are **constrained** fits — `Info (332111): 10.000 clk` captured
 live from each workspace and saved under `fit-evidence/` in the run directory —
@@ -576,7 +576,7 @@ buys 1.90×.** The adder chain is simply not the critical path at radix 2.
 
 **The default stays at 1 anyway, and that is the whole point of this campaign.**
 `SQ_RADIX = 2` is very nearly free, but the demand is 20,000 texels/frame and
-radix 1 delivers 37,791. Spending 36 more ALMs to reach 3.59× would be
+radix 1 delivers 37,784. Spending 36 more ALMs to reach 3.59× would be
 **provisioning past the demand** — the exact error the 28 DSPs came from,
 committed again at 1/100th the scale. The frontier's value is that raising the
 throughput is now a **measured one-parameter lever** rather than a rewrite, if

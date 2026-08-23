@@ -1255,7 +1255,7 @@ Two of the six multiplies became first-order accumulators (exact mod 2⁴¹, no
 domain argument owed); the four squares now share one sequential shift-add
 squarer. **Measured, constrained: 28 → 0 DSP blocks, and Fmax 32.33 → 87.54 MHz**
 — because the old block did not meet `gpu_clk` either, which the "rate met?
-yes" column above could not see. Throughput 538,833 → 37,791 texels/frame,
+yes" column above could not see. Throughput 538,045 → 37,784 texels/frame,
 still 1.89x the demand.
 
 Applying only the measured result, the running total moves from **213 to 201**.

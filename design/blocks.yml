@@ -1804,7 +1804,7 @@ blocks:
       the gpu_clk it was over-provisioned against. The replacement is derived
       from Sacrifice's SCAR system (docs/OWNER_DOCKET.md, "THE THREE DEMAND
       NUMBERS"). The coverage geometry now runs on one shared sequential
-      squarer: 0 DSP blocks, 87.54 MHz, 37,791 texels/frame at the default
+      squarer: 0 DSP blocks, 87.54 MHz, 37,784 texels/frame at the default
       SQ_RADIX = 1, which is 1.89× the demand. Argued in the contract.
 
   # ===========================================================================

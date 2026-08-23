@@ -68,9 +68,9 @@ paying that risk.
 finding the run did not expect: the contract said the throughput target was "met,
 measured", which was true about CYCLES and false about TIME -- the block was
 holding the shared gpu_clk at 32% of its constraint. ALMs 947 -> 993, registers
-496 -> 1,018. Throughput 538,833 -> 37,791 texels/frame, still 1.89x the demand.
-The SQ_RADIX frontier: 1 / 2 / 4 give 87.54 / 87.44 / 82.37 MHz at 37,791 /
-71,720 / 122,796 texels/frame, so radix 2 is nearly free on the clock -- and the
+496 -> 1,018. Throughput 538,045 -> 37,784 texels/frame, still 1.89x the demand.
+The SQ_RADIX frontier: 1 / 2 / 4 give 87.54 / 87.44 / 82.37 MHz at 37,784 /
+71,706 / 122,808 texels/frame, so radix 2 is nearly free on the clock -- and the
 default stays at 1 anyway, because spending 36 ALMs to exceed a met demand is
 the same error the 28 DSPs came from.
 

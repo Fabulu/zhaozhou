@@ -241,7 +241,7 @@ fpga/rtl` is empty, so the row describes the RTL as it stands.
 | RAM blocks | 0 | 0 | — |
 | **Fmax** | **32.33 MHz** | **87.54 MHz** | **+171%** |
 | initiation interval | 1.0 clk/texel | 38.61 clk/texel | 38.6x |
-| **texels/frame** | 538,833 | **37,791** | 0.070x |
+| **texels/frame** | 538,045 | **37,784** | 0.070x |
 | vs. the 20,000 demand | 26.9x | **1.89x** | — |
 
 **Both numbers, as the brief requires, and they point opposite ways.** Raw
@@ -345,10 +345,10 @@ saved under `fit-evidence/`.
 
 | `SQ_RADIX` | sq cycles | clk/texel | ALMs | regs | DSPs | **Fmax** | **texels/frame** | vs. demand |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33*** | *538,833* | *26.9×* |
-| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54** | **37,791** | **1.89×** |
-| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 | 71,720 | 3.59× |
-| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 | 122,796 | 6.14× |
+| *(pre-rearch)* | *—* | *1.00* | *947* | *496* | ***28*** | ***32.33*** | *538,045* | *26.9×* |
+| **1 (default)** | 36 | 38.61 | **993** | 1,018 | **0** | **87.54** | **37,784** | **1.89×** |
+| 2 | 18 | 20.32 | 1,029 | 992 | 0 | 87.44 | 71,706 | 3.59× |
+| 4 | 9 | 11.18 | 1,084 | 987 | 0 | 82.37 | 122,808 | 6.14× |
 
 **The SPEC's prediction about the frontier's shape was wrong, and the wrong part
 is the interesting part.** I predicted `SQ_RADIX = 4`'s four-deep adder chain
@@ -358,7 +358,7 @@ buys **1.90×**. The adder chain is simply not the critical path at radix 2.
 
 **The default stays at 1 anyway**, and that is the campaign's own principle
 applied to myself: `SQ_RADIX = 2` is very nearly free, but the demand is 20,000
-texels/frame and radix 1 delivers 37,791. Spending 36 more ALMs to reach 3.59×
+texels/frame and radix 1 delivers 37,784. Spending 36 more ALMs to reach 3.59×
 would be **provisioning past the demand** — the exact error the 28 DSPs came
 from, committed again at a hundredth of the scale. What the frontier buys is
 that raising throughput is now a measured one-parameter lever instead of a
@@ -592,6 +592,37 @@ comment — checkable with `git diff 104b43d HEAD -- fpga/rtl`, which shows thre
 inserted comment lines and nothing else. The four fits were taken at `7caf1dc`,
 `753ca93`, `5b6d4cd` and `3ad9caa`, all with `rtlCleanAtHead: true`, and
 `fpga/rtl`'s tracked content is identical across all of them.
+
+### 2026-08-23 19:5x — I published four wrong texels/frame figures. Corrected.
+
+Recomputing the frontier table before signing off, every texels/frame number I
+had written was slightly wrong, and two different mistakes produced them:
+
+| point | published | correct | why |
+| --- | ---: | ---: | --- |
+| pre-rearch | 538,833 | **538,045** | I used "1 texel/clock" instead of the block's own measured 4,102 cycles for 4,096 texels |
+| SQ_RADIX = 1 | 37,791 | **37,784** | arithmetic slip |
+| SQ_RADIX = 2 | 71,720 | **71,706** | arithmetic slip |
+| SQ_RADIX = 4 | 122,796 | **122,808** | arithmetic slip |
+
+The errors are between 0.01% and 0.15% and change no conclusion — the ratios
+against the 20,000 demand are still 26.9x / 1.89x / 3.59x / 6.14x. **Recorded
+anyway**, for two reasons. The first is the brief's: a wrong number reported
+confidently has cost this project more than any bug, and the size of the error
+is not what makes it a wrong number.
+
+The second is more useful. The pre-rearch figure was not an arithmetic slip; it
+was **the same category error this whole run is about** — I reached for the
+block's *nominal* rate (one texel per clock) instead of its *measured* one
+(4,102 cycles for 4,096 texels, which is 1.0015). A nominal rate quoted as a
+measurement is exactly what the ledger's placeholder was. I did it in a summary
+table while writing the paragraph that criticises it.
+
+All four figures corrected across `design/blocks.yml`,
+`design/contracts/SURFACE.STAMP.md`, `docs/OWNER_DOCKET.md`,
+`reports/REMAINING_BLOCKERS.md`, `ARCHIVE.md` and this log — 25 occurrences —
+and every one now comes from the same expression:
+`(Fmax / 60) / (cycles / 4096)`.
 
 ---
 
