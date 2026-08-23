@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `8a122496`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `b619d2cc`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -260,6 +260,82 @@ nothing, and it counts every module that is not textually inside another --
 including blocks that will never be instantiated together. Read it as the
 **arithmetic that exists in the repository**, which is the quantity this audit
 was asked to stop guessing at.
+
+## Timing, and how little of it exists
+
+Every figure here comes from the FIT lane. The map lane has no SDC and no
+placement, so it contributes nothing to this table by construction.
+
+`OLD_SDC` marks a row whose fit carries no Fmax at all -- it ran with no timing
+objective, which QUARTUS_GOTCHAS 7 records was true of every per-block fit this
+project ran for weeks. Those rows are not slow measurements; they are not
+measurements.
+
+| block | Fmax (MHz) | WNS setup (ns) | hold (ns) | fit commit | RTL at HEAD? | critical-path family, from source |
+| --- | ---: | ---: | ---: | --- | :--: | --- |
+| `zhao_field_seq` | **8.59** | - | - | `7a3e2a35` | **no** | MULTIPLY(1, widest 33-bit); VARSHIFT(46); COMB_LOOP(1); ASYNC_ARRAY_RE |
+| `zhao_texture_tmu` | **36.11** | - | - | `1c98bb83` | **no** | MULTIPLY(6, widest 18-bit); VARSHIFT(6); COMB_LOOP(2); ASYNC_ARRAY_REA |
+| `zhao_surface_stamp` | **87.54** | - | - | `753ca931` | **no** | VARSHIFT(1); ASYNC_ARRAY_READ(1) |
+| `zhao_geom_skin` | **89.65** | - | - | `56ef194b` | **no** | MULTIPLY(1, widest 32-bit); DIVIDE(2); VARSHIFT(1); COMB_LOOP(4); ASYN |
+| `zhao_terrain_project` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(11, widest 64-bit); COMB_LOOP(3); ASYNC_ARRAY_READ(17) |
+| `zhao_terrain_normals` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(6, widest 33-bit) |
+| `zhao_geom_cull` | *never timed* | - | - | `2a711f0f` | **no** | MULTIPLY(5, widest 34-bit); ASYNC_ARRAY_READ(2) |
+| `zhao_geom_binner` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(4, widest 36-bit); ASYNC_ARRAY_READ(6) |
+| `zhao_geom_lod` | *never timed* | - | - | `09bbe059` | **no** | MULTIPLY(1, widest 64-bit); DIVIDE(2) |
+| `zhao_terrain_tess` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(7, widest 34-bit); VARSHIFT(26); COMB_LOOP(4); ASYNC_ARRAY_RE |
+| `zhao_terrain_lod` | *never timed* | - | - | `9f2928fc` | **no** | MULTIPLY(1, widest 32-bit); ADD_COMPARE_SATURATE(2); ASYNC_ARRAY_READ( |
+| `zhao_raster_edgewalk` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_REA |
+| `zhao_audio_fifo` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(2); ASYNC_ARRAY_READ(1) |
+| `zhao_cmd_dma` | *never timed* | - | - | `f5e067e6` | **no** | VARSHIFT(36); ADD_COMPARE_SATURATE(3); COMB_LOOP(41); ASYNC_ARRAY_READ |
+| `zhao_debug_frameblit` | *never timed* | - | - | `7508adc0` | **no** | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) |
+| `zhao_raster_tilestore` | *never timed* | - | - | `96c0394a` | **no** | ADD_COMPARE_SATURATE(1) |
+| `zhao_sdram_ctrl` | *never timed* | - | - | `96c0394a` | **no** | ASYNC_ARRAY_READ(1) |
+| `zhao_terrain_patch` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(2); ASYNC_ARRAY_READ(4) |
+| `zhao_texture_cache` | *never timed* | - | - | `96c0394a` | **no** | ADD_COMPARE_SATURATE(2); COMB_LOOP(6); ASYNC_ARRAY_READ(5) |
+| `zhao_raster_fragment` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(7, widest 18-bit) |
+| `zhao_cmd_scheduler` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(4); ASYNC_ARRAY_READ(4) |
+| `zhao_debug_crc` | *never timed* | - | - | `96c0394a` | **no** | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) |
+| `zhao_input_rumble` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(1); ASYNC_ARRAY_READ(1) |
+| `zhao_measure_governor` | *never timed* | - | - | `96c0394a` | **no** | VARSHIFT(2); ASYNC_ARRAY_READ(1) |
+| `zhao_mem_guard` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(1) |
+| `zhao_vram_arbiter` | *never timed* | - | - | `96c0394a` | **no** | COMB_LOOP(4); ASYNC_ARRAY_READ(4) |
+| `zhao_geom_setup` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(4, widest 21-bit) |
+| `zhao_geom_clip` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(2, widest 23-bit) |
+| `zhao_raster_blend` | *never timed* | - | - | `96c0394a` | **no** | MULTIPLY(1, widest 18-bit) |
+| `zhao_geom_arena` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_hps_bridge` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_measure_tokens` | *never timed* | - | - | `96c0394a` | **no** | ASYNC_ARRAY_READ(1) |
+| `zhao_raster_earlyz` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_raster_resolve` | *never timed* | - | - | `96c0394a` | **no** | ASYNC_ARRAY_READ(1) |
+| `zhao_scanout_fetch` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_scanout_serializer` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_surface_blend` | *never timed* | - | - | `96c0394a` | **no** | VARSHIFT(1) |
+| `zhao_texture_bilerp` | *never timed* | - | - | `1c98bb83` | **no** | MULTIPLY(3, widest 18-bit) |
+| `zhao_video_framectl` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_video_mode` | *never timed* | - | - | `96c0394a` | **no** | - |
+| `zhao_video_scaler` | *never timed* | - | - | `96c0394a` | **no** | - |
+
+**4 of 41 fitted blocks carry an Fmax at all.**
+
+**And 0 of them carry a setup or hold slack figure.**
+
+That is not a gap in this report. `tools/quartus/run_block_fit.ps1` DOES try to
+extract both, with
+
+    '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)'
+
+and **it has never once matched** -- not in a single committed row, including
+the rows measured after the SDC repair, which do carry an Fmax from the very
+same report file. The Fmax regex reads the summary table; the slack regex reads
+a line format that Quartus 17.0.2's STA report does not appear to emit.
+
+So the ruling asks this heatmap for **WNS, TNS and hold**, and the fit lane can
+supply **none of the three**. The columns are printed empty rather than dropped,
+because a column that is missing looks like a question nobody asked.
+
+This is QUARTUS_GOTCHAS' own pattern one more time -- an extraction that fails
+silently and whose only symptom is a number that never appears. It is a defect
+in the instrument, not in the blocks, and it is the cheapest item on the board.
 
 ## Calibration: measured shape -> resources
 

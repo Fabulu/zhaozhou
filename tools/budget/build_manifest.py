@@ -681,6 +681,62 @@ def write_heatmap(path, man, calib, wl):
     L.append("was asked to stop guessing at.")
     L.append("")
 
+    # ---- timing ---------------------------------------------------------
+    L.append("## Timing, and how little of it exists")
+    L.append("")
+    L.append("Every figure here comes from the FIT lane. The map lane has no SDC and no")
+    L.append("placement, so it contributes nothing to this table by construction.")
+    L.append("")
+    L.append("`OLD_SDC` marks a row whose fit carries no Fmax at all -- it ran with no timing")
+    L.append("objective, which QUARTUS_GOTCHAS 7 records was true of every per-block fit this")
+    L.append("project ran for weeks. Those rows are not slow measurements; they are not")
+    L.append("measurements.")
+    L.append("")
+    L.append("| block | Fmax (MHz) | WNS setup (ns) | hold (ns) | fit commit | RTL at HEAD? | critical-path family, from source |")
+    L.append("| --- | ---: | ---: | ---: | --- | :--: | --- |")
+    timed = 0
+    for r in sorted(R, key=lambda x: (x["resources"].get("fitFmaxMhz") or 1e9)):
+        res = r["resources"]
+        if res.get("fitAlms") is None:
+            continue
+        f = res.get("fitFmaxMhz")
+        if f is not None:
+            timed += 1
+        L.append("| `%s` | %s | %s | %s | `%s` | %s | %s |" % (
+            r["module"],
+            ("**%.2f**" % f) if f is not None else "*never timed*",
+            res.get("fitSetupSlackNs") if res.get("fitSetupSlackNs") is not None else "-",
+            res.get("fitHoldSlackNs") if res.get("fitHoldSlackNs") is not None else "-",
+            r["provenance"].get("fitCommit"),
+            "yes" if r["provenance"].get("fitRtlMatchesHead") else "**no**",
+            "; ".join(r["criticalPathFamily"])[:70] or "-"))
+    L.append("")
+    L.append("**%d of %d fitted blocks carry an Fmax at all.**" % (timed, cov["modulesWithAnyFit"]))
+    L.append("")
+    nslack = sum(1 for r in R if r["resources"].get("fitSetupSlackNs") is not None
+                 or r["resources"].get("fitHoldSlackNs") is not None)
+    L.append("**And %d of them carry a setup or hold slack figure.**" % nslack)
+    if nslack == 0:
+        L.append("")
+        L.append("That is not a gap in this report. `tools/quartus/run_block_fit.ps1` DOES try to")
+        L.append("extract both, with")
+        L.append("")
+        L.append(r"    '(?m)^\s*Worst-case Setup Slack\D+(-?[0-9.]+)'")
+        L.append("")
+        L.append("and **it has never once matched** -- not in a single committed row, including")
+        L.append("the rows measured after the SDC repair, which do carry an Fmax from the very")
+        L.append("same report file. The Fmax regex reads the summary table; the slack regex reads")
+        L.append("a line format that Quartus 17.0.2's STA report does not appear to emit.")
+        L.append("")
+        L.append("So the ruling asks this heatmap for **WNS, TNS and hold**, and the fit lane can")
+        L.append("supply **none of the three**. The columns are printed empty rather than dropped,")
+        L.append("because a column that is missing looks like a question nobody asked.")
+        L.append("")
+        L.append("This is QUARTUS_GOTCHAS' own pattern one more time -- an extraction that fails")
+        L.append("silently and whose only symptom is a number that never appears. It is a defect")
+        L.append("in the instrument, not in the blocks, and it is the cheapest item on the board.")
+        L.append("")
+
     # ---- calibration ----------------------------------------------------
     pts = [p for p in calib.get("points", []) if p.get("status") == "ok"]
     L.append("## Calibration: measured shape -> resources")
