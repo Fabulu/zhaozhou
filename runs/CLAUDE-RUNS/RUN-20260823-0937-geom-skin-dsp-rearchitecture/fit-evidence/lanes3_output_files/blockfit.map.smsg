@@ -1,0 +1,3 @@
+Warning (10268): Verilog HDL information at zhao_cmd_scheduler.sv(239): always construct contains both blocking and non-blocking assignments File: C:/programmieren/zencrifice/zhaozhou/fpga/rtl/command/zhao_cmd_scheduler.sv Line: 239
+Warning (10268): Verilog HDL information at zhao_cmd_dma.sv(477): always construct contains both blocking and non-blocking assignments File: C:/programmieren/zencrifice/zhaozhou/fpga/rtl/command/zhao_cmd_dma.sv Line: 477
+Warning (10268): Verilog HDL information at zhao_vram_arbiter.sv(233): always construct contains both blocking and non-blocking assignments File: C:/programmieren/zencrifice/zhaozhou/fpga/rtl/memory/zhao_vram_arbiter.sv Line: 233

@@ -415,12 +415,22 @@ version would have produced a diff that CI then rejects.
 **Two things that change the plan:**
 
 **The running depth-172 proof is on the PRE-FIX RTL.** sby copied its sources at
-10:00:57; `zhao_field_normalize.sv` was edited at ~10:05. So this run yields the
-**timing** number — which is still the number the timeout decision needs, since
-the leading-zero version has strictly less logic and cannot be slower — but the
-**green must be re-run against the fixed RTL.** Worth recording explicitly,
-because a proof that passed on almost-the-right sources is exactly the kind of
-evidence that gets banked by mistake.
+10:00:57; `zhao_field_normalize.sv` was edited at ~10:05. The **green** must
+therefore be re-run against the fixed RTL — a proof that passed on
+almost-the-right sources is exactly the kind of evidence that gets banked by
+mistake.
+
+**CORRECTION, 14:00 — I said this run still yields the usable timing number. It
+does not.** My reasoning was that the leading-zero version has strictly less
+logic and so cannot be slower, which makes the pre-fix time a safe upper bound.
+That is true of the *hardware* and irrelevant to the *solver*: the proof engine
+also has to reason about the 128 unrolled compare-and-shift stages, and those
+dominate its work. A CI budget set from that run would be pinned to logic that
+**no longer exists in the design**.
+
+The agent stopped the run rather than let it supply a wrong number, which is the
+right call and better than the guidance I gave. **The run yields neither
+number.** Both the budget and the green come from the fixed RTL.
 
 **It is trending over budget:** k=82 at 30 minutes, ~2.7 steps/min with the
 census fit running alongside, extrapolating to ~63 min against an 1,800 s lane
@@ -623,6 +633,43 @@ honest configuration**, not merely that this one is slow. And asked that the
 note record the figure as **pessimistic** (measured with a Quartus fit running
 alongside), since being explicit that a number is the bad case is what stops the
 next person shaving it.
+
+### 14:00 - The timeout mechanism landed, and the number deliberately did not
+
+The override is in and **verified by configuring, not by reading**:
+`field_seq_bound_lane.cmake` takes the override path while
+`sat_add_lane.cmake` still gets 1800 — so the change is a local exception beside
+its reason, not a global loosening. ctest's budget is derived as
+`wrapper + 300`, so ctest always outlasts the wrapper and **the wrapper gets to
+report which stage died** rather than ctest killing it anonymously.
+
+The distinction from the `video_framectl_one_fence` precedent is written into
+`tests/CMakeLists.txt` beside the override, in both halves, plus the fact that
+the lane is nightly rather than the PR path.
+
+**The number itself is still a placeholder, on purpose** — see the correction
+above. It gets measured on the fixed RTL, which is what CI will actually run.
+
+Two further things to be recorded in `formal_runs.yml` when it lands: that the
+measurement was taken with other work running and is therefore **the bad case**,
+and that **the timing figure and the green come from different runs against
+different sources.**
+
+### The lesson this session keeps producing, stated once more
+
+Eight instances before today of build state mistaken for design behaviour; this
+adds two more of a related kind, and both were caught by asking *what exactly
+does this artifact describe?*
+
+* A proof whose sources were copied five minutes before an edit describes the
+  **old** design — in its pass/fail **and in its wall time**, which is the half
+  I initially missed.
+* A fit running while a stopped-but-still-alive sweep rewrites `.sv` files
+  underneath it describes **neither** version.
+
+Both have the same shape as the `terrain_lod` false regression, the inflated
+21/22 sweep score, and the 47 fits with no timing objective: **the artifact was
+real, and it was an artifact of something other than what it was read as.**
 
 ---
 
