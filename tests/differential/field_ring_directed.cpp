@@ -40,7 +40,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_ring.h"
+#include "Vzhao_field_ring_tb.h"
 
 #include "zfield/zfield.hpp"
 #include "zhao_sim.hpp"
@@ -132,7 +132,7 @@ struct DutRes {
   int cycles = 0;
 };
 
-DutRes run(Vzhao_field_ring& dut, int32_t d, int32_t r0, int32_t r1) {
+DutRes run(Vzhao_field_ring_tb& dut, int32_t d, int32_t r0, int32_t r1) {
   dut.v_valid_i = 1;
   dut.d_i = static_cast<uint32_t>(d);
   dut.r0_i = static_cast<uint32_t>(r0);
@@ -170,7 +170,7 @@ DutRes run(Vzhao_field_ring& dut, int32_t d, int32_t r0, int32_t r1) {
 
 int g_rcp0_seen = 0, g_rcp_seen = 0, g_clamped_lo = 0, g_clamped_hi = 0;
 
-void diff(Vzhao_field_ring& dut, int32_t d, int32_t r0, int32_t r1, const char* what) {
+void diff(Vzhao_field_ring_tb& dut, int32_t d, int32_t r0, int32_t r1, const char* what) {
   const Res want = interp(d, r0, r1);
   const Lanes lane = lanes_of(d, r0, r1);
   const DutRes got = run(dut, d, r0, r1);
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  Vzhao_field_ring dut;
+  Vzhao_field_ring_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;

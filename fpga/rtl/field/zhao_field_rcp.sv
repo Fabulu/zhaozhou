@@ -1,4 +1,5 @@
-// zhao_field_rcp.sv — the Field IR reciprocal, OP_RCP.
+// zhao_field_rcp.sv — the Field IR reciprocal, OP_RCP, walked over the shared
+// multiplier.
 //
 // A submodule of the FIELD.SEQ.* family. Reference: `zref::field_rcp`
 // (reference/include/zref/zref_rcp.hpp §6.2), which is what
@@ -8,6 +9,27 @@
 // `zref_tables.hpp` rather than transcribed, and checked entry by entry in the
 // test. A wrong seed does not fail loudly; it just makes some reciprocals
 // slightly wrong.
+//
+// ---------------------------------------------------------------------------
+// WHAT CHANGED, 2026-08-23, AND WHAT DID NOT
+// ---------------------------------------------------------------------------
+// This block used to be COMBINATIONAL, with the sequencer owning its pipeline,
+// and it owned two multipliers of its own — one 32x16 and one 16x49. Under the
+// DSP ruling of 2026-08-23 no production op unit keeps a private nonconstant
+// multiplier, so both products now walk `zhao_field_mul` and the block became
+// ready/valid.
+//
+// THE ANSWER DID NOT MOVE. Every constant, every shift, the single Newton
+// correction, the rounding mode and the four saturation rails are unchanged;
+// only WHEN the two products are formed is different. That is the claim the
+// differential makes, and it makes it against the same oracle as before.
+// ENFORCED-BY: tests/differential/field_rcp_directed.cpp:main
+//
+// The cost is latency: OP_RCP was a six-clock instruction and is now roughly
+// thirteen. Nothing in the engine's contract promised six — the docket's own
+// framing is that DSP allocation is justified by sustained frame demand, not
+// by preserving one-clock placeholder throughputs — and OP_RCP is a per-sample
+// field op, not a per-pixel path.
 //
 // ---------------------------------------------------------------------------
 // THE LAW, step for step
@@ -45,14 +67,23 @@
 //    still return the right number.
 //
 // ---------------------------------------------------------------------------
-// WIDTHS, and the one that is nearly tight
+// THE SPLIT PRODUCT, which is the only new arithmetic here
 // ---------------------------------------------------------------------------
 // `n` is u32 with bit 31 set, so `n` is in [2^31, 2^32). The seed is 16 bits, in
 // [0x8020, 0xFF80]. So `p = n * x` is at most about 2^48 — 49 bits — and
 // `2^48 - p` stays non-negative because the seed is by construction near 2^47/n.
-// `x * (2^48 - p)` reaches about 2^63: it needs a full 64 bits and no more, and
-// that is the tightest width in the block. `x << 16` is 33 bits, and the final
-// shift by `e` (0..31) brings it into range.
+//
+// A 49-bit operand does not fit the shared lane's 33 signed bits, so `corr` is
+// SPLIT at bit 32 and issued twice:
+//
+//     corr = corr_hi * 2^32 + corr_lo,   corr_lo = corr[31:0] (32 bits, zero
+//                                        extended), corr_hi = corr[48:32]
+//     x * corr = (x * corr_lo) + ((x * corr_hi) << 32)
+//
+// This is EXACT, not an approximation: both partial products are formed at full
+// width and recombined before the single rescale by 47, so the rounding happens
+// exactly once and in exactly the place the reference puts it. Splitting AFTER
+// the rescale, or rescaling each partial, would be a different function.
 //
 // The non-negativity claim is a property of the TABLE, not of this arithmetic:
 // a wrong seed would make `2^48 - p` wrap and the answer would be nonsense. It
@@ -60,13 +91,41 @@
 // transcribed, and checked entry by entry.
 // ENFORCED-BY: tests/differential/field_rcp_directed.cpp:main
 module zhao_field_rcp (
-    // Combinational: the sequencer owns the pipeline.
+    input logic clk,
+    input logic rst_n,
+
+    input  logic               v_valid_i,
+    output logic               v_ready_o,
     input  logic signed [31:0] a_i,
 
+    output logic               r_valid_o,
+    input  logic               r_ready_i,
     output logic signed [31:0] result_o,
     output logic               sat_rcp_o,   // SatLedger::rcp
-    output logic               rcp0_o       // SatLedger::rcp0, the sticky lane
+    output logic               rcp0_o,      // SatLedger::rcp0, the sticky lane
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i
 );
+
+  localparam logic [2:0] S_IDLE = 3'd0;
+  localparam logic [2:0] S_P    = 3'd1;   // waiting on n * seed
+  localparam logic [2:0] S_CLO  = 3'd2;   // issue seed * corr_lo
+  localparam logic [2:0] S_CHI  = 3'd3;   // issue seed * corr_hi
+  localparam logic [2:0] S_WLO  = 3'd4;   // collect the low partial
+  localparam logic [2:0] S_WHI  = 3'd5;   // collect the high partial, finish
+  localparam logic [2:0] S_OUT  = 3'd6;
+
+  logic [2:0] state;
 
   // ---- the zero case, pinned -----------------------------------------------
   logic is_zero, neg;
@@ -110,14 +169,61 @@ module zhao_field_rcp (
       .seed_o(seed)
   );
 
-  // ---- one pinned Newton correction ---------------------------------------
-  logic [63:0] p, corr, x1, shifted;
-  logic [63:0] r_wide;
+  // ---- what the walk holds from accept -------------------------------------
+  // The caller is not required to hold `a_i` for the whole walk, so everything
+  // derived from it is captured on the accepting edge.
+  logic [15:0] h_seed;
+  logic [ 5:0] h_e;
+  logic        h_neg, h_zero;
+
+  // `n * seed` is at most 2^48, so 49 bits is the whole value and not a
+  // truncation: `n` is in [2^31, 2^32) and the seed is 16 bits.
+  logic [48:0] p_val;
+  logic [65:0] xc;         // seed * (2^48 - p), recombined from two partials
+
+  logic [48:0] corr;
+  assign corr = 49'h1_0000_0000_0000 - p_val;   // 2^48 - p
+
+  // ---- the shared-lane requests --------------------------------------------
+  // Every operand is UNSIGNED and is zero-extended into the lane's 33 signed
+  // bits, so nothing on this path can be reinterpreted as negative.
   always_comb begin
-    p = 64'(n) * 64'({48'd0, seed});
-    corr = 64'h0001_0000_0000_0000 - p;              // 2^48 - p
+    mul_issue_o = 1'b0;
+    mul_a_o     = '0;
+    mul_b_o     = '0;
+    case (state)
+      S_IDLE: begin
+        // Issued on the accepting edge itself, from the combinational normalise
+        // above, so the walk does not spend a clock re-presenting what it has.
+        mul_issue_o = v_valid_i && v_ready_o && !is_zero;
+        mul_a_o     = $signed({1'b0, n});
+        mul_b_o     = $signed({17'd0, seed});
+      end
+      S_CLO: begin
+        mul_issue_o = 1'b1;
+        mul_a_o     = $signed({17'd0, h_seed});
+        mul_b_o     = $signed({1'b0, corr[31:0]});
+      end
+      S_CHI: begin
+        mul_issue_o = 1'b1;
+        mul_a_o     = $signed({17'd0, h_seed});
+        mul_b_o     = $signed({16'd0, corr[48:32]});
+      end
+      default: begin
+        mul_issue_o = 1'b0;
+        mul_a_o     = '0;
+        mul_b_o     = '0;
+      end
+    endcase
+  end
+
+  // ---- the finish, from the recombined product -----------------------------
+  logic [63:0] x1, shifted;
+  logic [63:0] r_wide;
+  logic        over;
+  always_comb begin
     // rescale_u(x * corr, 47): unsigned round-half-up.
-    x1 = ((64'({48'd0, seed}) * corr) + (64'd1 <<< 46)) >> 47;
+    x1 = 64'((xc + (66'd1 <<< 46)) >> 47);
     shifted = x1 <<< 16;
     // rescale_u(., e), with e == 0 the identity, exactly as the reference states.
     //
@@ -127,25 +233,94 @@ module zhao_field_rcp (
     // reference, and its VALUE never escapes -- an equivalent mutant, not a hole
     // in the test. It stays because the reference has it and because a future
     // widening of the result would make it live.
-    r_wide = (e == 6'd0) ? shifted : ((shifted + (64'd1 << (e - 6'd1))) >> e);
+    r_wide = (h_e == 6'd0) ? shifted : ((shifted + (64'd1 << (h_e - 6'd1))) >> h_e);
+    over   = (r_wide > 64'd2147483647);
   end
 
-  logic over;
-  assign over = (r_wide > 64'd2147483647);
+  assign v_ready_o = (state == S_IDLE) && (!r_valid_o || r_ready_i);
 
-  always_comb begin
-    if (is_zero) begin
-      result_o = 32'sh7FFF_FFFF;  // qformats §6.2, pinned
-      sat_rcp_o = 1'b0;
-      rcp0_o = 1'b1;
-    end else if (over) begin
-      result_o = neg ? 32'sh8000_0000 : 32'sh7FFF_FFFF;
-      sat_rcp_o = 1'b1;
-      rcp0_o = 1'b0;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      state     <= S_IDLE;
+      h_seed    <= '0;
+      h_e       <= '0;
+      h_neg     <= 1'b0;
+      h_zero    <= 1'b0;
+      p_val     <= '0;
+      xc        <= '0;
+      r_valid_o <= 1'b0;
+      result_o  <= '0;
+      sat_rcp_o <= 1'b0;
+      rcp0_o    <= 1'b0;
     end else begin
-      result_o = neg ? -$signed(r_wide[31:0]) : $signed(r_wide[31:0]);
-      sat_rcp_o = 1'b0;
-      rcp0_o = 1'b0;
+      if (r_valid_o && r_ready_i) r_valid_o <= 1'b0;
+
+      case (state)
+        S_IDLE: begin
+          if (v_valid_i && v_ready_o) begin
+            h_seed <= seed;
+            h_e    <= e;
+            h_neg  <= neg;
+            h_zero <= is_zero;
+            if (is_zero) begin
+              // qformats §6.2, pinned. No product is issued and none is needed.
+              result_o  <= 32'sh7FFF_FFFF;
+              sat_rcp_o <= 1'b0;
+              rcp0_o    <= 1'b1;
+              r_valid_o <= 1'b1;
+              state     <= S_OUT;
+            end else begin
+              state <= S_P;
+            end
+          end
+        end
+
+        S_P: begin
+          if (mul_valid_i) begin
+            p_val <= mul_p_i[48:0];
+            state <= S_CLO;
+          end
+        end
+
+        // Two issues on consecutive cycles: the partials are independent, so
+        // the lane's two-cycle latency is paid once rather than twice.
+        S_CLO: state <= S_CHI;
+        S_CHI: state <= S_WLO;
+
+        S_WLO: begin
+          if (mul_valid_i) begin
+            xc    <= 66'(mul_p_i[63:0]);
+            state <= S_WHI;
+          end
+        end
+
+        S_WHI: begin
+          if (mul_valid_i) begin
+            // The recombination, and the ONLY place the two partials meet.
+            xc        <= xc + (66'(mul_p_i[63:0]) <<< 32);
+            state     <= S_OUT;
+          end
+        end
+
+        S_OUT: begin
+          if (!r_valid_o && !h_zero) begin
+            if (over) begin
+              result_o  <= h_neg ? 32'sh8000_0000 : 32'sh7FFF_FFFF;
+              sat_rcp_o <= 1'b1;
+              rcp0_o    <= 1'b0;
+            end else begin
+              result_o  <= h_neg ? -$signed(r_wide[31:0]) : $signed(r_wide[31:0]);
+              sat_rcp_o <= 1'b0;
+              rcp0_o    <= 1'b0;
+            end
+            r_valid_o <= 1'b1;
+          end else if (r_valid_o && r_ready_i) begin
+            state <= S_IDLE;
+          end
+        end
+
+        default: state <= S_IDLE;
+      endcase
     end
   end
 

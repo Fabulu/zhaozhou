@@ -26,7 +26,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_rot.h"
+#include "Vzhao_field_rot_tb.h"
 
 #include "zfield/zfield.hpp"
 #include "zhao_sim.hpp"
@@ -94,7 +94,7 @@ struct DutRes {
   int cycles = 0;
 };
 
-DutRes run(Vzhao_field_rot& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y,
+DutRes run(Vzhao_field_rot_tb& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y,
            int32_t z) {
   dut.v_valid_i = 1;
   dut.is_rot3_i = rot3 ? 1 : 0;
@@ -194,7 +194,7 @@ bool fused_would_differ(int32_t ang, int32_t p, int32_t q) {
   return split != fused;
 }
 
-void diff(Vzhao_field_rot& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y,
+void diff(Vzhao_field_rot_tb& dut, bool rot3, uint32_t axis, int32_t ang, int32_t x, int32_t y,
           int32_t z, const char* what) {
   const Res want = interp(rot3, axis, ang, x, y, z);
   const DutRes got = run(dut, rot3, axis, ang, x, y, z);
@@ -273,7 +273,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  Vzhao_field_rot dut;
+  Vzhao_field_rot_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;

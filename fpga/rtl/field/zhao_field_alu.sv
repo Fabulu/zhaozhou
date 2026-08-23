@@ -80,6 +80,30 @@
 // 2^15 cannot overflow that. `>>> 16` leaves s50, which saturates to s32. MAD's
 // `c << 16` is s48 and joins an s64 product, so s66 covers it too — one width
 // serves the whole file.
+//
+// ---------------------------------------------------------------------------
+// THE PRODUCTS ARRIVE; THEY ARE NO LONGER FORMED HERE (2026-08-23)
+// ---------------------------------------------------------------------------
+// This block used to state `a0*b0`, `a0*b0 + a1*b1` and `+ a2*b2` and own the
+// silicon for them. Under the DSP ruling of 2026-08-23 they are formed on the
+// engine's ONE multiplier lane, DURING THE REGISTER-READ WALK: the sequencer
+// reads (a, b), (a+1, b+1) and (a+2, b+2) on three consecutive cycles and hands
+// each pair to `zhao_field_mul` as it goes, so the three products and their
+// running sum are standing ready in Q_EXEC. MUL, MAD, DOT2 and DOT3 still cost
+// six clocks; the read walk simply stopped being three idle cycles.
+//
+// WHAT THIS BLOCK NO LONGER STATES is the operand PAIRING -- that lane k of `a`
+// multiplies lane k of `b`. That fact now lives in the sequencer's read-address
+// walk, `a + k` against `b + k`, which is the same walk that captures a0..a2 and
+// b0..b2 for every other op. It is proven end to end against `zfield::interpret`
+// rather than restated here.
+// ENFORCED-BY: tests/differential/field_seq_directed.cpp
+//
+// `a1_i`, `b1_i`, `a2_i` and `b2_i` are consequently no longer read by this
+// block. They stay on the port list because they are what the op's OPERANDS
+// are, and because a future op class that needs them should not have to
+// re-thread them; the sums that used to consume them are the three inputs
+// below.
 module zhao_field_alu (
     // Purely combinational: the sequencer owns the register file and the
     // pipeline. This is the arithmetic and nothing else.
@@ -92,6 +116,14 @@ module zhao_field_alu (
     input  logic signed [31:0] b1_i,
     input  logic signed [31:0] b2_i,
     input  logic signed [31:0] c_i,    // reg[c]
+
+    // The shared lane's products, gathered during the register-read walk.
+    //   prod_ab_i = a0 * b0
+    //   dot2_i    = a0 * b0 + a1 * b1
+    //   dot3_i    = a0 * b0 + a1 * b1 + a2 * b2
+    input  logic signed [65:0] prod_ab_i,
+    input  logic signed [65:0] dot2_i,
+    input  logic signed [65:0] dot3_i,
 
     output logic signed [31:0] result_o,
     output logic               is_end_o,          // OP_END: stop, do not write
@@ -190,15 +222,26 @@ module zhao_field_alu (
   endfunction
 
   // ---- the shared wide terms ----------------------------------------------
+  // The two sums are still formed here; the three products are not.
   logic signed [W-1:0] sum_ab, dif_ab, prod_ab, mad_ab, dot2, dot3;
   always_comb begin
     sum_ab  = ext32(a0_i) + ext32(b0_i);
     dif_ab  = ext32(a0_i) - ext32(b0_i);
-    prod_ab = ext32(a0_i) * ext32(b0_i);
+    prod_ab = prod_ab_i;
     mad_ab  = prod_ab + (ext32(c_i) <<< 16);
-    dot2    = ext32(a0_i) * ext32(b0_i) + ext32(a1_i) * ext32(b1_i);
-    dot3    = dot2 + ext32(a2_i) * ext32(b2_i);
+    dot2    = dot2_i;
+    dot3    = dot3_i;
   end
+
+  // The lanes the products consumed. Named so that -Wall does not read the
+  // ports as dead, and so that a reader sees WHY they are still here.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [31:0] unread_a1, unread_b1, unread_a2, unread_b2;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign unread_a1 = a1_i;
+  assign unread_b1 = b1_i;
+  assign unread_a2 = a2_i;
+  assign unread_b2 = b2_i;
 
   // ---- ABS SATURATES, and it took the sequencer to notice -----------------
   // `zfield_interpret.cpp` §3.7 is explicit: "saturating abs:

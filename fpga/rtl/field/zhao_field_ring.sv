@@ -60,12 +60,30 @@
 //    number correctly and still misreport where the range went.
 //
 // ---------------------------------------------------------------------------
-// ONE MULTIPLIER, ONE RECIPROCAL, ONE SMOOTHSTEP WALKED TWICE
+// NO MULTIPLIER AND NO RECIPROCAL OF ITS OWN, AS OF 2026-08-23
 // ---------------------------------------------------------------------------
 // Nine 32x32 products and two reciprocals. The two smoothsteps are the SAME
-// five states walked twice with different edges, and `zhao_field_rcp` is
-// combinational so one instance serves both. Same trade as the rest of the
-// engine: this is a per-sample field op, not a per-pixel path.
+// five states walked twice with different edges, so one walk serves both.
+//
+// Under the DSP ruling of 2026-08-23 the walk no longer owns any arithmetic.
+// The nine products go through `zhao_field_mul`, the engine's one lane, and the
+// two reciprocals are two REQUESTS to the engine's one `zhao_field_rcp` -- the
+// same instance OP_RCP itself uses. That reciprocal is now sequenced too, so
+// what used to be a combinational borrow is a ready/valid handshake, called
+// twice, exactly where law 2 says a reciprocal is taken.
+//
+// THE DEEPEST OP IN THE ENGINE PAYS THE MOST FOR THIS, and that is the right
+// place to pay it: RING is a per-sample field op that already cost thirteen
+// clocks and now costs roughly fifty. Nothing in the engine's contract promised
+// otherwise, and the docket's framing is explicit that DSP allocation is
+// justified by sustained frame demand rather than by preserving one-clock
+// placeholder throughputs.
+//
+// THERE IS NO ARBITER between this block and the reciprocal it calls, and none
+// is needed: while RING waits on `zhao_field_rcp` it issues nothing of its own,
+// so the lane has exactly one requester at every instant. That is a fact about
+// this FSM, not a scheduling accident, and it is what makes the priority mux in
+// `zhao_field_exec_shared` sufficient.
 module zhao_field_ring (
     input logic clk,
     input logic rst_n,
@@ -83,22 +101,53 @@ module zhao_field_ring (
     output logic               sat_mul_o,
     output logic               sat_rescale_o,
     output logic               sat_rcp_o,
-    output logic               rcp0_o
+    output logic               rcp0_o,
+
+    // ---- the shared reciprocal, `zhao_field_rcp` --------------------------
+    output logic               rcp_valid_o,
+    input  logic               rcp_ready_i,
+    output logic signed [31:0] rcp_a_o,
+    input  logic               rcp_rvalid_i,
+    output logic               rcp_rready_o,
+    input  logic signed [31:0] rcp_result_i,
+    input  logic               rcp_sat_i,
+    input  logic               rcp_zero_i,
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i
 );
 
   localparam logic signed [31:0] FX_ONE = 32'sh0001_0000;
   localparam logic signed [31:0] FX_TWO = 32'sh0002_0000;
   localparam logic signed [31:0] FX_THREE = 32'sh0003_0000;
 
+  // Each product is an ISSUE state and a WAIT state, and the reciprocal is a
+  // REQUEST state and a WAIT state, because neither resource answers in the
+  // cycle it is asked any more.
   localparam logic [3:0] G_IDLE = 4'd0;
   localparam logic [3:0] G_MID = 4'd1;    // the midpoint
   localparam logic [3:0] G_SPAN = 4'd2;   // dd = e1 - e0, and its reciprocal
-  localparam logic [3:0] G_T = 4'd3;      // t = (x - e0) * r, then clamped
-  localparam logic [3:0] G_T2 = 4'd4;     // t2 = t * t
-  localparam logic [3:0] G_2T = 4'd5;     // u  = 3 - 2t
-  localparam logic [3:0] G_CUBE = 4'd6;   // s  = t2 * u
-  localparam logic [3:0] G_FIN = 4'd7;    // s0 * (1 - s1)
-  localparam logic [3:0] G_OUT = 4'd8;
+  localparam logic [3:0] G_SPANW = 4'd3;
+  localparam logic [3:0] G_T = 4'd4;      // t = (x - e0) * r, then clamped
+  localparam logic [3:0] G_TW = 4'd5;
+  localparam logic [3:0] G_T2 = 4'd6;     // t2 = t * t
+  localparam logic [3:0] G_T2W = 4'd7;
+  localparam logic [3:0] G_2T = 4'd8;     // u  = 3 - 2t
+  localparam logic [3:0] G_2TW = 4'd9;
+  localparam logic [3:0] G_CUBE = 4'd10;  // s  = t2 * u
+  localparam logic [3:0] G_CUBEW = 4'd11;
+  localparam logic [3:0] G_FIN = 4'd12;   // s0 * (1 - s1)
+  localparam logic [3:0] G_FINW = 4'd13;
+  localparam logic [3:0] G_OUT = 4'd14;
 
   logic [3:0] state;
   logic       half;   // 0 = the rising half, 1 = the falling half
@@ -108,23 +157,18 @@ module zhao_field_ring (
   logic signed [31:0] e0, e1;
   logic signed [31:0] rcp_v, t_val, t2_val, u_val, s0_val, s1_val;
 
-  // ---- the one reciprocal, walked ----------------------------------------
+  // ---- the shared reciprocal, requested twice ----------------------------
   logic signed [31:0] span;
-  logic signed [31:0] rcp_out;
-  logic               rcp_sat, rcp_zero;
   assign span = sub_sat(e1, e0);
 
-  zhao_field_rcp u_rcp (
-      .a_i      (span),
-      .result_o (rcp_out),
-      .sat_rcp_o(rcp_sat),
-      .rcp0_o   (rcp_zero)
-  );
+  assign rcp_valid_o  = (state == G_SPAN);
+  assign rcp_a_o      = span;
+  assign rcp_rready_o = (state == G_SPANW);
 
-  // ---- the one multiplier -------------------------------------------------
+  // ---- the shared multiplier's operands -----------------------------------
   logic signed [31:0] mul_a, mul_b;
   logic signed [63:0] mul_p;
-  assign mul_p = mul_a * mul_b;
+  assign mul_p = $signed(mul_p_i[63:0]);
 
   always_comb begin
     case (state)
@@ -152,6 +196,12 @@ module zhao_field_ring (
       end
     endcase
   end
+
+  // The request. Both operands are s32 and SIGN-extend into the lane's 33 bits.
+  assign mul_issue_o = (state == G_T) || (state == G_T2) || (state == G_2T) ||
+                       (state == G_CUBE) || (state == G_FIN);
+  assign mul_a_o = $signed({mul_a[31], mul_a});
+  assign mul_b_o = $signed({mul_b[31], mul_b});
 
   // ---- the primitives, each in its own lane -------------------------------
   function automatic logic signed [31:0] sub_sat(input logic signed [31:0] a,
@@ -260,57 +310,81 @@ module zhao_field_ring (
         end
 
         // Law 2: the reciprocal is field_rcp, zero and all. A degenerate ring
-        // gets a defined answer and a sticky lane that says so.
+        // gets a defined answer and a sticky lane that says so. The span's own
+        // subtraction saturates on the REQUEST edge, where the operands are.
         G_SPAN: begin
-          rcp_v <= rcp_out;
-          sat_add_o <= sat_add_o || sub_fired(e1, e0);
-          sat_rcp_o <= sat_rcp_o || rcp_sat;
-          rcp0_o <= rcp0_o || rcp_zero;
-          state <= G_T;
-        end
-
-        G_T: begin
-          // Law 3: clamp the PRODUCT.
-          t_val <= (t_raw < 32'sd0) ? 32'sd0 : ((t_raw > FX_ONE) ? FX_ONE : t_raw);
-          sat_add_o <= sat_add_o || sub_fired(h_d, e0);
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          state <= G_T2;
-        end
-
-        G_T2: begin
-          t2_val <= resc16(mul_p);
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          state <= G_2T;
-        end
-
-        G_2T: begin
-          u_val <= sub_sat(FX_THREE, resc16(mul_p));
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          sat_add_o <= sat_add_o || sub_fired(FX_THREE, resc16(mul_p));
-          state <= G_CUBE;
-        end
-
-        G_CUBE: begin
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          if (half == 1'b0) begin
-            s0_val <= resc16(mul_p);
-            // The falling half: forward across [m, r1].
-            half <= 1'b1;
-            e0 <= m_val;
-            e1 <= h_r1;
-            state <= G_SPAN;
-          end else begin
-            s1_val <= resc16(mul_p);
-            state <= G_FIN;
+          if (rcp_ready_i) begin
+            sat_add_o <= sat_add_o || sub_fired(e1, e0);
+            state <= G_SPANW;
           end
         end
 
-        G_FIN: begin
-          result_o <= resc16(mul_p);
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          sat_add_o <= sat_add_o || sub_fired(FX_ONE, s1_val);
-          r_valid_o <= 1'b1;
-          state <= G_OUT;
+        G_SPANW: begin
+          if (rcp_rvalid_i) begin
+            rcp_v <= rcp_result_i;
+            sat_rcp_o <= sat_rcp_o || rcp_sat_i;
+            rcp0_o <= rcp0_o || rcp_zero_i;
+            state <= G_T;
+          end
+        end
+
+        G_T: state <= G_TW;
+        G_TW: begin
+          if (mul_valid_i) begin
+            // Law 3: clamp the PRODUCT.
+            t_val <= (t_raw < 32'sd0) ? 32'sd0 : ((t_raw > FX_ONE) ? FX_ONE : t_raw);
+            sat_add_o <= sat_add_o || sub_fired(h_d, e0);
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            state <= G_T2;
+          end
+        end
+
+        G_T2: state <= G_T2W;
+        G_T2W: begin
+          if (mul_valid_i) begin
+            t2_val <= resc16(mul_p);
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            state <= G_2T;
+          end
+        end
+
+        G_2T: state <= G_2TW;
+        G_2TW: begin
+          if (mul_valid_i) begin
+            u_val <= sub_sat(FX_THREE, resc16(mul_p));
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            sat_add_o <= sat_add_o || sub_fired(FX_THREE, resc16(mul_p));
+            state <= G_CUBE;
+          end
+        end
+
+        G_CUBE: state <= G_CUBEW;
+        G_CUBEW: begin
+          if (mul_valid_i) begin
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            if (half == 1'b0) begin
+              s0_val <= resc16(mul_p);
+              // The falling half: forward across [m, r1].
+              half <= 1'b1;
+              e0 <= m_val;
+              e1 <= h_r1;
+              state <= G_SPAN;
+            end else begin
+              s1_val <= resc16(mul_p);
+              state <= G_FIN;
+            end
+          end
+        end
+
+        G_FIN: state <= G_FINW;
+        G_FINW: begin
+          if (mul_valid_i) begin
+            result_o <= resc16(mul_p);
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            sat_add_o <= sat_add_o || sub_fired(FX_ONE, s1_val);
+            r_valid_o <= 1'b1;
+            state <= G_OUT;
+          end
         end
 
         G_OUT: begin

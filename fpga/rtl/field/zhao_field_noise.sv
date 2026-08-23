@@ -77,14 +77,28 @@
 // as equivalent mutants with this reason attached.
 //
 // ---------------------------------------------------------------------------
-// ONE MULTIPLIER, WALKED
+// NO MULTIPLIER AT ALL, AS OF 2026-08-23
 // ---------------------------------------------------------------------------
 // A NOISE2 needs six 32x32 products (two for the shared lattice mix, then two
-// per lane) and a RIDGE needs four. They are taken ONE AT A TIME through a
-// single multiplier, the way `zhao_geom_mat3x4_mul` walks a matrix: this is a
-// field-program op evaluated per sample, not a per-pixel path, and six DSPs
-// spent to save five cycles is a bad trade in a design that has already failed
-// a fit once.
+// per lane) and a RIDGE needs four. They were already taken ONE AT A TIME
+// through a single multiplier this block owned. Under the DSP ruling of
+// 2026-08-23 that multiplier is gone too: the products now walk
+// `zhao_field_mul`, the engine's one arithmetic lane, which nine other op
+// controllers share because `zhao_field_seq` retires one instruction at a time.
+//
+// WHAT THAT COSTS IS THREE CLOCKS PER PRODUCT INSTEAD OF ONE. The lane is
+// input- and output-registered, so an issue in cycle N answers in cycle N+2,
+// and each of this block's steps is a genuine dependency on the one before it
+// -- the LCG advance needs the mix, the xor-shift needs the advance. There is
+// nothing here to pipeline, so a NOISE2 goes from about eight clocks to about
+// twenty-two. It is a per-sample field op; the DSPs are the scarce thing.
+//
+// EVERY PRODUCT ON THIS PATH IS MODULO 2^32 AND UNSIGNED (law 3). The operands
+// are zero-extended into the lane's 33 signed bits, which keeps them positive,
+// and only the low 32 bits of the exact product are read. That is the same
+// answer a 32x32 unsigned multiplier truncated to 32 bits gives, for every
+// input, because the low 32 bits of a product do not depend on anything above
+// them.
 module zhao_field_noise (
     input logic clk,
     input logic rst_n,
@@ -101,7 +115,19 @@ module zhao_field_noise (
     output logic signed [31:0] o0_o,        // NOISE2 lane 0, or RIDGE's result
     output logic signed [31:0] o1_o,        // NOISE2 lane 1 (zero for RIDGE)
     output logic               sat_add_o,
-    output logic               sat_rescale_o
+    output logic               sat_rescale_o,
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i
 );
 
   localparam logic [31:0] C_X = 32'h9E37_79B1;
@@ -110,15 +136,22 @@ module zhao_field_noise (
   localparam logic [31:0] C_LCG_A = 32'd2891336453;
   localparam logic [31:0] C_XSM = 32'd277803737;
 
-  localparam logic [2:0] S_IDLE = 3'd0;
-  localparam logic [2:0] S_MIX_X = 3'd1;
-  localparam logic [2:0] S_MIX_Y = 3'd2;
-  localparam logic [2:0] S_LCG = 3'd3;
-  localparam logic [2:0] S_RXS = 3'd4;
-  localparam logic [2:0] S_LANE = 3'd5;
-  localparam logic [2:0] S_OUT = 3'd6;
+  // Each product is now an ISSUE state and a WAIT state, because the shared
+  // lane answers two cycles after it is asked. The issue states keep their old
+  // names so the operand mux below still reads as the reference's step list.
+  localparam logic [3:0] S_IDLE = 4'd0;
+  localparam logic [3:0] S_MIX_X = 4'd1;
+  localparam logic [3:0] S_MIX_XW = 4'd2;
+  localparam logic [3:0] S_MIX_Y = 4'd3;
+  localparam logic [3:0] S_MIX_YW = 4'd4;
+  localparam logic [3:0] S_LCG = 4'd5;
+  localparam logic [3:0] S_LCGW = 4'd6;
+  localparam logic [3:0] S_RXS = 4'd7;
+  localparam logic [3:0] S_RXSW = 4'd8;
+  localparam logic [3:0] S_LANE = 4'd9;
+  localparam logic [3:0] S_OUT = 4'd10;
 
-  logic [2:0] state;
+  logic [3:0] state;
 
   logic signed [31:0] h_a0, h_a1;
   logic        [31:0] h_seed;
@@ -139,10 +172,10 @@ module zhao_field_noise (
   assign ix = $unsigned(h_a0 >>> 16);
   assign iy = $unsigned(h_a1 >>> 16);
 
-  // ---- the one multiplier, law 3: modulo 2^32, never saturating -----------
+  // ---- the shared lane's operands, law 3: modulo 2^32, never saturating ---
   logic [31:0] mul_a, mul_b;
   logic [31:0] mul_p;
-  assign mul_p = mul_a * mul_b;
+  assign mul_p = mul_p_i[31:0];
 
   // Law 2: the shift amount is a function of the DATA, 4..19.
   // Lane 1's finished hash, named so the two lanes read the same way. As with
@@ -182,6 +215,14 @@ module zhao_field_noise (
       end
     endcase
   end
+
+  // The request. ZERO-extended into 33 signed bits: these are u32 hash words,
+  // and a 32-bit value handed to a 33-bit signed port unextended would be read
+  // as negative for half of all inputs.
+  assign mul_issue_o = (state == S_MIX_X) || (state == S_MIX_Y) ||
+                       (state == S_LCG)   || (state == S_RXS);
+  assign mul_a_o = $signed({1'b0, mul_a});
+  assign mul_b_o = $signed({1'b0, mul_b});
 
   // ---- RIDGE's fold, on the finished lane-0 hash --------------------------
   // Law 5: the TOP half. u is [0, 1) and never negative.
@@ -272,28 +313,40 @@ module zhao_field_noise (
           end
         end
 
-        S_MIX_X: begin
-          mix_x <= mul_p;
-          state <= S_MIX_Y;
+        S_MIX_X: state <= S_MIX_XW;
+        S_MIX_XW: begin
+          if (mul_valid_i) begin
+            mix_x <= mul_p;
+            state <= S_MIX_Y;
+          end
         end
 
-        S_MIX_Y: begin
-          // s = (x*Cx) ^ ((y*Cy) ^ seed). The seed is folded into the Y term,
-          // which is not the same as folding it into the whole word -- xor is
-          // associative, so it is, and the grouping is kept for readability.
-          s_mix <= mix_x ^ (mul_p ^ h_seed);
-          s_reg <= mix_x ^ (mul_p ^ h_seed);
-          state <= S_LCG;
+        S_MIX_Y: state <= S_MIX_YW;
+        S_MIX_YW: begin
+          if (mul_valid_i) begin
+            // s = (x*Cx) ^ ((y*Cy) ^ seed). The seed is folded into the Y term,
+            // which is not the same as folding it into the whole word -- xor is
+            // associative, so it is, and the grouping is kept for readability.
+            s_mix <= mix_x ^ (mul_p ^ h_seed);
+            s_reg <= mix_x ^ (mul_p ^ h_seed);
+            state <= S_LCG;
+          end
         end
 
-        S_LCG: begin
-          s_reg <= mul_p + C_LCG_A;
-          state <= S_RXS;
+        S_LCG: state <= S_LCGW;
+        S_LCGW: begin
+          if (mul_valid_i) begin
+            s_reg <= mul_p + C_LCG_A;
+            state <= S_RXS;
+          end
         end
 
-        S_RXS: begin
-          s_reg <= mul_p;   // w, before the final xor-shift
-          state <= S_LANE;
+        S_RXS: state <= S_RXSW;
+        S_RXSW: begin
+          if (mul_valid_i) begin
+            s_reg <= mul_p;   // w, before the final xor-shift
+            state <= S_LANE;
+          end
         end
 
         S_LANE: begin

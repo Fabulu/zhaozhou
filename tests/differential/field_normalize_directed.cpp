@@ -27,7 +27,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_normalize.h"
+#include "Vzhao_field_normalize_tb.h"
 
 #include "zhao_sim.hpp"
 #include "zref/zref_fixp.hpp"
@@ -87,7 +87,7 @@ Res oracle3(int32_t x, int32_t y, int32_t z) {
   return o;
 }
 
-Res run(Vzhao_field_normalize& dut, bool is3, int32_t a0, int32_t a1, int32_t a2) {
+Res run(Vzhao_field_normalize_tb& dut, bool is3, int32_t a0, int32_t a1, int32_t a2) {
   dut.v_valid_i = 1;
   dut.is3_i = is3 ? 1 : 0;
   dut.a0_i = static_cast<uint32_t>(a0);
@@ -119,7 +119,7 @@ Res run(Vzhao_field_normalize& dut, bool is3, int32_t a0, int32_t a1, int32_t a2
   return r;
 }
 
-void diff(Vzhao_field_normalize& dut, bool is3, int32_t a0, int32_t a1, int32_t a2,
+void diff(Vzhao_field_normalize_tb& dut, bool is3, int32_t a0, int32_t a1, int32_t a2,
           const char* what) {
   const Res want = is3 ? oracle3(a0, a1, a2) : oracle2(a0, a1);
   const Res got = run(dut, is3, a0, a1, a2);
@@ -171,7 +171,7 @@ constexpr int32_t kOne = 1 << 16;
 }  // namespace
 
 int main(int argc, char** argv) {
-  Vzhao_field_normalize dut;
+  Vzhao_field_normalize_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;

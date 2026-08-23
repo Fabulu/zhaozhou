@@ -1,49 +1,81 @@
-// zhao_field_normalize.sv — the Field IR normalise ops: OP_NORMALIZE2 and
-// OP_NORMALIZE3.
-//
-// A submodule of the FIELD.SEQ.* family. Reference: the interpreter's
-// `normalize2` (§3.12) and `zref::normalize3_approx` (qformats §7.4), which are
-// the same shape and are implemented here as one datapath over two or three
-// lanes.
-//
-// The seed table lives in `zhao_field_rcp24_rom.sv`, GENERATED from
-// `zref_tables.hpp`. It is the SECOND reciprocal table in this engine and it is
-// NOT the one `zhao_field_rcp` uses — `FIELD_RCP_T0` seeds a 32-bit reciprocal
-// with one correction step, `RCP24_T0` seeds a 24-bit one with two. Feeding
-// either function the other's table would be invisible until some normalised
-// vector came out slightly short.
-//
-// ---------------------------------------------------------------------------
-// THE LAW
-// ---------------------------------------------------------------------------
-//     n2  = sum of squares, EXACT and unsigned
-//     n2 == 0                    -> all lanes zero (see the asymmetry below)
-//     len = isqrt_u64(n2)                       exact floor
-//     normalise len into [2^23, 2^24), counting e
-//     r   = rcp_u24_norm(m)                     TWO correction steps
-//     out = rescale_s32(lane * r, 31 + e)       ONE rounding per lane
-//
-// Five things are load-bearing:
-//
-// 1. **ONE ROUNDING PER LANE.** `lane * r` is exact in s64 and rescaled once by
-//    `31 + e`. The shift is a function of the vector's magnitude, not a
-//    constant, which is what keeps the result accurate across the whole range —
-//    and it is why `e` has to survive from the normalisation loop to the final
-//    rescale rather than being folded away early.
-// 2. **TWO CORRECTION STEPS, NOT ONE.** `rcp_u24_norm` iterates twice.
-//    `field_rcp` next door iterates ONCE. The two functions are different and
-//    the count is not a tuning knob.
-// 3. **THE ZERO CASE IS ASYMMETRIC BETWEEN THE TWO OPS**, and this is the one
-//    that looks like a bug and is not. `normalize2` bumps the `rcp0` ledger lane
-//    on a zero vector; `normalize3_approx` returns zeros and bumps NOTHING. The
-//    reference really does differ, so the RTL differs too, and the test pins
-//    both. Making them consistent would be tidier and would disagree with every
-//    capture the software has produced.
-// 4. **THE SUM OF SQUARES IS UNSIGNED.** Three squares reach 3*2^62, which
-//    overflows s64 and fits u64. The reference accumulates `normalize3`'s in a
-//    128-bit unsigned type and hands it to a u64 root; the value always fits.
-// 5. **THE ROOT IS A FLOOR.** Shared with `zhao_field_len`, same block, same
+// zhao_field_normalize.sv — the Field IR normalise ops: OP_NORMALIZE2 and
+// OP_NORMALIZE3.
+//
+// A submodule of the FIELD.SEQ.* family. Reference: the interpreter's
+// `normalize2` (§3.12) and `zref::normalize3_approx` (qformats §7.4), which are
+// the same shape and are implemented here as one datapath over two or three
+// lanes.
+//
+// The seed table lives in `zhao_field_rcp24_rom.sv`, GENERATED from
+// `zref_tables.hpp`. It is the SECOND reciprocal table in this engine and it is
+// NOT the one `zhao_field_rcp` uses — `FIELD_RCP_T0` seeds a 32-bit reciprocal
+// with one correction step, `RCP24_T0` seeds a 24-bit one with two. Feeding
+// either function the other's table would be invisible until some normalised
+// vector came out slightly short.
+//
+// ---------------------------------------------------------------------------
+// THE LAW
+// ---------------------------------------------------------------------------
+//     n2  = sum of squares, EXACT and unsigned
+//     n2 == 0                    -> all lanes zero (see the asymmetry below)
+//     len = isqrt_u64(n2)                       exact floor
+//     normalise len into [2^23, 2^24), counting e
+//     r   = rcp_u24_norm(m)                     TWO correction steps
+//     out = rescale_s32(lane * r, 31 + e)       ONE rounding per lane
+//
+// Five things are load-bearing:
+//
+// 1. **ONE ROUNDING PER LANE.** `lane * r` is exact in s64 and rescaled once by
+//    `31 + e`. The shift is a function of the vector's magnitude, not a
+//    constant, which is what keeps the result accurate across the whole range —
+//    and it is why `e` has to survive from the normalisation loop to the final
+//    rescale rather than being folded away early.
+// 2. **TWO CORRECTION STEPS, NOT ONE.** `rcp_u24_norm` iterates twice.
+//    `field_rcp` next door iterates ONCE. The two functions are different and
+//    the count is not a tuning knob.
+// 3. **THE ZERO CASE IS ASYMMETRIC BETWEEN THE TWO OPS**, and this is the one
+//    that looks like a bug and is not. `normalize2` bumps the `rcp0` ledger lane
+//    on a zero vector; `normalize3_approx` returns zeros and bumps NOTHING. The
+//    reference really does differ, so the RTL differs too, and the test pins
+//    both. Making them consistent would be tidier and would disagree with every
+//    capture the software has produced.
+// 4. **THE SUM OF SQUARES IS UNSIGNED.** Three squares reach 3*2^62, which
+//    overflows s64 and fits u64. The reference accumulates `normalize3`'s in a
+//    128-bit unsigned type and hands it to a u64 root; the value always fits.
+// 5. **THE ROOT IS A FLOOR.** Shared with `zhao_field_len`, same block, same
 //    exactness argument.
+//
+// ---------------------------------------------------------------------------
+// TEN PRODUCTS AND A SHARED ROOT, AS OF 2026-08-23
+// ---------------------------------------------------------------------------
+// This was the most expensive block in the engine: three squares, four
+// reciprocal-correction products and three output-lane products, ten
+// multipliers standing side by side, plus a second copy of the exact integer
+// root that `zhao_field_len` also owned. Under the DSP ruling of 2026-08-23 all
+// ten products walk `zhao_field_mul` and the root is the engine's ONE
+// `zhao_field_isqrt`.
+//
+// THE SCHEDULE, and where the parallelism actually is:
+//
+//   squares    three issues back to back      independent -> 5 clocks
+//   root       the unchanged restoring walk                  34 clocks
+//   reciprocal four issues, each dependent on the last    -> 4 x 3 clocks
+//   lanes      three issues back to back      independent -> 5 clocks
+//
+// The four reciprocal steps are a genuine chain -- the second correction reads
+// what the first produced -- so each pays the lane's full two-cycle latency.
+// The squares and the output lanes are not, so they do not.
+//
+// SIX OF THE TEN OPERANDS ARE UNSIGNED AND ONE IS NEARLY 33 BITS. `m` is u24,
+// the seed is u31, and the corrected `x` reaches 2^31 -- 32 bits, which
+// zero-extends into the lane's 33 signed bits and stays positive. That bound is
+// not an observation about the table: for ANY seed, x*(2 - m*x/2^54) is
+// maximised at x = 2^54/m, and m >= 2^23 puts the maximum at 2^31. The lane is
+// 33 bits wide so that this fits without a split.
+//
+// THE ACCUMULATOR IS LOADED BY THE FIRST SQUARE, NEVER ADDED TO, for the same
+// reason it is in `zhao_field_len`: a sum left over from the previous
+// instruction would be invisible in every test that runs one op at a time.
 module zhao_field_normalize (
     input logic clk,
     input logic rst_n,
@@ -61,38 +93,70 @@ module zhao_field_normalize (
     output logic signed [31:0] o1_o,
     output logic signed [31:0] o2_o,
     output logic               rcp0_o,        // set only by NORMALIZE2, see law 3
-    output logic               sat_rescale_o
+    output logic               sat_rescale_o,
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i,
+
+    // ---- the shared integer square root, `zhao_field_isqrt` ----------------
+    output logic        sqrt_valid_o,
+    input  logic        sqrt_ready_i,
+    output logic [63:0] sqrt_n_o,
+    input  logic        sqrt_rvalid_i,
+    output logic        sqrt_rready_o,
+    input  logic [63:0] sqrt_r_i
 );
 
-  // ---- the sum of squares, unsigned and exact -----------------------------
-  function automatic logic [63:0] sq(input logic signed [31:0] v);
-    logic [31:0] m;
-    begin
-      m = v[31] ? (~$unsigned(v) + 32'd1) : $unsigned(v);
-      sq = 64'(m) * 64'(m);
-    end
-  endfunction
+  localparam logic [3:0] N_IDLE = 4'd0;
+  localparam logic [3:0] N_GATH = 4'd1;    // three squares, issued and collected
+  localparam logic [3:0] N_ROOT = 4'd2;    // hand the sum to the shared root
+  localparam logic [3:0] N_WAIT = 4'd3;    // hold r_ready until the root answers
+  localparam logic [3:0] N_R0 = 4'd4;      // p0 = m * x0
+  localparam logic [3:0] N_R0W = 4'd5;
+  localparam logic [3:0] N_R1 = 4'd6;      // x1 = rescale_u(x0 * (2^31 - w0), 30)
+  localparam logic [3:0] N_R1W = 4'd7;
+  localparam logic [3:0] N_R2 = 4'd8;      // p1 = m * x1
+  localparam logic [3:0] N_R2W = 4'd9;
+  localparam logic [3:0] N_R3 = 4'd10;     // x2 = rescale_u(x1 * (2^31 - w1), 30)
+  localparam logic [3:0] N_R3W = 4'd11;
+  localparam logic [3:0] N_LANE = 4'd12;   // three output products
+  localparam logic [3:0] N_OUT = 4'd13;
+
+  logic [3:0] state;
+
+  // ---- what the walk holds from accept -------------------------------------
+  logic signed [31:0] h_a0, h_a1, h_a2;
+  logic               h_is3;
 
   logic [63:0] n2;
-  assign n2 = sq(a0_i) + sq(a1_i) + (is3_i ? sq(a2_i) : 64'd0);
-
-  logic is_zero;
+  logic        is_zero;
   assign is_zero = (n2 == 64'd0);
 
-  // ---- the exact integer square root --------------------------------------
-  logic        sq_valid, sq_ready, rt_valid, rt_ready;
-  logic [63:0] rt;
+  // ---- the three squares ----------------------------------------------------
+  // `v * v` sign-extended is exactly `|v|^2`, INT32_MIN included. The sum stays
+  // UNSIGNED because three squares reach 3*2^62 (law 4).
+  logic [1:0] iss_cnt, got_cnt;
 
-  zhao_field_isqrt u_isqrt (
-      .clk(clk),
-      .rst_n(rst_n),
-      .n_valid_i(sq_valid),
-      .n_ready_o(sq_ready),
-      .n_i(n2),
-      .r_valid_o(rt_valid),
-      .r_ready_i(rt_ready),
-      .r_o(rt)
-  );
+  logic signed [31:0] sq_sel;
+  always_comb begin
+    case (iss_cnt)
+      2'd0:    sq_sel = h_a0;
+      2'd1:    sq_sel = h_a1;
+      default: sq_sel = h_a2;
+    endcase
+  end
+
+  // ---- the root's answer, held ---------------------------------------------
+  logic [63:0] h_rt;
 
   // ---- normalise the length into [2^23, 2^24), counting e -----------------
   // The reference walks two while-loops. `len` is at most 2^32, so the shift is
@@ -103,7 +167,7 @@ module zhao_field_normalize (
   always_comb begin
     logic [63:0] t;
     logic signed [7:0] ee;
-    t = rt;
+    t = h_rt;
     ee = 8'sd0;
     if (t != 64'd0) begin
       for (int k = 0; k < 64; k++) begin
@@ -137,19 +201,17 @@ module zhao_field_normalize (
     resc_u = (k == 0) ? v : ((v + (64'd1 << (k - 1))) >> k);
   endfunction
 
-  logic [63:0] x0, p0, w0, x1, p1, w1, x2;
-  logic [31:0] r24;
-  always_comb begin
-    x0 = {33'd0, seed};
-    p0 = 64'({40'd0, m_val}) * x0;
-    w0 = p0 >> 24;
-    x1 = resc_u(x0 * ((64'd2 << 30) - w0), 30);
-    p1 = 64'({40'd0, m_val}) * x1;
-    w1 = p1 >> 24;
-    x2 = resc_u(x1 * ((64'd2 << 30) - w1), 30);
-    r24 = 32'(resc_u(x2, 7));
-    if (r24 > 32'h00FF_FFFF) r24 = 32'h00FF_FFFF;
-  end
+  // The correction chain, one register per step so that each product is read
+  // exactly once and by the state that asked for it.
+  logic [63:0] w0, w1;
+  logic [31:0] x1_q;
+  logic [23:0] r24;
+
+  // `2^31 - w` is at most 2^31 and so needs 32 unsigned bits; the lane sees it
+  // zero-extended and therefore positive.
+  logic [31:0] corr0, corr1;
+  assign corr0 = 32'((64'd2 << 30) - w0);
+  assign corr1 = 32'((64'd2 << 30) - w1);
 
   // ---- one rescale per lane, by 31 + e ------------------------------------
   logic [7:0] shift_amt;
@@ -174,26 +236,98 @@ module zhao_field_normalize (
     end
   endfunction
 
-  // The operands are held from accept, because the root takes 34 cycles and the
-  // caller's inputs are not required to stay put.
-  logic signed [31:0] h_a0, h_a1, h_a2;
-  logic               h_is3, h_zero;
+  // ---- the output lanes, issued back to back -------------------------------
+  logic [1:0] lane_iss, lane_got;
 
-  logic signed [63:0] m0, m1, m2;
+  logic signed [31:0] lane_sel;
   always_comb begin
-    m0 = $signed({{32{h_a0[31]}}, h_a0}) * $signed({32'd0, r24});
-    m1 = $signed({{32{h_a1[31]}}, h_a1}) * $signed({32'd0, r24});
-    m2 = $signed({{32{h_a2[31]}}, h_a2}) * $signed({32'd0, r24});
+    case (lane_iss)
+      2'd0:    lane_sel = h_a0;
+      2'd1:    lane_sel = h_a1;
+      default: lane_sel = h_a2;
+    endcase
   end
 
-  assign v_ready_o = sq_ready && (!r_valid_o || r_ready_i);
-  assign sq_valid = v_valid_i && (!r_valid_o || r_ready_i);
-  assign rt_ready = !r_valid_o || r_ready_i;
+  // ---- the shared lane's request -------------------------------------------
+  always_comb begin
+    mul_issue_o = 1'b0;
+    mul_a_o = '0;
+    mul_b_o = '0;
+    case (state)
+      N_GATH: begin
+        mul_issue_o = (iss_cnt != 2'd3);
+        mul_a_o = $signed({sq_sel[31], sq_sel});
+        mul_b_o = $signed({sq_sel[31], sq_sel});
+      end
+      N_R0: begin
+        mul_issue_o = 1'b1;
+        mul_a_o = $signed({9'd0, m_val});
+        mul_b_o = $signed({2'd0, seed});
+      end
+      N_R1: begin
+        mul_issue_o = 1'b1;
+        mul_a_o = $signed({2'd0, seed});
+        mul_b_o = $signed({1'b0, corr0});
+      end
+      N_R2: begin
+        mul_issue_o = 1'b1;
+        mul_a_o = $signed({9'd0, m_val});
+        mul_b_o = $signed({1'b0, x1_q});
+      end
+      N_R3: begin
+        mul_issue_o = 1'b1;
+        mul_a_o = $signed({1'b0, x1_q});
+        mul_b_o = $signed({1'b0, corr1});
+      end
+      N_LANE: begin
+        mul_issue_o = (lane_iss != 2'd3);
+        mul_a_o = $signed({lane_sel[31], lane_sel});
+        mul_b_o = $signed({9'd0, r24});
+      end
+      default: begin
+        mul_issue_o = 1'b0;
+        mul_a_o = '0;
+        mul_b_o = '0;
+      end
+    endcase
+  end
+
+  assign sqrt_valid_o  = (state == N_ROOT);
+  assign sqrt_n_o      = n2;
+  assign sqrt_rready_o = (state == N_WAIT);
+
+  assign v_ready_o = (state == N_IDLE) && (!r_valid_o || r_ready_i);
+
+  // The product the lane is answering with, as a signed s64: every value on
+  // this path fits, and the widths are argued in the header.
+  logic signed [63:0] p_signed;
+  logic        [63:0] p_unsigned;
+  assign p_signed   = $signed(mul_p_i[63:0]);
+  assign p_unsigned = mul_p_i[63:0];
+
+  logic [31:0] r24_next;
+  always_comb begin
+    logic [63:0] x2;
+    x2 = resc_u(p_unsigned, 30);
+    r24_next = 32'(resc_u(x2, 7));
+    if (r24_next > 32'h00FF_FFFF) r24_next = 32'h00FF_FFFF;
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      state <= N_IDLE;
       h_a0 <= '0; h_a1 <= '0; h_a2 <= '0;
-      h_is3 <= 1'b0; h_zero <= 1'b0;
+      h_is3 <= 1'b0;
+      n2 <= 64'd0;
+      h_rt <= 64'd0;
+      iss_cnt <= 2'd0;
+      got_cnt <= 2'd0;
+      lane_iss <= 2'd0;
+      lane_got <= 2'd0;
+      w0 <= 64'd0;
+      w1 <= 64'd0;
+      x1_q <= 32'd0;
+      r24 <= 24'd0;
       r_valid_o <= 1'b0;
       o0_o <= '0; o1_o <= '0; o2_o <= '0;
       rcp0_o <= 1'b0;
@@ -201,31 +335,110 @@ module zhao_field_normalize (
     end else begin
       if (r_valid_o && r_ready_i) r_valid_o <= 1'b0;
 
-      if (v_valid_i && v_ready_o) begin
-        h_a0 <= a0_i;
-        h_a1 <= a1_i;
-        h_a2 <= is3_i ? a2_i : 32'sd0;
-        h_is3 <= is3_i;
-        h_zero <= is_zero;
-      end
-
-      if (rt_valid && rt_ready) begin
-        if (h_zero) begin
-          o0_o <= '0; o1_o <= '0; o2_o <= '0;
-          // Law 3: NORMALIZE2 records rcp0 on a zero vector, NORMALIZE3 does
-          // not. The reference really is asymmetric here.
-          rcp0_o <= !h_is3;
-          sat_rescale_o <= 1'b0;
-        end else begin
-          o0_o <= resc_s(m0, shift_amt);
-          o1_o <= resc_s(m1, shift_amt);
-          o2_o <= h_is3 ? resc_s(m2, shift_amt) : 32'sd0;
-          rcp0_o <= 1'b0;
-          sat_rescale_o <= resc_s_fired(m0, shift_amt) || resc_s_fired(m1, shift_amt) ||
-                           (h_is3 && resc_s_fired(m2, shift_amt));
+      case (state)
+        N_IDLE: begin
+          if (v_valid_i && v_ready_o) begin
+            h_a0 <= a0_i;
+            h_a1 <= a1_i;
+            // NORMALIZE2's third lane is zero, so its square is zero and the
+            // sum is the two-lane one. The width, not the value, is what keeps
+            // the third OUTPUT lane from being written; that is the
+            // sequencer's job.
+            h_a2 <= is3_i ? a2_i : 32'sd0;
+            h_is3 <= is3_i;
+            iss_cnt <= 2'd0;
+            got_cnt <= 2'd0;
+            state <= N_GATH;
+          end
         end
-        r_valid_o <= 1'b1;
-      end
+
+        N_GATH: begin
+          if (iss_cnt != 2'd3) iss_cnt <= iss_cnt + 2'd1;
+          if (mul_valid_i) begin
+            n2 <= (got_cnt == 2'd0) ? p_unsigned : (n2 + p_unsigned);
+            got_cnt <= got_cnt + 2'd1;
+            if (got_cnt == 2'd2) state <= N_ROOT;
+          end
+        end
+
+        N_ROOT: begin
+          if (sqrt_ready_i) state <= N_WAIT;
+        end
+
+        N_WAIT: begin
+          if (sqrt_rvalid_i) begin
+            h_rt <= sqrt_r_i;
+            if (is_zero) begin
+              o0_o <= '0; o1_o <= '0; o2_o <= '0;
+              // Law 3: NORMALIZE2 records rcp0 on a zero vector, NORMALIZE3
+              // does not. The reference really is asymmetric here.
+              rcp0_o <= !h_is3;
+              sat_rescale_o <= 1'b0;
+              r_valid_o <= 1'b1;
+              state <= N_OUT;
+            end else begin
+              state <= N_R0;
+            end
+          end
+        end
+
+        // The two correction steps of `rcp_u24_norm`, four products, each one
+        // dependent on the one before it.
+        N_R0: state <= N_R0W;
+        N_R0W: if (mul_valid_i) begin
+          w0 <= p_unsigned >> 24;
+          state <= N_R1;
+        end
+
+        N_R1: state <= N_R1W;
+        N_R1W: if (mul_valid_i) begin
+          x1_q <= 32'(resc_u(p_unsigned, 30));
+          state <= N_R2;
+        end
+
+        N_R2: state <= N_R2W;
+        N_R2W: if (mul_valid_i) begin
+          w1 <= p_unsigned >> 24;
+          state <= N_R3;
+        end
+
+        N_R3: state <= N_R3W;
+        N_R3W: if (mul_valid_i) begin
+          r24 <= r24_next[23:0];
+          lane_iss <= 2'd0;
+          lane_got <= 2'd0;
+          rcp0_o <= 1'b0;
+          sat_rescale_o <= 1'b0;
+          state <= N_LANE;
+        end
+
+        // Three independent products, issued on consecutive cycles, each
+        // rescaled once by 31 + e as it lands (law 1).
+        N_LANE: begin
+          if (lane_iss != 2'd3) lane_iss <= lane_iss + 2'd1;
+          if (mul_valid_i) begin
+            lane_got <= lane_got + 2'd1;
+            case (lane_got)
+              2'd0: o0_o <= resc_s(p_signed, shift_amt);
+              2'd1: o1_o <= resc_s(p_signed, shift_amt);
+              default: o2_o <= h_is3 ? resc_s(p_signed, shift_amt) : 32'sd0;
+            endcase
+            if (!(lane_got == 2'd2) || h_is3) begin
+              sat_rescale_o <= sat_rescale_o || resc_s_fired(p_signed, shift_amt);
+            end
+            if (lane_got == 2'd2) begin
+              r_valid_o <= 1'b1;
+              state <= N_OUT;
+            end
+          end
+        end
+
+        N_OUT: begin
+          if (r_valid_o && r_ready_i) state <= N_IDLE;
+        end
+
+        default: state <= N_IDLE;
+      endcase
     end
   end
 

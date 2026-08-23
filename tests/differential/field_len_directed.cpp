@@ -26,7 +26,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_len.h"
+#include "Vzhao_field_len_tb.h"
 
 #include "zhao_sim.hpp"
 #include "zref/zref_fixp.hpp"
@@ -74,7 +74,7 @@ Res oracle(uint8_t mode, int32_t a0, int32_t a1, int32_t a2, int32_t b0, int32_t
   return o;
 }
 
-Res run(Vzhao_field_len& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2, int32_t b0,
+Res run(Vzhao_field_len_tb& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2, int32_t b0,
         int32_t b1) {
   dut.v_valid_i = 1;
   dut.mode_i = mode;
@@ -111,7 +111,7 @@ Res run(Vzhao_field_len& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2, 
   return r;
 }
 
-void diff(Vzhao_field_len& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2, int32_t b0,
+void diff(Vzhao_field_len_tb& dut, uint8_t mode, int32_t a0, int32_t a1, int32_t a2, int32_t b0,
           int32_t b1, const char* what) {
   const Res want = oracle(mode, a0, a1, a2, b0, b1);
   const Res got = run(dut, mode, a0, a1, a2, b0, b1);
@@ -158,7 +158,7 @@ constexpr int32_t kOne = 1 << 16;
 }  // namespace
 
 int main(int argc, char** argv) {
-  Vzhao_field_len dut;
+  Vzhao_field_len_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;

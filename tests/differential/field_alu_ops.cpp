@@ -38,7 +38,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_alu.h"
+#include "Vzhao_field_alu_tb.h"
 
 #include "zhao_sim.hpp"
 #include "zfield/zfield.hpp"
@@ -185,7 +185,7 @@ Res oracle(uint8_t op, uint32_t imm, const int32_t a[3], const int32_t b[3], int
   return o;
 }
 
-Res run(Vzhao_field_alu& dut, uint8_t op, uint32_t imm, const int32_t a[3], const int32_t b[3],
+Res run(Vzhao_field_alu_tb& dut, uint8_t op, uint32_t imm, const int32_t a[3], const int32_t b[3],
         int32_t c) {
   dut.op_i = op;
   dut.imm_i = imm;
@@ -208,7 +208,7 @@ Res run(Vzhao_field_alu& dut, uint8_t op, uint32_t imm, const int32_t a[3], cons
   return r;
 }
 
-void diff(Vzhao_field_alu& dut, uint8_t op, uint32_t imm, const int32_t a[3], const int32_t b[3],
+void diff(Vzhao_field_alu_tb& dut, uint8_t op, uint32_t imm, const int32_t a[3], const int32_t b[3],
           int32_t c, const char* what) {
   const Res want = oracle(op, imm, a, b, c);
   const Res got = run(dut, op, imm, a, b, c);
@@ -231,7 +231,7 @@ void diff(Vzhao_field_alu& dut, uint8_t op, uint32_t imm, const int32_t a[3], co
         got.sat_mul ? 1 : 0);
 }
 
-void diff1(Vzhao_field_alu& dut, uint8_t op, int32_t a0, int32_t b0, int32_t c, const char* what,
+void diff1(Vzhao_field_alu_tb& dut, uint8_t op, int32_t a0, int32_t b0, int32_t c, const char* what,
            uint32_t imm = 0) {
   const int32_t a[3] = {a0, 0, 0};
   const int32_t b[3] = {b0, 0, 0};
@@ -274,7 +274,7 @@ const uint8_t kArith[] = {OP_MOV, OP_LDC, OP_ADD,   OP_SUB,    OP_MUL, OP_MAD,  
 }  // namespace
 
 int main(int argc, char** argv) {
-  Vzhao_field_alu dut;
+  Vzhao_field_alu_tb dut;
 
   bool random_mode = false;
   uint32_t iters = 0;

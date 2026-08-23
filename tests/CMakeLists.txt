@@ -1035,9 +1035,11 @@ set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
 add_executable(test_field_normalize_directed differential/field_normalize_directed.cpp)
 target_link_libraries(test_field_normalize_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_normalize_directed
-  PREFIX Vzhao_field_normalize
-  TOP_MODULE zhao_field_normalize
+  PREFIX Vzhao_field_normalize_tb
+  TOP_MODULE zhao_field_normalize_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_normalize_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
 add_test(NAME field_normalize_directed COMMAND test_field_normalize_directed)
@@ -1143,6 +1145,8 @@ verilate(test_field_seq_directed
   PREFIX Vzhao_field_seq
   TOP_MODULE zhao_field_seq
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
@@ -1167,6 +1171,8 @@ add_test(NAME lint_zhao_field_seq
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_field_seq
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
@@ -1195,9 +1201,11 @@ set_tests_properties(lint_zhao_field_seq PROPERTIES
 add_executable(test_field_ring_directed differential/field_ring_directed.cpp)
 target_link_libraries(test_field_ring_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_ring_directed
-  PREFIX Vzhao_field_ring
-  TOP_MODULE zhao_field_ring
+  PREFIX Vzhao_field_ring_tb
+  TOP_MODULE zhao_field_ring_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_ring_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
 add_test(NAME field_ring_directed COMMAND test_field_ring_directed)
@@ -1230,9 +1238,11 @@ set_tests_properties(lint_zhao_field_ring PROPERTIES
 add_executable(test_field_rot_directed differential/field_rot_directed.cpp)
 target_link_libraries(test_field_rot_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_rot_directed
-  PREFIX Vzhao_field_rot
-  TOP_MODULE zhao_field_rot
+  PREFIX Vzhao_field_rot_tb
+  TOP_MODULE zhao_field_rot_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_rot_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
 add_test(NAME field_rot_directed COMMAND test_field_rot_directed)
@@ -1264,9 +1274,11 @@ set_tests_properties(lint_zhao_field_rot PROPERTIES
 add_executable(test_field_noise_directed differential/field_noise_directed.cpp)
 target_link_libraries(test_field_noise_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_noise_directed
-  PREFIX Vzhao_field_noise
-  TOP_MODULE zhao_field_noise
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv)
+  PREFIX Vzhao_field_noise_tb
+  TOP_MODULE zhao_field_noise_tb
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_noise_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
 add_test(NAME field_noise_directed COMMAND test_field_noise_directed)
 set_tests_properties(field_noise_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_noise_random COMMAND test_field_noise_directed --random 4000)
@@ -1294,9 +1306,11 @@ set_tests_properties(lint_zhao_field_noise PROPERTIES
 add_executable(test_field_curve_directed differential/field_curve_directed.cpp)
 target_link_libraries(test_field_curve_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_curve_directed
-  PREFIX Vzhao_field_curve
-  TOP_MODULE zhao_field_curve
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv)
+  PREFIX Vzhao_field_curve_tb
+  TOP_MODULE zhao_field_curve_tb
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_curve_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
 add_test(NAME field_curve_directed COMMAND test_field_curve_directed)
 set_tests_properties(field_curve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 add_test(NAME field_curve_random COMMAND test_field_curve_directed --random 3000)
@@ -1319,9 +1333,11 @@ set_tests_properties(lint_zhao_field_curve PROPERTIES
 add_executable(test_field_len_directed differential/field_len_directed.cpp)
 target_link_libraries(test_field_len_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_len_directed
-  PREFIX Vzhao_field_len
-  TOP_MODULE zhao_field_len
+  PREFIX Vzhao_field_len_tb
+  TOP_MODULE zhao_field_len_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_len_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
 add_test(NAME field_len_directed COMMAND test_field_len_directed)
 set_tests_properties(field_len_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -1370,9 +1386,11 @@ set_tests_properties(lint_zhao_field_sin PROPERTIES
 add_executable(test_field_rcp_directed differential/field_rcp_directed.cpp)
 target_link_libraries(test_field_rcp_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_rcp_directed
-  PREFIX Vzhao_field_rcp
-  TOP_MODULE zhao_field_rcp
+  PREFIX Vzhao_field_rcp_tb
+  TOP_MODULE zhao_field_rcp_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_rcp_tb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv)
 add_test(NAME field_rcp_directed COMMAND test_field_rcp_directed)
 set_tests_properties(field_rcp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -1454,9 +1472,10 @@ set_tests_properties(lint_zhao_crc32c_fold PROPERTIES LABELS "lint;fast"
 add_executable(test_field_alu_ops differential/field_alu_ops.cpp)
 target_link_libraries(test_field_alu_ops PRIVATE zhao_harness zhao_zref)
 verilate(test_field_alu_ops
-  PREFIX Vzhao_field_alu
-  TOP_MODULE zhao_field_alu
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+  PREFIX Vzhao_field_alu_tb
+  TOP_MODULE zhao_field_alu_tb
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_alu_tb.sv)
 add_test(NAME field_alu_ops COMMAND test_field_alu_ops)
 set_tests_properties(field_alu_ops PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_alu_random COMMAND test_field_alu_ops --random 20000)

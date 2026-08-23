@@ -80,19 +80,49 @@ module zhao_field_rot (
     output logic signed [31:0] o1_o,
     output logic signed [31:0] o2_o,       // zero for ROT2 (law 5)
     output logic               sat_add_o,
-    output logic               sat_mul_o
+    output logic               sat_mul_o,
+
+    // ---- the shared sine table, `zhao_field_sin` --------------------------
+    // Law 3 said "one table, walked". As of 2026-08-23 it is not even this
+    // block's table: the engine has ONE sine instance and OP_SIN, OP_COS and
+    // both of this block's reads take turns on it. The table is combinational,
+    // so borrowing it costs nothing and the walk is unchanged.
+    output logic        [15:0] sin_angle_o,
+    output logic               sin_is_cos_o,
+    input  logic signed [31:0] sin_result_i,
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i
 );
 
-  localparam logic [2:0] R_IDLE = 3'd0;
-  localparam logic [2:0] R_COS = 3'd1;
-  localparam logic [2:0] R_SIN = 3'd2;
-  localparam logic [2:0] R_CP = 3'd3;   // c*p
-  localparam logic [2:0] R_SQ = 3'd4;   // s*q  -> p'
-  localparam logic [2:0] R_SP = 3'd5;   // s*p
-  localparam logic [2:0] R_CQ = 3'd6;   // c*q  -> q'
-  localparam logic [2:0] R_OUT = 3'd7;
+  // Each product is an ISSUE state and a WAIT state, because the shared lane
+  // answers two cycles after it is asked. The four products are independent of
+  // one another and COULD be issued back to back; they are not, because law 1
+  // rescales each one separately and the sequential form keeps each rescale
+  // beside the product it belongs to. Four extra clocks on a per-sample op.
+  localparam logic [3:0] R_IDLE = 4'd0;
+  localparam logic [3:0] R_COS = 4'd1;
+  localparam logic [3:0] R_SIN = 4'd2;
+  localparam logic [3:0] R_CP = 4'd3;   // c*p
+  localparam logic [3:0] R_CPW = 4'd4;
+  localparam logic [3:0] R_SQ = 4'd5;   // s*q  -> p'
+  localparam logic [3:0] R_SQW = 4'd6;
+  localparam logic [3:0] R_SP = 4'd7;   // s*p
+  localparam logic [3:0] R_SPW = 4'd8;
+  localparam logic [3:0] R_CQ = 4'd9;   // c*q  -> q'
+  localparam logic [3:0] R_CQW = 4'd10;
+  localparam logic [3:0] R_OUT = 4'd11;
 
-  logic [2:0] state;
+  logic [3:0] state;
 
   logic               h_rot3;
   logic        [ 1:0] h_axis;
@@ -116,21 +146,19 @@ module zhao_field_rot (
     end
   end
 
-  // ---- the one sine table, WALKED (law 3) --------------------------------
+  // ---- the shared sine table, WALKED (law 3) -----------------------------
   logic               trig_is_cos;
   logic signed [31:0] trig_out;
   assign trig_is_cos = (state == R_COS);
 
-  zhao_field_sin u_trig (
-      .angle_i (h_ang),
-      .is_cos_i(trig_is_cos),
-      .result_o(trig_out)
-  );
+  assign sin_angle_o = h_ang;
+  assign sin_is_cos_o = trig_is_cos;
+  assign trig_out = sin_result_i;
 
-  // ---- the one multiplier ------------------------------------------------
+  // ---- the shared multiplier's operands ----------------------------------
   logic signed [31:0] mul_a, mul_b;
   logic signed [63:0] mul_p;
-  assign mul_p = mul_a * mul_b;
+  assign mul_p = $signed(mul_p_i[63:0]);
 
   always_comb begin
     case (state)
@@ -152,6 +180,12 @@ module zhao_field_rot (
       end
     endcase
   end
+
+  // The request. Both operands are s32 and SIGN-extend into the lane's 33 bits.
+  assign mul_issue_o = (state == R_CP) || (state == R_SQ) ||
+                       (state == R_SP) || (state == R_CQ);
+  assign mul_a_o = $signed({mul_a[31], mul_a});
+  assign mul_b_o = $signed({mul_b[31], mul_b});
 
   // Law 1: ONE rescale PER PRODUCT. Not one per row.
   function automatic logic signed [31:0] resc16(input logic signed [63:0] v);
@@ -263,33 +297,45 @@ module zhao_field_rot (
           state <= R_CP;
         end
 
-        R_CP: begin
-          t_cp <= resc16(mul_p);
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          state <= R_SQ;
+        R_CP: state <= R_CPW;
+        R_CPW: begin
+          if (mul_valid_i) begin
+            t_cp <= resc16(mul_p);
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            state <= R_SQ;
+          end
         end
 
-        R_SQ: begin
-          // p' = fx_sub(c*p, s*q) -- two roundings already done, then ONE
-          // saturating subtract. Fusing these is the natural "improvement" and
-          // is a different number.
-          out_p <= sub_sat(t_cp, resc16(mul_p));
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          sat_add_o <= sat_add_o || sub_fired(t_cp, resc16(mul_p));
-          state <= R_SP;
+        R_SQ: state <= R_SQW;
+        R_SQW: begin
+          if (mul_valid_i) begin
+            // p' = fx_sub(c*p, s*q) -- two roundings already done, then ONE
+            // saturating subtract. Fusing these is the natural "improvement" and
+            // is a different number.
+            out_p <= sub_sat(t_cp, resc16(mul_p));
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            sat_add_o <= sat_add_o || sub_fired(t_cp, resc16(mul_p));
+            state <= R_SP;
+          end
         end
 
-        R_SP: begin
-          t_sp <= resc16(mul_p);
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          state <= R_CQ;
+        R_SP: state <= R_SPW;
+        R_SPW: begin
+          if (mul_valid_i) begin
+            t_sp <= resc16(mul_p);
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            state <= R_CQ;
+          end
         end
 
-        R_CQ: begin
-          out_q <= add_sat(t_sp, resc16(mul_p));
-          sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
-          sat_add_o <= sat_add_o || add_fired(t_sp, resc16(mul_p));
-          state <= R_OUT;
+        R_CQ: state <= R_CQW;
+        R_CQW: begin
+          if (mul_valid_i) begin
+            out_q <= add_sat(t_sp, resc16(mul_p));
+            sat_mul_o <= sat_mul_o || resc16_fired(mul_p);
+            sat_add_o <= sat_add_o || add_fired(t_sp, resc16(mul_p));
+            state <= R_OUT;
+          end
         end
 
         R_OUT: begin

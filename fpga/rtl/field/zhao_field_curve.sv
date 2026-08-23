@@ -83,7 +83,29 @@ module zhao_field_curve (
     output logic        [ 5:0] seg_idx_o,      // the segment the search landed on
     output logic               sat_add_o,
     output logic               sat_mul_o,
-    output logic               sat_rescale_o
+    output logic               sat_rescale_o,
+
+    // ---- the shared multiplier, `zhao_field_mul` ---------------------------
+    // Four nonconstant products: the segment offset times the table's slope,
+    // and three Horner steps. Under the DSP ruling of 2026-08-23 none of them
+    // is this block's own silicon any more; each is an issue and a wait on the
+    // engine's one lane, which costs two clocks apiece on an op that already
+    // spends twelve in its binary search.
+    //
+    // The two CONSTANT products in `c2_wide` and `c3_wide` (times five and
+    // times three) stay where they are. The rule is about NONCONSTANT
+    // multipliers; a multiply by three is an add and a shift, and routing it
+    // through a shared lane would cost four clocks to save nothing.
+    output logic               mul_issue_o,
+    output logic signed [32:0] mul_a_o,
+    output logic signed [32:0] mul_b_o,
+    // The lane is 66 bits wide because DOT3 needs three products summed. An op
+    // that consumes ONE 32x32 product reads only the low 64 (or 32) of them,
+    // which is a property of this op rather than a hole in the port.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  logic signed [65:0] mul_p_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    input  logic               mul_valid_i
 );
 
   // M_CURVE (2'd0) is the fall-through case and so is never named in a
@@ -99,6 +121,8 @@ module zhao_field_curve (
   localparam logic [4:0] S_SRCHD = 5'd6;
   localparam logic [4:0] S_ENT = 5'd7;
   localparam logic [4:0] S_ENTD = 5'd8;
+  localparam logic [4:0] S_ENTM = 5'd19;   // issue d_off * dy
+  localparam logic [4:0] S_ENTW = 5'd20;
   localparam logic [4:0] S_P0 = 5'd9;
   localparam logic [4:0] S_P0D = 5'd10;
   localparam logic [4:0] S_P2 = 5'd11;
@@ -106,8 +130,11 @@ module zhao_field_curve (
   localparam logic [4:0] S_P3 = 5'd13;
   localparam logic [4:0] S_P3D = 5'd14;
   localparam logic [4:0] S_H1 = 5'd15;
+  localparam logic [4:0] S_H1W = 5'd21;
   localparam logic [4:0] S_H2 = 5'd16;
+  localparam logic [4:0] S_H2W = 5'd22;
   localparam logic [4:0] S_H3 = 5'd17;
+  localparam logic [4:0] S_H3W = 5'd23;
   localparam logic [4:0] S_OUT = 5'd18;
 
   logic [4:0] state;
@@ -126,6 +153,12 @@ module zhao_field_curve (
 
   logic signed [31:0] p1, p0, p2;
   logic signed [31:0] tt, c1, c2, c3, u_reg;
+
+  // The selected entry, HELD. The table read is registered and `tbl_idx_o` is a
+  // function of the state, so by the time the shared lane has answered its
+  // product the memory is no longer presenting entry `lo`. Everything the
+  // finish needs is captured on the cycle the entry is on the port.
+  logic signed [31:0] x_ent, y_ent, dy_ent;
 
   // ---- the primitives, each recording in its own lane ----------------------
   function automatic logic signed [31:0] add_sat(input logic signed [31:0] a,
@@ -224,16 +257,47 @@ module zhao_field_curve (
   assign seg_idx_o = lo[5:0];
 
   // ---- the SPLINE segment parameter, and CURVE's whole result -------------
+  // All four wide terms now read the SAME wire -- the shared lane's product --
+  // because only one of them is ever in flight. Which one is decided by the
+  // state that issued it, three states earlier.
+  logic signed [63:0] mul_p;
+  assign mul_p = $signed(mul_p_i[63:0]);
+
   logic signed [63:0] d_prod, tt_c3, tt_u, tt_v, curve_p;
   logic signed [31:0] d_off, tt_raw;
-  assign d_off   = sub_sat(clamped, tbl_x_i);
-  assign d_prod  = sx(d_off) * sx(tbl_dy_i);
+  assign d_off   = sub_sat(clamped, x_ent);
+  assign d_prod  = mul_p;
   assign tt_raw  = resc(d_prod, 16);
-  assign curve_p = d_prod + (sx(tbl_y_i) <<< 16);
+  assign curve_p = d_prod + (sx(y_ent) <<< 16);
 
-  assign tt_c3   = sx(tt) * sx(c3) + (sx(c2) <<< 16);
-  assign tt_u    = sx(tt) * sx(u_reg) + (sx(c1) <<< 16);
-  assign tt_v    = sx(tt) * sx(u_reg);
+  assign tt_c3   = mul_p + (sx(c2) <<< 16);
+  assign tt_u    = mul_p + (sx(c1) <<< 16);
+  assign tt_v    = mul_p;
+
+  // The lane requests. Every operand here is s32 and SIGN-extends.
+  logic signed [31:0] mul_a, mul_b;
+  always_comb begin
+    case (state)
+      S_ENTM: begin
+        mul_a = d_off;
+        mul_b = dy_ent;
+      end
+      S_H1: begin
+        mul_a = tt;
+        mul_b = c3;
+      end
+      default: begin
+        // S_H2 and S_H3 both walk `tt * u`, which is what makes this Horner.
+        mul_a = tt;
+        mul_b = u_reg;
+      end
+    endcase
+  end
+
+  assign mul_issue_o = (state == S_ENTM) || (state == S_H1) ||
+                       (state == S_H2)   || (state == S_H3);
+  assign mul_a_o = $signed({mul_a[31], mul_a});
+  assign mul_b_o = $signed({mul_b[31], mul_b});
 
   logic signed [39:0] c1_wide, c2_wide, c3_wide;
   logic signed [39:0] w_p0, w_p1, w_p2, w_p3;
@@ -256,6 +320,9 @@ module zhao_field_curve (
       h_n <= 7'd2;
       x_lo <= '0;
       clamped <= '0;
+      x_ent <= '0;
+      y_ent <= '0;
+      dy_ent <= '0;
       lo <= 7'd0;
       k <= 3'd5;
       p1 <= '0;
@@ -314,24 +381,37 @@ module zhao_field_curve (
 
         S_ENT: state <= S_ENTD;
         S_ENTD: begin
-          p1 <= tbl_y_i;
+          p1     <= tbl_y_i;
+          x_ent  <= tbl_x_i;
+          y_ent  <= tbl_y_i;
+          dy_ent <= tbl_dy_i;
           if (h_mode == M_DCURVE) begin
+            // DCURVE reads the slope and is done: no product, no lane, no wait.
             result_o  <= tbl_dy_i;
             r_valid_o <= 1'b1;
             state     <= S_OUT;
-          end else if (h_mode == 2'd0) begin
-            result_o  <= resc(curve_p, 16);
-            sat_add_o <= sub_fired(clamped, tbl_x_i);
-            sat_mul_o <= resc_fired(curve_p, 16);
-            r_valid_o <= 1'b1;
-            state     <= S_OUT;
           end else begin
-            // Law 3: for a spline table dy is 1/step, so this product is the
-            // segment parameter, not a value on the curve.
-            sat_add_o     <= sub_fired(clamped, tbl_x_i);
-            sat_rescale_o <= resc_fired(d_prod, 16);
-            tt <= (tt_raw < 32'sd0) ? 32'sd0 : ((tt_raw > 32'sd65536) ? 32'sd65536 : tt_raw);
-            state <= S_P0;
+            state <= S_ENTM;
+          end
+        end
+
+        S_ENTM: state <= S_ENTW;
+        S_ENTW: begin
+          if (mul_valid_i) begin
+            if (h_mode == 2'd0) begin
+              result_o  <= resc(curve_p, 16);
+              sat_add_o <= sub_fired(clamped, x_ent);
+              sat_mul_o <= resc_fired(curve_p, 16);
+              r_valid_o <= 1'b1;
+              state     <= S_OUT;
+            end else begin
+              // Law 3: for a spline table dy is 1/step, so this product is the
+              // segment parameter, not a value on the curve.
+              sat_add_o     <= sub_fired(clamped, x_ent);
+              sat_rescale_o <= resc_fired(d_prod, 16);
+              tt <= (tt_raw < 32'sd0) ? 32'sd0 : ((tt_raw > 32'sd65536) ? 32'sd65536 : tt_raw);
+              state <= S_P0;
+            end
           end
         end
 
@@ -357,23 +437,34 @@ module zhao_field_curve (
           state <= S_H1;
         end
 
-        // Horner, one 32x32 product per cycle.
-        S_H1: begin
-          u_reg     <= resc(tt_c3, 16);
-          sat_mul_o <= sat_mul_o || resc_fired(tt_c3, 16);
-          state     <= S_H2;
+        // Horner, one product per STEP, each an issue and a wait on the
+        // shared lane. The three steps are a chain -- H2 multiplies what H1
+        // produced -- so there is nothing here to overlap.
+        S_H1: state <= S_H1W;
+        S_H1W: begin
+          if (mul_valid_i) begin
+            u_reg     <= resc(tt_c3, 16);
+            sat_mul_o <= sat_mul_o || resc_fired(tt_c3, 16);
+            state     <= S_H2;
+          end
         end
 
-        S_H2: begin
-          u_reg     <= resc(tt_u, 16);
-          sat_mul_o <= sat_mul_o || resc_fired(tt_u, 16);
-          state     <= S_H3;
+        S_H2: state <= S_H2W;
+        S_H2W: begin
+          if (mul_valid_i) begin
+            u_reg     <= resc(tt_u, 16);
+            sat_mul_o <= sat_mul_o || resc_fired(tt_u, 16);
+            state     <= S_H3;
+          end
         end
 
-        S_H3: begin
-          u_reg     <= resc(tt_v, 16);
-          sat_mul_o <= sat_mul_o || resc_fired(tt_v, 16);
-          state     <= S_OUT;
+        S_H3: state <= S_H3W;
+        S_H3W: begin
+          if (mul_valid_i) begin
+            u_reg     <= resc(tt_v, 16);
+            sat_mul_o <= sat_mul_o || resc_fired(tt_v, 16);
+            state     <= S_OUT;
+          end
         end
 
         S_OUT: begin

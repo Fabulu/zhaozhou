@@ -48,7 +48,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_noise.h"
+#include "Vzhao_field_noise_tb.h"
 
 #include "zfield/zfield.hpp"
 #include "zhao_sim.hpp"
@@ -113,7 +113,7 @@ struct DutRes {
   int cycles = 0;
 };
 
-DutRes run(Vzhao_field_noise& dut, bool ridge, int32_t a0, int32_t a1, uint32_t seed) {
+DutRes run(Vzhao_field_noise_tb& dut, bool ridge, int32_t a0, int32_t a1, uint32_t seed) {
   dut.v_valid_i = 1;
   dut.is_ridge_i = ridge ? 1 : 0;
   dut.a0_i = static_cast<uint32_t>(a0);
@@ -162,7 +162,7 @@ void note_rxs(int32_t a0, int32_t a1, uint32_t seed, unsigned lane) {
   if (sh < 32) g_rxs_seen |= (1u << sh);
 }
 
-void diff(Vzhao_field_noise& dut, bool ridge, int32_t a0, int32_t a1, uint32_t seed,
+void diff(Vzhao_field_noise_tb& dut, bool ridge, int32_t a0, int32_t a1, uint32_t seed,
           const char* what) {
   const Res want = interp(ridge, a0, a1, seed);
   const DutRes got = run(dut, ridge, a0, a1, seed);
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  Vzhao_field_noise dut;
+  Vzhao_field_noise_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;

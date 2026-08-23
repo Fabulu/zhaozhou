@@ -29,7 +29,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_rcp.h"
+#include "Vzhao_field_rcp_tb.h"
 
 #include "zhao_sim.hpp"
 #include "zref/zref_fixp.hpp"
@@ -54,17 +54,42 @@ Res oracle(int32_t a) {
   return o;
 }
 
-Res run(Vzhao_field_rcp& dut, int32_t a) {
+// THE BLOCK IS READY/VALID NOW, NOT COMBINATIONAL. Under the DSP ruling of
+// 2026-08-23 `zhao_field_rcp` no longer owns the two multipliers it used to
+// stand on: both products walk the engine's one shared lane, so the reciprocal
+// took a handshake and about seven clocks. The ANSWER is unchanged and this
+// test is the proof of that -- same oracle, same vectors, same three lanes.
+Res run(Vzhao_field_rcp_tb& dut, int32_t a) {
+  dut.v_valid_i = 1;
   dut.a_i = static_cast<uint32_t>(a);
+  dut.r_ready_i = 1;
   dut.eval();
+
+  int guard = 0;
+  while (!dut.v_ready_o && guard++ < 128) {
+    zhao::tick(dut);
+    dut.eval();
+  }
+  zhao::tick(dut);
+  dut.v_valid_i = 0;
+  dut.eval();
+
+  int cycles = 0;
+  while (!dut.r_valid_o && cycles++ < 256) {
+    zhao::tick(dut);
+    dut.eval();
+  }
+
   Res r;
   r.value = static_cast<int32_t>(dut.result_o);
   r.sat_rcp = dut.sat_rcp_o != 0;
   r.rcp0 = dut.rcp0_o != 0;
+  zhao::tick(dut);  // the result is taken
+  dut.eval();
   return r;
 }
 
-void diff(Vzhao_field_rcp& dut, int32_t a, const char* what) {
+void diff(Vzhao_field_rcp_tb& dut, int32_t a, const char* what) {
   const Res want = oracle(a);
   const Res got = run(dut, a);
   const std::string t(what);
@@ -94,7 +119,14 @@ constexpr int32_t kOne = 1 << 16;
 }  // namespace
 
 int main(int argc, char** argv) {
-  Vzhao_field_rcp dut;
+  Vzhao_field_rcp_tb dut;
+  dut.rst_n = 0;
+  dut.v_valid_i = 0;
+  dut.r_ready_i = 1;
+  dut.eval();
+  for (int i = 0; i < 4; ++i) zhao::tick(dut);
+  dut.rst_n = 1;
+  dut.eval();
 
   bool random_mode = false;
   uint32_t iters = 0;

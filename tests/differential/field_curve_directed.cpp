@@ -44,7 +44,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_curve.h"
+#include "Vzhao_field_curve_tb.h"
 
 #include "zfield/zfield.hpp"
 #include "zhao_sim.hpp"
@@ -234,7 +234,7 @@ struct Res {
 
 /** One cycle with the table serviced: the index presented this cycle answers on
  *  the next one, which is what a registered M10K read does. */
-void tick_tbl(Vzhao_field_curve& dut, const TabPort& p) {
+void tick_tbl(Vzhao_field_curve_tb& dut, const TabPort& p) {
   const uint32_t idx = dut.tbl_idx_o;
   zhao::tick(dut);
   dut.tbl_x_i = static_cast<uint32_t>(p.x_of(idx));
@@ -243,7 +243,7 @@ void tick_tbl(Vzhao_field_curve& dut, const TabPort& p) {
   dut.eval();
 }
 
-Res run(Vzhao_field_curve& dut, uint8_t mode, int32_t a, const Tab& t, int stall_after = -1) {
+Res run(Vzhao_field_curve_tb& dut, uint8_t mode, int32_t a, const Tab& t, int stall_after = -1) {
   const TabPort p{&t};
   dut.v_valid_i = 1;
   dut.mode_i = mode;
@@ -282,7 +282,7 @@ Res run(Vzhao_field_curve& dut, uint8_t mode, int32_t a, const Tab& t, int stall
 int g_odd_v = 0;
 int g_neg_v = 0;
 
-void diff(Vzhao_field_curve& dut, uint8_t mode, int32_t a, const Tab& t, const char* what) {
+void diff(Vzhao_field_curve_tb& dut, uint8_t mode, int32_t a, const Tab& t, const char* what) {
   const InterpRes want = interp(mode, a, t);
   const Lanes lane = lanes_of(mode, a, t);
   const Res got = run(dut, mode, a, t);
@@ -416,7 +416,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  Vzhao_field_curve dut;
+  Vzhao_field_curve_tb dut;
   dut.rst_n = 0;
   dut.v_valid_i = 0;
   dut.r_ready_i = 1;
