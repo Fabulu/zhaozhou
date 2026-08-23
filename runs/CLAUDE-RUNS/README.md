@@ -7,21 +7,28 @@ found — none of which git history preserves.
 
 ## How to start one
 
-The tooling lives at the **workspace root**, one level above this repository:
+From the repository root:
 
 ```
-C:\programmieren\zencrifice\runs\CLAUDE-RUNS\init-run.ps1 <kebab-slug>
+runs\CLAUDE-RUNS\init-run.ps1 <kebab-slug>
 ```
 
-It creates `RUN-YYYYMMDD-HHMM-<slug>/` containing `TASK_LOG.md` and
-`SPEC_v1.md`, expanded from `docs/coding_agents/claude_run_templates/`
-(also at the workspace root). A third template, `FINDINGS/FINDINGS.md`, is for
-subagents to fill in.
+It creates `RUN-YYYYMMDD-HHMM-<slug>/` **in this directory**, containing
+`TASK_LOG.md` and `SPEC_v1.md` expanded from
+`docs/coding_agents/claude_run_templates/`. A third template,
+`FINDINGS/FINDINGS.md`, is for subagents to fill in.
 
-> **The tooling is outside this repository, which is exactly why it gets
-> forgotten.** It was forgotten for the whole of 2026-08-17, 08-19, 08-20 and
-> most of 08-22. Those runs have been reconstructed from git history and are
-> marked as such — read their preamble for what a reconstruction cannot recover.
+> **This tooling used to live at the workspace root, outside the repository,
+> which is exactly why it got forgotten** — for the whole of 2026-08-17, 08-19,
+> 08-20 and most of 08-22. Those runs were reconstructed from git history and
+> are marked as such; read their preamble for what a reconstruction cannot
+> recover.
+>
+> On 2026-08-23 the script and the templates were moved **into the repository**,
+> so a run is created in the tracked directory from the outset and there is no
+> copy step left to forget. The root copy is stale — it was already missing two
+> archived runs — and should not be used. Verified by running the in-repo script
+> end to end.
 
 ## What goes in a run folder
 
@@ -45,10 +52,19 @@ instead of its logic file and concluding nothing had changed; deleting
 
 ## Archiving
 
-**The workspace root is not a git repository.** Runs created there are not
-version-controlled and will be lost. Copy each completed run into this directory,
-which is tracked, and commit it. On 2026-08-22 sixteen run folders were found
-living only at the root, unprotected, going back to the first day of the project.
+Runs are now created directly in this tracked directory, so there is nothing to
+copy — **but they still have to be committed.** An uncommitted run folder is as
+lost as one at the root if the machine dies.
+
+The history behind this: the workspace root is not a git repository, and on
+2026-08-22 sixteen run folders were found living only there, unprotected, going
+back to the first day of the project. Copying each run into the repo was the
+fix — and then the copy step itself got forgotten, which is why the tooling
+moved instead of the runs. `ARCHIVE.md` is tracked here now too; it previously
+existed only at the root, so the index of the archive was the one file the
+archive could not protect.
+
+Commit the run as the work happens, not at the end.
 
 ## Subagents
 
