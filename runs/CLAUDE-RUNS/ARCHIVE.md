@@ -61,12 +61,15 @@ rounded -- and it is bit-identical, verified by brute force over all 65,536
 (fu,fv) plus 400,000 random footprints before a line was built.
 
 zhao_texture_bilerp's PORTS DID NOT CHANGE, so tests/formal/texture_bilerp.sby
-proved the new arithmetic with **no edit at all**: P1 derives the four weights
-in the harness and asserts them against the shipping module, so it now proves
-the factored form equals the law over all 2^48 inputs. That is why factoring was
-chosen over the weight hoist the contract had sanctioned, which would have
-changed ports, tests, the harness and the contract to remove 12 products where
-this removes 20.
+needed **no edit at all** and its cover task still passes -- BUT ITS bmc TASK
+STOPPED CLOSING (3,300 s, no answer, against 741 s for the arithmetic it
+replaced), so P1..P4 are UNPROVED on the new form. A green harness is not a
+green theorem, and this run published the second while having measured only the
+first, in three places, before catching it. What stands in its place is a TOTAL
+two-part equivalence over all 2^48 inputs. Factoring was still the right choice
+over the weight hoist the contract had sanctioned, which would have changed
+ports, tests, the harness and the contract to remove 12 products where this
+removes 20.
 
 FILT_LANES (4, 2, 1) is the measured frontier: 12 / 6 / 3 products, 12 / 6 / 3
 DSPs, direct-colour II 4 / 5 / 7. Default 2 -- the OPPOSITE of SURFACE.STAMP

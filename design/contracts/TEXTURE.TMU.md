@@ -118,7 +118,7 @@ Expanding `S` gives `t00·w00 + t10·w10 + t01·w01 + t11·w11` term for term. *
 
 **The operand widths are the honest ones**, which is `reports/QUARTUS_GOTCHAS.md` §5 applied rather than quoted: `(t10 − t00)` is a signed 9, `fu`/`fv` are signed 9s (a unit8 with its sign bit clear), `(B − A)` is a signed 18. So the three multiplies are **9×9, 9×9 and 18×9**. The form this replaced declared its texel products as `{17'd0, t00_i} * {8'd0, w00}` — a **25×25** multiply whose real need was 8×17, and §5 measured that exact class of slack costing `zhao_geom_lod` ten DSP blocks.
 
-**The proof did not have to move, and that is why this was chosen over the weight hoist this contract sanctioned in 2026-08-21.** `zhao_texture_bilerp`'s ports are unchanged, so `tests/formal/texture_bilerp.sby` and `texture_bilerp_fv.sv` needed **not one line changed**: P1 derives the four weights *in the harness* from free `fu_free`/`fv_free` and asserts `out == law`, so it now proves the **factored** form equals the four-weight law over all 2^48 inputs. Hoisting would have changed a module's ports, its directed tests, its formal harness and this contract to remove 12 products; factoring removes 20 and changes no interface.
+**The HARNESS did not have to move — but the PROOF no longer closes, and the two are not the same claim.** `zhao_texture_bilerp`'s ports are unchanged, so `tests/formal/texture_bilerp.sby` and `texture_bilerp_fv.sv` needed **not one line changed** and the cover task still passes; **the bmc task ran 3,300 s without an answer**, so P1–P4 are currently unproved on this filter. See THE HARNESS DID NOT MOVE, THE bmc TASK NO LONGER CLOSES under Formal properties, and the **total** two-part equivalence that stands in its place. Factoring was still the right choice over the weight hoist this contract sanctioned in 2026-08-21 — it removes 20 of the 32 products where hoisting removes 12, and changes no interface — but "the proof follows for free" was too strong.
 
 **The one-LSB traps, named so the tests can aim at them:** truncate instead of round (the tie `t = (0,255), fu = 128, fv = 0` gives `Σ + 32768 = 8,388,608` exactly, so round gives 128 and truncate gives 127 — pinned by name); swapped weights (`w10` paired with `t01`, invisible whenever `fu == fv` or the footprint is symmetric, so the tests use asymmetric fractions); a `/255` scale (weights are unit8 **products**, so the scale is 256·256 — the same /256-vs-/255 distinction `zhao_raster_blend` argues at length: this is a **weighting**, not a quantizer).
 
@@ -373,15 +373,66 @@ Nine deliberate RTL defects, injected **one at a time**, each under a harness th
 
 Free inputs are the four texel bytes and the two unit8 fractions — 48 bits, which is **total rather than sampled**: a texel channel *is* a byte (every charter §15 format decodes to charter §8's 8-bit lanes) and a fraction *is* a unit8. The harness is purely combinational, so depth 2 **is** the full state space, not a bound.
 
-**THE PROOF DID NOT MOVE WHEN THE ARITHMETIC DID (2026-08-23).** The filter was
-rewritten from eight products a channel to three (see THE FACTORED FORM above)
-and **not one line of `texture_bilerp.sby` or `texture_bilerp_fv.sv` changed**,
-because the harness derives the four weights *itself* from free
-`fu_free`/`fv_free` and asserts `out == law` against the shipping module's
-output. P1 therefore now proves the **factored** form equals the four-weight law
-over the whole 2^48 input space — a stronger statement than it was making
-before, obtained for free. This is exactly what the 2026-08-21 note predicted
-would survive a hoist, and it is why factoring was chosen over hoisting.
+### THE HARNESS DID NOT MOVE. THE bmc TASK NO LONGER CLOSES. (2026-08-23)
+
+Recorded in that order because the second half is the one that matters and the
+first half is what made it easy to miss.
+
+The filter was rewritten from eight products a channel to three (see THE
+FACTORED FORM above) and **not one line of `texture_bilerp.sby` or
+`texture_bilerp_fv.sv` changed** — the harness derives the four weights *itself*
+from free `fu_free`/`fv_free`, so it stands over any DUT with these ports. It
+elaborates, and the **cover task still passes in about 1 second**: every corner
+it pins is still reachable on the factored form, including the exact rounding
+tie and the strictly-inside-the-footprint case that stop P1 going vacuous.
+
+**But the bmc task ran 3,300 s on boolector without an answer**, against a
+recorded 741 s standalone / 1,264 s as the lane for the arithmetic it replaced.
+So **P1, P2, P3 and P4 are currently UNPROVED on the shipping filter.**
+
+**The reason is structural, and it is the same fact that makes the theorem worth
+having.** `texture_bilerp_fv.sv` computes the law as `t00*w00 + t10*w10 +
+t01*w01 + t11*w11`. Until today the DUT computed *that same expression*, so
+`a_exact` was very nearly a **syntactic** identity — two structurally identical
+circuits, which bit-blasting settles almost immediately. The DUT now computes a
+chain of three narrower multiplies of three different widths, one of whose
+operands is another's result. Proving them equal is a real distributive-law
+identity over bit-blasted multipliers, which is the hard case for this engine.
+
+**A run that reported "the proof did not have to move" and stopped there would
+have been reporting a green harness as a green theorem.** It is not one.
+
+### What stands in its place, and it is TOTAL rather than sampled
+
+`runs/CLAUDE-RUNS/RUN-20260823-1736-.../total_equivalence_check.py`, in two
+halves that between them settle the identity over **all 2^48 inputs**:
+
+1. **No lane truncates.** Every intermediate is monotone in each texel, so its
+   extremes over the byte domain occur at texel **corners**; enumerating all 16
+   corners × all 65,536 `(fu, fv)` therefore bounds the whole domain exactly.
+   **0 violations**, with the widest observed values at `|pu| ≤ 65,025`,
+   `A, B ∈ [0, 65,280]`, `|dv| ≤ 65,280`, `|pv| ≤ 16,646,400`,
+   `S ∈ [0, 16,711,680]` — every one comfortably inside its declared lane.
+2. **Given no truncation, the pre-rounding sum is exactly linear in the four
+   texels.** So `S(t) = Σ t_k·c_k(fu, fv)`, and evaluating the four basis
+   vectors plus the zero vector at every `(fu, fv)` determines the map
+   completely. The coefficients equal `w00, w10, w01, w11` exactly, for all
+   **65,536** fraction pairs, with **0 mismatches** — which settles the identity
+   for *every integer texel quadruple*, not merely every byte one.
+
+**What that does not cover, stated plainly:** it verifies the **expression**,
+transcribed from the RTL, not the RTL bytes. That gap is what the differential
+lanes close — `texture_tmu_directed` (76 checks at each of three `FILT_LANES`
+settings) and `texture_tmu_random` (3,749 bilinear samples, **476 exactly at a
+rounding tie**) drive the real Verilator model against `zref::Tmu`, which
+computes the four-weight law — together with the 13 sweep mutants aimed at this
+arithmetic, **all 13 caught**.
+
+**OPEN, and it is a regression in provability rather than in behaviour.** Worth
+trying next, cheapest first: a different SMT engine (the lane pins
+`smtbmc boolector`); or decomposing P1 into white-box lemmas on the DUT's own
+`a_s`/`b_s` so the solver chains three easy equalities instead of one hard one.
+Neither was attempted here.
 
 **Proved (P1–P4):** the output is exactly the derived single-rounded weighted sum computed in a wide lane — which catches all three named one-LSB traps at once and, because that wide law is compared against an **8-bit** output, also proves the weighted sum can never leave the field; the weights are a **partition of unity**, `Σw = 65,536` exactly, which together with P1 makes a flat footprint filter to itself by arithmetic; `fu = fv = 0` is the exact identity on `t00`, which is what makes nearest sampling the same datapath; and the 8-bit field holds with no clamp anywhere in the module.
 
@@ -558,8 +609,9 @@ called it "the most structurally invasive of the available DSP cuts" because it
 changes a module's ports, its directed tests, its formal harness and this
 contract. **Factoring superseded it**: it removes 20 of the 32 products where
 hoisting would have removed 12, it changes no interface at all, and the formal
-proof followed for free rather than having its partition-of-unity obligation
-transferred to the TMU.
+formal HARNESS needed no edit rather than having its partition-of-unity
+obligation transferred to the TMU — though the bmc TASK stopped closing, which
+is recorded under Formal properties and is not the same thing.
 
 **And the 2026-08-23 fit is the same lesson a second time.** 2026-08-21 learned
 that Quartus will not share two identical products. 2026-08-23 learned that it

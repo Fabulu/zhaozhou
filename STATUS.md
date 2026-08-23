@@ -148,10 +148,22 @@ neighbours.
 
 Written the other way round it is **three multiplies a channel**, and then the
 four channels can take turns through one pair of circuits instead of each having
-its own. Same answer, every time, for every possible input — which is not a
-claim I am making from taste: the formal proof that already guarded this
-arithmetic **needed no change at all**, so it now proves the new form is the
-same as the old one for all 281 trillion possible inputs.
+its own. Same answer, every time, for every possible input — and that is
+checked, not asserted: the two forms agree on **all 281 trillion possible
+inputs**, established by an exhaustive argument in two halves (no internal value
+can overflow its wires; and given that, the sum is exactly linear in the four
+dots, so checking four cases per fraction pair settles every case).
+
+**One thing there did go backwards and I am flagging it.** The machine-checked
+proof that used to guard this arithmetic no longer finishes — it ran 55 minutes
+without an answer, where the old form took 12. Neither the tool nor the block is
+wrong: the old code was written in *exactly* the shape the proof was written in,
+so the check was nearly trivial; the new code is a genuinely different shape that
+happens to compute the same thing, which is far harder to check mechanically. I
+published "the proof still passes" in three places before noticing, on the
+strength of the proof *harness* needing no edit — which is a different claim.
+Corrected everywhere, and the exhaustive argument above is what carries it for
+now.
 
 Running total: the multiplier demand across measured blocks is now **134**
 against the chip's 112, down from 327 this morning.

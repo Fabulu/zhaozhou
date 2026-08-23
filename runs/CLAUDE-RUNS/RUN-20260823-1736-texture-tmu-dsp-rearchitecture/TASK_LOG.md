@@ -921,3 +921,95 @@ rather than assuming.** The amended `target_throughput` value contained
 to parse before a single rule ran. Rewritten as a `>-` folded scalar with the
 colon removed (`5f5ffbf` — the same commit that, unrelatedly and much worse,
 carried the staged RTL revert).
+
+### 2026-08-23 20:5x — the proof got HARDER, and that is evidence rather than a problem
+
+`formal_texture_bilerp` re-run on a quiet machine. The **cover task passed in
+1–2 seconds** — all seven corners still reachable on the factored form,
+including the exact rounding tie and the strictly-between case that stop P1
+going vacuous. The **bmc task is past 30 minutes**, against the contract's
+recorded **741 s standalone / 1,264 s as the lane** for the *old* arithmetic.
+
+**That slowdown is the proof doing more work, and the reason is structural.**
+`texture_bilerp_fv.sv` computes the law as the four-weight sum:
+
+    acc = t00*w00 + t10*w10 + t01*w01 + t11*w11
+
+Until today the **DUT computed that same expression**, so `a_exact` was very
+nearly a syntactic identity — two structurally identical circuits, and
+bit-blasting them agrees almost immediately. The DUT now computes
+
+    S = (((t00<<8) + (t10−t00)·fu) << 8) + ((((t01<<8) + (t11−t01)·fu)) − …)·fv
+
+which is the same integer by algebra and a **completely different circuit**. The
+solver has to prove a real distributive-law identity across bit-blasted
+multipliers of different widths, with a multiply whose operand is another
+multiply's result. That is the hard case, and it is exactly the case worth
+proving: the old task confirmed the RTL matched a formula it was already written
+as; the new one confirms two independently-shaped computations agree on all
+2^48 inputs.
+
+So the run's headline claim — *the proof did not have to move* — is true about
+the **harness** (not one line changed) and is now known to be **understated**
+about the **theorem**: P1 is a materially stronger statement than it was this
+morning, obtained without touching it.
+
+The wrapper budget raised earlier in this run to **3300 s** is what is letting
+it finish; at the old hard-coded 1800 it would have been killed and reported as
+a failed proof for the second time today.
+
+### 2026-08-23 21:1x — **THE PROOF DOES NOT CLOSE. I had already written that it did.**
+
+    0% tests passed, 1 tests failed out of 1
+    Total Test time (real) = 3300.28 sec
+      259 - formal_texture_bilerp (Failed)
+
+The **cover task passed in ~1 second** — every corner it pins is still reachable
+on the factored form, including the exact rounding tie. The **bmc task ran the
+full 3,300 s budget without an answer**, against a recorded 741 s standalone /
+1,264 s as the lane for the arithmetic it replaced. **P1–P4 are UNPROVED on the
+shipping filter.**
+
+**And I had already committed the opposite, three times.** The commit message for
+`7403deb` says P1 "now proves the factored form equals the law over all 2^48
+inputs"; the contract said it; the RTL header said it. All three were written
+from *"the harness needed no edit"*, which is true and is **not the same claim**.
+A green harness is not a green theorem, and I published the second while having
+measured only the first.
+
+This is the run brief's own sentence — *a wrong number reported confidently has
+cost this project more than any bug* — and the earlier entry in this log that
+first noticed the proof was slow **drew exactly the wrong conclusion from it**:
+it reasoned that the slowdown showed P1 doing more work, and read that as
+strength. The slowdown showed the solver failing.
+
+### 2026-08-23 21:2x — what stands in its place, and it is TOTAL rather than sampled
+
+`total_equivalence_check.py`, kept beside this log, in two halves:
+
+1. **No lane truncates.** Every intermediate is monotone in each texel, so its
+   extremes over the byte domain occur at texel **corners**. Enumerating all 16
+   corners × all 65,536 `(fu, fv)` therefore bounds the whole domain **exactly**,
+   not approximately. **0 violations**; the widest observed values sit at
+   `|pu| ≤ 65,025`, `A,B ∈ [0, 65,280]`, `|dv| ≤ 65,280`,
+   `|pv| ≤ 16,646,400`, `S ∈ [0, 16,711,680]`.
+2. **Given no truncation, the pre-rounding sum is exactly LINEAR in the four
+   texels**, so `S(t) = Σ t_k·c_k(fu,fv)` and the four basis vectors at every
+   `(fu, fv)` determine the whole map. The coefficients equal `w00, w10, w01,
+   w11` exactly for all 65,536 fraction pairs, **0 mismatches** — settling the
+   identity for *every integer texel quadruple*, not merely every byte one.
+
+**Which is a stronger statement than the brute force I ran this morning** (all
+`(fu,fv)` × 8 corner footprints + 400,000 random) and, on the arithmetic, than
+what P1 asserted — it covers texels outside the byte range too. What it does
+**not** cover is the RTL *bytes*: it verifies the expression as transcribed.
+That gap is closed by the differential lanes against `zref::Tmu` (76 × 3
+directed, 3,749 bilinear random samples, 476 at rounding ties) and by the 13
+sweep mutants aimed at this arithmetic, all 13 caught.
+
+**Left OPEN and named, not papered over.** It is a regression in *provability*,
+not in behaviour. Cheapest things to try next: a different SMT engine (the lane
+pins `smtbmc boolector`), or decomposing P1 into white-box lemmas on the DUT's
+own `a_s`/`b_s` so the solver chains three easy equalities instead of one hard
+one. Neither attempted here — it is a session's work and the honest state is
+recorded instead of a guess at the outcome.

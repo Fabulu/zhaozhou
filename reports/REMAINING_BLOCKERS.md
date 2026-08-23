@@ -39,7 +39,13 @@
 > `B` likewise, `S = (A<<8) + (B-A)*fv`, one rescale — which is 3 products a
 > channel instead of 8, and then multiplexed 2 channels at a time. 32 products
 > became 6. `zhao_texture_bilerp`'s ports did not change, so
-> `tests/formal/texture_bilerp.sby` proved the new form with no edit at all.
+> `tests/formal/texture_bilerp.sby` needed no edit at all -- but its bmc task
+> stopped closing (3,300 s, no answer), so P1-P4 are UNPROVED on the new form.
+> A green harness is not a green theorem. What stands in its place is a TOTAL
+> two-part equivalence check over all 2^48 inputs (no lane truncates, proved at
+> the 16 texel corners x 65,536 fraction pairs; and the pre-rounding sum is
+> exactly linear in the texels, so four basis vectors per fraction pair settle
+> the whole map). Recorded in the contract as an open provability regression.
 >
 > **PROBLEM 1 — the block runs at 0.33x its derived demand, and nothing had ever
 > measured that.** The suite asserted accept-to-retire latency and byte

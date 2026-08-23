@@ -76,16 +76,34 @@
 // integer for every one of the 2^48 inputs this module can be handed, which is
 // what tests/formal/texture_bilerp.sby's P1 proves — see below.
 //
-// THE PROOF DID NOT HAVE TO MOVE, AND THAT IS WHY THIS FORM WAS CHOSEN OVER
-// HOISTING THE WEIGHTS. The contract sanctioned hoisting `w00..w11` up into
-// zhao_texture_tmu so the sharing would be explicit, while noting it "changes
-// a module's ports, its directed tests, its formal harness and this contract"
-// and transfers the partition-of-unity OBLIGATION out of the proved module.
-// Factoring removes 20 of the 32 products where hoisting would have removed
-// 12, and this module's PORTS ARE UNCHANGED — so texture_bilerp_fv.sv, which
-// derives the four weights ITSELF from free `fu_free`/`fv_free` and asserts
-// `out == law`, needed not one line changed and now proves the FACTORED form
-// equals the four-weight law over the whole input space.
+// THE HARNESS DID NOT HAVE TO MOVE — BUT THE PROOF NO LONGER CLOSES, AND THAT
+// SECOND HALF IS THE ONE TO READ. This module's PORTS ARE UNCHANGED, so
+// texture_bilerp_fv.sv — which derives the four weights ITSELF from free
+// `fu_free`/`fv_free` — needed not one line changed, and its COVER task still
+// passes in about a second. Its bmc task, which used to close in 741 s, ran
+// 3,300 s on boolector WITHOUT AN ANSWER on 2026-08-23, so P1..P4 are currently
+// UNPROVED on this filter.
+//
+// The reason is the same fact that makes the theorem worth having: the harness
+// computes the law as `t00*w00 + ... + t11*w11`, and until the factoring the
+// DUT computed THAT SAME EXPRESSION, so `a_exact` was nearly a SYNTACTIC
+// identity. It is now a real distributive-law identity across three multiplies
+// of three different widths, one feeding another — the hard case for the engine.
+//
+// WHAT STANDS IN ITS PLACE IS TOTAL, NOT SAMPLED. See the contract's
+// "What stands in its place": (1) no lane truncates — proved by enumerating all
+// 16 texel CORNERS (each intermediate is monotone in each texel, so corners
+// bound the byte domain) against all 65,536 (fu, fv), 0 violations; and (2)
+// with no truncation the pre-rounding sum is EXACTLY LINEAR in the texels, so
+// the four basis vectors at every (fu, fv) determine the whole map — and they
+// equal w00, w10, w01, w11 exactly, 0 mismatches. Together those settle the
+// identity for every integer texel quadruple.
+//
+// This was still the right form to choose over hoisting the weights, which the
+// contract had sanctioned: factoring removes 20 of the 32 products where
+// hoisting removes 12, and it changes no interface. But "the proof follows the
+// weights for free" was too strong, and it is corrected here rather than in a
+// paragraph nobody re-reads.
 //
 // THE WIDTHS ARE THE HONEST ONES, and that is QUARTUS_GOTCHAS.md §5 applied
 // rather than quoted. The form this replaced declared its texel products as
