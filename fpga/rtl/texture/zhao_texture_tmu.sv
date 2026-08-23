@@ -379,10 +379,16 @@ module zhao_texture_tmu #(
   // filtered on an earlier pass and come out of `fres_r`; channels at or above
   // it are combinational in ST_OUT.
   // (PASSES − 1)·FILT_LANES, written as 4 − FILT_LANES so that no `*` appears
-  // in this file at all: QUARTUS_GOTCHAS.md §3 says the only symptom of an
-  // ignored multstyle directive is a DSP count that will not fall, so "there
-  // is no multiply operator here" is a property worth keeping checkable by
-  // regex rather than by reading.
+  // on a DATAPATH expression anywhere in this file: QUARTUS_GOTCHAS.md §3 says
+  // the only symptom of an ignored multstyle directive is a DSP count that will
+  // not fall, so "there is no multiply operator here" is a property worth
+  // keeping checkable by regex rather than by reading.
+  //
+  // Stated exactly, because a claim that is nearly true is worse than none: the
+  // file contains ONE `*` outside comments, in `logic [FILT_LANES*8-1:0]
+  // bl_out` — a packed WIDTH, folded at elaboration into a constant, which
+  // infers nothing. Every arithmetic `*` in this block's cone lives in
+  // zhao_texture_bilerp, where there are exactly three.
   localparam int unsigned LAST_BASE  = 4 - FILT_LANES;
   // The last pass ST_FILT itself runs. Guarded so PASSES = 1 does not compute
   // an unsigned 0 − 2; ST_FILT is unreachable there and the value is unused.
