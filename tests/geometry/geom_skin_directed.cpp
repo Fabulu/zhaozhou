@@ -235,19 +235,17 @@ void skin_exact(const zc::mat3x4fx& A, const zc::mat3x4fx& B, const Vtx& v, int3
   const int32_t w1 = 64 - static_cast<int32_t>(v.w0);
   for (int i = 0; i < 3; ++i) {
     const int r = i * 4;
-    const __int128 pa = static_cast<__int128>(A.m[r]) * v.x +
-                        static_cast<__int128>(A.m[r + 1]) * v.y +
-                        static_cast<__int128>(A.m[r + 2]) * v.z +
-                        (static_cast<__int128>(A.m[r + 3]) << 16);
+    const __int128 pa =
+        static_cast<__int128>(A.m[r]) * v.x + static_cast<__int128>(A.m[r + 1]) * v.y +
+        static_cast<__int128>(A.m[r + 2]) * v.z + (static_cast<__int128>(A.m[r + 3]) << 16);
     if (rigid) {
       out[i] = rescale_exact(pa, 16);
       in_domain[i] = fits_s64(pa);
       continue;
     }
-    const __int128 pb = static_cast<__int128>(B.m[r]) * v.x +
-                        static_cast<__int128>(B.m[r + 1]) * v.y +
-                        static_cast<__int128>(B.m[r + 2]) * v.z +
-                        (static_cast<__int128>(B.m[r + 3]) << 16);
+    const __int128 pb =
+        static_cast<__int128>(B.m[r]) * v.x + static_cast<__int128>(B.m[r + 1]) * v.y +
+        static_cast<__int128>(B.m[r + 2]) * v.z + (static_cast<__int128>(B.m[r + 3]) << 16);
     const __int128 blend = static_cast<__int128>(v.w0) * pa + static_cast<__int128>(w1) * pb;
     out[i] = rescale_exact(blend, 22);
     in_domain[i] = fits_s64(blend);
@@ -290,8 +288,7 @@ void diff(Vzhao_geom_skin& dut, const zc::mat3x4fx& A, const zc::mat3x4fx& B, co
     if (in_domain[i]) {
       // THE SHIPPED ORACLE IS THE LAW HERE.
       check(g[i] == oracle[i], axis.c_str(),
-            static_cast<uint64_t>(static_cast<uint32_t>(oracle[i])),
-            static_cast<uint32_t>(g[i]));
+            static_cast<uint64_t>(static_cast<uint32_t>(oracle[i])), static_cast<uint32_t>(g[i]));
       // And this is what earns `skin_exact` the right to carry the rest.
       check(exact[i] == oracle[i], (axis + " [exact model tracks the shipped oracle]").c_str(),
             static_cast<uint64_t>(static_cast<uint32_t>(oracle[i])),
@@ -299,8 +296,7 @@ void diff(Vzhao_geom_skin& dut, const zc::mat3x4fx& A, const zc::mat3x4fx& B, co
       ++g_oracle_checked;
     } else {
       check(g[i] == exact[i], (axis + " [beyond the oracle's int64 narrowing]").c_str(),
-            static_cast<uint64_t>(static_cast<uint32_t>(exact[i])),
-            static_cast<uint32_t>(g[i]));
+            static_cast<uint64_t>(static_cast<uint32_t>(exact[i])), static_cast<uint32_t>(g[i]));
       ++g_beyond_oracle;
     }
   }
@@ -382,8 +378,10 @@ int main(int argc, char** argv) {
       diff(dut, A, B, v, tag);
     }
     dut.final();
-    std::printf("[geom_skin] oracle-checked coordinates: %ld, beyond the oracle's "
-                "int64 narrowing: %ld\n", g_oracle_checked, g_beyond_oracle);
+    std::printf(
+        "[geom_skin] oracle-checked coordinates: %ld, beyond the oracle's "
+        "int64 narrowing: %ld\n",
+        g_oracle_checked, g_beyond_oracle);
     return zhao::report_and_exit("geom_skin_random");
   }
 
@@ -700,7 +698,9 @@ int main(int argc, char** argv) {
   }
 
   dut.final();
-  std::printf("[geom_skin] oracle-checked coordinates: %ld, beyond the oracle's "
-              "int64 narrowing: %ld\n", g_oracle_checked, g_beyond_oracle);
+  std::printf(
+      "[geom_skin] oracle-checked coordinates: %ld, beyond the oracle's "
+      "int64 narrowing: %ld\n",
+      g_oracle_checked, g_beyond_oracle);
   return zhao::report_and_exit("geom_skin_directed");
 }
