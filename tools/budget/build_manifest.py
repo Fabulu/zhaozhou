@@ -774,6 +774,43 @@ def write_heatmap(path, man, calib, wl):
         L.append("in the instrument, not in the blocks, and it is the cheapest item on the board.")
         L.append("")
 
+    # ---- the cost curve the DESIGN already measures ----------------------
+    L.append("## DSP per product, measured on this design")
+    L.append("")
+    L.append("The calibration microbenches below characterise synthetic modules. This table is")
+    L.append("the same question answered by the SHIPPING RTL: for every block whose products")
+    L.append("are all one width, DSP blocks divided by product count. It is independent")
+    L.append("evidence, and it is what `design/budgets/dsp.md`'s corrected rule needs.")
+    L.append("")
+    L.append("| block | products | widest operand | map DSP | DSP per product | decomposition |")
+    L.append("| --- | ---: | ---: | ---: | ---: | --- |")
+    curve = []
+    for r in R:
+        d = r["resources"].get("mapDspBlocks")
+        n = r["arithmetic"]["nonconstantMultiplyInstances"]
+        w = r["arithmetic"]["widestNonconstantOperand"]
+        if not d or not n or not w:
+            continue
+        if r["arithmetic"].get("constantMultiplyInstances"):
+            continue
+        curve.append((w, d / n, r, d, n))
+    for w, per, r, d, n in sorted(curve, key=lambda x: (x[0], x[1])):
+        dec = r["resources"].get("mapDspDecomposition") or {}
+        decs = ", ".join("%s=%s" % (k.replace("Fixed Point ", "").replace(" Multiplier", ""), v)
+                         for k, v in dec.items() if v and k != "Total number of DSP blocks")
+        L.append("| `%s` | %d | %d | %d | **%.2f** | %s |" % (r["module"], n, w, d, per, decs or "-"))
+    L.append("")
+    L.append("Two things fall straight out and both matter to planning:")
+    L.append("")
+    L.append("* **A product at or below 18 bits costs ONE DSP block; a 32- or 33-bit product")
+    L.append("  costs THREE.** The jump is the discontinuity `design/budgets/dsp.md` was")
+    L.append("  corrected to warn about, now with a number on it.")
+    L.append("* **Quartus Lite packs NOTHING.** `zhao_geom_quat2mat` forms nine 16x16 signed")
+    L.append("  products and takes **nine** DSP blocks -- `Two Independent 18x18: 9` -- when two")
+    L.append("  16x16 operators would fit in one block's two halves. That block's own comment")
+    L.append("  assumes narrow products will pack. **They do not.**")
+    L.append("")
+
     # ---- calibration ----------------------------------------------------
     pts = [p for p in calib.get("points", []) if p.get("status") == "ok"]
     L.append("## Calibration: measured shape -> resources")

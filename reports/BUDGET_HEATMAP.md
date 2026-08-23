@@ -5,14 +5,14 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `7b776762`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `5511215a`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **45** |
+| modules with a map of **this exact RTL** | **48** |
 | modules with a fit of this exact RTL | 0 |
-| modules with any map | 45 |
+| modules with any map | 48 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
 | calibration points measured | 0 |
@@ -53,7 +53,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_cmd_dma` | - | 0 | 33,280 | - | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_debug_counters` | - | - | 2,560 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_curve` | - | - | - | - | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_normalize` | - | - | 7,967 | - | 14 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_normalize` | 0 | - | 7,967 | **0** | 14 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp` | - | - | 4,112 | - | 7 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp24_rom` | - | - | 7,967 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp_rom` | - | - | 4,112 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -76,14 +76,14 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_geom_quat2mat` | 9 | 1 | MULTIPLY(9, widest 16-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_raster_fragment` | 7 | 1 | MULTIPLY(7, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_bake_delta` | 4 | 1 | MULTIPLY(2, widest 32-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_mul` | 3 | 1 | MULTIPLY(1, widest 33-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_edgewalk` | 2 | 8 | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPR |
 | `zhao_cmd_scheduler` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SD |
 | `zhao_crc32c_fold` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_debug_crc` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_debug_frameblit` | - | 12 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_isqrt` | - | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_isqrt` | 0 | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_len` | - | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_mul` | - | 1 | MULTIPLY(1, widest 33-bit) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_noise` | - | 11 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_progcache` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_ring` | - | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -246,6 +246,7 @@ costs no throughput, because the spare cycles are already in the frame.
 | `zhao_geom_quat2mat` | 9 | 9 | - | - | - | - | - |
 | `zhao_raster_fragment` | 7 | 7 | - | - | - | - | - |
 | `zhao_terrain_bake_delta` | 4 | 2 | - | - | - | - | - |
+| `zhao_field_mul` | 3 | 1 | - | - | - | - | - |
 | `zhao_raster_edgewalk` | 2 | 2 | - | - | - | - | - |
 | `zhao_geom_setup` | 4 | 4 | - | - | - | - | - |
 | `zhao_texture_bilerp` | 3 | 3 | - | - | - | - | - |
@@ -285,6 +286,7 @@ Leaf modules only -- a module that instantiates another would double-count it.
 | `zhao_field_exec_shared` | 3 | yes |
 | `zhao_field_seq` | 3 |  |
 | `zhao_terrain_lod` | 3 |  |
+| `zhao_field_mul` | 3 | yes |
 | `zhao_texture_bilerp` | 3 | yes |
 | `zhao_forge_cliff` | 2 |  |
 | `zhao_raster_edgewalk` | 2 | yes |
@@ -374,6 +376,43 @@ because a column that is missing looks like a question nobody asked.
 This is QUARTUS_GOTCHAS' own pattern one more time -- an extraction that fails
 silently and whose only symptom is a number that never appears. It is a defect
 in the instrument, not in the blocks, and it is the cheapest item on the board.
+
+## DSP per product, measured on this design
+
+The calibration microbenches below characterise synthetic modules. This table is
+the same question answered by the SHIPPING RTL: for every block whose products
+are all one width, DSP blocks divided by product count. It is independent
+evidence, and it is what `design/budgets/dsp.md`'s corrected rule needs.
+
+| block | products | widest operand | map DSP | DSP per product | decomposition |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `zhao_geom_quat2mat` | 9 | 16 | 9 | **1.00** | Two Independent 18x18=9, Signed=9 |
+| `zhao_texture_tmu` | 6 | 18 | 6 | **1.00** | Two Independent 18x18=2, Mixed Sign=6 |
+| `zhao_raster_fragment` | 7 | 18 | 7 | **1.00** | Unsigned=4, Mixed Sign=3 |
+| `zhao_texture_bilerp` | 3 | 18 | 3 | **1.00** | Two Independent 18x18=1, Mixed Sign=3 |
+| `zhao_raster_blend` | 1 | 18 | 1 | **1.00** | Mixed Sign=1 |
+| `zhao_geom_setup` | 4 | 21 | 4 | **1.00** | Independent 27x27=4, Signed=4 |
+| `zhao_raster_edgewalk` | 2 | 23 | 2 | **1.00** | Independent 27x27=2, Signed=2 |
+| `zhao_geom_clip` | 2 | 23 | 2 | **1.00** | Independent 27x27=2, Signed=2 |
+| `zhao_terrain_bake_delta` | 2 | 32 | 4 | **2.00** | Two Independent 18x18=2, Unsigned=2, Mixed Sign=2 |
+| `zhao_geom_project` | 11 | 32 | 33 | **3.00** | Two Independent 18x18=22, Sum of two 18x18=11, Signed=9, Unsigned=13, Mixed Sign=22 |
+| `zhao_terrain_project` | 11 | 32 | 33 | **3.00** | Two Independent 18x18=22, Sum of two 18x18=11, Signed=9, Unsigned=13, Mixed Sign=22 |
+| `zhao_terrain_lod` | 1 | 32 | 3 | **3.00** | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
+| `zhao_geom_mat3x4_mul` | 3 | 32 | 9 | **3.00** | Two Independent 18x18=6, Sum of two 18x18=3, Signed=3, Unsigned=3, Mixed Sign=6 |
+| `zhao_terrain_bake` | 7 | 33 | 17 | **2.43** | Two Independent 18x18=10, Sum of two 18x18=3, Signed=3, Unsigned=7, Mixed Sign=10 |
+| `zhao_terrain_normals` | 6 | 33 | 18 | **3.00** | Two Independent 18x18=12, Sum of two 18x18=6, Signed=6, Unsigned=6, Mixed Sign=12 |
+| `zhao_field_mul` | 1 | 33 | 3 | **3.00** | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| `zhao_geom_cull` | 5 | 34 | 15 | **3.00** | Two Independent 18x18=10, Sum of two 18x18=5, Signed=4, Unsigned=6, Mixed Sign=10 |
+
+Two things fall straight out and both matter to planning:
+
+* **A product at or below 18 bits costs ONE DSP block; a 32- or 33-bit product
+  costs THREE.** The jump is the discontinuity `design/budgets/dsp.md` was
+  corrected to warn about, now with a number on it.
+* **Quartus Lite packs NOTHING.** `zhao_geom_quat2mat` forms nine 16x16 signed
+  products and takes **nine** DSP blocks -- `Two Independent 18x18: 9` -- when two
+  16x16 operators would fit in one block's two halves. That block's own comment
+  assumes narrow products will pack. **They do not.**
 
 ## Calibration: measured shape -> resources
 
