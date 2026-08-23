@@ -1,7 +1,13 @@
 [CmdletBinding()]
 param(
     [string]$Only = '',
-    [switch]$DryRun
+    [switch]$DryRun,
+    # Resume. The first sweep of this repo was killed by its harness at module
+    # 46 of 90 with everything before it already measured and committed, and
+    # re-running those 46 would have cost 45 minutes of Quartus time to learn
+    # nothing. run_block_map.ps1 merges rather than replaces, so skipping a
+    # module that already has an `ok` row loses nothing.
+    [switch]$SkipMapped
 )
 
 Set-StrictMode -Version Latest
@@ -92,6 +98,18 @@ $order += $tier2
 $order += $tier3
 
 if ($Only) { $order = @($order | Where-Object { $_ -like $Only }) }
+
+if ($SkipMapped) {
+    $existing = @{}
+    $dest = Join-Path $RepoRoot 'reports\synthesis\zhao_block_map.json'
+    if (Test-Path -LiteralPath $dest) {
+        $prior = [IO.File]::ReadAllText($dest) | ConvertFrom-Json
+        foreach ($r in $prior.blocks) { if ($r.status -eq 'ok') { $existing[$r.module] = $true } }
+    }
+    $before = $order.Count
+    $order = @($order | Where-Object { -not $existing.ContainsKey($_) })
+    Write-Host ("-SkipMapped: {0} of {1} already have an ok row; {2} to go" -f ($before - $order.Count), $before, $order.Count)
+}
 
 Write-Host ("map sweep: {0} module(s), serial, one Quartus job at a time" -f $order.Count)
 foreach ($k in $excluded.Keys) { Write-Host ("  EXCLUDED {0}: {1}" -f $k, $excluded[$k]) }

@@ -2,6 +2,10 @@
 param(
     [string[]]$Module,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
+    # 1800, and the number is measured rather than picked: zhao_surface_sheet
+    # MAPS in 1,096 s. A budget under that would have recorded a timeout for a
+    # module that completes, which is the exact mistake run_block_fit.ps1's
+    # header documents at the 900 s default.
     [int]$TimeoutSeconds = 1800,
     [string[]]$TopParameters,
     [string]$RowLabel = '',
@@ -176,11 +180,35 @@ try {
         if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
         if ($RowLabel) { $row.variantOf = $mod }
 
+        # ---- THE TIMEOUT, WHICH THE FIRST VERSION ACCEPTED AND IGNORED ----
+        #
+        # This script took a `-TimeoutSeconds` parameter from run_block_fit.ps1
+        # and never used it. The fit lane checks elapsed time BETWEEN its three
+        # stages; the map lane has one stage, so there is no "between", and the
+        # copy left the parameter as decoration. Measured 2026-08-23:
+        # `zhao_surface_sheet` held the lane for 1,096 s on a single map and
+        # nothing could have stopped it, so an unbounded module would stall the
+        # whole 90-module sweep indefinitely.
+        #
+        # Start-Process, not `&`, because a direct call blocks with no handle to
+        # kill. run_block_fit.ps1's header warns that Start-Process -PassThru
+        # returns an EMPTY ExitCode with redirected streams -- true, and avoided
+        # here by not depending on the exit code at all: success is judged by
+        # whether Analysis & Synthesis wrote a summary, which is what the code
+        # below already did.
         $sw = [Diagnostics.Stopwatch]::StartNew()
         Push-Location $dir
         try {
-            & $mapExe 'blockmap' *> (Join-Path $dir 'quartus_map.log')
-            if ($LASTEXITCODE -ne 0) { $row.status = 'failed:quartus_map' }
+            $p = Start-Process -FilePath $mapExe -ArgumentList 'blockmap' `
+                -WorkingDirectory $dir -NoNewWindow -PassThru `
+                -RedirectStandardOutput (Join-Path $dir 'quartus_map.log') `
+                -RedirectStandardError  (Join-Path $dir 'quartus_map.err.log')
+            if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
+                try { $p.Kill() } catch { }
+                $row.status = 'timeout'
+                $row.timeoutSeconds = $TimeoutSeconds
+                Write-Warning ("{0}: quartus_map exceeded {1}s and was killed. This is a MEASUREMENT, not a verdict on the block -- run_block_fit.ps1's own header records a module that reported `timeout` at 900 s and then fitted cleanly in 749 s with a larger budget." -f $mod, $TimeoutSeconds)
+            }
         } finally { Pop-Location }
         $sw.Stop()
         $row.seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
