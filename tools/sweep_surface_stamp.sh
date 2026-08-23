@@ -63,7 +63,10 @@ BUILD=${ZHAO_BUILD_DIR:-build}
 
 # Guard 7's human-readable half, per file. The derived sets must equal these.
 DECLARED_STAMP="test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random"
-DECLARED_SQ="$DECLARED_STAMP"
+# zhao_surface_sq has TWO consumers the stamp files do not: its own directed
+# suite, added 2026-08-23 because three sweep mutants proved the coverage test
+# is scale-invariant and therefore blind to a uniformly scaled squarer.
+DECLARED_SQ="test_surface_sq_directed test_surface_sq_radix4 $DECLARED_STAMP"
 DECLARED_BLEND="test_field_stamp_modes $DECLARED_STAMP"
 
 declare -A GOLD GOLDHASH

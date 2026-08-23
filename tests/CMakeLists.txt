@@ -3352,6 +3352,38 @@ set_tests_properties(surface_stamp_directed PROPERTIES LABELS "fast;nightly" TIM
 # rather than using ${ZHAO_SURFACE_STAMP_SV}: the sweep derives its consumer
 # set out of this file, and a name or a path it cannot see is a target it
 # cannot clean and re-score.
+# The shared sequential squarer, checked WHERE ITS VALUE IS VISIBLE.
+#
+# zhao_surface_stamp reduces this module's output to one boolean —
+# `covered = !(d2 > r_outer2 || d2 < r_inner2)` — and all three of those terms
+# come out of the SAME instance, so a comparison cannot see a uniform scaling of
+# it. The 2026-08-23 sweep proved that concretely: three mutants that double or
+# halve the squarer survived the entire stamp suite. They are defects in the
+# module, not in the stamp, and this is where a module is checked.
+#
+# Same argument zhao_surface_blend already won by being factored out. Built at
+# all three SQ_RADIX settings, because the adder chain has one link at the
+# default and its b > 0 arms are not elaborated there at all.
+add_executable(test_surface_sq_directed surface/surface_sq_directed.cpp)
+target_link_libraries(test_surface_sq_directed PRIVATE zhao_harness)
+verilate(test_surface_sq_directed
+  PREFIX Vzhao_surface_sq
+  TOP_MODULE zhao_surface_sq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sq.sv)
+add_test(NAME surface_sq_directed COMMAND test_surface_sq_directed)
+set_tests_properties(surface_sq_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_surface_sq_radix4 surface/surface_sq_directed.cpp)
+target_link_libraries(test_surface_sq_radix4 PRIVATE zhao_harness)
+target_compile_definitions(test_surface_sq_radix4 PRIVATE ZHAO_SQ_RADIX=4)
+verilate(test_surface_sq_radix4
+  PREFIX Vzhao_surface_sq
+  TOP_MODULE zhao_surface_sq
+  VERILATOR_ARGS -GSQ_RADIX=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_sq.sv)
+add_test(NAME surface_sq_radix4 COMMAND test_surface_sq_radix4)
+set_tests_properties(surface_sq_radix4 PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_surface_stamp_radix2 surface/surface_stamp_directed.cpp)
 target_link_libraries(test_surface_stamp_radix2 PRIVATE zhao_harness zhao_zref)
 target_compile_definitions(test_surface_stamp_radix2 PRIVATE ZHAO_SQ_RADIX=2)
