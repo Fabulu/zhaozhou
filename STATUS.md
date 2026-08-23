@@ -5,6 +5,64 @@ at the top.*
 
 ---
 
+## 2026-08-24 — the audit found the hidden 33, and closed the coverage gap
+
+### Every block is now measured, and the big prediction was exact
+
+The scan finished: **89 of 90 blocks mapped**, where yesterday only 41 of 94 had
+ever been measured at all.
+
+**The geometry projector is 33 multipliers** — the same number, to the unit, as
+the terrain projector we already measured at 33. Two implementations of one
+piece of maths, and the second had never been measured because it had never been
+run through the tool. Its own notes call the duplication "a cost, not a feature",
+which turns out to be exactly 33 multipliers of cost.
+
+**That single finding is worth more than yesterday's four rebuilds combined**,
+because removing a duplicate is cheaper than making real work smaller.
+
+Two more that nobody had flagged at all: the **triangle binning pipeline** at 21
+and **terrain baking** at 17. And the pose decoder came in at **18**, inside the
+14–18 that was predicted from reading the source.
+
+### A number I am NOT going to quote at you
+
+Adding up all 89 blocks gives 262, and **that figure is meaningless** — mapping
+each block on its own counts shared parts several times over. The binning
+pipeline contains the binner; three Field parts are inside the Field engine.
+
+The audit has to work out what contains what before any total means anything. I
+would rather tell you that than hand you a big number that looks like bad news
+and is really just arithmetic done wrong.
+
+**What stands: the 134 we measured properly, and the ~180 honest estimate.** The
+scan confirms the estimate was the right size and found where the missing weight
+was hiding.
+
+### Why this run was worth doing instead of another rescue
+
+Yesterday's method was: wait for a block's number to look alarming, then spend a
+day on it. This run read **every** block in about four hours and produced a
+ranked list — including two blocks nobody would have looked at for weeks.
+
+It also tested itself honestly. It was set a deliberately falsifiable task: find
+the two blocks we already knew were bad **without being told the answers.** That
+is the difference between a tool that measures and a tool that confirms what you
+already believe.
+
+### Where the multipliers actually are, now that we can see them all
+
+Biggest first: two projectors at 33 each, binning pipeline 21, pose decode 18,
+terrain normals 18, terrain bake 17, culling 15, binner 12.
+
+The four we rebuilt yesterday now sit near the bottom — Field engine 3, skinning
+9, texture unit 6, surface stamping 0.
+
+**The two projectors alone are more multipliers than everything we removed
+yesterday.**
+
+---
+
 ## 2026-08-23 (end of day) — 327 → 134 multipliers, and a change of method
 
 ### The day
