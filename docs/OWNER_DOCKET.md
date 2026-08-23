@@ -146,10 +146,122 @@ belong in the output stage. A strong RGB shadow mask should probably not be the
 default: five output columns per source pixel do not divide into three phosphor
 triads, so an aggressive mask risks moiré.
 
-### What still needs proving before this is safe to schedule
+### AUDIT RESULT — the plan holds, with two corrections and one bug found
 
-A read-only audit is running against the repo now to verify the claims this plan
-rests on, rather than accepting them:
+A read-only audit checked every claim against the code. **Eleven of thirteen
+confirmed outright.** The two that did not are both important, and one is a
+defect that exists today independently of widescreen.
+
+#### 1. "Value 3 is available" is FALSE in practice
+
+The *encoding slot* is free — `zhao_pkg.sv:40-44` declares a 2-bit enum with
+three values — but three separate places treat **anything that is not 0 or 1 as
+Duo**, and two would read out of bounds:
+
+* `zhao_pkg.sv:191-194` `zhao_mode_from_abi`: `(v==0)?Z60:(v==1)?STORM:DUO` —
+  **any byte ≥ 2 becomes Duo**;
+* `zhao_pkg.sv:137-148` `zhao_canvas_bytes` / `zhao_displayed_bytes` — the same
+  else-is-Duo ternary;
+* `zhao_pkg.sv:67-80` `ZHAO_TIMING[0:2]` is a **three**-entry table;
+  `ZHAO_TIMING[3]` is out of bounds. `zhao_cmd_scheduler.sv:527-535` already
+  carries `a_mode_act_in_range : assert (mode_act <= 8'd2)` **because indexing
+  it out of range was a real defect once** (the W2.6 "lawless-mode-byte"
+  defect);
+* `zhao_scanout_fetch.sv:141-145` has a `default:` arm commented "unreachable:
+  2-bit enum, three declared values" that emits `line_real=0` — **a fourth mode
+  would silently fetch nothing.**
+
+So adding `VIDEO_WIDE` is not "use the free slot". It is a deliberate ABI
+amendment plus the removal of four else-is-Duo assumptions.
+
+#### 2. A LATENT BUG, present today, unrelated to widescreen
+
+`reference/src/zref_video.cpp:18-27`:
+
+    static const VidTiming kTable[3] = { ... };
+    return kTable[mode & 3u];
+
+**The mask admits 0–3. The table has three entries.** `mode == 3` is an
+out-of-bounds read in the shipped reference oracle. Verified by reading the
+file directly, not just from the audit.
+
+It is currently unreachable — every entry point rejects mode 3 (`ZH_ABI_BAD_VALUE`
+in all three generated validators, plus two RTL hard-rejects at
+`zhao_video_mode.sv:133` and `zhao_cmd_scheduler.sv:370`). **And that
+unreachability is exactly what makes the fix safe: no golden capture can contain
+mode 3, so correcting the read is provably golden-neutral.** Worth doing on its
+own merits, before anyone adds a fourth mode and turns a latent bug into a live
+one.
+
+#### 3. 416 px width would have SILENTLY CORRUPTED the binner
+
+Vindicating the choice of 384 for a reason nobody had raised.
+`zhao_geom_binner.sv:205-217` has `GRID_W = 24` as a **compile-time parameter
+embedded in the tile-RAM address arithmetic** (`:486-488` `tidx = ty * GRID_W`,
+`:786`, `:805` row strides — deliberately a constant multiply, not a
+multiplier). 416 px needs 26 columns. Feeding `grid_w_i = 26` makes the row
+stride wrong by 2 and **tile rows overlap in the tile RAM** — lists alias. The
+clamp at `:441-453` only protects against `grid_w_i` being too *small*.
+26×15 = 390 entries still fits the 576-entry RAM, so it would be **silent
+corruption, not an overflow.**
+
+**384 width needs no binner change at all.** This alone settles 384×216 over
+416×234.
+
+#### 4. The partial-tile question has no answer, because the consumer is not built
+
+Better news than it sounds. There is **no divisibility assertion anywhere** —
+`tile_of()` is floor-and-clamp (`>>> 4`), and there is no round-up expression in
+the repository. The grid is a **runtime input** (`grid_w_i`, `grid_h_i`, 6 bits),
+so `ceil(H/16)` is simply passed in. Every current caller hardcodes an exact
+quotient because every current mode divides exactly.
+
+But the block that would clip a 16×16 tile against a 216-line canvas edge
+**does not exist yet**: `zhao_raster_resolve.sv:41-46` explicitly excludes
+framebuffer writes and tile scheduling, and always emits a full 256-pixel tile.
+So this is **an unwritten requirement the tile scheduler will inherit anyway**,
+not a blocker the proposal creates. The 384×224-store/216-display design avoids
+needing it at all.
+
+#### 5. Everything else: confirmed
+
+Slot span `ZHAO_FB_SLOT_SPAN = 0x3C000` = 245,760 B for every mode
+(`zhao_pkg.sv:126`) — 172,032 B fits with room. Line buffers really are
+2 × 512 RGB565 (`zhao_scanout_linebuf.sv:5`), sized for Duo. `x[9:0]`, `y[7:0]`
+(`zhao_pkg.sv:203-212`) — **Y caps at 255**, so 216 is fine and anything ≥ 256
+active lines would need a frozen-package amendment. Z60 is 384×240 with
+12 × 64 B whole bursts, Storm 10, Duo 8 per segment — all exactly as stated.
+Both projectors take `vp_x0/y0/w/h` as **12-bit configuration** with **no fixed
+aspect baked in anywhere** — the aspect lives entirely in the software-supplied
+matrix. `VIDEO.SCALER` is pass-through with "no arithmetic exists in this block
+by law". **No internal scanline, integer-scale or filter logic exists** — the
+only pixel post-processing is 4×4 Bayer dither at RGB888→565, before the
+framebuffer.
+
+**And the Duo precedent is real:** Duo *stores* 196,608 B while *displaying*
+245,760 B (`zhao_pkg.sv:100`), with scanout manufacturing border rows that fetch
+nothing (`zhao_scanout_fetch.sv:125-140`). Stored occupancy and displayed bytes
+are already distinguished by the design. The mechanism widescreen needs exists.
+
+#### 6. Blast radius: ~61 live files across 8 areas
+
+The heavy ones: **`zhao_pkg.sv` is FROZEN and has 18 sites**, including the
+`ZHAO_TIMING[0:2]` bound that must widen; the ABI is **generated**, so
+`spec/commands.zidl` plus `tools/abi-gen` must be edited rather than the seven
+generated outputs; the `unique case (fetch_mode)` in
+`zhao_scanout_fetch.sv:112-146` needs a fourth arm; `seg_geometry` in
+`zref_video.cpp:283-312` likewise; four separate frame-deadline tables need a
+fourth row; and the golden captures (`z60_10frame.zcap`, `storm_10frame.zcap`,
+`duo_10frame.zcap`, `duo_markers.zcap` — a 600-frame CRC chain) would need
+regeneration.
+
+Mostly mechanical surface propagation, as the proposal said — but it touches a
+frozen package and a generated ABI, so it is a deliberate amendment, not an
+edit.
+
+### Original audit list (all now answered above)
+
+The claims that were checked:
 
 1. the mode enum really is 2 bits with value 3 free, in RTL **and** in the ABI;
 2. an out-of-set enum byte really is `ZH_ABI_BAD_VALUE`, so this must be a
