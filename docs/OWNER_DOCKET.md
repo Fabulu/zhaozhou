@@ -1,5 +1,132 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — WIDESCREEN: accepted in principle, and the arithmetic has one
+## problem the proposal did not catch
+
+**Status: DOCKETED, not implemented. Deliberately not interrupting the DSP and
+timing campaign for it.** Recording it now is the point — the game, HUD and
+content pipeline are not yet entrenched, and adding a mode after fifty missions
+and a finished interface is far more painful than adding one to the hardware
+later.
+
+### The ruling as proposed
+
+* Widescreen presentation at minimum via an **anamorphic 384×240** mode: same
+  framebuffer, same line buffers, same scanout bandwidth, same fragment count,
+  no extra DSPs. A 16:9 view-projection matrix is sent while the FPGA draws the
+  same 92,160 pixels.
+* A native square-pixel **`VIDEO_WIDE` = 384×216 RGB565 @ 60 Hz**, presented
+  over HDMI as **1920×1080p60 at exact 5× nearest-neighbour**. Scanlines and CRT
+  treatment happen in the output scaler, never in the render framebuffer. On a
+  4K panel, keep 1080p out and let the television do the final exact 2×.
+* **No native mode may exceed the existing 512×240 storage/scanout envelope in
+  v1.**
+* `320×180` kept as a possible extra-chunky mode later (exact 6× to 1080p).
+
+### The arithmetic, checked
+
+| | pixels | framebuffer | row | bursts/row | 16:9? | to 1920×1080 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| Z60 384×240 (today) | 92,160 | 184,320 B | 768 B | 12 | no (8:5) | 5× / 4.5× — **not integer** |
+| **WIDE 384×216** | **82,944** | **165,888 B** | 768 B | **12** | **exact** | **5× / 5× — integer** |
+| alt 416×234 | 97,344 | 194,688 B | 832 B | 13 | exact | 4.615× — not integer |
+| alt 320×180 | 57,600 | 115,200 B | 640 B | 10 | exact | 6× / 6× — integer |
+
+384×216 is **10% fewer pixels than Z60**, keeps the row size and the 12-burst
+fetch **completely unchanged**, and is the only candidate that is simultaneously
+exact 16:9 and an exact integer scale to 1080p. The preference for it over
+416×234 is correct, and for a stronger reason than was given: 416×234 is not
+merely "uneven", it is **4.615×**, which alternates 4- and 5-pixel columns and
+will shimmer on horizontal scroll.
+
+### THE PROBLEM: 216 is not a multiple of the tile height, and neither is any alternative
+
+The renderer works in **16×16 tiles**. 384/16 = 24 exactly, so width is fine.
+But:
+
+    240 / 16 = 15      exact   (Z60 works)
+    216 / 16 = 13.5    NOT exact
+    234 / 16 = 14.625  NOT exact
+    180 / 16 = 11.25   NOT exact
+
+The proposal states "416×234 → 26 × 15 = 390 tiles". **That is wrong** — 234/16
+is 14.625, not 15 — and the same slip hides the problem in 384×216.
+
+**And this is not a matter of picking a better number. It is impossible.** For
+an integer scale `s` to 1920×1080, the source height is `1080/s`. For that to be
+a multiple of 16, 1080 must be divisible by `16s`. But
+
+    1080 = 2^3 · 3^3 · 5
+
+has only **three** factors of two, and 16 needs four. **No integer scale to
+1080p yields a tile-exact height — none, at any resolution.** Verified by
+enumeration as well as by the factorisation.
+
+So the choice is not between resolutions. It is between *integer 1080p scaling*
+and *tile-exact frame height*, and one of them has to give.
+
+### The resolution, which costs nothing
+
+**Decouple the tile grid from the displayed area.** Round the grid *up* to a
+multiple of 16 and scan out only the active rows:
+
+| | value |
+| --- | ---: |
+| tile grid / framebuffer | **384 × 224** — 24 × 14 = **336 exact tiles** |
+| framebuffer bytes | **172,032 B** (fits the 245,760 B slot) |
+| viewport, and rows scanned out | **384 × 216** |
+| rows rendered but never displayed | 8 |
+| HDMI | 1920×1080 at exact 5× |
+
+This needs **no partial-tile support anywhere**: the grid stays exactly
+divisible, every tile is a full 16×16, and the framebuffer is smaller than
+Z60's. The bottom eight rows fall outside the viewport, so the binner never
+places geometry there and they cost effectively nothing.
+
+Tile count **falls** from Z60's 360 to 336. Pixels fall 10%. Scanout falls 10%
+(216 × 12 = 2,592 bursts/frame against 2,880). **Widescreen makes the
+renderer's job slightly easier, not harder** — the same conclusion the proposal
+reached, and it survives the correction.
+
+The identical trick sizes `320×180` later: grid 320×192 (20 × 12 = 240 tiles),
+viewport 180, exact 6× to 1080p.
+
+### Anamorphic fallback — worth having, but be honest about it at 1080p
+
+384×240 stretched to 16:9 is genuinely almost free and should exist. But at
+1080p it is **5× horizontally and 4.5× vertically**, so the vertical scale is
+not an integer and scanlines cannot be uniform — exactly the artefact the native
+mode is chosen to avoid. It is the right fallback for adapters that cannot do
+better; it is not the shipping presentation.
+
+### Scanlines: after scaling, never in the framebuffer
+
+At exact 5×, each source row occupies five HDMI rows and every scanline is
+identical in thickness. Darkening rows in a 384×216 framebuffer would instead
+throw away real vertical information. Three presets — Sharp / Scanline / CRT —
+belong in the output stage. A strong RGB shadow mask should probably not be the
+default: five output columns per source pixel do not divide into three phosphor
+triads, so an aggressive mask risks moiré.
+
+### What still needs proving before this is safe to schedule
+
+A read-only audit is running against the repo now to verify the claims this plan
+rests on, rather than accepting them:
+
+1. the mode enum really is 2 bits with value 3 free, in RTL **and** in the ABI;
+2. an out-of-set enum byte really is `ZH_ABI_BAD_VALUE`, so this must be a
+   deliberate ABI amendment rather than a silent widening;
+3. the framebuffer slot really is 245,760 B for every mode;
+4. the line buffers really are 2 × 512 pixels, and X/Y really are 10 and 8 bits;
+5. **whether anything hardcodes or budgets 360 tiles**;
+6. whether the projector's viewport is genuinely configurable;
+7. `VIDEO.SCALER`'s contract really is native-stream-formatter-only;
+8. the full blast radius of a fourth mode.
+
+**Nothing above is a decision needed today.** The one thing worth confirming
+when convenient: **384×216 with a 384×224 tile grid**, versus the anamorphic
+mode alone.
+
 ## 2026-08-23 — GEOM.SKIN done, and ONE DECISION FOR YOU: the shipped
 ## skinning reference silently truncates to 64 bits
 
