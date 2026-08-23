@@ -3,7 +3,11 @@
 **Agent ID:** claude-dsp-terrain-lod
 **Created:** 2026-08-23
 **Parent Task:** RUN-20260822-2136
-**Status:** Complete
+**Status:** Complete — **amended 2026-08-23 after this work broke `main`.**
+Findings 8-10 are the amendment and are the part worth reading first: the DSP
+result below stands unchanged and was never the problem, but the GATE I reported
+it behind was not a gate, and my own mutation sweep left a mutant on disk that
+took `main` red.
 
 ---
 
@@ -21,6 +25,15 @@ were constant shifts — **was real, and was worth 6 of the 28.** The other 19 c
 from two things it had not noticed: twelve of the twenty-four left-hand sides
 were exact duplicates, and the whole block fits in a multiplier NARROWER than
 the one it was using.
+
+**AMENDMENT.** `main` went red after this landed: `measure_governor_lod` failed
+55 of 72 checks on the Duo fairness law. **It was not the RTL** — the sequenced
+block passes that composition 72/72 with a trace byte-identical to the block it
+replaced. It was **my mutation sweep**, which re-elaborated every consumer of the
+module through `cmake` but cleaned only the two it scored, leaving mutant-derived
+model sources on disk for the next build to compile. I did not catch it because
+the `ctest -L fast` I reported green **had never rebuilt the composed target**.
+Both failures are mine and both are written up in findings 8 and 9.
 
 ---
 
@@ -204,6 +217,114 @@ has `wire [16:0] step = morph_step_i;`. Verilator caught it as a duplicate
 declaration immediately, but a bulk rename of the token `step` then rewrote
 prose in comments as well. Rename the *new* identifier, not the common word.
 
+
+### 8. I REPORTED A GREEN GATE THAT WAS NOT A GATE, AND main WENT RED
+
+This is the most important finding in this file and it is not about DSPs.
+
+**What I reported:** `ctest -L fast` 262/262, twice.
+**What was true:** 262 binaries passed. Several of them had been compiled from
+the *pre-change* RTL and could not have failed no matter what I wrote.
+
+**`ctest` does not build.** It runs whatever executables are already on disk.
+After changing `zhao_terrain_lod.sv` I explicitly rebuilt three targets —
+`test_terrain_lod_directed`, `test_terrain_lod_random`, `test_terrain_lod_tess` —
+and then ran `ctest`. **Four** targets elaborate this module. The fourth,
+`test_measure_governor_lod`, was never rebuilt, so it ran a binary carrying the
+old RTL and reported a pass about code that was no longer in the tree.
+
+I compounded it by never asking who else consumed the block. My survey read
+`tests/terrain/`, found three lanes, and stopped. The question that would have
+caught this is one grep:
+
+```
+grep -B12 "TOP_MODULE zhao_terrain_lod" tests/CMakeLists.txt
+```
+
+which lists all four, including the composition that guards the Duo fairness
+law from a different subsystem's directory.
+
+**THE RULE, for this repo, stated so it is not re-learned:**
+
+> A green `ctest` proves nothing about an RTL change unless a FULL build ran
+> first. `verilate()` elaborates at CONFIGURE time and `ctest` has no build
+> step, so `cmake -S . -B build && ninja -C build` — with **no target
+> argument** — then `ctest`. Run it as the LAST action before reporting, after
+> the final commit, not in the middle of the session.
+
+That is the same family as the five build guards `tools/sweep_geom_lod.sh`
+already documents. Those guards protect the *sweep* from scoring a run that
+never happened. Nothing protected the *report*.
+
+### 9. THE COMPOSED FAILURE WAS REAL, AND MY SWEEP CAUSED IT — NOT MY RTL
+
+`measure_governor_lod` failed **55 of 72** checks on main, on charter §9's Duo
+fairness property: view 1 degrading removed 96 triangles of view 0's ground.
+The lead offered was that a shared multiplier needs shared sequencing state and
+that some of it might not be per-view. That was a reasonable read of the
+symptom. It was not the cause.
+
+**Diagnosis, in the order it was actually established:**
+
+1. The sequenced RTL, built clean with the target directory deleted, passes
+   **72/72**. Verified three times, with the elaborated model confirmed to
+   contain the sequencer (`mul_step` ×47, `lad_s0`, `rhs_rel0`).
+2. The pre-sequencing RTL, built the same way, also passes 72/72 — with a
+   **byte-identical trace**: `1616 / 1616 / 92 / 1514`. The composition cannot
+   tell the two versions apart.
+3. So the failing binary was not built from my RTL. The only thing in this
+   session that put other versions of this file on disk was **my own mutation
+   sweep**.
+4. `cmake -S . -B build` re-elaborates **every** target that verilates the
+   mutated module. The sweep deleted and rebuilt only the **two** it scored, so
+   all 40 iterations left mutant-derived model sources in
+   `test_measure_governor_lod.dir` and `test_terrain_lod_tess.dir`. Confirmed
+   directly: after one simulated sweep iteration both unscored targets' model
+   sources carry a regeneration timestamp from that iteration and contain the
+   mutant.
+5. **Reproduced bit for bit.** Applying **M14** — "the cameras take the coarser
+   strict decision" — and building the composed test gives **55 of 72 checks
+   failed** on exactly that assertion. That is the reported count, from a
+   mutation whose entire purpose is to break camera isolation.
+
+So the sweep manufactured the defect it was written to detect, and left it where
+someone else's build would compile it. Fixed as **guard 7** in
+`tools/sweep_terrain_lod.sh`: `TARGETS` is now the full consumer list, all four
+are cleaned, rebuilt and scored, and `check_consumers` reads
+`tests/CMakeLists.txt` and **refuses to start** if a consumer is missing from
+it, so the next target someone adds cannot silently reintroduce this.
+
+**A sweep must not leave the tree in a state it did not measure.**
+
+### 10. The cross-view question, answered properly rather than by symptom
+
+The lead deserves a real answer, because "the test passes" is not one. Enumerating
+every piece of state the sequencer added, and whether it is per-view:
+
+| state | per-view? | why it cannot leak |
+| --- | --- | --- |
+| `mul_a`/`mul_b`/`mul_p` | n/a | combinational, selected by `mul_step`; no memory |
+| `mul_step` | n/a | a schedule index, not view data |
+| `acc` (66-bit) | **shared** | the one place cross-view carry is possible — cleared at `mul_step==2` (after eye 0's three terms) and again at `mul_step==5`, before any eye-1 term is added |
+| `sq_num0/sq_res0` vs `sq_num1/sq_res1` | yes | separate registers, separate root lanes |
+| `rhs_rel0` vs `rhs_rel1` | yes | separate registers, written at steps 0 and 4 |
+| `lad_s0`/`lad_r0` vs `lad_s1`/`lad_r1` | yes | separate registers, cleared at the start of every eval phase |
+
+Only the *resource* is shared; every piece of *data* is per-view. The single
+shared accumulator is the one real risk, and it has a mutant whose whole job is
+to prove it — **M37, "the accumulator is not cleared between the two eyes"** —
+which is **caught**. `M35` (a ladder answer latched into the wrong flop) and
+`M39` (a right-hand side filed under the wrong camera) cover the per-view flops
+from the other direction.
+
+**No RTL change was required, and none was made.** The block at HEAD is
+byte-identical to the one measured at 3 DSPs, so that measurement stands
+unchanged and was not re-run — re-measuring identical RTL would produce an
+identical row and a misleading second provenance entry.
+
+**A block-level differential passing is not evidence that a composed property
+still holds.** This block sits in two compositions. Both are now in the sweep.
+
 ---
 
 ## Recommendations
@@ -232,6 +353,25 @@ prose in comments as well. Rename the *new* identifier, not the common word.
   reads them. Two blocks have now been fixed by hand while the gate that should
   have caught the problem still does not exist. The ALM side has V5; DSP has
   nothing.
+- **Run the full fast lane after a FULL build, as the last action before
+  reporting.** `cmake -S . -B build && ninja -C build` with no target argument,
+  then `ctest -L fast`, after the final commit. Anything else reports on
+  binaries rather than on the tree. This is now the single most important line
+  in this file.
+- **Before changing a block, list every target that elaborates it.**
+  `grep -B12 "TOP_MODULE <module>" tests/CMakeLists.txt`. For this block the
+  answer was four, one of which lives in another subsystem's test directory and
+  guards a charter property the block-level lanes cannot see.
+- **Any sweep must clean every CONSUMER of the mutated file, not every consumer
+  it scores.** Now enforced by `check_consumers` in
+  `tools/sweep_terrain_lod.sh`, which refuses to start if the build system knows
+  about a consumer the sweep does not. **Checked, rather than assumed, for the
+  other two sweeps:** `zhao_geom_lod` and `zhao_geom_cull` each have exactly
+  **one** consumer today, so `tools/sweep_geom_lod.sh` and
+  `tools/sweep_geom_cull.sh` do not leak. They have no guard against acquiring
+  one, which is precisely how this happened here — TERRAIN.LOD landed in phase 6
+  with three block-level lanes and gained the phase 8 composition later. Port
+  `check_consumers` to both when either is next touched.
 - **Write the mutation sweep before the restructuring, not after.** Doing it in
   that order here is what turned "the tests are green" into "the tests are green
   AND section 2 had a hole in it", and the hole was in the pre-existing block,
@@ -262,4 +402,9 @@ prose in comments as well. Rename the *new* identifier, not the common word.
 - `tools/quartus/run_block_fit.ps1` - the measurement
 - `reports/synthesis/zhao_block_fit.json` - both rows
 - `reports/REMAINING_BLOCKERS.md` - the 213/201 section, now 176
+- `tests/measure/measure_governor_lod.cpp` - the composed Duo-fairness lane that
+  went red; **the fourth consumer of this module, and the one I failed to look
+  for**
+- `tests/CMakeLists.txt` - the authority on who elaborates what; four targets
+  verilate `zhao_terrain_lod`
 - `runs/CLAUDE-RUNS/.../FINDINGS-dsp-sequencing.md` - the pilot this repeats

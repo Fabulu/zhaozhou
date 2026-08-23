@@ -58,18 +58,27 @@
 # ---------------------------------------------------------------------------
 # WHAT IS SCORED
 # ---------------------------------------------------------------------------
-# TWO lanes, because this block's defects split cleanly between them and the
-# contract's own hand-run mutation table proves it: `<` versus `<=` in the
-# ladder is an exact-equality event that random input never produces and only
-# `terrain_lod_directed` §2 constructs, while a transposed neighbour index shows
-# up in both. A mutant is CAUGHT if either lane fails.
+# ALL FOUR lanes that elaborate this module. Guard 7 requires all four to be
+# CLEANED anyway, and once cmake has re-elaborated them the marginal cost of also
+# building and running them is a few seconds each, so there is no longer any
+# reason to score fewer than are already being rebuilt.
 #
-# `terrain_lod_tess` (the real LOD driving the real TESS, asserting the island
-# is crack-free) is NOT in the loop, deliberately: it costs a second elaborated
-# model per iteration and the contract's table shows it catching a strict SUBSET
-# of what the directed lane catches -- three of its four hand-run mutations were
-# green there and red in `terrain_lod_directed`. It stays in `ctest -L fast`,
-# where it guards the composition rather than the arithmetic.
+# The four are not redundant -- they fail on different things:
+#
+#   terrain_lod_directed    the arithmetic and the law's own properties. `<`
+#                           versus `<=` is an exact-equality event random input
+#                           never produces and only its §2 constructs.
+#   terrain_lod_random      the trajectory: transitions, hysteresis, the hold,
+#                           the domain limit, over thousands of frames.
+#   terrain_lod_tess        the real LOD driving the real TESS: the island is
+#                           CRACK-FREE. Neither block can assert this alone.
+#   measure_governor_lod    the real governor driving the real LOD: charter §9's
+#                           DUO FAIRNESS law, end to end, in triangles. This is
+#                           the lane that went red on main, and it is in the loop
+#                           now precisely because a block-level differential
+#                           cannot see a per-view property.
+#
+# A mutant is CAUGHT if ANY lane fails.
 #
 # ---------------------------------------------------------------------------
 # THE SURVIVORS, PROVED RATHER THAN LABELLED
@@ -148,6 +157,11 @@
 #
 # SCORE AFTER: attempted=40 accounted=40 caught=38, survivors M11 and M18 --
 # the same two, and only those two.
+#
+# RE-RUN 2026-08-23 with guard 7 in place, so all FOUR consumer lanes are cleaned,
+# rebuilt and scored (adding terrain_lod_tess and measure_governor_lod):
+# attempted=40 accounted=40 caught=38, survivors M11 and M18. Same score, strictly
+# more coverage -- and, this time, a tree left in the state it was measured in.
 # ---------------------------------------------------------------------------
 set -u
 

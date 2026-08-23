@@ -514,3 +514,49 @@ tables, none ever scored.
 ledger check green.
 
 Running per-block total: **201 -> 176** against 112.
+
+### 2026-08-23, amendment — the sequencing was fine; the SWEEP took main red
+
+`measure_governor_lod` failed 55 of 72 checks on charter §9's Duo fairness law
+after the TERRAIN.LOD sequencing landed. Two separate failures, both mine, and
+neither of them the RTL.
+
+**1. My reported gate was not a gate.** `ctest` does not build. After changing
+the .sv I rebuilt three targets and ran `ctest -L fast`; **four** targets
+elaborate this module, and the fourth — `test_measure_governor_lod`, which lives
+in another subsystem's directory and guards the Duo property — ran a binary
+compiled from the OLD RTL and reported a pass about code no longer in the tree.
+The rule now written into the findings: `cmake -S . -B build && ninja -C build`
+with NO target argument, then `ctest -L fast`, as the LAST action before
+reporting.
+
+**2. My sweep manufactured the defect and left it on disk.** `cmake` re-elaborates
+every consumer of a mutated module; the sweep cleaned only the two it scored, so
+all 40 iterations left mutant-derived model sources in the two composed targets.
+Reproduced exactly: applying M14 ("the cameras take the coarser strict decision")
+and building the composed test gives 55 of 72 failures on that assertion — the
+reported count, from a mutation written to break camera isolation.
+
+**The RTL was never wrong.** Built clean, the sequenced block passes
+`measure_governor_lod` 72/72 with a trace byte-identical to the block it
+replaced (1616 / 1616 / 92 / 1514), and the elaborated model provably contains
+the sequencer. No RTL change was made, so the 28 -> 3 DSP measurement stands.
+
+The cross-view lead was answered properly rather than by symptom: every piece of
+DATA state is per-view (two root lanes, two relaxed right-hand sides, four ladder
+answers); only the multiplier and the two comparators are shared, and they carry
+no state between views. The one shared register — the 66-bit accumulator — is
+cleared at the eye boundary, and mutant M37 exists to prove exactly that and is
+caught.
+
+Fixed as **guard 7** in `tools/sweep_terrain_lod.sh`: TARGETS is the full
+consumer list, all four are cleaned/rebuilt/scored, and `check_consumers` reads
+tests/CMakeLists.txt and refuses to start if a consumer is missing. A sweep must
+not leave the tree in a state it did not measure.
+
+Checked rather than assumed: `zhao_geom_lod` and `zhao_geom_cull` each have
+exactly ONE consumer today, so `sweep_geom_lod.sh` and `sweep_geom_cull.sh` do
+not leak. Neither has a guard against acquiring one — which is exactly how this
+happened here, since TERRAIN.LOD landed in phase 6 with three block-level lanes
+and gained the phase 8 composition afterwards. Port `check_consumers` to both
+when either is next touched.
