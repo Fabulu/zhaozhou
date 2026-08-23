@@ -1484,13 +1484,13 @@ int main(int argc, char** argv) {
   //     bound holds; this section is where the MARGIN is visible, so that a
   //     bound quietly grown to fit a regression is a diff rather than a habit.
   {
-    const int kMaxOpCycles = 80;   // zhao_field_seq_pkg::MAX_OP_CYCLES
+    const int kMaxOpCycles = 80;  // zhao_field_seq_pkg::MAX_OP_CYCLES
 
     struct Case {
       const char* name;
       uint8_t op;
-      bool simple;          // must retire in exactly six clocks
-      int lanes;            // how many registers it writes
+      bool simple;  // must retire in exactly six clocks
+      int lanes;    // how many registers it writes
     };
     // Operand registers are loaded as input lanes so nothing is read before it
     // is written, and every destination is well clear of every source.
@@ -1519,7 +1519,22 @@ int main(int argc, char** argv) {
         {"SPLINE", zfield::OP_SPLINE, false, 1},
     };
 
+    // `kind` MUST be set even though `zfield::interpret` never reads it.
+    //
+    // The interpreter dispatches CURVE / DCURVE / SPLINE on the OPCODE, so a
+    // table's `kind` byte is inert on this path -- which is exactly why leaving
+    // it indeterminate went unnoticed until cppcheck said so. It is still a
+    // defect and not a nit: `zfield::Decoded` is what a DECODED program is, and
+    // the decoder validates this field (`kind > 1` is rejected outright, and
+    // `kind == 1` additionally requires uniform x spacing). A test that hands
+    // `interpret` a struct the decoder would refuse is not running a program,
+    // it is running something that happens to agree.
+    //
+    // 1 = spline, and these tables really are uniformly spaced (i * kOne/4), so
+    // the stricter of the two kinds is the honest label and it is the one the
+    // SPLINE cases need.
     zfield::Table tbl;
+    tbl.kind = 1;
     for (int i = 0; i < 8; ++i) {
       tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
       tbl.y.push_back(static_cast<int32_t>(i) * 1234 - 3000);
@@ -1613,6 +1628,7 @@ int main(int argc, char** argv) {
     const int kN = static_cast<int>(sizeof(kSteps) / sizeof(kSteps[0]));
 
     zfield::Table tbl;
+    tbl.kind = 1;  // spline; see the note in section 12
     for (int i = 0; i < 8; ++i) {
       tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
       tbl.y.push_back(static_cast<int32_t>(i) * 4321 - 9000);
@@ -1624,9 +1640,8 @@ int main(int argc, char** argv) {
     // vector that needs normalising, an angle that is not a quadrant boundary,
     // and a reciprocal operand small enough to exercise the correction.
     const std::vector<int32_t> vals = {
-        kOne * 3, -kOne * 4, kOne * 12, kOne / 7,  kOne * 2,  kOne * 5,
-        kOne * 9, 0x2A7Fu,   -kOne,     kOne * 6,  kOne / 3,  -kOne * 11,
-        kOne * 8, kOne * 2,  -kOne * 3, kOne * 4};
+        kOne * 3, -kOne * 4, kOne * 12, kOne / 7,   kOne * 2, kOne * 5, kOne * 9,  0x2A7Fu,
+        -kOne,    kOne * 6,  kOne / 3,  -kOne * 11, kOne * 8, kOne * 2, -kOne * 3, kOne * 4};
 
     struct Lanes {
       bool add = false, mul = false, rescale = false, rcp = false, rcp0 = false;
@@ -1699,10 +1714,10 @@ int main(int argc, char** argv) {
         for (int k = 0; k < kSteps[i].lanes; ++k, ++at) {
           std::snprintf(nm, sizeof nm, "13.%s %s lane %d equals its isolated answer",
                         reversed ? "reversed" : "forward", kSteps[i].name, k);
-          check(at < got.size() && static_cast<size_t>(k) < alone[i].size() &&
-                    got[at] == alone[i][k],
-                nm, static_cast<uint32_t>(alone[i][k]),
-                at < got.size() ? static_cast<uint32_t>(got[at]) : 0u);
+          check(
+              at < got.size() && static_cast<size_t>(k) < alone[i].size() && got[at] == alone[i][k],
+              nm, static_cast<uint32_t>(alone[i][k]),
+              at < got.size() ? static_cast<uint32_t>(got[at]) : 0u);
         }
       }
 
@@ -1822,6 +1837,7 @@ int main(int argc, char** argv) {
     };
 
     zfield::Table tbl;
+    tbl.kind = 1;  // spline; see the note in section 12
     for (int i = 0; i < 8; ++i) {
       tbl.x.push_back(static_cast<int32_t>(i) * (kOne / 4));
       tbl.y.push_back(static_cast<int32_t>(i) * 777 - 1500);
@@ -1864,8 +1880,8 @@ int main(int argc, char** argv) {
         const int32_t now = b.read_reg(20);
         if (dut.instr_retired_o) {
           ++retires;
-          if (retires == 1) planted = true;        // the LDC has committed
-          if (retires == 2) retire_cycle = n;      // the long op has committed
+          if (retires == 1) planted = true;    // the LDC has committed
+          if (retires == 2) retire_cycle = n;  // the long op has committed
         }
         // Between the sentinel landing and the long op retiring, reg[20] is the
         // sentinel and nothing else. `retires == 1` is exactly that window.
@@ -1878,8 +1894,8 @@ int main(int argc, char** argv) {
       // The write-back walk is allowed to touch reg[dst] at most `lanes - 1`
       // cycles before retirement, and not one cycle earlier.
       const int slack = cs.lanes - 1;
-      const bool too_early = changed_early && (retire_cycle < 0 ||
-                                               change_cycle < (retire_cycle - slack));
+      const bool too_early =
+          changed_early && (retire_cycle < 0 || change_cycle < (retire_cycle - slack));
       char nm[128];
       std::snprintf(nm, sizeof nm, "14.%s: reg[dst] is not written before the write-back walk",
                     cs.name);

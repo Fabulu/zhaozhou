@@ -159,33 +159,90 @@ module zhao_field_normalize (
   logic [63:0] h_rt;
 
   // ---- normalise the length into [2^23, 2^24), counting e -----------------
-  // The reference walks two while-loops. `len` is at most 2^32, so the shift is
-  // bounded and the loops become a leading-zero count either way; both
-  // directions are needed because a short vector's length is below 2^23.
+  //
+  // THIS WAS THE WHOLE DESIGN'S CRITICAL PATH. Measured 2026-08-23, the first
+  // timing analysis ever run on this block: the three worst setup paths were all
+  // `h_rt -> o1_o`, at SEVENTY-EIGHT LEVELS OF LOGIC in one cycle, and the Field
+  // engine closed at 8.59 MHz against a 10 ns clock.
+  //
+  // The cause was here, and the comment that used to sit on these lines already
+  // said so without anyone acting on it: "the loops become a leading-zero count
+  // either way". They were written as the reference writes them --
+  //
+  //     while (m < (1<<23)) { m <<= 1; --e; }
+  //     while (m >= (1<<24)) { m >>= 1; ++e; }
+  //
+  // -- and a `for (int k = 0; k < 64; ...)` in RTL is not a loop, it is 64 COPIES.
+  // Two of them unrolled into 128 dependent compare-and-shift stages on a 64-bit
+  // value, feeding both the seed ROM index and the per-lane rescale shift.
+  //
+  // ---------------------------------------------------------------------------
+  // THE CLOSED FORM, AND WHY IT IS THE SAME NUMBER
+  // ---------------------------------------------------------------------------
+  // `n2 == 0` is handled before this is reached (the oracle returns the zero
+  // vector and so does the walk), so `len` is at least 1 and has a most
+  // significant set bit. Call its index `n`.
+  //
+  //   * the FIRST loop runs only when n < 23, and stops the first time the value
+  //     reaches 2^23 -- which is after exactly 23 - n doublings, leaving the MSB
+  //     at bit 23;
+  //   * the SECOND loop runs only when n >= 24, and stops the first time the
+  //     value drops below 2^24 -- after exactly n - 23 halvings, again leaving
+  //     the MSB at bit 23;
+  //   * when n == 23 neither runs.
+  //
+  // So in every case the result has its MSB at bit 23, and `e` is `n - 23`:
+  // negative below, positive above, zero at. And repeated TRUNCATING halvings
+  // compose exactly -- floor(floor(x/2)/2) == floor(x/4) -- so the second loop
+  // is one truncating right shift, not an approximation of one.
+  //
+  //     e     = n - 23
+  //     m     = (n >= 23) ? (len >> (n - 23)) : (len << (23 - n))
+  //
+  // With `lz` the leading-zero count of the 64-bit value, n = 63 - lz, so
+  // e = 40 - lz and the two shifts are a barrel shift by at most 40. That is a
+  // handful of levels instead of 128, and it is bit-identical rather than close:
+  // there is no rounding anywhere in this function to get wrong.
+  //
+  // The leading-zero count is the SAME SIX-STAGE BINARY SEARCH `zhao_field_rcp`
+  // uses forty lines away, which is the other half of why this was a defect
+  // rather than a trade-off -- the correct shape was already in the file.
+  // ENFORCED-BY: tests/differential/field_normalize_directed.cpp:main
+  logic [ 5:0] lz;
+  logic [63:0] lz_t;
+  always_comb begin
+    lz = 6'd0;
+    lz_t = h_rt;
+    if (h_rt != 64'd0) begin
+      if (lz_t[63:32] == 32'd0) begin lz = lz + 6'd32; lz_t = lz_t << 32; end
+      if (lz_t[63:48] == 16'd0) begin lz = lz + 6'd16; lz_t = lz_t << 16; end
+      if (lz_t[63:56] == 8'd0)  begin lz = lz + 6'd8;  lz_t = lz_t << 8;  end
+      if (lz_t[63:60] == 4'd0)  begin lz = lz + 6'd4;  lz_t = lz_t << 4;  end
+      if (lz_t[63:62] == 2'd0)  begin lz = lz + 6'd2;  lz_t = lz_t << 2;  end
+      if (lz_t[63] == 1'b0)     begin lz = lz + 6'd1;  lz_t = lz_t << 1;  end
+    end
+  end
+
   logic signed [7:0] e_val;
   logic [23:0] m_val;
+  logic signed [7:0] d_exp;
+  logic [ 5:0] rsh, lsh;
   always_comb begin
-    logic [63:0] t;
-    logic signed [7:0] ee;
-    t = h_rt;
-    ee = 8'sd0;
-    if (t != 64'd0) begin
-      for (int k = 0; k < 64; k++) begin
-        if (t < (64'd1 << 23)) begin
-          t = t << 1;
-          ee = ee - 8'sd1;
-        end
-      end
-      for (int k = 0; k < 64; k++) begin
-        if (t >= (64'd1 << 24)) begin
-          t = t >> 1;
-          ee = ee + 8'sd1;
-        end
-      end
-    end
-    m_val = t[23:0];
-    e_val = ee;
+    // e = 40 - lz, which is n - 23 written in terms of leading zeros.
+    d_exp = 8'sd40 - $signed({2'd0, lz});
+    // Exactly one of these is ever nonzero, so the pair below is a single
+    // shift in whichever direction the exponent asks for.
+    rsh = (d_exp > 8'sd0) ? 6'(d_exp) : 6'd0;
+    lsh = (d_exp < 8'sd0) ? 6'(-d_exp) : 6'd0;
   end
+
+  assign m_val = (h_rt == 64'd0) ? 24'd0 : 24'((h_rt >> rsh) << lsh);
+  assign e_val = (h_rt == 64'd0) ? 8'sd0 : d_exp;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [63:0] lz_t_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign lz_t_unused = lz_t;
 
   // ---- rcp_u24_norm: seed, TWO correction steps, then rescale by 7 --------
   logic [ 7:0] idx;
