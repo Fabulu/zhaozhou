@@ -1,5 +1,100 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — THE EARTH FIELD BUDGET: the answer is not more cores, it is a cache
+
+The Field ruling left one question open: *how many physical Field cores are
+needed?* I costed it against numbers already in the repo, and **the shape of the
+answer is not "three cores".**
+
+### The repo already states the worst case, and states it against a placeholder
+
+`spec/terrain_rules.md:522-528`, verbatim and honest about its own status:
+
+> the worst legal patch costs 16 programs × 1,089 vertices × ≤32 instrs =
+> **557,568 field instructions for ONE patch** — ~33% of a 1.67 M-cycle frame at
+> the cost-model's 100 MHz placeholder clock **and 1 instr/cycle**.
+
+**That 1 instr/cycle is a placeholder, and we measured the real number today.**
+The Field engine retires a simple instruction in **six clocks**, and the rebuilt
+target is seven. So:
+
+| clocks/instruction | one worst-case patch | share of a frame |
+| ---: | ---: | ---: |
+| 1 — the repo placeholder | 557,568 | **33%** |
+| **6 — measured** | **3,345,408** | **201%** |
+| 7 — rebuilt-engine target | 3,902,976 | **234%** |
+
+**One worst legal patch is twice an entire frame.** The document is careful to
+call `MAX_PATCH_FIELDS` "an *intake correctness bound*, not a per-frame
+affordability certificate" — that caution was exactly right, and the factor was
+6× larger than the placeholder suggested.
+
+### And the modest case is no better
+
+Not the worst case. **One** program, eight instructions, over the visible patches
+`TERRAIN.PROJECT` already budgets for:
+
+    270 patches x 1,089 vertices x 1 program x 8 instrs x 6 clocks
+      = 14,113,440 clocks = 8.5x a frame
+
+**Three cores do not fix 8.5×. Nor do nine.** Any architecture that evaluates the
+earth field per-vertex per-frame across the visible set is out of reach by
+roughly an order of magnitude, at any core count this device can hold.
+
+For scale, the thing that *is* affordable: **one program on one patch is 52,272
+clocks — 3.1% of a frame.** So the engine is not too slow. The workload as
+implied is too large.
+
+### Therefore: evaluate on change, not on frame
+
+**The architectural answer is incremental evaluation with a cached result**, and
+Sacrifice's own engine is the evidence that this is how the game actually
+behaves:
+
+* terrain displacement there is **permanent and never fades** — a
+  `float[256][256]` field, CRC-hashed;
+* the two deformers touch **9–25 grid cells each** (bombardment ~3×3, volcano
+  ~5×5);
+* and the reference backend **only re-runs terrain displacement when the hash
+  differs from `emptyHash`** (`dagonBackend.d:2050-2058`) — *it is free until
+  something actually digs.*
+
+So the steady state is not 294,030 vertex-evaluations per frame. It is **zero**,
+punctuated by a few hundred when a spell lands. That matches the `SURFACE.STAMP`
+finding exactly — 36,864 texels **once per impact, not per frame** — and it is
+the same mistake in a different block: **a per-frame cost model applied to
+something that only changes on an event.**
+
+### What this changes
+
+1. **Do not size the Field core count from a per-frame full-field evaluation.**
+   That number is unbuildable and would justify any amount of hardware.
+2. **The open question becomes a different one, and a cheaper one:** what is the
+   *event* rate — how many patches become dirty per second, and how much of a
+   patch does one crater dirty? Sacrifice says a crater is ~9–25 cells of a
+   256×256 field, which is a very small fraction of one 33×33 patch.
+3. **`TERRAIN.PATCH` needs a dirty-region intake**, not a full-patch walk. If a
+   volcano dirties 25 cells, evaluating 1,089 vertices is **43× more work than
+   the event requires.**
+4. **One core is probably right**, and the ruling's "three cores by rate class"
+   was answering the wrong question — it was sized against a workload that no
+   architecture can serve, rather than against the workload the game generates.
+
+### Still genuinely open, and now sharper
+
+* the **event rate**: dirty patches per second under heavy combat;
+* how much of a patch a single deformation dirties, and whether the intake can
+  address a sub-patch region at all;
+* whether WARP, FLOW, FORMATION and STAMP are event-driven like EARTH or
+  genuinely per-frame — **FLOW almost certainly is per-frame** (particle forces),
+  and that is the profile most likely to need its own core.
+
+**Nothing here is a decision I should take.** But the previous framing —
+"derive per-frame demand, then instantiate cores by rate class" — would have
+produced a wrong and expensive answer, because the per-frame demand for EARTH is
+not a real quantity. **The question to ask the game is how often terrain
+changes, not how many vertices exist.**
+
 ## 2026-08-23 — STOP THE ONE-BLOCK-AT-A-TIME LOOP: build a budget compiler
 
 **Ruling: the next engineering run is a repo-wide audit, not another isolated
