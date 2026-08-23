@@ -337,3 +337,43 @@ fit census came to say `timeout` when they meant "we did not wait".
 
 **2. `-SkipMapped`.** Re-running the 46 finished modules would have cost 45
 minutes of Quartus time to learn nothing.
+
+## 2026-08-23 23:50 - the DSP cost curve, from the shipping design
+
+Before the synthetic microbenches ran at all, the mapped blocks already answer
+`design/budgets/dsp.md`'s question. For every block whose products are all one
+width, DSP blocks divided by product count:
+
+| widest operand | blocks | DSP per product | tool's own mode |
+| ---: | --- | ---: | --- |
+| 16 | `quat2mat` | **1.00** | Two Independent 18x18 |
+| 18 | `texture_tmu`, `raster_fragment`, `texture_bilerp`, `raster_blend` | **1.00** | 18x18 |
+| 21-23 | `geom_setup`, `raster_edgewalk`, `geom_clip` | **1.00** | **Independent 27x27** |
+| 32-34 | `geom_project`, `terrain_project`, `mat3x4_mul`, `terrain_lod`, `geom_cull` | **3.00** | 2x Independent 18x18 + Sum of two 18x18 |
+| 33 | `terrain_normals`, `field_mul` | **3.00** | same |
+
+Two consequences, and both change how a cut gets planned:
+
+**1. The cliff is between 27 and 32, not at 18.** Cyclone V has a 27x27 mode
+and Quartus uses it. `design/budgets/dsp.md`'s corrected rule said the cost
+moves discontinuously with width; this is where. The microbench grid was
+extended to sample 26/27/28 because sampling only 24 and 31 would have
+bracketed the cliff without locating it.
+
+**2. Quartus Lite packs NOTHING, confirmed from the narrow side.**
+`zhao_geom_quat2mat` forms **nine 16x16 signed products and takes nine DSP
+blocks** - the tool prints `Two Independent 18x18: 9`. Two 16x16 operators
+would fit in one block's two halves and it does not put them there. That
+module's own comment assumes narrow products will pack. **They do not**, which
+is the same behaviour the TMU measured from the other direction.
+
+## 2026-08-23 23:52 - the predictions, measured
+
+| # | prediction | verdict |
+| --- | --- | --- |
+| P1 | `geom_project` unfitted, duplicates `terrain_project`'s 33 DSP | **CONFIRMED, and stronger than asserted.** Not in the fit report. Byte-identical arithmetic signature - same 3 operators, same 11 products, same eight functions at the same call counts. Both map at **33**. |
+| P2 | GEOM.POSE hides 14-18 DSP | **CONFIRMED at 18** - `quat2mat` 9 + `mat3x4_mul` 9 = `pose_decode` **18**. Top of the predicted range. And its "narrow products will pack" comment is **refuted**: nine 16x16 products, nine DSPs. |
+| P3 | FORGE.CLIFF's three async tables cannot infer as RAM | **ONE-THIRD RIGHT.** Two DID infer as Simple Dual Port RAM (82,944 bits). `edge_mem_r` 2048x18 did not, and those 36,864 bits in logic are most of a **33,109-ALM** estimate - 79% of the device. The map COMPLETED (247 s), so the stop-and-report exception did not apply. |
+| P4 | FRAGMENT blend: mux before multiply, 6 -> 3 DSP | **ALREADY LANDED at HEAD.** `zhao_raster_blend` computes ONE product and says so in capitals; blend is 1 DSP, not 2. FRAGMENT maps at **7**, not the census's 10. The mux detector was validated against a synthetic positive before this was believed. |
+| P5 | TERRAIN.NORMALS 18 -> ~3 | **18 CONFIRMED.** Demand 2,000/frame against 1,666,667 capacity = **833x over-provisioned**; six products share one multiplier at 3 DSP. Return **15**, exactly as predicted. |
+| P6 | pose palette 1.57 Mbit ~= 150 M10K ~= 28% | **ARITHMETIC CONFIRMED EXACTLY** - 128 x 32 x 12 x 32 = 1,572,864 bits = 153.6 M10Ks = **27.8% of 553**. And sharper than the prediction: **the store does not exist in the RTL.** `pose_cache` emits a verdict and a slot index and its header says the caller owns the palettes; `pose_decode` holds ONE working palette of 12,288 bits. The 1.57 Mbit is an unbudgeted future cost, not a current one. |
