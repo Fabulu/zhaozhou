@@ -33,29 +33,33 @@ RTL = "fpga/rtl/terrain/zhao_terrain_lod.sv"
 MUTANTS = [
     # ---- the ladder ------------------------------------------------------
     ("M01 ladder compares < instead of <=",
-     "ladder_ok = (lhs <= rhs);",
-     "ladder_ok = (lhs < rhs);"),
+     "  wire        ev_pass_str = (ev_lhs <= ev_rhs_str);",
+     "  wire        ev_pass_str = (ev_lhs < ev_rhs_str);"),
     # M02 was first written as `scale[15:8]`, which leaves scale[7:0] unread
     # and fails -Wall UNUSEDSIGNAL. The preflight caught it before any scoring.
     ("M02 the deviation is doubled",
-     "lhs       = {9'b0, dev} * {24'b0, scale};",
-     "lhs       = {8'b0, dev, 1'b0} * {24'b0, scale};"),
-    ("M03 the right-hand side is off by one",
-     "rhs       = {17'b0, dstv} * {33'b0, h};",
-     "rhs       = {17'b0, dstv} * {33'b0, h} + 49'd1;"),
+     "      mul_a = {8'b0, ev_dev};",
+     "      mul_a = {7'b0, ev_dev, 1'b0};"),
+    ("M03 the strict right-hand side is off by one",
+     "  wire [48:0] ev_rhs_str = {9'b0, ev_dst, 8'd0};",
+     "  wire [48:0] ev_rhs_str = {9'b0, ev_dst, 8'd1};"),
+    # Coarsest-wins is now "the LAST passing rung to be written wins", because
+    # the rungs are walked 1, 2, 3 in time. Keeping the FIRST one is therefore
+    # exactly the finest-wins defect, re-spelled for the sequencer.
     ("M04 finest legal level wins, not coarsest",
-     "      if (ladder_ok(dev1, scale, dstv, h)) ladder = 2'd1;\n"
-     "      if (ladder_ok(dev2, scale, dstv, h)) ladder = 2'd2;\n"
-     "      if (ladder_ok(dev3, scale, dstv, h)) ladder = 2'd3;",
-     "      if (ladder_ok(dev3, scale, dstv, h)) ladder = 2'd3;\n"
-     "      if (ladder_ok(dev2, scale, dstv, h)) ladder = 2'd2;\n"
-     "      if (ladder_ok(dev1, scale, dstv, h)) ladder = 2'd1;"),
-    ("M05 the top rung maps to level 2",
-     "      if (ladder_ok(dev3, scale, dstv, h)) ladder = 2'd3;",
-     "      if (ladder_ok(dev3, scale, dstv, h)) ladder = 2'd2;"),
-    ("M06 the strict ladder is not strict",
-     "    s0 = ladder(d_dev1, d_dev2, d_dev3, cam0_scale_i, sq_res0[31:0], 16'd256);",
-     "    s0 = ladder(d_dev1, d_dev2, d_dev3, cam0_scale_i, sq_res0[31:0], hyst_eff);"),
+     "              if (!ev_cam) lad_s0 <= ev_rung;",
+     "              if (!ev_cam) lad_s0 <= (lad_s0 == 2'd0) ? ev_rung : lad_s0;"),
+    # NEW CLASS, and only reachable because the block sequences: a rung can now
+    # silently borrow another rung's operand on its way through the shared
+    # multiplier. This is the terrain twin of the geom pilot's M20/M21/M22.
+    # First spelled as "rung 3 reads dev2", which leaves d_dev3 unread and fails
+    # -Wall. Swapping two rungs is the same defect and keeps every signal used.
+    ("M05 two rungs swap their deviations",
+     "      2'd1: ev_dev = d_dev1;\n      2'd2: ev_dev = d_dev2;",
+     "      2'd1: ev_dev = d_dev2;\n      2'd2: ev_dev = d_dev1;"),
+    ("M06 the strict ladder's h is 512, not 256",
+     "  wire [48:0] ev_rhs_str = {9'b0, ev_dst, 8'd0};",
+     "  wire [48:0] ev_rhs_str = {8'b0, ev_dst, 9'd0};"),
 
     # ---- the square root -------------------------------------------------
     ("M07 the root runs one step short",
@@ -79,22 +83,23 @@ MUTANTS = [
      "    dsq_sat = (s[65:64] != 2'b00) ? 64'hFFFF_FFFF_FFFF_FFFF : s[63:0];",
      "    dsq_sat = (s[65:64] != 2'b00) ? 64'hFFFF_FFFF_FFFF_FFFE : s[63:0];"),
     # M12 was first written as "drop the y term", which leaves cam0_y_i unused
-    # and fails -Wall. Transposing the two axes is the same class of defect --
-    # and is the distance-side twin of M27's neighbour transposition.
-    ("M12 camera 0's x and y axes are transposed",
-     "    dsq0 = dsq_sat(sq66(diff33(sp_cx_i, cam0_x_i)) + sq66(diff33(sp_cy_i, cam0_y_i)) +",
-     "    dsq0 = dsq_sat(sq66(diff33(sp_cx_i, cam0_y_i)) + sq66(diff33(sp_cy_i, cam0_x_i)) +"),
+    # and fails -Wall; then as an axis transposition on the parallel sum. The sum
+    # is now a six-step schedule, so the same defect is a step that reaches for
+    # the wrong coordinate -- which is the sequencer's own failure mode.
+    ("M12 a squaring step takes the wrong coordinate",
+     "      3'd0: begin\n        sq_c = d_cx;\n        sq_e = cam0_x_i;\n      end",
+     "      3'd0: begin\n        sq_c = d_cy;\n        sq_e = cam0_x_i;\n      end"),
     ("M13 the coordinate difference is formed unsigned",
-     "    diff33 = $signed({a[31], a}) - $signed({b[31], b});",
-     "    diff33 = $signed({1'b0, a}) - $signed({1'b0, b});"),
+     "      d = $signed({a[31], a}) - $signed({b[31], b});",
+     "      d = $signed({1'b0, a}) - $signed({1'b0, b});"),
 
     # ---- the two cameras -------------------------------------------------
     ("M14 the cameras take the coarser strict decision",
-     "      t_strict  = (s0 < s1) ? s0 : s1;",
-     "      t_strict  = (s0 > s1) ? s0 : s1;"),
+     "      t_strict  = (lad_s0 < lad_s1) ? lad_s0 : lad_s1;",
+     "      t_strict  = (lad_s0 > lad_s1) ? lad_s0 : lad_s1;"),
     ("M15 the cameras take the coarser relaxed decision",
-     "      t_relaxed = (r0 < r1) ? r0 : r1;",
-     "      t_relaxed = (r0 > r1) ? r0 : r1;"),
+     "      t_relaxed = (lad_r0 < lad_r1) ? lad_r0 : lad_r1;",
+     "      t_relaxed = (lad_r0 > lad_r1) ? lad_r0 : lad_r1;"),
     ("M16 with no camera enabled the level goes coarsest",
      "      t_strict  = d_level;\n      t_relaxed = d_level;",
      "      t_strict  = 2'd3;\n      t_relaxed = 2'd3;"),
@@ -164,6 +169,29 @@ MUTANTS = [
     ("M34 ox and oz are swapped",
      "            out_ox_o      <= {1'b0, e_i, 3'b000};",
      "            out_ox_o      <= {1'b0, e_j, 3'b000};"),
+
+    # ---- the sequencer itself --------------------------------------------
+    # SIX MUTANTS THAT DID NOT EXIST BEFORE THE RESTRUCTURING, because before it
+    # there was no schedule to get wrong. A sweep that did not grow with the
+    # change would report the same score for strictly less coverage.
+    ("M35 a strict ladder answer lands in the relaxed flop",
+     "              if (!ev_cam) lad_s0 <= ev_rung;\n              else lad_s1 <= ev_rung;",
+     "              if (!ev_cam) lad_r0 <= ev_rung;\n              else lad_s1 <= ev_rung;"),
+    ("M36 the squaring phase ends one step early",
+     "          end else if (mul_step == 3'd5) begin",
+     "          end else if (mul_step == 3'd4) begin"),
+    ("M37 the accumulator is not cleared between the two eyes",
+     "            sq_num0 <= dsq_sat(acc_next);\n            acc     <= '0;",
+     "            sq_num0 <= dsq_sat(acc_next);\n            acc     <= acc_next;"),
+    ("M38 the evaluation phase ends one step early",
+     "          if (mul_step == 3'd7) state <= StDecide;",
+     "          if (mul_step == 3'd6) state <= StDecide;"),
+    ("M39 the relaxed right-hand side is filed under the wrong camera",
+     "            if (!ev_cam) rhs_rel0 <= mul_p[48:0];\n            else rhs_rel1 <= mul_p[48:0];",
+     "            if (!ev_cam) rhs_rel1 <= mul_p[48:0];\n            else rhs_rel0 <= mul_p[48:0];"),
+    ("M40 the ladder starts at level 1, not level 0",
+     "            lad_s0 <= 2'd0;",
+     "            lad_s0 <= 2'd1;"),
 ]
 
 

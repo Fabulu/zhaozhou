@@ -92,6 +92,42 @@
 # for `<` versus `<=`: an exact-equality event has to be built, not sampled.
 #
 # EXPECTED: two survivors, M11 and M18, both proved above.
+#
+# ---------------------------------------------------------------------------
+# WHAT SEQUENCING CHANGED HERE, 2026-08-23
+# ---------------------------------------------------------------------------
+# The block's thirty products now walk through ONE 32x32 unsigned multiplier
+# over fourteen clocks instead of standing side by side (28 DSPs -> 3). The
+# sweep grew 34 -> 40 with the code, because a sweep that did not grow would
+# report the same score for strictly less coverage.
+#
+# TEN MUTANTS MOVED, and where they landed says what the restructuring did:
+#   M01  the twelve ladder comparisons are now TWO, so `<=` lands on the one
+#        shared strict comparison
+#   M02  `dev` reaches the multiplier through an OPERAND MUX, not an expression
+#   M03  the strict right-hand side is a SHIFT now, so an off-by-one there is a
+#        mutation of `{9'b0, ev_dst, 8'd0}` rather than of a product
+#   M04  "coarsest wins" is now "the LAST passing rung to be written wins",
+#        because the rungs are walked 1, 2, 3 in TIME -- so keeping the first
+#        write is exactly the finest-wins defect, re-spelled
+#   M05  re-aimed onto the deviation mux: a rung can now silently borrow
+#        another rung's operand, which is the sequencer's own failure mode and
+#        the terrain twin of the geom pilot's M20/M21/M22
+#   M06  the strict `h` is a shift amount, not an argument
+#   M12  the squared distance is a six-step schedule, so "wrong axis" became
+#        "a step reaches for the wrong coordinate"
+#   M13  follows `diff33` into `absdiff32`
+#   M14/M15  the ladder answers are REGISTERS now, not combinational wires
+#
+# SIX ARE NEW, because before the restructuring there was no schedule to get
+# wrong: a ladder answer latched into the wrong flop (M35), the squaring phase
+# ending a step early (M36), the accumulator not cleared between the two eyes
+# (M37), the evaluation phase ending a step early (M38), a relaxed right-hand
+# side filed under the wrong camera (M39), and the ladder starting at level 1
+# instead of level 0 (M40). ALL SIX ARE CAUGHT.
+#
+# SCORE AFTER: attempted=40 accounted=40 caught=38, survivors M11 and M18 --
+# the same two, and only those two.
 # ---------------------------------------------------------------------------
 set -u
 
