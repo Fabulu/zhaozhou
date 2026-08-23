@@ -970,6 +970,61 @@ at the new commit lands. That guard has now saved a row twice today
 **The post-fix Fmax remains the one open number**, with STA running directly
 against the fitted netlist rather than repeating a 100-minute map+fit.
 
+### 17:30 - Widescreen RULED, and the demand numbers delegated  (`b9bc835`)
+
+Fabian: *"I confirm the widescreen, pick the better one we figured out."* So the
+native square-pixel path is the ruling, not anamorphic alone:
+
+* **`VIDEO_WIDE`** — stored/tiled 384×224 (24×14 = 336 exact tiles, 172,032 B),
+  viewport and raster 384×216 centred with 4-row guards, `displayed y -> stored
+  y + 4`, 12 bursts/row unchanged, presented at exact 5× to 1920×1080.
+* **`WIDE_DUO`** — two 192×144 views, exactly 4:3, exactly 12×9 tiles, bands
+  manufactured at scanout as Duo already does. 216 tiles and 1,728 bursts/frame,
+  **cheaper than every existing mode.**
+* Anamorphic 384×240 kept as an explicitly **non-shipping** fallback: 5×
+  horizontal but 4.5× vertical at 1080p, so its scanlines cannot be uniform.
+* 416×234 rejected outright — it would silently corrupt the binner's tile RAM.
+
+Not scheduled. The DSP and timing campaign continues.
+
+### 17:35 - The three demand numbers: delegated to me, with a source
+
+Rather than answer the docket questions directly, Fabian pointed at the evidence:
+
+> *"Orient yourself on sacrifice. The game's installed on Steam, the source
+> almost equivalent sacengine is also there... Find what resources we need. We
+> look flashier, bigger, crazier, but our resolution is shit so we probably
+> actually need less of everything. Follow your best guess."*
+
+Both located: `C:\programmieren\sacengine` (a D reimplementation of the Shiny
+2000 engine, which parses the original formats) and the retail install at
+`Steam\steamapps\common\Sacrifice`.
+
+**This is the right way to answer these.** The demand figures are not arbitrary
+policy — Zhaozhou's visual target *is* Sacrifice, so the original game's asset
+scale is real evidence rather than a guess. It also means the answer is
+*derived*, and must be labelled as derived rather than ruled.
+
+The shape of the derivation, stated before the data arrives so it cannot be
+fitted to it:
+
+* **fewer pixels** — 92,160 (Z60) or 82,944 (WIDE) against Sacrifice's original
+  resolution, so anything that scales with *fragments* goes **down**:
+  `TEXTURE.TMU` samples/frame above all;
+* **more objects** — the brief is flashier, bigger, crazier, so anything scaling
+  with *entities* goes **up**: particles, simultaneous spells, unit counts;
+* `SURFACE.STAMP` and `TERRAIN.NORMALS` sit in between and depend on facts
+  nobody here knows yet — whether Sacrifice stamps persistent marks at all, and
+  whether normals are recomputed for the whole field or only deformed patches.
+
+A read-only survey is running against both trees. Its most valuable single
+answer is **11**: does Sacrifice stamp persistent scorch marks/craters onto the
+terrain, at what texel size, and how many at once — because `SURFACE.STAMP` is
+28 DSPs sized against a "1 texel per clock" placeholder and nobody has ever
+known what rate it must sustain.
+
+**Working autonomously from here.** Fabian has left.
+
 ---
 
 ## Subagent Spawns
