@@ -679,3 +679,108 @@ The MUL_LANES = 1 fit is in the fitter. An earlier attempt at it was killed
 mid-placement and had to be restarted; the machine has been carrying two
 Quartus fits and a full 1,592-target rebuild concurrently, and a constrained
 fit of this block takes ~50 minutes alone.
+
+---
+
+## 13:03 — FMAX DIAGNOSED. The wire is named, and the experiment eliminated
+## three of the four candidates before the report was even opened.
+
+### The frontier's second point, which is also the experiment
+
+    tools/quartus/run_block_fit.ps1 -Module zhao_geom_skin `
+      -ExtraSources fpga/rtl/geometry/zhao_geom_skin.sv `
+      -TopParameters MUL_LANES=1 -RowLabel "@MUL_LANES=1" -KeepWorkspace
+
+Constrained (`Info (332111): 10.000 clk`, saved as
+`fit-evidence/lanes1_constraint.txt`), sourceCommit `e7591e8`, 833.5 s.
+
+| | MUL_LANES = 3 | MUL_LANES = 1 |
+| --- | ---: | ---: |
+| DSP blocks | 9 | **3** |
+| ALMs | 2,187 | 1,530 |
+| registers | 1,448 | 1,449 |
+| **Fmax** | **58.45 MHz** | **56.11 MHz** |
+
+**`-TopParameters` demonstrably took**: 9 DSPs against 3 is the parameter doing
+what it says. That is the QUARTUS_GOTCHAS §3 check on my own new tool flag — a
+directive that changes nothing is the failure mode, and this one changed the
+number it was supposed to change.
+
+### THE EXPERIMENT'S VERDICT: candidate B is exonerated
+
+`MUL_LANES = 1` leaves the blend/rescale path bit-identical and collapses the
+accumulator's reduction from **three 65-bit adds to one**. If the accumulator
+reduction were the critical path, Fmax would have jumped.
+
+**It did not. 58.45 -> 56.11 MHz, i.e. no improvement at all** (slightly worse,
+which is placement noise on a smaller design).
+
+**The product reduction into the accumulator is NOT the problem.** So is the
+"use the DSP's own output register" advice — already implemented and packed.
+
+### THE WIRE
+
+    from   br[1]                the blend-walk ROW COUNTER, bit 1
+    to     o_y_o[14]~reg0       the output register for row 1
+           10 logic levels
+           Data Delay          17.639 ns   against a 10.000 ns period
+           Clock skew          -0.124 ns
+           Data arrival        23.820 / required 15.997
+           Slack               -7.823  VIOLATED
+
+    Data path split:   Cell   9.452 ns  (54%, 62 cells)
+                       IC     8.187 ns  (46%, 61 hops)
+
+**All 200 worst setup paths end at `o_y_o[*]~reg0`.** One endpoint family, not
+twenty separate problems. Full report saved as
+`fit-evidence/lanes1_worst_paths.txt`.
+
+Two more candidates die on this evidence:
+
+- **not a virtual-pin artifact** — the path runs from a real internal control
+  register to a real internal output register; no virtual-pin node appears at
+  either end, so the characterisation wrapper is not needed;
+- **not routing pathology** — 54% cell against 46% interconnect is what
+  genuine logic depth looks like. It is arithmetic, and it must be cut
+  structurally rather than tuned with fitter effort.
+
+### And the path starts at the ROW COUNTER, which is more specific than expected
+
+`br` selects which accumulator pair feeds the entire blend chain, so the 6:1
+accumulator mux sits at the HEAD of the 17.6 ns chain:
+
+    br -> br_a/br_b -> acc[] 6:1 mux -> 66-bit (pa - pb)
+       -> six-term 73-bit shift-add tree (3 levels)
+       -> + (pb << 6)  -> + 2^21 rounding  -> two 73-bit saturation compares
+       -> o_y_o
+
+That is the whole 17.639 ns, in one clock, and it is why the block sits at
+58 MHz while `zhao_field_seq` at 8.59 MHz was a 78-level unrolled chain. This is
+a different regime: ten levels of very wide carry propagation.
+
+### What the fix has to be, and the arithmetic that says it will work
+
+17.639 ns cut into three stages is ~5.9 ns each. The agreed shape:
+
+- **B0** registers `pa`, `pb`, `pa - pb`, `w0`, `rigid` and the row tag —
+  which takes `br` and the accumulator mux OUT of the long path entirely;
+- **B1** registers the exact rounded numerator as ONE balanced 8-term tree:
+  six shifted difference terms, `pb << 6`, and the `2^21` rounding constant —
+  still exact, still a single rounding;
+- **B2** replaces the two 73-bit magnitude comparators with a sign-extension
+  test, since the shift is constant per path:
+  `(&num[72:53]) || (~|num[72:53])` selects `num[53:22]`, else saturate by
+  `num[72]`; rigid uses `[72:47]` / `[47:16]`. Reduction trees instead of wide
+  comparators.
+
+II goes 10 -> 12. **The acceptance table says 12 needs 86.4 MHz**, and three
+stages of ~5.9 ns should clear 100. At 100 MHz and II=12 that is 138,888
+vertices/frame against the 120,000 demand — and 8.33 M vertices/s against
+today's 5.845 M.
+
+**NOT DONE IN THIS RUN.** The diagnosis is complete and the fix is specified;
+implementing it is an RTL change across three elaborations plus a re-run of the
+28-mutant sweep (whose anchors sit on the lines being rewritten) plus two
+re-fits. Recorded as the next step rather than started at the end of a long
+session, because a large rewrite verified in a hurry is exactly how this
+project's build-state failures have happened.
