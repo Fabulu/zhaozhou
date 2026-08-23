@@ -776,9 +776,8 @@ void test_counters_and_throughput(Vzhao_surface_stamp& dut) {
       "surface_stamp_directed: full-cover stamp took %d cycles for 4,096 texels "
       "(%.2f clk/texel, budget %d; %.0f texels/frame at 100 MHz)\n",
       cyc, cyc / 4096.0, kBudgetPerTexel, kClocksPerFrame / (cyc / 4096.0));
-  check(cyc > 0 && cyc <= 4096 * kBudgetPerTexel,
-        "the derived 20,000 texel/frame demand is met", 4096 * kBudgetPerTexel,
-        static_cast<uint64_t>(cyc));
+  check(cyc > 0 && cyc <= 4096 * kBudgetPerTexel, "the derived 20,000 texel/frame demand is met",
+        4096 * kBudgetPerTexel, static_cast<uint64_t>(cyc));
 
   // And the SHAPE of the sequence, so a regression in the geometry engine shows
   // up as more than "still under budget". The squarer retires ZHAO_SQ_RADIX
