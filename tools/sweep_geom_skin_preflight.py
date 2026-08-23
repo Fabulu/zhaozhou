@@ -25,7 +25,26 @@ LANES = (1, 3, 6)
 sh = io.open(SWEEP, encoding="utf-8", newline="").read()
 gold = io.open(RTL, encoding="utf-8", newline="").read()
 body = sh[sh.index("MUTS=("):sh.index("\nexpected=")]
-ents = re.findall(r'^"(.*?)"$', body, re.M | re.S)
+ents = re.findall(r'^"(.*?)"\r?$', body, re.M | re.S)
+
+# A GUARD THAT LINTS NOTHING MUST FAIL, NOT PASS.
+#
+# Found 2026-08-23 the first time this sweep ran in a git worktree, as
+# docs/OWNER_DOCKET.md requires. A fresh checkout gave the sweep CRLF endings,
+# `^"(.*?)"$` matched nothing because the character before each newline was
+# \r rather than the closing quote, and the preflight printed
+# "linted 0 mutants, 0 do not build" and exited 0. A clean pass over an empty
+# set is the most flattering possible failure, and it is the same shape as
+# every other entry in reports/QUARTUS_GOTCHAS.md: a directive accepted and
+# silently ignored, with no symptom except a number that did not move.
+#
+# The regex now tolerates CRLF and .gitattributes pins *.sh to LF, so this
+# check should never fire. It exists because both of those are the kind of
+# thing that gets edited.
+if len(ents) < 2:
+    sys.exit("PREFLIGHT ABORT: parsed %d mutants out of %s. The mutant table did "
+             "not parse -- check line endings. Scoring an empty sweep is worse "
+             "than not running one." % (len(ents), SWEEP))
 vr = os.environ["VERILATOR_ROOT"]
 bad = []
 for e in ents:

@@ -220,9 +220,22 @@ module zhao_geom_skin #(
   // uses refuses to build. `$error` was not used because Quartus 17.0.2's
   // support for elaboration system tasks is not something to discover during
   // a twenty-minute fit.
-  if (!(MUL_LANES == 1 || MUL_LANES == 3 || MUL_LANES == 6)) begin : g_illegal
-    ZHAO_GEOM_SKIN_MUL_LANES_MUST_BE_1_3_OR_6 u_static_assert ();
-  end
+  //
+  // THE `generate` KEYWORDS ARE NOT OPTIONAL. Verilator, slang and the LRM all
+  // accept a bare module-scope `if`; Quartus 17.0.2 does not, and reports it as
+  // a SYNTAX error pointing at the `if`:
+  //
+  //   Error (10170): Verilog HDL syntax error at zhao_geom_skin.sv(223) near
+  //                  text: "if";  expecting "endmodule"
+  //
+  // MEASURED 2026-08-23: the first fit of this block died in analysis and
+  // synthesis at 44 s for exactly this, having linted clean at all three
+  // MUL_LANES settings first. See QUARTUS_GOTCHAS §8.
+  generate
+    if (!(MUL_LANES == 1 || MUL_LANES == 3 || MUL_LANES == 6)) begin : g_illegal
+      ZHAO_GEOM_SKIN_MUL_LANES_MUST_BE_1_3_OR_6 u_static_assert ();
+    end
+  endgenerate
 
   // ---- round-half-up shift then saturate, qformats §3/§4 ------------------
   // Round-half-up on a NEGATIVE value is the trap: adding the half and shifting

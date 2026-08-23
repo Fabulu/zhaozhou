@@ -46,6 +46,28 @@ fpga/rtl/generated/** text eol=lf
 spec/generated/** text eol=lf
 tests/fuzz/*.ts text eol=lf
 
+# SHELL SCRIPTS MUST CHECK OUT WITH LF, AND THIS IS NOT A STYLE PREFERENCE.
+#
+# Found 2026-08-23 the first time a mutation sweep was run in a git worktree, as
+# docs/OWNER_DOCKET.md requires them to be. A fresh checkout gave
+# tools/sweep_*.sh CRLF endings, and the effect was SILENT rather than loud:
+#
+#   * the preflight parses the mutant table with `^"(.*?)"$` in MULTILINE mode,
+#     and with CRLF the character before each newline is , not the closing
+#     quote. It matched nothing and reported "linted 0 mutants, 0 do not build"
+#     -- a clean pass over an empty set;
+#   * bash reading `#!/usr/bin/env bash` and CRLF-terminated array entries
+#     carries the  into every anchor, so no anchor can ever match its file.
+#
+# EVERY sweep in tools/ was affected, not just the new one. They had only ever
+# been run in the tree they were authored in, where the working copy was already
+# LF, so nothing had exercised a checkout of them.
+#
+# ENFORCED-BY: this rule, plus the preflight's own refusal to run on an empty
+# mutant table -- a guard that lints nothing must fail, not pass.
+*.sh text eol=lf
+tools/*.py text eol=lf
+
 # Committed binary evidence: never touch.
 *.bin -text
 *.zcap -text

@@ -171,6 +171,32 @@ version of this section correctly refused to invent one.
 | 3 | 166,666 | 1.39x |
 | 6 | 208,333 | 1.74x |
 
+### The verdicts do not depend on which clock number you believe
+
+`gpu_clk` is constrained at 100 MHz by the SDC, the composed machine currently
+measures about **95.5 MHz**, and the owner's recorded target is **120 MHz**
+(`docs/OWNER_DOCKET.md`). All three are in play, so the table above would be a
+weak argument if it only held at one of them:
+
+| sustained vertices/frame | 95.5 MHz | 100 MHz | 120 MHz |
+| --- | ---: | ---: | ---: |
+| `MUL_LANES = 1` (22 clk) | 72,348 | 75,757 | 90,909 |
+| `MUL_LANES = 3` (10 clk) | **159,166** | **166,666** | **200,000** |
+| `MUL_LANES = 6` (8 clk) | 198,958 | 208,333 | 250,000 |
+
+**`MUL_LANES = 3` clears 120,000 at every one of them and `MUL_LANES = 1`
+fails at every one of them.** The frontier's verdicts are a property of the
+architecture, not of an assumption about the clock. The directed test asserts
+against the 100 MHz figure because that is what the SDC constrains and what
+every fit is measured against; at 95.5 MHz the margin is 1.33x rather than
+1.39x, which changes nothing.
+
+The owner's own estimate for this block was "rigid ~4 clocks, weighted ~10-11".
+The weighted number landed at **10**. Rigid landed at **7**, not 4: three of
+those clocks are the registered multiplier lane's latency plus the blend walk,
+and they are the price of putting the DSP's own pipeline registers to work
+rather than a combinational multiplier in front of an output register.
+
 `MUL_LANES = 3` is the intended setting. `MUL_LANES = 1` is kept, built and
 differentiated **because it fails**: a frontier with no failing end does not
 show where the wall is, and section 8 of the directed test asserts that this

@@ -236,6 +236,10 @@ try {
         $rowModule = if ($RowLabel) { "$mod$RowLabel" } else { $mod }
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
         if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
+        # A parameter VARIANT is a second measurement of the SAME block, not a
+        # second block. Marked so a census that totals DSPs by row cannot count
+        # one block's frontier three times.
+        if ($RowLabel) { $row.variantOf = $mod }
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $ok = $true
 
@@ -330,6 +334,7 @@ try {
             'Rows carry their own sourceCommit. A row measured at an older commit describes THAT code, not HEAD. Check per-row provenance before totalling anything.',
             'This census does not cover the design: 42 of the repository''s 88 RTL modules, and several of those rows carry no data. See reports/DSP_Audit_2026-08-21.md.',
             'The composed fit is NOT blocked on machine memory. The 28.4 GB figure once recorded here was a wildcard virtual-pin bug fixed in d1a2b8a; composed synthesis completes in 42:33 at a 6.2 GB peak (f3506b6). It IS blocked on zhao_cmd_dma, which times out: 156 dependent CRC steps in one cycle (reports/REMAINING_BLOCKERS.md).',
+            'Rows carrying a variantOf field are alternate PARAMETER SETTINGS of the row they name, measured to expose a resource frontier. They are the same block. EXCLUDE them from any total.',
             'Nothing here is a programmed device. This is not hardware proof.'
         )
     }
