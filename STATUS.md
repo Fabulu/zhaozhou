@@ -5,6 +5,95 @@ at the top.*
 
 ---
 
+## 2026-08-23 — I told you a block was broken. It wasn't. And the plan is now much better than mine.
+
+### The correction first
+
+I reported that sequencing the terrain detail-level block had **broken a fairness
+guarantee** — the rule that one player's view degrading must never remove
+geometry from the other player's. I said the composed test caught it, and I said
+I had proved it by putting the old version back and watching the test pass.
+
+**That proof was wrong, and the block was never broken.**
+
+Putting the old file back forced a rebuild. The rebuild regenerated the
+simulation model from clean source — and it *also* wiped mutant-corrupted files
+that a testing tool had left lying around in test targets it never cleaned up.
+So the test passing tracked **the rebuild**, not the file I changed. I changed
+two things at once and blamed one of them.
+
+Rebuilt properly, with every affected target wiped first, the sequenced version
+passes all 72 checks and produces a trace **identical to the old block, number
+for number**. The agent found this before I did, and it re-measured rather than
+argued.
+
+So: **28 multipliers down to 3 stands**, no repair was needed, and the block was
+correct the whole time. What was actually broken was the test tooling, which is
+now fixed and refuses to run unless it cleans every place the block is used.
+
+I have committed the correction rather than quietly editing the record.
+
+### The plan is no longer mine, and it is better
+
+Your collaborator's brief is now the ruling. Three things in it change what I was
+doing:
+
+**A rule instead of improvisation.** I was fixing blocks one at a time by
+instinct. The rule is: *give each subsystem the smallest local multiplier farm
+its sustained rate actually needs, and share only what is mutually exclusive
+inside that subsystem.* No console-wide sharing — terrain, texture, Field and
+creatures genuinely run at the same time. And the sentence that reorders
+everything: **multipliers are justified by what a frame actually demands, not by
+preserving one-per-clock speeds that nobody ever measured a need for.**
+
+**A number I said I could not invent.** You have now ruled it:
+
+> **Zhaozhou v1 guarantees about 120,000 skinned creature vertices per frame at
+> 60 Hz, and the Measure degrades before exceeding that.**
+
+That turns the skinning block from "possibly justified" into a costed decision.
+It currently spends 64% of the chip's multipliers chasing a speed its own
+contract admits was never backed by a requirement. A rebuilt engine hits roughly
+150,000 per frame — real headroom against your 120,000. And if that proves low
+later, we build **two** of them; two small engines still cost far less than
+today's single huge one.
+
+**One thing I had backwards.** I had written off the terrain projector as
+untouchable because its speed is genuinely spent. The better reading: it projects
+the *corners of triangles*, so a patch does **6,144 projections for 1,089
+actual points** — the same points over and over. Remember each point instead, and
+a *slower* three-step projector finishes a patch in **half** the time while using
+a third of the multipliers. Doing what I planned — making it slower without the
+memory — would have been strictly worse.
+
+### Targets
+
+| part | multipliers now | target |
+| --- | ---: | ---: |
+| Field IR engine | 79 | 8–12 |
+| creature skinning | 72 | 12–18 |
+| terrain projector | 33 | 12–18 |
+| texture unit | 28 | 8–12 |
+| surface stamper | 28 | 4–6 |
+| terrain normals | 18 | ~6 |
+| creature culling | 15 | 4–6 |
+| detail level (done) | **6** | was 18 |
+| terrain detail (done) | **3** | was 28 |
+
+If they land, the measured part of the design sits near **90–105 against 112** —
+actual headroom instead of scraping the ceiling.
+
+The Field engine is being rebuilt now, and it is the biggest single item on the
+list.
+
+### And a process change you should know about
+
+Testing tools now run in their **own private copy of the project**. The mess
+above happened because two things shared one build directory. That is no longer
+allowed.
+
+---
+
 ## 2026-08-23 — I have been calling the Field IR engine "done", and it had never been built
 
 ### What I found
