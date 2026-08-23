@@ -1,0 +1,46 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_surface_stamp.sv        test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+   zhao_surface_sq.sv           test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+   zhao_surface_blend.sv        test_field_stamp_modes test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
+linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+== establishing the pristine baseline
+   pristine models 1fc7e04464fc/1fc7e04464fc/3f149747542e, 6 lanes green
+  S01 the magnitude negation drops its +1  caught
+  S02 the sign is read from the wrong bit  *** SURVIVED ***
+  S03 the addend shifts by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught
+  S04 the multiplier bits shift by one regardless of radix (EQUIVALENT at SQ_RADIX 1)  caught
+  S05 each chain link's place value is one too high  *** SURVIVED ***
+  S06 each chain link tests the neighbouring multiplier bit  caught
+  S07 the square runs one step short, dropping the TOP magnitude bit  caught
+  S08 the LOW magnitude bit is dropped  caught
+  S09 the accumulator is not cleared, so squares accumulate across calls  caught
+  S10 vld_o is asserted one step early  caught
+  S11 a fresh start does not clear the previous result's valid  caught
+  S12 the addend is loaded pre-doubled  *** SURVIVED ***
+  T01 the texel-centre accumulator steps by span, not 2*span  caught
+  T02 the row accumulator steps by span, not 2*span  caught
+  T03 the row reset seeds numx at zero, making (2i+1) into 2i  caught
+  T04 the row wraps one texel early  caught
+  T05 the z seed is taken from the x span  caught
+  T06 the coverage sum becomes a difference  caught
+  T07 the geometry answer is taken without waiting for the squarer  caught
+  T08 the squarer's dx and dz operands are swapped  caught
+  T09 the outer radius square lands in the inner register  caught
+  T10 the two radius operands are swapped, so the annulus inverts  caught
+  T11 dz^2 is dropped, collapsing the disc to a vertical band  caught
+  T12 the write texel index is transposed  caught
+  T13 stamp_results transposes before and after, losing the delta TERRAIN.BAKE needs  caught
+  T14 the outer rim is made exclusive, clipping the edge texel  caught
+  T15 the cursor advances without the geometry  caught
+  T16 the sheet read fires without the geometry  caught
+  B01 decay-accumulate REPLACES instead of accumulating  caught
+  B02 ADD's saturation is removed  caught
+  B03 SUB's saturation is removed  caught
+  B04 decay-accumulate's saturation is removed (the RATIFIED path)  caught
+== restoring the pristine build
+----
+attempted=32 expected=32 accounted=32 caught=29
+SURVIVOR: S02 the sign is read from the wrong bit
+SURVIVOR: S05 each chain link's place value is one too high
+SURVIVOR: S12 the addend is loaded pre-doubled
+SWEEP-EXIT=0

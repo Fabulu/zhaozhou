@@ -453,6 +453,83 @@ reach, because a texel exactly on a rim is a measure-zero event):
 **107/107 directed checks pass** with the new case. Run 2 of the sweep, on the
 fixed suite, is where the final score comes from.
 
+### 2026-08-23 18:0x — MUTATION SWEEP, RUN 2 (detached): 32 / 32 / 29, no discards
+
+    linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
+    pristine models 1fc7e04464fc/1fc7e04464fc/3f149747542e, 6 lanes green
+    ...
+    attempted=32 expected=32 accounted=32 caught=29
+    SURVIVOR: S02 the sign is read from the wrong bit
+    SURVIVOR: S05 each chain link's place value is one too high
+    SURVIVOR: S12 the addend is loaded pre-doubled
+    SWEEP-EXIT=0
+
+**No mutant was discarded.** Every one re-elaborated (model-directory hash
+differed from pristine each time) and every one linked, and the worktree's RTL
+was restored byte-identically afterwards — checked, not assumed.
+
+**S06, S07 and S08 all caught**, which is `test_rim_exact_odd_leg` doing exactly
+what it was written for. And **S03 and S04 caught**, which is the frontier builds
+doing what *they* were written for: at `SQ_RADIX = 1` those two mutations are
+*textually the same expression* as the original, so no default-build test could
+ever distinguish them.
+
+### 2026-08-23 18:2x — the three survivors, and why they are not a comfortable result
+
+All three hide behind one structural fact rather than three separate accidents:
+
+    covered = !(d2 > r_outer2 || d2 < r_inner2)
+
+and `d2`, `r_outer2` and `r_inner2` **all come out of the same squarer
+instance**. A comparison is scale-invariant, so multiplying that module's output
+by any constant is invisible from the stamp. S05 and S12 both double it; S02
+reads a sign bit that is provably identical to the right one for every input the
+block can present.
+
+The arguments hold — `|dx| < 2³⁴` for any int32 input, and `2·d2 < 2⁶²` inside
+the stated domain so the doubling cannot wrap. But **three unobservable mutants
+is a smell, and the smell has a name**: the squarer was being checked only where
+its value had already been reduced to a boolean. That is exactly the mistake
+`zhao_surface_blend` was factored out of this block to avoid, repeated on the
+module that replaced the DSP farm.
+
+### 2026-08-23 18:4x — `surface_sq_directed`, and the three survivors die
+
+`tests/surface/surface_sq_directed.cpp` checks `sq_o` against the low 64 bits of
+the two's-complement product — which *is* the law, since the block used to
+compute `64'(dx) * 64'(dx)` and keep 64 bits. 104 values, each chosen against a
+way of being wrong:
+
+- the sign rails, including `−2³⁵`, where a naive signed negation returns a
+  *negative* magnitude and the true square (2⁷⁰) leaves the 64-bit lane entirely
+  — both forms must give 0;
+- **every** single-bit magnitude, positive and negative: one set bit means the
+  result is a single partial product, which is the only family that can tell one
+  chain link's place value from its neighbour's (S05);
+- the bits the stamp cannot reach but the module must still get right (S02);
+- the operand ranges the stamp does present, including `r_inner` at 2³²;
+- odd magnitudes at scale, so the parity accident is checked at its source.
+
+Plus the handshake shape, the hold behaviour and reset. Built at `SQ_RADIX` 1
+and 4.
+
+**One check failed on the first run, and it was mine, not the RTL's**: I asserted
+`vld_o` arrives `Steps + 1` ticks after the start *tick*, when the helper counts
+`Steps`. The two conventions differ by one because the last accumulate registers
+at the end of the step cycle and is readable from the next. **104/104 arithmetic
+values passed on that same first run**, so the squarer was right and the
+assertion was wrong. Fixed the assertion and wrote the convention into the
+comment, so nobody later "fixes" the RTL to reconcile them.
+
+**Then re-scored the three survivors**, using the filtered mode built for this:
+
+    ZHAO_SWEEP_ONLY="S02 S05 S12"
+      S02 caught · S05 caught · S12 caught
+    attempted=3 expected=3 accounted=3 caught=3 [FILTERED -- NOT a sweep score]
+
+**All three now fail.** A full sweep was then re-run end to end so the final
+number is one run rather than a reconciliation of two.
+
 ---
 
 ## Subagent Spawns

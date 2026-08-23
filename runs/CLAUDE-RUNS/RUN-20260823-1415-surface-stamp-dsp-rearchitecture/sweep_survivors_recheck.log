@@ -4,3 +4,15 @@
    zhao_surface_blend.sv        test_field_stamp_modes test_surface_stamp_chain test_surface_stamp_directed test_surface_stamp_radix2 test_surface_stamp_radix4 test_surface_stamp_random
 linted 32 mutants at SQ_RADIX (1, 2, 4), 0 do not build
 == establishing the pristine baseline
+   pristine models 1fc7e04464fc/603d48fba2cf/3f149747542e, 8 lanes green
+########################################################################
+## FILTERED RUN — 3 of 32 mutants: S02 S05 S12
+## THIS IS NOT A SWEEP SCORE. It confirms a fix on named mutants only.
+########################################################################
+  S02 the sign is read from the wrong bit  caught
+  S05 each chain link's place value is one too high  caught
+  S12 the addend is loaded pre-doubled  caught
+== restoring the pristine build
+----
+attempted=3 expected=3 accounted=3 caught=3 [FILTERED: S02 S05 S12 -- NOT a sweep score]
+SWEEP-EXIT=0
