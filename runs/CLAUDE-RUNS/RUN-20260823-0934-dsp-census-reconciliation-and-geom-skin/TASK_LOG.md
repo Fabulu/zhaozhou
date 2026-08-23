@@ -290,6 +290,55 @@ at the full derived depth of 172 was abandoned at k=114 after 2h20. **There is n
 version of this proof that runs unabstracted inside its own budget.** Recorded in
 `formal_runs.yml` as a measurement, not a claim.
 
+### 11:40 - `ctest -L fast` on merged main: 259 of 262
+
+Total 1,643 s against the clean rebuild. **No RTL failures anywhere** — every
+differential and every Verilator lint passes, including the whole Field engine
+after 79 -> 3 DSPs and the sequenced terrain and creature LOD ladders.
+
+Three failures:
+
+| test | verdict |
+| --- | --- |
+| `ledger_check` | **expected and correct** — the single V16 error, formal `pending` |
+| `cppcheck_check` | **a real test defect**, see below |
+| `format_check` | clang-format drift, mechanical |
+
+Both lint failures are in `tests/differential/field_seq_directed.cpp`, which my
+merge put on main before the Field agent had run the lane. That is my error, not
+the agent's.
+
+**The cppcheck finding is worth more than the lane it came from.**
+`zfield::Table` declares `uint8_t kind;  // 0 curve, 1 spline` (zfield.hpp:120).
+Line 1522 declares `zfield::Table tbl;`, fills `x`, `y` and `dy`, and **never
+sets `kind`** — then pushes it into `p.tables` at three sites (1535, 1642, 1836).
+
+The `kCases` list at 1505-1519 contains **CURVE, DCURVE and SPLINE sharing that
+one table.** So the per-opcode latency figures that block prints may be
+attributed to opcodes run against the wrong kind of table. It presumably passes
+because oracle and DUT read the same indeterminate byte and agree — which is
+precisely the shape of a test that looks green while proving less than it
+claims. Handed to the Field agent, which owns the file and has it open;
+editing it from here would only have caused a conflict.
+
+### 11:45 - Run tooling moved INTO the repo  (`2286e82`)
+
+Found while trying to archive this run: I had initialised it into the **wrong
+archive.** `init-run.ps1` and the templates lived at the workspace root, which
+is not a git repository, while the tracked archive is `zhaozhou/runs/CLAUDE-RUNS`.
+
+The README already named this as the reason runs were forgotten for four whole
+days, and prescribed copying each finished run into the repo — **and that copy
+step was itself getting forgotten.** The root copy was already missing
+`RUN-20260818-0341` and `RUN-20260821-1200`.
+
+So the tooling moved rather than the runs. `runs\CLAUDE-RUNS\init-run.ps1 <slug>`
+now creates the run directly in the tracked directory; the script resolves
+templates relative to its own parent, so `docs/coding_agents/claude_run_templates`
+was copied in to make that work. Verified end to end by generating a run and
+deleting it. `ARCHIVE.md` is tracked now too — the index of the archive had been
+the one file the archive could not protect.
+
 ---
 
 ## Subagent Spawns
