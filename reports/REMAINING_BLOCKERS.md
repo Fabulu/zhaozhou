@@ -1217,3 +1217,57 @@ instruction count). That proof would have to be re-established against a shared
 datapath. It is a bigger change than the LOD pilot, and it is the first
 sequencing target where the answer is genuinely unknown rather than merely
 unmeasured.
+
+---
+
+## 2026-08-23 — `zhao_geom_skin` is 72 DSPs, and the running total is 327
+
+Second never-fitted block measured, chosen because it applies a bone matrix per
+vertex and was therefore the likeliest remaining consumer:
+
+| | measured |
+| --- | ---: |
+| ALMs | 1,801 |
+| **DSPs** | **72** |
+| registers | 145 |
+| `rtlCleanAtHead` | true |
+
+**64% of the device for one block**, second only to the Field IR engine's 79.
+Running measured total: **327 DSPs against 112** — very nearly three times the
+device, and still only 41 of 91 modules measured.
+
+### But this one may be RATE-JUSTIFIED, unlike the others
+
+The rule the `geom_lod` pilot produced is that the question is not whether the
+products are independent but **whether the block's rate consumes the**
+**parallelism**. Every target so far failed that test obviously:
+`zhao_geom_lod` runs once per instance per frame; `zhao_terrain_lod` makes one
+decision per patch per frame; the Field IR sequencer retires one instruction
+every six clocks.
+
+**Skinning is different.** It transforms a vertex by a 3x4 matrix, and vertices
+are the highest-rate object in the geometry pipeline — thousands per frame per
+creature. A block that genuinely needs one vertex per clock has a real claim on
+its multipliers, and sequencing it would cost throughput the design actually
+spends. That is the same verdict `zhao_terrain_project` got.
+
+**So this is NOT queued for sequencing.** It is recorded as measured, with the
+rate question open, because answering it needs a vertex-rate budget that nobody
+has stated — how many skinned vertices per frame the machine must sustain. That
+is an owner-shaped number, not something to infer from the RTL.
+
+### Where the total actually stands
+
+| block | DSPs | sequencing verdict |
+| --- | ---: | --- |
+| `zhao_field_seq` (whole Field IR engine) | 79 | **biggest opportunity** — ten units, one instruction per six clocks |
+| `zhao_geom_skin` | 72 | rate may justify it — needs a vertex budget |
+| `zhao_terrain_project` | 33 | do NOT — its rate is already spent |
+| `zhao_terrain_lod` | 28 | in progress |
+| `zhao_surface_stamp` | 28 | partial |
+| `zhao_texture_tmu` | 28 | strong candidate |
+| `zhao_geom_lod` | 6 | **done: was 18** |
+
+Two of the three largest consumers may be legitimate. That materially changes
+the shape of the problem: it is not simply "sequence everything", and the
+remaining slack may not be enough on its own.
