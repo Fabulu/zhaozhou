@@ -1,6 +1,7 @@
 // zhao_texture_bilerp.sv — one bilinear channel: the four texels of a 2×2
 // footprint and the two unit8 sub-texel fractions → the filtered byte.
-// Instantiated 4× (red, green, blue, alpha) by zhao_texture_tmu.
+// Instantiated FILT_LANES× (1, 2 or 4) by zhao_texture_tmu, which
+// time-multiplexes the four channels (R, G, B, A) through them.
 //
 // ---------------------------------------------------------------------------
 // THIS ARITHMETIC IS A CHOICE, NOT A CITATION — and here is the derivation
@@ -26,14 +27,12 @@
 //   2. spec/qformats.md §3, the single-rounding law — "any multiply-then-add
 //      instruction computes the EXACT wide-integer expression and rounds
 //      EXACTLY ONCE via `rescale(·,k)` at the end. Double rounding is
-//      rejected." A bilinear filter is a multiply-then-add of four products,
-//      so the two-lerps-then-a-lerp formulation every textbook writes (three
-//      roundings) is REFUSED here by that law. One product sum, one rescale.
+//      rejected."
 //
 //   3. spec/qformats.md §4 — `rescale_u(x, k) = (x + (1 << (k−1))) >> k`,
 //      round-half-up. With Q16 weights that is `(Σ + 32768) >> 16`.
 //
-// so:
+// so THE LAW IS:
 //
 //     w00 = (256 − fu)·(256 − fv)      w10 = fu·(256 − fv)
 //     w01 = (256 − fu)·fv              w11 = fu·fv          ⎫ Σw = 65,536
@@ -44,25 +43,83 @@
 // `ia = 65536 − a` (reference/src/zrender/rast.cpp) — so this is that frozen
 // form widened from two taps to four, not a new numeric idea.
 //
+// ---------------------------------------------------------------------------
+// HOW IT IS COMPUTED: THE FACTORED FORM. 8 products → 3, BIT-IDENTICAL.
+// Rearchitected 2026-08-23 (RUN-20260823-1736). See WHY THIS IS NOT THE FORM
+// §3 REFUSES, immediately below — that distinction is the whole argument.
+// ---------------------------------------------------------------------------
+// The law above is a sum of four products of a texel by a weight, and each
+// weight is itself a product. Written literally that is EIGHT multiplies a
+// channel, and the fit measured what that costs: 7 DSP blocks for this module
+// alone and 28 for the TMU — 4 × 7 exactly, because the four instances' weight
+// products are identical and were NOT shared (recorded in the contract as a
+// prediction that failed). Factor the same integer expression instead:
+//
+//     A = t00·(256−fu) + t10·fu  =  (t00 << 8) + (t10 − t00)·fu    1 product
+//     B = t01·(256−fu) + t11·fu  =  (t01 << 8) + (t11 − t01)·fu    1 product
+//     S = A·(256−fv)   + B·fv    =  (A   << 8) + (B   − A  )·fv    1 product
+//     out = (S + 32768) >> 16                                      1 rescale
+//
+// Expanding S gives
+//     t00(256−fu)(256−fv) + t10·fu(256−fv) + t01(256−fu)fv + t11·fu·fv
+// which is the law TERM FOR TERM. Three products a channel, not eight, and
+// there are no weights left to duplicate — `w00` does not exist any more.
+//
+// WHY THIS IS NOT THE FORM spec/qformats.md §3 REFUSES. The single-rounding
+// law rejects "two lerps then a lerp" because the textbook writes each lerp as
+// a ROUNDED unit8 blend — three `rescale` calls, three roundings, bits lost at
+// every stage. Nothing above is rounded. `A` and `B` are EXACT integers in a
+// signed-18 lane (their true range is [0, 65,280]); `S` is the EXACT weighted
+// sum in a signed-27 lane; and there is EXACTLY ONE `(S + 32768) >> 16`, at
+// the end, on the whole sum. This is algebraic factoring of the wide-integer
+// expression §3 demands, not staged rounding of it. The two forms are the same
+// integer for every one of the 2^48 inputs this module can be handed, which is
+// what tests/formal/texture_bilerp.sby's P1 proves — see below.
+//
+// THE PROOF DID NOT HAVE TO MOVE, AND THAT IS WHY THIS FORM WAS CHOSEN OVER
+// HOISTING THE WEIGHTS. The contract sanctioned hoisting `w00..w11` up into
+// zhao_texture_tmu so the sharing would be explicit, while noting it "changes
+// a module's ports, its directed tests, its formal harness and this contract"
+// and transfers the partition-of-unity OBLIGATION out of the proved module.
+// Factoring removes 20 of the 32 products where hoisting would have removed
+// 12, and this module's PORTS ARE UNCHANGED — so texture_bilerp_fv.sv, which
+// derives the four weights ITSELF from free `fu_free`/`fv_free` and asserts
+// `out == law`, needed not one line changed and now proves the FACTORED form
+// equals the four-weight law over the whole input space.
+//
+// THE WIDTHS ARE THE HONEST ONES, and that is QUARTUS_GOTCHAS.md §5 applied
+// rather than quoted. The form this replaced declared its texel products as
+// `{17'd0, t00_i} * {8'd0, w00}` — a 25×25 multiply whose real need was 8×17.
+// §5 measured that exact class of slack costing zhao_geom_lod ten DSP blocks.
+// Here the operands are what the values are:
+//     (t10 − t00) ∈ [−255, 255]        signed 9
+//     fu, fv      ∈ [0, 255]           signed 9 (a unit8, sign bit clear)
+//     (B − A)     ∈ [−65,280, 65,280]  signed 18
+// so the three multiplies are 9×9, 9×9 and 18×9 — and no wider.
+//
 // THE ONE-LSB TRAPS, NAMED SO THE TESTS CAN AIM AT THEM
 //   · TRUNCATE instead of round. `Σ >> 16` biases every filtered texel
 //     downward by up to one LSB — invisible on a photo, fatal against a
 //     bit-identical oracle. The tie `t = (0, 255), fu = 128, fv = 0` gives
 //     Σ + 32768 = 8,388,608 exactly, so round gives 128 and truncate gives
 //     127. That vector is pinned by name in the directed test.
-//   · SWAPPED WEIGHTS. `w10` paired with `t01` is a transpose that is
-//     invisible whenever fu == fv and whenever the footprint is symmetric —
-//     which is most random vectors. The tests use asymmetric fractions.
-//   · A /255 SCALE. Weights are unit8 PRODUCTS, so the scale is 256·256, not
-//     255·255. The same /256-vs-/255 distinction zhao_raster_blend argues at
-//     length: this is a WEIGHTING, not a quantizer.
+//   · SWAPPED WEIGHTS. In this form the transpose appears as `t01`/`t10`
+//     exchanged between the two U-lerps, which is invisible whenever fu == fv
+//     and whenever the footprint is symmetric — most random vectors. The tests
+//     use asymmetric fractions.
+//   · A /255 SCALE. The scale is 256·256, not 255·255: `(t00 << 8)` and
+//     `(A << 8)` are the two factors of 256, and the fractions are unit8s.
+//     The same /256-vs-/255 distinction zhao_raster_blend argues at length —
+//     this is a WEIGHTING, not a quantizer.
 //
 // THE ENDPOINTS, stated because they surprise people. `fu = fv = 0` gives
-// w00 = 65,536 and the result is EXACTLY t00 — the filter is the identity at
-// a texel's own sample point, which is what makes bilinear and nearest agree
-// there (see the half-texel bias in zhao_texture_tmu). `fu = 255` is 255/256,
-// NOT 1.0, so t10 is never weighted fully — the identical unit8 endpoint
-// zhao_raster_blend documents for a = 255.
+// A = t00<<8, B = t01<<8, S = t00<<16 and out = t00 EXACTLY — the filter is
+// the identity at a texel's own sample point, which is what makes bilinear and
+// nearest agree there (see the half-texel bias in zhao_texture_tmu) and what
+// lets FILTER_NEAREST take THIS datapath rather than a parallel one. The
+// identity survives the refactor unchanged; it is formal property P3.
+// `fu = 255` is 255/256, NOT 1.0, so t10 is never weighted fully — the
+// identical unit8 endpoint zhao_raster_blend documents for a = 255.
 //
 // Conservative SystemVerilog subset only (charter §2); no dependencies.
 // Proved by tests/formal/texture_bilerp.sby.
@@ -78,37 +135,45 @@ module zhao_texture_bilerp (
   output logic [7:0] out_o
 );
 
-  // 256 − f reaches 256, so the complement is 9 bits. This is the whole
-  // reason Σw is exactly 65,536 rather than 65,025 + a fudge.
-  logic [8:0] iu, iv, fu, fv;
+  // ---- the two fractions as non-negative signed 9s -----------------------
+  // A unit8 is 0..255, so the sign bit is always clear. Nine bits, not eight,
+  // because the multiplicand beside it is a signed difference.
+  logic signed [8:0] fu_s, fv_s;
   always_comb begin
-    fu = {1'b0, fu_i};
-    fv = {1'b0, fv_i};
-    iu = 9'd256 - fu;
-    iv = 9'd256 - fv;
+    fu_s = $signed({1'b0, fu_i});
+    fv_s = $signed({1'b0, fv_i});
   end
 
-  // Weights: each ≤ 65,536, so 17 bits. Σ = (iu+fu)·(iv+fv) = 256·256 exactly.
-  logic [16:0] w00, w10, w01, w11;
+  // ---- the U lerps: A and B, EXACT, no rounding --------------------------
+  // du0 = t10 − t00 and du1 = t11 − t01 are in [−255, 255]: signed 9.
+  // The products are in [−65,025, 65,025] and the sums A, B in [0, 65,280].
+  logic signed [8:0]  du0, du1;
+  logic signed [17:0] pu0, pu1;   // 9×9
+  logic signed [17:0] a_s, b_s;
   always_comb begin
-    w00 = iu * iv;
-    w10 = fu * iv;
-    w01 = iu * fv;
-    w11 = fu * fv;
+    du0 = $signed({1'b0, t10_i}) - $signed({1'b0, t00_i});
+    du1 = $signed({1'b0, t11_i}) - $signed({1'b0, t01_i});
+    pu0 = du0 * fu_s;
+    pu1 = du1 * fu_s;
+    a_s = $signed({2'b00, t00_i, 8'd0}) + pu0;
+    b_s = $signed({2'b00, t01_i, 8'd0}) + pu1;
   end
 
-  // One exact wide sum, ONE rescale (spec/qformats.md §3/§4). Σ t·w ≤ 255 ·
-  // 65,536 = 16,711,680, so 25 bits carry the sum and its rounding term with
-  // room to spare; the shifted result cannot exceed 255 and needs no clamp —
-  // the weights are a partition of unity and the inputs are bytes.
-  logic [24:0] p00, p10, p01, p11, acc;
+  // ---- the V lerp: ONE exact wide sum, ONE rescale -----------------------
+  // dv = B − A is in [−65,280, 65,280]: signed 18, which is exactly the width
+  // a Cyclone V variable-precision block's 18×19 mode wants.
+  // pv = dv·fv is in ±16,646,400; S = (A<<8) + pv is the EXACT Σ t·w and lies
+  // in [0, 16,711,680], so S + 32768 ≤ 16,744,448 and the shifted result
+  // cannot exceed 255 — no clamp anywhere, because the weights are a partition
+  // of unity and the inputs are bytes (formal P2 and P4).
+  logic signed [17:0] dv;
+  logic signed [26:0] pv, a_ext, s_w;
   always_comb begin
-    p00 = {17'd0, t00_i} * {8'd0, w00};
-    p10 = {17'd0, t10_i} * {8'd0, w10};
-    p01 = {17'd0, t01_i} * {8'd0, w01};
-    p11 = {17'd0, t11_i} * {8'd0, w11};
-    acc = p00 + p10 + p01 + p11;
-    out_o = 8'((acc + 25'd32768) >> 16);
+    dv    = b_s - a_s;
+    pv    = 27'(dv * fv_s);
+    a_ext = 27'(a_s);
+    s_w   = (a_ext <<< 8) + pv;
+    out_o = 8'((s_w + 27'sd32768) >>> 16);
   end
 
 endmodule : zhao_texture_bilerp
