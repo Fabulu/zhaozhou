@@ -308,3 +308,32 @@ Simple Dual Port RAM - `prio_mem_r` 2048x32 and `run_mem_r` 1024x17. It refused
 
 The map COMPLETED, so the ruling's stop-and-report exception does not apply and
 nothing was fixed here.
+
+## 2026-08-23 23:44 - the sweep was killed by its own harness at 46 of 90
+
+The background task hosting `map_sweep.ps1` hit its lifetime limit mid-module.
+Everything through module 46 was already merged and committed - which is
+exactly what invoking `run_block_map.ps1` once per module was for - so nothing
+was lost.
+
+**No Quartus job was running at that moment**, which made it the only safe
+window in the run to touch the harness. Two fixes:
+
+**1. The timeout the map lane accepted and ignored.** `-TimeoutSeconds` was
+copied from `run_block_fit.ps1` and never used: the fit lane checks elapsed
+time BETWEEN its three stages, the map lane has one stage, so there is no
+"between" and the parameter was decoration. `zhao_surface_sheet` proved the
+cost by holding the lane for 1,096 s with nothing able to stop it.
+
+Enforced with `Start-Process` + `WaitForExit`, deliberately NOT depending on
+the exit code - `run_block_fit.ps1`'s own header records `Start-Process
+-PassThru` returning an EMPTY ExitCode with redirected streams. Success is
+judged by whether Analysis & Synthesis wrote a summary, which is what the code
+already did.
+
+The default is **1800 s, measured against surface_sheet's 1,096 rather than
+picked.** A budget under a real completion time is exactly how ten rows in the
+fit census came to say `timeout` when they meant "we did not wait".
+
+**2. `-SkipMapped`.** Re-running the 46 finished modules would have cost 45
+minutes of Quartus time to learn nothing.
