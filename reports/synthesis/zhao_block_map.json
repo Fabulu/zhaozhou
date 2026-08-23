@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "5511215ae56d8687e6174586078970284e4e5f90",
+    "newestRunCommit":  "3d6ee37f18fa264ea16d50f6df9d6bc82e176ae2",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -37,6 +37,34 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  0
+                   },
+                   {
+                       "module":  "zhao_field_curve",
+                       "status":  "ok",
+                       "sourceCommit":  "707c14f6387fef63a2f7bda435653615ff897e67",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  41.1,
+                       "dspBlocks":  0,
+                       "registers":  495,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  324,
+                       "pins":  0,
+                       "estimatedAlms":  950,
+                       "combAluts":  1219,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
                    },
                    {
                        "module":  "zhao_field_exec_shared",
@@ -167,6 +195,34 @@
                        "critical":  1
                    },
                    {
+                       "module":  "zhao_field_noise",
+                       "status":  "ok",
+                       "sourceCommit":  "0493648c247ee4e4ffd297ab20ac5ea2a2204a7a",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  36.9,
+                       "dspBlocks":  0,
+                       "registers":  238,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  303,
+                       "pins":  0,
+                       "estimatedAlms":  396,
+                       "combAluts":  278,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
                        "module":  "zhao_field_normalize",
                        "status":  "ok",
                        "sourceCommit":  "4fe83108ca831a82e418e55d3c367582fea73dc0",
@@ -184,6 +240,34 @@
                        "pins":  0,
                        "estimatedAlms":  1374,
                        "combAluts":  1393,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_field_rot",
+                       "status":  "ok",
+                       "sourceCommit":  "5511215ae56d8687e6174586078970284e4e5f90",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  34.8,
+                       "dspBlocks":  0,
+                       "registers":  418,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  418,
+                       "pins":  0,
+                       "estimatedAlms":  529,
+                       "combAluts":  411,
                        "mlabMemoryBits":  null,
                        "inferredMemories":  [
 
@@ -229,6 +313,34 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
+                   },
+                   {
+                       "module":  "zhao_field_sin",
+                       "status":  "ok",
+                       "sourceCommit":  "3d6ee37f18fa264ea16d50f6df9d6bc82e176ae2",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  74.3,
+                       "dspBlocks":  0,
+                       "registers":  0,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  49,
+                       "pins":  0,
+                       "estimatedAlms":  324,
+                       "combAluts":  455,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  0
                    },
                    {
                        "module":  "zhao_forge_cliff",

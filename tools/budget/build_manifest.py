@@ -57,6 +57,18 @@ CORRECTED_SDC_COMMITS = None  # resolved from the fit file's own row labels
 
 SEV_ORDER = {"GREEN": 0, "YELLOW": 1, "ORANGE": 2, "RED": 3}
 
+# NOT CONSOLE HARDWARE, and named here rather than filtered silently.
+# zhao_stub_top is the Phase-1 gate's frame-validator stub; its 8,388,608-bit
+# frame slot is a test scaffold and would otherwise sit at the top of the
+# storage ranking, above zhao_surface_sheet, looking like the design's largest
+# memory. zhao_synth_probe is a synthesis canary. Both are still scanned,
+# still measured and still printed -- they are excluded only from TOTALS.
+ROLES = {
+    "zhao_stub_top": "scaffolding: Phase-1 gate frame-validator stub, not console hardware",
+    "zhao_synth_probe": "scaffolding: synthesis canary",
+    "zhao_shell_top": "composed top: has its own lane (run_composed_fit.ps1)",
+}
+
 
 def load(path, default=None):
     p = os.path.join(REPO, path)
@@ -399,6 +411,7 @@ def main():
 
         records.append({
             "module": name,
+            "role": ROLES.get(name, "design"),
             "sourceFile": m["sourceFile"],
             "severity": sev,
             "scanSeverity": m["severity"],
@@ -690,8 +703,9 @@ def write_heatmap(path, man, calib, wl):
     # ---- DSP ledger -----------------------------------------------------
     L.append("## DSP ledger at HEAD, from the map lane")
     L.append("")
-    L.append("Leaf modules only -- a module that instantiates another would double-count it.")
-    L.append("`instantiatedBy` marks rows that are inside another measured row.")
+    L.append("Leaf modules only -- a module that instantiates another would double-count it,")
+    L.append("and scaffolding is excluded from the total with its reason printed rather than")
+    L.append("filtered away silently.")
     L.append("")
     inside = set()
     for r in R:
@@ -704,10 +718,12 @@ def write_heatmap(path, man, calib, wl):
         d = r["resources"].get("mapDspBlocks")
         if not d:
             continue
-        ins = r["module"] in inside
+        ins = r["module"] in inside or not r["role"].startswith("design")
         if not ins:
             total += d
-        L.append("| `%s` | %d | %s |" % (r["module"], d, "yes" if ins else ""))
+        why = "yes" if r["module"] in inside else (
+            "excluded: " + r["role"].split(":")[0] if not r["role"].startswith("design") else "")
+        L.append("| `%s` | %d | %s |" % (r["module"], d, why))
     L.append("")
     L.append("**Top-level total: %d DSP** against a 112-DSP device and a policy ceiling of 85-90." % total)
     L.append("")

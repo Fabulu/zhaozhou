@@ -5,14 +5,14 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `5511215a`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `3d6ee37f`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **48** |
+| modules with a map of **this exact RTL** | **53** |
 | modules with a fit of this exact RTL | 0 |
-| modules with any map | 48 |
+| modules with any map | 53 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
 | calibration points measured | 0 |
@@ -52,12 +52,12 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_audio_fifo` | - | 0 | 65,536 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_cmd_dma` | - | 0 | 33,280 | - | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_debug_counters` | - | - | 2,560 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_curve` | - | - | - | - | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_curve` | 0 | - | - | **0** | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_normalize` | 0 | - | 7,967 | **0** | 14 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp` | - | - | 4,112 | - | 7 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp24_rom` | - | - | 7,967 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rcp_rom` | - | - | 4,112 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_sin` | - | - | 8,738 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_sin` | 0 | - | 8,738 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_sin_rom` | - | - | 4,369 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_tilestore` | 0 | 0 | 32,768 | 32,768 (2 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_shell_top` | - | - | 118,784 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -83,11 +83,11 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_debug_crc` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_debug_frameblit` | - | 12 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_isqrt` | 0 | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_len` | - | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_noise` | - | 11 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_len` | 0 | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_noise` | 0 | 11 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_progcache` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_ring` | - | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_rot` | - | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_rot` | 0 | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_pose_cache` | 0 | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_input_rumble` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_input_snapshot` | - | 1 | COMB_LOOP(2); ASYNC_ARRAY_READ(11) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -259,8 +259,9 @@ names explicitly, and it is where the next cheap win is.
 
 ## DSP ledger at HEAD, from the map lane
 
-Leaf modules only -- a module that instantiates another would double-count it.
-`instantiatedBy` marks rows that are inside another measured row.
+Leaf modules only -- a module that instantiates another would double-count it,
+and scaffolding is excluded from the total with its reason printed rather than
+filtered away silently.
 
 | block | map DSP | inside another row? |
 | --- | ---: | --- |
