@@ -5,6 +5,88 @@ at the top.*
 
 ---
 
+## 2026-08-23 (late) — surface stamping: 28 multipliers to zero, and 160 total
+
+### The block needs no multipliers at all
+
+| | before | after |
+| --- | ---: | ---: |
+| multipliers | 28 | **0** |
+| logic cells | 947 | 993 |
+| speed | **32.33 MHz** | **87.54 MHz** |
+
+**Both measured the same way**, which matters — the "before" number is a fresh
+re-measurement of the old design under the corrected timing setup, not the old
+optimistic figure. So this is a fair comparison rather than a flattering one:
+**28 multipliers gone, 46 logic cells added, and 2.7× faster.**
+
+This was the first block sized from **evidence rather than a guess**, and the
+evidence was Sacrifice itself. The prediction was "0–2 multipliers". The answer
+is zero, at every setting of the design dial.
+
+The reasoning that got there, since it is the template for the rest: a big spell
+scar marks about 36,864 texels, and it happens **once per impact, not once per
+frame**. Even a heavy barrage needs ~6,000 texels per frame from a block built
+for 1,666,667. And the original game composited its scars through a **lookup
+table**, not arithmetic — so there was never a reason for a multiplier farm to
+exist here at all.
+
+### Where the campaign stands
+
+| | multipliers |
+| --- | ---: |
+| this morning | **327** against a 112-multiplier chip |
+| **now** | **160** |
+| if the next two hit their derived targets | ~124 |
+| the ceiling | **85–90** |
+
+Today removed **167 multipliers**, every one measured rather than estimated:
+the Field engine 79 → 3, creature skinning 72 → 9, surface stamping 28 → 0.
+
+Still to go: terrain projection 33, the texture unit 28 (derived target 6–9),
+terrain normals 18 (derived target 1–2), culling 15, the binner 12.
+
+### Speed, which is now the harder problem
+
+| block | speed |
+| --- | ---: |
+| creature skinning | **89.65 MHz** — meets its budget |
+| surface stamping | **87.54 MHz** |
+| Field engine | **33.86 MHz** — still 3× short |
+
+Three blocks measured, two of them comfortably fast. **The design is not
+uniformly slow** — that is the most useful thing we have learned, because this
+morning it looked like it might be. Thirty-seven blocks still have no speed
+figure at all.
+
+### One thing I found by checking rather than by being bitten
+
+Our texture unit can only address textures whose dimensions are **powers of
+two**. Sacrifice's creature textures are 256 wide with **arbitrary heights up to
+799** — only 13% are power-of-two in both directions, because each is a vertical
+strip of body parts stacked together.
+
+That is not a hardware fault. The restriction is what makes texture addressing a
+shift instead of a multiply, and removing it would add multipliers to the very
+block we are about to cut from 28 to 6–9.
+
+The fix belongs in the asset pipeline, and it is cheap: **split those strips at
+body-part boundaries into power-of-two tiles.** That is a repack, not a
+resample — no pixel is altered and nothing is lost.
+
+**This is the third time today** a piece of hardware turned out to be efficient
+*because* it assumes something about the content, with the assumption written
+down inside the block and nowhere the asset importer would look. The other two
+are both in creature skinning: bone weights must add up to a fixed total, and no
+vertex may use more than two bones (Sacrifice uses three for 2.5% of vertices,
+at the shoulders and hips).
+
+None of these is urgent. But when the first real creature looks subtly wrong,
+the search will start in the hardware — which is correct — instead of in the
+importer, which was never told. So they are now collected in one place.
+
+---
+
 ## 2026-08-23 (night) — the answer on the Field engine: 8.59 → 33.86 MHz
 
 ### The number you were waiting for
