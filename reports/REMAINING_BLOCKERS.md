@@ -1,5 +1,142 @@
 # What is actually blocking every remaining block
 
+> ## STATE AS OF 2026-08-23 (night). This block supersedes everything below it,
+> ## which is now history. Read this first.
+>
+> ### The DSP campaign: 327 -> 188, all measured
+>
+> | | DSPs |
+> | --- | ---: |
+> | morning | 327 against a 112-DSP device |
+> | **now** | **188** |
+> | policy ceiling | **85-90**, warning line >95 |
+>
+> Landed today, each measured under a constrained fit:
+> `zhao_field_seq` **79 -> 3**, `zhao_geom_skin` **72 -> 9**.
+> Earlier: `zhao_terrain_lod` 28 -> 3, `zhao_geom_lod` 18 -> 6.
+>
+> Remaining, largest first — **every one now has a demand figure, which was not
+> true this morning**:
+>
+> | block | DSPs | demand basis | target |
+> | --- | ---: | --- | ---: |
+> | `zhao_terrain_project` | 33 | ~270 patches/frame, costed against 1.67 M clocks | cache-then-sequence |
+> | `zhao_surface_stamp` | 28 | **20,000 texels/frame** (derived) | **0-2** |
+> | `zhao_texture_tmu` | 28 | **850,000 samples/frame** (derived) | **6-9** |
+> | `zhao_terrain_normals` | 18 | **2,000 normals/frame** (derived) | **1-2** |
+> | `zhao_geom_cull` | 15 | one evaluation per five clocks | 4-6 |
+> | `zhao_geom_binner` | 12 | per-triangle costs + arena caps | — |
+>
+> The three **derived** figures come from Sacrifice itself (survey of `sacengine`
+> plus the retail install; full working in `docs/OWNER_DOCKET.md`). They are
+> derived, not ruled — overturn on sight. If they land the census reaches ~124
+> before the other three are touched.
+>
+> ### THE NEW AXIS: timing. Every block before 2026-08-23 was fitted with no
+> ### timing objective at all.
+>
+> The per-block SDC named `gpu_clk`/`vid_clk`/`audio_clk` while 63 of 71 clock
+> ports are called `clk`, so `create_clock` resolved to an empty collection in
+> **every fit this project had ever run**. Fixed. Consequences:
+>
+> * DSP counts **stand** (inferred before the SDC is read);
+> * **47 rows' ALM figures are the OPTIMISTIC end** — with no timing to meet, the
+>   fitter optimised for area alone. The column was measured against the wrong
+>   objective, not merely missing one;
+> * Fmax figures in those rows were never measurements.
+>
+> **Only three blocks have a real speed number:**
+>
+> | block | Fmax | meets its own budget? |
+> | --- | ---: | --- |
+> | `zhao_geom_skin` | **89.65 MHz** | **yes** — 124,514 vertices/frame vs 120,000 |
+> | `zhao_geom_skin@MUL_LANES=6` | 84.61 MHz | yes, but costs 9 more DSPs for 13% |
+> | `zhao_field_seq` | **33.86 MHz** | **no** — 3x short of 100 MHz |
+>
+> **Thirty-eight other blocks have no evidence either way.** Expect surprises.
+>
+> `zhao_field_seq` went 8.59 -> 33.86 MHz on one rewrite (two 64-iteration
+> combinational loops -> a six-stage leading-zero count, bit-identical). **That
+> is a campaign, not a one-off** — a second path is unnamed. But WNS improved
+> 5.4x while TNS improved **47x**, which means a *population* of paths collapsed
+> rather than one outlier, so the remaining work is likely ordinary.
+>
+> **`zhao_geom_skin` at 89.65 MHz would cap the shared `gpu_clk` below 100.**
+> Margin 3.8%. The remaining 1.155 ns is `Mult -> acc`; registering it pushes II
+> to 13, which needs 93.6 MHz and would **fail** at 89.65. Only worth taking if
+> it buys >4 MHz, and that must be measured.
+>
+> A static scan for the same long-combinational-chain shape
+> (`reports/TIMING_HAZARD_SCAN.md`) found **one** other candidate:
+> `zhao_raster_edgewalk.sv:324`, a 16-step serial popcount on the per-pixel
+> raster path. Deliberately not rewritten on suspicion — fit it, read the logic
+> levels, then decide.
+>
+> ### The acceptance test is a RATE, never a clock
+>
+> `Fmax / initiation interval`, not Fmax. On GEOM.SKIN, +2 pipeline stages bought
+> +31 MHz and turned a failing block into a passing one; a fix that buys MHz by
+> adding stages can equally come out behind. **Report both numbers.** And note
+> `gpu_clk` is shared, so meeting a block's own budget is necessary and not
+> sufficient.
+>
+> **Two frame budgets exist and differ 6.6x.** `frame_gpu_cycles` (Z60 251,520)
+> is exactly `2 x h_total x v_total` — the raster period and the scheduler's
+> deadline. The **compute** budget is **1,666,667 clocks/frame** at the 100 MHz
+> placeholder. Both are called "gpu cycles". See `design/budgets/latency.md`.
+>
+> ### Test-infrastructure defect, fixed, blast radius zero
+>
+> In a fresh checkout, CRLF made the mutation preflight's regex match nothing;
+> it printed `linted 0 mutants, 0 do not build` and **exited 0**. A clean pass
+> over an empty set. Fixed twice over (`.gitattributes` pins `*.sh`/`tools/*.py`
+> to LF; the preflight refuses fewer than two parsed mutants). **Audited: every
+> recorded sweep score parsed a real set, so nothing is withdrawn.** It was found
+> on the first run under the recent worktree ruling, before it had a history to
+> poison.
+>
+> ### Correctness findings that outrank the sizing
+>
+> * **Sacrifice skins to THREE bones; `zhao_geom_skin` does two.** Measured over
+>   317,234 ring-vertices: 65.07% one bone, 32.41% two, **2.51% three**. Ours is
+>   exact for 97.49% and clips the seam vertices (shoulders, hips, neck) where
+>   error shows most. A rare second pass is probably cheapest. **A decision, not
+>   a defect — but it must be taken deliberately.**
+> * **Sacrifice's bone weights do NOT sum to a constant** (raw `ubyte`/64, all
+>   256 values occur), so the blend is affine rather than convex — while our
+>   `(pb<<6) + w0*(pa-pb)` identity is valid only when `w0 + w1 = 64`. Fine if
+>   the asset pipeline normalises on import; that is now a stated precondition.
+> * **Creature textures are 256 wide with arbitrary height up to 799**; only
+>   12.7% are power-of-two in both axes. A TMU assuming square power-of-two
+>   breaks on most character art.
+>
+> ### Blockers REMOVED today
+>
+> * **Widescreen is RULED** (not scheduled): `VIDEO_WIDE` = 384x216 displayed
+>   from a 384x224 tiled canvas, exact 5x to 1080p; `WIDE_DUO` = 2 x 192x144.
+>   Prerequisite recorded: "enum value 3 is free" is **false in practice** —
+>   three `else-is-DUO` ternaries, a three-entry `ZHAO_TIMING` table, and a
+>   `default:` arm that would make a fourth mode silently fetch nothing.
+> * A latent out-of-bounds read in the reference oracle
+>   (`zref_video.cpp` returned `kTable[mode & 3u]` from a three-entry table)
+>   is **fixed**, provably golden-neutral.
+>
+> ### Still genuinely blocked on the owner
+>
+> * the three earth-field WRITE ops (`FIELD.WRITE.MATERIAL/NAV/HAZARD`), whose
+>   law is unspecified — `TERRAIN.PATCH` sits downstream;
+> * particle-simulation, compositor and 2D behaviour, reserved by standing
+>   instruction;
+> * `zref::rescale_s32` silently narrows `__int128` to `int64_t` in the shipped
+>   skinning reference. Not a regression, unreachable with a real bone matrix
+>   (0 of 24,000 pose-range coordinates). Three options in the docket; none
+>   taken.
+> * the scar-texture **pool size** — Sacrifice's `GetFreeScarTexture` /
+>   `ReleaseScarTexture` prove a finite copy-on-write pool exists, but its
+>   capacity is not recoverable. **`SURFACE.STAMP` is pool-bound, not
+>   rate-bound**, so this is the number that matters for it.
+
+
 > ## STATE AS OF 2026-08-22 (late). This block supersedes the two survey
 > ## sections below it, which are now history.
 >
