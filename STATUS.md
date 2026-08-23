@@ -5,6 +5,86 @@ at the top.*
 
 ---
 
+## 2026-08-23 (later) — the multipliers were never the problem with speed
+
+### What we can now see, and could not before
+
+Yesterday's finding was that no block had ever been asked to hit a speed. That
+is fixed, and the first block has now been measured properly on both sides of a
+big rewrite. The result is not what the multiplier work predicted.
+
+| the Field engine | multipliers | speed |
+| --- | ---: | ---: |
+| before the rewrite | 79 | **7.72 MHz** |
+| after the rewrite | **3** | **8.59 MHz** |
+
+The target is 100 MHz. **It is twelve times too slow, and it was twelve times
+too slow before as well.** Removing 76 of 79 multipliers bought 11%.
+
+So the multiplier campaign was necessary — the design still wants three times
+the multipliers the chip has — but it was never going to fix speed, because
+multipliers were not what was slow.
+
+### What is slow, named exactly
+
+The timing tool pointed at one wire and all three of the worst paths are that
+same wire, with **78 levels of logic in a single clock tick**. It is inside the
+normalise block: a piece of arithmetic written as two sixty-four-step loops that
+the hardware has to lay out end to end, 128 stages deep, all inside one tick.
+
+The fix is cheap and already exists a few lines away — a neighbouring block does
+the same job the right way, in a handful of steps instead of 128. Doing it costs
+**one extra clock on an operation that has thirteen clocks of slack.**
+
+**We deliberately did not do it in this pass.** It is a different change, and it
+would invalidate the mutation sweep and both chip measurements that were just
+taken. It is on the docket with the measurement attached, to be picked up with
+the next piece of Field work rather than as a special trip.
+
+### The part you should actually weigh
+
+Every one of the 47 block measurements was taken with no speed objective. Area
+was the only column anyone was reading, and area is the column least affected.
+**We now have good reason to think other blocks are also far from closing, and
+no evidence either way until they are re-measured.**
+
+That is a new line of work, not a continuation of the current one. It does not
+change the multiplier plan; it sits beside it.
+
+One thing that is NOT affected: **the composed shell still measures ~95.5 MHz**
+and that number was always honest, because the shell has its own correct timing
+file. The heavy arithmetic engines are not in the shell yet. The gap is between
+the blocks and the machine they are going to be dropped into.
+
+### Where the multiplier count stands
+
+| | multipliers |
+| --- | ---: |
+| measured today, 41 of 47 blocks | **327** against 112 |
+| once the Field engine's new number is recorded | **251** |
+| with the creature-skinning block at its target | **~194** |
+| policy ceiling | **85–90** |
+
+Biggest remaining: creature skinning 72, terrain projection 33, surface stamp
+28, texture unit 28, terrain normals 18, culling 15, binner 12. Creature
+skinning is being worked now.
+
+### Two smaller things
+
+**A measurement that had been destroyed is back.** The creature-detail block's
+row said "failed" with no numbers, because a later measurement I killed had
+overwritten a good one. It was recovered from history rather than retyped — the
+tool's own bytes, at a commit where the design is provably unchanged — and it
+restores the 18 → 6 result to the report. Note that this made the total go
+**up**, 321 to 327: the block had been silently counted as zero.
+
+**The repo would not build.** Three separate pieces of stale build state, none
+of them design faults, one of which made a completely correct file list report a
+missing file. The correct build sequence had only ever been written inside a
+note field in a config file; it is now in `docs/BUILD.md`.
+
+---
+
 ## 2026-08-23 — every speed measurement I have given you was never taken
 
 ### The defect
