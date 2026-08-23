@@ -1,5 +1,168 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-23 — TEXTURE.TMU REARCHITECTURE RULING: it is a calculator wearing a
+## one-request-at-a-time trench coat
+
+**The TMU architecture is fine. The current RTL fails two independent ways.**
+The 28 → 6 DSP result stands and is not implicated in either.
+
+Queued behind the Field waves. **Not started.**
+
+### The two failures
+
+**1. Timing — 36.11 MHz.** Fitted worst path `q_fmt_r[0] → smp_a_o[4]`, **21.432
+ns**: a registered format bit through `decode16`, the channel mux, the whole
+factored bilinear filter, to the sample output.
+
+**2. Throughput — CLUT initiation interval is 6.** Even at a full 100 MHz that
+is **277,778 samples/frame against ~850,000 demanded — 0.33×.** At the measured
+36.11 MHz it is **102,556 — 0.12×.** *No clock fix reaches this.*
+
+### The DSP work is exonerated by measurement, not argument
+
+| filter lanes | DSPs | Fmax |
+| ---: | ---: | ---: |
+| old arithmetic | 28 | 36.92 MHz |
+| 4 | 12 | 36.38 MHz |
+| **2 (shipping)** | **6** | **36.11 MHz** |
+| 1 | 3 | 35.62 MHz |
+
+**Fmax barely moves while DSPs fall 28 → 3.** Multiplier count was never what
+made this block slow, so adding arithmetic back cannot rescue it. Registers in
+the right places can.
+
+And the 2-lane choice is better justified than "within budget": one lane needs
+**2,211,840 filter cycles/frame against 1,666,667 available** — it fails. **Two
+lanes is the cheapest filter width that clears the workload.**
+
+### FIRST, fix a stale diagnosis in the repo
+
+`STATUS.md` said the 37.004 ns address-generator path was the honest worst path.
+**It is not**, and this is corrected — the figure came from applying I/O
+constraints *post hoc* to a database placed with **no I/O objective at all**, so
+the fitter had never once optimised those paths. **A post-hoc timing query on an
+unoptimised placement is an upper bound, not a fitted critical path.** With the
+objective present during the fit, the address generator improves and the
+filter/output cone leads.
+
+Left uncorrected, an implementer would pipeline the second-worst cone first.
+
+### The shape
+
+Today: accept one request → compute every address → wait for the texel cache →
+maybe wait for the palette cache → decode all texels → run the whole filter →
+expose a combinational output → wait for it to be consumed → **only then** accept
+another request.
+
+Wanted: request-plan pipeline → small in-flight queue → cache-access conveyor →
+registered decode → pipelined two-lane filter → in-order result queue →
+registered output.
+
+**Latency may rise from ~5 clocks to ~10–12. That is harmless** if a request can
+enter every clock or two.
+
+### Waves
+
+**W0 — baseline.** Re-fit `zhao_texture_cache` under the corrected clock+I/O
+SDC (its row predates the repair). Fit a **TMU + real cache** characterisation
+wrapper — the seam becomes internal, so that is more representative than giving
+each side a zero-delay external environment. Save the top 100–200 setup paths
+grouped by family.
+
+**W1 — break the 21 ns filter.** A clocked `zhao_texture_bilerp_pipe`: F0 decode
+and register taps/fractions/tags; F1 the two U lerps; F2 the V lerp; F3 round
+and register the byte. **Still exactly three multiplies per lane, two lanes, six
+DSPs.** Keep the existing combinational `zhao_texture_bilerp` as the formally
+proved arithmetic law and add a **latency-equivalence proof** — pipelined output
+at N+3 equals the combinational law on input at N — so the clocked
+implementation never becomes the only readable statement of the arithmetic.
+
+**W2 — pipeline the address generator.** It is not today's worst path but will
+become it. Capture the raw request first, so no request pin feeds deep
+arithmetic; then mode/mip, coordinate scale, wrap, address. **Compute `u0/u1/v0/v1`
+once and `row0/row1` once** — the present loop computes four wrapped U values,
+four wrapped V values and four row shifts where only two of each are unique.
+Hold the cache bundle in an issue register, bit-stable until accepted.
+
+**W3 — throughput, and do better than the existing II=2 proposal.** The
+contract's two-entry queue gives `100 MHz / 60 / 2 = 833,333` against a true
+**829,440** demand — **0.47% headroom and nothing for a miss.** That is a number
+that looks like success and is not.
+
+Better: **`TEXTURE.CACHE` has four independent lanes with four independent
+addresses resolved in one access**, and the CLUT path uses only lane 0. Pack
+them:
+
+    beat   lane 0        lane 1
+    0      texel A       —
+    1      texel B       —
+    2      texel C       palette A
+    3      texel D       palette B
+
+A deliberate two-beat lag means **no cache-response-to-cache-request
+combinational path**. After warm-up: **one complete CLUT sample per clock →
+1,666,667/frame, twice the demand.**
+
+> **One cache amendment is required and must not be fudged:** the access packet
+> carries **one scalar source ID for all four lanes**. Packing sample C's texel
+> with sample A's palette needs **per-lane provenance** (`acc_lane_src_id_i[0..3]`).
+> And **do not identify the TMU sample by the cache's response ID** — carry
+> internal record IDs in a parallel access-tag register. Results may complete out
+> of order internally; **only the head record may drive `smp_*`.**
+
+**W4 — cache capacity.** The cache is 1 KiB while spending one M10K per lane —
+capacity is parameterised and nearly free. Sweep LINES/LINE_BYTES on **real
+raster traces**, and choose by **effective samples/frame**, not nominal hit rate.
+**Quartus must confirm M10K counts; do not infer them from nominal capacity.**
+
+**W5 — the integration trap.** `RASTER.FRAGMENT` currently receives *already
+sampled* texel fields; the real request/rejoin composition does not exist. Without
+a **fragment-context FIFO**, the rasteriser will issue one request, wait for it,
+and **serialise the new pipeline from outside** — destroying the whole point.
+Rejoin by strict queue order or an internal sequence number, **not** by assuming
+source IDs are unique.
+
+### Acceptance — none of it optional
+
+| | requirement |
+| --- | --- |
+| DSPs | **6** |
+| standalone Fmax, corrected I/O SDC | ≥110 MHz preferred, **≥100 required** |
+| **TMU + real cache composed Fmax** | **≥100 MHz** |
+| hold violations | **0** |
+| CLUT initiation interval on a hit | **1 clock** |
+| direct bilinear II at two lanes | 2 clocks |
+| CLUT capacity at 100 MHz | **1.667 M/frame before misses** |
+| accept-to-output latency on a hit | ≤16 clocks preferred |
+| ordering | **exact acceptance order** |
+| arithmetic | **byte-identical to `zref::Tmu`** |
+| output under backpressure | stable |
+| frontier | 1/2/4 lanes still build and test |
+
+**Explicitly forbidden:** adding filter lanes; restoring the 28-DSP arithmetic;
+optimising the 32-bit sample counter; false-path or multicycle exemptions on
+functional logic; changing arithmetic rounding; and shipping the II=2 proposal
+while calling 0.47% headroom done.
+
+### Verification the sweep must carry
+
+Distinct source IDs in packed lane accesses; lane-0 miss, lane-1 miss, and
+simultaneous; issue bundle stable across an entire miss; output stall with the
+queue full; queue wrap-around; palette response assigned to the wrong record;
+texel/palette lane swap; dropped pipeline valid/tag; filter channel-tag
+corruption; early or out-of-order retirement; mode-error attribution with
+several requests in flight; hostile disabled cache lanes; and the existing
+directed/random/formal suites at all three lane counts.
+
+### Scale
+
+**Larger than the skinning timing fix, substantially smaller than Field.** The
+arithmetic is already correct and formally pinned, and the DSP problem is
+already solved. **The remaining risk is bookkeeping — tags, queues, stalls and
+ordering — which is exactly what the differential and mutation infrastructure is
+good at catching.**
+
+
 ## 2026-08-23 — FIELD TIMING REARCHITECTURE RULING: it needs to become a real
 ## little processor
 
