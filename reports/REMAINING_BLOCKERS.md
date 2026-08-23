@@ -1103,6 +1103,49 @@ Applying only the measured result, the running total moves from **213 to 201**.
 That is still 1.8x the device. The lever works; it has to be pulled about ten
 more times.
 
+### 2026-08-23, second pull: `zhao_terrain_lod` 28 -> 3, and the area fell again
+
+The block the table above called the best target was sequenced next, and it beat
+the pilot's ratio.
+
+| | ALMs | DSPs | registers | fit s | commit |
+| --- | ---: | ---: | ---: | ---: | --- |
+| before | 2,086 | **28** | 1,257 | 434.3 | `47d607c` |
+| after | 1,759 | **3** | 1,634 | 673.2 | `9f2928f` |
+| delta | **-327 (-15.7%)** | **-25 (-89%)** | +377 | | |
+
+Both sides measured on this machine at a clean worktree; the BEFORE was re-run
+rather than quoted and reproduced the committed row to the digit. Device share
+**25% -> 2.7%**.
+
+**The area fell for the second time out of two.** That is now a measured pattern
+rather than a single result, and the objection that sequencing trades area for
+multipliers should not be raised again without evidence. The reason is the same
+both times: the parallel form's cost was never mostly the multipliers, it was the
+*wide datapaths standing beside them* — here six 66-bit squarers, two three-term
+66-bit adder trees and **twelve** 49-bit comparators, collapsed to one
+multiplier, one accumulator and **two** comparators.
+
+Three things made 28 into 3 rather than into the contract's predicted 22:
+
+1. `h` is the constant 256 in the strict ladder, so six of the twenty-four
+   ladder multiplies were **shifts** — the lever the contract had already named,
+   worth 6.
+2. `s0`/`r0` and `s1`/`r1` share their left-hand sides exactly, so twelve of the
+   twenty-four were **duplicates** — only six distinct products exist.
+3. `|c - e|` fits in 32 UNSIGNED bits (both operands are s32, so the difference
+   spans `[-(2^32-1), 2^32-1]`) and `d^2 = |d|^2`, so the ONE shared multiplier
+   is 32x32 unsigned — **narrower** than the signed 33x33 the squares needed.
+
+Cost: 34 clocks per descriptor became 48, so a patch is ~784 clocks rather than
+~560 and the margin over the ledger's rate falls from ~11x to ~8x. Verification
+did not weaken: directed 211 -> 219 checks (a real hole found by the block's new
+mutation sweep and closed), random and nightly lanes identical to the digit,
+LOD->TESS composition still crack-free, `ctest -L fast` 262/262.
+
+**Running total: 201 -> 176.** Still 1.6x the device, and the two blocks pulled
+so far were worth 37 DSPs between them.
+
 ---
 
 ## 2026-08-23 — the Field IR engine had NEVER been synthesised, and it is 79 DSPs

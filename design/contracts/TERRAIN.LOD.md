@@ -364,54 +364,66 @@ does not re-derive the decision.
 
 ## Synthesis / resource ceiling
 
-**MEASURED 2026-08-22**, Quartus 17.0.2 Lite, 5CSEBA6U23I7, at clean HEAD
-`d4f5bd2` (`reports/synthesis/zhao_block_fit.json`):
+**MEASURED 2026-08-23**, Quartus 17.0.2 Lite, 5CSEBA6U23I7, virtual pins, no
+composed fit, both sides re-measured on the same machine at a clean worktree
+(`reports/synthesis/zhao_block_fit.json`):
 
-| | measured | device |
-| --- | ---: | ---: |
-| ALMs | 2,086 | 41,910 (5.0%) |
-| registers | 1,257 | |
-| **DSP blocks** | **28** | **112 (25%)** |
-| block memory bits | 0 | |
+| | before (`47d607c`) | after (`9f2928f`) | delta |
+| --- | ---: | ---: | ---: |
+| ALMs | 2,086 (5.0%) | **1,759 (4.2%)** | **−327 (−15.7%)** |
+| registers | 1,257 | 1,634 | +377 |
+| **DSP blocks** | **28 (25% of 112)** | **3 (2.7% of 112)** | **−25 (−89%)** |
+| block memory bits | 0 | 0 | |
+| fit seconds | 434.3 | 673.2 | |
 
-**A QUARTER OF THE DEVICE'S MULTIPLIERS, IN THIS ONE BLOCK.** That is the
-figure `reports/DSP_Audit_2026-08-21.md` estimated for TERRAIN.LOD, now
-confirmed by measurement rather than by counting operators.
+**IT WAS A QUARTER OF THE DEVICE'S MULTIPLIERS. IT IS NOW THREE OF THEM.**
 
-### What this section used to say, and why it was wrong
+The BEFORE was re-measured rather than quoted: the committed row said
+2,086 / 28 / 1,257 measured at `d4f5bd2`, and re-run at HEAD with a clean
+worktree it reproduced to the digit. That row was committed on its own before
+any RTL moved, so this comparison is not against a number in a comment.
 
-> *Not synthesized... Structurally, from the RTL: six signed 33×33 multipliers
-> for the two squared distances, two 64-bit compare-subtract root lanes, four
-> 49-bit ladder comparators, and 16 × 43 bits of decision store.*
+**THE AREA FELL TOO, and that is the part worth arguing about.** The standing
+objection to sequencing is that it trades area for multipliers. Measured here it
+does not: 327 ALMs came back while 377 registers were added. Two reasons, the
+same two the `zhao_geom_lod` pilot found:
 
-The block had never been through Quartus, and the structural count was taken by
-reading the RTL. It undercounted badly, because it stopped at the `ladder()`
-function instead of at its call sites:
+- a Cyclone V ALM carries flops whether the design uses them or not, and
+- the area was never mostly the multipliers. It was **six parallel 66-bit
+  squarers with two three-term 66-bit adder trees behind them, and twelve
+  parallel 49-bit comparators**. Sequencing collapsed those to one multiplier,
+  one 66-bit accumulator and **two** comparators.
 
-* `ladder()` is called **four** times — `s0`, `r0`, `s1`, `r1`;
-* each call runs `ladder_ok()` **three** times, once per rung;
-* each `ladder_ok()` is **two** multiplies and **one** comparator.
+### Where the thirty products were, and where they went
 
-So the ladder alone is **12 comparators and 24 multiplies**, not four
-comparators and no multipliers. Together with the six for the squared distances
-that is 30 multiply operations, which the fitter packs into 28 DSPs.
+The pre-sequencing structural count in this section had itself been wrong once:
+it read `ladder()` rather than its call sites, and so counted four comparators
+where there were twelve. The true shape was
 
-### The reduction that is visible from here
+* `ladder()` called **four** times — `s0`, `r0`, `s1`, `r1`;
+* each call running `ladder_ok()` **three** times, once per rung;
+* each `ladder_ok()` being **two** multiplies and **one** comparator;
 
-The DSP audit's target for this block is 4–8. One lever is already documented
-two sections up in this very file:
+so **24 ladder multiplies and 12 comparators**, plus six squares for the two
+distances: 30 multiply operations, which the fitter packed into 28 DSPs.
 
-> `h` is **256** for the strict ladder and `hyst_i` for the relaxed one
+All thirty now walk through **one 32 × 32 unsigned multiplier** across a 6-clock
+squaring phase and an 8-clock evaluation phase. Three details did the work:
 
-`rhs = dstv * h`, and for the strict ladder `h` is the constant 256 — which is
-a **shift**, not a multiply. Six of the twenty-four ladder multiplies (`s0` and
-`s1`, three rungs each) are multiplications by a compile-time power of two that
-are being spent as DSPs because `ladder_ok()` takes `h` as a parameter and the
-strict and relaxed cases share one function.
+1. **The strict ladder's right-hand side is not a multiply.** `h` is the
+   constant 256 there, so `dstv · h` is `dstv << 8`. **Six of the twenty-four
+   ladder multiplies were multiplications by a compile-time power of two**,
+   spent as DSPs only because `ladder_ok()` took `h` as an argument and the
+   strict and relaxed cases shared one function. Only the two RELAXED
+   right-hand sides need a step. *This section predicted that lever and it was
+   real* — but it was worth six of twenty-eight, not twenty-five.
+2. **Twelve of the twenty-four left-hand sides were duplicates.** `s0` and `r0`
+   share `dev · cam0_scale` exactly, as do `s1` and `r1`; only **six** distinct
+   left-hand sides exist. The parallel form wrote them twice each.
+3. **|c − e| fits in 32 unsigned bits**, so the shared multiplier is 32 × 32
+   unsigned — *narrower* than the signed 33 × 33 the squares used to need.
 
-Splitting the strict path from the relaxed one should return those six directly.
-That is a measurable experiment, not a certainty: it is written here as the next
-thing to try, not as a claim about what it will save.
+The DSP audit's target for this block was 4–8. The measurement is **3**.
 
 ## Integration capture cases
 
