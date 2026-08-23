@@ -109,30 +109,40 @@ module zhao_field_sin (
   // the table's monotonicity being remembered.
   logic signed [17:0] d;
 
-  // THE ONE NONCONSTANT MULTIPLY OUTSIDE `zhao_field_mul`, AND IT COSTS A DSP.
+  // THE INTERPOLATION IS A SHIFT-ADD, NOT A MULTIPLY, AND THAT IS THE DSP RULE.
   //
-  // Measured 2026-08-23: the Field cone fits in 4 DSP blocks, of which
-  // `zhao_field_mul` is 3 and THIS interpolation is the fourth. The DSP ruling
+  // Measured 2026-08-23: the Field cone fitted in 4 DSP blocks, of which
+  // `zhao_field_mul` was 3 and THIS interpolation was the fourth. The ruling
   // says no production op unit keeps a private nonconstant multiplier, and an
-  // 18x6 product is one.
+  // 18x6 product written as `d * t` is one.
   //
   // Routing it through the shared lane would be the literal fix and a bad one:
   // the sine table is combinational, so OP_SIN and OP_COS cost exactly what an
   // ADD costs, and both of ROT's table reads sit inside its walk. Sequencing
   // this product would make SIN and COS multi-cycle and lengthen every rotation
-  // by six clocks, to save a DSP on a device with 108 spare.
+  // by six clocks, to save one DSP on a device with 108 spare.
   //
-  // So the multiplier is kept and the DSP is not: `multstyle = "logic"` is a
-  // Quartus synthesis directive that builds the product from ALMs instead. Six
-  // bits of multiplier is a six-term shift-add; the fitter is better at that
-  // than a DSP block is. The attribute is invisible to Verilator and to slang,
-  // so simulation and the formal proof see exactly the same arithmetic.
+  // `(* multstyle = "logic" *)` was tried first and Quartus 17.0.2 SILENTLY
+  // IGNORED IT -- no warning, still four DSP blocks. So the product is written
+  // as what it is: `t` is SIX BITS, so `d * t` is a six-term shift-add, and
+  // six terms is a shape the fitter builds better from ALMs than from a DSP.
+  //
+  // THIS IS THE SAME NUMBER, not an approximation. Each term is `d << k` for a
+  // set bit of `t`, accumulated exactly in 25 signed bits; `|d| <= 2^16` and
+  // `t <= 63`, so the sum is at most about 2^22 and cannot overflow. It is the
+  // definition of multiplication, unrolled -- which is why the differential is
+  // unchanged and still passes bit for bit.
   // ENFORCED-BY: tests/differential/field_sin_directed.cpp:main
-  (* multstyle = "logic" *) logic signed [24:0] interp;
+  logic signed [24:0] dt;
+  logic signed [24:0] interp;
   logic signed [31:0] s_quarter;
   always_comb begin
     d = $signed({1'b0, next_v}) - $signed({1'b0, base});
-    interp = ($signed({{7{d[17]}}, d}) * $signed({19'd0, t}) + 25'sd32) >>> 6;
+    dt = 25'sd0;
+    for (int k = 0; k < 6; k++) begin
+      if (t[k]) dt = dt + (25'(d) <<< k);
+    end
+    interp = (dt + 25'sd32) >>> 6;
     s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base}))
                               : (32'($signed({1'b0, base})) + 32'(interp));
   end
