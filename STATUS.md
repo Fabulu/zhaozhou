@@ -5,6 +5,86 @@ at the top.*
 
 ---
 
+## 2026-08-23 (night, correction) — I gave you a speed figure that was measuring
+## the wrong thing, and it affects every speed figure I have given you
+
+### The correction
+
+Two hours ago I told you the texture unit ran at **199.72 MHz, nearly twice what
+it needs**, and concluded that of the four blocks measured, only the Field engine
+was genuinely slow.
+
+**That was wrong. The texture unit runs at 36.92 MHz** — it was holding the
+shared clock to **37%** of its target, which is within noise of the 32% that
+surface stamping was holding it to before it was fixed.
+
+Same design, same tool, same chip. The only difference is what the timing file
+was asked to check.
+
+### What went wrong, because it is the same trap as yesterday
+
+Yesterday's finding was that our timing file named clocks that did not exist, so
+**no block was ever asked to hit a speed.** That is fixed.
+
+What was **not** fixed: the file asks about the speed of paths *between
+registers*, and says nothing about paths that begin or end at the block's
+edge — so the timing tool **silently excludes them entirely.**
+
+For the texture unit that is nearly the whole block. Its arithmetic runs from
+its request inputs to its sample outputs; almost the only thing between two
+registers is a counter. **So the 199.72 MHz I reported was the speed of the
+counter.** The real arithmetic had never been timed at all — not slowly, not at
+all — and the number I read as "twice its target" was measuring the one part of
+the block nobody cares about.
+
+Asked properly, the worst path is **37.0 ns** through the address generator —
+which is precisely what that block's own written specification has warned about
+since the day it was written.
+
+### What this means for the other numbers
+
+**Every speed figure in this project was measured the same way**, so all of them
+are suspect until re-measured:
+
+| block | what I told you | status |
+| --- | ---: | --- |
+| creature skinning | 89.65 MHz | **suspect** — needs re-measuring |
+| surface stamping | 87.54 MHz | **suspect** — needs re-measuring |
+| Field engine | 33.86 MHz | **suspect**, and likely the least affected |
+
+How wrong each one is depends on how much of the block sits between registers
+rather than at its edges. A deeply pipelined block will barely move; a block
+that is mostly arithmetic from input to output — like the texture unit — moves by
+5×.
+
+**What is NOT affected: every multiplier count.** Those come from an earlier
+stage that does not read the timing file at all. The census of **134** stands,
+and so does every reduction behind it.
+
+### The good part
+
+**The tool is already fixed** — it now declares an arrival time on every input
+and a required time on every output, so the paths that were invisible are
+checked from here on. Validated against a real database before being trusted.
+
+And the agent found this **while checking its own earlier conclusion rather than
+moving on from it.** It had written "suspected, measured, and cleared" two hours
+before, and went back to ask whether the measurement it used to clear the
+suspicion was answering the question it was asked. It was not.
+
+That is the eleventh time in two days that a measurement has been real and has
+been measuring something other than what it was read as. I have stopped calling
+these one-offs. **The rule stands: a green number from a tool nobody has watched
+run is not evidence** — and now, explicitly, neither is a number from a tool
+that was asked the wrong question.
+
+### Meanwhile the actual work went well
+
+The texture unit is **28 → 6 multipliers**, with the whole ladder measured at
+28 → 12 → 6 → 3 and the speed flat across all of it. Census **160 → 134**.
+
+---
+
 ## 2026-08-23 (late night) — the texture unit cost 28 multipliers and now costs
 ## 6; and the speed number I have been reporting for every block was wrong
 
