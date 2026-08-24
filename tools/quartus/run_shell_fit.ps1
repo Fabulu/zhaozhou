@@ -322,6 +322,31 @@ try {
     [IO.File]::WriteAllText($synthOut, (($synthesisJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
     [IO.File]::WriteAllText($timingOut, (($timingJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
 
+    # ---- PRESERVE THE PATH DETAIL, NOT JUST THE SUMMARY --------------------
+    # report.tcl already writes setup/hold/recovery/removal path reports at
+    # `-detail full_path`, and until now every one of them died with the
+    # workspace. The JSON kept "hold worst slack -0.952 ns, 1 failing endpoint"
+    # and threw away the only artifact that says WHICH endpoint.
+    #
+    # MEASURED 2026-08-24: the composed shell fit reported exactly that hold
+    # violation, and the path could not be identified afterwards from anything
+    # that survived. The only leftovers on disk were workspaces from 2026-08-22
+    # -- a different commit, so reading them would have been the familiar error
+    # of taking an artifact for something other than what it is.
+    #
+    # A failing number you cannot act on is barely better than no number. This
+    # does not change what is measured; it changes whether it can be worked on.
+    $charSrc = Join-Path $outputDir 'characterization'
+    if (Test-Path -LiteralPath $charSrc) {
+        $charDst = Join-Path $ReportRoot 'characterization'
+        New-Item -ItemType Directory -Path $charDst -Force | Out-Null
+        Copy-Item -Path (Join-Path $charSrc '*.rpt') -Destination $charDst -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path (Join-Path $charSrc '*.tsv') -Destination $charDst -Force -ErrorAction SilentlyContinue
+        $staRpt = Join-Path $outputDir 'zhao_shell_fit.sta.rpt'
+        if (Test-Path -LiteralPath $staRpt) { Copy-Item -LiteralPath $staRpt -Destination $charDst -Force }
+        Write-Host ("WROTE {0} ({1} file(s))" -f $charDst, (Get-ChildItem $charDst -File).Count)
+    }
+
     Write-Host "PASS analysis/elaboration, synthesis, fitter, and TimeQuest."
     Write-Host "WROTE $synthOut"
     Write-Host "WROTE $timingOut"
