@@ -117,6 +117,57 @@ module zhao_terrain_normals (
     e2z = $signed({cz_i[31], cz_i}) - $signed({az_i[31], az_i});
   end
 
+  // ---- ONE shared 33x33 multiplier, walked over the six cross terms --------
+  //
+  // WHY. The six products used to exist SPATIALLY -- all at once -- which cost
+  // 18 DSP blocks: `tools/budget/calibration.json` measures a 28..33-bit
+  // product at 3 blocks, and 6 x 3 = 18, matching the map exactly.
+  //
+  // The demand does not want them. design/budgets/workloads.yml asks for 2,000
+  // normals/frame against a 1,666,667-clock compute frame; the heatmap reads
+  // 0.0012x, i.e. 833x over-provisioned. Six clocks per normal is
+  // 2,000 x 7 = 14,000 clocks, 0.84% of a frame, and leaves capacity for
+  // 238,095 normals/frame -- 119x the demand.
+  //
+  // WHY NOT NARROWER INSTEAD. The 33-bit width is NOT slack. This block's own
+  // contract declares a domain-limit lane "uniform over +/-4096 world units,
+  // reaching the fx16 output rails" (TERRAIN.NORMALS.md:158) and states the
+  // rails are reached by legal input (:113). A world coordinate in fx16 needs
+  // 29 bits and a difference of two needs 30, so no narrowing reaches the
+  // 27-bit 1-DSP band. Rate is the available lever here; width is not.
+  //
+  // The operand pairs, in order, and the sign each contributes:
+  //   0: e1y*e2z  +acc0     1: e1z*e2y  -acc0
+  //   2: e1z*e2x  +acc1     3: e1x*e2z  -acc1
+  //   4: e1x*e2y  +acc2     5: e1y*e2x  -acc2
+  localparam int unsigned NSTEP = 6;
+
+  logic               m_busy;
+  logic        [2:0]  mseq;
+  logic signed [32:0] l1x, l1y, l1z, l2x, l2y, l2z;  // edges latched at accept
+  logic        [15:0] m_src;
+  logic signed [32:0] m_a, m_b;
+
+  always_comb begin
+    unique case (mseq)
+      3'd0: begin m_a = l1y; m_b = l2z; end
+      3'd1: begin m_a = l1z; m_b = l2y; end
+      3'd2: begin m_a = l1z; m_b = l2x; end
+      3'd3: begin m_a = l1x; m_b = l2z; end
+      3'd4: begin m_a = l1x; m_b = l2y; end
+      3'd5: begin m_a = l1y; m_b = l2x; end
+      default: begin m_a = 33'sd0; m_b = 33'sd0; end
+    endcase
+  end
+
+  // The ONE nonconstant multiply in this file. 33x33 -> 66, sign-extended to
+  // the 67-bit accumulator width that a difference of two products needs.
+  wire signed [65:0] m_p = m_a * m_b;
+
+  // 67 bits: a difference of two 66-bit products. Same width the spatial
+  // version's s1_n* carried, for the same reason.
+  logic signed [66:0] acc0, acc1, acc2;
+
   // ---- stage 2: the round-half-up rescale by 16 ----------------------------
   logic               s2_valid;
   logic signed [31:0] s2_nx, s2_ny, s2_nz;
@@ -138,13 +189,29 @@ module zhao_terrain_normals (
 
   // One job in flight per stage; a full output stalls stage 2, which stalls
   // stage 1, which deasserts ready. No packet is ever dropped.
-  wire s2_free = !s2_valid || nrm_ready_i;
-  wire s1_free = !s1_valid || s2_free;
+  // Computed once and used by both the outputs and the degeneracy test.
+  wire signed [31:0] r_nx = rescale16(s1_n0);
+  wire signed [31:0] r_ny = rescale16(s1_n1);
+  wire signed [31:0] r_nz = rescale16(s1_n2);
 
-  assign tri_ready_o = s1_free;
+  wire s2_free = !s2_valid || nrm_ready_i;
+
+  // Sequenced: ready only when the shared multiplier is idle and stage 1 is
+  // empty. The old `s1_free` admitted a new triangle every clock, which was
+  // correct when all six products existed at once and is not now. Latency and
+  // initiation interval both become 7; the contract already admits `variable`.
+  assign tri_ready_o = !m_busy && !s1_valid;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      m_busy <= 1'b0;
+      mseq  <= 3'd0;
+      acc0  <= '0;
+      acc1  <= '0;
+      acc2  <= '0;
+      l1x <= '0; l1y <= '0; l1z <= '0;
+      l2x <= '0; l2y <= '0; l2z <= '0;
+      m_src <= '0;
       s1_valid <= 1'b0;
       s1_n0 <= '0;
       s1_n1 <= '0;
@@ -158,28 +225,65 @@ module zhao_terrain_normals (
       s2_src <= '0;
       terrain_samples_evaluated_o <= '0;
     end else begin
-      if (s1_free) begin
-        s1_valid <= tri_valid_i;
+      // Accept only when the multiplier is free AND stage 1 is empty, so the
+      // walk can never be interrupted and s1_valid can never be overwritten
+      // mid-sequence. Deliberately more conservative than the old `s1_free`.
+      if (!m_busy && !s1_valid) begin
         if (tri_valid_i) begin
-          s1_n0 <= (e1y * e2z) - (e1z * e2y);
-          s1_n1 <= (e1z * e2x) - (e1x * e2z);
-          s1_n2 <= (e1x * e2y) - (e1y * e2x);
-          s1_src <= src_id_i;
+          l1x <= e1x; l1y <= e1y; l1z <= e1z;
+          l2x <= e2x; l2y <= e2y; l2z <= e2z;
+          m_src  <= src_id_i;
+          mseq   <= 3'd0;
+          m_busy <= 1'b1;
+        end
+      end else if (m_busy) begin
+        // One product per clock, accumulated with its sign. The first term of
+        // each lane assigns and the second subtracts, so no lane needs a clear.
+        unique case (mseq)
+          3'd0: acc0 <=  $signed({{1{m_p[65]}}, m_p});
+          3'd1: acc0 <= acc0 - $signed({{1{m_p[65]}}, m_p});
+          3'd2: acc1 <=  $signed({{1{m_p[65]}}, m_p});
+          3'd3: acc1 <= acc1 - $signed({{1{m_p[65]}}, m_p});
+          3'd4: acc2 <=  $signed({{1{m_p[65]}}, m_p});
+          3'd5: acc2 <= acc2 - $signed({{1{m_p[65]}}, m_p});
+          default: ;
+        endcase
+
+        if (mseq == 3'(NSTEP - 1)) begin
+          m_busy <= 1'b0;
+          s1_valid <= 1'b1;
+          s1_n0 <= acc0;
+          s1_n1 <= acc1;
+          // acc2's final subtract lands this same edge, so take it from the
+          // combinational value rather than the register, which is one cycle
+          // behind. Same value, one cycle earlier -- keeps the walk at 6.
+          s1_n2 <= acc2 - $signed({{1{m_p[65]}}, m_p});
+          s1_src <= m_src;
+        end else begin
+          mseq <= mseq + 3'd1;
         end
       end
+
+      if (s1_valid && s2_free) s1_valid <= 1'b0;
 
       if (s2_free) begin
         s2_valid <= s1_valid;
         if (s1_valid) begin
-          s2_nx <= rescale16(s1_n0);
-          s2_ny <= rescale16(s1_n1);
-          s2_nz <= rescale16(s1_n2);
+          // rescale16 was called SIX times here for three values -- three for
+          // the outputs and three more solely to judge degeneracy. Each call
+          // is a 67-bit add, an arithmetic shift and two 67-bit comparisons,
+          // so half of that logic existed only to be compared against zero.
+          // Same defect SURFACE.STAMP carried (a 66-bit rescale computed twice,
+          // the second time only for a ledger bit). Computed once now, and the
+          // degeneracy test reads the results.
+          s2_nx <= r_nx;
+          s2_ny <= r_ny;
+          s2_nz <= r_nz;
           // Degenerate is judged on the RESCALED lanes, matching the
           // reference: `shade_flat_tri` computes nmag2 from fx/fy/fz, the
           // post-rescale values, so a cell whose exact cross product is
           // nonzero but rounds to zero counts as degenerate there too.
-          s2_degen <= (rescale16(s1_n0) == 32'sd0) && (rescale16(s1_n1) == 32'sd0) &&
-              (rescale16(s1_n2) == 32'sd0);
+          s2_degen <= (r_nx == 32'sd0) && (r_ny == 32'sd0) && (r_nz == 32'sd0);
           s2_src <= s1_src;
           terrain_samples_evaluated_o <= terrain_samples_evaluated_o + 32'd1;
         end
