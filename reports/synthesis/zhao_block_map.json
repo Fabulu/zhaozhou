@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "b09b0512a9e5906f9ed2801f66acfeb2297ee668",
+    "newestRunCommit":  "534bbd2263eee36e92dbc12ccdc1ceae2a3c8f2d",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "0b74b21fc720aa87",
+    "sourceListHash":  "060a1f26c5aa3dcf",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -1090,15 +1090,15 @@
                    {
                        "module":  "zhao_geom_binner",
                        "status":  "ok",
-                       "sourceCommit":  "de11ce9bf10579d2b38c0487c67027500eff5c47",
+                       "sourceCommit":  "534bbd2263eee36e92dbc12ccdc1ceae2a3c8f2d",
                        "rtlCleanAtHead":  true,
-                       "sourceListHash":  "9a53f278725c7224",
-                       "sourceFileCount":  94,
+                       "sourceListHash":  "060a1f26c5aa3dcf",
+                       "sourceFileCount":  96,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  32,
-                       "dspBlocks":  12,
+                       "seconds":  38.9,
+                       "dspBlocks":  6,
                        "registers":  937,
                        "blockMemoryBits":  42944,
                        "virtualPins":  756,
@@ -1143,9 +1143,8 @@
                        "inferredMemoryCount":  4,
                        "inferredDesignMemoryCount":  4,
                        "dspDecomposition":  {
-                                                "Two Independent 18x18":  6,
-                                                "Total number of DSP blocks":  12,
-                                                "Fixed Point Unsigned Multiplier":  6,
+                                                "Independent 27x27":  6,
+                                                "Total number of DSP blocks":  6,
                                                 "Fixed Point Mixed Sign Multiplier":  6
                                             },
                        "ramConversionWarnings":  0,
