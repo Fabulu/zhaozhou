@@ -925,3 +925,33 @@ runs:
       lanes), the denial's `fixed:1` timing (measured directly in the directed
       lane), and the 45/45/10 numbers themselves (they arrive from the command
       stream -- contract law T3).
+
+  - property: tests/formal/cdc_snapshot.sby
+    status: green
+    date: "2026-08-24"
+    commit: "24c1625"
+    lane: formal_cdc_snapshot
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The starvation crossing, replaced structurally and proved as a PROTOCOL
+      rather than watched as a value. The shell used to sample a 64-bit vid_clk
+      counter straight into gpu_clk and check afterwards whether it had moved;
+      across FOUR composed fits that touched nothing in that path its hold slack
+      read -0.952 FAIL, +0.254 pass, +0.259 pass, -0.728 FAIL -- 1.2 ns of swing
+      on placement alone, which made the shell timing verdict NONDETERMINISTIC.
+      bmc and cover both PASS at depth 32: the handshake cannot lose, duplicate
+      or fabricate a snapshot, a publish while busy raises a sticky fault rather
+      than silently dropping, the acknowledgement names the request actually
+      consumed, and validity never retracts. Six covers demand the machine
+      publishes, is busy, overflows, collects, edges and carries a nonzero value
+      -- every assertion is guarded and would be vacuously true on a machine that
+      never runs, which is the shape MEM.GUARD once shipped.
+      TWO GAPS, RECORDED RATHER THAN IMPLIED AWAY. (1) METASTABILITY is not
+      proven and cannot be by any formal tool; that is the three-flop
+      synchronizer and a settling-time argument. (2) DIFFERING CLOCK RATES are
+      not proven: the harness drives both domains from one clock, so the
+      synchronizers degrade to plain delays. The rate case -- a destination
+      slower than the publish rate, which is exactly what ovf_o exists for --
+      still needs a simulation test at randomised relative phase and does not
+      have one.

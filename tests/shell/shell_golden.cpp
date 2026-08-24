@@ -265,8 +265,19 @@ void run_mode(const ModeInfo& mi, bool write_golden) {
         check(sw.bank[31] == 0, "golden: underruns", 0, sw.bank[31]);
         check(sw.bank[35] == 0, "golden: gaps", 0, sw.bank[35]);
         check(sw.bank[36] == 0, "golden: rumble drops", 0, sw.bank[36]);
-        // boot transient (mode-flush refetch) settles by tick 2
-        if (starve_baseline == ~0ull && sk >= 2) {
+        // Boot transient (mode-flush refetch) settles by tick 2 in RAW
+        // sampling. IT IS TICK 3 NOW, and the extra tick is the point of the
+        // change rather than a regression: bank[30] no longer samples the
+        // vid-domain counter across the clock boundary on a gpu tick. It
+        // reports a COHERENT SNAPSHOT published once per vid frame and
+        // collected through a toggle handshake, so the first real reading
+        // lands one frame later than a torn read did.
+        //
+        // Caught by this test at tick 2 reading 0 (no snapshot collected
+        // yet) and then 0x280 once one arrived -- and 0x280 = 640 is inside
+        // this very check's own <= 1024 "two lines" tolerance, so the value
+        // was never wrong. Only its arrival moved.
+        if (starve_baseline == ~0ull && sk >= 3) {
           starve_baseline = sw.bank[30];
           check(starve_baseline <= 1024, "golden: starvation baseline <= two lines", 1,
                 starve_baseline <= 1024);

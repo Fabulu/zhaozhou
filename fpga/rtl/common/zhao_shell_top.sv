@@ -541,7 +541,8 @@ module zhao_shell_top
   assign unused_dma = ^dma_snap_cmds ^ ^dma_snap_bytes ^ ^dma_snap_drops
                     ^ ^dma_bytes_consumed ^ ^dma_cmds_consumed ^ ^dma_slot
                     ^ dpy_snap_req ^ ^frame_id_vid ^ ^deadline_margin_vid
-                    ^ frame_repeated_vid ^ frame_tick_vid ^ frame_end;
+                    ^ frame_repeated_vid ^ frame_tick_vid ^ frame_end
+                    ^ starve_busy;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
@@ -1462,21 +1463,60 @@ module zhao_shell_top
     else        tick_d1 <= gpu_tick.pulse;
   end
 
-  // starvation CDC tripwire: the vid-domain value must be quiescent across
-  // the tick sample window (it only moves during active lines; the tick
-  // lands in vblank) — trip if it moved
-  logic [63:0] starve_samp;
-  logic        cdc_err;
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      starve_samp <= 64'd0;
-      cdc_err     <= 1'b0;
-    end else begin
-      starve_samp <= starvation_o;
-      if (tick_d1 && (starvation_o != starve_samp)) cdc_err <= 1'b1;
-    end
-  end
-  assign shell_err_cdc_o = cdc_err;
+  // ---- the starvation crossing, as a SNAPSHOT MAILBOX ---------------------
+  // This used to sample the whole 64-bit vid_clk counter straight into gpu_clk
+  // and check AFTERWARDS whether it had moved:
+  //
+  //     starve_samp <= starvation_o;
+  //     if (tick_d1 && (starvation_o != starve_samp)) cdc_err <= 1'b1;
+  //
+  // The premise -- the counter only advances during active lines, the tick
+  // lands in vblank -- was reasonable. The STRUCTURE was not: a value
+  // comparison can notice that a bus moved, it cannot make a metastable sample
+  // safe, and it says nothing about the 62 bits that did not move.
+  //
+  // MEASURED, and this is why it changed. Across FOUR composed fits that
+  // touched nothing in this path, the crossing's hold slack read
+  //
+  //     -0.952 FAIL   +0.254 pass   +0.259 pass   -0.728 FAIL
+  //
+  // 1.2 ns of swing on placement alone, which made the shell's timing verdict
+  // NONDETERMINISTIC -- worse than permanently red, because a verdict that
+  // flips at random cannot be trusted in either direction and a real
+  // regression arriving on a lucky fit is indistinguishable from luck. It had
+  // already hidden one: the true worst synchronous path (-0.875 ns) sat behind
+  // this crossing's -1.991.
+  //
+  // Published once per VID-DOMAIN frame, which is the rate the consumer wants:
+  // `prov[6]` samples at `tick_d1`, once per frame.
+  //
+  // ENFORCED-BY: tests/formal/cdc_snapshot.sby
+  logic [63:0] starve_snap;
+  logic        starve_snap_valid;
+  logic        starve_ovf;
+  // Named rather than left empty: this lane forbids empty-by-name pin
+  // connections, and the signal is genuinely observable -- it says the video
+  // side is holding a snapshot the GPU side has not taken yet.
+  logic        starve_busy;
+
+  zhao_cdc_snapshot #(.W(64)) u_starve_mbx (
+      .src_clk      (vid_clk),
+      .src_rst_n    (rst_n),
+      .src_publish_i(frame_tick_vid),
+      .d_i          (starvation_o),
+      .src_busy_o   (starve_busy),
+      .ovf_o        (starve_ovf),
+      .dst_clk      (gpu_clk),
+      .dst_rst_n    (rst_n),
+      .q_o          (starve_snap),
+      .q_valid_o    (starve_snap_valid)
+  );
+
+  // The error bit now means something a person can act on: the GPU side failed
+  // to collect a snapshot before the video side had another to publish. The
+  // old bit meant "the counter moved while I happened to be looking", which is
+  // a statement about luck.
+  assign shell_err_cdc_o = starve_ovf;
 
   // summed byte counters (u64; each shadow saturates at u32 individually)
   logic [63:0] vram_total, hps_total;
@@ -1499,8 +1539,14 @@ module zhao_shell_top
                 value: vram_total};                               // id 28
     prov[5] = '{valid: tick_d1, counter_id: ZHAO_CNT_HPS_BYTES,
                 value: hps_total};                                // id 29
+    // READS THE SNAPSHOT, NOT THE CROSSING. This line used to take
+    // `starvation_o` -- a vid_clk value -- directly on a gpu_clk tick, so the
+    // counter itself sampled across the domain boundary and the tripwire
+    // above only watched it happen. `starve_snap_valid` gates the first
+    // frame, before any snapshot has been collected, to zero rather than to
+    // an undefined mailbox.
     prov[6] = '{valid: tick_d1, counter_id: ZHAO_CNT_SCANOUT_STARVE,
-                value: starvation_o};                             // id 30
+                value: starve_snap_valid ? starve_snap : 64'd0};  // id 30
     prov[7] = '{valid: tick_d1, counter_id: ZHAO_CNT_INPUT_SEQ_GAPS,
                 value: input_gaps_o};                             // id 35
     prov[8] = '{valid: tick_d1, counter_id: ZHAO_CNT_RUMBLE_DROPPED,

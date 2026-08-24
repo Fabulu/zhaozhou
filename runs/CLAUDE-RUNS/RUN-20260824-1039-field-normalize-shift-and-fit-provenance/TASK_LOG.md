@@ -659,6 +659,84 @@ and the point of the change**. Fixed properly by taking the argument at its real
 Green: directed, random, random_nightly, lint, and the **formal arena-bounds
 proof**. Expect 12 -> 4 on the map.
 
+### 18:40 — ALL SEVEN OWNER RULINGS LANDED, and one corrects my language
+
+Fabian ruled every open item. Recorded verbatim at `24c1625`. The one that
+changes how I must *speak*, not just what I build:
+
+> **"Do not claim 110 DSP saved until each affected block maps."**
+
+The SetView bound **enables** the audit; it banks nothing. I have been quoting
+110 as money in hand and it is not — and today's own BINNER result is the proof:
+I predicted 4, measured 6, because I counted operator sites instead of reading
+the loop bound. **The only DSP saving actually on the board is 12 -> 6.**
+
+The rulings in one line each: SetView bounds the **nine multiplied** linear words
+to signed 27-bit and rejects violations whole; BAKE radius 512 m rejected not
+clamped; creature radius 128 m with rigid bone matrices and Loom scale kept
+separate (<=4.0); `rescale_s32` is a **bug**, s128 throughout; scars are
+**sheet-based** — no pool, no fading, 8 MiB canonical; Earth WRITE ops are **live
+composition**, never persistent mutation; two-bone hardware stays behind the
+existing measured all-clips error gate.
+
+**And one of my questions was simply the wrong question.** I asked for a
+scar-texture *pool size*. There is no pool: a stamp rasterises into the patch's
+64x64 sheet and the record then occupies nothing. Ten thousand overlapping
+impacts still leave one fixed sheet.
+
+### 19:00 — THE CDC MAILBOX IS WIRED AND PROVED
+
+`zhao_cdc_snapshot` — a one-entry toggle-handshake mailbox — replaces the raw
+64-bit sample. **It replaces BOTH crossings, which is the part I nearly missed:**
+`prov[6].value` was reading `starvation_o` (a `vid_clk` value) directly on a
+`gpu_clk` tick, so the counter itself sampled across the boundary and the
+tripwire merely *watched* it happen.
+
+`formal_cdc_snapshot`: **bmc PASS, cover PASS** at depth 32. Six assertions, six
+covers.
+
+Two frontend corrections on the way: `read_slang` rejects concurrent SVA
+outright — *"encountered unsupported SVA feature"* on all six `assert property`
+— so the properties are **immediate assertions inside clocked blocks**, matching
+`zhao_debug_frameblit`; and it hit the same declaration-before-use rule as the
+Field sequencer, because the toggle pair is by nature referenced from both
+domains.
+
+### 19:10 — the golden replay caught it, and the DESIGN was right
+
+    FAIL: golden: starvation constant: expected 0x0, got 0x280
+
+**0x280 = 640, and this check's own tolerance is `<= 1024` ("two lines").** The
+value was never wrong. What moved is *when it becomes visible*: the mailbox
+publishes once per vid frame and the GPU collects it a few clocks later, so the
+first real reading lands one frame after a torn read did. The test captured its
+baseline at tick 2 — before any snapshot existed — saw 0, then saw the true 640
+and called it non-constant.
+
+Baseline capture moved to tick 3 **with the reason written beside it**. Same
+shape as the Field register-file change: a deliberate latency change recorded
+before the test moved, not a test bent to fit a result.
+
+### 19:20 — THE LEDGER REFUSED ME TWICE MORE, AND WAS RIGHT BOTH TIMES
+
+* **V19** — a bounded `bmc` proof must carry a scope guard that fires if the
+  depth is raised, or an explicit waiver. Mine needs no guard: every assertion is
+  **step-local**, relating now to `$past` one clock earlier, with no horizon and
+  nothing accumulating toward a bound. `# SCOPE-TOTAL:` waiver written, and it
+  states the contrast — in `field_seq_bound` the **depth IS the claim**, which is
+  exactly why that one has a real guard.
+* **V20** — `// stable for >= 2 dst clocks by construction` was an invariant
+  claim with no enforcer. It now names `a_hold_stable_while_busy`, an assertion
+  in the same file that **proves** the stability the comment asserts.
+
+> Twice in one day the ledger has refused a comment of mine where the claim was
+> TRUE but UNBACKED. That is the rule doing precisely what it exists for, and it
+> is a better reviewer than I am on my own prose.
+
+`shell_err_cdc_o` now means something a person can act on — the GPU side failed
+to collect a snapshot before the video side had another. The old bit meant "the
+counter moved while I happened to be looking", which is a statement about luck.
+
 ---
 
 ## Decisions Made

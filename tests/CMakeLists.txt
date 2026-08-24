@@ -1905,7 +1905,8 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
   foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety
-                           video_slotmgr_invariants field_seq_bound sat_add)
+                           video_slotmgr_invariants field_seq_bound sat_add
+                           cdc_snapshot)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
@@ -3239,6 +3240,7 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_cdc_snapshot.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_scaler.sv

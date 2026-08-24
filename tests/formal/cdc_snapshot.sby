@@ -1,0 +1,78 @@
+# cdc_snapshot.sby — the starvation crossing's replacement, proved as a protocol.
+#
+# WHY THIS PROOF EXISTS
+#
+# The shell sampled a 64-bit vid_clk counter directly into gpu_clk and checked
+# AFTERWARDS whether it had moved. Measured across four composed fits that
+# touched nothing in that path, its hold slack read -0.952 FAIL, +0.254 pass,
+# +0.259 pass, -0.728 FAIL: 1.2 ns of swing on placement alone, which made the
+# whole shell timing verdict nondeterministic.
+#
+# The replacement is a toggle-handshake mailbox. What has to be true of it is a
+# PROTOCOL claim, not a value claim, so it is proved rather than watched.
+#
+# WHAT IS PROVED (properties live in the DUT under `ifdef FORMAL):
+#   the source cannot touch the held value while a snapshot is uncollected;
+#   a publish while busy raises a STICKY overflow and never silently drops;
+#   the destination never fabricates a snapshot;
+#   the acknowledgement names the request actually consumed;
+#   the valid latch never retracts.
+#
+# WHAT IS NOT PROVED, stated so nobody reads more into a green than is there:
+#   METASTABILITY. No formal tool establishes it; that is the three-flop
+#   synchronizer's job and a settling-time argument.
+#   DIFFERING CLOCK RATES. This harness drives both domains from one clock, so
+#   the synchronizers degrade to plain delays. The rate case -- a destination
+#   slower than the publish rate, which is exactly what ovf_o is for -- needs a
+#   simulation test at randomised relative phase. It is a REAL GAP and is
+#   recorded as one in design/formal_runs.yml rather than implied away.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the assertions hold to the depth below.
+#   cover — the antecedents are REACHABLE. Every assertion here is an
+#           implication, and a machine that never publishes satisfies all of
+#           them while proving nothing. The covers demand a publish, a
+#           collection, a busy window, an overflow, and TWO snapshots in
+#           sequence.
+#
+# DEPTH. The longest causal chain is publish -> req toggle -> three destination
+# flops -> capture+ack -> three source flops -> busy clears -> second publish,
+# which is 2 + 3 + 1 + 3 + 1 = 10 steps; c_two_snaps needs a second pass through
+# it. 32 gives that with room and keeps the run trivial.
+
+# SCOPE-TOTAL: every assertion here is STEP-LOCAL -- each relates the current
+# state to $past(state) one clock earlier, with no horizon assumption and no
+# quantity that accumulates toward a bound. Raising the depth cannot reach a
+# state the proof did not already cover at every step, so there is nothing
+# for an a_scope_* guard to fire on.
+#
+# The depth exists for the COVERS, not the asserts: c_two_snaps-style
+# reachability needs the full publish -> 3 sync flops -> capture+ack -> 3
+# sync flops -> busy clear -> publish loop, about 10 steps, and 32 gives that
+# twice over. A cover that becomes reachable at a greater depth would be a
+# missing cover, not a broken bound.
+#
+# Contrast field_seq_bound, where the depth IS the claim: a_progress bounds
+# busy_cnt, so raising the depth past its derivation would silently re-scope
+# what PASS means and its a_scope_short_program_window exists to refuse that.
+#
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 32
+cover: mode cover
+cover: depth 32
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+read_slang --top zhao_cdc_snapshot -DFORMAL zhao_cdc_snapshot.sv
+prep -top zhao_cdc_snapshot
+
+[files]
+../../fpga/rtl/common/zhao_cdc_snapshot.sv
