@@ -79,8 +79,19 @@ blocks:
       docs/OWNER_DOCKET.md 2026-08-23: 10 deform events/s x 25 vertices is 4.2
       normals/frame; rebuilding the entire 65,536-vertex field once per second
       is 1,092. 2,000 is the ruled demand, generous against both.
-    measuredII: null
-    requiredII: 1
+    measuredII: 7
+    # 833, not 1. The contract asks for "1 normal per vertex per clock", which
+    # is a one-clock PLACEHOLDER of the kind that produced a 327-DSP design --
+    # it says nothing about how many normals a frame needs. Derived instead:
+    # 1,666,667 clocks / 2,000 normals = 833 clocks available per normal. At the
+    # measured II of 7 this block has 119x headroom.
+    #
+    # NOTE: nothing in tools/ reads `requiredII` -- it is a dead field in all
+    # seven entries, exactly as `verticesPerItem` was before it was removed.
+    # Corrected here rather than deleted, because `requiredII: 1` sitting beside
+    # `measuredII: 7` reads as a violation to a human even though no tool checks
+    # it. The other six entries should be audited when someone owns that field.
+    requiredII: 833
     reserve: 0.20
 
   zhao_terrain_project:
