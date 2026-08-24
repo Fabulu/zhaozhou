@@ -995,6 +995,29 @@ runs:
     # accept edge exactly as mem_q captures the memory, and open clears the
     # shadow validity in the same order the RTL clears its valid bits.
     #
+    # 2026-08-25: A REAL HARNESS DEFECT FOUND AND FIXED, by asking the solver a
+    # direct question instead of proposing a fifth theory. A diagnostic cover
+    #
+    #   cover (fill_ok && !f_watched_fill && wr_addr == watched_addr)
+    #
+    # was REACHABLE. The shadow compared FULL-WIDTH KEYS while the RTL writes by
+    # TRUNCATED ADDRESS, so a fill could land in the watched slot without the
+    # shadow recording it -- and bmc then refuted a_hit_implies_written by
+    # exhibiting a hit the shadow believed was never written. The arena was
+    # right; the QUESTION was wrong. The shadow now keys off wr_addr/rd_addr, and
+    # the diagnostic cover became UNREACHABLE, which is the confirmation.
+    #
+    # bmc STILL FAILS at k=4 on the same input sequence (open+fill+seal in one
+    # cycle, then a lookup, then a hit with f_shadow_valid low). Cover passes.
+    # The remaining discrepancy is not yet explained: by inspection the fill that
+    # sets valid_q must also set the shadow, and the trace says it does not.
+    #
+    # WHAT WORKED, and should be done first next time: a diagnostic COVER that
+    # asks whether a specific divergence is reachable settles in one run what
+    # four hypotheses could not. Trace-reading works too, but only through a
+    # parsed VCD -- a grep over this file mangles signal identifiers containing
+    # quote characters and already produced one false finding.
+    #
     # NEXT STEP when this is picked up: stop hypothesising and read the k=4
     # counterexample properly -- yosys-smtbmc or a VCD viewer, NOT a grep, since
     # a grep already produced one false finding here (signal identifiers in this

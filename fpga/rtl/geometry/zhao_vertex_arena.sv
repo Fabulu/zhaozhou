@@ -308,10 +308,23 @@ module zhao_vertex_arena #(
   logic                 f_shadow_valid;   // written since the last open
   logic [GEN_W-1:0]     f_shadow_gen;
 
-  wire f_watched_fill = fill_ok &&
-                        (fill_arena_i == f_arena) && (fill_index_i == f_index);
-  wire f_watched_look = look_valid_i &&
-                        (look_arena_i == f_arena) && (look_index_i == f_index);
+  // THE SHADOW KEYS OFF THE ADDRESS, NOT THE KEY -- and the difference was a
+  // real defect in this proof, found by c_fill_addr_alias being REACHABLE.
+  //
+  // The RTL writes and reads by the TRUNCATED address {arena[AW-1:0],
+  // index[IW-1:0]}. The first version of this shadow compared the FULL-WIDTH
+  // key instead, so a fill could land in the watched slot without the shadow
+  // recording it, and bmc then refuted `a_hit_implies_written` by exhibiting a
+  // hit the shadow believed had never been written. The arena was right; the
+  // question was wrong.
+  //
+  // Four earlier hypotheses -- read-during-write, missing reset, fills during
+  // reset, an out-of-range watched key -- were all refuted by experiment before
+  // this one was found by asking the solver a DIRECT question instead of
+  // proposing another theory.
+  wire [AW+IW-1:0] f_addr = {f_arena[AW-1:0], f_index[IW-1:0]};
+  wire f_watched_fill = fill_ok && (wr_addr == f_addr);
+  wire f_watched_look = look_valid_i && (rd_addr == f_addr);
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -397,6 +410,12 @@ module zhao_vertex_arena #(
       c_watched_hit:cover (f_look_was_watched && rep_hit_o);
       c_overflow:   cover (arena_overflow_o);
       c_regen:      cover (f_past_valid && open_i && !open_bad_arena);
+      // c_fill_addr_alias lived here and did its job: it was REACHABLE, which
+      // proved the shadow's full-width key compare could miss a fill the RTL
+      // applied to the watched address. After keying the shadow off the address
+      // it became UNREACHABLE -- so it is removed rather than left as a cover
+      // that can never fire, which would red the lane forever for a condition
+      // the fix deliberately eliminated.
     end
   end
 `endif
