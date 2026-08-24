@@ -1909,8 +1909,29 @@ if(ZHAO_SBY_BIN)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+    # field_seq_bound needs FAR more than the 1800 s default, and the number is
+    # MEASURED (2026-08-24) rather than chosen: bmc at the derived depth 172
+    # passes in 2:02:17 (7,337 s) and cover in 15.9 s. That 7,337 was taken with
+    # a duplicate proof contending for ~30 min of it, so it is an UPPER bound on
+    # the solo time -- the safe direction for a budget.
+    #
+    # Before this the lane died at exactly 1800.20 s, at roughly k=130 of 172,
+    # and reported FAILED. It was never failing a property: every bound it
+    # reached was UNSATISFIABLE. It was never FINISHING. That is exactly the
+    # shape the mem_vram_arbiter_liveness comment above warns about -- a proof
+    # lane that times out gets read as a failure, or gets "fixed" by deleting
+    # tasks.
+    #
+    # Per the ZHAO_FORMAL_WRAPPER_TIMEOUT contract at the top of this file, a
+    # lane needing more sets it before its configure_file and puts it back.
+    if(sby_prop STREQUAL "field_seq_bound")
+      set(ZHAO_FORMAL_WRAPPER_TIMEOUT 12000)
+    endif()
     configure_file(formal/mem_formal_lane.cmake.in
                    formal/${sby_prop}_lane.cmake @ONLY)
+    if(sby_prop STREQUAL "field_seq_bound")
+      set(ZHAO_FORMAL_WRAPPER_TIMEOUT 1800)
+    endif()
     set(zhao_formal_script "${CMAKE_CURRENT_BINARY_DIR}/formal/${sby_prop}_lane.cmake")
     string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
     add_test(NAME formal_${sby_prop}
@@ -1933,6 +1954,13 @@ if(ZHAO_SBY_BIN)
   # AND its 5,000-packet random lane while this proof fails it. Leaving it in
   # nightly alone would mean the law is unguarded in the lane people watch.
   set_tests_properties(formal_sat_add PROPERTIES LABELS "formal;nightly;fast")
+
+  # CTest TIMEOUT must sit ABOVE the wrapper budget so the wrapper fails first
+  # with a readable sby message rather than being killed from outside -- the
+  # rule the ZHAO_FORMAL_WRAPPER_TIMEOUT comment records from
+  # formal_texture_bilerp, where CTest 3600 against wrapper 1800 produced a
+  # bare FAILED at 1,800.88 s.
+  set_tests_properties(formal_field_seq_bound PROPERTIES TIMEOUT 12600)
 endif()
 
 # ---- W2.2: video -------------------------------------------------------------

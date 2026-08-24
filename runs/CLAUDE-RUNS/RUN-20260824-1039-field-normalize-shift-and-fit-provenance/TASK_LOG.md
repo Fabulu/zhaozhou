@@ -283,6 +283,44 @@ So **FRAMEBLIT step 8 is unblocked, and it is "rerun the composed Quartus
 synthesis"** — a machine task, queued behind the formal measurement, since two
 heavy Quartus/solver jobs must not co-schedule.
 
+### 13:45 — I CORRUPTED THE MEASUREMENT I HAD SPENT AN HOUR PROTECTING
+
+`ctest -R "field_seq"` also matches **`formal_field_seq_bound`**. So the run I
+started to verify the declaration reorder launched a **second copy of the same
+two-hour proof**, which then competed with the solo measurement for about thirty
+minutes before timing out at 1800 s.
+
+An hour of refusing to co-schedule anything, undone by an unanchored regex.
+
+The four lanes I actually wanted all passed — `field_seq_directed`,
+`field_seq_random`, `field_seq_random_nightly`, `lint_zhao_field_seq` — so the
+reorder is behaviour-neutral, and the sweep preflight still reports **38 mutants,
+0 do not build**, meaning no anchor moved. Committed `0d80f64`, pushed.
+
+**The wall-time figure is therefore an upper bound, and is recorded as one.**
+For sizing a timeout that errs in the safe direction — the lane's own warning is
+about lanes that pass solo and fail contended, i.e. under-sizing — but it is not
+the solo number the policy asks for and must not be written down as though it
+were.
+
+### 14:30 — THE PROOF PASSES
+
+    engine_0 (btor btormc) returned pass
+    engine_0 did not produce any traces
+    DONE (PASS, rc=0)
+    Elapsed clock time: 2:02:17 (7337 s)
+
+**`bmc` passes at depth 172.** 19 inputs, 152 states, 4 bad-state properties, 6
+constraints; every bound UNSATISFIABLE and no trace produced.
+
+**7,337 s is 4.1x the 1,800 s wrapper budget** — with ~30 minutes of that
+contended by my duplicate. The lane was never failing. It was never *finishing*.
+
+That also settles the depth question the RF change raised: the derivation keys
+off the package constant `MAX_OP_CYCLES = 80`, not measured latency, so
+NORMALIZE3's worst case at 67 + 1 for the new state stays far under it and **172
+did not need re-deriving.**
+
 ---
 
 ## Decisions Made

@@ -166,13 +166,26 @@ runs:
       the bmc at exactly this assertion); bmc + cover re-run green.
 
   - property: tests/formal/field_seq_bound.sby
-    status: pending
-    # PENDING, DELIBERATELY. The depth was re-derived to 172 (see notes) and the
-    # solo wall time of that run is still being measured. This entry is committed
-    # now because the DERIVATION is the part that is hard to reconstruct; the
-    # status is flipped only by a run that passes inside the lane's own budget.
-    date: "2026-08-23"
-    commit: "62d7b0e"
+    status: green
+    # FLIPPED 2026-08-24, by a run that passes inside the lane's own budget --
+    # after that budget was raised to fit the MEASURED time rather than the
+    # other way round. bmc PASSES at depth 172 in 2:02:17 (7,337 s), producing
+    # no trace; cover PASSES in 15.9 s with all four traces. The lane's wrapper
+    # budget is now 12,000 s (tests/CMakeLists.txt), because at the 1800 s
+    # default this lane died at exactly 1800.20 s around k=130 of 172 and
+    # reported FAILED while never having failed a property.
+    #
+    # 7,337 s was measured with a duplicate copy of the same proof contending
+    # for roughly 30 minutes of it, so it is an UPPER bound on the solo time.
+    # Recorded as such rather than as a solo figure; the lane is RUN_SERIAL and
+    # the budget is sized off the larger number.
+    #
+    # The depth did NOT need re-deriving after the register-file rewrite: 172
+    # follows from the package constant MAX_OP_CYCLES = 80, not from measured
+    # latency, and NORMALIZE3's worst case at 67 + 1 for the added state stays
+    # far below it.
+    date: "2026-08-24"
+    commit: "0d80f64"
     lane: formal_field_seq_bound
     tasks: [bmc, cover]
     covers: true
