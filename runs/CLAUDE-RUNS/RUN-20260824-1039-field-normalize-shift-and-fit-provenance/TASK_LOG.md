@@ -172,6 +172,117 @@ M36.
 Preflight: **38 mutants across 11 files, 0 do not build** — non-zero count
 parsed, both re-anchored mutants confirmed buildable.
 
+### 11:50 — SWEEP 38/38, and the successor mutant is CAUGHT
+
+    attempted=38  expected=38  accounted=38  caught=33
+    SURVIVOR: M01, M07, M20, M36, M38
+
+**No mutant was discarded by the re-elaboration hash guard** (`attempted` equals
+`accounted`), so all 38 genuinely rebuilt. The five survivors are the same five
+as before and all are documented proven equivalents — **no coverage hole**.
+
+**M35's successor is caught**, which is the result that matters: the slice form
+is genuinely covered, not merely un-mutated. Had I deleted M35 when its target
+vanished, the score would still have read 33/37 and looked identical.
+
+Committed `440a1a1`, pushed. Harness work committed separately at `92e279d`.
+
+### 11:56 — THE FORMAL LANE HAS BEEN DEAD SINCE THE 23rd, BEHIND A `pending` LABEL
+
+The last ledger error is V16: `FIELD.SEQ.CORE` is `RTL_VERIFIED` while
+`tests/formal/field_seq_bound.sby` is recorded `pending`. The entry says the
+status flips "only by a run that passes inside the lane's own budget", so I ran
+it.
+
+**It did not elaborate at all. It failed in 0.92 seconds.**
+
+    zhao_field_seq.sv:328: error: identifier 'exec_writes' used before its declaration
+    ... 7 errors, then 4 more at :368 for rd_a_q/rd_b_q/rd_c_q/rd_h_q
+
+**The register-file rewrite did this.** It put a combinational write decode and
+a clocked memory process *above* the declarations they reference. Verilator
+accepts a forward reference; **`read_slang`, the formal frontend, does not.**
+Eleven errors, two ordering classes, no signal changed meaning.
+
+> **A red already labelled *expected* stops being looked at.** V16 exists so
+> banked evidence cannot back a maturity claim, and it was doing that job
+> honestly — but the same label removed the only pressure that would have
+> revealed the lane could not even start. The entry was truthful and it still
+> hid a completely broken lane.
+
+This is the sibling of the `SKIP`-if-absent gate that hid weeks of drift, and of
+the map-only census that looked healthy because the scanner walked the wrong
+branch. **The failure is never the label; it is that a label ends the looking.**
+
+### 12:25 — elaborating, and the wall time is finally being measured
+
+Depth **129 of 172**, every property UNSATISFIABLE so far, `cover` queued behind
+`bmc` on the single solver. The derivation did **not** need re-deriving: it keys
+off the package constant `MAX_OP_CYCLES = 80`, not measured latency, and
+NORMALIZE3's worst case at 67 + 1 for the new state is still far under it.
+
+Deliberately running **no builds or tests concurrently** — the number this owes
+the ledger is the run's *solo* wall time, and contending for CPU would inflate
+the very measurement being taken.
+
+Noted in passing: yosys warns `no driver for u_norm.r24_next[31:24]`. Benign and
+pre-existing — `r24_next` is clamped to `0x00FF_FFFF` and only `[23:0]` is ever
+consumed, so the top bits are optimised away. Not from the mantissa change.
+
+### 12:26 — the proof does not FAIL, it does not FIT
+
+    Total Test time (real) = 1800.20 sec   <- exactly the budget
+
+`ZHAO_FORMAL_WRAPPER_TIMEOUT` is **1800**, and `tests/CMakeLists.txt:65` says
+the wrapper budget is the one that BINDS — a lane's CTest `TIMEOUT` is only a
+backstop. So this is a **timeout at k~130 of 172**, not a violated property.
+Every bound reached was UNSATISFIABLE.
+
+The policy for this is already written and sanctioned: *"a lane that needs more
+sets it before its `configure_file` and puts it back afterwards"*, with
+`RUN_SERIAL TRUE` because **"wall time must approximate solo time"**. That is
+also the justification for not co-scheduling anything while measuring.
+
+`mem_vram_arbiter_liveness` went through exactly this in August and its comment
+carries the warning worth repeating: a proof lane that times out gets read as a
+failure, **or gets "fixed" by deleting tasks.**
+
+Measuring the solo number rather than picking a round one. At 13:25 it is at
+**k=140 after 57 minutes**, and the tail is steepening — k=130 took ~29 min and
+the next ten bounds took another 28. This is a multi-hour lane, which is itself
+the finding.
+
+### 13:30 — I MISREAD A SUPERSEDED SECTION AS A LIVE BLOCKER
+
+Chasing FRAMEBLIT (priority a), `REMAINING_BLOCKERS.md` appeared to say CMD.DMA
+still had two defects — a one-cycle payload CRC re-walk and a `slot_buf` that
+could not infer as RAM — described as *"NOT yet done, and it is a real
+redesign"*, gating the composed fit and FRAMEBLIT step 8.
+
+**All of it is already done, and the document says so.** The text I read sits
+inside a block headed *"(SUPERSEDED, kept for the reasoning)"*, and one
+paragraph above it the live text reads **"This unblocks the composed fit and
+FRAMEBLIT step 8."**
+
+The evidence agrees, which is why I caught it:
+
+| check | result |
+| --- | --- |
+| `slot_ram` inference | **32,768 memory bits** on the map — exactly 4,096 bytes |
+| the fit that "never succeeded" | `status ok`, **3,607 ALMs**, 1,293 s |
+| the commit | `f5e067e`, *"CMD.DMA FITS: 83,977 ALMs -> 3,607, and the staging buffer is real memory"*, **2026-08-22** |
+| the CRC re-walk | gone at `fd262de`; the RTL says *"crc_final() is gone"* and folds per beat |
+
+> **Reading a long report is a lane with its own failure mode.** A superseded
+> section is not stale data to be corrected — it is correct data about the past,
+> and treating it as current would have had me "fix" something already fixed and
+> then report a blocker cleared that was never blocking. The label that saved
+> this was the document's own, written by whoever chose to keep the reasoning.
+
+So **FRAMEBLIT step 8 is unblocked, and it is "rerun the composed Quartus
+synthesis"** — a machine task, queued behind the formal measurement, since two
+heavy Quartus/solver jobs must not co-schedule.
+
 ---
 
 ## Decisions Made

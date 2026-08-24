@@ -5,6 +5,62 @@ at the top.*
 
 ---
 
+## 2026-08-24 (midday) — a fit I had to throw away, and a proof that was never running
+
+### I broke my own rule and it was worth finding
+
+I edited a source file **while a Quartus fit was running**. Then I checked what
+that actually does, and it is worse than sloppy: our fit harness hands Quartus
+**the live files in the working folder**. Nothing is copied. So the fit measures
+whatever the file says at the moment the tool happens to read it.
+
+The timestamps: my edit at **10:33:06**, the tool's report at **10:34:47** —
+101 seconds later, inside the window where it reads sources.
+
+**So I killed the fit and threw it away.** It may well have been a perfectly
+good measurement. The point is it could no longer be *shown* to be, and a number
+we cannot show is worth nothing here — that is the same lesson as the
+199 MHz that turned out to be 37.
+
+The harness now takes a fingerprint of every source before, during and after,
+and a run whose sources moved is marked contaminated and **cannot enter the
+report**. The previous good measurement is kept rather than overwritten.
+
+Getting the *test of that alarm* right took four tries. Three times it reported
+"no contamination" and three times that was the test being broken, not the
+alarm: once it edited too early, once it watched a **stale leftover folder**
+(there were 36 of them), once it edited files that were not part of that build
+at all. **A test that says "nothing found" is not evidence the detector works.**
+
+### The Field engine's mantissa was doing work twice
+
+One of the Field engine's slowest steps built **two 64-bit shifters in series**
+to answer a question the step immediately before it had already answered. It is
+now a direct read of the bits that were already in the right place — same
+answer, verified against **50,000 random cases**, less hardware and a shorter
+path. This is wave 1 of the Field plan.
+
+### And a proof that has not run since the 23rd
+
+Our formal proof for the Field sequencer — the one that proves the machine
+**cannot hang**, which no ordinary test can show — was marked "pending" in the
+ledger. I ran it.
+
+**It did not even start.** It has been failing in one second since the register
+rewrite on the 23rd, because the formal tool is stricter about declaration order
+than our simulator is. Eleven complaints, all of them ordering, none of them a
+change in behaviour.
+
+**Nobody noticed because the entry already said "pending".** That is the part
+worth keeping: a red already labelled *expected* stops being looked at. The
+label was honest and it still hid a lane that was completely broken.
+
+It now elaborates and is running — currently proving depth 21 of 172, nothing
+violated so far. That run's wall time is the thing the ledger said was still
+unmeasured, and I will report it when it lands.
+
+---
+
 ## 2026-08-24 — the projector merge saved nothing, and found something better
 
 ### I predicted ~33 multipliers. The answer is zero, and I was wrong about why

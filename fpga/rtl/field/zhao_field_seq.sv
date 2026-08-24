@@ -315,6 +315,23 @@ module zhao_field_seq (
   logic [5:0]  rf_waddr;
   logic signed [31:0] rf_wdata;
 
+  // DECLARED HERE, ABOVE THEIR FIRST USE, NOT BESIDE THE ARITHMETIC THEY
+  // BELONG TO. The register-file rewrite put a combinational write decode
+  // above them, and Verilator accepts a reference that precedes its
+  // declaration while `read_slang` -- the FORMAL frontend -- does not. The
+  // proof lane failed to elaborate at all, and the V16 entry being recorded
+  // `pending` is what kept that invisible: nobody re-ran a proof that was
+  // already not green. Ordering only; no signal changed meaning.
+  logic signed [31:0] exec_result;
+  logic               exec_is_end, exec_writes, exec_unsupported;
+  logic               exec_sat_add, exec_sat_mul, exec_sat_rescale;
+
+  logic               multi_op, multi_vready, multi_rvalid;
+  logic signed [31:0] multi_o0, multi_o1, multi_o2;
+  logic [1:0]         multi_width;
+  logic               multi_sat_add, multi_sat_mul, multi_sat_rescale;
+  logic               multi_sat_rcp, multi_rcp0;
+
   // Decoded combinationally so the memories can be a plain clocked block. The
   // guard mirrors the sequential one below exactly: clear wins, then the walk,
   // then the host -- "there is no arbitration to get wrong because there is no
@@ -341,6 +358,10 @@ module zhao_field_seq (
     end
   end
 
+  // Declared above the clocked block that drives them: read_slang (the formal
+  // frontend) requires declaration before use where Verilator does not.
+  logic signed [31:0] rd_a_q, rd_b_q, rd_c_q, rd_h_q;
+
   // ---- the memories: CLOCK ONLY --------------------------------------------
   // No reset touches these arrays and no write is partial -- two of the three
   // things QUARTUS_GOTCHAS 10 measured as INDEPENDENTLY fatal to inference. The
@@ -360,7 +381,6 @@ module zhao_field_seq (
     end
   end
 
-  logic signed [31:0] rd_a_q, rd_b_q, rd_c_q, rd_h_q;
   wire signed [31:0] rd_a = va_q ? rd_a_q : 32'sd0;
   wire signed [31:0] rd_b = vb_q ? rd_b_q : 32'sd0;
   wire signed [31:0] rd_c = vc_q ? rd_c_q : 32'sd0;
@@ -388,15 +408,6 @@ module zhao_field_seq (
   end
 
   // ---- the arithmetic, all of it ------------------------------------------
-  logic signed [31:0] exec_result;
-  logic               exec_is_end, exec_writes, exec_unsupported;
-  logic               exec_sat_add, exec_sat_mul, exec_sat_rescale;
-
-  logic               multi_op, multi_vready, multi_rvalid;
-  logic signed [31:0] multi_o0, multi_o1, multi_o2;
-  logic [1:0]         multi_width;
-  logic               multi_sat_add, multi_sat_mul, multi_sat_rescale;
-  logic               multi_sat_rcp, multi_rcp0;
 
   // The table selector is the immediate, held for the whole instruction, so
   // the shell sees a stable table while the unit walks its entries.
