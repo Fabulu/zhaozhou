@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "748171193c93abe21581c8f79c5b5a0a1405a18e",
+    "newestRunCommit":  "2eeef64e52ae8ef714c980759490ac5033b67aad",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -2317,27 +2317,42 @@
                    {
                        "module":  "zhao_surface_sheet",
                        "status":  "ok",
-                       "sourceCommit":  "991f13c3ebf54704f1b14a588d3ea689d7d5791c",
+                       "sourceCommit":  "2eeef64e52ae8ef714c980759490ac5033b67aad",
                        "rtlCleanAtHead":  true,
                        "sourceListHash":  "9a53f278725c7224",
                        "sourceFileCount":  94,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  1095.8,
+                       "seconds":  32.5,
                        "dspBlocks":  0,
-                       "registers":  131258,
-                       "blockMemoryBits":  0,
+                       "registers":  170,
+                       "blockMemoryBits":  131072,
                        "virtualPins":  238,
                        "pins":  0,
-                       "estimatedAlms":  95947,
-                       "combAluts":  60354,
-                       "mlabMemoryBits":  null,
+                       "estimatedAlms":  279,
+                       "combAluts":  187,
+                       "mlabMemoryBits":  0,
                        "inferredMemories":  [
-
+                                                {
+                                                    "name":  "altsyncram:mem_str_rtl_0|altsyncram_s6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:mem_tag_rtl_0|altsyncram_s6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                }
                                             ],
-                       "inferredMemoryCount":  0,
-                       "inferredDesignMemoryCount":  0,
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1

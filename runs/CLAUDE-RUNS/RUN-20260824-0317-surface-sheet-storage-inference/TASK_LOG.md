@@ -150,6 +150,41 @@ against 95,947 estimated ALMs today.
 The open question is closed by measurement, and the four rows are now permanent
 calibration data rather than a one-off probe.
 
+### 04:05 - THE MEASUREMENT. It infers.
+
+`tools\quartusun_block_map.ps1 -Module zhao_surface_sheet -TimeoutSeconds 3600`,
+map-only, `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2. Provenance checked before
+reading anything: `sourceCommit 2eeef64` (this run's RTL commit),
+`rtlCleanAtHead: true`, `sourceFileCount 94`.
+
+| metric | HEAD (991f13c3) | after (2eeef64) | |
+| --- | ---: | ---: | --- |
+| `blockMemoryBits` | 0 | **131,072** | exactly the declared storage |
+| `inferredMemoryCount` | 0 | **2** | one per plane |
+| `registers` | 131,258 | **170** | -772x |
+| `estimatedAlms` | 95,947 | **279** | **-344x** |
+| `combAluts` | 60,354 | **187** | |
+| `dspBlocks` | 0 | 0 | unchanged, as intended |
+| map seconds | 1,095.8 | **32.5** | -34x |
+
+```
+altsyncram:mem_tag_rtl_0|...|ALTSYNCRAM  AUTO  Simple Dual Port  8192 x 8
+altsyncram:mem_str_rtl_0|...|ALTSYNCRAM  AUTO  Simple Dual Port  8192 x 8
+```
+
+`ramConversionWarnings: 0`. **229 % of the device becomes 0.67 % of it.** The
+block is no longer in the top eight resource items; it was number one by a
+factor of nearly three. `zhao_forge_cliff` (33,109) is now the largest, which is
+the stretch goal, and `zhao_field_seq` (7,958, still 0 bits inferred) the second.
+
+The 344x is close to §10's own curve. The grid measured 502x at 32,768 bits and
+806x at 36,864; this array is 131,072 bits, so the penalty was in the right
+family and the recovery is what removing it predicts.
+
+Note the map also got **34x faster**. 1,096 s of synthesis was Quartus building
+131,072 flip-flops and their mux trees.
+
+
 ---
 
 ## Subagent Spawns
