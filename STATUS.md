@@ -5,6 +5,91 @@ at the top.*
 
 ---
 
+## 2026-08-24 — the audit is done, and the biggest problem has no multipliers in it
+
+### The headline nobody was looking for
+
+We spent two days chasing multipliers. **The largest resource problem in the
+repository is a block with none.**
+
+`zhao_surface_sheet` — the surface texture store — declares 131,072 bits of
+memory. **The chip tool inferred none of it.** Every bit became a flip-flop:
+
+| | |
+| --- | ---: |
+| memory it asked for | 131,072 bits |
+| memory it got | **0** |
+| flip-flops instead | 131,258 |
+| logic cells | **95,947** |
+| **as a share of the whole chip** | **229%** |
+
+**It does not fit. It is more than twice the device, on its own, and it has zero
+multipliers — so it was invisible to every count we have made.** `FORGE.CLIFF` is
+the same illness at 79% of the chip.
+
+That is not a disaster so much as a relief: neither block is *doing* too much
+work. They are both storing data in the wrong kind of silicon, and the fix is
+a well-understood one.
+
+### Because the audit turned that into a law, not a guess
+
+The calibration ran 102 controlled experiments. Storage either becomes real
+memory or it becomes a mountain of logic, and **three things independently push
+it the wrong way**: reading without a clock, letting reset touch the array, or
+using byte-enables. Any one is enough.
+
+The penalty grows with size — **36× at 2 kbit, 502× at 32 kbit, 808× at the
+worst point measured.** Byte-enables were the surprise: 65,536 bits cost **45,134
+logic cells**, more than this chip has.
+
+**So a block reporting zero memory is now a failing block, by measurement rather
+than by opinion** — and both blocks above can be diagnosed without running the
+hours-long test that previously just timed out.
+
+### And a multiplier lever we have never had
+
+    operand width      multipliers per product
+    8 – 27 bits                 1
+    28 – 33                     3
+    40 – 48                     4
+    64                          9
+
+**Narrowing an operand from 32 bits to 27 turns one product from three
+multipliers into one**, changing nothing else. Terrain normals' six products are
+18 multipliers today; at 27 bits they are **6**, before any other work. That
+single number explains an old mystery too — the same code once cost 28 and 18
+depending only on how wide its inputs were. It was two bands apart.
+
+### What the whole design actually looks like now
+
+Every block is measured: **89 of 91**, against 41 of 94 two days ago. About
+**200 multipliers** of arithmetic exist repo-wide, and the ranked list puts
+**~75 of them** on three blocks, each derived from measured over-provisioning
+rather than intuition.
+
+The two projectors are confirmed as **byte-identical arithmetic** mapping to 33
+multipliers each — the duplication is exact, not approximate.
+
+### Honest limits, stated by the audit itself
+
+**None of the 41 stored speed measurements describes today's code.** They will
+have to be re-run. The slack figures the audit can now extract are **untested** —
+no measurement has run since that code was written, so I will not quote one.
+
+And it reported **seven of its own failures, five of them wrong predictions** —
+including flagging a correct idiom as a defect, shipping a detector that could
+never fire, and losing 97 measurements to a mistake it had fixed ten metres away
+the same night. **That is the reason to trust the six findings above.**
+
+### Where this leaves the work
+
+Two blocks that do not fit the chip, and the fix for both is the same and is now
+a measured rule. Three blocks holding ~75 multipliers of provable waste. And 84
+blocks still with no idea how much work they must do per frame — which is the
+next cheap win, because that number is what separates "expensive" from "wrong".
+
+---
+
 ## 2026-08-24 — the audit found the hidden 33, and closed the coverage gap
 
 ### Every block is now measured, and the big prediction was exact
