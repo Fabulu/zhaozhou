@@ -32,26 +32,33 @@ struct Dut {
   explicit Dut(Vzhao_vertex_arena* d) : v(d) {}
 
   void tick() {
-    v->clk = 0; v->eval();
-    v->clk = 1; v->eval();
+    v->clk = 0;
+    v->eval();
+    v->clk = 1;
+    v->eval();
   }
 
   void idle() {
-    v->open_i = 0; v->org_we_i = 0; v->fill_valid_i = 0;
-    v->seal_i = 0; v->look_valid_i = 0;
+    v->open_i = 0;
+    v->org_we_i = 0;
+    v->fill_valid_i = 0;
+    v->seal_i = 0;
+    v->look_valid_i = 0;
   }
 
   void reset() {
     idle();
     v->rst_n = 0;
-    tick(); tick();
+    tick();
+    tick();
     v->rst_n = 1;
     tick();
   }
 
   uint32_t open(int arena) {
     idle();
-    v->open_i = 1; v->open_arena_i = arena;
+    v->open_i = 1;
+    v->open_arena_i = arena;
     tick();
     idle();
     return ref.open(arena);
@@ -59,7 +66,8 @@ struct Dut {
 
   void seal(int arena) {
     idle();
-    v->seal_i = 1; v->seal_arena_i = arena;
+    v->seal_i = 1;
+    v->seal_arena_i = arena;
     tick();
     idle();
     ref.seal(arena);
@@ -67,8 +75,11 @@ struct Dut {
 
   void set_origin(int arena, int32_t x, int32_t y, int32_t z) {
     idle();
-    v->org_we_i = 1; v->org_arena_i = arena;
-    v->org_x_i = x; v->org_y_i = y; v->org_z_i = z;
+    v->org_we_i = 1;
+    v->org_arena_i = arena;
+    v->org_x_i = x;
+    v->org_y_i = y;
+    v->org_z_i = z;
     tick();
     idle();
     ref.set_origin(arena, ArenaOrigin{x, y, z});
@@ -92,7 +103,7 @@ struct Dut {
     v->look_arena_i = arena;
     v->look_gen_i = gen & 0xFF;
     v->look_index_i = index;
-    tick();          // accepted; reply is registered and appears now
+    tick();  // accepted; reply is registered and appears now
     idle();
     v->eval();
 
@@ -100,8 +111,7 @@ struct Dut {
 
     check(v->rep_valid_o == 1, what, 1, v->rep_valid_o);
     check(v->rep_hit_o == (r.hit() ? 1 : 0), what, r.hit() ? 1 : 0, v->rep_hit_o);
-    check(v->rep_refuse_o == (r.refused() ? 1 : 0), what, r.refused() ? 1 : 0,
-          v->rep_refuse_o);
+    check(v->rep_refuse_o == (r.refused() ? 1 : 0), what, r.refused() ? 1 : 0, v->rep_refuse_o);
     if (r.hit()) {
       check(v->rep_payload_o == r.payload, what, r.payload, v->rep_payload_o);
     }
@@ -119,7 +129,8 @@ struct Dut {
 }  // namespace
 
 int main(int argc, char** argv) {
-  (void)argc; (void)argv;
+  (void)argc;
+  (void)argv;
   Verilated::traceEverOn(false);
   auto* top = new Vzhao_vertex_arena;
   Dut d(top);
@@ -180,12 +191,12 @@ int main(int argc, char** argv) {
 
   // ---- 9. counters agree with the oracle ----------------------------------
   top->eval();
-  check(top->arena_hits_o == d.ref.hits(), "hit count matches oracle",
-        d.ref.hits(), top->arena_hits_o);
-  check(top->arena_misses_o == d.ref.misses(), "miss count matches oracle",
-        d.ref.misses(), top->arena_misses_o);
-  check(top->arena_refusals_o == d.ref.refusals(), "refusal count matches oracle",
-        d.ref.refusals(), top->arena_refusals_o);
+  check(top->arena_hits_o == d.ref.hits(), "hit count matches oracle", d.ref.hits(),
+        top->arena_hits_o);
+  check(top->arena_misses_o == d.ref.misses(), "miss count matches oracle", d.ref.misses(),
+        top->arena_misses_o);
+  check(top->arena_refusals_o == d.ref.refusals(), "refusal count matches oracle", d.ref.refusals(),
+        top->arena_refusals_o);
 
   top->final();
   delete top;

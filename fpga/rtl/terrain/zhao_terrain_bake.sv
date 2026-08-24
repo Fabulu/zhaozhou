@@ -228,6 +228,12 @@ module zhao_terrain_bake (
     output logic [31:0] breach_events_o,
     output logic [31:0] scar_saturations_o,
     output logic [31:0] nobake_clamps_o,
+    // OWNER RULING 2026-08-24: MAX_BAKE_RADIUS = 512 m. A larger radius is
+    // REJECTED, never clamped -- a clamp would silently reshape a crater the
+    // designer asked for, which is the kind of quiet substitution this project
+    // refuses elsewhere (SetView rejects rather than clamps for the same
+    // reason). Counted so a rejected bake is visible rather than merely absent.
+    output logic [31:0] bake_radius_rejects_o,
     output logic        idle_o
 );
 
@@ -288,6 +294,17 @@ module zhao_terrain_bake (
   logic               c_dual, c_cells;
   logic        [15:0] c_src;
   logic        [62:0] c_r2;  // radius^2, unsigned; 0 when radius <= 0 (B5)
+
+  // 512.0 m in fx16 raw = 512 * 65536 = 0x0200_0000.
+  //
+  // WHY 512 AND NOT MORE, from the ruling's own arithmetic: at the largest
+  // legal pitch a patch is 128 m across and ~181 m corner to corner, so the
+  // farthest swept vertex of a barely-intersecting patch sits under ~694 m from
+  // the stencil centre -- inside signed-27-bit Q16.16 (+-1024 m). That is what
+  // lets `dx`/`dz` be re-domained around the CENTRE instead of carrying
+  // absolute island coordinates, which is the whole point.
+  localparam logic signed [31:0] MAX_BAKE_RADIUS_RAW = 32'sh0200_0000;
+  wire radius_illegal = (cmd_radius_i > MAX_BAKE_RADIUS_RAW);
 
   logic [5:0] vi, vj;  // lattice indices, 0..32
   logic [5:0] ci, cj;  // cell indices, 0..31
@@ -533,6 +550,7 @@ module zhao_terrain_bake (
       breach_events_o <= '0;
       scar_saturations_o <= '0;
       nobake_clamps_o <= '0;
+      bake_radius_rejects_o <= '0;
     end else begin
       dig_done_o  <= 1'b0;
       bake_done_o <= 1'b0;
@@ -546,7 +564,14 @@ module zhao_terrain_bake (
 
       case (state)
         StIdle: begin
-          if (cmd_valid_i && cmd_ready_o) begin
+          // A RECORD WHOSE RADIUS EXCEEDS THE LAW IS REJECTED WHOLE. It is
+          // consumed so the producer cannot wedge, it sweeps nothing, and it is
+          // COUNTED. Deliberately unlike B5's `radius <= 0`, which is a lawful
+          // no-op that still sweeps: a zero radius is a legal request for
+          // nothing, an oversized one is a request the machine refuses.
+          if (cmd_valid_i && cmd_ready_o && radius_illegal) begin
+            bake_radius_rejects_o <= bake_radius_rejects_o + 32'd1;
+          end else if (cmd_valid_i && cmd_ready_o) begin
             c_cx <= cmd_cx_i;
             c_cz <= cmd_cz_i;
             c_from <= cmd_depth_from_i;

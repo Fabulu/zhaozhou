@@ -915,6 +915,74 @@ bug whose symptom is *missing* ones.
 **29,385,065 checks, 0 failures.** My first attempt asserted `>= 7` and failed;
 the code was right and my arithmetic was not.
 
+### 22:00 — GEOM.WCACHE built to the owner's brief, and its proof FAILS
+
+Contract (15 TODOs -> 0), reference `zref::geom::VertexArena`, RTL
+`zhao_vertex_arena`, differential — **all green**. The differential passes
+sixteen directed lookups including the case that matters: reopening an arena
+must not resurrect a payload still physically in the memory.
+
+**The formal proof does not pass, and it is registered as failing rather than
+omitted.** `cover` passes; `bmc` is refuted at k=4 on
+`a_hit_is_the_watched_value` — the property the contract leads with.
+
+**Four hypotheses, four experiments, four keepers, no diagnosis:**
+
+| hypothesis | verdict | what it produced anyway |
+| --- | --- | --- |
+| read-during-write ordering | wrong | **read-old specified** — genuinely undefined before |
+| no reset assumption | wrong, but needed | `rst_n` was FREE; moved k=2 -> k=4 |
+| fills during reset | wrong, but a real gap | clock-only memory stored what no observer recorded |
+| out-of-range watched key | wrong, but correct anyway | the claim is about REAL vertices |
+
+**I got the bisection wrong first, twice, and both errors were method errors.**
+I "disabled" an assertion with a `str.replace` and **did not assert the match**,
+so nothing was replaced and I read the resulting failure as evidence about a
+different assertion. Then I "confirmed" it from a VCD through a grep whose
+pattern was mangled by a signal identifier containing a quote character — it
+matched nothing, and I read the absence of change-lines as proof of no change.
+
+> **A bisection is worth more than a trace read through an unverified filter.**
+> Both errors have the same shape as the fourteen already recorded here: an
+> artifact that is real while being an artifact of something other than what it
+> was read as. Corrected in the ledger at `65f36ae`, in public, because the first
+> commit had claimed the load-bearing property held.
+
+`-Wall` also found two real design gaps: out-of-range indices were
+**unrepresentable** (so the refusal lived in the contract, the oracle and the
+tests and nowhere in silicon), and `org`/`seal`/`open` never range-checked their
+arena — an out-of-range origin write would have **aliased onto a real arena's
+datum**.
+
+### 23:15 — RULING 5, and both numbers were right
+
+`SURFACE.SHEET` cited **14.38 MiB** as its own pool twice. That figure is
+**F+E+D+G+H, five layers** at 14,722 B/patch. The sheet is layer F alone at
+8,192 B/patch = **8 MiB**; the other 6.38 MiB belongs to layers this block never
+touches.
+
+The ruling said the layer table wins *"unless another pool is identified
+explicitly"* — and one is, so the fix was to stop conflating them rather than to
+change a number. **Both figures were always correct; only the label on one was
+wrong.** A contract claiming 14.38 MiB overstates its own footprint by 80%, the
+same shape as the projector's "270 patches per frame" — a capacity filed as a
+demand that made the most saturated block look like the most wasteful.
+
+### 23:30 — RULING 2: the bake radius REFUSES, it does not clamp
+
+`MAX_BAKE_RADIUS_RAW = 32'sh0200_0000` (512.0 m), with the ruling's arithmetic
+kept beside it: at the largest legal pitch a patch is 128 m across and ~181 m
+corner-to-corner, so the farthest swept vertex of a barely-intersecting patch is
+under **~694 m** from the centre — inside signed-27-bit Q16.16. **That is what
+makes the `dx`/`dz` re-domain legal**, and it is why the number is 512.
+
+**A refusal is not a lawful no-op**, and the block now distinguishes them. B5
+already said `radius <= 0` is accepted and sweeps writing nothing — a legal
+request for nothing. An oversized radius is a request the machine **refuses**:
+consumed so the producer cannot wedge, sweeping nothing, and **counted** on
+`bake_radius_rejects_o`. Without the counter a rejection is indistinguishable
+from a bake that merely did not happen.
+
 ---
 
 ## Decisions Made
