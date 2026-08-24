@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1b17ff51e2e1cd6e29b3d47a945892bec6904965",
+    "newestRunCommit":  "fc899a70cee6abf1919fbad4eb3129eed66e83ff",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -346,6 +346,25 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  31.1,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_pair_tmu_cache",
+                       "status":  "ok",
+                       "sourceCommit":  "fc899a70cee6abf1919fbad4eb3129eed66e83ff",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  1213.8,
+                       "sourcesHashed":  35,
+                       "alms":  2383,
+                       "registers":  2311,
+                       "blockMemoryBits":  8192,
+                       "ramBlocks":  4,
+                       "dspBlocks":  6,
+                       "virtualPins":  131,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  37.25,
                        "fmaxClock":  "clk"
                    },
                    {

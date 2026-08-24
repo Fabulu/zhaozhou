@@ -737,6 +737,56 @@ before the test moved, not a test bent to fit a result.
 to collect a snapshot before the video side had another. The old bit meant "the
 counter moved while I happened to be looking", which is a statement about luck.
 
+### 19:45 — THE CDC REPAIR, MEASURED. Best result of the day.
+
+| | before (`e617267`) | after (`768c0ff`) |
+| --- | ---: | ---: |
+| worst setup | -0.570 ns, 36 | **-0.208 ns, 23** |
+| worst hold | **-0.728 FAIL** | **+0.262, 0 — PASSES** |
+| cross-domain paths in hold | 1 | **0** |
+| gpu_clk | ~94.6 MHz | **~98.0 MHz** |
+
+**2% short of target, from 17% short this morning.**
+
+**The falsifiable prediction held.** I said beforehand the crossing should
+DISAPPEAR from both worst lists rather than merely improve, because the only
+thing crossing asynchronously now is a single toggle behind a three-flop
+synchronizer. Measured: **0** occurrences in `setup_paths.rpt`, **0** vid<->gpu
+paths anywhere in the hold list. The 72 remaining `starve_q` mentions are
+vid->vid internal paths — the counter and the mailbox's source side.
+
+It paid twice: the hold failure is gone AND setup improved 0.36 ns, because
+relieving that path let the fitter place everything else better.
+
+### 20:10 — I BUILT A BAD MEASUREMENT AND CAUGHT IT BY ARITHMETIC
+
+TMU+CACHE pair, first fit:
+
+    zhao_texture_tmu   leaf   1,921 ALM
+    zhao_texture_cache leaf   1,087 ALM
+    pair                        438 ALM     <- 85% GONE
+
+**Nothing in the flow flagged it.** Status `ok`, provenance guard clean, 34
+sources hashed, every field in the row internally consistent. What gave it away
+was comparing against the LEAF AREA: TESS+NORMALS lost 27% when its seam went
+internal, which virtual-pin removal explains — **85% does not.**
+
+Cause: I tied `req_base_i`, `req_pal_base_i` and 28 of 32 mode bits to
+CONSTANTS, so the TMU's format decode was unreachable and the tool folded most
+of the block away. **The 37.63 MHz described a TMU that had been deleted.**
+
+> **A characterization wrapper that over-constrains its stimulus does not measure
+> the design. It measures what survives the folding.**
+
+The fourteenth instance in this repository of an artifact being real while being
+an artifact of something other than what it was read as — and **the first where I
+built the artifact myself.** Every decoded field now comes from a 96-bit
+registered stimulus. Discarded at `fc899a7`; the row must not be cited.
+
+Worth noting for when the honest number lands: the LEAF TMU measures **36.11
+MHz**, consistent with the docket's standing note that its 199.72 MHz was an
+artifact of an SDC carrying no I/O constraints.
+
 ---
 
 ## Decisions Made
