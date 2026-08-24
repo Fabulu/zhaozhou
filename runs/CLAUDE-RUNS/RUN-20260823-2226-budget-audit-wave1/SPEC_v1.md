@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260823-2226
 **Created:** 2026-08-23 22:26 UTC+02:00
-**Status:** Active
+**Status:** Complete (archived 2026-08-24)
 **Previous Version:** N/A
 
 ---
@@ -113,7 +113,22 @@ from mechanical rules alone. If they do not, the heatmap does not work.
 - **Regex/grep arithmetic inventory.** Tried twice by the owner on
   `zhao_geom_project`: gave `0`, then gave line counts. Both useless. This is
   the entire argument for the AST scanner.
-- (append as encountered)
+- **`verilator --xml-only`.** Removed in 5.051. Use `--json-only`
+  (`Vtop.tree.json` + `Vtop.tree.meta.json`). `verilator_bin.exe --help` also
+  does not exist -- the perl wrapper owns it and BUILD.md forbids the wrapper.
+- **`json.load` on `Vtop.tree.meta.json`.** Verilator 5.051 writes Windows
+  paths into `filename` without escaping the backslash; it is not valid JSON.
+  Read `realpath` with a regex.
+- **Flagging the widening-multiply idiom as extension slack.** Measured free:
+  `calib_widen_explicit` and `calib_widen_implicit` are both 3 DSP / 137 ALM.
+- **Sizing arrays alone to find uninferred memories.** Flags divider pipelines.
+  Use access sites per element.
+- **Picking a state variable by name.** Picks localparams. Pick the variable a
+  process assigns several distinct constants to.
+- **Believing a detector that reports zero.** Give it a positive control.
+- **Serialising results once after a loop.** Write after every point.
+- **`str.replace()` without an `assert` in a patch script.** It matched
+  nothing, returned the string unchanged, and cost a whole relaunch.
 
 ---
 
