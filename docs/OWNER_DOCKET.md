@@ -1,5 +1,84 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — THE FIELD MEMORY TARGET IS OPTIMISTIC, and the ROMs are innocent
+
+Before starting the Field rebuild's six waves I measured where its ALMs actually
+are. **Two of the ruling's premises do not survive**, and it is much cheaper to
+say so now than after four of those waves.
+
+### The ROMs are already cheap
+
+The ruling names three constant tables as a principal cost — a 256x16 reciprocal
+seed, a 256x31 normalisation reciprocal, and a 257x17 sine table instantiated
+twice — all "emitted as `always_comb` case trees" instead of M10Ks.
+
+They are emitted that way. **They cost 328 ALMs between them:**
+
+    zhao_field_sin_rom      87 ALMs   for 4,369 ROM bits
+    zhao_field_rcp_rom      79 ALMs   for 4,112
+    zhao_field_rcp24_rom   162 ALMs   for 7,967
+
+Quartus constant-folds a case tree over constants very well. **A constant ROM is
+not the same problem as a read/write array**, and `QUARTUS_GOTCHAS` §10's
+penalty curve — measured on *arrays* — does not transfer to it. Converting these
+to M10Ks would buy roughly **328 ALMs and spend 3 of the 502 free M10Ks**. Worth
+doing eventually for the timing benefit of a registered read; **not worth
+scheduling as a resource win.**
+
+### The register file is real, and it is one array, not the block
+
+`zhao_field_seq` holds **one** array — 2,048 bits, the 64x32 register file — and
+the scanner confirms it is **both** async-read *and* reset-touched, so both
+killers apply. The calibration measured exactly that shape:
+
+    64x32 sync + no reset  ->     40 ALMs   (infers)
+    64x32 sync + reset     ->  1,411 ALMs   (does not)
+
+So converting it saves about **1,371 ALMs**, and the valid-bitmap pattern in the
+ruling is the right way to do it.
+
+### But that does not reach the target
+
+    zhao_field_seq today                     7,958 ALMs
+    minus the register file conversion      -1,371
+                                            ------
+                                             6,587
+
+**The ruling targets 3,500-5,000.** The measured distribution does not support
+reaching it through memory work, because the memory is not where the block is:
+
+| | ALMs |
+| --- | ---: |
+| `zhao_field_exec_shared` — the shared arithmetic | **4,793** |
+| `zhao_field_progcache` | 2,237 |
+| the three ROMs | 328 |
+
+`field_seq`'s standalone map **contains** these. **The arithmetic is the block**,
+and it is already shared — the 79 -> 3 DSP work did that. What remains is
+ordinary logic depth, not storage.
+
+`progcache` is worth one line: 2,237 ALMs over two arrays totalling 1,280 bits,
+both async-read and reset-touched — but they are a **tag array and an LRU array**,
+and an associative tag compare is inherently logic. The scanner agrees, marking
+`arraysExpectingRam: 0`. **Not every array that fails to infer is a defect.**
+
+### What I would change about the plan
+
+**Keep waves 1-3** — the normalisation slice, the `isqrt` recurrence, and the
+register file. They are correct, and waves 1 and 2 are *timing* work, which is
+where this block's real problem is (33.86 MHz against 100).
+
+**Demote the ROM conversion** from a resource item to a timing item, and expect
+~328 ALMs from it, not thousands.
+
+**Drop the ALM target of 3,500-5,000** until something measures where
+`exec_shared`'s 4,793 actually goes. It may well be reducible — but by
+arithmetic restructuring, not by memory, and nobody has looked.
+
+**The timing target stands unchanged.** 100-120 MHz is the point of the exercise;
+the ALM figure was always a secondary estimate, and it is the estimate that does
+not hold.
+
 ## 2026-08-24 — I MUST WALK BACK THE 110-DSP WIDTH ESTIMATE. It is mostly not available.
 
 I put a candidate saving of **110 DSPs** on this docket from the 27-bit cliff,
