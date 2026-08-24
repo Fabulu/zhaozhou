@@ -332,6 +332,36 @@ try {
         }
         $qsf | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qsf') -Encoding ascii
 
+        # ---------------------------------------------------------------------
+        # SOURCE PROVENANCE, ENFORCED
+        # ---------------------------------------------------------------------
+        # The QSF above names sources by ABSOLUTE PATH IN THE LIVE WORKING TREE.
+        # Nothing is copied into the workspace. So an edit made while a fit is
+        # running silently changes what is being measured, and the row still
+        # carries `sourceCommit = $head` as though it described that commit.
+        #
+        # MEASURED 2026-08-24: an edit to zhao_field_normalize.sv landed 101
+        # seconds BEFORE this flow wrote its map report, during a 90-minute
+        # zhao_field_seq fit. Afterwards there was no way to tell which version
+        # had been elaborated, so a fit that may well have been perfectly good
+        # was thrown away -- discarded for unprovable provenance, not for being
+        # known wrong. That is the expensive way to learn this.
+        #
+        # Hashing every source costs milliseconds and turns a SILENT
+        # contamination into a loud one. As with the ticks-suffixed workspace
+        # above: it does not change what is measured, it changes whether the
+        # measurement can be shown.
+        $srcBefore = @{}
+        $srcAfterMap = $null
+        foreach ($line in $qsf) {
+            if ($line -match '^set_global_assignment -name (?:SYSTEMVERILOG|VERILOG|VHDL)_FILE (.+)$') {
+                $sp = $Matches[1].Trim()
+                if (Test-Path -LiteralPath $sp) {
+                    $srcBefore[$sp] = (Get-FileHash -LiteralPath $sp -Algorithm SHA256).Hash
+                }
+            }
+        }
+
         # PER-ROW PROVENANCE. This file MERGES rows across runs (see the merge
         # note below), so a single top-level sourceCommit is a lie the moment
         # two runs contribute: it labels every row with the newest run's
@@ -367,6 +397,23 @@ try {
             foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
                 & (Join-Path $QuartusBin $exe) 'blockfit' *> (Join-Path $dir "$exe.log")
                 if ($LASTEXITCODE -ne 0) { $row.status = "failed:$exe"; $ok = $false; break }
+                # quartus_map is the ONLY stage that reads the sources, so hash
+                # again the moment it finishes. Start-vs-end alone cannot see an
+                # edit that is reverted before the run ends; straddling the read
+                # with a checkpoint narrows that blind spot to an edit made AND
+                # undone entirely inside the elaboration window. Stated rather
+                # than hidden: this is tighter, not airtight -- only copying the
+                # sources into the workspace would be airtight, and the one
+                # `include in the tree (sdram_params.svh) means that needs
+                # directory-structure preservation, which is not free.
+                if ($exe -eq 'quartus_map.exe') {
+                    $srcAfterMap = @{}
+                    foreach ($k in @($srcBefore.Keys)) {
+                        $srcAfterMap[$k] = if (Test-Path -LiteralPath $k) {
+                            (Get-FileHash -LiteralPath $k -Algorithm SHA256).Hash
+                        } else { 'MISSING' }
+                    }
+                }
                 if ($sw.Elapsed.TotalSeconds -gt $TimeoutSeconds) {
                     $row.status = 'timeout'; $ok = $false; break
                 }
@@ -376,6 +423,29 @@ try {
         }
         $sw.Stop()
         $row.seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+
+        # See SOURCE PROVENANCE above. Re-hash before any result is believed.
+        # This runs BEFORE the summary parse, so a contaminated run can never
+        # reach `status = 'ok'` and can never be merged into the census.
+        $srcChanged = @()
+        foreach ($k in @($srcBefore.Keys)) {
+            $nowHash = if (Test-Path -LiteralPath $k) {
+                (Get-FileHash -LiteralPath $k -Algorithm SHA256).Hash
+            } else { 'MISSING' }
+            if ($nowHash -ne $srcBefore[$k]) { $srcChanged += (Split-Path -Leaf $k) }
+            elseif ($srcAfterMap -and $srcAfterMap.ContainsKey($k) -and $srcAfterMap[$k] -ne $srcBefore[$k]) {
+                # Changed during elaboration and put back afterwards. The row
+                # would look pristine at the end; it is not.
+                $srcChanged += ((Split-Path -Leaf $k) + '(during-map)')
+            }
+        }
+        $row.sourcesHashed = $srcBefore.Count
+        if ($srcChanged.Count -gt 0) {
+            $row.status = 'contaminated:source-changed-during-fit'
+            $row.contaminatedSources = ($srcChanged -join ' ')
+            $ok = $false
+            Write-Warning ("CONTAMINATED: {0} changed while {1} was being measured. Row discarded." -f ($srcChanged -join ', '), $mod)
+        }
 
         $summary = Join-Path $dir 'output_files\blockfit.fit.summary'
         if ($ok -and (Test-Path -LiteralPath $summary)) {

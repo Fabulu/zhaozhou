@@ -81,9 +81,15 @@ zref::terrain::FaceNormal drive(Vzhao_terrain_normals& dut, const Tri& t, uint16
     // cycles walking one shared multiplier over the LATCHED edges. Held
     // stimulus made a live read of `e1y` indistinguishable from the latched
     // `l1y`, and mutant M09 survived the sweep on exactly that.
-    dut.ax_i = 0x0BAD0000; dut.ay_i = 0x0BAD0001; dut.az_i = 0x0BAD0002;
-    dut.bx_i = 0x0BAD0003; dut.by_i = 0x0BAD0004; dut.bz_i = 0x0BAD0005;
-    dut.cx_i = 0x0BAD0006; dut.cy_i = 0x0BAD0007; dut.cz_i = 0x0BAD0008;
+    dut.ax_i = 0x0BAD0000;
+    dut.ay_i = 0x0BAD0001;
+    dut.az_i = 0x0BAD0002;
+    dut.bx_i = 0x0BAD0003;
+    dut.by_i = 0x0BAD0004;
+    dut.bz_i = 0x0BAD0005;
+    dut.cx_i = 0x0BAD0006;
+    dut.cy_i = 0x0BAD0007;
+    dut.cz_i = 0x0BAD0008;
     dut.src_id_i = 0xBAD5;
   }
   check(seen, "a triangle produces a normal", 1, seen ? 1 : 0);

@@ -445,6 +445,61 @@ true-dual-port.
 
 ---
 
+## 11. The fit reads the LIVE working tree, so editing during a fit rewrites what was measured
+
+`run_block_fit.ps1` names every source in the generated QSF by **absolute path
+into the working tree**. Nothing is copied into the workspace. So a file edited
+while a fit is running is the file the fit elaborates — and the row it writes
+still carries `sourceCommit = <HEAD>` as though it described that commit.
+
+**MEASURED 2026-08-24.** An edit to `zhao_field_normalize.sv` landed at 10:33:06
+during a 90-minute `zhao_field_seq` fit whose map report was written at 10:34:47
+— **101 seconds later**. Afterwards there was no way to establish which version
+had been elaborated, so the fit was killed and discarded. It may well have been
+perfectly good; it could not be *shown* to be. That is the expensive way to
+learn this, and it is the same failure the ticks-suffixed workspace fixed for
+logs: not a wrong measurement, an unprovable one.
+
+**Now enforced.** The flow hashes every source named in the QSF at the moment it
+writes the QSF, again the instant `quartus_map` finishes, and once more at the
+end. Any difference sets `status = contaminated:source-changed-during-fit`,
+suppresses the resources, and — because the check runs *before* the summary is
+parsed — such a row can never reach `status = 'ok'` nor be merged into the
+census. The previous good measurement is kept rather than erased.
+
+**Both detection arms carry a positive control** (`zhao_audio_fifo`, 2026-08-24):
+
+| arm | control | result |
+| --- | --- | --- |
+| start-vs-end | `zhao_debug_counters.sv` edited after the QSF, left edited | **CONTAMINATED**, ALM suppressed |
+| during-map | `zhao_input_rumble.sv` edited after the QSF, **reverted after the map** so the tree ends byte-identical | **CONTAMINATED** |
+| negative | three clean runs | `ok`, `sourcesHashed: 27` |
+
+The during-map arm is the one worth having: at the end of that run the file was
+byte-identical to its committed form, so a start-vs-end check alone would have
+called it clean.
+
+**Three attempts at the control tested nothing, each silently.** The first
+edited at a fixed `t=8s`, before the QSF existed. The second polled for the QSF
+and matched a **stale workspace** — 36 orphaned `zhao-block-fit-*` directories
+had accumulated in `%TEMP%` — so it fired at `t=0.5s`, again before the run had
+hashed anything. The third baselined the workspaces correctly but edited
+**terrain files, which are not in the 27-file shell cone at all**; the guard
+ignored them because it is supposed to. `sourcesHashed: 27` in the row is what
+made that legible, and it matches `grep -c SYSTEMVERILOG_FILE` on the shell QSF
+exactly.
+
+> **A control that reports "not detected" is not evidence the detector is
+> broken.** Three times running it was evidence the control was.
+
+**Still not airtight, stated rather than hidden:** an edit made *and undone*
+entirely inside the elaboration window is invisible. Only copying the sources
+into the workspace would close that, and the one `` `include `` in the tree
+(`sdram_params.svh`) means a copy must preserve directory structure. Not free,
+and not yet done.
+
+---
+
 ---
 
 ## Addendum: the same trap exists outside Quartus
