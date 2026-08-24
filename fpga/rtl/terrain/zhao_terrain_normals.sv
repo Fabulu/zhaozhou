@@ -297,6 +297,11 @@ module zhao_terrain_normals (
   assign nz_o         = s2_nz;
   assign degenerate_o = s2_degen;
   assign src_id_o     = s2_src;
-  assign idle_o       = !s1_valid && !s2_valid;
+  // m_busy MUST be here. Before sequencing there was no state between accept
+  // and s1_valid, so !s1_valid && !s2_valid was the whole story. Now a triangle
+  // can be mid-walk with both valids low, and a consumer that drains on idle_o
+  // stops one triangle early -- which is exactly what terrain_tess_normals
+  // caught: 0x7F normals where it expected 0x80, with every VALUE correct.
+  assign idle_o       = !m_busy && !s1_valid && !s2_valid;
 
 endmodule : zhao_terrain_normals
