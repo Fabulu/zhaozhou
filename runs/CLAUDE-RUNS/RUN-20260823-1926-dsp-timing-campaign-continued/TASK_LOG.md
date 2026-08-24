@@ -300,6 +300,54 @@ meshes every frame it has EARTH's problem and needs EARTH's answer.
 **The question is no longer "how many cores" but "which profiles are
 sample-scaled".** Three of five are answered.
 
+### 2026-08-24 03:00 - Audit closed. The waves it ranked are now the work.
+
+The audit's deliverables are landed (`BUDGET_HEATMAP.md`, `budget_manifest.json`,
+`rtl_inventory.json`, `calibration.json` 102/102, `QUARTUS_GOTCHAS` §10) and its
+run is archived. **It built the map. None of the territory is walked yet**, and
+saying otherwise would be the same category error as reading a green harness as
+a green theorem.
+
+**Started wave 1 of implementation: `zhao_surface_sheet` storage inference.**
+
+Chosen over the larger DSP prizes deliberately. It is **229% of the device on its
+own** — 131,072 declared bits inferring as **zero**, 131,258 registers, 95,947
+ALMs — so it is not expensive, it is **unplaceable**. A block that cannot be
+placed outranks a block that is merely wasteful, and the fix is now a **measured
+law** rather than a hypothesis (three independent killers, penalty superlinear to
+808x).
+
+It is also the cheapest possible proof that the audit's central claim is
+actionable: the diagnosis came from a map, not a fit, and the fix is verified by
+`blockMemoryBits > 0` rather than by a test suite that would pass either way.
+
+### The queue, explicit rather than implied
+
+| # | work | return | state |
+| --- | --- | ---: | --- |
+| 1 | `zhao_surface_sheet` storage | **229% -> fits** | **running** |
+| 2 | `zhao_forge_cliff` `edge_mem_r` | 79% -> fits | stretch of wave 1; two of its three tables already infer |
+| 3 | projector merge — `GEOM.PROJECT` + `TERRAIN.PROJECT` | **~50 DSPs** | docketed; byte-identical arithmetic confirmed, 33 each |
+| 4 | Field memories rebuild, waves 0-5 | 8,901 -> ~3,500-5,000 ALMs, 100-120 MHz | docketed with acceptance criteria |
+| 5 | TMU pipeline, waves 0-5 | II 6 -> 1, 36 -> >=100 MHz | docketed; arithmetic already correct and pinned |
+| 6 | `TERRAIN.NORMALS` width narrowing + sequencing | 18 -> 6 -> ~3 | the 27-bit band makes the first 3x free |
+| 7 | demand figures for the remaining 84 blocks | separates "expensive" from "wrong" | the audit's own "next cheap win" |
+
+**Three limits carried forward, stated by the audit rather than discovered
+later:**
+
+1. **none of the 41 stored fits describes HEAD** — every trustworthy resource
+   number in the heatmap came from the map lane, and the heatmap says so per row;
+2. **WNS/TNS/hold extraction is fixed but UNPROVEN** — no fit has run since the
+   rewrite. **Do not quote a slack number until a real `.sta.rpt` has been read;**
+3. 84 blocks still have no demand figure.
+
+**The 27-bit band is the cheapest lever on the board and applies to several of
+these**: 8-27 bits is one DSP per product, 28-33 is three. Narrowing a 32-bit
+operand to 27 cuts a product threefold with **no other change** — no sequencing,
+no extra clocks, no interface change. It needs only a proof of width, which is
+exactly what `QUARTUS_GOTCHAS` §5 has demanded since it was written.
+
 ---
 
 ## Subagent Spawns
@@ -307,7 +355,8 @@ sample-scaled".** Three of five are answered.
 | Timestamp | Agent ID | Purpose | Status | Findings Link |
 |-----------|----------|---------|--------|---------------|
 | 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134, archived | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
-| 22:26 | `af363d9` | Budget audit wave 1 — scanner, calibration, map-only pass | Running | own run dir |
+| 22:26 | `af363d9` | Budget audit wave 1 — scanner, calibration, map-only pass | **COMPLETE**, archived | `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/` |
+| 03:00 | `a54e57b` | SURFACE.SHEET storage inference, 229% -> fits | Running | own run dir |
 
 ---
 
