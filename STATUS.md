@@ -5,6 +5,60 @@ at the top.*
 
 ---
 
+## 2026-08-24 (evening) — the shell is at 98 MHz and the timing verdict finally means something
+
+### The clock-domain repair worked, and it is measured
+
+| | before | after |
+| --- | ---: | ---: |
+| graphics clock | ~94.6 MHz | **~98.0 MHz** |
+| worst timing margin | −0.570 ns | **−0.208 ns** |
+| failing paths | 36 | **23** |
+| **hold failures** | **1 — FAILING** | **0 — PASSES** |
+
+**We are 2% short of 100 MHz**, from 17% short this morning.
+
+### The part that matters more than the number
+
+That counter crossing between the video and graphics clocks used to be a **coin
+flip**. Across four builds that changed nothing about it, it failed, passed,
+passed, failed — a swing of 1.2 nanoseconds decided purely by where the chip
+happened to place two flip-flops.
+
+So the tool's verdict was **random**. Worse than always-red: a red you can plan
+around, but a verdict that flips on luck can't report a real regression — and it
+had already hidden one, concealing the true worst path behind its own noise.
+
+It is now a proper handshake: the video side puts a value in a box and locks it,
+raises one flag, and the graphics side takes the value and acknowledges. Only
+that single flag crosses between clocks. **The crossing has disappeared from the
+timing report entirely** — not improved, gone. Zero cross-clock paths remain in
+the hold analysis.
+
+And the proof is machine-checked rather than argued: it cannot lose a snapshot,
+duplicate one, invent one, or let the video side overwrite a value the graphics
+side hasn't taken.
+
+### The one honest caveat
+
+I proved the *protocol*. I did not prove the electrical behaviour of two
+unrelated clocks sampling each other — no tool can; that is what the three-stage
+synchroniser is for. And I have not yet tested it with the two clocks at
+deliberately awkward speed ratios. Both gaps are written down in the repo rather
+than left implied.
+
+### Also today
+
+* **A multiplier measurement killed a bad plan of mine.** I had proposed capping
+  islands at 2 km to save multipliers. Measurement says that would have bought
+  **nothing** — shrinking one side of a multiply while the other stays wide costs
+  exactly the same. Your ruling stands: no island cap, no precision loss.
+* **One real multiplier saving so far: 12 → 6** in the triangle binner, from
+  multiplying a 23-bit value at 23 bits instead of at its 36-bit register width.
+  I predicted 4 and got 6; I had miscounted the loop.
+
+---
+
 ## 2026-08-24 (evening) — the renderer has a timing number for the first time, and it is 31 MHz
 
 ### What was measured
