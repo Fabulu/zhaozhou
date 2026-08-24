@@ -205,6 +205,101 @@ green harness read as a green theorem.
 **A green result from a tool nobody has watched run is not evidence — and
 neither is a number from a tool that was asked the wrong question.**
 
+### 2026-08-24 00:30 - Audit wave 1: coverage closed, and the hidden 33 confirmed exactly
+
+**89 of 91 modules mapped** against HEAD's exact RTL (`34be87f`), where the fit
+report covered **41 of 94**. About four hours of unattended Quartus, against
+roughly a day per block for the reactive method.
+
+**`zhao_geom_project` = 33 DSPs — unit-identical to `zhao_terrain_project`'s
+measured 33.** The prediction was 30-33 from reading the source; the answer is
+exact. Its own header calls the duplication "a cost, not a feature", and that
+cost is precisely 33 multipliers. **The two projectors together are more
+multipliers than everything removed yesterday.**
+
+Also newly visible: `zhao_geom_bin_pipe` **21**, `zhao_terrain_bake` **17**,
+`zhao_geom_pose_decode` **18** (inside the 14-18 predicted from source).
+
+**A number I deliberately did not publish as a headline:** the 89 mapped modules
+sum to 262, and that figure is meaningless — mapping each module standalone
+double-counts hierarchy (`geom_bin_pipe` contains the binner; `field_mul` and
+`field_exec_shared` sit inside `field_seq`). **Containment must be resolved
+before any total means anything.** Said so in `STATUS.md` rather than handing
+over a big number that looks like bad news and is arithmetic done wrong.
+
+### 00:45 - THE RAM INFERENCE LAW, measured rather than inferred
+
+The calibration microbenches produced the strongest artefact of the campaign,
+because it is a **controlled experiment** rather than a deduction from a block:
+
+| shape | bits | sync + norst | sync + RST | async + norst | penalty |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 64x32 | 2,048 | **40 ALM** *(infers)* | 1,411 | 1,427 | **35x** |
+| 256x16 | 4,096 | **26 ALM** *(infers)* | 2,801 | 2,818 | **108x** |
+| 1024x32 | 32,768 | **44 ALM** *(infers)* | 22,071 | 22,071 | **502x** |
+
+> **Synchronous read AND no reset touching the array -> infers, tens of ALMs.
+> EITHER an asynchronous read OR a reset on the array -> ZERO memory bits.**
+> The two conditions kill inference **independently**; either alone suffices.
+
+**The penalty is superlinear** — 35x at 2 kbit, 502x at 32 kbit — because the
+memory is not merely dearer, it **is not there**, and every bit becomes a flop
+behind a mux tree. So the rule bites hardest exactly where the array is largest
+and the temptation to "just use registers" is strongest.
+
+It retro-explains two findings we paid to learn:
+
+* `zhao_field_seq` — **0 M10Ks while spending 8,901 ALMs**, a 64x32 register
+  file plus three ROMs built in logic;
+* `zhao_forge_cliff` — three `assign x = mem_r[idx]` **async** reads over
+  ~120 kbit, fit **timed out at 5,000+ s**. On this curve that is expected, and
+  it means **nobody ever needed to fit it**: the source shape is the diagnosis.
+
+**`memBits = 0` is now a detection signal, not a policy.** A block that plainly
+contains storage and reports zero memory bits is a failed implementation
+whatever its tests say — which was already the acceptance rule in the Field
+ruling, and is now a measurement.
+
+Handed the analysis to the audit agent to write as `QUARTUS_GOTCHAS` §10 rather
+than writing it myself: it owns that file and the full 102-bench dataset
+including variants I cannot see, and **editing a file under a running agent is
+the collision that cost me earlier today.**
+
+### 00:50 - Field core count: answered as far as evidence allows
+
+Costed both remaining profiles against repo figures rather than waiting for a
+ruling:
+
+* **EARTH** — `terrain_rules.md` states the worst legal patch at 557,568 field
+  instructions, "~33% of a frame", **at 1 instr/cycle, which it honestly labels a
+  placeholder.** Measured today: **six clocks**. So the true figure is **201% of
+  a frame for ONE patch**. Even a modest case — 1 program, 8 instructions,
+  across the 270 visible patches — is **8.5x a frame.** No core count fixes
+  that; three do not and thirty do not.
+* **FLOW** — and here **I corrected my own flag.** I had called it the profile
+  most likely to need its own core. It is genuinely per-frame, and it is
+  **cheap**: at Sacrifice's measured scale (largest burst 1,375 particles,
+  standing budget 2,000-3,000) it is **4.0-8.6% of a frame**, and double the
+  peak with double-length programs is 40%.
+
+**About 98x apart, and both are "per-frame profiles".** The difference is not the
+engine: **a particle is an ENTITY (thousands); a patch vertex is a SAMPLE OF A
+FUNCTION (hundreds of thousands).** Entity-scaled work fits. Sample-scaled work
+must be cached.
+
+**So: one core, provided EARTH becomes event-driven** — which Sacrifice's own
+engine supports, since its displacement is permanent, its deformers touch 9-25
+cells, and its backend only re-runs displacement when the hash changes. *Free
+until something actually digs.* Same shape as `SURFACE.STAMP`'s 36,864 texels
+**once per impact**: a per-frame cost model applied to an event-driven quantity.
+
+**WARP is the remaining risk** — vertex deformation is sample-scaled, and
+120,000 vertices x 8 instrs x 6 clocks is **3.5x a frame**. If it runs on whole
+meshes every frame it has EARTH's problem and needs EARTH's answer.
+
+**The question is no longer "how many cores" but "which profiles are
+sample-scaled".** Three of five are answered.
+
 ---
 
 ## Subagent Spawns
