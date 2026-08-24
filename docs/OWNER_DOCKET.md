@@ -3784,3 +3784,46 @@ So **there is no sequencing-versus-frequency trade to make**; the premise did no
 survive contact with the path report. The retiming ladder above stands as policy
 for when a sequencer genuinely is critical, which is not established for any
 block yet.
+
+---
+
+## 2026-08-25 — FIELD wave 4 attempted and REVERTED, with what was learned
+
+The fit named wave 4 (registered finish) as the Field engine's critical path:
+`i_op[2]` -> the register file's write-data port, **29.250 ns over 17 logic
+levels**. That ranking is measured and stands.
+
+**The change itself was attempted three times and reverted.** The tree is green
+and nothing half-landed.
+
+### The schedule analysis was right and is worth keeping
+
+A write decoded in `Q_EXEC` lands at the `Q_EXEC->Q_FETCH` edge; the next
+instruction reads its operands at the `Q_LATCH->Q_RD1` edge, **two edges later**.
+So delaying the write by one consumes one and leaves one — **wave 4 needs no
+extra state and costs no instruction latency**, which is better than the ruling
+assumed. That analysis was checked against the state machine rather than
+assumed, and it survives the revert.
+
+### What defeated it, in order
+
+1. **Registering the host port too.** Section 14 plants a sentinel through it
+   and watches every cycle; the plant lagged and the observer saw *itself*.
+2. **The valid bitmap did not travel with the data.** It is set in a separate
+   block at the old edge, so `valid` went high while the memory still held the
+   previous value — a read-returns-stale hazard I introduced.
+3. **Something still unidentified.** After both fixes the symptom is unchanged:
+   `change_cycle` is identically **7** for every opcode, against expected values
+   from 0x16 to 0x48.
+
+> **A constant where there should be variance is an observer artefact, not a
+> design one** — this repository's own rule, met for the third time. The test
+> comment already records the previous instance, when the constant was 6 and the
+> cause was the host port lagging after the block-memory conversion. It is now 7,
+> which says the sentinel is one cycle later still and the observer needs the
+> same correction the RF change once needed.
+
+**Next time: fix the observer before the RTL.** Section 14 derives
+`planted_cycle` from when `write_reg` was called, and every wave that changes
+write timing shifts it. Until that is parameterised on the actual sentinel
+arrival, each such wave will present as a false early-write across every opcode.
