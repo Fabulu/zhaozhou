@@ -590,4 +590,42 @@ blocks are `terrain_project` 33, `texture_tmu` 28 (in flight), `terrain_normals`
 
 ---
 
+## RUN-20260824-0754 — TERRAIN.NORMALS rate sequencing
+
+**Date:** 2026-08-24
+**Branch:** main
+
+**Summary:**
+`zhao_terrain_normals` 18 -> 3 DSP blocks by sequencing six spatial
+cross-product multiplies onto one shared lane, values bit-identical. Done
+directly rather than delegated: four subagents in a row were killed by
+server-side API errors.
+
+**Deliverables:**
+- 18 -> 3 DSPs, 768 ALMs, II/latency 1/2 -> 7/7, capacity 238,095 normals/frame
+  against a demand of 2,000
+- the duplicated `rescale16` removed -- six calls for three values, half of it
+  existing only to be compared against zero
+- `tools/sweep_terrain_normals*` -- the block had no sweep at all
+- two real test gaps closed, both verified caught on a re-run
+- `measuredII` 7 recorded; `requiredII` corrected from a one-clock placeholder
+  to the demand-derived 833
+
+**Notes:**
+Width was NOT the lever and the docket claim that it was is walked back at
+`42b6209`: this block's contract declares a domain-limit lane over +/-4096 world
+units and states the fx16 rails are reached by legal input, so 33 bits is
+justified.
+
+Three guards each caught something a value test could not: the chain test found
+a lost normal (`idle_o` advertising idle mid-walk, 127 where 128 were due, every
+value correct); the preflight found a mutant that could not build; the sweep
+found two coverage holes. And a third sweep run nearly produced a false finding
+from a worktree checkout that silently did not take -- caught by checking the
+artifact rather than the command.
+
+**Outcome:** Complete. Census contribution -15 DSPs.
+
+---
+
 <!-- Entries go above this line, newest first -->

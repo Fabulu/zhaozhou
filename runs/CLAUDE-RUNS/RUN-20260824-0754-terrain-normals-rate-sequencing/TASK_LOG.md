@@ -165,3 +165,91 @@ for owning one, and it is the second time in two days that a block-local suite
 was green while a seam was broken.
 
 All five now pass: directed, random, random_nightly, lint, and the chain.
+
+### 09:20 — SWEEP: 12 attempted, 12 accounted, 12 caught, 0 discarded
+
+The block had **no sweep at all**; one was written, modelled on
+`sweep_terrain_lod.sh`. Its mutant table is a **Python module rather than a bash
+array** for a specific reason that applies here too: this RTL forms its
+differences with `$signed(...)`, and inside a double-quoted bash word `$signed`
+expands to nothing — an anchor would then either never match or, worse, match
+*different text than the one written down*, and the sweep would score a mutation
+nobody authored.
+
+The mechanical rename also produced a target that does not exist and kept one
+belonging to the LOD block. Both corrected: a sweep that cleans the wrong
+directories leaves mutant-derived model sources in the ones it never scored.
+
+**Sweep 1 — 10 of 12, and NEITHER survivor was equivalent.** Both were real
+holes, and both existed for the same reason: **the tests were written against a
+block that had no state between accept and result.**
+
+* **M09**, step 0 reading the *live* edge instead of its latched copy, survived
+  because `drive()` dropped `tri_valid_i` but left all nine coordinate inputs
+  unchanged for the whole drain — so live and latched were always identical. In
+  ready/valid the producer is free to change its data the cycle after
+  `valid && ready`, and this block now spends six more cycles walking over the
+  latched edges. **Held stimulus was testing a protocol nobody promised.**
+  Closed by poisoning all nine inputs plus `src_id` immediately after
+  acceptance, which strengthens every existing case rather than only this one.
+* **M10**, judging degeneracy on a pre-rescale lane, survived because nothing
+  drove a cross product that is nonzero yet rounds to zero — **precisely the
+  case the contract calls out as deliberate.** Raw fx16 unit edges give
+  cross = (1,0,0), and `rescale16(1)` is `(1 + 32768) >> 16 = 0`, so every lane
+  rounds to zero while the pre-rescale lane reads 1. Added as a directed case.
+
+Neither could have been found by a value test. **The arithmetic was never
+wrong** — both are holes that only open when a block's *timing* changes.
+
+**Sweep 2 — 12 of 12.** Both closed, verified.
+
+### 09:25 — AND I NEARLY REPORTED A FALSE FINDING
+
+Between those two runs there was a third that I almost believed. It reported
+M09 and M10 **still surviving**, and I was one step from concluding the fix had
+failed.
+
+**The worktree checkout had silently not taken.** It was still at `a18cda4`
+rather than `9bf9b24`, so that run scored the *old* tests — it was sweep 1
+repeated, not evidence about anything.
+
+Two things made it catchable, and both were habits rather than luck:
+
+1. **the pristine model hash was byte-identical between runs**
+   (`74439b23dc7c0f26`). Expected here, since the RTL did not change — but it is
+   what prompted a check rather than an acceptance;
+2. **I checked the artifact, not the command.** The checkout *appeared* to
+   succeed. `git rev-parse` said `a18cda4`, and grepping the worktree source for
+   the poison string returned **0**.
+
+That is the thirteenth instance in three days of *an artifact being real while
+being an artifact of something other than what it was read as* — and the first
+where the thing about to be fooled was me. **The rule holds in both directions:
+a green result from a tool nobody watched run is not evidence, and neither is a
+red one.**
+
+### 09:35 — independent confirmation, from a tool that did not know what changed
+
+Regenerating the AST scanner over all 92 modules:
+
+    nonconstantMultiplyInstances   6 -> 1
+    duplicateExpressions           1 -> 0
+
+Neither number was told to it. The second is the duplicated `rescale16` the
+audit's detector had predicted before the block was opened.
+
+### 09:40 — gates
+
+| gate | result |
+| --- | --- |
+| oracle resolves (V17) | `zref::terrain::face_normal` |
+| differential bit-identical | all 5 lanes pass |
+| mutation sweep | **12/12 caught, 0 discarded** |
+| gaps closed | 2, both real, both verified caught |
+| `ctest -L fast` | green apart from the recorded V16 baseline |
+| ledger | **1 error, unchanged** — nothing introduced |
+| DSPs | **18 -> 3**, map-measured at a committed commit |
+
+`measuredII` recorded as 7. `requiredII` corrected from the contract's one-clock
+placeholder to the demand-derived 833 — and noted as a field **no tool reads**,
+in all seven entries, exactly as `verticesPerItem` was.
