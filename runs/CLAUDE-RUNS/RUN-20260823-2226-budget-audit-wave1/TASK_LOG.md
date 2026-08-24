@@ -377,3 +377,114 @@ is the same behaviour the TMU measured from the other direction.
 | P4 | FRAGMENT blend: mux before multiply, 6 -> 3 DSP | **ALREADY LANDED at HEAD.** `zhao_raster_blend` computes ONE product and says so in capitals; blend is 1 DSP, not 2. FRAGMENT maps at **7**, not the census's 10. The mux detector was validated against a synthetic positive before this was believed. |
 | P5 | TERRAIN.NORMALS 18 -> ~3 | **18 CONFIRMED.** Demand 2,000/frame against 1,666,667 capacity = **833x over-provisioned**; six products share one multiplier at 3 DSP. Return **15**, exactly as predicted. |
 | P6 | pose palette 1.57 Mbit ~= 150 M10K ~= 28% | **ARITHMETIC CONFIRMED EXACTLY** - 128 x 32 x 12 x 32 = 1,572,864 bits = 153.6 M10Ks = **27.8% of 553**. And sharper than the prediction: **the store does not exist in the RTL.** `pose_cache` emits a verdict and a slot index and its header says the caller owns the palettes; `pose_decode` holds ONE working palette of 12,288 bits. The 1.57 Mbit is an unbudgeted future cost, not a current one. |
+
+## 2026-08-24 00:43 - map sweep COMPLETE: 89 of 91
+
+The census gap the docket opened this run to close - **41 of 94** - is closed.
+**89 of the repository's 91 synthesizable modules** now carry a `quartus_map`
+row measured against the byte-identical RTL tree at HEAD. (94 files = 91
+modules + 3 package files.)
+
+The two that do not: `zhao_shell_top`, excluded with its reason recorded, and
+`zhao_stub_top`, which hit the newly-enforced 1800 s timeout - scaffolding, and
+the **first proof that the timeout enforcement works**.
+
+## 2026-08-24 01:20-01:45 - the calibration grid, and the cliff is at 27 -> 28
+
+**Single product, input+output registered, signed and unsigned identical at
+every width measured:**
+
+| operand width | DSP blocks |
+| ---: | ---: |
+| 8, 9, 16, 18, 19, 24, 26, **27** | **1** |
+| **28**, 31, 32, 33 | **3** |
+| 40, 48 | 4 |
+| 64 | 9 |
+
+**The discontinuity `design/budgets/dsp.md` was corrected to warn about is
+between 27 and 28 bits, and it is a factor of THREE.** Cyclone V has a 27x27
+mode and Quartus uses it right up to the boundary.
+
+That is a lever this project has never had a number for: **narrowing a 32-bit
+operand to 27 bits takes a product from 3 DSPs to 1**, without touching the
+number of operators. `TERRAIN.NORMALS`' six 33-bit products are 18 DSPs; at 27
+bits they would be 6.
+
+**Signedness makes no difference at any width measured.** The corrected rule
+says "width and signedness change the cost discontinuously". Width does.
+Signedness, on these shapes, does not.
+
+**Four SUMMED products** (`a0*b0 + a1*b1 + ...`) cost 3 DSPs at widths 8-18 and
+4 at 19-27 - the DSP's own adder chain packs two 18x18 products per block. But
+that is the SUM case. `zhao_geom_quat2mat`'s nine **independent** 16x16
+products take **nine** blocks. The microbench measures sum-of-products; the
+design measures independent products; **both are needed and they answer
+differently.**
+
+**The widening-idiom control settles the rule I withdrew twice:**
+`calib_widen_explicit` (`$signed({{32{a[31]}}, a}) * ...`) and
+`calib_widen_implicit` (`64'(a) * 64'(b)`) both cost **3 DSPs and 137 ALMs -
+identical.** The idiom is free. The withdrawal was correct.
+
+**Registering does not change DSP count** - comb / input-registered /
+input+output-registered all give 1 / 3 / 9 at 18 / 32 / 64 bits. It changes
+ALMs (37 / 55 / 61 at 18 bits).
+
+## 2026-08-24 01:51 - I LOST 97 MEASUREMENTS, AND IT WAS THE MISTAKE I HAD JUST FIXED ELSEWHERE
+
+`run_calib.ps1` accumulated all 102 points in memory and serialised them once,
+after the loop. The background harness hit its lifetime limit at **point 97 of
+102** and every one was lost - forty minutes of Quartus time, each number
+already printed to the console where it could be read but not merged.
+
+`tools/quartus/map_sweep.ps1` was written EARLIER THE SAME NIGHT specifically
+to avoid this, by invoking its runner once per module, and its header says so.
+**The lesson did not travel the ten metres to the next file I wrote.**
+
+Fixed: merge-and-write after every point, plus `-SkipMeasured`.
+
+**And the fix's first attempt failed in the same family as everything in
+QUARTUS_GOTCHAS.** The resume logic went in; the `[switch]$SkipMeasured`
+parameter declaration did not, because that one `str.replace()` in my patch
+script matched nothing and returned the string unchanged **with no error** -
+the only replacement in the patch without an `assert`. PowerShell answered
+"Es wurde kein Parameter gefunden" and the relaunch died before a single bench.
+
+A directive accepted and silently ignored, written by me, into the tooling for
+a file about directives accepted and silently ignored.
+
+## 2026-08-24 02:00 - QUARTUS_GOTCHAS 10 written, at the coordinator's request
+
+Nine entries of hindsight bought one entry of foresight: every previous entry
+was found by being surprised by one block, and this one was **measured on
+purpose** across 32 RAM templates.
+
+The law, and the two killers are INDEPENDENT - read the `sync + RESET` and
+`ASYNC + no reset` columns against each other and they are the same number:
+
+    sync read AND no reset on the array  ->  infers, tens of ALMs
+    EITHER async read OR reset on array  ->  ZERO memory bits
+
+    2,048 bits    40 ALM ->  1,411     35x
+    4,096 bits    26 ALM ->  2,801    108x
+   32,768 bits    44 ALM -> 22,071    502x
+   36,864 bits    31 ALM -> 24,985    806x
+
+The 36,864-bit row is **`zhao_forge_cliff`'s `edge_mem_r` geometry exactly**,
+which is why that block estimates 33,109 ALMs and why its fit ran 5,000 s
+without finishing. **Nobody needs to fit it to know.**
+
+Two qualifiers the full set insists on, which a four-shape reading would miss:
+
+* Quartus **sometimes rescues** an async read by inserting a read-address
+  register - two of forge_cliff's three tables converted anyway. It is not a
+  guarantee and cannot be planned against: same file, same run, one refused.
+* Every two-port template infers **exactly twice** the bits. Two read addresses
+  plus a write is three ports; an M10K has two; Quartus replicates. A second
+  read port doubles the M10K count.
+
+`EXPECTED_RAM_NOT_INFERRED` now fires on **eleven** modules from the AST's
+expected bits against the map's inferred bits, with no fit required - including
+two nobody had looked at, both of which sat in the old census as bare
+`timeout` rows: `zhao_debug_counters` (2,560 bits -> 3,795 ALMs) and
+`zhao_terrain_bake` (1,089 bits -> 2,324 ALMs).
