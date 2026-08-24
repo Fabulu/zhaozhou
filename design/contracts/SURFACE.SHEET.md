@@ -75,9 +75,19 @@ M10K offers exactly one read and one write per clock, and the ledger asks for
 one sheet texel per clock while `SURFACE.STAMP` is a read-modify-write engine.
 A single shared port halves the rate to one texel per two clocks and **misses
 the ledger target**. Read-during-write at the same address returns the **old**
-word (both accesses live in one `always_ff`). `SURFACE.STAMP` never does that —
-its cursor marches forward and its write trails its read by two texels — but
-the semantics are stated rather than left to the synthesiser.
+word (both accesses live in one `always_ff`, in both planes). `SURFACE.STAMP`
+never does that — its cursor marches forward and its write trails its read by
+two texels — but the semantics are stated rather than left to the synthesiser.
+
+Keeping the read and the write in **one** process is what buys that answer, and
+it costs nothing: `calib_ram_8192x8_shared_re` and `calib_ram_8192x8_split_re`
+both infer the full 65,536 bits at 23 ALM, so the shared process needs **no
+bypass network** and no read-during-write attribute. Because the reference is a
+C++ model with no notion of a cycle, `SheetStore` cannot express this rule and
+the shipped differential cannot check it; it is checked instead by
+`runs/CLAUDE-RUNS/RUN-20260824-0317-.../sheet_shape_equivalence.cpp`, which
+drives same-address collisions on purpose, and by mutant **S05** of
+`tools/sweep_surface_sheet.sh`.
 
 ## Clock and reset semantics
 
@@ -146,10 +156,33 @@ The two ports are independent: a read and a write are accepted in the same cycle
 
 ## Memory ownership
 
-`Slots × 4,096 × 16` bits, one array, no VRAM port. At the default `Slots = 2`
-that is 131,072 bits ≈ 13 M10K on a Cyclone V — **the block's entire memory
-bill**, and the first fit report should retune `Slots` rather than the logic.
-Word layout `{tag[15:8], strength[7:0]}`, byte enables on the two halves.
+`Slots × 4,096 × 16` bits, no VRAM port. At the default `Slots = 2` that is
+131,072 bits — **the block's entire memory bill**, and the first fit report
+should retune `Slots` rather than the logic.
+
+**Two arrays of 8 bits, not one of 16 with byte enables** — `mem_tag[Slots ×
+4,096]` and `mem_str[Slots × 4,096]`, each written whole under its own enable.
+The observable law is unchanged (`wr_we_tag_i` moves the tag and leaves the
+strength, and the reverse), and this is also the shape the oracle has always
+had: `zref::surface::Sheet` is `uint8_t tag[4096]; uint8_t strength[4096]`.
+
+The shape is load-bearing, not cosmetic. Written as one 16-bit array with
+
+```systemverilog
+if (be[1]) mem[a][15:8] <= d[15:8];
+if (be[0]) mem[a][ 7:0] <= d[ 7:0];
+```
+
+it inferred **no memory at all**: 131,258 registers and an estimated **95,947
+ALMs, 229 % of the whole device**, measured map-only on `5CSEBA6U23I7`.
+`reports/QUARTUS_GOTCHAS.md` §10 gives three independent killers of storage
+inference — an asynchronous read, a reset touching the array, and byte enables —
+and Quartus 17.0.2 Lite does not infer M10K byte-enable support from that
+template. Splitting the word removes the killer rather than working around it,
+and is preferred to instantiating `altsyncram` (§10's other option) because it
+needs no vendor primitive. Each plane is 8,192 × 8 at the default and maps to an
+ALTSYNCRAM AUTO Simple Dual Port; the microbench of exactly that shape is
+`calib_ram_8192x8_shared_re` in `tools/budget/calibration.json`.
 
 The 14.38 MiB pool of `terrain_rules` §8 lives in VRAM and is not modelled here;
 this block is the fabric-side resident window onto it. Nothing in this tree

@@ -162,12 +162,47 @@ module zhao_surface_sheet #(
   localparam int unsigned AddrBits = SlotBits + 12;
 
   // ---- the store ----------------------------------------------------------
-  // Word layout: {tag[15:8], strength[7:0]}. Deliberately NOT reset — a reset
-  // loop over the array is exactly what stops M10K inference, and C3's clear
-  // sweep makes the initial contents unobservable (no read can be served for a
-  // handle that has not been ACQUIREd, and an allocating ACQUIRE zeroes the
-  // slot before it answers).
-  logic [15:0] mem[Words];
+  // TWO BYTE PLANES, not one 16-bit array with byte enables. Deliberately NOT
+  // reset — a reset loop over the array is exactly what stops M10K inference,
+  // and C3's clear sweep makes the initial contents unobservable (no read can
+  // be served for a handle that has not been ACQUIREd, and an allocating
+  // ACQUIRE zeroes the slot before it answers).
+  //
+  // WHY TWO ARRAYS AND NOT ONE, measured (RUN-20260824-0317). This was
+  //
+  //     logic [15:0] mem[Words];
+  //     if (mem_be[1]) mem[wr_addr][15:8] <= wr_word[15:8];
+  //     if (mem_be[0]) mem[wr_addr][ 7:0] <= wr_word[ 7:0];
+  //
+  // and it cost 131,258 REGISTERS and an estimated 95,947 ALMs — 229 % of the
+  // whole device — for 131,072 bits, because it inferred NO memory at all.
+  // reports/QUARTUS_GOTCHAS.md §10 has three independent killers of storage
+  // inference: an asynchronous read, a reset that touches the array, and BYTE
+  // ENABLES. The first two were already absent here on purpose. The third was
+  // present, and one is sufficient: Quartus 17.0.2 Lite does not infer M10K
+  // byte-enable support from that template, and the penalty is superlinear in
+  // the array, so it bit hardest exactly here.
+  //
+  // Splitting the word removes the byte enable rather than working around it:
+  // each plane is written WHOLE, gated by its own enable. That is the same
+  // behaviour — the two halves were never partially written *within* a half —
+  // and it is also the shape the oracle has always had
+  // (`zref::surface::Sheet` is `uint8_t tag[4096]; uint8_t strength[4096]`).
+  // Preferred over instantiating `altsyncram`, which §10 offers for a
+  // genuinely byte-enabled memory: no vendor primitive, nothing for the
+  // simulation model to diverge on, and nothing to re-solve for the Steam and
+  // silicon lanes.
+  //
+  // MEASURED, not assumed, because the calibration grid did not cover this
+  // template: `calib_ram_8192x8_shared_re` in tools/budget/calibration.json is
+  // one of these planes exactly — 8,192 x 8, synchronous read WITH a read
+  // enable, read and write sharing ONE always_ff — and maps to 65,536 bits in
+  // an ALTSYNCRAM AUTO Simple Dual Port at 23 ALM and ZERO registers. The
+  // shared process is what preserves C5's read-during-write semantic, and it
+  // costs nothing; the four-point `ram_rdw` family proves the split-process and
+  // no-read-enable variants are indistinguishable from it.
+  logic [7:0] mem_tag[Words];
+  logic [7:0] mem_str[Words];
 
   // ---- the directory ------------------------------------------------------
   logic [31:0] dir_handle[Slots];
@@ -234,7 +269,8 @@ module zhao_surface_sheet #(
   logic [         1:0] pg_status_q;
   logic [        15:0] pg_src_id_q;
   logic                pg_is_read_q;
-  logic [        15:0] ram_q;
+  logic [         7:0] ram_tag_q;
+  logic [         7:0] ram_str_q;
 
   assign pg_valid_o    = pg_valid_q;
   assign pg_op_o       = pg_op_q;
@@ -244,8 +280,8 @@ module zhao_surface_sheet #(
   // same value a resident-but-untouched texel answers; the STATUS is what
   // distinguishes them, and a consumer that ignores status gets the fail-safe
   // reading (nothing was stamped there) rather than another patch's scar.
-  assign pg_tag_o      = (pg_is_read_q && pg_status_q == StHit) ? ram_q[15:8] : 8'd0;
-  assign pg_strength_o = (pg_is_read_q && pg_status_q == StHit) ? ram_q[7:0] : 8'd0;
+  assign pg_tag_o      = (pg_is_read_q && pg_status_q == StHit) ? ram_tag_q : 8'd0;
+  assign pg_strength_o = (pg_is_read_q && pg_status_q == StHit) ? ram_str_q : 8'd0;
 
   // A response slot is free when it is empty or being drained this cycle.
   wire pg_slot_free = !pg_valid_q || pg_ready_i;
@@ -276,18 +312,29 @@ module zhao_surface_sheet #(
   wire do_write = wr_fire && wr_hit;
 
   // ---- the one memory process (C5: one read, one write, read-old) ---------
+  // Both planes are read and written in ONE always_ff, as before. That is not
+  // incidental: nonblocking assignment makes the read see the PRE-write array,
+  // which is C5's stated read-during-write semantic, and keeping the shared
+  // process is what buys it with NO bypass network. `calib_ram_8192x8_shared_re`
+  // measures that this template still infers (see the store's declaration).
   wire [AddrBits-1:0] rd_addr = {req_hit_slot, req_texel_i};
   wire [AddrBits-1:0] wr_addr = clr_active ? {clr_slot, clr_addr} : {wr_hit_slot, wr_texel_i};
-  wire [        15:0] wr_word = clr_active ? 16'd0 : {wr_tag_i, wr_strength_i};
+  wire [         7:0] wr_tag = clr_active ? 8'd0 : wr_tag_i;
+  wire [         7:0] wr_str = clr_active ? 8'd0 : wr_strength_i;
   wire mem_we = clr_active || do_write;
-  wire [1:0] mem_be = clr_active ? 2'b11 : {wr_we_tag_i, wr_we_strength_i};
+  // Per-PLANE write enables, replacing the byte enables on one 16-bit word.
+  // The clear sweep writes both planes; a stamp writes whichever halves it
+  // named. Identical behaviour, no part-select, so no byte enable.
+  wire mem_we_tag = mem_we && (clr_active || wr_we_tag_i);
+  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i);
 
   always_ff @(posedge clk) begin
-    if (do_read_hit) ram_q <= mem[rd_addr];
-    if (mem_we) begin
-      if (mem_be[1]) mem[wr_addr][15:8] <= wr_word[15:8];
-      if (mem_be[0]) mem[wr_addr][7:0] <= wr_word[7:0];
+    if (do_read_hit) begin
+      ram_tag_q <= mem_tag[rd_addr];
+      ram_str_q <= mem_str[rd_addr];
     end
+    if (mem_we_tag) mem_tag[wr_addr] <= wr_tag;
+    if (mem_we_str) mem_str[wr_addr] <= wr_str;
   end
 
   // ---- control -------------------------------------------------------------

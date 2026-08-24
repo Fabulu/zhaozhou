@@ -1,0 +1,11 @@
+== the real pair: working tree against 4f0770d
+sheet_shape_equivalence: 228144 cycles compared, 400 same-address collisions driven
+PASS: the two shapes are indistinguishable on every output port, every cycle
+  C1 a write lands in the WRONG PLANE (tag data into the strength array)  caught (3894 port-cycle mismatches)
+  C2 the tag enable also writes the strength plane  caught (1895 port-cycle mismatches)
+  C3 the clear sweep clears only the tag plane  caught (3 port-cycle mismatches)
+  C4 read-during-write returns the POST-write word where C5 says pre-write  caught (408 port-cycle mismatches)
+  C5 the strength plane is read one texel late (address pipeline off by one)  caught (1118 port-cycle mismatches)
+----
+real pair: EQUIVALENT over 228,144 compared cycles
+positive controls: 5 caught, 0 blind, of 5
