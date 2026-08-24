@@ -390,6 +390,180 @@ does NOT survive a partial write. The two killers are independent but not equal
 in strength, and that is now a rule with a mechanism behind it rather than a
 shrug.
 
+### 06:20 - SWEEP SCORE, and every survivor adjudicated
+
+`tools/sweep_surface_sheet.sh`, detached worktree
+`/c/programmieren/zencrifice/zhaozhou-sweep-sheet` at `2eeef64`
+(log: `sweep_run1_13of18.log`):
+
+```
+linted 18 mutants at Slots (2, 4), 0 do not build
+pristine models 514131a2a4fb, 6 lanes green
+attempted=18 expected=18 accounted=18 caught=13
+```
+
+**A survivor is either a test gap or a true equivalent, and reading the RTL
+produces an argument, not evidence.** Each of the five was run through this
+run's shape differential -- the post-change RTL against the pre-change RTL out
+of git, 228,144 compared port-cycles, all fifteen output ports every cycle:
+
+| survivor | differential verdict | action |
+| --- | --- | --- |
+| S05 read-during-write answers post-write | **408 mismatches** | GAP -> new test |
+| S07 read-data register's enable deleted | differs | GAP -> stimulus fixed |
+| S14 `req_ready_o` drops `!clr_active` | **0 mismatches** | **TRUE EQUIVALENT** |
+| S17 `wr_ready_o` high during the sweep | **663,970 mismatches** | GAP -> new test |
+| S18 the counter does not saturate | unreachable | COSTED, left alive |
+
+**S14, argued against named lines and then confirmed.**
+`zhao_surface_sheet.sv:395` and `:400` set `clr_active` and `pend_valid`
+together in the same `do_acquire_new` branch; `:372` clears `pend_valid` only
+under `pend_valid && !clr_active && pg_slot_free`. So `clr_active` implies
+`pend_valid`, `!clr_active && !pend_valid` is just `!pend_valid`, and the
+`!clr_active` term in `req_ready_o` is redundant. That is the argument; the
+0-mismatch probe is the evidence. Both are recorded, because the argument alone
+is what this repository keeps getting wrong.
+
+**S17 was the surprise, and the third gap.** `wr_ready_o = !clr_active` is in
+the contract's backpressure rules and **nothing anywhere offered a write during
+a clear sweep**. An accepted write during a sweep has its address overridden by
+the sweep's, so it lands nowhere -- but it still counts a texel, and the counter
+then disagrees with what the sheet holds, which is exactly what that counter's
+own comment forbids. `test_clear_sweep_is_visible` now offers a write on every
+one of the 4,096 cycles and checks three things: the port refuses it, the
+counter does not move, and the texel is still zero afterwards.
+
+**S18 is NOT called an equivalent, because it is not one.** `spec/counters.md`
+4 says a counter never wraps; the two behaviours differ, at exactly one value,
+reachable only after **2^32 = 4,294,967,296 accepted writes**. The write port
+takes at most one per clock, so no shorter stimulus exists. Measured throughput
+on this machine: 228,144 cycle-pairs in **188 ms** across two models, about
+2.4 M cycles/s single -- so the cheapest possible killing test is **roughly half
+an hour of pure simulation**, a nightly lane at best and never `ctest -L fast`.
+Left alive deliberately, named in the sweep table with the cost attached.
+`tools/sweep_geom_skin.sh` carries the identical mutant on an identical 32-bit
+saturating counter and labels it "EXPECTED EQUIVALENT" -- **it is not
+equivalent, it is unreachable, and those are different claims.**
+
+`surface_sheet_directed`: **58 -> 67 checks**, three defects' worth of new
+coverage, all from the sweep.
+
+---
+
+## WHAT DID NOT WORK
+
+Nine, and the ones that cost most were the ones where a number looked right.
+
+**1. The shape differential's first run reported 624 mismatches that were
+entirely its own.** `Both::drive(f)` applies the lambda to BOTH models, and I
+called `rnd()` INSIDE the lambda -- so the generator advanced twice per cycle
+and the two DUTs received **different stimulus**. Every "mismatch" was the
+harness comparing two different experiments. It was caught only because the
+first failure landed at cycle 12,634, which is the first cycle of the collision
+phase, and that was too neat: a real read-during-write bug would not wait for
+the phase designed to provoke it and then also produce `new=73 old=0` in the
+other direction two cycles later. **Had I believed the number I would have
+"fixed" the RTL to match a phantom** -- and the RTL was already correct.
+
+**2. The `resetTouched` fix was wrong on the first attempt, in the most
+flattering possible way.** The defect was walking the whole `IF`; taking
+`thensp` is the obvious repair and it is **exactly as wrong as taking both**.
+Verilator's elaborated AST folds `if (!rst_n)` by SWAPPING the arms -- the
+condition arrives as a bare `VARREF rst_n`, the WORK is in `thensp` and the
+RESET is in `elsesp`. Confirmed by dumping the node rather than by more
+reasoning. Only the positive controls caught it, and one of them
+(`dir_handle`) had been **passing by coincidence** before, because it is also
+written in the operating logic. A control set that had only checked the arrays
+expected to become `false` would have passed the broken fix.
+
+**3. I ran a Quartus map concurrently with the mutation sweep, against this
+repository's own standing rule.** `quartus_map` had accumulated **49 seconds of
+CPU in 40 minutes of wall time** -- it was starved by the sweep's constant
+`cmake`/`verilator`/`g++` cycle. The `zhao_forge_cliff` row records **462.5 s**
+where the prior measurement of the same block took **247.2 s**. No structural
+number is affected (memory bits, inferred count and registers are properties of
+the netlist), but **that row's `seconds` field is contaminated and must not be
+compared against 247.2 as though it measured the same thing.** The rule is "one
+Quartus job at a time" and it exists because concurrency has already cost this
+project a row permanently.
+
+**4. The `zhao_forge_cliff` map was run against UNCOMMITTED RTL**, so its row
+carries `rtlCleanAtHead: false`. Labelling it `@edge-split-wip` keeps it honest
+and keeps the old row intact, but it means the authoritative row still has to be
+re-measured from a clean tree. Committing first would have cost nothing.
+
+**5. `Tee-Object` silently wrote no file.** The `run_calib.ps1 -Family ram_rdw`
+console output was piped through `Tee-Object -FilePath ...` and **no file was
+created**, with no error. Discovered when the run folder listing came back
+without it. Recovered by regenerating the evidence file from
+`tools/budget/calibration.json` with a script -- **not by retyping the numbers
+from the terminal scrollback**, which was the tempting and forbidden move.
+
+**6. A `\r` escape mangled a command line inside my own TASK_LOG.**
+`tools\quartus\run_block_map.ps1` was written into a non-raw Python string and
+became `tools\quartusun_block_map.ps1`, because `\r` is a carriage return.
+Caught by re-reading the diff. Python printed a `SyntaxWarning` about the
+adjacent `\q` and I did not read it. **A mangled command in a run log is a trap
+laid for the next agent**, and it is invisible to every test.
+
+**7. The preflight rejected all 18 mutants and it looked like 18 broken
+mutations.** It was one broken mutation (S01, which orphaned `mem_tag` ->
+`-Wall` UNDRIVEN) and **seventeen reports of a pre-existing defect in the block
+itself**: it does not lint clean at `Slots = 1`, and neither does the
+pre-change version. Reading the failure TEXT rather than the failure COUNT is
+what separated "my mutants are broken" from "the block does not elaborate
+cleanly at its own lower bound". A count would have sent me rewriting
+seventeen correct mutations.
+
+**8. Two `python - <<'PY'` heredocs failed to parse with "unexpected EOF" on
+content that was syntactically fine**, costing two retries before I gave up and
+wrote the script to a file first. Not a repository defect; recorded because the
+workaround is the thing worth knowing.
+
+**9. I launched the sweep with `nohup ... &` inside a backgrounded shell and
+then could not tell whether it had started.** The log file did not exist for
+several minutes and the task reported "completed"; the sweep was in fact alive
+and still in its first `cmake` configure of a fresh worktree. Checking
+`Get-Process` is what settled it -- and that is the same check this repository
+already mandates for the opposite reason, because "a stopped background task is
+not a stopped process".
+
+### And one thing that was NOT a failure but looked like one
+
+`scan_rtl.py` reported `zhao_surface_sheet`'s `mem` as **healthy** -- sync read,
+not reset-touched, `expectedStorage: RAM`, severity YELLOW. That was not the
+scanner being broken in the ordinary sense; it was the scanner **not having the
+detector at all**, which reads identically from the outside. The block's own
+header comment was also proudly correct about two of the three killers and
+silent on the third. **Two independent sources of "this array is fine", both
+honest, both blind in the same place** -- and the only thing that found it was
+reading the write statement.
+
+---
+
+## NOT DONE
+
+* **No fit for either block.** Everything here is map-only. Inference and
+  resource counts are decided by Analysis and Synthesis, which is why map is
+  the right instrument for this question -- but **no Fmax or slack was
+  measured**, and both blocks now have M10Ks on paths that previously had
+  flops. Do not quote a timing number for either.
+* **`zhao_forge_cliff`'s authoritative map row.** The `@edge-split-wip` row is
+  measured against uncommitted RTL and under CPU contention. Re-measure clean.
+* **`zhao_surface_sheet` does not lint at `Slots = 1`.** `SlotBits` is 1 even at
+  one slot so `AddrBits` is 13 against a 4,096-word array. Functionally
+  harmless (the extra bit is always zero) and out of this run's scope, because
+  changing an address width at an untested parameter value is a behaviour
+  change wearing a lint fix.
+* **S18 is alive**, by decision, at a measured cost of half an hour of
+  simulation.
+* **`zhao_field_seq` is now the largest uninferred storage left**: 0 memory
+  bits, 7,958 estimated ALMs, and `scan_rtl` now reports its `rf` correctly as
+  async-read AND genuinely reset-written -- two killers, both real. It is the
+  obvious next block and this run did not touch it.
+* Nothing was done about `zhao_debug_counters` (3,795 ALMs, 0 bits) or
+  `zhao_field_exec_shared` (4,793 ALMs, 0 bits).
+
 
 ---
 

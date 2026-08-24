@@ -205,7 +205,42 @@ its own). Adding a bitmap here would contradict a ratified rejected-alternative.
 
 ---
 
-## Open Questions
+## Open Questions -- ANSWERED
+
+- **Does Quartus 17.0.2 Lite infer an M10K when the synchronous read and the
+  write share one `always_ff` (the read-old template)?** **YES, and the read
+  enable is free too.** New `ram_rdw` calibration family, 2x2 at 8192x8: all
+  four variants infer 65,536 bits at 22-23 ALM and ZERO registers, as
+  `ALTSYNCRAM [AUTO Simple Dual Port]`. **No bypass network is needed**, so C5's
+  read-during-write semantic is preserved for free. The fallback plan
+  (separate read process plus an explicit read-old bypass) was never required.
+- **`scan_rtl.py` cannot see byte enables. Fix here, or docket?** **Fixed here**,
+  and a SECOND defect was found while doing it: `resetTouched` walked the whole
+  `IF` including the ELSE, so every array written in the operating logic of any
+  `always_ff` with an async reset read as reset-touched. Both carry positive
+  controls in both directions, `validate_scan_rtl_fixes.py`, 14/14.
+- **Why do `zhao_forge_cliff`'s `prio_mem_r` and `run_mem_r` infer when
+  `edge_mem_r` does not, given all three are async-read?** **Because
+  `edge_mem_r[mhead_r][5:0] <= mtake_r` is a partial write and the other two are
+  not.** Quartus's rescue of an async read survives the async read and does not
+  survive a byte enable. Split at that field boundary, `edge_key_r` and
+  `edge_span_r` infer **while still being read asynchronously** -- which
+  confirms the mechanism rather than merely removing the symptom.
+  33,109 -> 7,664 estimated ALMs, 82,944 -> 119,808 memory bits.
+
+## New questions this run raises
+
+- **`zhao_field_seq` is now the largest uninferred storage in the tree** (0 bits,
+  7,958 ALMs). Its `rf` has two REAL killers -- async read and a genuine reset
+  loop -- so it is the one block where the valid-bitmap pattern this task
+  offered is actually the right answer. Not touched here.
+- **`zhao_surface_sheet` does not lint at `Slots = 1`** (`AddrBits` is 13 against
+  a 4,096-word array). Harmless, pre-existing, and a behaviour change to fix.
+- **No fit was run.** Both blocks now have M10Ks on paths that previously held
+  flops; no Fmax or slack has been measured for either, and none should be
+  quoted.
+
+## Original Open Questions (kept for the record)
 
 - Does Quartus 17.0.2 Lite infer an M10K when the synchronous read and the write
   share one `always_ff` (the read-old template)? The repo's two exemplars split
