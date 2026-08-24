@@ -5,12 +5,12 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `babe30fa`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `f7c3b578`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **90** |
+| modules with a map of **this exact RTL** | **89** |
 | modules with a fit of this exact RTL | 0 |
 | modules with any map | 89 |
 | modules with any fit | 41 |

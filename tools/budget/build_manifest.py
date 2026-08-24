@@ -430,7 +430,11 @@ def main():
                 "headCommit": head[:8],
                 "scanSourceListHash": inv.get("sourceListHash"),
                 "mapSourceListHash": (mp or {}).get("sourceListHash"),
+                # `status == ok` matters: zhao_stub_top has a row at HEAD's RTL
+                # whose status is `timeout`, and counting it as a map made the
+                # coverage line read 90 maps against 89 usable ones.
                 "mapRtlMatchesHead": (mp is not None
+                                      and mp.get("status") == "ok"
                                       and rtl_tree(mp.get("sourceCommit")) == head_rtl
                                       and bool(mp.get("rtlCleanAtHead"))),
                 "fitRtlMatchesHead": (ft is not None
