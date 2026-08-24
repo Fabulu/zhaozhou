@@ -3554,3 +3554,136 @@ extent bounded only by fx16 itself (±32 km).
 **No island cap is recommended, and no fx16 amendment.** What the measurement
 adds is that the rebase must ALSO bring the matrix words under 27 bits, or the
 narrowing half of the plan returns nothing.
+
+---
+
+# 2026-08-24 — OWNER RULINGS (Fabian, all seven open items)
+
+**These are decisions, not proposals. Everything below is ratified.**
+
+## 1. SetView: bound the NINE MULTIPLIED words, not the format
+
+SetView keeps 16 full s32 Q16.16 words. The nine linear words that actually
+enter multipliers — row-major addresses **[0,1,2,4,5,6,12,13,14]** — must
+sign-extend from **signed 27-bit raw: `-0x0400_0000 .. 0x03FF_FFFF`**
+(−1024.0 .. +1023.9999847).
+
+* Violation **rejects the entire SetView and retains the previous view.** No
+  silent clamping of a camera matrix.
+* Translation words stay full s32; row 2 stays inert and writable.
+* **No Q-format change. No island cap.**
+
+**Sacrifices:** only view matrices with a linear coefficient ≥1024 —
+pathological zooms and absurd FOVs, not real cameras. All 16 fractional bits kept.
+
+> **STANDING CORRECTION TO MY OWN LANGUAGE, ruled explicitly:** *"do not claim
+> 110 DSP saved until each affected block maps."* The ruling **enables** the
+> audit; it banks nothing. I have quoted 110 as money in hand and it is not —
+> every block must still prove BOTH operands land in the cheap band, then show it
+> on a map.
+
+## 2. TERRAIN.BAKE maximum analytic radius = 512 m (`0x0200_0000`)
+
+`radius <= 0` no-op; `0 < r <= 512 m` legal; `r > 512 m` **rejected, not
+clamped**. Dispatch only to patch envelopes intersecting the stencil; re-domain
+`dx`/`dz` around the stencil CENTRE, not absolute island coordinates.
+
+At the largest legal pitch a patch is 128 m across, ~181 m corner-to-corner, so
+the farthest swept vertex of a barely-intersecting patch is under ~694 m from
+centre — inside signed-27-bit Q16.16 (±1024 m).
+
+**Sacrifices:** one analytic stamp cannot exceed 1.024 km diameter. Bigger events
+compose from multiple stamps, authored stencils, timed impacts, or a Wound.
+
+## 3. Creature extent: rigid skin matrices, scale stays separate
+
+* `CREATURE_LOCAL_RADIUS = 128 m`, validated by the asset compiler over **every
+  vertex of every frame of every clip**, before Loom scale and world translation.
+* Bone palette matrices are **rotation + translation only** — no non-uniform
+  scale, no shear, no scale in the 3×3. Those terms are rigid rotation
+  coefficients and fit signed 27-bit trivially.
+* Uniform Loom SCALE stays explicit: cumulative `0 < scale <= 4.0` on the
+  rendered part, not per nested node. Authoring scale baked offline.
+* Terrain-class giants remain a separate terrain-patch path.
+
+**Sacrifices:** skeletal shear, per-bone non-uniform squash/stretch, and a single
+ordinary skinned mesh beyond ~1 km at max scale. **Growth, size variation and
+giants all survive.**
+
+## 4. `rescale_s32` — a BUG, not a design choice
+
+`constexpr int32_t rescale_s32(__int128 x, int k, SatLedger*, ...)`, carrying
+s128 through the rounding add, the arithmetic shift, the INT32 comparison and the
+final explicit cast. Every implicit `__int128 -> int64_t` narrowing removed.
+int64 callers promote exactly, so one canonical s128 function suffices. RTL may
+use a narrower accumulator **only with a proved domain bound** plus a differential
+against the exact-wide reference. Directed cases immediately below and above the
+int64 range so it cannot return.
+
+**Sacrifices:** nothing. It restores the already-written exact-wide / one-rounding law.
+
+## 5. Scars are SHEET-based — I was asking the wrong question
+
+No per-scar pool, no pressure fading. A stamp rasterises into the patch's 64×64
+{tag,strength} sheet; the scar record then occupies nothing. Ten thousand
+overlapping impacts still leave one fixed sheet.
+
+* each of the 1,024 resident patches may own one persistent sheet;
+* 64×64×2 B = **8,192 B**, canonical resident storage **8 MiB**;
+* **no scar count limit**, no cache-pressure disappearance;
+* fading only via explicit AGE / clear / heal;
+* unload must write back, reload restores;
+* the M10K `Slots` value is a **fabric working-cache parameter, not a gameplay
+  cap** — keep it parameterised, pick it from composed measurement.
+
+**Doc discrepancy to fix:** the layer table gives 8,192 B × 1,024 = 8 MiB while a
+SURFACE.SHEET paragraph still says 14.38 MiB. The table and the arithmetic win
+unless a second pool is identified.
+
+## 6. Earth-field WRITE ops are LIVE COMPOSITION, never persistent mutation
+
+**MATERIAL** — per 32×32 terrain cell. Writes `{matA u8, matB u8, weight unit8}`.
+Starts from authored layer E; active programs applied in accepted command order;
+**last enabled writer wins**; weight clamped [0,1] → unit8. Layer E unmodified.
+Priority comes from command ordering, so hardware invents no material hierarchy.
+
+**NAV** — per 8×8 gameplay cell (4×4 terrain cells). Signed Q16.16 movement-cost
+delta, combined by **saturating addition in command order**, clamped at zero
+below. May make ground cheaper or dearer; **may not** make VOID, OUT, impossible
+slope or collision-blocked terrain walkable — hard passability stays separate
+truth. `SW.CPUCOLL` consumes the identical composed value.
+
+**HAZARD** — same 8×8 grid. Non-negative Q16.16 severity, clamp [0,1] → u8, final
+`max(authored, every active field)`. Zero neutral. Overlapping fields do **not**
+multiply damage; a program wanting additive interaction computes it internally.
+
+**Lifetime:** all three live. On expiry, composition reverts to authored plus
+remaining active fields. Persistence goes through TERRAIN.BAKE, SURFACE.STAMP or
+explicit simulation commands — **a field evaluated every frame must never rewrite
+a VRAM page every frame.**
+
+## 7. Three-bone tail: two-bone hardware stays, nothing ships damaged
+
+Normalise to exact 1/64 quanta, force the sum to 64 by adjusting the largest,
+sort, drop the smallest, renormalise the survivors to 64. Then the existing
+measured gate over every frame of every clip: **warn >1% of bound radius, reject
+>3%.**
+
+No universal three-bone path in v1, and **no blind clamp**. A failing vertex is
+re-rigged, split by the compiler, or rejected. Keep rejection statistics;
+reconsider a sequenced slow tail only from real content evidence.
+
+**Sacrifices:** rigging convenience. Not visible quality — the high-error cases
+are forbidden from shipping.
+
+---
+
+## Execution order, ratified
+
+`BINNER` → `CDC mailbox` → remaining pair wrappers → **measured, workload-aware**
+pipelining → remaining Field waves.
+
+> **"Renderer pipelining" does NOT mean pipeline everything.** Rank the pair
+> wrappers by real Fmax against real workload, then attack the worst USEFUL seam.
+> TESS+NORMALS is the obvious candidate at 31.1 MHz with ~37x headroom — but
+> another pair may prove worse, and that is a measurement, not a guess.
