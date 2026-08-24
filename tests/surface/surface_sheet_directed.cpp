@@ -255,9 +255,8 @@ void test_clear_sweep_is_visible(Vzhao_surface_sheet& dut) {
   zhao::tick(dut);
   dut.eval();
   const SheetResponse swept = sdev::sheet_request(dut, sdev::kOpRead, kHandleC, 123, 0);
-  check(swept.tag == 0 && swept.strength == 0,
-        "and it did not land: the swept texel is still zero", 0,
-        (static_cast<uint32_t>(swept.tag) << 8) | swept.strength);
+  check(swept.tag == 0 && swept.strength == 0, "and it did not land: the swept texel is still zero",
+        0, (static_cast<uint32_t>(swept.tag) << 8) | swept.strength);
 }
 
 void test_read_throughput_and_backpressure(Vzhao_surface_sheet& dut) {
@@ -447,8 +446,9 @@ void test_read_during_write_returns_the_old_word(Vzhao_surface_sheet& dut) {
   // in a way the whole-word case cannot see.
   sdev::sheet_write(dut, kHandleC, 701, 0x33, 0x44, true, true, 0);
   const uint32_t old_tag_only = rdw(701, 0x99, 0x88, true, false);
-  check(old_tag_only == 0x3344, "a tag-only read-during-write still returns the whole PRE-write word",
-        0x3344, old_tag_only);
+  check(old_tag_only == 0x3344,
+        "a tag-only read-during-write still returns the whole PRE-write word", 0x3344,
+        old_tag_only);
   const SheetResponse half = sdev::sheet_request(dut, sdev::kOpRead, kHandleC, 701, 0);
   check((static_cast<uint32_t>(half.tag) << 8 | half.strength) == 0x9944,
         "the tag moved and the strength did not", 0x9944,
