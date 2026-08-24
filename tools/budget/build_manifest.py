@@ -844,6 +844,43 @@ def write_heatmap(path, man, calib, wl):
             L.append("unless the style column says otherwise. **DSP is per module, so divide by the")
             L.append("operator count to get cost per product.**")
             L.append("")
+            # THE LAW FIRST, THE ROWS AFTER. Sixty-six rows of grid is a
+            # dataset; the reader needs the shape of it before the evidence
+            # for it.
+            single = {}
+            for p2 in muls:
+                if p2.get("operators") == 1 and p2.get("style") == "ioreg" and p2.get("dspBlocks") is not None:
+                    single.setdefault(p2["width"], set()).add(p2["dspBlocks"])
+            if single:
+                bands, cur = [], None
+                for w in sorted(single):
+                    d = sorted(single[w])
+                    dv = d[0] if len(d) == 1 else None
+                    if cur and cur[2] == dv:
+                        cur[1] = w
+                    else:
+                        cur = [w, w, dv]
+                        bands.append(cur)
+                L.append("**One product, input+output registered:**")
+                L.append("")
+                L.append("| operand width | DSP blocks | signed vs unsigned |")
+                L.append("| --- | ---: | --- |")
+                for lo, hi, dv in bands:
+                    span = "%d" % lo if lo == hi else "%d - %d" % (lo, hi)
+                    same = all(len(single[w]) == 1 for w in single if lo <= w <= hi)
+                    L.append("| %s | **%s** | %s |" % (span, dv if dv is not None else "varies",
+                                                       "identical" if same else "DIFFERS"))
+                L.append("")
+                L.append("The cliff is where the tool stops using its 27x27 mode. **Narrowing a")
+                L.append("32-bit operand to 27 bits takes a product from 3 DSP blocks to 1**, with")
+                L.append("no change to the number of operators -- a lever this project has never")
+                L.append("had a number for.")
+                L.append("")
+                L.append("Note the `n4` rows below measure a **sum** of four products, which the")
+                L.append("DSP's own adder chain can pack. Independent products do not pack:")
+                L.append("`zhao_geom_quat2mat`'s nine 16x16 products take nine blocks. Both")
+                L.append("numbers are real and they answer different questions.")
+                L.append("")
             L.append("| operand width | signed | operators | style | DSP | DSP/product | est. ALM | decomposition |")
             L.append("| ---: | :--: | ---: | --- | ---: | ---: | ---: | --- |")
             for p in sorted(muls, key=lambda x: (x.get("width", 0), x.get("signed"), x.get("operators", 0), x.get("style", ""))):

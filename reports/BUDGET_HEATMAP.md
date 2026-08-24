@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `35fc97a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `f0f671a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -15,7 +15,7 @@ HEAD `35fc97a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 
 | modules with any map | 89 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
-| calibration points measured | 8 |
+| calibration points measured | 42 |
 
 ## The test of whether this works
 
@@ -440,6 +440,23 @@ Cyclone V `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2, input+output registered
 unless the style column says otherwise. **DSP is per module, so divide by the
 operator count to get cost per product.**
 
+**One product, input+output registered:**
+
+| operand width | DSP blocks | signed vs unsigned |
+| --- | ---: | --- |
+| 8 - 27 | **1** | identical |
+| 28 - 32 | **3** | identical |
+
+The cliff is where the tool stops using its 27x27 mode. **Narrowing a
+32-bit operand to 27 bits takes a product from 3 DSP blocks to 1**, with
+no change to the number of operators -- a lever this project has never
+had a number for.
+
+Note the `n4` rows below measure a **sum** of four products, which the
+DSP's own adder chain can pack. Independent products do not pack:
+`zhao_geom_quat2mat`'s nine 16x16 products take nine blocks. Both
+numbers are real and they answer different questions.
+
 | operand width | signed | operators | style | DSP | DSP/product | est. ALM | decomposition |
 | ---: | :--: | ---: | --- | ---: | ---: | ---: | --- |
 | 8 | U | 1 | ioreg | 1 | 1.00 | 28 | Unsigned=1 |
@@ -450,6 +467,40 @@ operator count to get cost per product.**
 | 9 | U | 4 | ioreg | 3 | 0.75 | 85 | Sum of two 18x18=1, Unsigned=4 |
 | 9 | S | 1 | ioreg | 1 | 1.00 | 31 | Signed=1 |
 | 9 | S | 4 | ioreg | 3 | 0.75 | 85 | Sum of two 18x18=1, Signed=4 |
+| 16 | U | 1 | ioreg | 1 | 1.00 | 55 | Two Independent 18x18=1, Unsigned=1 |
+| 16 | U | 4 | ioreg | 3 | 0.75 | 151 | Sum of two 18x18=1, Unsigned=4 |
+| 16 | S | 1 | ioreg | 1 | 1.00 | 55 | Two Independent 18x18=1, Signed=1 |
+| 16 | S | 4 | ioreg | 3 | 0.75 | 151 | Sum of two 18x18=1, Signed=4 |
+| 18 | U | 1 | ioreg | 1 | 1.00 | 61 | Two Independent 18x18=1, Unsigned=1 |
+| 18 | U | 4 | ioreg | 3 | 0.75 | 169 | Sum of two 18x18=1, Unsigned=4 |
+| 18 | S | 1 | ioreg | 1 | 1.00 | 61 | Two Independent 18x18=1, Signed=1 |
+| 18 | S | 4 | ioreg | 3 | 0.75 | 169 | Sum of two 18x18=1, Signed=4 |
+| 19 | U | 1 | ioreg | 1 | 1.00 | 65 | Unsigned=1 |
+| 19 | U | 4 | ioreg | 4 | 1.00 | 179 | Unsigned=4 |
+| 19 | S | 1 | ioreg | 1 | 1.00 | 65 | Signed=1 |
+| 19 | S | 4 | ioreg | 4 | 1.00 | 179 | Signed=4 |
+| 24 | U | 1 | ioreg | 1 | 1.00 | 81 | Unsigned=1 |
+| 24 | U | 4 | ioreg | 4 | 1.00 | 225 | Unsigned=4 |
+| 24 | S | 1 | ioreg | 1 | 1.00 | 81 | Signed=1 |
+| 24 | S | 4 | ioreg | 4 | 1.00 | 225 | Signed=4 |
+| 26 | U | 1 | ioreg | 1 | 1.00 | 88 | Unsigned=1 |
+| 26 | U | 4 | ioreg | 4 | 1.00 | 244 | Unsigned=4 |
+| 26 | S | 1 | ioreg | 1 | 1.00 | 88 | Signed=1 |
+| 26 | S | 4 | ioreg | 4 | 1.00 | 244 | Signed=4 |
+| 27 | U | 1 | ioreg | 1 | 1.00 | 91 | Unsigned=1 |
+| 27 | U | 4 | ioreg | 4 | 1.00 | 253 | Unsigned=4 |
+| 27 | S | 1 | ioreg | 1 | 1.00 | 91 | Signed=1 |
+| 27 | S | 4 | ioreg | 4 | 1.00 | 253 | Signed=4 |
+| 28 | U | 1 | ioreg | 3 | 3.00 | 119 | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
+| 28 | U | 4 | ioreg | 12 | 3.00 | 356 | Two Independent 18x18=8, Sum of two 18x18=4, Unsigned=16 |
+| 28 | S | 1 | ioreg | 3 | 3.00 | 119 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 28 | S | 4 | ioreg | 12 | 3.00 | 356 | Two Independent 18x18=8, Sum of two 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
+| 31 | U | 1 | ioreg | 3 | 3.00 | 132 | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
+| 31 | U | 4 | ioreg | 12 | 3.00 | 395 | Two Independent 18x18=8, Sum of two 18x18=4, Unsigned=16 |
+| 31 | S | 1 | ioreg | 3 | 3.00 | 132 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 31 | S | 4 | ioreg | 12 | 3.00 | 395 | Two Independent 18x18=8, Sum of two 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
+| 32 | U | 1 | ioreg | 3 | 3.00 | 137 | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
+| 32 | U | 4 | ioreg | 12 | 3.00 | 408 | Two Independent 18x18=8, Sum of two 18x18=4, Unsigned=16 |
 
 ## Blocks with no demand figure
 
