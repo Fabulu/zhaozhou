@@ -540,6 +540,62 @@ static void test_monotonicity() {
   std::printf("  monotonicity: add/sub/mul/rescale 2^18 triples OK\n");
 }
 
+// THE NARROWING THAT BYPASSED SATURATION (owner ruling, 2026-08-24 item 4).
+//
+// rescale_s32 used to take `int64_t` while mat3x4_mul and the rigid inversion
+// built genuine __int128 products and passed them straight in. The conversion
+// happened at the CALL BOUNDARY, so a value past INT64_MAX wrapped BEFORE the
+// round, the shift and the clamp could act on it -- the saturating law was
+// bypassed exactly where it was needed, and nothing recorded a clamp because no
+// clamp occurred.
+//
+// These are the cases that could not have passed before the signature widened:
+// each is a legitimate s128 magnitude that an int64 parameter cannot represent.
+static void test_rescale_s128_domain() {
+  SatLedger L;
+
+  // Just past the int64 rails, both signs. Under the old signature these
+  // wrapped to small values and returned nonsense WITHOUT bumping the ledger.
+  const __int128 just_over = static_cast<__int128>(INT64_MAX) + 1;
+  const __int128 just_under = static_cast<__int128>(INT64_MIN) - 1;
+  CHECK_EQ(rescale_s32(just_over, 16, &L), INT32_MAX);
+  CHECK_EQ(rescale_s32(just_under, 16, &L), INT32_MIN);
+
+  // A full 3-term mat3x4 row of extreme fx16 words: 3 * (2^31)^2 = 3*2^62,
+  // which exceeds INT64_MAX and is exactly the shape creature_core.cpp:77
+  // constructs.
+  const __int128 lo = static_cast<__int128>(INT32_MIN);
+  const __int128 row3 = lo * lo + lo * lo + lo * lo;
+  CHECK(row3 > static_cast<__int128>(INT64_MAX));
+  CHECK_EQ(rescale_s32(row3, 16, &L, &SatLedger::mul), INT32_MAX);
+
+  // k == 0 is the identity path and had its own narrowing: it called
+  // sat_s32_from_s64, which took int64_t.
+  CHECK_EQ(rescale_s32(just_over, 0, &L), INT32_MAX);
+  CHECK_EQ(rescale_s32(just_under, 0, &L), INT32_MIN);
+
+  // int64 callers must still promote EXACTLY -- the widening may not disturb
+  // any value the old signature handled correctly.
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(INT64_MAX), 16, &L), INT32_MAX);
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(0), 16, nullptr), 0);
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(65536), 16, nullptr), 1);
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(-65536), 16, nullptr), -1);
+  // round-half-up at the boundary, unchanged by the widening
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(32768), 16, nullptr), 1);
+  CHECK_EQ(rescale_s32(static_cast<int64_t>(32767), 16, nullptr), 0);
+
+  // EVERY clamp above was recorded, and the count is EXACT rather than a lower
+  // bound -- silence is precisely what the old bug looked like, so a test that
+  // merely tolerates extra clamps would not have caught it.
+  //   rescale: just_over/16, just_under/16, just_over/0, just_under/0,
+  //            INT64_MAX/16                                            = 5
+  //   mul:     row3                                                    = 1
+  CHECK_EQ(L.rescale, 5u);
+  CHECK_EQ(L.mul, 1u);
+  CHECK_EQ(L.total(), 6u);
+  std::printf("  rescale_s32 s128 domain: past-int64 rails clamp AND record\n");
+}
+
 static void test_sat_ledger() {
   SatLedger L;
   fx_add(fx16{INT32_MAX}, fx16{1}, &L);  // add clamp
@@ -770,6 +826,7 @@ int main(int argc, char** argv) {
   test_field_rcp();
   test_angle_wrap();
   test_monotonicity();
+  test_rescale_s128_domain();
   test_sat_ledger();
   test_isqrt();
   test_normalize();

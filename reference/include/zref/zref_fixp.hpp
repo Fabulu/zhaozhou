@@ -101,12 +101,45 @@ constexpr int16_t sat_s16_from_s64(int64_t v, SatLedger* L, uint32_t SatLedger::
 
 // rescale_s32(x, k): round-half-up shift, then saturate to the fx16 word.
 // k == 0 is the identity. Clamps record in L->rescale unless a more specific
-// counter is passed by the op wrappers below (§5). The rounding add runs in
-// s128: x near INT64_MAX must not wrap before the shift.
-constexpr int32_t rescale_s32(int64_t x, int k, SatLedger* L,
+// counter is passed by the op wrappers below (§5).
+//
+// TAKES __int128, AND THAT IS A BUG FIX, NOT A GENERALISATION.
+// (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 4)
+//
+// The parameter used to be `int64_t` while the body promoted to s128 and the
+// comment claimed "the rounding add runs in s128: x near INT64_MAX must not
+// wrap before the shift". Both were true and both missed the actual hazard:
+// the narrowing happened at the CALL BOUNDARY, before this function saw
+// anything.
+//
+//     __int128 p = a*b + a*b + a*b;                 // creature_core.cpp:77
+//     out.m[i*4+j] = rescale_s32(p, 16, L, ...);    // silently -> int64_t
+//
+// mat3x4_mul builds genuine 128-bit products, and so does the rigid inversion
+// at :249/:252. A value past INT64_MAX wrapped BEFORE the round, the shift and
+// the saturation could act on it, so the saturating law -- the one thing this
+// function exists to enforce -- was bypassed exactly when it was needed.
+//
+// int64 callers promote exactly, so one canonical s128 entry point is enough
+// and no call site needs changing. The RTL remains free to carry a narrower
+// accumulator, but only with a PROVED domain bound and a differential against
+// this exact-wide reference.
+constexpr int32_t rescale_s32(__int128 x, int k, SatLedger* L,
                               uint32_t SatLedger::*c = &SatLedger::rescale) {
-  if (k == 0) return detail::sat_s32_from_s64(x, L, c);
-  __int128 r = (static_cast<__int128>(x) + (static_cast<__int128>(1) << (k - 1))) >> k;
+  if (k == 0) {
+    // s128-safe identity: the old form called sat_s32_from_s64 and narrowed
+    // here too.
+    if (x > INT32_MAX) {
+      detail::ledger_bump(L, c);
+      return INT32_MAX;
+    }
+    if (x < INT32_MIN) {
+      detail::ledger_bump(L, c);
+      return INT32_MIN;
+    }
+    return static_cast<int32_t>(x);
+  }
+  const __int128 r = (x + (static_cast<__int128>(1) << (k - 1))) >> k;
   if (r > INT32_MAX) {
     detail::ledger_bump(L, c);
     return INT32_MAX;

@@ -852,6 +852,69 @@ Python heredoc that wrote the change ate a backslash and put a literal
 **backspace** in the path, so Quartus refused a directory called
 `...hesislockpaths`. Forward slashes now — no escaping layer can mangle them.
 
+### 21:50 — THE CRITICAL PATH ARRIVED AND VOIDED MY OWN RANKING
+
+Three fits and two harness fixes to get one path report, and it was worth every
+one of them:
+
+    From  altsyncram:lat_mem_rtl_0|...|ram_block1a0~PORT_B_WRITE_ENABLE_REG
+    To    zhao_terrain_tess:u_tess|vy[0][3]
+    Data Delay              30.000 ns
+    Number of Logic Levels  10
+
+**Three nanoseconds per logic level.** Cyclone V logic is 0.3-0.5 ns/level, and
+the clock path spent **66% of its delay in interconnect**. That is not a deep
+datapath — it is a **1,523-ALM design sprawling in a 41,910-ALM device** with
+virtual pins on every port. Nothing pressures the fitter to pack it.
+
+**The number characterises the PLACEMENT, not the logic.**
+
+#### 1. My sequencing change is ACQUITTED
+
+**Zero of the 25 worst paths touch `u_normals`.** I suspected the six-step walk I
+built this morning (18 DSPs -> 3) had cost frequency, and said so publicly,
+because the DSP campaign leans on that technique for a dozen more blocks. The
+hypothesis was mine, it was reasonable, and it is **wrong**.
+
+#### 2. The ranking cannot support a pipelining decision
+
+I stated "the renderer is limited by control state, not depth or seams"
+**twice, confidently**, on a measurement that could not carry it. What makes it
+untrustworthy rather than merely imprecise: the fastest pair (1,405 ALM) is
+nearly the same size as the slowest (1,523 ALM), so I cannot even argue the
+inflation cancels.
+
+> The audit asked for pair fits because leaf fits carry ~1,000 fictional virtual
+> pins. That was RIGHT, and pairs did fix it — 1,045 pins to 67. **It fixed the
+> boundary problem and left the SPRAWL problem.** I did not notice until I read a
+> path instead of a summary.
+
+Recorded as `QUARTUS_GOTCHAS` 12. **Unaffected:** the composed shell fit (7,442
+ALMs of genuinely connected logic, real top, paths between named blocks), and
+every DSP/memory figure, which are inference results rather than placement ones.
+
+### 22:00 — RULING 4 IMPLEMENTED: `rescale_s32` takes `__int128`
+
+The bug was real and the ruling was right to call it a bug rather than a choice.
+`mat3x4_mul` builds genuine 128-bit products:
+
+    __int128 p = a*b + a*b + a*b;                  // creature_core.cpp:77
+    out.m[i*4+j] = rescale_s32(p, 16, L, ...);     // silently -> int64_t
+
+The narrowing happened **at the call boundary**, so a value past INT64_MAX
+wrapped *before* the round, the shift and the clamp could act on it — the
+saturating law was bypassed exactly where it was needed, and **nothing recorded a
+clamp, because no clamp occurred.** Silence was the bug's signature.
+
+Directed cases either side of the int64 rails, plus the real 3-term row shape
+`3*(2^31)^2`, plus the `k == 0` identity path which had its own narrowing through
+`sat_s32_from_s64`. The clamp count is asserted **exactly** (5 rescale + 1 mul),
+not as a lower bound — a test that tolerated extra clamps would not have caught a
+bug whose symptom is *missing* ones.
+
+**29,385,065 checks, 0 failures.** My first attempt asserted `>= 7` and failed;
+the code was right and my arithmetic was not.
+
 ---
 
 ## Decisions Made

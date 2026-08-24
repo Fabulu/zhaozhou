@@ -2017,11 +2017,11 @@ blocks:
     notes: Warp8 throughput is cut-order 5 (§26).
 
   - id: GEOM.WCACHE
-    name: World-space vertex cache
+    name: Projected-vertex arena
     kind: rtl
     subsystem: geometry
     clock_domain: gpu
-    purpose: Cache world-space/post-transform vertices as the dual-view sharing point (compute once, project twice).
+    purpose: Bounded direct-indexed arena of projected vertices, the dual-view sharing point (project once, replay twice). NOT an associative cache -- owner ruling 2026-08-24.
     contract: design/contracts/GEOM.WCACHE.md
     phase: 8
     owner_issue: ZH-040
@@ -2030,9 +2030,9 @@ blocks:
     upstream: [GEOM.SKIN]
     downstream: [GEOM.PROJECT]
     backpressure: ready_valid
-    latency: variable_bounded:64
-    target_throughput: 1 cache lookup per clock
-    reference_model: zref::WorldCache
+    latency: fixed:1
+    target_throughput: 1 lookup per clock
+    reference_model: zref::geom::VertexArena
     tests:
       directed: tests/geometry/geom_wcache_directed.cpp
       random: tests/geometry/geom_wcache_random.cpp
