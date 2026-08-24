@@ -1,0 +1,41 @@
+== the real pair, at HEAD
+pair_equivalence: zhao_geom_project vs zhao_terrain_project vs project_vertex
+  near-plane boundary w == 0           2058 vertices   identical
+  near-plane boundary, stalling        2058 vertices   identical
+  duo, no stall                        1200 vertices   identical
+  duo, stalling consumer               1200 vertices   identical
+  odd viewports, no stall              1200 vertices   identical
+  odd viewports, stalling              1200 vertices   identical
+  behind the eye, no stall             1200 vertices   identical
+  behind the eye, stalling             1200 vertices   identical
+  guard-band rails                     1200 vertices   identical
+  guard-band rails, stalling           1200 vertices   identical
+  reconfigured, no reset                900 vertices   identical
+  reconfigured again, stalling          900 vertices   identical
+  reconfigured back to duo              900 vertices   identical
+----
+16416 vertices compared on three-way agreement, 0 mismatches
+RESULT: geom_project, terrain_project and project_vertex AGREE EVERYWHERE.
+  P1 terrain: the view tag is swapped at the viewport stage
+      caught (5234 mismatches)
+  P2 terrain: a config write lands in the wrong view's matrix
+      caught (44495 mismatches)
+  P3 geom: the viewport transform uses the other view's viewport
+      caught (2054 mismatches)
+  P4 terrain: the triangle is reassembled out of order (B takes C's word)
+      caught (3418 mismatches)
+  P5 geom: a stale matrix -- row 0 uses view 0 regardless of the packet
+      caught (2712 mismatches)
+  P6 terrain: the near plane becomes strict (w == 0 moves to the accept side)
+      caught (2352 mismatches)
+  P7 geom: the guard band clamps one count short of the rail
+      caught (4680 mismatches)
+  P8 terrain: the row sum rounds toward zero instead of half up
+      caught (1611 mismatches)
+  P9 geom: the 1/w lane divides the wrong numerator
+      caught (8325 mismatches)
+  P10 terrain: a behind-the-eye vertex keeps its coordinates instead of zeroing
+      caught (6915 mismatches)
+----
+real pair: EQUIVALENT
+controls: 10 caught, 0 BLIND, of 10

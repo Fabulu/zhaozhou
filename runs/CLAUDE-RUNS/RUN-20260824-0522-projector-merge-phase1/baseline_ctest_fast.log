@@ -1,0 +1,595 @@
+﻿Test project C:/Programmieren/zencrifice/zhaozhou/build
+        Start   1: stub_top
+  1/272 Test   #1: stub_top .........................   Passed    0.12 sec
+        Start   2: lint_stub_top
+  2/272 Test   #2: lint_stub_top ....................   Passed    0.22 sec
+        Start   3: formal_lane
+  3/272 Test   #3: formal_lane ......................   Passed    0.42 sec
+        Start   4: ledger_check
+  4/272 Test   #4: ledger_check .....................***Failed    8.55 sec
+-- 
+> zhaozhou@0.0.1 ledger:check
+> npm run -w tools/ledger check
+
+
+> @zhaozhou/ledger@0.0.1 check
+> npm run build && node dist/cli.js check
+
+
+> @zhaozhou/ledger@0.0.1 build
+> tsc -p tsconfig.json
+
+ledger: V2 git-history — comparing against HEAD
+ledger: V16 formal registry — 23 recorded run(s)
+
+-- ledger: CHECK FAILED — 1 error(s) against 92 blocks / 40 ops
+  - V16: FIELD.SEQ.CORE is RTL_VERIFIED but formal "tests/formal/field_seq_bound.sby" is recorded as "pending", not green — banked evidence cannot back a maturity claim
+npm error Lifecycle script `check` failed with error:
+npm error code 1
+npm error path C:\Programmieren\zencrifice\zhaozhou\tools\ledger
+npm error workspace @zhaozhou/ledger@0.0.1
+npm error location C:\Programmieren\zencrifice\zhaozhou\tools\ledger
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c npm run build && node dist/cli.js check
+
+CMake Error at npm/ledger_check.cmake:21 (message):
+  npm run ledger:check failed with exit code 1
+
+
+
+        Start   5: fixp
+  5/272 Test   #5: fixp .............................   Passed    0.50 sec
+        Start   7: tables_tri
+  6/272 Test   #7: tables_tri .......................   Passed    0.02 sec
+        Start   8: tables_check
+  7/272 Test   #8: tables_check .....................   Passed    6.08 sec
+        Start   9: crc
+  8/272 Test   #9: crc ..............................   Passed    0.02 sec
+        Start  10: golden_abi_info
+  9/272 Test  #10: golden_abi_info ..................   Passed    0.02 sec
+        Start  11: abi_golden
+ 10/272 Test  #11: abi_golden .......................   Passed    0.03 sec
+        Start  12: zcap_roundtrip
+ 11/272 Test  #12: zcap_roundtrip ...................   Passed    0.05 sec
+        Start  13: capture_cli_verify
+ 12/272 Test  #13: capture_cli_verify ...............   Passed    0.02 sec
+        Start  14: reel_sequence_crc
+ 13/272 Test  #14: reel_sequence_crc ................   Passed   68.96 sec
+        Start  15: abi_staleness
+ 14/272 Test  #15: abi_staleness ....................   Passed    6.34 sec
+        Start  16: empty_frame_replay
+ 15/272 Test  #16: empty_frame_replay ...............   Passed    0.14 sec
+        Start  17: abi_fuzz_parity
+ 16/272 Test  #17: abi_fuzz_parity ..................   Passed    0.21 sec
+        Start  18: zref_shell
+ 17/272 Test  #18: zref_shell .......................   Passed    0.02 sec
+        Start  19: zemu_smoke
+ 18/272 Test  #19: zemu_smoke .......................   Passed    0.02 sec
+        Start  20: desktop_smoke
+ 19/272 Test  #20: desktop_smoke ....................   Passed    0.02 sec
+        Start  21: field_crater_ring
+ 20/272 Test  #21: field_crater_ring ................   Passed    0.02 sec
+        Start  23: lint_zhao_pkg
+ 21/272 Test  #23: lint_zhao_pkg ....................   Passed    0.14 sec
+        Start  24: format_check
+ 22/272 Test  #24: format_check .....................   Passed    7.54 sec
+        Start  25: source_list_parity
+ 23/272 Test  #25: source_list_parity ...............   Passed    0.08 sec
+        Start  26: no_serial_crc
+ 24/272 Test  #26: no_serial_crc ....................   Passed    0.07 sec
+        Start  27: cppcheck_check
+ 25/272 Test  #27: cppcheck_check ...................   Passed  566.12 sec
+        Start  28: input_snapshot_directed
+ 26/272 Test  #28: input_snapshot_directed ..........   Passed    0.08 sec
+        Start  29: input_rumble_directed
+ 27/272 Test  #29: input_rumble_directed ............   Passed    0.04 sec
+        Start  30: input_random
+ 28/272 Test  #30: input_random .....................   Passed    0.04 sec
+        Start  32: lint_input_snapshot
+ 29/272 Test  #32: lint_input_snapshot ..............   Passed    0.16 sec
+        Start  33: lint_input_rumble
+ 30/272 Test  #33: lint_input_rumble ................   Passed    0.12 sec
+        Start  35: mixer_tone_directed
+ 31/272 Test  #35: mixer_tone_directed ..............   Passed    0.02 sec
+        Start  36: mixer_tone_random
+ 32/272 Test  #36: mixer_tone_random ................   Passed    0.03 sec
+        Start  37: audio_fifo_directed
+ 33/272 Test  #37: audio_fifo_directed ..............   Passed    0.06 sec
+        Start  38: audio_fifo_random
+ 34/272 Test  #38: audio_fifo_random ................   Passed    0.59 sec
+        Start  40: lint_zhao_audio_fifo
+ 35/272 Test  #40: lint_zhao_audio_fifo .............   Passed    0.16 sec
+        Start  42: lint_mem_sdram_ctrl
+ 36/272 Test  #42: lint_mem_sdram_ctrl ..............   Passed    0.15 sec
+        Start  43: lint_mem_vram_arbiter
+ 37/272 Test  #43: lint_mem_vram_arbiter ............   Passed    0.15 sec
+        Start  44: lint_mem_mem_guard
+ 38/272 Test  #44: lint_mem_mem_guard ...............   Passed    0.15 sec
+        Start  45: lint_mem_hps_bridge
+ 39/272 Test  #45: lint_mem_hps_bridge ..............   Passed    0.14 sec
+        Start  46: lint_mem_params
+ 40/272 Test  #46: lint_mem_params ..................   Passed    0.07 sec
+        Start  47: mem_sdram_directed
+ 41/272 Test  #47: mem_sdram_directed ...............   Passed    2.93 sec
+        Start  48: mem_vram_arbiter_directed
+ 42/272 Test  #48: mem_vram_arbiter_directed ........   Passed    3.19 sec
+        Start  49: mem_random
+ 43/272 Test  #49: mem_random .......................   Passed    2.96 sec
+        Start  51: mem_bandwidth_budget
+ 44/272 Test  #51: mem_bandwidth_budget .............   Passed    2.90 sec
+        Start  52: mem_guard_directed
+ 45/272 Test  #52: mem_guard_directed ...............   Passed    3.45 sec
+        Start  53: mem_hps_bridge_directed
+ 46/272 Test  #53: mem_hps_bridge_directed ..........   Passed    0.02 sec
+        Start  54: mem_hps_bridge_random
+ 47/272 Test  #54: mem_hps_bridge_random ............   Passed    0.02 sec
+        Start  58: render_directed
+ 48/272 Test  #58: render_directed ..................   Passed    0.06 sec
+        Start  59: render_heightfield
+ 49/272 Test  #59: render_heightfield ...............   Passed    0.04 sec
+        Start  60: render_sky
+ 50/272 Test  #60: render_sky .......................   Passed    0.10 sec
+        Start  61: render_star
+ 51/272 Test  #61: render_star ......................   Passed    0.69 sec
+        Start  62: render_golden
+ 52/272 Test  #62: render_golden ....................   Passed    0.10 sec
+        Start  63: terrain_dual
+ 53/272 Test  #63: terrain_dual .....................   Passed    0.04 sec
+        Start  64: terrain_keel
+ 54/272 Test  #64: terrain_keel .....................   Passed    0.02 sec
+        Start  65: forge_cliff_directed
+ 55/272 Test  #65: forge_cliff_directed .............   Passed    0.38 sec
+        Start  66: lint_forge_cliff
+ 56/272 Test  #66: lint_forge_cliff .................   Passed    0.07 sec
+        Start  67: forge_cliff_random
+ 57/272 Test  #67: forge_cliff_random ...............   Passed    2.80 sec
+        Start  69: texture_mosaic_directed
+ 58/272 Test  #69: texture_mosaic_directed ..........   Passed    0.10 sec
+        Start  70: texture_mosaic_random
+ 59/272 Test  #70: texture_mosaic_random ............   Passed    0.13 sec
+        Start  72: texture_aux_directed
+ 60/272 Test  #72: texture_aux_directed .............   Passed    0.04 sec
+        Start  73: texture_aux_random
+ 61/272 Test  #73: texture_aux_random ...............   Passed    0.19 sec
+        Start  75: lint_texture_aux
+ 62/272 Test  #75: lint_texture_aux .................   Passed    0.06 sec
+        Start  76: lint_texture_mosaic
+ 63/272 Test  #76: lint_texture_mosaic ..............   Passed    0.05 sec
+        Start  77: lint_texture_mod255
+ 64/272 Test  #77: lint_texture_mod255 ..............   Passed    0.03 sec
+        Start  79: creature_core
+ 65/272 Test  #79: creature_core ....................   Passed    0.02 sec
+        Start  80: render_budget
+ 66/272 Test  #80: render_budget ....................   Passed    7.67 sec
+        Start  81: cmd_scheduler_directed
+ 67/272 Test  #81: cmd_scheduler_directed ...........   Passed    0.04 sec
+        Start  82: geom_pose_cache_directed
+ 68/272 Test  #82: geom_pose_cache_directed .........   Passed    0.12 sec
+        Start  83: geom_pose_cache_random
+ 69/272 Test  #83: geom_pose_cache_random ...........   Passed    0.04 sec
+        Start  85: lint_zhao_geom_pose_cache
+ 70/272 Test  #85: lint_zhao_geom_pose_cache ........   Passed    0.09 sec
+        Start  86: geom_pose_decode_directed
+ 71/272 Test  #86: geom_pose_decode_directed ........   Passed    0.04 sec
+        Start  87: geom_pose_decode_random
+ 72/272 Test  #87: geom_pose_decode_random ..........   Passed    0.06 sec
+        Start  89: lint_zhao_geom_pose_decode
+ 73/272 Test  #89: lint_zhao_geom_pose_decode .......   Passed    0.09 sec
+        Start  90: geom_mat3x4_mul_directed
+ 74/272 Test  #90: geom_mat3x4_mul_directed .........   Passed    0.04 sec
+        Start  91: geom_mat3x4_mul_random
+ 75/272 Test  #91: geom_mat3x4_mul_random ...........   Passed    0.02 sec
+        Start  93: lint_zhao_geom_mat3x4_mul
+ 76/272 Test  #93: lint_zhao_geom_mat3x4_mul ........   Passed    0.05 sec
+        Start  94: field_normalize_directed
+ 77/272 Test  #94: field_normalize_directed .........   Passed    0.05 sec
+        Start  95: field_normalize_random
+ 78/272 Test  #95: field_normalize_random ...........   Passed    0.21 sec
+        Start  97: lint_zhao_field_normalize
+ 79/272 Test  #97: lint_zhao_field_normalize ........   Passed    0.10 sec
+        Start  98: hps_arbiter_directed
+ 80/272 Test  #98: hps_arbiter_directed .............   Passed    0.03 sec
+        Start  99: lint_zhao_hps_arbiter
+ 81/272 Test  #99: lint_zhao_hps_arbiter ............   Passed    0.16 sec
+        Start 100: video_slotmgr_directed
+ 82/272 Test #100: video_slotmgr_directed ...........   Passed    0.05 sec
+        Start 101: video_slotmgr_random
+ 83/272 Test #101: video_slotmgr_random .............   Passed    0.03 sec
+        Start 103: lint_zhao_video_slotmgr
+ 84/272 Test #103: lint_zhao_video_slotmgr ..........   Passed    0.05 sec
+        Start 104: field_seq_directed
+ 85/272 Test #104: field_seq_directed ...............   Passed    0.04 sec
+        Start 105: field_seq_random
+ 86/272 Test #105: field_seq_random .................   Passed    0.09 sec
+        Start 107: lint_zhao_field_seq
+ 87/272 Test #107: lint_zhao_field_seq ..............   Passed    0.42 sec
+        Start 108: field_ring_directed
+ 88/272 Test #108: field_ring_directed ..............   Passed    0.03 sec
+        Start 109: field_ring_random
+ 89/272 Test #109: field_ring_random ................   Passed    0.15 sec
+        Start 111: lint_zhao_field_ring
+ 90/272 Test #111: lint_zhao_field_ring .............   Passed    0.08 sec
+        Start 112: field_rot_directed
+ 91/272 Test #112: field_rot_directed ...............   Passed    0.03 sec
+        Start 113: field_rot_random
+ 92/272 Test #113: field_rot_random .................   Passed    0.09 sec
+        Start 115: lint_zhao_field_rot
+ 93/272 Test #115: lint_zhao_field_rot ..............   Passed    0.07 sec
+        Start 116: field_noise_directed
+ 94/272 Test #116: field_noise_directed .............   Passed    0.02 sec
+        Start 117: field_noise_random
+ 95/272 Test #117: field_noise_random ...............   Passed    0.08 sec
+        Start 119: lint_zhao_field_noise
+ 96/272 Test #119: lint_zhao_field_noise ............   Passed    0.08 sec
+        Start 120: field_curve_directed
+ 97/272 Test #120: field_curve_directed .............   Passed    0.08 sec
+        Start 121: field_curve_random
+ 98/272 Test #121: field_curve_random ...............   Passed    0.15 sec
+        Start 123: lint_zhao_field_curve
+ 99/272 Test #123: lint_zhao_field_curve ............   Passed    0.07 sec
+        Start 124: field_len_directed
+100/272 Test #124: field_len_directed ...............   Passed    0.06 sec
+        Start 125: field_len_random
+101/272 Test #125: field_len_random .................   Passed    0.12 sec
+        Start 127: lint_zhao_field_len
+102/272 Test #127: lint_zhao_field_len ..............   Passed    0.06 sec
+        Start 128: field_sin_directed
+103/272 Test #128: field_sin_directed ...............   Passed    0.10 sec
+        Start 129: lint_zhao_field_sin
+104/272 Test #129: lint_zhao_field_sin ..............   Passed    0.07 sec
+        Start 130: field_rcp_directed
+105/272 Test #130: field_rcp_directed ...............   Passed    0.03 sec
+        Start 131: field_rcp_random
+106/272 Test #131: field_rcp_random .................   Passed    0.18 sec
+        Start 133: lint_zhao_field_rcp
+107/272 Test #133: lint_zhao_field_rcp ..............   Passed    0.07 sec
+        Start 134: debug_frameblit_directed
+108/272 Test #134: debug_frameblit_directed .........   Passed    5.83 sec
+        Start 135: lint_zhao_debug_frameblit
+109/272 Test #135: lint_zhao_debug_frameblit ........   Passed    4.32 sec
+        Start 136: crc32c_fold_directed
+110/272 Test #136: crc32c_fold_directed .............   Passed    0.02 sec
+        Start 137: crc32c_fold_random
+111/272 Test #137: crc32c_fold_random ...............   Passed    0.68 sec
+        Start 139: lint_zhao_crc32c_fold
+112/272 Test #139: lint_zhao_crc32c_fold ............   Passed    3.81 sec
+        Start 140: field_alu_ops
+113/272 Test #140: field_alu_ops ....................   Passed    0.03 sec
+        Start 141: field_alu_random
+114/272 Test #141: field_alu_random .................   Passed    0.08 sec
+        Start 143: lint_zhao_field_alu
+115/272 Test #143: lint_zhao_field_alu ..............   Passed    0.06 sec
+        Start 144: part_soft_directed
+116/272 Test #144: part_soft_directed ...............   Passed    0.02 sec
+        Start 145: part_soft_random
+117/272 Test #145: part_soft_random .................   Passed    0.03 sec
+        Start 147: lint_zhao_part_soft
+118/272 Test #147: lint_zhao_part_soft ..............   Passed    0.06 sec
+        Start 148: part_expand_directed
+119/272 Test #148: part_expand_directed .............   Passed    0.03 sec
+        Start 149: part_expand_random
+120/272 Test #149: part_expand_random ...............   Passed    0.03 sec
+        Start 151: lint_zhao_part_expand
+121/272 Test #151: lint_zhao_part_expand ............   Passed    0.06 sec
+        Start 152: field_progcache_directed
+122/272 Test #152: field_progcache_directed .........   Passed    0.05 sec
+        Start 153: field_progcache_random
+123/272 Test #153: field_progcache_random ...........   Passed    0.04 sec
+        Start 155: lint_zhao_field_progcache
+124/272 Test #155: lint_zhao_field_progcache ........   Passed    0.07 sec
+        Start 156: geom_project_directed
+125/272 Test #156: geom_project_directed ............   Passed    0.03 sec
+        Start 157: geom_project_random
+126/272 Test #157: geom_project_random ..............   Passed    0.04 sec
+        Start 159: lint_zhao_geom_project
+127/272 Test #159: lint_zhao_geom_project ...........   Passed    0.32 sec
+        Start 160: geom_quat2mat_directed
+128/272 Test #160: geom_quat2mat_directed ...........   Passed    0.07 sec
+        Start 161: geom_quat2mat_random
+129/272 Test #161: geom_quat2mat_random .............   Passed    0.03 sec
+        Start 163: lint_zhao_geom_quat2mat
+130/272 Test #163: lint_zhao_geom_quat2mat ..........   Passed    0.06 sec
+        Start 164: geom_skin_directed
+131/272 Test #164: geom_skin_directed ...............   Passed    0.05 sec
+        Start 165: geom_skin_random
+132/272 Test #165: geom_skin_random .................   Passed    0.03 sec
+        Start 167: geom_skin_lanes1
+133/272 Test #167: geom_skin_lanes1 .................   Passed    0.07 sec
+        Start 168: geom_skin_lanes1_random
+134/272 Test #168: geom_skin_lanes1_random ..........   Passed    0.03 sec
+        Start 169: geom_skin_lanes6
+135/272 Test #169: geom_skin_lanes6 .................   Passed    0.05 sec
+        Start 170: geom_skin_lanes6_random
+136/272 Test #170: geom_skin_lanes6_random ..........   Passed    0.03 sec
+        Start 171: lint_zhao_geom_skin
+137/272 Test #171: lint_zhao_geom_skin ..............   Passed    0.07 sec
+        Start 172: field_stamp_modes
+138/272 Test #172: field_stamp_modes ................   Passed    0.46 sec
+        Start 173: debug_trace_rtl_directed
+139/272 Test #173: debug_trace_rtl_directed .........   Passed    0.04 sec
+        Start 174: debug_trace_rtl_random
+140/272 Test #174: debug_trace_rtl_random ...........   Passed    0.11 sec
+        Start 176: lint_zhao_debug_trace
+141/272 Test #176: lint_zhao_debug_trace ............   Passed    0.05 sec
+        Start 177: debug_trace_directed
+142/272 Test #177: debug_trace_directed .............   Passed    0.02 sec
+        Start 178: debug_trace_random
+143/272 Test #178: debug_trace_random ...............   Passed    0.02 sec
+        Start 179: cmd_decoder_directed
+144/272 Test #179: cmd_decoder_directed .............   Passed    0.03 sec
+        Start 180: cmd_decoder_random
+145/272 Test #180: cmd_decoder_random ...............   Passed    0.12 sec
+        Start 182: lint_zhao_cmd_decoder
+146/272 Test #182: lint_zhao_cmd_decoder ............   Passed    0.18 sec
+        Start 183: cmd_dma_directed
+147/272 Test #183: cmd_dma_directed .................   Passed    0.04 sec
+        Start 184: cmd_dma_random
+148/272 Test #184: cmd_dma_random ...................   Passed    0.22 sec
+        Start 186: cmd_random
+149/272 Test #186: cmd_random .......................   Passed    0.18 sec
+        Start 188: debug_counters_directed
+150/272 Test #188: debug_counters_directed ..........   Passed    0.04 sec
+        Start 189: debug_counters_random
+151/272 Test #189: debug_counters_random ............   Passed    0.09 sec
+        Start 191: debug_crc_directed
+152/272 Test #191: debug_crc_directed ...............   Passed    1.87 sec
+        Start 192: debug_crc_random
+153/272 Test #192: debug_crc_random .................   Passed    2.93 sec
+        Start 194: lint_cmd_scheduler
+154/272 Test #194: lint_cmd_scheduler ...............   Passed    0.18 sec
+        Start 195: lint_cmd_dma
+155/272 Test #195: lint_cmd_dma .....................   Passed    8.51 sec
+        Start 196: lint_debug_counters
+156/272 Test #196: lint_debug_counters ..............   Passed    0.23 sec
+        Start 197: lint_debug_crc
+157/272 Test #197: lint_debug_crc ...................   Passed    3.77 sec
+        Start 203: formal_sat_add
+158/272 Test #203: formal_sat_add ...................   Passed    3.48 sec
+        Start 204: test_video_mode_directed
+159/272 Test #204: test_video_mode_directed .........   Passed   12.38 sec
+        Start 205: test_video_scanout_directed
+160/272 Test #205: test_video_scanout_directed ......   Passed   26.41 sec
+        Start 206: test_video_framectl_directed
+161/272 Test #206: test_video_framectl_directed .....   Passed   14.98 sec
+        Start 207: test_video_mode_random
+162/272 Test #207: test_video_mode_random ...........   Passed    4.52 sec
+        Start 208: test_video_scanout_random
+163/272 Test #208: test_video_scanout_random ........   Passed    8.04 sec
+        Start 209: test_video_framectl_random
+164/272 Test #209: test_video_framectl_random .......   Passed    6.57 sec
+        Start 213: video_scaler_directed
+165/272 Test #213: video_scaler_directed ............   Passed    2.62 sec
+        Start 214: video_scaler_random
+166/272 Test #214: video_scaler_random ..............   Passed    0.23 sec
+        Start 216: lint_zhao_video_mode
+167/272 Test #216: lint_zhao_video_mode .............   Passed    0.23 sec
+        Start 217: lint_zhao_video_framectl
+168/272 Test #217: lint_zhao_video_framectl .........   Passed    0.21 sec
+        Start 218: lint_zhao_video_scaler
+169/272 Test #218: lint_zhao_video_scaler ...........   Passed    0.21 sec
+        Start 219: lint_zhao_scanout_fetch
+170/272 Test #219: lint_zhao_scanout_fetch ..........   Passed    0.22 sec
+        Start 220: lint_zhao_scanout_linebuf
+171/272 Test #220: lint_zhao_scanout_linebuf ........   Passed    0.23 sec
+        Start 221: lint_zhao_scanout_serializer
+172/272 Test #221: lint_zhao_scanout_serializer .....   Passed    0.21 sec
+        Start 222: lint_zhao_video_scanout
+173/272 Test #222: lint_zhao_video_scanout ..........   Passed    0.38 sec
+        Start 226: raster_edgewalk_directed
+174/272 Test #226: raster_edgewalk_directed .........   Passed    0.14 sec
+        Start 227: raster_edgewalk_random
+175/272 Test #227: raster_edgewalk_random ...........   Passed    0.69 sec
+        Start 229: lint_raster_edgewalk
+176/272 Test #229: lint_raster_edgewalk .............   Passed    0.18 sec
+        Start 231: raster_tilestore_directed
+177/272 Test #231: raster_tilestore_directed ........   Passed    0.06 sec
+        Start 232: raster_tilestore_random
+178/272 Test #232: raster_tilestore_random ..........   Passed    0.09 sec
+        Start 234: lint_raster_tilestore
+179/272 Test #234: lint_raster_tilestore ............   Passed    0.09 sec
+        Start 235: raster_resolve_directed
+180/272 Test #235: raster_resolve_directed ..........   Passed    1.22 sec
+        Start 236: raster_resolve_random
+181/272 Test #236: raster_resolve_random ............   Passed    0.97 sec
+        Start 238: lint_raster_resolve
+182/272 Test #238: lint_raster_resolve ..............   Passed    0.24 sec
+        Start 240: raster_earlyz_directed
+183/272 Test #240: raster_earlyz_directed ...........   Passed    0.06 sec
+        Start 241: raster_earlyz_random
+184/272 Test #241: raster_earlyz_random .............   Passed    0.10 sec
+        Start 243: lint_raster_earlyz
+185/272 Test #243: lint_raster_earlyz ...............   Passed    0.12 sec
+        Start 244: raster_fragment_directed
+186/272 Test #244: raster_fragment_directed .........   Passed    0.05 sec
+        Start 245: raster_fragment_random
+187/272 Test #245: raster_fragment_random ...........   Passed    0.11 sec
+        Start 247: lint_raster_fragment
+188/272 Test #247: lint_raster_fragment .............   Passed    0.09 sec
+        Start 249: texture_cache_directed
+189/272 Test #249: texture_cache_directed ...........   Passed    0.12 sec
+        Start 250: texture_cache_random
+190/272 Test #250: texture_cache_random .............   Passed    0.30 sec
+        Start 252: texture_tmu_directed
+191/272 Test #252: texture_tmu_directed .............   Passed    0.03 sec
+        Start 253: texture_tmu_random
+192/272 Test #253: texture_tmu_random ...............   Passed    0.08 sec
+        Start 255: texture_tmu_lanes4
+193/272 Test #255: texture_tmu_lanes4 ...............   Passed    0.04 sec
+        Start 256: texture_tmu_lanes1
+194/272 Test #256: texture_tmu_lanes1 ...............   Passed    0.04 sec
+        Start 257: lint_texture_cache
+195/272 Test #257: lint_texture_cache ...............   Passed    0.10 sec
+        Start 258: lint_texture_tmu
+196/272 Test #258: lint_texture_tmu .................   Passed    0.20 sec
+        Start 260: geom_clip_directed
+197/272 Test #260: geom_clip_directed ...............   Passed    0.03 sec
+        Start 261: geom_clip_random
+198/272 Test #261: geom_clip_random .................   Passed    0.23 sec
+        Start 263: geom_setup_directed
+199/272 Test #263: geom_setup_directed ..............   Passed    0.03 sec
+        Start 264: geom_setup_random
+200/272 Test #264: geom_setup_random ................   Passed    0.10 sec
+        Start 266: geom_binner_directed
+201/272 Test #266: geom_binner_directed .............   Passed    0.20 sec
+        Start 267: geom_binner_random
+202/272 Test #267: geom_binner_random ...............   Passed    4.73 sec
+        Start 269: terrain_normals_directed
+203/272 Test #269: terrain_normals_directed .........   Passed    0.09 sec
+        Start 270: terrain_normals_random
+204/272 Test #270: terrain_normals_random ...........   Passed    0.08 sec
+        Start 272: lint_terrain_normals
+205/272 Test #272: lint_terrain_normals .............   Passed    0.08 sec
+        Start 273: geom_lod_directed
+206/272 Test #273: geom_lod_directed ................   Passed    0.14 sec
+        Start 274: geom_lod_random
+207/272 Test #274: geom_lod_random ..................   Passed    0.18 sec
+        Start 276: geom_cull_directed
+208/272 Test #276: geom_cull_directed ...............   Passed    0.39 sec
+        Start 277: geom_cull_random
+209/272 Test #277: geom_cull_random .................   Passed    0.51 sec
+        Start 279: lint_zhao_geom_cull
+210/272 Test #279: lint_zhao_geom_cull ..............   Passed    0.09 sec
+        Start 280: field_out_height
+211/272 Test #280: field_out_height .................   Passed    0.03 sec
+        Start 281: field_out_height_random
+212/272 Test #281: field_out_height_random ..........   Passed    0.02 sec
+        Start 283: terrain_patch_directed
+213/272 Test #283: terrain_patch_directed ...........   Passed    0.05 sec
+        Start 284: terrain_patch_random
+214/272 Test #284: terrain_patch_random .............   Passed    0.10 sec
+        Start 286: lint_terrain_patch
+215/272 Test #286: lint_terrain_patch ...............   Passed    0.08 sec
+        Start 287: terrain_tess_directed
+216/272 Test #287: terrain_tess_directed ............   Passed    0.54 sec
+        Start 288: terrain_tess_random
+217/272 Test #288: terrain_tess_random ..............   Passed    0.28 sec
+        Start 290: lint_terrain_tess
+218/272 Test #290: lint_terrain_tess ................   Passed    0.17 sec
+        Start 291: terrain_tess_normals
+219/272 Test #291: terrain_tess_normals .............   Passed    0.23 sec
+        Start 292: terrain_project_directed
+220/272 Test #292: terrain_project_directed .........   Passed    0.06 sec
+        Start 293: terrain_project_random
+221/272 Test #293: terrain_project_random ...........   Passed    0.11 sec
+        Start 295: lint_terrain_project
+222/272 Test #295: lint_terrain_project .............   Passed    0.44 sec
+        Start 296: terrain_lod_directed
+223/272 Test #296: terrain_lod_directed .............   Passed    0.11 sec
+        Start 297: terrain_lod_random
+224/272 Test #297: terrain_lod_random ...............   Passed    0.71 sec
+        Start 299: lint_terrain_lod
+225/272 Test #299: lint_terrain_lod .................   Passed    0.16 sec
+        Start 300: terrain_lod_tess
+226/272 Test #300: terrain_lod_tess .................   Passed    0.04 sec
+        Start 301: lint_geom_clip
+227/272 Test #301: lint_geom_clip ...................   Passed    0.08 sec
+        Start 302: lint_geom_setup
+228/272 Test #302: lint_geom_setup ..................   Passed    0.10 sec
+        Start 303: lint_geom_binner
+229/272 Test #303: lint_geom_binner .................   Passed    0.10 sec
+        Start 304: geom_bin_pipe_directed
+230/272 Test #304: geom_bin_pipe_directed ...........   Passed    0.14 sec
+        Start 305: terrain_project_chain
+231/272 Test #305: terrain_project_chain ............   Passed    0.82 sec
+        Start 306: lint_geom_bin_pipe
+232/272 Test #306: lint_geom_bin_pipe ...............   Passed    0.47 sec
+        Start 308: raster_tile_pipe_directed
+233/272 Test #308: raster_tile_pipe_directed ........   Passed    0.14 sec
+        Start 309: raster_tile_pipe_random
+234/272 Test #309: raster_tile_pipe_random ..........   Passed    1.92 sec
+        Start 311: lint_raster_tile_pipe
+235/272 Test #311: lint_raster_tile_pipe ............   Passed    0.34 sec
+        Start 312: lint_shell_top
+236/272 Test #312: lint_shell_top ...................   Passed   16.20 sec
+        Start 314: shell_duo_markers_fast
+237/272 Test #314: shell_duo_markers_fast ...........   Passed  172.70 sec
+        Start 316: shell_golden_replay
+238/272 Test #316: shell_golden_replay ..............   Passed   98.15 sec
+        Start 317: field_write_tag
+239/272 Test #317: field_write_tag ..................   Passed    0.19 sec
+        Start 318: surface_sheet_store_diff
+240/272 Test #318: surface_sheet_store_diff .........   Passed    0.10 sec
+        Start 319: surface_sheet_store_random
+241/272 Test #319: surface_sheet_store_random .......   Passed    0.13 sec
+        Start 321: surface_sheet_directed
+242/272 Test #321: surface_sheet_directed ...........   Passed    0.07 sec
+        Start 322: surface_sheet_random
+243/272 Test #322: surface_sheet_random .............   Passed    0.21 sec
+        Start 324: surface_stamp_directed
+244/272 Test #324: surface_stamp_directed ...........   Passed    9.76 sec
+        Start 325: surface_sq_directed
+245/272 Test #325: surface_sq_directed ..............   Passed    0.02 sec
+        Start 326: surface_sq_radix4
+246/272 Test #326: surface_sq_radix4 ................   Passed    0.02 sec
+        Start 327: surface_stamp_radix2
+247/272 Test #327: surface_stamp_radix2 .............   Passed    5.31 sec
+        Start 328: surface_stamp_radix4
+248/272 Test #328: surface_stamp_radix4 .............   Passed    3.27 sec
+        Start 329: surface_stamp_random
+249/272 Test #329: surface_stamp_random .............   Passed   25.35 sec
+        Start 331: surface_stamp_chain
+250/272 Test #331: surface_stamp_chain ..............   Passed   49.79 sec
+        Start 332: lint_surface_sheet
+251/272 Test #332: lint_surface_sheet ...............   Passed    0.05 sec
+        Start 333: lint_surface_stamp
+252/272 Test #333: lint_surface_stamp ...............   Passed    0.06 sec
+        Start 334: lint_surface_blend
+253/272 Test #334: lint_surface_blend ...............   Passed    0.03 sec
+        Start 336: terrain_bake_directed
+254/272 Test #336: terrain_bake_directed ............   Passed    0.42 sec
+        Start 337: terrain_bake_random
+255/272 Test #337: terrain_bake_random ..............   Passed    1.25 sec
+        Start 339: terrain_bake_chain
+256/272 Test #339: terrain_bake_chain ...............   Passed    0.17 sec
+        Start 340: lint_terrain_bake
+257/272 Test #340: lint_terrain_bake ................   Passed    0.11 sec
+        Start 341: lint_terrain_bake_delta
+258/272 Test #341: lint_terrain_bake_delta ..........   Passed    0.04 sec
+        Start 343: field_out_velocity
+259/272 Test #343: field_out_velocity ...............   Passed    0.03 sec
+        Start 344: field_out_velocity_random
+260/272 Test #344: field_out_velocity_random ........   Passed    0.03 sec
+        Start 346: terrain_velocity_directed
+261/272 Test #346: terrain_velocity_directed ........   Passed    0.08 sec
+        Start 347: terrain_velocity_random
+262/272 Test #347: terrain_velocity_random ..........   Passed    0.36 sec
+        Start 349: terrain_velocity_chain
+263/272 Test #349: terrain_velocity_chain ...........   Passed    0.05 sec
+        Start 350: lint_terrain_velocity
+264/272 Test #350: lint_terrain_velocity ............   Passed    0.05 sec
+        Start 351: measure_tokens_directed
+265/272 Test #351: measure_tokens_directed ..........   Passed    0.03 sec
+        Start 352: measure_tokens_random
+266/272 Test #352: measure_tokens_random ............   Passed    0.12 sec
+        Start 354: lint_measure_tokens
+267/272 Test #354: lint_measure_tokens ..............   Passed    0.05 sec
+        Start 356: measure_governor_directed
+268/272 Test #356: measure_governor_directed ........   Passed    0.04 sec
+        Start 357: measure_governor_random
+269/272 Test #357: measure_governor_random ..........   Passed    0.38 sec
+        Start 359: measure_governor_lod
+270/272 Test #359: measure_governor_lod .............   Passed    0.67 sec
+        Start 360: measure_tokens_binner
+271/272 Test #360: measure_tokens_binner ............   Passed    0.04 sec
+        Start 361: lint_measure_governor
+272/272 Test #361: lint_measure_governor ............   Passed    0.07 sec
+
+99% tests passed, 1 tests failed out of 272
+
+Label Time Summary:
+fast       = 1219.92 sec*proc (272 tests)
+formal     =   3.90 sec*proc (2 tests)
+lint       = 620.21 sec*proc (81 tests)
+nightly    = 412.37 sec*proc (188 tests)
+
+Total Test time (real) = 1220.47 sec
+
+The following tests FAILED:
+	  4 - ledger_check (Failed)                             fast
+ctest : Errors while running CTest
+In Zeile:1 Zeichen:371
++ ... ao-env.ps1; ctest --test-dir build -L fast --output-on-failure 2>&1 | ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Errors while running CTest:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
