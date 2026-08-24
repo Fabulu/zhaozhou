@@ -479,6 +479,20 @@ try {
                     $row.setupSlackNs = $setup.slackNs
                     $row.setupTnsNs   = $setup.tnsNs
                 }
+                # KEEP THE REPORT, NOT ONLY THE NUMBER. Same gap the shell fit
+                # had until 2026-08-24: the row carried an Fmax and the .sta.rpt
+                # that explains WHERE it comes from died with the workspace, so
+                # a slow block could be measured but never diagnosed.
+                #
+                # It bit immediately. Four pair fits ranked the renderer
+                # 31.10 / 37.25 / 55.52 / 88.79 MHz, and the obvious next
+                # question -- is the slowest pair limited by TESS or by the
+                # sequenced multiply walk I put into NORMALS this morning --
+                # could not be answered from anything that survived.
+                $pathDir = Join-Path $RepoRoot 'reports\synthesislockpaths'
+                New-Item -ItemType Directory -Path $pathDir -Force | Out-Null
+                Copy-Item -LiteralPath $sta -Destination (Join-Path $pathDir ($rowModule + '.sta.rpt')) -Force
+
                 $hold = Get-StaSummary $s 'Hold Summary'
                 if ($null -ne $hold) {
                     $row.holdSlackNs = $hold.slackNs
