@@ -591,10 +591,14 @@ int main(int argc, char** argv) {
       }
       // The claim this case exists to pin, stated as its own check so a
       // regression names itself rather than hiding inside a packet compare.
-      const bool lane2_rails = (wraw <= 2);
-      check((got[0].d == INT32_MAX) == lane2_rails,
-            "the 1/w lane rails exactly when (1<<32)/clip.w >= 2^31", lane2_rails ? 1 : 0,
-            (got[0].d == INT32_MAX) ? 1 : 0);
+      // Guarded because `check()` records and continues rather than aborting,
+      // so a short run must not be followed by an out-of-range read.
+      if (!got.empty()) {
+        const bool lane2_rails = (wraw <= 2);
+        check((got[0].d == INT32_MAX) == lane2_rails,
+              "the 1/w lane rails exactly when (1<<32)/clip.w >= 2^31", lane2_rails ? 1 : 0,
+              (got[0].d == INT32_MAX) ? 1 : 0);
+      }
     }
   }
 

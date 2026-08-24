@@ -656,14 +656,76 @@ model directory is what tells the two apart, and it did.
 
 ## Files Created
 
+In the run folder:
+
 - `SPEC_v1.md`, `TASK_LOG.md`
-- `baseline_ctest_fast.log` — 271/272, the inherited `ledger_check` failure
-- `pair_equivalence.cpp`, `run_pair_equivalence.sh`, `apply_probe.py`
-- `pair_equivalence.log` — 16,416 vertices, 0 mismatches, 10/10 controls
+- `baseline_ctest_fast.log` — 271/272 before anything was touched
+- `final_ctest_fast.log` — after
+- `pair_equivalence.cpp`, `run_pair_equivalence.sh`, `pair_equivalence.log`
+  — the two shipped blocks vs each other vs the oracle: 16,416 vertices,
+  0 mismatches, 10 of 10 controls caught
+- `caller_regression.cpp`, `run_caller_regression.sh`, `caller_regression.log`
+  — each caller vs its own pre-merge self, every port every cycle:
+  1,080,000 port-cycles, 0 mismatches, 7 of 7 timing controls caught
+- `apply_probe.py` — anchored substitution for both harnesses' controls
+- `launch_sweep.sh`, `sweep.log` (19/23), `sweep_rescore.log` (the four
+  survivors re-scored after the gaps were closed: 2 caught, 2 proved equivalent)
+
+In the tree:
+
+- `fpga/rtl/common/zhao_project_core.sv` — the projection law, once
+- `tools/sweep_project_core.sh`, `tools/sweep_project_core_preflight.py`
+- `tools/sweep_apply_mutant.py` — written to a file so the next sweep does not
+  inline a heredoc either
+
+## Files Modified
+
+- `fpga/rtl/geometry/zhao_geom_project.sv` — 525 lines to 169
+- `fpga/rtl/terrain/zhao_terrain_project.sv` — 870 lines to 368
+- `tests/CMakeLists.txt` — the core's path written ONCE, four consumers
+- `tests/geometry/geom_project_directed.cpp` — §3c the divider's rail, §6b row 2
+  is inert
+- `tests/terrain/project_dev.hpp`, `tests/terrain/terrain_project_directed.cpp`
+  — `idle_o` checked in the FALSE direction for the first time
+- `design/contracts/GEOM.PROJECT.md`, `design/contracts/TERRAIN.PROJECT.md`
+- `design/blocks.yml` — both notes; no maturity touched
+- `docs/OWNER_DOCKET.md` — the merge, the 66-stays-66 measurement, the
+  single-instance costing, the 6,144x demand error, the 27-bit proof sites
+- `reports/synthesis/zhao_block_map.json` — three refreshed rows
+
+## Decisions Made
+
+1. **The seam is at the `to_screen_xy` register**, because that is
+   simultaneously GEOM's output register and TERRAIN's old `s6`. Chosen by the
+   two contracts' latency numbers (36 and 38), not by taste; there is exactly
+   one admissible boundary.
+2. **The pipeline enable is an INPUT** (`en_i`), not derived in the core. The two
+   callers back-pressure from different places and a core that decided for
+   itself would have silently changed one of them.
+3. **`view` is a first-class core signal, the riders are opaque payload.** `view`
+   selects the matrix at stage 1 and the viewport at stage 6; the payload is
+   never interpreted, and is 16 bits for GEOM and 42 for TERRAIN.
+4. **Both blocks instantiate the core; no single shared instance was built.**
+   The 33-DSP saving is real but it is an architecture change, it is
+   over-subscribed at today's terrain workload, and the docket's own ordering
+   puts the vertex cache first. Measured and docketed rather than attempted.
+5. **`zhao_project_core` gets no `design/blocks.yml` entry**, matching
+   `zhao_dc_sdp_ram.sv`'s standing as a shared implementation leaf.
+6. **`pre_sat` and the forced divisor both STAY**, though both are provably
+   output-neutral, because they are what make the block's stated invariant true.
+7. **The row-2 and depth-rail tests were positive-controlled before being
+   believed**, and the row-2 control had to be aimed at the test rather than at
+   the block before it proved anything.
 
 ## Next Steps
 
-- Finish step 2; read the control table before believing the verdict.
-- Step 3: extract `zhao_project_core`, both callers instantiate it.
-- Per-caller cycle-exact regression against pre-change RTL.
-- Mutation sweep in a worktree; map; ctest; ledger; commit.
+Handed to the owner, in this order — the first two are order-dependent:
+
+1. **The projected-vertex cache** (`GEOM.WCACHE`). 6,144 projections per patch
+   becomes 1,089; terrain drops from 99.5% to 17.6% of a compute frame.
+2. **One arbitrated core instance** — the 33-DSP saving. Affordable only after
+   step 1; needs a ruling because each caller becomes stallable by the other.
+3. **27-bit width narrowing**, 33 to 11. Needs a proof about world coordinates.
+4. **Correct the terrain demand row**, or `build_manifest.py`'s use of
+   `verticesPerItem`, or the ruled 270 patches. Owner's call which.
+5. A **fit** for the three modules. Nothing here measured timing.

@@ -17,6 +17,15 @@ set -u
 WT=/c/programmieren/zencrifice/.pcsweep
 LOG=${1:?usage: launch_sweep.sh <logfile>}
 
+# Resolve LOG against the CALLER'S directory before the `cd` below, or the
+# configure log lands inside the worktree instead of the run folder -- which is
+# what happened on the first run of this script, leaving evidence in a directory
+# that is about to be deleted.
+case "$LOG" in
+  /*) ;;
+  *) LOG="$PWD/$LOG" ;;
+esac
+
 export VERILATOR_ROOT='C:\programmieren\zencrifice\.tools\oss-cad-suite\share\verilator'
 export PATH="/c/programmieren/zencrifice/.tools/oss-cad-suite/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/lib:/c/programmieren/dsstuff/mingw64/bin:$PATH"
 export ZHAO_BUILD_DIR=build-pcsweep

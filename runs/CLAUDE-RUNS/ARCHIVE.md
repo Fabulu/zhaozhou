@@ -34,6 +34,119 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260824-0522] The two projectors are one core — and the 66 → 33 does not follow from it
+
+**Archived:** 2026-08-24 UTC+02:00
+**Created:** 2026-08-24 05:22 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260824-0522-projector-merge-phase1/`
+**Branch:** main
+
+**Summary:**
+`zhao_geom_project` and `zhao_terrain_project` each contained a complete copy of
+`zref::render::project_vertex` — 33 mapped DSPs each, and
+`zhao_geom_project`'s own header called the duplication "a cost, not a feature".
+The law now lives once, in `fpga/rtl/common/zhao_project_core.sv`, and both
+blocks are thin shells around it. 1,395 lines of RTL became 1,126.
+
+**It was proved equivalent before it was merged, not after.** The audit had
+reported the two blocks' arithmetic *signatures* byte-identical, which is a
+claim about shape. `pair_equivalence` drove both shipped blocks and the shipped
+oracle from one stimulus stream and compared **16,416 projected vertices three
+ways with zero mismatches**, across thirteen phases including the exact
+near-plane boundary `clip.w == 0`, both guard-band rails, rotating consumer
+stalls, and reconfiguration without reset — against ten positive controls it had
+to catch and did.
+
+**Neither caller moved.** `caller_regression` runs each rewritten shell beside a
+verbatim copy of its own pre-merge self and compares every output port on every
+cycle — handshakes, counters and `idle_o` included: **1,080,000 port-cycles, 0
+mismatches, 7 of 7 timing controls caught.** Both contract latencies (36 and 38)
+are unchanged, and the seam was placed by those two numbers rather than by
+convenience: the core ends at the register that is simultaneously GEOM's output
+and TERRAIN's old `s6`.
+
+**AND THE PAIR IS STILL 66 DSPs, measured.** A module that two blocks
+*instantiate* is not a module they *share*. Map-only at committed RTL, one
+Quartus job at a time: both shells came back **identical to the unit** —
+33 DSP / 5,956 reg / 5,028 ALM and 33 / 6,685 / 5,503 — and the new core alone is
+33 / 5,925 / 4,996. `GEOM.PROJECT.md`'s own Follow-up asserted both halves of a
+contradiction ("have both instantiate it" AND "that halves the divider cost");
+the core's row settles which: **one instance is 33.** Reaching 33 for the pair is
+an architecture change, not a refactor, and it is costed on the docket at
+**106.7 % of a compute frame** at today's terrain workload.
+
+**Deliverables:**
+- `fpga/rtl/common/zhao_project_core.sv` — the projection law, once
+- `fpga/rtl/geometry/zhao_geom_project.sv`, `fpga/rtl/terrain/zhao_terrain_project.sv` — shells
+- `tools/sweep_project_core.sh`, `tools/sweep_project_core_preflight.py`, `tools/sweep_apply_mutant.py`
+- `tests/geometry/geom_project_directed.cpp` — §3c the divider's rail, §6b row 2 is inert
+- `tests/terrain/project_dev.hpp`, `tests/terrain/terrain_project_directed.cpp` — `idle_o` in the false direction
+- `docs/OWNER_DOCKET.md`, both contracts, `design/blocks.yml`
+- `reports/synthesis/zhao_block_map.json` — three refreshed rows
+- run folder: both differentials, both sweep logs, before/after ctest logs
+
+**Notes:**
+**Three findings the merge was not looking for.**
+
+1. **`zhao_terrain_project`'s demand figure is wrong by 6,144×, in the
+   flattering direction — and worse than mis-scaled: 270 is a CEILING filed as a
+   DEMAND.** `TERRAIN.PROJECT.md:198` derives it as "about 270 patches per frame
+   of pure projection", i.e. `1,666,667 / 6,144`, the count at which the block is
+   exactly 100 % busy. `workloads.yml` files it as `itemsPerFrame: 270`,
+   `build_manifest.py:300` divides it by capacity, and `verticesPerItem: 3` on
+   that row **is read by nothing.** So `BUDGET_HEATMAP.md` reports demand
+   0.00016× and over-provision **6173×** for what is by construction **1.0×** —
+   it ranks the *tightest* block in the design as the most over-provisioned, and
+   derives an "est. DSP after: 3" from serialisation headroom that does not
+   exist. Serialising it even 3× would take it to 3× a frame. Docketed, not
+   corrected: which number should move is the owner's call.
+2. **`idle_o` was only ever asserted in the true direction** — three checks in
+   the tree, all `idle_o == 1` after drain, all passing against
+   `assign idle_o = 1'b1`. Both idle mutants survived on that gap; closed, and
+   re-scored as caught.
+3. **The divider's rail was only reachable on the lanes that hide it.** The
+   suite produces 3,206 `div-rail` events per random run, but X and Y both pass
+   through `to_screen_xy`'s ±2048 px clamp, so a wrong large quotient lands on
+   the same rail pixel as the correct one. The depth lane has nothing
+   downstream, and nothing drove `clip.w` small enough to rail it. Closed.
+
+**Sweep: 19 of 23 on the first run; 21 of 23 after both gaps were closed, with
+the remaining two PROVED unkillable** — the overflowing restoring recurrence
+saturates by itself on both signs, so deleting the pre-division saturation
+compare changes no output; and the behind-the-eye path discards the whole
+divider, so forcing its divisor to 1 changes no output. Both proofs are written
+into the core's header rather than left in a run log. Both mechanisms are kept:
+they are what make the block's stated invariant true, and a design correct only
+through an overflow coincidence is correct by accident.
+
+Two additions to the inherited sweep pattern, both gaps in every earlier sweep:
+every mutant is linted as **four tops** (both shells plus the core at
+`PAYLOAD_W` 16 and 42), and **guard 8** runs the random lanes ctest actually
+invokes rather than only the bare exe.
+
+**Seven entries in WHAT DID NOT WORK.** The two that would have done real damage:
+a build failure that printed "the two shipped projectors are NOT equivalent"
+when it had merely failed to find a generated header — had that line been quoted
+instead of read, the run would have stopped and reported a divergence between
+two identical blocks; and reading M15 as a pure coverage gap, writing a test for
+it, and finding out only by running it that it was **also** an equivalent.
+"The suite cannot reach this" and "this cannot be distinguished" are different
+claims, and a mutant can survive for both reasons at once. Also disclosed: two
+python heredocs used against this run's own SPEC's Don't Retry.
+
+**Outcome:**
+Phase 1 complete and transparent: one law, one file, zero behavioural or timing
+change, map-measured. **Phase 1 alone does not reduce DSPs and cannot** — the
+brief's 66 → 33 needs one arbitrated instance, which is docketed with its
+frame-budget cost and its ordering. `ctest -L fast` and the ledger are at their
+inherited baseline (the single V16 `FIELD.SEQ.CORE` error). No fit was run:
+map-only, so **no timing number should be quoted for any of the three modules.**
+Recommended next, in order: the projected-vertex cache, then one shared core
+instance, then the 27-bit narrowing — all three of which now land in one file
+instead of two.
+
+---
+
 ### [RUN-20260824-0317] SURFACE.SHEET and FORGE.CLIFF: the storage that was never storage, 229 % of the device to 0.67 %
 
 **Archived:** 2026-08-24 UTC+02:00
