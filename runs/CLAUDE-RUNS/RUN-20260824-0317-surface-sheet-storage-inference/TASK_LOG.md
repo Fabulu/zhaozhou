@@ -1,7 +1,7 @@
 # Task Log: RUN-20260824-0317 - surface-sheet storage inference
 
 **Created:** 2026-08-24 03:17 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260824-0317-surface-sheet-storage-inference/
 
 ---
@@ -447,6 +447,56 @@ equivalent, it is unreachable, and those are different claims.**
 
 `surface_sheet_directed`: **58 -> 67 checks**, three defects' worth of new
 coverage, all from the sweep.
+### 06:55 - FINAL SWEEP at the shipping commit: 16 of 18
+
+Worktree re-detached to `0d25ed0` and the FULL sweep re-run, not a filtered
+subset (`sweep_run2_final_16of18.log`). Both logs are kept: run 1 is the
+evidence for why three tests exist.
+
+```
+linted 18 mutants at Slots (2, 4), 0 do not build
+attempted=18 expected=18 accounted=18 caught=16
+SURVIVOR: S14 the request port is NOT refused during the sweep (TRUE EQUIVALENT, confirmed)
+SURVIVOR: S18 the touched counter is not saturating (EXPECTED SURVIVOR)
+```
+
+**13 -> 16.** The three that changed are exactly the three gaps the first run
+exposed: S05 (read-during-write), S07 (the read enable, whose test was passing
+on constant stimulus) and S17 (a write offered during the clear sweep). Both
+remaining survivors are named in the mutant table itself with their reason, so a
+future reader cannot mistake 16/18 for a hole:
+
+* **S14 is a true equivalent**, argued from `zhao_surface_sheet.sv:395`/`:400`
+  and `:372` and confirmed at 0 mismatches in 228,144 compared port-cycles.
+* **S18 is unreachable, not equivalent** -- 2^32 accepted writes, measured at
+  roughly half an hour of simulation, left alive by decision with the cost
+  written down.
+
+### 07:20 - GATES
+
+```
+ctest --test-dir build -L fast --output-on-failure
+99% tests passed, 1 tests failed out of 272
+The following tests FAILED:
+      4 - ledger_check (Failed)   fast
+Total Test time (real) = 1125.33 sec
+```
+
+**One failure, and it is the baseline taken before any edit** -- `V16:
+FIELD.SEQ.CORE is RTL_VERIFIED but formal "tests/formal/field_seq_bound.sby" is
+recorded as "pending"`. Another lane's gate, unrelated to this block, and the
+identical single failure RUN-20260823-1736 recorded. **No new ledger error.**
+
+An intermediate run had TWO failures: `format_check` as well, on three of the
+new read-during-write checks. That was mine and the gate caught it, which is
+worth recording because `tests/CMakeLists.txt` says that gate spent weeks
+SKIPPING silently -- there is no `clang-format` on PATH on this machine at all,
+and the pinned `node_modules/clang-format` 15.0.0 devDependency is the only
+reason it fails instead of passing vacuously. Fixed by running the pinned
+binary; all 78 lint-labelled tests green.
+
+Status: **Complete.**
+
 
 ---
 
