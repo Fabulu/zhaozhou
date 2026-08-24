@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "b8aeeeb0411c4e87ddef8aad52de1f1f281122e2",
+    "newestRunCommit":  "b09b0512a9e5906f9ed2801f66acfeb2297ee668",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -729,27 +729,58 @@
                    {
                        "module":  "zhao_field_seq",
                        "status":  "ok",
-                       "sourceCommit":  "7395d7932f5acf7f3c19851f43b7ff381a97c4d0",
+                       "sourceCommit":  "b09b0512a9e5906f9ed2801f66acfeb2297ee668",
                        "rtlCleanAtHead":  true,
-                       "sourceListHash":  "9a53f278725c7224",
-                       "sourceFileCount":  94,
+                       "sourceListHash":  "0b74b21fc720aa87",
+                       "sourceFileCount":  95,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  112.1,
+                       "seconds":  235.3,
                        "dspBlocks":  3,
-                       "registers":  5288,
-                       "blockMemoryBits":  0,
+                       "registers":  3305,
+                       "blockMemoryBits":  8192,
                        "virtualPins":  318,
                        "pins":  0,
-                       "estimatedAlms":  7958,
-                       "combAluts":  9901,
-                       "mlabMemoryBits":  null,
+                       "estimatedAlms":  5142,
+                       "combAluts":  7308,
+                       "mlabMemoryBits":  0,
                        "inferredMemories":  [
-
+                                                {
+                                                    "name":  "altsyncram:rf_a_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:rf_b_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:rf_c_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:rf_h_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                }
                                             ],
-                       "inferredMemoryCount":  0,
-                       "inferredDesignMemoryCount":  0,
+                       "inferredMemoryCount":  4,
+                       "inferredDesignMemoryCount":  4,
                        "dspDecomposition":  {
                                                 "Two Independent 18x18":  2,
                                                 "Sum of two 18x18":  1,
@@ -2839,21 +2870,21 @@
                    {
                        "module":  "zhao_terrain_normals",
                        "status":  "ok",
-                       "sourceCommit":  "7395d7932f5acf7f3c19851f43b7ff381a97c4d0",
+                       "sourceCommit":  "bfc747103a561bc2d1f1b00c5537d60d2ac07908",
                        "rtlCleanAtHead":  true,
-                       "sourceListHash":  "9a53f278725c7224",
-                       "sourceFileCount":  94,
+                       "sourceListHash":  "0b74b21fc720aa87",
+                       "sourceFileCount":  95,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  26.9,
-                       "dspBlocks":  18,
-                       "registers":  319,
+                       "seconds":  26.4,
+                       "dspBlocks":  3,
+                       "registers":  738,
                        "blockMemoryBits":  0,
                        "virtualPins":  456,
                        "pins":  0,
-                       "estimatedAlms":  799,
-                       "combAluts":  1059,
+                       "estimatedAlms":  768,
+                       "combAluts":  896,
                        "mlabMemoryBits":  null,
                        "inferredMemories":  [
 
@@ -2861,12 +2892,12 @@
                        "inferredMemoryCount":  0,
                        "inferredDesignMemoryCount":  0,
                        "dspDecomposition":  {
-                                                "Two Independent 18x18":  12,
-                                                "Sum of two 18x18":  6,
-                                                "Total number of DSP blocks":  18,
-                                                "Fixed Point Signed Multiplier":  6,
-                                                "Fixed Point Unsigned Multiplier":  6,
-                                                "Fixed Point Mixed Sign Multiplier":  12
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
                                             },
                        "ramConversionWarnings":  0,
                        "errors":  0,
