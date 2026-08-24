@@ -34,6 +34,103 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260823-2226] The budget compiler: 41 of 94 measured becomes 89 of 91, and the biggest item on the board has no DSPs
+
+**Archived:** 2026-08-24 UTC+02:00
+**Created:** 2026-08-23 22:26 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/`
+**Branch:** main
+
+**Summary:**
+Wave 1 of the repo-wide audit the docket ordered in place of another isolated
+rescue. **Nothing was optimised**, which was the ruling; the deliverable is
+evidence and ranked work.
+
+The census gap closed: **41 of 94 became 89 of 91**, every row measured against
+the byte-identical RTL tree at HEAD. The lane that made that affordable is
+`quartus_map` alone — Analysis & Synthesis answers DSP inference, RAM
+inference, an ALM estimate AND the `Two Independent 18x18` / `Sum of two 18x18`
+decomposition, at 20-40 s a module against 300-1300 s for a constrained fit.
+Legitimacy checked rather than assumed: **19 of 21 blocks holding both a map
+and a fit agree exactly on DSPs, and both exceptions are stale-commit, not
+tool.**
+
+**`tools/budget/scan_rtl.py` answers the question grep could not.**
+`zhao_geom_project` writes three `*` operators, one inside a function it calls
+nine times, so the honest count is **11** — and Quartus maps it at 33 DSP
+blocks, three per product. *3 operators -> 11 products -> 33 DSPs* is the whole
+argument for an elaborated AST. (Verilator 5.051 has no `--xml-only`;
+`--json-only` is the equivalent and was verified against the tool.)
+
+**The largest resource item in the repository has no DSPs and had never been
+measured.** `zhao_surface_sheet` declares 131,072 bits, infers **zero** memory,
+and estimates **95,947 ALMs — 229% of the device.** `zhao_forge_cliff` is
+33,109 — 79%. Neither would ever have surfaced in a DSP-shaped audit, and a
+week of this project's attention has been on DSPs.
+
+**102 calibration microbenches turned two hand-waves into laws.**
+One product, input+output registered: **1 DSP block from 8 to 27 bits, 3 from
+28 to 33, 4 at 40-48, 9 at 64.** Signed and unsigned identical at every width.
+The discontinuity `design/budgets/dsp.md` was corrected to warn about is
+**between 27 and 28 bits and it is a factor of three** — so narrowing a 32-bit
+operand to 27 takes a product from 3 DSPs to 1 with no change to the operator
+count, a lever this project has never had a number for.
+
+And storage, now `QUARTUS_GOTCHAS` §10 — the first entry in that file found by
+**measurement rather than by being surprised**: synchronous read, no reset on
+the array and no byte enables → it infers at tens of ALMs; an async read, a
+reset, **or byte enables** → zero memory bits. Three killers, independent, any
+one sufficient. The penalty is superlinear: **36x at 2 kbit, 108x at 4 kbit,
+502x at 32 kbit, 808x at 36 kbit.** Byte enables were the surprise, found in
+the last two benches: 65,536 bits costing **45,134 ALMs**, more than the device.
+
+**Deliverables:**
+- `tools/budget/scan_rtl.py` — elaborated-AST inventory, 91/91 modules, zero
+  failures; multiplies with honest operand widths, variable shifts, division,
+  combinational loops, saturate chains, duplicated expensive expressions,
+  arrays with access-sites-per-element, constant case-tree ROMs, interface
+  shape and an inferred minimum II, each with a severity AND a reason
+- `runs/.../validate_detectors.py` — six positive/negative controls; one
+  detector **failed** its first run and could never have fired
+- `tools/quartus/run_block_map.ps1` + `map_sweep.ps1` — the map-only lane,
+  serial, resumable, with an enforced timeout
+- `tools/budget/gen_calib.py` + `tools/quartus/run_calib.ps1` +
+  `tools/budget/calibration.json` — 102 measured points
+- `design/budgets/workloads.yml` — every demand figure that exists, cited, and
+  the twelve blocks that have none named explicitly
+- `reports/budget_manifest.json` + `reports/BUDGET_HEATMAP.md` — nothing typed
+- `reports/QUARTUS_GOTCHAS.md` §10
+- `tools/quartus/run_block_fit.ps1` — WNS/TNS extraction rewritten (unproven)
+
+**The predictions, measured:**
+P1 **confirmed and stronger than asserted** — the two projectors have
+byte-identical arithmetic signatures and both map at 33; P2 **confirmed at 18**,
+the top of the 14-18 range, and its "narrow products will pack" comment
+**refuted** (nine 16x16 products, nine DSP blocks); P3 **one-third right** —
+two of the three async tables inferred anyway; P4 **already landed at HEAD**,
+the 10-DSP census row is stale and the block maps at 7; P5 **18 confirmed**,
+833x over-provisioned, return 15 exactly as predicted; P6 **arithmetic exact**
+(1,572,864 bits = 27.8% of 553 M10Ks) **and sharper** — the store does not
+exist in the RTL at all.
+
+**Notes:**
+Seven things did not work and five were wrong predictions the tool refused. The
+shape they share: in every case something was reasoned about and published, and
+in every case a measured number sitting next to the claim is what caught it.
+The two that had no number next to them — a detector that could never fire, and
+97 lost measurements — are why the positive controls and the incremental write
+now exist. The lost measurements are the sharpest: `run_calib.ps1` serialised
+once after its loop, and `map_sweep.ps1` had been written **earlier the same
+night** specifically to avoid that, with a header explaining why.
+
+**Outcome:** Complete. **200 DSP** of arithmetic exists in the repository
+against a 112-DSP device; the ranked list puts ~75 DSPs of return on three
+blocks alone, all of it derived from measured over-provisioning rather than
+estimated. No fit in the census describes the RTL at HEAD, and WNS/TNS/hold
+remain unmeasured — both are the next wave, not this one.
+
+---
+
 ### [RUN-20260823-1736] TEXTURE.TMU: the bilinear law factored, 28 -> 6 DSPs -- and the Fmax column was measuring a counter
 
 **Archived:** 2026-08-23 UTC+02:00
