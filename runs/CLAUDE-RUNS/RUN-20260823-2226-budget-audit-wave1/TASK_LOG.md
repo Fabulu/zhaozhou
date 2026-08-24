@@ -488,3 +488,104 @@ expected bits against the map's inferred bits, with no fit required - including
 two nobody had looked at, both of which sat in the old census as bare
 `timeout` rows: `zhao_debug_counters` (2,560 bits -> 3,795 ALMs) and
 `zhao_terrain_bake` (1,089 bits -> 2,324 ALMs).
+
+## 2026-08-24 03:00 - all 102 calibration points measured, and a THIRD killer
+
+The last two benches finished after GOTCHAS 10 was written and changed its
+headline. **Byte enables are a third independent killer of RAM inference:**
+
+| template | memory bits | est. ALM |
+| --- | ---: | ---: |
+| `1024x32` sync, no reset, 1 port | **32,768** | **44** |
+| `1024x32` sync, no reset, 1 port, **byte enables** | **0** | **22,583** |
+| `2048x32` sync, no reset, 1 port, **byte enables** | **0** | **45,134** |
+
+Same read style, same reset behaviour, same depth and width. The only change is
+per-byte writes instead of a whole-word write, and the memory disappears.
+**45,134 ALMs for a 65,536-bit buffer is more than the entire device.**
+
+M10Ks have byte-enable support in hardware; 17.0.2 Lite does not infer it from
+this template. It matters because a byte-enabled write is exactly how a blit
+buffer wants to be written - and this repo's own history records
+`zhao_cmd_dma`'s `blit_buf` blocking the composed fit on Error 276003.
+
+The second run reproduced the first run's numbers **exactly**, which is what
+makes the byte-enable rows trustworthy on a single measurement each.
+
+---
+
+# WHAT DID NOT WORK
+
+Seven, and five of them are wrong predictions I made and the tool refused.
+
+**1. `verilator --xml-only` does not exist here.** The ruling names the flag;
+Verilator 5.051 removed it. `--json-only` is the equivalent. Cost: ten minutes
+and one wrong first assumption about the toolchain.
+
+**2. I flagged the CORRECT widening-multiply idiom as a defect.** The first
+scanner rated `$signed({{32{a[31]}}, a}) * $signed({{32{b[31]}}, b})` RED for
+carrying extension slack. That is how you write a widening signed product and
+how `zhao_geom_project` writes all nine of its matrix products. **Refuted by
+the 33-DSP map result in the same hour** (33 blocks / 11 products = three each
+= the 32x32 decomposition), then **settled by measurement**:
+`calib_widen_explicit` and `calib_widen_implicit` are **both 3 DSP and 137
+ALM, identical.** A rule left as drafted would have sent an implementer to
+rewrite nine correct lines.
+
+**3. I called three divider PIPELINES uninferred memories.** Sizing arrays
+alone put a false `EXPECTED_RAM_NOT_INFERRED` on **both projectors** - the two
+largest rows on the board, so the false alarm sat exactly where a real one
+would be lost. Fixed with access sites per element (`dstep_dv`: 32 elements,
+**754** access sites).
+
+**4. I picked the state variable by NAME and picked a localparam.** On
+`zhao_texture_tmu` the detector chose `ST_IDLE` over `st_r` and reported
+`II >= 1` for the block whose **measured II is 6**.
+
+**5. A detector that could never fire, and I would have reported its silence as
+a result.** Zero mux-before-multiply candidates across 91 modules. Only a
+synthetic positive control revealed the detector only looked *inside* the
+ternary's arms, and nobody writes two products inline in a ternary. Six controls
+now exist; that one failed on its first run.
+
+**6. Operand width had to become a recursion, twice.** First it could not see
+through a FUNCTION that widens (`ext32m`); then it could not see that
+`{x, 15'b0}` is a shift, not a widening. Each reported 64-bit operands where
+the honest widths are 32 and 27, and each was caught by the same 33-DSP number
+refusing to agree.
+
+**7. I LOST 97 MEASUREMENTS TO A MISTAKE I HAD FIXED TEN METRES AWAY.**
+`run_calib.ps1` serialised its results once, after the loop; the harness killed
+it at point 97 of 102. `map_sweep.ps1` was written **earlier the same night**
+to avoid exactly this and its header explains why. Forty minutes of Quartus
+time, and every number already on the console where it could be read but not
+merged.
+
+**And the fix's first attempt failed in the family this repository has a file
+about.** The resume logic went in; the `[switch]$SkipMeasured` declaration did
+not, because that one `str.replace()` in my patch script matched nothing and
+returned the string unchanged **with no error** - the only replacement in the
+patch without an `assert`. A directive accepted and silently ignored, written
+by me, while patching the tooling for a file about directives accepted and
+silently ignored.
+
+**The shape all seven share:** in every case I reasoned about what the tool
+would do and published it, and in every case the tool disagreed. The three that
+were caught cheaply were caught because a MEASURED NUMBER was sitting next to
+the claim. The two that were not - the never-firing detector and the lost
+measurements - had no number to contradict them, which is exactly why the
+positive controls and the incremental write now exist.
+
+## Not done, and named rather than left implied
+
+* **No re-fit campaign.** Zero of the 41 fit rows describe the RTL at HEAD.
+  Closing that is a fit-sized job and this run does not fit anything.
+* **WNS/TNS/hold are still empty.** The extraction is fixed and committed but
+  **unproven** - no fit has run since, and the run_calib `-Fit` lane was not
+  used because the map lane answered every resource question at a twentieth of
+  the cost. Do not quote a slack number until a real `.sta.rpt` has been read.
+* **No subsystem-pair fits.** `NO_SUBSYSTEM_FIT` flags 14 blocks; none was
+  measured.
+* **`zhao_shell_top` and `zhao_stub_top` have no map.** One excluded with its
+  reason, one timed out at 1,800 s. Both are named in the report.
+* **Nothing was optimised**, which was the ruling.
