@@ -1,0 +1,17 @@
+{
+    "runId":  "wumen-86e27e3-20260824T140154Z",
+    "sourceCommit":  "86e27e3e6ea46c32d1caa8b97f2d48bf70fa2333",
+    "startedUtc":  "2026-08-24T14:01:57.6761297Z",
+    "host":  "WUMEN",
+    "os":  "Microsoft Windows 11 Pro",
+    "osVersion":  "10.0.26200",
+    "cpu":  "Intel(R) Core(TM) i7-10510U CPU @ 1.80GHz",
+    "cores":  4,
+    "threads":  8,
+    "ramTotalBytes":  25561325568,
+    "ramFreeBytesAtStart":  13955350528,
+    "pageFileBytes":  54785216512,
+    "quartus":  "Quartus Prime Analysis \u0026 Synthesis Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition Copyright (C) 2017  Intel Corporation. All rights reserved.",
+    "quartusBin":  "C:\\intelFPGA_lite\\17.0\\quartus\\bin64",
+    "processors":  4
+}
