@@ -114,6 +114,44 @@
 // compare, then 31 restoring steps — never 48.
 //
 // ---------------------------------------------------------------------------
+// TWO THINGS IN THE DIVIDER THAT NO TEST CAN EVER CATCH, AND WHY THEY STAY
+// ---------------------------------------------------------------------------
+// RUN-20260824-0522's mutation sweep left four survivors. Two were test gaps
+// and were closed with tests. The other two are PROVABLE EQUIVALENTS — not
+// "argued", not "we could not find a case": no stimulus can distinguish them,
+// and here is why. Both are kept anyway, and the reason is the same in each
+// case: they are what make the correctness ARGUMENT above sound, rather than
+// making the block correct by coincidence.
+//
+// 1. `pre_sat` — the pre-division saturation compare — CHANGES NO OUTPUT.
+//
+//    When it fires, rem_0 = h[47:31] >= D. In the recurrence, if rem_k >= D
+//    then t = 2*rem_k + b >= 2D > D, so the subtract fires and
+//    rem_{k+1} = t - D >= D. By induction every one of the 31 steps subtracts
+//    and emits a quotient bit of ONE, so `work` ends as 0x7FFF_FFFF and the
+//    remainder ends nonzero. Therefore:
+//      * positive lane: q_mag = 0x7FFF_FFFF, result INT32_MAX — the rail.
+//      * negative lane: the `remainder != 0` carry makes q_mag 0x8000_0000, and
+//        ~0x8000_0000 + 1 is 0x8000_0000 — INT32_MIN, also the rail.
+//    **The overflowing recurrence saturates by itself, on both signs.** The
+//    compare is kept because it is what makes the "rem < D at every step"
+//    invariant TRUE, which is the premise the paragraph above reasons from. A
+//    design that got the right answer only through this overflow coincidence
+//    would be correct by accident, and the next person to touch the recurrence
+//    would have no invariant to rely on.
+//
+// 2. FORCING `pre_d` TO 1 ON THE BEHIND-THE-EYE PATH CHANGES NO OUTPUT either,
+//    and this file already said so ("a behind-the-eye vertex never uses its
+//    quotients"). It is now confirmed rather than asserted: `out_x_o`,
+//    `out_y_o` and `out_d_o` are all forced to zero when `s5_behind`, and
+//    `pre_d`, `pre_d2` and `pre_sat` reach nothing else, so the whole divider's
+//    output is discarded on that path. A divisor of 0 is also well defined in
+//    this formulation — `t >= 0` is always true, so each step subtracts zero —
+//    so there is no X to propagate and no simulation-versus-synthesis
+//    divergence to hide behind. Kept for the same reason: the invariant is
+//    stated as holding on EVERY cycle, not merely on the cycles that matter.
+//
+// ---------------------------------------------------------------------------
 // COST, AND THE TWO LEVERS THIS FILE DELIBERATELY DOES NOT PULL
 // ---------------------------------------------------------------------------
 // Eleven nonconstant multiplies: nine 32x32 row products (three rows of three;

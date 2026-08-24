@@ -1,0 +1,40 @@
+sweep worktree: /c/programmieren/zencrifice/.pcsweep at dbdc001
+build dir:      build-pcsweep
+
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_project_core.sv           test_geom_project_directed test_terrain_project_chain test_terrain_project_directed test_terrain_project_random
+   zhao_geom_project.sv           test_geom_project_directed
+   zhao_terrain_project.sv        test_terrain_project_chain test_terrain_project_directed test_terrain_project_random
+linted 23 mutants as 4 tops, 0 do not build
+== establishing the pristine baseline
+   pristine models c36504c059be, 4 lanes green
+  M01 the viewport transform uses the OTHER view's viewport  caught
+  M02 a config write lands in the WRONG VIEW'S MATRIX  caught
+  M03 a config write lands in the wrong view's VIEWPORT  caught
+  M04 the row sums select the matrix by the WRONG VIEW TAG  caught
+  M05 STALE MATRIX: row 0 is pinned to view 0 whatever the packet says  caught
+  M06 the view does not RIDE the pipeline: stage 6 uses the INCOMING view  caught
+  M07 RESULTS OUT OF ORDER: the corner index is one ahead of its vertex  caught
+  M08 RESULTS OUT OF ORDER: B takes C's coordinates at reassembly  caught
+  M09 the near plane becomes STRICT: w == 0 moves to the accept side  caught
+  M10 a behind-the-eye vertex KEEPS its coordinates instead of zeroing  caught
+  M11 the row rescale rounds TOWARD ZERO instead of half up  caught
+  M12 the fx_mad rescale rounds toward zero  caught
+  M13 the guard band clamps ONE COUNT SHORT of the rail  caught
+  M14 the 1/w lane divides the WRONG NUMERATOR  caught
+  M15 the divider's SATURATION COMPARE is dropped  *** SURVIVED ***
+  M16 the divisor is NOT forced to 1 on the behind-the-eye path  *** SURVIVED ***
+  M17 the CALLER'S ENABLE is ignored by the main pipeline  caught
+  M18 the caller's enable is ignored by the DIVIDER LANES  caught
+  M19 the PAYLOAD does not ride in lockstep -- it skips the divider  caught
+  M20 busy_o forgets the OUTPUT REGISTER, so idle_o lies one cycle early  *** SURVIVED ***
+  M21 GEOM: v_ready_o no longer tracks the stall  caught
+  M22 TERRAIN: tri_ready_o forgets the sequencer is busy  caught
+  M23 TERRAIN: idle_o asserts while a triangle still waits at the output  *** SURVIVED ***
+== restoring the pristine build
+----
+attempted=23 expected=23 accounted=23 caught=19
+SURVIVOR: M15 the divider's SATURATION COMPARE is dropped
+SURVIVOR: M16 the divisor is NOT forced to 1 on the behind-the-eye path
+SURVIVOR: M20 busy_o forgets the OUTPUT REGISTER, so idle_o lies one cycle early
+SURVIVOR: M23 TERRAIN: idle_o asserts while a triangle still waits at the output

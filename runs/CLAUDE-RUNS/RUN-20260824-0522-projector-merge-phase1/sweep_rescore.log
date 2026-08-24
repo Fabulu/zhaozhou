@@ -1,0 +1,20 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_project_core.sv           test_geom_project_directed test_terrain_project_chain test_terrain_project_directed test_terrain_project_random
+   zhao_geom_project.sv           test_geom_project_directed
+   zhao_terrain_project.sv        test_terrain_project_chain test_terrain_project_directed test_terrain_project_random
+linted 23 mutants as 4 tops, 0 do not build
+== establishing the pristine baseline
+   pristine models c36504c059be, 4 lanes green
+########################################################################
+## FILTERED RUN — 4 of 23 mutants: M15 M16 M20 M23
+## THIS IS NOT A SWEEP SCORE. It confirms a fix on named mutants only.
+########################################################################
+  M15 the divider's SATURATION COMPARE is dropped  *** SURVIVED ***
+  M16 the divisor is NOT forced to 1 on the behind-the-eye path  *** SURVIVED ***
+  M20 busy_o forgets the OUTPUT REGISTER, so idle_o lies one cycle early  caught
+  M23 TERRAIN: idle_o asserts while a triangle still waits at the output  caught
+== restoring the pristine build
+----
+attempted=4 expected=4 accounted=4 caught=2 [FILTERED: M15 M16 M20 M23 -- NOT a sweep score]
+SURVIVOR: M15 the divider's SATURATION COMPARE is dropped
+SURVIVOR: M16 the divisor is NOT forced to 1 on the behind-the-eye path

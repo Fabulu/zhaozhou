@@ -405,22 +405,252 @@ instead is a real defect -- `idle_o` asserting while a finished triangle still
 waits at the output -- and orphans nothing, because `out_valid_r` also drives
 `out_valid_o`.
 
-*(continued)*
+### 07:50 - Step 4 result: 19 of 23, and the four survivors were worth more than the nineteen
+
+    attempted=23 expected=23 accounted=23 caught=19
+
+Cross-check clean -- attempted, expected and accounted all 23, so nothing was
+silently discarded. The nineteen caught include every one of the five defect
+classes the brief names, and the mismatch counts are in `sweep.log`.
+
+The four survivors split exactly two and two, and **both halves cost more time
+than the sweep itself and were worth it.**
+
+#### Two REAL GAPS, closed with tests
+
+**M20 and M23 -- `idle_o` was only ever checked in the TRUE direction.**
+
+Three assertions exist about that port in the whole tree: one in
+`terrain_project_directed` and two in `terrain_project_random`, all of the form
+`idle_o == 1` after the stream drains. **All three pass against
+`assign idle_o = 1'b1`.** So both idle mutants survived: M20 drops the core's
+output register from `busy_o`, M23 drops `out_valid_r` from `idle_o`, and each
+makes the block claim idle while work is still in flight.
+
+`project_dev.hpp::run` now counts, per cycle, the times `idle_o` was HIGH while
+work was outstanding -- at least one packet accepted on an earlier cycle and not
+every result collected yet. In that state a rigid pipeline always has something
+in it, so the correct count is zero. Checked across all four stall masks
+including "stalled 31 cycles in 32". **A one-sided assertion about a status flag
+is not a test of the flag**, and this one had been passing for as long as the
+block has existed.
+
+**M15's gap was real too, but the test I wrote for it did NOT kill it** -- see
+below, because that sequence is the most instructive thing in this run.
+
+#### M15: a gap AND an equivalent, and I got the order wrong
+
+`terrain_project_random` reports **3,206 `div-rail` events per run**, so the
+suite reaches ndc saturation constantly, and M15 -- which deletes the
+pre-division saturation compare -- still survived. My first reading was that the
+rail was unreachable. It is not; the reason is subtler and it is a genuine
+finding about the design:
+
+* **The X and Y lanes cannot show it.** Their quotient goes on through `fx_mad`
+  and then `to_screen_xy`, which CLAMPS to +-2048 px. A vertex whose ndc railed
+  is far outside the guard band either way, so a wrong large quotient lands on
+  exactly the same rail pixel as the correct INT32_MAX. **The clamp that makes
+  the guard band a law hides this defect completely.**
+* **The depth lane can.** `out_d_o` is the raw Q16.16 1/w quotient with nothing
+  downstream of it, and nothing in the tree drove `clip.w` small enough (<= 2)
+  to rail it.
+
+So I added `geom_project_directed` 3c: `clip.w` swept over {1, 2, 3, 5}, which
+straddles the depth lane's rail boundary exactly on both sides, with a matrix
+arranged so `clip.w` IS the raw word and `clip.x` IS the vertex's raw x -- no
+approximation anywhere. Built it, ran it against M15, and:
+
+    [geom_project_directed] 751 checks passed
+
+**It did not kill M15.** And the reason is that M15 is a PROVABLE EQUIVALENT:
+
+> When `pre_sat` fires, `rem_0 = h[47:31] >= D`. In the recurrence, if
+> `rem_k >= D` then `t = 2*rem_k + b >= 2D > D`, so the subtract fires and
+> `rem_{k+1} = t - D >= D`. By induction **every one of the 31 steps subtracts
+> and emits a quotient bit of ONE**, so `work` ends 0x7FFF_FFFF and the
+> remainder ends nonzero. Positive lane: q_mag = 0x7FFF_FFFF -> INT32_MAX, the
+> rail. Negative lane: the `remainder != 0` carry makes q_mag 0x8000_0000, and
+> `~0x8000_0000 + 1` is 0x8000_0000 -> INT32_MIN, also the rail. **The
+> overflowing recurrence saturates by itself, on both signs, in every case where
+> the compare would have fired.**
+
+No stimulus can distinguish them, and that is stronger than "we could not find
+one". The compare STAYS, and the reason is not superstition: it is what makes
+the "rem < D at every step" invariant TRUE, and that invariant is the premise
+the block's own correctness argument reasons from. A design that got the right
+answer only through this overflow coincidence would be **correct by accident**,
+and the next person to touch the recurrence would have no invariant to lean on.
+
+**The new depth-rail test is kept anyway**, and not as a consolation prize: it
+pins the depth lane's rail boundary, which nothing tested, and it is the only
+thing in the tree that would notice a future width narrowing changing where that
+rail falls.
+
+**M16 is the same shape and this file already predicted it.** Forcing the
+divisor to 1 on the behind-the-eye path changes no output, because
+`out_x_o`/`out_y_o`/`out_d_o` are all forced to zero when `s5_behind` and
+`pre_d`, `pre_d2` and `pre_sat` reach nothing else -- the whole divider's output
+is discarded on that path. A divisor of 0 is also well defined in this
+formulation (`t >= 0` is always true, so each step subtracts zero), so there is
+no X to propagate and no simulation-versus-synthesis divergence hiding behind
+it. Kept for the same reason as M15: the invariant is claimed to hold on EVERY
+cycle, not merely on the cycles that matter. The pre-merge RTL header already
+said exactly this; the sweep turned an assertion into a proof.
+
+Both proofs are now written into `zhao_project_core.sv`'s header, so the next
+reader finds them at the code rather than in a run log.
+
+### 08:20 - Re-scored the four survivors against the closed gaps
+
+Filtered run, in the worktree, at the shipping commit, with the banner the
+script prints so a filtered log cannot be mistaken for a sweep score.
+
+    ## FILTERED RUN - 4 of 23 mutants: M15 M16 M20 M23
+    ## THIS IS NOT A SWEEP SCORE. It confirms a fix on named mutants only.
+
+      M15 the divider's SATURATION COMPARE is dropped         *** SURVIVED ***
+      M16 the divisor is NOT forced to 1 on the behind-eye    *** SURVIVED ***
+      M20 busy_o forgets the OUTPUT REGISTER                  caught
+      M23 idle_o asserts while a triangle still waits         caught
+
+    attempted=4 expected=4 accounted=4 caught=2 [FILTERED - NOT a sweep score]
+
+**Both real gaps are closed. Both survivors are the proved equivalents.** So the
+standing score is **21 of 23 killed, 2 provably unkillable** -- every mutant that
+CAN be killed is killed. The filtered number is not quoted as a sweep score
+anywhere, and the script prints the banner precisely so it cannot be.
 
 ---
 
 ## WHAT DID NOT WORK
 
-*(see the closing section; kept contemporaneous)*
+Seven, and the first two are the ones that would have done real damage.
 
-1. **A build failure reported itself as "NOT equivalent".** §05:31 above. The
-   harness's own error path produced the most alarming possible sentence about
-   the RTL, from a missing include directory.
-2. **A `python - <<'EOF'` heredoc failed to parse** — again, and this time it
-   was my own quoting: a `\` immediately before a closing `'''` escaped the
-   quote and the string never closed. My own SPEC's Don't Retry says to write
-   the script to a file first; I did not follow it and lost a retry. The rule
-   is in the SPEC because RUN-20260824-0317 lost two.
+**1. A BUILD FAILURE REPORTED ITSELF AS A FINDING ABOUT THE RTL.** The
+equivalence differential's first run printed
+
+    RESULT: the two shipped projectors are NOT equivalent. STOP -- report before merging.
+
+and it had not compiled. `link_and_run` returns 2 for a missing executable and
+the caller tested only `-ne 0`, so a missing include directory -- `zhao_abi.h`
+lives in `runtime/include`, not under `reference/` -- came out as the most
+alarming possible sentence about the design. **Had I quoted that line instead of
+reading the log, this run would have stopped and reported a divergence between
+two blocks that are in fact identical**, and the merge would have been abandoned
+on a typo. rc 2 is now separated from rc 1 in both paths and aborts loudly. A
+tool that cannot run must say so, not return the scary answer.
+
+**2. I READ M15 AS AN UNREACHABLE CASE, WROTE A TEST FOR IT, AND THE TEST DID
+NOT KILL IT.** The sweep left the divider's saturation compare alive. I reasoned
+that no test drove `clip.w` small enough to rail the depth lane -- which was
+TRUE, and a genuine coverage gap -- and concluded that closing the gap would
+kill the mutant. It did not: M15 is a **provable equivalent**, because the
+overflowing restoring recurrence emits 31 quotient bits of ONE and therefore
+saturates by itself, on both signs. I had the coverage analysis right and the
+conclusion wrong, and I only found out by BUILDING the test and RUNNING it
+against the mutant instead of reasoning about whether it would work.
+
+> The general shape: **"the suite cannot reach this" and "this cannot be
+> distinguished" are different claims, and the first does not imply the second.**
+> A mutant can survive for both reasons at once, which is exactly what happened
+> here. If I had merely argued M15 was an equivalent I would have been right by
+> luck; if I had merely argued it was a gap I would have shipped a test that
+> proves nothing about the mutant it was written for.
+
+**3. My own SPEC's Don't Retry told me not to use `python - <<'EOF'` heredocs,
+and I used one anyway and lost a retry.** A backslash immediately before a
+closing `'''` escaped the quote, the string never closed, and bash reported an
+unterminated quote from a Python syntax error. Then it happened a second time
+with a different heredoc for the TASK_LOG. **The rule was already written down,
+in this run's own SPEC, inherited from RUN-20260824-0317's eighth disclosed
+failure.** Writing the rule is not the same as following it. Every subsequent
+script went to a file first, and `tools/sweep_apply_mutant.py` exists so the
+next sweep does not inline it either.
+
+**4. The first `cmake --build` after editing `tests/CMakeLists.txt` failed
+during ninja's own regeneration**, with `MODMISSING: Cannot find file containing
+module 'zhao_project_core'` -- against a CMakeLists that already named the file
+correctly. An explicit `cmake -S . -B build` fixed it and the same target then
+built. `verilate()` elaborates at CONFIGURE time, which is guard 1 of every
+sweep in this tree, and this is the same trap outside a sweep: **ninja's implicit
+reconfigure is not a substitute for an explicit one when a verilate() source
+list changes.** Two minutes, but it looks exactly like a broken edit.
+
+**5. My first M23 mutation was a build failure wearing a defect's name**, and
+the preflight caught it rather than the sweep scoring it. Dropping `core_busy`
+from `idle_o` orphans the signal into a `-Wall UNUSEDSIGNAL`. Rewritten to drop
+`out_valid_r` instead. The guard was not relaxed. This is the fifth run in a row
+in which the preflight rejected a mutation of exactly this shape, which is an
+argument for the preflight and not for my mutation-writing.
+
+**6. My first control for the row-2 test proved nothing about the row-2 test.**
+Pinning row 0's first product to matrix word 8 made the whole suite fail loudly
+-- which shows the suite works, not that the NEW case adds anything. The control
+that actually established marginal value was an address-decode alias making
+writes to 8..11 land on 12..15, which is invisible to every existing lane
+because `configure()` writes 0..15 in order and the real w row then overwrites
+the damage: 28 failures, all in the new section, against 149,071 other checks
+passing. **A control has to be aimed at the test, not at the block.**
+
+**7. A backgrounded rescore produced an empty log and no processes, and I could
+not tell whether it had ever started.** Re-run in the foreground with output to
+a real file, it worked first time and took under ten minutes. Cause not
+established, which is why it is here: I do not know whether it died or never
+launched, and "it produced no output" is not a result. RUN-20260824-0317's ninth
+failure is the same uncertainty from the other direction.
+
+### And one thing that was NOT a failure but looked like one
+
+`ninja` reported the terrain target rebuilding when only comments in the core
+header had changed. That is correct -- the header is a source file and its hash
+moved -- but it briefly looked like the model was re-elaborating for no reason,
+which is the symptom guard 4 of every sweep exists to detect. Hashing the whole
+model directory is what tells the two apart, and it did.
+
+---
+
+## NOT DONE
+
+* **No fit for any of the three modules.** Everything here is map-only, which is
+  the right instrument for DSP inference and is what the before/after comparison
+  needed -- but **no Fmax or slack was measured, and no timing number should be
+  quoted for any of them.** The merge introduced a module boundary in the middle
+  of a 36-stage pipeline; map cannot say what that does to routing. `OLD_SDC` and
+  `NO_CURRENT_FIT` were already on both blocks' debt flags before this run and
+  still are.
+* **`reports/rtl_inventory.json` and `reports/BUDGET_HEATMAP.md` are NOT
+  regenerated**, and the reason is deliberate. The inventory is from `8a3f29f`
+  and does not contain `zhao_project_core` at all; after the merge its
+  `zhao_geom_project` row (11 written multiplies) is wrong in ATTRIBUTION, since
+  those multiplies are now written in the core. But `scan_rtl.py --out` rewrites
+  the whole file for the modules it is given, so a three-module run would
+  truncate 91 rows to 3, and a full run would import other lanes' RTL drift
+  since `8a3f29f` into this run's diff. **A mixed-provenance inventory is worse
+  than a stale one that says which commit it came from.** The MAP rows, which
+  are the authoritative DSP evidence, ARE refreshed and clean at `b8aeeeb`.
+* **`design/budgets/workloads.yml`'s terrain demand row is NOT corrected.** The
+  6,144x error is documented with its full argument on the docket. Which number
+  should move -- the row, `build_manifest.py`'s use of `verticesPerItem`, or the
+  ruled 270 patches that the corrected arithmetic puts at 99.5% of a frame -- is
+  the owner's call and not a tool's.
+* **The single shared instance is not built**, which is where the 33 DSPs are. It
+  is an architecture change, it is costed on the docket at 106.7% of a frame at
+  today's terrain workload, and the docket's existing order already puts the
+  projected-vertex cache ahead of it.
+* **The 27-bit width narrowing is not attempted.** The three places a proof
+  would be needed are named in the core's header and on the docket. It needs a
+  ruling about world size.
+* **The projected-vertex cache is not built.** `GEOM.WCACHE` owns it; explicitly
+  out of scope, and folding it in would have made one change out of two.
+* **`zhao_project_core` has no `design/blocks.yml` entry**, deliberately. It is a
+  shared implementation leaf of two blocks, the same standing as
+  `fpga/rtl/common/zhao_dc_sdp_ram.sv`, which also has none. No ledger rule maps
+  `.sv` files to blocks (92 blocks against 95 RTL files today), and inventing a
+  block with a maturity and a contract for an internal module would be a ledger
+  claim nobody asked for.
+* **M15 and M16 are alive by proof**, not by decision-under-uncertainty. They
+  cannot be killed. Both proofs are in the core's header.
+
 
 ---
 
