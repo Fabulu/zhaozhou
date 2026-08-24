@@ -1,5 +1,100 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — THE VERTEX CACHE IS NOT A BLOCK, IT IS A SEAM CHANGE
+
+Investigated directly rather than delegated (three subagents in a row were
+killed by server-side API errors). **The conclusion changes the scope of the work
+substantially, and it is better found now than after someone had built the wrong
+thing.**
+
+### `TERRAIN.PROJECT` cannot cache anything, because it does not know what it is projecting
+
+`TERRAIN.PROJECT.md:57-70` — its input packet is:
+
+    ax_i ay_i az_i    signed 32, vertex A, fx16 world units
+    bx_i by_i bz_i    vertex B
+    cx_i cy_i cz_i    vertex C
+    src_id_i          16, source id -- PER PRIMITIVE, not per vertex
+    view_i, mat_a_i, mat_b_i, weight_i
+
+**There is no per-vertex lattice index anywhere in it.** The block receives three
+coordinate triples and one triangle-level id. It has **no way to know** that
+vertex A of triangle 5 is the same lattice point as vertex C of triangle 4 — which
+is precisely the fact a projected-vertex cache would have to exploit.
+
+So the 6,144-projections-for-1,089-vertices waste is **not addressable inside
+this block.** The three options are:
+
+* **key on the coordinate triple** — a 96-bit tag compare per vertex. Absurd, and
+  it would cost more than the projection it saves;
+* **add a vertex index to the packet** — an interface change on a hot path, and
+  the producer must supply it;
+* **make the pipeline vertex-major** — project the 1,089 unique lattice vertices
+  once into a store, then assemble triangles by *fetching* projected vertices.
+
+The third is what "cache-then-sequence" in the earlier docket entry actually
+implies. **It is a restructure of a seam, not a block bolted on.**
+
+### The identity exists one stage upstream, and that locates the work
+
+The chain is `TERRAIN.PATCH -> TERRAIN.TESS -> TERRAIN.NORMALS ->
+TERRAIN.PROJECT`. **`TERRAIN.TESS` is where triangles are formed from the
+lattice** ("subpatch tessellation ... with stitching and geomorph between
+levels"), so it is the last stage that *has* vertex identity. By the time the
+packet reaches the projector, identity has been discarded and only coordinates
+remain.
+
+So the change lands at the **TESS -> NORMALS -> PROJECT seam**, and it touches
+three blocks rather than one.
+
+**Note also that `TERRAIN.PROJECT`'s input packet is "exactly TERRAIN.NORMALS'
+input packet"** (`TERRAIN.PROJECT.md:58`). So the interface change hits normals
+too — and normals is independently on the width list at 18 DSPs, 833x
+over-provisioned. **Those two pieces of work touch the same packet and should be
+scheduled together**, not as separate visits.
+
+### AND THIS ANSWERS THE GEOM.WCACHE QUESTION, better than expected
+
+The open question was whether `GEOM.WCACHE` — specified as *"cache
+world-space/post-transform vertices as the dual-view sharing point (compute once,
+project twice)"* — is the same cache terrain needs. I expected the answer to be
+"no, different contents and different keys".
+
+**The answer is plausibly yes, for a reason neither contract states: both caches
+require the same missing thing — vertex identity in the packet.** Dual-view
+sharing must know that this vertex is the same vertex the other view already
+transformed. Corner de-duplication must know that this corner is a lattice point
+already projected. Neither is possible without an index, and once an index exists
+both become straightforward.
+
+**So `GEOM.WCACHE` is not two caches or one cache. It is the index plus a store**,
+and what it caches is a parameter of where it sits. That is a more useful
+statement than either contract currently makes, and `GEOM.WCACHE.md` is an empty
+stub (every section "TODO"), so nothing is contradicted by saying so.
+
+### What this means for cost and sequencing
+
+The cache was described as "the unlock" and it still is — 94.4% of a compute
+frame down to 16.7% — but it is **not a cheap unlock**:
+
+* an interface change on the terrain hot path, touching three blocks;
+* a producer change in `TERRAIN.TESS` to emit indices;
+* the reference oracle and its goldens move, because the packet changes;
+* `TERRAIN.NORMALS` is in the blast radius and should be done in the same visit.
+
+**None of that argues against doing it.** It argues against scoping it as "add a
+cache block", which is how I briefed it and which would have had an agent
+discover this after building the wrong thing. Recorded so the next attempt starts
+from the seam.
+
+### Recommendation
+
+Do `TERRAIN.NORMALS` **first** — 18 DSPs, 833x over-provisioned, and the *only*
+block on the list whose wide operands are height *differences* (S 1.7.8) rather
+than world coordinates, so its narrowing needs no Q-format ruling. It is the
+cheapest real win on the board, it is independent, and it warms up the exact
+packet the seam change will alter.
+
 ## 2026-08-24 — THE PROJECTORS ARE MERGED, AND THE 66 → 33 DOES NOT FOLLOW FROM IT
 
 Two things came out of RUN-20260824-0522 and the second is the one that needs a
