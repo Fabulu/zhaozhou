@@ -3442,3 +3442,61 @@ which could not elaborate for a day).
 
 **Not taken unilaterally.** Silencing a measurement to turn a flag green is the
 exact move `mem_vram_arbiter_liveness`'s comment warns about, so it waits.
+
+### 2026-08-24, later — the CDC is a COIN FLIP, measured across four fits
+
+The entry above asked whether to constrain the starvation crossing or keep it
+visible. **Four composed fits now answer the question that was left open**, and
+the answer is stronger than "it is a measurement artefact".
+
+| fit | RTL change | CDC hold slack |
+| --- | --- | ---: |
+| `f2680df` | — | **-0.952 FAIL** |
+| `86e27e3` | GLUE 3 subtract | **+0.254 pass** |
+| `59de7ca` | CRC seed -> M_HCRC | **+0.259 pass** |
+| `e617267` | CRC seed -> M_SEED_PREP | **-0.728 FAIL** |
+
+**Nothing in any of those commits touches the crossing.** Its slack swings by
+1.2 ns on placement alone, and the same is true of its setup number, which was
+the worst path in the design at `f2680df` and absent from the top-100 by
+`86e27e3`.
+
+So the verdict `timingPassed` is **nondeterministic**: it reports a hold failure
+or not depending on where the fitter happens to put two flip-flops in unrelated
+clock domains. That is worse than a permanently red flag, because a flag that
+flips at random cannot be trusted in either direction — a real regression
+arriving on a "pass" fit would be indistinguishable from luck.
+
+**This makes item 1 of ShellFixes.md required rather than recommended.** The
+recommendation stands as written (repair the crossing structurally with a
+request/acknowledge snapshot mailbox, then constrain it by name, then split the
+verdict into `synchronousTimingPassed` / `cdcStructurePassed` /
+`cdcPhysicalChecksPassed`), and the evidence for it is now empirical rather than
+architectural.
+
+**Still not taken unilaterally** — it is a real design change to a crossing with
+a stated safety premise, and it needs its own formal properties (source stable
+while req != ack, no overwrite of an unacknowledged value, exactly one
+destination pulse per request, no fabricated snapshot). Those are Fabian's to
+sanction.
+
+### And the synchronous problem is now DIFFUSE, not a path
+
+Worth recording because it changes what "close the last 5%" means:
+
+| fit | worst setup | endpoints | worst family |
+| --- | ---: | ---: | --- |
+| `f2680df` | -1.991 | 836 | `f_pos -> recq[*]` (plus the CDC) |
+| `86e27e3` | -0.423 | 16 | `hps_arbiter -> cmd_dma|crc_hdr_r` |
+| `59de7ca` | -0.621 | 60 | `m.M_HCRC -> crc_pay_r` |
+| `e617267` | -0.570 | 36 | `scanout_fetch|fetch_line -> mem_guard|fwd_req.addr` |
+
+**Three fits, three different worst families, all in a -0.42..-0.62 band.** The
+single-family era ended with the GLUE 3 change. No remaining path dominates, so
+further one-path surgery has low expected value and single-seed A/B comparisons
+can no longer resolve a 0.2 ns difference from placement noise.
+
+The honest options from here are (a) accept ~95 MHz for development images while
+the renderer is built, (b) pipeline broadly rather than surgically, or (c) fix
+the CDC first so the verdict stops being a coin flip and A/B becomes meaningful
+again. **(c) is a precondition for judging (b).**
