@@ -5,6 +5,82 @@ at the top.*
 
 ---
 
+## 2026-08-24 — the block that was twice the size of the chip now uses 0.7% of it
+
+### The fix
+
+The surface texture store was **229% of the whole chip**. It is now **0.7%**.
+
+| | before | after |
+| --- | ---: | ---: |
+| memory it asked for | 131,072 bits | 131,072 bits |
+| memory it actually got | **none** | **all of it** |
+| flip-flops used instead | 131,258 | **170** |
+| logic cells | 95,947 | **279** |
+
+**A 344-fold reduction**, and nothing about what the block *does* changed. Every
+one of those bits had been built out of flip-flops because of one detail in how
+the code was written.
+
+The cliff-edge block got the same treatment: **79% of the chip down to 18%.**
+
+### What the detail was, and why I have to correct myself
+
+I told you memory storage fails to become real memory for three reasons: reading
+it without a clock, clearing it on reset, or writing only part of a word at a
+time.
+
+**Only the third one was actually wrong here.** The block's own notes said it had
+been careful about the first two — and it was right. The single cause was writing
+half a word at a time.
+
+More precisely: the cliff block's table now works **while still being read
+without a clock**. So that first "rule" is not a rule at all. **Writing part of a
+word is the one that cannot be survived.**
+
+The fix was to stop writing half-words — split the store into two arrays, one per
+half. **Which is exactly the shape the software reference has always had.** The
+hardware had been carrying a complication the software never needed.
+
+### And a finding I would rather report than bury
+
+**The tool we built yesterday to find these problems had been reporting this
+block as healthy.**
+
+It had no detector for the half-word case at all, and its reset detector was
+reading the wrong half of the code — a subtlety of how the analysis tool
+represents `if (reset)`. Two blind spots, one of them pointed directly at the
+worst block in the repository.
+
+Both are fixed and both now have tests that would catch the blindness returning.
+But it is the same lesson this project keeps paying for: **the tool that checks
+things is a thing that needs checking.**
+
+### Where the design stands
+
+| | |
+| --- | ---: |
+| multipliers | **134**, from 327 |
+| ceiling | 85–90 |
+| blocks over the chip's size | **none** — was two |
+| biggest remaining block | the Field engine, 19% |
+
+**Nothing is now too big to build.** That was not true yesterday.
+
+### What is running
+
+The **two duplicate projectors** — the same maths implemented twice, 33
+multipliers each. Merging them is the single largest remaining win and needs no
+decision from you, because duplication is duplication.
+
+I have told it explicitly **not to trust** the audit's claim that the two are
+identical. That claim is about the *shape* of the arithmetic, not about what the
+blocks actually do. So the first job is to run both and compare every output —
+and **if they disagree anywhere, that disagreement is a bug in one of them and is
+worth more than the merge.**
+
+---
+
 ## 2026-08-24 — the cheapest fix on the board turns out to be a number, not a rewrite
 
 ### There is a cliff at 27 bits, and most of our arithmetic is standing just past it
