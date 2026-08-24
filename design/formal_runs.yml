@@ -969,6 +969,24 @@ runs:
     #      contract, which was genuinely undefined before;
     #   2. no reset assumption -- true and necessary (rst_n was a free input, so
     #      the solver started in an arbitrary state); moved the failure k=2 -> 4;
+    # BISECTED 2026-08-24 23:03, and the answer is the SERIOUS one:
+    # with a_hit_implies_written disabled and ONLY a_hit_is_the_watched_value
+    # enabled, bmc still fails at k=4. Disabling BOTH makes it pass. So the
+    # failing property is the LOAD-BEARING one -- a lookup returning a payload
+    # that disagrees with what was written to that key.
+    #
+    # Two possibilities remain and they are NOT equally serious:
+    #   (a) the watched-slot shadow mis-models something (most likely, since the
+    #       differential passes sixteen directed cases including the
+    #       reopen-does-not-resurrect one), or
+    #   (b) a real aliasing bug in the arena.
+    # UNTIL THAT IS DISTINGUISHED, THIS BLOCK IS NOT CORRECT-BY-EVIDENCE.
+    #
+    # An earlier note here said the value property held and only the auxiliary
+    # one failed. THAT WAS WRONG: it came from reading a VCD with a grep whose
+    # pattern was mangled by a signal identifier containing a quote character.
+    # A bisection is worth more than a trace read by an unverified filter.
+    #
     #   3. fills landing during reset -- a real RTL gap, now gated, because a
     #      clock-only memory process would otherwise store a payload that every
     #      reset-gated observer ignores.
