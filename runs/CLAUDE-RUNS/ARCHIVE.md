@@ -628,4 +628,43 @@ artifact rather than the command.
 
 ---
 
+## RUN-20260824-0932 — FIELD register file to block memory
+
+**Date:** 2026-08-24
+**Branch:** main
+
+**Summary:**
+`zhao_field_seq`'s 64x32 register file converted from flops behind four
+asynchronous 64:1 muxes into four replicated inferred memories. Done directly;
+subagents were unavailable (server-side API errors).
+
+**Deliverables:**
+- `blockMemoryBits` 0 -> 8,192, four memories inferred, packed into ONE M10K of
+  502 free
+- ALMs 7,958 -> 5,142 (-35.4%), registers ~5,288 -> 3,305, DSPs unchanged at 3
+- a 64-bit valid bitmap replacing the 64-entry clear -- required, not merely
+  cheaper, because M10K contents are undefined after reset
+- sweep 38/38 accounted, 33 caught, five survivors all documented proven
+  equivalents and the same five as before: NO coverage hole
+- contract records the now-synchronous host read port and the 6 -> 7 clock cost
+
+**Notes:**
+Three lessons that outlive the block. A microbenchmark prices the component and
+not its blast radius -- I predicted -1,371 ALMs from the calibration's
+standalone array and got -2,816, because removing the muxes also removed their
+fan-out and the reset across 2,048 flops. A constant where there should be
+variance is an observer artefact: change_cycle was identically 6 across seven
+ops whose retire cycles range 22..85. And a mutation can survive because it no
+longer does anything rather than because a test is weak -- M20's anchor matched
+TWICE after the write was factored into a decode, and its equivalence proof
+survived only because it is semantic rather than positional.
+
+Also corrected my own docket entry twice: I called the ruling's 3,500-5,000 ALM
+band unreachable and predicted 6,587.
+
+**Outcome:** Complete for the resource question. Timing -- the reason this block
+matters -- remains unmeasured: no fit has run and no slack number may be quoted.
+
+---
+
 <!-- Entries go above this line, newest first -->

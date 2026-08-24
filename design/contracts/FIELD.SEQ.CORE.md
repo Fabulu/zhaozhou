@@ -28,6 +28,24 @@ whole file and returns to idle.
 `rf_raddr_i` / `rf_rdata_o` out. Host writes are accepted only while the walk is
 not running.
 
+> **The read is SYNCHRONOUS as of 2026-08-24.** `rf_raddr_i` is presented on one
+> edge and `rf_rdata_o` answers on the next. It used to be combinational, and
+> the change is a consequence of the register file becoming block memory: it was
+> 2,048 bits of flops behind four asynchronous 64:1 muxes — which this contract
+> already named as the dominant cost — and an asynchronous read is one of the
+> three things `reports/QUARTUS_GOTCHAS.md` §10 measured as independently fatal
+> to memory inference.
+>
+> The symptom of missing this is unambiguous and was seen: **every chained result
+> reads back as the PREVIOUS instruction's answer.** A reader that settles
+> combinationally and does not clock will see stale data, not garbage.
+>
+> **A consequence for observers**: a testbench watching a register *during* a run
+> must hold `rf_raddr_i` and read the port, not call a helper that clocks — an
+> extra edge per observation swallows `instr_retired_o` pulses and reports work
+> as lost. And an observation now lags the file by one cycle, so a check timed
+> against a retire pulse needs to skip the first sample after it.
+
 **Run control**: `clear_i` (zero the file), `start_i`, `busy_o`, `done_o`,
 `status_o`.
 
@@ -88,6 +106,12 @@ and longer for the ops that walk the shared lane. MEASURED by section 12 of
 | SPLINE | 45 |
 | RING | 54 |
 | NORMALIZE2, NORMALIZE3 | 66–67 |
+
+**SEVEN clocks as of 2026-08-24, not six** — the register file became block
+memory, so a read is answered one edge after its address, every operand group
+lands a state later, and a fourth read state (`Q_RD3`) catches the last one. The
+sentence below is kept because its ARGUMENT is unchanged and is the point: the
+count moved by one, the reason it is small did not.
 
 **MUL, MAD, DOT2 and DOT3 still cost six clocks on a machine with ONE
 multiplier**, and that is the point of the schedule rather than a coincidence:
