@@ -294,7 +294,31 @@ module zhao_forge_cliff (
   // the edge table: {cj[4:0], ci[4:0], side[1:0], span[5:0]} — page-local
   // indices; the page origin is added at emit time so the OUTPUT is exactly
   // zref::forge::RimEdge.
-  logic [ 17:0]        edge_mem_r  [0:MaxEdges-1];
+  //
+  // SPLIT ALONG THE SPAN FIELD, and the split is the whole reason this table
+  // costs what it does. It was one 2,048 x 18 array, and it was the ONLY one of
+  // this block's three tables that did not infer as RAM:
+  //
+  //   prio_mem_r  2048x32  ONE write site, whole word          -> INFERRED
+  //   run_mem_r   1024x17  TWO write sites, both whole word    -> INFERRED
+  //   edge_mem_r  2048x18  two write sites, one of them PARTIAL -> NOT INFERRED
+  //
+  // All three are read with `assign x = mem[idx]`, i.e. asynchronously, and
+  // reports/QUARTUS_GOTCHAS.md §10 lists an async read as one of three
+  // independent killers of storage inference — yet two of the three converted
+  // anyway, because Quartus sometimes rescues an async read by inserting a read
+  // address register. §10 also says that rescue "is not a guarantee and cannot
+  // be planned against". The contrast between the two that worked and the one
+  // that did not is the diagnosis: `edge_mem_r[mhead_r][5:0] <= mtake_r` is a
+  // partial write, which is §10's THIRD killer — the same one that cost
+  // zhao_surface_sheet 229 % of the device — and the rescue does not survive it.
+  //
+  // So the table is split at the field boundary it was already documented as
+  // having. `edge_span_r` is the part that is written on its own; `edge_key_r`
+  // is everything above it. Both are now written WHOLE, no part-select exists,
+  // and `edge_rd_c` reassembles the same 18-bit word. No behaviour moves.
+  logic [ 11:0]        edge_key_r  [0:MaxEdges-1];  // {cj[4:0], ci[4:0], side[1:0]}
+  logic [  5:0]        edge_span_r [0:MaxEdges-1];  // span[5:0], written alone by StMdead
   logic [MaxEdges-1:0] alive_r;
   logic [ 31:0]        prio_mem_r  [0:MaxEdges-1];
   logic [EIW-1:0]      cnt_r;
@@ -338,7 +362,7 @@ module zhao_forge_cliff (
   logic [17:0] edge_rd_c;
   logic [16:0] run_rd_c;
   logic [31:0] prio_rd_c;
-  assign edge_rd_c = edge_mem_r[idx_r[10:0]];
+  assign edge_rd_c = {edge_key_r[idx_r[10:0]], edge_span_r[idx_r[10:0]]};
   assign run_rd_c  = run_mem_r[ridx_r[9:0]];
   assign prio_rd_c = prio_mem_r[idx_r[10:0]];
 
@@ -571,7 +595,8 @@ module zhao_forge_cliff (
         // F3: cj outer, ci inner, side 0..3 — one side per clock.
         StEnum: begin
           if (is_rim_c && cnt_r != EIW'(MaxEdges)) begin
-            edge_mem_r[idx_r[10:0]] <= {sc_cj_r[4:0], sc_ci_r[4:0], sc_side_r, 6'd1};
+            edge_key_r[idx_r[10:0]]  <= {sc_cj_r[4:0], sc_ci_r[4:0], sc_side_r};
+            edge_span_r[idx_r[10:0]] <= 6'd1;
             alive_r[idx_r[10:0]] <= 1'b1;
             idx_r             <= idx_r + {{(EIW - 1) {1'b0}}, 1'b1};
             cnt_r             <= cnt_r + {{(EIW - 1) {1'b0}}, 1'b1};
@@ -687,7 +712,7 @@ module zhao_forge_cliff (
         // -------------------------------------------------------------------
         StMdead: begin
           if (mstep_r == mtake_r) begin
-            edge_mem_r[mhead_r][5:0] <= mtake_r;
+            edge_span_r[mhead_r] <= mtake_r;
             merged_r <= merged_r + {6'd0, mtake_r} - 12'd1;
             need_r   <= need_r - ({{(EIW - 6) {1'b0}}, mtake_r} - {{(EIW - 1) {1'b0}}, 1'b1});
             st_r     <= StMsel;

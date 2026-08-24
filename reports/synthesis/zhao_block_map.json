@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "2eeef64e52ae8ef714c980759490ac5033b67aad",
-    "newestRunClean":  true,
+    "newestRunCommit":  "548e0081720b8ffde299571be934103285688e46",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -857,6 +857,70 @@
                                             ],
                        "inferredMemoryCount":  2,
                        "inferredDesignMemoryCount":  2,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  2,
+                                                "Fixed Point Unsigned Multiplier":  2
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_forge_cliff@edge-split-wip",
+                       "status":  "ok",
+                       "sourceCommit":  "548e0081720b8ffde299571be934103285688e46",
+                       "rtlCleanAtHead":  false,
+                       "sourceListHash":  "9a53f278725c7224",
+                       "sourceFileCount":  94,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_forge_cliff",
+                       "seconds":  462.5,
+                       "dspBlocks":  2,
+                       "registers":  3875,
+                       "blockMemoryBits":  119808,
+                       "virtualPins":  265,
+                       "pins":  0,
+                       "estimatedAlms":  7664,
+                       "combAluts":  8149,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  12,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:edge_span_r_rtl_0|altsyncram_kpi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  6,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:prio_mem_r_rtl_0|altsyncram_isi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:run_mem_r_rtl_0|altsyncram_8si1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  4,
+                       "inferredDesignMemoryCount":  4,
                        "dspDecomposition":  {
                                                 "Total number of DSP blocks":  2,
                                                 "Fixed Point Unsigned Multiplier":  2

@@ -20,7 +20,7 @@ Behaviour must stay bit-identical to `zref::surface::SheetStore`.
 
 ### 2026-08-24 03:17 UTC+02:00 - Task Started
 
-Run initialised with `runs\CLAUDE-RUNS\init-run.ps1 surface-sheet-storage-inference`.
+Run initialised with `runs/CLAUDE-RUNS/init-run.ps1 surface-sheet-storage-inference`.
 
 ### 03:20 - A trap found before any work: TWO git installations that disagree
 
@@ -152,7 +152,7 @@ calibration data rather than a one-off probe.
 
 ### 04:05 - THE MEASUREMENT. It infers.
 
-`tools\quartusun_block_map.ps1 -Module zhao_surface_sheet -TimeoutSeconds 3600`,
+`tools/quartus/run_block_map.ps1 -Module zhao_surface_sheet -TimeoutSeconds 3600`,
 map-only, `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2. Provenance checked before
 reading anything: `sourceCommit 2eeef64` (this run's RTL commit),
 `rtlCleanAtHead: true`, `sourceFileCount 94`.
@@ -183,6 +183,158 @@ family and the recovery is what removing it predicts.
 
 Note the map also got **34x faster**. 1,096 s of synthesis was Quartus building
 131,072 flip-flops and their mux trees.
+
+### 04:20 - The sweep, in a worktree
+
+`git worktree add --detach /c/programmieren/zencrifice/zhaozhou-sweep-sheet 2eeef64`,
+per the standing owner ruling. Guard 7 derived **six** consumers from
+`tests/CMakeLists.txt` and they matched the declared set:
+
+```
+test_field_write_tag test_surface_sheet_directed test_surface_sheet_random
+test_surface_sheet_store_diff test_surface_stamp_chain test_texture_aux_directed
+```
+
+Three of the six are not named for this block. A sweep that scored only the
+`test_surface_sheet_*` lanes would have missed the case the block exists to
+prevent: one patch's scars appearing under another patch's stamp.
+
+Preflight: **`linted 18 mutants at Slots (2, 4), 0 do not build`** -- a non-zero
+count, checked, because a fresh checkout once printed "linted 0 mutants" and
+exited 0.
+
+Two things the preflight caught before anything was scored:
+
+* **S01 orphaned a signal.** Redirecting the tag write into `mem_str` leaves
+  `mem_tag` written by nothing -> `-Wall` UNDRIVEN. Rewritten as a TRANSPOSE of
+  the two planes, which keeps both driven and is a truer statement of "a write
+  lands in the wrong array" anyway. **The mutation was fixed, not the guard.**
+* **The block does not lint clean at `Slots = 1`** -- and neither does HEAD's
+  pre-change version, so the split did not cause it:
+  `Bit extraction of array[4095:0] requires 12 bit index, not 13 bits`.
+  `SlotBits` is `(Slots <= 1) ? 1 : $clog2(Slots)`, so it is 1 even at one slot
+  and `AddrBits = SlotBits + 12` is 13 against a 4,096-word array. The extra bit
+  is always zero, so the block is functionally unharmed, but the parameter does
+  not elaborate cleanly at its own lower bound. **Not fixed: changing an address
+  width at an untested `Slots` is a behaviour change wearing a lint fix.**
+  Docketed. The preflight lints at 2 and 4 and says in its own comment why not 1.
+
+### 04:35 - THE STRETCH GOAL: zhao_forge_cliff, diagnosed before anything changed
+
+The task said to read *why* two of its three tables infer and one does not,
+before touching it. The answer is one line, and it is the same killer:
+
+| table | shape | write sites | inferred? |
+| --- | --- | --- | --- |
+| `prio_mem_r` | 2048x32 | 1, **whole word** | **YES**, 65,536 bits |
+| `run_mem_r` | 1024x17 | 2, **both whole word** | **YES**, 17,408 bits |
+| `edge_mem_r` | 2048x18 | 2, **one of them PARTIAL** | **NO** |
+
+```systemverilog
+edge_mem_r[mhead_r][5:0] <= mtake_r;   // zhao_forge_cliff.sv:690, StMdead
+```
+
+All three are read `assign x = mem_r[idx]`, i.e. ASYNCHRONOUSLY, which §10 lists
+as a killer in its own right -- and two of them converted anyway, because
+Quartus sometimes rescues an async read by inserting a read-address register.
+§10 says that rescue "cannot be planned against". **The rescue does not survive
+a partial write.** That is the whole contrast, and it is the same defect that
+cost SURFACE.SHEET 229 % of the device.
+
+Split at the field boundary the table was already documented as having --
+`{cj[4:0], ci[4:0], side[1:0], span[5:0]}` -- into `edge_key_r` (12 b) and
+`edge_span_r` (6 b). `edge_rd_c` reassembles the same 18-bit word. Both writes
+are now whole. Lint clean; `test_forge_cliff_directed` and
+`test_forge_cliff_random` both green.
+
+### 04:45 - TWO DEFECTS IN scan_rtl.py, the tool the task said to use
+
+The task said "do not guess -- `tools/budget/scan_rtl.py` exists and reports
+read style, reset-touching and byte enables per array; use it". It reports two
+of those three, and one of the two it reports is wrong.
+
+**Defect 1 -- there is no byte-enable detector at all.** `grep -i byte
+tools/budget/scan_rtl.py` finds nothing in 1,577 lines. On the repository's
+worst block it reported the array as sync-read, not reset-touched,
+`expectedStorage: RAM`, severity YELLOW: **healthy**. The scanner §10 names as
+the source of "expected bits" could not see the killer that was actually
+present.
+
+**Defect 2 -- `resetTouched` was true for arrays no reset touches.** The scan
+walked the ENTIRE `IF` node, ELSE branch included, so anything written in the
+operating logic of an `always_ff` with an async reset counted as reset-written.
+All three `zhao_forge_cliff` tables reported `resetTouched: true` against a
+reset branch that assigns thirty-one scalars and not one array element. This is
+the field an agent checks §10's SECOND killer with, so the false positive sends
+someone to fix a reset that is not there.
+
+**The fix for defect 2 was wrong the first time, and the controls caught it.**
+Taking `thensp` looked obviously right and is exactly as wrong as taking both.
+Every block here writes `if (!rst_n) <reset> else <work>`, and **Verilator's
+elaborated AST folds the `!` away by SWAPPING the arms**: the condition arrives
+as a bare `VARREF rst_n`, with the WORK in `thensp` and the RESET in `elsesp`.
+Confirmed by dumping the node -- `cond type: VARREF`, `thensp` first statement
+at line 548, `elsesp` first statement at 506. Reading polarity off the NAME is
+no better (`rst_n` reads active-low, `rst` active-high), and picking a detector
+by name is a failure this repository has already disclosed.
+
+The branch is now identified by what a reset branch IS: it drives things to
+known values, so **every right-hand side in it is constant**, where the working
+branch is full of VARREFs. Polarity-independent and frontend-independent. When
+the test does not separate the two arms, BOTH are taken -- the old, over-broad
+behaviour, which is the safe direction for a guard.
+
+**Both detectors are given positive controls, in BOTH directions**, because
+RUN-20260823-2226's fifth disclosed failure is a detector that returned zero
+across 91 modules because it could never fire. `validate_scan_rtl_fixes.py`,
+14 cases, **14/14**:
+
+* partial writes must be **0** on the six arrays that are now whole-written, and
+  **2** on the pre-change `mem` and **1** on the pre-change `edge_mem_r`, read
+  out of git at `991f13c3`. A detector that says "no partial write" about
+  everything passes a one-sided test just as well as a correct one.
+* `resetTouched` must be **false** on the cliff tables and on `mem_tag`, and
+  must still be **TRUE** on `zhao_surface_sheet.dir_handle` (which really is
+  cleared in the reset branch) and on `zhao_field_seq.rf` (which §10 itself
+  retro-explains as "written from a reset branch"). Before the second fix,
+  `dir_handle` passed **by coincidence** -- it is also written in the operating
+  logic, so the over-broad walk found it there.
+
+### 05:00 - THE SWEEP FOUND A REAL HOLE: S05 SURVIVED
+
+> `S05 read-during-write returns the POST-write word where C5 says pre-write  *** SURVIVED ***`
+
+Six consumer lanes, 232 checks between them, and **not one of them can tell the
+two behaviours apart.** The contract states the rule; no consumer generates it
+(`SURFACE.STAMP`'s cursor marches forward and its write trails its read by two
+texels); and the shipped differential cannot cover it **by construction**,
+because `zref::surface::SheetStore` is a C++ model with no notion of a cycle.
+A stated, unconsumed, untested semantic is precisely what a storage-shape change
+moves without anything noticing.
+
+**S05 is NOT an equivalent.** The two behaviours are distinguishable, and this
+run already had the instrument that distinguishes them: the shape differential
+catches the same defect as control C4 with **408 port-cycle mismatches**. So the
+finding is a TEST GAP, and the rule is to kill it with a test rather than argue
+it.
+
+Added `test_read_during_write_returns_the_old_word` to
+`tests/surface/surface_sheet_directed.cpp` -- 6 new checks, 58 -> 64:
+
+* the whole-word collision returns the PRE-write word, and the raced write still
+  lands;
+* the **tag-only** collision returns the whole PRE-write word, and afterwards the
+  tag has moved and the strength has not. That second half is the case the
+  whole-word collision cannot see, and it is the one place the split into two
+  planes could have gone wrong quietly.
+
+`test_simultaneous_read_and_write` already existed and drives both ports in one
+cycle at **different** addresses (500 and 501) -- the case SURFACE.STAMP actually
+generates. The same-address case is the one nobody had written.
+
+**This is the sweep earning its cost.** Every other mutant so far was caught;
+the one that survived is the one the contract had argued in prose and nothing
+had checked.
 
 
 ---

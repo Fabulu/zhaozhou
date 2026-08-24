@@ -282,7 +282,22 @@ void test_read_throughput_and_backpressure(Vzhao_surface_sheet& dut) {
   }
   check(sent, "the read was accepted", 1, sent ? 1 : 0);
   // Hold pg_ready low for a while; the answer must still be there afterwards.
+  //
+  // AND WIGGLE THE READ ADDRESS WHILE IT IS HELD. Added RUN-20260824-0317:
+  // without this the loop left `req_texel_i` parked on 9 for all twenty cycles,
+  // so a block that re-read the array EVERY cycle instead of only on an
+  // accepted request kept fetching the same texel and answered correctly by
+  // accident. Mutant S07 — the read-data register's enable deleted — SURVIVED
+  // this test for exactly that reason: the check was real, and its stimulus was
+  // constant. Texel 7 holds 248 where texel 9 holds 246, so an ungated read
+  // now changes the held word and the check below fails.
+  //
+  // Nothing is accepted during the stall (`req_ready_o` is low because the
+  // response register is occupied), so this must be invisible.
   for (int c = 0; c < 20; ++c) {
+    dut.req_texel_i = (c & 1) ? 7 : 11;
+    dut.req_handle_i = kHandleC;
+    dut.eval();
     zhao::tick(dut);
     dut.eval();
   }
@@ -329,6 +344,80 @@ void test_simultaneous_read_and_write(Vzhao_surface_sheet& dut) {
         (static_cast<uint32_t>(q.tag) << 8) | q.strength);
 }
 
+void test_read_during_write_returns_the_old_word(Vzhao_surface_sheet& dut) {
+  // C5's LAST SENTENCE, which had no test until RUN-20260824-0317:
+  //
+  //   "Read-during-write at the same address returns the OLD word (both
+  //    accesses live in one `always_ff`). SURFACE.STAMP never does that -- its
+  //    cursor marches forward and its write trails its read by two texels --
+  //    but the semantics are stated rather than left to the synthesiser."
+  //
+  // WHY THIS EXISTS. `test_simultaneous_read_and_write` above drives both ports
+  // in one cycle at DIFFERENT addresses (500 and 501), which is the case
+  // SURFACE.STAMP actually generates. The SAME-address case was stated in the
+  // contract, exercised by no consumer, and checked by nothing -- and the
+  // reference cannot cover it either, because `zref::surface::SheetStore` is a
+  // C++ model with no notion of a cycle, so the shipped differential is blind
+  // to it by construction.
+  //
+  // That combination is exactly what a storage-shape change moves silently. The
+  // mutation sweep proved it: mutant S05 -- "read-during-write returns the
+  // POST-write word" -- SURVIVED the whole suite, all six consumer lanes, on
+  // the first run. It is not an equivalent; the two behaviours are
+  // distinguishable in 408 port-cycles of the run's shape differential. So the
+  // gap is closed with a test rather than argued away.
+  auto rdw = [&](uint16_t texel, uint8_t tag, uint8_t str, bool we_tag, bool we_str) {
+    dut.pg_ready_i = 1;
+    dut.req_valid_i = 1;
+    dut.req_op_i = sdev::kOpRead;
+    dut.req_handle_i = kHandleC;
+    dut.req_texel_i = texel;
+    dut.wr_valid_i = 1;
+    dut.wr_handle_i = kHandleC;
+    dut.wr_texel_i = texel;  // THE SAME TEXEL, in THE SAME CYCLE
+    dut.wr_tag_i = tag;
+    dut.wr_strength_i = str;
+    dut.wr_we_tag_i = we_tag ? 1 : 0;
+    dut.wr_we_strength_i = we_str ? 1 : 0;
+    dut.eval();
+    const bool both = dut.req_ready_o && dut.wr_ready_o;
+    zhao::tick(dut);
+    dut.req_valid_i = 0;
+    dut.wr_valid_i = 0;
+    dut.eval();
+    const uint32_t seen = (static_cast<uint32_t>(dut.pg_tag_o) << 8) | dut.pg_strength_o;
+    check(both && dut.pg_valid_o, "read-during-write: both ports accepted, one answer", 1,
+          (both && dut.pg_valid_o) ? 1 : 0);
+    zhao::tick(dut);
+    return seen;
+  };
+
+  // ---- both halves written under the collision --------------------------
+  sdev::sheet_write(dut, kHandleC, 700, 0x11, 0x22, true, true, 0);
+  const uint32_t old_word = rdw(700, 0xEE, 0xDD, true, true);
+  check(old_word == 0x1122, "a same-address read-during-write returns the PRE-write word", 0x1122,
+        old_word);
+  const SheetResponse after = sdev::sheet_request(dut, sdev::kOpRead, kHandleC, 700, 0);
+  check((static_cast<uint32_t>(after.tag) << 8 | after.strength) == 0xEEDD,
+        "and the write it raced still landed", 0xEEDD,
+        (static_cast<uint32_t>(after.tag) << 8) | after.strength);
+
+  // ---- ONE half written under the collision ------------------------------
+  // The enables used to be byte enables on one 16-bit word and are now
+  // per-plane write enables on two arrays. A collision that writes only the tag
+  // must still answer the old word in BOTH halves, and must leave the strength
+  // alone afterwards -- which is the one place the split could have gone wrong
+  // in a way the whole-word case cannot see.
+  sdev::sheet_write(dut, kHandleC, 701, 0x33, 0x44, true, true, 0);
+  const uint32_t old_tag_only = rdw(701, 0x99, 0x88, true, false);
+  check(old_tag_only == 0x3344, "a tag-only read-during-write still returns the whole PRE-write word",
+        0x3344, old_tag_only);
+  const SheetResponse half = sdev::sheet_request(dut, sdev::kOpRead, kHandleC, 701, 0);
+  check((static_cast<uint32_t>(half.tag) << 8 | half.strength) == 0x9944,
+        "the tag moved and the strength did not", 0x9944,
+        (static_cast<uint32_t>(half.tag) << 8) | half.strength);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -348,6 +437,7 @@ int main(int argc, char** argv) {
   test_clear_sweep_is_visible(dut);
   test_read_throughput_and_backpressure(dut);
   test_simultaneous_read_and_write(dut);
+  test_read_during_write_returns_the_old_word(dut);
 
   return zhao::report_and_exit("surface_sheet_directed");
 }

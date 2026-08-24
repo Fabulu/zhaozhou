@@ -983,6 +983,44 @@ def analyse_module(name, mnode, types, filemap):
         if base is not None and base.get("type") == "VARREF":
             sel_by_var[base.get("varp")].append((n, base))
 
+    # ---- PARTIAL WRITES: GOTCHAS section 10's THIRD killer -----------------
+    # This scanner had NO byte-enable detector at all, in 1,577 lines, while
+    # section 10 names it as one of the three independent killers of storage
+    # inference and calls it "the one most likely to be written by accident".
+    #
+    # The cost of the gap, measured: zhao_surface_sheet asked for 131,072 bits,
+    # inferred NONE, and spent an estimated 95,947 ALMs -- 229 % of the device,
+    # the largest single resource item in the repository. Its array was read
+    # synchronously and was not reset, so this scanner reported it YELLOW and
+    # `expectedStorage: RAM`, i.e. HEALTHY. The one thing wrong with it was
+    #
+    #     if (be[1]) mem[a][15:8] <= d[15:8];
+    #
+    # a nonblocking assignment whose LHS is a SEL over an ARRAYSEL -- which is
+    # exactly what is matched below. Same shape found in zhao_forge_cliff:
+    # `edge_mem_r[mhead_r][5:0] <= mtake_r` is the only structural difference
+    # between the one of its three tables that did not infer and the two that
+    # did.
+    #
+    # A partial write is only a killer for something that WANTS to be memory; a
+    # bitfield in a small register bank is fine. The severity below is gated on
+    # `expects_ram` for that reason.
+    partial_writes = defaultdict(int)
+    for n in walk(mnode):
+        if n.get("type") not in ("ASSIGN", "ASSIGNDLY"):
+            continue
+        lhs = only_child(n, "lhsp")
+        if lhs is None or lhs.get("type") != "SEL":
+            continue
+        inner = only_child(lhs, "fromp")
+        if inner is None or inner.get("type") != "ARRAYSEL":
+            continue
+        base = only_child(inner, "fromp")
+        while base is not None and base.get("type") in ("ARRAYSEL", "SEL"):
+            base = only_child(base, "fromp")
+        if base is not None and base.get("type") == "VARREF":
+            partial_writes[base.get("varp")] += 1
+
     # which VARs are written inside a reset branch
     reset_written = set()
     for n in walk(mnode):
@@ -994,12 +1032,68 @@ def analyse_module(name, mnode, types, filemap):
         names = [x.get("name", "") for x in walk(cond) if x.get("type") == "VARREF"]
         if not any(RESET_RE.search(nm or "") for nm in names):
             continue
-        for x in walk(n):
-            if x.get("type") in ("ASSIGN", "ASSIGNDLY"):
-                lhs = only_child(x, "lhsp")
-                for y in walk(lhs) if lhs is not None else []:
-                    if y.get("type") == "VARREF":
-                        reset_written.add(y.get("varp"))
+        # ONE BRANCH OF THE IF, not both.
+        #
+        # This walked `n` -- the entire IF node, ELSE included, i.e. the block's
+        # normal operating logic. So every array written in any
+        # `always_ff @(posedge clk or negedge rst_n)` reported
+        # `resetTouched: true` whether the reset touched it or not.
+        #
+        # Caught RUN-20260824-0317 on zhao_forge_cliff: all three of its tables
+        # were reported reset-touched, and the 43 lines after `if (!rst_n)`
+        # assign thirty-one scalars and not one array element. This field is how
+        # an agent checks GOTCHAS section 10's second killer, so a false
+        # positive sends someone to fix a reset that is not there -- the same
+        # shape as the widening-multiply rule that would have sent an
+        # implementer to rewrite nine correct lines.
+        #
+        # WHICH BRANCH IS THE RESET BRANCH CANNOT BE READ OFF THE POLARITY.
+        # Every block in this tree writes `if (!rst_n) <reset> else <work>`, and
+        # Verilator's elaborated AST folds the `!` away by SWAPPING the arms:
+        # the condition arrives as a bare `VARREF rst_n` with the WORK in
+        # `thensp` and the RESET in `elsesp`. Taking `thensp` is therefore
+        # exactly as wrong as taking both, and wrong in the more flattering
+        # direction. Nor does the name settle it -- `rst_n` reads active-low and
+        # `rst` active-high, and a scanner that guesses from a name is the
+        # detector-picked-by-name failure this repository has already disclosed.
+        #
+        # So the branch is identified by what a reset branch IS: it drives
+        # things to KNOWN VALUES, so every right-hand side in it is constant.
+        # The working branch is full of VARREFs. That is polarity-independent
+        # and frontend-independent. When the test does not separate the two
+        # arms, BOTH are taken -- the old, over-broad behaviour, which is the
+        # safe direction for a guard.
+        def _assigns(branch_key):
+            out = []
+            for b in (n.get(branch_key) or []):
+                for x in walk(b):
+                    if x.get("type") in ("ASSIGN", "ASSIGNDLY"):
+                        out.append(x)
+            return out
+
+        def _all_const_rhs(assigns):
+            if not assigns:
+                return False
+            for x in assigns:
+                rhs = only_child(x, "rhsp")
+                if rhs is None or not is_constant_cone(rhs):
+                    return False
+            return True
+
+        then_a, else_a = _assigns("thensp"), _assigns("elsesp")
+        then_c, else_c = _all_const_rhs(then_a), _all_const_rhs(else_a)
+        if then_c and not else_c:
+            branch_assigns = then_a
+        elif else_c and not then_c:
+            branch_assigns = else_a
+        else:
+            branch_assigns = then_a + else_a
+
+        for x in branch_assigns:
+            lhs = only_child(x, "lhsp")
+            for y in walk(lhs) if lhs is not None else []:
+                if y.get("type") == "VARREF":
+                    reset_written.add(y.get("varp"))
 
     for addr, v in vars_by_addr.items():
         info = types.info(v.get("dtypep"))
@@ -1063,6 +1157,7 @@ def analyse_module(name, mnode, types, filemap):
             "accessSites": rec_sites, "sitesPerElement": round(rec_sites / elems, 2),
             "dynamicallyAddressed": bool(dynamic),
             "resetTouched": addr in reset_written,
+            "partialWriteSites": partial_writes.get(addr, 0),
             "expectedStorage": ("RAM" if expects_ram else "registers"),
         }
         rec.update(S.loc(v))
@@ -1072,6 +1167,14 @@ def analyse_module(name, mnode, types, filemap):
                              "SYNCHRONOUS read port, so this cannot infer as memory and becomes flops behind a "
                              "%d:1 mux. zhao_field_seq spends 8,901 ALMs and ZERO M10Ks exactly this way while "
                              "502 block memories sit idle" % (total, elems, ew, elems))
+        elif expects_ram and rec["partialWriteSites"]:
+            rec["severity"] = "RED"
+            rec["reason"] = ("%d addressable bits written with %d PARTIAL (bit-select) write(s) -- byte "
+                             "enables. Quartus 17.0.2 Lite does not infer M10K byte-enable support from "
+                             "that template and the memory disappears entirely: measured 0 memory bits and "
+                             "45,134 ALMs for a 65,536-bit buffer. Split the word into one array per "
+                             "independently-written field, or instantiate altsyncram" %
+                             (total, rec["partialWriteSites"]))
         elif expects_ram and rec["resetTouched"]:
             rec["severity"] = "RED"
             rec["reason"] = ("%d addressable bits written from a reset branch. A reset that touches every "
