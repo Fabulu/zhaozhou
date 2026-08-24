@@ -35,17 +35,17 @@ module zhao_pair_tmu_cache (
     input  logic        clk,
     input  logic        rst_n,
     input  logic        stim_valid_i,
-    input  logic [31:0] stim_i,
+    input  logic [95:0] stim_i,
     output logic [31:0] hash_o
 );
 
   // ---- registered stimulus ------------------------------------------------
   logic        req_valid_q;
-  logic [31:0] stim_q;
+  logic [95:0] stim_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       req_valid_q <= 1'b0;
-      stim_q      <= 32'd0;
+      stim_q      <= 96'd0;
     end else begin
       req_valid_q <= stim_valid_i;
       stim_q      <= stim_i;
@@ -71,10 +71,18 @@ module zhao_pair_tmu_cache (
   zhao_texture_tmu u_tmu (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(req_valid_q), .req_ready_o(req_ready),
-      .req_u_i(stim_q), .req_v_i({stim_q[15:0], stim_q[31:16]}),
-      .req_base_i(32'h0001_0000), .req_pal_base_i(32'h0002_0000),
-      .req_mode_i({28'd0, stim_q[3:0]}),
-      .req_lod_i(stim_q[23:16]), .req_src_id_i(stim_q[31:16]),
+      // EVERY decoded field comes from the stimulus. The first version of this
+      // wrapper tied req_base_i, req_pal_base_i and 28 of the 32 mode bits to
+      // CONSTANTS, and the fit measured 438 ALMs for a pair whose TMU leaf
+      // alone is 1,921 -- the tool had constant-folded most of the block away
+      // and the resulting 37.63 MHz described a TMU that does not exist.
+      // A characterization wrapper that over-constrains its stimulus does not
+      // measure the design; it measures what survives the folding.
+      .req_u_i(stim_q[31:0]), .req_v_i(stim_q[63:32]),
+      .req_base_i({stim_q[79:64], stim_q[15:0]}),
+      .req_pal_base_i({stim_q[95:80], stim_q[31:16]}),
+      .req_mode_i(stim_q[63:32] ^ stim_q[95:64]),
+      .req_lod_i(stim_q[71:64]), .req_src_id_i(stim_q[95:80]),
       .cac_valid_o(cac_valid), .cac_ready_i(cac_ready),
       .cac_en_o(cac_en), .cac_addr_o(cac_addr), .cac_src_id_o(cac_src_id),
       .cac_valid_i(cac_rvalid), .cac_ready_o(cac_rready), .cac_data_i(cac_data),
