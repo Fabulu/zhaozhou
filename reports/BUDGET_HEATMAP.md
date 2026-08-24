@@ -5,17 +5,17 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `3d6ee37f`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `35fc97a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **53** |
+| modules with a map of **this exact RTL** | **90** |
 | modules with a fit of this exact RTL | 0 |
-| modules with any map | 53 |
+| modules with any map | 89 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
-| calibration points measured | 0 |
+| calibration points measured | 8 |
 
 ## The test of whether this works
 
@@ -49,16 +49,16 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_field_seq` | 3 | 3 | 22,865 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `PARETO_UNPROVEN` |
 | `zhao_terrain_lod` | 3 | 3 | - | **0** | 6 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_forge_cliff` | 2 | - | 119,808 | 82,944 (2 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
-| `zhao_audio_fifo` | - | 0 | 65,536 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_cmd_dma` | - | 0 | 33,280 | - | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
-| `zhao_debug_counters` | - | - | 2,560 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_audio_fifo` | 0 | 0 | 65,536 | 65,536 (1 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_cmd_dma` | 0 | 0 | 33,280 | 32,768 (1 design) | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
+| `zhao_debug_counters` | 0 | - | 2,560 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_field_curve` | 0 | - | - | **0** | 24 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_normalize` | 0 | - | 7,967 | **0** | 14 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_rcp` | - | - | 4,112 | - | 7 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_rcp24_rom` | - | - | 7,967 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_rcp_rom` | - | - | 4,112 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_rcp` | 0 | - | 4,112 | **0** | 7 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_rcp24_rom` | 0 | - | 7,967 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_rcp_rom` | 0 | - | 4,112 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_sin` | 0 | - | 8,738 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_sin_rom` | - | - | 4,369 | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_sin_rom` | 0 | - | 4,369 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_tilestore` | 0 | 0 | 32,768 | 32,768 (2 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_shell_top` | - | - | 118,784 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_stub_top` | - | - | 8,388,608 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -78,25 +78,25 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_terrain_bake_delta` | 4 | 1 | MULTIPLY(2, widest 32-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_mul` | 3 | 1 | MULTIPLY(1, widest 33-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_edgewalk` | 2 | 8 | MULTIPLY(2, widest 23-bit); VARSHIFT(1); COMB_LOOP(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPR |
-| `zhao_cmd_scheduler` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SD |
-| `zhao_crc32c_fold` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_debug_crc` | - | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_debug_frameblit` | - | 12 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_cmd_scheduler` | 0 | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_crc32c_fold` | 0 | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_debug_crc` | 0 | 1 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_debug_frameblit` | 0 | 12 | VARSHIFT(18); COMB_LOOP(20); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_isqrt` | 0 | 3 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_len` | 0 | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_noise` | 0 | 11 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_progcache` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_field_ring` | - | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_field_progcache` | 0 | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
+| `zhao_field_ring` | 0 | 15 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_rot` | 0 | 12 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_pose_cache` | 0 | 5 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_input_rumble` | - | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_input_snapshot` | - | 1 | COMB_LOOP(2); ASYNC_ARRAY_READ(11) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_measure_governor` | - | 1 | VARSHIFT(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_mem_guard` | - | 1 | COMB_LOOP(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_sdram_ctrl` | - | 16 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_input_rumble` | 0 | 1 | COMB_LOOP(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_input_snapshot` | 0 | 1 | COMB_LOOP(2); ASYNC_ARRAY_READ(11) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_measure_governor` | 0 | 1 | VARSHIFT(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_mem_guard` | 0 | 1 | COMB_LOOP(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_sdram_ctrl` | 0 | 16 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_stamp` | 0 | 8 | VARSHIFT(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT` |
 | `zhao_texture_aux` | 0 | 6 | VARSHIFT(24) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_vram_arbiter` | - | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_vram_arbiter` | 0 | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 
 ## YELLOW (32)
 
@@ -107,33 +107,33 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_texture_bilerp` | 3 | 1 | MULTIPLY(3, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_clip` | 2 | 1 | MULTIPLY(2, widest 23-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_blend` | 1 | 1 | MULTIPLY(1, widest 18-bit) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_cmd_decoder` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_dc_sdp_ram` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_debug_trace` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_cmd_decoder` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_dc_sdp_ram` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_debug_trace` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_field_alu` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_geom_arena` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_hps_arbiter` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_hps_bridge` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_measure_tokens` | - | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SD |
-| `zhao_part_expand` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_part_soft` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_hps_arbiter` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_hps_bridge` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_measure_tokens` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_part_expand` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_part_soft` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_div255` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_earlyz` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_fill` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_quant` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_raster_resolve` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_scanout_fetch` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_scanout_linebuf` | - | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_scanout_serializer` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_scanout_fetch` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_scanout_linebuf` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_scanout_serializer` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_blend` | 0 | 1 | VARSHIFT(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_sq` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_synth_probe` | - | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_synth_probe` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_texture_mod255` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_video_framectl` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_video_mode` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_video_scaler` | - | 1 | - | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_video_scanout` | - | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_video_slotmgr` | - | 1 | ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_video_framectl` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_video_mode` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_video_scaler` | 0 | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_video_scanout` | 0 | 1 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_video_slotmgr` | 0 | 1 | ASYNC_ARRAY_READ(2) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 
 ## GREEN (0)
 
@@ -163,12 +163,12 @@ device is not a question of estimator error.
 | `zhao_geom_project` | 5,028 | 12.0% | 33 | - | 2,870 |
 | `zhao_field_exec_shared` | 4,793 | 11.4% | 3 | 20,817 | **0** |
 | `zhao_raster_tile_pipe` | 4,465 | 10.7% | 9 | 32,768 | 32,768 |
+| `zhao_debug_counters` | 3,795 | 9.1% | 0 | 2,560 | **0** |
 | `zhao_geom_pose_decode` | 2,520 | 6.0% | 18 | 12,288 | 12,288 |
 | `zhao_geom_skin` | 2,494 | 6.0% | 9 | - | **0** |
 | `zhao_terrain_bake` | 2,324 | 5.5% | 17 | 1,089 | **0** |
 | `zhao_raster_edgewalk` | 2,308 | 5.5% | 2 | - | **0** |
-| `zhao_texture_tmu` | 1,984 | 4.7% | 6 | - | **0** |
-| `zhao_terrain_patch` | 1,952 | 4.7% | 0 | - | **0** |
+| `zhao_field_progcache` | 2,237 | 5.3% | 0 | - | **0** |
 
 ## Is the map lane trustworthy? Measured, not assumed
 
@@ -187,23 +187,40 @@ fit agree, so every block holding both a map row and a fit row is compared here.
 | `zhao_texture_tmu` | 6 | 6 | `7395d793` | `1c98bb83` |  |
 | `zhao_field_seq` | 3 | 3 | `7395d793` | `7a3e2a35` |  |
 | `zhao_terrain_lod` | 3 | 3 | `de11ce9b` | `9f2928fc` |  |
+| `zhao_audio_fifo` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_cmd_dma` | 0 | 0 | `74817119` | `f5e067e6` |  |
 | `zhao_raster_tilestore` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
 | `zhao_terrain_patch` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
 | `zhao_texture_cache` | 0 | 0 | `8a3f29f6` | `96c0394a` |  |
 | `zhao_geom_binner` | 12 | 12 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_fragment` | 7 | 10 | `7395d793` | `96c0394a` | **differs** |
 | `zhao_raster_edgewalk` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
+| `zhao_cmd_scheduler` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_debug_crc` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_debug_frameblit` | 0 | 0 | `74817119` | `7508adc0` |  |
+| `zhao_input_rumble` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_measure_governor` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_mem_guard` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_sdram_ctrl` | 0 | 0 | `74817119` | `96c0394a` |  |
 | `zhao_surface_stamp` | 0 | 0 | `991f13c3` | `753ca931` |  |
+| `zhao_vram_arbiter` | 0 | 0 | `74817119` | `96c0394a` |  |
 | `zhao_geom_setup` | 4 | 4 | `de11ce9b` | `96c0394a` |  |
 | `zhao_texture_bilerp` | 3 | 3 | `8a3f29f6` | `1c98bb83` |  |
 | `zhao_geom_clip` | 2 | 2 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_blend` | 1 | 2 | `de11ce9b` | `96c0394a` | **differs** |
 | `zhao_geom_arena` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_hps_bridge` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_measure_tokens` | 0 | 0 | `74817119` | `96c0394a` |  |
 | `zhao_raster_earlyz` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
 | `zhao_raster_resolve` | 0 | 0 | `de11ce9b` | `96c0394a` |  |
+| `zhao_scanout_fetch` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_scanout_serializer` | 0 | 0 | `74817119` | `96c0394a` |  |
 | `zhao_surface_blend` | 0 | 0 | `8a3f29f6` | `96c0394a` |  |
+| `zhao_video_framectl` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_video_mode` | 0 | 0 | `74817119` | `96c0394a` |  |
+| `zhao_video_scaler` | 0 | 0 | `74817119` | `96c0394a` |  |
 
-**22 agree exactly, 2 differ.**
+**39 agree exactly, 2 differ.**
 
 Every difference above is a block whose map and fit were taken at DIFFERENT
 commits, which is what `NO_CURRENT_FIT` exists to say. Read the commit columns
@@ -417,8 +434,22 @@ Two things fall straight out and both matter to planning:
 
 ## Calibration: measured shape -> resources
 
-*Not yet measured.* Run `python tools/budget/gen_calib.py` then
-`tools/quartus/run_calib.ps1`.
+### Multipliers
+
+Cyclone V `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2, input+output registered
+unless the style column says otherwise. **DSP is per module, so divide by the
+operator count to get cost per product.**
+
+| operand width | signed | operators | style | DSP | DSP/product | est. ALM | decomposition |
+| ---: | :--: | ---: | --- | ---: | ---: | ---: | --- |
+| 8 | U | 1 | ioreg | 1 | 1.00 | 28 | Unsigned=1 |
+| 8 | U | 4 | ioreg | 3 | 0.75 | 76 | Sum of two 18x18=1, Unsigned=4 |
+| 8 | S | 1 | ioreg | 1 | 1.00 | 28 | Signed=1 |
+| 8 | S | 4 | ioreg | 3 | 0.75 | 76 | Sum of two 18x18=1, Signed=4 |
+| 9 | U | 1 | ioreg | 1 | 1.00 | 31 | Unsigned=1 |
+| 9 | U | 4 | ioreg | 3 | 0.75 | 85 | Sum of two 18x18=1, Unsigned=4 |
+| 9 | S | 1 | ioreg | 1 | 1.00 | 31 | Signed=1 |
+| 9 | S | 4 | ioreg | 3 | 0.75 | 85 | Sum of two 18x18=1, Signed=4 |
 
 ## Blocks with no demand figure
 
@@ -445,7 +476,7 @@ because a missing row and an unanswered question look identical otherwise.
 * **`OLD_SDC`** -- the fit carries no Fmax at all, so it ran with no timing objective -- QUARTUS_GOTCHAS 7 and 9
 * **`NO_WORKLOAD`** -- no items/frame, so no demand ratio can be computed for this block
 * **`NO_II_TEST`** -- throughput is asserted nowhere executable; the II shown is inferred from the state graph
-* **`EXPECTED_RAM_NOT_INFERRED`** -- the source declares addressable storage or a large constant table and the map reports zero design memories
+* **`EXPECTED_RAM_NOT_INFERRED`** -- the source declares addressable storage or a large constant table and the map reports zero design memories. **reports/QUARTUS_GOTCHAS.md 10** measures what this costs: a synchronous read with no reset on the array infers at tens of ALMs, and EITHER an async read OR a reset kills inference outright -- 35x the ALMs at 2 kbit, 108x at 4 kbit, 502x at 32 kbit, 806x at 36 kbit. This flag is the cheap detector for it, and it needs no fit
 * **`NO_SUBSYSTEM_FIT`** -- arithmetic runs from this block's own pins, so a leaf fit misrepresents it -- measured at 5.4x once
 * **`NO_RESERVE`** -- demand ratio leaves less headroom than workloads.yml asks for
 * **`PARETO_UNPROVEN`** -- over 5 DSPs or over 5% of the device's ALMs with no second measured operating point -- the docket's own CI gate, applied to the measured number

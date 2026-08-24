@@ -913,7 +913,7 @@ def write_heatmap(path, man, calib, wl):
         ("OLD_SDC", "the fit carries no Fmax at all, so it ran with no timing objective -- QUARTUS_GOTCHAS 7 and 9"),
         ("NO_WORKLOAD", "no items/frame, so no demand ratio can be computed for this block"),
         ("NO_II_TEST", "throughput is asserted nowhere executable; the II shown is inferred from the state graph"),
-        ("EXPECTED_RAM_NOT_INFERRED", "the source declares addressable storage or a large constant table and the map reports zero design memories"),
+        ("EXPECTED_RAM_NOT_INFERRED", "the source declares addressable storage or a large constant table and the map reports zero design memories. **reports/QUARTUS_GOTCHAS.md 10** measures what this costs: a synchronous read with no reset on the array infers at tens of ALMs, and EITHER an async read OR a reset kills inference outright -- 35x the ALMs at 2 kbit, 108x at 4 kbit, 502x at 32 kbit, 806x at 36 kbit. This flag is the cheap detector for it, and it needs no fit"),
         ("NO_SUBSYSTEM_FIT", "arithmetic runs from this block's own pins, so a leaf fit misrepresents it -- measured at 5.4x once"),
         ("NO_RESERVE", "demand ratio leaves less headroom than workloads.yml asks for"),
         ("PARETO_UNPROVEN", "over 5 DSPs or over 5% of the device's ALMs with no second measured operating point -- the docket's own CI gate, applied to the measured number"),
