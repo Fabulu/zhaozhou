@@ -5,6 +5,82 @@ at the top.*
 
 ---
 
+## 2026-08-24 — the projector merge saved nothing, and found something better
+
+### I predicted ~33 multipliers. The answer is zero, and I was wrong about why
+
+I told you merging the two duplicate projectors was the largest remaining win —
+33 multipliers of pure duplication. **The merge is done, proved correct, and saved
+no multipliers at all.**
+
+| | before | after |
+| --- | ---: | ---: |
+| geometry projector | 33 | **33** |
+| terrain projector | 33 | **33** |
+| the new shared core | — | 33 |
+
+**A block that two others *instantiate* is not one they *share*.** Both callers
+build their own copy of it, so the hardware is identical — the same arithmetic in
+one file instead of two. My prediction confused code duplication with silicon
+duplication, and they are not the same thing.
+
+What the merge *did* buy is real but smaller: **one copy of the law instead of
+two** (1,395 lines became 1,126), so the next change to projection cannot be made
+to one projector and forgotten in the other. That is worth having. It is not 33
+multipliers.
+
+### Actually sharing one copy does not fit, and now we know why
+
+The obvious next thought is to make them take turns on one core. **It does not
+fit:** terrain projection alone already uses **99.5% of a frame's compute
+budget.** Two users on one core is 106.7%. There is nothing to share *with*.
+
+### Which uncovered the real problem, and it is a measurement one
+
+The terrain projector's demand is filed in our budget file as **"270 patches per
+frame"**. That number came from dividing a frame's budget by the cost of a patch.
+
+**It is a capacity, filed as a demand.**
+
+The consequence is bad: our new heatmap divides capacity by demand to rank what
+is over-provisioned, and comparing capacity against itself gives a ratio of
+about **6,000×**. So **the tool has been ranking the tightest block in the design
+as the most wasteful one.** The true ratio is **1.0** — it is exactly full.
+
+A unit mismatch made a saturated block look like the biggest opportunity on the
+board. Anyone acting on that ranking would have tried to shrink a block with no
+headroom whatsoever.
+
+### So the priority has changed, and the change is well-founded
+
+The terrain projector projects **triangle corners**, so a patch does **6,144
+projections for 1,089 actual points** — each shared point re-projected about six
+times.
+
+Fixing that is not polish, it is the unlock:
+
+| | share of a frame |
+| --- | ---: |
+| today, 6,144 projections per patch | **99.5%** |
+| caching the 1,089 unique points | **17.6%** |
+
+**A 5.6× reduction**, which is also what finally makes one shared core possible —
+and only then does the merge that was just built pay for itself.
+
+### What was done properly, and is worth noting
+
+The agent **proved the two projectors were equivalent before merging them**,
+rather than trusting the claim that they looked alike: 16,416 vertices compared
+three ways against the software reference, zero mismatches. Its first attempt
+scored 10 controls and caught only 9 — **it was blind to the exact boundary case
+the law is written about**, and 12,300 random vertices never hit that one value.
+It built a targeted test for it rather than accepting the pass.
+
+And it confirmed neither caller changed behaviour: **1,080,000 cycles of every
+output compared against a verbatim pre-merge copy, zero mismatches.**
+
+---
+
 ## 2026-08-24 — the block that was twice the size of the chip now uses 0.7% of it
 
 ### The fix
