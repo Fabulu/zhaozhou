@@ -6,7 +6,7 @@
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceCommit":  "f624ba36ac6ec0f4e7041e3bc52fefcc84d61c8d",
+    "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
     "generator":  "tools/budget/gen_calib.py + tools/quartus/run_calib.ps1",
     "points":  [
                    {
@@ -1948,6 +1948,376 @@
                                                 "Sum of two 18x18":  1,
                                                 "Total number of DSP blocks":  3,
                                                 "Fixed Point Unsigned Multiplier":  4
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s23x11_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s23x11_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  23,
+                       "widthB":  11,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  24.9,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  68,
+                       "estimatedAlms":  58,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s24x18_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s24x18_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  24,
+                       "widthB":  18,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  17.5,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  84,
+                       "estimatedAlms":  71,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s24x24_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s24x24_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  24,
+                       "widthB":  24,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  18,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  96,
+                       "estimatedAlms":  81,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s27x18_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s27x18_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  27,
+                       "widthB":  18,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  18.8,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  90,
+                       "estimatedAlms":  76,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s27x24_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s27x24_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  27,
+                       "widthB":  24,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  16.6,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  102,
+                       "estimatedAlms":  86,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s27x27_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s27x27_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  27,
+                       "widthB":  27,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  14.3,
+                       "status":  "ok",
+                       "dspBlocks":  1,
+                       "blockMemoryBits":  0,
+                       "registers":  108,
+                       "estimatedAlms":  91,
+                       "combAluts":  0,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Total number of DSP blocks":  1,
+                                                "Fixed Point Signed Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s28x28_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s28x28_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  28,
+                       "widthB":  28,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  15.3,
+                       "status":  "ok",
+                       "dspBlocks":  3,
+                       "blockMemoryBits":  0,
+                       "registers":  141,
+                       "estimatedAlms":  119,
+                       "combAluts":  38,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s32x18_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s32x18_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  32,
+                       "widthB":  18,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  18.3,
+                       "status":  "ok",
+                       "dspBlocks":  2,
+                       "blockMemoryBits":  0,
+                       "registers":  118,
+                       "estimatedAlms":  104,
+                       "combAluts":  32,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Total number of DSP blocks":  2,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  1
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s32x24_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s32x24_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  32,
+                       "widthB":  24,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  18.3,
+                       "status":  "ok",
+                       "dspBlocks":  3,
+                       "blockMemoryBits":  0,
+                       "registers":  145,
+                       "estimatedAlms":  119,
+                       "combAluts":  38,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s32x27_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s32x27_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  32,
+                       "widthB":  27,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  17,
+                       "status":  "ok",
+                       "dspBlocks":  3,
+                       "blockMemoryBits":  0,
+                       "registers":  151,
+                       "estimatedAlms":  126,
+                       "combAluts":  41,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s32x32_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s32x32_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  32,
+                       "widthB":  32,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  15.5,
+                       "status":  "ok",
+                       "dspBlocks":  3,
+                       "blockMemoryBits":  0,
+                       "registers":  161,
+                       "estimatedAlms":  137,
+                       "combAluts":  46,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
+                                            },
+                       "inferredMemories":  [
+
+                                            ]
+                   },
+                   {
+                       "module":  "calib_mulasym_s33x27_ioreg",
+                       "stage":  "map-only",
+                       "file":  "build-budget/calib/calib_mulasym_s33x27_ioreg.sv",
+                       "family":  "multiply_asym",
+                       "width":  33,
+                       "widthB":  27,
+                       "signed":  true,
+                       "operators":  1,
+                       "style":  "ioreg",
+                       "sourceCommit":  "aedc0bd05155b138bfce4693c26948a5900f44e6",
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "seconds":  30.8,
+                       "status":  "ok",
+                       "dspBlocks":  3,
+                       "blockMemoryBits":  0,
+                       "registers":  154,
+                       "estimatedAlms":  128,
+                       "combAluts":  42,
+                       "mlabMemoryBits":  null,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  2,
+                                                "Sum of two 18x18":  1,
+                                                "Total number of DSP blocks":  3,
+                                                "Fixed Point Signed Multiplier":  1,
+                                                "Fixed Point Unsigned Multiplier":  1,
+                                                "Fixed Point Mixed Sign Multiplier":  2
                                             },
                        "inferredMemories":  [
 

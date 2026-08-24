@@ -3500,3 +3500,57 @@ The honest options from here are (a) accept ~95 MHz for development images while
 the renderer is built, (b) pipeline broadly rather than surgically, or (c) fix
 the CDC first so the verdict stops being a coin flip and A/B becomes meaningful
 again. **(c) is a precondition for judging (b).**
+
+---
+
+## 2026-08-24 — MEASURED: the wide operand sets the DSP band. One-sided narrowing buys NOTHING.
+
+**This retires the "2 km islands or 110 DSPs" framing entirely, and it was my
+framing.** Two independent reviews rejected it, both for the same reason, and
+neither could settle it because the measurement did not exist. It does now.
+
+All 106 prior calibration points were **symmetric** (w × w). The band table they
+produced — 8..27 → 1 DSP, 28..33 → 3 — was then used to argue that narrowing a
+COORDINATE to 27 bits recovers ~110 DSPs. Twelve asymmetric points, three of
+them controls that reproduce the known symmetric answers exactly:
+
+| a × b | DSP | | a × b | DSP |
+| --- | ---: | --- | --- | ---: |
+| 33 × 27 | **3** | | 27 × 27 | **1** *(control)* |
+| 32 × 32 | 3 *(control)* | | 27 × 24 | 1 |
+| 32 × 27 | **3** | | 27 × 18 | 1 |
+| 32 × 24 | 3 | | 24 × 24 | 1 |
+| **32 × 18** | **2** | | 24 × 18 | 1 |
+| 28 × 28 | 3 *(control)* | | 23 × 11 | **1** |
+
+### What this means
+
+1. **`32 × 27` costs exactly as much as `32 × 32`.** Narrowing the coordinate
+   alone recovers nothing at all. `zhao_project_core` already contains 32×27
+   products mapping at 3 DSPs each (11 × 3 = 33, the measured total) — the
+   evidence was in the design the whole time and nobody read it that way.
+2. **The ~110 DSP figure requires bounding BOTH operands ≤27** — the coordinate
+   *and* the 3×3 view-projection matrix words. The matrix bound is a separate
+   owner ruling (a SetView validation law), and without it the coordinate work
+   is worthless.
+3. **`32 × 18 = 2` is a genuine partial lever**, and nobody predicted it. Where
+   one operand can be driven to 18 bits, a third of the cost comes off even with
+   a full-width partner. Worth a follow-up grid at 32×19..23 to find the exact
+   step.
+4. **`23 × 11 = 1` confirms the `GEOM.BINNER` win.** Its four products are
+   23-bit × 11-bit VALUES multiplied out of 36-bit REGISTERS, mapping at 3 each.
+   Multiply at the value width and it is 1 each: **12 → 4 DSPs, no ruling, no
+   behaviour change.**
+
+### The island question is now answered, and the answer is "not by narrowing"
+
+Island size never had to be capped. The route both reviews converged on is
+**segmented coordinates**: a wide island/patch/instance origin plus a bounded
+local delta, with the origin's contribution folded into the SAME pre-rounding
+accumulator the projector already uses and ONE final rescale. That is bit-exact
+by integer distributivity, keeps every Q16.16 fraction bit, and leaves island
+extent bounded only by fx16 itself (±32 km).
+
+**No island cap is recommended, and no fx16 amendment.** What the measurement
+adds is that the rebase must ALSO bring the matrix words under 27 bits, or the
+narrowing half of the plan returns nothing.
