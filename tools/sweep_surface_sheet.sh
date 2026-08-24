@@ -53,6 +53,23 @@
 #   the backpressure it asserts. A rearchitecture that leaves these uncaught has
 #   broken the suite, not just the block, and they are re-run for that reason.
 #
+# ONE EXPECTED SURVIVOR, COSTED RATHER THAN CALLED AN EQUIVALENT.
+#
+# S18 deletes the saturation guard on `surface_texels_touched_o`. It is NOT an
+# equivalent -- `spec/counters.md` 4 says a counter never wraps, and the two
+# behaviours differ, at exactly one value. They differ only after 2^32 =
+# 4,294,967,296 ACCEPTED WRITES, and the write port takes at most one per clock,
+# so no shorter stimulus can reach it. A Verilated model of this block runs at
+# about 2.4 M cycles/s on this machine (measured: 228,144 cycle-pairs in 188 ms
+# across two models), which puts the cheapest possible killing test at roughly
+# HALF AN HOUR of pure simulation -- a nightly lane at best, never `ctest -L fast`.
+#
+# It is left alive deliberately and named here so that a future reader does not
+# mistake a 17/18 for a hole. `tools/sweep_geom_skin.sh` carries the identical
+# mutant on the identical 32-bit saturating counter (its M21) and labels it
+# "EXPECTED EQUIVALENT", which is the one word this note avoids: it is not
+# equivalent, it is unreachable, and those are different claims.
+#
 # THE SCORING RULE: after regeneration every model must EXIST, every exe must
 # EXIST, and the hash of the whole set must DIFFER from the pristine set's.
 # Anything else is discarded, never scored.
@@ -210,11 +227,18 @@ MUTS=(
 "S11 a write naming a NON-RESIDENT handle lands in slot 0 instead of nowhere@@fpga/rtl/surface/zhao_surface_sheet.sv@@  wire do_write = wr_fire && wr_hit;@@  wire do_write = wr_fire;"
 "S12 the counter counts DROPPED writes, so it stops agreeing with the sheet@@fpga/rtl/surface/zhao_surface_sheet.sv@@      if (do_write) begin@@      if (wr_fire) begin"
 "S13 the clear sweep is one texel short -- the last texel of a fresh sheet is not zero@@fpga/rtl/surface/zhao_surface_sheet.sv@@        if (clr_addr == 12'((Texels - 1))) clr_active <= 1'b0;@@        if (clr_addr == 12'((Texels - 2))) clr_active <= 1'b0;"
-"S14 the request port is NOT refused during the sweep (the store is incoherent mid-sweep)@@fpga/rtl/surface/zhao_surface_sheet.sv@@  assign req_ready_o   = !clr_active && !pend_valid && pg_slot_free;@@  assign req_ready_o   = !pend_valid && pg_slot_free;"
+# S14 IS A TRUE EQUIVALENT, and it is kept because proving that was worth doing.
+# `!clr_active` is REDUNDANT in `req_ready_o`: `clr_active` and `pend_valid` are
+# set together in the same `do_acquire_new` branch, and `pend_valid` can only
+# clear under `!clr_active`, so `clr_active` implies `pend_valid` and
+# `!clr_active && !pend_valid` is just `!pend_valid`. Argued from those two
+# lines and then CONFIRMED: 0 mismatches in 228,144 compared port-cycles against
+# the shipped behaviour (this run's shape differential, probe S14).
+"S14 the request port is NOT refused during the sweep (TRUE EQUIVALENT, confirmed)@@fpga/rtl/surface/zhao_surface_sheet.sv@@  assign req_ready_o   = !clr_active && !pend_valid && pg_slot_free;@@  assign req_ready_o   = !pend_valid && pg_slot_free;"
 "S15 a MISSED read returns the array contents instead of zero@@fpga/rtl/surface/zhao_surface_sheet.sv@@  assign pg_tag_o      = (pg_is_read_q && pg_status_q == StHit) ? ram_tag_q : 8'd0;@@  assign pg_tag_o      = pg_is_read_q ? ram_tag_q : 8'd0;"
 "S16 RELEASE does not free the slot@@fpga/rtl/surface/zhao_surface_sheet.sv@@          dir_live[req_hit_slot] <= 1'b0;@@          dir_live[req_hit_slot] <= 1'b1;"
 "S17 the WRITE port is accepted during the sweep@@fpga/rtl/surface/zhao_surface_sheet.sv@@  assign wr_ready_o    = !clr_active;@@  assign wr_ready_o    = 1'b1;"
-"S18 the touched counter is not saturating (spec/counters.md 4: a counter never wraps)@@fpga/rtl/surface/zhao_surface_sheet.sv@@        if (surface_texels_touched_o != 32'hFFFF_FFFF)
+"S18 the touched counter is not saturating (EXPECTED SURVIVOR -- see the note above the table)@@fpga/rtl/surface/zhao_surface_sheet.sv@@        if (surface_texels_touched_o != 32'hFFFF_FFFF)
           surface_texels_touched_o <= surface_texels_touched_o + 32'd1;@@        surface_texels_touched_o <= surface_texels_touched_o + 32'd1;"
 )
 

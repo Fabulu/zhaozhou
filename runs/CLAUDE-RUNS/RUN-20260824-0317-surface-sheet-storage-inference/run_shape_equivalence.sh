@@ -14,7 +14,12 @@
 # RUN-20260823-2226's fifth disclosed failure is exactly that: a detector that
 # returned zero across 91 modules because it could never fire.
 #
-# So: PASS on the real pair, and FAIL on every control, or the run means nothing.
+# So: PASS on the real pair, and the expected verdict on every probe, or the run
+# means nothing.
+#
+# The probe table also carries the mutation sweep's SURVIVORS. A survivor is
+# either a test gap or a true equivalent, and deciding which by reading the RTL
+# produces an argument, not evidence. Running it here produces both.
 #
 # Usage:  runs/CLAUDE-RUNS/RUN-.../run_shape_equivalence.sh [<pre-change-rev>]
 # Default rev is the commit that still holds the byte-enabled array.
@@ -69,26 +74,41 @@ if [ $REAL -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# POSITIVE CONTROLS. Each is a real defect the new shape makes possible, and
-# each must be CAUGHT. `old@@new` against the working-tree file.
+# CONTROLS AND EQUIVALENCE PROBES.  `name @@ expect @@ old @@ new`
+#
+# expect=differ  a real defect the new shape makes possible. MUST be caught, or
+#                the harness is blind to it and its zero means nothing.
+#
+# expect=same    a mutation the mutation sweep could not kill, submitted here to
+#                decide WHY. A survivor is either a test gap or a true
+#                equivalent, and the difference matters: one is closed with a
+#                test, the other is argued and left. Reading the RTL gives an
+#                argument; running 228,144 cycles of it against the shipped
+#                behaviour gives evidence for the argument. If a `same` probe
+#                DIFFERS, the argument was wrong and it was a gap all along.
 # ---------------------------------------------------------------------------
 CTRL=(
-"C1 a write lands in the WRONG PLANE (tag data into the strength array)@@    if (mem_we_tag) mem_tag[wr_addr] <= wr_tag;@@    if (mem_we_tag) mem_str[wr_addr] <= wr_tag;"
-"C2 the tag enable also writes the strength plane@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i);@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i || wr_we_tag_i);"
-"C3 the clear sweep clears only the tag plane@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i);@@  wire mem_we_str = mem_we && wr_we_strength_i;"
-"C4 read-during-write returns the POST-write word where C5 says pre-write@@    if (do_read_hit) begin
+"C1 a write lands in the WRONG PLANE (tag data into the strength array)@@differ@@    if (mem_we_tag) mem_tag[wr_addr] <= wr_tag;@@    if (mem_we_tag) mem_str[wr_addr] <= wr_tag;"
+"C2 the tag enable also writes the strength plane@@differ@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i);@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i || wr_we_tag_i);"
+"C3 the clear sweep clears only the tag plane@@differ@@  wire mem_we_str = mem_we && (clr_active || wr_we_strength_i);@@  wire mem_we_str = mem_we && wr_we_strength_i;"
+"C4 read-during-write returns the POST-write word where C5 says pre-write@@differ@@    if (do_read_hit) begin
       ram_tag_q <= mem_tag[rd_addr];
       ram_str_q <= mem_str[rd_addr];
     end@@    if (do_read_hit) begin
       ram_tag_q <= (mem_we_tag && wr_addr == rd_addr) ? wr_tag : mem_tag[rd_addr];
       ram_str_q <= (mem_we_str && wr_addr == rd_addr) ? wr_str : mem_str[rd_addr];
     end"
-"C5 the strength plane is read one texel late (address pipeline off by one)@@      ram_str_q <= mem_str[rd_addr];@@      ram_str_q <= mem_str[rd_addr ^ 1];"
+"C5 the strength plane is read one texel late (address pipeline off by one)@@differ@@      ram_str_q <= mem_str[rd_addr];@@      ram_str_q <= mem_str[rd_addr ^ 1];"
+# ---- the mutation sweep's surviving mutants, submitted for a verdict -------
+"S14 req_ready_o drops its !clr_active term (sweep survivor)@@same@@  assign req_ready_o   = !clr_active && !pend_valid && pg_slot_free;@@  assign req_ready_o   = !pend_valid && pg_slot_free;"
+"S17 wr_ready_o is high during the clear sweep (sweep survivor)@@differ@@  assign wr_ready_o    = !clr_active;@@  assign wr_ready_o    = 1'b1;"
 )
 
-fails=0; caught=0
+fails=0; caught=0; agreed=0
 for entry in "${CTRL[@]}"; do
-  name=${entry%%@@*}; rest=${entry#*@@}; old=${rest%%@@*}; new=${rest#*@@}
+  name=${entry%%@@*}; rest=${entry#*@@}
+  expect=${rest%%@@*}; rest=${rest#*@@}
+  old=${rest%%@@*}; new=${rest#*@@}
   cp "$REPO/$RTL" new.sv
   OLD="$old" NEW="$new" F=new.sv python - <<'PY'
 import io, os, sys
@@ -109,16 +129,27 @@ PY
     echo "  $name  DISCARDED: did not elaborate"; continue
   fi
   out=$(link_and_run); rc=$?
-  if [ $rc -eq 0 ]; then
-    echo "  $name  *** NOT CAUGHT -- the harness is blind to it ***"
-    fails=$((fails + 1))
+  n=$(printf '%s' "$out" | grep -o '[0-9]* port-cycle mismatches')
+  if [ "$expect" = "same" ]; then
+    if [ $rc -eq 0 ]; then
+      echo "  $name  EQUIVALENT confirmed (0 mismatches in 228,144 cycles)"
+      agreed=$((agreed + 1))
+    else
+      echo "  $name  *** NOT EQUIVALENT ($n) -- the survivor is a TEST GAP ***"
+      fails=$((fails + 1))
+    fi
   else
-    echo "  $name  caught ($(printf '%s' "$out" | grep -o '[0-9]* port-cycle mismatches'))"
-    caught=$((caught + 1))
+    if [ $rc -eq 0 ]; then
+      echo "  $name  *** NOT CAUGHT -- the harness is blind to it ***"
+      fails=$((fails + 1))
+    else
+      echo "  $name  caught ($n)"
+      caught=$((caught + 1))
+    fi
   fi
 done
 
 echo "----"
 echo "real pair: EQUIVALENT over 228,144 compared cycles"
-echo "positive controls: $caught caught, $fails blind, of ${#CTRL[@]}"
+echo "probes: $caught defects caught, $agreed equivalences confirmed, $fails unexpected, of ${#CTRL[@]}"
 [ $fails -eq 0 ] || exit 6

@@ -1,0 +1,31 @@
+== guard 7: consumers, derived from tests/CMakeLists.txt
+   zhao_surface_sheet.sv          test_field_write_tag test_surface_sheet_directed test_surface_sheet_random test_surface_sheet_store_diff test_surface_stamp_chain test_texture_aux_directed
+linted 18 mutants at Slots (2, 4), 0 do not build
+== establishing the pristine baseline
+   pristine models 514131a2a4fb, 6 lanes green
+  S01 a write lands in the WRONG ARRAY: the two planes are transposed  caught
+  S02 the TAG enable also writes the strength plane (a tag-only blend erases strength)  caught
+  S03 the STRENGTH enable also writes the tag plane  caught
+  S04 the clear sweep clears only the TAG plane -- stale strength survives an invalidated address  caught
+  S05 read-during-write returns the POST-write word where C5 says pre-write  *** SURVIVED ***
+  S06 the read pipeline is off by ONE CYCLE (the array is read a cycle after the accept)  caught
+  S07 the read enable is dropped, so a stalled response loses its word  *** SURVIVED ***
+  S08 the READ names the write port's slot -- one patch reads another's scars  caught
+  S09 re-acquiring a resident handle CLEARS it -- persistence lost  caught
+  S10 OVERFLOW EVICTS: a full directory steals slot 0 instead of refusing  caught
+  S11 a write naming a NON-RESIDENT handle lands in slot 0 instead of nowhere  caught
+  S12 the counter counts DROPPED writes, so it stops agreeing with the sheet  caught
+  S13 the clear sweep is one texel short -- the last texel of a fresh sheet is not zero  caught
+  S14 the request port is NOT refused during the sweep (the store is incoherent mid-sweep)  *** SURVIVED ***
+  S15 a MISSED read returns the array contents instead of zero  caught
+  S16 RELEASE does not free the slot  caught
+  S17 the WRITE port is accepted during the sweep  *** SURVIVED ***
+  S18 the touched counter is not saturating (spec/counters.md 4: a counter never wraps)  *** SURVIVED ***
+== restoring the pristine build
+----
+attempted=18 expected=18 accounted=18 caught=13
+SURVIVOR: S05 read-during-write returns the POST-write word where C5 says pre-write
+SURVIVOR: S07 the read enable is dropped, so a stalled response loses its word
+SURVIVOR: S14 the request port is NOT refused during the sweep (the store is incoherent mid-sweep)
+SURVIVOR: S17 the WRITE port is accepted during the sweep
+SURVIVOR: S18 the touched counter is not saturating (spec/counters.md 4: a counter never wraps)

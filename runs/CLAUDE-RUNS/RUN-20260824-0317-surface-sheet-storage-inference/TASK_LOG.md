@@ -336,6 +336,60 @@ generates. The same-address case is the one nobody had written.
 the one that survived is the one the contract had argued in prose and nothing
 had checked.
 
+### 05:10 - S07 SURVIVED TOO, and the reason is worse than a missing test
+
+> `S07 the read enable is dropped, so a stalled response loses its word  *** SURVIVED ***`
+
+The contract promises exactly this and says which test checks it:
+
+> "`pg_valid_o` holds its word until `pg_ready_i` -- the read-data register's
+> enable is gated by the accept, so a stalled response does not lose the word.
+> `surface_sheet_directed` holds `pg_ready_i` low for 20 cycles and checks the
+> word is still there and still correct."
+
+**That test exists and it is real, and it was passing for the wrong reason.**
+Its hold loop is
+
+```cpp
+for (int c = 0; c < 20; ++c) { zhao::tick(dut); dut.eval(); }
+```
+
+which leaves `req_texel_i` parked on 9 for all twenty cycles. A block that
+re-reads the array on EVERY cycle instead of only on an accepted request
+therefore keeps fetching texel 9, and answers correctly by accident. **The check
+was right; its stimulus was constant.** That is a subtler failure than a missing
+test, and it is the one a reviewer reading the test list would never see.
+
+Fixed by wiggling the address during the stall (`req_texel_i` alternates 7/11,
+which hold 248 and 244 against texel 9's 246). Nothing is accepted during the
+stall -- `req_ready_o` is low because the response register is occupied -- so it
+must be invisible to a correct block, and it is: 64 checks still green.
+
+### 05:35 - THE STRETCH GOAL LANDED, and it confirms the mechanism
+
+`tools/quartus/run_block_map.ps1 -Module zhao_forge_cliff -RowLabel "@edge-split-wip"`.
+
+| metric | before | after |
+| --- | ---: | ---: |
+| `blockMemoryBits` | 82,944 | **119,808** -- the FULL expected storage |
+| `inferredMemoryCount` | 2 | **4** |
+| `registers` | 40,655 | **3,875** |
+| `estimatedAlms` | 33,109 | **7,664** -- 79 % of the device to 18 % |
+| `dspBlocks` | 2 | 2, unchanged as intended |
+
+```
+altsyncram:edge_key_r_rtl_0   AUTO  Simple Dual Port  2048 x 12
+altsyncram:edge_span_r_rtl_0  AUTO  Simple Dual Port  2048 x  6
+```
+
+**`edge_key_r` and `edge_span_r` inferred while STILL BEING READ
+ASYNCHRONOUSLY.** Nothing about the read was touched. That is the confirmation
+the diagnosis needed: §10's "rescue" -- Quartus inserting a read-address
+register to save an async read -- is real, and it survives the async read and
+does NOT survive a partial write. The two killers are independent but not equal
+in strength, and that is now a rule with a mechanism behind it rather than a
+shrug.
+
 
 ---
 

@@ -204,23 +204,60 @@ void test_clear_sweep_is_visible(Vzhao_surface_sheet& dut) {
   dut.eval();
   zhao::tick(dut);
   dut.req_valid_i = 0;
+  // AND THE WRITE PORT IS REFUSED FOR THE WHOLE SWEEP TOO.
+  //
+  // Added RUN-20260824-0317. `wr_ready_o = !clr_active` is in the contract's
+  // backpressure rules and NOTHING offered a write during a sweep, so mutant
+  // S17 -- `wr_ready_o` tied high -- SURVIVED all six consumer lanes. It is not
+  // an equivalent: an accepted write during a sweep has its address overridden
+  // by the sweep's, so it lands nowhere, but it still counts a texel in
+  // `surface_texels_touched_o`. The counter then disagrees with what the sheet
+  // holds, which is exactly what the counter's own comment says must never
+  // happen ("a dropped write does NOT count -- the counter has to agree with
+  // what the sheet holds or it is not observability"). The shape differential
+  // separates the two behaviours by 663,970 port-cycles.
+  const uint32_t touched_before = dut.surface_texels_touched_o;
   int busy_cycles = 0;
   int refused = 0;
+  int wr_refused = 0;
+  dut.wr_handle_i = kHandleC;  // the handle being allocated: resident, so a
+  dut.wr_texel_i = 123;        // fired write WOULD hit if the port let it
+  dut.wr_tag_i = 0xAB;
+  dut.wr_strength_i = 0xCD;
+  dut.wr_we_tag_i = 1;
+  dut.wr_we_strength_i = 1;
+  dut.wr_src_id_i = 0x0C5;
   for (int c = 0; c < 6000; ++c) {
     dut.eval();
     if (dut.res_busy_o) ++busy_cycles;
     if (dut.res_busy_o && !dut.req_ready_o) ++refused;
+    if (dut.res_busy_o && !dut.wr_ready_o) ++wr_refused;
     if (dut.pg_valid_o) break;
+    // Offer the write ONLY while the sweep is running, so that a correct block
+    // simply never accepts it and the test does not depend on when it stops.
+    dut.wr_valid_i = dut.res_busy_o ? 1 : 0;
+    dut.eval();
     zhao::tick(dut);
   }
+  dut.wr_valid_i = 0;
+  dut.eval();
   check(busy_cycles == 4096, "the clear sweep is exactly 4,096 cycles", 4096,
         static_cast<uint64_t>(busy_cycles));
   check(refused == busy_cycles, "requests are refused for the whole sweep", busy_cycles,
         static_cast<uint64_t>(refused));
+  check(wr_refused == busy_cycles, "WRITES are refused for the whole sweep too", busy_cycles,
+        static_cast<uint64_t>(wr_refused));
+  check(dut.surface_texels_touched_o == touched_before,
+        "a write offered during the sweep counts no texel", touched_before,
+        dut.surface_texels_touched_o);
   check(dut.pg_status_o == sdev::kStAllocated, "the sweep ends with the ALLOCATED answer",
         sdev::kStAllocated, dut.pg_status_o);
   zhao::tick(dut);
   dut.eval();
+  const SheetResponse swept = sdev::sheet_request(dut, sdev::kOpRead, kHandleC, 123, 0);
+  check(swept.tag == 0 && swept.strength == 0,
+        "and it did not land: the swept texel is still zero", 0,
+        (static_cast<uint32_t>(swept.tag) << 8) | swept.strength);
 }
 
 void test_read_throughput_and_backpressure(Vzhao_surface_sheet& dut) {

@@ -6,6 +6,8 @@ PASS: the two shapes are indistinguishable on every output port, every cycle
   C3 the clear sweep clears only the tag plane  caught (3 port-cycle mismatches)
   C4 read-during-write returns the POST-write word where C5 says pre-write  caught (408 port-cycle mismatches)
   C5 the strength plane is read one texel late (address pipeline off by one)  caught (1118 port-cycle mismatches)
+  S14 req_ready_o drops its !clr_active term (sweep survivor)  EQUIVALENT confirmed (0 mismatches in 228,144 cycles)
+  S17 wr_ready_o is high during the clear sweep (sweep survivor)  caught (663970 port-cycle mismatches)
 ----
 real pair: EQUIVALENT over 228,144 compared cycles
-positive controls: 5 caught, 0 blind, of 5
+probes: 6 defects caught, 1 equivalences confirmed, 0 unexpected, of 7
