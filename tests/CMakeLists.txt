@@ -3386,6 +3386,16 @@ set(ZHAO_SURFACE_STAMP_SV
 # reference_function zref::fieldir::sink_write_tag is one of the twenty-five
 # phantoms; the law is real and lives in zref::surface::SheetStore, so the op is
 # tested against that rather than against a second implementation.
+# The three Earth sink composition laws. No verilate(): these are REFERENCE
+# laws with no RTL yet -- FIELD.WRITE.MATERIAL/NAV/HAZARD had reference_function
+# names in ops.yml that resolved to nothing until the owner ruling of
+# 2026-08-24 supplied the behaviour. The RTL differential joins this file when
+# the sink RTL exists; until then the law is pinned where it lives.
+add_executable(test_field_write_earth_sinks differential/field_write_earth_sinks.cpp)
+target_link_libraries(test_field_write_earth_sinks PRIVATE zhao_harness zhao_zref)
+add_test(NAME field_write_earth_sinks COMMAND test_field_write_earth_sinks)
+set_tests_properties(field_write_earth_sinks PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_field_write_tag differential/field_write_tag.cpp)
 target_link_libraries(test_field_write_tag PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_field_write_tag PRIVATE

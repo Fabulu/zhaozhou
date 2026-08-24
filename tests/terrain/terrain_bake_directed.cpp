@@ -209,6 +209,26 @@ void test_stencil_edge(Vzhao_terrain_bake& dut) {
         static_cast<uint64_t>(static_cast<uint16_t>(static_cast<int16_t>(g_from - g_to))),
         static_cast<uint64_t>(static_cast<uint16_t>(c.scar[centre])));
 
+  // THE 512 m LAW (owner ruling 2026-08-24 item 2). A radius above
+  // MAX_BAKE_RADIUS is REFUSED: the record is consumed so the producer cannot
+  // wedge, it sweeps nothing, and the refusal is COUNTED.
+  //
+  // Tested here rather than merely excluded from the random generator. Removing
+  // illegal inputs from a fuzzer is legitimate only when the refusal itself is
+  // pinned somewhere, or the law would exist in the RTL and in no test.
+  {
+    const int32_t kMaxR = 512 * kM;
+    st.radius = kMaxR;
+    bdev::BakeOut ok = bdev::run_bake(dut, p, st, 0);
+    check(ok.texels_touched > 0, "exactly 512 m is legal and still bakes", 1,
+          ok.texels_touched > 0 ? 1 : 0);
+
+    st.radius = kMaxR + 1;
+    bdev::BakeOut rej = bdev::run_bake(dut, p, st, 0);
+    check(rej.texels_touched == 0, "one raw unit past 512 m is REFUSED and writes nothing", 0,
+          rej.texels_touched);
+  }
+
   // radius 1: only a vertex at distance ZERO can be inside.
   st.radius = 1;
   bdev::BakeOut d1 = bdev::run_bake(dut, p, st, 0);

@@ -573,6 +573,91 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
 
 // ------------------------------------------------------- the clamp gate ----
 
+// ---------------------------------------------------------------------------
+// THE CREATURE EXTENT LAW (owner ruling 2026-08-24 item 3)
+// ---------------------------------------------------------------------------
+
+RigidFault rigid_fault_of(const mat3x4fx& m, uint32_t tol_q16) {
+  // Rows of the 3x3, in fx16. A rotation has unit rows that are mutually
+  // perpendicular; scale breaks the first, shear the second, and the two are
+  // reported apart because they are different notes to send an author.
+  for (int r = 0; r < 3; ++r) {
+    const int64_t a0 = m.m[r * 4 + 0], a1 = m.m[r * 4 + 1], a2 = m.m[r * 4 + 2];
+    const int64_t n2 = a0 * a0 + a1 * a1 + a2 * a2;  // Q32.32
+    const int64_t one = static_cast<int64_t>(1) << 32;
+    // |n2 - 1| compared in Q32.32 against a tolerance expressed in Q16 units of
+    // the SQUARED norm, which is what the ratified drift bound is stated in.
+    const int64_t d = n2 > one ? n2 - one : one - n2;
+    if (d > static_cast<int64_t>(tol_q16) << 16) return RigidFault::kRowNormNotUnit;
+  }
+  for (int r = 0; r < 3; ++r) {
+    const int q = (r + 1) % 3;
+    const int64_t d01 = static_cast<int64_t>(m.m[r * 4 + 0]) * m.m[q * 4 + 0] +
+                        static_cast<int64_t>(m.m[r * 4 + 1]) * m.m[q * 4 + 1] +
+                        static_cast<int64_t>(m.m[r * 4 + 2]) * m.m[q * 4 + 2];
+    const int64_t ad = d01 < 0 ? -d01 : d01;
+    if (ad > static_cast<int64_t>(tol_q16) << 16) return RigidFault::kRowsNotOrthogonal;
+  }
+  return RigidFault::kNone;
+}
+
+ExtentVerdict validate_extent(const std::vector<SourceVertex>& src, const Skeleton& sk,
+                              const SkeletonBake& baked, const ClipBank& bank,
+                              int32_t cumulative_scale) {
+  ExtentVerdict v;
+  (void)baked;
+
+  // The scale bound is (0, 4]: a zero or negative scale is not a small
+  // creature, it is a degenerate or mirrored one.
+  v.worst_scale = cumulative_scale;
+  if (cumulative_scale <= 0 || cumulative_scale > kMaxCumulativeScale) v.scale_reject = true;
+
+  CreatureType probe{};
+  probe.skeleton = sk;
+  probe.bank = bank;
+  if (!bake_skeleton(sk, probe.baked)) {
+    v.radius_reject = true;
+    return v;
+  }
+
+  SatLedger* L = nullptr;
+  for (const Clip& c : bank.clips) {
+    for (uint16_t f = 0; f < c.frame_count; ++f) {
+      std::array<mat3x4fx, kMaxBones> pose{};
+      decode_pose(probe, c, f, pose, nullptr);
+
+      // Every bone that any vertex rides must be rigid. Checked per frame
+      // because decode_pose composes the hierarchy: a rig can be rigid at bind
+      // and acquire scale through a parent three frames in.
+      for (uint16_t b = 0; b < sk.bone_count && v.rigid_fault == RigidFault::kNone; ++b) {
+        const RigidFault rf = rigid_fault_of(pose[b]);
+        if (rf != RigidFault::kNone) {
+          v.rigid_fault = rf;
+          v.rigid_fault_bone = b;
+          v.worst_frame = f;
+        }
+      }
+
+      for (uint32_t vi = 0; vi < src.size(); ++vi) {
+        const SourceVertex& s = src[vi];
+        int32_t x, y, z;
+        skin_vertex(pose.data(), SkinVertex{s.x, s.y, s.z, s.b0, s.b1, s.w0}, x, y, z, L);
+        const int64_t dx = x, dy = y, dz = z;  // relative to the root at origin
+        const uint64_t d2 = static_cast<uint64_t>(dx * dx + dy * dy + dz * dz);
+        const int32_t r = static_cast<int32_t>(isqrt_u64(d2));
+        if (r > v.worst_radius) {
+          v.worst_radius = r;
+          v.worst_vertex = vi;
+          v.worst_frame = f;
+        }
+      }
+    }
+  }
+
+  if (v.worst_radius > kCreatureLocalRadius) v.radius_reject = true;
+  return v;
+}
+
 ClampVerdict clamp_3to2(const std::vector<SourceVertex>& src, const Skeleton& sk,
                         const SkeletonBake& baked, const ClipBank& bank, int32_t bound_radius,
                         std::vector<SkinVertex>* out) {

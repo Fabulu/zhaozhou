@@ -854,6 +854,82 @@ void test_compositor() {
 
 }  // namespace
 
+// THE CREATURE EXTENT LAW (owner ruling 2026-08-24 item 3).
+// It exists so GEOM.SKIN and GEOM.MAT3X4_MUL have a PROVABLE bound on their
+// multiplier operands: both contain no world coordinates at all -- world
+// position enters only through the additive translation column -- so their
+// operands are bounded by the CREATURE, and until now nothing said how big a
+// creature may be. These cases pin the three ways an asset can violate it.
+static void test_extent_law() {
+  zc::Skeleton sk;
+  sk.bone_count = 2;
+  sk.bones[0] = zc::Bone{0, 0, 0, 0};
+  sk.bones[1] = zc::Bone{0, 0, 0, 0};
+  zc::SkeletonBake baked;
+  check(zc::bake_skeleton(sk, baked), "extent: bake rig");
+
+  zc::ClipBank bank;
+  bank.bone_count = 2;
+  zc::Clip c;
+  c.slot_id = 1;
+  c.frame_count = 1;
+  c.root = {0, 0, 0};
+  c.quats.resize(2, zc::quat16_identity());
+  bank.clips.push_back(std::move(c));
+
+  {
+    std::vector<zc::SourceVertex> src{zc::SourceVertex{10 * M1, 0, 0, 0, 1, 1, 64, 0, 0}};
+    zc::ExtentVerdict v = zc::validate_extent(src, sk, baked, bank, 1 * M1);
+    check(v.ok(), "extent: a 10 m vertex is legal");
+    check_eq(v.worst_radius, 10 * M1, "extent: worst radius is exact");
+  }
+  {
+    std::vector<zc::SourceVertex> src{zc::SourceVertex{129 * M1, 0, 0, 0, 1, 1, 64, 0, 0}};
+    zc::ExtentVerdict v = zc::validate_extent(src, sk, baked, bank, 1 * M1);
+    check(v.radius_reject, "extent: 129 m is REJECTED, not clamped");
+    check(!v.ok(), "extent: a rejected asset is not ok()");
+  }
+  {  // the boundary is inclusive
+    std::vector<zc::SourceVertex> src{zc::SourceVertex{128 * M1, 0, 0, 0, 1, 1, 64, 0, 0}};
+    check(!zc::validate_extent(src, sk, baked, bank, 1 * M1).radius_reject,
+          "extent: exactly 128 m is legal");
+  }
+
+  {  // cumulative scale is (0, 4]: zero and negative are degenerate, not small
+    std::vector<zc::SourceVertex> src{zc::SourceVertex{M1, 0, 0, 0, 1, 1, 64, 0, 0}};
+    check(!zc::validate_extent(src, sk, baked, bank, 4 * M1).scale_reject,
+          "extent: scale 4.0 is legal");
+    check(zc::validate_extent(src, sk, baked, bank, 4 * M1 + 1).scale_reject,
+          "extent: scale just over 4.0 is REJECTED");
+    check(zc::validate_extent(src, sk, baked, bank, 0).scale_reject, "extent: scale 0 is REJECTED");
+    check(zc::validate_extent(src, sk, baked, bank, -M1).scale_reject,
+          "extent: negative scale is REJECTED");
+  }
+
+  {  // the rigid test reports the KIND: scale and shear are different notes
+    const zc::mat3x4fx ident = zc::mat3x4_identity();
+    check(zc::rigid_fault_of(ident) == zc::RigidFault::kNone, "rigid: identity passes");
+
+    zc::mat3x4fx scaled = ident;
+    scaled.m[0] = 2 * M1;
+    check(zc::rigid_fault_of(scaled) == zc::RigidFault::kRowNormNotUnit,
+          "rigid: baked scale is reported AS scale");
+
+    zc::mat3x4fx sheared = ident;
+    sheared.m[1] = M1;
+    check(zc::rigid_fault_of(sheared) != zc::RigidFault::kNone, "rigid: shear is caught");
+
+    // A real rotation MUST pass, or the gate rejects every animated rig.
+    zc::mat3x4fx rot = ident;
+    rot.m[0] = 0;
+    rot.m[1] = M1;
+    rot.m[4] = -M1;
+    rot.m[5] = 0;
+    check(zc::rigid_fault_of(rot) == zc::RigidFault::kNone, "rigid: a real rotation passes");
+  }
+  std::printf("  creature extent law: radius/scale/rigid gates OK\n");
+}
+
 int main() {
   test_quat_anchors();
   test_quat_error_sweep();
@@ -862,6 +938,7 @@ int main() {
   test_ring_builder();
   test_compile();
   test_clamp_gate();
+  test_extent_law();
   test_pose_bank();
   test_anim();
   test_ground_tilt();

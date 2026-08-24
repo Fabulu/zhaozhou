@@ -658,5 +658,79 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
                        SatLedger* L);
 
+/* ---------------------------------------------------------------------------
+ * THE CREATURE EXTENT LAW (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 3)
+ * ---------------------------------------------------------------------------
+ * What this buys, and why it is an ASSET law rather than a hardware one:
+ *
+ * GEOM.SKIN and GEOM.MAT3X4_MUL contain NO world coordinates at all. Their
+ * multiplier operands are palette 3x3 entries times a MODEL-space vertex, and
+ * the world position enters only through the additive translation column. So
+ * their operands are bounded by the CREATURE, not by the island -- but nothing
+ * said how big a creature may be, so nothing could prove the bound.
+ *
+ * The ruling supplies the missing content law. Once assets are validated to it,
+ * both blocks 3x3 terms are rigid rotation coefficients and their vertex
+ * operands are bounded, which is the precondition for narrowing them. It does
+ * NOT by itself bank any DSP saving: each block must still map and show BOTH
+ * operands land in the cheap band.
+ *
+ * WHAT IS GIVEN UP: skeletal shear, per-bone non-uniform squash/stretch, and a
+ * single ordinary skinned mesh beyond ~1 km at maximum scale. Growth, size
+ * variation and giants all survive -- giants are a separate terrain-patch path,
+ * and uniform SCALE stays an explicit Loom operation rather than being folded
+ * into the bone matrices.
+ */
+
+/** 128 m in fx16 raw. Every posed vertex of every clip frame must lie within
+ *  this radius of the root BEFORE Loom scale and world translation. */
+constexpr int32_t kCreatureLocalRadius = 128 * 65536;
+
+/** Cumulative uniform Loom scale affecting a rendered part. Fixed authoring
+ *  scale is baked offline, so this bounds RUNTIME scale only. */
+constexpr int32_t kMaxCumulativeScale = 4 * 65536;
+
+/** How a bone matrix may fail the rigid test. Distinguished rather than
+ *  collapsed into one bool: "your rig has shear" and "your rig has scale baked
+ *  into a bone" are different notes to send an author. */
+enum class RigidFault : uint8_t {
+  kNone = 0,
+  kRowNormNotUnit,    // a 3x3 row is not unit length: scale baked into the bone
+  kRowsNotOrthogonal  // two 3x3 rows are not perpendicular: shear
+};
+
+struct ExtentVerdict {
+  uint32_t worst_vertex = 0;
+  uint32_t worst_frame = 0;
+  int32_t worst_radius = 0;    // fx16, the largest |posed vertex - root|
+  bool radius_reject = false;  // > kCreatureLocalRadius
+  uint16_t rigid_fault_bone = 0;
+  RigidFault rigid_fault = RigidFault::kNone;
+  bool scale_reject = false;  // cumulative scale outside (0, 4]
+  int32_t worst_scale = 0;
+
+  bool ok() const { return !radius_reject && rigid_fault == RigidFault::kNone && !scale_reject; }
+};
+
+/**
+ * Is a 3x3 block a rotation -- no scale, no shear? The tolerance is the
+ * ratified quaternion-to-matrix norm drift (spec/qformats.md 412-414), NOT an
+ * arbitrary epsilon: a matrix that came from a legal unit quaternion must pass,
+ * and the drift bound is exactly how far one can legally sit from unit length.
+ */
+RigidFault rigid_fault_of(const mat3x4fx& m, uint32_t tol_q16 = 16);
+
+/**
+ * The compile gate for the extent law. Over EVERY vertex of EVERY frame of
+ * EVERY clip -- the same total sweep clamp_3to2 uses, and for the same reason:
+ * a bound that holds on the bind pose says nothing about a reaching animation.
+ *
+ * REJECTS rather than clamps, matching TERRAIN.BAKE radius and SetView. A
+ * clamped creature is a creature the author did not author.
+ */
+ExtentVerdict validate_extent(const std::vector<SourceVertex>& src, const Skeleton& sk,
+                              const SkeletonBake& baked, const ClipBank& bank,
+                              int32_t cumulative_scale);
+
 }  // namespace creature
 }  // namespace zref

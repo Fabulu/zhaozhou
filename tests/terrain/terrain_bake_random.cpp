@@ -285,7 +285,18 @@ void run_lane(Vzhao_terrain_bake& dut, bdev::Rng& rng, int patches, bool island,
         if (island)
           st.radius = rng.chance(3) ? 50 * kM : rng.range(1, 40) * kM / 2;
         else
-          st.radius = rng.chance(6) ? rng.range(-(1 << 27), 0) : rng.range(1, 1 << 27);
+          // 1 << 25 == 0x0200_0000 == 512.0 m, the MAX_BAKE_RADIUS of the owner
+          // ruling of 2026-08-24. This generator used to reach 1 << 27 (2048 m),
+          // which is now ILLEGAL INPUT: the block refuses such a record and
+          // sweeps nothing while the oracle still bakes, so the two diverge by
+          // design rather than by defect.
+          //
+          // The negative branch stays: `radius <= 0` is a LAWFUL no-op (B5), a
+          // legal request for nothing, and is deliberately different from a
+          // refusal. Narrowing the generator to the declared domain is only
+          // legitimate BECAUSE the domain is declared -- the rejection itself is
+          // covered by a directed case rather than left untested.
+          st.radius = rng.chance(6) ? rng.range(-(1 << 27), 0) : rng.range(1, 1 << 25);
       }
 
       // depth: the island ramps monotonically down like a Volcano; the domain
