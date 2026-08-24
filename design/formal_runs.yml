@@ -982,6 +982,24 @@ runs:
     #   (b) a real aliasing bug in the arena.
     # UNTIL THAT IS DISTINGUISHED, THIS BLOCK IS NOT CORRECT-BY-EVIDENCE.
     #
+    # RULED OUT so far, each by an experiment rather than an argument:
+    #   * missing reset assumption      (added; moved k=2 -> k=4)
+    #   * read-during-write ordering    (read-old modelled; still fails)
+    #   * fills landing during reset    (enable now gated; still fails)
+    #   * an OUT-OF-RANGE watched key   (f_arena/f_index now assumed in range,
+    #     which is correct regardless -- the claim is about real vertices --
+    #     and it still fails)
+    #
+    # Static re-reading of the shadow logic found nothing: f_watched_fill and
+    # f_watched_look compare at full width, f_expect captures f_shadow at the
+    # accept edge exactly as mem_q captures the memory, and open clears the
+    # shadow validity in the same order the RTL clears its valid bits.
+    #
+    # NEXT STEP when this is picked up: stop hypothesising and read the k=4
+    # counterexample properly -- yosys-smtbmc or a VCD viewer, NOT a grep, since
+    # a grep already produced one false finding here (signal identifiers in this
+    # VCD contain quote characters).
+    #
     # An earlier note here said the value property held and only the auxiliary
     # one failed. THAT WAS WRONG: it came from reading a VCD with a grep whose
     # pattern was mangled by a signal identifier containing a quote character.

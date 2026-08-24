@@ -292,6 +292,18 @@ module zhao_vertex_arena #(
   (* anyconst *) logic [ARENA_W-1:0] f_arena;
   (* anyconst *) logic [INDEX_W-1:0] f_index;
 
+  // THE WATCHED KEY MUST NAME A REAL SLOT.
+  // Without this the solver may choose f_arena/f_index OUT OF RANGE -- the
+  // ports are one bit wider than the address precisely so illegal keys are
+  // expressible -- and then the shadow tracks a slot that does not exist while
+  // the truncated address aliases onto one that does. That is a defect in the
+  // QUESTION, not in the arena: 'a lookup never wraps into another vertex' is a
+  // claim about real vertices.
+  always_ff @(posedge clk) begin
+    assume (f_arena < ARENA_W'(ARENAS));
+    assume (f_index < INDEX_W'(DEPTH));
+  end
+
   logic [PAYLOAD_W-1:0] f_shadow;
   logic                 f_shadow_valid;   // written since the last open
   logic [GEN_W-1:0]     f_shadow_gen;
