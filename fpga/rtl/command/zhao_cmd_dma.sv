@@ -568,6 +568,25 @@ module zhao_cmd_dma #(
           cw <= cw + 2'd1;
           if (cw == 2'd3) begin
             cw <= 2'd0;
+            // SEEDED HERE, UNCONDITIONALLY, rather than in M_HDR_CHK's success
+            // branch. It used to sit behind the whole validation ladder -- magic,
+            // ABI version, reserved flags, four length laws, the header CRC and
+            // the epoch -- which put every one of those comparisons in the CLOCK
+            // ENABLE cone of a 32-bit register. The composed shell fit of
+            // 2026-08-24 named `hdr_win[28][5] -> crc_pay_r[8]` as the worst
+            // real synchronous path at -0.875 ns.
+            //
+            // Moving it costs nothing and changes nothing observable:
+            //   * `crc_pay_r` is meaningless when the header FAILS -- the
+            //     machine leaves for the error path and never folds payload;
+            //   * `M_SEED` is unreachable unless validation succeeded, so no
+            //     accepted packet can observe a different seed;
+            //   * nothing between here and M_SEED_PREP folds into `crc_pay_r`,
+            //     so seeding one cycle earlier cannot be overwritten or read.
+            // Same value, same cycle count, same interface, one fewer cone.
+            //
+            // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
+            crc_pay_r <= 32'hFFFF_FFFF;
             m <= M_HDR_CHK;
           end
         end
@@ -671,7 +690,9 @@ module zhao_cmd_dma #(
             // design's 13,651 negative-slack paths ran
             // hdr_win -> seed_steps_q, worst -1.096 ns. Half the remaining
             // timing problem was this one extra job in an already full cycle.
-            crc_pay_r <= 32'hFFFF_FFFF;
+            // `crc_pay_r <= 32'hFFFF_FFFF` USED TO BE HERE. It is now seeded
+            // unconditionally at the end of M_HCRC -- see the note there. The
+            // point was to get this whole ladder out of a register's enable.
             cw <= 2'd0;
             m <= M_SEED_PREP;
           end
