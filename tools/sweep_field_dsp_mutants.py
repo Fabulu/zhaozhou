@@ -126,9 +126,12 @@ MUTS = [
       unit_issue = len_mul_issue;"""),
 
     # ---- the schedule -------------------------------------------------------
+    # Re-anchored 2026-08-24: the register file became block memory, so a read
+    # is answered one edge after its address and slot 0 first issues in Q_RD1.
+    # Q_LATCH now only ADDRESSES group 0. Intent unchanged.
     ("M16 first slot labelled as the second", F_SEQ,
-     """      Q_LATCH: begin slot_issue = 1'b1; slot_idx = 2'd0; end""",
-     """      Q_LATCH: begin slot_issue = 1'b1; slot_idx = 2'd1; end"""),
+     """      Q_RD1:   begin slot_issue = 1'b1; slot_idx = 2'd0; end""",
+     """      Q_RD1:   begin slot_issue = 1'b1; slot_idx = 2'd1; end"""),
     ("M17 Q_LATCH reads the PREVIOUS instruction's operand addresses", F_SEQ,
      """      Q_LATCH: begin
         ra = ins_a_i;
@@ -141,24 +144,26 @@ MUTS = [
         rc = ins_c_i;
       end"""),
     ("M18 the gather state is skipped", F_SEQ,
-     """        Q_RD2: begin
-          a2 <= rd_a;
+     """        Q_RD3: begin
+          a2 <= rd_a;       // group 2
           b2 <= rd_b;
           state <= Q_GATH;
         end""",
-     """        Q_RD2: begin
-          a2 <= rd_a;
+     """        Q_RD3: begin
+          a2 <= rd_a;       // group 2
           b2 <= rd_b;
           state <= Q_EXEC;
         end"""),
     ("M19 the third slot never issues", F_SEQ,
-     """      Q_RD2:   begin slot_issue = 1'b1; slot_idx = 2'd2; end""",
-     """      Q_RD2:   begin slot_issue = 1'b0; slot_idx = 2'd2; end"""),
+     """      Q_RD3:   begin slot_issue = 1'b1; slot_idx = 2'd2; end""",
+     """      Q_RD3:   begin slot_issue = 1'b0; slot_idx = 2'd2; end"""),
     ("M20 multi-cycle ops also write back in Q_EXEC", F_SEQ,
      """        if ((state == Q_EXEC) && exec_writes && !exec_is_end && !exec_unsupported
-             && !multi_op) begin""",
+             && !multi_op) begin
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = exec_result;""",
      """        if ((state == Q_EXEC) && exec_writes && !exec_is_end && !exec_unsupported
-             ) begin"""),
+             ) begin
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = exec_result;"""),
 
     # ---- the per-op walks ---------------------------------------------------
     ("M21 RCP swaps the two halves of its split correction product", F_RCP,
@@ -267,9 +272,9 @@ MUTS = [
     # the early write destroys.
     ("M33 lane 0 commits in Q_MISS, before the unit has an answer", F_SEQ,
      """        end else if ((state == Q_MWAIT) && multi_rvalid) begin
-          rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge""",
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = multi_o0;""",
      """        end else if ((state == Q_MISS) || ((state == Q_MWAIT) && multi_rvalid)) begin
-          rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge"""),
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = multi_o0;"""),
 
     # ---- the leading-zero count that replaced the critical path -------------
     #
