@@ -1,5 +1,88 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — I MUST WALK BACK THE 110-DSP WIDTH ESTIMATE. It is mostly not available.
+
+I put a candidate saving of **110 DSPs** on this docket from the 27-bit cliff,
+called it "the cheapest lever on the board", and recommended
+`TERRAIN.NORMALS` as the cleanest case needing no owner ruling. **I checked it
+against the RTL and the contracts, and most of that is wrong.** Correcting it
+here before anyone spends a day on it.
+
+### What `TERRAIN.NORMALS` actually does, and why 33 bits is correct
+
+`zhao_terrain_normals.sv:110-117`:
+
+    logic signed [32:0] e1x, e1y, e1z, e2x, e2y, e2z;
+    e1x = $signed({bx_i[31], bx_i}) - $signed({ax_i[31], ax_i});
+    ...
+    s1_n0 <= (e1y * e2z) - (e1z * e2y);      // 33x33 -> 3 DSPs each
+
+The operands **are** differences, as I hoped — the block sign-extends 32 to 33
+and subtracts, which is the correct safe width for a difference of two signed
+32-bit values.
+
+**The question was whether the inputs are bounded tightly enough to narrow. They
+are not.** `TERRAIN.NORMALS.md:158` declares its own domain-limit test lane as
+**"uniform over ±4096 world units, reaching the fx16 output rails"**, and `:113`
+states plainly that **"the fx16 rails are reached by legal input"**.
+
+So ±4096 world units is a **legitimate input domain**, not a stress test beyond
+spec — and it comfortably covers a Sacrifice-scale map (2,550 units across) with
+margin. Which means:
+
+    world coordinate in fx16   -> 29 bits
+    a DIFFERENCE of two        -> 30 bits
+    the 1-DSP band needs       -> <= 27
+
+**The 33-bit width is justified. The width lever is unavailable on this block.**
+
+### And that generalises, which is the part that matters
+
+My earlier entry split the thirteen candidates into "class A, world coordinates,
+needs a format ruling" and "class B, something else, a cheap proof". I put
+`TERRAIN.NORMALS` in class B because heights are stored `S 1.7.8`.
+
+**That was reasoning from the storage format.** `qformats.md:54` says heights are
+stored `S 1.7.8` but **"live math in fx16"** — and once a quantity is in fx16 and
+may span the world, it needs 29 bits, and its differences 30. **Class B is much
+smaller than I implied, and possibly close to empty**: anything that touches a
+world coordinate at any point in its datapath is class A.
+
+**So the honest position on the 110: it is an upper bound computed from operand
+widths, and the widths are mostly there for a reason.** The real available saving
+from narrowing is unknown and probably small, and every candidate needs the same
+check I just did — read the contract's declared input domain, not the storage
+format of its inputs.
+
+**I should not have called it the cheapest lever on the board.** The check is
+cheap; the saving is not established.
+
+### What IS available on this block, and it is still worth having
+
+**The rate lever is untouched by any of this.** The demand is **2,000
+normals/frame** against a 1,666,667-clock budget — the heatmap reads **0.0012x,
+833x over-provisioned** — and the six products exist **spatially**, all at once,
+in `s1_n0/s1_n1/s1_n2`.
+
+One shared 33-bit multiply lane walking six products at ~10 clocks per normal is
+**20,000 clocks a frame, about 1.2%**. That is **18 -> 3 DSPs** — one lane at
+33 bits is 3 blocks — by sequencing alone, with no width change and no ruling.
+
+**15 DSPs, and the route is rate, not width.** Same destination I claimed,
+different and honest reason.
+
+### The correction worth generalising
+
+The band table is real and measured. What I did with it was assume a wide operand
+is *evidence of waste*. **It is evidence of a wide operand.** Whether it is waste
+depends on the declared input domain, which lives in the contract — and for
+anything carrying world coordinates in fx16, 29-30 bits is simply what the format
+costs.
+
+**`QUARTUS_GOTCHAS` §5 says "prove the width, then synthesise". I inverted it —
+I inferred a proof from a width.** The right order is: read the domain, then see
+which band it lands in.
+
 ## 2026-08-24 — THE VERTEX CACHE IS NOT A BLOCK, IT IS A SEAM CHANGE
 
 Investigated directly rather than delegated (three subagents in a row were
