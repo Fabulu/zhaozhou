@@ -424,6 +424,97 @@ difference is a bug in one of them and is worth more than the merge.** And if
 they cannot share, a documented "these cannot" with evidence is a good outcome.
 The header calls the merge "a trivial edit"; that is a hypothesis to test.
 
+### 2026-08-24 08:00 - Projector merge: transparent, correct, and it saved NOTHING
+
+| | before | after |
+| --- | ---: | ---: |
+| `zhao_geom_project` | 33 DSP / 5,028 ALM | **identical** |
+| `zhao_terrain_project` | 33 DSP / 5,503 ALM | **identical** |
+| `zhao_project_core` | — | 33 DSP / 4,996 ALM |
+
+**My prediction of ~33 DSPs was wrong, and wrong in an instructive way: a module
+two blocks *instantiate* is not one they *share*.** Both callers build their own
+copy, so the silicon is unchanged. I had conflated code duplication with silicon
+duplication. `GEOM.PROJECT.md`'s Follow-up asserts both "have both instantiate
+it" **and** "that halves the divider cost" — only the second gives 33, and the
+core's own row settles that one instance is 33.
+
+What the merge did buy is real and smaller: **one copy of the law instead of
+two**, 1,395 lines to 1,126, so the next projection change cannot be made in one
+projector and forgotten in the other.
+
+**Time-sharing one core does not fit**, and this was costed rather than assumed:
+terrain projection alone is 99.5% of a compute frame at the old figure, so two
+callers on one core is 106.7%.
+
+Done properly: equivalence was **proved before merging** — 16,416 vertices
+compared three ways against the shipped oracle, 0 mismatches. Its own first
+scored run caught **9 of 10** controls: blind to `clip.w == 0` exactly, the
+boundary the law is written about, which 12,300 random vertices never hit. Closed
+with a matrix whose w row is the identity on x. Then `caller_regression` ran each
+shell beside a **verbatim pre-merge copy**: 1,080,000 port-cycles, 0 mismatches,
+7/7 timing controls, with stimulus a pure function of cycle number **deliberately
+not advancing on `valid && ready`, because `ready` is one of the outputs under
+test.** Sweep 19/23 -> 21/23 after closing two real gaps; last two proved
+unkillable, **written at the code rather than in a log.**
+
+### 08:15 - THE BIGGER FINDING: a capacity filed as a demand  (`f87bbe9`)
+
+`workloads.yml` had `zhao_terrain_project` as `unit: patches, itemsPerFrame: 270,
+confidence: ruled`. **Every part of that was wrong the same way.** 270 was
+derived in `TERRAIN.PROJECT.md:198` as a **capacity** — the frame budget divided
+by the cost of a patch — then filed as a demand and marked *ruled*.
+
+The manifest computes capacity in **projections** and divided it by a demand in
+**patches**, so it compared the block against itself: **~6,173x
+over-provisioned** for a block that is essentially full. **Our own new heatmap was
+ranking the most saturated block in the design as the most wasteful one, and I
+had been reading that ranking.**
+
+Fixed with a real demand: `spec/terrain_rules.md:322` gives **256 live/visible
+patches**, and a 33x33 patch projects triangle **corners** — 2,048 triangles x 3
+= 6,144 projections. So `256 x 6,144 = 1,572,864` = **94.4% of the compute
+frame**.
+
+**Measured effect: 6,173x -> 0.94x.** And the ranking became informative rather
+than noise — `terrain_normals` reads **0.0012x** (genuinely 833x
+over-provisioned) while `geom_project` reads **0.07x**. **The two projectors now
+get opposite and correct verdicts**: one saturated by corner re-projection, one
+not. That distinction was invisible before.
+
+Also deleted `verticesPerItem: 3` — no tool reads it, and it was wrong anyway.
+
+> **The lesson: a demand and a capacity in different units divide to a
+> plausible-looking number.** Nothing about 6,173x looked like a unit error. It
+> looked like the biggest opportunity on the board.
+
+### 08:30 - Cache wave: two server-side agent deaths, then resumed
+
+Two agents were terminated by API 529s. The first (projector merge) had already
+**archived its run**, so nothing was lost and its final gate had completed —
+**271/272, sole failure the pre-existing V16 baseline**, verified by re-running
+the ledger here. The second died before creating anything.
+
+Rather than risk a third launch I did the bounded piece myself — the
+`workloads.yml` fix above, which turned out to be the more urgent item since it
+was corrupting the rankings. Then resumed the cache agent with that item marked
+done and **256 patches, not 270**, as its demand basis.
+
+### What "finished" requires from here — stated so it is not vague
+
+| # | wave | gate |
+| --- | --- | --- |
+| 3 | **projected-vertex cache** | 94.4% -> 16.7% of a frame; `blockMemoryBits > 0`; transparent cold/warm/thrashing **and under reconfiguration** |
+| 4 | Field memories rebuild, 6 waves | 7,958 ALM -> ~4,000; `ramBlocks > 0`; **>=100 MHz** |
+| 5 | TMU pipeline, 5 waves | CLUT II 6 -> 1; **>=100 MHz composed with the cache** |
+| 6 | `TERRAIN.NORMALS` width + rate | 18 -> 6 -> ~3 DSPs |
+| 7 | demand figures for the remaining 84 blocks | every expensive block has a **demand**, not a capacity |
+| 8 | **a re-fit campaign** | zero of 41 stored fits describe HEAD; **and no slack number may be quoted until a real `.sta.rpt` is read** |
+
+Item 8 is the one that makes the others verifiable. **Timing closure is currently
+unproven for the whole design**, and the slack extraction — though written — has
+never run against a real fit.
+
 ---
 
 ## Subagent Spawns
@@ -433,7 +524,8 @@ The header calls the merge "a trivial edit"; that is a hypothesis to test.
 | 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134, archived | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
 | 22:26 | `af363d9` | Budget audit wave 1 — scanner, calibration, map-only pass | **COMPLETE**, archived | `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/` |
 | 03:00 | `a54e57b` | SURFACE.SHEET storage inference, 229% -> fits | **COMPLETE** — 229% -> 0.7%, forge_cliff 79% -> 18.3% | `runs/CLAUDE-RUNS/RUN-20260824-0317-surface-sheet-storage-inference/` |
-| 05:45 | `a2605a5` | Projector merge phase 1, 66 -> ~33 DSPs | Running | own run dir |
+| 05:45 | `a2605a5` | Projector merge phase 1 | **COMPLETE** — transparent, 0 DSPs saved, found the demand bug | `runs/CLAUDE-RUNS/RUN-20260824-0522-projector-merge-phase1/` |
+| 08:30 | `a6f05b1` | Projected-vertex cache, 94.4% -> 16.7% | Running (resumed after a 529) | own run dir |
 
 ---
 
