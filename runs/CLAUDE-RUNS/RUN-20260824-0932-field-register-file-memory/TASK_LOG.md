@@ -137,9 +137,36 @@ consequence from a test bent to fit a result.
 
 ---
 
+### 12:40 — SWEEP: 38/38 accounted, 33 caught, and the score is UNCHANGED
+
+    attempted=38  expected=38  accounted=38  caught=33
+
+**All five survivors are documented, proven equivalents**, and they are the same
+five as before this change:
+
+* **M01** (lane operand registers not held between issues), **M07** (read-slot
+  shadow one stage deep) and **M20** (the write-back guard) — proofs in
+  `RUN-20260822-2136/FINDINGS-dsp-field-engine.md:544-558`;
+* **M36** (zero-length guard dropped) and **M38** (a leading-zero stage tests the
+  wrong half) — proved by the Field agent in the LZ replacement.
+
+**So the register-file conversion introduced no coverage hole.**
+
+**The M20 question needed checking rather than assuming**, because I had
+re-anchored it and had written down the risk that *a mutation can survive
+because it no longer does anything.* It resolves cleanly: M20's equivalence is
+**semantic** — `zhao_field_alu`'s `default:` arm makes the `&& !multi_op` guard
+redundant — so the proof is about what the mutation means, not where it sits.
+Re-anchoring moved the text and not the argument.
+
+Had the proof been positional, the re-anchor would have invalidated it silently,
+and a survivor that *looks* like a known equivalent is the most comfortable
+possible way to hide a real hole.
+
+---
+
 ## Next Steps
 
-- [ ] Field mutation sweep result (running)
 - [ ] contract: record that the host read port is now synchronous
 - [ ] a fit, for the timing question this was really about — **no slack number
       may be quoted until a real `.sta.rpt` is read**
