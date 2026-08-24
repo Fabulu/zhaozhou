@@ -3392,3 +3392,53 @@ prior sessions, so the list is readable from the repo.
 - Reel subjects must be legible at gallery scale, not merely correct.
 - Site copy gate is hard: no em dashes, no AI-isms, including reel provenance
   strings.
+
+---
+
+## 2026-08-24 — the starvation CDC: keep it visible, or constrain it?
+
+**Needs Fabian's decision. It is not a hardware question, it is a policy one.**
+
+The composed shell fit reports its **worst setup path (-1.991 ns) and its only
+hold failure (-0.952 ns)** on the same crossing: `zhao_scanout_serializer`'s
+64-bit `starve_q` counter, launched on `vid_clk`, sampled into `starve_samp` /
+`cdc_err` on `gpu_clk` in `zhao_shell_top` GLUE 8.
+
+**The crossing is guarded and the guard is deliberate.** `starve_samp` latches
+`starvation_o` every `gpu_clk`, and `cdc_err` — exported as `shell_err_cdc_o` —
+raises if the value moved during the tick sample window. The premise, stated in
+the RTL, is that the counter only advances during active lines while the tick
+lands in vblank, so the source is quiescent when sampled. The timing JSON has
+recorded the choice all along:
+
+> "The GPU-to-video displayed-byte serializer crossing is intentionally not
+> false-pathed; its result remains part of setup/hold characterization."
+
+**So the numbers are an artefact of analysing unrelated clocks, not a defect.**
+
+**The cost of leaving it as is:** `timingPassed` is **false forever**, and a
+permanently red verdict cannot report a real regression. Today it already hid
+one: the true worst *synchronous* path is **-0.875 ns (~92 MHz)**, not the
+-1.991 ns (83.4 MHz) the summary shows, and I published the wrong figure before
+the path detail existed.
+
+**The options:**
+
+1. **`set_clock_groups -asynchronous` / `set_false_path` for the crossing**, and
+   characterise it separately with `set_max_skew` or `set_net_delay`. The verdict
+   becomes meaningful again; the crossing stops being watched by TimeQuest and is
+   watched by `shell_err_cdc_o` alone.
+2. **Keep it visible and accept a red verdict**, treating `timingPassed` as
+   advisory and reading the path list every time. Costs vigilance forever.
+3. **Remove the crossing**: gray-code or handshake the counter, or export it
+   through the existing counter-provider path instead of sampling it raw.
+   Most work, no artefact, no permanent exception.
+
+**Recommendation: (1) plus a named exception**, because a verdict that is always
+red is a verdict nobody reads — and this project has already been bitten twice
+by a red that was labelled expected and therefore stopped being looked at (the
+`SKIP`-if-absent format gate, and the `pending` formal entry that hid a lane
+which could not elaborate for a day).
+
+**Not taken unilaterally.** Silencing a measurement to turn a flag green is the
+exact move `mem_vram_arbiter_liveness`'s comment warns about, so it waits.

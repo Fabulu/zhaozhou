@@ -396,6 +396,33 @@ The harness reported exit 1 on the push step; that was PowerShell's
 `NativeCommandError` firing on git writing progress to stderr. The commit
 (`be65ec0`) and the push both landed — checked rather than assumed.
 
+### 15:20 — the hold violation could not be ACTED on, and that was a harness gap
+
+The composed fit said `hold worst slack -0.952 ns, 1 failing endpoint` and
+**nothing on disk said which endpoint.**
+
+`report.tcl` has always written `setup/hold/recovery/removal_paths.rpt` at
+`-detail full_path`. All four die with the workspace: the run directory kept the
+JSON summaries and discarded the only artifact that makes a failure actionable.
+
+The only path reports left on disk were in workspaces dated **2026-08-22** — a
+different commit. Reading those to answer a question about today's fit would
+have been precisely the error this repository keeps recording, so they were not
+read.
+
+> **A failing number you cannot act on is barely better than no number.** The
+> hold violation is the single most important line in that report — a setup miss
+> can be run slower, a hold miss is wrong at every frequency — and it was the
+> least actionable thing in it.
+
+Fixed at `f2680df`: `characterization/*.rpt`, `*.tsv` and the `.sta.rpt` are
+copied into the report root. Same shape as the ticks-suffixed workspace — it
+does not change what is measured, it changes whether it can be worked on.
+
+Composed fit re-running at `f2680df` to capture the detail. It answers **both**
+open timing items at once: the failing hold endpoint, and the critical-path
+family behind the 836 setup endpoints.
+
 ---
 
 ## Decisions Made
