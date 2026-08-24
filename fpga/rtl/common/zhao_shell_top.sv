@@ -1259,7 +1259,32 @@ module zhao_shell_top
   // the byte on the wires completes a record exactly when its position is
   // the record's last byte (f_len valid from byte 4 on; records are >=16 B)
   logic in_rec_region, rec_completes_now;
-  assign in_rec_region = (f_pos >= 32'd36) && (f_pos < (pkt_len - 32'd4));
+  // `pkt_len - 32'd4` USED TO BE COMPUTED HERE, in series with the comparison
+  // that gates the record write. MEASURED on the composed shell fit of
+  // 2026-08-24: the `f_pos -> recq[*]` family is the largest group of failing
+  // setup endpoints on gpu_clk (~-0.765 ns at ~10.6 ns of data delay), and this
+  // is a 32-bit subtract standing directly in front of a 32-bit compare whose
+  // result is the write enable of a 144-bit array.
+  //
+  // EXACT, not approximately equal. `f_pos` resets to 0 whenever
+  // `f_pos + 1 >= pkt_len`, so `f_pos < pkt_len` always holds, and
+  // `in_rec_region` additionally requires `f_pos >= 36`. A packet therefore
+  // cannot reach the region until 36 accepted bytes after its own first byte,
+  // and a copy of `pkt_len - 4` that lags by ONE cycle has been correct for 35
+  // cycles by the time anything consults it. The lag is only observable across
+  // a packet boundary, which is exactly where the region test is false anyway.
+  //
+  // Underflow semantics are preserved deliberately: the registered expression
+  // is the same expression, so a `pkt_len < 4` wraps identically to before.
+  //
+  // ENFORCED-BY: tests/shell/shell_golden.cpp:main
+  logic [31:0] pkt_len_m4_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) pkt_len_m4_q <= 32'd0;
+    else        pkt_len_m4_q <= pkt_len - 32'd4;
+  end
+
+  assign in_rec_region = (f_pos >= 32'd36) && (f_pos < pkt_len_m4_q);
   assign rec_completes_now = in_rec_region && (f_rpos >= 16'd4)
                            && (f_rpos + 16'd1 == f_len);
 
