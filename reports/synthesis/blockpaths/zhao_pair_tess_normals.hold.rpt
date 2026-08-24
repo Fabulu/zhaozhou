@@ -1,0 +1,2221 @@
+----------------
+; Command Info ;
+----------------
+Report Timing: Found 25 hold paths (0 violated).  Worst case slack is 0.328 
+
+Tcl Command:
+    report_timing -hold -file output_files/blockfit_hold_paths.rpt -nworst 1 -npaths 25 -detail full_path
+
+Options:
+    -hold 
+    -nworst 1 
+    -npaths 25 
+    -detail full_path 
+    -file {output_files/blockfit_hold_paths.rpt} 
+
+Delay Model:
+    Slow 1100mV 100C Model
+
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Summary of Paths                                                                                                                                                                                                  ;
++-------+----------------------------------------------------------------+--------------------------------------------------------------------+--------------+-------------+--------------+------------+------------+
+; Slack ; From Node                                                      ; To Node                                                            ; Launch Clock ; Latch Clock ; Relationship ; Clock Skew ; Data Delay ;
++-------+----------------------------------------------------------------+--------------------------------------------------------------------+--------------+-------------+--------------+------------+------------+
+; 0.328 ; zhao_terrain_tess:u_tess|vx[1][16]                             ; zhao_terrain_tess:u_tess|o_bx[16]                                  ; clk          ; clk         ; 0.000        ; 0.120      ; 0.448      ;
+; 0.335 ; zhao_terrain_tess:u_tess|vz[1][17]                             ; zhao_terrain_tess:u_tess|o_bz[17]                                  ; clk          ; clk         ; 0.000        ; 0.116      ; 0.451      ;
+; 0.338 ; zhao_terrain_tess:u_tess|vy[1][1]                              ; zhao_terrain_tess:u_tess|o_by[1]                                   ; clk          ; clk         ; 0.000        ; 0.115      ; 0.453      ;
+; 0.339 ; zhao_terrain_tess:u_tess|vz[1][21]                             ; zhao_terrain_tess:u_tess|o_bz[21]                                  ; clk          ; clk         ; 0.000        ; 0.125      ; 0.464      ;
+; 0.353 ; zhao_terrain_tess:u_tess|vx[1][18]                             ; zhao_terrain_tess:u_tess|o_bx[18]                                  ; clk          ; clk         ; 0.000        ; 0.120      ; 0.473      ;
+; 0.355 ; zhao_terrain_tess:u_tess|vx[1][17]                             ; zhao_terrain_tess:u_tess|o_bx[17]                                  ; clk          ; clk         ; 0.000        ; 0.119      ; 0.474      ;
+; 0.363 ; zhao_terrain_tess:u_tess|o_cy[28]                              ; zhao_terrain_normals:u_normals|l2y[28]                             ; clk          ; clk         ; 0.000        ; 0.526      ; 0.889      ;
+; 0.373 ; zhao_terrain_tess:u_tess|o_ay[7]                               ; zhao_terrain_normals:u_normals|l1y[7]                              ; clk          ; clk         ; 0.000        ; 0.504      ; 0.877      ;
+; 0.374 ; zhao_terrain_tess:u_tess|o_cy[26]                              ; zhao_terrain_normals:u_normals|l2y[26]                             ; clk          ; clk         ; 0.000        ; 0.534      ; 0.908      ;
+; 0.375 ; zhao_terrain_tess:u_tess|o_cy[14]                              ; zhao_terrain_normals:u_normals|l2y[14]                             ; clk          ; clk         ; 0.000        ; 0.571      ; 0.946      ;
+; 0.399 ; zhao_terrain_tess:u_tess|o_az[20]                              ; zhao_terrain_normals:u_normals|l1z[20]                             ; clk          ; clk         ; 0.000        ; 0.535      ; 0.934      ;
+; 0.408 ; zhao_terrain_tess:u_tess|o_ay[27]                              ; zhao_terrain_normals:u_normals|l2y[27]                             ; clk          ; clk         ; 0.000        ; 0.544      ; 0.952      ;
+; 0.409 ; zhao_terrain_tess:u_tess|o_ay[29]                              ; zhao_terrain_normals:u_normals|l2y[29]                             ; clk          ; clk         ; 0.000        ; 0.551      ; 0.960      ;
+; 0.410 ; zhao_terrain_tess:u_tess|o_ay[24]                              ; zhao_terrain_normals:u_normals|l2y[24]                             ; clk          ; clk         ; 0.000        ; 0.571      ; 0.981      ;
+; 0.410 ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]               ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]~DUPLICATE         ; clk          ; clk         ; 0.000        ; 0.121      ; 0.531      ;
+; 0.416 ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7]                ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7]                    ; clk          ; clk         ; 0.000        ; 0.107      ; 0.523      ;
+; 0.417 ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19]     ; clk          ; clk         ; 0.000        ; 0.108      ; 0.525      ;
+; 0.418 ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6]  ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6]      ; clk          ; clk         ; 0.000        ; 0.108      ; 0.526      ;
+; 0.420 ; zhao_terrain_normals:u_normals|acc2[66]                        ; zhao_terrain_normals:u_normals|s1_n2[66]                           ; clk          ; clk         ; 0.000        ; 0.113      ; 0.533      ;
+; 0.421 ; zhao_terrain_tess:u_tess|vy[0][15]                             ; zhao_terrain_tess:u_tess|o_ay[15]                                  ; clk          ; clk         ; 0.000        ; 0.556      ; 0.977      ;
+; 0.422 ; zhao_terrain_normals:u_normals|acc2[3]                         ; zhao_terrain_normals:u_normals|acc2[3]                             ; clk          ; clk         ; 0.000        ; 0.114      ; 0.536      ;
+; 0.425 ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]               ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]                   ; clk          ; clk         ; 0.000        ; 0.107      ; 0.532      ;
+; 0.425 ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]       ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]~DUPLICATE ; clk          ; clk         ; 0.000        ; 0.113      ; 0.538      ;
+; 0.426 ; zhao_terrain_normals:u_normals|acc0[2]                         ; zhao_terrain_normals:u_normals|acc0[2]                             ; clk          ; clk         ; 0.000        ; 0.110      ; 0.536      ;
+; 0.426 ; zhao_terrain_normals:u_normals|m_src[6]                        ; zhao_terrain_normals:u_normals|s1_src[6]                           ; clk          ; clk         ; 0.000        ; 0.114      ; 0.540      ;
++-------+----------------------------------------------------------------+--------------------------------------------------------------------+--------------+-------------+--------------+------------+------------+
+
+Path #1: Hold slack is 0.328 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vx[1][16] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_bx[16]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 3.901                              ;
+; Data Required Time ; 3.573                              ;
+; Slack              ; 0.328                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.120 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.448 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.684       ; 78         ; 0.733 ; 1.951 ;
+;    Cell                ;       ; 2     ; 0.769       ; 22         ; 0.272 ; 0.497 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.331       ; 74         ; 0.000 ; 0.331 ;
+;    Cell                ;       ; 3     ; 0.117       ; 26         ; 0.000 ; 0.068 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.311       ; 86         ; 2.402 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++----------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                  ;
++---------+---------+----+------+--------+----------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                            ;
++---------+---------+----+------+--------+----------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                   ;
+; 3.453   ; 3.453   ;    ;      ;        ;                      ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                 ;
+;   2.956 ;   1.951 ; RR ; IC   ; 1      ; FF_X28_Y52_N22       ; u_tess|vx[1][16]|clk               ;
+;   3.453 ;   0.497 ; RR ; CELL ; 1      ; FF_X28_Y52_N22       ; zhao_terrain_tess:u_tess|vx[1][16] ;
+; 3.901   ; 0.448   ;    ;      ;        ;                      ; data path                          ;
+;   3.453 ;   0.000 ;    ; uTco ; 1      ; FF_X28_Y52_N22       ; zhao_terrain_tess:u_tess|vx[1][16] ;
+;   3.453 ;   0.000 ; FF ; CELL ; 2      ; FF_X28_Y52_N22       ; u_tess|vx[1][16]|q                 ;
+;   3.784 ;   0.331 ; FF ; IC   ; 1      ; MLABCELL_X28_Y52_N42 ; u_tess|o_bx[16]~feeder|dataf       ;
+;   3.833 ;   0.049 ; FF ; CELL ; 1      ; MLABCELL_X28_Y52_N42 ; u_tess|o_bx[16]~feeder|combout     ;
+;   3.833 ;   0.000 ; FF ; IC   ; 1      ; FF_X28_Y52_N43       ; u_tess|o_bx[16]|d                  ;
+;   3.901 ;   0.068 ; FF ; CELL ; 1      ; FF_X28_Y52_N43       ; zhao_terrain_tess:u_tess|o_bx[16]  ;
++---------+---------+----+------+--------+----------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.573   ; 3.573    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.609 ;   2.402  ; RR ; IC   ; 1      ; FF_X28_Y52_N43      ; u_tess|o_bx[16]|clk               ;
+;   6.198 ;   0.589  ; RR ; CELL ; 1      ; FF_X28_Y52_N43      ; zhao_terrain_tess:u_tess|o_bx[16] ;
+;   3.573 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.573   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.573   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y52_N43      ; zhao_terrain_tess:u_tess|o_bx[16] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #2: Hold slack is 0.335 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vz[1][17] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_bz[17]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 3.908                              ;
+; Data Required Time ; 3.573                              ;
+; Slack              ; 0.335                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.116 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.451 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.684       ; 78         ; 0.733 ; 1.951 ;
+;    Cell                ;       ; 2     ; 0.773       ; 22         ; 0.272 ; 0.501 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.334       ; 74         ; 0.000 ; 0.334 ;
+;    Cell                ;       ; 3     ; 0.117       ; 26         ; 0.000 ; 0.068 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.311       ; 86         ; 2.402 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                 ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                            ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                   ;
+; 3.457   ; 3.457   ;    ;      ;        ;                     ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                 ;
+;   2.956 ;   1.951 ; RR ; IC   ; 1      ; FF_X28_Y52_N25      ; u_tess|vz[1][17]|clk               ;
+;   3.457 ;   0.501 ; RR ; CELL ; 1      ; FF_X28_Y52_N25      ; zhao_terrain_tess:u_tess|vz[1][17] ;
+; 3.908   ; 0.451   ;    ;      ;        ;                     ; data path                          ;
+;   3.457 ;   0.000 ;    ; uTco ; 1      ; FF_X28_Y52_N25      ; zhao_terrain_tess:u_tess|vz[1][17] ;
+;   3.457 ;   0.000 ; FF ; CELL ; 2      ; FF_X28_Y52_N25      ; u_tess|vz[1][17]|q                 ;
+;   3.791 ;   0.334 ; FF ; IC   ; 1      ; MLABCELL_X28_Y52_N0 ; u_tess|o_bz[17]~feeder|dataf       ;
+;   3.840 ;   0.049 ; FF ; CELL ; 1      ; MLABCELL_X28_Y52_N0 ; u_tess|o_bz[17]~feeder|combout     ;
+;   3.840 ;   0.000 ; FF ; IC   ; 1      ; FF_X28_Y52_N1       ; u_tess|o_bz[17]|d                  ;
+;   3.908 ;   0.068 ; FF ; CELL ; 1      ; FF_X28_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[17]  ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.573   ; 3.573    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.609 ;   2.402  ; RR ; IC   ; 1      ; FF_X28_Y52_N1       ; u_tess|o_bz[17]|clk               ;
+;   6.198 ;   0.589  ; RR ; CELL ; 1      ; FF_X28_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[17] ;
+;   3.573 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.573   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.573   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[17] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #3: Hold slack is 0.338 
+===============================================================================
++--------------------------------------------------------+
+; Path Summary                                           ;
++--------------------+-----------------------------------+
+; Property           ; Value                             ;
++--------------------+-----------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vy[1][1] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_by[1]  ;
+; Launch Clock       ; clk                               ;
+; Latch Clock        ; clk                               ;
+; Data Arrival Time  ; 3.902                             ;
+; Data Required Time ; 3.564                             ;
+; Slack              ; 0.338                             ;
++--------------------+-----------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.115 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.453 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.674       ; 78         ; 0.733 ; 1.941 ;
+;    Cell                ;       ; 2     ; 0.775       ; 22         ; 0.272 ; 0.503 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.338       ; 75         ; 0.000 ; 0.338 ;
+;    Cell                ;       ; 3     ; 0.115       ; 25         ; 0.000 ; 0.067 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.300       ; 86         ; 2.391 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                ;
++---------+---------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+---------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                  ;
+; 3.449   ; 3.449   ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   2.946 ;   1.941 ; RR ; IC   ; 1      ; FF_X23_Y54_N25      ; u_tess|vy[1][1]|clk               ;
+;   3.449 ;   0.503 ; RR ; CELL ; 1      ; FF_X23_Y54_N25      ; zhao_terrain_tess:u_tess|vy[1][1] ;
+; 3.902   ; 0.453   ;    ;      ;        ;                     ; data path                         ;
+;   3.449 ;   0.000 ;    ; uTco ; 1      ; FF_X23_Y54_N25      ; zhao_terrain_tess:u_tess|vy[1][1] ;
+;   3.449 ;   0.000 ; FF ; CELL ; 2      ; FF_X23_Y54_N25      ; u_tess|vy[1][1]|q                 ;
+;   3.787 ;   0.338 ; FF ; IC   ; 1      ; LABCELL_X23_Y54_N39 ; u_tess|o_by[1]~feeder|dataf       ;
+;   3.835 ;   0.048 ; FF ; CELL ; 1      ; LABCELL_X23_Y54_N39 ; u_tess|o_by[1]~feeder|combout     ;
+;   3.835 ;   0.000 ; FF ; IC   ; 1      ; FF_X23_Y54_N40      ; u_tess|o_by[1]|d                  ;
+;   3.902 ;   0.067 ; FF ; CELL ; 1      ; FF_X23_Y54_N40      ; zhao_terrain_tess:u_tess|o_by[1]  ;
++---------+---------+----+------+--------+---------------------+-----------------------------------+
+
++--------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                               ;
++---------+----------+----+------+--------+---------------------+----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                          ;
++---------+----------+----+------+--------+---------------------+----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                  ;
+; 3.564   ; 3.564    ;    ;      ;        ;                     ; clock path                       ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                   ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                              ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk               ;
+;   5.598 ;   2.391  ; RR ; IC   ; 1      ; FF_X23_Y54_N40      ; u_tess|o_by[1]|clk               ;
+;   6.187 ;   0.589  ; RR ; CELL ; 1      ; FF_X23_Y54_N40      ; zhao_terrain_tess:u_tess|o_by[1] ;
+;   3.564 ;   -2.623 ;    ;      ;        ;                     ; clock pessimism removed          ;
+; 3.564   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                ;
+; 3.564   ; 0.000    ;    ; uTh  ; 1      ; FF_X23_Y54_N40      ; zhao_terrain_tess:u_tess|o_by[1] ;
++---------+----------+----+------+--------+---------------------+----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #4: Hold slack is 0.339 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vz[1][21] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_bz[21]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 3.913                              ;
+; Data Required Time ; 3.574                              ;
+; Slack              ; 0.339                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.125 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.464 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.684       ; 78         ; 0.733 ; 1.951 ;
+;    Cell                ;       ; 2     ; 0.765       ; 22         ; 0.272 ; 0.493 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.347       ; 75         ; 0.000 ; 0.347 ;
+;    Cell                ;       ; 3     ; 0.117       ; 25         ; 0.000 ; 0.068 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.312       ; 86         ; 2.403 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                 ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                            ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                   ;
+; 3.449   ; 3.449   ;    ;      ;        ;                     ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                 ;
+;   2.956 ;   1.951 ; RR ; IC   ; 1      ; FF_X27_Y52_N22      ; u_tess|vz[1][21]|clk               ;
+;   3.449 ;   0.493 ; RR ; CELL ; 1      ; FF_X27_Y52_N22      ; zhao_terrain_tess:u_tess|vz[1][21] ;
+; 3.913   ; 0.464   ;    ;      ;        ;                     ; data path                          ;
+;   3.449 ;   0.000 ;    ; uTco ; 1      ; FF_X27_Y52_N22      ; zhao_terrain_tess:u_tess|vz[1][21] ;
+;   3.449 ;   0.000 ; FF ; CELL ; 2      ; FF_X27_Y52_N22      ; u_tess|vz[1][21]|q                 ;
+;   3.796 ;   0.347 ; FF ; IC   ; 1      ; LABCELL_X27_Y52_N0  ; u_tess|o_bz[21]~feeder|dataf       ;
+;   3.845 ;   0.049 ; FF ; CELL ; 1      ; LABCELL_X27_Y52_N0  ; u_tess|o_bz[21]~feeder|combout     ;
+;   3.845 ;   0.000 ; FF ; IC   ; 1      ; FF_X27_Y52_N1       ; u_tess|o_bz[21]|d                  ;
+;   3.913 ;   0.068 ; FF ; CELL ; 1      ; FF_X27_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[21]  ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.574   ; 3.574    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.610 ;   2.403  ; RR ; IC   ; 1      ; FF_X27_Y52_N1       ; u_tess|o_bz[21]|clk               ;
+;   6.199 ;   0.589  ; RR ; CELL ; 1      ; FF_X27_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[21] ;
+;   3.574 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.574   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.574   ; 0.000    ;    ; uTh  ; 1      ; FF_X27_Y52_N1       ; zhao_terrain_tess:u_tess|o_bz[21] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #5: Hold slack is 0.353 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vx[1][18] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_bx[18]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 3.945                              ;
+; Data Required Time ; 3.592                              ;
+; Slack              ; 0.353                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.120 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.473 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.702       ; 78         ; 0.733 ; 1.969 ;
+;    Cell                ;       ; 2     ; 0.770       ; 22         ; 0.272 ; 0.498 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.356       ; 75         ; 0.000 ; 0.356 ;
+;    Cell                ;       ; 3     ; 0.117       ; 25         ; 0.000 ; 0.068 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                 ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                            ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                   ;
+; 3.472   ; 3.472   ;    ;      ;        ;                     ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                 ;
+;   2.974 ;   1.969 ; RR ; IC   ; 1      ; FF_X27_Y56_N25      ; u_tess|vx[1][18]|clk               ;
+;   3.472 ;   0.498 ; RR ; CELL ; 1      ; FF_X27_Y56_N25      ; zhao_terrain_tess:u_tess|vx[1][18] ;
+; 3.945   ; 0.473   ;    ;      ;        ;                     ; data path                          ;
+;   3.472 ;   0.000 ;    ; uTco ; 1      ; FF_X27_Y56_N25      ; zhao_terrain_tess:u_tess|vx[1][18] ;
+;   3.472 ;   0.000 ; FF ; CELL ; 2      ; FF_X27_Y56_N25      ; u_tess|vx[1][18]|q                 ;
+;   3.828 ;   0.356 ; FF ; IC   ; 1      ; LABCELL_X27_Y56_N12 ; u_tess|o_bx[18]~feeder|dataf       ;
+;   3.877 ;   0.049 ; FF ; CELL ; 1      ; LABCELL_X27_Y56_N12 ; u_tess|o_bx[18]~feeder|combout     ;
+;   3.877 ;   0.000 ; FF ; IC   ; 1      ; FF_X27_Y56_N13      ; u_tess|o_bx[18]|d                  ;
+;   3.945 ;   0.068 ; FF ; CELL ; 1      ; FF_X27_Y56_N13      ; zhao_terrain_tess:u_tess|o_bx[18]  ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.592   ; 3.592    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X27_Y56_N13      ; u_tess|o_bx[18]|clk               ;
+;   6.217 ;   0.589  ; RR ; CELL ; 1      ; FF_X27_Y56_N13      ; zhao_terrain_tess:u_tess|o_bx[18] ;
+;   3.592 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.592   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.592   ; 0.000    ;    ; uTh  ; 1      ; FF_X27_Y56_N13      ; zhao_terrain_tess:u_tess|o_bx[18] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #6: Hold slack is 0.355 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vx[1][17] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_bx[17]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 3.941                              ;
+; Data Required Time ; 3.586                              ;
+; Slack              ; 0.355                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.119 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.474 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.702       ; 78         ; 0.733 ; 1.969 ;
+;    Cell                ;       ; 2     ; 0.765       ; 22         ; 0.272 ; 0.493 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.359       ; 76         ; 0.000 ; 0.359 ;
+;    Cell                ;       ; 3     ; 0.115       ; 24         ; 0.000 ; 0.067 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.881       ; 14         ; 0.298 ; 0.583 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                 ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                            ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                   ;
+; 3.467   ; 3.467   ;    ;      ;        ;                     ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                 ;
+;   2.974 ;   1.969 ; RR ; IC   ; 1      ; FF_X27_Y56_N22      ; u_tess|vx[1][17]|clk               ;
+;   3.467 ;   0.493 ; RR ; CELL ; 1      ; FF_X27_Y56_N22      ; zhao_terrain_tess:u_tess|vx[1][17] ;
+; 3.941   ; 0.474   ;    ;      ;        ;                     ; data path                          ;
+;   3.467 ;   0.000 ;    ; uTco ; 1      ; FF_X27_Y56_N22      ; zhao_terrain_tess:u_tess|vx[1][17] ;
+;   3.467 ;   0.000 ; FF ; CELL ; 2      ; FF_X27_Y56_N22      ; u_tess|vx[1][17]|q                 ;
+;   3.826 ;   0.359 ; FF ; IC   ; 1      ; LABCELL_X27_Y56_N3  ; u_tess|o_bx[17]~feeder|dataf       ;
+;   3.874 ;   0.048 ; FF ; CELL ; 1      ; LABCELL_X27_Y56_N3  ; u_tess|o_bx[17]~feeder|combout     ;
+;   3.874 ;   0.000 ; FF ; IC   ; 1      ; FF_X27_Y56_N4       ; u_tess|o_bx[17]|d                  ;
+;   3.941 ;   0.067 ; FF ; CELL ; 1      ; FF_X27_Y56_N4       ; zhao_terrain_tess:u_tess|o_bx[17]  ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.586   ; 3.586    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X27_Y56_N4       ; u_tess|o_bx[17]|clk               ;
+;   6.211 ;   0.583  ; RR ; CELL ; 1      ; FF_X27_Y56_N4       ; zhao_terrain_tess:u_tess|o_bx[17] ;
+;   3.586 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.586   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.586   ; 0.000    ;    ; uTh  ; 1      ; FF_X27_Y56_N4       ; zhao_terrain_tess:u_tess|o_bx[17] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #7: Hold slack is 0.363 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_cy[28]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[28] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.344                                  ;
+; Data Required Time ; 3.981                                  ;
+; Slack              ; 0.363                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.526 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.889 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 77         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.780       ; 23         ; 0.272 ; 0.508 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.600       ; 67         ; 0.000 ; 0.600 ;
+;    Cell                ;       ; 3     ; 0.289       ; 33         ; 0.000 ; 0.226 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.853       ; 14         ; 0.298 ; 0.555 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.455   ; 3.455   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X23_Y55_N41       ; u_tess|o_cy[28]|clk                    ;
+;   3.455 ;   0.508 ; RR ; CELL ; 1      ; FF_X23_Y55_N41       ; zhao_terrain_tess:u_tess|o_cy[28]      ;
+; 4.344   ; 0.889   ;    ;      ;        ;                      ; data path                              ;
+;   3.455 ;   0.000 ;    ; uTco ; 1      ; FF_X23_Y55_N41       ; zhao_terrain_tess:u_tess|o_cy[28]      ;
+;   3.455 ;   0.000 ; FF ; CELL ; 1      ; FF_X23_Y55_N41       ; u_tess|o_cy[28]|q                      ;
+;   4.055 ;   0.600 ; FF ; IC   ; 3      ; MLABCELL_X25_Y55_N24 ; u_normals|e2y[28]~113|datac            ;
+;   4.281 ;   0.226 ; FR ; CELL ; 1      ; MLABCELL_X25_Y55_N24 ; u_normals|e2y[28]~113|sumout           ;
+;   4.281 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y55_N26       ; u_normals|l2y[28]|d                    ;
+;   4.344 ;   0.063 ; RR ; CELL ; 1      ; FF_X25_Y55_N26       ; zhao_terrain_normals:u_normals|l2y[28] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.981   ; 3.981    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y55_N26      ; u_normals|l2y[28]|clk                  ;
+;   6.183 ;   0.555  ; RR ; CELL ; 1      ; FF_X25_Y55_N26      ; zhao_terrain_normals:u_normals|l2y[28] ;
+;   3.981 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.981   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.981   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y55_N26      ; zhao_terrain_normals:u_normals|l2y[28] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #8: Hold slack is 0.373 
+===============================================================================
++------------------------------------------------------------+
+; Path Summary                                               ;
++--------------------+---------------------------------------+
+; Property           ; Value                                 ;
++--------------------+---------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_ay[7]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l1y[7] ;
+; Launch Clock       ; clk                                   ;
+; Latch Clock        ; clk                                   ;
+; Data Arrival Time  ; 4.330                                 ;
+; Data Required Time ; 3.957                                 ;
+; Slack              ; 0.373                                 ;
++--------------------+---------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.504 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.877 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.693       ; 78         ; 0.733 ; 1.960 ;
+;    Cell                ;       ; 2     ; 0.760       ; 22         ; 0.272 ; 0.488 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.592       ; 68         ; 0.000 ; 0.592 ;
+;    Cell                ;       ; 3     ; 0.285       ; 32         ; 0.000 ; 0.218 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.299       ; 86         ; 2.390 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.860       ; 14         ; 0.298 ; 0.562 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                    ;
++---------+---------+----+------+--------+---------------------+---------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                               ;
++---------+---------+----+------+--------+---------------------+---------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                      ;
+; 3.453   ; 3.453   ;    ;      ;        ;                     ; clock path                            ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                        ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                   ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                     ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                    ;
+;   2.965 ;   1.960 ; RR ; IC   ; 1      ; FF_X18_Y59_N25      ; u_tess|o_ay[7]|clk                    ;
+;   3.453 ;   0.488 ; RR ; CELL ; 1      ; FF_X18_Y59_N25      ; zhao_terrain_tess:u_tess|o_ay[7]      ;
+; 4.330   ; 0.877   ;    ;      ;        ;                     ; data path                             ;
+;   3.453 ;   0.000 ;    ; uTco ; 1      ; FF_X18_Y59_N25      ; zhao_terrain_tess:u_tess|o_ay[7]      ;
+;   3.453 ;   0.000 ; RR ; CELL ; 2      ; FF_X18_Y59_N25      ; u_tess|o_ay[7]|q                      ;
+;   4.045 ;   0.592 ; RR ; IC   ; 3      ; LABCELL_X19_Y56_N21 ; u_normals|e1y[7]~29|datad             ;
+;   4.263 ;   0.218 ; RR ; CELL ; 1      ; LABCELL_X19_Y56_N21 ; u_normals|e1y[7]~29|sumout            ;
+;   4.263 ;   0.000 ; RR ; IC   ; 1      ; FF_X19_Y56_N22      ; u_normals|l1y[7]|d                    ;
+;   4.330 ;   0.067 ; RR ; CELL ; 1      ; FF_X19_Y56_N22      ; zhao_terrain_normals:u_normals|l1y[7] ;
++---------+---------+----+------+--------+---------------------+---------------------------------------+
+
++-------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                    ;
++---------+----------+----+------+--------+---------------------+---------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                               ;
++---------+----------+----+------+--------+---------------------+---------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                       ;
+; 3.957   ; 3.957    ;    ;      ;        ;                     ; clock path                            ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                        ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                   ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                     ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                    ;
+;   5.597 ;   2.390  ; RR ; IC   ; 1      ; FF_X19_Y56_N22      ; u_normals|l1y[7]|clk                  ;
+;   6.159 ;   0.562  ; RR ; CELL ; 1      ; FF_X19_Y56_N22      ; zhao_terrain_normals:u_normals|l1y[7] ;
+;   3.957 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed               ;
+; 3.957   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                     ;
+; 3.957   ; 0.000    ;    ; uTh  ; 1      ; FF_X19_Y56_N22      ; zhao_terrain_normals:u_normals|l1y[7] ;
++---------+----------+----+------+--------+---------------------+---------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #9: Hold slack is 0.374 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_cy[26]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[26] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.356                                  ;
+; Data Required Time ; 3.982                                  ;
+; Slack              ; 0.374                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.534 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.908 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 78         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.773       ; 22         ; 0.272 ; 0.501 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.619       ; 68         ; 0.000 ; 0.619 ;
+;    Cell                ;       ; 3     ; 0.289       ; 32         ; 0.000 ; 0.226 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.854       ; 14         ; 0.298 ; 0.556 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.448   ; 3.448   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X24_Y55_N58       ; u_tess|o_cy[26]|clk                    ;
+;   3.448 ;   0.501 ; RR ; CELL ; 1      ; FF_X24_Y55_N58       ; zhao_terrain_tess:u_tess|o_cy[26]      ;
+; 4.356   ; 0.908   ;    ;      ;        ;                      ; data path                              ;
+;   3.448 ;   0.000 ;    ; uTco ; 1      ; FF_X24_Y55_N58       ; zhao_terrain_tess:u_tess|o_cy[26]      ;
+;   3.448 ;   0.000 ; FF ; CELL ; 1      ; FF_X24_Y55_N58       ; u_tess|o_cy[26]|q                      ;
+;   4.067 ;   0.619 ; FF ; IC   ; 3      ; MLABCELL_X25_Y55_N18 ; u_normals|e2y[26]~105|datac            ;
+;   4.293 ;   0.226 ; FR ; CELL ; 1      ; MLABCELL_X25_Y55_N18 ; u_normals|e2y[26]~105|sumout           ;
+;   4.293 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y55_N20       ; u_normals|l2y[26]|d                    ;
+;   4.356 ;   0.063 ; RR ; CELL ; 1      ; FF_X25_Y55_N20       ; zhao_terrain_normals:u_normals|l2y[26] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.982   ; 3.982    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y55_N20      ; u_normals|l2y[26]|clk                  ;
+;   6.184 ;   0.556  ; RR ; CELL ; 1      ; FF_X25_Y55_N20      ; zhao_terrain_normals:u_normals|l2y[26] ;
+;   3.982 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.982   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.982   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y55_N20      ; zhao_terrain_normals:u_normals|l2y[26] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #10: Hold slack is 0.375 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_cy[14]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[14] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.371                                  ;
+; Data Required Time ; 3.996                                  ;
+; Slack              ; 0.375                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.571 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.946 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 78         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.750       ; 22         ; 0.272 ; 0.478 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.643       ; 68         ; 0.000 ; 0.643 ;
+;    Cell                ;       ; 3     ; 0.303       ; 32         ; 0.000 ; 0.242 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.868       ; 14         ; 0.298 ; 0.570 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.425   ; 3.425   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X23_Y57_N34       ; u_tess|o_cy[14]|clk                    ;
+;   3.425 ;   0.478 ; RR ; CELL ; 1      ; FF_X23_Y57_N34       ; zhao_terrain_tess:u_tess|o_cy[14]      ;
+; 4.371   ; 0.946   ;    ;      ;        ;                      ; data path                              ;
+;   3.425 ;   0.000 ;    ; uTco ; 1      ; FF_X23_Y57_N34       ; zhao_terrain_tess:u_tess|o_cy[14]      ;
+;   3.425 ;   0.000 ; RR ; CELL ; 1      ; FF_X23_Y57_N34       ; u_tess|o_cy[14]|q                      ;
+;   4.068 ;   0.643 ; RR ; IC   ; 3      ; MLABCELL_X25_Y56_N42 ; u_normals|e2y[14]~57|datac             ;
+;   4.310 ;   0.242 ; RR ; CELL ; 1      ; MLABCELL_X25_Y56_N42 ; u_normals|e2y[14]~57|sumout            ;
+;   4.310 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y56_N43       ; u_normals|l2y[14]|d                    ;
+;   4.371 ;   0.061 ; RR ; CELL ; 1      ; FF_X25_Y56_N43       ; zhao_terrain_normals:u_normals|l2y[14] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.996   ; 3.996    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y56_N43      ; u_normals|l2y[14]|clk                  ;
+;   6.198 ;   0.570  ; RR ; CELL ; 1      ; FF_X25_Y56_N43      ; zhao_terrain_normals:u_normals|l2y[14] ;
+;   3.996 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.996   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.996   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y56_N43      ; zhao_terrain_normals:u_normals|l2y[14] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #11: Hold slack is 0.399 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_az[20]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l1z[20] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.388                                  ;
+; Data Required Time ; 3.989                                  ;
+; Slack              ; 0.399                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.535 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.934 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 77         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.779       ; 23         ; 0.272 ; 0.507 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.656       ; 70         ; 0.000 ; 0.656 ;
+;    Cell                ;       ; 3     ; 0.278       ; 30         ; 0.000 ; 0.209 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.329       ; 86         ; 2.420 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.862       ; 14         ; 0.298 ; 0.564 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++-------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                     ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                       ;
+; 3.454   ; 3.454   ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X24_Y56_N37      ; u_tess|o_az[20]|clk                    ;
+;   3.454 ;   0.507 ; RR ; CELL ; 1      ; FF_X24_Y56_N37      ; zhao_terrain_tess:u_tess|o_az[20]      ;
+; 4.388   ; 0.934   ;    ;      ;        ;                     ; data path                              ;
+;   3.454 ;   0.000 ;    ; uTco ; 1      ; FF_X24_Y56_N37      ; zhao_terrain_tess:u_tess|o_az[20]      ;
+;   3.454 ;   0.000 ; RR ; CELL ; 2      ; FF_X24_Y56_N37      ; u_tess|o_az[20]|q                      ;
+;   4.110 ;   0.656 ; RR ; IC   ; 3      ; LABCELL_X29_Y56_N42 ; u_normals|Add2~17|datad                ;
+;   4.319 ;   0.209 ; RR ; CELL ; 1      ; LABCELL_X29_Y56_N42 ; u_normals|Add2~17|sumout               ;
+;   4.319 ;   0.000 ; RR ; IC   ; 1      ; FF_X29_Y56_N44      ; u_normals|l1z[20]|d                    ;
+;   4.388 ;   0.069 ; RR ; CELL ; 1      ; FF_X29_Y56_N44      ; zhao_terrain_normals:u_normals|l1z[20] ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.989   ; 3.989    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.627 ;   2.420  ; RR ; IC   ; 1      ; FF_X29_Y56_N44      ; u_normals|l1z[20]|clk                  ;
+;   6.191 ;   0.564  ; RR ; CELL ; 1      ; FF_X29_Y56_N44      ; zhao_terrain_normals:u_normals|l1z[20] ;
+;   3.989 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.989   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.989   ; 0.000    ;    ; uTh  ; 1      ; FF_X29_Y56_N44      ; zhao_terrain_normals:u_normals|l1z[20] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #12: Hold slack is 0.408 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_ay[27]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[27] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.388                                  ;
+; Data Required Time ; 3.980                                  ;
+; Slack              ; 0.408                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.544 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.952 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.674       ; 78         ; 0.733 ; 1.941 ;
+;    Cell                ;       ; 2     ; 0.762       ; 22         ; 0.272 ; 0.490 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.654       ; 69         ; 0.000 ; 0.654 ;
+;    Cell                ;       ; 3     ; 0.298       ; 31         ; 0.000 ; 0.237 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.852       ; 14         ; 0.298 ; 0.554 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.436   ; 3.436   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.946 ;   1.941 ; RR ; IC   ; 1      ; FF_X19_Y55_N55       ; u_tess|o_ay[27]|clk                    ;
+;   3.436 ;   0.490 ; RR ; CELL ; 1      ; FF_X19_Y55_N55       ; zhao_terrain_tess:u_tess|o_ay[27]      ;
+; 4.388   ; 0.952   ;    ;      ;        ;                      ; data path                              ;
+;   3.436 ;   0.000 ;    ; uTco ; 1      ; FF_X19_Y55_N55       ; zhao_terrain_tess:u_tess|o_ay[27]      ;
+;   3.436 ;   0.000 ; RR ; CELL ; 2      ; FF_X19_Y55_N55       ; u_tess|o_ay[27]|q                      ;
+;   4.090 ;   0.654 ; RR ; IC   ; 3      ; MLABCELL_X25_Y55_N21 ; u_normals|e2y[27]~109|datad            ;
+;   4.327 ;   0.237 ; RR ; CELL ; 1      ; MLABCELL_X25_Y55_N21 ; u_normals|e2y[27]~109|sumout           ;
+;   4.327 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y55_N22       ; u_normals|l2y[27]|d                    ;
+;   4.388 ;   0.061 ; RR ; CELL ; 1      ; FF_X25_Y55_N22       ; zhao_terrain_normals:u_normals|l2y[27] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.980   ; 3.980    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y55_N22      ; u_normals|l2y[27]|clk                  ;
+;   6.182 ;   0.554  ; RR ; CELL ; 1      ; FF_X25_Y55_N22      ; zhao_terrain_normals:u_normals|l2y[27] ;
+;   3.980 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.980   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.980   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y55_N22      ; zhao_terrain_normals:u_normals|l2y[27] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #13: Hold slack is 0.409 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_ay[29]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[29] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.389                                  ;
+; Data Required Time ; 3.980                                  ;
+; Slack              ; 0.409                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.551 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.960 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 78         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.754       ; 22         ; 0.272 ; 0.482 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.662       ; 69         ; 0.000 ; 0.662 ;
+;    Cell                ;       ; 3     ; 0.298       ; 31         ; 0.000 ; 0.237 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.852       ; 14         ; 0.298 ; 0.554 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.429   ; 3.429   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X23_Y57_N13       ; u_tess|o_ay[29]|clk                    ;
+;   3.429 ;   0.482 ; RR ; CELL ; 1      ; FF_X23_Y57_N13       ; zhao_terrain_tess:u_tess|o_ay[29]      ;
+; 4.389   ; 0.960   ;    ;      ;        ;                      ; data path                              ;
+;   3.429 ;   0.000 ;    ; uTco ; 1      ; FF_X23_Y57_N13       ; zhao_terrain_tess:u_tess|o_ay[29]      ;
+;   3.429 ;   0.000 ; RR ; CELL ; 2      ; FF_X23_Y57_N13       ; u_tess|o_ay[29]|q                      ;
+;   4.091 ;   0.662 ; RR ; IC   ; 3      ; MLABCELL_X25_Y55_N27 ; u_normals|e2y[29]~117|datad            ;
+;   4.328 ;   0.237 ; RR ; CELL ; 1      ; MLABCELL_X25_Y55_N27 ; u_normals|e2y[29]~117|sumout           ;
+;   4.328 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y55_N28       ; u_normals|l2y[29]|d                    ;
+;   4.389 ;   0.061 ; RR ; CELL ; 1      ; FF_X25_Y55_N28       ; zhao_terrain_normals:u_normals|l2y[29] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.980   ; 3.980    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y55_N28      ; u_normals|l2y[29]|clk                  ;
+;   6.182 ;   0.554  ; RR ; CELL ; 1      ; FF_X25_Y55_N28      ; zhao_terrain_normals:u_normals|l2y[29] ;
+;   3.980 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.980   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.980   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y55_N28      ; zhao_terrain_normals:u_normals|l2y[29] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #14: Hold slack is 0.410 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|o_ay[24]      ;
+; To Node            ; zhao_terrain_normals:u_normals|l2y[24] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.406                                  ;
+; Data Required Time ; 3.996                                  ;
+; Slack              ; 0.410                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.571 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.981 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 78         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.750       ; 22         ; 0.272 ; 0.478 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.678       ; 69         ; 0.000 ; 0.678 ;
+;    Cell                ;       ; 3     ; 0.303       ; 31         ; 0.000 ; 0.242 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.330       ; 86         ; 2.421 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.868       ; 14         ; 0.298 ; 0.570 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.425   ; 3.425   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X23_Y57_N52       ; u_tess|o_ay[24]|clk                    ;
+;   3.425 ;   0.478 ; RR ; CELL ; 1      ; FF_X23_Y57_N52       ; zhao_terrain_tess:u_tess|o_ay[24]      ;
+; 4.406   ; 0.981   ;    ;      ;        ;                      ; data path                              ;
+;   3.425 ;   0.000 ;    ; uTco ; 1      ; FF_X23_Y57_N52       ; zhao_terrain_tess:u_tess|o_ay[24]      ;
+;   3.425 ;   0.000 ; RR ; CELL ; 2      ; FF_X23_Y57_N52       ; u_tess|o_ay[24]|q                      ;
+;   4.103 ;   0.678 ; RR ; IC   ; 3      ; MLABCELL_X25_Y55_N12 ; u_normals|e2y[24]~97|datac             ;
+;   4.345 ;   0.242 ; RR ; CELL ; 1      ; MLABCELL_X25_Y55_N12 ; u_normals|e2y[24]~97|sumout            ;
+;   4.345 ;   0.000 ; RR ; IC   ; 1      ; FF_X25_Y55_N13       ; u_normals|l2y[24]|d                    ;
+;   4.406 ;   0.061 ; RR ; CELL ; 1      ; FF_X25_Y55_N13       ; zhao_terrain_normals:u_normals|l2y[24] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.996   ; 3.996    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.628 ;   2.421  ; RR ; IC   ; 1      ; FF_X25_Y55_N13      ; u_normals|l2y[24]|clk                  ;
+;   6.198 ;   0.570  ; RR ; CELL ; 1      ; FF_X25_Y55_N13      ; zhao_terrain_normals:u_normals|l2y[24] ;
+;   3.996 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.996   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.996   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y55_N13      ; zhao_terrain_normals:u_normals|l2y[24] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #15: Hold slack is 0.410 
+===============================================================================
++---------------------------------------------------------------------------------+
+; Path Summary                                                                    ;
++--------------------+------------------------------------------------------------+
+; Property           ; Value                                                      ;
++--------------------+------------------------------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]           ;
+; To Node            ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]~DUPLICATE ;
+; Launch Clock       ; clk                                                        ;
+; Latch Clock        ; clk                                                        ;
+; Data Arrival Time  ; 4.010                                                      ;
+; Data Required Time ; 3.600                                                      ;
+; Slack              ; 0.410                                                      ;
++--------------------+------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.121 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.531 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.725       ; 78         ; 0.733 ; 1.992 ;
+;    Cell                ;       ; 2     ; 0.754       ; 22         ; 0.272 ; 0.482 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.234       ; 44         ; 0.000 ; 0.234 ;
+;    Cell                ;       ; 3     ; 0.297       ; 56         ; 0.000 ; 0.226 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.356       ; 86         ; 2.447 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.873       ; 14         ; 0.298 ; 0.575 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++----------------------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                                          ;
++---------+---------+----+------+--------+----------------------+------------------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                                    ;
++---------+---------+----+------+--------+----------------------+------------------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                                           ;
+; 3.479   ; 3.479   ;    ;      ;        ;                      ; clock path                                                 ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                                             ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                                        ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                                          ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                                         ;
+;   2.997 ;   1.992 ; RR ; IC   ; 1      ; FF_X28_Y60_N50       ; u_tess|subpatch_rejected_o[17]|clk                         ;
+;   3.479 ;   0.482 ; RR ; CELL ; 1      ; FF_X28_Y60_N50       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]           ;
+; 4.010   ; 0.531   ;    ;      ;        ;                      ; data path                                                  ;
+;   3.479 ;   0.000 ;    ; uTco ; 1      ; FF_X28_Y60_N50       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]           ;
+;   3.479 ;   0.000 ; FF ; CELL ; 1      ; FF_X28_Y60_N50       ; u_tess|subpatch_rejected_o[17]|q                           ;
+;   3.713 ;   0.234 ; FF ; IC   ; 2      ; MLABCELL_X28_Y60_N48 ; u_tess|Add75~65|datac                                      ;
+;   3.939 ;   0.226 ; FR ; CELL ; 2      ; MLABCELL_X28_Y60_N48 ; u_tess|Add75~65|sumout                                     ;
+;   3.939 ;   0.000 ; RR ; IC   ; 1      ; FF_X28_Y60_N49       ; u_tess|subpatch_rejected_o[17]~DUPLICATE|d                 ;
+;   4.010 ;   0.071 ; RR ; CELL ; 1      ; FF_X28_Y60_N49       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]~DUPLICATE ;
++---------+---------+----+------+--------+----------------------+------------------------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                                         ;
++---------+----------+----+------+--------+---------------------+------------------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                                    ;
++---------+----------+----+------+--------+---------------------+------------------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                            ;
+; 3.600   ; 3.600    ;    ;      ;        ;                     ; clock path                                                 ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                             ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                        ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                          ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                         ;
+;   5.654 ;   2.447  ; RR ; IC   ; 1      ; FF_X28_Y60_N49      ; u_tess|subpatch_rejected_o[17]~DUPLICATE|clk               ;
+;   6.229 ;   0.575  ; RR ; CELL ; 1      ; FF_X28_Y60_N49      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]~DUPLICATE ;
+;   3.600 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                                    ;
+; 3.600   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                                          ;
+; 3.600   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y60_N49      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17]~DUPLICATE ;
++---------+----------+----+------+--------+---------------------+------------------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #16: Hold slack is 0.416 
+===============================================================================
++----------------------------------------------------------------------+
+; Path Summary                                                         ;
++--------------------+-------------------------------------------------+
+; Property           ; Value                                           ;
++--------------------+-------------------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
+; To Node            ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
+; Launch Clock       ; clk                                             ;
+; Latch Clock        ; clk                                             ;
+; Data Arrival Time  ; 4.002                                           ;
+; Data Required Time ; 3.586                                           ;
+; Slack              ; 0.416                                           ;
++--------------------+-------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.107 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.523 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.725       ; 78         ; 0.733 ; 1.992 ;
+;    Cell                ;       ; 2     ; 0.754       ; 22         ; 0.272 ; 0.482 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.234       ; 45         ; 0.000 ; 0.234 ;
+;    Cell                ;       ; 3     ; 0.289       ; 55         ; 0.000 ; 0.226 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.356       ; 86         ; 2.447 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.859       ; 14         ; 0.298 ; 0.561 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++-----------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                               ;
++---------+---------+----+------+--------+----------------------+-------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                         ;
++---------+---------+----+------+--------+----------------------+-------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                                ;
+; 3.479   ; 3.479   ;    ;      ;        ;                      ; clock path                                      ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                                  ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                             ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                               ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                              ;
+;   2.997 ;   1.992 ; RR ; IC   ; 1      ; FF_X28_Y60_N20       ; u_tess|subpatch_rejected_o[7]|clk               ;
+;   3.479 ;   0.482 ; RR ; CELL ; 1      ; FF_X28_Y60_N20       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
+; 4.002   ; 0.523   ;    ;      ;        ;                      ; data path                                       ;
+;   3.479 ;   0.000 ;    ; uTco ; 1      ; FF_X28_Y60_N20       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
+;   3.479 ;   0.000 ; FF ; CELL ; 2      ; FF_X28_Y60_N20       ; u_tess|subpatch_rejected_o[7]|q                 ;
+;   3.713 ;   0.234 ; FF ; IC   ; 2      ; MLABCELL_X28_Y60_N18 ; u_tess|Add75~25|datac                           ;
+;   3.939 ;   0.226 ; FR ; CELL ; 1      ; MLABCELL_X28_Y60_N18 ; u_tess|Add75~25|sumout                          ;
+;   3.939 ;   0.000 ; RR ; IC   ; 1      ; FF_X28_Y60_N20       ; u_tess|subpatch_rejected_o[7]|d                 ;
+;   4.002 ;   0.063 ; RR ; CELL ; 1      ; FF_X28_Y60_N20       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
++---------+---------+----+------+--------+----------------------+-------------------------------------------------+
+
++-----------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                              ;
++---------+----------+----+------+--------+---------------------+-------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                         ;
++---------+----------+----+------+--------+---------------------+-------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                 ;
+; 3.586   ; 3.586    ;    ;      ;        ;                     ; clock path                                      ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                  ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                             ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                               ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                              ;
+;   5.654 ;   2.447  ; RR ; IC   ; 1      ; FF_X28_Y60_N20      ; u_tess|subpatch_rejected_o[7]|clk               ;
+;   6.215 ;   0.561  ; RR ; CELL ; 1      ; FF_X28_Y60_N20      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
+;   3.586 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                         ;
+; 3.586   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                               ;
+; 3.586   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y60_N20      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[7] ;
++---------+----------+----+------+--------+---------------------+-------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #17: Hold slack is 0.417 
+===============================================================================
++-------------------------------------------------------------------------------------+
+; Path Summary                                                                        ;
++--------------------+----------------------------------------------------------------+
+; Property           ; Value                                                          ;
++--------------------+----------------------------------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
+; To Node            ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
+; Launch Clock       ; clk                                                            ;
+; Latch Clock        ; clk                                                            ;
+; Data Arrival Time  ; 4.005                                                          ;
+; Data Required Time ; 3.588                                                          ;
+; Slack              ; 0.417                                                          ;
++--------------------+----------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.108 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.525 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.724       ; 78         ; 0.733 ; 1.991 ;
+;    Cell                ;       ; 2     ; 0.756       ; 22         ; 0.272 ; 0.484 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.229       ; 44         ; 0.000 ; 0.229 ;
+;    Cell                ;       ; 3     ; 0.296       ; 56         ; 0.000 ; 0.227 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.355       ; 86         ; 2.446 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.862       ; 14         ; 0.298 ; 0.564 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++-------------------------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                                             ;
++---------+---------+----+------+--------+---------------------+----------------------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                                        ;
++---------+---------+----+------+--------+---------------------+----------------------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                                               ;
+; 3.480   ; 3.480   ;    ;      ;        ;                     ; clock path                                                     ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                                                 ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                            ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                              ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                             ;
+;   2.996 ;   1.991 ; RR ; IC   ; 1      ; FF_X31_Y60_N56      ; u_normals|terrain_samples_evaluated_o[19]|clk                  ;
+;   3.480 ;   0.484 ; RR ; CELL ; 1      ; FF_X31_Y60_N56      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
+; 4.005   ; 0.525   ;    ;      ;        ;                     ; data path                                                      ;
+;   3.480 ;   0.000 ;    ; uTco ; 1      ; FF_X31_Y60_N56      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
+;   3.480 ;   0.000 ; FF ; CELL ; 2      ; FF_X31_Y60_N56      ; u_normals|terrain_samples_evaluated_o[19]|q                    ;
+;   3.709 ;   0.229 ; FF ; IC   ; 2      ; LABCELL_X31_Y60_N54 ; u_normals|Add13~73|datac                                       ;
+;   3.936 ;   0.227 ; FR ; CELL ; 1      ; LABCELL_X31_Y60_N54 ; u_normals|Add13~73|sumout                                      ;
+;   3.936 ;   0.000 ; RR ; IC   ; 1      ; FF_X31_Y60_N56      ; u_normals|terrain_samples_evaluated_o[19]|d                    ;
+;   4.005 ;   0.069 ; RR ; CELL ; 1      ; FF_X31_Y60_N56      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
++---------+---------+----+------+--------+---------------------+----------------------------------------------------------------+
+
++--------------------------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                                             ;
++---------+----------+----+------+--------+---------------------+----------------------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                                        ;
++---------+----------+----+------+--------+---------------------+----------------------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                                ;
+; 3.588   ; 3.588    ;    ;      ;        ;                     ; clock path                                                     ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                                 ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                            ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                              ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                             ;
+;   5.653 ;   2.446  ; RR ; IC   ; 1      ; FF_X31_Y60_N56      ; u_normals|terrain_samples_evaluated_o[19]|clk                  ;
+;   6.217 ;   0.564  ; RR ; CELL ; 1      ; FF_X31_Y60_N56      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
+;   3.588 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                                        ;
+; 3.588   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                                              ;
+; 3.588   ; 0.000    ;    ; uTh  ; 1      ; FF_X31_Y60_N56      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[19] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #18: Hold slack is 0.418 
+===============================================================================
++------------------------------------------------------------------------------------+
+; Path Summary                                                                       ;
++--------------------+---------------------------------------------------------------+
+; Property           ; Value                                                         ;
++--------------------+---------------------------------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
+; To Node            ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
+; Launch Clock       ; clk                                                           ;
+; Latch Clock        ; clk                                                           ;
+; Data Arrival Time  ; 4.012                                                         ;
+; Data Required Time ; 3.594                                                         ;
+; Slack              ; 0.418                                                         ;
++--------------------+---------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.108 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.526 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.724       ; 78         ; 0.733 ; 1.991 ;
+;    Cell                ;       ; 2     ; 0.762       ; 22         ; 0.272 ; 0.490 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.226       ; 43         ; 0.000 ; 0.226 ;
+;    Cell                ;       ; 3     ; 0.300       ; 57         ; 0.000 ; 0.231 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.355       ; 86         ; 2.446 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.868       ; 14         ; 0.298 ; 0.570 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++------------------------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                                            ;
++---------+---------+----+------+--------+---------------------+---------------------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                                       ;
++---------+---------+----+------+--------+---------------------+---------------------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                                              ;
+; 3.486   ; 3.486   ;    ;      ;        ;                     ; clock path                                                    ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                                                ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                           ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                             ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                            ;
+;   2.996 ;   1.991 ; RR ; IC   ; 1      ; FF_X31_Y60_N17      ; u_normals|terrain_samples_evaluated_o[6]|clk                  ;
+;   3.486 ;   0.490 ; RR ; CELL ; 1      ; FF_X31_Y60_N17      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
+; 4.012   ; 0.526   ;    ;      ;        ;                     ; data path                                                     ;
+;   3.486 ;   0.000 ;    ; uTco ; 1      ; FF_X31_Y60_N17      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
+;   3.486 ;   0.000 ; FF ; CELL ; 2      ; FF_X31_Y60_N17      ; u_normals|terrain_samples_evaluated_o[6]|q                    ;
+;   3.712 ;   0.226 ; FF ; IC   ; 2      ; LABCELL_X31_Y60_N15 ; u_normals|Add13~21|datac                                      ;
+;   3.943 ;   0.231 ; FR ; CELL ; 1      ; LABCELL_X31_Y60_N15 ; u_normals|Add13~21|sumout                                     ;
+;   3.943 ;   0.000 ; RR ; IC   ; 1      ; FF_X31_Y60_N17      ; u_normals|terrain_samples_evaluated_o[6]|d                    ;
+;   4.012 ;   0.069 ; RR ; CELL ; 1      ; FF_X31_Y60_N17      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
++---------+---------+----+------+--------+---------------------+---------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                                            ;
++---------+----------+----+------+--------+---------------------+---------------------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                                       ;
++---------+----------+----+------+--------+---------------------+---------------------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                               ;
+; 3.594   ; 3.594    ;    ;      ;        ;                     ; clock path                                                    ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                                ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                           ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                             ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                            ;
+;   5.653 ;   2.446  ; RR ; IC   ; 1      ; FF_X31_Y60_N17      ; u_normals|terrain_samples_evaluated_o[6]|clk                  ;
+;   6.223 ;   0.570  ; RR ; CELL ; 1      ; FF_X31_Y60_N17      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
+;   3.594 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                                       ;
+; 3.594   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                                             ;
+; 3.594   ; 0.000    ;    ; uTh  ; 1      ; FF_X31_Y60_N17      ; zhao_terrain_normals:u_normals|terrain_samples_evaluated_o[6] ;
++---------+----------+----+------+--------+---------------------+---------------------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #19: Hold slack is 0.420 
+===============================================================================
++---------------------------------------------------------------+
+; Path Summary                                                  ;
++--------------------+------------------------------------------+
+; Property           ; Value                                    ;
++--------------------+------------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|acc2[66]  ;
+; To Node            ; zhao_terrain_normals:u_normals|s1_n2[66] ;
+; Launch Clock       ; clk                                      ;
+; Latch Clock        ; clk                                      ;
+; Data Arrival Time  ; 4.048                                    ;
+; Data Required Time ; 3.628                                    ;
+; Slack              ; 0.420                                    ;
++--------------------+------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.113 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.533 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.756       ; 78         ; 0.733 ; 2.023 ;
+;    Cell                ;       ; 2     ; 0.759       ; 22         ; 0.272 ; 0.487 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.234       ; 44         ; 0.000 ; 0.234 ;
+;    Cell                ;       ; 3     ; 0.299       ; 56         ; 0.000 ; 0.230 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.388       ; 86         ; 2.479 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.865       ; 14         ; 0.298 ; 0.567 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                       ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                  ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                         ;
+; 3.515   ; 3.515   ;    ;      ;        ;                     ; clock path                               ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                           ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                      ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                        ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                       ;
+;   3.028 ;   2.023 ; RR ; IC   ; 1      ; FF_X37_Y56_N56      ; u_normals|acc2[66]|clk                   ;
+;   3.515 ;   0.487 ; RR ; CELL ; 1      ; FF_X37_Y56_N56      ; zhao_terrain_normals:u_normals|acc2[66]  ;
+; 4.048   ; 0.533   ;    ;      ;        ;                     ; data path                                ;
+;   3.515 ;   0.000 ;    ; uTco ; 1      ; FF_X37_Y56_N56      ; zhao_terrain_normals:u_normals|acc2[66]  ;
+;   3.515 ;   0.000 ; FF ; CELL ; 1      ; FF_X37_Y56_N56      ; u_normals|acc2[66]|q                     ;
+;   3.749 ;   0.234 ; FF ; IC   ; 1      ; LABCELL_X37_Y56_N48 ; u_normals|Add11~9|datac                  ;
+;   3.979 ;   0.230 ; FR ; CELL ; 2      ; LABCELL_X37_Y56_N48 ; u_normals|Add11~9|sumout                 ;
+;   3.979 ;   0.000 ; RR ; IC   ; 1      ; FF_X37_Y56_N49      ; u_normals|s1_n2[66]|d                    ;
+;   4.048 ;   0.069 ; RR ; CELL ; 1      ; FF_X37_Y56_N49      ; zhao_terrain_normals:u_normals|s1_n2[66] ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                       ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                  ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                          ;
+; 3.628   ; 3.628    ;    ;      ;        ;                     ; clock path                               ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                           ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                      ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                        ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                       ;
+;   5.686 ;   2.479  ; RR ; IC   ; 1      ; FF_X37_Y56_N49      ; u_normals|s1_n2[66]|clk                  ;
+;   6.253 ;   0.567  ; RR ; CELL ; 1      ; FF_X37_Y56_N49      ; zhao_terrain_normals:u_normals|s1_n2[66] ;
+;   3.628 ;   -2.625 ;    ;      ;        ;                     ; clock pessimism removed                  ;
+; 3.628   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                        ;
+; 3.628   ; 0.000    ;    ; uTh  ; 1      ; FF_X37_Y56_N49      ; zhao_terrain_normals:u_normals|s1_n2[66] ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #20: Hold slack is 0.421 
+===============================================================================
++---------------------------------------------------------+
+; Path Summary                                            ;
++--------------------+------------------------------------+
+; Property           ; Value                              ;
++--------------------+------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|vy[0][15] ;
+; To Node            ; zhao_terrain_tess:u_tess|o_ay[15]  ;
+; Launch Clock       ; clk                                ;
+; Latch Clock        ; clk                                ;
+; Data Arrival Time  ; 4.416                              ;
+; Data Required Time ; 3.995                              ;
+; Slack              ; 0.421                              ;
++--------------------+------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.556 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.977 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 0     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.675       ; 78         ; 0.733 ; 1.942 ;
+;    Cell                ;       ; 2     ; 0.764       ; 22         ; 0.272 ; 0.492 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 1     ; 0.693       ; 71         ; 0.693 ; 0.693 ;
+;    Cell                ;       ; 2     ; 0.284       ; 29         ; 0.000 ; 0.284 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.329       ; 86         ; 2.420 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.868       ; 14         ; 0.298 ; 0.570 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                 ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                            ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                   ;
+; 3.439   ; 3.439   ;    ;      ;        ;                     ; clock path                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                 ;
+;   2.947 ;   1.942 ; RR ; IC   ; 1      ; FF_X22_Y56_N14      ; u_tess|vy[0][15]|clk               ;
+;   3.439 ;   0.492 ; RR ; CELL ; 1      ; FF_X22_Y56_N14      ; zhao_terrain_tess:u_tess|vy[0][15] ;
+; 4.416   ; 0.977   ;    ;      ;        ;                     ; data path                          ;
+;   3.439 ;   0.000 ;    ; uTco ; 1      ; FF_X22_Y56_N14      ; zhao_terrain_tess:u_tess|vy[0][15] ;
+;   3.439 ;   0.000 ; RR ; CELL ; 1      ; FF_X22_Y56_N14      ; u_tess|vy[0][15]|q                 ;
+;   4.132 ;   0.693 ; RR ; IC   ; 1      ; FF_X28_Y56_N43      ; u_tess|o_ay[15]|asdata             ;
+;   4.416 ;   0.284 ; RR ; CELL ; 1      ; FF_X28_Y56_N43      ; zhao_terrain_tess:u_tess|o_ay[15]  ;
++---------+---------+----+------+--------+---------------------+------------------------------------+
+
++---------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                           ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                   ;
+; 3.995   ; 3.995    ;    ;      ;        ;                     ; clock path                        ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                    ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                               ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                 ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                ;
+;   5.627 ;   2.420  ; RR ; IC   ; 1      ; FF_X28_Y56_N43      ; u_tess|o_ay[15]|clk               ;
+;   6.197 ;   0.570  ; RR ; CELL ; 1      ; FF_X28_Y56_N43      ; zhao_terrain_tess:u_tess|o_ay[15] ;
+;   3.995 ;   -2.202 ;    ;      ;        ;                     ; clock pessimism removed           ;
+; 3.995   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                 ;
+; 3.995   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y56_N43      ; zhao_terrain_tess:u_tess|o_ay[15] ;
++---------+----------+----+------+--------+---------------------+-----------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #21: Hold slack is 0.422 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|acc2[3] ;
+; To Node            ; zhao_terrain_normals:u_normals|acc2[3] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.091                                  ;
+; Data Required Time ; 3.669                                  ;
+; Slack              ; 0.422                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.114 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.536 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.781       ; 78         ; 0.733 ; 2.048 ;
+;    Cell                ;       ; 2     ; 0.774       ; 22         ; 0.272 ; 0.502 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.236       ; 44         ; 0.000 ; 0.236 ;
+;    Cell                ;       ; 3     ; 0.300       ; 56         ; 0.000 ; 0.231 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.415       ; 86         ; 2.506 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.883       ; 14         ; 0.298 ; 0.585 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++-------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                     ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                       ;
+; 3.555   ; 3.555   ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   3.053 ;   2.048 ; RR ; IC   ; 1      ; FF_X37_Y59_N41      ; u_normals|acc2[3]|clk                  ;
+;   3.555 ;   0.502 ; RR ; CELL ; 1      ; FF_X37_Y59_N41      ; zhao_terrain_normals:u_normals|acc2[3] ;
+; 4.091   ; 0.536   ;    ;      ;        ;                     ; data path                              ;
+;   3.555 ;   0.000 ;    ; uTco ; 1      ; FF_X37_Y59_N41      ; zhao_terrain_normals:u_normals|acc2[3] ;
+;   3.555 ;   0.000 ; FF ; CELL ; 1      ; FF_X37_Y59_N41      ; u_normals|acc2[3]|q                    ;
+;   3.791 ;   0.236 ; FF ; IC   ; 3      ; LABCELL_X37_Y59_N39 ; u_normals|Add11~253|datac              ;
+;   4.022 ;   0.231 ; FR ; CELL ; 1      ; LABCELL_X37_Y59_N39 ; u_normals|Add11~253|sumout             ;
+;   4.022 ;   0.000 ; RR ; IC   ; 1      ; FF_X37_Y59_N41      ; u_normals|acc2[3]|d                    ;
+;   4.091 ;   0.069 ; RR ; CELL ; 1      ; FF_X37_Y59_N41      ; zhao_terrain_normals:u_normals|acc2[3] ;
++---------+---------+----+------+--------+---------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.669   ; 3.669    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.713 ;   2.506  ; RR ; IC   ; 1      ; FF_X37_Y59_N41      ; u_normals|acc2[3]|clk                  ;
+;   6.298 ;   0.585  ; RR ; CELL ; 1      ; FF_X37_Y59_N41      ; zhao_terrain_normals:u_normals|acc2[3] ;
+;   3.669 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.669   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.669   ; 0.000    ;    ; uTh  ; 1      ; FF_X37_Y59_N41      ; zhao_terrain_normals:u_normals|acc2[3] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #22: Hold slack is 0.425 
+===============================================================================
++-----------------------------------------------------------------------+
+; Path Summary                                                          ;
++--------------------+--------------------------------------------------+
+; Property           ; Value                                            ;
++--------------------+--------------------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
+; To Node            ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
+; Launch Clock       ; clk                                              ;
+; Latch Clock        ; clk                                              ;
+; Data Arrival Time  ; 4.011                                            ;
+; Data Required Time ; 3.586                                            ;
+; Slack              ; 0.425                                            ;
++--------------------+--------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.107 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.532 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.725       ; 78         ; 0.733 ; 1.992 ;
+;    Cell                ;       ; 2     ; 0.754       ; 22         ; 0.272 ; 0.482 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.234       ; 44         ; 0.000 ; 0.234 ;
+;    Cell                ;       ; 3     ; 0.298       ; 56         ; 0.000 ; 0.226 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.356       ; 86         ; 2.447 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.859       ; 14         ; 0.298 ; 0.561 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++------------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                                ;
++---------+---------+----+------+--------+----------------------+--------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                          ;
++---------+---------+----+------+--------+----------------------+--------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                                 ;
+; 3.479   ; 3.479   ;    ;      ;        ;                      ; clock path                                       ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                                   ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                              ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                                ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                               ;
+;   2.997 ;   1.992 ; RR ; IC   ; 1      ; FF_X28_Y60_N50       ; u_tess|subpatch_rejected_o[17]|clk               ;
+;   3.479 ;   0.482 ; RR ; CELL ; 1      ; FF_X28_Y60_N50       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
+; 4.011   ; 0.532   ;    ;      ;        ;                      ; data path                                        ;
+;   3.479 ;   0.000 ;    ; uTco ; 1      ; FF_X28_Y60_N50       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
+;   3.479 ;   0.000 ; FF ; CELL ; 1      ; FF_X28_Y60_N50       ; u_tess|subpatch_rejected_o[17]|q                 ;
+;   3.713 ;   0.234 ; FF ; IC   ; 2      ; MLABCELL_X28_Y60_N48 ; u_tess|Add75~65|datac                            ;
+;   3.939 ;   0.226 ; FR ; CELL ; 2      ; MLABCELL_X28_Y60_N48 ; u_tess|Add75~65|sumout                           ;
+;   3.939 ;   0.000 ; RR ; IC   ; 1      ; FF_X28_Y60_N50       ; u_tess|subpatch_rejected_o[17]|d                 ;
+;   4.011 ;   0.072 ; RR ; CELL ; 1      ; FF_X28_Y60_N50       ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
++---------+---------+----+------+--------+----------------------+--------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                               ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                          ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                  ;
+; 3.586   ; 3.586    ;    ;      ;        ;                     ; clock path                                       ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                   ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                              ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                               ;
+;   5.654 ;   2.447  ; RR ; IC   ; 1      ; FF_X28_Y60_N50      ; u_tess|subpatch_rejected_o[17]|clk               ;
+;   6.215 ;   0.561  ; RR ; CELL ; 1      ; FF_X28_Y60_N50      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
+;   3.586 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                          ;
+; 3.586   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                                ;
+; 3.586   ; 0.000    ;    ; uTh  ; 1      ; FF_X28_Y60_N50      ; zhao_terrain_tess:u_tess|subpatch_rejected_o[17] ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #23: Hold slack is 0.425 
+===============================================================================
++-----------------------------------------------------------------------------------------+
+; Path Summary                                                                            ;
++--------------------+--------------------------------------------------------------------+
+; Property           ; Value                                                              ;
++--------------------+--------------------------------------------------------------------+
+; From Node          ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]           ;
+; To Node            ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]~DUPLICATE ;
+; Launch Clock       ; clk                                                                ;
+; Latch Clock        ; clk                                                                ;
+; Data Arrival Time  ; 4.019                                                              ;
+; Data Required Time ; 3.594                                                              ;
+; Slack              ; 0.425                                                              ;
++--------------------+--------------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.113 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.538 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.725       ; 78         ; 0.733 ; 1.992 ;
+;    Cell                ;       ; 2     ; 0.756       ; 22         ; 0.272 ; 0.484 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.233       ; 43         ; 0.000 ; 0.233 ;
+;    Cell                ;       ; 3     ; 0.305       ; 57         ; 0.000 ; 0.227 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.356       ; 86         ; 2.447 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.867       ; 14         ; 0.298 ; 0.569 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++-----------------------------------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                                                 ;
++---------+---------+----+------+--------+---------------------+--------------------------------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                                            ;
++---------+---------+----+------+--------+---------------------+--------------------------------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                                                   ;
+; 3.481   ; 3.481   ;    ;      ;        ;                     ; clock path                                                         ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                                                     ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                                ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                                  ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                                 ;
+;   2.997 ;   1.992 ; RR ; IC   ; 1      ; FF_X29_Y60_N50      ; u_tess|terrain_triangles_emitted_o[17]|clk                         ;
+;   3.481 ;   0.484 ; RR ; CELL ; 1      ; FF_X29_Y60_N50      ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]           ;
+; 4.019   ; 0.538   ;    ;      ;        ;                     ; data path                                                          ;
+;   3.481 ;   0.000 ;    ; uTco ; 1      ; FF_X29_Y60_N50      ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]           ;
+;   3.481 ;   0.000 ; FF ; CELL ; 1      ; FF_X29_Y60_N50      ; u_tess|terrain_triangles_emitted_o[17]|q                           ;
+;   3.714 ;   0.233 ; FF ; IC   ; 2      ; LABCELL_X29_Y60_N48 ; u_tess|Add77~65|datac                                              ;
+;   3.941 ;   0.227 ; FR ; CELL ; 2      ; LABCELL_X29_Y60_N48 ; u_tess|Add77~65|sumout                                             ;
+;   3.941 ;   0.000 ; RR ; IC   ; 1      ; FF_X29_Y60_N49      ; u_tess|terrain_triangles_emitted_o[17]~DUPLICATE|d                 ;
+;   4.019 ;   0.078 ; RR ; CELL ; 1      ; FF_X29_Y60_N49      ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]~DUPLICATE ;
++---------+---------+----+------+--------+---------------------+--------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                                                 ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                                            ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                                                    ;
+; 3.594   ; 3.594    ;    ;      ;        ;                     ; clock path                                                         ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                                                     ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                                                ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                                                  ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                                                 ;
+;   5.654 ;   2.447  ; RR ; IC   ; 1      ; FF_X29_Y60_N49      ; u_tess|terrain_triangles_emitted_o[17]~DUPLICATE|clk               ;
+;   6.223 ;   0.569  ; RR ; CELL ; 1      ; FF_X29_Y60_N49      ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]~DUPLICATE ;
+;   3.594 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                                            ;
+; 3.594   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                                                  ;
+; 3.594   ; 0.000    ;    ; uTh  ; 1      ; FF_X29_Y60_N49      ; zhao_terrain_tess:u_tess|terrain_triangles_emitted_o[17]~DUPLICATE ;
++---------+----------+----+------+--------+---------------------+--------------------------------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #24: Hold slack is 0.426 
+===============================================================================
++-------------------------------------------------------------+
+; Path Summary                                                ;
++--------------------+----------------------------------------+
+; Property           ; Value                                  ;
++--------------------+----------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|acc0[2] ;
+; To Node            ; zhao_terrain_normals:u_normals|acc0[2] ;
+; Launch Clock       ; clk                                    ;
+; Latch Clock        ; clk                                    ;
+; Data Arrival Time  ; 4.056                                  ;
+; Data Required Time ; 3.630                                  ;
+; Slack              ; 0.426                                  ;
++--------------------+----------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.110 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.536 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 1     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.768       ; 79         ; 0.733 ; 2.035 ;
+;    Cell                ;       ; 2     ; 0.752       ; 21         ; 0.272 ; 0.480 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 0.240       ; 45         ; 0.000 ; 0.240 ;
+;    Cell                ;       ; 3     ; 0.296       ; 55         ; 0.000 ; 0.227 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.402       ; 86         ; 2.493 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.857       ; 14         ; 0.298 ; 0.559 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++--------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                      ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location             ; Element                                ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                      ; launch edge time                       ;
+; 3.520   ; 3.520   ;    ;      ;        ;                      ; clock path                             ;
+;   0.000 ;   0.000 ;    ;      ;        ;                      ; source latency                         ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39  ; clk                                    ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15          ; clk~CLKENA0|inclk                      ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15          ; clk~CLKENA0|outclk                     ;
+;   3.040 ;   2.035 ; RR ; IC   ; 1      ; FF_X34_Y59_N38       ; u_normals|acc0[2]|clk                  ;
+;   3.520 ;   0.480 ; RR ; CELL ; 1      ; FF_X34_Y59_N38       ; zhao_terrain_normals:u_normals|acc0[2] ;
+; 4.056   ; 0.536   ;    ;      ;        ;                      ; data path                              ;
+;   3.520 ;   0.000 ;    ; uTco ; 1      ; FF_X34_Y59_N38       ; zhao_terrain_normals:u_normals|acc0[2] ;
+;   3.520 ;   0.000 ; FF ; CELL ; 1      ; FF_X34_Y59_N38       ; u_normals|acc0[2]|q                    ;
+;   3.760 ;   0.240 ; FF ; IC   ; 3      ; MLABCELL_X34_Y59_N36 ; u_normals|Add9~257|datac               ;
+;   3.987 ;   0.227 ; FR ; CELL ; 1      ; MLABCELL_X34_Y59_N36 ; u_normals|Add9~257|sumout              ;
+;   3.987 ;   0.000 ; RR ; IC   ; 1      ; FF_X34_Y59_N38       ; u_normals|acc0[2]|d                    ;
+;   4.056 ;   0.069 ; RR ; CELL ; 1      ; FF_X34_Y59_N38       ; zhao_terrain_normals:u_normals|acc0[2] ;
++---------+---------+----+------+--------+----------------------+----------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                     ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                        ;
+; 3.630   ; 3.630    ;    ;      ;        ;                     ; clock path                             ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                         ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                    ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                      ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                     ;
+;   5.700 ;   2.493  ; RR ; IC   ; 1      ; FF_X34_Y59_N38      ; u_normals|acc0[2]|clk                  ;
+;   6.259 ;   0.559  ; RR ; CELL ; 1      ; FF_X34_Y59_N38      ; zhao_terrain_normals:u_normals|acc0[2] ;
+;   3.630 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                ;
+; 3.630   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                      ;
+; 3.630   ; 0.000    ;    ; uTh  ; 1      ; FF_X34_Y59_N38      ; zhao_terrain_normals:u_normals|acc0[2] ;
++---------+----------+----+------+--------+---------------------+----------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+
+Path #25: Hold slack is 0.426 
+===============================================================================
++---------------------------------------------------------------+
+; Path Summary                                                  ;
++--------------------+------------------------------------------+
+; Property           ; Value                                    ;
++--------------------+------------------------------------------+
+; From Node          ; zhao_terrain_normals:u_normals|m_src[6]  ;
+; To Node            ; zhao_terrain_normals:u_normals|s1_src[6] ;
+; Launch Clock       ; clk                                      ;
+; Latch Clock        ; clk                                      ;
+; Data Arrival Time  ; 4.041                                    ;
+; Data Required Time ; 3.615                                    ;
+; Slack              ; 0.426                                    ;
++--------------------+------------------------------------------+
+
++-----------------------------------------------------------------------------------+
+; Statistics                                                                        ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Property               ; Value ; Count ; Total Delay ; % of Total ; Min   ; Max   ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+; Hold Relationship      ; 0.000 ;       ;             ;            ;       ;       ;
+; Clock Skew             ; 0.114 ;       ;             ;            ;       ;       ;
+; Data Delay             ; 0.540 ;       ;             ;            ;       ;       ;
+; Number of Logic Levels ;       ; 0     ;             ;            ;       ;       ;
+; Physical Delays        ;       ;       ;             ;            ;       ;       ;
+;  Arrival Path          ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 2.726       ; 78         ; 0.733 ; 1.993 ;
+;    Cell                ;       ; 2     ; 0.775       ; 22         ; 0.272 ; 0.503 ;
+;   Data                 ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 1     ; 0.254       ; 47         ; 0.254 ; 0.254 ;
+;    Cell                ;       ; 2     ; 0.286       ; 53         ; 0.000 ; 0.286 ;
+;    uTco                ;       ; 1     ; 0.000       ; 0          ; 0.000 ; 0.000 ;
+;  Required Path         ;       ;       ;             ;            ;       ;       ;
+;   Clock                ;       ;       ;             ;            ;       ;       ;
+;    IC                  ;       ; 2     ; 5.357       ; 86         ; 2.448 ; 2.909 ;
+;    Cell                ;       ; 2     ; 0.887       ; 14         ; 0.298 ; 0.589 ;
++------------------------+-------+-------+-------------+------------+-------+-------+
+Note: Negative delays are omitted from totals when calculating percentages
+
++---------------------------------------------------------------------------------------------------------+
+; Data Arrival Path                                                                                       ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+; Total   ; Incr    ; RF ; Type ; Fanout ; Location            ; Element                                  ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+; 0.000   ; 0.000   ;    ;      ;        ;                     ; launch edge time                         ;
+; 3.501   ; 3.501   ;    ;      ;        ;                     ; clock path                               ;
+;   0.000 ;   0.000 ;    ;      ;        ;                     ; source latency                           ;
+;   0.000 ;   0.000 ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                      ;
+;   0.733 ;   0.733 ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                        ;
+;   1.005 ;   0.272 ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                       ;
+;   2.998 ;   1.993 ; RR ; IC   ; 1      ; FF_X25_Y60_N44      ; u_normals|m_src[6]|clk                   ;
+;   3.501 ;   0.503 ; RR ; CELL ; 1      ; FF_X25_Y60_N44      ; zhao_terrain_normals:u_normals|m_src[6]  ;
+; 4.041   ; 0.540   ;    ;      ;        ;                     ; data path                                ;
+;   3.501 ;   0.000 ;    ; uTco ; 1      ; FF_X25_Y60_N44      ; zhao_terrain_normals:u_normals|m_src[6]  ;
+;   3.501 ;   0.000 ; RR ; CELL ; 1      ; FF_X25_Y60_N44      ; u_normals|m_src[6]|q                     ;
+;   3.755 ;   0.254 ; RR ; IC   ; 1      ; FF_X25_Y60_N34      ; u_normals|s1_src[6]|asdata               ;
+;   4.041 ;   0.286 ; RR ; CELL ; 1      ; FF_X25_Y60_N34      ; zhao_terrain_normals:u_normals|s1_src[6] ;
++---------+---------+----+------+--------+---------------------+------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------+
+; Data Required Path                                                                                       ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+; Total   ; Incr     ; RF ; Type ; Fanout ; Location            ; Element                                  ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+; 0.000   ; 0.000    ;    ;      ;        ;                     ; latch edge time                          ;
+; 3.615   ; 3.615    ;    ;      ;        ;                     ; clock path                               ;
+;   0.000 ;   0.000  ;    ;      ;        ;                     ; source latency                           ;
+;   0.000 ;   0.000  ;    ;      ; 1      ; LABCELL_X43_Y80_N39 ; clk                                      ;
+;   2.909 ;   2.909  ; RR ; IC   ; 1      ; CLKCTRL_G15         ; clk~CLKENA0|inclk                        ;
+;   3.207 ;   0.298  ; RR ; CELL ; 1396   ; CLKCTRL_G15         ; clk~CLKENA0|outclk                       ;
+;   5.655 ;   2.448  ; RR ; IC   ; 1      ; FF_X25_Y60_N34      ; u_normals|s1_src[6]|clk                  ;
+;   6.244 ;   0.589  ; RR ; CELL ; 1      ; FF_X25_Y60_N34      ; zhao_terrain_normals:u_normals|s1_src[6] ;
+;   3.615 ;   -2.629 ;    ;      ;        ;                     ; clock pessimism removed                  ;
+; 3.615   ; 0.000    ;    ;      ;        ;                     ; clock uncertainty                        ;
+; 3.615   ; 0.000    ;    ; uTh  ; 1      ; FF_X25_Y60_N34      ; zhao_terrain_normals:u_normals|s1_src[6] ;
++---------+----------+----+------+--------+---------------------+------------------------------------------+
+
+----------------------------
+; Extra Fitter Information ;
+----------------------------
+HTML report is unavailable in plain text report export.
+
+

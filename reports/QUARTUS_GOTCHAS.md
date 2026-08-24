@@ -528,3 +528,60 @@ Seven of the eight were printed by the tool, in plain text, in runs nobody read.
 **Run the fit. Read what it says.** A green differential and a clean mutation
 sweep say the logic is right; they say nothing at all about whether the thing
 can be built.
+
+---
+
+## 12. A pair/leaf fit in a mostly-empty device measures ROUTING, not the design
+
+**MEASURED 2026-08-24, and it invalidated a ranking I had already acted on.**
+
+Four renderer pair wrappers were fitted to rank them for pipelining:
+
+| pair | Fmax |
+| --- | ---: |
+| TESS+NORMALS | 31.10 |
+| TMU+CACHE | 37.25 |
+| FRAGMENT+TILESTORE | 55.52 |
+| SETUP+BINNER | 88.79 |
+
+I read the spread as a property of the blocks — specifically that the slow ones
+carry control state while the fast one is pure arithmetic. Then the critical
+path report arrived:
+
+    Data Delay              30.000 ns
+    Number of Logic Levels  10
+
+**Three nanoseconds per logic level.** Cyclone V logic is ~0.3–0.5 ns/level. The
+clock path spent **66% of its delay in interconnect**. That is not a deep
+datapath; it is a **1,523-ALM design placed in a 41,910-ALM device** with virtual
+pins on every port. Nothing pressures the fitter to pack it, so it sprawls and
+the router takes long routes between the pieces.
+
+**So the number characterises the placement, not the logic.**
+
+### What this does and does not invalidate
+
+* **Relative ranking between pairs is still weak evidence** — all four were fitted
+  the same way, so all four are inflated by the same mechanism. But they are not
+  inflated by the same AMOUNT: sprawl depends on size and shape, and the fastest
+  pair (SETUP+BINNER, 1,405 ALM) is nearly the same size as the slowest
+  (TESS+NORMALS, 1,523 ALM), which is exactly what makes the comparison
+  untrustworthy rather than merely imprecise.
+* **The composed shell fit is NOT affected.** It is 7,442 ALMs of genuinely
+  connected logic with a real top level, and its critical paths run between named
+  blocks rather than across empty fabric.
+* **DSP and memory counts are unaffected** — those are inference results, not
+  placement results.
+
+### The rule
+
+> **A leaf or pair Fmax is an upper bound on nothing and a lower bound on the
+> design's real speed.** Treat it as a screening number that can only say "this
+> block is not obviously catastrophic". To compare two blocks, either compose
+> them into something that fills a meaningful fraction of the device, or accept
+> that the comparison is between two placements rather than two designs.
+
+The audit asked for pair fits because leaf fits carry ~1,000 fictional virtual
+pins. That was right and the pairs did fix it — TESS+NORMALS went 1,045 pins to
+67. **It fixed the boundary problem and left the sprawl problem**, and I did not
+notice until I read a path.
