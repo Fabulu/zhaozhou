@@ -536,6 +536,65 @@ for a change to CRC seeding — plus `ctest -L fast` green at 272 and ledger 0.
 
 Refit running. **One measured change per commit**, as section 6 requires.
 
+### 17:20 — THE CDC IS A COIN FLIP, and that is the real result of the day
+
+Four composed fits, **none of which touch the crossing**:
+
+| fit | RTL change | CDC hold |
+| --- | --- | ---: |
+| `f2680df` | — | **-0.952 FAIL** |
+| `86e27e3` | GLUE 3 subtract | **+0.254 pass** |
+| `59de7ca` | CRC seed -> M_HCRC | **+0.259 pass** |
+| `e617267` | CRC seed -> M_SEED_PREP | **-0.728 FAIL** |
+
+1.2 ns of swing on placement alone. **`timingPassed` is therefore
+nondeterministic**, which is worse than permanently red: a flag that flips at
+random cannot be trusted in either direction, and a real regression arriving on
+a lucky fit is indistinguishable from luck.
+
+That promotes ShellFixes item 1 from *recommended* to **required**, on empirical
+rather than architectural grounds. Docketed at `d950641`; **not taken
+unilaterally**, because it changes a crossing with a stated safety premise and
+needs its own formal properties.
+
+### 17:25 — and the synchronous problem went DIFFUSE
+
+| fit | worst setup | endpoints | worst family |
+| --- | ---: | ---: | --- |
+| `f2680df` | -1.991 | 836 | `f_pos -> recq[*]` |
+| `86e27e3` | -0.423 | 16 | `hps_arbiter -> crc_hdr_r` |
+| `59de7ca` | -0.621 | 60 | `m.M_HCRC -> crc_pay_r` |
+| `e617267` | -0.570 | 36 | `scanout_fetch -> mem_guard|fwd_req.addr` |
+
+**Three fits, three different worst families, all in -0.42..-0.62.** The
+single-family era ended with GLUE 3. No path dominates, so further one-path
+surgery has low expected value — and single-seed A/B can no longer resolve
+0.2 ns from placement noise, which is exactly why my `M_SEED_PREP` relocation
+still reads worse than the state before the CMD.DMA change.
+
+> **The CDC repair is a precondition for judging anything else.** You cannot
+> A/B a diffuse timing problem against a verdict that flips on placement.
+
+### 17:30 — the renderer's FIRST composed measurement
+
+`fpga/rtl/synth/zhao_pair_tess_normals.sv` (`1b17ff5`), the registered
+characterization wrapper the audit asked for and nobody built.
+
+**Every renderer number in the census is a LEAF fit.** `zhao_terrain_tess`
+alone presents nine 32-bit vertex outputs as virtual pins, so the fitter is told
+they are free and the seam that matters is never placed. The composed SHELL has
+been measured four times; the RENDERER has never been built as one machine at
+all.
+
+Registered stimulus in, registered hash sink out, so nothing reaches a pin and
+no lane can be optimised away for being unobserved. **The lattice is a
+registered memory read, not a function of the request** — driving it
+combinationally would flatter the number by deleting a real cycle boundary.
+
+Limits written into the file rather than left implied: no true lattice depth, no
+real height distribution, `nrm_ready_i` tied high. It answers "how fast can the
+pair run when nothing stalls it", which is the question a clock target asks.
+
 ---
 
 ## Decisions Made

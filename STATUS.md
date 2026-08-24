@@ -5,6 +5,57 @@ at the top.*
 
 ---
 
+## 2026-08-24 (evening) — the renderer has a timing number for the first time, and it is 31 MHz
+
+### What was measured
+
+Terrain tessellator + normals, built as **one machine** with the seam between
+them internal. Every renderer number before today was a single block measured in
+isolation, with its outputs treated as free pins.
+
+| | two blocks measured separately | **built as one** |
+| --- | ---: | ---: |
+| logic (ALMs) | 2,100 | **1,523** |
+| multipliers | 24 | **9** |
+| fake boundary pins | **1,045** | **67** |
+| speed | **never measured** | **31.1 MHz** |
+
+**94% of that boundary was fictional.** That is why isolated block numbers were
+never trustworthy, and it is the thing the audit warned about in June and nobody
+had tested until now.
+
+The multiplier count is a clean confirmation: 6 + 3 = 9, exactly as predicted
+after this morning's normals rework took that block from 18 to 3.
+
+### 31 MHz against a 100 MHz target — what it does and does not mean
+
+**It is not a throughput problem.** Even at 31 MHz this pair can produce about
+**74,000 normals per frame against a demand of 2,000** — 37× more than the game
+asks for. The work fits easily.
+
+**It is a problem because the clock is shared.** If this pair sits in the same
+clock domain as everything else, it sets the ceiling for everything else, and
+that ceiling would be 31 MHz rather than 100.
+
+**Which is good news, oddly.** A block with 37× spare throughput can be given
+more pipeline stages almost for free: each stage costs a clock of latency and
+buys clock speed, and we have latency to burn. This is the cheapest kind of
+timing problem to fix — unlike the shell, where the last 5% is spread thin
+across a dozen unrelated paths.
+
+### What it changes about priorities
+
+The shell is at 95.9 MHz and 4% short. **The renderer is 3× short and nobody
+knew, because no renderer block had a valid speed measurement at all.** That
+inverts the ordering: the shell's remaining 4% is a polish problem, while the
+renderer needs real pipelining work — and it needs the same pair-wise
+measurement done for the other seams before we can say how much.
+
+Five more pairs are worth building the same way: texture+cache, fragment+tile
+store, setup+binner, projector+vertex cache, field+terrain intake.
+
+---
+
 ## 2026-08-24 (late afternoon) — one line of RTL took the shell from 836 failing paths to 16
 
 ### Measured, before and after, on the same machine and the same flow
