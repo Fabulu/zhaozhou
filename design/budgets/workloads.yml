@@ -84,13 +84,37 @@ blocks:
     reserve: 0.20
 
   zhao_terrain_project:
-    unit: patches
-    itemsPerFrame: 270
-    confidence: ruled
+    # CORRECTED 2026-08-24. This entry previously read `unit: patches,
+    # itemsPerFrame: 270, confidence: ruled`, and every part of that was wrong
+    # in the same way: 270 was DERIVED IN TERRAIN.PROJECT.md:198 AS A CAPACITY,
+    # by dividing the 1,666,667-clock frame by the 6,144-clock cost of a patch.
+    # It was a capacity filed as a demand.
+    #
+    # The tool computes capacity in PROJECTIONS and divided it by a demand in
+    # PATCHES, so it compared the block against itself and reported roughly
+    # 6,173x over-provisioned -- ranking the most saturated block in the design
+    # as the most wasteful one. The true ratio is about 1.0.
+    #
+    # `verticesPerItem: 3` was also read by nothing, and wrong: a 33x33 patch
+    # is 2,048 triangles x 3 corners = 6,144 projections, not 3.
+    #
+    # The real demand comes from the visible-patch budget instead:
+    # spec/terrain_rules.md:322 -- "256 live/visible patches".
+    #   256 patches x 6,144 projections = 1,572,864 projections/frame
+    #                                   = 94.4% of the compute frame.
+    # The block is SATURATED, not over-provisioned. Nothing in the terrain path
+    # has headroom until the projected-vertex cache lands, which takes a patch
+    # from 6,144 projections to its 1,089 unique lattice vertices:
+    #   256 x 1,089 = 278,784 = 16.7% of a frame, a 5.6x reduction.
+    unit: projections
+    itemsPerFrame: 1572864
+    confidence: derived
     source: >-
-      docs/OWNER_DOCKET.md 2026-08-23, "Where the remaining 188 multipliers
-      sit": ~270 patches/frame, already costed against the 1.67 M budget.
-    verticesPerItem: 3
+      spec/terrain_rules.md:322 gives 256 live/visible patches; each 33x33 patch
+      projects triangle CORNERS, so 2,048 triangles x 3 = 6,144 projections
+      (TERRAIN.PROJECT.md:198). 256 x 6,144 = 1,572,864 projections/frame,
+      94.4% of the 1,666,667-clock compute budget. NOT a ruled figure and NOT a
+      capacity: it is the visible-patch budget times the measured per-patch cost.
     measuredII: null
     requiredII: 1
     reserve: 0.20

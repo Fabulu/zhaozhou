@@ -5,17 +5,17 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `f7c3b578`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `3fbbe0e3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
 | modules scanned (elaborated AST) | **91** |
-| modules with a map of **this exact RTL** | **89** |
+| modules with a map of **this exact RTL** | **0** |
 | modules with a fit of this exact RTL | 0 |
 | modules with any map | 89 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
-| calibration points measured | 102 |
+| calibration points measured | 106 |
 
 ## The test of whether this works
 
@@ -34,7 +34,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | block | map DSP | fit DSP | expected RAM bits | inferred | II | demand | debt flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `zhao_geom_project` | 33 | - | - | 2,870 (0 design) | 1 | 0.07x | `NO_CURRENT_FIT`, `NO_II_TEST`, `OLD_SDC`, `PARETO_UNPROVEN` |
-| `zhao_terrain_project` | 33 | 33 | - | 3,822 (0 design) | 1 | 0.00016x | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `OLD_SDC`, `PARETO_UNPROVEN` |
+| `zhao_terrain_project` | 33 | 33 | - | 3,822 (0 design) | 1 | 0.94x | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_RESERVE`, `NO_SUBSYSTEM_FIT`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_bin_pipe` | 21 | - | 75,712 | 75,712 (6 design) | 1 | - | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_geom_pose_decode` | 18 | - | 12,288 | 12,288 (1 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_normals` | 18 | 18 | - | **0** | 1 | 0.0012x | `NO_CURRENT_FIT`, `NO_II_TEST`, `OLD_SDC`, `PARETO_UNPROVEN` |
@@ -48,7 +48,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_field_exec_shared` | 3 | - | 20,817 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_field_seq` | 3 | 3 | 22,865 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `PARETO_UNPROVEN` |
 | `zhao_terrain_lod` | 3 | 3 | - | **0** | 6 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_forge_cliff` | 2 | - | 119,808 | 82,944 (2 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
+| `zhao_forge_cliff` | 2 | - | 119,808 | 119,808 (4 design) | 13 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_audio_fifo` | 0 | 0 | 65,536 | 65,536 (1 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_cmd_dma` | 0 | 0 | 33,280 | 32,768 (1 design) | 19 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_debug_counters` | 0 | - | 2,560 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
@@ -62,12 +62,11 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_raster_tilestore` | 0 | 0 | 32,768 | 32,768 (2 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_shell_top` | - | - | 118,784 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_stub_top` | - | - | 8,388,608 | - | 4 | - | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_MAP`, `NO_WORKLOAD`, `OLD_SDC` |
-| `zhao_surface_sheet` | 0 | - | 131,072 | **0** | 1 | - | `EXPECTED_RAM_NOT_INFERRED`, `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC`, `PARETO_UNPROVEN` |
 | `zhao_terrain_patch` | 0 | 0 | - | **0** | 1 | - | `NO_CURRENT_FIT`, `NO_SUBSYSTEM_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_terrain_velocity` | 0 | - | - | **0** | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_texture_cache` | 0 | 0 | - | 8,192 (4 design) | 1 | - | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 
-## ORANGE (26)
+## ORANGE (27)
 
 | block | map DSP | II | critical-path family | debt flags |
 | --- | ---: | ---: | --- | --- |
@@ -94,6 +93,7 @@ II=1. Both must come out RED from mechanical rules alone.
 | `zhao_measure_governor` | 0 | 1 | VARSHIFT(2); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_mem_guard` | 0 | 1 | COMB_LOOP(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_sdram_ctrl` | 0 | 16 | ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
+| `zhao_surface_sheet` | 0 | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_surface_stamp` | 0 | 8 | VARSHIFT(1); ASYNC_ARRAY_READ(1) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_SUBSYSTEM_FIT` |
 | `zhao_texture_aux` | 0 | 6 | VARSHIFT(24) | `NO_CURRENT_FIT`, `NO_II_TEST`, `NO_WORKLOAD`, `OLD_SDC` |
 | `zhao_vram_arbiter` | 0 | 1 | COMB_LOOP(4); ASYNC_ARRAY_READ(4) | `NO_CURRENT_FIT`, `NO_WORKLOAD`, `OLD_SDC` |
@@ -155,9 +155,8 @@ device is not a question of estimator error.
 
 | block | est. ALM | % of device | DSP | expected storage bits | inferred |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `zhao_surface_sheet` | 95,947 | **229%** | 0 | 131,072 | **0** |
-| `zhao_forge_cliff` | 33,109 | **79%** | 2 | 119,808 | 82,944 |
 | `zhao_field_seq` | 7,958 | 19.0% | 3 | 22,865 | **0** |
+| `zhao_forge_cliff` | 7,664 | 18.3% | 2 | 119,808 | 119,808 |
 | `zhao_terrain_project` | 5,503 | 13.1% | 33 | - | 3,822 |
 | `zhao_geom_bin_pipe` | 5,299 | 12.6% | 21 | 75,712 | 75,712 |
 | `zhao_geom_project` | 5,028 | 12.0% | 33 | - | 2,870 |
@@ -169,6 +168,7 @@ device is not a question of estimator error.
 | `zhao_terrain_bake` | 2,324 | 5.5% | 17 | 1,089 | **0** |
 | `zhao_raster_edgewalk` | 2,308 | 5.5% | 2 | - | **0** |
 | `zhao_field_progcache` | 2,237 | 5.3% | 0 | - | **0** |
+| `zhao_texture_tmu` | 1,984 | 4.7% | 6 | - | **0** |
 
 ## Is the map lane trustworthy? Measured, not assumed
 
@@ -178,7 +178,7 @@ fit agree, so every block holding both a map row and a fit row is compared here.
 
 | block | map DSP | fit DSP | map commit | fit commit | |
 | --- | ---: | ---: | --- | --- | --- |
-| `zhao_terrain_project` | 33 | 33 | `7395d793` | `96c0394a` |  |
+| `zhao_terrain_project` | 33 | 33 | `b8aeeeb0` | `96c0394a` |  |
 | `zhao_terrain_normals` | 18 | 18 | `7395d793` | `96c0394a` |  |
 | `zhao_geom_cull` | 15 | 15 | `de11ce9b` | `2a711f0f` |  |
 | `zhao_geom_skin` | 9 | 9 | `de11ce9b` | `56ef194b` |  |
@@ -243,8 +243,8 @@ costs no throughput, because the spare cycles are already in the frame.
 | block | DSP now | products | demand | over-provision | lanes that clear demand | est. DSP after | est. return |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `zhao_geom_project` | 33 | 11 | 0.07x | 14x | 1 | 3 | **30** |
-| `zhao_terrain_project` | 33 | 11 | 0.00016x | 6173x | 1 | 3 | **30** |
 | `zhao_terrain_normals` | 18 | 6 | 0.0012x | 833x | 1 | 3 | **15** |
+| `zhao_terrain_project` | 33 | 11 | 0.94x | 1x | - | - | - |
 | `zhao_geom_bin_pipe` | 21 | 13 | - | - | - | - | - |
 | `zhao_geom_pose_decode` | 18 | 12 | - | - | - | - | - |
 | `zhao_terrain_bake` | 17 | 7 | - | - | - | - | - |
