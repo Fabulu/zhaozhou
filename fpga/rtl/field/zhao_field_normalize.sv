@@ -1,48 +1,93 @@
-// zhao_field_normalize.sv — the Field IR normalise ops: OP_NORMALIZE2 and
-// OP_NORMALIZE3.
-//
-// A submodule of the FIELD.SEQ.* family. Reference: the interpreter's
-// `normalize2` (§3.12) and `zref::normalize3_approx` (qformats §7.4), which are
-// the same shape and are implemented here as one datapath over two or three
-// lanes.
-//
-// The seed table lives in `zhao_field_rcp24_rom.sv`, GENERATED from
-// `zref_tables.hpp`. It is the SECOND reciprocal table in this engine and it is
-// NOT the one `zhao_field_rcp` uses — `FIELD_RCP_T0` seeds a 32-bit reciprocal
-// with one correction step, `RCP24_T0` seeds a 24-bit one with two. Feeding
-// either function the other's table would be invisible until some normalised
-// vector came out slightly short.
-//
-// ---------------------------------------------------------------------------
-// THE LAW
-// ---------------------------------------------------------------------------
-//     n2  = sum of squares, EXACT and unsigned
-//     n2 == 0                    -> all lanes zero (see the asymmetry below)
-//     len = isqrt_u64(n2)                       exact floor
-//     normalise len into [2^23, 2^24), counting e
-//     r   = rcp_u24_norm(m)                     TWO correction steps
-//     out = rescale_s32(lane * r, 31 + e)       ONE rounding per lane
-//
-// Five things are load-bearing:
-//
-// 1. **ONE ROUNDING PER LANE.** `lane * r` is exact in s64 and rescaled once by
-//    `31 + e`. The shift is a function of the vector's magnitude, not a
-//    constant, which is what keeps the result accurate across the whole range —
-//    and it is why `e` has to survive from the normalisation loop to the final
-//    rescale rather than being folded away early.
-// 2. **TWO CORRECTION STEPS, NOT ONE.** `rcp_u24_norm` iterates twice.
-//    `field_rcp` next door iterates ONCE. The two functions are different and
-//    the count is not a tuning knob.
-// 3. **THE ZERO CASE IS ASYMMETRIC BETWEEN THE TWO OPS**, and this is the one
-//    that looks like a bug and is not. `normalize2` bumps the `rcp0` ledger lane
-//    on a zero vector; `normalize3_approx` returns zeros and bumps NOTHING. The
-//    reference really does differ, so the RTL differs too, and the test pins
-//    both. Making them consistent would be tidier and would disagree with every
-//    capture the software has produced.
-// 4. **THE SUM OF SQUARES IS UNSIGNED.** Three squares reach 3*2^62, which
-//    overflows s64 and fits u64. The reference accumulates `normalize3`'s in a
-//    128-bit unsigned type and hands it to a u64 root; the value always fits.
-// 5. **THE ROOT IS A FLOOR.** Shared with `zhao_field_len`, same block, same
+// zhao_field_normalize.sv — the Field IR normalise ops: OP_NORMALIZE2 and
+
+// OP_NORMALIZE3.
+
+//
+
+// A submodule of the FIELD.SEQ.* family. Reference: the interpreter's
+
+// `normalize2` (§3.12) and `zref::normalize3_approx` (qformats §7.4), which are
+
+// the same shape and are implemented here as one datapath over two or three
+
+// lanes.
+
+//
+
+// The seed table lives in `zhao_field_rcp24_rom.sv`, GENERATED from
+
+// `zref_tables.hpp`. It is the SECOND reciprocal table in this engine and it is
+
+// NOT the one `zhao_field_rcp` uses — `FIELD_RCP_T0` seeds a 32-bit reciprocal
+
+// with one correction step, `RCP24_T0` seeds a 24-bit one with two. Feeding
+
+// either function the other's table would be invisible until some normalised
+
+// vector came out slightly short.
+
+//
+
+// ---------------------------------------------------------------------------
+
+// THE LAW
+
+// ---------------------------------------------------------------------------
+
+//     n2  = sum of squares, EXACT and unsigned
+
+//     n2 == 0                    -> all lanes zero (see the asymmetry below)
+
+//     len = isqrt_u64(n2)                       exact floor
+
+//     normalise len into [2^23, 2^24), counting e
+
+//     r   = rcp_u24_norm(m)                     TWO correction steps
+
+//     out = rescale_s32(lane * r, 31 + e)       ONE rounding per lane
+
+//
+
+// Five things are load-bearing:
+
+//
+
+// 1. **ONE ROUNDING PER LANE.** `lane * r` is exact in s64 and rescaled once by
+
+//    `31 + e`. The shift is a function of the vector's magnitude, not a
+
+//    constant, which is what keeps the result accurate across the whole range —
+
+//    and it is why `e` has to survive from the normalisation loop to the final
+
+//    rescale rather than being folded away early.
+
+// 2. **TWO CORRECTION STEPS, NOT ONE.** `rcp_u24_norm` iterates twice.
+
+//    `field_rcp` next door iterates ONCE. The two functions are different and
+
+//    the count is not a tuning knob.
+
+// 3. **THE ZERO CASE IS ASYMMETRIC BETWEEN THE TWO OPS**, and this is the one
+
+//    that looks like a bug and is not. `normalize2` bumps the `rcp0` ledger lane
+
+//    on a zero vector; `normalize3_approx` returns zeros and bumps NOTHING. The
+
+//    reference really does differ, so the RTL differs too, and the test pins
+
+//    both. Making them consistent would be tidier and would disagree with every
+
+//    capture the software has produced.
+
+// 4. **THE SUM OF SQUARES IS UNSIGNED.** Three squares reach 3*2^62, which
+
+//    overflows s64 and fits u64. The reference accumulates `normalize3`'s in a
+
+//    128-bit unsigned type and hands it to a u64 root; the value always fits.
+
+// 5. **THE ROOT IS A FLOOR.** Shared with `zhao_field_len`, same block, same
+
 //    exactness argument.
 //
 // ---------------------------------------------------------------------------
@@ -226,23 +271,38 @@ module zhao_field_normalize (
   logic signed [7:0] e_val;
   logic [23:0] m_val;
   logic signed [7:0] d_exp;
-  logic [ 5:0] rsh, lsh;
   always_comb begin
     // e = 40 - lz, which is n - 23 written in terms of leading zeros.
     d_exp = 8'sd40 - $signed({2'd0, lz});
-    // Exactly one of these is ever nonzero, so the pair below is a single
-    // shift in whichever direction the exponent asks for.
-    rsh = (d_exp > 8'sd0) ? 6'(d_exp) : 6'd0;
-    lsh = (d_exp < 8'sd0) ? 6'(-d_exp) : 6'd0;
   end
 
-  assign m_val = (h_rt == 64'd0) ? 24'd0 : 24'((h_rt >> rsh) << lsh);
+  // NO DYNAMIC SHIFT. This was:
+  //
+  //     rsh = (d_exp > 0) ?  d_exp : 0;
+  //     lsh = (d_exp < 0) ? -d_exp : 0;
+  //     m_val = 24'((h_rt >> rsh) << lsh);
+  //
+  // -- two 64-bit barrel shifts in series, described so the tool has to build
+  // both and mux them, to answer a question the leading-zero search has already
+  // answered. `lz_t` IS `h_rt << lz`, so its most significant set bit is at bit
+  // 63 by construction, and the normalised 24-bit mantissa is simply its top
+  // 24 bits.
+  //
+  // ENFORCED-BY: tests/differential/field_normalize_directed.cpp:main
+  //
+  // Exactly equivalent, in both directions:
+  //   n >= 23 (d_exp > 0): the old form shifts RIGHT by n-23, dropping the low
+  //     bits; lz_t[63:40] is h_rt[n : n-23], the same bits.
+  //   n <  23 (d_exp < 0): the old form shifts LEFT by 23-n, zero-filling
+  //     below; lz_t[63:40] is h_rt[n:0] at the top with the same zero fill,
+  //     because the left shift by lz = 63-n put it there.
+  // Either way the MSB lands at bit 23 of a 24-bit value, which is the whole
+  // definition of the mantissa.
+  //
+  // This also retires the `lz_t_unused` hack that existed only to keep `lz_t`
+  // alive for -Wall: it is load-bearing now.
+  assign m_val = (h_rt == 64'd0) ? 24'd0 : lz_t[63:40];
   assign e_val = (h_rt == 64'd0) ? 8'sd0 : d_exp;
-
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [63:0] lz_t_unused;
-  /* verilator lint_on UNUSEDSIGNAL */
-  assign lz_t_unused = lz_t;
 
   // ---- rcp_u24_norm: seed, TWO correction steps, then rescale by 7 --------
   logic [ 7:0] idx;
