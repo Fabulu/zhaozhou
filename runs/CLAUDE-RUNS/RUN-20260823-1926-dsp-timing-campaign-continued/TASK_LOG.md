@@ -348,6 +348,82 @@ operand to 27 cuts a product threefold with **no other change** — no sequencin
 no extra clocks, no interface change. It needs only a proof of width, which is
 exactly what `QUARTUS_GOTCHAS` §5 has demanded since it was written.
 
+### 2026-08-24 05:30 - Wave 1 COMPLETE: two unplaceable blocks became placeable
+
+| | `zhao_surface_sheet` | | `zhao_forge_cliff` | |
+| --- | ---: | ---: | ---: | ---: |
+| | before | **after** | before | **after** |
+| `blockMemoryBits` | 0 | **131,072** | 82,944 | **119,808** |
+| `inferredMemoryCount` | 0 | **2** | 2 | **4** |
+| registers | 131,258 | **170** | 40,655 | **3,875** |
+| `estimatedAlms` | 95,947 | **279** | 33,109 | **7,664** |
+| share of device | **229%** | **0.7%** | 79% | **18.3%** |
+
+**A 344x logic reduction on `surface_sheet`**, and both `ramConversionWarnings: 0`.
+
+### The law is REFINED, and I relayed the coarse version
+
+I passed on `QUARTUS_GOTCHAS` §10 as *"three independent killers — async read,
+reset, or byte enables."* The diagnosis found **exactly one applied: byte
+enables.** The read was already synchronous and the array already deliberately
+unreset — the block's own header said so and was right about both.
+
+Sharper still: `forge_cliff`'s `edge_mem_r` now **infers while still being read
+asynchronously.** So an async read *can* be survived; **a byte enable cannot.**
+That is a rule with a mechanism rather than three items in a list, and it was
+established by adding a `ram_rdw` calibration family the original grid was
+missing — measured, not argued.
+
+**The fix was the right kind:** split each byte-enabled word into whole-written
+arrays — **the shape `zref::surface::Sheet` has always had**
+(`uint8_t tag[4096]; uint8_t strength[4096]`). No vendor primitive, and C5's
+read-old semantic survives with **no bypass network**.
+
+### The uncomfortable finding is about our own tool
+
+`scan_rtl.py` had **two defects**: no byte-enable detector at all, and
+`resetTouched` walked the ELSE branch — Verilator folds `if (!rst_n)` by
+**swapping the arms**, so `thensp` is the working branch.
+
+**It had been reporting the repository's worst block as healthy.** The audit tool
+fell into precisely the class it was built to catch. Both defects now carry
+positive controls in **both** directions, 14/14.
+
+### Nine failures disclosed, and one claim withdrawn
+
+The two costliest were **numbers that looked right**: a differential reporting
+624 mismatches that were **entirely its own** (`rnd()` called inside the lambda
+driving both models, so the two DUTs got different stimulus — believing it would
+have meant "fixing" correct RTL); and a `resetTouched` repair that was "obviously
+right and exactly as wrong as the bug", caught only by controls, one of which had
+been passing by coincidence.
+
+And the one worth naming: the agent ran a Quartus map concurrently with a sweep,
+**against the standing rule**, then wrote that the row was "contaminated" — and on
+re-measuring, **withdrew the claim**. The clean re-run was *slower* with identical
+structural numbers. **The violation stands; the harm it reached for could not be
+shown, and the only reason that is knowable is that it re-measured.**
+
+### 05:45 - Wave 3 started: the projector merge
+
+`zhao_field_seq` is now the largest single item (7,958 ALMs, **0 memory bits**),
+but the **DSP ceiling is the binding constraint** and the projectors are the
+largest DSP item: **33 each, byte-identical arithmetic, 11 multiplies apiece at
+32-bit operands.** `zhao_geom_project`'s own header calls the duplication *"a
+cost, not a feature"*.
+
+Scoped to **phase 1 only** — extract the shared core, nothing else. The
+projected-vertex cache (6,144 projections for 1,089 unique lattice vertices) and
+the 27-bit narrowing are both docketed separately and **compose on top**.
+
+**The brief's most important instruction is not to trust the audit.** "Byte-
+identical arithmetic signatures" is a claim about *shape*, not behaviour — so the
+first task is a differential driving **both existing blocks** from one stimulus
+and comparing every output every cycle. **If they differ anywhere, that
+difference is a bug in one of them and is worth more than the merge.** And if
+they cannot share, a documented "these cannot" with evidence is a good outcome.
+The header calls the merge "a trivial edit"; that is a hypothesis to test.
+
 ---
 
 ## Subagent Spawns
@@ -356,7 +432,8 @@ exactly what `QUARTUS_GOTCHAS` §5 has demanded since it was written.
 |-----------|----------|---------|--------|---------------|
 | 17:36 | `acc49f0` | TEXTURE.TMU 28 -> 6-9 DSPs | **COMPLETE** — 6 DSPs, census 134, archived | `runs/CLAUDE-RUNS/RUN-20260823-1736-texture-tmu-dsp-rearchitecture/` |
 | 22:26 | `af363d9` | Budget audit wave 1 — scanner, calibration, map-only pass | **COMPLETE**, archived | `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/` |
-| 03:00 | `a54e57b` | SURFACE.SHEET storage inference, 229% -> fits | Running | own run dir |
+| 03:00 | `a54e57b` | SURFACE.SHEET storage inference, 229% -> fits | **COMPLETE** — 229% -> 0.7%, forge_cliff 79% -> 18.3% | `runs/CLAUDE-RUNS/RUN-20260824-0317-surface-sheet-storage-inference/` |
+| 05:45 | `a2605a5` | Projector merge phase 1, 66 -> ~33 DSPs | Running | own run dir |
 
 ---
 
