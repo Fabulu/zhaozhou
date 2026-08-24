@@ -383,6 +383,19 @@ module zhao_vertex_arena #(
         a_hit_implies_written:      assert (f_expect_valid);
       end
 
+      // AN a_shadow_tracks_valid ASSERTION WAS TRIED HERE AND WITHDRAWN. It
+      // said f_shadow_valid == valid_q[f_addr] -- the invariant the failing
+      // property depends on -- hoping a counterexample would land on the update
+      // that breaks it rather than on a symptom three steps downstream.
+      //
+      // It failed at k=3 on a trace where the machine is COMPLETELY IDLE: no
+      // open, no fill, no seal, valid_q all zero, f_shadow_valid zero. An
+      // equality between two zeros does not fail, so the signal the assertion
+      // reads is not the signal the VCD shows -- yosys represents an unpacked
+      // array as a MEMORY, and the 8-bit `valid_q` in the dump is not that
+      // array. Withdrawn rather than left failing on a question it cannot
+      // currently ask.
+
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so
       //    the assertion above already carries it; kept separate because it is
