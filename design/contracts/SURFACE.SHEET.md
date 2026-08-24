@@ -30,7 +30,7 @@ mentions both as future work and neither is specified anywhere).
 | a sheet that has never been stamped reads ZERO everywhere | `zref::render::SurfaceSheet` is value-initialised; `SoftwareRenderer::sheet_for` "creates on first use" |
 | layer F is written by `SURFACE.STAMP` and by nothing else | `spec/terrain_rules.md` §7 |
 | overflow REJECTS the stamp and never partial-writes | `design/blocks.yml` `notes:` for this block |
-| the resident world set is 1,024 patches, 14.38 MiB of sheets pool | `spec/terrain_rules.md` §1.2, §8 |
+| the resident world set is 1,024 patches; **the SHEETS are 8 MiB of a 14.38 MiB five-layer pool** | `spec/terrain_rules.md` §1.2, §8 |
 
 **CHOSEN.** The ledger's `notes:` says "Residency policy per §11".
 `spec/terrain_rules.md` §11 is the list of things that section **explicitly does
@@ -184,7 +184,18 @@ needs no vendor primitive. Each plane is 8,192 × 8 at the default and maps to a
 ALTSYNCRAM AUTO Simple Dual Port; the microbench of exactly that shape is
 `calib_ram_8192x8_shared_re` in `tools/budget/calibration.json`.
 
-The 14.38 MiB pool of `terrain_rules` §8 lives in VRAM and is not modelled here;
+**8 MiB OF SHEETS, NOT 14.38.** This contract twice cited the 14.38 MiB figure
+as though it were the sheet pool. It is not: `terrain_rules` §8 gives 14,722 B
+per patch for **F+E+D+G+H**, five layers. The sheet is layer F alone at
+**8,192 B per patch**, so 1,024 patches hold **8 MiB** and the other 6.38 MiB
+belongs to layers this block never touches.
+
+Owner ruling 2026-08-24 said the layer table and its arithmetic win *"unless
+another pool is identified explicitly"* — and one is, which is why the fix is to
+stop conflating the two rather than to change a number. Both figures were
+always correct; only the label on one of them was wrong.
+
+That 14.38 MiB pool lives in VRAM and is not modelled here;
 this block is the fabric-side resident window onto it. Nothing in this tree
 states how many sheets that window should hold, which is why `Slots` is an
 elaboration parameter.
