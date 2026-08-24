@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "548e0081720b8ffde299571be934103285688e46",
-    "newestRunClean":  false,
+    "newestRunCommit":  "0d25ed049693720a92c8311b7a8e7c89040f24b8",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -821,23 +821,39 @@
                    {
                        "module":  "zhao_forge_cliff",
                        "status":  "ok",
-                       "sourceCommit":  "7395d7932f5acf7f3c19851f43b7ff381a97c4d0",
+                       "sourceCommit":  "0d25ed049693720a92c8311b7a8e7c89040f24b8",
                        "rtlCleanAtHead":  true,
                        "sourceListHash":  "9a53f278725c7224",
                        "sourceFileCount":  94,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  247.2,
+                       "seconds":  520.3,
                        "dspBlocks":  2,
-                       "registers":  40655,
-                       "blockMemoryBits":  82944,
+                       "registers":  3875,
+                       "blockMemoryBits":  119808,
                        "virtualPins":  265,
                        "pins":  0,
-                       "estimatedAlms":  33109,
-                       "combAluts":  31810,
+                       "estimatedAlms":  7664,
+                       "combAluts":  8149,
                        "mlabMemoryBits":  0,
                        "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  12,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:edge_span_r_rtl_0|altsyncram_kpi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  6,
+                                                    "autoShift":  false
+                                                },
                                                 {
                                                     "name":  "altsyncram:prio_mem_r_rtl_0|altsyncram_isi1:auto_generated|ALTSYNCRAM",
                                                     "type":  "AUTO",
@@ -855,8 +871,8 @@
                                                     "autoShift":  false
                                                 }
                                             ],
-                       "inferredMemoryCount":  2,
-                       "inferredDesignMemoryCount":  2,
+                       "inferredMemoryCount":  4,
+                       "inferredDesignMemoryCount":  4,
                        "dspDecomposition":  {
                                                 "Total number of DSP blocks":  2,
                                                 "Fixed Point Unsigned Multiplier":  2
