@@ -406,6 +406,11 @@ try {
                 # sources into the workspace would be airtight, and the one
                 # `include in the tree (sdram_params.svh) means that needs
                 # directory-structure preservation, which is not free.
+                if ($exe -eq 'quartus_sta.exe') {
+                    # Second STA invocation, purely to emit node-level paths.
+                    $tcl = (Join-Path $PSScriptRoot 'block_paths.tcl').Replace([char]92, [char]47)
+                    & (Join-Path $QuartusBin 'quartus_sta.exe') -t $tcl *> (Join-Path $dir 'quartus_sta_paths.log')
+                }
                 if ($exe -eq 'quartus_map.exe') {
                     $srcAfterMap = @{}
                     foreach ($k in @($srcBefore.Keys)) {
@@ -492,6 +497,16 @@ try {
                 $pathDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
                 New-Item -ItemType Directory -Path $pathDir -Force | Out-Null
                 Copy-Item -LiteralPath $sta -Destination (Join-Path $pathDir ($rowModule + '.sta.rpt')) -Force
+                # NODE-LEVEL PATHS. The .sta.rpt above carries summaries only;
+                # it names an Fmax and never a From/To node, which ranks blocks
+                # but cannot diagnose one. block_paths.tcl runs the report_timing
+                # the shell lane has always had.
+                foreach ($pr in @('setup','hold')) {
+                    $prSrc = Join-Path $dir ('output_files/blockfit_' + $pr + '_paths.rpt')
+                    if (Test-Path -LiteralPath $prSrc) {
+                        Copy-Item -LiteralPath $prSrc -Destination (Join-Path $pathDir ($rowModule + '.' + $pr + '.rpt')) -Force
+                    }
+                }
 
                 $hold = Get-StaSummary $s 'Hold Summary'
                 if ($null -ne $hold) {

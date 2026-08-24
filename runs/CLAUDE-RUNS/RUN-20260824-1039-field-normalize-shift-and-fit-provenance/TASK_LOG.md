@@ -787,6 +787,71 @@ Worth noting for when the honest number lands: the LEAF TMU measures **36.11
 MHz**, consistent with the docket's standing note that its 199.72 MHz was an
 artifact of an SDC carrying no I/O constraints.
 
+### 21:00 — FOUR PAIRS RANKED, and the reading I gave twice was wrong twice
+
+| pair | Fmax | character |
+| --- | ---: | --- |
+| TESS+NORMALS | **31.10** | state machine + sequenced multiply walk |
+| TMU+CACHE | 37.25 | format decode + cache handshake |
+| FRAGMENT+TILESTORE | 55.52 | read-modify-write pipeline |
+| **SETUP+BINNER** | **88.79** | almost pure arithmetic |
+
+**A 2.9x spread.** I called the renderer "systemically slow" from the first two
+points, which happened to agree. FRAGMENT+TILESTORE partly killed it; SETUP+BINNER
+killed it outright. **I generalised from two samples, twice.**
+
+**The hypothesis test came back clean.** SETUP is three edge functions and a
+constant term with essentially no state machine, and it is the FASTEST by a wide
+margin. FRAGMENT+TILESTORE is the TIGHTEST loop — a read-modify-write across its
+own seam — and it is third. So the renderer is **not** limited by datapath logic
+depth, and it is **not** limited by its seams. It is limited in the blocks that
+carry **control state and iteration**.
+
+That changes what "pipeline the worst seam" means: adding datapath stages
+everywhere would have been right if depth were the limit. It is not. The work is
+in the walks and the handshakes.
+
+**The binner DSP fix survives composition:** the pair measures exactly 10 DSPs =
+setup 4 + binner 6. The stored binner leaf row still reads 12 because it predates
+today, which is one more reminder that a census of stale rows misleads.
+
+### 21:10 — AND THE RANKING POINTS AT MY OWN WORK
+
+Sequencing has been the DSP campaign's principal tool all week:
+
+    field_seq       79 -> 3
+    geom_skin       72 -> 9
+    texture_tmu     28 -> 6
+    surface_stamp   28 -> 0
+    terrain_normals 18 -> 3    <- mine, this morning
+
+Every one traded parallel hardware for a **walk with a state counter**, justified
+by throughput headroom. **Not one was ever measured for frequency**, because no
+renderer block had a valid Fmax to compare against until today.
+
+And the ranking now says the slow pairs are exactly the ones carrying control
+state, while the arithmetic-only pair runs at 88.79 MHz.
+
+> **"I traded frequency for DSPs and never measured the frequency"** is the
+> obvious hypothesis, it is mine, and it is load-bearing for twelve more blocks
+> the same technique is queued against. Better to learn it from one block now
+> than from twelve later.
+
+Consistent is not proven. That is why I want the critical PATH, not an argument.
+
+### 21:20 — the harness could not answer it, so the harness was fixed
+
+`run_block_fit.ps1` read `blockfit.sta.rpt` for an Fmax and let it die with the
+workspace — **the identical gap `run_shell_fit.ps1` had this morning**, in a
+different file, found the same way: by needing the evidence and not having it.
+
+> **A measurement you cannot interrogate is a number, not evidence.**
+
+Fixed at `e1a3906`, then broken by my own hand and fixed again at `bb833ee`: the
+Python heredoc that wrote the change ate a backslash and put a literal
+**backspace** in the path, so Quartus refused a directory called
+`...hesislockpaths`. Forward slashes now — no escaping layer can mangle them.
+
 ---
 
 ## Decisions Made
