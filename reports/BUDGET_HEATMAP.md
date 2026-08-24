@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `f0f671a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `d956968c`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -15,7 +15,7 @@ HEAD `f0f671a3`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 
 | modules with any map | 89 |
 | modules with any fit | 41 |
 | modules with a demand figure | **7** |
-| calibration points measured | 42 |
+| calibration points measured | 102 |
 
 ## The test of whether this works
 
@@ -445,7 +445,9 @@ operator count to get cost per product.**
 | operand width | DSP blocks | signed vs unsigned |
 | --- | ---: | --- |
 | 8 - 27 | **1** | identical |
-| 28 - 32 | **3** | identical |
+| 28 - 33 | **3** | identical |
+| 40 - 48 | **4** | identical |
+| 64 | **9** | identical |
 
 The cliff is where the tool stops using its 27x27 mode. **Narrowing a
 32-bit operand to 27 bits takes a product from 3 DSP blocks to 1**, with
@@ -473,6 +475,8 @@ numbers are real and they answer different questions.
 | 16 | S | 4 | ioreg | 3 | 0.75 | 151 | Sum of two 18x18=1, Signed=4 |
 | 18 | U | 1 | ioreg | 1 | 1.00 | 61 | Two Independent 18x18=1, Unsigned=1 |
 | 18 | U | 4 | ioreg | 3 | 0.75 | 169 | Sum of two 18x18=1, Unsigned=4 |
+| 18 | S | 1 | comb | 1 | 1.00 | 37 | Two Independent 18x18=1, Signed=1 |
+| 18 | S | 1 | inreg | 1 | 1.00 | 55 | Two Independent 18x18=1, Signed=1 |
 | 18 | S | 1 | ioreg | 1 | 1.00 | 61 | Two Independent 18x18=1, Signed=1 |
 | 18 | S | 4 | ioreg | 3 | 0.75 | 169 | Sum of two 18x18=1, Signed=4 |
 | 19 | U | 1 | ioreg | 1 | 1.00 | 65 | Unsigned=1 |
@@ -501,6 +505,81 @@ numbers are real and they answer different questions.
 | 31 | S | 4 | ioreg | 12 | 3.00 | 395 | Two Independent 18x18=8, Sum of two 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
 | 32 | U | 1 | ioreg | 3 | 3.00 | 137 | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
 | 32 | U | 4 | ioreg | 12 | 3.00 | 408 | Two Independent 18x18=8, Sum of two 18x18=4, Unsigned=16 |
+| 32 | S | 1 | comb | 3 | 3.00 | 88 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 32 | S | 1 | inreg | 3 | 3.00 | 120 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 32 | S | 1 | ioreg | 3 | 3.00 | 137 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 32 | S | 4 | ioreg | 12 | 3.00 | 408 | Two Independent 18x18=8, Sum of two 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
+| 33 | U | 1 | ioreg | 3 | 3.00 | 141 | Two Independent 18x18=2, Sum of two 18x18=1, Unsigned=4 |
+| 33 | U | 4 | ioreg | 12 | 3.00 | 421 | Two Independent 18x18=8, Sum of two 18x18=4, Unsigned=16 |
+| 33 | S | 1 | ioreg | 3 | 3.00 | 141 | Two Independent 18x18=2, Sum of two 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 33 | S | 4 | ioreg | 12 | 3.00 | 421 | Two Independent 18x18=8, Sum of two 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
+| 40 | U | 1 | ioreg | 4 | 4.00 | 183 | Two Independent 18x18=1, Unsigned=4 |
+| 40 | U | 4 | ioreg | 16 | 4.00 | 508 | Two Independent 18x18=4, Unsigned=16 |
+| 40 | S | 1 | ioreg | 4 | 4.00 | 183 | Two Independent 18x18=1, Signed=1, Unsigned=1, Mixed Sign=2 |
+| 40 | S | 4 | ioreg | 16 | 4.00 | 508 | Two Independent 18x18=4, Signed=4, Unsigned=4, Mixed Sign=8 |
+| 48 | U | 1 | ioreg | 4 | 4.00 | 220 | Unsigned=4 |
+| 48 | U | 4 | ioreg | 16 | 4.00 | 612 | Unsigned=16 |
+| 48 | S | 1 | ioreg | 4 | 4.00 | 220 | Signed=1, Unsigned=1, Mixed Sign=2 |
+| 48 | S | 4 | ioreg | 16 | 4.00 | 612 | Signed=4, Unsigned=4, Mixed Sign=8 |
+| 64 | U | 1 | ioreg | 9 | 9.00 | 336 | Two Independent 18x18=1, Unsigned=9 |
+| 64 | U | 4 | ioreg | 36 | 9.00 | 1351 | Two Independent 18x18=4, Unsigned=36 |
+| 64 | S | 1 | comb | 9 | 9.00 | 268 | Two Independent 18x18=1, Signed=1, Unsigned=4, Mixed Sign=4 |
+| 64 | S | 1 | inreg | 9 | 9.00 | 332 | Two Independent 18x18=1, Signed=1, Unsigned=4, Mixed Sign=4 |
+| 64 | S | 1 | ioreg | 9 | 9.00 | 337 | Two Independent 18x18=1, Signed=1, Unsigned=4, Mixed Sign=4 |
+| 64 | S | 4 | ioreg | 36 | 9.00 | 1355 | Two Independent 18x18=4, Signed=4, Unsigned=16, Mixed Sign=16 |
+
+### The widening-multiply idiom
+
+`zhao_geom_project` writes nine products as
+`$signed({{32{a[31]}}, a}) * $signed({{32{b[31]}}, b})`. The first draft of
+`scan_rtl.py` called that extension slack and flagged it RED. These two rows
+settle it by measurement rather than by argument.
+
+| form | DSP | est. ALM |
+| --- | ---: | ---: |
+| sign extension spelled out, as zhao_geom_project's mul32 writes it | 3 | 137 |
+| plain widened signed product | 3 | 137 |
+
+### Storage templates
+
+`blockMemoryBits > 0` is the ONLY evidence an array became a memory.
+
+| depth x width | read | reset | ports | byte-en | expected bits | block mem bits | INFERRED? | est. ALM |
+| --- | --- | --- | ---: | :--: | ---: | ---: | :--: | ---: |
+| 64x32 | async | no | 1 | no | 2,048 | 0 | **NO** | 1427 |
+| 64x32 | async | no | 2 | no | 2,048 | 0 | **NO** | 1801 |
+| 64x32 | async | yes | 1 | no | 2,048 | 0 | **NO** | 1411 |
+| 64x32 | async | yes | 2 | no | 2,048 | 0 | **NO** | 1769 |
+| 64x32 | sync | no | 1 | no | 2,048 | 2,048 | **yes** | 40 |
+| 64x32 | sync | no | 2 | no | 2,048 | 4,096 | **yes** | 59 |
+| 64x32 | sync | yes | 1 | no | 2,048 | 0 | **NO** | 1411 |
+| 64x32 | sync | yes | 2 | no | 2,048 | 0 | **NO** | 1769 |
+| 256x16 | async | no | 1 | no | 4,096 | 0 | **NO** | 2818 |
+| 256x16 | async | no | 2 | no | 4,096 | 0 | **NO** | 3534 |
+| 256x16 | async | yes | 1 | no | 4,096 | 0 | **NO** | 2801 |
+| 256x16 | async | yes | 2 | no | 4,096 | 0 | **NO** | 3501 |
+| 256x16 | sync | no | 1 | no | 4,096 | 4,096 | **yes** | 26 |
+| 256x16 | sync | no | 2 | no | 4,096 | 8,192 | **yes** | 38 |
+| 256x16 | sync | yes | 1 | no | 4,096 | 0 | **NO** | 2801 |
+| 256x16 | sync | yes | 2 | no | 4,096 | 0 | **NO** | 3501 |
+| 1024x32 | async | no | 1 | no | 32,768 | 0 | **NO** | 22071 |
+| 1024x32 | async | no | 2 | no | 32,768 | 0 | **NO** | 27566 |
+| 1024x32 | async | yes | 1 | no | 32,768 | 0 | **NO** | 22071 |
+| 1024x32 | async | yes | 2 | no | 32,768 | 0 | **NO** | 27566 |
+| 1024x32 | sync | no | 1 | no | 32,768 | 32,768 | **yes** | 44 |
+| 1024x32 | sync | no | 1 | yes | 32,768 | 0 | **NO** | 22583 |
+| 1024x32 | sync | no | 2 | no | 32,768 | 65,536 | **yes** | 65 |
+| 1024x32 | sync | yes | 1 | no | 32,768 | 0 | **NO** | 22071 |
+| 1024x32 | sync | yes | 2 | no | 32,768 | 0 | **NO** | 27566 |
+| 2048x18 | async | no | 1 | no | 36,864 | 0 | **NO** | 25039 |
+| 2048x18 | async | no | 2 | no | 36,864 | 0 | **NO** | 31245 |
+| 2048x18 | async | yes | 1 | no | 36,864 | 0 | **NO** | 24985 |
+| 2048x18 | async | yes | 2 | no | 36,864 | 0 | **NO** | 31145 |
+| 2048x18 | sync | no | 1 | no | 36,864 | 36,864 | **yes** | 31 |
+| 2048x18 | sync | no | 2 | no | 36,864 | 73,728 | **yes** | 45 |
+| 2048x18 | sync | yes | 1 | no | 36,864 | 0 | **NO** | 24985 |
+| 2048x18 | sync | yes | 2 | no | 36,864 | 0 | **NO** | 31145 |
+| 2048x32 | sync | no | 1 | yes | 65,536 | 0 | **NO** | 45134 |
 
 ## Blocks with no demand figure
 

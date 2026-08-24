@@ -200,7 +200,7 @@ the tool which path produced it.
 
 ---
 
-## 10. Storage inference is a LAW with two independent killers, and the penalty is superlinear
+## 10. Storage inference is a LAW with three independent killers, and the penalty is superlinear
 
 Every entry above was found by being surprised by one block. This one was
 **measured on purpose**, with a controlled grid of generated microbenches
@@ -208,8 +208,9 @@ Every entry above was found by being surprised by one block. This one was
 `zhao_field_seq` reporting **zero M10Ks while spending 8,901 ALMs** deserved an
 explanation better than "Quartus did not feel like it".
 
-Thirty-two RAM templates, four shapes x sync/async read x reset/no-reset x one
-and two read ports, on `5CSEBA6U23I7` under this project's own settings:
+Thirty-four RAM templates — four shapes x sync/async read x reset/no-reset x
+one and two read ports, plus two byte-enable variants — on `5CSEBA6U23I7` under
+this project's own settings. All 102 benches in the grid completed:
 
 | shape | bits | sync + no reset | sync + RESET | ASYNC + no reset | ASYNC + reset |
 | --- | ---: | --- | --- | --- | --- |
@@ -222,14 +223,46 @@ and two read ports, on `5CSEBA6U23I7` under this project's own settings:
 | 2048x18 p1 | 36,864 | **36,864 bits, 31 ALM** | 0, 24,985 | 0, 25,039 | — |
 | 2048x18 p2 | 36,864 | **73,728 bits, 45 ALM** | 0, 31,145 | — | — |
 
-> **Synchronous read AND no reset touching the array — it infers, and costs tens
-> of ALMs. EITHER an asynchronous read OR a reset on the array — ZERO memory
-> bits. The two conditions kill inference INDEPENDENTLY; either one alone is
-> sufficient, and having both is no worse than having one.**
+> **Synchronous read, no reset touching the array, and no byte enables — it
+> infers, and costs tens of ALMs. An ASYNCHRONOUS READ, a RESET on the array,
+> or BYTE ENABLES — ZERO memory bits. The three conditions kill inference
+> INDEPENDENTLY; any one alone is sufficient, and having several is no worse
+> than having one.**
 
 Read the `sync + RESET` and `ASYNC + no reset` columns against each other: they
 are the same number to within a rounding of the estimator. Neither is a
 degradation of inference. **Both are its complete absence.**
+
+### The third killer: byte enables
+
+Added after the grid finished, because it was not expected and it is the one
+most likely to be written by accident:
+
+| template | memory bits | est. ALM |
+| --- | ---: | ---: |
+| `1024x32`, sync, no reset, 1 port | **32,768** | **44** |
+| `1024x32`, sync, no reset, 1 port, **byte enables** | **0** | **22,583** |
+| `2048x32`, sync, no reset, 1 port, **byte enables** | **0** | **45,134** |
+
+Same read style, same reset behaviour, same depth and width. The only
+difference is writing
+
+```systemverilog
+if (be_i[0]) mem[waddr_i][ 7: 0] <= wdata_i[ 7: 0];
+if (be_i[1]) mem[waddr_i][15: 8] <= wdata_i[15: 8];
+...
+```
+
+instead of `mem[waddr_i] <= wdata_i;` — and the memory disappears. **45,134
+ALMs for a 65,536-bit buffer is more than the entire device.**
+
+M10Ks have byte-enable support in hardware; Quartus 17.0.2 Lite does not infer
+it from this template. **This matters because a byte-enabled write is exactly
+how a blit buffer or a framebuffer wants to be written**, and
+`design/budgets/dsp.md`'s own history records `zhao_cmd_dma`'s `blit_buf`
+blocking the composed fit on Error 276003. If a byte-enabled memory is needed,
+instantiate `altsyncram` explicitly rather than hoping — and then check the
+memory-bit count, because hoping is what this whole entry is about.
 
 ### The penalty is superlinear in the array
 
@@ -304,7 +337,9 @@ true-dual-port.
 2. Do **not** touch the array from a reset branch. M10K contents are undefined
    after reset anyway; use a `valid` bitmap, which is one register per entry
    and clears in a cycle.
-3. Then **measure that it took.** `Total block memory bits` in the map summary,
+3. Do **not** write it with per-byte enables in RTL. If byte writes are
+   genuinely required, instantiate the megafunction.
+4. Then **measure that it took.** `Total block memory bits` in the map summary,
    or `Total RAM Blocks` in the fit summary. Zero is a failure.
 
 > Evidence: `tools/budget/calibration.json`, and the tool's own console output
