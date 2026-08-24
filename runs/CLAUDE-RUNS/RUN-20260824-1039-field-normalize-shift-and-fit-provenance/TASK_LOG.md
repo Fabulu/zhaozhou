@@ -595,6 +595,70 @@ Limits written into the file rather than left implied: no true lattice depth, no
 real height distribution, `nrm_ready_i` tied high. It answers "how fast can the
 pair run when nothing stalls it", which is the question a clock target asks.
 
+### 18:00 — TWO REVIEWS, ONE OBJECTION, AND THEY WERE BOTH RIGHT
+
+Fabian commissioned a second opinion. Both reviews rejected my
+"2 km islands or 110 DSPs" framing, **independently, for the same reason**, and
+neither could settle it because the measurement did not exist.
+
+The objection: **all 106 calibration points are SYMMETRIC.** The band table
+(8..27 -> 1 DSP, 28..33 -> 3) was correct and was then applied to a case it had
+never measured — narrowing ONE operand while the other stays 32 bits.
+
+Twelve asymmetric points, three of them controls:
+
+| a x b | DSP | | a x b | DSP |
+| --- | ---: | --- | --- | ---: |
+| 33 x 27 | **3** | | 27 x 27 | 1 *(control ok)* |
+| 32 x 32 | 3 *(control ok)* | | 27 x 24 | 1 |
+| **32 x 27** | **3** | | 27 x 18 | 1 |
+| 32 x 24 | 3 | | 24 x 24 | 1 |
+| **32 x 18** | **2** | | 24 x 18 | 1 |
+| 28 x 28 | 3 *(control ok)* | | **23 x 11** | **1** |
+
+**`32 x 27` costs exactly what `32 x 32` costs.** Narrowing the coordinate alone
+recovers NOTHING.
+
+> **The counter-evidence was in the design the whole time.**
+> `zhao_project_core` has contained 32x27 products mapping at 3 DSPs each since
+> it was written — 11 x 3 = 33, the measured total. I had the number and read it
+> as confirmation of the band model instead of as a refutation of my own plan.
+
+Two results nobody predicted: **32x18 = 2**, a real partial lever; and
+**23x11 = 1**, which is what makes the BINNER fix worth doing.
+
+### 18:10 — the architecture both reviews converged on
+
+**Segmented coordinates.** A wide island/patch/instance origin plus a bounded
+local delta, with the origin's contribution folded into the SAME pre-rounding
+accumulator the projector already uses, and ONE final rescale. Bit-exact by
+integer distributivity; every Q16.16 fraction bit kept; island extent bounded
+only by fx16 itself at +-32 km. **No island cap. No format amendment.**
+
+Where the two differed I sided with the first: camera-relative needs a far-cull
+to bound the delta, and **this machine has no z clip by design**
+(`zhao_geom_cull.sv:40-43`), so that route needs a fog ruling. Patch-origin
+rebase bounds the delta BY CONSTRUCTION — a patch spans <=128 m at the coarsest
+pitch.
+
+### 18:20 — GEOM.BINNER, the one win that needs no ruling at all
+
+Four products of a 23-bit slope by an 11-bit tile offset, multiplied out of a
+**36-bit accumulator register**: 3 DSPs each, 12 total.
+
+The proof is mechanical, not a bound: `tri_kx0_i` is `signed [22:0]`,
+`kx_r[0] <= ext23(tri_kx0_i)` is PURE SIGN EXTENSION (`:435`), and `kx_r` is
+assigned nowhere else. Bits [35:23] carry no information, so `k * t` and
+`k[22:0] * t` are the same integer and every downstream truncation applies
+identically.
+
+`-Wall` objected that 13 bits of the function argument went unread — **correct,
+and the point of the change**. Fixed properly by taking the argument at its real
+23-bit width so the narrowing is visible at every call site rather than hidden.
+
+Green: directed, random, random_nightly, lint, and the **formal arena-bounds
+proof**. Expect 12 -> 4 on the map.
+
 ---
 
 ## Decisions Made

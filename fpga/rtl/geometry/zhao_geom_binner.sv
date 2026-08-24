@@ -435,6 +435,37 @@ module zhao_geom_binner #(
     ext23 = $signed({{(ACC_W-23){v[22]}}, v});
   endfunction
 
+  // THE EDGE-SLOPE TIMES TILE-OFFSET PRODUCT, MULTIPLIED AT ITS REAL WIDTH.
+  //
+  // `kx_r`/`ky_r` are ACC_W = 36 bits wide because they are ACCUMULATORS, and
+  // they must be. But the slope they hold is `ext23()` of a 23-bit input and is
+  // assigned NOWHERE ELSE, so bits [35:23] are sign extension and carry no
+  // information. Multiplying the 36-bit register handed Quartus a 36x11 shape.
+  //
+  // MEASURED 2026-08-24, asymmetric calibration grid:
+  //     23 x 11 -> 1 DSP        32 x 27 -> 3 DSPs
+  // and this block mapped 12 DSPs for four such products, i.e. 3 each. At the
+  // real width they are 1 each: 12 -> 4.
+  //
+  // EXACT, not an approximation. The register's VALUE is by construction equal
+  // to the sign-extension of its low 23 bits, so `k * t` and `k[22:0] * t` are
+  // the same integer, and every downstream truncation applies identically.
+  // This is width HYGIENE -- no bound is being assumed, no domain narrowed, and
+  // nothing here depends on world size or any owner ruling.
+  //
+  // ENFORCED-BY: tests/geometry/geom_binner_directed.cpp
+  // Takes the slope at its REAL 23-bit width rather than the accumulator
+  // width, so the narrowing is visible at every call site instead of hidden
+  // inside the function -- and so `-Wall` cannot object that 13 bits of an
+  // argument go unread, which is exactly what it did when this took ACC_W.
+  function automatic logic signed [ACC_W-1:0] k_mul_tile(
+      input logic signed [22:0] k,
+      input logic signed [10:0] t);
+    logic signed [33:0] p;
+    p = k * t;
+    k_mul_tile = $signed({{(ACC_W-34){p[33]}}, p});
+  endfunction
+
   // The clamped tile row/column of a pixel coordinate: floor(p / 16), pinned
   // to [0, limit-1] so a caller's undersized grid can never alias a tile index
   // onto another tile's list (it loses tiles instead — LAWS CHOSEN B/D).
@@ -701,10 +732,10 @@ module zhao_geom_binner #(
           // E' at the FIRST tile of the range: E'(0,0) + kx·px0 + ky·py0.
           S_SETUP2: begin
             for (int k = 0; k < 3; k++) begin
-              ep_r[k]  <= ep_r[k] + kx_r[k] * $signed({1'b0, tx0_r, 4'd0}) +
-                                    ky_r[k] * $signed({1'b0, ty0_r, 4'd0});
-              epr_r[k] <= ep_r[k] + kx_r[k] * $signed({1'b0, tx0_r, 4'd0}) +
-                                    ky_r[k] * $signed({1'b0, ty0_r, 4'd0});
+              ep_r[k]  <= ep_r[k] + k_mul_tile($signed(kx_r[k][22:0]), $signed({1'b0, tx0_r, 4'd0})) +
+                                    k_mul_tile($signed(ky_r[k][22:0]), $signed({1'b0, ty0_r, 4'd0}));
+              epr_r[k] <= ep_r[k] + k_mul_tile($signed(kx_r[k][22:0]), $signed({1'b0, tx0_r, 4'd0})) +
+                                    k_mul_tile($signed(ky_r[k][22:0]), $signed({1'b0, ty0_r, 4'd0}));
             end
             row_base_r <= tidx(ty0_r);
             state      <= S_TILE;
