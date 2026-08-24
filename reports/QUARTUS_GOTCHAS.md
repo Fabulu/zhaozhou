@@ -5,7 +5,12 @@
 
 Every entry below cost this project real time, and every one has the same shape:
 **Verilator and slang accept it, the differentials pass, the mutation sweep
-scores clean — and only a Quartus run says otherwise.** They were scattered
+scores clean — and only a Quartus run says otherwise.**
+
+**§10 is the exception, and deliberately so.** It was not discovered by being
+surprised; it was MEASURED, with a controlled grid of generated microbenches,
+after three separate blocks had each paid for the same lesson individually. Nine
+entries of hindsight bought one entry of foresight. They were scattered
 across individual RTL headers, one per block, which is why each was rediscovered
 rather than remembered.
 
@@ -192,6 +197,120 @@ The rule that generalises §7 and §9 together: **a constraint file is not a
 timing objective until you have read which path it actually reported.** Both
 entries were found the same way — by disbelieving an implausible Fmax and asking
 the tool which path produced it.
+
+---
+
+## 10. Storage inference is a LAW with two independent killers, and the penalty is superlinear
+
+Every entry above was found by being surprised by one block. This one was
+**measured on purpose**, with a controlled grid of generated microbenches
+(`tools/budget/gen_calib.py`, mapped by `tools/quartus/run_calib.ps1`), because
+`zhao_field_seq` reporting **zero M10Ks while spending 8,901 ALMs** deserved an
+explanation better than "Quartus did not feel like it".
+
+Thirty-two RAM templates, four shapes x sync/async read x reset/no-reset x one
+and two read ports, on `5CSEBA6U23I7` under this project's own settings:
+
+| shape | bits | sync + no reset | sync + RESET | ASYNC + no reset | ASYNC + reset |
+| --- | ---: | --- | --- | --- | --- |
+| 64x32 p1 | 2,048 | **2,048 bits, 40 ALM** | 0, 1,411 | 0, 1,427 | 0, 1,411 |
+| 64x32 p2 | 2,048 | **4,096 bits, 59 ALM** | 0, 1,769 | 0, 1,801 | 0, 1,769 |
+| 256x16 p1 | 4,096 | **4,096 bits, 26 ALM** | 0, 2,801 | 0, 2,818 | 0, 2,801 |
+| 256x16 p2 | 4,096 | **8,192 bits, 38 ALM** | 0, 3,501 | 0, 3,534 | 0, 3,501 |
+| 1024x32 p1 | 32,768 | **32,768 bits, 44 ALM** | 0, 22,071 | 0, 22,071 | 0, 22,071 |
+| 1024x32 p2 | 32,768 | **65,536 bits, 65 ALM** | 0, 27,566 | 0, 27,566 | 0, 27,566 |
+| 2048x18 p1 | 36,864 | **36,864 bits, 31 ALM** | 0, 24,985 | 0, 25,039 | — |
+| 2048x18 p2 | 36,864 | **73,728 bits, 45 ALM** | 0, 31,145 | — | — |
+
+> **Synchronous read AND no reset touching the array — it infers, and costs tens
+> of ALMs. EITHER an asynchronous read OR a reset on the array — ZERO memory
+> bits. The two conditions kill inference INDEPENDENTLY; either one alone is
+> sufficient, and having both is no worse than having one.**
+
+Read the `sync + RESET` and `ASYNC + no reset` columns against each other: they
+are the same number to within a rounding of the estimator. Neither is a
+degradation of inference. **Both are its complete absence.**
+
+### The penalty is superlinear in the array
+
+| bits | inferred | not inferred | penalty |
+| ---: | ---: | ---: | ---: |
+| 2,048 | 40 ALM | 1,411 | **35x** |
+| 4,096 | 26 ALM | 2,801 | **108x** |
+| 32,768 | 44 ALM | 22,071 | **502x** |
+| 36,864 | 31 ALM | 24,985 | **806x** |
+
+An inferred memory is nearly free and barely grows — 2,048 bits and 36,864 bits
+both cost about thirty ALMs, because the cost is the address and control logic,
+not the storage. A memory that did not infer costs **every bit as a flip-flop
+behind a mux tree**, so it grows with the array *and* with the mux depth.
+
+**The rule matters most exactly where the array is biggest and the temptation to
+"just make it registers" is strongest.**
+
+### The detection signal is `memory bits = 0`
+
+There is no warning. Quartus does not say "I declined to infer your memory". The
+only symptom is a number that is zero, in a block that obviously contains
+storage — which is precisely §3's shape, one more time.
+
+> **A fit or map reporting zero memory bits for a block that clearly contains
+> storage is a FAILED IMPLEMENTATION, whatever the tests say.**
+
+That was already the acceptance rule written into the Field ruling. These
+measurements turn it from a policy into a threshold: expected bits from the
+elaborated AST (`tools/budget/scan_rtl.py`), inferred bits from the map row, and
+`EXPECTED_RAM_NOT_INFERRED` in `reports/BUDGET_HEATMAP.md` when the first is
+large and the second is zero.
+
+### What it retro-explains, with no new fit required
+
+* **`zhao_field_seq`: 0 M10Ks, 8,901 ALMs.** Its register file is
+  `logic signed [31:0] rf [0:63]` — **64x32, read asynchronously, written from
+  a reset branch.** `calib_ram_64x32_async_rst_p1` is a byte-for-byte model of
+  it and costs **1,411 ALMs against 40**. Both killers, and the block also holds
+  three constant tables built as `always_comb` case trees, which are ROMs by any
+  other name.
+* **`zhao_forge_cliff`: fit timed out at 5,000+ s.** Three `assign x =
+  mem_r[idx]` async reads over ~120 kbit. Two of the three did convert anyway
+  (see below); `edge_mem_r` is **2048x18** — exactly the shape in the last row
+  of the grid — and it stayed in logic. Estimated **33,109 ALMs, 79% of the
+  device.** At the 806x curve that is not a mystery, and **nobody needs to fit
+  it to know.** The source shape is the diagnosis.
+* **`zhao_surface_sheet`: 131,072 bits, ZERO inferred, 95,947 estimated ALMs —
+  229% of the whole device**, in a block with no DSPs that had never appeared in
+  any census because the DSP column is what everyone was reading.
+
+### The one place the rule bends, and it does not help
+
+`zhao_forge_cliff`'s `prio_mem_r` (2048x32) and `run_mem_r` (1024x17) **DID**
+convert to Simple Dual Port RAM despite async reads in the source — 82,944 bits
+of the expected 119,808. So Quartus sometimes rescues an async read by inserting
+a read-address register. **It is not a guarantee and it cannot be planned
+against**: same file, same tool, same run, one of the three refused. Write the
+synchronous read; do not hope for the rescue.
+
+### Two-port templates REPLICATE
+
+Every `p2` row infers exactly **twice** the bits of its `p1` sibling. Two
+independent read addresses plus a write is three ports, an M10K has two, so
+Quartus builds two copies. That is the right answer and it is worth budgeting
+for: a second read port doubles the M10K count, it does not come free out of
+true-dual-port.
+
+### The check, before writing the RTL
+
+1. Read it **synchronously** — `always_ff @(posedge clk) q <= mem[addr];`
+2. Do **not** touch the array from a reset branch. M10K contents are undefined
+   after reset anyway; use a `valid` bitmap, which is one register per entry
+   and clears in a cycle.
+3. Then **measure that it took.** `Total block memory bits` in the map summary,
+   or `Total RAM Blocks` in the fit summary. Zero is a failure.
+
+> Evidence: `tools/budget/calibration.json`, and the tool's own console output
+> in `runs/CLAUDE-RUNS/RUN-20260823-2226-budget-audit-wave1/calib_map.log`.
+> Generated by `tools/budget/gen_calib.py`; re-runnable with
+> `tools/quartus/run_calib.ps1 -Family ram`.
 
 ---
 
