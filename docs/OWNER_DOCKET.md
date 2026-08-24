@@ -247,6 +247,57 @@ Specifically:
   is the clearest case: **18 -> 6 by width alone, then 6 -> ~3 by sequencing** to
   its measured demand of 2,000 normals/frame. Neither step requires the other.
 
+### CORRECTION: I called the width audit "cheap". For world coordinates it is not
+
+I wrote that narrowing "needs a proof about operand ranges and nothing else,
+answerable from the oracle and the world constants largely without Quartus."
+**That is true for some of the thirteen blocks and false for the most valuable
+ones.** I checked the format before anyone acted on it.
+
+**World coordinates are `fx16` = Q16.16 s32** — 16 integer bits, 16 fractional
+(`spec/qformats.md` §2; `TERRAIN.PROJECT.md:64` confirms `ax_i/ay_i/az_i` are
+"signed 32, fx16 world units").
+
+A Sacrifice-scale map is 256 cells at 10 world units = **2,550 units across**,
+which needs **13 integer bits**. So:
+
+    13 integer + 16 fractional = 29 bits
+
+**29 is still above the cliff.** Narrowing a world coordinate to 27 bits does not
+require proving a range — the range is already known and it does not fit. It
+requires **giving up two fractional bits**:
+
+| integer bits | fractional left at 27 total | precision |
+| ---: | ---: | --- |
+| 13 | **14** | 1/16,384 of a world unit |
+
+For scale that is 1/163,840 of a terrain cell, which is visually irrelevant. **So
+it is almost certainly acceptable — but it is a FORMAT CHANGE, not a proof.** It
+alters `zref`'s arithmetic, moves every golden CRC, and is a deliberate amendment
+of the same weight as the video-mode enum: `qformats.md` is normative and the
+reference is the oracle.
+
+### So the 110 splits into two classes, and only one is cheap
+
+**Class A — the operand is a world coordinate.** The projectors, `terrain_bake`,
+`geom_cull`, `terrain_tess`, `terrain_bake_delta`. Narrowing needs a **Q-format
+amendment** (`fx16` -> a 27-bit form, e.g. S 1.12.14), regenerated goldens, and
+an owner ruling on precision. **Large, valuable, and not cheap.**
+
+**Class B — the operand is something else.** `terrain_normals`' edge vectors,
+`field_mul`, `terrain_lod`, `mat3x4_mul`'s matrix elements. These may have
+genuinely provable ranges well inside 27 bits without touching any format —
+`terrain_normals` in particular takes *differences of heights*, and heights are
+S 1.7.8 (Q1) rather than fx16, so its 33-bit operands are likely an artefact of
+widening rather than a real requirement.
+
+**Class B is the cheap audit I described. Class A is a format decision.**
+
+I do not have the split by block measured — establishing it is the actual first
+task, and it is still cheap, because it is reading declarations rather than
+running tools. But the headline number should not be quoted as though all 110
+were available for the price of a proof. **It is not.**
+
 ### Why this changes the plan
 
 The campaign has been rearchitecting blocks one at a time — sequencing, sharing,
