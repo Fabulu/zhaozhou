@@ -1902,7 +1902,10 @@ int main(int argc, char** argv) {
         const int32_t now = static_cast<int32_t>(dut.rf_rdata_o);
         if (dut.instr_retired_o) {
           ++retires;
-          if (retires == 1) { planted = true; planted_cycle = n; }  // LDC committed
+          if (retires == 1) {
+            planted = true;
+            planted_cycle = n;
+          }                                    // LDC committed
           if (retires == 2) retire_cycle = n;  // the long op has committed
         }
         // Between the sentinel landing and the long op retiring, reg[20] is the
@@ -1913,8 +1916,7 @@ int main(int argc, char** argv) {
         // long op as writing dst early, at cycle 6, which was the observer and
         // not the RTL -- the give-away was change_cycle being identically 6 for
         // seven different ops whose retire cycles range from 22 to 85.
-        if (planted && retires == 1 && n > planted_cycle && now != kSentinel &&
-            !changed_early) {
+        if (planted && retires == 1 && n > planted_cycle && now != kSentinel && !changed_early) {
           changed_early = true;
           change_cycle = n;
         }
