@@ -1,0 +1,24 @@
+== the real pair: working tree against f7dd30f
+caller_regression: each caller against its own pre-merge self, 40000 cycles each
+  zhao_geom_project    (all 8 outputs/cycle)     cycle-identical
+  zhao_terrain_project (all 19 outputs/cycle)    cycle-identical
+----
+80000 cycles driven, 1080000 port-cycles compared, 0 mismatches
+RESULT: NEITHER CALLER'S TIMING OR ORDERING CHANGED.
+  T1 core: one extra pipeline stage (the seam moved by one)
+      caught (72076 mismatches)
+  T2 geom: v_ready_o no longer tracks the stall
+      caught (1815 mismatches)
+  T3 terrain: tri_ready_o forgets the sequencer is busy
+      caught (4642 mismatches)
+  T4 core: the main pipeline advances even when the caller says stop
+      caught (112004 mismatches)
+  T5 terrain: idle_o ignores the core
+      caught (209 mismatches)
+  T6 geom: the counter ticks on STALLED cycles too
+      caught (7960 mismatches)
+  T7 terrain: the corner index rides one stage out of step
+      caught (79316 mismatches)
+----
+real pair: CYCLE-IDENTICAL on every output port
+timing controls: 7 caught, 0 BLIND, of 7

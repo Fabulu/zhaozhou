@@ -1588,6 +1588,14 @@ set_tests_properties(lint_zhao_field_progcache PROPERTIES
 # the phantom zref::GeomProject the ledger declared. White-box include of
 # reference/src for zrender/internal.hpp, the same access TERRAIN.PROJECT's
 # suite already has.
+#
+# GEOM.PROJECT and TERRAIN.PROJECT are two shells around ONE projector,
+# fpga/rtl/common/zhao_project_core.sv (RUN-20260824-0522). Every target that
+# verilates or lints either shell needs the core in its source list, and the
+# path is written ONCE here for the same reason source_list_parity.cmake
+# exists: two statements of one fact, and the one that is not exercised rots.
+set(ZHAO_PROJECT_CORE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_core.sv)
 add_executable(test_geom_project_directed geometry/geom_project_directed.cpp)
 target_link_libraries(test_geom_project_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_geom_project_directed PRIVATE
@@ -1595,7 +1603,8 @@ target_include_directories(test_geom_project_directed PRIVATE
 verilate(test_geom_project_directed
   PREFIX Vzhao_geom_project
   TOP_MODULE zhao_geom_project
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv
+          ${ZHAO_PROJECT_CORE_SV})
 add_test(NAME geom_project_directed COMMAND test_geom_project_directed)
 set_tests_properties(geom_project_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 add_test(NAME geom_project_random COMMAND test_geom_project_directed --random 100)
@@ -1606,7 +1615,8 @@ set_tests_properties(geom_project_random_nightly PROPERTIES LABELS "nightly" TIM
 add_test(NAME lint_zhao_geom_project
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_geom_project
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv)
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv
+                 ${ZHAO_PROJECT_CORE_SV})
 set_tests_properties(lint_zhao_geom_project PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
@@ -2899,7 +2909,8 @@ set_tests_properties(terrain_tess_normals PROPERTIES LABELS "fast;nightly" TIMEO
 # the pictures the project already ships". White-box include of
 # reference/src is what lets the test call it.
 set(ZHAO_TERRAIN_PROJECT_SV
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_project.sv)
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_project.sv
+    ${ZHAO_PROJECT_CORE_SV})
 
 add_executable(test_terrain_project_directed terrain/terrain_project_directed.cpp)
 target_link_libraries(test_terrain_project_directed PRIVATE zhao_harness zhao_zref)
