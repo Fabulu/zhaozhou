@@ -5,6 +5,88 @@ at the top.*
 
 ---
 
+## 2026-08-24 — the cheapest fix on the board turns out to be a number, not a rewrite
+
+### There is a cliff at 27 bits, and most of our arithmetic is standing just past it
+
+The calibration measured something nobody here knew: **a multiplication costs one
+multiplier block if its inputs are 27 bits or narrower, and three if they are 28
+to 33.** Nothing in between. It is a cliff, not a slope.
+
+Almost all of this design's arithmetic uses **32-bit** inputs — one bit-width
+band past the cliff, paying three times over.
+
+I checked the rule against blocks we have actually measured before believing it:
+
+| block | multiplications | input width | predicted | **measured** |
+| --- | ---: | ---: | ---: | ---: |
+| geometry projector | 11 | 32 | 33 | **33** |
+| terrain projector | 11 | 32 | 33 | **33** |
+| terrain normals | 6 | 33 | 18 | **18** |
+| matrix engine | 3 | 32 | 9 | **9** |
+
+**Exact, four times.** The rule predicts rather than describes.
+
+### Which puts a very large number on the table
+
+Thirteen blocks sit above the cliff. Together they hold **168 multipliers today**.
+If their arithmetic fits in 27 bits, the same work costs **58**.
+
+    a saving of 110 multipliers
+
+For scale: we are at **134** and need to reach **85–90**. That is about 45 to
+find. **This list holds more than twice that.**
+
+### And it costs nothing
+
+Everything we have done for two days has been rebuilding blocks — sharing
+arithmetic, adding pipeline stages, sequencing loops. Each has taken about a day
+and each changed how a block works.
+
+**Narrowing a number changes nothing about how a block works.** No extra clock
+cycles, no new state, no interface change, no rewrite. It needs one thing only:
+**a proof that the smaller width is actually big enough.**
+
+### The catch, stated plainly
+
+**These are candidates, not winnings.** Each needs that proof, and some will fail
+it:
+
+* the creature-detail block's 64-bit path is a division and almost certainly
+  cannot shrink — I have excluded it;
+* **world coordinates may genuinely need 32 bits.** The projectors, terrain
+  baking and culling all do position arithmetic, and whether 27 bits covers the
+  world is a real question about how big the world is and how finely it is
+  measured. **That one is partly yours** — it depends on the size of a Zhaozhou
+  map and the precision the game needs, not on the hardware;
+* the 58 assumes *every* multiplication shrinks, which will not happen.
+
+Partial success is the realistic outcome, and partial success is still large.
+
+### It also stacks with the work we were already going to do
+
+Terrain normals is the clean example: **18 multipliers today, 6 if narrowed, and
+about 3 after the sequencing we had already planned.** The two do not compete —
+they multiply.
+
+### So I have changed the recommended order
+
+Before the next block rewrite, I would do a **width audit**: for each of these
+thirteen, what is the true range of the numbers going in, and does 27 bits hold
+them? That is answerable from the software reference and the world constants,
+largely without running the chip tools at all.
+
+If even half of the 110 is real, we reach the ceiling **without touching the two
+duplicate projectors** — and if we remove that duplication too, the design lands
+comfortably under it.
+
+### Meanwhile
+
+The surface texture store — the block at 229% of the chip because its memory
+became flip-flops — is being fixed now.
+
+---
+
 ## 2026-08-24 — the audit is done, and the biggest problem has no multipliers in it
 
 ### The headline nobody was looking for
