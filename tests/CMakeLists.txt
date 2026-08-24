@@ -2674,6 +2674,18 @@ add_test(NAME geom_setup_random_nightly COMMAND test_geom_setup_random --nightly
 set_tests_properties(geom_setup_random_nightly PROPERTIES
   LABELS "nightly" TIMEOUT 3600)
 
+# GEOM.WCACHE -- the projected-vertex arena. Differential against
+# zref::geom::VertexArena, whose refusal semantics are the interesting half.
+add_executable(test_geom_wcache_directed geometry/geom_wcache_directed.cpp)
+target_link_libraries(test_geom_wcache_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_wcache_directed
+  PREFIX Vzhao_vertex_arena
+  TOP_MODULE zhao_vertex_arena
+  VERILATOR_ARGS -GARENAS=2 -GDEPTH=16 -GPAYLOAD_W=64 -GGEN_W=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+add_test(NAME geom_wcache_directed COMMAND test_geom_wcache_directed)
+set_tests_properties(geom_wcache_directed PROPERTIES LABELS "fast;nightly")
+
 add_executable(test_geom_binner_directed geometry/geom_binner_directed.cpp)
 target_link_libraries(test_geom_binner_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_geom_binner_directed PRIVATE

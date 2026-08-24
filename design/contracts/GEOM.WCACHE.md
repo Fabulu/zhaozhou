@@ -99,6 +99,28 @@ three properties `QUARTUS_GOTCHAS` 10 measured as decisive for inference.
 **A map reporting `blockMemoryBits = 0` for this block is a FAILED implementation
 however green its tests are.** That rule found a block at 229% of the device.
 
+## Read-during-write: READ-OLD
+
+A lookup concurrent with a fill **to the same slot** returns the value present
+**before** the write. That is what the inferred memory does without a bypass
+network, and no bypass is added: it would cost a mux on the widest path in the
+block to serve a case the producer/consumer split makes rare, and
+`SURFACE.SHEET` already established read-old survives here.
+
+**This was undefined until a formal counterexample asked the question.** The
+first version of the proof compared a lookup against a shadow that had already
+taken the new value, and `bmc` refuted it. The RTL was right and the contract
+was silent, which is the more dangerous of the two.
+
+## Fills during reset are DROPPED
+
+The memory process is clock-only, deliberately, so that no reset touches the
+array. The fill ENABLE is nevertheless gated by `rst_n`: without it a fill
+asserted during reset lands in the store while every reset-gated observer --
+valid bits, generation, counters -- ignores it, leaving a payload nothing
+recorded. Gating an enable does not affect inference; only writing the array
+from a reset would.
+
 ## Q formats and rounding
 
 The arena performs **no arithmetic**. It stores and returns payload bits

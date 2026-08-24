@@ -955,3 +955,39 @@ runs:
       slower than the publish rate, which is exactly what ovf_o exists for --
       still needs a simulation test at randomised relative phase and does not
       have one.
+
+  - property: tests/formal/geom_wcache_arena_bounds.sby
+    status: pending
+    # PENDING BECAUSE bmc FAILS, and that is recorded rather than hidden.
+    # cover PASSES (every antecedent reachable: hit, miss, refuse, watched hit,
+    # overflow, regeneration). bmc is refuted at k = 4 on property 0,
+    # a_hit_is_the_watched_value, and the counterexample is NOT yet diagnosed.
+    #
+    # Three hypotheses were tried and all three were WRONG about this failure,
+    # while each produced a real fix that is being kept on its own merits:
+    #   1. read-during-write ordering -- led to READ-OLD being specified in the
+    #      contract, which was genuinely undefined before;
+    #   2. no reset assumption -- true and necessary (rst_n was a free input, so
+    #      the solver started in an arbitrary state); moved the failure k=2 -> 4;
+    #   3. fills landing during reset -- a real RTL gap, now gated, because a
+    #      clock-only memory process would otherwise store a payload that every
+    #      reset-gated observer ignores.
+    #
+    # The assertion will NOT be weakened to obtain a pass. It is the property the
+    # contract leads with -- a lookup must never wrap into another vertex -- and
+    # a proof that passes because the claim was softened is worth less than one
+    # that honestly fails.
+    date: "2026-08-24"
+    commit: "2edbcc1"
+    lane: formal_geom_wcache_arena_bounds
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      The projected-vertex arena bounds law. Uses the watched-slot technique:
+      f_arena/f_index are anyconst so the solver picks one arbitrary slot and
+      holds it, a shadow mirrors only writes to that slot, and the assertion is
+      that a hit on the watched key returns the shadow value. Because the key is
+      free, refuting it for any slot refutes it for the chosen one.
+      RTL and the differential against zref::geom::VertexArena are GREEN across
+      all sixteen directed lookups including every refusal class and the
+      reopen-does-not-resurrect case; only the formal lane is open.

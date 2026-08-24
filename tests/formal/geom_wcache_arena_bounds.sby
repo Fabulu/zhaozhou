@@ -1,0 +1,75 @@
+# geom_wcache_arena_bounds.sby — the projected-vertex arena's bounds law.
+#
+# The contract's first formal property is the reason this file exists:
+#
+#     A LOOKUP MUST NEVER WRAP INTO ANOTHER VERTEX.
+#
+# Everything else the arena does is convenience. That one is correctness: a
+# lookup answering with a neighbouring slot's payload, or with a previous
+# generation's, puts a vertex in the wrong place on screen and no differential
+# built from plausible command streams is guaranteed to hit it.
+#
+# THE WATCHED-SLOT TECHNIQUE. The property quantifies over every slot, which a
+# bounded proof cannot enumerate. So `f_arena`/`f_index` are `anyconst`: the
+# solver picks one arbitrary slot at reset and holds it, a shadow register
+# mirrors only writes to that slot, and the assertion is that a hit on the
+# watched key equals the shadow. Because the key is free, refuting it for ANY
+# slot refutes it for the chosen one, so the proof covers all of them.
+#
+# WHAT IS PROVED
+#   a hit on the watched key returns the value written to THAT key
+#   a hit implies the slot was written since its arena was last opened
+#   a refusal never claims a hit
+#   hit and refuse never appear without a reply
+#   the overflow fault is sticky
+#
+# WHAT IS NOT PROVED, stated rather than implied away:
+#   MEMORY INFERENCE. Whether the store becomes an M10K or 70,000 flip-flops is
+#   a synthesis result, not a logical one. `blockMemoryBits > 0` on a map is the
+#   only evidence for that, and the contract makes it a pass/fail condition.
+#   THE SHELL. This proves the primitive. The GEOM.WCACHE shell around it, and
+#   the projector's folding of the arena origin into its translation, are
+#   separate obligations.
+#
+# SCOPE-TOTAL: every assertion here is STEP-LOCAL -- each relates the current
+# reply to state one clock earlier, with no horizon and nothing accumulating
+# toward a bound. Raising the depth cannot reach a state the proof did not
+# already cover at every step. The depth exists for the COVERS: c_regen needs an
+# open, a fill, a seal and a lookup in sequence, which is a handful of steps, and
+# 24 gives that with room. Contrast field_seq_bound, where the depth IS the claim
+# (a_progress bounds busy_cnt) and a scope guard therefore exists to refuse a
+# raised depth.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the assertions hold to the depth below.
+#   cover — the antecedents are REACHABLE. Every assertion is guarded, and an
+#           arena that never answers a lookup satisfies all of them while proving
+#           nothing, which is the vacuity shape MEM.GUARD once shipped.
+#
+# The parameters are SMALL on purpose: 2 arenas of 4 slots. The property is
+# about aliasing between slots, and two arenas of four aliases in exactly the
+# same ways as two arenas of 1,089 while fitting in a solver.
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 24
+cover: mode cover
+cover: depth 24
+expect pass
+
+[engines]
+btor btormc
+
+[script]
+# Parameters go to read_slang, not to chparam: slang ELABORATES here, so by the
+# time chparam runs the module is no longer parametric and yosys says so --
+# "used with parameters but is not parametric".
+read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 zhao_vertex_arena.sv
+prep -top zhao_vertex_arena
+
+[files]
+../../fpga/rtl/geometry/zhao_vertex_arena.sv
