@@ -1,5 +1,97 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — THE 27-BIT CLIFF: a ranked list where 110 DSPs may be sitting
+
+The calibration measured that a product costs **1 DSP from 8 to 27 bits and 3
+from 28 to 33**. I cross-referenced that band table against the AST inventory and
+the map results. **Thirteen blocks sit just above the cliff**, and the arithmetic
+is worth reading twice.
+
+### The band model predicts mapped reality exactly
+
+Before trusting any of this, I checked the model against blocks whose DSP count
+we have actually measured:
+
+| block | nonconstant muls | widest operand | predicted (n x 3) | **mapped** |
+| --- | ---: | ---: | ---: | ---: |
+| `zhao_geom_project` | 11 | 32 | 33 | **33** |
+| `zhao_terrain_project` | 11 | 32 | 33 | **33** |
+| `zhao_terrain_normals` | 6 | 33 | 18 | **18** |
+| `zhao_geom_mat3x4_mul` | 3 | 32 | 9 | **9** |
+
+**Exact, four times, to the unit.** The fifth (`zhao_geom_skin`, 1 counted mul
+against 9 mapped) differs because the scanner counts *written* instances and the
+block replicates lanes in a generate — a known limit of instance counting, not a
+failure of the band.
+
+So the model is: **DSPs = (multiply instances) x (band for the widest operand)**,
+and it is predictive rather than descriptive.
+
+### The list
+
+| block | muls | widest | mapped DSPs | if narrowed to <=27 |
+| --- | ---: | ---: | ---: | ---: |
+| `zhao_geom_project` | 11 | 32 | 33 | 11 |
+| `zhao_terrain_project` | 11 | 32 | 33 | 11 |
+| `zhao_terrain_normals` | 6 | 33 | 18 | 6 |
+| `zhao_terrain_bake` | 5 | 33 | 17 | 5 |
+| `zhao_geom_cull` | 5 | 34 | 15 | 5 |
+| `zhao_geom_binner` | 4 | 36 | 12 | 4 |
+| `zhao_geom_mat3x4_mul` | 3 | 32 | 9 | 3 |
+| `zhao_geom_skin` | (3 lanes) | 32 | 9 | 3 |
+| `zhao_terrain_tess` | 7 | 34 | 6 | 7 |
+| `zhao_geom_lod` | 1 | **64** | 6 | 1 |
+| `zhao_terrain_bake_delta` | 2 | 32 | 4 | 2 |
+| `zhao_field_mul` | 1 | 33 | 3 | 1 |
+| `zhao_terrain_lod` | 1 | 32 | 3 | 1 |
+
+    mapped DSPs in these blocks today          168
+    if every one narrowed to <=27 bits          58
+                                              -----
+    theoretical saving                         110
+
+**That is more than the entire remaining gap.** The census is 134 measured
+against a ceiling of 85-90, so roughly 45-50 must go. This list holds twice that
+in *candidates*.
+
+### The caveats, which are the important part
+
+**These are candidates, not entitlements.** Every one requires **proving** the
+narrower width is sufficient, which is exactly what `QUARTUS_GOTCHAS` §5 has
+demanded since it was written — and §5 exists precisely because someone carried
+"free" slack and paid 28 DSPs where 18 would do.
+
+Specifically:
+
+* **`zhao_geom_lod` at 64 bits is almost certainly not narrowable** — that width
+  is the division path, and it was already narrowed once from 72 to 40 (and
+  `lpm_divide` caps numerators at 64). Treat it as excluded.
+* **World coordinates may genuinely need 32 bits.** The projectors, `terrain_bake`
+  and `geom_cull` all carry position arithmetic; whether 27 bits suffices is a
+  question about the world size and the fixed-point format, not a free choice.
+* **The 58 figure assumes every multiply narrows.** Partial success is the
+  realistic outcome, and partial success is still large.
+* The saving is **orthogonal to sequencing**, and they compose. `TERRAIN.NORMALS`
+  is the clearest case: **18 -> 6 by width alone, then 6 -> ~3 by sequencing** to
+  its measured demand of 2,000 normals/frame. Neither step requires the other.
+
+### Why this changes the plan
+
+The campaign has been rearchitecting blocks one at a time — sequencing, sharing,
+pipelining — at roughly a day each. **Width narrowing costs no clocks, no extra
+state, no interface change and no rearchitecture.** It needs a proof about
+operand ranges and nothing else.
+
+**So the cheapest remaining work is not a rearchitecture at all.** It is a
+fixed-point audit: for each of these blocks, what is the true range of its
+operands, and does 27 bits hold it? That question is answerable from the
+reference oracle and the world-space constants, largely without Quartus.
+
+**Recommended: do the width audit before the next rearchitecture.** If even half
+of the 110 is real, the ceiling is reachable without touching the two projectors'
+duplication — and if the duplication is *also* removed, the design lands well
+under.
+
 ## 2026-08-23 — THE EARTH FIELD BUDGET: the answer is not more cores, it is a cache
 
 The Field ruling left one question open: *how many physical Field cores are
