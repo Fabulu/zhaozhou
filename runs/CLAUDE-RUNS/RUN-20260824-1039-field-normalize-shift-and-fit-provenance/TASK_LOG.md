@@ -487,6 +487,55 @@ Green: shell golden replay (86 s), lint, duo markers, cmd decoder, and
 **Whether it is worth anything is the fitter's call.** A composed re-fit is
 running and the number goes in this log either way.
 
+### 17:00 — ONE LINE TOOK 836 FAILING ENDPOINTS TO 16
+
+Composed refit at `86e27e3`, same machine, same flow, same seed:
+
+| | `f2680df` | `86e27e3` |
+| --- | ---: | ---: |
+| worst setup | -1.991 ns | **-0.423 ns** |
+| failing setup endpoints | **836** | **16** |
+| worst hold | -0.952 ns FAIL | **+0.254 ns PASS** |
+| failing hold endpoints | 1 | **0** |
+| gpu_clk | 83.4 / ~92 real | **95.9 MHz** |
+
+The `f_pos -> recq[*]` family is gone from the path list, which is what the
+change targeted. **The CDC dropped off the worst list too — and that is NOT a
+fix.** Registering a subtract in the framer cannot repair a crossing between
+unrelated clocks; relieving pressure let the fitter place it better, and
+placement-dependent slack can come back. Recorded as a caveat, not a win.
+
+The 16 survivors are ordinary synchronous logic:
+`hps_arbiter|held_req.client[0] -> cmd_dma|crc_hdr_r[1]`, -0.423 down to -0.08.
+
+### 17:10 — FABIAN SENT A FULL CLOSURE PLAN, and it was one fit out of date
+
+`reports/ShellFixes.md` (`33b0a63`). Its diagnosis is right and matches what the
+path detail showed independently: the 83.4 MHz is the monitored CDC, the real
+problem is ~8% concentrated in two pieces of control logic, and **"do not lower
+the GPU target to 92 MHz"** because the renderer's budgets assume 1,666,667
+compute clocks per frame.
+
+Two of its predictions had already resolved by the time it arrived:
+
+* **item 3** (rewrite the framer as streaming hardware) states its expected
+  result as *"the large `f_pos -> recq[*]` family disappears entirely."* **It
+  already has** — from the one-line registered subtract, not the rewrite. The
+  rewrite remains the better structure; it is no longer the timing lever.
+* **item 4's prediction** that *"HPS arbiter state into CMD.DMA CRC control"*
+  would surface next is **exactly what the fit now names.**
+
+**item 2 applied** (`59de7ca`): `crc_pay_r`'s seed moved out of `M_HDR_CHK`'s
+success branch — where the whole validation ladder sat in a register's clock
+enable — to an unconditional seed at the end of `M_HCRC`. Checked against the
+code rather than accepted: `crc_pay_r` is meaningless on header failure,
+`M_SEED` is unreachable without success, and nothing folds into it in between.
+
+Verified by the differential AND `formal_cmd_dma_crc_gate` — the right instrument
+for a change to CRC seeding — plus `ctest -L fast` green at 272 and ledger 0.
+
+Refit running. **One measured change per commit**, as section 6 requires.
+
 ---
 
 ## Decisions Made
