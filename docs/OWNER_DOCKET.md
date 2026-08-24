@@ -1,5 +1,63 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — MEASURED: the Field register file, and I was too pessimistic
+
+I wrote this morning that the Field ruling's ALM target of 3,500-5,000 "does not
+follow" and predicted **6,587** after the register-file conversion. **Built and
+measured, it is 5,142** — inside the band I said was unreachable. Correcting my
+own correction.
+
+| `zhao_field_seq` | before | after |
+| --- | ---: | ---: |
+| `blockMemoryBits` | **0** | **8,192** |
+| inferred memories | 0 | **4** |
+| ALMs | 7,958 | **5,142** |
+| registers | ~5,288 | **3,305** |
+| DSPs | 3 | 3 |
+
+**−2,816 ALMs, −35.4%**, against my predicted −1,371.
+
+### Why the estimate was low, and it is a general lesson
+
+I costed the change from the calibration's standalone 64x32 array: 1,411 ALMs
+broken against 40 inferred, so ~1,371. **That measures the array and nothing
+else.** In situ, removing the four asynchronous 64:1 read muxes also removed the
+logic that fed them and the reset fan-out across 2,048 flops — **registers fell
+by 1,983**, which is most of the extra saving.
+
+> **A microbenchmark prices the component. It does not price the component's
+> blast radius.** The calibration remains right and remains the reason this was
+> attempted; it was simply a floor rather than an estimate.
+
+Worth carrying into the remaining candidates: where the audit's calibration
+predicts a saving from removing a structure, **the structure's fan-out may be
+worth more than the structure.**
+
+### What it cost, stated plainly
+
+**Simple instructions go from 6 clocks to 7.** A synchronous read is answered
+one edge after its address, so every operand group lands a state later and a
+fourth read state (`Q_RD3`) catches the last. This was predicted in the run's
+SPEC *before* the RTL was written, which is what makes updating the latency
+assertion a recorded consequence rather than a test bent to fit a result.
+
+**The host read port is now synchronous** — an interface change. It is a debug
+port, used while the walk is idle, and the contract needs the line.
+
+**8,192 bits fit in ONE M10K** of 502 free, because Quartus packed the four
+copies.
+
+### The rest of the entry stands
+
+The three constant ROMs really are already cheap (328 ALMs together) and remain
+a **timing** item rather than a resource one. And `exec_shared` at 4,793 ALMs is
+still the bulk of what remains — **the arithmetic is still the block**, and
+nobody has yet looked at where those go.
+
+**Timing is still the open question.** This change removes what the file's own
+header called the dominant cost, so it should help the 33.86 MHz — but **no fit
+has run, and no slack number may be quoted until a real `.sta.rpt` is read.**
+
 ## 2026-08-24 — THE FIELD MEMORY TARGET IS OPTIMISTIC, and the ROMs are innocent
 
 Before starting the Field rebuild's six waves I measured where its ALMs actually
