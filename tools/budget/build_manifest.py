@@ -916,6 +916,39 @@ def write_heatmap(path, man, calib, wl):
             L.append("")
             L.append("`blockMemoryBits > 0` is the ONLY evidence an array became a memory.")
             L.append("")
+            L.append("**The law, written up in full as `reports/QUARTUS_GOTCHAS.md` 10:**")
+            L.append("")
+            L.append("> Synchronous read, no reset touching the array, and no byte enables --")
+            L.append("> it infers, and costs tens of ALMs. An ASYNCHRONOUS READ, a RESET on")
+            L.append("> the array, or BYTE ENABLES -- **zero memory bits**. The three kill")
+            L.append("> inference INDEPENDENTLY; any one alone is sufficient.")
+            L.append("")
+            # The penalty curve, computed from the measured pairs rather than typed.
+            base = {}
+            for q in rams:
+                if q.get("readStyle") == "sync" and not q.get("reset") and                         q.get("ports") == 1 and not q.get("byteEnables"):
+                    base[q["expectedBits"]] = q.get("estimatedAlms")
+            worst = {}
+            for q in rams:
+                if q.get("ports") != 1 or q.get("byteEnables"):
+                    continue
+                if (q.get("blockMemoryBits") or 0) > 0:
+                    continue
+                b = q["expectedBits"]
+                worst[b] = max(worst.get(b, 0), q.get("estimatedAlms") or 0)
+            if base and worst:
+                L.append("| array | inferred | NOT inferred | penalty |")
+                L.append("| ---: | ---: | ---: | ---: |")
+                for b in sorted(set(base) & set(worst)):
+                    L.append("| %s bits | %s ALM | %s ALM | **%.0fx** |" % (
+                        "{:,}".format(b), base[b], "{:,}".format(worst[b]),
+                        worst[b] / base[b]))
+                L.append("")
+                L.append("An inferred memory barely grows -- 2,048 bits and 36,864 bits both cost")
+                L.append("about thirty ALMs, because the cost is address and control logic, not")
+                L.append("storage. One that did not infer costs every bit as a flip-flop behind a")
+                L.append("mux tree. **The rule matters most exactly where the array is biggest.**")
+                L.append("")
             L.append("| depth x width | read | reset | ports | byte-en | expected bits | block mem bits | INFERRED? | est. ALM |")
             L.append("| --- | --- | --- | ---: | :--: | ---: | ---: | :--: | ---: |")
             for p in sorted(rams, key=lambda x: (x.get("depth", 0), x.get("width", 0),

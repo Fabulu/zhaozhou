@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `d956968c`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
+HEAD `babe30fa`. Frame budget **1,666,667 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -543,6 +543,25 @@ settle it by measurement rather than by argument.
 ### Storage templates
 
 `blockMemoryBits > 0` is the ONLY evidence an array became a memory.
+
+**The law, written up in full as `reports/QUARTUS_GOTCHAS.md` 10:**
+
+> Synchronous read, no reset touching the array, and no byte enables --
+> it infers, and costs tens of ALMs. An ASYNCHRONOUS READ, a RESET on
+> the array, or BYTE ENABLES -- **zero memory bits**. The three kill
+> inference INDEPENDENTLY; any one alone is sufficient.
+
+| array | inferred | NOT inferred | penalty |
+| ---: | ---: | ---: | ---: |
+| 2,048 bits | 40 ALM | 1,427 ALM | **36x** |
+| 4,096 bits | 26 ALM | 2,818 ALM | **108x** |
+| 32,768 bits | 44 ALM | 22,071 ALM | **502x** |
+| 36,864 bits | 31 ALM | 25,039 ALM | **808x** |
+
+An inferred memory barely grows -- 2,048 bits and 36,864 bits both cost
+about thirty ALMs, because the cost is address and control logic, not
+storage. One that did not infer costs every bit as a flip-flop behind a
+mux tree. **The rule matters most exactly where the array is biggest.**
 
 | depth x width | read | reset | ports | byte-en | expected bits | block mem bits | INFERRED? | est. ALM |
 | --- | --- | --- | ---: | :--: | ---: | ---: | :--: | ---: |
