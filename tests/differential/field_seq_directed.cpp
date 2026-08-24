@@ -214,8 +214,15 @@ struct Bench {
   }
 
   int32_t read_reg(uint8_t r) {
+    // The register file is block memory now, so the host port is SYNCHRONOUS:
+    // the address is presented on one edge and the answer lands on the next.
+    // This used to be `eval()` alone, which returned whatever the previous
+    // address had selected -- and the symptom was unmistakable once seen, with
+    // every chained result reading back as the PREVIOUS instruction's answer.
+    // The values were never wrong; only the read protocol moved.
+    // Safe to clock here: read_reg is only called once the walk is idle.
     dut.rf_raddr_i = r;
-    dut.eval();
+    zhao::tick(dut);
     return static_cast<int32_t>(dut.rf_rdata_o);
   }
 
@@ -1562,8 +1569,16 @@ int main(int argc, char** argv) {
       std::snprintf(nm, sizeof nm, "12.%s ran to END", cs.name);
       check(status == 0, nm, 0, status);
       if (cs.simple) {
-        std::snprintf(nm, sizeof nm, "12.%s still retires in six clocks", cs.name);
-        check(got == 6, nm, 6, static_cast<uint32_t>(got));
+        // SEVEN, not six. The register file became block memory, so a read is
+        // answered one edge after its address and every operand group lands a
+        // state later -- Q_LATCH now only ADDRESSES group 0, and a fourth read
+        // state (Q_RD3) catches the last one. This one extra clock was
+        // predicted in the run's SPEC before the RTL was written, which is what
+        // makes updating the number here a recorded consequence rather than a
+        // test bent to fit a result. Every VALUE is unchanged and still
+        // bit-identical to zfield::interpret.
+        std::snprintf(nm, sizeof nm, "12.%s retires in seven clocks", cs.name);
+        check(got == 7, nm, 7, static_cast<uint32_t>(got));
       }
       std::snprintf(nm, sizeof nm, "12.%s within MAX_OP_CYCLES", cs.name);
       check(got <= kMaxOpCycles, nm, 1, got <= kMaxOpCycles ? 1 : 0);
@@ -1872,20 +1887,34 @@ int main(int argc, char** argv) {
 
       int retires = 0;
       bool planted = false;
+      int planted_cycle = -1;
       bool changed_early = false;
       int change_cycle = -1;
       int retire_cycle = -1;
       for (int n = 0; n < 4000 && !dut.done_o; ++n) {
+        // Watch reg[20] WITHOUT clocking: read_reg() now advances the clock
+        // (the file is block memory), and calling it inside this loop ticked
+        // twice per iteration and swallowed instr_retired_o pulses. step() does
+        // not touch rf_raddr_i, so holding the address and reading the port
+        // directly gives the same observation with no extra edge.
+        dut.rf_raddr_i = 20;
         b.step();
-        const int32_t now = b.read_reg(20);
+        const int32_t now = static_cast<int32_t>(dut.rf_rdata_o);
         if (dut.instr_retired_o) {
           ++retires;
-          if (retires == 1) planted = true;    // the LDC has committed
+          if (retires == 1) { planted = true; planted_cycle = n; }  // LDC committed
           if (retires == 2) retire_cycle = n;  // the long op has committed
         }
         // Between the sentinel landing and the long op retiring, reg[20] is the
         // sentinel and nothing else. `retires == 1` is exactly that window.
-        if (planted && retires == 1 && now != kSentinel && !changed_early) {
+        // `n > planted_cycle`: the host port lags one cycle now that the file is
+        // block memory, so on the very cycle the LDC retires the port still
+        // shows the PRE-sentinel value. Without this the test reported every
+        // long op as writing dst early, at cycle 6, which was the observer and
+        // not the RTL -- the give-away was change_cycle being identically 6 for
+        // seven different ops whose retire cycles range from 22 to 85.
+        if (planted && retires == 1 && n > planted_cycle && now != kSentinel &&
+            !changed_early) {
           changed_early = true;
           change_cycle = n;
         }

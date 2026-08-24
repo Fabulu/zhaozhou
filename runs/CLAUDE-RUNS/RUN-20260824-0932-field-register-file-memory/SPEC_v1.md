@@ -102,6 +102,12 @@ rather than merely cheaper.
 
 ## Open Questions
 
+- **CORRECTED**: the SPEC said "safe to clock in read_reg: it is only called
+  once the walk is idle". **That was false.** Section 14 of the directed test
+  watches reg[20] EVERY cycle during a run, so a clocking read_reg advanced the
+  clock twice per iteration and swallowed retire pulses. The observer now holds
+  the address and reads the port directly, with no extra edge.
+
 - Whether the four copies should instead be two dual-port RAMs; deferred, since
   M10Ks are not scarce here (4 of 502) and replication keeps the read paths
   independent.

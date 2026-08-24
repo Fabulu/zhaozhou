@@ -214,12 +214,54 @@ module zhao_field_seq (
   localparam logic [3:0] Q_MWAIT = 4'd9;   // hold r_ready until the unit answers
   localparam logic [3:0] Q_WB1 = 4'd10;    // second output lane, dst+1
   localparam logic [3:0] Q_WB2 = 4'd11;    // third output lane, dst+2
+  // Added by the memory conversion. A synchronous read answers one edge after
+  // its address, so every operand group lands one state later than it used to
+  // and a fourth read state is needed to catch the last one. This is the six
+  // clocks becoming seven that the Field ruling predicted.
+  localparam logic [3:0] Q_RD3 = 4'd12;    // group 2 lands here
 
   logic [3:0] state;
   logic [7:0] pc;
 
   // The register file. Flops, not M10K -- see the header.
-  logic signed [31:0] rf [0:63];
+  // ---- the register file: four replicated block memories ------------------
+  //
+  // It was ONE flop array read four ways:
+  //
+  //     logic signed [31:0] rf [0:63];
+  //     assign rd_a = rf[ra];  assign rd_b = rf[rb];
+  //     assign rd_c = rf[rc];  assign rf_rdata_o = rf[rf_raddr_i];
+  //
+  // 2,048 bits behind four asynchronous 64:1 muxes, which this file's own
+  // header already named as the dominant cost. It inferred NO memory at all:
+  // tools/budget/calibration.json measured this exact shape, and BOTH of the
+  // things it did are independently fatal --
+  //
+  //     64x32 synchronous read, no reset    ->    40 ALMs, infers
+  //     64x32 synchronous read, WITH reset  -> 1,411 ALMs, 0 memory bits
+  //     64x32 ASYNCHRONOUS read, no reset   -> 1,427 ALMs, 0 memory bits
+  //
+  // -- so removing only the reset, or only the async read, would have changed
+  // nothing. Both had to go together.
+  //
+  // Four copies because an M10K is one write and one read; every write is
+  // broadcast to all four so they are always identical. 4 x 2,048 = 8,192 bits,
+  // one M10K each at most, against 502 free.
+  logic signed [31:0] rf_a [0:63];
+  logic signed [31:0] rf_b [0:63];
+  logic signed [31:0] rf_c [0:63];
+  logic signed [31:0] rf_h [0:63];
+
+  // The clear is a BITMAP, not a walk over the array. Zeroing 64 entries in a
+  // reset branch is one of the two killers above, and a bitmap is not merely
+  // cheaper -- it is the only correct option, because M10K contents are
+  // UNDEFINED after reset and a read must still answer zero.
+  logic [63:0] rf_valid;
+
+  // Registered read addresses: with synchronous memory the answer arrives one
+  // edge after the address, so the valid bit must be sampled at the SAME time
+  // as the data or a just-cleared register could read as live.
+  logic       va_q, vb_q, vc_q, vh_q;
 
   // Latched instruction fields, so the walk does not depend on the instruction
   // memory holding its answer.
@@ -265,11 +307,64 @@ module zhao_field_seq (
     endcase
   end
 
-  logic signed [31:0] rd_a, rd_b, rd_c;
-  assign rd_a = rf[ra];
-  assign rd_b = rf[rb];
-  assign rd_c = rf[rc];
-  assign rf_rdata_o = rf[rf_raddr_i];
+  // ---- the one write port, decoded once ------------------------------------
+  // The three lane writes look simultaneous and are not: they sit in an
+  // if/else-if chain across Q_MWAIT, Q_WB1 and Q_WB2, so at most one lands on
+  // any edge. That is why four single-write memories are enough.
+  logic        rf_wen;
+  logic [5:0]  rf_waddr;
+  logic signed [31:0] rf_wdata;
+
+  // Decoded combinationally so the memories can be a plain clocked block. The
+  // guard mirrors the sequential one below exactly: clear wins, then the walk,
+  // then the host -- "there is no arbitration to get wrong because there is no
+  // concurrency to allow".
+  always_comb begin
+    rf_wen   = 1'b0;
+    rf_waddr = 6'd0;
+    rf_wdata = 32'sd0;
+    if (!clear_i) begin
+      if (busy_o) begin
+        if ((state == Q_EXEC) && exec_writes && !exec_is_end && !exec_unsupported
+             && !multi_op) begin
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = exec_result;
+        end else if ((state == Q_MWAIT) && multi_rvalid) begin
+          rf_wen = 1'b1; rf_waddr = i_dst;        rf_wdata = multi_o0;
+        end else if (state == Q_WB1) begin
+          rf_wen = 1'b1; rf_waddr = i_dst + 6'd1; rf_wdata = m_o1;
+        end else if (state == Q_WB2) begin
+          rf_wen = 1'b1; rf_waddr = i_dst + 6'd2; rf_wdata = m_o2;
+        end
+      end else if (rf_we_i) begin
+        rf_wen = 1'b1; rf_waddr = rf_waddr_i;     rf_wdata = rf_wdata_i;
+      end
+    end
+  end
+
+  // ---- the memories: CLOCK ONLY --------------------------------------------
+  // No reset touches these arrays and no write is partial -- two of the three
+  // things QUARTUS_GOTCHAS 10 measured as INDEPENDENTLY fatal to inference. The
+  // third, an asynchronous read, is what the registered rd_*_q outputs remove.
+  // A map reporting blockMemoryBits = 0 after this is a FAILED implementation
+  // however green the tests are.
+  always_ff @(posedge clk) begin
+    rd_a_q <= rf_a[ra];
+    rd_b_q <= rf_b[rb];
+    rd_c_q <= rf_c[rc];
+    rd_h_q <= rf_h[rf_raddr_i];
+    if (rf_wen) begin
+      rf_a[rf_waddr] <= rf_wdata;
+      rf_b[rf_waddr] <= rf_wdata;
+      rf_c[rf_waddr] <= rf_wdata;
+      rf_h[rf_waddr] <= rf_wdata;
+    end
+  end
+
+  logic signed [31:0] rd_a_q, rd_b_q, rd_c_q, rd_h_q;
+  wire signed [31:0] rd_a = va_q ? rd_a_q : 32'sd0;
+  wire signed [31:0] rd_b = vb_q ? rd_b_q : 32'sd0;
+  wire signed [31:0] rd_c = vc_q ? rd_c_q : 32'sd0;
+  assign rf_rdata_o = vh_q ? rd_h_q : 32'sd0;
 
   // ---- the free arithmetic slots ------------------------------------------
   // The three read states hand their pairs straight to the shared lane. Which
@@ -281,9 +376,13 @@ module zhao_field_seq (
     slot_issue = 1'b0;
     slot_idx   = 2'd0;
     case (state)
-      Q_LATCH: begin slot_issue = 1'b1; slot_idx = 2'd0; end
-      Q_RD1:   begin slot_issue = 1'b1; slot_idx = 2'd1; end
-      Q_RD2:   begin slot_issue = 1'b1; slot_idx = 2'd2; end
+      // Shifted by one state with the reads. Q_LATCH now only ADDRESSES group
+      // 0; its data arrives at Q_RD1, which is where slot 0 can first be
+      // issued. Issuing in Q_LATCH would hand the lane the PREVIOUS
+      // instruction's operands -- silently, and with every value well-formed.
+      Q_RD1:   begin slot_issue = 1'b1; slot_idx = 2'd0; end
+      Q_RD2:   begin slot_issue = 1'b1; slot_idx = 2'd1; end
+      Q_RD3:   begin slot_issue = 1'b1; slot_idx = 2'd2; end
       default: begin slot_issue = 1'b0; slot_idx = 2'd0; end
     endcase
   end
@@ -367,7 +466,12 @@ module zhao_field_seq (
       sat_rcp_o <= 1'b0;
       rcp0_o <= 1'b0;
       instr_retired_o <= 1'b0;
-      for (int i = 0; i < 64; i++) rf[i] <= '0;
+      // A bitmap clear, not a walk over the array. Zeroing 64 entries in a
+      // reset branch is one of the two things that stopped this file
+      // inferring -- and a bitmap is the only CORRECT option besides, because
+      // M10K contents are undefined after reset and a read must still answer 0.
+      rf_valid <= 64'd0;
+      va_q <= 1'b0; vb_q <= 1'b0; vc_q <= 1'b0; vh_q <= 1'b0;
     end else begin
       done_o <= 1'b0;
       instr_retired_o <= 1'b0;
@@ -379,24 +483,31 @@ module zhao_field_seq (
       // writes are refused while the walk owns the file: there is no
       // arbitration to get wrong because there is no concurrency to allow.
       if (clear_i) begin
-        for (int i = 0; i < 64; i++) rf[i] <= '0;
+        rf_valid <= 64'd0;   // the clear command, same reasoning
       end else if (busy_o) begin
         // The walk's write-back. The decoder has proved `dst` never overlaps
         // this instruction's own sources, which is why there is no bypass
         // network here and does not need to be one.
         if ((state == Q_EXEC) && exec_writes && !exec_is_end && !exec_unsupported
              && !multi_op) begin
-          rf[i_dst] <= exec_result;
+          rf_valid[i_dst] <= 1'b1;
         end else if ((state == Q_MWAIT) && multi_rvalid) begin
-          rf[i_dst] <= multi_o0;          // lane 0, on the accepting edge
+          rf_valid[i_dst] <= 1'b1;              // lane 0, on the accepting edge
         end else if (state == Q_WB1) begin
-          rf[i_dst + 6'd1] <= m_o1;       // lane 1
+          rf_valid[i_dst + 6'd1] <= 1'b1;       // lane 1
         end else if (state == Q_WB2) begin
-          rf[i_dst + 6'd2] <= m_o2;       // lane 2
+          rf_valid[i_dst + 6'd2] <= 1'b1;       // lane 2
         end
       end else if (rf_we_i) begin
-        rf[rf_waddr_i] <= rf_wdata_i;
+        rf_valid[rf_waddr_i] <= 1'b1;
       end
+
+      // The valid bits travel with the addresses so a read answers with the
+      // liveness that held when it was ISSUED, not when it lands.
+      va_q <= rf_valid[ra];
+      vb_q <= rf_valid[rb];
+      vc_q <= rf_valid[rc];
+      vh_q <= rf_valid[rf_raddr_i];
 
       case (state)
         Q_IDLE: begin
@@ -432,23 +543,27 @@ module zhao_field_seq (
           i_a <= ins_a_i;
           i_b <= ins_b_i;
           i_imm <= ins_imm_i;
-          a0 <= rd_a;
-          b0 <= rd_b;
-          cv <= rd_c;
-          state <= Q_RD1;
+          state <= Q_RD1;   // group 0 was ADDRESSED here; it lands next edge
         end
 
         // The remaining operand groups, walked. Reads are combinational, so
         // each state drives its addresses and captures its answers on the same
         // edge.
         Q_RD1: begin
-          a1 <= rd_a;
-          b1 <= rd_b;
+          a0 <= rd_a;       // group 0, addressed in Q_LATCH
+          b0 <= rd_b;
+          cv <= rd_c;
           state <= Q_RD2;
         end
 
         Q_RD2: begin
-          a2 <= rd_a;
+          a1 <= rd_a;       // group 1
+          b1 <= rd_b;
+          state <= Q_RD3;
+        end
+
+        Q_RD3: begin
+          a2 <= rd_a;       // group 2
           b2 <= rd_b;
           state <= Q_GATH;
         end
