@@ -5,6 +5,59 @@ at the top.*
 
 ---
 
+## 2026-08-24 (late afternoon) — one line of RTL took the shell from 836 failing paths to 16
+
+### Measured, before and after, on the same machine and the same flow
+
+| | before | after |
+| --- | ---: | ---: |
+| worst setup slack | −1.991 ns | **−0.423 ns** |
+| failing setup endpoints | **836** | **16** |
+| worst hold slack | −0.952 ns (failing) | **+0.254 ns (passes)** |
+| failing hold endpoints | 1 | **0** |
+| graphics clock | 83.4 MHz reported / ~92 real | **95.9 MHz** |
+
+**The hold failure is gone and we are 4% off the 100 MHz target**, from 17% off
+this morning.
+
+### What the change was
+
+The glue that chops incoming command packets into records asked, every clock:
+
+> is this byte position past 36, **and** past (packet length − 4)?
+
+and the answer gated a 144-bit write. The subtraction sat directly in front of
+the comparison, so the chip had to do the arithmetic and the comparison and the
+write decision inside one tick.
+
+The subtraction now happens one clock earlier, into a register.
+
+**It is exactly equivalent, not approximately.** The position counter resets
+whenever it reaches the packet length, and the region test needs position ≥ 36 —
+so a value that lags by one clock has been correct for 35 clocks before anything
+looks at it. The only moment the lag is visible is at a packet boundary, which
+is precisely where the test is false anyway.
+
+### Two honest caveats
+
+**The clock-domain crossing is not fixed, it is currently passing.** Both of
+this morning's headline failures were that crossing, and with the pressure taken
+off elsewhere the fitter placed it better. Its slack depends on placement and
+**can come back**. The decision about how to treat it properly is still yours,
+on the docket.
+
+**16 endpoints still fail**, so the tool still says FAIL overall. The remaining
+ones are ordinary logic — the HPS arbiter reaching the command DMA's checksum
+registers — and they are small (−0.423 down to −0.08).
+
+### The part I got wrong earlier today
+
+I told you 83.4 MHz this morning. That was the crossing, not the design. The
+real figure was ~92, and it is now 95.9. I would rather say that plainly than
+let the first number stand.
+
+---
+
 ## 2026-08-24 (afternoon) — the composed shell FITS, and the 83 MHz I reported was wrong
 
 ### CORRECTION FIRST

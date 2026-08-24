@@ -423,6 +423,70 @@ Composed fit re-running at `f2680df` to capture the detail. It answers **both**
 open timing items at once: the failing hold endpoint, and the critical-path
 family behind the 836 setup endpoints.
 
+### 16:00 — the CDC was BOTH headline numbers, and I had published the wrong one
+
+With the path detail preserved, the composed fit reads:
+
+    -1.991  starve_q[57]  vid_clk -> cdc_err  gpu_clk     <- a CDC, not logic
+    -0.875  cmd_dma|hdr_win[28][5] -> crc_pay_r[8]        <- worst REAL path
+    -0.765  f_pos[1] -> recq[2][*]  (a large family)
+
+**The worst setup path and the only hold failure are the same crossing.**
+`starve_q` is a 64-bit counter in `vid_clk`, sampled into `starve_samp` on
+`gpu_clk`, and `cdc_err` is a **runtime tripwire** that raises if the counter
+moves during the sample window — the premise being that it advances only during
+active lines while the tick lands in vblank. TimeQuest analyses two unrelated
+clocks and reports both numbers; neither is a defect.
+
+**So I had to correct STATUS.md.** I published **83.4 MHz** to Fabian's channel
+this morning. The real worst *synchronous* path is **-0.875 ns, ~92 MHz** —
+short by 8%, not 17%. I also over-stated the hold finding: *"wrong at every
+frequency"* is true of a synchronous path and false of an asynchronous one.
+
+> **A summary line cannot tell you what KIND of failure it is.** The verdict
+> said `timingPassed: false` and the worst number was an artefact of a decision
+> we made on purpose. A permanently red verdict cannot report a regression —
+> and it had already hidden one, because -0.875 was invisible behind -1.991.
+
+Docketed for Fabian with three options and a recommendation, **not decided**:
+silencing a measurement to turn a flag green is the move
+`mem_vram_arbiter_liveness`'s comment warns about.
+
+### 16:20 — priority (b) is NOT missing ops. It is timing
+
+Checked rather than assumed, because "the rest of the Field IR engine" reads
+like unbuilt work:
+
+| op | RTL | reference | differential | ledger |
+| --- | --- | --- | --- | --- |
+| NORMALIZE2/3, CURVE, DCURVE, SPLINE, NOISE2, RING, RIDGE, ROT2, ROT3 | yes | yes | yes | 40 ops |
+
+All ten are implemented, mirrored in `zref`, exercised by
+`field_seq_directed.cpp`, and green. **Field's functionality is complete**; what
+remains is waves 2/4/5/6, which are timing.
+
+### 16:30 — GLUE 3, oracle first
+
+The framer has **no shipped reference function** — it is shell glue. Its oracle
+is behavioural, so it was established BEFORE the edit and run green first:
+`shell_golden_replay`, `cmd_decoder_directed`, `cmd_scheduler_directed`.
+
+    in_rec_region = (f_pos >= 36) && (f_pos < (pkt_len - 32'd4));
+
+A 32-bit subtract in series with the compare that gates a **144-bit array
+write**. `pkt_len - 4` is now registered, and the equivalence is **exact**:
+`f_pos` resets when `f_pos + 1 >= pkt_len`, and the region needs `f_pos >= 36`,
+so a one-cycle-lagged copy has been correct for 35 cycles before anything reads
+it. Underflow preserved deliberately — the same expression, registered, so
+`pkt_len < 4` still wraps rather than being quietly "fixed" under cover of a
+timing change.
+
+Green: shell golden replay (86 s), lint, duo markers, cmd decoder, and
+`ctest -L fast` at 272 tests with the ledger at 0. Committed `86e27e3`.
+
+**Whether it is worth anything is the fitter's call.** A composed re-fit is
+running and the number goes in this log either way.
+
 ---
 
 ## Decisions Made
