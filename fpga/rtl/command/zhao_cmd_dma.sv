@@ -568,25 +568,6 @@ module zhao_cmd_dma #(
           cw <= cw + 2'd1;
           if (cw == 2'd3) begin
             cw <= 2'd0;
-            // SEEDED HERE, UNCONDITIONALLY, rather than in M_HDR_CHK's success
-            // branch. It used to sit behind the whole validation ladder -- magic,
-            // ABI version, reserved flags, four length laws, the header CRC and
-            // the epoch -- which put every one of those comparisons in the CLOCK
-            // ENABLE cone of a 32-bit register. The composed shell fit of
-            // 2026-08-24 named `hdr_win[28][5] -> crc_pay_r[8]` as the worst
-            // real synchronous path at -0.875 ns.
-            //
-            // Moving it costs nothing and changes nothing observable:
-            //   * `crc_pay_r` is meaningless when the header FAILS -- the
-            //     machine leaves for the error path and never folds payload;
-            //   * `M_SEED` is unreachable unless validation succeeded, so no
-            //     accepted packet can observe a different seed;
-            //   * nothing between here and M_SEED_PREP folds into `crc_pay_r`,
-            //     so seeding one cycle earlier cannot be overwritten or read.
-            // Same value, same cycle count, same interface, one fewer cone.
-            //
-            // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
-            crc_pay_r <= 32'hFFFF_FFFF;
             m <= M_HDR_CHK;
           end
         end
@@ -690,9 +671,12 @@ module zhao_cmd_dma #(
             // design's 13,651 negative-slack paths ran
             // hdr_win -> seed_steps_q, worst -1.096 ns. Half the remaining
             // timing problem was this one extra job in an already full cycle.
-            // `crc_pay_r <= 32'hFFFF_FFFF` USED TO BE HERE. It is now seeded
-            // unconditionally at the end of M_HCRC -- see the note there. The
-            // point was to get this whole ladder out of a register's enable.
+            // `crc_pay_r <= 32'hFFFF_FFFF` USED TO BE HERE, in the SUCCESS arm
+            // of the validation ladder, which put magic, ABI version, reserved
+            // flags, four length laws, the header CRC and the epoch into the
+            // clock-enable cone of a 32-bit register. It is now seeded in
+            // M_SEED_PREP -- see the note there, including why M_HCRC was tried
+            // first and MEASURED WORSE.
             cw <= 2'd0;
             m <= M_SEED_PREP;
           end
@@ -701,6 +685,27 @@ module zhao_cmd_dma #(
         // One cycle, entirely from registers: cb and fetched were latched by
         // the header check, so nothing here reads hdr_win.
         M_SEED_PREP: begin
+          // THE PAYLOAD CRC IS SEEDED HERE, and the placement is measured
+          // rather than reasoned. Fabian's ShellFixes.md item 2 is right that
+          // the seed must leave M_HDR_CHK's success arm -- there it put the
+          // whole validation ladder in a register's clock enable, and the
+          // composed fit named `hdr_win[28][5] -> crc_pay_r[8]` at -0.875 ns.
+          //
+          // ITS SUGGESTED HOME, the end of M_HCRC, MEASURED WORSE: -0.423 ->
+          // -0.621 ns and 16 -> 60 failing endpoints, with the new worst path
+          // being `m.M_HCRC -> crc_pay_r[23]` at 10.471 ns of data delay. That
+          // is the state that runs `crc_hdr_r <= fold_o`, so seeding there put
+          // this register's write in the CRC fold's shadow -- trading a ladder
+          // for a fold.
+          //
+          // M_SEED_PREP is the cheap state: its own header says "one cycle,
+          // entirely from registers", nothing here reads hdr_win, and no
+          // payload byte has been folded yet, so the seed cannot be
+          // overwritten or observed late. Reached only on validation success,
+          // so no accepted packet sees a different seed.
+          //
+          // ENFORCED-BY: tests/command/cmd_dma_directed.cpp
+          crc_pay_r <= 32'hFFFF_FFFF;
           // THE SEED LENGTH IS A THREE-WAY DECISION ON cb, NOT A CALCULATION.
           //
           // I proved this to justify the constant fold widths and then went on
