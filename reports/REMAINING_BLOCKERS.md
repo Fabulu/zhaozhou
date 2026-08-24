@@ -1,5 +1,140 @@
 # What is actually blocking every remaining block
 
+> ## STATE AS OF 2026-08-24 (morning). This block supersedes everything below it.
+> ## Read this first.
+>
+> ### NOTHING IS NOW TOO BIG TO BUILD. Yesterday two blocks were.
+>
+> | block | was | now |
+> | --- | ---: | ---: |
+> | `zhao_surface_sheet` | 95,947 ALM — **229% of the device** | **279 ALM — 0.7%** |
+> | `zhao_forge_cliff` | 33,109 ALM — 79% | **7,664 ALM — 18.3%** |
+>
+> `surface_sheet` declared 131,072 bits and inferred **zero** — every bit a
+> flip-flop, 131,258 registers. It now infers all of them: **170 registers, a
+> 344x logic reduction, no behavioural change.** Both blocks report
+> `ramConversionWarnings: 0`.
+>
+> **Neither had any DSPs**, which is why two days of multiplier work never saw
+> them. A DSP census cannot find a block like this.
+>
+> ### THE STORAGE LAW, corrected — one killer, not three
+>
+> `QUARTUS_GOTCHAS` §10 was first written as three independent killers: async
+> read, reset touching the array, byte enables. **That is too coarse and the
+> first item is wrong.**
+>
+> Measured: of the three, **only byte enables applied** to `surface_sheet` — its
+> read was already synchronous and its array deliberately unreset, exactly as its
+> header claimed. And `forge_cliff`'s `edge_mem_r` now **infers while still being
+> read asynchronously**.
+>
+> > **A byte enable cannot be survived. An asynchronous read sometimes can.**
+>
+> The fix in both cases: **split the byte-enabled word into whole-written
+> arrays** — which is the shape `zref::surface::Sheet` has always had
+> (`uint8_t tag[4096]; uint8_t strength[4096]`). The RTL had been carrying a
+> complication the reference never needed. Read-old semantics survived with **no
+> bypass network**, verified by a `ram_rdw` calibration family added for the
+> purpose.
+>
+> ### THE 27-BIT CLIFF — the cheapest lever on the board, and it is large
+>
+> Measured over 102 calibration points: a product costs **1 DSP from 8 to 27
+> bits, 3 from 28 to 33, 4 at 40–48, 9 at 64.** Signed and unsigned identical.
+> It is a cliff, not a slope, and **most of this design's arithmetic is 32-bit**
+> — one band past it, paying triple.
+>
+> The band model predicts mapped reality **exactly**: `geom_project` 11 muls x 3
+> = 33 measured; `terrain_project` 33; `terrain_normals` 18; `mat3x4_mul` 9.
+>
+> Thirteen blocks sit above the cliff holding **168 mapped DSPs, which would be
+> 58 if narrowed — a candidate saving of 110**, against a remaining gap of ~45.
+>
+> **They are candidates, not winnings.** Each needs a *proof* that the narrower
+> width suffices (`QUARTUS_GOTCHAS` §5 has demanded this since it was written).
+> `zhao_geom_lod`'s 64 bits is the division path and is **excluded**. Whether 27
+> bits covers **world coordinates** is an owner question about map size and
+> precision, not a hardware one.
+>
+> **Width narrowing costs no clocks, no state, no interface change and no
+> rearchitecture** — unlike every rebuild so far. And it **composes** with
+> sequencing rather than competing: `TERRAIN.NORMALS` is 18 -> 6 by width, then
+> 6 -> ~3 by rate.
+>
+> ### The audit's deliverables, and the limits it stated on itself
+>
+> `reports/BUDGET_HEATMAP.md`, `reports/budget_manifest.json`,
+> `reports/rtl_inventory.json`, `tools/budget/calibration.json` (102/102),
+> `tools/budget/scan_rtl.py`, `tools/quartus/map_sweep.ps1`.
+> Coverage went **41 of 94 -> 89 of 91**.
+>
+> Three limits, still true:
+>
+> 1. **No fit in the census describes HEAD** — zero of 41. Every trustworthy
+>    resource number came from the **map** lane, and the heatmap says so per row.
+> 2. **WNS/TNS/hold extraction is fixed but UNPROVEN.** No fit has run since the
+>    rewrite. **Do not quote a slack number until a real `.sta.rpt` has been
+>    read.**
+> 3. **84 blocks still have no demand figure**, which is what separates
+>    "expensive" from "wrong".
+>
+> ### AND THE AUDIT TOOL ITSELF HAD BLIND SPOTS
+>
+> `scan_rtl.py` had **no byte-enable detector at all**, and its `resetTouched`
+> check walked the ELSE branch — Verilator folds `if (!rst_n)` by **swapping the
+> arms**, so `thensp` is the working branch. **It had been reporting the
+> repository's worst block as healthy.** Both fixed, both now carrying positive
+> controls in **either** direction.
+>
+> The tool that checks things is a thing that needs checking. Treat a GREEN from
+> the scanner as evidence only for detectors that have a control.
+>
+> ### Where the DSP campaign stands
+>
+> | | DSPs |
+> | --- | ---: |
+> | 2026-08-23 morning | 327 |
+> | **now, measured** | **134** |
+> | ceiling | **85–90** |
+>
+> Rebuilt and measured: `field_seq` 79 -> 3, `geom_skin` 72 -> 9 (and it **meets
+> its 120,000-vertex frame budget** at 124,514), `surface_stamp` 28 -> 0,
+> `texture_tmu` 28 -> 6.
+>
+> ### The queue
+>
+> | # | work | return | state |
+> | --- | --- | ---: | --- |
+> | 1 | `surface_sheet` + `forge_cliff` storage | 229%/79% -> 0.7%/18.3% | **DONE** |
+> | 2 | projector merge, phase 1 | **~33 DSPs** | **in flight** |
+> | 3 | width audit over the 13 cliff blocks | up to 110 DSPs | **recommended next** — cheapest, no rearchitecture |
+> | 4 | Field memories rebuild, 6 waves | 7,958 -> ~4,000 ALM, 33.86 -> 100+ MHz | docketed |
+> | 5 | TMU pipeline, 5 waves | II 6 -> 1, 36 -> >=100 MHz | docketed |
+> | 6 | `TERRAIN.NORMALS` width + rate | 18 -> 6 -> ~3 | docketed |
+> | 7 | demand figures for 84 blocks | separates expensive from wrong | docketed |
+> | 8 | projected-vertex cache | 6,144 -> 1,089 projections/patch | docketed, `GEOM.WCACHE` |
+>
+> **`zhao_field_seq` is now the largest single block** — 7,958 ALMs with **zero
+> memory bits**, a 64x32 register file and three ROMs built from logic while 502
+> M10Ks sit idle. It is the clearest remaining application of the storage law,
+> and the one block where the **valid-bitmap** pattern genuinely is the answer.
+>
+> ### Still blocked on the owner
+>
+> * the three earth-field WRITE ops (`FIELD.WRITE.MATERIAL/NAV/HAZARD`);
+> * particle-simulation, compositor and 2D behaviour, reserved by standing
+>   instruction;
+> * `zref::rescale_s32`'s silent `__int128` -> `int64_t` narrowing in the shipped
+>   skinning reference — three options docketed, none taken;
+> * the scar-texture **pool size** — `SURFACE.STAMP` is pool-bound, not
+>   rate-bound;
+> * **whether 27 bits covers world coordinates** — this one now gates up to 110
+>   DSPs and is the highest-value question outstanding;
+> * the **three-bone skinning tail** (2.51% of vertices) and the
+>   weight-normalisation precondition.
+
+
 > ## STATE AS OF 2026-08-23 (night). This block supersedes everything below it,
 > ## which is now history. Read this first.
 >
