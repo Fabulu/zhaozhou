@@ -1,5 +1,177 @@
 # Owner docket — Zhaozhou
 
+## 2026-08-24 — THE PROJECTORS ARE MERGED, AND THE 66 → 33 DOES NOT FOLLOW FROM IT
+
+Two things came out of RUN-20260824-0522 and the second is the one that needs a
+ruling.
+
+### 1. The two projectors were the same block, and that is now proved rather than asserted
+
+`zhao_geom_project` and `zhao_terrain_project` each contained a complete copy of
+`zref::render::project_vertex`. The audit reported their **arithmetic signatures
+were byte-identical** — 11 nonconstant multiplies, widest operand 32 bits, 33
+mapped DSPs each. That is a statement about the SHAPE of the arithmetic. It is
+not a statement about behaviour, and this campaign's own failure list is mostly
+census counters that agreed while something else did not.
+
+So it was measured before it was merged. `pair_equivalence` drives **both
+shipped blocks and the shipped oracle from one stimulus stream** and compares
+every projected vertex three ways:
+
+    16,416 vertices compared on three-way agreement, 0 mismatches
+    controls: 10 caught, 0 BLIND, of 10
+
+Thirteen phases, including the exact near-plane boundary `clip.w == 0`, both
+guard-band rails, and three that reconfigure both views with no intervening
+reset. **The two blocks are behaviourally identical.**
+
+The law now lives once, in `fpga/rtl/common/zhao_project_core.sv`. 1,395 lines
+of RTL became 1,126. Both callers are **cycle-identical to their own pre-merge
+selves on every output port** over 1,080,000 compared port-cycles, handshakes,
+counters and `idle_o` included, and both contract latencies (36 and 38) are
+unchanged. Map-only, one Quartus job at a time, against committed RTL:
+
+| module | before | after |
+| --- | --- | --- |
+| `zhao_geom_project` | 33 DSP, 5,956 reg, 5,028 ALM | **identical** |
+| `zhao_terrain_project` | 33 DSP, 6,685 reg, 5,503 ALM | **identical** |
+| `zhao_project_core` | — | 33 DSP, 5,925 reg, 4,996 ALM |
+
+Every number for both shells is identical **to the unit**. Quartus synthesised
+structurally the same hardware from the extracted form.
+
+### 2. AND THE PAIR IS STILL 66 DSPs. The saving needs a DIFFERENT change.
+
+**A module that two blocks INSTANTIATE is not a module they SHARE.** Each shell
+holds its own core, so the pair holds two sets of multipliers. The extraction
+bought maintenance, not silicon.
+
+`design/contracts/GEOM.PROJECT.md`'s own Follow-up asserts both halves of a
+contradiction, in one sentence:
+
+> "extract a shared `zhao_project_core` with a parameterised payload and **have
+> both instantiate it**. That **halves the divider cost** as well as the
+> maintenance"
+
+Both instantiating it does not halve anything. Only **one arbitrated instance
+serving both callers** gives 33, and the core's own measured row is what settles
+that it would: 33 DSPs for one.
+
+**That is a real, available 33-DSP saving — the largest single item on the
+board — and it is NOT a refactor. It is an architecture change**, because a
+single instance means:
+
+* **Each caller can now be stalled by the other.** The core is one rigid
+  in-order pipeline with one enable. Neither caller's *ordering* changes, but
+  its *timing* does, and `design/budgets/latency.md` §1 rule 4 says latency is
+  not to be traded for throughput without the trade being written down.
+* **The aggregate rate halves**, from two vertices per clock to one shared.
+
+And the affordability question has an answer that is not currently in the repo:
+
+    zhao_geom_project     120,000 vertices/frame    = 7.2% of 1,666,667
+    zhao_terrain_project  270 patches x 6,144        = 99.5% of 1,666,667
+                                                      -----
+    one shared core                                   106.7% of a frame
+
+**`design/budgets/workloads.yml` already records the geom half of this
+argument** — "120,000 vertices at one per clock is 7.2% of the frame, so a
+SHARED projector is affordable and two are not justified by rate" — but it
+computes the terrain half wrong, which is finding 3.
+
+**Recommended: do not build the single instance until the projected-vertex cache
+lands.** With the cache, terrain drops from 6,144 projections per patch to 1,089
+— 270 × 1,089 = 294,030, or **17.6%** of a frame — and geom plus terrain on one
+core becomes 24.8%, comfortable. The docket's existing order already puts the
+cache at item 7 and says of the projector "**do NOT serialize it first**";
+sharing one instance between two callers IS serializing them against each other,
+so that ruling covers this case too. **The sequence is: cache, then one shared
+instance, then width narrowing.** They compose, and only the first two need to
+be in that order.
+
+### 3. `zhao_terrain_project`'s demand figure is wrong by 6,144x, in the flattering direction
+
+Found while costing item 2, and it is independent of the merge.
+
+`design/budgets/workloads.yml`:
+
+    zhao_terrain_project:
+      unit: patches
+      itemsPerFrame: 270
+      verticesPerItem: 3
+
+`tools/budget/build_manifest.py:300-301` computes
+`demandRatio = itemsPerFrame / capacity` — **`verticesPerItem` is never read at
+all.** So the model costs 270 *patches* as 270 *projections* and reports:
+
+| | demand | over-provision |
+| --- | ---: | ---: |
+| `reports/BUDGET_HEATMAP.md` today | 0.00016x | **6173x** |
+| corrected: 270 x 6,144 projections | **0.995x** | **1.005x** |
+
+The 6,144 is not a new derivation; it is stated in
+`design/contracts/TERRAIN.PROJECT.md:198` and in the docket's own "do NOT
+serialize it first" entry: a 33x33 patch is 1,089 vertices but 2,048 triangles,
+so 6,144 projected vertices.
+
+**And the 270 is worse than merely mis-scaled: it is a CEILING that was read as a
+DEMAND.** The same contract paragraph derives it, in the next sentence, as *how
+many patches fit in a frame*:
+
+> "so a full patch costs 6,144 clocks rather than 1,089. At 100 MHz / 60 Hz
+> (1.67 M clocks) **that is about 270 patches per frame of pure projection**"
+
+270 is the number at which this block is exactly 100% busy. It is
+`1,666,667 / 6,144`. So the corrected ratio is not merely different from
+0.00016x, it is **1.0 by the construction of the figure** -- the workload row
+took a saturation point and filed it as a workload.
+
+**Three consequences, and the middle one is the dangerous one.**
+
+1. The heatmap ranks `zhao_terrain_project` as **the most over-provisioned block
+   in the design**. It is in fact the **tightest** — it consumes essentially the
+   whole compute frame on its own, and it is over its own declared
+   `reserve: 0.20` before anything else runs.
+2. The heatmap's "est. DSP after: 3" for this block assumes it can be serialised
+   by up to 6,173x. **Serialising it even 3x would take it to 3x a frame.** A
+   block ranked as the second-largest available DSP win is in truth the one
+   block on that list that must NOT be serialised — and the same table's
+   `zhao_geom_project` row (0.07x, 14x over-provision) is fine, because 120,000
+   vertices is a real per-vertex figure.
+3. `verticesPerItem` exists in the schema, is set on this row, and is read by
+   nothing. A field that looks like it is doing work and is not is exactly the
+   "two statements of one fact, and the one that is not exercised rots" shape
+   `tests/lint/source_list_parity.cmake` was written about.
+
+**Recommended:** either change the row to `unit: projections, itemsPerFrame:
+1658880`, or make `build_manifest.py` multiply by `verticesPerItem` and set it to
+6144 — and then re-derive. Not corrected in RUN-20260824-0522 because it changes
+a generated report's numbers for a block that run was not measuring, and because
+270 patches/frame is itself a ruled figure that the corrected arithmetic now puts
+at 99.5% of a frame — **which may mean the patch count is what should move, and
+that is the owner's call, not a tool's.**
+
+### 4. Where the 27-bit proof would be needed, for whoever takes that lever
+
+Not attempted in RUN-20260824-0522 — it needs a ruling about world size, not a
+refactor — but the merge means it now lands in **one** file, and the three
+places are not equally hard:
+
+* **`mul32`'s operands at the row sums.** One side is an fx16 view-projection
+  coefficient; the other is an fx16 **world coordinate**. The coordinate is the
+  hard half, because it is what bounds the playable world. This is the proof
+  that matters.
+* **the `fx_mad` product `ndc * (w << 15)`.** `ndc` is a full s32 quotient that
+  SATURATES to the fx16 rails, so narrowing it is a claim about the
+  post-division range, not the world range — a different proof, and the rails
+  make it the more delicate one.
+* **`ROW_W = 68` and `MAD_W = 64`** are sized from the current widths and shrink
+  with them. Consequences, not inputs.
+
+Eleven products at 3 DSPs each is 33; at <= 27 bits it is 11. So the full stack
+is: **66 today → 33 with one shared instance → 11 with narrowing**, and the cache
+is what makes the middle step affordable.
+
 ## 2026-08-24 — THE 27-BIT CLIFF: a ranked list where 110 DSPs may be sitting
 
 The calibration measured that a product costs **1 DSP from 8 to 27 bits and 3

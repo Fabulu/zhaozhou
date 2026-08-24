@@ -534,6 +534,59 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---- 6b. ROW 2 IS INERT, and until now nothing said so ------------------
+  // The RTL computes THREE row sums, not four: `clip.z` is never read, because
+  // the depth lane is Q16.16 1/w and `ProjOut` has no z field. That is what
+  // makes the block nine multipliers instead of sixteen, and it is stated as an
+  // invariant in `zhao_project_core.sv` -- "the row-2 words remain writable so
+  // the register map stays a plain sixteen-word block, and they are inert by
+  // construction".
+  //
+  // ADDED 2026-08-24 (RUN-20260824-0522) BECAUSE NOTHING ENFORCED IT. The
+  // ledger's V20 rule rejected the claim for having no machine-resolvable
+  // enforcer, and it was right: no case in this suite, or in TERRAIN.PROJECT's,
+  // ever wrote a row-2 word with a value that would change the answer if it
+  // WERE read. Every matrix above sets row 2 to a plausible z scale, which a
+  // block that wrongly summed row 2 into a real output could still pass. So:
+  // configure a view, capture the answer, then rewrite ONLY the four row-2
+  // words with hostile values -- the rails included, so a wrong read would
+  // saturate rather than perturb -- and require the answer to be identical.
+  //
+  // This is also now the only test that would notice a future width narrowing
+  // accidentally wiring row 2 into the datapath.
+  {
+    const int32_t r[16] = {kOne, kOne / 3, 0,    11, 0, kOne, kOne / 5, -7,
+                           0,    0,        kOne, 0,  0, 0,    kOne / 2, kOne};
+    const zref::mat4fx m = mat_of(r);
+    dut.configure(0, m, vpA);
+
+    const std::vector<VtxIn> in = {{kOne, 0, kOne, false, 40},
+                                   {-kOne * 3, kOne * 2, kOne / 2, false, 41},
+                                   {kOne * 7, -kOne * 5, -kOne * 9, false, 42},
+                                   {0, 0, 0, false, 43}};
+    const std::vector<VtxOut> before = dut.run(in);
+    check(before.size() == in.size(), "row-2 baseline returned every vertex", in.size(),
+          static_cast<uint64_t>(before.size()));
+
+    // Only addresses 8..11 -- matrix row 2 -- and nothing else.
+    const uint32_t hostile[4] = {0x7FFFFFFFu, 0x80000000u, 0xFFFFFFFFu, 0x00008000u};
+    for (int k = 0; k < 4; ++k) {
+      dut.write_cfg(0, static_cast<uint8_t>(8 + k), hostile[k]);
+    }
+
+    const std::vector<VtxOut> after = dut.run(in);
+    check(after.size() == in.size(), "row-2 rewrite returned every vertex", in.size(),
+          static_cast<uint64_t>(after.size()));
+    for (size_t k = 0; k < in.size() && k < before.size() && k < after.size(); ++k) {
+      char tag[96];
+      std::snprintf(tag, sizeof tag, "row 2 is inert, vertex %zu", k);
+      compare(before[k], after[k], tag);
+      // And still the oracle's answer, which never looked at row 2 either.
+      std::snprintf(tag, sizeof tag, "row 2 inert vs oracle, vertex %zu", k);
+      compare(oracle(m, vpA, in[k]), after[k], tag);
+    }
+  }
+
   // ---- 7. the counter counts accepted vertices ----------------------------
   {
     const uint32_t before = dut.transformed();

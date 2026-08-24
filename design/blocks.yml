@@ -1697,7 +1697,18 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Kept separate from GEOM.PROJECT by architect ruling (1.D): merging later is a trivial edit."
+    notes: >-
+      MERGED 2026-08-24 (RUN-20260824-0522). The projection law now lives once,
+      in fpga/rtl/common/zhao_project_core.sv, which this block and GEOM.PROJECT
+      both instantiate; this block keeps the vertex sequencer, the triangle
+      reassembly and the riders. Latency UNCHANGED at 38 and every output port
+      is cycle-identical to the pre-merge block over 1,080,000 compared
+      port-cycles. The old note called the merge "a trivial edit"; it was not
+      quite -- the seam had to be placed by the two blocks' stated latencies
+      (36 and 38) rather than by convenience, and the pipeline enable had to
+      become the caller's so that the two different back-pressure boundaries
+      both survived. It is ALSO not a DSP saving: both shells hold their own
+      core, so the pair is still 66 DSPs, measured. See the docket entry.
 
   # ===========================================================================
   # SURFACE — Scar Scribe (fpga/rtl/surface)
@@ -2073,7 +2084,15 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Kept separate from TERRAIN.PROJECT by architect ruling (1.D).
+    notes: >-
+      MERGED 2026-08-24 (RUN-20260824-0522). This block is now a thin shell
+      around fpga/rtl/common/zhao_project_core.sv, which TERRAIN.PROJECT also
+      instantiates; it keeps the vertex handshake and the accepted-vertex
+      counter. Latency UNCHANGED at 36 -- the core's output register IS this
+      block's output register -- and every output port is cycle-identical to
+      the pre-merge block. The duplication its header called "a cost, not a
+      feature" is gone from the SOURCE; it is NOT gone from the silicon,
+      because two instances hold two sets of multipliers. See the docket.
 
   - id: GEOM.CLIP
     name: Clip and cull

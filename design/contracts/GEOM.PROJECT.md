@@ -98,6 +98,13 @@ Fixed, and long: 36 clocks from accept to result -- one input register, one row
 sum, one rescale, one divider setup, 31 restoring steps, one quotient stage and
 one viewport stage.
 
+**UNCHANGED by the RUN-20260824-0522 core extraction, and measured rather than
+reasoned** (`design/budgets/latency.md` 1 rule 1: a change that moves latency
+must say so and by how much -- this one moved it by zero). All 36 stages are now
+inside `zhao_project_core`, whose output register is this block's output
+register. `caller_regression` compared this block against a verbatim pre-merge
+copy of itself on every output port on every cycle: 0 mismatches.
+
 Fixed is the point. The divider is the only expensive thing here, and pipelining
 it rigidly buys one vertex per clock at the cost of latency nobody downstream is
 waiting on.
@@ -236,22 +243,53 @@ fact rather than a claim.
 
 ## Notes
 
-**This block duplicates TERRAIN.PROJECT's projector, deliberately, and that is a
-cost rather than a feature.**
+**The duplication is gone from the source. It is NOT gone from the silicon, and
+the difference is the whole content of this section.**
 
-TERRAIN.PROJECT's header says its three vertices "go through ONE projector on
-three consecutive clocks", so the projector inside it is exactly this block,
-wrapped in triangle framing and carrying terrain's material passthrough. The
-alternative was to extract a shared core from TERRAIN.PROJECT -- 870 lines,
-`UNIT_VERIFIED`, with its divider stages threaded through terrain-specific
-payload. Refactoring a verified block to make room for an unverified one is the
-wrong order of operations.
+This block used to contain a complete copy of `project_vertex` -- the same
+localparams, the same eight helper functions, the same configuration register
+file, the same row sums, the same 31-stage divider and the same viewport
+`fx_mad` that TERRAIN.PROJECT contained. Its header called that "a cost, not a
+feature". The follow-up this section used to record was carried out in
+RUN-20260824-0522: the law now lives once, in
+`fpga/rtl/common/zhao_project_core.sv`, and this block is the vertex-level
+interface around it -- a ready/valid handshake, the accepted-vertex counter, and
+nothing else.
 
-What makes the duplication safe rather than merely convenient is that both are
-differentials against the same shipped oracle: they cannot silently diverge in
-behaviour, only in source.
+**It was merged on a differential, not on a resemblance.** The budget audit had
+reported the two blocks' arithmetic SIGNATURES byte-identical, which is a claim
+about shape. `pair_equivalence` drove both pre-merge blocks and the shipped
+oracle from one stimulus stream and compared 16,416 projected vertices three
+ways with zero mismatches, against ten positive controls it had to catch and
+did.
 
-**Follow-up:** now that both are verified against `project_vertex`, extract a
-shared `zhao_project_core` with a parameterised payload and have both instantiate
-it. That halves the divider cost as well as the maintenance, and the existing
-suites on both sides are the safety net that makes the refactor checkable.
+**Latency did not move, and the seam is why.** The core's output register IS
+this block's output register, so this block adds no stage and the 36 clocks
+below are unchanged. TERRAIN.PROJECT needs the core to end one stage before ITS
+output; this block needs it to end exactly AT its output; those two requirements
+pick the boundary between them. Evidence: `caller_regression` runs each shell
+beside a verbatim copy of its own pre-merge self and compares every output port
+on every cycle -- 1,080,000 port-cycles, 0 mismatches, 7 of 7 timing controls
+caught.
+
+The pipeline enable is the CALLER'S (`en_i`) rather than derived inside the
+core, because the two callers back-pressure from different places: this block
+from the core's own output register, TERRAIN from its triangle register one stage
+further on. A core that decided for itself would have had to pick one and
+silently change the other.
+
+**WHAT THIS DID NOT BUY: any DSPs.** This block and TERRAIN.PROJECT each
+instantiate their OWN core, so the pair still holds two sets of multipliers --
+33 + 33, map-measured before and after, identical to the unit. The sentence this
+section used to carry, "have both instantiate it ... that halves the divider
+cost", asserted both halves of a contradiction: **a module two blocks
+instantiate is not a module they share.** Halving requires ONE arbitrated
+instance serving both callers, which is an architecture change and not a
+refactor -- each caller would then be stallable by the other, and the aggregate
+rate would halve. It is costed on the 2026-08-24 docket entry, together with the
+reason it should wait for the projected-vertex cache.
+
+**Follow-up, in order:** the projected-vertex cache (`GEOM.WCACHE`), then one
+shared core instance, then the 27-bit width narrowing. They compose, only the
+first two are order-dependent, and all three now land in one file instead of
+two.

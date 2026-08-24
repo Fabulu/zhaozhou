@@ -84,6 +84,7 @@
 //    no z field. Row 2 of the matrix is never computed. Nine multipliers, not
 //    sixteen. The row-2 words remain writable so the register map stays a plain
 //    sixteen-word block, and they are inert by construction.
+//    ENFORCED-BY: tests/geometry/geom_project_directed.cpp:main
 // 3. A BEHIND-THE-EYE VERTEX CARRIES ZERO AND IS NOT DROPPED. `project_vertex`
 //    returns a default-constructed `ProjOut` whose screen vertex is {0,0,0}.
 //    This core emits those zeros and raises `out_behind_o`. Dropping is

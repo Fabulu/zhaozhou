@@ -186,6 +186,16 @@ The ledger says `variable`, which a fixed latency satisfies; this contract
 records the stronger fact. Under backpressure the *elapsed* time grows because
 the pipeline freezes, but no packet ever overtakes another.
 
+**UNCHANGED by the RUN-20260824-0522 core extraction, and measured rather than
+reasoned** (`design/budgets/latency.md` 1 rule 1: a change that moves latency
+must say so and by how much -- this one moved it by zero). The 38 is now 1
+sequencer + 36 core + 1 reassembly: `zhao_project_core`'s output register is
+exactly where this block's `s6` used to be, which is why the seam is there and
+not one stage either side. `caller_regression` compared this block against a
+verbatim pre-merge copy of itself on every one of its nineteen output ports on
+every cycle -- `tri_ready_o`, `idle_o` and the triangle counter included --
+across 40,000 cycles with 0 mismatches, and caught 7 of 7 timing controls.
+
 ## Target throughput
 
 The ledger asks for **1 projected vertex per clock**, and this block sustains
@@ -202,6 +212,20 @@ inside the 256-visible-patch budget of `spec/terrain_rules.md` §4.2 but not
 comfortably. **The fix is a post-transform vertex cache, and it is not this
 block's to build**: the ledger's `GEOM.WCACHE` is exactly that, and it is phase
 8. Recorded here so the number is on the table when it is scheduled.
+
+**AND THAT 270 IS A CEILING, NOT A DEMAND -- `design/budgets/workloads.yml`
+READS IT AS ONE.** The paragraph above derives 270 as *how many patches fit in a
+frame at 6,144 clocks each*, i.e. the number at which this block is exactly
+100% busy. The workload row copies it in as `itemsPerFrame: 270` with `unit:
+patches`, and `tools/budget/build_manifest.py:300` computes
+`demandRatio = itemsPerFrame / capacity` -- **`verticesPerItem` is set on that
+row and read by nothing.** So `reports/BUDGET_HEATMAP.md` reports this block at
+demand **0.00016x** and over-provision **6173x**, when by the construction of
+the figure it is **1.0x**. The heatmap therefore ranks the tightest block in the
+design as the most over-provisioned one, and derives an "est. DSP after: 3" from
+a serialisation headroom that does not exist. Docketed 2026-08-24; not corrected
+in RUN-20260824-0522 because which number should move -- the row, the tool, or
+the ruled patch count -- is the owner's call.
 
 **The rejected alternative for the divider was measured, not preferred.** A
 single iterative divider is about 200 flip-flops and 31 cycles per vertex. Even
@@ -381,6 +405,18 @@ rejection carrying zeros; and the guard band as a CLAMP.
 
 **LAWS CHOSEN, not found.** Each is also argued in the RTL header.
 
+0. **The projector itself is no longer in this file.** RUN-20260824-0522
+   extracted `fpga/rtl/common/zhao_project_core.sv`, which this block and
+   GEOM.PROJECT both instantiate; the law -- exact row sums, near-plane verdict,
+   31-step restoring divider, viewport `fx_mad`, `to_screen_xy` -- lives once.
+   This block keeps the vertex sequencer, the reassembly register, the riders
+   (carried through the core as an opaque payload it never interprets) and
+   `idle_o`. The ledger's old note called the merge "a trivial edit"; it was not
+   quite, because the seam had to be placed by the two blocks' stated latencies
+   and the pipeline enable had to become the caller's so that two different
+   back-pressure boundaries both survived. **It is also not a DSP saving:** both
+   shells hold their own core, so the pair is still 66, map-measured. See the
+   2026-08-24 docket entry.
 1. **This block takes a triangle and emits a triangle.** `project_vertex` is a
    per-vertex function and the ledger's rate line is per vertex, but the only
    consumer that exists (GEOM.CLIP) takes triangles and the only producer that

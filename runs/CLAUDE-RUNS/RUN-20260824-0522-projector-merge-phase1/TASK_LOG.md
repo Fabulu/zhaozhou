@@ -196,6 +196,215 @@ standing between the merge and them.
 behavioural claim rather than standing on a census coincidence.** The merge may
 proceed.
 
+### 06:05 - Step 3: the core, and where its boundary had to fall
+
+`fpga/rtl/common/zhao_project_core.sv`. Both shells instantiate it. 1,395 lines
+of RTL become 1,126.
+
+**The seam is placed by the two latency numbers, not by taste**, and this was
+the one real design decision in the change. GEOM.PROJECT's contract says fixed
+**36**; TERRAIN.PROJECT's says fixed **38**. So the core ends at its
+`to_screen_xy` register, because that register is simultaneously
+
+  * GEOM's output register -- so GEOM adds no stage, and
+  * TERRAIN's old `s6` -- so TERRAIN keeps its sequencer in front and its
+    reassembly register behind, and adds exactly the two stages it always had.
+
+One stage earlier would have forced GEOM to add a stage; one later would have
+cost TERRAIN one. There is exactly one admissible boundary and the two contracts
+pick it between them.
+
+**The enable is the CALLER'S, not the core's.** The two callers back-pressure
+from different places: GEOM from the core's own output register, TERRAIN from the
+triangle register one stage further on. The pre-merge blocks each computed
+`advance` locally and they are NOT the same expression. A core that derived its
+own would have had to pick one of the two and silently change the other -- which
+is precisely the failure the brief warned about, so it is designed out rather
+than tested for. `en_i` is an input.
+
+`view` is a first-class core signal, not payload: it selects the matrix at
+stage 1 and the viewport at stage 6. The riders are an opaque `PAYLOAD_W` word
+the core never interprets -- 16 bits of `src_id` for GEOM, 42 bits of
+`{corner, src, matA, matB, weight}` for TERRAIN.
+
+Both lint clean at `-Wall`. All nine existing lanes pass, including the nightly
+randoms and `terrain_project_chain`, which composes through GEOM.CLIP, SETUP and
+BINNER.
+
+### 06:12 - Step 3 evidence: nothing about either caller moved
+
+`caller_regression.cpp` runs each rewritten shell beside a VERBATIM copy of its
+own pre-merge self, recovered with `git show` (never `git checkout <rev> --`,
+which stages), and compares **every output port on every cycle**.
+
+    80,000 cycles driven, 1,080,000 port-cycles compared, 0 mismatches
+    RESULT: NEITHER CALLER'S TIMING OR ORDERING CHANGED.
+    timing controls: 7 caught, 0 BLIND, of 7
+
+The stimulus is a pure function of the cycle number and deliberately does NOT
+advance on `valid && ready`. `ready` is one of the outputs under test: a
+queue-driven harness would feed the two models different stimulus the instant
+they disagreed, and the comparison would stop being one. That is
+RUN-20260824-0317's failure 1 in a subtler dress -- there the divergence came
+from an RNG called twice, here it would come from feedback. It also makes the
+check STRONGER than a protocol-respecting one, because it drives `valid` held
+through a stall, `valid` dropped mid-handshake, and configuration written while
+vertices are in flight.
+
+**One control was withdrawn, and the reason is worth more than the control.**
+T6 first mutated the counter's `accept` to `v_valid_i` and came back NOT CAUGHT.
+That is not a gap. Inside `else if (advance)`, `v_ready_o` IS `advance` and is
+therefore 1, so
+
+    accept = v_valid_i && v_ready_o   ==   v_valid_i
+
+exactly. A **provable no-op**, which no test can distinguish -- a badly chosen
+control, not a blind harness. Replaced by one that removes the `advance` guard
+so the counter ticks on frozen cycles; that is caught, 7,960 mismatches. The
+distinction matters because "NOT CAUGHT" and "cannot be caught" look identical
+in a log and mean opposite things.
+
+### 06:30 - Step 4: MEASURED. And the brief's 66 -> 33 does not follow.
+
+Map-only, Quartus 17.0.2, 5CSEBA6U23I7, **one job at a time, nothing else
+running, against COMMITTED RTL** at b8aeeeb. `Get-Process` checked empty first.
+
+| module | before (7395d793) | after (b8aeeeb) |
+| --- | --- | --- |
+| `zhao_geom_project` | 33 DSP, 5,956 reg, 5,028 ALM | **33 / 5,956 / 5,028** |
+| `zhao_terrain_project` | 33 DSP, 6,685 reg, 5,503 ALM | **33 / 6,685 / 5,503** |
+| `zhao_project_core` | -- | 33 DSP, 5,925 reg, 4,996 ALM |
+
+Every number for both shells is **identical to the unit** -- DSPs, registers and
+estimated ALMs alike. Quartus synthesised structurally the same hardware from
+the extracted form, which is independent corroboration of the cycle-exact
+regression rather than a second happy accident.
+
+**And the pair is still 66 DSPs.** A module that two blocks INSTANTIATE is not a
+module they SHARE; each shell holds its own core. The extraction bought
+maintenance, not silicon, and no amount of care in writing it could have bought
+otherwise.
+
+`design/contracts/GEOM.PROJECT.md`'s own Follow-up asserted both halves of a
+contradiction in one sentence -- "have both instantiate it" AND "that halves the
+divider cost" -- and the brief inherited the second half. **The core's own
+measured row is what settles which is true: ONE instance is 33.** Reaching 33
+for the pair needs one arbitrated instance serving both callers, which is an
+architecture change and not a refactor: each caller becomes stallable by the
+other, and the aggregate rate halves from two vertices per clock to one.
+
+I did NOT build that, and the reason is a number, not a preference -- see 06:45.
+
+The shell overheads fall out of the same three rows and they are the right
+shape: GEOM adds **31** registers over the bare core (its 32-bit accepted-vertex
+counter) and TERRAIN adds **760** (the sequencer's nine 32-bit corner words plus
+riders, and the triangle reassembly register).
+
+### 06:45 - Why one shared instance is not affordable YET, and a demand figure wrong by 6,144x
+
+Costing the single-instance option against `design/budgets/workloads.yml` turned
+up a defect in the budget model that is independent of this merge and larger
+than it.
+
+    zhao_geom_project     120,000 vertices/frame       =  7.2% of 1,666,667
+    zhao_terrain_project  270 patches x 6,144          = 99.5% of 1,666,667
+                                                         -----
+    one shared core                                     106.7% of a frame
+
+`workloads.yml` already records the geom half of that argument verbatim --
+"120,000 vertices at one per clock is 7.2% of the frame, so a SHARED projector
+is affordable and two are not justified by rate" -- but its terrain row is:
+
+    unit: patches
+    itemsPerFrame: 270
+    verticesPerItem: 3
+
+and `tools/budget/build_manifest.py:300` computes
+`demandRatio = itemsPerFrame / capacity`. **`verticesPerItem` is set on that row
+and read by nothing.** So the model costs 270 *patches* as 270 *projections*:
+
+| | demand | over-provision |
+| --- | ---: | ---: |
+| `reports/BUDGET_HEATMAP.md` today | 0.00016x | **6173x** |
+| corrected | **0.995x** | **1.005x** |
+
+**And it is worse than mis-scaled: 270 is a CEILING that was filed as a DEMAND.**
+`design/contracts/TERRAIN.PROJECT.md:198` derives it in the sentence after the
+6,144: "At 100 MHz / 60 Hz (1.67 M clocks) that is about 270 patches per frame of
+pure projection". 270 is `1,666,667 / 6,144` -- the count at which the block is
+exactly 100% busy. The corrected ratio is **1.0 by the construction of the
+figure**.
+
+Consequences, and the middle one is the dangerous one:
+
+1. The heatmap ranks `zhao_terrain_project` the **most over-provisioned block in
+   the design**. It is the **tightest**, and it is over its own declared
+   `reserve: 0.20` before anything else runs.
+2. The heatmap derives "est. DSP after: 3" for it from 6,173x of serialisation
+   headroom that does not exist. **Serialising it even 3x would take it to 3x a
+   frame.** A block ranked as the second-largest available DSP win is in truth
+   the one block on that list that must NOT be serialised.
+3. `verticesPerItem` looks like it is doing work and is not -- the same "two
+   statements of one fact, and the one that is not exercised rots" shape
+   `tests/lint/source_list_parity.cmake` was written about.
+
+**Not corrected here.** Which number should move -- the row, the tool, or the
+ruled 270 patches, which the corrected arithmetic now puts at 99.5% of a frame --
+is the owner's call, and this run was not measuring that block's workload.
+Docketed with the full argument.
+
+The recommendation that follows: **the projected-vertex cache first.** With it,
+terrain drops to 270 x 1,089 = 294,030 = 17.6% of a frame, geom plus terrain on
+one core is 24.8%, and the single shared instance becomes comfortable. The
+docket's existing order already puts the cache at item 7 and already says of the
+projector "do NOT serialize it first" -- and sharing one instance between two
+callers IS serializing them against each other, so that ruling covers this case
+too. Sequence: **cache, then one shared instance, then width narrowing.**
+
+### 07:05 - Step 4: the mutation sweep
+
+`tools/sweep_project_core.sh` + `tools/sweep_project_core_preflight.py` +
+`tools/sweep_apply_mutant.py`. 23 mutants over all three files, run **detached in
+a git worktree at the shipping commit with its own build directory**
+(`/c/programmieren/zencrifice/.pcsweep`, `build-pcsweep`) -- the standing owner
+ruling, and also what let the main tree carry the documentation edits while the
+sweep was alive. Guards 1-7 carried unchanged from `sweep_surface_sheet.sh`.
+Liveness confirmed with `Get-Process`, not by the absence of an error: a stopped
+background task is not a stopped process, and RUN-20260824-0317's ninth failure
+was exactly this uncertainty.
+
+Two additions to the inherited pattern, both of which are gaps in every existing
+sweep:
+
+* **Every mutant is linted as FOUR tops** -- both shells plus the core standalone
+  at `PAYLOAD_W` 16 and 42, the two widths its callers actually use. A mutation
+  in the core changes both shells, so linting only the edited file would
+  reproduce, in the tooling, exactly the blind spot this run existed to remove.
+  A parameter with one tested value is a constant with extra steps.
+* **GUARD 8: the random lanes are RUN.** Every sweep in this tree invokes each
+  consumer exe bare. ctest also invokes `test_geom_project_directed` as
+  `--random 2000` and `test_terrain_project_random` as `--nightly`. Scoring a
+  mutant against a strictly smaller test set than CI applies overstates the
+  suite, silently and in the flattering direction.
+
+The sweep also cross-checks that **the core's consumer set is the UNION of the
+two shells'**, and aborts if it is not: if the extraction had failed to land in
+both callers, every core mutant would be scored against a smaller set than it
+reaches, and the score would look fine.
+
+**The preflight earned its keep on the first run**: 23 parsed (non-zero,
+verified), 1 rejected --
+
+    M23 TERRAIN: idle_o ignores the core
+        zhao_terrain_project: %Warning-UNUSEDSIGNAL ...:254:21
+
+Removing `core_busy` from `idle_o` ORPHANS it. That is a build failure wearing a
+defect's name, and three runs of this project's history have such things scoring
+as CAUGHT. **The mutation was rewritten, not the guard**: dropping `out_valid_r`
+instead is a real defect -- `idle_o` asserting while a finished triangle still
+waits at the output -- and orphans nothing, because `out_valid_r` also drives
+`out_valid_o`.
+
 *(continued)*
 
 ---
