@@ -123,14 +123,29 @@ class Dev {
    * consumer is always ready. `cycles_out`, when given, receives the number of
    * clocks from the first accepted packet to the last collected one, which is
    * how the throughput claim in the contract is measured rather than asserted.
+   *
+   * `idle_bad_out`, when given, receives the number of cycles on which `idle_o`
+   * was HIGH while work was outstanding -- at least one packet accepted on an
+   * earlier cycle and not every result collected yet. In that state something is
+   * always in flight (a vertex inside the core, or a finished triangle waiting
+   * at the output register), so the correct count is zero.
+   *
+   * ADDED 2026-08-24 (RUN-20260824-0522) BECAUSE THE MUTATION SWEEP FOUND THE
+   * GAP. Every existing check of this port is `idle_o == 1` after the stream
+   * drains -- one in the directed lane, two in the random lanes -- and all three
+   * would pass against `assign idle_o = 1'b1`. Mutant M20, which drops the core's
+   * output register from `busy_o` so `idle_o` asserts one cycle early, survived
+   * the whole suite for exactly that reason. A one-sided assertion about a status
+   * flag is not a test of the flag.
    */
   std::vector<TriOut> run(const std::vector<TriIn>& in, uint32_t stall_mask = 0,
-                          int* cycles_out = nullptr) {
+                          int* cycles_out = nullptr, int* idle_bad_out = nullptr) {
     std::vector<TriOut> out;
     out.reserve(in.size());
     size_t pushed = 0;
     int first_cycle = -1;
     int last_cycle = 0;
+    int idle_bad = 0;
     const int limit = static_cast<int>(in.size()) * 64 + 4096;
 
     for (int cycle = 0; cycle < limit; ++cycle) {
@@ -164,6 +179,10 @@ class Dev {
       }
 
       dut_.eval();
+      // `pushed` counts packets accepted on EARLIER cycles, so on the very
+      // first accept cycle it is still 0 and the block is legitimately idle:
+      // the packet is not latched until the tick below.
+      if (pushed > 0 && out.size() < in.size() && dut_.idle_o) ++idle_bad;
       const bool take = (pushed < in.size()) && dut_.tri_ready_o;
       if (dut_.out_valid_o && ready) {
         TriOut o;
@@ -196,6 +215,7 @@ class Dev {
     dut_.out_ready_i = 0;
     dut_.eval();
     if (cycles_out != nullptr) *cycles_out = (first_cycle < 0) ? 0 : (last_cycle - first_cycle + 1);
+    if (idle_bad_out != nullptr) *idle_bad_out = idle_bad;
     return out;
   }
 

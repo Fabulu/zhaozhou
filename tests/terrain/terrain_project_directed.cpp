@@ -403,8 +403,18 @@ int main(int argc, char** argv) {
     for (int mi = 0; mi < 4; ++mi) {
       dev.reset();
       dev.configure(0, m, kCanvas);
-      const std::vector<TriOut> got = dev.run(batch, masks[mi]);
+      int idle_bad = 0;
+      const std::vector<TriOut> got = dev.run(batch, masks[mi], nullptr, &idle_bad);
       check(got.size() == batch.size(), mask_what[mi], batch.size(), got.size());
+      // THE OTHER DIRECTION OF THE idle_o CLAIM, and it did not exist before
+      // 2026-08-24. `idle_o == 1 after the drain` is checked below and is also
+      // checked by both random lanes -- and all three pass against
+      // `assign idle_o = 1'b1`. Mutant M20 (the core's output register dropped
+      // from `busy_o`, so idle asserts one cycle early) survived the entire
+      // suite on that gap. `idle_bad` counts cycles where idle_o was HIGH while
+      // work was outstanding, which is a state the rigid pipeline cannot be in.
+      check(idle_bad == 0, "idle_o is LOW on every cycle work is in flight", 0,
+            static_cast<uint64_t>(idle_bad));
       for (size_t i = 0; i < got.size() && i < batch.size(); ++i) {
         expect_one(batch[i], got[i], m, kCanvas, mask_what[mi]);
         check(got[i].src_id == batch[i].src_id, "packets keep their order under stall",

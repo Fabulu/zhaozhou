@@ -534,6 +534,70 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---- 3c. THE DIVIDER'S RAIL, ON THE LANE WHERE IT IS VISIBLE ------------
+  // `fx_div_exact` saturates to the fx16 word, and the RTL takes that verdict
+  // BEFORE dividing: `pre_sat[l] = (h[47:31] >= D)`, one 31-bit compare, and
+  // when it fires the answer is a rail and no division happens. That compare is
+  // load-bearing -- without it the restoring recurrence starts with a remainder
+  // that is NOT less than the divisor, its invariant is broken, and it produces
+  // a truncated quotient instead of the rail.
+  //
+  // ADDED 2026-08-24 (RUN-20260824-0522) BECAUSE THE MUTATION SWEEP FOUND THE
+  // GAP. Mutant M15 forces `pre_sat[l] = 0` and SURVIVED the whole suite --
+  // geom directed and random, terrain directed, random and chain -- even though
+  // `terrain_project_random` reports 3,206 `div-rail` events per run. The reason
+  // is worth stating because it is not obvious:
+  //
+  //   THE X AND Y LANES CANNOT SHOW IT. Their quotient goes on through
+  //   `fx_mad` and then `to_screen_xy`, which CLAMPS to +-2048 px. A vertex
+  //   whose ndc railed is far outside the guard band either way, so a wrong
+  //   large quotient lands on exactly the same rail pixel as the correct
+  //   INT32_MAX. The clamp that makes the guard band a law also hides this
+  //   defect completely.
+  //
+  //   THE DEPTH LANE CAN. `out_d_o` is the raw Q16.16 1/w quotient with nothing
+  //   downstream of it, so its saturation is directly observable -- and nothing
+  //   in the tree drove `clip.w` small enough to reach it.
+  //
+  // Lane 2's numerator is the constant 1.0, so it rails when
+  // (1 << 32) / clip.w >= 2^31, i.e. for clip.w of 1 and 2 but not 3. Sweeping
+  // clip.w over {1, 2, 3, 5} therefore straddles that boundary exactly, on both
+  // sides, with no randomness involved.
+  //
+  // The matrix below makes both clip words exact rather than approximate: with
+  // m[0][0] = m[1][1] = 1.0 and the whole w row zero except m[3][3] = wraw,
+  // row_cw is wraw << 16 and rescale(.,16) of that is wraw itself, so
+  // clip.w IS the raw word, and clip.x IS the vertex's raw x.
+  {
+    for (const int32_t wraw : {1, 2, 3, 5}) {
+      const int32_t r[16] = {kOne, 0, 0, 0, 0, kOne, 0, 0, 0, 0, kOne, 0, 0, 0, 0, wraw};
+      const zref::mat4fx m = mat_of(r);
+      dut.configure(0, m, vp0);
+
+      // x straddles the X lane's own rail too (it fires at x >= wraw * 32768),
+      // so the case is not only about lane 2 even though lane 2 is what shows.
+      const int32_t at = wraw * 32768;
+      const std::vector<VtxIn> in = {{at, -at, 0, false, 50},
+                                     {at - 1, 1 - at, 0, false, 51},
+                                     {100000, -100000, 0, false, 52},
+                                     {1, -1, 0, false, 53}};
+      const std::vector<VtxOut> got = dut.run(in);
+      check(got.size() == in.size(), "divider-rail run returned every vertex", in.size(),
+            static_cast<uint64_t>(got.size()));
+      for (size_t k = 0; k < in.size() && k < got.size(); ++k) {
+        char tag[96];
+        std::snprintf(tag, sizeof tag, "divider rail, clip.w=%d, vertex %zu", wraw, k);
+        compare(oracle(m, vp0, in[k]), got[k], tag);
+      }
+      // The claim this case exists to pin, stated as its own check so a
+      // regression names itself rather than hiding inside a packet compare.
+      const bool lane2_rails = (wraw <= 2);
+      check((got[0].d == INT32_MAX) == lane2_rails,
+            "the 1/w lane rails exactly when (1<<32)/clip.w >= 2^31", lane2_rails ? 1 : 0,
+            (got[0].d == INT32_MAX) ? 1 : 0);
+    }
+  }
+
   // ---- 6b. ROW 2 IS INERT, and until now nothing said so ------------------
   // The RTL computes THREE row sums, not four: `clip.z` is never read, because
   // the depth lane is Q16.16 1/w and `ProjOut` has no z field. That is what
