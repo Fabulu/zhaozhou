@@ -5,6 +5,59 @@ at the top.*
 
 ---
 
+## 2026-08-24 (afternoon) — the composed shell FITS. It does not yet CLOSE TIMING
+
+### The whole shell, built as one machine, for the first time since the 22nd
+
+This is the measurement FRAMEBLIT step 8 was waiting for, and it had been
+blocked on CMD.DMA since the 22nd. CMD.DMA cleared, the machine was free, so it
+ran. **All four stages succeeded** — analysis, synthesis, fitter and timing.
+
+| | composed shell | device |
+| --- | ---: | ---: |
+| logic (ALMs) | **7,442** | 41,910 — **17.8%** |
+| registers | 9,926 | |
+| memory | 114,688 bits in **13** M10Ks | 553 |
+| multipliers | **0** | 112 |
+
+**Area is not a problem here.** The shell is under a fifth of the chip.
+
+### Timing is the problem, and it is one clock only
+
+| clock | target | result |
+| --- | --- | --- |
+| **gpu_clk** | 100 MHz | **83.4 MHz — MISSES**, 836 failing endpoints |
+| vid_clk | 50 MHz | passes, 1.469 ns to spare |
+| audio_clk | 25 MHz | passes, 29.4 ns to spare |
+
+So the graphics clock is **16.6% short**, and video and audio are fine. That is
+a much better shape than "the design is slow" — there is one domain to work on.
+
+**There is also a hold violation on gpu_clk (−0.952 ns, one endpoint).** That
+one matters out of proportion to its size: a setup failure means *run it
+slower*, but a **hold failure cannot be fixed by slowing the clock at all**. It
+has to be fixed. One endpoint is the good news.
+
+### And this finally proves the timing numbers themselves
+
+I have been carrying a warning for days that our slack extraction was "repaired
+but unproven — do not quote a number until a real report has been read." **This
+run read one.** The report also carries `10.000 gpu_clk`, which is the line that
+proves the clock was actually constrained — the absence of exactly that is what
+made an earlier 199 MHz turn out to be 37.
+
+So the timing lane is now trustworthy, and the first thing it says is that we
+are at 83.4 where we want 100.
+
+### Caveat, stated plainly
+
+This is the **shell** — 27 files: video scanout, command DMA, SDRAM, HPS
+bridge, audio, the debug blocks. **It is not the renderer.** Terrain, Field,
+raster, texture and geometry are not in this cone. Their numbers are per-block
+and still owe a composed run of their own.
+
+---
+
 ## 2026-08-24 (midday) — a fit I had to throw away, and a proof that was never running
 
 ### I broke my own rule and it was worth finding

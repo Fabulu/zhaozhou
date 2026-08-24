@@ -321,6 +321,81 @@ off the package constant `MAX_OP_CYCLES = 80`, not measured latency, so
 NORMALIZE3's worst case at 67 + 1 for the new state stays far under it and **172
 did not need re-deriving.**
 
+### 14:45 — GREEN, and the ledger has zero errors for the first time
+
+    bmc   depth 172   PASS   2:02:17 (7,337 s)   no trace
+    cover              PASS   15.9 s              all four traces
+
+**Three separate things were wrong and none of them was the property.**
+
+1. it could not **elaborate** since the 23rd (`read_slang` vs Verilator);
+2. the **budget** was 4.1x too small — 1800 s against a 7,337 s run;
+3. the **entry** said `pending`, which is what stopped anyone looking.
+
+Wrapper raised to **12,000 s** and CTest to **12,600 s**, via the per-lane
+override `tests/CMakeLists.txt` already sanctions. Verified after reconfigure
+rather than assumed: the generated `field_seq_bound` wrapper reads
+`TIMEOUT 12000` and `cmd_dma_crc_gate` still reads `1800`, so the override is
+both applied and **restored**. CTest sits above the wrapper on purpose, so the
+wrapper fails first with a readable sby message — the `formal_texture_bilerp`
+rule, where CTest 3600 against wrapper 1800 gave a bare FAILED at 1,800.88 s.
+
+    ledger_check   2 errors -> 0
+    ctest -L fast  green, 272 tests
+
+Committed `764b2a0`, pushed.
+
+### 14:50 — FRAMEBLIT step 8 started
+
+Step 8 of the integration is *"rerun the composed Quartus synthesis
+immediately"*, and it was gated on CMD.DMA, which cleared on the 22nd. The
+machine is free for the first time today, so it is running now at
+`-Processors 4`.
+
+The old reason this needed a second machine — a 28.4 GB peak — **was a bug, not
+a requirement**: `VIRTUAL_PIN ON -to *` matched every internal net rather than
+the 101 top-level ports. Fixed at `d1a2b8a`; the real peak is 6.2 GB.
+
+### 15:16 — STEP 8 ANSWERED: the composed shell fits, and misses one clock
+
+`run_composed_fit.ps1 -Processors 4`, run `wumen-764b2a0-20260824T124441Z`,
+**1,889 s**, all four stages `success`.
+
+| | composed shell | device |
+| --- | ---: | ---: |
+| ALMs | **7,442** | 41,910 (**17.8%**) |
+| registers | 9,926 | |
+| block memory | 114,688 bits, **13** M10K | 553 |
+| DSPs | **0** | 112 |
+| virtual pins | 2,336 | |
+
+**Timing fails, and on exactly one domain:**
+
+    setup  -1.991 ns  836 endpoints  TNS -253.490   gpu_clk   (10 ns target)
+           +1.469 ns    0 endpoints                 vid_clk   (20 ns)
+          +29.416 ns    0 endpoints                 audio_clk (40 ns)
+    hold   -0.952 ns    1 endpoint   TNS   -0.952   gpu_clk
+
+`gpu_clk` closes at **83.4 MHz** against 100 — 16.6% short. **The hold
+violation is the one that cannot be waited out**: a setup miss means run it
+slower, a hold miss means the design is wrong at any frequency. One endpoint.
+
+**This also retires a standing caveat.** `REMAINING_BLOCKERS` has said since the
+audit that WNS/TNS/hold extraction was *"fixed but UNPROVEN — do not quote a
+slack number until a real `.sta.rpt` has been read."* One has now been read, and
+the report carries `Info (332111): 10.000 gpu_clk` — the constraint-evidence
+line whose ABSENCE is what made the old 199.72 MHz turn out to be 37. The lane
+is trustworthy, and its first trustworthy statement is that we are short.
+
+**Scope, stated so it cannot be over-read:** this is the 27-file SHELL cone —
+scanout, CMD.DMA, SDRAM, HPS bridge, audio, debug. **Terrain, Field, raster,
+texture and geometry are not in it.** A composed number for the renderer is a
+separate run that has never been done.
+
+The harness reported exit 1 on the push step; that was PowerShell's
+`NativeCommandError` firing on git writing progress to stderr. The commit
+(`be65ec0`) and the push both landed — checked rather than assumed.
+
 ---
 
 ## Decisions Made
