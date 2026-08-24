@@ -3687,3 +3687,100 @@ pipelining → remaining Field waves.
 > wrappers by real Fmax against real workload, then attack the worst USEFUL seam.
 > TESS+NORMALS is the obvious candidate at 31.1 MHz with ~37x headroom — but
 > another pair may prove worse, and that is a measurement, not a guess.
+
+---
+
+# 2026-08-24 (late) — OWNER RULING: build GEOM.WCACHE; no DSP/MHz trade authorised
+
+## WCACHE v1 — a bounded direct-index vertex ARENA, not a cache
+
+Authorised, and scoped deliberately narrow. It is on the path to five things at
+once — an honest PROJECT+WCACHE measurement, eliminating repeated terrain
+projections, sharing one projector between terrain and creatures, carrying the
+datum-rebased representation, and making the 27-bit route real without shrinking
+the world — which is why it is worth doing now and why it must not sprawl.
+
+**The brief:**
+
+* explicit **arena/generation** and **vertex_index** fields. **Do not** compare
+  96-bit coordinate triples and **do not** overload the opaque `src_id`;
+* separate **fill** and **lookup/replay** channels;
+* **direct-indexed inferred memory**. No associative tags, no LRU, no arbitrary
+  eviction;
+* out-of-range lookup, lookup before sealing, stale generation, or arena
+  overflow is a **deterministic refusal/miss** — it must never wrap into another
+  vertex;
+* **position in rebased form**: one full-width origin per arena, bounded local
+  coordinates per vertex. The projector folds the origin into its per-arena
+  translation and multiplies the LOCAL coordinates. **Do not reconstruct
+  absolute coordinates before the multiplied row terms, or the entire DSP reason
+  for the representation is thrown away;**
+* one **reusable parameterised arena primitive** with a `GEOM.WCACHE` shell.
+  Terrain may later instantiate the same primitive at its own depth and payload
+  width. **Same primitive does not mean one physically shared memory**, nor one
+  cache arbitrating unrelated traffic;
+* banking (single vs ping-pong) is **derived** from the one-lookup-per-clock
+  target and measured workload, not an owner aesthetic.
+
+**Order:** contract + reference model → bounds/formal tests → RTL →
+PROJECT+WCACHE composed fit.
+
+> Explicitly NOT authorised: a week-long general cache hierarchy.
+
+## DSP / MHz — NO TRADE AUTHORISED
+
+**Policy, set in advance so it is not an emotional choice after one ugly fit:**
+
+| | |
+| --- | --- |
+| composed `gpu_clk` sign-off target | **100 MHz** |
+| preferred planning ceiling | **85–90 DSP** |
+| absolute physical ceiling | **112 DSP** |
+
+* **A block is not accepted at 31, 50 or 80 MHz merely because its private
+  workload still fits.** It shares the clock and therefore limits the whole
+  machine. *(This retires my own repeated "it meets its demand 119x over"
+  framing — true and irrelevant.)*
+* A DSP-saving rewrite must **either close at 100 MHz or carry a concrete,
+  measured retiming route** that does not simply restore the DSPs.
+* First response to a sequencer timing problem, in order: **inspect the
+  node-level path → register/retime control and feedback → pipeline the walk
+  while retaining its issue interval → datum rebase and honest width narrowing →
+  only then add multiplier lanes.**
+* If a provisional constraint must bend, **bend the 85–90 planning target before
+  the global 100 MHz clock.** Frequency is global; a DSP overage is local and
+  measurable. The final machine must still fit under 112 with every unfinished
+  block accounted for.
+* **A permanent clock reduction requires a fresh whole-machine 60 Hz workload
+  proof and another ruling.** One slow pair does not implicitly authorise it.
+
+## Evidence labelling, adopted as standing discipline
+
+Every saving is now labelled, and may never be silently promoted:
+
+    hypothesis -> leaf-mapped -> pair-mapped -> composed-shell confirmed
+
+Current state under that discipline:
+
+| saving | label |
+| --- | --- |
+| BINNER 12 -> 6 DSP | **pair-mapped** (leaf map + SETUP+BINNER pair, 4+6=10 exact) |
+| CDC repair, hold 0 failures, gpu_clk 98 MHz | **composed-shell confirmed** |
+| ~110 DSP from width narrowing | **hypothesis** — and one-sided narrowing is measured to buy nothing |
+| datum rebase | **hypothesis** |
+| renderer pair Fmax ranking | **VOID** — routing-dominated, `QUARTUS_GOTCHAS` 12 |
+
+## The question this ruling asked to be answered first — it is answered
+
+*"Continue the node-path diagnosis in parallel; WCACHE must not block finding
+whether NORMALS actually caused the 31.1 MHz result."*
+
+**It did not.** Zero of the 25 worst paths touch `u_normals`. And the 31.1 MHz is
+not a design property at all: 30 ns of data delay over **10 logic levels** —
+3 ns/level against a 0.3–0.5 ns/level part, 66% of the clock path in interconnect
+— is a 1,523-ALM design sprawling in a 41,910-ALM device.
+
+So **there is no sequencing-versus-frequency trade to make**; the premise did not
+survive contact with the path report. The retiming ladder above stands as policy
+for when a sequencer genuinely is critical, which is not established for any
+block yet.
