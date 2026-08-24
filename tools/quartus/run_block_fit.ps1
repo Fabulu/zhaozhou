@@ -489,7 +489,7 @@ try {
                 # question -- is the slowest pair limited by TESS or by the
                 # sequenced multiply walk I put into NORMALS this morning --
                 # could not be answered from anything that survived.
-                $pathDir = Join-Path $RepoRoot 'reports\synthesislockpaths'
+                $pathDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
                 New-Item -ItemType Directory -Path $pathDir -Force | Out-Null
                 Copy-Item -LiteralPath $sta -Destination (Join-Path $pathDir ($rowModule + '.sta.rpt')) -Force
 
