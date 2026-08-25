@@ -203,6 +203,47 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 5 measured: 36.84 -> 43.89 MHz, 2026-08-25
+
+| | wave 4 (`7396df3`) | wave 5 (`c37462f`) |
+| --- | ---: | ---: |
+| Fmax | 36.84 MHz | **43.89 MHz** (+19.1%) |
+| ALMs | 4,673 | 4,682 (+9) |
+| registers | 3,498 | 3,505 |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean: `sourceCommit` equals HEAD, `rtlCleanAtHead` true, 46 sources
+hashed, 1048.7 s.
+
+**Nineteen percent for nine ALMs**, the largest single-wave gain since the
+register file became block memory. Cumulative on this block: **8.59 -> 43.89
+MHz, 5.1x.**
+
+That is a bigger gain than wave 4's 8.4%, and the reason is worth keeping: wave
+4 registered an ENDPOINT, which can only ever buy the routing and setup at the
+end of a path. Wave 5 changed the SHAPE of the cone. Depth is worth more than
+endpoints.
+
+**SIN is still the largest contributor**, so this is not finished. The new worst
+path is
+
+    i_op[4] -> zhao_field_exec_shared:u_exec|zhao_field_rot:u_rot|s_val[16]
+    22.627 ns  (was 26.946)
+
+and 64 of its 154 cells are still inside `u_sin`, now feeding ROT's table read.
+Broken down by sub-block, what remains is **five serial adders** -- `Add11` (18
+cells), `Add3` (12), `Add9` (10), `Add4` (6), `Add5` (4) -- plus four cells of
+ROM. The tree flattened the ACCUMULATION; the adds around it did not move:
+
+    ROM -> d = next_v - base -> tree (depth 3) -> s_quarter = base + interp -> negate
+
+**Wave 6 is therefore `s_quarter`, and it is free.** `base + (X >>> 6)` equals
+`((base <<< 6) + X) >>> 6` EXACTLY, because `base <<< 6` is a multiple of 64 and
+the shift is a floor -- so `base` can join the tree as another leaf instead of
+being added after it. The tree has 7 leaves today (6 terms plus the rounding
+constant) and 8 leaves is still depth 3, so folding `base` in removes a
+full-width serial add and costs **no extra level**.
+
 ### Wave 4 measured, and the path re-ranked the waves AGAIN, 2026-08-25
 
 | | wave 3 (`01598b3`) | wave 4 (`7396df3`) |

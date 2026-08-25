@@ -543,6 +543,61 @@ blocked RTL blocks was trial-advanced to `REFERENCE_COMPLETE` in a scratch copy
 of `design/blocks.yml`, the ledger check run, the errors recorded, and the file
 restored. Dashboard-staleness errors are filtered out as noise.
 
+## 2026-08-25 — WHAT IS ACTUALLY UNBUILT, derived from the ledger and the tree
+
+The prose below counts **16 greenfield blocks**. That count is stale, and the
+list naming `GEOM.PROJECT` as the cheapest of them is stale twice over:
+`GEOM.PROJECT` is `UNIT_VERIFIED` with `zhao_geom_project.sv` on disk and a
+669-line differential. This section is derived rather than remembered.
+
+### The derivation, and its two failure modes, because neither method is trustworthy alone
+
+**Matching block IDs to filenames over-reports gaps.** It called 23 blocks
+unbuilt, including `MEM.HPS.ARBITER` (`zhao_hps_arbiter.sv` exists),
+`GEOM.POSE` (`zhao_geom_pose_cache.sv`, `zhao_geom_pose_decode.sv`) and
+`MEM.SDRAM` (`zhao_sdram_ctrl.sv`). The guess `zhao_mem_hps_arbiter` is simply
+not what the file is called.
+
+**Searching the RTL for each block ID under-reports them.** It called only 12
+unbuilt, because an ID appearing in a file may be an upstream/downstream mention
+in someone else's header rather than an implementation.
+
+Two methods, opposite error directions, so the pair gives BOUNDS and neither
+gives a count. The candidates that mattered were then checked individually --
+and for every one below, the ID appears ONLY in other blocks' files:
+
+    GEOM.MESHFETCH -> zhao_geom_cull.sv, zhao_geom_lod.sv, zhao_measure_governor.sv
+    GEOM.VDECODE   -> zhao_geom_skin.sv
+    GEOM.LOOM      -> zhao_geom_skin.sv
+    GEOM.WARP      -> zhao_geom_skin.sv
+    GEOM.WCACHE    -> zhao_project_core.sv, zhao_vertex_arena.sv, zhao_terrain_project.sv
+    INPUT.SNAC     -> nothing at all
+
+### The result
+
+| | count | which |
+| --- | ---: | --- |
+| RTL_VERIFIED | 16 | done |
+| have RTL, need EVIDENCE not code | ~32 | the bulk of the tree |
+| **unbuilt and buildable now** | **6** | `GEOM.MESHFETCH`, `GEOM.VDECODE`, `GEOM.LOOM`, `GEOM.WARP`, `GEOM.WCACHE`, `INPUT.SNAC` |
+| unbuilt, owner-blocked | 9 | 5x `PART.*`, 2x `TWOD.*`, 3x `POST.*` (minus overlap) |
+| unbuilt, hardware-blocked | 4 | `SYS.PLL`, `SYS.RESET`, `SYS.CDC`, `MEM.SDRAM` |
+| unbuilt, deliberately late | 1 | `MEASURE.HISTOGRAM`, charter §12 Version 2 |
+
+**So "sixteen blocks to write from scratch" is wrong in both directions.** The
+real code frontier is SIX blocks, five of them in geometry. What the tree mostly
+needs is not more RTL — it is evidence promoting ~32 `UNIT_VERIFIED` blocks that
+already have RTL, which is the slower and less glamorous half.
+
+**`FIELD.SEQ.EARTH`'s exception is also closed.** The docket entry says its
+`FIELD.WRITE.MATERIAL/NAV/HAZARD` ops have "no reference function, no RTL, and
+no law pinned". All three now exist (`zhao_field_sinks.sv`, `compose_*`,
+11/11 mutants). EARTH now sits exactly where the other four profiles do:
+blocked on DECIDING the profile I/O contract, which is specification and is
+Fabian's.
+
+---
+
 ## The headline
 
 **There are no cheap advances left.** `TERRAIN.BAKE` was the last block that was
