@@ -203,6 +203,52 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 8 measured: 48.92 -> 49.90 MHz. IT WORKED AND IT BARELY HELPED.
+
+| | wave 7 (`dc341b5`) | wave 8 (`ed3c274`) |
+| --- | ---: | ---: |
+| Fmax | 48.92 MHz | **49.90 MHz** (+2.0%) |
+| ALMs | 4,713 | 4,725 |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean, 1429.9 s. Cumulative **8.59 -> 49.90 MHz, 5.8x.**
+
+**Two percent, against a cut that should have halved the path.** The register
+did exactly what it was meant to: SIN is GONE from the worst path, entirely.
+The problem is what was behind it.
+
+    before   i_op[0] -> walk_wdata_q[30]        19.713 ns   (72 cells in u_sin)
+    after    u_norm|h_rt[46] -> u_norm|o0_o[1]  19.875 ns   (117 cells in u_norm)
+
+**The two cones were the same length.** Removing one exposed the other at
+19.875 ns -- 0.16 ns WORSE than the path it replaced. This is the whack-a-mole
+phase, and it is worth naming because the lesson generalises: cutting the worst
+path only pays when the second-worst is meaningfully shorter, and nothing in the
+report tells you that until you look at the runner-up.
+
+**A prediction is withdrawn.** Wave 8 was expected to split ~72 cells from ~90
+and land near the 10 ns budget. It did split them; the gain was 2% because the
+budget was never the binding constraint on that path alone.
+
+### Wave 9: the incrementer that wave 7 left behind
+
+    Add12  66 cells of the 117 in u_norm
+
+`Add12` is `sh + 65'(rnd)`, the increment wave 7 substituted for the 65-bit
+ripple-carry ADD. Wave 7 halved it -- 122 cells to 66 -- and it is still the
+single largest element on the path.
+
+There is no further identity to spend: the rounding is already one bit. So
+wave 9 registers across it, splitting
+
+    h_rt -> leading zero -> e_val -> k -> (v >>> k)        [stage A]
+    sh + rnd -> saturate -> o0_o                           [stage B]
+
+at a cost of one clock per output lane. NORMALIZE3 is 68 clocks against
+`MAX_OP_CYCLES = 80`, so the headroom is there -- but it is TWELVE clocks total
+and wave 8 already spent one on ROT, so the accounting has to be checked and not
+assumed.
+
 ### Wave 7 measured: 45.42 -> 48.92 MHz, and SIN CAME BACK
 
 | | wave 6 (`9371875`) | wave 7 (`dc341b5`) |
