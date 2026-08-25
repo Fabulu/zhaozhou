@@ -309,5 +309,52 @@ int main(int argc, char** argv) {
   }
 
   dut.final();
+  // ---- MEASURED INITIATION INTERVAL ---------------------------------------
+  // reports/FIELD_RESOURCE_MODEL.md derives this unit's II as 61 by subtracting
+  // a 7-clock front-end walk from a 68-clock total instruction latency. That is
+  // arithmetic, not measurement, and the model says so and asks for this.
+  //
+  // II is measured at the UNIT boundary, not through the sequencer: the
+  // sequencer is serial by construction, so anything measured through it
+  // reports latency and calls it II. Here `v_valid_i` is held high permanently
+  // with `r_ready_i` high, and the clocks between successive ACCEPTS are
+  // counted. If the unit overlapped its tail with the next accept, this would
+  // come out below the derived figure and the model would be pessimistic.
+  {
+    dut.v_valid_i = 1;
+    dut.is3_i = 1;
+    dut.a0_i = static_cast<uint32_t>(3 << 16);
+    dut.a1_i = static_cast<uint32_t>(4 << 16);
+    dut.a2_i = static_cast<uint32_t>(5 << 16);
+    dut.r_ready_i = 1;
+    dut.eval();
+
+    int accepts = 0, gap = 0;
+    int first_gap = -1, worst_gap = 0;
+    for (int c = 0; c < 4096 && accepts < 5; ++c) {
+      const bool accept = dut.v_valid_i && dut.v_ready_o;
+      if (accept) {
+        if (accepts > 0) {
+          if (first_gap < 0) first_gap = gap;
+          if (gap > worst_gap) worst_gap = gap;
+        }
+        ++accepts;
+        gap = 0;
+      }
+      zhao::tick(dut);
+      dut.eval();
+      ++gap;
+    }
+    dut.v_valid_i = 0;
+    dut.eval();
+
+    std::printf("  NORMALIZE3 measured II = %d clocks (accepts seen: %d)\n", first_gap, accepts);
+    check(accepts >= 2, "the unit accepts repeatedly with valid held high", 2, accepts);
+    check(first_gap > 0 && first_gap < 512, "the measured II is a sane positive figure", 1,
+          (first_gap > 0 && first_gap < 512) ? 1 : 0);
+    check(first_gap == worst_gap, "the initiation interval is STEADY, not just a first-shot figure",
+          first_gap, worst_gap);
+  }
+
   return zhao::report_and_exit("field_normalize_directed");
 }

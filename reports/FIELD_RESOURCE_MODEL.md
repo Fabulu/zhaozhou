@@ -50,11 +50,15 @@ So for all of them, **II = latency**. Only two units are pipelined:
 Derived as *(measured total instruction latency − 7 front-end clocks)*. The
 totals are measured by `tests/differential/field_seq_directed.cpp`; the
 subtraction is arithmetic, so these are **derived, not directly measured**, and
-a dispatch-to-result counter should confirm them before any RTL is cut.
+a dispatch-to-accept counter should confirm them before any RTL is cut.
+
+**NORMALIZE3 has since been measured directly at 59** -- the derivation said 61,
+so the arithmetic ran two clocks pessimistic. Every other row below is still
+derived and should be assumed to carry a similar error bar.
 
 | op | total | unit II | | op | total | unit II |
 | --- | ---: | ---: | --- | --- | ---: | ---: |
-| NORMALIZE3 | 68 | **61** | | CURVE | 30 | 23 |
+| NORMALIZE3 | 68 | **59 measured** | | CURVE | 30 | 23 |
 | NORMALIZE2 | 67 | 60 | | ROT3 | 28 | 21 |
 | RING | 55 | **48** | | ROT2 | 27 | 20 |
 | LEN2/LEN3/DIST2 | 49 | 42 | | DCURVE | 27 | 20 |
@@ -105,13 +109,13 @@ decision, and it is a prerequisite for everything below: fixing a unit's II is
 pointless while the front end serialises at 7 clocks per instruction.
 
 **2. Then fix the units by measured II, not by reputation.** The order the model
-gives is NORMALIZE (61), RING (48), LEN (42), SPLINE (39) — and *not* the ROT
+gives is NORMALIZE (**59, measured**), RING (48), LEN (42), SPLINE (39) — and *not* the ROT
 and CURVE work the earlier waves happened to touch.
 
 **3. Replication is the expensive answer for NORMALIZE.** Closing 128
 patch-fields with one NORMALIZE per eight instructions needs
-`128 × 1,089 × 61 = 8,502,912` clocks against a 1,333,333 budget: **seven
-NORMALIZE units**. Pipelining the isqrt so it accepts every clock collapses that
+`128 × 1,089 × 59 = 8,224,128` clocks against a 1,333,333 budget: **seven
+NORMALIZE units** (6.17, so seven). Pipelining the isqrt so it accepts every clock collapses that
 to one, and the front end binds again at 153/frame. **Pipelining the long units
 is worth more than replicating them, by roughly the ratio of their II.**
 
@@ -124,9 +128,21 @@ plateau and the throughput ceiling with one change.
 
 ## What must be verified before any RTL
 
-* **Confirm the derived IIs directly.** A dispatch-to-accept counter per unit,
-  rather than subtracting 7 from a total latency. If a unit overlaps its tail
-  with the next accept, its real II is lower and this model is pessimistic.
+* ~~**Confirm the derived IIs directly.**~~ **DONE for NORMALIZE3, 2026-08-25:
+  measured II = 59 clocks, steady.** The derivation said 61. The model was
+  pessimistic by two clocks, exactly as this item warned it might be.
+
+  Measured at the UNIT boundary, not through the sequencer -- the sequencer is
+  serial by construction, so anything measured through it reports latency and
+  calls it II. `v_valid_i` held high with `r_ready_i` high, counting clocks
+  between successive accepts; the test also asserts the gap is STEADY across
+  five accepts rather than reading a first-shot figure.
+  (`tests/differential/field_normalize_directed.cpp`)
+
+  **The two-clock error does not change any conclusion**: NORMALIZE-heavy
+  programs still bind on this unit, still give ~2x rather than 7x, and still sit
+  ~6x short of the spec's 128 patches. Remaining units (RING 48, LEN 42,
+  SPLINE 39, CURVE 23 ...) are still derived and want the same treatment.
 * **Characterise the banked register file in Quartus, not in arithmetic.** The
   proposal is 4 banks × 3 replicated copies, 16 contexts × 16 registers × 32
   bits = 8,192 bits per bank. The estimate is ~12 M10Ks of 553. The device has
