@@ -1,3 +1,29 @@
+// ===========================================================================
+// FROZEN 2026-08-25 BY OWNER RULING. THIS IS FIELD v1.
+// ===========================================================================
+// FIELD v2 is authorised and is being built alongside this file, NOT out of it.
+// This engine is now the exact serial REFERENCE, the differential ORACLE for
+// v2, and the FALLBACK. It is not deleted and it is not progressively mutated
+// into the new design.
+//
+// WHY IT IS FROZEN RATHER THAN EVOLVED. Its defining assumption is one
+// instruction in flight: every multi-cycle operation drains before the next is
+// fetched, and that fact is what lets it have no arbiter, one executing opcode,
+// one accumulator owner, one write-back owner and untagged functional-unit
+// replies. Every one of those becomes false the moment two samples coexist.
+// Mutating it into a multithreaded vector machine would falsify its own
+// invariants one at a time, with the test suite passing throughout.
+//
+// WHAT IT COST TO LEARN THAT. Waves 3-10 took this engine from 8.59 to
+// 58.99 MHz -- 6.9x, every figure fitter-measured -- and it is still ~7x short
+// on THROUGHPUT, because the cost model assumes one instruction per clock and
+// this retires one every seven. The clock was never the binding constraint.
+// See reports/EARTH60_CAPACITY.md and reports/FIELD_RESOURCE_MODEL.md.
+//
+// CHANGES PERMITTED HERE: correctness repairs only. No further timing waves
+// unless they transfer directly to v2. Everything this file proves --
+// differential, mutation, formal -- remains the evidence v2 must reproduce.
+// ===========================================================================
 // zhao_field_seq.sv — the Field IR sequencer: the register file and the
 // instruction walk that turns a decoded program into a run.
 //

@@ -352,3 +352,34 @@ measure it before believing that margin.
   ceiling for simple programs plus the unit fixes it called for.
 - The model reproduces that report's patch-fields/frame rows when fed its
   synthetic "7 simple + 1 long" programs (same arithmetic, same IIs).
+
+---
+
+## RCP's initiation interval is now MEASURED, and the 94.1% point holds
+
+*Added 2026-08-25 after this report was written.*
+
+This model's recommended configuration — width 4, 8 wavefronts, 2 multiplier
+lanes — closes at **94.1%** of the reserved budget and **binds on RCP**. Its II
+was listed as **9, derived** (a 16-clock total instruction latency minus a
+7-clock front-end walk) with a stated ±2 error bar, and the report noted that
+**at II=10 the configuration does not close**.
+
+**Measured at the unit boundary: II = 9 clocks, steady across five accepts.**
+(`tests/differential/field_rcp_directed.cpp`.) The derivation was exact.
+
+So the 94.1% point stands on a measured binding constraint rather than a derived
+one. Two things worth keeping from that:
+
+* **The derivations are not uniformly reliable.** NORMALIZE3's was two clocks
+  pessimistic (61 derived, 59 measured); RCP's is exact. The subtraction is a
+  reasonable estimator and not a substitute for measurement, and which way it
+  errs is not predictable from the outside.
+* **This one mattered.** A ±2 error bar on a number that decides whether the
+  recommended architecture closes is not a footnote, and it is the kind of thing
+  that gets quoted as settled once it has been repeated twice.
+
+The remaining derived IIs — RING 48, LEN/DIST2 42, SPLINE 39, NOISE2 23,
+CURVE 23, ROT3 21, ROT2 20, DCURVE 20, RIDGE 16 — are still derived. CURVE and
+DIST2 head the work order, so they are the next two that should be measured
+rather than assumed.

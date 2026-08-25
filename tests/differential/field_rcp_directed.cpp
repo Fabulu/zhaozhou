@@ -290,5 +290,53 @@ int main(int argc, char** argv) {
   }
 
   dut.final();
+  // ---- MEASURED INITIATION INTERVAL ---------------------------------------
+  // reports/FIELD_V2_MODEL.md closes Earth60 at 94.1% of the reserved budget
+  // and BINDS ON THIS UNIT. Its II is listed as 9, DERIVED by subtracting a
+  // 7-clock front-end walk from a 16-clock total instruction latency, with a
+  // stated +/-2 error bar -- and at II=10 the configuration does NOT close.
+  // A load-bearing number that nobody has measured is exactly what this
+  // project keeps getting caught by, so it is measured here.
+  //
+  // At the UNIT boundary, not through the sequencer: the sequencer drains every
+  // multi-cycle op before fetching another, so anything measured through it
+  // reports latency and calls it II. v_valid_i is held high with r_ready_i
+  // high and the clocks between successive ACCEPTS are counted. The gap is
+  // also required to be STEADY across five accepts -- a unit that accepted
+  // quickly once and then settled slower would otherwise report the
+  // flattering figure. NORMALIZE3 got the same treatment and its derivation
+  // turned out two clocks pessimistic.
+  {
+    dut.v_valid_i = 1;
+    dut.a_i = static_cast<uint32_t>(3 << 16);
+    dut.r_ready_i = 1;
+    dut.eval();
+
+    int accepts = 0, gap = 0, first_gap = -1, worst_gap = 0;
+    for (int c = 0; c < 4096 && accepts < 5; ++c) {
+      const bool accept = dut.v_valid_i && dut.v_ready_o;
+      if (accept) {
+        if (accepts > 0) {
+          if (first_gap < 0) first_gap = gap;
+          if (gap > worst_gap) worst_gap = gap;
+        }
+        ++accepts;
+        gap = 0;
+      }
+      zhao::tick(dut);
+      dut.eval();
+      ++gap;
+    }
+    dut.v_valid_i = 0;
+    dut.eval();
+
+    std::printf("  RCP measured II = %d clocks (accepts seen: %d)\n", first_gap, accepts);
+    check(accepts >= 2, "the unit accepts repeatedly with valid held high", 2, accepts);
+    check(first_gap > 0 && first_gap < 512, "the measured II is a sane positive figure", 1,
+          (first_gap > 0 && first_gap < 512) ? 1 : 0);
+    check(first_gap == worst_gap, "the initiation interval is STEADY, not a first-shot figure",
+          first_gap, worst_gap);
+  }
+
   return zhao::report_and_exit("field_rcp_directed");
 }

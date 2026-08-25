@@ -1716,6 +1716,19 @@ set_tests_properties(lint_zhao_geom_skin PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# FIELD v2: the SIMD barrel core. v1 (zhao_field_seq) is FROZEN as the serial
+# reference and oracle; v2 is built alongside it and answers to the same
+# semantics. This increment covers the single-cycle ALU ops; long operations
+# are refused rather than skipped until their tagged interfaces land.
+add_executable(test_field_v2_core_directed differential/field_v2_core_directed.cpp)
+target_link_libraries(test_field_v2_core_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v2_core_directed
+  PREFIX Vzhao_field_v2_core
+  TOP_MODULE zhao_field_v2_core
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_core.sv)
+add_test(NAME field_v2_core_directed COMMAND test_field_v2_core_directed)
+set_tests_properties(field_v2_core_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD.WRITE.{MATERIAL,NAV,HAZARD}: the three Earth sinks, RTL against
 # zref::fieldir::compose_*. field_write_earth_sinks.cpp pins the same laws but
 # drives the REFERENCE only -- it was unit evidence with no DUT in it, because
