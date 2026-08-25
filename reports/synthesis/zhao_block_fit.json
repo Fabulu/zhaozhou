@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "c6348e81225b8fa039b27887b4aadd52606274d5",
-    "newestRunClean":  false,
+    "newestRunCommit":  "6d64fac122183ee81a044dee76681753896a42c1",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -409,9 +409,9 @@
                    {
                        "module":  "zhao_probe_banked_rf",
                        "status":  "ok",
-                       "sourceCommit":  "c6348e81225b8fa039b27887b4aadd52606274d5",
-                       "rtlCleanAtHead":  false,
-                       "seconds":  876.3,
+                       "sourceCommit":  "6d64fac122183ee81a044dee76681753896a42c1",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  1097.9,
                        "sourcesHashed":  29,
                        "alms":  375,
                        "registers":  11,

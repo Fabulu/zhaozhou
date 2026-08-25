@@ -143,12 +143,31 @@ plateau and the throughput ceiling with one change.
   programs still bind on this unit, still give ~2x rather than 7x, and still sit
   ~6x short of the spec's 128 patches. Remaining units (RING 48, LEN 42,
   SPLINE 39, CURVE 23 ...) are still derived and want the same treatment.
-* **Characterise the banked register file in Quartus, not in arithmetic.** The
-  proposal is 4 banks × 3 replicated copies, 16 contexts × 16 registers × 32
-  bits = 8,192 bits per bank. The estimate is ~12 M10Ks of 553. The device has
-  had hundreds idle while Field starved, and the earlier RF conversion already
-  proved that trading ALM mux forests for synchronous memory pays — but that
-  conversion was *measured*, and so must this be.
+* ~~**Characterise the banked register file in Quartus.**~~ **DONE 2026-08-25,
+  and the estimate was exactly right.** `fpga/rtl/synth/zhao_probe_banked_rf.sv`,
+  fitted at `6d64fac` with `rtlCleanAtHead: True`:
+
+  | | predicted | measured |
+  | --- | ---: | ---: |
+  | M10K blocks | ~12 | **12** |
+  | memory bits | 12 × 8,192 | **98,304** |
+  | ALMs | — | **375** |
+  | DSPs | — | **0** |
+  | Fmax | — | **96.54 MHz** |
+
+  One M10K per replica, as hoped; a split across two would have given 24. Two
+  facts beyond the count matter:
+
+  **375 ALMs is what replaces BOTH the three-state operand walk and the
+  `Q_WB1`/`Q_WB2` write-back walk** — under a tenth of the sequencer's 4,494.
+
+  **96.54 MHz means the banked file is not what would hold a barrel engine below
+  100.** The seven-operand single-cycle read is not the hard part.
+
+  Measured twice: once with the probe uncommitted (`rtlCleanAtHead: False`) and
+  again after committing. Identical figures. The first was reported with its
+  provenance caveat stated rather than buried, because the repository's standard
+  is a clean tree and it has been enforced on every other measurement today.
 * **The Earth instruction histogram.** Every row above is parameterised on "one
   long op per eight instructions" because nobody has said what an Earth program
   contains. This is the single input that decides whether the barrel front end
