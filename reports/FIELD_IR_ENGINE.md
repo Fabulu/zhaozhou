@@ -203,6 +203,50 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 6 measured: 43.89 -> 45.42 MHz, and SIN LEFT THE PATH ENTIRELY
+
+| | wave 5 (`c37462f`) | wave 6 (`9371875`) |
+| --- | ---: | ---: |
+| Fmax | 43.89 MHz | **45.42 MHz** (+3.5%) |
+| ALMs | 4,682 | **4,665** (-17) |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean, `rtlCleanAtHead` true, 891.3 s. Cumulative **8.59 -> 45.42
+MHz, 5.3x.**
+
+Modest, and proportionate: removing one adder from a five-adder chain.
+
+**THE PATH THEN MOVED OFF SIN COMPLETELY.** The new worst path is
+
+    u_exec|u_norm|h_rt[16] -> u_exec|u_norm|o0_o[0]   21.835 ns
+
+with **175 cells in `zhao_field_normalize` and ZERO in `u_sin`.** SIN went from
+64 cells to none.
+
+**This kills wave 7 as drafted.** A pipelined SIN table was scoped, drafted and
+ready to apply -- synchronous dual-port ROM, retimed decode, one extra ROT state
+-- and it would now buy **no frequency at all**. That was the stated risk before
+wave 6 ran: *flattening SIN may simply promote whatever was second.* It did.
+
+The draft is not wasted -- the table is still two combinational 257-entry LUT
+muxes, roughly 8,700 bits, and converting it to one M10K is an AREA win worth
+taking later. But it is no longer a SPEED wave, and shipping it as one would
+have been measuring the wrong thing.
+
+**Wave 7 is now `resc_s` in NORMALIZE, and 122 of the path's 175 cells are one
+adder.** `Add12` is this:
+
+    r = (k == 0) ? 65'(v) : ((65'(v) + (65'sd1 <<< (k - 1))) >>> k);
+
+a full 65-bit ripple-carry add of a dynamically shifted rounding constant.
+
+**It can be removed exactly, not approximated.** Writing `v = q*2^k + r` with
+`0 <= r < 2^k` under floor semantics, `(v + 2^(k-1)) >> k` = `q + [r >= 2^(k-1)]`
+= `(v >>> k) + v[k-1]`. The rounding constant only ever contributes the single
+bit at position `k-1`. So the 65-bit ADD becomes a shift plus an INCREMENT --
+and because the result saturates to 32 bits, the increment needs about 34 bits
+with the high slice deciding overflow, not 65.
+
 ### Wave 5 measured: 36.84 -> 43.89 MHz, 2026-08-25
 
 | | wave 4 (`7396df3`) | wave 5 (`c37462f`) |
