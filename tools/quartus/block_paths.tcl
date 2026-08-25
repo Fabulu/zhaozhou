@@ -12,9 +12,18 @@ project_open blockfit
 create_timing_netlist -model slow
 read_sdc
 update_timing_netlist
-report_timing -setup -npaths 25 -nworst 1 -detail full_path \
+# 25 PATHS SHOWED THE WINNER AND NOTHING ELSE, and wave 8 proved that is not
+# enough to plan with: removing the #1 cone bought 2% because a second cone of
+# equal length stood behind it, and the 25-path report never showed it. Per the
+# owner directive of 2026-08-25 the census covers the top 200 setup paths so
+# distinct cone FAMILIES can be counted.
+#
+# `-nworst 1` keeps one path per ENDPOINT, so 200 rows are 200 different
+# endpoints rather than 200 bits of one bus -- which is what makes the grouping
+# meaningful. full_path detail carries the module hierarchy the census groups on.
+report_timing -setup -npaths 200 -nworst 1 -detail full_path \
     -file output_files/blockfit_setup_paths.rpt
-report_timing -hold  -npaths 25 -nworst 1 -detail full_path \
+report_timing -hold  -npaths 200 -nworst 1 -detail full_path \
     -file output_files/blockfit_hold_paths.rpt
 delete_timing_netlist
 project_close
