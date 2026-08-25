@@ -383,3 +383,60 @@ The remaining derived IIs — RING 48, LEN/DIST2 42, SPLINE 39, NOISE2 23,
 CURVE 23, ROT3 21, ROT2 20, DCURVE 20, RIDGE 16 — are still derived. CURVE and
 DIST2 head the work order, so they are the next two that should be measured
 rather than assumed.
+
+---
+
+## CURVE integration: attempted, reverted, and what was learned
+
+*2026-08-26. The attempt is recorded because the next session should start from
+the finding rather than rediscover it.*
+
+The wiring was built and then **reverted**, so `OP_CURVE` is refused by v2 again.
+It is not committed in a half-working state, deliberately: v2 had reached a
+condition where it **accepted CURVE and returned zeros**, and an opcode that is
+neither executed nor refused produces "a plausible field and a wrong world" —
+the exact failure this engine's own law forbids. Accepted-but-broken is strictly
+worse than unsupported.
+
+### What was built and does work
+
+* `zhao_field_v2_core` gained a long-op path: detect the curve family, hold the
+  request until the serialiser accepts, stall issue while one is pending, keep
+  the wavefront IN FLIGHT until the reply lands, and count the instruction as
+  retired at REPLY rather than at dispatch.
+* `zhao_field_v2_lanemux` + v1's unmodified `zhao_field_curve` + a
+  `zhao_field_mul` lane, instantiated inside v2. Lint clean across all five
+  modules.
+* The **saturation ledger** was exposed as v2 outputs. The lint that flagged the
+  dangling `sat_*` pins was right and worth obeying: saturation is part of the
+  answer in this engine, and leaving those pins unconnected would have silently
+  dropped half the semantics of every long op.
+* The ALU path did **not** regress: 15 checks, still **0.99 instr/clock**.
+
+### What does not work, stated exactly
+
+Diagnostic from the run: **98 clocks, 2 instructions retired, status OK,
+busy 0.** So the dispatch, the four-lane serialisation, the reply, the tag and
+the retirement all function — 98 clocks is about `4 x II` plus overhead, which
+matches the model. **Every lane's value comes back 0.**
+
+Two hypotheses were tested and neither was the cause:
+
+1. **Table timing.** `zhao::tick` evaluates three times and the unit's
+   `tbl_idx_o` settles combinationally after each, so answering the table only
+   before the tick feeds the posedge data addressed by a stale index. Re-driving
+   the table after every eval — which is what v1's own curve bench does — did
+   **not** fix it.
+2. Operand capture (`lq_a <= rd_a` at `s1_valid`) was checked against the ALU
+   path's own use of `rd_a` and appears correct.
+
+**The cause is not yet known.** The next thing to try is a unit-level probe:
+drive `zhao_field_curve` directly from the v2 testbench with the same table and
+operands and confirm it answers there, which separates "the unit is not being
+fed" from "the reply is not reaching the register file".
+
+### The one thing that is certain
+
+The failing differential was **not** weakened to pass. It compared against
+`zfield::interpret` on a two-instruction program — the same oracle v1's curve
+differential uses — and it correctly said no.
