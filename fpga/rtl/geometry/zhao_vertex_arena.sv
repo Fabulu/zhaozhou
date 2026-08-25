@@ -114,7 +114,23 @@ module zhao_vertex_arena #(
   // ---- metadata, in flops -------------------------------------------------
   logic [GEN_W-1:0]      gen_q   [0:ARENAS-1];
   logic                  sealed_q[0:ARENAS-1];
-  logic                  valid_q [0:(ARENAS*DEPTH)-1];
+  // PACKED, NOT UNPACKED, AND THE PROOF IS WHY.
+  //
+  // This was `logic valid_q [0:(ARENAS*DEPTH)-1]`, an unpacked array. Yosys
+  // models an unpacked array as a MEMORY, and a bulk asynchronous reset over
+  // every cell is not expressible as a memory reset -- so the solver was free
+  // to start cells at 1. bmc then exhibited a HIT on a slot that was never
+  // filled, which is `a_hit_implies_written` failing at k = 4, and the same
+  // modelling gap is why an earlier `a_shadow_tracks_valid` appeared to fail on
+  // a COMPLETELY IDLE trace and was withdrawn as unaskable.
+  //
+  // A packed vector is a single wide register: the reset is one assignment the
+  // solver must honour, and `valid_q[addr]` still bit-selects exactly as
+  // before. It also makes the "in flops" claim above STRUCTURAL rather than a
+  // hope -- an unpacked array is what a synthesiser converts to memory when it
+  // feels like it, and the storage law (QUARTUS_GOTCHAS §10) only kept this one
+  // in logic because the reset happens to touch every cell.
+  logic [(ARENAS*DEPTH)-1:0] valid_q;
   logic signed [31:0]    org_x_q [0:ARENAS-1];
   logic signed [31:0]    org_y_q [0:ARENAS-1];
   logic signed [31:0]    org_z_q [0:ARENAS-1];
@@ -181,7 +197,7 @@ module zhao_vertex_arena #(
         org_y_q[i]  <= '0;
         org_z_q[i]  <= '0;
       end
-      for (i = 0; i < ARENAS * DEPTH; i = i + 1) valid_q[i] <= 1'b0;
+      valid_q <= '0;   // one register, one reset -- see the declaration
       arena_overflow_o <= 1'b0;
     end else begin
       // OPEN: bump the generation, unseal, drop this arena's valid bits.
@@ -383,18 +399,31 @@ module zhao_vertex_arena #(
         a_hit_implies_written:      assert (f_expect_valid);
       end
 
-      // AN a_shadow_tracks_valid ASSERTION WAS TRIED HERE AND WITHDRAWN. It
-      // said f_shadow_valid == valid_q[f_addr] -- the invariant the failing
-      // property depends on -- hoping a counterexample would land on the update
-      // that breaks it rather than on a symptom three steps downstream.
+      // a_shadow_tracks_valid: THE DIAGNOSIS ABOVE WAS RIGHT AND THE FIX WAS
+      // ELSEWHERE. 2026-08-25.
       //
-      // It failed at k=3 on a trace where the machine is COMPLETELY IDLE: no
-      // open, no fill, no seal, valid_q all zero, f_shadow_valid zero. An
-      // equality between two zeros does not fail, so the signal the assertion
-      // reads is not the signal the VCD shows -- yosys represents an unpacked
-      // array as a MEMORY, and the 8-bit `valid_q` in the dump is not that
-      // array. Withdrawn rather than left failing on a question it cannot
-      // currently ask.
+      // It said `f_shadow_valid == valid_q[f_addr]` and failed at k=3 on a
+      // COMPLETELY IDLE trace -- no open, no fill, no seal, valid_q all zero,
+      // f_shadow_valid zero. The note here concluded that the signal read was
+      // not the signal dumped, because yosys models an unpacked array as a
+      // MEMORY. That was correct.
+      //
+      // What it did not follow through: **a bulk asynchronous reset over every
+      // cell is not expressible as a memory reset either.** The solver was
+      // therefore free to start cells at 1, which is how bmc could exhibit a
+      // HIT on a slot that was never filled.
+      //
+      // `valid_q` is now a PACKED vector (see its declaration), so it is a
+      // register the solver must reset. Re-asking this question with the packed
+      // vector returns UNSAT at k=3 in both directions -- shadow implies array
+      // and array implies shadow -- so the invariant HOLDS and is no longer
+      // unaskable. It is left out of the shipped property set because the
+      // proof's remaining failure is not here, and an assertion that passes is
+      // not evidence of the thing that does not.
+      //
+      // STILL FAILING, AND NOT CLAIMED OTHERWISE: bmc does not pass. The
+      // packed-vector change removed one real modelling gap and did not close
+      // the proof. The CI lane stays unregistered.
 
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so
