@@ -79,9 +79,8 @@ struct Bench {
 };
 
 // The oracle, driven from the same beat stream.
-void oracle(const fi::MaterialState& am, int32_t anav, uint8_t ahaz,
-            const std::vector<Beat>& beats, fi::MaterialState* om, int32_t* onav,
-            uint8_t* ohaz) {
+void oracle(const fi::MaterialState& am, int32_t anav, uint8_t ahaz, const std::vector<Beat>& beats,
+            fi::MaterialState* om, int32_t* onav, uint8_t* ohaz) {
   std::vector<fi::MaterialWrite> mw;
   std::vector<int32_t> nd, hs;
   for (const Beat& x : beats) {
@@ -111,8 +110,7 @@ void diff(Bench& b, const fi::MaterialState& am, int32_t anav, uint8_t ahaz,
   check(b.dut.weight_o == om.weight, nm, om.weight, b.dut.weight_o);
   std::snprintf(nm, sizeof nm, "%s: nav", name);
   check(static_cast<int32_t>(b.dut.nav_o) == onav, nm,
-        static_cast<uint64_t>(static_cast<uint32_t>(onav)),
-        static_cast<uint64_t>(b.dut.nav_o));
+        static_cast<uint64_t>(static_cast<uint32_t>(onav)), static_cast<uint64_t>(b.dut.nav_o));
   std::snprintf(nm, sizeof nm, "%s: hazard", name);
   check(b.dut.hazard_o == ohaz, nm, ohaz, b.dut.hazard_o);
 }
@@ -136,14 +134,18 @@ int main(int argc, char** argv) {
   // what the ruling refused: priority belongs to command order.
   {
     std::vector<Beat> v(3);
-    v[0].mat_en = true;  v[0].mat = {10, 11, 32};
-    v[1].mat_en = true;  v[1].mat = {20, 21, 64};
-    v[2].mat_en = false; v[2].mat = {30, 31, 96};
+    v[0].mat_en = true;
+    v[0].mat = {10, 11, 32};
+    v[1].mat_en = true;
+    v[1].mat = {20, 21, 64};
+    v[2].mat_en = false;
+    v[2].mat = {30, 31, 96};
     diff(b, authored, 0, 0, v, "2.last enabled wins, disabled skipped");
   }
   {
     std::vector<Beat> v(1);
-    v[0].mat_en = false; v[0].mat = {99, 98, 1};
+    v[0].mat_en = false;
+    v[0].mat = {99, 98, 1};
     diff(b, authored, 0, 0, v, "2b.a disabled write changes nothing");
   }
 
@@ -243,8 +245,8 @@ int main(int argc, char** argv) {
         x.nav_delta = static_cast<int32_t>(rng());
         // Mix full-range severities with in-band ones so the rounding is
         // exercised and not only the clamp.
-        x.haz_sev = (rng() & 1) ? static_cast<int32_t>(rng())
-                                : static_cast<int32_t>(rng() % (kOne + 1));
+        x.haz_sev =
+            (rng() & 1) ? static_cast<int32_t>(rng()) : static_cast<int32_t>(rng() % (kOne + 1));
       }
       const fi::MaterialState am{static_cast<uint8_t>(rng()), static_cast<uint8_t>(rng()),
                                  static_cast<uint8_t>(rng())};

@@ -48,6 +48,7 @@ F_CURVE = 'fpga/rtl/field/zhao_field_curve.sv'
 F_NOISE = 'fpga/rtl/field/zhao_field_noise.sv'
 F_ROT = 'fpga/rtl/field/zhao_field_rot.sv'
 F_SINK = 'fpga/rtl/field/zhao_field_sinks.sv'
+F_SIN = 'fpga/rtl/field/zhao_field_sin.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -339,6 +340,30 @@ MUTS = [
     ("M49 the authored layer is not preserved when no write arrives", F_SINK,
      """      nav_q    <= auth_nav_i;""",
      """      nav_q    <= 32'sd0;"""),
+
+    # ---- wave 5: the sine interpolation summed as a tree ---------------------
+    # The restructure claims to be the SAME NUMBER, bit for bit. These attack
+    # that claim: a dropped term, a duplicated one, a wrong weight, and the
+    # rounding constant lost or negated. All are invisible to a reader and all
+    # are caught by the exhaustive 65,536-angle differential.
+    ("M50 the sine tree drops the top term", F_SIN,
+     """    pair2 = term[4] + term[5];""",
+     """    pair2 = term[4];"""),
+    ("M51 the sine tree duplicates a term instead of summing two", F_SIN,
+     """    pair1 = term[2] + term[3];""",
+     """    pair1 = term[2] + term[2];"""),
+    ("M52 a sine term is weighted by the wrong power of two", F_SIN,
+     """    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< k) : 25'sd0;""",
+     """    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< (k + 1)) : 25'sd0;"""),
+    ("M53 the sine rounding constant is lost in the tree", F_SIN,
+     """    quad1 = pair2 + 25'sd32;   // the rounding constant, carried as a free leaf""",
+     """    quad1 = pair2;"""),
+    ("M54 the sine rounding constant rounds half DOWN", F_SIN,
+     """    quad1 = pair2 + 25'sd32;   // the rounding constant, carried as a free leaf""",
+     """    quad1 = pair2 - 25'sd32;"""),
+    ("M55 the sine tree SUBTRACTS one half instead of adding it", F_SIN,
+     """    dt    = quad0 + quad1;""",
+     """    dt    = quad0 - quad1;"""),
 ]
 
 

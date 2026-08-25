@@ -133,16 +133,40 @@ module zhao_field_sin (
   // definition of multiplication, unrolled -- which is why the differential is
   // unchanged and still passes bit for bit.
   // ENFORCED-BY: tests/differential/field_sin_directed.cpp:main
+  //
+  // WAVE 5, 2026-08-25: THE SIX TERMS ARE SUMMED AS A BALANCED TREE, NOT AS A
+  // RUNNING TOTAL.
+  //
+  // Measured at 36.84 MHz, the sequencer's worst path had EIGHTY of its cells
+  // inside this unit and ZERO in any other -- `u_isqrt`, `u_rcp`, `u_curve`,
+  // `u_noise`, `u_ring`, `u_rot`, `u_alu`, `u_mul`, `u_norm` and `u_len` all
+  // contributed nothing. It was a `cin`/`cout` ripple the length of the cone.
+  //
+  // The cause was the accumulation ORDER, not the arithmetic: `dt = dt + term`
+  // six times is six DEPENDENT 25-bit adds, so term 0's carry must settle
+  // before term 5 can begin. Pairwise summation uses the same adders at depth
+  // THREE. The rounding constant joins as a fourth leaf rather than a seventh
+  // add, so it costs no extra level.
+  //
+  // IT IS THE SAME NUMBER, bit for bit, and not by approximation: integer
+  // addition is associative, each term is exact in 25 signed bits, and the
+  // bound above (|d| <= 2^16, t <= 63, sum about 2^22) holds for every
+  // ordering, so no intermediate can overflow. The differential is unchanged.
+  logic signed [24:0] term [6];
+  logic signed [24:0] pair0, pair1, pair2, quad0, quad1;
   logic signed [24:0] dt;
   logic signed [24:0] interp;
   logic signed [31:0] s_quarter;
   always_comb begin
     d = $signed({1'b0, next_v}) - $signed({1'b0, base});
-    dt = 25'sd0;
-    for (int k = 0; k < 6; k++) begin
-      if (t[k]) dt = dt + (25'(d) <<< k);
-    end
-    interp = (dt + 25'sd32) >>> 6;
+    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< k) : 25'sd0;
+    pair0 = term[0] + term[1];
+    pair1 = term[2] + term[3];
+    pair2 = term[4] + term[5];
+    quad0 = pair0 + pair1;
+    quad1 = pair2 + 25'sd32;   // the rounding constant, carried as a free leaf
+    dt    = quad0 + quad1;
+    interp = dt >>> 6;
     s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base}))
                               : (32'($signed({1'b0, base})) + 32'(interp));
   end

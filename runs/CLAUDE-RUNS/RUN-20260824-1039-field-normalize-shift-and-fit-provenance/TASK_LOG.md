@@ -1143,6 +1143,57 @@ built block (`implemented_by`), not four unbuilt blocks.
 
 `ctest -L fast` green, 191 tests, 1193.51 s. Ledger green. STATUS.md updated.
 
+### 04:10 — WAVE 5: the sine interpolation was a RIPPLE, not a multiply
+
+The 36.84 MHz worst path put EIGHTY of its cells inside `u_sin` and ZERO in any
+other unit. The cause was not the arithmetic but the ORDER of it:
+
+    dt = dt + term   x6      six DEPENDENT 25-bit adds
+
+Term 0's carry has to settle before term 5 can start. Summed pairwise the same
+adders give depth THREE, and the rounding constant joins as a fourth leaf rather
+than a seventh add, so it costs no level.
+
+**Bit-identical, and proven rather than argued.** Integer addition is
+associative, every term is exact in 25 signed bits, and the block's existing
+bound (|d| <= 2^16, t <= 63, sum ~2^22) holds for any ordering, so no
+intermediate can overflow. The EXHAUSTIVE differential -- all 65,536 angles for
+both sin and cos, 131,072 comparisons -- is unchanged.
+
+Six new mutants, all caught, by all three consumers: a dropped term, a
+duplicated term, a wrong power-of-two weight, the rounding constant lost or
+negated, and one half of the tree subtracted. Sweep 55/55 accounted, 50 caught,
+0 discarded, survivors unchanged.
+
+**The preflight earned its keep.** The first M55 (`dt = quad0`) left `quad1`
+unused and did not BUILD. Guard 5 exists because a mutant that fails to compile
+leaves the previous binary in place and is scored as CAUGHT -- the most
+flattering possible way to be wrong. The preflight refused to start instead:
+*fix the mutation, not the guard.* Replaced with `quad0 - quad1`, which keeps
+both halves live and still corrupts the sum.
+
+**And the consumer derivation caught something I would have got wrong by hand:**
+`zhao_field_sin.sv` feeds `test_field_rot_directed` as well as the two obvious
+targets. Guard 7 derives consumers from `tests/CMakeLists.txt` at run time
+precisely because a hand-maintained list once left mutant-generated sources on
+disk and produced a wrong public diagnosis.
+
+### 04:10 — A GREEN THAT WAS NOT EARNED, caught by reading the body
+
+The gate was run as `ctest ...; npm run ledger:check` in ONE shell. PowerShell
+reports the LAST command's exit code, so the job returned **exit 0 with a red
+`format_check` inside it**. Nothing lied; the signal simply did not mean what
+its shape suggested.
+
+This is the same class as the Verilator hash problem -- a pass that was never
+earned -- and it would have put a red commit on origin. **Gates are no longer
+chained: each runs alone and is judged on its own exit code.**
+
+The violation itself was trivial, a clang-format break in the sink test, fixed
+with the PINNED `node_modules/.bin/clang-format` rather than any system copy,
+because a local gate that is not the same tool as CI is how weeks of drift hid
+the last time.
+
 ---
 
 ## Decisions Made
