@@ -1887,6 +1887,7 @@ int main(int argc, char** argv) {
 
       int retires = 0;
       bool planted = false;
+      bool seen_sentinel = false;
       int planted_cycle = -1;
       bool changed_early = false;
       int change_cycle = -1;
@@ -1910,13 +1911,22 @@ int main(int argc, char** argv) {
         }
         // Between the sentinel landing and the long op retiring, reg[20] is the
         // sentinel and nothing else. `retires == 1` is exactly that window.
-        // `n > planted_cycle`: the host port lags one cycle now that the file is
-        // block memory, so on the very cycle the LDC retires the port still
-        // shows the PRE-sentinel value. Without this the test reported every
-        // long op as writing dst early, at cycle 6, which was the observer and
-        // not the RTL -- the give-away was change_cycle being identically 6 for
-        // seven different ops whose retire cycles range from 22 to 85.
-        if (planted && retires == 1 && n > planted_cycle && now != kSentinel && !changed_early) {
+        //
+        // THE START OF THE WINDOW IS THE SENTINEL'S ARRIVAL, OBSERVED -- not an
+        // offset from the retire pulse. The read port lags the write, and how
+        // MUCH it lags is a property of the write path that every timing wave
+        // changes. This test has already been fooled twice by assuming a fixed
+        // offset: once at `change_cycle == 6` when the register file became
+        // block memory, and again at 7 when a wave-4 attempt registered the
+        // write-back. Both times EVERY opcode reported the same early cycle,
+        // against expected values ranging 0x16..0x48.
+        //
+        // A CONSTANT WHERE THERE SHOULD BE VARIANCE IS AN OBSERVER ARTEFACT.
+        // Waiting for the sentinel to actually appear makes the check immune to
+        // the lag entirely, so the next wave that moves write timing is measured
+        // rather than mis-blamed.
+        if (planted && !seen_sentinel && now == kSentinel) seen_sentinel = true;
+        if (seen_sentinel && retires == 1 && now != kSentinel && !changed_early) {
           changed_early = true;
           change_cycle = n;
         }

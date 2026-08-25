@@ -368,16 +368,49 @@ module zhao_field_seq (
   // third, an asynchronous read, is what the registered rd_*_q outputs remove.
   // A map reporting blockMemoryBits = 0 after this is a FAILED implementation
   // however green the tests are.
+  // ---- WAVE 4: THE REGISTERED FINISH ---------------------------------------
+  // MEASURED. The Field engine fitted at 33.98 MHz with its critical path
+  //     i_op[2] -> altsyncram rf_b | porta_datain_reg21
+  //     29.250 ns over SEVENTEEN logic levels
+  // i.e. the opcode drove the whole arithmetic result selection combinationally
+  // into the register file's write-data port. THE MEASUREMENT NAMED THIS WAVE;
+  // the ruling's own order would have started at wave 2 (isqrt) or 5 (SIN),
+  // neither of which is on this path.
+  //
+  // NO EXTRA STATE AND NO LATENCY COST, checked against the schedule rather than
+  // assumed: a write decoded in Q_EXEC lands at the Q_EXEC->Q_FETCH edge, and
+  // the next instruction reads its operands at the Q_LATCH->Q_RD1 edge, TWO
+  // edges later. Delaying by one consumes one and leaves one.
+  //
+  // ONLY THE WALK IS REGISTERED. The host port is a debug/config path, is not on
+  // the critical path, and delaying it moved the differential's own sentinel.
+  logic               walk_wen_q;
+  logic [5:0]         walk_waddr_q;
+  logic signed [31:0] walk_wdata_q;
+  wire                host_wen = !clear_i && !busy_o && rf_we_i;
+  always_ff @(posedge clk) begin
+    walk_wen_q   <= rf_wen && busy_o && !clear_i;
+    walk_waddr_q <= rf_waddr;
+    walk_wdata_q <= rf_wdata;
+  end
+
   always_ff @(posedge clk) begin
     rd_a_q <= rf_a[ra];
     rd_b_q <= rf_b[rb];
     rd_c_q <= rf_c[rc];
     rd_h_q <= rf_h[rf_raddr_i];
-    if (rf_wen) begin
-      rf_a[rf_waddr] <= rf_wdata;
-      rf_b[rf_waddr] <= rf_wdata;
-      rf_c[rf_waddr] <= rf_wdata;
-      rf_h[rf_waddr] <= rf_wdata;
+    // Host writes land immediately, the walk's one edge later. They cannot
+    // collide: host_wen requires !busy_o and the walk requires busy_o.
+    if (host_wen) begin
+      rf_a[rf_waddr_i] <= rf_wdata_i;
+      rf_b[rf_waddr_i] <= rf_wdata_i;
+      rf_c[rf_waddr_i] <= rf_wdata_i;
+      rf_h[rf_waddr_i] <= rf_wdata_i;
+    end else if (walk_wen_q) begin
+      rf_a[walk_waddr_q] <= walk_wdata_q;
+      rf_b[walk_waddr_q] <= walk_wdata_q;
+      rf_c[walk_waddr_q] <= walk_wdata_q;
+      rf_h[walk_waddr_q] <= walk_wdata_q;
     end
   end
 
@@ -499,16 +532,21 @@ module zhao_field_seq (
         // The walk's write-back. The decoder has proved `dst` never overlaps
         // this instruction's own sources, which is why there is no bypass
         // network here and does not need to be one.
-        if ((state == Q_EXEC) && exec_writes && !exec_is_end && !exec_unsupported
-             && !multi_op) begin
-          rf_valid[i_dst] <= 1'b1;
-        end else if ((state == Q_MWAIT) && multi_rvalid) begin
-          rf_valid[i_dst] <= 1'b1;              // lane 0, on the accepting edge
-        end else if (state == Q_WB1) begin
-          rf_valid[i_dst + 6'd1] <= 1'b1;       // lane 1
-        end else if (state == Q_WB2) begin
-          rf_valid[i_dst + 6'd2] <= 1'b1;       // lane 2
-        end
+        // The valid bit is driven from the SAME registered enable the memory
+        // uses, so bit and datum land together by construction rather than by
+        // two conditions kept in step by hand.
+        // ENFORCED-BY: tests/differential/field_seq_directed.cpp
+        //
+        // Setting it at the pre-delay edge instead is a PROVEN-EQUIVALENT
+        // mutant, not a latent bug. It was measured, not argued: that variant
+        // passes all 1,127 directed checks with a changed binary hash, because
+        // the decoder leaves two edges between a write-back and the next
+        // operand read, so no consumer is ever inside the one-cycle window in
+        // which the two would disagree. Deleting the assignment outright fails
+        // from the very first check, which is what pins the bit as live.
+        // Recorded in reports/FIELD_IR_ENGINE.md so it is not read as a hole.
+        // ENFORCED-BY: tests/differential/field_seq_directed.cpp
+        if (walk_wen_q) rf_valid[walk_waddr_q] <= 1'b1;
       end else if (rf_we_i) begin
         rf_valid[rf_waddr_i] <= 1'b1;
       end

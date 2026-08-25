@@ -983,6 +983,117 @@ consumed so the producer cannot wedge, sweeping nothing, and **counted** on
 `bake_radius_rejects_o`. Without the counter a rejection is indistinguishable
 from a bake that merely did not happen.
 
+### 2026-08-25 01:00 — FIELD.SEQ MEASURED AT HEAD, and the path ranked the waves
+
+The fit I killed for provenance at the very start of this session, finally run:
+
+| | `7a3e2a3` | `01598b3` |
+| --- | ---: | ---: |
+| ALMs | 8,901 | **4,821** (-46%) |
+| block memory bits | 0 | **8,192** |
+| Fmax | **8.59 MHz** | **33.98 MHz** (3.95x) |
+
+The M10K conversion is confirmed by a **fit**, not a map. Provenance clean —
+45 sources hashed, `rtlCleanAtHead` true. The stored 8.59 was stale by three
+changes AND predates the SDC I/O fix, so it was suspect twice over.
+
+**The prediction was recorded before the run and held**: a large gain because the
+register file removed four asynchronous 64:1 muxes the block's own header called
+its dominant cost, but not 100 MHz because isqrt and SIN are untouched.
+
+**And the path ranked the remaining waves**, which is why preserving it mattered:
+
+    i_op[2] -> altsyncram rf_b | porta_datain_reg21
+    29.250 ns over SEVENTEEN logic levels
+
+The opcode drives the whole arithmetic result selection into the register file's
+write port. That is **wave 4**, not wave 2 (isqrt) or wave 5 (SIN) — reading the
+ruling's order would have started in the wrong place.
+
+At **1.72 ns/level** against 3.0 for the routing-dominated pair fits and ~0.3-0.5
+ideal, this is real depth rather than sprawl: even ideally routed, 17 levels is
+~8.5 ns against a 10 ns budget.
+
+### 01:30 — WAVE 4 FAILED THREE TIMES, and every failure was the OBSERVER
+
+Attempted, reverted, then landed only after fixing the test.
+
+**Two were real bugs I introduced and fixed**: registering the host port (which
+carries section 14's sentinel, so the plant lagged and the observer saw itself),
+and the valid bitmap not travelling with the data (set in a separate block at the
+old edge, so `valid` went high while the memory still held the previous value).
+
+**The third was section 14 itself.** It derived its check window from the LDC's
+RETIRE pulse plus a hard-coded one-cycle offset — but the read port's lag is a
+property of the write path that **every timing wave changes**. It now waits for
+the sentinel to actually APPEAR, which makes it immune to the lag entirely.
+
+> That test had already been fooled twice: at `change_cycle == 6` when the
+> register file became block memory, and at 7 by my own wave-4 attempt. Both
+> times **every opcode reported the same early cycle** against expected values
+> spanning 0x16..0x48. **A constant where there should be variance is an observer
+> artefact** — three instances now, in one file.
+
+**The control that makes the green trustworthy:** the observer fix was verified
+to pass on the UNMODIFIED RTL *before* wave 4 was re-applied. Landing a test
+change and an RTL change together would have left no way to tell which produced
+the pass.
+
+**Wave 4 is cheaper than the ruling assumed: no extra state, no latency cost.**
+A write decoded in `Q_EXEC` lands at the `Q_EXEC->Q_FETCH` edge; the next
+instruction reads at `Q_LATCH->Q_RD1`, **two edges later**. Delaying by one
+consumes one and leaves one. Checked against the state machine, not assumed.
+
+### 02:12 — THE LEDGER CAUGHT ME ASSERTING A HAZARD THAT DOES NOT EXIST
+
+Wave 4's gate went red on V20, on a comment I had just written. The comment said
+setting the valid bit at the pre-delay edge "would open a window where valid is
+1 while the memory still holds the previous value" -- a hazard the new placement
+supposedly avoided.
+
+V20 demands a machine-resolvable enforcer for any invariant claim. The tempting
+move was to name a plausible-looking test. Instead the variant was BUILT:
+
+| variant | hash changed | result |
+| --- | --- | --- |
+| valid set at the pre-delay edge | `4ffcaa51`, distinct | **passes all 1,127 checks** |
+| valid assignment deleted | `a3dd0343` | **fails at check 1.one add** |
+
+**The claim was wrong.** The first variant is a proven-equivalent mutant: the
+decoder leaves two edges between a write-back and the next operand read, so no
+consumer is ever inside the one-cycle window where bit and datum disagree. This
+is the same two-edge slack that made wave 4 free -- it also makes the ordering
+unobservable.
+
+**The second run is the part that makes the first one mean anything.** Without
+it, "the mutant passed" is indistinguishable from "nothing exercises this at
+all". A control that reports 'not detected' is not evidence the detector works
+-- the rule learned four times over from the fit-provenance guard, applied
+before it could bite instead of after.
+
+The ordering stays: correct by construction beats correct by a slack budget a
+later wave could spend. But it is now recorded as a preference with a reason,
+not as a bug that was fixed. Written up in `reports/FIELD_IR_ENGINE.md`.
+
+**Process controls that held this time**, both from earlier failures in this run:
+every `str.replace` asserted its match count (a silent no-op once produced a
+wrong bisection conclusion), and both mutants were hash-checked rather than
+trusted on a pass.
+
+### 02:12 — WAVE 4 LANDED
+
+Sweep `38/38 accounted, 33 caught, 0 discarded`, survivors unchanged at the five
+documented equivalents (M01, M07, M20, M36, M38). M20 sits directly on the path
+wave 4 changed; its equivalence proof is semantic -- `zhao_field_alu`'s
+`default:` arm makes the `!multi_op` guard redundant -- so it is about what the
+mutation means, not when the write lands, and survives a timing change.
+
+`ctest -L fast` green in 761.82 s, 190 tests. Ledger green, 92 blocks / 40 ops.
+The stale `terrain_bake_random` red from earlier in this run did not reproduce.
+
+**Not yet claimed: any frequency gain.** Wave 4 is green, not measured. The
+33.98 MHz baseline stands until a fit says otherwise.
+
 ---
 
 ## Decisions Made

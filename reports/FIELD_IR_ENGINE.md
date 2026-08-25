@@ -158,6 +158,35 @@ survives the whole suite, and explains why: `e == 0` happens only for
 note was written before this sweep existed and it held up — which is the point
 of recording equivalents rather than leaving them to look like holes.
 
+### The sequencer's registered write-back, wave 4, 2026-08-25
+
+The walk's register-file write is delayed by one edge to get the opcode out of
+the write-port address path. The valid bitmap moved with it, driven from the
+same registered enable. A comment claimed that setting the bit at the OLD edge
+"would open a window where valid is 1 while the memory still holds the previous
+value" — presented as a hazard the new placement avoided.
+
+**That claim was wrong, and the ledger's V20 rule is what forced it to be
+checked.** The rule refused an invariant with no named enforcer; rather than
+name a plausible one, the variant was built and run.
+
+| variant | binary hash changed | result |
+| --- | --- | --- |
+| valid set at the pre-delay edge | yes, `4ffcaa51` -> distinct | **passes all 1,127 checks** |
+| valid assignment deleted | yes, `a3dd0343` | **fails from check 1.one add** |
+
+The first is a **proven-equivalent mutant**: the decoder leaves two edges
+between a write-back and the next operand read, so nothing is ever inside the
+one-cycle window where bit and datum would disagree. The second establishes the
+bit is load-bearing, so the equivalence is not vacuous — without that second
+run, "the mutant passed" would have been indistinguishable from "the tests do
+not exercise this at all", which is the exact confusion equivalence records
+exist to prevent.
+
+The ordering is still worth keeping: it is correct by construction instead of
+correct by a slack budget that a later wave could spend. But it is recorded as
+a preference with a reason, not as a bug that was fixed.
+
 ### The arithmetic core, swept 2026-08-22
 
 34 mutations, **31 caught, 3 equivalent, 0 real gaps**, and every one of the 31
