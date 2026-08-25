@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "01598b3d3135fce8b12906f8580a33c664f079e4",
+    "newestRunCommit":  "7396df363a9a8ccd602598bee1428e80b321a447",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -90,12 +90,12 @@
                    {
                        "module":  "zhao_field_seq",
                        "status":  "ok",
-                       "sourceCommit":  "01598b3d3135fce8b12906f8580a33c664f079e4",
+                       "sourceCommit":  "7396df363a9a8ccd602598bee1428e80b321a447",
                        "rtlCleanAtHead":  true,
-                       "seconds":  1084.5,
+                       "seconds":  977.3,
                        "sourcesHashed":  45,
-                       "alms":  4821,
-                       "registers":  3459,
+                       "alms":  4673,
+                       "registers":  3498,
                        "blockMemoryBits":  8192,
                        "ramBlocks":  4,
                        "dspBlocks":  3,
@@ -103,7 +103,7 @@
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  33.98,
+                       "fmaxMhz":  36.84,
                        "fmaxClock":  "clk"
                    },
                    {

@@ -158,6 +158,42 @@ survives the whole suite, and explains why: `e == 0` happens only for
 note was written before this sweep existed and it held up — which is the point
 of recording equivalents rather than leaving them to look like holes.
 
+### Wave 4 measured, and the path re-ranked the waves AGAIN, 2026-08-25
+
+| | wave 3 (`01598b3`) | wave 4 (`7396df3`) |
+| --- | ---: | ---: |
+| Fmax | 33.98 MHz | **36.84 MHz** (+8.4%) |
+| ALMs | 4,821 | **4,673** (-3%) |
+| registers | 3,459 | 3,498 (+39, the added stage) |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean: `sourceCommit` equals HEAD, `rtlCleanAtHead` true, 45 sources
+hashed, 977.3 s.
+
+**A real gain and a modest one.** The prediction recorded before the run was
+that removing the opcode from the write-port address path would help but not
+reach 100 MHz, because the long arithmetic units were untouched. That held.
+
+**But the endpoint moved and the CAUSE did not.** The new worst path is
+
+    i_op[7]~DUPLICATE -> walk_wdata_q[27]   26.946 ns  (was 29.250 ns)
+
+which is the same opcode-driven result selection, now landing in wave 4's own
+pipeline register instead of the memory write port. Wave 4 bought the 2.3 ns of
+routing and write-port setup it was aimed at, and nothing more, which is exactly
+what registering an endpoint can buy.
+
+**Attributed rather than guessed: 80 of the path's cells are inside `u_sin`,
+and ZERO are in any other unit** -- not `u_isqrt`, `u_rcp`, `u_curve`,
+`u_noise`, `u_ring`, `u_rot`, `u_alu`, `u_mul`, `u_norm` or `u_len`. It is a
+ripple-carry chain, `cin`/`cout` repeating the length of the cone.
+
+So **wave 5 (SIN) is next, not wave 2 (isqrt)**. The ruling's wave order puts
+isqrt first, and isqrt contributes nothing measurable to the current worst path.
+This is the second time the measured path has re-ranked the plan -- the first
+was wave 4 itself being promoted ahead of wave 2 at 33.98 MHz. Reading the order
+instead of the report would have spent a day on the wrong unit, twice.
+
 ### The sequencer's registered write-back, wave 4, 2026-08-25
 
 The walk's register-file write is delayed by one edge to get the opcode out of
