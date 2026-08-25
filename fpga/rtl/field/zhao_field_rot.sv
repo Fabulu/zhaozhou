@@ -126,6 +126,9 @@ module zhao_field_rot (
   // clocks: the sine request is issued while the cosine answer is landing,
   // because `trig_is_cos` is derived from the state and is already low here.
   localparam logic [3:0] R_SINW = 4'd12;
+  // WAVE 10: the table read is registered too, so the answer is TWO clocks
+  // behind its request and the walk needs a second capture state.
+  localparam logic [3:0] R_COSW = 4'd13;
 
   logic [3:0] state;
 
@@ -302,11 +305,22 @@ module zhao_field_rot (
         //
         // One extra clock for both reads, not two, because the two requests are
         // still issued on consecutive clocks.
+        //   R_COS   presents cos (trig_is_cos is high only here)
+        //   R_SIN   presents sin
+        //   R_COSW  captures the COS answer, two clocks after R_COS
+        //   R_SINW  captures the SIN answer
+        //
+        // Two extra clocks for both reads, not four: the requests are still
+        // issued on consecutive clocks, so only the pipeline fill is paid once.
         R_COS: begin
           state <= R_SIN;
         end
 
         R_SIN: begin
+          state <= R_COSW;
+        end
+
+        R_COSW: begin
           c_val <= trig_out;
           state <= R_SINW;
         end

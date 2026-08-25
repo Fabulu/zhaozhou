@@ -96,7 +96,9 @@ module zhao_field_sin (
     input  logic [15:0] angle_i,
     input  logic        is_cos_i,  // 0 = OP_SIN, 1 = OP_COS
 
-    // Valid one cycle after `angle_i` is presented.
+    // Valid TWO cycles after `angle_i` is presented (wave 8 registered the
+    // result, wave 10 registered the table read). LATENCY 2, INITIATION
+    // INTERVAL 1 -- a request may still be issued every clock.
     output logic signed [31:0] result_o
 );
 
@@ -127,14 +129,51 @@ module zhao_field_sin (
   logic [8:0]  i_next;
   assign i_next = (i == 9'd256) ? 9'd256 : (i + 9'd1);
 
-  zhao_field_sin_rom u_base (
-      .idx_i(i),
-      .val_o(base)
+  // WAVE 10, 2026-08-25: ONE SYNCHRONOUS DUAL-PORT TABLE, NOT TWO LUT MUXES.
+  //
+  // Measured at 54.80 MHz, this block owned all twelve worst paths as a single
+  // cone of 39 logic levels at 0.46 ns each -- real depth, not routing. In
+  // order it ran
+  //
+  //   Add1 -> i -> u_base -> Add3 -> Add8 -> Add4 -> Add6 -> s_quarter -> Add10
+  //
+  // so the angle decode (`Add1`, 22 cells) sits AHEAD of the table and the
+  // final negate (`Add10`, 20) at the end. The midpoint is the table output:
+  // about 30 cells before it and 46 after.
+  //
+  // This change was drafted after wave 6 and shelved TWICE -- at wave 6 SIN was
+  // off the critical path entirely, and at wave 8 the table was four cells of a
+  // cone whose midpoint lay elsewhere. Neither shelving was wrong. The
+  // measurement has now moved the midpoint onto it.
+  zhao_field_sin_rom u_tbl (
+      .clk    (clk),
+      .idx_a_i(i),
+      .idx_b_i(i_next),
+      .val_a_o(base),
+      .val_b_o(next_v)
   );
-  zhao_field_sin_rom u_next (
-      .idx_i(i_next),
-      .val_o(next_v)
-  );
+
+  // THE DECODE MUST TRAVEL WITH THE READ. `q` picks the sign and `t` weights
+  // the interpolation, and both belong to the angle whose table entry is
+  // arriving NOW -- not to whatever is being presented this cycle. Using the
+  // live ones against a delayed read misbehaves ONLY when consecutive requests
+  // differ, which is exactly what ROT does, so it would survive every
+  // steady-state test. That is what the back-to-back sections of
+  // field_sin_directed.cpp exist to catch.
+  //
+  // `i_next` and `v15` deliberately stay LIVE: they are the address path, not
+  // consumers of the read.
+  // Only the SIGN travels. `q[0]` selects the quarter-wave mirror, which is
+  // part of the ADDRESS path and must stay live -- registering it would delay
+  // the index by a cycle relative to the read it computes.
+  logic       q_sign_q;
+  logic [5:0] t_q;
+  logic [8:0] i_q;
+  always_ff @(posedge clk) begin
+    q_sign_q <= q[1];
+    t_q      <= t;
+    i_q      <= i;
+  end
 
   // `d` is SIGNED: the quarter wave rises to 1.0, so within it d >= 0, but the
   // subtraction is written signed anyway because nothing here should depend on
@@ -191,7 +230,7 @@ module zhao_field_sin (
   logic signed [31:0] s_quarter;
   always_comb begin
     d = $signed({1'b0, next_v}) - $signed({1'b0, base});
-    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< k) : 25'sd0;
+    for (int k = 0; k < 6; k++) term[k] = t_q[k] ? (25'(d) <<< k) : 25'sd0;
     pair0 = term[0] + term[1];
     pair1 = term[2] + term[3];
     pair2 = term[4] + term[5];
@@ -218,11 +257,11 @@ module zhao_field_sin (
     // Had it been caught, the exactness claim behind wave 6 would have been
     // wrong and the fold would need re-examining -- which is why the prediction
     // was written down first rather than the label applied afterwards.
-    s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base})) : 32'(interp);
+    s_quarter = (i_q == 9'd256) ? 32'($signed({1'b0, base})) : 32'(interp);
   end
 
   // The upper half of the circle is negative.
-  wire signed [31:0] result_c = q[1] ? -s_quarter : s_quarter;
+  wire signed [31:0] result_c = q_sign_q ? -s_quarter : s_quarter;
 
   // The pipeline boundary. No reset: the value is meaningless until a request
   // has been issued, and a reset here would be a second thing to keep in step

@@ -353,8 +353,8 @@ MUTS = [
      """    pair1 = term[2] + term[3];""",
      """    pair1 = term[2] + term[2];"""),
     ("M52 a sine term is weighted by the wrong power of two", F_SIN,
-     """    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< k) : 25'sd0;""",
-     """    for (int k = 0; k < 6; k++) term[k] = t[k] ? (25'(d) <<< (k + 1)) : 25'sd0;"""),
+     """    for (int k = 0; k < 6; k++) term[k] = t_q[k] ? (25'(d) <<< k) : 25'sd0;""",
+     """    for (int k = 0; k < 6; k++) term[k] = t_q[k] ? (25'(d) <<< (k + 1)) : 25'sd0;"""),
     ("M53 the sine rounding constant is lost in the tree", F_SIN,
      """    pair3 = 25'sd32 + (25'($signed({1'b0, base})) <<< 6);""",
      """    pair3 = 25'sd0 + (25'($signed({1'b0, base})) <<< 6);"""),
@@ -375,8 +375,8 @@ MUTS = [
      """    pair3 = 25'sd32 + (25'($signed({1'b0, base})) <<< 6);""",
      """    pair3 = 25'sd32;"""),
     ("M59 the endpoint arm returns the interpolation instead of base", F_SIN,
-     """    s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base})) : 32'(interp);""",
-     """    s_quarter = 32'(interp);"""),
+     """    s_quarter = (i_q == 9'd256) ? 32'($signed({1'b0, base})) : 32'(interp);""",
+     """    s_quarter = (i_q == 9'd256) ? 32'(interp) : 32'(interp);"""),
     ("M55 the sine tree SUBTRACTS one half instead of adding it", F_SIN,
      """    dt    = quad0 + quad1;""",
      """    dt    = quad0 - quad1;"""),
@@ -403,11 +403,11 @@ MUTS = [
     # The pipeline boundary is only safe if every consumer waits. These attack
     # the two that must: ROT captures a state too early, and the latency itself.
     ("M65 ROT captures the cosine answer into the sine register", F_ROT,
-     """        R_SIN: begin
+     """        R_COSW: begin
           c_val <= trig_out;
           state <= R_SINW;
         end""",
-     """        R_SIN: begin
+     """        R_COSW: begin
           s_val <= trig_out;
           state <= R_SINW;
         end"""),
@@ -419,6 +419,28 @@ MUTS = [
      """        R_SINW: begin
           s_val <= c_val;
           state <= R_CP;
+        end"""),
+    # M70 as first written ADDED a capture in R_SIN while leaving the correct
+    # one in R_COSW. Two writes to the same register in successive states: the
+    # later, correct one wins, so the mutant was EQUIVALENT BY CONSTRUCTION and
+    # survived. It was a malformed mutant, not a coverage hole -- moving the
+    # capture rather than duplicating it fails 1,158 of 3,495 checks.
+    ("M70 ROT captures the cosine one clock early, before the table answers", F_ROT,
+     """        R_SIN: begin
+          state <= R_COSW;
+        end
+
+        R_COSW: begin
+          c_val <= trig_out;
+          state <= R_SINW;
+        end""",
+     """        R_SIN: begin
+          c_val <= trig_out;
+          state <= R_COSW;
+        end
+
+        R_COSW: begin
+          state <= R_SINW;
         end"""),
     ("M67 the sine table answers two clocks late instead of one", F_SIN,
      """  always_ff @(posedge clk) result_o <= result_c;""",
@@ -440,6 +462,41 @@ MUTS = [
     ("M69 the registered shift amount is off by one", F_NRM,
      """  always_ff @(posedge clk) shift_amt_q <= shift_amt;""",
      """  always_ff @(posedge clk) shift_amt_q <= shift_amt + 8'd1;"""),
+    # ---- wave 10: the decode must travel with the registered table read ------
+    # This is the one way the change breaks silently. A decode left LIVE against
+    # a delayed read answers correctly whenever the input stands still, and is
+    # wrong only when consecutive requests differ -- which is exactly ROT.
+    ("M71 the travelling interpolation weight is the wrong value", F_SIN,
+     """    t_q      <= t;""",
+     """    t_q      <= t >> 1;"""),
+    ("M72 the travelling sign is inverted", F_SIN,
+     """    q_sign_q <= q[1];""",
+     """    q_sign_q <= ~q[1];"""),
+    ("M73 the travelling endpoint index is the NEXT index", F_SIN,
+     """    i_q      <= i;""",
+     """    i_q      <= i_next;"""),
+    ("M75 the decode travels ONE CLOCK BEHIND the table read", F_SIN,
+     """  always_ff @(posedge clk) begin
+    q_sign_q <= q[1];
+    t_q      <= t;
+    i_q      <= i;
+  end""",
+     """  logic       q_sign_d;
+  logic [5:0] t_d;
+  logic [8:0] i_d;
+  always_ff @(posedge clk) begin
+    q_sign_d <= q[1];
+    t_d      <= t;
+    i_d      <= i;
+    q_sign_q <= q_sign_d;
+    t_q      <= t_d;
+    i_q      <= i_d;
+  end"""),
+    ("M74 the two table ports are swapped", F_SIN,
+     """      .val_a_o(base),
+      .val_b_o(next_v)""",
+     """      .val_a_o(next_v),
+      .val_b_o(base)"""),
 ]
 
 

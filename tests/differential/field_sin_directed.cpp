@@ -46,6 +46,7 @@ int32_t run(Vzhao_field_sin& dut, uint16_t angle, bool is_cos) {
   dut.angle_i = angle;
   dut.is_cos_i = is_cos ? 1 : 0;
   zhao::tick(dut);
+  zhao::tick(dut);  // wave 10: the table read is registered too, so latency 2
   return static_cast<int32_t>(dut.result_o);
 }
 
@@ -55,14 +56,20 @@ int32_t run(Vzhao_field_sin& dut, uint16_t angle, bool is_cos) {
 // every other case in this file and still break ROT.
 void run_pair(Vzhao_field_sin& dut, uint16_t a0, bool cos0, uint16_t a1, bool cos1, int32_t* r0,
               int32_t* r1) {
+  // LATENCY 2, INITIATION INTERVAL 1. a1 is issued on the clock AFTER a0, so the
+  // two requests OVERLAP in the pipeline. That overlap is the whole point: it is
+  // the only arrangement that catches a decode which failed to travel with its
+  // own table read, because such a block answers correctly whenever the input
+  // stands still.
   dut.angle_i = a0;
   dut.is_cos_i = cos0 ? 1 : 0;
-  zhao::tick(dut);   // a0's answer lands on this edge
-  dut.angle_i = a1;  // a1 is issued while a0's answer is being read
-  dut.is_cos_i = cos1 ? 1 : 0;
-  *r0 = static_cast<int32_t>(dut.result_o);
   zhao::tick(dut);
-  *r1 = static_cast<int32_t>(dut.result_o);
+  dut.angle_i = a1;  // issued while a0 is still in flight
+  dut.is_cos_i = cos1 ? 1 : 0;
+  zhao::tick(dut);
+  *r0 = static_cast<int32_t>(dut.result_o);  // a0 lands here
+  zhao::tick(dut);
+  *r1 = static_cast<int32_t>(dut.result_o);  // a1 one clock behind it
 }
 
 int32_t oracle(uint16_t angle, bool is_cos) {
