@@ -404,6 +404,46 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---- concurrent lookup and commit ---------------------------------------
+  // THE ARBITRATION LAW, AND THE SWEEP IS WHY IT IS HERE. Every case above
+  // drives a lookup, waits for its reply, and only then drives a commit. So
+  // `cm_ready_o`'s `&& !lu_fire` term -- the thing that stops a lookup and a
+  // commit touching the entry table on the SAME clock -- was never exercised.
+  // Mutation M79 deletes that term and SURVIVED the whole suite.
+  //
+  // This raises both request lines together and asserts the block never accepts
+  // both on one edge. It is a structural law of the block, not a value the
+  // reference model can answer: `zref::field::ProgCache` is sequential by
+  // construction and has no notion of two requests in flight.
+  {
+    Dut d2(raw);
+    zf::ProgCache ref2;
+    (void)ref2;
+
+    raw.lu_valid_i = 1;
+    raw.lu_hash_i = 0xA5A50001u;
+    raw.lu_resp_ready_i = 1;
+    raw.cm_valid_i = 1;
+    raw.cm_hash_i = 0xA5A50002u;
+    raw.cm_ok_i = 1;
+    raw.cm_resp_ready_i = 1;
+    raw.eval();
+
+    uint64_t both = 0;
+    for (int i = 0; i < 32; ++i) {
+      const bool lu_fire = raw.lu_valid_i && raw.lu_ready_o;
+      const bool cm_fire = raw.cm_valid_i && raw.cm_ready_o;
+      if (lu_fire && cm_fire) ++both;
+      zhao::tick(raw);
+      raw.eval();
+    }
+    check(both == 0, "a lookup and a commit never fire on the same clock", 0, both);
+
+    raw.lu_valid_i = 0;
+    raw.cm_valid_i = 0;
+    raw.eval();
+  }
+
   raw.final();
   return zhao::report_and_exit("field_progcache_directed");
 }

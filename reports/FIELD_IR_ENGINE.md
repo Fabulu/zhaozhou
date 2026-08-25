@@ -45,6 +45,7 @@ hash did not move is **discarded, never scored**.
 | Rotation | `ROT2`, `ROT3` | `zhao_field_rot.sv` | 3,495 | 15,000 | **17 / 17** |
 | Band | `RING` | `zhao_field_ring.sv` | 572 | 24,000 | **17 / 18**, 1 equivalent |
 | Shared engine | all 31 opcodes | `zhao_field_exec_shared.sv`, `zhao_field_mul.sv` | 1,127 | 12,906 | see below |
+| Program cache | resident directory | `zhao_field_progcache.sv` | 124 | random lane | **3 / 4**, 1 gap CLOSED |
 | Earth sinks | `WRITE.MATERIAL`, `WRITE.NAV`, `WRITE.HAZARD` | `zhao_field_sinks.sv` | 21,345 | 4,000 streams | **11 / 11** |
 
 ## 2026-08-23: ten calculators became one engine
@@ -202,6 +203,51 @@ after every delta but floors at zero only ONCE, on the way out. So from cost
 carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
+
+### FIELD.PROGCACHE: a block the sweep never covered, 2026-08-25
+
+The audit of 2026-08-25 found this block had a 16.8 KB directed test, 223 lines
+of RTL, and **neither sweep coverage nor an `ENFORCED-BY` marker**. I first
+described it as "pointedly excluded" by `sweep_field_dsp.sh`; that was wrong and
+worth correcting, because it implied a decision somebody made. **It was simply
+never added.** Overlooked is a different and more fixable problem than excluded.
+
+Four mutants, attacking the four laws the block's own header states:
+
+| | defect | result |
+| --- | --- | --- |
+| M76 | the victim is the MOST recently used entry | caught |
+| M77 | eviction preferred over a free slot | caught |
+| M78 | a free slot claimed even when valid | caught |
+| M79 | a lookup and a commit fire on the same clock | **SURVIVED** |
+
+**M76 mattered most going in** -- the header warns that a realistic acquire rate
+would "silently invert the eviction order", a defect that costs hit rate without
+ever producing a wrong answer. It is caught, so that law is genuinely tested.
+
+### M79 was a real hole, and it is now closed
+
+`cm_ready_o`'s `&& !lu_fire` term stops a lookup and a commit touching the entry
+table on the same clock. **Every existing case drove a lookup, waited for its
+reply, and only then drove a commit**, so the term was never exercised and
+deleting it survived the entire suite.
+
+It is also a law the reference CANNOT answer: `zref::field::ProgCache` is
+sequential by construction and has no notion of two requests in flight. So this
+is a structural property of the block, asserted directly rather than
+differentially.
+
+**Closed and verified in both directions**, which is the only way a new test
+means anything:
+
+    pristine RTL     124 checks pass
+    M79 applied      FAILS, got 0x20 -- 32 simultaneous fires
+
+Two silent traps were hit while proving that second row, both worth recording:
+`Copy-Item -ErrorAction SilentlyContinue` reported success having found no
+source, so the restore had to go through git; and the rebuild afterwards printed
+`[1/1] Linking` with no verilate step, meaning the "failure" was still the
+mutant's model. Deleting the model directory forced real regeneration.
 
 ### Wave 10 measured: 54.80 -> 58.99 MHz, and the table became memory
 

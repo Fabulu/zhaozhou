@@ -49,6 +49,7 @@ F_NOISE = 'fpga/rtl/field/zhao_field_noise.sv'
 F_ROT = 'fpga/rtl/field/zhao_field_rot.sv'
 F_SINK = 'fpga/rtl/field/zhao_field_sinks.sv'
 F_SIN = 'fpga/rtl/field/zhao_field_sin.sv'
+F_PROG = 'fpga/rtl/field/zhao_field_progcache.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -497,6 +498,30 @@ MUTS = [
       .val_b_o(next_v)""",
      """      .val_a_o(next_v),
       .val_b_o(base)"""),
+    # ---- FIELD.PROGCACHE, which the sweep never covered ---------------------
+    # The audit of 2026-08-25 found this block has a directed test, RTL, and
+    # NEITHER sweep coverage NOR an ENFORCED-BY marker. It was not deliberately
+    # excluded; it was simply never added. These attack the four laws its header
+    # states: hit restamps LRU, miss inserts into a free slot else evicts the
+    # LEAST recently used, and the counters follow.
+    ("M76 the victim is the MOST recently used entry", F_PROG,
+     """      if (ent_valid[i] && ent_lru[i] <= best_lru) begin""",
+     """      if (ent_valid[i] && ent_lru[i] >= best_lru) begin"""),
+    ("M77 eviction is preferred over a free slot", F_PROG,
+     """  assign victim = free_any ? free_idx : lru_idx;""",
+     """  assign victim = lru_idx;"""),
+    ("M78 a free slot is claimed even when the entry is valid", F_PROG,
+     """      if (!ent_valid[i]) begin
+        free_any = 1'b1;
+        free_idx = IDXW'(i);
+      end""",
+     """      begin
+        free_any = 1'b1;
+        free_idx = IDXW'(i);
+      end"""),
+    ("M79 a lookup and a commit may fire on the same clock", F_PROG,
+     """  assign cm_ready_o = (!cm_resp_valid_o || cm_resp_ready_i) && !lu_fire;""",
+     """  assign cm_ready_o = (!cm_resp_valid_o || cm_resp_ready_i);"""),
 ]
 
 
