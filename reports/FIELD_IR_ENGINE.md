@@ -203,6 +203,53 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 7 measured: 45.42 -> 48.92 MHz, and SIN CAME BACK
+
+| | wave 6 (`9371875`) | wave 7 (`dc341b5`) |
+| --- | ---: | ---: |
+| Fmax | 45.42 MHz | **48.92 MHz** (+7.7%) |
+| ALMs | 4,665 | 4,713 (+48) |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean, 1294.6 s. Cumulative **8.59 -> 48.92 MHz, 5.7x.**
+
+**The path returned to SIN.** NORMALIZE is gone from it entirely:
+
+    i_op[0] -> walk_wdata_q[30]   19.713 ns
+    72 of 162 cells in u_sin, ZERO in u_norm
+
+So the pipelined-SIN work drafted and then SHELVED after wave 6 is the right
+change after all. Shelving it was still correct: at wave 6 it would have bought
+nothing, and the measurement said so.
+
+**What is left in SIN is no longer algebra.** Six serial adders -- `Add1` (22
+cells), `Add8` (14), `Add3` (10), `Add6` (8), `Add10` (6), `Add4` (4) -- and
+only FOUR cells of ROM. The tree is already depth 3 and `base` is already folded
+in; there is no further identity to exploit.
+
+**And the other 90 cells are not in SIN at all** -- they are the opcode mux and
+the result selection between SIN and `walk_wdata_q`. Even a perfect SIN would
+leave them.
+
+### Wave 8: stop hunting identities, spend a clock
+
+The owner ruling of 2026-08-25 makes latency currency: at 100 MHz even eight
+clocks per simple op is 2.2x the real throughput of six clocks at 33.86 MHz.
+
+Registering SIN's OUTPUT cuts this path at its midpoint:
+
+    i_op -> decode -> ROM -> tree -> round -> sign     (~72 cells)
+    REGISTER
+    sin result -> exec mux -> walk_wdata_q             (~90 cells)
+
+**It costs OP_SIN and OP_COS nothing.** `a0` latches at the `Q_RD1 -> Q_RD2`
+edge and `Q_GATH` is the ONLY entry to `Q_EXEC`, three states later, so up to
+two cycles of table latency are absorbed by depth that already exists.
+
+ROT pays: its walk captures `trig_out` on consecutive edges and needs one wait
+state per read. That is ~2 clocks on a 25-clock op, against `MAX_OP_CYCLES = 80`
+with NORMALIZE3 worst at 68 -- twelve clocks of declared headroom.
+
 ### Wave 6 measured: 43.89 -> 45.42 MHz, and SIN LEFT THE PATH ENTIRELY
 
 | | wave 5 (`c37462f`) | wave 6 (`9371875`) |
