@@ -60,7 +60,11 @@ module zhao_field_rot_tb (
   logic               sin_is_cos;
   logic signed [31:0] sin_result;
 
+  // WAVE 8: the table is registered, so the bench must clock it exactly as
+  // zhao_field_exec_shared does. Leaving it unconnected here would have
+  // verified a different block from the one that ships.
   zhao_field_sin u_sin (
+      .clk     (clk),
       .angle_i (sin_angle),
       .is_cos_i(sin_is_cos),
       .result_o(sin_result)

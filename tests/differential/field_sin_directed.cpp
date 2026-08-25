@@ -38,11 +38,31 @@ namespace {
 
 using zhao::check;
 
+// WAVE 8: the result is REGISTERED, so it lands one clock after the angle is
+// presented rather than in the same delta cycle. `eval()` alone would return
+// the answer to the PREVIOUS question -- the exact symptom the register file
+// produced in field_seq_directed.cpp when it became block memory.
 int32_t run(Vzhao_field_sin& dut, uint16_t angle, bool is_cos) {
   dut.angle_i = angle;
   dut.is_cos_i = is_cos ? 1 : 0;
-  dut.eval();
+  zhao::tick(dut);
   return static_cast<int32_t>(dut.result_o);
+}
+
+// BACK-TO-BACK ISSUE, which is the property the pipeline must not lose: ROT
+// reads cosine and sine on CONSECUTIVE clocks off one held angle. A block that
+// answered correctly only when its input stood still for two cycles would pass
+// every other case in this file and still break ROT.
+void run_pair(Vzhao_field_sin& dut, uint16_t a0, bool cos0, uint16_t a1, bool cos1, int32_t* r0,
+              int32_t* r1) {
+  dut.angle_i = a0;
+  dut.is_cos_i = cos0 ? 1 : 0;
+  zhao::tick(dut);   // a0's answer lands on this edge
+  dut.angle_i = a1;  // a1 is issued while a0's answer is being read
+  dut.is_cos_i = cos1 ? 1 : 0;
+  *r0 = static_cast<int32_t>(dut.result_o);
+  zhao::tick(dut);
+  *r1 = static_cast<int32_t>(dut.result_o);
 }
 
 int32_t oracle(uint16_t angle, bool is_cos) {
@@ -214,5 +234,38 @@ int main() {
   }
 
   dut.final();
+  // ---- back-to-back issue, the property ROT depends on ---------------------
+  // ROT presents cos on one clock and sin on the next off a HELD angle, then
+  // captures the two answers on consecutive clocks. Sweeping the pair across
+  // the circle catches a pipeline that only settles when its input is static,
+  // and catches a decode that failed to travel with its result.
+  {
+    uint64_t bad = 0;
+    int32_t first_a = -1;
+    for (uint32_t a = 0; a < 65536; a += 7) {
+      const uint16_t angle = static_cast<uint16_t>(a);
+      int32_t gc = 0, gs = 0;
+      run_pair(dut, angle, true, angle, false, &gc, &gs);
+      if (gc != oracle(angle, true) || gs != oracle(angle, false)) {
+        if (first_a < 0) first_a = static_cast<int32_t>(a);
+        ++bad;
+      }
+    }
+    check(bad == 0, "cos then sin on CONSECUTIVE clocks, swept across the circle", 0, bad);
+    if (bad) std::printf("  first divergent angle: 0x%04X\n", first_a);
+
+    // And the harder direction: two DIFFERENT angles back to back, so a stale
+    // decode cannot be masked by the two requests sharing one angle.
+    uint64_t bad2 = 0;
+    for (uint32_t a = 0; a < 65536; a += 101) {
+      const uint16_t x = static_cast<uint16_t>(a);
+      const uint16_t y = static_cast<uint16_t>(a * 31u + 12345u);
+      int32_t r0 = 0, r1 = 0;
+      run_pair(dut, x, false, y, false, &r0, &r1);
+      if (r0 != oracle(x, false) || r1 != oracle(y, false)) ++bad2;
+    }
+    check(bad2 == 0, "two DIFFERENT angles back to back, so a stale decode cannot hide", 0, bad2);
+  }
+
   return zhao::report_and_exit("field_sin_directed");
 }

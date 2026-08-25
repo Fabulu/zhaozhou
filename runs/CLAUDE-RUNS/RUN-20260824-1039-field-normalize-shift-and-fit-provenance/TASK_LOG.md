@@ -1271,6 +1271,69 @@ binary that predated the change. Caught only because the exe is hashed before
 and after. The underlying fault was real: `v[k-1]` needs a six-bit index, and
 the guard discussion above.
 
+### 07:20 — WAVE 8: stop hunting identities, spend a clock
+
+Wave 7's fit put the path back on SIN -- `i_op[0] -> walk_wdata_q[30]`,
+19.713 ns, **72 of 162 cells in `u_sin` and ZERO in `u_norm`**. What remained
+there was six serial adders and four cells of ROM: the tree is depth 3 and
+`base` is already folded in, so there is no identity left to exploit.
+
+**Ninety of those 162 cells are OUTSIDE SIN** -- the opcode mux and the result
+selection -- so no amount of work inside the block shortens them. Registering
+SIN's RESULT is the only cut that helps both halves: ~72 cells before, ~90
+after.
+
+**The draft was simplified, and that is the interesting part.** The shelved
+plan was a synchronous dual-port ROM plus a retimed decode. The measurement says
+the ROM is FOUR cells, so moving it behind a register shortens neither half --
+and keeping the whole cone combinational means `q`, `t` and `i` need no delay
+line to travel with a delayed table read. That retiming is the one way this
+change could silently break, and it would break ONLY when consecutive requests
+differ, which is exactly what ROT does. **Not creating the hazard beats testing
+for it.**
+
+Cost, measured rather than estimated: `NORMALIZE3` still worst at **68 clocks
+against MAX_OP_CYCLES = 80**; ROT passes 3,495 checks with one added wait state;
+the sequencer's 1,127 unchanged. OP_SIN and OP_COS pay NOTHING -- `a0` latches
+at the `Q_RD1 -> Q_RD2` edge and `Q_GATH` is the only entry to `Q_EXEC`, three
+states later.
+
+ROT needs one extra state, not two: the sine request issues while the cosine
+answer lands, because `trig_is_cos` is derived from the state and is already low
+in the capture state.
+
+### 07:20 — A KILLED SWEEP LEAVES A MUTANT IN THE WORKING TREE
+
+The first wave-8 sweep was killed mid-run. `zhao_field_mul.sv` came back
+**carrying M01** -- `if (issue_i)` deleted, so the multiplier's operand
+registers no longer hold between issues.
+
+Two things make this the worst shape it could have had:
+
+* it is in a file wave 8 never touched, so it does not stand out in a diff being
+  skimmed for one's own edits;
+* **M01 is a documented SURVIVOR.** No test in the suite catches it. A commit
+  would have passed the entire gate while carrying a deliberate defect.
+
+Found by diffing `git status` against what I had actually edited, rather than
+against what looked plausible. **Any interrupted sweep now gets that check plus
+a re-run**, so guard 6 rebuilds the pristine tree and clears mutant-derived
+models left in `build/`.
+
+### 07:20 — THREE MORE STALE-BINARY PASSES, ALL CAUGHT BY THE HASH
+
+`cmake --build` failed and tests reported green three separate times today:
+
+1. `test_field_normalize_directed` -- 419 checks, twice, against a binary that
+   predated the change (`v[k-1]` needed a six-bit index);
+2. all three field tests -- 20 / 3,495 / 1,127 checks -- when the ROT
+   TESTBENCH's own `zhao_field_sin` instance was left without `clk`;
+3. the same three, when a collapsed `
+` escape broke the new test mid-string.
+
+Each time `ninja: error: rebuilding 'build.ninja'` scrolled past and the
+previous executable ran. The before/after hash is the only reason none landed.
+
 ---
 
 ## Decisions Made

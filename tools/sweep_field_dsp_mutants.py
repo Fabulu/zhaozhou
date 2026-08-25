@@ -399,6 +399,34 @@ MUTS = [
     ("M64 the sign-extension guard returns zero instead of the sign", F_NRM,
      """             : (k >= 8'd65) ? v[63]""",
      """             : (k >= 8'd65) ? 1'b0"""),
+    # ---- wave 8: the sine result is registered, and ROT waits for it ---------
+    # The pipeline boundary is only safe if every consumer waits. These attack
+    # the two that must: ROT captures a state too early, and the latency itself.
+    ("M65 ROT captures the cosine answer into the sine register", F_ROT,
+     """        R_SIN: begin
+          c_val <= trig_out;
+          state <= R_SINW;
+        end""",
+     """        R_SIN: begin
+          s_val <= trig_out;
+          state <= R_SINW;
+        end"""),
+    ("M66 ROT skips the sine capture state, taking a stale answer", F_ROT,
+     """        R_SINW: begin
+          s_val <= trig_out;
+          state <= R_CP;
+        end""",
+     """        R_SINW: begin
+          s_val <= c_val;
+          state <= R_CP;
+        end"""),
+    ("M67 the sine table answers two clocks late instead of one", F_SIN,
+     """  always_ff @(posedge clk) result_o <= result_c;""",
+     """  logic signed [31:0] result_d2;
+  always_ff @(posedge clk) begin
+    result_d2 <= result_c;
+    result_o  <= result_d2;
+  end"""),
 ]
 
 

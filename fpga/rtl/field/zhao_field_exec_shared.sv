@@ -255,7 +255,13 @@ module zhao_field_exec_shared (
   logic               sin_is_cos;
   logic signed [31:0] sin_result;
 
+  // WAVE 8: the table answers one clock after the angle is presented. OP_SIN
+  // and OP_COS pay nothing for it -- `a0` latches at the Q_RD1 -> Q_RD2 edge
+  // and Q_GATH is the ONLY entry to Q_EXEC, three states later, so the request
+  // has been standing for three cycles by the time the result is read. ROT
+  // pays one wait state per table read; see zhao_field_rot.sv.
   zhao_field_sin u_sin (
+      .clk     (clk),
       .angle_i (sin_angle),
       .is_cos_i(sin_is_cos),
       .result_o(sin_result)

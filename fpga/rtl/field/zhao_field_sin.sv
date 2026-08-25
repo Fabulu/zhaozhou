@@ -60,11 +60,43 @@
 // The endpoint is the full `0x10000`, exactly 1.0, not one ulp below it — which
 // is why the table is seventeen bits wide and the result of `sin(0x4000)` is
 // exactly one.
+// ---------------------------------------------------------------------------
+// WAVE 8, 2026-08-25: ONE CYCLE OF LATENCY, BOUGHT DELIBERATELY.
+// ---------------------------------------------------------------------------
+// This block was combinational and its header said so: "the sequencer owns the
+// pipeline". That was right while there was algebra left to spend. There is
+// not: the tree is depth 3, `base` is folded into it, and what remains on the
+// measured path is SIX SERIAL ADDERS and four cells of ROM.
+//
+// Measured at 48.92 MHz, the sequencer's worst path was
+//
+//     i_op[0] -> walk_wdata_q[30]   19.713 ns
+//
+// with 72 of its 162 cells here and NINETY outside -- the opcode mux and the
+// result selection, which no amount of work inside this block can shorten.
+// Registering the RESULT cuts that path at its midpoint into ~72 cells and
+// ~90 cells, which is the only cut available that helps both halves.
+//
+// The owner ruling of 2026-08-25 makes this affordable: at 100 MHz even eight
+// clocks per simple op is 2.2x the real throughput of six clocks at 33.86 MHz.
+// The currency is real time, not cycles.
+//
+// EVERYTHING BEFORE THE REGISTER STAYS COMBINATIONAL, deliberately. Splitting
+// the ROM out as well was drafted and rejected: the ROM is four cells of the
+// path, so moving it behind a register shortens neither half -- and holding the
+// decode in one cycle means `q`, `t` and `i` need no delay line to travel with
+// a delayed table read. That retiming is the one way this change could silently
+// break, and it would break ONLY when consecutive requests differ, which is
+// exactly what ROT does. Not creating the hazard beats testing for it.
+//
+// LATENCY 1, INITIATION INTERVAL 1: a request may be issued every clock, which
+// is what lets ROT read cosine and sine on consecutive clocks.
 module zhao_field_sin (
-    // Combinational: the sequencer owns the pipeline.
+    input  logic        clk,
     input  logic [15:0] angle_i,
     input  logic        is_cos_i,  // 0 = OP_SIN, 1 = OP_COS
 
+    // Valid one cycle after `angle_i` is presented.
     output logic signed [31:0] result_o
 );
 
@@ -190,6 +222,11 @@ module zhao_field_sin (
   end
 
   // The upper half of the circle is negative.
-  assign result_o = q[1] ? -s_quarter : s_quarter;
+  wire signed [31:0] result_c = q[1] ? -s_quarter : s_quarter;
+
+  // The pipeline boundary. No reset: the value is meaningless until a request
+  // has been issued, and a reset here would be a second thing to keep in step
+  // with the sequencer's own idea of when a result is due.
+  always_ff @(posedge clk) result_o <= result_c;
 
 endmodule : zhao_field_sin

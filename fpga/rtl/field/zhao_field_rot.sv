@@ -121,6 +121,11 @@ module zhao_field_rot (
   localparam logic [3:0] R_CQ = 4'd9;   // c*q  -> q'
   localparam logic [3:0] R_CQW = 4'd10;
   localparam logic [3:0] R_OUT = 4'd11;
+  // WAVE 8: the sine table answers one clock after its angle is presented, so
+  // the walk needs one capture state per read. It does NOT need two extra
+  // clocks: the sine request is issued while the cosine answer is landing,
+  // because `trig_is_cos` is derived from the state and is already low here.
+  localparam logic [3:0] R_SINW = 4'd12;
 
   logic [3:0] state;
 
@@ -287,12 +292,26 @@ module zhao_field_rot (
         end
 
         // Law 3: one table, walked. Both values come from the SAME angle.
+        //
+        // WAVE 8 retimed this. The table now answers one clock late, so a state
+        // PRESENTS a request and the state after it CAPTURES the answer:
+        //
+        //   R_COS   presents cos (trig_is_cos is high only here)
+        //   R_SIN   presents sin, and captures the COS answer
+        //   R_SINW  captures the SIN answer
+        //
+        // One extra clock for both reads, not two, because the two requests are
+        // still issued on consecutive clocks.
         R_COS: begin
-          c_val <= trig_out;
           state <= R_SIN;
         end
 
         R_SIN: begin
+          c_val <= trig_out;
+          state <= R_SINW;
+        end
+
+        R_SINW: begin
           s_val <= trig_out;
           state <= R_CP;
         end
