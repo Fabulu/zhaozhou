@@ -5,6 +5,89 @@ at the top.*
 
 ---
 
+## 2026-08-25 (midday) — I found something that matters more than the clock
+
+### The short version
+
+We have been making the Field engine **faster**. It needed to be made
+**wider**, and nobody had checked.
+
+The terrain cost model in the spec assumes the engine finishes **one
+instruction every clock**. The engine we built finishes **one instruction
+every seven clocks**. That gap is 7x, and no amount of clock work closes it.
+
+I found this because bro's note told me to stop and cost the whole path
+end-to-end before picking the next optimisation. It was the right call. I would
+have spent the next several waves winning the clock battle and losing the war.
+
+### What it means concretely
+
+The spec prices the worst legal terrain patch at "about a third of a frame".
+Measured against the engine that exists, that same patch takes **2.34 frames**.
+
+Against the spec's own heavy-combat case of 128 live-field patches, one Field
+core is **6x to 13x short**, depending on how expensive the field programs are.
+
+**Reaching 100 MHz would not have fixed this.** We would have had a beautifully
+clocked engine that still could not deform terrain at 60 Hz -- which is the
+exact thing this console exists to do.
+
+### The good news
+
+The fix is not exotic. The engine walks seven internal steps per instruction
+and does them strictly one after another, with no overlap. Overlapping them --
+standard pipelining -- is worth about **7x**, which is more than everything the
+clock work has produced so far (6.9x across eight waves), and it multiplies with
+the clock rather than competing with it.
+
+### There is a second ceiling, and it is not in the Field engine
+
+The block that CONSUMES field results, TERRAIN.PATCH, takes `1 + n` clocks per
+vertex where `n` is how many overlapping effects touch that vertex. At n=1 that
+is 17% of a frame. **At n=16 it is 142% of a frame on its own** -- over budget
+before the Field engine does anything at all.
+
+So building more Field cores stops helping past about n=8 unless the consumer
+widens too. That was bro's warning and the numbers agree with it.
+
+### Two numbers I need from you, and I did not guess them
+
+1. **How many terrain patches actually change in a frame during heavy combat?**
+   The spec's 128 is a correctness limit on what the hardware must not choke
+   on, not a claim about what a real fight looks like. It says so itself.
+2. **How many overlapping effects hit one vertex?** This drives both ceilings
+   above.
+
+I have written the budget so both are variables and the answer is a table
+rather than a single number. Picking values that made the budget close would
+have been inventing your game for you.
+
+### Where the clock work actually got to
+
+**58.99 MHz**, up from 8.59 when it was first measured properly -- 6.9x. The
+last wave also moved the sine table into on-chip memory, which gave back 198
+logic cells as well as time.
+
+But I also ran a proper census of the 200 worst timing paths instead of only
+the worst one, and it says the remaining work is harder than it looked: there
+is no single slow thing left. **All 200 paths sit in a narrow band between 12
+and 17 nanoseconds.** Cutting any one of them moves the total by about a
+nanosecond because the next one is right behind it. That is why the last few
+waves gained 2%, 9.8%, 7.6% instead of the 19% earlier ones did.
+
+The census did find one lever: everything routes through the single shared
+multiplier -- 160 of the 200 paths touch it -- so one well-placed pair of
+registers there would cut five different families at once. That is the next
+clock wave, if we do one.
+
+### My recommendation
+
+**Do the throughput work before any more clock work.** The clock is at 59 and
+needs 1.7x more. The throughput deficit is 7x. They multiply, and doing them in
+the wrong order means discovering the 7x after paying for the 1.7x.
+
+---
+
 ## 2026-08-25 (early hours) — the Field engine got faster and grew its last Earth piece
 
 ### The number
