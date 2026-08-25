@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "8292d969e55d60671c9b56ea32dc959ddfd7b3ce",
-    "newestRunClean":  false,
+    "newestRunCommit":  "924a48ab93e9e0910ed8568176e401f3f9f641fe",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -449,14 +449,14 @@
                    {
                        "module":  "zhao_probe_compose_pipe_s4",
                        "status":  "ok",
-                       "sourceCommit":  "8292d969e55d60671c9b56ea32dc959ddfd7b3ce",
-                       "rtlCleanAtHead":  false,
+                       "sourceCommit":  "924a48ab93e9e0910ed8568176e401f3f9f641fe",
+                       "rtlCleanAtHead":  true,
                        "topParameters":  "STAGES=4",
                        "variantOf":  "zhao_probe_compose_pipe",
-                       "seconds":  1133.2,
+                       "seconds":  1112.1,
                        "sourcesHashed":  29,
-                       "alms":  299,
-                       "registers":  487,
+                       "alms":  298,
+                       "registers":  299,
                        "blockMemoryBits":  0,
                        "ramBlocks":  0,
                        "dspBlocks":  0,
@@ -464,7 +464,7 @@
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  90.32,
+                       "fmaxMhz":  89.13,
                        "fmaxClock":  "clk"
                    },
                    {

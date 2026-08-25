@@ -100,6 +100,40 @@ any reserve beyond 20% and before TERRAIN.PATCH's intake is counted.
 
 ---
 
+## CORRECTION 2026-08-25: the TERRAIN.PATCH ceiling below is WRONG by 16x
+
+**The 142% headline in this section is my error and it should not drive any
+architecture decision.** It is corrected here rather than deleted so the
+reasoning stays visible.
+
+I read the spec's `≤128 live-field patches` as *128 unique patches each carrying
+16 fields*. It is not. The derivation reads:
+
+> 8 Erupts × ≤16 patches = ≤128 live-field patches
+
+That is 8 Erupts each covering up to 16 patches — **128 patch-field
+ASSOCIATIONS**. `MAX_PATCH_FIELDS = 16` is a different quantity: the per-patch
+lane bound (8 Erupts + 8 Quakes). Multiplying them gives 2,048 associations,
+**sixteen times the frozen donor case**.
+
+The cost is `1,089 × (unique patches + associations)`:
+
+| frozen case | clocks | % of frame |
+| --- | ---: | ---: |
+| max overlap — 8 unique × 16 fields | 148,104 | **8.9%** |
+| 16 unique × 8 fields | 156,816 | 9.4% |
+| no overlap — 128 unique × 1 field | 278,784 | **16.7%** |
+| *my published figure (2,048 assoc)* | *2,369,664* | *142.2%* |
+
+**So TERRAIN.PATCH is cheap headroom under the frozen case, not a second fatal
+ceiling.** The ordered-pipeline probe is still worth having — it is ~61 ALMs per
+stage and buys real margin — but it is not an emergency, and **Field remains the
+priority**. Treating it as co-equal would have spent effort in the wrong place
+on the strength of an arithmetic slip of mine.
+
+The section below is left as written, with its numbers now known to describe a
+scenario 16× beyond anything the donor derivation produces.
+
 ## TERRAIN.PATCH intake, which is a separate ceiling
 
 `1 + n` clocks per vertex, 1,089 vertices per patch, 128 patches:

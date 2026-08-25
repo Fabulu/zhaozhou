@@ -1,5 +1,5 @@
 TimeQuest Timing Analyzer report for blockfit
-Tue Aug 25 16:47:24 2026
+Tue Aug 25 17:53:58 2026
 Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 
 
@@ -99,14 +99,14 @@ agreement for further details.
 ; Number detected on machine ; 8           ;
 ; Maximum allowed            ; 4           ;
 ;                            ;             ;
-; Average used               ; 1.69        ;
+; Average used               ; 1.51        ;
 ; Maximum used               ; 4           ;
 ;                            ;             ;
 ; Usage by Processor         ; % Time Used ;
 ;     Processor 1            ; 100.0%      ;
-;     Processor 2            ;  23.3%      ;
-;     Processor 3            ;  23.1%      ;
-;     Processor 4            ;  23.0%      ;
+;     Processor 2            ;  17.6%      ;
+;     Processor 3            ;  16.8%      ;
+;     Processor 4            ;  16.6%      ;
 +----------------------------+-------------+
 
 
@@ -115,7 +115,7 @@ agreement for further details.
 +---------------+--------+--------------------------+
 ; SDC File Path ; Status ; Read at                  ;
 +---------------+--------+--------------------------+
-; blockfit.sdc  ; OK     ; Tue Aug 25 16:47:12 2026 ;
+; blockfit.sdc  ; OK     ; Tue Aug 25 17:53:29 2026 ;
 +---------------+--------+--------------------------+
 
 
@@ -133,7 +133,7 @@ agreement for further details.
 +-----------+-----------------+------------+------+
 ; Fmax      ; Restricted Fmax ; Clock Name ; Note ;
 +-----------+-----------------+------------+------+
-; 90.32 MHz ; 90.32 MHz       ; clk        ;      ;
+; 89.13 MHz ; 89.13 MHz       ; clk        ;      ;
 +-----------+-----------------+------------+------+
 This panel reports FMAX for every clock in the design, regardless of the user-specified clock periods.  FMAX is only computed for paths where the source and destination registers or ports are driven by the same clock.  Paths of different clocks, including generated clocks, are ignored.  For paths between a clock and its inversion, FMAX is computed as if the rising and falling edges are scaled along with FMAX, such that the duty cycle (in terms of a percentage) is maintained. Altera recommends that you always use clock constraints and other slack reports for sign-off analysis.
 
@@ -149,7 +149,7 @@ HTML report is unavailable in plain text report export.
 +-------+--------+---------------------+
 ; Clock ; Slack  ; End Point TNS       ;
 +-------+--------+---------------------+
-; clk   ; -1.072 ; -29.946             ;
+; clk   ; -1.220 ; -31.209             ;
 +-------+--------+---------------------+
 
 
@@ -158,7 +158,7 @@ HTML report is unavailable in plain text report export.
 +-------+--------+--------------------+
 ; Clock ; Slack  ; End Point TNS      ;
 +-------+--------+--------------------+
-; clk   ; -5.679 ; -394.234           ;
+; clk   ; -5.683 ; -509.956           ;
 +-------+--------+--------------------+
 
 
@@ -167,7 +167,7 @@ HTML report is unavailable in plain text report export.
 +-------+-------+-------------------------+
 ; Clock ; Slack ; End Point TNS           ;
 +-------+-------+-------------------------+
-; clk   ; 1.712 ; 0.000                   ;
+; clk   ; 1.564 ; 0.000                   ;
 +-------+-------+-------------------------+
 
 
@@ -176,7 +176,7 @@ HTML report is unavailable in plain text report export.
 +-------+-------+------------------------+
 ; Clock ; Slack ; End Point TNS          ;
 +-------+-------+------------------------+
-; clk   ; 1.153 ; 0.000                  ;
+; clk   ; 1.213 ; 0.000                  ;
 +-------+-------+------------------------+
 
 
@@ -185,7 +185,7 @@ HTML report is unavailable in plain text report export.
 +-------+-------+------------------------------------+
 ; Clock ; Slack ; End Point TNS                      ;
 +-------+-------+------------------------------------+
-; clk   ; 4.259 ; 0.000                              ;
+; clk   ; 4.265 ; 0.000                              ;
 +-------+-------+------------------------------------+
 
 
@@ -195,13 +195,13 @@ HTML report is unavailable in plain text report export.
 No synchronizer chains to report.
 
 
-+------------------------------------------------+
-; Slow 1100mV -40C Model Fmax Summary            ;
-+----------+-----------------+------------+------+
-; Fmax     ; Restricted Fmax ; Clock Name ; Note ;
-+----------+-----------------+------------+------+
-; 89.5 MHz ; 89.5 MHz        ; clk        ;      ;
-+----------+-----------------+------------+------+
++-------------------------------------------------+
+; Slow 1100mV -40C Model Fmax Summary             ;
++-----------+-----------------+------------+------+
+; Fmax      ; Restricted Fmax ; Clock Name ; Note ;
++-----------+-----------------+------------+------+
+; 89.17 MHz ; 89.17 MHz       ; clk        ;      ;
++-----------+-----------------+------------+------+
 This panel reports FMAX for every clock in the design, regardless of the user-specified clock periods.  FMAX is only computed for paths where the source and destination registers or ports are driven by the same clock.  Paths of different clocks, including generated clocks, are ignored.  For paths between a clock and its inversion, FMAX is computed as if the rising and falling edges are scaled along with FMAX, such that the duty cycle (in terms of a percentage) is maintained. Altera recommends that you always use clock constraints and other slack reports for sign-off analysis.
 
 
@@ -210,7 +210,7 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-------+--------+---------------------+
 ; Clock ; Slack  ; End Point TNS       ;
 +-------+--------+---------------------+
-; clk   ; -1.173 ; -33.411             ;
+; clk   ; -1.214 ; -32.200             ;
 +-------+--------+---------------------+
 
 
@@ -219,7 +219,7 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-------+--------+--------------------+
 ; Clock ; Slack  ; End Point TNS      ;
 +-------+--------+--------------------+
-; clk   ; -5.685 ; -396.313           ;
+; clk   ; -5.710 ; -527.580           ;
 +-------+--------+--------------------+
 
 
@@ -228,7 +228,7 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-------+-------+-------------------------+
 ; Clock ; Slack ; End Point TNS           ;
 +-------+-------+-------------------------+
-; clk   ; 2.175 ; 0.000                   ;
+; clk   ; 2.007 ; 0.000                   ;
 +-------+-------+-------------------------+
 
 
@@ -237,7 +237,7 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-------+-------+------------------------+
 ; Clock ; Slack ; End Point TNS          ;
 +-------+-------+------------------------+
-; clk   ; 0.982 ; 0.000                  ;
+; clk   ; 1.069 ; 0.000                  ;
 +-------+-------+------------------------+
 
 
@@ -246,7 +246,7 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-------+-------+------------------------------------+
 ; Clock ; Slack ; End Point TNS                      ;
 +-------+-------+------------------------------------+
-; clk   ; 4.178 ; 0.000                              ;
+; clk   ; 4.175 ; 0.000                              ;
 +-------+-------+------------------------------------+
 
 
@@ -261,7 +261,7 @@ No synchronizer chains to report.
 +-------+-------+----------------------+
 ; Clock ; Slack ; End Point TNS        ;
 +-------+-------+----------------------+
-; clk   ; 3.571 ; 0.000                ;
+; clk   ; 3.622 ; 0.000                ;
 +-------+-------+----------------------+
 
 
@@ -270,7 +270,7 @@ No synchronizer chains to report.
 +-------+--------+--------------------+
 ; Clock ; Slack  ; End Point TNS      ;
 +-------+--------+--------------------+
-; clk   ; -2.657 ; -176.148           ;
+; clk   ; -2.667 ; -216.999           ;
 +-------+--------+--------------------+
 
 
@@ -279,7 +279,7 @@ No synchronizer chains to report.
 +-------+-------+-------------------------+
 ; Clock ; Slack ; End Point TNS           ;
 +-------+-------+-------------------------+
-; clk   ; 4.828 ; 0.000                   ;
+; clk   ; 4.904 ; 0.000                   ;
 +-------+-------+-------------------------+
 
 
@@ -288,7 +288,7 @@ No synchronizer chains to report.
 +-------+-------+------------------------+
 ; Clock ; Slack ; End Point TNS          ;
 +-------+-------+------------------------+
-; clk   ; 1.319 ; 0.000                  ;
+; clk   ; 1.244 ; 0.000                  ;
 +-------+-------+------------------------+
 
 
@@ -297,7 +297,7 @@ No synchronizer chains to report.
 +-------+-------+------------------------------------+
 ; Clock ; Slack ; End Point TNS                      ;
 +-------+-------+------------------------------------+
-; clk   ; 4.603 ; 0.000                              ;
+; clk   ; 4.606 ; 0.000                              ;
 +-------+-------+------------------------------------+
 
 
@@ -312,7 +312,7 @@ No synchronizer chains to report.
 +-------+-------+----------------------+
 ; Clock ; Slack ; End Point TNS        ;
 +-------+-------+----------------------+
-; clk   ; 5.117 ; 0.000                ;
+; clk   ; 5.053 ; 0.000                ;
 +-------+-------+----------------------+
 
 
@@ -321,7 +321,7 @@ No synchronizer chains to report.
 +-------+--------+--------------------+
 ; Clock ; Slack  ; End Point TNS      ;
 +-------+--------+--------------------+
-; clk   ; -2.533 ; -173.125           ;
+; clk   ; -2.543 ; -226.332           ;
 +-------+--------+--------------------+
 
 
@@ -330,7 +330,7 @@ No synchronizer chains to report.
 +-------+-------+-------------------------+
 ; Clock ; Slack ; End Point TNS           ;
 +-------+-------+-------------------------+
-; clk   ; 5.737 ; 0.000                   ;
+; clk   ; 5.760 ; 0.000                   ;
 +-------+-------+-------------------------+
 
 
@@ -339,7 +339,7 @@ No synchronizer chains to report.
 +-------+-------+------------------------+
 ; Clock ; Slack ; End Point TNS          ;
 +-------+-------+------------------------+
-; clk   ; 0.951 ; 0.000                  ;
+; clk   ; 0.877 ; 0.000                  ;
 +-------+-------+------------------------+
 
 
@@ -348,7 +348,7 @@ No synchronizer chains to report.
 +-------+-------+------------------------------------+
 ; Clock ; Slack ; End Point TNS                      ;
 +-------+-------+------------------------------------+
-; clk   ; 4.590 ; 0.000                              ;
+; clk   ; 4.592 ; 0.000                              ;
 +-------+-------+------------------------------------+
 
 
@@ -363,10 +363,10 @@ No synchronizer chains to report.
 +------------------+---------+----------+----------+---------+---------------------+
 ; Clock            ; Setup   ; Hold     ; Recovery ; Removal ; Minimum Pulse Width ;
 +------------------+---------+----------+----------+---------+---------------------+
-; Worst-case Slack ; -1.173  ; -5.685   ; 1.712    ; 0.951   ; 4.178               ;
-;  clk             ; -1.173  ; -5.685   ; 1.712    ; 0.951   ; 4.178               ;
-; Design-wide TNS  ; -33.411 ; -396.313 ; 0.0      ; 0.0     ; 0.0                 ;
-;  clk             ; -33.411 ; -396.313 ; 0.000    ; 0.000   ; 0.000               ;
+; Worst-case Slack ; -1.220  ; -5.710   ; 1.564    ; 0.877   ; 4.175               ;
+;  clk             ; -1.220  ; -5.710   ; 1.564    ; 0.877   ; 4.175               ;
+; Design-wide TNS  ; -32.2   ; -527.58  ; 0.0      ; 0.0     ; 0.0                 ;
+;  clk             ; -32.200 ; -527.580 ; 0.000    ; 0.000   ; 0.000               ;
 +------------------+---------+----------+----------+---------+---------------------+
 
 
@@ -417,7 +417,7 @@ No synchronizer chains to report.
 +------------+----------+----------+----------+----------+----------+
 ; From Clock ; To Clock ; RR Paths ; FR Paths ; RF Paths ; FF Paths ;
 +------------+----------+----------+----------+----------+----------+
-; clk        ; clk      ; 29079    ; 0        ; 0        ; 0        ;
+; clk        ; clk      ; 29905    ; 0        ; 0        ; 0        ;
 +------------+----------+----------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -427,7 +427,7 @@ Entries labeled "false path" only account for clock-to-clock false paths and not
 +------------+----------+----------+----------+----------+----------+
 ; From Clock ; To Clock ; RR Paths ; FR Paths ; RF Paths ; FF Paths ;
 +------------+----------+----------+----------+----------+----------+
-; clk        ; clk      ; 29079    ; 0        ; 0        ; 0        ;
+; clk        ; clk      ; 29905    ; 0        ; 0        ; 0        ;
 +------------+----------+----------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -437,7 +437,7 @@ Entries labeled "false path" only account for clock-to-clock false paths and not
 +------------+----------+----------+----------+----------+----------+
 ; From Clock ; To Clock ; RR Paths ; FR Paths ; RF Paths ; FF Paths ;
 +------------+----------+----------+----------+----------+----------+
-; clk        ; clk      ; 487      ; 0        ; 0        ; 0        ;
+; clk        ; clk      ; 299      ; 0        ; 0        ; 0        ;
 +------------+----------+----------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -447,7 +447,7 @@ Entries labeled "false path" only account for clock-to-clock false paths and not
 +------------+----------+----------+----------+----------+----------+
 ; From Clock ; To Clock ; RR Paths ; FR Paths ; RF Paths ; FF Paths ;
 +------------+----------+----------+----------+----------+----------+
-; clk        ; clk      ; 487      ; 0        ; 0        ; 0        ;
+; clk        ; clk      ; 299      ; 0        ; 0        ; 0        ;
 +------------+----------+----------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -507,142 +507,142 @@ Info: Running Quartus Prime TimeQuest Timing Analyzer
     Info: devices manufactured by Intel and sold by Intel or its 
     Info: authorized distributors.  Please refer to the applicable 
     Info: agreement for further details.
-    Info: Processing started: Tue Aug 25 16:47:06 2026
+    Info: Processing started: Tue Aug 25 17:53:19 2026
 Info: Command: quartus_sta blockfit
 Info: qsta_default_script.tcl version: #1
 Info (20032): Parallel compilation is enabled and will use up to 4 processors
 Info (21076): High junction temperature operating condition is not set. Assuming a default value of '100'.
 Info (21076): Low junction temperature operating condition is not set. Assuming a default value of '-40'.
 Info (332104): Reading SDC File: 'blockfit.sdc'
-Warning (332174): Ignored filter at blockfit.sdc(5): clk_gpu could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 5
-Warning (332049): Ignored create_clock at blockfit.sdc(5): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 5
-    Info (332050): create_clock -name clk_gpu    -period 10.000 [get_ports {clk_gpu}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 5
-Warning (332174): Ignored filter at blockfit.sdc(6): gpu_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 6
-Warning (332049): Ignored create_clock at blockfit.sdc(6): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 6
-    Info (332050): create_clock -name gpu_clk    -period 10.000 [get_ports {gpu_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 6
-Warning (332174): Ignored filter at blockfit.sdc(7): vid_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 7
-Warning (332049): Ignored create_clock at blockfit.sdc(7): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 7
-    Info (332050): create_clock -name vid_clk    -period 20.000 [get_ports {vid_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 7
-Warning (332174): Ignored filter at blockfit.sdc(8): clk_audio could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 8
-Warning (332049): Ignored create_clock at blockfit.sdc(8): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 8
-    Info (332050): create_clock -name clk_audio  -period 40.000 [get_ports {clk_audio}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 8
-Warning (332174): Ignored filter at blockfit.sdc(9): audio_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 9
-Warning (332049): Ignored create_clock at blockfit.sdc(9): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 9
-    Info (332050): create_clock -name audio_clk  -period 40.000 [get_ports {audio_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 9
-Warning (332174): Ignored filter at blockfit.sdc(10): wr_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 10
-Warning (332049): Ignored create_clock at blockfit.sdc(10): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 10
-    Info (332050): create_clock -name wr_clk     -period 10.000 [get_ports {wr_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 10
-Warning (332174): Ignored filter at blockfit.sdc(11): rd_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 11
-Warning (332049): Ignored create_clock at blockfit.sdc(11): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 11
-    Info (332050): create_clock -name rd_clk     -period 10.000 [get_ports {rd_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-24948-639232649188848639/zhao_probe_compose_pipe/blockfit.sdc Line: 11
+Warning (332174): Ignored filter at blockfit.sdc(5): clk_gpu could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 5
+Warning (332049): Ignored create_clock at blockfit.sdc(5): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 5
+    Info (332050): create_clock -name clk_gpu    -period 10.000 [get_ports {clk_gpu}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 5
+Warning (332174): Ignored filter at blockfit.sdc(6): gpu_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 6
+Warning (332049): Ignored create_clock at blockfit.sdc(6): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 6
+    Info (332050): create_clock -name gpu_clk    -period 10.000 [get_ports {gpu_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 6
+Warning (332174): Ignored filter at blockfit.sdc(7): vid_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 7
+Warning (332049): Ignored create_clock at blockfit.sdc(7): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 7
+    Info (332050): create_clock -name vid_clk    -period 20.000 [get_ports {vid_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 7
+Warning (332174): Ignored filter at blockfit.sdc(8): clk_audio could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 8
+Warning (332049): Ignored create_clock at blockfit.sdc(8): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 8
+    Info (332050): create_clock -name clk_audio  -period 40.000 [get_ports {clk_audio}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 8
+Warning (332174): Ignored filter at blockfit.sdc(9): audio_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 9
+Warning (332049): Ignored create_clock at blockfit.sdc(9): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 9
+    Info (332050): create_clock -name audio_clk  -period 40.000 [get_ports {audio_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 9
+Warning (332174): Ignored filter at blockfit.sdc(10): wr_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 10
+Warning (332049): Ignored create_clock at blockfit.sdc(10): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 10
+    Info (332050): create_clock -name wr_clk     -period 10.000 [get_ports {wr_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 10
+Warning (332174): Ignored filter at blockfit.sdc(11): rd_clk could not be matched with a port File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 11
+Warning (332049): Ignored create_clock at blockfit.sdc(11): Argument <targets> is an empty collection File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 11
+    Info (332050): create_clock -name rd_clk     -period 10.000 [get_ports {rd_clk}] File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-1064-639232689414634981/zhao_probe_compose_pipe/blockfit.sdc Line: 11
 Info (332151): Clock uncertainty is not calculated until you update the timing netlist.
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
 Info: Found TIMEQUEST_REPORT_SCRIPT_INCLUDE_DEFAULT_ANALYSIS = ON
 Info: Analyzing Slow 1100mV 100C Model
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case setup slack is -1.072
+Info (332146): Worst-case setup slack is -1.220
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -1.072             -29.946 clk 
-Info (332146): Worst-case hold slack is -5.679
+    Info (332119):    -1.220             -31.209 clk 
+Info (332146): Worst-case hold slack is -5.683
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -5.679            -394.234 clk 
-Info (332146): Worst-case recovery slack is 1.712
+    Info (332119):    -5.683            -509.956 clk 
+Info (332146): Worst-case recovery slack is 1.564
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     1.712               0.000 clk 
-Info (332146): Worst-case removal slack is 1.153
+    Info (332119):     1.564               0.000 clk 
+Info (332146): Worst-case removal slack is 1.213
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     1.153               0.000 clk 
-Info (332146): Worst-case minimum pulse width slack is 4.259
+    Info (332119):     1.213               0.000 clk 
+Info (332146): Worst-case minimum pulse width slack is 4.265
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.259               0.000 clk 
+    Info (332119):     4.265               0.000 clk 
 Info: Analyzing Slow 1100mV -40C Model
 Info (334003): Started post-fitting delay annotation
 Info (334004): Delay annotation completed successfully
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case setup slack is -1.173
+Info (332146): Worst-case setup slack is -1.214
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -1.173             -33.411 clk 
-Info (332146): Worst-case hold slack is -5.685
+    Info (332119):    -1.214             -32.200 clk 
+Info (332146): Worst-case hold slack is -5.710
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -5.685            -396.313 clk 
-Info (332146): Worst-case recovery slack is 2.175
+    Info (332119):    -5.710            -527.580 clk 
+Info (332146): Worst-case recovery slack is 2.007
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     2.175               0.000 clk 
-Info (332146): Worst-case removal slack is 0.982
+    Info (332119):     2.007               0.000 clk 
+Info (332146): Worst-case removal slack is 1.069
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.982               0.000 clk 
-Info (332146): Worst-case minimum pulse width slack is 4.178
+    Info (332119):     1.069               0.000 clk 
+Info (332146): Worst-case minimum pulse width slack is 4.175
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.178               0.000 clk 
+    Info (332119):     4.175               0.000 clk 
 Info: Analyzing Fast 1100mV 100C Model
 Info (334003): Started post-fitting delay annotation
 Info (334004): Delay annotation completed successfully
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
-Info (332146): Worst-case setup slack is 3.571
+Info (332146): Worst-case setup slack is 3.622
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     3.571               0.000 clk 
+    Info (332119):     3.622               0.000 clk 
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case hold slack is -2.657
+Info (332146): Worst-case hold slack is -2.667
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -2.657            -176.148 clk 
-Info (332146): Worst-case recovery slack is 4.828
+    Info (332119):    -2.667            -216.999 clk 
+Info (332146): Worst-case recovery slack is 4.904
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.828               0.000 clk 
-Info (332146): Worst-case removal slack is 1.319
+    Info (332119):     4.904               0.000 clk 
+Info (332146): Worst-case removal slack is 1.244
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     1.319               0.000 clk 
-Info (332146): Worst-case minimum pulse width slack is 4.603
+    Info (332119):     1.244               0.000 clk 
+Info (332146): Worst-case minimum pulse width slack is 4.606
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.603               0.000 clk 
+    Info (332119):     4.606               0.000 clk 
 Info: Analyzing Fast 1100mV -40C Model
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
-Info (332146): Worst-case setup slack is 5.117
+Info (332146): Worst-case setup slack is 5.053
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     5.117               0.000 clk 
+    Info (332119):     5.053               0.000 clk 
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case hold slack is -2.533
+Info (332146): Worst-case hold slack is -2.543
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -2.533            -173.125 clk 
-Info (332146): Worst-case recovery slack is 5.737
+    Info (332119):    -2.543            -226.332 clk 
+Info (332146): Worst-case recovery slack is 5.760
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     5.737               0.000 clk 
-Info (332146): Worst-case removal slack is 0.951
+    Info (332119):     5.760               0.000 clk 
+Info (332146): Worst-case removal slack is 0.877
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.951               0.000 clk 
-Info (332146): Worst-case minimum pulse width slack is 4.590
+    Info (332119):     0.877               0.000 clk 
+Info (332146): Worst-case minimum pulse width slack is 4.592
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.590               0.000 clk 
+    Info (332119):     4.592               0.000 clk 
 Info (332101): Design is fully constrained for setup requirements
 Info (332101): Design is fully constrained for hold requirements
 Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 18 warnings
-    Info: Peak virtual memory: 5179 megabytes
-    Info: Processing ended: Tue Aug 25 16:47:24 2026
-    Info: Elapsed time: 00:00:18
-    Info: Total CPU time (on all processors): 00:00:24
+    Info: Peak virtual memory: 5173 megabytes
+    Info: Processing ended: Tue Aug 25 17:53:58 2026
+    Info: Elapsed time: 00:00:39
+    Info: Total CPU time (on all processors): 00:00:30
 
 
