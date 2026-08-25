@@ -203,6 +203,60 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 9 measured: 49.90 -> 54.80 MHz, for nothing
+
+| | wave 8 (`ed3c274`) | wave 9 (`9fcd7b9`) |
+| --- | ---: | ---: |
+| Fmax | 49.90 MHz | **54.80 MHz** (+9.8%) |
+| ALMs | 4,725 | **4,692** (-33) |
+| DSP / M10K | 3 / 4 | 3 / 4, unchanged |
+
+Provenance clean, 1224.4 s. Cumulative **8.59 -> 54.80 MHz, 6.4x**, and this one
+cost **no clocks and no area** -- `NORMALIZE3` is still 68 of 80.
+
+### Reading the RUNNER-UP, which is what wave 8 taught
+
+All twelve worst paths are now ONE cone:
+
+    i_op[2] -> u_exec|u_sin|result_o[N]   18.25 ns
+
+so there is no second cone hiding behind this one -- unlike wave 8, where SIN
+and NORMALIZE were the same length and cutting one bought 2%.
+
+**And a reading error of mine is corrected here.** I reported "90 of 162 cells
+are OUTSIDE SIN" for wave 8, and said the same again at 80 cells for wave 9.
+Both were double-counts: the hierarchical name is
+`zhao_field_exec_shared:u_exec|zhao_field_sin:u_sin|...`, so a grep for `u_exec|`
+matches the prefix of every SIN cell. Of the 80 "u_exec" cells, **72 are the
+`u_sin` prefix**. The cone is essentially all SIN plus about four cells of
+opcode compare. No amount of work outside SIN was ever going to help.
+
+**The depth is real, not sprawl.** The report gives 39 logic levels, 10.41 ns of
+cell delay against 7.66 ns of routing -- about **0.46 ns per level**, inside the
+0.3-0.5 ideal band. This is not the routing-dominated artefact that voided the
+renderer ranking (`QUARTUS_GOTCHAS` §12).
+
+### Wave 10: the shelved ROM draft, now justified by measurement
+
+The cone in order is
+
+    Add1 -> i -> u_base -> Add3 -> Add8 -> Add4 -> Add6 -> s_quarter -> Add10
+
+so `Add1` (22 cells) is the ANGLE DECODE ahead of the table, and `Add10` (20)
+is the final negate. The midpoint sits at the ROM output: about 30 cells before,
+46 after.
+
+That is exactly where the synchronous dual-port ROM drafted after wave 6 and
+shelved after wave 7 puts a register. It was correctly shelved twice -- at wave
+6 SIN was off the path entirely, and at wave 8 the ROM was four cells of a cone
+whose midpoint lay elsewhere. **The measurement now puts the midpoint on it.**
+
+Latency becomes 2. OP_SIN and OP_COS still pay nothing (`a0` stands three states
+before `Q_EXEC`); ROT pays one more wait state, its second of the twelve-clock
+budget. The retiming hazard returns with it -- `q`, `t` and `i` must travel with
+the delayed read -- which is what the drafted `q_q`/`t_q`/`i_q` and the
+back-to-back test sections exist for.
+
 ### Wave 8 measured: 48.92 -> 49.90 MHz. IT WORKED AND IT BARELY HELPED.
 
 | | wave 7 (`dc341b5`) | wave 8 (`ed3c274`) |
