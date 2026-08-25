@@ -1,0 +1,328 @@
+Can you help design the solution for the agent? I'm sure he can come up with something good so come up with some tips to go even harder
+
+Yes. I would push him past “make the seven sequencer stages overlap”. There is a better shape available because Field is not a normal CPU: it is evaluating the same tiny straight-line programs over hordes of completely independent terrain vertices.
+
+The architecture I’d want him to seriously investigate is a tiny multithreaded/barrel Field processor, not a heroic superscalar CPU.
+
+The current machine has exactly one instruction in flight and deliberately drains every multi-cycle operation before fetching another; all the shared arithmetic depends on that fact. The 7× discovery comes from the fetch/read/gather/execute walk being completely serialized.
+
+My preferred attack
+
+1. Run 16 independent vertex contexts through one Field engine.
+
+Each context is one vertex/sample with its own:
+
+PC + register state + busy bit + SatLedger + vertex/field tag
+
+Crucially: allow only one instruction in flight per context initially.
+
+Then you don't need some awful CPU-style RAW/WAW forwarding network. Context A issues an instruction and becomes unavailable until its result comes back. Next clock you issue context B, then C, D...
+
+For simple instructions:
+
+clock 0   vertex A
+clock 1   vertex B
+clock 2   vertex C
+...
+clock 15  vertex P
+clock 16  vertex A's next instruction
+
+Dependencies within a vertex become almost irrelevant because you simply don't revisit that vertex until its previous instruction retired.
+
+That's classic fine-grained multithreading: hide latency with independent work rather than make latency disappear.
+
+And Field has absurd amounts of independent work. A patch alone has 1,089 vertices.
+
+2. Spend the fucking M10Ks and abolish the three-cycle operand walk
+
+Here's the particularly nice Zhaozhou-specific trick.
+
+The widest instruction reads:
+
+a,a+1,a+2,b,b+1,b+2,c
+
+Seven registers.
+
+Bank the 64 registers by:
+
+bank = register & 3
+
+Now notice:
+
+a,a+1,a+2 touch three different banks.
+b,b+1,b+2 touch three different banks.
+c adds at most one more access to one bank.
+
+Therefore no bank ever needs more than three reads for one instruction.
+
+So construct:
+
+4 banks × 3 replicated read copies = 12 memories.
+
+Every write is broadcast to the three replicas of its bank.
+
+And there's another beautiful consequence: every multi-output instruction writes at most three consecutive registers. Three consecutive registers necessarily land in three different modulo-4 banks.
+
+So you can potentially write:
+
+dst, dst+1, dst+2
+
+in one clock, killing the current Q_WB1/Q_WB2 walk too.
+
+With 16 vertex contexts, each bank contains:
+
+16 contexts × 16 registers × 32 bits = 8192 bits
+
+That is an extremely M10K-shaped thing. If Quartus maps it the way we'd expect, you're talking roughly 12 M10Ks for a 16-context, seven-read, three-write logical register file.
+
+Don't trust my count until Quartus proves it. But it's absolutely worth characterizing.
+
+The device had hundreds of M10Ks sitting unused while Field was starving for throughput. The previous RF conversion already proved that trading ALM mux forests for synchronous memory was enormously profitable.
+
+That could turn the front of the machine into approximately:
+
+S0  choose ready vertex context; issue instruction fetch
+S1  instruction arrives; issue all operand reads
+S2  all operands arrive; dispatch tagged operation
+...
+    result returns whenever it returns
+    write destination bank(s)
+    context becomes ready again
+
+One new instruction dispatch per clock, assuming an execution resource is available.
+
+3. Do NOT retain the current “three speculative multiplies every instruction” trick
+
+This is important.
+
+Presently the engine gets enormous value from the otherwise-idle read cycles by sending a0*b0, a1*b1, a2*b2 through the one multiplier.
+
+That makes sense while every instruction occupies those cycles anyway.
+
+Once we're trying for II=1, it's poison.
+
+Instead predecode each instruction into actual resource tokens:
+
+MOV/ADD: 0 multiply requests
+MUL/MAD: 1
+DOT2: 2
+DOT3: 3
+etc.
+
+Then give the multiplier requests tags:
+
+{context, instruction kind, product index, destination/accumulator}
+
+The multiplier already has registered input and output. Make its tag travel alongside the product.
+
+Now a DOT3 can submit three multiply micro-ops while entirely unrelated contexts keep doing ADDs, SINs, table ops, etc.
+
+4. Characterize 1 / 2 / 3 multiplier lanes instead of religiously preserving one
+
+This is where I'd tell him to go hard.
+
+One 33×33 lane costs 3 DSPs.
+
+So:
+
+1 lane = 3 DSP
+2 = 6
+3 = 9 DSP
+
+The stupid old Field engine used 79 DSPs.
+
+Three genuinely useful lanes for 9 DSPs is still hilarious by comparison.
+
+I would make MUL_LANES parameterized and characterize 1/2/3. Don't decide from ideology.
+
+Especially interesting:
+
+2 fast lanes + 1 slow/shared lane = 9 DSP.
+
+Fast lanes service MUL/MAD/DOT traffic from the high-throughput front end. The third services RING/NORMALIZE/CURVE/etc.
+
+That also physically breaks up the one shared multiplier hub currently touched by 160 of the top 200 timing paths.
+
+So the throughput redesign may simultaneously murder the current timing plateau.
+
+That's much better than another Wave 11 bandage.
+
+5. Make latency and initiation interval two completely different numbers
+
+This is probably the most important warning to send him.
+
+We just learned the hard way that:
+
+“NORMALIZE takes 68 clocks” tells us almost nothing about whether the new engine can sustain Earth60.
+
+For every resource, we need:
+
+latency L
+and
+initiation interval II
+
+separately.
+
+A 40-cycle pipeline with II=1 is fantastic.
+
+A 20-cycle iterative unit with II=20 may be terrible.
+
+So build a table something like:
+
+Unit	latency	measured II	requests per opcode
+multiplier	2	1	MUL=1, DOT3=3…
+SIN	2	1	…
+sqrt	?	?	NORMALIZE/LEN
+RCP	?	?	RCP/RING
+curve	?	?	…
+
+Then take the proposed Earth instruction histogram and calculate resource utilization, not “average instruction latency.”
+
+This is the remaining asterisk in the happy “7× for free” story.
+
+If NORMALIZE accepts only one operation every ~60 clocks and an Earth program uses NORMALIZE every eighth instruction, the front-end being II=1 doesn't save us. That specific unit must either become pipelined, interleaved internally, or replicated.
+
+But then we're fixing the one resource actually short on throughput, rather than cloning six complete Field processors.
+
+6. Let the compiler do more of the thinking
+
+Field has another enormous advantage over an ordinary CPU:
+
+we own the language, compiler, decoder, ISA and hardware.
+
+And programs are tiny.
+
+I would keep canonical Field IR exactly as it is, but lower validated programs into an internal scheduled micro-op representation containing things like:
+
+resource class
+physical source-bank addresses
+destination bank(s)
+width
+multiply token count
+table request
+latency class
+
+Do that when the program is loaded, not on every vertex.
+
+Potentially let the compiler perform register placement to make banking even easier.
+
+Hardware should not repeatedly rediscover facts the compiler already knows 1,089 times per patch.
+
+7. TERRAIN.PATCH has an equally cheeky pipeline solution
+
+This might be my favorite second trick.
+
+Current compositor does:
+
+vertex A: field0 -> field1 -> field2 -> ... field15
+vertex B: field0 -> field1 -> ...
+
+Hence its 1+n clocks per vertex problem, and at n=16 the 128-patch extreme alone costs 142% of a frame.
+
+But saturating field addition has to preserve field order, not necessarily complete one vertex before touching the next.
+
+So make a pipeline:
+
+stage 0   apply field 0
+stage 1   apply field 1
+stage 2   apply field 2
+...
+stage 15  apply field 15
+
+Then:
+
+cycle 0:  A field0
+cycle 1:  A field1 | B field0
+cycle 2:  A field2 | B field1 | C field0
+...
+
+You preserve the exact sequential saturation order for every individual vertex, but after filling the pipe you retire:
+
+ONE FULLY COMPOSED VERTEX EVERY CLOCK, EVEN WITH 16 FIELDS.
+
+Latency = 16-ish.
+
+Throughput = 1 vertex/clock.
+
+That's precisely the kind of thing an FPGA exists to do.
+
+It costs 16 ordered saturation stages rather than one reused stage. But those are add/compare/select logic, not 16 giant DSP farms. Characterize 4/8/16 stages and see what it costs.
+
+Feed it from small per-field result FIFOs/batch RAM so Field itself can evaluate samples in whatever order maximizes throughput, while the composer restores the canonical vertex-major/command-order seam.
+
+That potentially destroys the second Earth60 bottleneck as well.
+
+8. Batch vertices rather than demanding globally ordered execution
+
+I'd probably process something like 16–64 vertices as a working batch.
+
+Field can schedule those samples aggressively. Results carry:
+
+{patch, vertex, field-index}
+
+into a small scratch/FIFO structure.
+
+Then the ordered compositor consumes the batch.
+
+This lets computation be optimized for throughput while the externally visible terrain state remains deterministic and boring.
+
+No need to buffer all:
+
+1089 × 16 fields
+
+for a complete patch.
+
+Buffer 16/32/64 vertices and roll forward.
+
+9. Don't make overload become temporal stutter
+
+Even after we build the monster, eventually somebody will create a pathological spell scene.
+
+The fallback law should be:
+
+never make live deformation “catch up over several frames.”
+
+That's the Sacrifice failure we're trying to kill.
+
+If The Measure has to negotiate, negotiate:
+
+spatial sample density,
+distant-patch LOD,
+cosmetic sinks,
+persistence/bake latency,
+
+before negotiating live terrain update cadence.
+
+Near/gameplay-important terrain stays 60 Hz. Far terrain can evaluate a coarser lattice and interpolate if necessary. Persistent scar baking can follow behind.
+
+Temporal smoothness is the contract.
+
+What I'd actually send the agent
+
+I wouldn't prescribe the whole design as law. I'd send this:
+
+Before implementing a conventional overlapped seven-stage sequencer, please investigate a multi-context/barrel Field architecture.
+
+Field's workload is unusually favorable: thousands of independent vertex evaluations of tiny straight-line programs. Consider 8–16 vertex contexts with at most one outstanding instruction per context initially. Schedule a ready context every clock. This hides instruction latency without requiring intra-context RAW forwarding, renaming or a ROB.
+
+Investigate replacing the RF walk entirely. Bank registers by reg[1:0]. Each a..a+2 and b..b+2 triple touches three distinct banks; with c, a bank sees at most three reads. Therefore 4 banks × 3 replicated synchronous copies should provide all seven source operands in one RF cycle. Destination width is ≤3 contiguous registers, which land in distinct modulo-4 banks and may permit all output lanes to write in one cycle. With 16 contexts each bank is 256×32; characterize this exact structure in Quartus rather than estimating it.
+
+Do not carry forward speculative three-product issue. Decode actual resource demand per instruction and send tagged micro-requests to execution resources. Add context/destination/product tags through the multiplier pipeline.
+
+Characterize MUL_LANES=1/2/3. Three 33×33 lanes cost 9 DSP versus the old Field's 79. Consider 2 fast lanes for ordinary MUL/MAD/DOT traffic plus 1 lane for long-op controllers. The current shared multiplier touches 160/200 worst timing paths, so splitting/tagging this seam may improve timing and throughput together.
+
+For every execution resource report latency AND initiation interval separately. Produce an opcode→resource-token table and calculate required resource II from Earth workloads. The new front end reaching one dispatch/clock is irrelevant if NORMALIZE, RCP, sqrt, etc. cannot accept requests at the required rate.
+
+Preserve canonical Field IR, but consider lowering validated programs once into expanded/scheduled internal microcode. Programs are reused across many vertices; don't pay dynamic decode/address-generation repeatedly.
+
+Also investigate TERRAIN.PATCH as an ordered pipeline rather than a lane walk: one stage per accepted field (or parameterized 4/8/16 stages), different vertices occupying different stages simultaneously. This preserves exact per-vertex command-order saturating addition while potentially changing throughput from 1/(1+n) vertex/clock to 1 vertex/clock after fill. Buffer Field results in small tagged vertex batches/FIFOs so compute order and required compose order are decoupled.
+
+Suggested first deliverable is not RTL: write the proposed pipeline/resource model and calculate steady-state throughput for simple-only, CURVE, RING and NORMALIZE-heavy Earth programs at 1/2/3 multiplier lanes and 8/16 contexts. Then implement the smallest architecture whose measured II, not latency, closes Earth60 with reserve.
+
+Keep the existing serial RTL/reference as a differential oracle. New proof invariants should include context-tag conservation, bank-copy coherence, no context reissue while busy, response→correct context/destination, and issued = retired + in_flight.
+
+That is where I think the real nutshot is.
+
+Don't make Field into a faster little CPU. Make it into a tiny terrain GPU.
+
+The workload is almost begging us to.
