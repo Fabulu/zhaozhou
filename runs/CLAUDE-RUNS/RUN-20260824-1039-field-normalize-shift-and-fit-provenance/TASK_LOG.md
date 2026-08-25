@@ -1194,6 +1194,83 @@ with the PINNED `node_modules/.bin/clang-format` rather than any system copy,
 because a local gate that is not the same tool as CI is how weeks of drift hid
 the last time.
 
+### 06:20 — WAVE 7: a 65-bit adder whose only job was to round
+
+Wave 6's fit moved the path off SIN entirely -- 175 cells in
+`zhao_field_normalize`, zero in `u_sin` -- and **122 of those 175 were one
+adder**, `Add12`:
+
+    r = (k == 0) ? 65'(v) : ((65'(v) + (65'sd1 <<< (k - 1))) >>> k)
+
+a 65-bit BARREL SHIFT to build a rounding constant and a 65-bit RIPPLE-CARRY
+ADD to apply it. The constant never contributes more than one bit: with
+`v = q*2^k + r`, `0 <= r < 2^k`, the inner sum reaches the next multiple of
+`2^k` exactly when `r >= 2^(k-1)`, i.e. when bit `k-1` of `v` is set. So
+
+    (v + 2^(k-1)) >> k  ==  (v >>> k) + v[k-1]
+
+The shift becomes a bit select and the add becomes an increment. Both callers
+now share one function instead of duplicating the expression.
+
+Sweep 64/64 accounted, 57 caught, 0 discarded. M60-M63 caught: wrong bit, no
+rounding, always rounding, wrong shift.
+
+### 06:20 — I CLAIMED A LATENT BUG THAT DOES NOT EXIST
+
+**M64 survived and I had not predicted it**, unlike M59. I hypothesised a
+reachable defect: that `65'sd1 <<< (k-1)` with `k-1 >= 64` lands the 1 in the
+sign bit of a 65-bit signed value, making the rounding constant `-2^64`, so the
+old code returned -1 where the 128-bit reference returns 0. I said so publicly.
+
+**It is wrong.** The probe that settled it, rather than another hypothesis:
+restore the ORIGINAL expression, confirm the binary hash changed, run the suite.
+**All 419 checks pass.** The two forms agree everywhere the machine can reach.
+
+The error: I read `lz` as the leading-zero count of the SUM OF SQUARES. It is
+the count of its SQUARE ROOT -- `h_rt <= sqrt_r_i`. So `h_rt <= 2^32`,
+`lz >= 32`, `d_exp = 40 - lz <= 8`, and **`k` lives in [8, 39]**. `k >= 65` is
+unreachable by construction, which is exactly why M64 survives. The `k == 0` arm
+is unreachable for the same reason.
+
+**The contrast with M59 is the point.** M59 was predicted from an argument and
+then confirmed -- that makes "equivalent" a finding. M64 was investigated after
+the fact and my first explanation was WRONG -- that makes it a lesson. Both are
+in the RTL with their reasoning, including the failed one, so nobody re-derives
+the bad version.
+
+The guard stays: free, and a total function is easier to reason about than one
+correct only under a bound proved elsewhere. But it is labelled
+defensive-and-unreachable, not load-bearing.
+
+**Meta, and it recurred three times today:** a diagnostic that DISTINGUISHES
+beats another hypothesis. The stale-binary catch, the M59 prediction and this
+probe were all the same move.
+
+### 06:20 — THE PREFLIGHT REJECTED THREE OF MY OWN MUTANTS
+
+M55 (`dt = quad0`) left `quad1` unused; M61 and M62 removed the only use of
+`rnd`. None BUILT, and the sweep refused to start rather than score them.
+
+That guard exists because a mutant that fails to compile leaves the previous
+binary in place and is scored as **caught** -- the most flattering possible way
+to be wrong. Three mutants that would have silently inflated the score did not.
+Retargeted at the bit SOURCE instead of the sum, keeping the signals live.
+
+**And I corrupted the mutant list itself**: a fallback located the list's end
+with `rindex(']')`, which found a bracket inside `main()`, so the splice landed
+mid-function and the file would not parse. Restored from HEAD, re-anchored on
+the verified sole top-level terminator, and the writer now `ast.parse`s before
+writing -- the same discipline as asserting `str.replace` match counts, applied
+to a file being generated rather than patched.
+
+### 06:20 — `cmake --build` FAILED AND THE TEST PASSED ANYWAY, TWICE
+
+`ninja: error: rebuilding 'build.ninja'` left the previous executable in place,
+and `test_field_normalize_directed` reported **419 checks passed** against a
+binary that predated the change. Caught only because the exe is hashed before
+and after. The underlying fault was real: `v[k-1]` needs a six-bit index, and
+the guard discussion above.
+
 ---
 
 ## Decisions Made

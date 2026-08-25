@@ -380,6 +380,25 @@ MUTS = [
     ("M55 the sine tree SUBTRACTS one half instead of adding it", F_SIN,
      """    dt    = quad0 + quad1;""",
      """    dt    = quad0 - quad1;"""),
+    # ---- wave 7: the rescale rounds with one bit instead of a 65-bit add -----
+    # The claim is (v + 2^(k-1)) >> k == (v >>> k) + v[k-1], EXACTLY. These
+    # attack the only places it can fail: which bit is read, whether it is read
+    # at all, and the sign-extension guard for k-1 >= 64.
+    ("M60 the rescale rounds from the wrong bit", F_NRM,
+     """                            : v[6'(k - 8'd1)];""",
+     """                            : v[6'(k)];"""),
+    ("M61 the rescale truncates instead of rounding", F_NRM,
+     """                            : v[6'(k - 8'd1)];""",
+     """                            : 1'b0;"""),
+    ("M62 the rescale always rounds up", F_NRM,
+     """                            : v[6'(k - 8'd1)];""",
+     """                            : 1'b1;"""),
+    ("M63 the rescale shifts by one too many", F_NRM,
+     """      sh     = (k == 8'd0) ? 65'(v) : (65'(v) >>> k);""",
+     """      sh     = (k == 8'd0) ? 65'(v) : (65'(v) >>> (k + 8'd1));"""),
+    ("M64 the sign-extension guard returns zero instead of the sign", F_NRM,
+     """             : (k >= 8'd65) ? v[63]""",
+     """             : (k >= 8'd65) ? 1'b0"""),
 ]
 
 

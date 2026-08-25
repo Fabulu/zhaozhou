@@ -334,11 +334,70 @@ module zhao_field_normalize (
   logic [7:0] shift_amt;
   assign shift_amt = 8'(8'sd31 + e_val);
 
+  // WAVE 7, 2026-08-25: SHIFT FIRST, THEN ROUND WITH A SINGLE BIT.
+  //
+  // This was written the way the reference reads it -- add the rounding
+  // constant at full width, then shift:
+  //
+  //     r = (65'(v) + (65'sd1 <<< (k - 1))) >>> k
+  //
+  // which costs a 65-bit BARREL SHIFT to build the constant and a 65-bit
+  // RIPPLE-CARRY ADD to apply it. Measured: that add was `Add12`, **122 of the
+  // 175 cells** on this block's worst path at 45.42 MHz.
+  //
+  // The constant never contributes more than one bit. Write `v = q*2^k + r`
+  // with `0 <= r < 2^k` under floor semantics; then
+  // `v + 2^(k-1) = q*2^k + (r + 2^(k-1))`, and that inner sum reaches the next
+  // multiple of `2^k` exactly when `r >= 2^(k-1)` -- which is exactly when bit
+  // `k-1` of `v` is set. So
+  //
+  //     (v + 2^(k-1)) >> k  ==  (v >>> k) + v[k-1]
+  //
+  // for every `v` and every `k >= 1`. EXACT, not an approximation: the barrel
+  // shift becomes a bit select and the add becomes an increment.
+  //
+  // The two callers now share ONE function. They computed the same 65-bit
+  // expression independently before, which is two chances to edit one of them.
+  // ENFORCED-BY: tests/differential/field_normalize_directed.cpp:main
+  function automatic logic signed [64:0] resc_r(input logic signed [63:0] v,
+                                                input logic [7:0] k);
+    logic signed [64:0] sh;
+    logic               rnd;
+    begin
+      // `k` is eight bits wide and `v` is sixty-four, so the select needs a
+      // narrower index. The `k >= 65` arm is DEFENSIVE AND UNREACHABLE, and the
+      // bound is worth writing down because it is not obvious:
+      //
+      //   `h_rt` is the SQUARE ROOT (`h_rt <= sqrt_r_i`), not the sum of
+      //   squares. `n2` is 64 bits, so `h_rt <= 2^32`, so `lz >= 32`, so
+      //   `d_exp = 40 - lz <= 8`, so `k = 31 + d_exp <= 39`.
+      //
+      // So `k` lives in [8, 39]: `k - 1` always fits six bits, and the `k == 0`
+      // arm above is unreachable for the same reason. Both are kept because a
+      // function that is total is easier to reason about than one that is
+      // correct only under a bound proved somewhere else.
+      //
+      // PROVEN-EQUIVALENT MUTANT: M64 replaces `v[63]` here with `1'b0` and
+      // SURVIVES the sweep, exactly as the bound above says it must. This was
+      // NOT predicted -- it was investigated after the fact, and the first
+      // explanation offered (that `lz` counted the sum of squares, making
+      // `k >= 65` reachable and the old code buggy) was WRONG. The probe that
+      // settled it: restoring the original expression passes all 419 checks
+      // with a changed binary hash, so the two forms agree everywhere the
+      // machine can actually go.
+      rnd    = (k == 8'd0)  ? 1'b0
+             : (k >= 8'd65) ? v[63]
+                            : v[6'(k - 8'd1)];
+      sh     = (k == 8'd0) ? 65'(v) : (65'(v) >>> k);
+      resc_r = sh + 65'(rnd);
+    end
+  endfunction
+
   function automatic logic signed [31:0] resc_s(input logic signed [63:0] v,
                                                 input logic [7:0] k);
     logic signed [64:0] r;
     begin
-      r = (k == 8'd0) ? 65'(v) : ((65'(v) + (65'sd1 <<< (k - 8'd1))) >>> k);
+      r = resc_r(v, k);
       if (r > 65'sd2147483647) resc_s = 32'sh7FFF_FFFF;
       else if (r < -65'sd2147483648) resc_s = 32'sh8000_0000;
       else resc_s = r[31:0];
@@ -348,7 +407,7 @@ module zhao_field_normalize (
   function automatic logic resc_s_fired(input logic signed [63:0] v, input logic [7:0] k);
     logic signed [64:0] r;
     begin
-      r = (k == 8'd0) ? 65'(v) : ((65'(v) + (65'sd1 <<< (k - 8'd1))) >>> k);
+      r = resc_r(v, k);
       resc_s_fired = (r > 65'sd2147483647) || (r < -65'sd2147483648);
     end
   endfunction
