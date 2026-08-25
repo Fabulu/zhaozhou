@@ -51,6 +51,7 @@ F_SINK = 'fpga/rtl/field/zhao_field_sinks.sv'
 F_SIN = 'fpga/rtl/field/zhao_field_sin.sv'
 F_PROG = 'fpga/rtl/field/zhao_field_progcache.sv'
 F_V2 = 'fpga/rtl/field/zhao_field_v2_core.sv'
+F_LMUX = 'fpga/rtl/field/zhao_field_v2_lanemux.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -542,6 +543,25 @@ MUTS = [
     ("M84 the retiring wavefront's in-flight bit is never cleared", F_V2,
      """        inflight[s1_wf] <= 1'b0;""",
      """        inflight[s1_wf] <= 1'b1;"""),
+    # ---- v2's tagged lane serialiser ---------------------------------------
+    # The tag is the whole point: v1 needed none because one instruction was in
+    # flight, so a reply could only belong to the one thing waiting. These
+    # attack the tag, the lane index, and the request/reply conservation.
+    ("M85 the reply is tagged with the LIVE request, not the captured one", F_LMUX,
+     """  assign rsp_wf_o    = wf_q;""",
+     """  assign rsp_wf_o    = req_wf_i;"""),
+    ("M86 the destination tag is taken live rather than carried", F_LMUX,
+     """  assign rsp_dst_o   = dst_q;""",
+     """  assign rsp_dst_o   = req_dst_i;"""),
+    ("M87 a lane's answer is written to the NEXT lane's slot", F_LMUX,
+     """          y_q[lane] <= u_result_i;""",
+     """          y_q[(lane + LW'(1)) & LW'(LANES-1)] <= u_result_i;"""),
+    ("M88 the last lane is skipped, so one lane keeps a stale answer", F_LMUX,
+     """          if (lane == LW'(LANES-1)) begin""",
+     """          if (lane >= LW'(LANES-2)) begin"""),
+    ("M89 the unit is presented the wrong lane's operand", F_LMUX,
+     """  assign u_a_o       = a_q[lane];""",
+     """  assign u_a_o       = a_q[0];"""),
 ]
 
 

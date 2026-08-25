@@ -1716,6 +1716,20 @@ set_tests_properties(lint_zhao_geom_skin PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# FIELD v2: the tagged lane serialiser. v2 issues VECTOR instructions and every
+# long-operation unit in the engine is SCALAR, so something must serialise the
+# lanes and carry the {wavefront, destination} tag back. v1 needed no tags --
+# one instruction in flight meant a reply could only belong to the one thing
+# waiting -- so this is a property the new architecture has to prove.
+add_executable(test_field_v2_lanemux_directed differential/field_v2_lanemux_directed.cpp)
+target_link_libraries(test_field_v2_lanemux_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v2_lanemux_directed
+  PREFIX Vzhao_field_v2_lanemux
+  TOP_MODULE zhao_field_v2_lanemux
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_lanemux.sv)
+add_test(NAME field_v2_lanemux_directed COMMAND test_field_v2_lanemux_directed)
+set_tests_properties(field_v2_lanemux_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD v2: the SIMD barrel core. v1 (zhao_field_seq) is FROZEN as the serial
 # reference and oracle; v2 is built alongside it and answers to the same
 # semantics. This increment covers the single-cycle ALU ops; long operations

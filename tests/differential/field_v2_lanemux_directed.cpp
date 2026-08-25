@@ -1,0 +1,240 @@
+// field_v2_lanemux_directed.cpp — v2's tagged lane serialiser.
+//
+// FIELD v2 issues VECTOR instructions; every long-operation unit in the engine
+// is SCALAR. This block turns one into the other, and the properties worth
+// pinning are the ones v1 never had to have:
+//
+//   1. TAG CONSERVATION. A reply must carry back the wavefront and destination
+//      that ASKED. v1 needed no tags -- one instruction in flight meant a reply
+//      could only belong to the one thing waiting. With several wavefronts
+//      sharing a unit, an untagged reply is a reply to whoever happens to be
+//      waiting, and that is the defect class this redesign exists to abolish.
+//
+//   2. LANE ORDER. Lane k's answer must land in lane k's slot. Off-by-one in
+//      the collect index is invisible when every lane carries the same value,
+//      so every case here gives the lanes DISTINCT values.
+//
+//   3. NO REPLY IS INVENTED OR LOST. Requests in, replies out, one for one,
+//      with the counts checked rather than assumed.
+//
+//   4. THE SERIALISATION COST IS MEASURED, not asserted. A shared scalar unit
+//      serving LANES lanes costs LANES x II per vector instruction. That number
+//      is the reason reports/FIELD_V2_MODEL.md puts CURVE first in the work
+//      order, so the test reports it rather than leaving it to argument.
+//
+// The scalar unit here is a MODEL with a settable latency, not a real Field
+// unit: this block's job is routing and tagging, and a real unit would test the
+// unit's arithmetic instead of this block's bookkeeping.
+
+#include "Vzhao_field_v2_lanemux.h"
+#include "verilated.h"
+
+#include "zhao_sim.hpp"
+
+#include <cstdint>
+#include <cstdio>
+#include <deque>
+#include <vector>
+
+namespace {
+
+using zhao::check;
+
+constexpr int kLanes = 4;
+
+// Every wavefront index 0..7 and destination 0..63 is a LEGAL tag, so there is
+// no impossible value to park on the request lines. The COMPLEMENT is used
+// instead: 7-wf can never equal wf (that needs wf = 3.5) and 63-dst can never
+// equal dst. So the poison is guaranteed to differ from the tag it replaces,
+// for every transaction, without relying on a value the test happens not to use.
+constexpr int poison_wf(int wf) { return 7 - wf; }
+constexpr int poison_dst(int dst) { return 63 - dst; }
+
+// A scalar unit with a fixed latency and a ready-when-idle handshake -- the
+// same shape every long unit in the engine actually has.
+struct ScalarUnit {
+  int latency;
+  int busy = 0;
+  int32_t held = 0;
+  bool has_result = false;
+  int32_t result = 0;
+  uint64_t accepted = 0;
+  uint64_t replied = 0;
+
+  explicit ScalarUnit(int lat) : latency(lat) {}
+
+  bool ready() const { return busy == 0 && !has_result; }
+
+  void accept(int32_t a) {
+    held = a;
+    busy = latency;
+    ++accepted;
+  }
+
+  // The model's "arithmetic": a value the test can predict exactly, chosen so a
+  // lane swap or a dropped tag cannot coincidentally produce the right answer.
+  static int32_t f(int32_t a) { return a * 3 + 7; }
+
+  void tick(bool taking) {
+    if (has_result && taking) {
+      has_result = false;
+      ++replied;
+    }
+    if (busy > 0) {
+      if (--busy == 0) {
+        result = f(held);
+        has_result = true;
+      }
+    }
+  }
+};
+
+struct Bench {
+  Vzhao_field_v2_lanemux& d;
+  ScalarUnit unit;
+
+  Bench(Vzhao_field_v2_lanemux& dut, int latency) : d(dut), unit(latency) {
+    d.rst_n = 0;
+    d.req_valid_i = 0;
+    d.rsp_ready_i = 1;
+    d.u_ready_i = 0;
+    d.u_rvalid_i = 0;
+    d.eval();
+    for (int i = 0; i < 3; ++i) zhao::tick(d);
+    d.rst_n = 1;
+    d.eval();
+  }
+
+  void drive_unit() {
+    d.u_ready_i = unit.ready() ? 1 : 0;
+    d.u_rvalid_i = unit.has_result ? 1 : 0;
+    d.u_result_i = static_cast<uint32_t>(unit.result);
+    d.eval();
+  }
+
+  void step() {
+    drive_unit();
+    const bool accepting = d.u_valid_o && unit.ready();
+    const int32_t a = static_cast<int32_t>(d.u_a_o);
+    const bool taking = d.u_rready_o && unit.has_result;
+    zhao::tick(d);
+    if (accepting) unit.accept(a);
+    unit.tick(taking);
+    drive_unit();
+  }
+
+  /** Push one vector request and run until its reply is taken. Returns clocks. */
+  int transact(int wf, int dst, int mode, const int32_t* a, int32_t* y, int guard = 4096) {
+    d.req_wf_i = wf;
+    d.req_dst_i = dst;
+    d.req_mode_i = mode;
+    for (int l = 0; l < kLanes; ++l) d.req_a_i[l] = static_cast<uint32_t>(a[l]);
+    d.req_valid_i = 1;
+    drive_unit();
+    int clocks = 0;
+    while (!d.req_ready_o && clocks < guard) {
+      step();
+      ++clocks;
+    }
+    step();
+    ++clocks;
+
+    // POISON THE REQUEST LINES AFTER THE ACCEPT. Dropping req_valid_i is not
+    // enough: the tag inputs keep their old values, so a reply tagged from the
+    // LIVE input reads the same thing as one tagged from the CAPTURED copy and
+    // the difference is invisible. Mutants M85/M86 -- reply tagged live rather
+    // than carried -- survived the whole suite for exactly that reason, and the
+    // test claimed to prove tag conservation while proving nothing of the sort.
+    //
+    // Poisoning with values that cannot be any legal in-flight tag means a
+    // live-sourced tag now reads the poison and fails loudly.
+    d.req_valid_i = 0;
+    d.req_wf_i = poison_wf(wf);
+    d.req_dst_i = poison_dst(dst);
+    drive_unit();
+    while (!d.rsp_valid_o && clocks < guard) {
+      step();
+      ++clocks;
+    }
+    for (int l = 0; l < kLanes; ++l) y[l] = static_cast<int32_t>(d.rsp_y_o[l]);
+    return clocks;
+  }
+};
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Verilated::commandArgs(argc, argv);
+  Vzhao_field_v2_lanemux dut;
+
+  // ---- 1. lane order and the model's arithmetic ---------------------------
+  // Distinct values per lane, so an off-by-one in the collect index shows up.
+  {
+    Bench b(dut, 5);
+    const int32_t a[kLanes] = {11, 22, 33, 44};
+    int32_t y[kLanes] = {};
+    b.transact(3, 17, 1, a, y);
+    check(dut.rsp_wf_o == 3, "1.the reply carries the wavefront that asked", 3, dut.rsp_wf_o);
+    check(dut.rsp_dst_o == 17, "1.the reply carries the destination that asked", 17, dut.rsp_dst_o);
+    uint64_t bad = 0;
+    for (int l = 0; l < kLanes; ++l)
+      if (y[l] != ScalarUnit::f(a[l])) ++bad;
+    check(bad == 0, "1.every lane's answer lands in that lane's slot", 0, bad);
+  }
+
+  // ---- 2. TAG CONSERVATION across many different tags ---------------------
+  // The property v1 never needed. A tag recomputed from front-end state instead
+  // of carried would pass a single transaction and fail here.
+  {
+    Bench b(dut, 3);
+    uint64_t bad_tag = 0, bad_val = 0;
+    for (int t = 0; t < 32; ++t) {
+      const int wf = t % 8;
+      const int dst = (t * 7) % 64;
+      int32_t a[kLanes];
+      for (int l = 0; l < kLanes; ++l) a[l] = t * 100 + l;
+      int32_t y[kLanes] = {};
+      b.transact(wf, dst, t % 3, a, y);
+      if (dut.rsp_wf_o != wf || dut.rsp_dst_o != dst) ++bad_tag;
+      for (int l = 0; l < kLanes; ++l)
+        if (y[l] != ScalarUnit::f(a[l])) ++bad_val;
+    }
+    check(bad_tag == 0, "2.every reply carries back its own wavefront and destination", 0, bad_tag);
+    check(bad_val == 0, "2.and every lane's value survives the round trip", 0, bad_val);
+  }
+
+  // ---- 3. no reply invented, none lost ------------------------------------
+  {
+    Bench b(dut, 4);
+    const int kN = 16;
+    for (int t = 0; t < kN; ++t) {
+      int32_t a[kLanes] = {t, t + 1, t + 2, t + 3};
+      int32_t y[kLanes] = {};
+      b.transact(t % 8, t, 0, a, y);
+    }
+    check(b.unit.accepted == static_cast<uint64_t>(kN * kLanes),
+          "3.the scalar unit saw exactly LANES requests per vector instruction", kN * kLanes,
+          b.unit.accepted);
+    check(b.unit.replied == b.unit.accepted, "3.every scalar request got exactly one reply",
+          b.unit.accepted, b.unit.replied);
+  }
+
+  // ---- 4. THE SERIALISATION COST, measured --------------------------------
+  // A shared scalar unit serving LANES lanes costs LANES x II per vector
+  // instruction. This is the number that puts CURVE first in the v2 work order,
+  // so it is reported rather than argued.
+  for (int lat : {1, 5, 23}) {
+    Bench b(dut, lat);
+    const int32_t a[kLanes] = {1, 2, 3, 4};
+    int32_t y[kLanes] = {};
+    const int clocks = b.transact(0, 0, 0, a, y);
+    std::printf("  scalar unit II=%2d -> vector instruction costs %3d clocks (%d lanes)\n", lat,
+                clocks, kLanes);
+    check(clocks >= lat * kLanes,
+          "4.a vector long op costs at least LANES x II, as the model assumes", 1,
+          (clocks >= lat * kLanes) ? 1 : 0);
+  }
+
+  dut.final();
+  return zhao::report_and_exit("field_v2_lanemux_directed");
+}
