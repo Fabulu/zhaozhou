@@ -1,0 +1,72 @@
+so, anything we really need to tell the agent?
+
+Yes. Do not derail Wave 9, but send one message now so the agent does not mistake “FIELD.SEQ reaches 100 MHz” for “real-time terrain deformation is solved.”
+
+The critical missing budget is still explicitly unresolved in the repository: zhao_field_seq needs a workload distribution by profile, not a single scalar throughput number. The proper calculation is invocation count × instructions × measured clocks, summed against 1,666,667 compute clocks per frame.
+
+Also, TERRAIN.PATCH itself consumes one result lane per cycle; with n overlapping Earth fields it needs 1+n clocks per vertex. So merely cloning Field cores does not automatically solve the complete path unless the patch composers, queues, and composed-height storage can consume the extra output.
+
+Paste this to the agent
+Wave 9 proceeds as planned. Do not interrupt it.
+
+After the Wave-9 fit, before choosing Wave 10, two deliverables become mandatory:
+
+1. TIMING PATH CENSUS, NOT ONLY THE WINNER
+
+Group at least the top 200 setup paths by distinct logical cone/module and report:
+- worst path for each family;
+- number of paths above 10 ns, 12 ns, 15 ns and 18 ns;
+- runner-up and third-place families;
+- which cuts would share one pipeline boundary.
+
+Wave 8 proved that removing the #1 path may buy almost nothing when another
+equal-length cone is waiting behind it. We need to know whether Field contains
+two ~20 ns cones or eight before spending the remaining opcode-cycle headroom.
+
+2. END-TO-END EARTH60 CAPACITY
+
+Do not declare Field complete merely because one FIELD.SEQ instance reaches
+100 MHz.
+
+Derive and commit a heavy-combat live-terrain workload:
+
+  affected patches/frame
+  x 1,089 vertices/patch
+  x overlapping Earth fields
+  x instructions/program
+  x measured clocks/instruction
+
+Then include TERRAIN.PATCH's own 1+n compose clocks per vertex, queue/storage
+bandwidth, and 20% reserve.
+
+Produce the measured frontier for enough architecture choices to close it:
+- one Field core;
+- two/three/four Field cores;
+- interleaved or pipelined samples if scalar-core replication is inefficient;
+- enough TERRAIN.PATCH/composed-cache intake bandwidth to consume their output.
+
+Earth/live terrain receives reserved hard-deadline capacity. Warp, Formation,
+Flow and Stamp may not steal the capacity required to update every affected
+terrain patch at 60 Hz. Pick the physical Field-core count only after this
+workload exists.
+
+LIVE-TO-BAKE LAW
+
+Visible and gameplay-relevant live terrain deformation must update at 60 Hz.
+TERRAIN.BAKE is a persistence path and may run behind it, but it must never make
+the visible deformation advance in chunks. Keep the live field authoritative
+until the exact persistent bake has committed, then retire it without a height,
+collision or navigation discontinuity.
+
+The current worst-case analytic bake rate is not sign-off quality. Before terrain
+sign-off, choose and measure either the pipelined-divider route or the fetched
+stencil route, and bound the maximum bake backlog and catch-up time.
+
+MAX_OP_CYCLES = 80 is a formal/liveness constant, not a product law. Raise and
+re-prove it if further pipeline stages are necessary. Never sacrifice the
+100 MHz clock merely to preserve 80; judge added cycles against the measured
+Earth60 workload.
+
+The bake warning matters: the present analytic bake can consume up to roughly 79% of a frame for 64 page-covering records, while the contract’s intended post-fix rate is about one vertex per clock through either a pipelined divider or fetched stencil.
+
+So the answer is: Wave 9 is still correct. The new mandatory work is a path-family census and an end-to-end Earth60 budget. Without those, the agent could win the 100 MHz battle and still accidentally build terrain deformation that falls behind—the exact thing Zhaozhou exists to fix.
