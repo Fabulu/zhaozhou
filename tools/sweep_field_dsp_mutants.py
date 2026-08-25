@@ -427,6 +427,19 @@ MUTS = [
     result_d2 <= result_c;
     result_o  <= result_d2;
   end"""),
+    # ---- wave 9: the shift amount is registered ------------------------------
+    # Removing the register is the OLD code and would be equivalent, so these
+    # attack the value instead: never loading it, and loading it wrong.
+    ("M68 the registered shift amount lags by TWO cycles instead of one", F_NRM,
+     """  always_ff @(posedge clk) shift_amt_q <= shift_amt;""",
+     """  logic [7:0] shift_amt_d;
+  always_ff @(posedge clk) begin
+    shift_amt_d <= shift_amt;
+    shift_amt_q <= shift_amt_d;
+  end"""),
+    ("M69 the registered shift amount is off by one", F_NRM,
+     """  always_ff @(posedge clk) shift_amt_q <= shift_amt;""",
+     """  always_ff @(posedge clk) shift_amt_q <= shift_amt + 8'd1;"""),
 ]
 
 

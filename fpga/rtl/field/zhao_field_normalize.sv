@@ -334,6 +334,42 @@ module zhao_field_normalize (
   logic [7:0] shift_amt;
   assign shift_amt = 8'(8'sd31 + e_val);
 
+  // WAVE 9, 2026-08-25: THE SHIFT AMOUNT IS REGISTERED, AND IT COSTS NOTHING.
+  //
+  // Measured at 49.90 MHz, this block owned the worst path:
+  //
+  //     u_norm|h_rt[46] -> u_norm|o0_o[1]   19.875 ns, 117 cells
+  //
+  // and 66 of those cells were `Add12`, the increment inside `resc_s`. But the
+  // cone in front of it was being paid for too: `h_rt` -> leading zero -> `lz`
+  // -> `d_exp` -> `shift_amt` was recomputed COMBINATIONALLY on the same clock
+  // that a lane landed, feeding straight into the shift and the increment.
+  //
+  // It did not need to be. `h_rt` is written when the square root lands, and
+  // the lanes do not retire until `N_LANE` -- with N_R0, N_R0W, N_R1, N_R1W,
+  // N_R2, N_R2W, N_R3 and N_R3W in between. The value has been stable for at
+  // least eight cycles by the time anything reads it.
+  //
+  // So registering it splits the cone for FREE: no extra state, no extra clock,
+  // no change to any operation's latency. The leading-zero search settles into
+  // a register on its own clock, and the lane path starts at that register.
+  //
+  // The safety margin is the load-bearing part: `shift_amt_q` holds the
+  // PREVIOUS value for one cycle after `h_rt` changes, and eight states of
+  // reciprocal refinement stand between the two. A shorter walk would need the
+  // register loaded explicitly when `h_rt` is written instead.
+  //
+  // PROVEN-EQUIVALENT MUTANT, and the prediction was recorded BEFORE the run:
+  // M68 makes this lag TWO cycles rather than one and SURVIVES the sweep,
+  // because eight states of margin absorb it. That is the margin measured
+  // rather than argued -- had it been CAUGHT, the eight-state claim above would
+  // have been wrong and this register would need loading explicitly on `h_rt`.
+  // M69, which loads the amount off by one, is caught, so the register is not
+  // merely untested.
+  // ENFORCED-BY: tests/differential/field_normalize_directed.cpp:main
+  logic [7:0] shift_amt_q;
+  always_ff @(posedge clk) shift_amt_q <= shift_amt;
+
   // WAVE 7, 2026-08-25: SHIFT FIRST, THEN ROUND WITH A SINGLE BIT.
   //
   // This was written the way the reference reads it -- add the rounding
@@ -595,12 +631,12 @@ module zhao_field_normalize (
           if (mul_valid_i) begin
             lane_got <= lane_got + 2'd1;
             case (lane_got)
-              2'd0: o0_o <= resc_s(p_signed, shift_amt);
-              2'd1: o1_o <= resc_s(p_signed, shift_amt);
-              default: o2_o <= h_is3 ? resc_s(p_signed, shift_amt) : 32'sd0;
+              2'd0: o0_o <= resc_s(p_signed, shift_amt_q);
+              2'd1: o1_o <= resc_s(p_signed, shift_amt_q);
+              default: o2_o <= h_is3 ? resc_s(p_signed, shift_amt_q) : 32'sd0;
             endcase
             if (!(lane_got == 2'd2) || h_is3) begin
-              sat_rescale_o <= sat_rescale_o || resc_s_fired(p_signed, shift_amt);
+              sat_rescale_o <= sat_rescale_o || resc_s_fired(p_signed, shift_amt_q);
             end
             if (lane_got == 2'd2) begin
               r_valid_o <= 1'b1;

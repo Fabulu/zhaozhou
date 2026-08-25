@@ -1334,6 +1334,44 @@ models left in `build/`.
 Each time `ninja: error: rebuilding 'build.ninja'` scrolled past and the
 previous executable ran. The before/after hash is the only reason none landed.
 
+### 10:05 — WAVE 9: the split that cost nothing, and a plan that was too expensive
+
+I committed publicly to wave 9 registering ACROSS `Add12` at a cost of one clock
+per output lane. Reading the state machine instead of assuming showed something
+cheaper.
+
+`h_rt -> leading zero -> lz -> d_exp -> shift_amt` was recomputed
+COMBINATIONALLY on the same clock a lane landed, feeding straight into the shift
+and the increment. It never needed to be: `h_rt` is written when the square root
+lands, and no lane retires until `N_LANE`, with N_R0, N_R0W, N_R1, N_R1W, N_R2,
+N_R2W, N_R3 and N_R3W in between. **The value has been stable for at least eight
+cycles before anything reads it.**
+
+So registering it splits the cone for FREE -- no extra state, no extra clock, no
+operation's latency changed. Confirmed rather than asserted: `NORMALIZE3` still
+reports 68 clocks against `MAX_OP_CYCLES = 80`, so wave 8's ROT clock remains
+the only one spent of the twelve.
+
+**Both mutation predictions were recorded BEFORE the run and both held.** M69
+(shift amount off by one) caught; **M68 (lagging TWO cycles instead of one)
+SURVIVED**, because eight states of margin absorb it. That converts the margin
+from an argument into a measurement. Had M68 been caught, the eight-state claim
+would have been wrong and the register would need loading explicitly on `h_rt`
+-- which is now written into the RTL beside it, along with the fact that M69
+proves the register is not merely untested.
+
+Sweep 69/69 accounted, 61 caught, 0 discarded; eight survivors, all documented.
+
+### 10:05 — I EDITED DURING MY OWN GATE, AND RE-RAN IT
+
+The M68 documentation landed while the gate was in `ctest`, after its build had
+finished. Comment-only, so behaviour is identical, and I could have argued past
+it. **The green described a tree I was not going to commit.**
+
+Every bad green today was defensible by exactly that kind of reasoning -- three
+stale-binary passes, and an exit code that reported only the last command of a
+chain. So the gate was re-run over the final tree: 917.17 s, green, ledger green.
+
 ---
 
 ## Decisions Made
