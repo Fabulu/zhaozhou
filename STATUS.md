@@ -5,6 +5,67 @@ at the top.*
 
 ---
 
+## 2026-08-25 (evening) — the new Field engine runs, and it is 27.8x faster
+
+### The number
+
+The old engine finished one instruction every seven clocks. The new one finishes
+**four vertices' worth every clock**.
+
+    old engine   0.143 vertex-instructions per clock
+    new engine   3.97  vertex-instructions per clock   = 27.8x
+
+That is measured on the actual hardware description by the test suite, not
+estimated. For scale: the seven rounds of clock work I did earlier today bought
+6.9x. This one change bought four times as much, and it bought the thing that
+was actually short.
+
+### Why it works, in one paragraph
+
+Field evaluates the *same* short program over thousands of independent points —
+a single terrain patch is 1,089 of them. So the new engine runs **four vertices
+side by side** through one instruction, and keeps **eight such groups in flight
+at once**. When one group is waiting, another one works. Nothing clever is
+needed to handle the waiting, because a group simply isn't looked at again until
+its previous instruction has finished — which means the engine needs none of the
+complicated machinery a normal CPU needs to keep track of overlapping work.
+
+### The old engine is kept, deliberately
+
+It is frozen, not deleted, and it now says so in its own header. It is the
+reference the new engine is checked against — every answer the new one gives is
+compared to the old one's, so "faster" can never quietly become "wrong".
+
+I did not try to convert the old engine into the new one. Its whole design rests
+on only ever doing one thing at a time; that assumption is baked into a dozen
+places, and every one of them silently becomes false the moment two vertices are
+in flight. Converting it would have broken those one at a time with all the
+tests still passing — the worst possible way to fail.
+
+### What it cannot do yet
+
+Only the simple arithmetic instructions run. Curves, distances, rings and the
+rest are **refused** with an error, not skipped — an instruction quietly ignored
+would produce terrain that looks plausible and is wrong, which is the one outcome
+worth being paranoid about.
+
+The order I add them in is now decided by evidence rather than guesswork: I had
+the three real Earth programs analysed, and they say curves and distance come
+first, rings next. They also say **NORMALIZE — which I had queued as top
+priority because it is the slowest operation in the engine — is never used by
+any of them.** I would have spent a day making something faster that this game
+never calls.
+
+### Also today, and less flattering
+
+I published a figure saying the terrain compositor would eat 142% of a frame and
+was a second fatal bottleneck. **It was wrong by a factor of sixteen** — I had
+multiplied two quantities that shouldn't be multiplied. The real figure is
+9-17%. Bro caught it. Had I been right you would have had two crises instead of
+one, and the plan would have been much worse.
+
+---
+
 ## 2026-08-25 (midday) — I found something that matters more than the clock
 
 ### The short version

@@ -50,6 +50,7 @@ F_ROT = 'fpga/rtl/field/zhao_field_rot.sv'
 F_SINK = 'fpga/rtl/field/zhao_field_sinks.sv'
 F_SIN = 'fpga/rtl/field/zhao_field_sin.sv'
 F_PROG = 'fpga/rtl/field/zhao_field_progcache.sv'
+F_V2 = 'fpga/rtl/field/zhao_field_v2_core.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -522,6 +523,25 @@ MUTS = [
     ("M79 a lookup and a commit may fire on the same clock", F_PROG,
      """  assign cm_ready_o = (!cm_resp_valid_o || cm_resp_ready_i) && !lu_fire;""",
      """  assign cm_ready_o = (!cm_resp_valid_o || cm_resp_ready_i);"""),
+    # ---- FIELD v2: the invariants a barrel core NEWLY admits ----------------
+    # v1 could not have these defects because it had one instruction in flight
+    # by construction. v2 has a scoreboard, wavefront tags and independent
+    # lanes, and each of those is a new way to be wrong.
+    ("M80 a wavefront may reissue while its instruction is still in flight", F_V2,
+     """  assign ready = active & ~inflight & ~finished;""",
+     """  assign ready = active & ~finished;"""),
+    ("M81 write-back uses the ISSUING wavefront, not the retiring one", F_V2,
+     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];""",
+     """        for (l = 0; l < LANES; l++) rf[l][{sel, s1_dst}] <= alu_y[l];"""),
+    ("M82 every lane is written lane 0's result", F_V2,
+     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];""",
+     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[0];"""),
+    ("M83 an unsupported opcode is SKIPPED instead of refused", F_V2,
+     """        default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero""",
+     """        default:   unsupported = 1'b0;     // MUTANT: silently skipped"""),
+    ("M84 the retiring wavefront's in-flight bit is never cleared", F_V2,
+     """        inflight[s1_wf] <= 1'b0;""",
+     """        inflight[s1_wf] <= 1'b1;"""),
 ]
 
 

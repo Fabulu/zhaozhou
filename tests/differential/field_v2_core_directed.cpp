@@ -72,23 +72,45 @@ int32_t q16_mul(int32_t a, int32_t b) {
 void interp(const std::vector<Instr>& prog, int32_t* reg) {
   for (const Instr& in : prog) {
     switch (in.op) {
-      case OP_MOV: reg[in.dst] = reg[in.a]; break;
-      case OP_ADD: reg[in.dst] = sat_add(reg[in.a], reg[in.b]); break;
-      case OP_SUB: reg[in.dst] = sat_sub(reg[in.a], reg[in.b]); break;
-      case OP_MUL: reg[in.dst] = q16_mul(reg[in.a], reg[in.b]); break;
-      case OP_MAD: reg[in.dst] = sat_add(q16_mul(reg[in.a], reg[in.b]), reg[in.c]); break;
-      case OP_MIN: reg[in.dst] = reg[in.a] < reg[in.b] ? reg[in.a] : reg[in.b]; break;
-      case OP_MAX: reg[in.dst] = reg[in.a] > reg[in.b] ? reg[in.a] : reg[in.b]; break;
-      case OP_ABS: reg[in.dst] = reg[in.a] < 0 ? sat_sub(0, reg[in.a]) : reg[in.a]; break;
+      case OP_MOV:
+        reg[in.dst] = reg[in.a];
+        break;
+      case OP_ADD:
+        reg[in.dst] = sat_add(reg[in.a], reg[in.b]);
+        break;
+      case OP_SUB:
+        reg[in.dst] = sat_sub(reg[in.a], reg[in.b]);
+        break;
+      case OP_MUL:
+        reg[in.dst] = q16_mul(reg[in.a], reg[in.b]);
+        break;
+      case OP_MAD:
+        reg[in.dst] = sat_add(q16_mul(reg[in.a], reg[in.b]), reg[in.c]);
+        break;
+      case OP_MIN:
+        reg[in.dst] = reg[in.a] < reg[in.b] ? reg[in.a] : reg[in.b];
+        break;
+      case OP_MAX:
+        reg[in.dst] = reg[in.a] > reg[in.b] ? reg[in.a] : reg[in.b];
+        break;
+      case OP_ABS:
+        reg[in.dst] = reg[in.a] < 0 ? sat_sub(0, reg[in.a]) : reg[in.a];
+        break;
       case OP_CLAMP:
         reg[in.dst] = reg[in.a] < reg[in.b]   ? reg[in.b]
                       : reg[in.a] > reg[in.c] ? reg[in.c]
                                               : reg[in.a];
         break;
-      case OP_SELECT: reg[in.dst] = reg[in.c] != 0 ? reg[in.a] : reg[in.b]; break;
-      case OP_CMP: reg[in.dst] = reg[in.a] < reg[in.b] ? (1 << 16) : 0; break;
-      case OP_END: return;
-      default: return;
+      case OP_SELECT:
+        reg[in.dst] = reg[in.c] != 0 ? reg[in.a] : reg[in.b];
+        break;
+      case OP_CMP:
+        reg[in.dst] = reg[in.a] < reg[in.b] ? (1 << 16) : 0;
+        break;
+      case OP_END:
+        return;
+      default:
+        return;
     }
   }
 }
@@ -169,8 +191,8 @@ int main(int argc, char** argv) {
   // ---- 1. one wavefront, one lane: the semantics ---------------------------
   {
     Bench b(dut);
-    b.prog = {{OP_ADD, 2, 0, 1, 0}, {OP_MUL, 3, 2, 0, 0}, {OP_SUB, 4, 3, 1, 0},
-              {OP_END, 0, 0, 0, 0}};
+    b.prog = {
+        {OP_ADD, 2, 0, 1, 0}, {OP_MUL, 3, 2, 0, 0}, {OP_SUB, 4, 3, 1, 0}, {OP_END, 0, 0, 0, 0}};
     const int32_t kOne = 1 << 16;
     int32_t ref[64] = {};
     ref[0] = 3 * kOne;
@@ -258,9 +280,9 @@ int main(int argc, char** argv) {
     // 8 wavefronts x 17 instructions each, END included.
     check(retired == static_cast<uint32_t>(kWfs * 17),
           "4.every wavefront retired every instruction", kWfs * 17, retired);
-    std::printf("  v2: %u vector instructions in %d clocks = %.2f instr/clock (%.2f vertex-instr/clock)\n",
-                retired, clocks, double(retired) / clocks,
-                double(retired) * kLanes / clocks);
+    std::printf(
+        "  v2: %u vector instructions in %d clocks = %.2f instr/clock (%.2f vertex-instr/clock)\n",
+        retired, clocks, double(retired) / clocks, double(retired) * kLanes / clocks);
     // v1's measured floor is 7 clocks per instruction. Anything at or below 2
     // clocks per vector instruction is a categorical change rather than a tune.
     check(double(retired) / clocks > 0.5,

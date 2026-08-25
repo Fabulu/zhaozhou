@@ -71,7 +71,7 @@ MUTPY=tools/sweep_field_dsp_mutants.py
 
 # The union of every consumer, for a reader. Cross-checked below against what
 # the build system actually says.
-DECLARED_TARGETS="test_field_seq_directed test_field_alu_ops test_field_len_directed test_field_normalize_directed test_field_noise_directed test_field_rot_directed test_field_ring_directed test_field_curve_directed test_field_rcp_directed test_field_sinks_directed test_field_sin_directed test_field_progcache_directed"
+DECLARED_TARGETS="test_field_seq_directed test_field_alu_ops test_field_len_directed test_field_normalize_directed test_field_noise_directed test_field_rot_directed test_field_ring_directed test_field_curve_directed test_field_rcp_directed test_field_sinks_directed test_field_sin_directed test_field_progcache_directed test_field_v2_core_directed"
 
 # `| tr -d` because Python's text stdout emits CRLF on Windows and a bare carriage return
 # on the end of a path turns every guard below into a false ABORT.
