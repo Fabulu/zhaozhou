@@ -153,7 +153,7 @@ module zhao_field_sin (
   // bound above (|d| <= 2^16, t <= 63, sum about 2^22) holds for every
   // ordering, so no intermediate can overflow. The differential is unchanged.
   logic signed [24:0] term [6];
-  logic signed [24:0] pair0, pair1, pair2, quad0, quad1;
+  logic signed [24:0] pair0, pair1, pair2, pair3, quad0, quad1;
   logic signed [24:0] dt;
   logic signed [24:0] interp;
   logic signed [31:0] s_quarter;
@@ -163,12 +163,30 @@ module zhao_field_sin (
     pair0 = term[0] + term[1];
     pair1 = term[2] + term[3];
     pair2 = term[4] + term[5];
+    // WAVE 6: `base` joins the tree as an eighth leaf instead of being added
+    // after the shift. `base + (X >>> 6)` and `((base <<< 6) + X) >>> 6` are
+    // EQUAL, not approximately: `base <<< 6` is a multiple of 64 and the shift
+    // is an arithmetic floor, so the shifted-out bits belong entirely to X and
+    // `base` cannot influence them. Seven leaves were already depth 3 and eight
+    // still are, so this removes a full-width serial add for no extra level.
+    pair3 = 25'sd32 + (25'($signed({1'b0, base})) <<< 6);
     quad0 = pair0 + pair1;
-    quad1 = pair2 + 25'sd32;   // the rounding constant, carried as a free leaf
+    quad1 = pair2 + pair3;
     dt    = quad0 + quad1;
     interp = dt >>> 6;
-    s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base}))
-                              : (32'($signed({1'b0, base})) + 32'(interp));
+    // The i == 256 arm stays because it mirrors the reference line for line.
+    // It is redundant, and wave 6 makes it MORE obviously so: at the endpoint
+    // `t` is 0, so every `term` is 0 and the tree reduces to `pair3`, giving
+    // `((base <<< 6) + 32) >>> 6` == `base` exactly. Both arms return the same
+    // value for every reachable input.
+    //
+    // PROVEN-EQUIVALENT MUTANT, and the prediction was recorded BEFORE the run:
+    // M59 replaces this whole select with `32'(interp)` and SURVIVES the
+    // exhaustive 65,536-angle differential, as the argument above says it must.
+    // Had it been caught, the exactness claim behind wave 6 would have been
+    // wrong and the fold would need re-examining -- which is why the prediction
+    // was written down first rather than the label applied afterwards.
+    s_quarter = (i == 9'd256) ? 32'($signed({1'b0, base})) : 32'(interp);
   end
 
   // The upper half of the circle is negative.
