@@ -399,6 +399,29 @@ module zhao_vertex_arena #(
         a_hit_implies_written:      assert (f_expect_valid);
       end
 
+      // THE CAUSE, LOCALISED -- and it is KEPT FAILING on purpose.
+      //
+      // `a_hit_implies_written` fails at k=4. This says the same thing one step
+      // earlier and in terms of the ARRAY rather than the reply: if the store
+      // believes the watched slot is valid, the shadow must believe it too. It
+      // fails at **k=3**, so the divergence happens at the UPDATE, not in the
+      // reply path -- the shadow misses a fill that the array records.
+      //
+      // Its companion direction, `!f_shadow_valid || valid_q[f_addr]`, returns
+      // UNSAT: the shadow never claims a fill the array does not have. So the
+      // gap is one-directional, which narrows it to `f_watched_fill`.
+      //
+      // THE VCD CANNOT SETTLE THIS AND SHOULD NOT BE TRUSTED HERE. Its trace
+      // shows `fill_ok` high with `wr_addr` equal to the watched address while
+      // `f_watched_fill` is low, which is impossible for a combinational AND of
+      // those two terms -- and `f_arena`/`f_index` are `anyconst`, so the
+      // watched address cannot have moved between the fill and the lookup. The
+      // most likely reading is that yosys merged `wr_addr` and `rd_addr`, which
+      // are structurally identical expressions, so the dumped column is not the
+      // signal it is labelled. This file already recorded that same trap once.
+      // The instrument for the rest of this is ASSERTIONS, not dumps.
+      p_array_implies_shadow: assert (!valid_q[f_addr] || f_shadow_valid);
+
       // a_shadow_tracks_valid: THE DIAGNOSIS ABOVE WAS RIGHT AND THE FIX WAS
       // ELSEWHERE. 2026-08-25.
       //
