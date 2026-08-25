@@ -26,6 +26,7 @@
 #include "verilated.h"
 
 #include "zhao_sim.hpp"
+#include "zfield/zfield.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -42,6 +43,9 @@ constexpr uint8_t OP_MOV = 0x00, OP_ADD = 0x01, OP_SUB = 0x02, OP_MUL = 0x03;
 constexpr uint8_t OP_MAD = 0x04, OP_MIN = 0x05, OP_MAX = 0x06, OP_ABS = 0x07;
 constexpr uint8_t OP_CLAMP = 0x08, OP_SELECT = 0x09, OP_CMP = 0x0A;
 constexpr uint8_t OP_END = 0xFF;
+constexpr uint8_t OP_CURVE = 0x1A;        // dispatched to the serialiser
+constexpr uint8_t OP_SPLINE = 0x1B;       // same unit, mode 2
+constexpr uint8_t OP_DCURVE = 0x1D;       // same unit, mode 1
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -124,10 +128,37 @@ struct Bench {
     d.h_we_i = 0;
     d.start_i = 0;
     d.instr_count_i = 0;
+    d.tbl_n_i = 0;
+    d.tbl_x_i = 0;
+    d.tbl_y_i = 0;
+    d.tbl_dy_i = 0;
     d.eval();
     for (int i = 0; i < 3; ++i) zhao::tick(d);
     d.rst_n = 1;
     d.eval();
+  }
+
+  // The curve table, as a REGISTERED read: the index presented this cycle is
+  // answered on the NEXT one, which is what an M10K does.
+  //
+  // I first drove this combinationally -- answering the current index in the
+  // same evaluation -- and every lane came back zero, because the unit was fed
+  // data one cycle early on every lookup. v1's own curve bench states the
+  // protocol in a comment and I had not read it.
+  std::vector<int32_t> tx, ty, tdy;
+
+  void tick_tbl() {
+    const uint32_t idx = d.tbl_idx_o;
+    zhao::tick(d);
+    if (!tx.empty()) {
+      const bool in = idx < tx.size();
+      // Out-of-range answers are HOSTILE: a missing bound check should walk off
+      // the end loudly rather than quietly agreeing with the oracle.
+      d.tbl_x_i = static_cast<uint32_t>(in ? tx[idx] : INT32_MIN);
+      d.tbl_y_i = static_cast<uint32_t>(in ? ty[idx] : 0x5A5A5A5A);
+      d.tbl_dy_i = static_cast<uint32_t>(in ? tdy[idx] : 0x5A5A5A5A);
+      d.eval();
+    }
   }
 
   void present() {
@@ -174,7 +205,7 @@ struct Bench {
     int clocks = 0;
     while ((d.busy_o != 0) && clocks < guard) {
       present();
-      zhao::tick(d);
+      tick_tbl();
       ++clocks;
     }
     present();
@@ -300,6 +331,245 @@ int main(int argc, char** argv) {
     b.run(1u);
     check(dut.status_o == 3, "5.an opcode v2 cannot execute is refused, not skipped", 3,
           dut.status_o);
+  }
+
+  // ---- 6. CURVE: a LONG op, through the tagged serialiser -----------------
+  // The first long operation v2 can run. It is not executed in the core: the
+  // core dispatches a vector request to zhao_field_v2_lanemux, which serialises
+  // four lanes through v1's UNMODIFIED zhao_field_curve and carries the
+  // {wavefront, destination} tag back.
+  //
+  // The oracle is zfield::interpret on a two-instruction program -- the same
+  // oracle v1's own curve differential uses. v2 changes how work reaches the
+  // unit, not what it computes, so agreement here is the claim worth making.
+  //
+  // FOUR DISTINCT LANE VALUES, because the defect this path newly admits is a
+  // lane receiving another lane's answer, and equal inputs would hide it.
+  {
+    Bench b(dut);
+    b.prog = {{OP_CURVE, 2, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+    const std::vector<int32_t> tx = {0, 1 << 16, 2 << 16, 3 << 16};
+    const std::vector<int32_t> ty = {0, 2 << 16, 1 << 16, 4 << 16};
+    const std::vector<int32_t> tdy(4, 0);
+
+    auto oracle = [&](uint8_t op, int32_t a) -> int32_t {
+      zfield::Decoded prog;
+      prog.profile = 0;
+      prog.tables.push_back(zfield::Table{0, tx, ty, tdy});
+      zfield::Instr ins{};
+      ins.op = op;
+      ins.dst = 1;
+      ins.a = 0;
+      ins.b = 0;
+      ins.c = 0;
+      ins.imm = 0;
+      prog.instrs.push_back(ins);
+      zfield::Instr end{};
+      end.op = zfield::OP_END;
+      prog.instrs.push_back(end);
+      zfield::IoLane il{};
+      il.name = "a";
+      il.type = 0;
+      il.reg = 0;
+      prog.in_lanes.push_back(il);
+      zfield::IoLane ol{};
+      ol.name = "y";
+      ol.type = 0;
+      ol.reg = 1;
+      prog.out_lanes.push_back(ol);
+      int32_t in[1] = {a};
+      int32_t out[1] = {0};
+      zfield::interpret(prog, in, 1, out, 1);
+      return out[0];
+    };
+
+    int32_t a[kLanes];
+    for (int l = 0; l < kLanes; ++l) {
+      a[l] = (l + 1) * (1 << 15);
+      b.write_reg(0, l, 0, a[l]);
+    }
+    b.tx = tx;
+    b.ty = ty;
+    b.tdy = tdy;
+    dut.tbl_n_i = static_cast<uint8_t>(tx.size());
+    b.run(1u);
+
+    uint64_t bad = 0;
+    for (int l = 0; l < kLanes; ++l) {
+      const int32_t want = oracle(zfield::OP_CURVE, a[l]);
+      const int32_t got = b.read_reg(0, l, 2);
+      if (got != want) {
+        ++bad;
+        std::printf("  6.lane %d: want %d got %d\n", l, want, got);
+      }
+    }
+    check(bad == 0, "6.CURVE through the serialiser matches zfield::interpret, per lane", 0, bad);
+    check(dut.status_o == 0, "6.and the run reports OK, not refused", 0, dut.status_o);
+  }
+
+  // ---- 7. DCURVE and SPLINE: the same unit, different modes ---------------
+  // Both were wired with CURVE -- one unit, a mode select -- so they need
+  // EVIDENCE rather than RTL. Worth testing separately anyway: the mode is
+  // carried through the serialiser as part of the request, so a mode dropped or
+  // mistranslated between the core's opcode and the unit's 2-bit input would
+  // show up here and nowhere else. Section 6 alone would pass with the mode
+  // hard-wired to zero.
+  {
+    struct ModeCase {
+      uint8_t op;
+      uint8_t z_op;
+      const char* name;
+    };
+    const ModeCase cases[] = {
+        {OP_DCURVE, zfield::OP_DCURVE, "DCURVE"},
+        {OP_SPLINE, zfield::OP_SPLINE, "SPLINE"},
+    };
+    const std::vector<int32_t> tx = {0, 1 << 16, 2 << 16, 3 << 16};
+    const std::vector<int32_t> ty = {0, 2 << 16, 1 << 16, 4 << 16};
+    const std::vector<int32_t> tdy = {0, 1 << 15, -(1 << 15), 0};
+
+    for (const ModeCase& mc : cases) {
+      Bench b(dut);
+      b.prog = {{mc.op, 2, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+
+      auto oracle = [&](int32_t a) -> int32_t {
+        zfield::Decoded prog;
+        prog.profile = 0;
+        prog.tables.push_back(zfield::Table{0, tx, ty, tdy});
+        zfield::Instr ins{};
+        ins.op = mc.z_op;
+        ins.dst = 1;
+        ins.a = 0;
+        ins.b = 0;
+        ins.c = 0;
+        ins.imm = 0;
+        prog.instrs.push_back(ins);
+        zfield::Instr end{};
+        end.op = zfield::OP_END;
+        prog.instrs.push_back(end);
+        zfield::IoLane il{};
+        il.name = "a";
+        il.type = 0;
+        il.reg = 0;
+        prog.in_lanes.push_back(il);
+        zfield::IoLane ol{};
+        ol.name = "y";
+        ol.type = 0;
+        ol.reg = 1;
+        prog.out_lanes.push_back(ol);
+        int32_t in[1] = {a};
+        int32_t out[1] = {0};
+        zfield::interpret(prog, in, 1, out, 1);
+        return out[0];
+      };
+
+      int32_t a[kLanes];
+      for (int l = 0; l < kLanes; ++l) {
+        a[l] = (l + 1) * (1 << 15);
+        b.write_reg(0, l, 0, a[l]);
+      }
+      b.tx = tx;
+      b.ty = ty;
+      b.tdy = tdy;
+      dut.tbl_n_i = static_cast<uint8_t>(tx.size());
+      b.run(1u);
+
+      uint64_t bad = 0;
+      for (int l = 0; l < kLanes; ++l)
+        if (b.read_reg(0, l, 2) != oracle(a[l])) ++bad;
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "7.%s matches zfield::interpret on every lane", mc.name);
+      check(bad == 0, nm, 0, bad);
+    }
+  }
+
+  // ---- 8. EVERY wavefront running long ops, in TWO MODES at once ----------
+  // Sections 6 and 7 each start ONE wavefront, so at most one long operation is
+  // ever in the machine. That is not the workload: eight wavefronts run the same
+  // Earth program, they drift apart in pc, and the serialiser sees requests from
+  // several of them interleaved.
+  //
+  // The mutation sweep is what said so. M93 (a long op counted at dispatch AND
+  // at reply), M94 (the unit given the LIVE mode rather than the captured one)
+  // and M95 (a request retired without the serialiser accepting it) all SURVIVED
+  // sections 6 and 7, and all three are unreachable with a single long op in
+  // flight. This section is the smallest program that reaches them: CURVE then
+  // SPLINE, so two wavefronts at different pcs demand DIFFERENT MODES of the
+  // same unit in the same window.
+  {
+    Bench b(dut);
+    b.prog = {{OP_CURVE, 2, 0, 0, 0}, {OP_SPLINE, 3, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+    const std::vector<int32_t> tx = {0, 1 << 16, 2 << 16, 3 << 16};
+    const std::vector<int32_t> ty = {0, 2 << 16, 1 << 16, 4 << 16};
+    const std::vector<int32_t> tdy = {0, 1 << 15, -(1 << 15), 0};
+
+    auto oracle = [&](uint8_t z_op, int32_t a) -> int32_t {
+      zfield::Decoded prog;
+      prog.profile = 0;
+      prog.tables.push_back(zfield::Table{0, tx, ty, tdy});
+      zfield::Instr ins{};
+      ins.op = z_op;
+      ins.dst = 1;
+      ins.a = 0;
+      ins.b = 0;
+      ins.c = 0;
+      ins.imm = 0;
+      prog.instrs.push_back(ins);
+      zfield::Instr end{};
+      end.op = zfield::OP_END;
+      prog.instrs.push_back(end);
+      zfield::IoLane il{};
+      il.name = "a";
+      il.type = 0;
+      il.reg = 0;
+      prog.in_lanes.push_back(il);
+      zfield::IoLane ol{};
+      ol.name = "y";
+      ol.type = 0;
+      ol.reg = 1;
+      prog.out_lanes.push_back(ol);
+      int32_t in[1] = {a};
+      int32_t out[1] = {0};
+      zfield::interpret(prog, in, 1, out, 1);
+      return out[0];
+    };
+
+    // Distinct per wavefront AND per lane: a reply delivered to the wrong
+    // wavefront, or the wrong lane of the right one, must not land on a value
+    // that happens to be correct anyway.
+    int32_t a[kWfs][kLanes];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        a[w][l] = (w * kLanes + l + 1) * 3719;
+        b.write_reg(w, l, 0, a[w][l]);
+      }
+
+    b.tx = tx;
+    b.ty = ty;
+    b.tdy = tdy;
+    dut.tbl_n_i = static_cast<uint8_t>(tx.size());
+    const uint32_t before = dut.instr_retired_o;
+    const int clocks = b.run((1u << kWfs) - 1u);
+
+    check(clocks < 20000, "8.all wavefronts finished (no lost long-op request)", 1,
+          clocks < 20000 ? 1 : 0);
+
+    uint64_t bad_c = 0, bad_s = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        if (b.read_reg(w, l, 2) != oracle(zfield::OP_CURVE, a[w][l])) ++bad_c;
+        if (b.read_reg(w, l, 3) != oracle(zfield::OP_SPLINE, a[w][l])) ++bad_s;
+      }
+    check(bad_c == 0, "8.CURVE result correct for every wavefront and lane", 0, bad_c);
+    check(bad_s == 0, "8.SPLINE result correct for every wavefront and lane", 0, bad_s);
+
+    // A long op retires ONCE, at its reply. Counting it at dispatch as well is
+    // invisible to any value check -- the answers stay right and the machine
+    // merely claims to have done more work than it did.
+    const uint32_t retired = dut.instr_retired_o - before;
+    check(retired == static_cast<uint32_t>(kWfs * 3),
+          "8.each wavefront retired exactly its three instructions", kWfs * 3, retired);
+    std::printf("  v2 long-op mix: %u instructions in %d clocks\n", retired, clocks);
   }
 
   dut.final();

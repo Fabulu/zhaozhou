@@ -93,6 +93,25 @@ module zhao_field_v2_core #(
     input  logic [$clog2(REGS)-1:0]    ins_b_i,
     input  logic [$clog2(REGS)-1:0]    ins_c_i,
 
+    // ---- curve table lookup, passed through to the boundary --------------
+    // A REGISTERED read: the index presented this cycle is answered on the
+    // NEXT one, exactly as an M10K does. The table lives outside the unit in
+    // v1 and stays outside here -- v2 consumes program tables, it does not own
+    // them.
+    output logic [5:0]         tbl_idx_o,
+    input  logic [6:0]         tbl_n_i,
+    input  logic signed [31:0] tbl_x_i,
+    input  logic signed [31:0] tbl_y_i,
+    input  logic signed [31:0] tbl_dy_i,
+
+    // ---- saturation ledger ------------------------------------------------
+    // NOT optional bookkeeping: saturation is part of the answer in this
+    // engine, so v2 exposes it as v1 does. Dangling sat_* pins would silently
+    // drop half the semantics of every long operation.
+    output logic        sat_add_o,
+    output logic        sat_mul_o,
+    output logic        sat_rescale_o,
+
     // ---- observability ---------------------------------------------------
     output logic [31:0] instr_retired_o   // vector instructions retired
 );
@@ -109,6 +128,9 @@ module zhao_field_v2_core #(
   localparam logic [7:0] OP_CLAMP  = 8'h08;
   localparam logic [7:0] OP_SELECT = 8'h09;
   localparam logic [7:0] OP_CMP    = 8'h0A;
+  localparam logic [7:0] OP_CURVE  = 8'h1A;   // mode 0
+  localparam logic [7:0] OP_SPLINE = 8'h1B;   // mode 2
+  localparam logic [7:0] OP_DCURVE = 8'h1D;   // mode 1
 
   localparam logic [7:0] ST_OK             = 8'd0;
   localparam logic [7:0] ST_PC_OVERRUN     = 8'd2;
@@ -171,7 +193,9 @@ module zhao_field_v2_core #(
   logic [RW-1:0]  s1_dst;
 
   wire pc_overrun = sel_valid && (pc[sel] >= instr_count_i);
-  wire issue_fire = sel_valid && !pc_overrun;
+  // issue_fire is assigned further down, once s1_is_long exists: the long-op
+  // interlock needs it, and a wire must be declared before it is used.
+  wire issue_fire;
 
   // ---- stage 2: execute and write back ---------------------------------
   logic signed [31:0] alu_y [LANES];
@@ -238,13 +262,64 @@ module zhao_field_v2_core #(
         OP_CMP:    for (int l = 0; l < LANES; l++)
                      alu_y[l] = (rd_a[l] < rd_b[l]) ? 32'sh0001_0000 : 32'sd0;
         OP_END:    ;                       // retires the wavefront, writes nothing
+        OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
     end
   end
 
+  // ---- long operations, via the tagged lane serialiser -------------------
+  // A long op is not executed here. It is handed to zhao_field_v2_lanemux,
+  // which serialises the LANES lanes through one scalar unit and carries the
+  // {wavefront, destination} tag back. The wavefront stays IN FLIGHT until the
+  // reply lands: the scoreboard does not care how long an instruction takes.
+  wire s1_is_long = s1_valid && ((s1_op == OP_CURVE) || (s1_op == OP_DCURVE) ||
+                                 (s1_op == OP_SPLINE));
+  logic [1:0] s1_mode;
+  always_comb begin
+    unique case (s1_op)
+      OP_DCURVE: s1_mode = 2'd1;
+      OP_SPLINE: s1_mode = 2'd2;
+      default:   s1_mode = 2'd0;
+    endcase
+  end
+
+  logic               lq_valid;
+  logic [WFW-1:0]     lq_wf;
+  logic [RW-1:0]      lq_dst;
+  logic [1:0]         lq_mode;
+  logic signed [31:0] lq_a [LANES];
+
+  logic               lm_req_ready, lm_rsp_valid;
+  logic [WFW-1:0]     lm_rsp_wf;
+  logic [RW-1:0]      lm_rsp_dst;
+  logic signed [31:0] lm_rsp_y [LANES];
+
+  // ---- THE LONG-OP INTERLOCK ---------------------------------------------
+  // The dispatch slot holds ONE request. It is filled at stage 2 -- two cycles
+  // after the instruction issued -- so a guard on lq_valid alone is two cycles
+  // late: a second long op reaches stage 2 while the first request is still
+  // waiting for the serialiser, and the dispatch below overwrites it. The first
+  // wavefront then waits forever for a reply to a request that no longer
+  // exists, and the engine hangs.
+  //
+  // Found by mutation sweep, not by inspection: M93/M94/M95 all survived
+  // because sections 6 and 7 start ONE wavefront and never put two long ops in
+  // the machine at once. Section 8 does, and hung at the 20,000-clock guard
+  // with 11 of 24 instructions retired.
+  //
+  // Only LONG ops are held. Short ops keep issuing past a pending request --
+  // they touch neither the slot nor the serialiser, and stalling the whole
+  // machine behind one curve lookup would give back the throughput v2 exists
+  // for. Wavefronts write disjoint register regions, so a short op retiring
+  // beside a long reply cannot collide with it.
+  wire ins_is_long = (ins_op_i == OP_CURVE) || (ins_op_i == OP_DCURVE) ||
+                     (ins_op_i == OP_SPLINE);
+  wire long_slot_busy = lq_valid || (s1_valid && s1_is_long);
+  assign issue_fire = sel_valid && !pc_overrun && !(ins_is_long && long_slot_busy);
+
   wire s1_is_end = s1_valid && (s1_op == OP_END);
-  wire s1_writes = s1_valid && !s1_is_end && !unsupported;
+  wire s1_writes = s1_valid && !s1_is_end && !unsupported && !s1_is_long;
 
   // ---- sequential ------------------------------------------------------
   integer i, l;
@@ -261,6 +336,14 @@ module zhao_field_v2_core #(
       s1_op          <= 8'd0;
       s1_dst         <= '0;
       instr_retired_o<= 32'd0;
+      lq_valid       <= 1'b0;
+      lq_wf          <= '0;
+      lq_dst         <= '0;
+      lq_mode        <= 2'd0;
+      sat_add_o      <= 1'b0;
+      sat_mul_o      <= 1'b0;
+      sat_rescale_o  <= 1'b0;
+      for (i = 0; i < LANES; i++) lq_a[i] <= '0;
     end else begin
       // start pulses
       for (i = 0; i < WFS; i++) begin
@@ -299,8 +382,35 @@ module zhao_field_v2_core #(
       end
 
       // ---- stage 2 retire ----
+      // ---- long-op dispatch, held until the serialiser accepts -----------
+      if (s1_is_long) begin
+        lq_valid <= 1'b1;
+        lq_wf    <= s1_wf;
+        lq_dst   <= s1_dst;
+        lq_mode  <= s1_mode;
+        for (l = 0; l < LANES; l++) lq_a[l] <= rd_a[l];
+      end else if (lq_valid && lm_req_ready) begin
+        lq_valid <= 1'b0;
+      end
+
+      // Saturation is STICKY, as in v1: a run that saturated once did so.
+      if (cv_sat_add)  sat_add_o     <= 1'b1;
+      if (cv_sat_mul)  sat_mul_o     <= 1'b1;
+      if (cv_sat_resc) sat_rescale_o <= 1'b1;
+
+      // ---- long-op reply: write back and release the wavefront -----------
+      if (lm_rsp_valid) begin
+        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
+        inflight[lm_rsp_wf] <= 1'b0;
+        instr_retired_o     <= instr_retired_o + 32'd1;
+      end
+
       if (s1_valid) begin
-        inflight[s1_wf] <= 1'b0;
+        // A LONG OP KEEPS ITS WAVEFRONT IN FLIGHT. Clearing it here would let
+        // the wavefront issue again while the serialiser still owed it an
+        // answer -- the hazard the one-in-flight rule exists to prevent, and
+        // invisible until two wavefronts contend for the unit.
+        if (!s1_is_long) inflight[s1_wf] <= 1'b0;
         if (unsupported) begin
           if (status_o == ST_OK) status_o <= ST_UNSUPPORTED_OP;
           active[s1_wf]   <= 1'b0;
@@ -309,7 +419,8 @@ module zhao_field_v2_core #(
           active[s1_wf]   <= 1'b0;
           finished[s1_wf] <= 1'b1;
           instr_retired_o <= instr_retired_o + 32'd1;
-        end else begin
+        end else if (!s1_is_long) begin
+          // A long op counts when its REPLY lands, not when it dispatches.
           instr_retired_o <= instr_retired_o + 32'd1;
         end
       end
@@ -320,6 +431,51 @@ module zhao_field_v2_core #(
         for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];
     end
   end
+
+  // ---- the serialiser, the scalar unit, and its multiplier lane ---------
+  logic [5:0]         cv_seg_unused;
+  logic               cv_sat_add, cv_sat_mul, cv_sat_resc;
+  logic               u_valid, u_ready, u_rvalid, u_rready;
+  logic [1:0]         u_mode;
+  logic signed [31:0] u_a, u_result;
+  logic               mul_issue, mul_p_valid;
+  logic signed [32:0] mul_a, mul_b;
+  logic signed [65:0] mul_p;
+
+  zhao_field_v2_lanemux #(.LANES(LANES), .WFS(WFS), .REGS(REGS)) u_lanemux (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(lq_valid), .req_ready_o(lm_req_ready),
+      .req_wf_i(lq_wf), .req_dst_i(lq_dst), .req_mode_i(lq_mode), .req_a_i(lq_a),
+      .u_valid_o(u_valid), .u_ready_i(u_ready), .u_mode_o(u_mode), .u_a_o(u_a),
+      .u_rvalid_i(u_rvalid), .u_rready_o(u_rready), .u_result_i(u_result),
+      .rsp_valid_o(lm_rsp_valid), .rsp_ready_i(1'b1),
+      .rsp_wf_o(lm_rsp_wf), .rsp_dst_o(lm_rsp_dst), .rsp_y_o(lm_rsp_y)
+  );
+
+  // v1's curve unit, UNMODIFIED -- the same silicon the frozen engine uses and
+  // the same differential covers. v2 changes how work reaches it, not what it
+  // computes. It owns no multiplier: the 2026-08-23 rearchitecture took ten
+  // private ones to one shared lane and 79 DSPs to 3, so v2 supplies the lane.
+  // That seam is MUL_LANES in reports/FIELD_V2_MODEL.md, which prices 1/2/3/4
+  // at 3/6/9/12 DSPs and finds width 4 needs at least two.
+  zhao_field_curve u_curve (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(u_valid), .v_ready_o(u_ready),
+      .mode_i(u_mode), .a_i(u_a),
+      .tbl_n_i(tbl_n_i), .tbl_idx_o(tbl_idx_o),
+      .tbl_x_i(tbl_x_i), .tbl_y_i(tbl_y_i), .tbl_dy_i(tbl_dy_i),
+      .r_valid_o(u_rvalid), .r_ready_i(u_rready), .result_o(u_result),
+      .seg_idx_o(cv_seg_unused),
+      .sat_add_o(cv_sat_add), .sat_mul_o(cv_sat_mul), .sat_rescale_o(cv_sat_resc),
+      .mul_issue_o(mul_issue), .mul_a_o(mul_a), .mul_b_o(mul_b),
+      .mul_p_i(mul_p), .mul_valid_i(mul_p_valid)
+  );
+
+  zhao_field_mul u_mul (
+      .clk(clk), .rst_n(rst_n),
+      .issue_i(mul_issue), .a_i(mul_a), .b_i(mul_b),
+      .p_o(mul_p), .p_valid_o(mul_p_valid)
+  );
 
   assign busy_o     = active;
   assign done_o     = finished;

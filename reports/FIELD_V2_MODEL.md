@@ -386,7 +386,7 @@ rather than assumed.
 
 ---
 
-## CURVE integration: attempted, reverted, and what was learned
+## CURVE integration, attempt 1: attempted, reverted, and what was learned
 
 *2026-08-26. The attempt is recorded because the next session should start from
 the finding rather than rediscover it.*
@@ -440,3 +440,155 @@ fed" from "the reply is not reaching the register file".
 The failing differential was **not** weakened to pass. It compared against
 `zfield::interpret` on a two-instruction program — the same oracle v1's curve
 differential uses — and it correctly said no.
+
+---
+
+## CURVE integration, attempt 2: it runs, and the sweep found a hang under it
+
+*2026-08-26, later. Attempt 1's section is kept above because the cause it did
+not find is worth reading beside the cause that was.*
+
+### The cause attempt 1 could not find
+
+The curve table is a **REGISTERED read**: the index presented this cycle is
+answered on the NEXT one, which is what an M10K does. Attempt 1 drove it
+combinationally — answering the current index in the same evaluation — so the
+unit was fed data one cycle early on every lookup and every lane came back zero.
+
+v1's own curve bench states the protocol in a comment. Attempt 1's hypothesis 1
+was *close* to it — it re-drove the table after every `eval` — but that is a
+different mistake from answering one cycle late, and re-driving more often does
+not make an early answer late.
+
+The corrected `tick_tbl` captures `tbl_idx_o` **before** the tick and presents
+the answer **after** it. Out-of-range indices are answered with hostile values
+(`INT32_MIN`, `0x5A5A5A5A`) so a missing bound check walks off the end loudly
+rather than quietly agreeing with the oracle.
+
+Result: CURVE agrees with `zfield::interpret` per lane. DCURVE and SPLINE
+followed as evidence rather than RTL — one unit, three modes — but they are
+tested separately because the mode travels through the serialiser as part of the
+request, and a CURVE-only test passes with the mode hard-wired to zero.
+
+### THE HANG, which no value check could have found
+
+The mutation sweep scored the new seam and **three mutants survived**: a long op
+counted at both dispatch and reply (M93), the unit given the LIVE mode rather
+than the captured one (M94), and a request retired without the serialiser having
+accepted it (M95).
+
+All three share one cause of invisibility: **every section started ONE
+wavefront**, so at most one long operation was ever in the machine. That is not
+the workload. Eight wavefronts run the same Earth program, drift apart in pc, and
+several want the unit in the same window.
+
+Section 8 was written to reach them. It **hung** — 11 of 24 instructions retired
+against the 20,000-clock guard.
+
+    dispatch slot filled at STAGE 2      = two cycles after issue
+    issue guard read `lq_valid`          = two cycles too early
+    => a second long op reaches stage 2 while the first request is still
+       pending, and the dispatch overwrites it. The first wavefront waits
+       forever for a reply to a request that no longer exists.
+
+This is the failure mode the model did not predict, and it is worth naming
+precisely: **the throughput model reasons about initiation intervals, and an
+initiation interval says nothing about a request that is destroyed before it is
+served.** The model's arithmetic was right; its silence was the problem.
+
+### The interlock
+
+```systemverilog
+wire ins_is_long    = (ins_op_i == OP_CURVE) || (ins_op_i == OP_DCURVE) ||
+                      (ins_op_i == OP_SPLINE);
+wire long_slot_busy = lq_valid || (s1_valid && s1_is_long);
+assign issue_fire   = sel_valid && !pc_overrun && !(ins_is_long && long_slot_busy);
+```
+
+Only LONG ops are held. Short ops keep issuing past a pending request: they touch
+neither the slot nor the serialiser, and stalling the whole machine behind one
+curve lookup would give back exactly the throughput v2 exists for. Wavefronts
+write disjoint register regions, so a short op retiring beside a long reply
+cannot collide with it.
+
+**M96 mutates the interlock back to its two-cycle-late form**, so the defect
+cannot return unnoticed.
+
+### Measured
+
+| | |
+|---|---|
+| ALU-only program, 8 wavefronts | 0.99 instr/clock, **3.97 vertex-instr/clock** (unchanged) |
+| CURVE + SPLINE, 8 wavefronts | 24 instructions in 2,020 clocks |
+| checks | 23, all green |
+| sweep, v2 core + lanemux in full | 17 mutants, all caught |
+
+The long-op figure is a serialiser measurement, not a regression: four lanes go
+through one unit one at a time, sixteen long operations do that sixteen times,
+and the ALU path's throughput is untouched. It is also the argument for the next
+piece of work — **a second lane** — stated as a number rather than a preference.
+
+
+---
+
+## Next long operation: DIST2/LEN2/LEN3, and the operand problem
+
+*2026-08-26. Written before the RTL, so the design decision is on the record
+rather than reconstructed from the diff.*
+
+### The oracle resolves, and the unit already exists
+
+`reference/include/zfield/zfield.hpp` gives `OP_LEN2 = 0x12`, `OP_LEN3 = 0x13`,
+`OP_DIST2 = 0x14`, and `zfield_interpret.cpp` implements DIST2 as `len_of` over
+the componentwise difference — the same `len_of` LEN2 and LEN3 use.
+
+v1's `zhao_field_len` already takes `mode_i` 0/1/2 for exactly those three, plus
+`a0/a1/a2/b0/b1`. So this is the CURVE situation again: **one unit, three modes,
+wiring rather than arithmetic.**
+
+### What makes it harder than CURVE
+
+CURVE consumes ONE operand. These consume up to FOUR:
+
+| op | registers read |
+|---|---|
+| LEN2 | `a`, `a+1` |
+| LEN3 | `a`, `a+1`, `a+2` |
+| DIST2 | `a`, `a+1`, `b`, `b+1` |
+
+v2's register read walk supplies three values per lane — `rd_a`, `rd_b`, `rd_c`
+— addressed by the instruction's `a`/`b`/`c` fields. These ops do not address
+their operands that way: they take CONSECUTIVE registers from a base. `a+1` is
+not reachable from any current port.
+
+### Two ways out, and why the second one wins
+
+**More read ports.** Three per lane becomes five. The banked register file
+measured **12 M10K** at three ports (`zhao_probe_banked_rf`), and port count is
+what M10K replication scales with, so this is roughly a 4 M10K increase for an
+operation that is a minority of the histogram. It also raises the port count for
+every wavefront whether or not it ever executes a length.
+
+**A second read pass.** Spend ONE extra clock: with the long op held in stage 1,
+drive the read addresses from `{s1_wf, s1_a + 1}`, `{s1_wf, s1_a + 2}` and
+`{s1_wf, s1_b + 1}` on the following cycle, and capture those into the request
+alongside the first three. Zero extra M10K.
+
+The second pass wins on the numbers already measured. A long operation costs
+about `4 x II` in the serialiser — the CURVE+SPLINE mix measured 2,020 clocks
+for 24 instructions — so **one clock is under 1% of the operation it belongs
+to**, against a permanent ~4 M10K on a device with 553.
+
+### What it requires, stated so it is not discovered late
+
+* `s1_a` and `s1_b` must be captured at issue. Stage 1 does not keep them today,
+  because no short op needs the operand INDEX after the read has happened.
+* **Issue must stall completely for the steal cycle** — not just for long ops.
+  The existing interlock holds long ops only, deliberately, so short ops keep
+  flowing past a pending request. A short op issuing into the steal cycle would
+  have its own reads replaced by the length's second pass, and would then compute
+  on another instruction's operands. That is a wrong ANSWER rather than a hang,
+  which makes it the more dangerous of the two.
+* The mutant for it therefore writes itself: **remove the steal-cycle stall and
+  the sweep must fail.** If it does not, the test does not run a short op behind
+  a length, and that is the gap to close first.

@@ -5,6 +5,65 @@ at the top.*
 
 ---
 
+## 2026-08-26 — curves run on the new engine, and a hang that was hiding in it
+
+### What now works
+
+The new Field engine can do **curves**. That is the first of the complicated
+instructions to run on it, and it covers three of them at once — CURVE, DCURVE
+and SPLINE are one piece of hardware in three modes.
+
+It runs them on the *old* engine's curve hardware, unchanged. That was the
+point of the design: the new engine changes how work reaches a unit, not what
+the unit computes. So when the answers match the reference, that means
+something — the same silicon, reached a new way, still agrees.
+
+Curves and distances were what the three real Earth programs said to build
+first, so this is the top of the evidence-ordered list rather than my guess.
+
+### The part worth telling you about
+
+The tests passed. Then the mutation sweep — the thing that deliberately breaks
+the hardware to check the tests would notice — reported **three deliberate
+defects that nothing caught**. All three were invisible for the same reason:
+every test started **one** group of vertices, so only one slow instruction was
+ever in the machine at a time.
+
+That is not the real workload. The real workload is eight groups running the
+same program, drifting apart, several of them wanting the curve unit at once.
+
+So I wrote that test. **It hung.** Not "gave a wrong number" — the engine
+stopped, with 11 of 24 instructions done, waiting forever.
+
+The cause: the slot that holds a pending curve request is filled two clocks
+after the instruction starts, and the check that was supposed to stop a second
+request from landing on top of it read that slot too early. A second group's
+request overwrote the first one. The first group then waited for an answer to a
+request that no longer existed.
+
+This would not have shown up in any single-group test, and it would have shown
+up on real terrain as the machine simply stopping. It is fixed, the fix is
+itself now one of the deliberate defects the sweep re-checks, and all eight of
+the new checks catch what they are meant to.
+
+I am telling you this because it is the clearest example so far of why the
+sweep is worth its cost. The tests were green. The engine was broken. Only
+breaking it on purpose found the gap.
+
+### Where the Field engine stands
+
+| | old engine | new engine |
+|---|---|---|
+| simple arithmetic | yes | yes |
+| curves (CURVE/DCURVE/SPLINE) | yes | **yes, as of today** |
+| distances, rings, noise, rotations | yes | not yet — refused, never skipped |
+| speed | 0.143 vertex-instructions/clock | 3.97 |
+
+Next, in the order the Earth programs demand: distance, then rings, then a
+second multiplier so four vertices at a time stops being the limit.
+
+---
+
 ## 2026-08-25 (evening) — the new Field engine runs, and it is 27.8x faster
 
 ### The number

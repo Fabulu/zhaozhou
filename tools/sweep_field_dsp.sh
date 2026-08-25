@@ -96,6 +96,23 @@ restore() {
   return 1
 }
 
+# A KILLED SWEEP MUST NOT LEAVE A MUTANT IN THE TREE. This trap is not a
+# convenience: a sweep interrupted mid-iteration once left a SURVIVING mutant
+# in zhao_field_mul.sv, and the next gate ran green over a deliberate defect.
+# Ctrl-C, a timeout and a normal exit all land here.
+on_exit() {
+  local rc=$?
+  # The successful path deletes GOLDDIR, and without this every clean run
+  # would compare against nothing, read as mutated, and cry wolf.
+  [ -d "$GOLDDIR" ] || return $rc
+  if moved_from_gold; then
+    echo "== interrupted with the tree mutated -- restoring" >&2
+    restore || echo "RESTORE FAILED: $FILES may still be mutated -- git checkout them" >&2
+  fi
+  return $rc
+}
+trap on_exit EXIT INT TERM
+
 moved_from_gold() {
   local f
   for f in $FILES; do
@@ -227,14 +244,24 @@ for f in $FILES; do
   PRISTINE_SET[$(setkey "$ts")]=$(model_hash "$ts")
 done
 
-expected=$(python "$MUTPY" --count | tr -d '\r')
+# SWEEP_ONLY runs a SUBSET, for scoring one increment's mutants without a
+# full re-sweep. It is loud on purpose: a subset run must never be readable
+# as a full sweep in a log, because "the sweep was green" is the claim this
+# file exists to support. Unset (the default) means all of them.
+TOTAL=$(python "$MUTPY" --count | tr -d '\r')
+if [ -n "${SWEEP_ONLY:-}" ]; then
+  K_LIST="$SWEEP_ONLY"
+  echo "!! SUBSET RUN: $(echo $K_LIST | wc -w) of $TOTAL mutants -- NOT a full sweep"
+else
+  K_LIST=$(seq 0 $((TOTAL - 1)))
+fi
+expected=$(echo $K_LIST | wc -w)
 attempted=0
 accounted=0
 caught=0
 survivors=()
 
-k=0
-while [ "$k" -lt "$expected" ]; do
+for k in $K_LIST; do
   name=$(python "$MUTPY" --name "$k" | tr -d '\r')
   file=$(python "$MUTPY" --file "$k" | tr -d '\r')
   targets=$(consumers_of "$file" | tr -d '\r')
@@ -258,13 +285,13 @@ while [ "$k" -lt "$expected" ]; do
   if ! models_present "$targets"; then
     echo "  $name  DISCARDED: a model was absent after regeneration"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1)); continue
+    continue
   fi
   if ! exes_present "$targets"; then
     echo "  $name  DISCARDED: a target did not LINK (a build failure would"
     echo "                    otherwise be scored as a caught mutant)"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1)); continue
+    continue
   fi
   # GUARDS 3 AND 4: the mutant's generated model must DIFFER from the pristine
   # one for THIS file's consumers. Identical means the target did not
@@ -273,7 +300,7 @@ while [ "$k" -lt "$expected" ]; do
   if [ "$mutant_model" = "${PRISTINE_SET[$(setkey "$targets")]}" ]; then
     echo "  $name  DISCARDED: model identical to pristine (did not re-elaborate)"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1)); continue
+    continue
   fi
 
   if ! run_lanes "$targets"; then
@@ -286,7 +313,6 @@ while [ "$k" -lt "$expected" ]; do
   accounted=$((accounted + 1))
 
   restore || { echo "  $name  ABORT: revert was not byte-identical"; exit 4; }
-  k=$((k + 1))
 done
 
 echo "== restoring the pristine build"

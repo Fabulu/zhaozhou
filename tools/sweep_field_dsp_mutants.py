@@ -540,9 +540,12 @@ MUTS = [
     ("M83 an unsupported opcode is SKIPPED instead of refused", F_V2,
      """        default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero""",
      """        default:   unsupported = 1'b0;     // MUTANT: silently skipped"""),
+    # M84's anchor moved when CURVE landed: the clear now carries the long-op
+    # guard. Rewritten onto the live line rather than relaxed -- the defect it
+    # names (a wavefront that never comes back) is unchanged.
     ("M84 the retiring wavefront's in-flight bit is never cleared", F_V2,
-     """        inflight[s1_wf] <= 1'b0;""",
-     """        inflight[s1_wf] <= 1'b1;"""),
+     """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
+     """        if (!s1_is_long) inflight[s1_wf] <= 1'b1;"""),
     # ---- v2's tagged lane serialiser ---------------------------------------
     # The tag is the whole point: v1 needed none because one instruction was in
     # flight, so a reply could only belong to the one thing waiting. These
@@ -562,6 +565,45 @@ MUTS = [
     ("M89 the unit is presented the wrong lane's operand", F_LMUX,
      """  assign u_a_o       = a_q[lane];""",
      """  assign u_a_o       = a_q[0];"""),
+    # ---- v2's FIRST LONG OPERATION: the request/reply seam ------------------
+    # CURVE/DCURVE/SPLINE are one unit in three modes, reached over a tagged
+    # request/reply. That seam is where v2 can be wrong in ways neither v1 nor
+    # v2's short-op core could be: a mode lost in translation, a reply written
+    # to the wrong lanes, a wavefront released before its answer came back, or
+    # a long op counted twice because it passes the retire logic twice.
+    ("M90 every curve mode collapses to plain CURVE", F_V2,
+     """      OP_DCURVE: s1_mode = 2'd1;
+      OP_SPLINE: s1_mode = 2'd2;""",
+     """      OP_DCURVE: s1_mode = 2'd0;
+      OP_SPLINE: s1_mode = 2'd0;"""),
+    ("M91 the long-op reply broadcasts lane 0 to every lane", F_V2,
+     """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];""",
+     """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[0];"""),
+    ("M92 a long op releases its wavefront at DISPATCH, not at reply", F_V2,
+     """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
+     """        inflight[s1_wf] <= 1'b0;"""),
+    ("M93 a long op is counted at dispatch AND again at its reply", F_V2,
+     """        end else if (!s1_is_long) begin
+          // A long op counts when its REPLY lands, not when it dispatches.
+          instr_retired_o <= instr_retired_o + 32'd1;
+        end""",
+     """        end else begin
+          instr_retired_o <= instr_retired_o + 32'd1;
+        end"""),
+    ("M94 the unit is given the LIVE mode rather than the captured one", F_LMUX,
+     """  assign u_mode_o    = mode_q;""",
+     """  assign u_mode_o    = req_mode_i;"""),
+    ("M95 a request retires without the serialiser having accepted it", F_V2,
+     """      end else if (lq_valid && lm_req_ready) begin""",
+     """      end else if (lq_valid) begin"""),
+    # M96 is the interlock the sweep itself produced. M93/M94/M95 survived the
+    # single-wavefront sections, section 8 was written to reach them, and it
+    # HUNG on the shipped RTL: the two-cycle-late guard below let a second long
+    # op overwrite a pending request. This mutant restores that guard, so the
+    # defect can never come back unnoticed.
+    ("M96 the long-op interlock reverts to its two-cycle-late form", F_V2,
+     """  assign issue_fire = sel_valid && !pc_overrun && !(ins_is_long && long_slot_busy);""",
+     """  assign issue_fire = sel_valid && !pc_overrun && !lq_valid;"""),
 ]
 
 
