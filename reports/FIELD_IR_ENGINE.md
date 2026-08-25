@@ -203,6 +203,55 @@ carried, not floored. A per-step floor passes every other nav case in the file.
 Section 3e exists for exactly that, and the sweep is where "3e would catch it"
 stopped being a claim.
 
+### Wave 10 measured: 54.80 -> 58.99 MHz, and the table became memory
+
+| | wave 9 (`9fcd7b9`) | wave 10 (`4bfdbde`) |
+| --- | ---: | ---: |
+| Fmax | 54.80 MHz | **58.99 MHz** (+7.6%) |
+| ALMs | 4,692 | **4,494** (-198) |
+| M10K blocks | 4 | **5** |
+| memory bits | 8,192 | **12,561** (+4,369) |
+| DSPs | 3 | 3, unchanged |
+
+Provenance clean, 1856.8 s. Cumulative **8.59 -> 58.99 MHz, 6.9x.**
+
+**+4,369 bits is exactly 257 x 17.** The table INFERRED, rather than staying
+logic -- which is what the storage law predicts for synchronous reads with no
+reset on the array and no byte enables, and what the 198 recovered ALMs are.
+This is the first wave to pay for itself in area as well as time.
+
+### The path left SIN entirely, and the shape of the problem changed
+
+    u_ring|e1[4] -> u_mul|b_q[0]     16.95 ns
+
+RING computing an operand and handing it to the shared multiplier, through
+`lz_t`, `ShiftLeft0`, `Ram0` and two adders. **26 logic levels**, against SIN's
+39 -- the cone is genuinely shorter now, not merely different.
+
+**But the routing fraction is rising and that is worth watching.** The split is
+now 8.606 ns of cell against 8.094 ns of interconnect -- **48% routing**, up
+from 42% at wave 9 and 30% at wave 6. `QUARTUS_GOTCHAS` §12 says a leaf fit in a
+mostly-empty device measures ROUTING rather than the design, and that is what
+voided the renderer pair ranking. At 39 levels the depth dominated and the
+number meant what it looked like; at 26 levels and half routing, it is starting
+not to.
+
+**This does not void the measurement** -- 0.33 ns per logic level is still
+inside the ideal band, and the ALM and M10K deltas are placement-independent
+facts. But the next wave should be judged with the ratio in mind, and a
+composed fit will be needed before any of these numbers is called a system
+frequency.
+
+### Wave 11: RING's operand into the multiplier
+
+The cone ends at `u_mul|b_q`, the shared lane's operand register, so RING is
+computing a product operand combinationally across its whole normalisation.
+Registering that operand splits it.
+
+RING costs ~54 clocks against `MAX_OP_CYCLES = 80`, and NORMALIZE3 at 68 is the
+worst op, so one or two clocks on RING do not move the bound at all. Two of the
+twelve are spent, both on ROT.
+
 ### Wave 9 measured: 49.90 -> 54.80 MHz, for nothing
 
 | | wave 8 (`ed3c274`) | wave 9 (`9fcd7b9`) |
