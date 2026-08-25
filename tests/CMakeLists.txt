@@ -1716,6 +1716,19 @@ set_tests_properties(lint_zhao_geom_skin PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# FIELD.WRITE.{MATERIAL,NAV,HAZARD}: the three Earth sinks, RTL against
+# zref::fieldir::compose_*. field_write_earth_sinks.cpp pins the same laws but
+# drives the REFERENCE only -- it was unit evidence with no DUT in it, because
+# there was no RTL. This is the hardware differential.
+add_executable(test_field_sinks_directed differential/field_sinks_directed.cpp)
+target_link_libraries(test_field_sinks_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_sinks_directed
+  PREFIX Vzhao_field_sinks
+  TOP_MODULE zhao_field_sinks
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sinks.sv)
+add_test(NAME field_sinks_directed COMMAND test_field_sinks_directed)
+set_tests_properties(field_sinks_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD.STAMP.{MAX,ADD,SUB,REPLACE,AGE}: the five stamp-blend ops, exhaustive
 # against zref::surface::blend_apply. ops.yml named this file as their
 # differential coverage and it did not exist -- V10 only surfaced that once

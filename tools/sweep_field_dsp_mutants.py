@@ -47,6 +47,7 @@ F_RING = 'fpga/rtl/field/zhao_field_ring.sv'
 F_CURVE = 'fpga/rtl/field/zhao_field_curve.sv'
 F_NOISE = 'fpga/rtl/field/zhao_field_noise.sv'
 F_ROT = 'fpga/rtl/field/zhao_field_rot.sv'
+F_SINK = 'fpga/rtl/field/zhao_field_sinks.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -299,6 +300,45 @@ MUTS = [
     ("M38 a leading-zero stage tests the wrong half", F_NRM,
      """      if (lz_t[63:32] == 32'd0) begin lz = lz + 6'd32; lz_t = lz_t << 32; end""",
      """      if (lz_t[63:33] == 31'd0) begin lz = lz + 6'd32; lz_t = lz_t << 32; end"""),
+
+    # ---- the three Earth sinks ---------------------------------------------
+    # The laws are the owner ruling of 2026-08-24. Each mutant is a DIFFERENT
+    # defensible-looking rule, because that is the failure mode here: every one
+    # of these is what a reasonable implementer might have written instead.
+    ("M39 material ignores the enable, so a disabled write wins", F_SINK,
+     """      if (wr_mat_en_i) begin""",
+     """      if (1'b1) begin"""),
+    ("M40 nav floors at zero PER STEP instead of once on the way out", F_SINK,
+     """      nav_q <= nav_sat;""",
+     """      nav_q <= (nav_sat < 32'sd0) ? 32'sd0 : nav_sat;"""),
+    ("M41 nav wraps instead of saturating at the high rail", F_SINK,
+     """  wire signed [31:0] nav_sat = (nav_sum > 33'sh0_7FFFFFFF) ? 32'sh7FFFFFFF""",
+     """  wire signed [31:0] nav_sat = (nav_sum > 33'sh0_FFFFFFFF) ? 32'sh7FFFFFFF"""),
+    ("M42 nav floors the ANSWER at one rather than zero", F_SINK,
+     """  assign nav_o = (nav_q < 32'sd0) ? 32'sd0 : nav_q;""",
+     """  assign nav_o = (nav_q < 32'sd1) ? 32'sd1 : nav_q;"""),
+    ("M43 hazard SUMS severities instead of taking the maximum", F_SINK,
+     """      if (haz_u8 > haz_q) haz_q <= haz_u8;""",
+     """      haz_q <= (({1'b0, haz_q} + {1'b0, haz_u8}) > 9'd255)
+                 ? 8'd255 : (haz_q + haz_u8);"""),
+    ("M44 hazard lets a weak field LOWER authored danger", F_SINK,
+     """      if (haz_u8 > haz_q) haz_q <= haz_u8;""",
+     """      haz_q <= haz_u8;"""),
+    ("M45 hazard does not floor a negative severity", F_SINK,
+     """      lo = (s < 32'sd0) ? 32'sd0 : s;""",
+     """      lo = s;"""),
+    ("M46 hazard does not clamp at 1.0", F_SINK,
+     """      cl = (lo > 32'sd65536) ? 17'd65536 : lo[16:0];""",
+     """      cl = lo[16:0];"""),
+    ("M47 hazard truncates instead of rounding half up", F_SINK,
+     """      sev_to_u8 = 8'((({cl, 8'd0} - {8'd0, cl}) + 25'd32768) >> 16);""",
+     """      sev_to_u8 = 8'((({cl, 8'd0} - {8'd0, cl}) + 25'd0) >> 16);"""),
+    ("M48 hazard scales by 256 instead of 255", F_SINK,
+     """      sev_to_u8 = 8'((({cl, 8'd0} - {8'd0, cl}) + 25'd32768) >> 16);""",
+     """      sev_to_u8 = 8'(({cl, 8'd0} + 25'd32768) >> 16);"""),
+    ("M49 the authored layer is not preserved when no write arrives", F_SINK,
+     """      nav_q    <= auth_nav_i;""",
+     """      nav_q    <= 32'sd0;"""),
 ]
 
 

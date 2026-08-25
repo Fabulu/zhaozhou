@@ -45,6 +45,7 @@ hash did not move is **discarded, never scored**.
 | Rotation | `ROT2`, `ROT3` | `zhao_field_rot.sv` | 3,495 | 15,000 | **17 / 17** |
 | Band | `RING` | `zhao_field_ring.sv` | 572 | 24,000 | **17 / 18**, 1 equivalent |
 | Shared engine | all 31 opcodes | `zhao_field_exec_shared.sv`, `zhao_field_mul.sv` | 1,127 | 12,906 | see below |
+| Earth sinks | `WRITE.MATERIAL`, `WRITE.NAV`, `WRITE.HAZARD` | `zhao_field_sinks.sv` | 21,345 | 4,000 streams | **11 / 11** |
 
 ## 2026-08-23: ten calculators became one engine
 
@@ -157,6 +158,50 @@ survives the whole suite, and explains why: `e == 0` happens only for
 |a| == 1, and 1/(1/65536) is 2^32, which saturates whatever the shift did. That
 note was written before this sweep existed and it held up — which is the point
 of recording equivalents rather than leaving them to look like holes.
+
+### The three Earth sinks, built 2026-08-25
+
+`FIELD.WRITE.MATERIAL`, `FIELD.WRITE.NAV` and `FIELD.WRITE.HAZARD` are the
+owner ruling of 2026-08-24 in fabric: `zhao_field_sinks.sv`, differentially
+tested against `zref::fieldir::compose_material`, `compose_nav` and
+`compose_hazard`.
+
+**What was already there was NOT hardware evidence.**
+`tests/differential/field_write_earth_sinks.cpp` pins all three laws and passes
+-- but it drives the REFERENCE only. There is no DUT in it, because there was no
+RTL. It sat in `tests/differential/` looking exactly like the hardware
+differentials beside it. Advancing anything on its strength would have been the
+precise confusion the maturity ladder exists to prevent.
+
+**The three ops named references that do not exist.** `ops.yml` cited
+`zref::fieldir::sink_write_material` and friends -- three of the forty phantom
+`zref::fieldir::*` names. The behaviour is real under another name, exactly as
+`interpret` was, so the fix is to point the ledger at the real law rather than
+write a second one. Repointed to `compose_*` and to the new differential.
+
+**The interface adds nothing the laws did not supply.** MATERIAL needs an
+explicit enable because "last ENABLED writer wins" requires one, and the
+reference has it. NAV and HAZARD do not get enable bits: the additive identity
+is 0 and the reference states outright that zero is neutral for hazard, so a
+beat with no contribution writes 0. Inventing two enable signals would have been
+interface where a neutral element already existed.
+
+**No DSP.** The u8 conversion is `s * 255`, which is a shift and a subtract.
+
+**11 mutants, 11 caught**, and they are deliberately not variations on one
+theme -- each is a different rule a reasonable implementer might have written:
+material ignoring the enable; nav wrapping, flooring at one, or flooring PER
+STEP; hazard summing instead of maxing, letting a weak field lower authored
+danger, skipping the negative floor, skipping the 1.0 clamp, truncating instead
+of rounding, scaling by 256; and the authored layer not surviving an empty
+program.
+
+**M40 is the one that matters.** The reference saturates to the int32 range
+after every delta but floors at zero only ONCE, on the way out. So from cost
+1.0, deltas `{-10.0, +20.0}` give **11.0, not 20.0** -- the intermediate -9.0 is
+carried, not floored. A per-step floor passes every other nav case in the file.
+Section 3e exists for exactly that, and the sweep is where "3e would catch it"
+stopped being a claim.
 
 ### Wave 4 measured, and the path re-ranked the waves AGAIN, 2026-08-25
 

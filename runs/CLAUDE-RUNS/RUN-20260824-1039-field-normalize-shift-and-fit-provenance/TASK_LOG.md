@@ -1094,6 +1094,55 @@ The stale `terrain_bake_random` red from earlier in this run did not reproduce.
 **Not yet claimed: any frequency gain.** Wave 4 is green, not measured. The
 33.98 MHz baseline stands until a fit says otherwise.
 
+### 03:10 — THE THREE EARTH SINKS, and a test that was not what it looked like
+
+`zhao_field_sinks.sv`: FIELD.WRITE.MATERIAL / NAV / HAZARD, the owner ruling of
+2026-08-24 in fabric. 21,345 directed checks plus 4,000 random streams against
+`compose_material` / `compose_nav` / `compose_hazard`. No DSP -- the u8
+conversion is `s * 255`, a shift and a subtract.
+
+**`tests/differential/field_write_earth_sinks.cpp` was NOT hardware evidence.**
+It sits in `tests/differential/`, is named like the differentials beside it, and
+passes -- while driving the REFERENCE ONLY. No DUT is instantiated in it,
+because there was no RTL when it was written. It is unit evidence shelved where
+hardware evidence lives, and anything advanced on its strength would have rested
+on nothing. *A passing test in the right directory is not proof there is
+hardware behind it* -- worth a sweep of the tree for the same shape.
+
+**The interface adds nothing the laws did not already supply.** MATERIAL gets an
+enable because "last ENABLED writer wins" needs one and the reference has it.
+NAV and HAZARD get none: the additive identity is 0 and the reference states
+zero is neutral for hazard, so a beat with no contribution writes 0. Two more
+enable signals would have been invented interface.
+
+**11 mutants, 11 caught**, each a DIFFERENT rule a reasonable implementer might
+have written rather than eleven variations of one. Sweep total 49/49 accounted,
+44 caught, survivors unchanged at the same five documented equivalents.
+
+**M40 is the one that justifies the file.** The reference saturates to int32
+after every delta but floors at zero only ONCE, on the way out: from 1.0,
+`{-10.0, +20.0}` gives 11.0, not 20.0. A per-step floor passes every other nav
+case. Section 3e was written for it, and the sweep is where "3e would catch it"
+stopped being a claim.
+
+**Three phantom references retired.** `ops.yml` cited
+`zref::fieldir::sink_write_{material,nav,hazard}`, none of which exist -- three
+of the forty. The behaviour is real under another name, exactly as `interpret`
+was, so the ledger was repointed at `compose_*` rather than a fourth wrapper
+being written around nothing.
+
+**`FIELD.SEQ.EARTH` deliberately NOT advanced past SPECIFIED.** Its ops are now
+fully covered and its implementing block (`FIELD.SEQ.CORE`) is RTL_VERIFIED, but
+there is still no end-to-end Earth8 PROGRAM differential. Op coverage plus a
+shared implementation is not the evidence that the profile has been run.
+
+**Two stale claims in REMAINING_BLOCKERS.md corrected in place**, not deleted:
+the `FIELD.MOV/ADD/SUB` blockers are closed by `field_alu_ops.cpp`, and
+`FIELD.SEQ.CORE` has RTL -- so the four profile sequencers are PROFILES of a
+built block (`implemented_by`), not four unbuilt blocks.
+
+`ctest -L fast` green, 191 tests, 1193.51 s. Ledger green. STATUS.md updated.
+
 ---
 
 ## Decisions Made

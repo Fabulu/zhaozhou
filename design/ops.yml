@@ -522,11 +522,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16, spec/qformats.md §material-ids]
     result_q: spec/qformats.md §material-state
     rounding: saturating
-    reference_function: zref::fieldir::sink_write_material
+    reference_function: zref::fieldir::compose_material
     implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]
     cost_units: 2
     field_ir_opcode: WRITE.MATERIAL
-    differential_tests: tests/differential/field_write_material.cpp
+    differential_tests: tests/differential/field_sinks_directed.cpp
     notes: null
 
   - id: FIELD.WRITE.NAV
@@ -537,11 +537,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §nav-layer
     rounding: saturating
-    reference_function: zref::fieldir::sink_write_nav
+    reference_function: zref::fieldir::compose_nav
     implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]
     cost_units: 1
     field_ir_opcode: WRITE.NAV
-    differential_tests: tests/differential/field_write_nav.cpp
+    differential_tests: tests/differential/field_sinks_directed.cpp
     notes: Consumed on the FPGA side and mirrored by SW.CPUCOLL for CPU navigation.
 
   - id: FIELD.WRITE.TAG
@@ -567,11 +567,11 @@ ops:
     operand_q: [spec/qformats.md §Q16.16]
     result_q: spec/qformats.md §hazard-layer
     rounding: saturating
-    reference_function: zref::fieldir::sink_write_hazard
+    reference_function: zref::fieldir::compose_hazard
     implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH]
     cost_units: 1
     field_ir_opcode: WRITE.HAZARD
-    differential_tests: tests/differential/field_write_hazard.cpp
+    differential_tests: tests/differential/field_sinks_directed.cpp
     notes: null
 
   # ------------------------- stamp blend modes (5) --------------------------

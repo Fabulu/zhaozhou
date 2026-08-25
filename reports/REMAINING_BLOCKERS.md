@@ -660,6 +660,26 @@ against. No `FIELD.SEQ.*` block has any. **So the three op tests are not the
 blocker; the sequencer RTL is**, and the op tests come with the first sequencer
 that exists.
 
+> **STALE AS OF 2026-08-25 — both halves of that paragraph have been overtaken,
+> and it is corrected here rather than deleted so the reasoning stays readable.**
+>
+> * The three op blockers are **closed**. `tests/differential/field_alu_ops.cpp`
+>   exists and `ops.yml` cites it for all three.
+> * `FIELD.SEQ.CORE` **has RTL** — `zhao_field_seq.sv`, fitted at 36.84 MHz on
+>   2026-08-25 — and the four profile sequencers carry
+>   `implemented_by: FIELD.SEQ.CORE`. They are PROFILES of a block that exists,
+>   not four unbuilt blocks, so "write the first sequencer" is already done and
+>   what remains is per-profile evidence.
+> * The three Earth sinks now have RTL and a differential
+>   (`zhao_field_sinks.sv`, `field_sinks_directed.cpp`, 11/11 mutants caught),
+>   which was the last op-layer gap specific to `FIELD.SEQ.EARTH`.
+>
+> `FIELD.SEQ.EARTH` is deliberately **NOT advanced past SPECIFIED** on the
+> strength of this. Its ops are covered and its implementing block is
+> RTL_VERIFIED, but there is still no end-to-end Earth8 PROGRAM differential,
+> and op coverage plus a shared implementation is not the same evidence as the
+> profile having been run.
+
 `TERRAIN.PATCH` is a different case, documented in
 `reports/PHANTOM_REFERENCES.md`: its three remaining op blockers are sinks that
 belong to `FIELD.SEQ.EARTH`, and it is blocked on that block being built rather

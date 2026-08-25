@@ -5,6 +5,83 @@ at the top.*
 
 ---
 
+## 2026-08-25 (early hours) — the Field engine got faster and grew its last Earth piece
+
+### The number
+
+| | yesterday | now |
+| --- | ---: | ---: |
+| Field sequencer clock | 33.98 MHz | **36.84 MHz** |
+| its logic area | 4,821 ALM | **4,673 ALM** |
+| multipliers / memories | 3 / 4 | unchanged |
+
+For context on the day before that: this same block was **8.59 MHz** when it was
+first measured properly. It is now **4.3x** that.
+
+**This particular step was small on purpose and it delivered what was predicted
+for it**, +8%. I wrote down beforehand that it would help and would not reach
+100 MHz, because the slow arithmetic units were untouched. That is what happened.
+
+### What the timing report then told me, which I would have got wrong by planning
+
+The plan said the next job was the square-root unit. **The report says it is the
+sine unit** — 80 of the critical path's parts are inside `sine`, and *zero* are
+in the square root, the reciprocal, the curve, the noise, the ring, the
+rotation, the arithmetic core, the multiplier, the normaliser or the length
+unit. Not "mostly"; zero.
+
+That is the second time this week the measurement has re-ordered the plan. Had I
+worked the written order instead, I would have spent a day speeding up a unit
+that contributes nothing to the current bottleneck. **The plan ranks; the
+measurement decides.**
+
+### The three Earth writes are now real hardware
+
+`MATERIAL`, `NAV` and `HAZARD` — the three answers you gave me on the 24th about
+how overlapping field programs combine — exist in silicon terms now, with 21,345
+checks against the reference and eleven deliberate sabotage variants, all
+eleven caught.
+
+They cost **no multipliers**, which matters because multipliers are the scarce
+thing on this chip.
+
+### Two pieces of unflattering bookkeeping, because they change what you can trust
+
+**1. A test that looked like hardware proof was not.** A file sitting among the
+hardware tests, named like them, passing — but it only ever exercised the
+*reference model*. There was no hardware in it, because the hardware did not
+exist yet. Anything I had advanced on its strength would have been resting on
+nothing. The real hardware test is now written and is what those numbers above
+come from.
+
+**2. I wrote a comment claiming a bug that was not there.** I asserted that an
+alternative design would open a timing hole. A repository rule refused the claim
+because I had not named anything that would catch it. Rather than name something
+plausible, I built the alternative: **it passes all 1,127 checks.** My claim was
+wrong. I also built a deliberately broken version, which fails immediately —
+without that second run, "the alternative passed" would have been
+indistinguishable from "nothing tests this area at all". Both are written down.
+
+### Where the whole machine stands
+
+- **Frame blitter: finished** — verified in the assembled system, with its
+  atomicity law sabotage-tested 20 out of 20.
+- **Field instruction set: finished** — every operation built, tested and
+  sharing one arithmetic unit instead of ten.
+- **Field sequencer: working, and being made faster.** Sine is next.
+- **Sixteen blocks still to write from scratch.** There is no backlog of
+  nearly-done work left; that ran out on the 24th.
+- **Particles, compositor and the 2D blocks remain untouched**, because they
+  need decisions from you and I am not going to invent game behaviour for them.
+
+### The one thing still red
+
+The vertex-cache proof fails at depth 4. Its automated lane is deliberately
+switched **off** rather than marked passing, so nothing in the repository claims
+that block is proven. It is not.
+
+---
+
 ## 2026-08-24 (evening) — the shell is at 98 MHz and the timing verdict finally means something
 
 ### The clock-domain repair worked, and it is measured
