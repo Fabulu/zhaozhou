@@ -927,3 +927,55 @@ predicate, the mul chain and the rcp0 fold all grew a normalize arm) and M145
 orphaned a signal. Fifth time this session that editing a shared line
 invalidated other mutants' anchors; the preflight caught all of them before the
 sweep started.
+
+## 2026-08-26 (later) - The sequencer FRONT END: written, lint-clean, NOT WORKING
+
+`fpga/rtl/field/zhao_field_v2_front.sv` and
+`tests/differential/field_v2_front_directed.cpp` exist and are **uncommitted on
+purpose**. The differential FAILS. Nothing is registered in ctest, so `main`
+stays green -- a red gate for everyone else is not an acceptable way to record
+unfinished work.
+
+### Rule 1 resolved cleanly
+
+The oracle is the reference's own driving pattern: `zref::terrain`
+(reference/src/zrender/terrain.cpp) walks a lattice and calls
+`zfield::interpret` ONCE PER POINT, and `zfield.hpp` states the mapping -- "in
+lanes map to R0.. in the program's input order; out lanes are read from the
+output map at END." So the block owes: program in, point stream in, one answer
+per point OUT IN ORDER.
+
+### Two real bugs found and fixed on the way
+
+1. **The ready/valid handshake was wrong.** `pt_ready_o` asserted on the FIRST
+   of the n_in write cycles, so a correct producer advanced and lanes 1..n-1
+   were written from the NEXT point. Ready now lands on the LAST lane cycle.
+   Symptom looked like reordering, not like a handshake fault.
+2. **The drain read was phase-ambiguous.** Rewritten as an explicit
+   present/settle/capture walk rather than trying to match the register file's
+   latency exactly -- one cycle more per lane, and unambiguous.
+
+### The unresolved fault, stated precisely
+
+Sections 1-4 still fail. Point 0 has in=(1000,1803); the program is
+`ADD r20 = r0+r1` then `MUL r21 = r0*r1`, out map {20, 21}.
+
+    want = (2803, 28)          2803 = a+b, 28 = a*b in Q16.16
+    got  = (28, 1000)
+
+Two single-lane probes on the same setup:
+
+    out_regs = {20}  ->  got 28    (the value that belongs to r21)
+    out_regs = {21}  ->  got 1000  (the value that belongs to r0)
+
+**Those two are not consistent with any single off-by-one** on the register
+address, the lane index or the output-map index, which is why I stopped
+inferring. The next step is ground truth -- a VCD, or temporary debug outputs
+exposing `rd_idx`, `drain_lane`, `h_rreg` and `h_rdata` per cycle -- not another
+guess. I have made three timing guesses and each one moved the symptom without
+explaining it, which is the signal to stop guessing.
+
+What is NOT in doubt: the point COUNTS are right in every section (32, 5, 39,
+32), so fill, batch launch, partial batches and the multi-batch loop all
+sequence correctly. The fault is confined to which register a drained lane
+reads.
