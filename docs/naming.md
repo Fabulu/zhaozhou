@@ -3,7 +3,7 @@
 **Decision (wave 1, plan 1.F — hybrid, docs-only):** the programming language
 for the Zhaozhou console is **Form**. The *nanquan* repository will later
 become the standalone **toolchain distribution** for Form. No wave-1 commits
-touch `nanquan/` or `Upheaval/` (the game folder, named *Upheaval* on
+touch `nanquan/` or `Upheaval/` (the game folder, named *Tribute Upheaval* on
 2026-08-26; it was `untitled-game/` when this was written).
 
 ## Why

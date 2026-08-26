@@ -63,5 +63,5 @@ cmake (broken with native g++); no spaces in the repo or build path; invoke
 ## Related
 
 - [Nanquan](../nanquan) — future standalone Form toolchain distribution
-- [Upheaval](../Upheaval) — the game that runs on this console
+- [Tribute Upheaval](../Upheaval) — the game that runs on this console
 - [AGENT_START_HERE.md](AGENT_START_HERE.md) — agent onboarding (charter pointers)
