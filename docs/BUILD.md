@@ -104,3 +104,53 @@ trusting the stop — a stop signal reaches the shell, not always what it spawne
 The same check applies in the other direction: `git status` before a fit. A fit
 started against a dirty tree records `rtlCleanAtHead: false`, which is the
 report telling you the row may not describe any commit.
+
+## The wrong `ctest` on PATH fails all 278 tests at once, and not for any reason in the test
+
+Symptom: `ctest --test-dir build -L fast` reports **BAD_COMMAND** for every
+single test, in 0.00 seconds each, while the test executables exist and run
+correctly when launched by hand.
+
+Cause: three `ctest.exe` are installed on this machine and PATH order decides
+which one answers.
+
+```
+C:\devkitPro\msys2\usr\bin\ctest.exe        <- wins on PATH
+C:\Program Files\CMake\bin\ctest.exe
+C:\programmieren\dsstuff\mingw64\bin\ctest.exe   <- the one that configured build/
+```
+
+The build records the ctest it belongs to:
+
+```
+$ grep CMAKE_CTEST_COMMAND build/CMakeCache.txt
+CMAKE_CTEST_COMMAND:INTERNAL=C:/Programmieren/dsstuff/mingw64/bin/ctest.exe
+```
+
+The msys2 build is POSIX-path-flavoured. Handed a `CTestTestfile.cmake` written
+by a native Windows CMake, it does not recognise `C:/...` as absolute and glues
+it onto the test's working directory, producing commands like:
+
+```
+Command: "/c/programmieren/zencrifice/zhaozhou/build/tests/C:/Programmieren/zencrifice/.tools/oss-cad-suite/bin/verilator_bin.exe"
+```
+
+which of course cannot be launched. The log in
+`build/Testing/Temporary/LastTest.log` prints that concatenated path in full,
+and it is the fastest way to recognise this: **look at the `Command:` line, not
+at the test.**
+
+Fix: invoke the ctest the cache names, explicitly.
+
+```powershell
+& 'C:\Programmieren\dsstuff\mingw64\bin\ctest.exe' --test-dir build -L fast -j 4
+```
+
+Two related notes:
+
+* Building has the same hazard in a different shape -- `cmake --build` through
+  the Bash tool fails in `ccache` with *"The USERPROFILE environment variable
+  must be set"*, because that environment does not carry it and exporting it
+  from inside bash does not reach the child. Build from PowerShell.
+* An all-tests-fail result is not evidence about the tree. Before believing a
+  red gate, check that ONE test fails for a reason printed inside the test.
