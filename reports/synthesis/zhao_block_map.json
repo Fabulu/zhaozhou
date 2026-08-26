@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "c39bf728091d6fb5368b01ef36d7e25217101727",
+    "newestRunCommit":  "e7d2995bacb1d7d0ea7e516de741895db42f4a98",
     "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -851,16 +851,46 @@
                    },
                    {
                        "module":  "zhao_field_v2_front",
-                       "status":  "timeout",
-                       "sourceCommit":  "c39bf728091d6fb5368b01ef36d7e25217101727",
+                       "status":  "ok",
+                       "sourceCommit":  "e7d2995bacb1d7d0ea7e516de741895db42f4a98",
                        "rtlCleanAtHead":  false,
                        "sourceListHash":  "d0d9cddcca7d4839",
                        "sourceFileCount":  107,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "timeoutSeconds":  1800,
-                       "seconds":  1800.2
+                       "seconds":  2906.7,
+                       "dspBlocks":  15,
+                       "registers":  75438,
+                       "blockMemoryBits":  4369,
+                       "virtualPins":  782,
+                       "pins":  0,
+                       "estimatedAlms":  121292,
+                       "combAluts":  133338,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_field_v2_core:u_core|zhao_field_sin:u_sin|zhao_field_sin_rom:u_tbl|altsyncram:tbl_rtl_0|altsyncram_7a02:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "True Dual Port",
+                                                    "depth":  257,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  1,
+                       "inferredDesignMemoryCount":  1,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  10,
+                                                "Sum of two 18x18":  5,
+                                                "Total number of DSP blocks":  15,
+                                                "Fixed Point Signed Multiplier":  5,
+                                                "Fixed Point Unsigned Multiplier":  5,
+                                                "Fixed Point Mixed Sign Multiplier":  10
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
                    },
                    {
                        "module":  "zhao_forge_cliff",

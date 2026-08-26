@@ -1,6 +1,6 @@
 # FIELD v2 — the register file's port count, and why the fit may have failed
 
-> Written 2026-08-26 while `quartus_map` on `zhao_field_v2_front` is still
+> Written 2026-08-26 while `quartus_map` on `zhao_field_v2_front` was still
 > running. **Nothing here is measured.** It is the enumeration a fix would be
 > built from, written before the report lands so that the report can refute it
 > rather than be read to fit it.
@@ -115,3 +115,62 @@ write arbitration, not of the engine.
 Every FIELD v2 throughput figure in this repo — 3.97 vertex-instructions per
 clock, 27.8× v1 — is a **simulation** figure and stays one until the block
 places.
+
+---
+
+# THE REPORT LANDED. THE HYPOTHESIS IS CONFIRMED.
+
+`quartus_map`, 2,906.7 s, Quartus Prime Lite 17.0.2, 5CSEBA6U23I7:
+
+| | measured | available |
+| --- | --- | --- |
+| estimated ALMs | **121,292** | 41,910 |
+| combinational ALUTs | 133,338 | -- |
+| registers | **75,438** | ~83,820 |
+| block memory bits | 4,369 | 5,662,720 |
+| MLAB memory bits | **0** | -- |
+| DSP blocks | 15 | 112 |
+| inferred memories | **1** | -- |
+| RAM conversion warnings | **0** | -- |
+
+**The design is 2.9x too large for the device.** That is why the fit errored
+96 minutes into placement.
+
+### The register file did not merely fail to become RAM. It was never a
+### candidate.
+
+The single inferred memory is the sine table:
+
+    zhao_field_sin_rom:u_tbl|altsyncram  True Dual Port  257 x 17
+
+257 x 17 = 4,369 bits, which is the entire block-memory figure. Nothing else
+in the design is in memory at all. And `ramConversionWarnings` is **0** --
+Quartus did not try and give up, it never treated `rf` as storage worth
+converting.
+
+`rf` appears in the report as individual flops behind multiplexer trees:
+
+    6:1 ; 128 bits ; 512 LEs ; ... ; |zhao_field_v2_core:u_core|rf[2][16][17]
+    6:1 ; 128 bits ; 512 LEs ; ... ; |zhao_field_v2_core:u_core|rf[3][17][31]
+
+That is lane 2, word 16, bit 17 -- one bit of the register file, with its own
+6:1 read mux costing 512 LEs. 65,536 such bits.
+
+The `mlabMemoryBits: 0` line is worth its own sentence: it did not even land in
+LUT-RAM, which is the cheap fallback. Four write sources and four read ports
+took it straight to discrete registers.
+
+### One honest caveat about this measurement
+
+`rtlCleanAtHead` is **false** for this run: a second session was committing to
+the repo throughout and the working tree was not clean at HEAD. No file under
+`fpga/rtl/field/` was modified while it ran -- that was deliberate, since the
+tool reads the live tree -- so the Field cone measured is HEAD's. But the flag
+is recorded rather than explained away, and a re-run on a clean tree is owed
+once the storage is rebuilt.
+
+### What this does NOT say
+
+It does not say the engine is wrong. It says the storage is written in a shape
+no FPGA can build. Every throughput result stands as a simulation result and
+none of them is affected by how the registers are physically held.
