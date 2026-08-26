@@ -174,11 +174,41 @@ module zhao_field_v2_core #(
   // QUARTUS_GOTCHAS §10 says infers. Address is {wavefront, register}: a
   // wavefront's registers are contiguous, so a lane's file is one memory.
   localparam int RFAW = WFW + RW;
-  logic signed [31:0] rf   [LANES][0:(1<<RFAW)-1];
+  // FOUR REPLICAS, ONE WRITE PORT. Measured 2026-08-26: as a single array
+  // read on four ports and written from four places in one clock, this did
+  // not become memory -- it did not even reach MLAB. quartus_map reported
+  // ZERO ram-conversion warnings, meaning it was never a candidate, and
+  // listed rf bit by bit (rf[2][16][17], a 6:1 mux at 512 LEs). The block
+  // came out at 121,292 ALMs against the device's 41,910 and the fit errored
+  // 96 minutes into placement. reports/FIELD_V2_Regfile_Ports.md has the
+  // numbers.
+  //
+  // An M10K is one write and one read. So the file is replicated once per
+  // reader -- a, b, c and the host -- with every write mirrored into all
+  // four. Replication buys READ ports; it does nothing for write ports, so
+  // the write side is reduced to exactly one port below.
+  logic signed [31:0] rf_a [LANES][0:(1<<RFAW)-1];
+  logic signed [31:0] rf_b [LANES][0:(1<<RFAW)-1];
+  logic signed [31:0] rf_c [LANES][0:(1<<RFAW)-1];
+  logic signed [31:0] rf_h [LANES][0:(1<<RFAW)-1];
   logic signed [31:0] rd_a [LANES];
   logic signed [31:0] rd_b [LANES];
   logic signed [31:0] rd_c [LANES];
   logic signed [31:0] h_rd [LANES];
+
+  // ---- the write-back queue ---------------------------------------------
+  // The multi-result reply used to write dst, dst+1 and dst+2 in ONE clock.
+  // Three writes to three addresses is three write ports, and that is the
+  // half of the problem replication cannot solve. They are spent one per
+  // clock instead, which costs at most three clocks on an operation that
+  // already costs hundreds -- the measured CURVE+SPLINE mix was 2,020 clocks
+  // for 24 instructions.
+  logic [1:0]         wbq_cnt;            // results still owed, 0..3
+  logic [1:0]         wbq_idx;            // which one is next, 0..2
+  logic [WFW-1:0]     wbq_wf;
+  logic [RW-1:0]      wbq_dst;
+  logic signed [31:0] wbq_y [LANES][0:2];
+  wire                wbq_busy = (wbq_cnt != 2'd0);
 
   // ---- THE SECOND READ PASS ---------------------------------------------
   // Three read ports per lane supply a/b/c. The length family wants up to FIVE
@@ -479,7 +509,14 @@ module zhao_field_v2_core #(
   // wants some part of that, so the predicate is about the NEED, not the family.
   wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot || s1_is_nrm;
   wire steal_now = s1_needs_pass2;
-  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+  // ISSUE STOPS WHILE THE WRITE-BACK QUEUE DRAINS, and that is what makes the
+  // single write port safe. The ALU write-back has priority over the queue,
+  // so without this a steady stream of short ops could starve a reply
+  // indefinitely. With it, at most the one instruction already in stage 1 can
+  // still write, so the queue is guaranteed a free port within one clock and
+  // drains in at most four. It also makes a second long reply arriving on top
+  // of an undrained queue impossible: no long op can issue while it is busy.
+  assign issue_fire = sel_valid && !pc_overrun && !steal_now && !wbq_busy &&
                       !(ins_is_long && long_slot_busy);
 
   // ---- read addresses ----------------------------------------------------
@@ -496,6 +533,51 @@ module zhao_field_v2_core #(
   wire s1_is_end = s1_valid && (s1_op == OP_END);
   wire s1_writes = s1_valid && !s1_is_end && !unsupported && !s1_is_long;
 
+  // ---- THE ONE WRITE PORT ------------------------------------------------
+  // Three sources, in strict priority: the ALU write-back, then the queued
+  // long-op results, then the host. The host is last because it is the only
+  // one that can wait for free -- it is driven exclusively while the machine
+  // is being filled, never while wavefronts run (zhao_field_v2_front.sv drives
+  // h_we only in F_FILL), so in practice it never contends at all. Written as
+  // a priority chain rather than as an assumption, because the core cannot
+  // enforce what its instantiator does.
+  logic               wb_we   [LANES];
+  logic [RFAW-1:0]    wb_addr;
+  logic signed [31:0] wb_data [LANES];
+  wire                wbq_go = wbq_busy && !s1_writes;
+  wire                retire_s1   = s1_valid && !unsupported &&
+                                    (s1_is_end || !s1_is_long);
+  wire                retire_long = wbq_go && (wbq_cnt == 2'd1);
+
+  always_comb begin
+    integer wl;
+    for (wl = 0; wl < LANES; wl++) begin
+      wb_we[wl]   = 1'b0;
+      wb_data[wl] = '0;
+    end
+    wb_addr = '0;
+    if (s1_writes) begin
+      wb_addr = {s1_wf, s1_dst};
+      for (wl = 0; wl < LANES; wl++) begin
+        wb_we[wl]   = 1'b1;
+        wb_data[wl] = alu_y[wl];
+      end
+    end else if (wbq_busy) begin
+      wb_addr = {wbq_wf, RW'(wbq_dst + RW'(wbq_idx))};
+      for (wl = 0; wl < LANES; wl++) begin
+        wb_we[wl]   = 1'b1;
+        wb_data[wl] = wbq_y[wl][wbq_idx];
+      end
+    end else if (h_we_i) begin
+      // ONE LANE ONLY. The host fills a point one register at a time and each
+      // lane holds a different point, so a host write that broadcast would
+      // overwrite three other points with this one's value.
+      wb_addr           = {h_wf_i, h_reg_i};
+      wb_we[h_lane_i]   = 1'b1;
+      wb_data[h_lane_i] = h_wdata_i;
+    end
+  end
+
   // ---- sequential ------------------------------------------------------
   integer i, l;
   always_ff @(posedge clk or negedge rst_n) begin
@@ -506,6 +588,10 @@ module zhao_field_v2_core #(
       finished       <= '0;
       status_o       <= ST_OK;
       rr_ptr         <= '0;
+      wbq_cnt        <= 2'd0;
+      wbq_idx        <= 2'd0;
+      wbq_wf         <= '0;
+      wbq_dst        <= '0;
       s1_valid       <= 1'b0;
       s1_wf          <= '0;
       s1_op          <= 8'd0;
@@ -575,11 +661,13 @@ module zhao_field_v2_core #(
       end
 
       // ---- register reads land here ----
+      // One reader per replica, and each replica is written identically, so
+      // any of them answers for the file as a whole.
       for (l = 0; l < LANES; l++) begin
-        rd_a[l] <= rf[l][{rd_wf, addr_a}];
-        rd_b[l] <= rf[l][{rd_wf, addr_b}];
-        rd_c[l] <= rf[l][{rd_wf, addr_c}];
-        h_rd[l] <= rf[l][{h_rwf_i, h_rreg_i}];
+        rd_a[l] <= rf_a[l][{rd_wf, addr_a}];
+        rd_b[l] <= rf_b[l][{rd_wf, addr_b}];
+        rd_c[l] <= rf_c[l][{rd_wf, addr_c}];
+        h_rd[l] <= rf_h[l][{h_rwf_i, h_rreg_i}];
       end
 
       // Save pass 1's a and b before the steal overwrites those ports. This
@@ -666,20 +754,31 @@ module zhao_field_v2_core #(
       if (rg_rcp0    || rc_rcp0    || nm_rcp0)       rcp_zero_o    <= 1'b1;
 
       // ---- long-op reply: write back and release the wavefront -----------
+      // UP TO THREE CONSECUTIVE REGISTERS, ONE PER CLOCK. The count rides with
+      // the reply, so this does not re-decode an opcode that left stage 1
+      // several cycles ago. Only the owed results are written: writing dst+1
+      // unconditionally would clobber a register a single-result op never
+      // claimed, and the neighbouring register is exactly where the NEXT
+      // instruction's operand is most likely to live.
+      //
+      // The wavefront is released when the LAST owed result lands, not when
+      // the reply arrives -- releasing at arrival would let the wavefront
+      // issue an instruction that reads a register the queue has not yet
+      // written.
       if (lm_rsp_valid) begin
-        // UP TO THREE CONSECUTIVE REGISTERS. The count rides with the reply, so
-        // this does not re-decode an opcode that left stage 1 several cycles
-        // ago. A write is issued only when the count says so: writing dst+1
-        // unconditionally would clobber a register a single-result op never
-        // claimed, and the neighbouring register is exactly where the NEXT
-        // instruction's operand is most likely to live.
         for (l = 0; l < LANES; l++) begin
-          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
-          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];
-          if (lm_rsp_nres >= 2'd3) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(2))}] <= lm_rsp_y2[l];
+          wbq_y[l][0] <= lm_rsp_y[l];
+          wbq_y[l][1] <= lm_rsp_y1[l];
+          wbq_y[l][2] <= lm_rsp_y2[l];
         end
-        inflight[lm_rsp_wf] <= 1'b0;
-        instr_retired_o     <= instr_retired_o + 32'd1;
+        wbq_wf  <= lm_rsp_wf;
+        wbq_dst <= lm_rsp_dst;
+        wbq_cnt <= lm_rsp_nres;
+        wbq_idx <= 2'd0;
+      end else if (wbq_go) begin
+        wbq_idx <= wbq_idx + 2'd1;
+        wbq_cnt <= wbq_cnt - 2'd1;
+        if (wbq_cnt == 2'd1) inflight[wbq_wf] <= 1'b0;
       end
 
       if (s1_valid) begin
@@ -695,17 +794,31 @@ module zhao_field_v2_core #(
         end else if (s1_is_end) begin
           active[s1_wf]   <= 1'b0;
           finished[s1_wf] <= 1'b1;
-          instr_retired_o <= instr_retired_o + 32'd1;
-        end else if (!s1_is_long) begin
-          // A long op counts when its REPLY lands, not when it dispatches.
-          instr_retired_o <= instr_retired_o + 32'd1;
         end
       end
 
-      // ---- writes: host, then write-back ----
-      if (h_we_i) rf[h_lane_i][{h_wf_i, h_reg_i}] <= h_wdata_i;
-      if (s1_writes)
-        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];
+      // ONE ACCOUNT, ADDED ONCE. These used to be two separate
+      // `instr_retired_o <= instr_retired_o + 1` statements inside the same
+      // always_ff. When a long op retired on the same clock as a short op, the
+      // later assignment won and ONE RETIREMENT WAS SILENTLY LOST -- every
+      // value in the file still correct, the count quietly short. Summing both
+      // terms into a single assignment is the only form that cannot drop one.
+      // A long op counts when its last result LANDS, not when it dispatches
+      // and not when its reply arrives.
+      instr_retired_o <= instr_retired_o + 32'(retire_s1) + 32'(retire_long);
+
+      // ---- the single write port, mirrored into every replica ----
+      // Same address, same data, same clock, four times. That is what keeps
+      // the replicas identical, and it is why any one of them can answer a
+      // read on its own port.
+      for (l = 0; l < LANES; l++) begin
+        if (wb_we[l]) begin
+          rf_a[l][wb_addr] <= wb_data[l];
+          rf_b[l][wb_addr] <= wb_data[l];
+          rf_c[l][wb_addr] <= wb_data[l];
+          rf_h[l][wb_addr] <= wb_data[l];
+        end
+      end
     end
   end
 

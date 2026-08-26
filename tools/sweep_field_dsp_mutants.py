@@ -533,11 +533,11 @@ MUTS = [
      """  assign ready = active & ~inflight & ~finished;""",
      """  assign ready = active & ~(inflight & finished) & ~finished;"""),
     ("M81 write-back uses the ISSUING wavefront, not the retiring one", F_V2,
-     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];""",
-     """        for (l = 0; l < LANES; l++) rf[l][{sel, s1_dst}] <= alu_y[l];"""),
+     """      wb_addr = {s1_wf, s1_dst};""",
+     """      wb_addr = {sel, s1_dst};"""),
     ("M82 every lane is written lane 0's result", F_V2,
-     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];""",
-     """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[0];"""),
+     """        wb_data[wl] = alu_y[wl];""",
+     """        wb_data[wl] = alu_y[0];"""),
     ("M83 an unsupported opcode is SKIPPED instead of refused", F_V2,
      """        default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero""",
      """        default:   unsupported = 1'b0;     // MUTANT: silently skipped"""),
@@ -581,19 +581,15 @@ MUTS = [
      """      OP_DCURVE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
       OP_SPLINE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end"""),
     ("M91 the long-op reply broadcasts lane 0 to every lane", F_V2,
-     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];""",
-     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[0];"""),
+     """          wbq_y[l][0] <= lm_rsp_y[l];""",
+     """          wbq_y[l][0] <= lm_rsp_y[0];"""),
     ("M92 a long op releases its wavefront at DISPATCH, not at reply", F_V2,
      """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
      """        inflight[s1_wf] <= 1'b0;"""),
-    ("M93 a long op is counted at dispatch AND again at its reply", F_V2,
-     """        end else if (!s1_is_long) begin
-          // A long op counts when its REPLY lands, not when it dispatches.
-          instr_retired_o <= instr_retired_o + 32'd1;
-        end""",
-     """        end else begin
-          instr_retired_o <= instr_retired_o + 32'd1;
-        end"""),
+    ("M93 a long op is counted at dispatch AND again when it lands", F_V2,
+     """  wire                retire_s1   = s1_valid && !unsupported &&
+                                    (s1_is_end || !s1_is_long);""",
+     """  wire                retire_s1   = s1_valid && !unsupported;"""),
     ("M94 the unit is given the LIVE mode rather than the captured one", F_LMUX,
      """  assign u_mode_o    = mode_q;""",
      """  assign u_mode_o    = (lane == '0) ? req_mode_i : mode_q;"""),
@@ -606,9 +602,9 @@ MUTS = [
     # op overwrite a pending request. This mutant restores that guard, so the
     # defect can never come back unnoticed.
     ("M96 the long-op interlock reverts to its two-cycle-late form", F_V2,
-     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now && !wbq_busy &&
                       !(ins_is_long && long_slot_busy);""",
-     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now && !wbq_busy &&
                       !(ins_is_long && long_slot_busy && lq_valid);"""),
     # ---- THE LENGTH FAMILY, and the second read pass -----------------------
     # LEN2/LEN3/DIST2 are the first ops that want more operands than the
@@ -617,9 +613,9 @@ MUTS = [
     # mutant below attacks that trade: the addresses, the saved first pass, the
     # stall that protects the stolen cycle, and the routing to a SECOND unit.
     ("M97 the steal cycle no longer stalls issue", F_V2,
-     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now && !wbq_busy &&
                       !(ins_is_long && long_slot_busy);""",
-     """  assign issue_fire = sel_valid && !pc_overrun &&
+     """  assign issue_fire = sel_valid && !pc_overrun && !wbq_busy &&
                       !(ins_is_long && long_slot_busy);"""),
     ("M98 the second pass reads from the WRONG base register", F_V2,
      """  wire [RW-1:0] addr_a = steal_now ? RW'(s1_a + RW'(1)) : ins_a_i;""",
@@ -762,16 +758,16 @@ MUTS = [
     # in the wrong place or does not land at all is a wrong answer somewhere
     # else entirely.
     ("M125 a multi-result op writes only its first register", F_V2,
-     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
-     """          if (lm_rsp_nres >= 2'd3) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];"""),
+     """        wbq_cnt <= lm_rsp_nres;""",
+     """        wbq_cnt <= 2'd1;"""),
     ("M126 the two results are swapped between dst and dst+1", F_V2,
-     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
-          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
-     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];
-          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y[l];"""),
+     """          wbq_y[l][0] <= lm_rsp_y[l];
+          wbq_y[l][1] <= lm_rsp_y1[l];""",
+     """          wbq_y[l][0] <= lm_rsp_y1[l];
+          wbq_y[l][1] <= lm_rsp_y[l];"""),
     ("M127 the second result lands on dst instead of dst+1", F_V2,
-     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
-     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];"""),
+     """      wb_addr = {wbq_wf, RW'(wbq_dst + RW'(wbq_idx))};""",
+     """      wb_addr = {wbq_wf, wbq_dst};"""),
     ("M128 every op claims a single result", F_V2,
      """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd3
                       : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd2
@@ -903,6 +899,38 @@ MUTS = [
     ("M157 a drained point never advances, so the first repeats", F_FRONT,
      """              drained <= drained + SW'(1);""",
      """              drained <= drained;"""),
+    # ---- the register file rebuild, 2026-08-26 -------------------------
+    # The file was one array read on four ports and written from four places
+    # in one clock. quartus_map measured 121,292 ALMs against a 41,910-ALM
+    # device because none of it became memory. It is now four read replicas
+    # sharing ONE write port, with the multi-result reply spent one result per
+    # clock through a queue. These mutants exist because that machinery is new
+    # and none of the mutants above were written against it.
+    ("M158 issue is not blocked while the write-back queue drains", F_V2,
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now && !wbq_busy &&
+                      !(ins_is_long && long_slot_busy);""",
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+                      !(ins_is_long && long_slot_busy);"""),
+    ("M159 the queue advances even on a clock the ALU took the write port", F_V2,
+     """  wire                wbq_go = wbq_busy && !s1_writes;""",
+     """  wire                wbq_go = wbq_busy;"""),
+    ("M160 one replica is never written, so operand b reads stale", F_V2,
+     """          rf_b[l][wb_addr] <= wb_data[l];""",
+     """          rf_c[l][wb_addr] <= wb_data[l];"""),
+    ("M161 a host write broadcasts to every lane", F_V2,
+     """      wb_we[h_lane_i]   = 1'b1;""",
+     """      for (wl = 0; wl < LANES; wl++) wb_we[wl] = 1'b1;"""),
+    ("M162 the wavefront is released when the reply ARRIVES, not when it lands", F_V2,
+     """        wbq_idx <= 2'd0;""",
+     """        wbq_idx <= 2'd0;
+        inflight[lm_rsp_wf] <= 1'b0;"""),
+    ("M163 the wavefront is released one result before the queue finishes", F_V2,
+     """        if (wbq_cnt == 2'd1) inflight[wbq_wf] <= 1'b0;""",
+     """        if (wbq_cnt <= 2'd2) inflight[wbq_wf] <= 1'b0;"""),
+    ("M164 the two retirements are OR'd, so a simultaneous pair counts once", F_V2,
+     """      instr_retired_o <= instr_retired_o + 32'(retire_s1) + 32'(retire_long);""",
+     """      instr_retired_o <= instr_retired_o + 32'(retire_s1 | retire_long);"""),
+
 ]
 
 
