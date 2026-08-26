@@ -504,10 +504,36 @@ module zhao_vertex_arena #(
       // believed in either direction until the assume binds -- and the fix
       // belongs in the HARNESS, not in the arena.
       //
-      // The mechanism is not yet established: `f_arena`/`f_index` are anyconst
-      // and therefore constant, so a clocked assume ought to bind them at every
-      // step. Establishing WHY it does not is the next question, and it is a
-      // question about yosys/sby semantics rather than about this block.
+      // 2026-08-26, MECHANISM ESTABLISHED: THE ASSUME IS INERT, IN EVERY FORM.
+      //
+      // Asserting the same expression the harness assumes fails under ALL THREE
+      // ways of writing the assumption:
+      //
+      //     always_ff @(posedge clk) assume (...);      FAILS at step 3
+      //     always_comb              assume (...);      FAILS at step 3
+      //     assume property (@(posedge clk) ...);       FAILS at step 3
+      //
+      // And the assertion machinery itself is fine on the same signals in the
+      // same block:
+      //
+      //     assert (f_arena <= 2'd3 && f_index <= 3'd7)   PASSES  (trivially true)
+      //     assert (f_arena < ARENA_W'(ARENAS))           FAILS   (the assumed bound)
+      //
+      // So the solver reads `f_arena` correctly and picks 2 or 3 for it anyway,
+      // in defiance of three assumptions that forbid exactly that.
+      //
+      // WHAT THAT MEANS BEYOND THIS BLOCK. Every proof in this tree that bounds
+      // a free or `anyconst` variable with an assume is resting on the same
+      // mechanism. If assumptions do not constrain here, the ones elsewhere
+      // deserve the same one-line check -- ASSERT WHAT YOU ASSUME, and see
+      // whether it holds -- before their PASS results are treated as evidence.
+      // That check costs one assertion and is the cheapest audit available.
+      //
+      // NOT YET KNOWN: whether this is `read_slang` dropping assumptions, a
+      // yosys/sby handling of `anyconst` under this flow, or something specific
+      // to this file. That is a toolchain question, and it is the next one --
+      // not another theory about the arena, which the evidence no longer
+      // implicates at all.
 
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so
