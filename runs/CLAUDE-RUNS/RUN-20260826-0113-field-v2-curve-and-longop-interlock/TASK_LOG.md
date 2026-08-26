@@ -979,3 +979,49 @@ What is NOT in doubt: the point COUNTS are right in every section (32, 5, 39,
 32), so fill, batch launch, partial batches and the multi-batch loop all
 sequence correctly. The fault is confined to which register a drained lane
 reads.
+
+## 2026-08-26 (later still) - FOUND IT: pc_o flaps to zero, and that is a CORE
+## interface defect, not a front-end bug
+
+I said the next step was a waveform rather than a fourth guess. It was, and it
+paid: a per-cycle trace of the front end shows the fault in one line.
+
+    c5: pc=0   c6: pc=1   c7: pc=0   c8: pc=2   c9: pc=0   c10: pc=3
+
+`zhao_field_v2_core` drives
+
+    assign pc_o = sel_valid ? pc[sel] : 8'd0;
+
+and it issues on every OTHER cycle -- one instruction in flight per wavefront.
+So on every NON-ISSUE cycle `pc_o` reads **zero**, and a front end that presents
+`instruction[pc_o]` combinationally puts INSTRUCTION 0 on the bus half the time.
+
+The core survives this internally because `s1_op`/`s1_dst` are captured at
+`issue_fire` and `rd_*` are only consumed when `s1_valid`. But **`ins_is_long`
+is read CONTINUOUSLY** -- it gates the long-op interlock -- so the interlock is
+being computed from instruction 0 on alternate cycles.
+
+### Why this is the core's problem and not the front end's
+
+`pc_o` has no "this pc means something" companion. Zero is a legal pc, so the
+front end cannot tell "wavefront 3 is about to issue instruction 0" from "nobody
+is issuing". Any instruction memory driven from `pc_o` inherits the ambiguity.
+
+The fix is an interface change to make deliberately, not a hack to bolt on:
+either add `pc_valid_o` (= `sel_valid`) so the front end can hold the bus
+steady, or have the core register the fetched instruction itself. The first is
+smaller and keeps the instruction memory outside the core, which is the shape
+the rest of the engine already has.
+
+**This is exactly the kind of defect the front end existed to find.** The core
+passed 109 checks and a 71-mutant sweep while carrying an output whose meaning
+is undefined half the time, because every one of those tests drove `ins_*` from
+a testbench that already knew which wavefront was issuing.
+
+### State
+
+`zhao_field_v2_front.sv` and `field_v2_front_directed.cpp` remain UNCOMMITTED
+and unregistered; `main` stays green. Debug taps and the tracer are removed --
+the front end still lints clean across 17 modules with them gone. Two real bugs
+were fixed on the way (the ready/valid handshake, the drain phase walk) and both
+are worth keeping when this resumes.
