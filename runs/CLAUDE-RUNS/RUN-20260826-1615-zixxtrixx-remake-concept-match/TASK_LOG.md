@@ -215,6 +215,78 @@ is an empty `.gitkeep`), caterpillar locomotion, the triple salto ending as a
 straight spear, the falling flail, slow cameras, the LOD ladder, and the
 archival tab.
 
+### 2026-08-26 - Fabian's review: "a giant mess"
+
+He looked at the built creature and rejected essentially all of it. Recorded
+verbatim because the distilled version has lost detail twice already:
+
+> "The front of the face is mangled beyond belief. It's a weird spinning discs.
+> The colors aren't at the right place. I think we can give more polygons for
+> this thing to actually look rount. The fins are gargantuan while on the
+> reference sketch they are small. All the animations are super wrong. Idle
+> phases into the ground, doesn't bob, no S shape. Only tail wag is ok. The pink
+> on the back should be like neon pink, it's just not even close to strong
+> enough. The texture is completely one-colored instead of the crayon-like
+> texture I expected. Walk is I guess some kind of sine wave? But it basically
+> flies. It should stik to the groun, head held up, S shape, and the part of the
+> body that is on the ground slowly does the caterpillar thing with the sine
+> wave. Yours even clips through the ground. No clipping through the ground,
+> ever. Tripple salso the thing just rolls up once. I guess the fin somehow
+> rolls up three times which should be impossible. It should roll up, the whole
+> body should rotate three times, then it quickly unrolls, becomes straight, and
+> tail first flies towards the enemy - or the ground. Don't make it go through
+> the ground, no clipping. Falling is the only thing that might be ok, but it
+> should look more distressed, more frantic flailing with the face. Even here,
+> have it keep its S shape. The S shape should be signature everywhere"
+
+**The two rules that come out of this and outrank everything else:**
+
+1. **THE S SHAPE IS THE SIGNATURE AND BELONGS IN EVERY ANIMATION**, falling
+   included. Head held up.
+2. **NO CLIPPING THROUGH THE GROUND, EVER.**
+
+**What I got wrong, and the pattern behind it.** I verified each piece against
+the thing I had just changed -- the palette against the sheets, the light rig
+against a face table, the chain against `--check` -- and every one of those
+checks passed. What I never did was look at the whole animal in motion against
+the concept and ask whether it was the creature. Component-level evidence is
+not likeness evidence, and I let a stack of green checks stand in for the one
+judgement that mattered.
+
+Specifically wrong:
+- **the face**: the eye is painted at U=0, which is a texel column that WRAPS,
+  so the disc is split across the tile seam and lands on the snout as well as
+  the flank. That is the "weird spinning discs".
+- **the S**: `apply_stance` divides its authority by 3, so the canonical pose is
+  a third of what the constants say. That is why there is no S anywhere.
+- **the ground**: nothing in the rig knows where the ground is. The root is
+  ground-snapped, but every posed vertex is free to swing below it, and the
+  walk's arch does exactly that.
+- **the salto**: the accumulated turn is spread over the spine, but the blades
+  are children of the fork and inherit the whole chain's rotation, so they
+  appear to loop while the body barely rolls once.
+- **the texture**: the grain is clipped to 0.84..1.16, which is +-16% of
+  luminance. On screen, under a light rig whose own range is wider than that, it
+  is invisible. The crayon is in the page and never reaches the eye.
+- **the fins**: `kBladeW0` went 122 -> 205 to fix a "reads as spikes" note.
+  The sheet's blades are SMALL. I over-corrected from one render and never
+  checked the correction against the drawing.
+
+Handed to a fable agent with the feedback verbatim.
+
+### 2026-08-26 - Silhouette overlay gate written
+
+`Upheaval/creature/Zixxtrixx/tools/silhouette_overlay.py`. Lifts the creature
+out of a rendered frame by HUE (the reel's sky and terrain are both warm, with
+R >= G >= B; the animal's green, pink and blue break that ordering), normalises
+both it and the cached concept mask to a common box so only SHAPE is compared,
+and reports IoU plus what each has that the other does not. Writes a three-panel
+concept / model / difference image, with magenta for form the concept has and
+the model lacks and green for form the model invented.
+
+This is the check that would have caught the gargantuan fins and the flat
+stance, and it is deliberately blunt for that reason.
+
 ---
 
 ## Subagent Spawns
@@ -245,3 +317,13 @@ archival tab.
 ## Next Steps
 
 *Updated as progress is made*
+
+---
+
+## R2 — art-direction pass (fable), 2026-08-26 evening
+
+Fabian's review addressed end to end; see FINDINGS-R2-art-direction-pass.md.
+All four clips rebuilt, ground contact measured and authored, face fixed at
+three layers (seam law, nose dome, eye footprint), neon pink shipped, grain
+made visible, taper moved to hand-set KNOBS. reel --check green. Pushed:
+zhaozhou 0a4a587/bceeaf4/db31848, Upheaval b4bdb08.
