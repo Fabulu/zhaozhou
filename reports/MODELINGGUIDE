@@ -1,0 +1,488 @@
+So, we have our first model for Zixxtrixx, but it has issues. 
+
+Read the upheaval directory and everything in it to get started. Then I have some advice from bro. Use it to jumpstart a new agent who will improve Zixxtrixx and upload new animations for everything
+to the website. The first animations we keep in an archival tab. We can do better and we have a much bigger polygon budget. Particularly with our LOD ambitions.
+
+I talked to bro about a salto mortale attack. At the end it should come straight down. So salto up, become like a straight spear and smash down with real power.
+
+And maybe one subagent won't work, I saw just now the task is complex. Here it is:
+
+That is perfect unit-click bullshit. It turns his name into a delayed joke:
+
+“I have one trick.” — matter-of-fact
+“I have two tricks.” — faintly proud
+“I have three tricks.” — selling it
+“I have... FOUR tricks!” — theatrical pause
+“I HAVE FIVE TRICKS!” — absurdly intense
+“I HAVE ZIXXTRIXX!” — full apocalyptic proclamation
+
+The sixth should be delivered so Zixxtrixx sounds unmistakably like “six tricks”, but still remains his proper name. Thunderous reverb, perhaps a tiny blood-moon flash or pointless burst of particles—far too much audiovisual consequence for clicking a snake six times.
+
+Then on click seven, dead calm:
+
+“That is all my tricks.”
+
+Or reset immediately to “I have one trick”, which may be even funnier because he has learned nothing.
+
+This is exactly the sort of tiny character gag people will quote, deliberately demonstrate to friends, and put in videos. Zixxtrixx has one joke. Zixxtrixx also has six jokes.
+
+THIS IS NOT A PROMPT FOR A PICTURE. Now, from all we've learned, gimme your advice for creature agent. How to remake the model, how to rejigger the colors for offline as well as the website, how to re-animate the model. Make sute the tail attack is more dynamic, maybe it can become a triple salto mortale. Tell it the movement should of the snake should be more caterpillar-y than snake-y. Up and down instead of left and right, and stronger. Camera rotation should be slower so you can see the animation better, and it's good even if it's longer. Also give it a flailing animation for falling. Better colors, better LOD, tell it to start an actual texture pipeline so we have actual textures and it should use the crayon textures as discussed.  More round, more smooth, and try to get rid of the cracky - textures should start stretching over them. Sacrifice does it, it should have references aplenty. I'll then put all our conversation in github, tell it to read it and spawn a sub agent for this.
+
+The key correction is that this is not a hardware-budget rescue job. The console already resolves to 16-bit RGB565; the global 256-colour rule belongs only to the GIF-export lane. The creature format already permits two bone influences per vertex, and its ring-cylinder source is only an offline authoring format—the hardware ultimately receives ordinary meshlets. The present cracks come from building the body as separate rigid parts, while the invisible locomotion comes from a modest lateral-yaw animation shown under an absurdly fast camera orbit.
+
+I would hand the agent this:
+
+Zixxtrixx complete remake pass for Tribute Upheaval
+
+The current Zixxtrixx is a successful technical prototype. It proves that the creature compiler, skeleton, rendering, clips, reel and website path exist.
+
+It is not an approved likeness of the concept art, and it must not be polished conservatively merely because it already compiles. Rebuild whatever needs rebuilding.
+
+The game is now named Tribute Upheaval.
+
+0. Read the conversation and delegate reconnaissance first
+
+Before changing code:
+
+Locate the newly committed conversation transcript. Search for distinctive phrases such as:
+Zixxtrixx will have voicelines
+I have Zixxtrixx
+THIS IS NOT A PROMPT FOR A PICTURE
+caterpillar-y
+triple salto mortale
+Read the complete relevant conversation, beginning with the first Zixxtrixx concept-art discussion and ending with this task.
+Spawn one dedicated subagent for visual, animation and asset-pipeline reconnaissance. That subagent must inspect:
+both concept sheets;
+tools/reel/zixxtrixx.h;
+tools/reel/zhao_reel.cpp;
+spec/creature_rules.md;
+the geometry, pose, texture and raster contracts;
+fpga/rtl/texture/zhao_texture_tmu.sv;
+fpga/rtl/raster/zhao_raster_resolve.sv;
+the reference renderer;
+the existing Sacrifice creature/donor reconnaissance and any relevant source references already recorded in the repository.
+Have the subagent write a short, evidence-based report covering:
+why the current model does not match the concept;
+how to build a continuous bendable body;
+which texture path already exists and which tooling seam is missing;
+how Sacrifice avoids visibly disconnected body sections;
+a proposed animation vocabulary;
+expected bone, meshlet, texture and animation costs.
+
+The parent agent owns the final design and implementation. Do not merely paste the subagent report into the task log.
+
+1. Art direction
+
+Zixxtrixx is not a realistic snake.
+
+He is a strange, theatrical, slightly ridiculous creature whose personality includes the escalating click lines:
+
+“I have one trick.”
+“I have two tricks.”
+…
+“I have Zixxtrixx.”
+
+That personality should inform the motion. He can be flamboyant, smug and physically excessive. His attack does not need zoological plausibility.
+
+The concept’s critical visual identity is:
+
+upright, compact S-shaped posture;
+front of body raised strongly from the ground;
+broad, unusual head rather than a simple capsule;
+enormous integrated yellow eyes;
+blue head and throat;
+green body;
+pink dorsal region and tail markings;
+orange eye surround;
+broad, colourful forked tail forms;
+handmade crayon/pencil surface rather than clean plastic.
+
+The existing horizontal ground-snake silhouette is rejected.
+
+2. Rebuild the static model before touching the final animation
+
+First produce a canonical static model that matches the concept.
+
+Create fixed front and side renders using a nearly orthographic camera aligned to the concept sheets. Display the concept and render side by side, and also produce black-silhouette comparisons.
+
+Match in this order:
+
+overall upright S silhouette;
+head-to-body proportion;
+eye size, location and integration into the skull;
+position of the major body curves;
+body thickness and taper;
+forked tail outline;
+colour-region boundaries;
+small details.
+
+Do not begin by adding surface detail to the existing horizontal tube.
+
+Required shape changes
+Raise the front half substantially.
+Give the body a permanent upright S-shaped canonical stance.
+Make the skull broad, flattened and designed in silhouette.
+Do not represent the head as another rotationally symmetric ring sausage.
+Integrate the eyes into the head contour; they should influence the silhouette rather than looking glued onto it.
+Make the tail ends broader, flatter and more leaf-, blade- or fin-like. Avoid three narrow tapered horns unless the concept comparison proves that shape.
+Restore the mouth as texture or low-cost geometry.
+Restore the orange eye surround.
+Restore the blue-to-green throat transition.
+Let the pink dorsal region follow the body as a painted region instead of reading as a separate helmet and a chain of attached pink tubes.
+Do not treat RingPart as a hardware limit
+
+The ring-cylinder authoring path is an offline tool convenience. The hardware sees compiled meshlets.
+
+Use offset and elliptical rings where they are sufficient. Add a custom-mesh or generalized-profile path on the tooling side where circular rings cannot reproduce the concept. Do not redesign silicon for this.
+
+Start LOD0 around 10–12 body sides, with more where the head and eyes actually require it, then measure. Six sides were chosen to appease the GIF palette budget and must not survive by inertia.
+
+Use smooth normals across continuous organic surfaces. Retain intentional hard edges on the tail blades or other designed forms. “More smooth” must not mean glossy generic fantasy plastic; the crayon texture will carry the handmade roughness.
+
+3. Replace the segmented body with a continuous skinned shell
+
+The current body is made from independent rigid cylinder pieces. That is why the attack opens visible cracks.
+
+Texture cannot cover a literal geometric hole.
+
+Build one continuous body surface:
+
+shared boundary vertices between longitudinal sections;
+no caps between body segments;
+enough intermediate rings to hold the curved silhouette;
+joint rings weighted across adjacent bones;
+no more than two bone influences per vertex;
+continuous UV coordinates along the entire body;
+texture seam placed underneath the creature, not along a visible side;
+neck/body and body/tail transitions either share topology or overlap invisibly inside a thicker form.
+
+Near a joint, blend vertices between the two adjacent bones. In the middle of a segment, one dominant bone is fine. Preserve the existing ≤32-bone law.
+
+An overlapping-segment fix may be used for a quick diagnostic, but it is not the final answer. The reusable asset-tool primitive should be a continuous flexible chain suitable for snakes, tails, tentacles, long necks and similar creatures.
+
+Add checks for:
+
+weight count ≤2;
+normalized weights;
+shared seam positions;
+UV continuity;
+no internal segment caps;
+no visible opening in the most extreme attack pose.
+4. Start the real creature texture pipeline
+
+Zixxtrixx must become the first vertical slice through an actual reusable creature-texture pipeline.
+
+Do not make a Zixxtrixx-only hack, but do not turn this into a year-long general-purpose DCC project either. Build the minimum general path needed to ship this creature properly.
+
+The path should cover:
+
+source texture asset and metadata;
+UVs on ring-generated and custom geometry;
+deterministic conversion into formats already supported by the machine;
+palette generation where CLUT8 is used;
+mip generation;
+cartridge/page packing;
+reference-renderer sampling;
+reel and website consumption;
+validation and budget reporting.
+
+Follow the existing TMU and creature contracts rather than inventing an unrelated texture system. CLUT8 is probably a good fit for the hand-drawn creature surface, with nearest sampling and proper mips. Compare it against direct RGB565 only after measuring quality and memory.
+
+Crayon texture direction
+
+The surface should visibly come from the drawings:
+
+uneven crayon or pencil coverage;
+overlapping strokes;
+subtle paper grain;
+darker pressure marks;
+slight colour variation inside each large region;
+imperfect hand-drawn boundaries;
+no photoreal scales;
+no procedural reptile skin;
+no clean plastic gradients.
+
+Use several shared pages rather than a unique texture for every tiny rigid piece. A sensible starting decomposition is:
+
+continuous body page;
+head/throat page;
+tail page;
+eye page or eye material.
+
+The body texture must flow continuously over joints. Use longitudinal UVs so the pink dorsal marking follows the full body. The current “texture runs around the ring while the stripe runs along the animal” limitation must be removed in the authoring/compiler path.
+
+Generate palette-aware mips that preserve the major blue, green, pink, yellow and orange identity at distance. Do not let the smallest mip turn the creature into green-brown mud.
+
+5. Correct the colour and website pipeline
+
+The actual game render is RGB565. The entire animated scene is not limited to 256 colours.
+
+The present PaletteSet/GIF rule is an output-format constraint that has accidentally been allowed to redesign the creature. Stop doing that.
+
+Master render
+Render using the game’s real RGB565 path.
+Preserve exact RGB565-derived frames for offline inspection.
+Provide PNG or equivalent full-colour frame output.
+Keep deterministic CRCs and provenance.
+Website
+
+Replace GIF as the required presentation format.
+
+Use a full-colour looping format such as WebM/MP4 or animated WebP, with a static poster image. GIF may remain as an optional degraded fallback, but:
+
+GIF conversion happens after the art is approved;
+GIF quantization is allowed to lose quality;
+the creature is never simplified to satisfy GIF;
+the GIF palette must not be a content gate;
+the website’s primary display must show the real creature.
+
+Restore the visual material discarded for the GIF lane:
+
+orange eye rim;
+mouth;
+throat transition;
+fuller body roundness;
+richer terrain and sky;
+proper lighting variation;
+any legitimate material removed solely to bring the union of all animation frames under 256 colours.
+
+Do not solve pastel colours becoming muddy merely by pushing saturation harder. First correct the material response, lighting and texture. Evaluate the final result after RGB565 resolve.
+
+The creature should remain highly colour-readable at 240p:
+
+blue head;
+yellow eyes;
+orange border;
+green body;
+pink dorsal/tail accents.
+6. Replace the slither with strong caterpillar-like locomotion
+
+The current side-to-side sine wave is visually negligible and conceptually wrong.
+
+The locomotion should be primarily vertical and longitudinal, not lateral:
+
+the elevated front anchors;
+a strong arch travels through the body;
+the middle rises and bunches;
+the rear is drawn forward;
+the body extends and settles;
+root motion advances the animal.
+
+Think caterpillar or inchworm more than snake.
+
+The up/down motion should be exaggerated enough to read instantly at 384×240. A viewer should not need to stare at the contour to discover that an animation exists.
+
+Use pitch through the X/Y plane as the main movement. A small lateral sway or roll may remain as secondary life, but it should contribute perhaps a fraction of the vertical authority rather than dominating it.
+
+Requirements:
+
+preserve the upright S-shaped head posture;
+keep the head alert and intentionally controlled;
+make the body visibly compress and release;
+avoid ground penetration;
+avoid obvious foot-sliding equivalents;
+produce a clean loop;
+make at least two full visible cycles available in the website preview.
+
+A fixed-camera side or three-quarter render must clearly show the gait before any orbit camera is applied.
+
+7. Make the tail strike absurdly dynamic
+
+The current attack is an engineering sketch. Replace it with something theatrically excessive.
+
+The first serious prototype should be a triple salto mortale tail attack:
+
+Zixxtrixx compresses and coils.
+The front braces and the rear rises.
+Tail and body make the first overhead rotation.
+A second, faster rotation builds momentum.
+A third rotation becomes the committed attack.
+The tail prongs spear downward in front of the head.
+Hold the impact briefly.
+Recoil, shake off the force and return to stance.
+
+Prototype at least two versions:
+
+head/front acts as the pivot while the rear and tail perform three overhead loops;
+the whole creature becomes a compact forward-somersaulting wheel before uncoiling into the stab.
+
+Choose based on readability, not realism.
+
+The whole animal should participate. Do not simply rotate the last three tail bones.
+
+Eliminate the current animation discontinuity
+
+Do not switch a joint abruptly between lateral yaw and attack pitch based on a threshold.
+
+Compose pitch, yaw and roll continuously using proper quaternion composition or an equivalent deterministic authoring helper. Use smooth authored curves for anticipation, acceleration, impact and recovery.
+
+The attack needs:
+
+a clear anticipation silhouette;
+accelerating motion;
+a precise contact pose;
+an attack event on the actual contact frame;
+a short impact hold or hit-stop;
+visible follow-through;
+no cracks;
+no sudden axis popping;
+a loop or return whose last pose does not jump into the first pose.
+
+It may be longer than the current attack. Longer is desirable when it improves readability.
+
+8. Re-evaluate 30 Hz held poses
+
+The current rule uses 30 Hz keys held for two 60 Hz simulation ticks without interpolation. Do not assume that remains visually sufficient merely because it came from the donor.
+
+First remove the axis discontinuity and slow the preview camera. Then create an A/B comparison:
+
+current 30 Hz held-pose playback;
+deterministic 60 Hz presentation interpolation between the same stored keys.
+
+A fixed-point normalized linear quaternion blend is a plausible experiment. Do not commit a hardware redesign before the visual comparison.
+
+If interpolation makes the triple strike and falling motion materially better, document the evidence and amend the relevant creature/pose plan before producing fifty creatures. A per-clip interpolation flag is acceptable if ordinary locomotion does not need it but fast attacks and falling do.
+
+The game remains deterministic; this is presentation interpolation, not gameplay truth.
+
+9. Add a falling flail animation
+
+Add a loopable airborne/falling clip.
+
+It should look panicked and uncontrolled:
+
+body corkscrews;
+head and tail counter-rotate;
+tail blades flap and splay;
+the body alternately stretches and bunches;
+no perfectly symmetrical sine motion;
+large readable changes at 240p;
+seamless loop for long falls.
+
+A separate landing/crumple clip is welcome, but the required deliverable is the falling flail loop.
+
+The animation should still feel like Zixxtrixx rather than a generic ragdoll. His theatrical personality can survive the panic.
+
+10. Slow down and separate the preview cameras
+
+The present orbit hides the animation by performing a whole camera revolution during a very short clip.
+
+Create distinct presentation subjects:
+
+static concept-match turntable;
+fixed-camera slither inspection;
+fixed three-quarter tail-attack inspection;
+slow beauty orbit;
+falling-flail inspection.
+
+For the beauty orbit, target roughly one complete revolution over 12–16 seconds, or at minimum several complete animation cycles per revolution.
+
+Camera motion must never be the dominant visible movement.
+
+A longer website loop is fine. This is creature presentation, not an advertising banner that has to finish in one second.
+
+11. Build a real LOD ladder
+
+Do not solve all distances with one compromised six-sided creature.
+
+Create and measure a proper ladder:
+
+LOD0
+continuous smooth body;
+custom head contour;
+proper eyes;
+broad tail forms;
+full crayon texture;
+seam-safe two-bone deformation.
+LOD1
+reduce circumference and intermediate body rings;
+simplify head topology;
+retain the exact upright silhouette;
+retain eye size and tail outline;
+retain all major colour regions.
+LOD2
+merge less important curves;
+simplify the tail and skull without changing recognition;
+preserve the blue-head/yellow-eye/green-body/pink-tail signature.
+Microform
+
+At extreme distance, Zixxtrixx should still read as:
+
+upright green S + blue head + two yellow eyes + pink tail accents.
+
+Use the existing screen-space Measure and compiler-generated microform discipline. Do not author arbitrary distance thresholds by intuition.
+
+Capture and compare the creature at several projected heights, for example around 96, 48, 24 and 12 pixels. The exact shipping thresholds come from measurement.
+
+Every LOD must remain crack-free.
+
+12. Verification and completion gates
+
+Do not close the run merely because it compiles.
+
+Produce:
+
+front and side concept comparison;
+silhouette overlays;
+static 360-degree turntable;
+fixed-camera caterpillar locomotion;
+slow orbit locomotion;
+fixed-camera triple-salto tail attack;
+extreme attack-pose crack inspection;
+falling-flail clip;
+full-colour website preview;
+LOD distance sheet;
+before/after comparison with the current technical prototype.
+
+Record:
+
+bone count;
+meshlet count;
+unique vertices and triangles per LOD;
+two-weight usage;
+texture page sizes;
+palette sizes;
+mip-chain cost;
+animation bytes;
+decoded-pose/cache implications;
+website asset sizes;
+build and render timings.
+
+Tests must cover:
+
+mesh validity;
+≤2 influences;
+normalized weights;
+UV continuity;
+deterministic texture conversion;
+deterministic renders;
+no accidental reintroduction of the global 256-colour content law;
+existing fast gates and reel checks.
+
+Do not pin final visual CRCs until the new appearance has been inspected. Preserve the old prototype captures for comparison.
+
+13. Hard prohibitions
+
+Do not:
+
+preserve the current geometry merely because it exists;
+mistake RingPart for a silicon constraint;
+use texture as an excuse not to fix actual geometric cracks;
+remove colours or geometry to satisfy GIF;
+hide weak animation behind camera movement;
+keep the horizontal ground-snake posture;
+substitute a generic reptile texture for the crayon art;
+make Zixxtrixx glossy, realistic or solemn;
+close the run without visual evidence.
+
+The final result should feel like Sabina’s drawing stood up, acquired an absurd animation budget and learned how to attack by performing three somersaults with its own tail.
+
+That gives the agent permission to stop defending the first blockout and turn it into the first actual art-production creature in Tribute Upheaval.
+
+The key correction is that this is **not a hardware-budget rescue job**. The console already resolves to 16-bit RGB565; the global 256-colour rule belongs only to the GIF-export lane. The creature format already permits two bone influences per vertex, and its ring-cylinder source is only an offline authoring format—the hardware ultimately receives ordinary meshlets. The present cracks come from building the body as separate rigid parts, while the invisible locomotion comes from a modest lateral-yaw animation shown under an absurdly fast camera orbit. I would hand the agent this:
+
+Losschreiben
+
+The key correction is that this is not a hardware-budget rescue job. The console already resolves to 16-bit RGB565; the global 256-colour rule belongs only to the GIF-export lane. The creature format already permits two bone influences per vertex, and its ring-cylinder source is only an offline authoring format—the hardware ultimately receives ordinary meshlets. The present cracks come from building the body as separate rigid parts, while the invisible locomotion comes from a modest lateral-yaw animation shown under an absurdly fast camera orbit.
+
+I would hand the agent this:
