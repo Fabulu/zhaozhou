@@ -1258,3 +1258,102 @@ exposed the real defect:
     p_array_implies_shadow silenced -> a_probe_slot_clear FAILS
     that silenced too               -> a_probe_no_watched_fill FAILS
     those silenced too              -> a_probe_key_bounded FAILS
+
+---
+
+## 21:50 — RESOLVED: it was the LOCAL, and the rule was already written down
+
+The narrowing above ("it is the `(* anyconst *)` case") is **wrong**, in the
+same way its own predecessor was wrong: it narrowed to the last thing that had
+changed instead of to the thing that was different.
+
+One variable at a time, same file, same engine, asserting the bound the harness
+assumes:
+
+| declaration of `f_arena` / `f_index` | result |
+| --- | --- |
+| `(* anyconst *) logic`, module-local | FAILS at step 3 |
+| attribute dropped, held constant by assumption, still local | **FAILS at step 3** |
+| identical signals moved into the PORT LIST | **PASSES** |
+
+The middle row settles it. Dropping the attribute changed nothing, so
+`anyconst` was never the culprit. What does not bind is **a free variable
+declared as a local** — this frontend ties attribute-carrying locals to
+constants/x, and an assumption written about a constant constrains nothing.
+
+### The part that stings
+
+Four files in `tests/formal` already record this, by name, as the W2.5
+ratification note:
+
+    video_linebuf_fv.sv     "the anyconst idiom, but as a port"
+    formal_mem_arbiter.sv   "must be PORTS, not (* anyseq *) locals"
+    formal_mem_guard.sv     "deliberately NOT (* anyseq *) locals"
+    formal_mem_refresh.sv   "carried on PORTS because locals do not"
+
+`zhao_vertex_arena.sv` is the only file in the tree that broke the rule. Three
+days and three wrong diagnoses went into rediscovering a note I had written.
+
+The reading that would have shortened it: **the first counterexample was an
+IDLE trace**, and an idle trace cannot violate a property about lookups. That is
+a signature of a broken question, not a broken machine, and it was visible on
+day one.
+
+### Made permanent
+
+`a_probe_key_bounded` and `a_probe_key_constant` now ship in the file, placed
+FIRST in the assertion block on purpose — bmc names only the first failing
+assertion at a step, so a future binding regression reports itself by name
+rather than as a lookup property failing on an empty trace.
+
+Status: refuted at k=3 before, clean through k=17 after. Full depth-24 run in
+flight; `design/formal_runs.yml` stays `pending` until it completes.
+
+## 21:50 — the Field v2 fit FAILED, and the evidence was deleted
+
+`zhao_field_v2_front`: `quartus_fit` ran **5,747.8 s** and exited non-zero.
+The harness reports timeouts as `timeout`, so this is a genuine tool error, not
+a budget kill.
+
+**The error message is gone.** `run_block_fit.ps1` removes its workspace unless
+`-KeepWorkspace` is passed, and it was not. That is a process mistake worth
+naming: a 96-minute measurement that fails and takes its own log with it costs
+the whole 96 minutes twice.
+
+First re-run attempt was map-only and hit `run_block_map.ps1`'s own 1,800 s
+default at 30 minutes. Relaunched at 9,000 s with `-KeepWorkspace`.
+
+### The hypothesis, held loosely until the report lands
+
+`zhao_field_v2_core.sv:177` — `rf[LANES][0:(1<<RFAW)-1]`, read on four ports
+(a, b, c, host) and written from **four places in one clock**: the multi-result
+reply writes up to three distinct destinations (677–679), plus the ALU
+writeback (708) and the host port (706). M10K offers two ports. Storage that
+cannot map to a memory becomes flops: 512 × 32 × 4 lanes ≈ 65,000 against
+~84,000 on the device.
+
+Counter-evidence that the shape is buildable: `zhao_probe_banked_rf` measured
+375 ALMs / 12 M10K / 96.5 MHz at three read ports. The read side was fine. What
+came after the probe is the multi-write side.
+
+Reference point for scale: v1 `zhao_field_seq` fits at 4,494 ALMs / 5 M10K /
+3 DSP, **Fmax 59.0 MHz**.
+
+## 21:50 — two harness traps found while running the gate
+
+* **The wrong `ctest` on PATH fails all 278 fast tests** with BAD_COMMAND in
+  0.00 s each. Three `ctest.exe` are installed; msys2's wins, does not treat
+  `C:/...` as absolute, and concatenates it onto the working directory.
+  `build/CMakeCache.txt` names the correct one. Written up in `docs/BUILD.md`.
+* **`cmake --build` through the Bash tool** dies in ccache with "USERPROFILE
+  must be set"; exporting it from inside bash does not reach the child. Build
+  from PowerShell.
+
+With the right ctest: **275 of 278 pass.** The three failures were
+`ledger_check` (V20 on my own new comment — enforcer named, now green),
+`format_check` (entirely the creature lane's uncommitted files, formatted with
+the repo's own clang-format) and `cppcheck_check` (`field_v2_front_directed.cpp:208`
+passed a partially-uninitialised array; now zero-initialised).
+
+**Note: a second session is committing to this repo concurrently** (the creature
+lane, commits `bceeaf4`..`e7d2995`). Only my own files are being staged.
