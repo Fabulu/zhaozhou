@@ -339,8 +339,16 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     ring_cache.push_back(build_ring(part.rings[ri], part.align, v_lane_of(ri)));
     for (BuiltVert& bv : ring_cache.back()) orient(bv.x, bv.y, bv.z);
     const uint32_t base = static_cast<uint32_t>(cur.verts.size());
+    // CHAIN parts carry their bones per RING, so one continuous surface can
+    // span a whole bone chain and blend across each joint. RIGID parts keep
+    // the original {bone, bone, 64} exactly, so nothing that existed before
+    // changes by a single bit.
+    const RingSpec& rs = part.rings[ri];
+    const uint8_t vb0 = part.chain ? rs.b0 : part.bone;
+    const uint8_t vb1 = part.chain ? rs.b1 : part.bone;
+    const uint8_t vw0 = part.chain ? rs.w0 : 64;
     for (const BuiltVert& bv : ring_cache.back()) {
-      cur.verts.push_back(SkinVertex{bv.x, bv.y, bv.z, part.bone, part.bone, 64, bv.u, bv.v});
+      cur.verts.push_back(SkinVertex{bv.x, bv.y, bv.z, vb0, vb1, vw0, bv.u, bv.v});
     }
     return base;
   };
@@ -388,8 +396,12 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
       int32_t ax0 = 0, ay0 = part.rings[0].y, az0 = 0;
       orient(ax0, ay0, az0);
-      cur.verts.push_back(
-          SkinVertex{ax0, ay0, az0, part.bone, part.bone, 64, static_cast<uint8_t>(part.align), 0});
+      // a chain end cap follows its own end ring, not a part-wide bone
+      cur.verts.push_back(SkinVertex{ax0, ay0, az0,
+                                     part.chain ? part.rings[0].b0 : part.bone,
+                                     part.chain ? part.rings[0].b1 : part.bone,
+                                     part.chain ? part.rings[0].w0 : uint8_t{64},
+                                     static_cast<uint8_t>(part.align), 0});
       for (int k = 0; k < n; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(lo + k));
         cur.idx.push_back(static_cast<uint8_t>(lo + (k + 1 == n ? 0 : k + 1)));
@@ -400,7 +412,10 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
       int32_t ax1 = 0, ay1 = part.rings[n_rings - 1].y, az1 = 0;
       orient(ax1, ay1, az1);
-      cur.verts.push_back(SkinVertex{ax1, ay1, az1, part.bone, part.bone, 64,
+      cur.verts.push_back(SkinVertex{ax1, ay1, az1,
+                                     part.chain ? part.rings[n_rings - 1].b0 : part.bone,
+                                     part.chain ? part.rings[n_rings - 1].b1 : part.bone,
+                                     part.chain ? part.rings[n_rings - 1].w0 : uint8_t{64},
                                      static_cast<uint8_t>(part.align), 255});
       for (int k = 0; k < m; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(hi + k));
@@ -452,6 +467,24 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         if (reason) *reason = "ring segments outside 3..32 (meshlet limit)";
         return false;
       }
+      // CHAIN parts carry per-ring bones and a 1/64 weight. w1 = 64 - w0 is
+      // structural, so weights cannot fail to normalise -- but the indices and
+      // the weight range still have to be checked, and a chain part must not
+      // also claim a part-wide bone.
+      if (p.chain) {
+        if (rs.b0 >= sk.bone_count || rs.b1 >= sk.bone_count) {
+          if (reason) *reason = "chain ring bone index out of range";
+          return false;
+        }
+        if (rs.w0 > 64) {
+          if (reason) *reason = "chain ring w0 above 64 (weights are 1/64 quanta)";
+          return false;
+        }
+      }
+    }
+    if (p.chain && (p.caps & ~(kCapTop | kCapBot)) != 0) {
+      if (reason) *reason = "chain part caps outside {top, bot}";
+      return false;
     }
   }
 
@@ -491,9 +524,13 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       // compiled payload in creature-global bind space so S=A*inv_rest keeps
       // the part attached at that bone in the identity pose instead of piling
       // every rigid part at the root.
-      const int32_t bx = out.baked.world_x[p.bone];
-      const int32_t by = out.baked.world_y[p.bone];
-      const int32_t bz = out.baked.world_z[p.bone];
+      // RIGID parts are authored bone-locally and are lifted into
+      // creature-global bind space here. CHAIN parts are ALREADY in
+      // creature-global bind space -- they have no single bone to be local to,
+      // which is the whole point -- so their offset is zero.
+      const int32_t bx = p.chain ? 0 : out.baked.world_x[p.bone];
+      const int32_t by = p.chain ? 0 : out.baked.world_y[p.bone];
+      const int32_t bz = p.chain ? 0 : out.baked.world_z[p.bone];
       for (SkinVertex& v : m.verts) {
         v.x += bx;
         v.y += by;
@@ -529,9 +566,13 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       d.rings.push_back(rs);
     }
     for (Meshlet& m : build_ring_part(d)) {
-      const int32_t bx = out.baked.world_x[p.bone];
-      const int32_t by = out.baked.world_y[p.bone];
-      const int32_t bz = out.baked.world_z[p.bone];
+      // RIGID parts are authored bone-locally and are lifted into
+      // creature-global bind space here. CHAIN parts are ALREADY in
+      // creature-global bind space -- they have no single bone to be local to,
+      // which is the whole point -- so their offset is zero.
+      const int32_t bx = p.chain ? 0 : out.baked.world_x[p.bone];
+      const int32_t by = p.chain ? 0 : out.baked.world_y[p.bone];
+      const int32_t bz = p.chain ? 0 : out.baked.world_z[p.bone];
       for (SkinVertex& v : m.verts) {
         v.x += bx;
         v.y += by;

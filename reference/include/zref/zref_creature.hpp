@@ -314,6 +314,10 @@ struct RingSpec {
   int32_t y;       // fx16 along the part axis
   int32_t radius;  // fx16
   uint8_t segments;
+  // CHAIN MODE ONLY (see RingPart::chain). This ring's two bones and the
+  // weight of the first in 1/64 quanta; w1 = 64 - w0 by construction, so the
+  // normalisation law cannot be violated. Ignored by rigid parts.
+  uint8_t b0 = 0, b1 = 0, w0 = 64;
 };
 
 inline constexpr uint8_t kCapTop = 1;  // fan cap closing the +Y end
@@ -335,7 +339,32 @@ struct RingPart {
   std::vector<RingSpec> rings;
   uint8_t caps = 0;
   uint8_t align = 0;
-  uint8_t bone = 0;     // rigid part: one bone per part (donor law)
+  // NOT a donor law, despite what this comment said until 2026-08-26: the
+  // donor is 34.92% multi-bone (measured, FINDINGS-R1 section E.3). The
+  // mis-attribution is what authored the cracks.
+  uint8_t bone = 0;     // RIGID parts only: the single bone this part follows
+  /**
+   * CHAIN MODE (added 2026-08-26). A rigid part is one bone, so a shape that
+   * bends must be several parts -- and adjacent parts share no vertices, which
+   * is why the first Zixxtrixx opened a 61 mm hole (5.3 px on a 19 px body) at
+   * the peak of its attack. Texture cannot cover a geometric hole.
+   *
+   * With `chain` set, each ring carries its OWN {b0, b1, w0} and the rings are
+   * authored directly in creature-global bind space (no per-part bone offset).
+   * One part can then span a whole bone chain as ONE continuous surface:
+   * interior rings are shared by construction, there are no internal caps, and
+   * rings near a joint blend across the two bones either side of it.
+   *
+   * Nothing downstream needed changing. `skin_vertex` already takes the
+   * 2-weight path, GEOM.SKIN already specifies the identical
+   * rescale(w0*pa + w1*pb, 22), and the measured DSP cost of the weight
+   * multiplies was approximately zero. The blend was implemented everywhere
+   * EXCEPT in the one place that emits vertices.
+   *
+   * The reusable primitive this gives us is a continuous flexible chain --
+   * snakes, tails, tentacles, long necks.
+   */
+  bool chain = false;
   uint8_t pitch_q = 0;  // quarter turns about X applied at build
   uint8_t yaw_q = 0;    // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;
