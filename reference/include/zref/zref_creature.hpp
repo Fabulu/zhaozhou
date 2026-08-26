@@ -59,6 +59,13 @@
 #include <vector>
 
 namespace zref {
+
+// forward: the creature page is a render Tileset (256 tiles of 64x64
+// CLUT8 with an RGB565 palette), declared here to avoid an include cycle
+namespace render {
+struct Tileset;
+}
+
 namespace creature {
 
 // ---------------------------------------------------------------- formats --
@@ -305,6 +312,7 @@ struct Meshlet {
   std::vector<SkinVertex> verts;
   std::vector<uint8_t> idx;           // 3 * tri_count vertex indices
   uint8_t r = 128, g = 128, b = 128;  // part material (the CLUT8 page stand-in)
+  uint8_t page = 255;  // tile in the creature's Tileset; 255 = flat colour
 };
 
 // ----------------------------------------------------------- ring builder --
@@ -379,6 +387,10 @@ struct RingPart {
   uint8_t pitch_q = 0;  // quarter turns about X applied at build
   uint8_t yaw_q = 0;    // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;
+  // TEXTURE PAGE (added 2026-08-26). Index of the tile in the creature's
+  // Tileset. 255 = untextured, and the flat r/g/b above is used instead --
+  // which is what every part did before a page pipeline existed.
+  uint8_t page = 255;
 };
 
 /**
@@ -426,6 +438,9 @@ struct CreatureType {
   int32_t micro_error = 0;     // fx16, measured
   int32_t splat_error = 0;     // fx16, bound_radius / 2
   int32_t glint_error = 0;     // fx16, == bound_radius
+  // The creature's texture page. Null means every meshlet falls back to
+  // its flat material colour, so an untextured creature still renders.
+  const render::Tileset* page_set = nullptr;
 };
 
 /**

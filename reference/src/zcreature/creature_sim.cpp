@@ -527,6 +527,10 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const render::ProjOut po = render::project_vertex(vp, vpp, fx16{pvs[vi].wx},
                                                           fx16{pvs[vi].wy}, fx16{pvs[vi].wz}, L);
         pvs[vi].s = po.s;
+        // UVs: SkinVertex carries u/v as 0..255, ScreenV wants Q16.16 TILE
+        // units, so u8 << 8 puts one full wrap across exactly one tile.
+        pvs[vi].s.u = static_cast<int32_t>(m.verts[vi].u) << 8;
+        pvs[vi].s.v = static_cast<int32_t>(m.verts[vi].v) << 8;
         pvs[vi].in = po.in;
       }
       for (size_t ti = 0; ti + 2 < m.idx.size(); ti += 3) {
@@ -541,9 +545,26 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                                        kFillX, kFillY, kFillZ, L);
         const Shade3 sh = creature_light(lam_key, lam_fill);
         render::TriMode tm;  // opaque: depth test + write
-        render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * sh.r + 32768) >> 16),
-                           sat_u8((m.g * sh.g + 32768) >> 16), sat_u8((m.b * sh.b + 32768) >> 16),
-                           tm);
+        // TEXTURED PATH. raster_tri has always been able to sample CLUT8
+        // through a TextureSpan; nothing on the creature side ever built one.
+        // The light gain rides mod_r/g/b, which is exactly the lane it wants:
+        // texel colour TIMES the per-channel rig, one multiply, no second
+        // shading model.
+        if (T.page_set != nullptr && m.page != 255) {
+          render::TextureSpan tex;
+          tex.ts = T.page_set;
+          tex.tile_a = m.page;
+          tex.tile_b = m.page;
+          tex.mosaic = false;
+          tex.mod_r = sh.r;
+          tex.mod_g = sh.g;
+          tex.mod_b = sh.b;
+          render::raster_tri(surf, vpp, a.s, b.s, c.s, 255, 255, 255, tm, &tex);
+        } else {
+          render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * sh.r + 32768) >> 16),
+                             sat_u8((m.g * sh.g + 32768) >> 16),
+                             sat_u8((m.b * sh.b + 32768) >> 16), tm);
+        }
       }
     }
   }

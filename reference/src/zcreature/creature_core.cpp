@@ -368,6 +368,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     const int verts_needed = m + (bottom_cap ? 1 : 0) + (top_cap ? 1 : 0);
     if (static_cast<int>(cur.verts.size()) + verts_needed > kMeshletMaxVerts ||
         static_cast<int>(cur.idx.size()) / 3 + tris_needed > kMeshletMaxTris) {
+      cur.page = part.page;
       cur.r = part.r;
       cur.g = part.g;
       cur.b = part.b;
@@ -432,7 +433,8 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     }
   }
   if (!cur.idx.empty()) {
-    cur.r = part.r;
+    cur.page = part.page;
+      cur.r = part.r;
     cur.g = part.g;
     cur.b = part.b;
     out.push_back(std::move(cur));

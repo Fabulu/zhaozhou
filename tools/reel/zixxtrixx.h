@@ -48,6 +48,8 @@ namespace zixx {
 
 // the measured taper, generated from the concept sheet
 #include "zixxtrixx_profile.h"
+// the crayon page, generated from the same sheets
+#include "zixxtrixx_page.h"
 
 // ============================== KNOBS ======================================
 // Millimetres unless noted. Angles in angle16: 65536 = one turn, 182 ~ 1 deg.
@@ -224,6 +226,30 @@ inline Bind station_bind(int i) {
   const int w = 64 - ((frac * 64 + 512) >> 10);
   return Bind{static_cast<uint8_t>(kBSpine0 + k), static_cast<uint8_t>(kBSpine0 + k + 1),
               static_cast<uint8_t>(w)};
+}
+
+// ------------------------------------------------------------ the page ----
+// The generated tables become a render::Tileset once, at first use. The tile
+// indices below are the page's own order, and they are what a part's
+// `page` field selects.
+enum : uint8_t {
+  kTileBody = 0,   // flank, with the dorsal band painted at U=192
+  kTileHead = 1,   // head and throat
+  kTileEye = 2,    // eye
+  kTileRim = 3,    // eye rim / pupil
+  kTileBlade = 4,  // tail blade
+  kTileCrest = 5   // crest / blade edging
+};
+
+inline const zref::render::Tileset& page() {
+  static const zref::render::Tileset ts = [] {
+    zref::render::Tileset t;
+    for (int i = 0; i < 256; ++i) t.palette[i] = kPagePalette[i];
+    for (int k = 0; k < kPageTiles; ++k)
+      for (int i = 0; i < 64 * 64; ++i) t.tiles[k][i] = kPageTexels[k][i];
+    return t;
+  }();
+  return ts;
 }
 
 inline void set_rgb(zc::RingPart& p, const uint8_t c[3]) {
@@ -505,7 +531,8 @@ inline const zc::CreatureType& type() {
         rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
         p.rings.push_back(rs);
       }
-      set_rgb(p, kGreen);
+      p.page = kTileBody;
+      set_rgb(p, kGreen);  // fallback if the page is ever absent
       parts.push_back(p);
     }
 
@@ -533,38 +560,19 @@ inline const zc::CreatureType& type() {
         rs.cz = -fxm(kBodyY);
         p.rings.push_back(rs);
       }
+      p.page = kTileHead;
       set_rgb(p, kBlue);
       parts.push_back(p);
     }
 
-    // ---- DORSAL CREST: a third chain, same bones, riding on the back -----
-    // The concept's pink runs ALONG the animal; a ring part's texture runs
-    // AROUND it, so until the texture lane lands the stripe is geometry. It
-    // shares the body's binds, which is what keeps it welded through any bend.
-    {
-      zc::RingPart p;
-      p.chain = true;
-      p.pitch_q = 1;
-      p.yaw_q = 3;
-      p.caps = zc::kCapBot | zc::kCapTop;
-      for (int i = 0; i < kProfileStations; ++i) {
-        const int32_t r = station_r(i);
-        const Bind bd = station_bind(i);
-        zc::RingSpec rs;
-        rs.y = fxm(station_x(i));
-        rs.radius = fxm(r * kCrestNum / 100);
-        rs.segments = 8;
-        rs.b0 = bd.b0;
-        rs.b1 = bd.b1;
-        rs.w0 = bd.w0;
-        rs.rx = fxm(r * kCrestNum / 100);
-        rs.rz = fxm(r * kCrestNum / 140);
-        rs.cz = -fxm(kBodyY + r * kCrestLift / 100);  // UP is NEGATIVE cz
-        p.rings.push_back(rs);
-      }
-      set_rgb(p, kPink);
-      parts.push_back(p);
-    }
+    // ---- THE DORSAL CREST IS NOW PAINT, NOT GEOMETRY --------------------
+    // It used to be a third chain riding on the back, because a ring part's
+    // texture ran AROUND the body while the concept's stripe runs ALONG it,
+    // and V restarted at every rigid part so a longitudinal marking could not
+    // survive at all. One chain part fixed the V continuity and the page
+    // paints the band at U=192 (the back), so the geometry is redundant --
+    // 57 rings and 8 sides of it. This is the texture lane paying for itself
+    // the first time it is used.
 
     // ---- EYES: enormous, orange-ringed -----------------------------------
     for (int side = 0; side < 2; ++side) {
@@ -578,6 +586,7 @@ inline const zc::CreatureType& type() {
       rim.pitch_q = 1;
       rim.yaw_q = yq;
       rim.bone = bone;
+      rim.page = kTileRim;
       set_rgb(rim, kOrange);
       parts.push_back(rim);
 
@@ -590,6 +599,7 @@ inline const zc::CreatureType& type() {
       eye.pitch_q = 1;
       eye.yaw_q = yq;
       eye.bone = bone;
+      eye.page = kTileEye;
       set_rgb(eye, kYellow);
       parts.push_back(eye);
     }
@@ -625,6 +635,7 @@ inline const zc::CreatureType& type() {
         rs.w0 = static_cast<uint8_t>(64 - wroot);
         p.rings.push_back(rs);
       }
+      p.page = kTileBlade;
       set_rgb(p, kGreen);
       parts.push_back(p);
     }
@@ -639,6 +650,7 @@ inline const zc::CreatureType& type() {
       p.rings = {{0, fxm(kSpikeR), 6},
                  {fxm(kSpikeLen / 2), fxm(kSpikeR * 6 / 10), 6},
                  {fxm(kSpikeLen), fxm(kSpikeR / 5), 6}};
+      p.page = kTileCrest;
       set_rgb(p, kPink);
       parts.push_back(p);
     }
@@ -656,6 +668,7 @@ inline const zc::CreatureType& type() {
     if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
       std::fprintf(stderr, "zixxtrixx: compile failed: %s\n", reason);
     }
+    type.page_set = &page();
     return type;
   }();
   return t;
