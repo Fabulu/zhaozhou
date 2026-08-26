@@ -281,3 +281,44 @@ The novel flagship (S3 §B4): a giant whose torso is walkable terrain.
 - Kind 8/9 byte-exact layouts — freeze at SW.TOOLS.ASSET (Phase 12 entry);
   the semantic fields above are the contract.
 - Mud-shepherd scheduling — intent recorded (§6.5), unscheduled.
+
+---
+
+# AMENDED 2026-08-26 (RUN-20260826-1615, Zixxtrixx production pass)
+
+These are AUTHORING-FORMAT amendments. **No hardware contract changed** — the
+compiled product is still ordinary meshlets with at most two bone influences,
+and GEOM.SKIN already specified the blend.
+
+**1.1 ring format, three additions**
+
+* `RingSpec` gains `{b0, b1, w0}` — per-ring bones and the first one's weight in
+  1/64 quanta. `w1 = 64 - w0` is structural.
+* `RingSpec` gains `cx, cz` (ring centre offset) and `rx, rz` (elliptical
+  radii; both zero means circular and uses `radius`).
+* `RingPart` gains `chain`. A chain part's rings carry their own bones and are
+  authored in **creature-global bind space**; one part spans a whole bone chain
+  as a single continuous surface with no internal caps.
+
+**1.2 correction of a false citation.** `zref_creature.hpp` described one bone
+per part as "(donor law)". It is not: the donor is **34.92% multi-bone**
+(measured). Independently, `build_ring_part` had never emitted a two-bone blend
+— every vertex was `{bone, bone, 64}` — while the runtime, the hardware contract
+and the 3->2 clamp gate all implemented blending correctly. The blend existed
+everywhere except where vertices are made.
+
+**1.2 texture page.** `RingPart` and `Meshlet` gain `page`; `CreatureType` gains
+`page_set`. `page == 255` means untextured and falls back to the flat material
+colour.
+
+**2.1 clip bank.** `Clip` gains `interpolate`. When set, the decoder blends
+between consecutive keys at the half-tick with a normalized integer quaternion
+lerp. **Presentation only** — the sim clock, event frames and every gameplay
+consequence still run on the authored 30 Hz keys. Default off.
+
+**Compile-time validators added:** chain bone indices in range, `w0 <= 64`, caps
+restricted to chain ends.
+
+**Not a creature law, but it governs creature work:** the 256-colour rule is a
+GIF-export constraint and must never shape a creature. `SceneSubject::full_colour`
+exempts a subject from it.
