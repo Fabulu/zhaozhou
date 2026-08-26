@@ -666,8 +666,8 @@ MUTS = [
     end"""),
     ("M106 the length's saturation never reaches the ledger", F_V2,
      """      if (cv_sat_add  || ln_sat_add  || rg_sat_add ||
-          nz_sat_add)                                 sat_add_o     <= 1'b1;""",
-     """      if ((cv_sat_add || rg_sat_add || nz_sat_add) &&
+          nz_sat_add   || rt_sat_add)                 sat_add_o     <= 1'b1;""",
+     """      if ((cv_sat_add || rg_sat_add || nz_sat_add || rt_sat_add) &&
           ln_sat_add)                                 sat_add_o     <= 1'b1;"""),
     ("M107 LEN3 and DIST2 collapse to LEN2's mode", F_V2,
      """      OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
@@ -706,7 +706,7 @@ MUTS = [
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_noise) begin""",
+    end else if (to_rot) begin""",
      """    if (to_ring && rg_mul_issue) begin
       mul_issue = rg_mul_issue;
       mul_a     = rg_mul_a;
@@ -715,7 +715,7 @@ MUTS = [
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_noise) begin"""),
+    end else if (to_rot) begin"""),
     ("M115 the band's two radii are swapped at the unit", F_V2,
      """      .d_i(u_a), .r0_i(u_a1), .r1_i(u_a2),""",
      """      .d_i(u_a), .r0_i(u_a2), .r1_i(u_a1),"""),
@@ -723,8 +723,8 @@ MUTS = [
      """      if (rg_rcp0    || rc_rcp0)                     rcp_zero_o    <= 1'b1;""",
      """      if (rg_rcp0    && rc_rcp0)                     rcp_zero_o    <= 1'b1;"""),
     ("M117 RING's multiply saturation reaches the ledger only beside a curve's", F_V2,
-     """      if (cv_sat_mul  || rg_sat_mul)                 sat_mul_o     <= 1'b1;""",
-     """      if (cv_sat_mul  && rg_sat_mul)                 sat_mul_o     <= 1'b1;"""),
+     """      if (cv_sat_mul  || rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;""",
+     """      if (cv_sat_mul  && rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;"""),
     ("M118 RING never dispatches at all", F_V2,
      """      if (s1_is_curve || s1_is_ring || s1_is_ridge) begin""",
      """      if (s1_is_curve || s1_is_ridge) begin"""),
@@ -751,8 +751,8 @@ MUTS = [
      """      .is_ridge_i(1'b0),"""),
     ("M124 the noise unit's saturation reaches the ledger only beside another", F_V2,
      """      if (cv_sat_add  || ln_sat_add  || rg_sat_add ||
-          nz_sat_add)                                 sat_add_o     <= 1'b1;""",
-     """      if ((cv_sat_add || ln_sat_add || rg_sat_add) &&
+          nz_sat_add   || rt_sat_add)                 sat_add_o     <= 1'b1;""",
+     """      if ((cv_sat_add || ln_sat_add || rg_sat_add || rt_sat_add) &&
           nz_sat_add)                                 sat_add_o     <= 1'b1;"""),
     # ---- THE MULTI-RESULT REPLY, and NOISE2 as its first user --------------
     # Every long op before NOISE2 returned one value. Four of the remaining six
@@ -772,15 +772,19 @@ MUTS = [
      """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
      """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];"""),
     ("M128 every op claims a single result", F_V2,
-     """  wire [1:0]  s1_nres = s1_is_noise2 ? 2'd2 : 2'd1;""",
-     """  wire [1:0]  s1_nres = s1_is_noise2 ? 2'd1 : 2'd1;"""),
+     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2) ? 2'd2
+                                                     : 2'd1;""",
+     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd1
+                      : (s1_is_noise2 || s1_is_rot2) ? 2'd1
+                                                     : 2'd1;"""),
     ("M129 the second read pass is for lengths only again", F_V2,
-     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2;""",
-     """  wire s1_needs_pass2 = s1_is_len;"""),
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;""",
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_rot;"""),
     ("M130 the pass-2 path still hard-wires the length unit", F_V2,
      """        lq_unit  <= ln_unit;
         lq_nres  <= ln_nres;""",
-     """        lq_unit  <= ln_unit ^ 2'd1;
+     """        lq_unit  <= ln_unit ^ 3'd1;
         lq_nres  <= ln_nres;"""),
     ("M131 a pass-2 op loses its immediate", F_V2,
      """        lq_imm   <= ln_imm;  // NOISE2 takes this path AND reads a seed""",
@@ -795,6 +799,39 @@ MUTS = [
     ("M134 the reply carries lane 0's second result to every lane", F_LMUX,
      """      rsp_y1_o[l] = y1_q[l];""",
      """      rsp_y1_o[l] = y1_q[0];"""),
+    # ---- ROT2/ROT3, the sine table, and the widened unit selector ----------
+    # ROT3's immediate is an AXIS. A dropped axis still rotates the right vector
+    # by the right angle, so it is a plausible world -- these attack the axis,
+    # the mode, the angle's source, the third register, and the fifth shared
+    # resource.
+    ("M135 the axis is dropped and every ROT3 rotates about X", F_V2,
+     """      .is_rot3_i(u_mode[0]), .axis_i(u_imm[1:0]),""",
+     """      .is_rot3_i(u_mode[0]), .axis_i(2'(u_imm[1:0] & 2'd0)),"""),
+    ("M136 ROT3 is told it is ROT2", F_V2,
+     """      .is_rot3_i(u_mode[0]), .axis_i(u_imm[1:0]),""",
+     """      .is_rot3_i(1'b0), .axis_i(u_imm[1:0]),"""),
+    ("M137 ROT2 writes a third register it does not own", F_V2,
+     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2) ? 2'd2
+                                                     : 2'd1;""",
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_rot2) ? 2'd3
+                      : s1_is_noise2                ? 2'd2
+                                                    : 2'd1;"""),
+    ("M138 the rotation angle is read from the wrong register", F_V2,
+     """      .ang_i(u_b0),""",
+     """      .ang_i(u_a),"""),
+    ("M139 the sine table is asked for cosine and back again", F_V2,
+     """      .clk(clk), .angle_i(rt_sin_angle), .is_cos_i(rt_sin_is_cos),""",
+     """      .clk(clk), .angle_i(rt_sin_angle), .is_cos_i(!rt_sin_is_cos),"""),
+    ("M140 ROT is routed to the curve unit's code", F_V2,
+     """  wire to_rot   = (u_unit == UNIT_ROT);""",
+     """  wire to_rot   = (u_unit == UNIT_CURVE);"""),
+    ("M141 ROT's saturation reaches the ledger only beside another", F_V2,
+     """      if (cv_sat_mul  || rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;""",
+     """      if ((cv_sat_mul || rg_sat_mul) && rt_sat_mul)  sat_mul_o     <= 1'b1;"""),
+    ("M142 a rotation never takes its second read pass", F_V2,
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;""",
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2;"""),
 ]
 
 

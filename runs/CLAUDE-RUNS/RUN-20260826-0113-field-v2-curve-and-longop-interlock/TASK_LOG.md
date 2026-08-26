@@ -783,3 +783,104 @@ step for step before believing the result.
 
 Neither can be applied while a sweep is running: bash re-reads a script it is
 executing, and the preflight is invoked by that same script.
+
+## 2026-08-26 08:00 UTC+02:00 - ROT2/ROT3, and the selector widened
+
+79 checks (was 69). Eleven of the fourteen Field operations now execute on v2.
+
+ROT cost no new front-end mechanism, exactly as the design note predicted: the
+second read pass already fetches reg[a..a+2] and the angle sits in reg[b], and
+two or three results ride the reply NOISE2 opened. What was new is **v2's fifth
+shared resource, the sine table**, which `zhao_field_rot` borrows rather than
+owns.
+
+### A design call worth recording
+
+The unit selector was TWO BITS with all four codes taken, and ROT is the fifth.
+I widened it to three rather than sharing UNIT_CURVE's code disambiguated by the
+mode.
+
+**A selector that needs a second field to disambiguate it is one that will
+eventually be read without it.** Widening costs a wire; the squeeze costs a
+class of bug that only shows up when someone reads the field somewhere new.
+
+### The axis got two independent proofs
+
+Same vector and angle under all three axes, required to DISAGREE; and the
+PASS-THROUGH LANE -- X carries a0 untouched, Y carries a1, Z carries a2 -- which
+is the cheapest possible proof the axis arrived, checked separately from the
+rotated pair.
+
+ROT2 must also NOT write dst+2 (its third lane is zero by law 5 and the register
+belongs to the program). Pre-loaded with 0xFACEFEED and checked untouched.
+
+### The tooling fixes paid immediately
+
+* the SUBSET preflight linted 8 mutants in seconds, where it would have linted
+  142 for ten minutes;
+* the FULL preflight then caught **seven anchor drifts** from the ROT wiring
+  before the sweep started -- M106, M114, M117, M124, M128, M129, M130. That is
+  why it runs first, and it is the fourth time this session that editing a
+  shared line invalidated other mutants' anchors.
+
+### NORMALIZE2/3 needs ONE new thing
+
+Everything is in hand except the shared INTEGER SQUARE ROOT, which v2 wires
+straight to `u_len` because the length family was its only consumer. NORMALIZE
+makes it two, so those wires become a mux on the captured unit id -- the same
+shape, and the same caveat, as the multiplier.
+
+It does NOT use the shared reciprocal (its own rcp24 ROM), which confirms the
+correction made earlier today: M116's re-score trigger is OP_RCP, and wiring
+NORMALIZE does not fire it.
+
+## 2026-08-26 08:30 UTC+02:00 - M139 SURVIVED, and the fault is in my test
+
+    M139 the sine table is asked for cosine and back again  *** SURVIVED ***
+
+**A real gap, and the irony is exact.**
+
+`zhao_field_sin` implements cosine by ADDING 90 DEGREES to the angle
+(`a = is_cos_i ? angle_i + 16'h4000 : angle_i`). So inverting `is_cos_i` swaps
+sine and cosine, which must change any rotation.
+
+Except at one angle. I chose `ang = 0x2000` and wrote the comment "an angle with
+both sin and cos non-trivial". In a 16-bit angle **0x2000 is exactly 45
+degrees**, where sin == cos -- the single angle at which swapping them is
+invisible.
+
+    0x1000 = 22.5 deg  sin=+0.3827 cos=+0.9239
+    0x2000 = 45.0 deg  sin=+0.7071 cos=+0.7071   <- what I picked
+    0x3000 = 67.5 deg  sin=+0.9239 cos=+0.3827
+
+I picked the one value that hides the defect, and justified it in a comment as
+the opposite.
+
+### The lesson, which is not "check your trig"
+
+A "nice round" constant in a test is chosen for the tester's convenience, and
+convenience correlates with SYMMETRY -- 45 degrees, zero, one, powers of two.
+Symmetric inputs are exactly the ones under which distinct things become equal,
+which is exactly what a mutation needs to hide.
+
+The fix is not a better constant, it is SEVERAL: the section will sweep a set of
+angles including at least one where sin and cos differ in magnitude AND one
+where they differ in sign, so no single symmetry can cover the mutant.
+
+That also generalises to what is already written: any test pinned to one
+convenient value is one symmetry away from vacuous, and the sweep is the only
+thing that finds it.
+
+## 2026-08-26 09:00 UTC+02:00 - M139 closed; ROT's evidence complete
+
+Three angles instead of one: 22.5 deg (sin < cos), 67.5 deg (sin > cos), and
+112.5 deg (**cosine negative**), so no single symmetry covers the mutant. The
+section went 79 -> **99 checks** and M139 is now CAUGHT.
+
+    ROT sweep: attempted=63 accounted=63 caught=60 equivalent=2 survivor=1
+    after the fix:            61 caught + 2 proven equivalent, 0 unexplained
+
+**Zero discards this run**, on the first sweep after the retry landed.
+
+The reason for the angle choice is now written into the test itself, because the
+failure mode is reusable and the next person will reach for a round number too.

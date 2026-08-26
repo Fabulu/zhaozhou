@@ -55,6 +55,8 @@ constexpr uint8_t OP_DIST2 = 0x14;        // the length unit, mode 2
 constexpr uint8_t OP_RING = 0x21;         // its own unit, no mode
 constexpr uint8_t OP_RIDGE = 0x22;        // the noise unit, is_ridge = 1
 constexpr uint8_t OP_NOISE2 = 0x1C;       // the noise unit, is_ridge = 0, TWO results
+constexpr uint8_t OP_ROT2 = 0x28;         // the rot unit, TWO results
+constexpr uint8_t OP_ROT3 = 0x29;         // the rot unit, THREE results, axis in imm
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -1285,6 +1287,163 @@ check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.
   check(retired == static_cast<uint32_t>(kWfs * 2),
         "16.each wavefront retired exactly two instructions", kWfs * 2, retired);
   std::printf("  v2 NOISE2 %u instructions in %d clocks\n", retired, clocks);
+}
+
+// ---- 17. ROT2 and ROT3, and THE AXIS ------------------------------------
+// These cost no new front-end mechanism: reg[a..a+2] and the angle in reg[b]
+// all arrive on the second read pass, and two or three results ride the reply
+// NOISE2 opened. What is new is the SINE TABLE, v2's fifth shared resource.
+//
+// ROT3's immediate is an AXIS SELECT, and this is the case flagged when the
+// immediate was built: a dropped or hard-wired axis still rotates the right
+// vector by the right angle. The result is a plausible world. Nothing about
+// the value's shape betrays it.
+//
+// So the axis is tested by VARYING it -- the same vector and angle under all
+// three axes, required to give three different answers -- and by the
+// PASS-THROUGH LANE, which is the cheapest possible axis proof: X carries a0
+// untouched, Y carries a1, Z carries a2. A hard-wired axis leaves the wrong
+// lane untouched and fails immediately.
+{
+  auto rot_oracle = [&](uint8_t z_op, uint32_t axis, const int32_t* v, int32_t ang, int32_t* out3) {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    zfield::Instr ins{};
+    ins.op = z_op;
+    ins.dst = 16;
+    ins.a = 0;
+    ins.b = 8;
+    ins.c = 0;
+    ins.imm = axis;
+    prog.instrs.push_back(ins);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 9; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    for (int k = 0; k < 3; ++k) {
+      zfield::IoLane ol{};
+      ol.name = "y";
+      ol.type = 0;
+      ol.reg = static_cast<uint8_t>(16 + k);
+      prog.out_lanes.push_back(ol);
+    }
+    int32_t in[9] = {0};
+    in[0] = v[0];
+    in[1] = v[1];
+    in[2] = v[2];
+    in[8] = ang;
+    int32_t out[3] = {0, 0, 0};
+    zfield::interpret(prog, in, 9, out, 3);
+    out3[0] = out[0];
+    out3[1] = out[1];
+    out3[2] = out[2];
+  };
+
+  // ANGLES, PLURAL, AND NONE OF THEM ROUND. The first version of this
+  // section used 0x2000 alone, commented as "an angle with both sin and cos
+  // non-trivial". In a 16-bit angle 0x2000 is EXACTLY 45 degrees, where
+  // sin == cos -- the one angle at which swapping them is invisible. Mutant
+  // M139 (the sine table asked for cosine and back again) survived on it.
+  //
+  // A convenient constant is chosen for the tester's convenience, and
+  // convenience correlates with SYMMETRY. Symmetric inputs are exactly where
+  // distinct things become equal, which is what a mutation needs to hide.
+  //
+  // These three differ in magnitude AND in sign, so no single symmetry covers
+  // them: 22.5 deg (s<c, both +), 67.5 deg (s>c, both +), 112.5 deg (c
+  // NEGATIVE).
+  const int32_t kAngles[3] = {0x1000, 0x3000, 0x5000};
+
+  // ---- 17a. ROT2: two results, third register untouched -----------------
+  for (const int32_t ang : kAngles) {
+    Bench b(dut);
+    b.prog = {{OP_ROT2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        for (int k = 0; k < 3; ++k) {
+          v[w][l][k] = (w * kLanes + l + 1) * (k + 2) * 4099;
+          b.write_reg(w, l, k, v[w][l][k]);
+        }
+        b.write_reg(w, l, 8, ang);
+        // dst+2 must NOT be written: ROT2's third lane is zero by law 5 and
+        // the register belongs to whatever the program left there.
+        b.write_reg(w, l, 18, static_cast<int32_t>(0xFACEFEED));
+      }
+    b.run((1u << kWfs) - 1u);
+
+    uint64_t bad = 0, clobbered = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        int32_t want[3];
+        rot_oracle(zfield::OP_ROT2, 0, v[w][l], ang, want);
+        if (b.read_reg(w, l, 16) != want[0]) ++bad;
+        if (b.read_reg(w, l, 17) != want[1]) ++bad;
+        if (b.read_reg(w, l, 18) != static_cast<int32_t>(0xFACEFEED)) ++clobbered;
+      }
+    check(bad == 0, "17.ROT2 matches zfield::interpret on both lanes", 0, bad);
+    check(clobbered == 0, "17.ROT2 did NOT write dst+2", 0, clobbered);
+  }
+
+  // ---- 17b. ROT3 under all three axes, at every angle ---------------------
+  for (const int32_t ang : kAngles) {
+    int32_t got[3][kWfs][kLanes][3];
+    for (uint32_t axis = 0; axis < 3; ++axis) {
+      Bench b(dut);
+      b.prog = {{OP_ROT3, 16, 0, 8, 0, axis}, {OP_END, 0, 0, 0, 0}};
+      int32_t v[kWfs][kLanes][3];
+      uint64_t bad = 0, passthru = 0;
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          for (int k = 0; k < 3; ++k) {
+            v[w][l][k] = (w * kLanes + l + 1) * (k + 2) * 4099;
+            b.write_reg(w, l, k, v[w][l][k]);
+          }
+          b.write_reg(w, l, 8, ang);
+        }
+      b.run((1u << kWfs) - 1u);
+
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          int32_t want[3];
+          rot_oracle(zfield::OP_ROT3, axis, v[w][l], ang, want);
+          for (int k = 0; k < 3; ++k) {
+            got[axis][w][l][k] = b.read_reg(w, l, static_cast<int>(16 + k));
+            if (got[axis][w][l][k] != want[k]) ++bad;
+          }
+          // THE PASS-THROUGH LANE: X carries a0, Y carries a1, Z carries a2.
+          if (got[axis][w][l][axis] != v[w][l][axis]) ++passthru;
+        }
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "17.ROT3 axis %u angle 0x%X matches zfield::interpret", axis,
+                    static_cast<unsigned>(ang));
+      check(bad == 0, nm, 0, bad);
+      std::snprintf(nm, sizeof nm, "17.ROT3 axis %u angle 0x%X carried the right lane through",
+                    axis, static_cast<unsigned>(ang));
+      check(passthru == 0, nm, 0, passthru);
+    }
+
+    // THE AXIS ARRIVED. Same vector, same angle, three axes: a dropped or
+    // hard-wired axis collapses these into agreement.
+    uint64_t xy = 0, xz = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l)
+        for (int k = 0; k < 3; ++k) {
+          if (got[0][w][l][k] == got[1][w][l][k]) ++xy;
+          if (got[0][w][l][k] == got[2][w][l][k]) ++xz;
+        }
+    check(xy < static_cast<uint64_t>(kWfs * kLanes * 3),
+          "17.axis X and axis Y do not give the same answer", 0, xy == 0 ? 0 : 1);
+    check(xz < static_cast<uint64_t>(kWfs * kLanes * 3),
+          "17.axis X and axis Z do not give the same answer", 0, xz == 0 ? 0 : 1);
+  }
+  std::printf("  v2 ROT2/ROT3 checked on all three axes\n");
 }
 
 dut.final();

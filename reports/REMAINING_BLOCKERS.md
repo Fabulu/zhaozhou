@@ -1,6 +1,65 @@
 # What is actually blocking every remaining block
 
-> ## STATE AS OF 2026-08-26. This block supersedes everything below it.
+> ## STATE AS OF 2026-08-26 (evening). This block supersedes everything below it.
+> ## Read this first.
+>
+> ### The Field engine: ELEVEN of fourteen operations run on v2
+>
+> | | v2 |
+> | --- | --- |
+> | the twelve ALU ops | executing |
+> | CURVE, DCURVE, SPLINE | executing |
+> | LEN2, LEN3, DIST2 | executing |
+> | RING, RIDGE, NOISE2 | executing |
+> | ROT2, ROT3 | executing |
+> | **NORMALIZE2, NORMALIZE3** | **the last two** |
+>
+> ALU-path throughput is unchanged throughout at **3.97 vertex-instructions per
+> clock**, 27.8x v1.
+>
+> ### What NORMALIZE still needs, and it is one wire bundle
+>
+> Everything else exists: the second read pass, the multi-result reply, the mode
+> field, the immediate, the ledger discipline, the multiplier priority chain.
+>
+> `zhao_field_normalize` takes the **shared integer square root**, and v2 wires
+> `zhao_field_isqrt` STRAIGHT to `u_len` because the length family was its only
+> consumer. NORMALIZE makes it two, so those wires become a mux on the captured
+> unit id -- same shape as the multiplier, licensed by the same interlock, and
+> carrying the same caveat: it is a mux, not an arbiter, and it becomes wrong
+> the moment two long ops can run concurrently.
+>
+> It does NOT use the shared reciprocal; it carries its own rcp24 ROM.
+>
+> ### Then the sequencer, and what that means here
+>
+> v2 IS the sequencer for the operations it runs -- issue, scoreboard, interlock,
+> retire. What remains under that heading is the FRONT of it: program fetch and
+> the per-patch driving `zhao_field_seq` does in v1. v2 is driven by a testbench
+> today.
+>
+> ### FIVE SHARED RESOURCES NOW, and the rule for adding the sixth
+>
+> multiplier, reciprocal, integer square root, curve table, sine table.
+>
+> The question to ask of a new unit is NOT "can two operations overlap" -- the
+> interlock answers that -- but **"does this operation call anything that also
+> needs a shared lane"**. RING was the first where the answer was yes INSIDE a
+> single operation, and it turned the multiplier's mux into a priority chain.
+>
+> ### THE EVIDENCE, and the two things it still does not cover
+>
+> Every increment: differential against `zfield::interpret`, mutation sweep with
+> forced regeneration and a generated-model hash check, `ctest -L fast`, ledger.
+> The sweep now enforces its own law -- a survivor without a proof of equivalence
+> FAILS the run, and a declared equivalent that is CAUGHT aborts.
+>
+> * **v2 HAS NO LEDGER ENTRY AND HAS NEVER BEEN FITTED.** Every number above is
+>   simulation. `ledger:check` is green WITHOUT v2 in it.
+> * **DEBUG.FRAMEBLIT is closed** -- RTL_VERIFIED on the composed path, swept
+>   20/20, composed fit 7,442 ALM. It is not outstanding work.
+
+> ## STATE AS OF 2026-08-26 (morning). Superseded by the block above it.
 > ## Read this first.
 >
 > ### The Field engine's blocker was never the clock, and v2 is the answer

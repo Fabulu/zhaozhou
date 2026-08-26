@@ -72,7 +72,7 @@ module zhao_field_v2_lanemux #(
     // WHICH UNIT, carried like the tag. This block stays unit-agnostic -- it
     // serialises and tags, it does not know what a curve or a length is -- so
     // the selector travels with the transaction and the core routes on it.
-    input  logic [1:0]                req_unit_i,
+    input  logic [2:0]                req_unit_i,
     // The instruction's immediate, captured on the same terms as the tag and
     // for the same reason: a unit given it live reads whatever the front end is
     // doing when its turn comes, not what the instruction asked for.
@@ -97,7 +97,7 @@ module zhao_field_v2_lanemux #(
     output logic                      u_valid_o,
     input  logic                      u_ready_i,
     output logic [1:0]                u_mode_o,
-    output logic [1:0]                u_unit_o,
+    output logic [2:0]                u_unit_o,
     output logic [31:0]               u_imm_o,
     output logic signed [31:0]        u_a_o,
     output logic signed [31:0]        u_a1_o,
@@ -140,7 +140,7 @@ module zhao_field_v2_lanemux #(
   logic [$clog2(WFS)-1:0]  wf_q;
   logic [$clog2(REGS)-1:0] dst_q;
   logic [1:0]              mode_q;
-  logic [1:0]              unit_q;
+  logic [2:0]              unit_q;
   logic [31:0]             imm_q;
   logic [1:0]              nres_q;
 
@@ -176,7 +176,7 @@ module zhao_field_v2_lanemux #(
       wf_q   <= '0;
       dst_q  <= '0;
       mode_q <= 2'd0;
-      unit_q <= 2'd0;
+      unit_q <= 3'd0;
       imm_q  <= 32'd0;
       nres_q <= 2'd1;
       for (l = 0; l < LANES; l++) begin

@@ -1230,3 +1230,66 @@ twice.
 The retry prints that it happened. Silently retrying would convert a flaky
 machine into invisible slowness; printing it keeps the flakiness visible while
 recovering the coverage.
+
+---
+
+## ROT2/ROT3 landed; NORMALIZE2/3 is the last, and it needs an ARBITER
+
+*2026-08-26.* 79 checks. ROT cost no new front-end mechanism, as predicted --
+`reg[a..a+2]` and the angle in `reg[b]` all arrive on the second read pass, and
+two or three results ride the reply NOISE2 opened.
+
+### The selector was widened rather than squeezed
+
+The unit selector was two bits and all four codes were taken; ROT is the fifth.
+It is now three bits.
+
+The alternative was to share `UNIT_CURVE`'s code and disambiguate by the mode.
+That was rejected on a principle worth writing down: **a selector that needs a
+second field to disambiguate it is a selector that will eventually be read
+without one.** The cost of widening is a wire; the cost of the squeeze is a
+class of bug that only appears when someone reads the field in a new place.
+
+### The axis, tested twice over
+
+ROT3's immediate selects the axis, and a wrong axis still rotates the right
+vector by the right angle -- a plausible world. Two independent checks:
+
+* the same vector and angle under **all three axes**, required to disagree;
+* the **pass-through lane** -- X carries `a0` untouched, Y carries `a1`, Z
+  carries `a2`. That is the cheapest possible proof the axis arrived, and it is
+  checked separately from the rotated pair.
+
+ROT2 additionally must NOT write `dst+2`: its third lane is zero by the unit's
+law 5, and the register belongs to whatever the program left there. Pre-loaded
+with `0xFACEFEED` and checked untouched.
+
+### NORMALIZE2/3: everything is in hand EXCEPT one thing
+
+| needed | status |
+| --- | --- |
+| `reg[a..a+2]` | the second read pass, built |
+| two or three results | the multi-result reply, built |
+| `is3_i` mode | the mode field, built |
+| `rcp0_o`, `sat_rescale_o` | ledger lanes, and by now a habit |
+| the shared multiplier | the priority chain, built |
+| **the shared INTEGER SQUARE ROOT** | **wired directly to the length unit** |
+
+`zhao_field_normalize` takes `sqrt_valid_o`/`sqrt_n_o`/`sqrt_r_i` -- and v2's
+`zhao_field_isqrt` is connected straight to `u_len`, because the length family
+was its only consumer. **NORMALIZE makes it two**, so those four wires become a
+mux on the captured unit id, exactly as the multiplier did.
+
+The same argument licenses it: the interlock keeps ONE long op in the machine,
+so at most one unit is active. And the same caveat applies -- it is a mux, not an
+arbiter, and it becomes wrong the moment two long ops can run concurrently.
+
+**It does NOT use the shared reciprocal.** It carries its own rcp24 ROM. That
+was the error corrected earlier today, and it holds: M116's re-score trigger is
+OP_RCP, and wiring NORMALIZE does not fire it.
+
+### One oddity to respect rather than smooth over
+
+`rcp0_o` is documented as "set only by NORMALIZE2, see law 3". NORMALIZE3 does
+not raise it. That asymmetry is the unit's law and the oracle's; a test that
+expects the lane on NORMALIZE3 would be testing my assumption, not the design.

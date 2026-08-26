@@ -5,6 +5,53 @@ at the top.*
 
 ---
 
+## 2026-08-26 — rotations, and eleven of fourteen
+
+### What now works
+
+**Rotations** — ROT2 in the plane, ROT3 about any of the three axes. That is
+eleven of the fourteen kinds of maths the Field engine has to do, running on the
+new engine.
+
+They were cheap: everything they needed was already built for the operations
+before them. The one new part is a **sine table**, which the old engine already
+had and the new one now borrows.
+
+A bonus that falls out of it: sine and cosine as standalone operations become
+nearly free now that the table is there.
+
+### The bug that would have looked fine
+
+Rotations take an extra number saying *which axis to turn around*. If the
+hardware lost that number, it would still rotate the right shape by the right
+angle — just around the wrong axis. The result is a perfectly plausible world.
+Nothing about the numbers looks wrong.
+
+Two tests catch it. One runs the same shape through all three axes and demands
+three different answers. The other is cheaper and sharper: **in every rotation,
+one of the three coordinates is left completely untouched**, and which one it is
+tells you the axis. Checking that the *right* one was left alone catches a wrong
+axis instantly.
+
+### A small thing I chose to do the expensive way
+
+The engine labels which sub-unit each job is for. That label had room for
+exactly four, and rotations were the fifth. I made the label bigger rather than
+squeezing rotations in beside an existing one.
+
+The squeeze would have worked today. But a label that needs a second label to
+explain it is one that will eventually be read without the second one, and that
+is the kind of bug that shows up months later in something unrelated.
+
+### What is left
+
+**Normalise** — three of fourteen, counting the two forms — and then the
+scheduler that feeds the whole thing. Normalise needs no new machinery; it needs
+one shared part (the square-root unit) to be shareable by two users instead of
+one.
+
+---
+
 ## 2026-08-26 (late) — the engine can now hand back more than one answer
 
 ### The bottleneck nobody would have guessed
