@@ -1751,6 +1751,9 @@ int render_scene(const SceneSubject& sub) {
     dog_inst.tilt_mode = zixx_subject ? zc::TiltMode::kSideways : zc::TiltMode::kCompletely;
     // Zixxtrixx is shot on an orbit, so its facing only has to look right at
     // frame 0; the watchdog keeps its authored front-quarter read.
+    // Facing 0 is already side-on to the orbit camera at frame 0 -- a quarter
+    // turn puts us END-ON, which is worse. Kept at 0; the salto's dive reading
+    // small is NOT a staging problem, see the run log.
     dog_inst.facing = zref::angle16{zixx_subject ? uint16_t{0} : uint16_t{0x1000}};
     // Zixxtrixx clip slots: 3 = idle, 4 = caterpillar walk, 5 = triple salto,
     // 6 = falling flail. The watchdog keeps its own two.
@@ -2947,7 +2950,10 @@ void zixx_common(SceneSubject& s) {
   s.step = 1;
   s.full_colour = true;
   s.bump_ext = 6;
-  s.cam_k = 210000;
+  // ZOOMED IN 2026-08-26. At 210000 the animal was about a fifth of the
+  // frame -- too small to judge, let alone enjoy. A creature showcase should
+  // fill its frame; the orbit keeps it centred.
+  s.cam_k = 400000;
   s.cam_eye = 13;
   s.cam_dist = 8;
   s.cam_bias = 0;
@@ -2994,7 +3000,7 @@ SceneSubject subject_zixx_walk() {
   s.frames = zixx::kWalkKeys * 2 * 3;  // three full gait cycles
   s.orbit = false;
   zixx_common(s);
-  s.cam_k = 230000;
+  s.cam_k = 340000;  // the walk travels, so a little wider
   s.note =
       "Caterpillar locomotion, fixed three-quarter camera so the gait is "
       "legible before any orbit is applied. The S holds throughout: head "
@@ -3014,7 +3020,27 @@ SceneSubject subject_zixx_attack() {
   s.frames = zixx::kAttackKeys * 2;
   s.orbit = false;
   zixx_common(s);
-  s.cam_k = 200000;
+  // 235000: at 300000 the dive left the frame entirely for nine frames --
+  // the animal is 3.5 m of spear and it travels, so this shot needs room the
+  // others do not. Judged from a contact sheet, not from the rest pose.
+  // FLATTER GROUND for this shot only. The default mound has a crest, and a
+  // 3.5 m spear diving to ground level went BEHIND it -- nine frames where all
+  // you could see was the blue head poking over a hill. The animal is the
+  // subject; the terrain is not allowed to occlude the impact.
+  s.bump_ext = 18;
+  s.cam_k = 235000;
+
+  // SCREEN SHAKE ON IMPACT -- showcase only, at Fabian's request, and
+  // deliberately NOT a general feature: it lives on this presentation
+  // subject, not in the creature and not in the sim. Contact is clip key 52,
+  // which is reel frame 104 (keys are held two ticks; the reel runs one tick
+  // per frame). A hard first jolt then a decaying alternation, so it reads as
+  // one heavy blow rather than a wobble.
+  s.shake_frame = 104;
+  {
+    static const int32_t kJolt[] = {-2100, 1500, -1050, 700, -430, 260, -140, 70, -30};
+    for (int32_t v : kJolt) s.shake.push_back(v);
+  }
   s.note =
       "The attack. Zixxtrixx rolls up into a wheel, and the WHOLE BODY "
       "somersaults three times -- the spin lives on bone 0 with the root "

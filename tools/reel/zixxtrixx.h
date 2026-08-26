@@ -577,10 +577,16 @@ inline zc::Clip build_attack() {
   // the strike must BITE: deep, localised, brief, AUTHORED penetration.
   // Keys 46..51 track the swing where the tail hangs nearest vertical
   // (need = 3530*sin(phi) - 630, phi = (spin-3000)*0.36 deg).
-  static const Key kLift[] = {{0, 0},     {8, 40},    {16, 700},  {30, 1150},
-                              {44, 950},  {46, 1460}, {48, 2750}, {49, 2950},
-                              {50, 2870}, {51, 2400}, {52, 1350}, {56, 1350},
-                              {60, 900},  {66, 300},  {71, 0}};
+  // LOWERED 2026-08-26 after looking at a contact sheet. The apex was 2950 mm
+  // -- nearly three metres -- which threw the animal above the terrain horizon
+  // and shrank it to a speck, so the strike read as FLYING AWAY rather than
+  // driving down. Contact at key 52 is unchanged at 1350 (the geometry that
+  // buries the blades 200 mm); only the arc over it is flattened, which also
+  // keeps the whole action inside frame.
+  static const Key kLift[] = {{0, 0},     {8, 40},    {16, 560},  {30, 900},
+                              {44, 820},  {46, 1150}, {48, 1780}, {49, 1900},
+                              {50, 1850}, {51, 1640}, {52, 1350}, {56, 1350},
+                              {60, 860},  {66, 290},  {71, 0}};
   // root forward drive in mm during the dive, returned to zero by the wrap
   static const Key kFwd[] = {{0, 0},   {44, 0},   {48, 220}, {52, 520},
                              {57, 520}, {66, 160}, {71, 0}};

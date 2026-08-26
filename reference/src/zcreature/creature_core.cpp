@@ -227,8 +227,7 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
     return kIdentityPose.data();
   }
   for (auto& s : slots_) {
-    if (s.valid && s.type == type.type_id && s.clip == slot && s.frame == frame &&
-        s.sub == sub) {
+    if (s.valid && s.type == type.type_id && s.clip == slot && s.frame == frame && s.sub == sub) {
       ++ctr_.hits;
       s.this_frame = true;
       s.lru = ++lru_ctr_;
@@ -331,11 +330,11 @@ std::vector<BuiltVert> build_ring(const RingSpec& spec, uint8_t align, uint8_t v
   const int32_t rz = spec.rx != 0 || spec.rz != 0 ? spec.rz : spec.radius;
   for (int k = 0; k < spec.segments; ++k) {
     const uint16_t ang = static_cast<uint16_t>((k * 65536 / spec.segments + align * 256) & 0xFFFF);
-    out[k].x = spec.cx + rescale_s32(static_cast<int64_t>(rx) * fx_cos(angle16{ang}).raw, 16,
-                                     nullptr);
+    out[k].x =
+        spec.cx + rescale_s32(static_cast<int64_t>(rx) * fx_cos(angle16{ang}).raw, 16, nullptr);
     out[k].y = spec.y;
-    out[k].z = spec.cz + rescale_s32(static_cast<int64_t>(rz) * fx_sin(angle16{ang}).raw, 16,
-                                     nullptr);
+    out[k].z =
+        spec.cz + rescale_s32(static_cast<int64_t>(rz) * fx_sin(angle16{ang}).raw, 16, nullptr);
     out[k].u = static_cast<uint8_t>(ang >> 8);
     out[k].v = v_lane;
   }
@@ -476,8 +475,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       int32_t ax0 = part.rings[0].cx, ay0 = part.rings[0].y, az0 = part.rings[0].cz;
       orient(ax0, ay0, az0);
       // a chain end cap follows its own end ring, not a part-wide bone
-      cur.verts.push_back(SkinVertex{ax0, ay0, az0,
-                                     part.chain ? part.rings[0].b0 : part.bone,
+      cur.verts.push_back(SkinVertex{ax0, ay0, az0, part.chain ? part.rings[0].b0 : part.bone,
                                      part.chain ? part.rings[0].b1 : part.bone,
                                      part.chain ? part.rings[0].w0 : uint8_t{64},
                                      static_cast<uint8_t>(part.align), 0});
@@ -506,7 +504,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
   }
   if (!cur.idx.empty()) {
     cur.page = part.page;
-      cur.r = part.r;
+    cur.r = part.r;
     cur.g = part.g;
     cur.b = part.b;
     out.push_back(std::move(cur));

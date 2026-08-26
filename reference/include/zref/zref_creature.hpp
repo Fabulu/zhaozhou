@@ -201,6 +201,22 @@ struct Clip {
   std::vector<int32_t> root;      // 3 * frame_count fx16 (x, y, z per frame)
   std::vector<quat16> quats;      // frame_count * bone_count
   std::vector<ClipEvent> events;  // frame-sorted
+  /**
+   * PRESENTATION INTERPOLATION (added 2026-08-26, MODELINGGUIDE section 8).
+   *
+   * Keys are authored at 30 Hz and held for two 60 Hz sim ticks, so motion
+   * updates 30 times a second no matter how fast the clip actually moves. On
+   * a slow idle that is invisible; on a triple somersault and on a falling
+   * flail it is plainly choppy.
+   *
+   * With this set, the pose decoder blends between key f and key f+1 at the
+   * half-tick using a NORMALIZED integer quaternion lerp. It is PRESENTATION
+   * ONLY -- the sim clock, the event frames and every gameplay consequence
+   * still run on the authored 30 Hz keys, so determinism is untouched.
+   *
+   * Default OFF, so nothing that already exists changes by a single bit.
+   */
+  bool interpolate = false;
 };
 
 /** The 64-slot clip bank (creature_rules 2.1; slot ids need not be dense). */
@@ -254,7 +270,7 @@ class PoseBank {
    * bone_count are identity). Never nullptr. On a bad slot/frame id the
    * pointer targets the static identity bind pose and bad_ids increments.
    */
-  const mat3x4fx* acquire(const CreatureType& type, uint16_t slot, uint16_t frame);
+  const mat3x4fx* acquire(const CreatureType& type, uint16_t slot, uint16_t frame, uint8_t sub = 0);
 
   const Counters& counters() const { return ctr_; }
   size_t resident() const { return resident_; }
@@ -263,6 +279,7 @@ class PoseBank {
   struct Slot {
     bool valid = false;
     uint16_t type = 0, clip = 0, frame = 0;
+    uint8_t sub = 0;  // half-key phase, for presentation interpolation
     uint64_t lru = 0;
     bool this_frame = false;
     std::array<mat3x4fx, kMaxBones> pose{};
@@ -312,7 +329,7 @@ struct Meshlet {
   std::vector<SkinVertex> verts;
   std::vector<uint8_t> idx;           // 3 * tri_count vertex indices
   uint8_t r = 128, g = 128, b = 128;  // part material (the CLUT8 page stand-in)
-  uint8_t page = 255;  // tile in the creature's Tileset; 255 = flat colour
+  uint8_t page = 255;                 // tile in the creature's Tileset; 255 = flat colour
 };
 
 // ----------------------------------------------------------- ring builder --
@@ -361,7 +378,7 @@ struct RingPart {
   // NOT a donor law, despite what this comment said until 2026-08-26: the
   // donor is 34.92% multi-bone (measured, FINDINGS-R1 section E.3). The
   // mis-attribution is what authored the cracks.
-  uint8_t bone = 0;     // RIGID parts only: the single bone this part follows
+  uint8_t bone = 0;  // RIGID parts only: the single bone this part follows
   /**
    * CHAIN MODE (added 2026-08-26). A rigid part is one bone, so a shape that
    * bends must be several parts -- and adjacent parts share no vertices, which
@@ -464,7 +481,16 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
  * is not per-frame-per-instance). Also the clamp gate's oracle.
  */
 void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
-                 std::array<mat3x4fx, kMaxBones>& out, SatLedger* L);
+                 std::array<mat3x4fx, kMaxBones>& out, SatLedger* L, uint8_t sub = 0);
+
+/**
+ * Normalized integer lerp between two quantized quaternions, at t = num/den.
+ * Hemisphere-corrected (q and -q are the same rotation, so the nearer of the
+ * two is used), then renormalized -- a plain lerp shortens the quaternion and
+ * quat16_to_mat3's 9-product formula would scale the whole matrix by |q|^2,
+ * which shows up as the creature breathing when it should not.
+ */
+quat16 quat16_nlerp(const quat16& a, const quat16& b, int32_t num, int32_t den);
 
 // ------------------------------------------------- the 3->2 weight clamp ----
 

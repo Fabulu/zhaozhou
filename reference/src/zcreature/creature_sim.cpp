@@ -384,9 +384,9 @@ inline constexpr int32_t kFillX = -14301;  // -0.21822
 inline constexpr int32_t kFillY = -57205;  // -0.87287
 inline constexpr int32_t kFillZ = -28602;  // -0.43644
 
-inline constexpr int32_t kAmbR = 22282, kAmbG = 23265, kAmbB = 24248;   // .34 .355 .37
-inline constexpr int32_t kKey = 48497;                                  // .74, white
-inline constexpr int32_t kFillR = 19661, kFillG = 15073, kFillB = 10486; // .30 .23 .16
+inline constexpr int32_t kAmbR = 22282, kAmbG = 23265, kAmbB = 24248;     // .34 .355 .37
+inline constexpr int32_t kKey = 48497;                                    // .74, white
+inline constexpr int32_t kFillR = 19661, kFillG = 15073, kFillB = 10486;  // .30 .23 .16
 
 struct Shade3 {
   int32_t r, g, b;  // Q16.16 gain per channel
@@ -509,7 +509,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     }
 
     // ---- mesh / micro: pose -> world palette -> skin -> project -> raster
-    const mat3x4fx* pose = poses.acquire(T, ci.anim.slot, ci.anim.frame);
+    const mat3x4fx* pose = poses.acquire(T, ci.anim.slot, ci.anim.frame, ci.anim.sub);
     std::array<mat3x4fx, kMaxBones> worldm{};
     for (int b = 0; b < T.bank.bone_count; ++b) {
       mat3x4_mul(world, pose[b], worldm[b], L);
@@ -540,9 +540,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         if (!a.in || !b.in || !c.in) continue;  // Phase-3 near-plane law
         const int32_t lam_key =
             render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L);
-        const int32_t lam_fill =
-            render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
-                                       kFillX, kFillY, kFillZ, L);
+        const int32_t lam_fill = render::shade_flat_tri_dir(
+            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, kFillX, kFillY, kFillZ, L);
         const Shade3 sh = creature_light(lam_key, lam_fill);
         render::TriMode tm;  // opaque: depth test + write
         // TEXTURED PATH. raster_tri has always been able to sample CLUT8
@@ -562,8 +561,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           render::raster_tri(surf, vpp, a.s, b.s, c.s, 255, 255, 255, tm, &tex);
         } else {
           render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * sh.r + 32768) >> 16),
-                             sat_u8((m.g * sh.g + 32768) >> 16),
-                             sat_u8((m.b * sh.b + 32768) >> 16), tm);
+                             sat_u8((m.g * sh.g + 32768) >> 16), sat_u8((m.b * sh.b + 32768) >> 16),
+                             tm);
         }
       }
     }
