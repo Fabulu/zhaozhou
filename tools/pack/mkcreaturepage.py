@@ -42,18 +42,32 @@ TILE = 64
 
 # Pigment, measured. Upheaval/creature/Zixxtrixx/PALETTE.md.
 GREEN = (120, 184, 68)
-PINK = (233, 188, 206)
+# ART DIRECTION OVERRIDE (Fabian, 2026-08-26): "The pink on the back should be
+# like neon pink, it's just not even close to strong enough." The sheet's
+# measured pale pink (233,188,206) is therefore NOT what ships on the dorsal
+# band -- the owner's call beats the measurement.
+PINK = (255, 32, 168)
 BLUE = (3, 145, 205)
 YELLOW = (243, 232, 142)
 ORANGE = (218, 106, 71)
+WHITE = (246, 246, 246)
+INK = (34, 30, 34)
 
 # Where to lift crayon grain from, in the 2000-wide display space of each
 # sheet: a patch of solid, evenly-worked colour.
+# Measured 2026-08-26 (grain-box probe): the old green box was only 23%
+# honest crayon -- it straddled the form's edge, most of it was bare paper,
+# and the paper was replaced by the median, which is exactly why the body
+# read as one flat colour. The new green box sits deep inside the upper arch
+# (89% crayon, grain sd 0.086 vs 0.057). The PALE pink pigment fails the
+# saturation gate outright (sd 0.017 -- crayon laid so lightly there is no
+# stroke structure to lift), so the pink band borrows the green box's stroke
+# field: same pencil, same hand, same direction as the body it rides on.
 GRAIN_SOURCES = {
-    "green": ("Side", (940, 1020, 1160, 1120)),
-    "pink": ("Side", (930, 402, 1210, 424)),
+    "green": ("Side", (700, 600, 900, 900)),
+    "pink": ("Side", (700, 600, 900, 900)),
     "blue": ("Side", (1215, 585, 1360, 700)),
-    "yellow": ("Front", (1268, 574, 1310, 620)),
+    "yellow": ("Side", (1440, 580, 1540, 680)),
     "orange": ("Front", (1228, 562, 1248, 606)),
 }
 
@@ -89,8 +103,13 @@ def grain(sheet, box, seed):
     if m <= 1:
         return np.ones((TILE, TILE))
     g = lum / m
-    # keep the stroke structure, drop what is left of the extremes
-    return np.clip(g, 0.84, 1.16)
+    # AMPLIFY the stroke structure (Fabian, 2026-08-26: "the texture is
+    # completely one-colored instead of the crayon-like texture I expected").
+    # The raw multiplier field survives the trip to screen at roughly half its
+    # amplitude once the light rig and RGB565 have had their say, so push it
+    # here, at the source, where the stroke shapes are still real.
+    g = 1.0 + (g - 1.0) * 2.1
+    return np.clip(g, 0.74, 1.26)
 
 
 def tint(base, g):
@@ -128,7 +147,116 @@ def body_tile(g_green, g_pink, rng):
             d = min(abs(x - (lo + hi) / 2), TILE - abs(x - (lo + hi) / 2))
             if d < (hi - lo) / 2:
                 t[y, x] = p[y, x]
+    # THE THROAT RUNS ON PAST THE HEAD (both sheets: the blue continues along
+    # the underside behind the skull, a teardrop down the chest in Front.png).
+    # The head chain covers V rows 0..~12 of this tile; the wedge takes over
+    # where it ends and tapers away by row 21. Belly is U = 64 -> column 16.
+    b = tint(BLUE, g_green)
+    for y in range(8, 22):
+        w = 10.0 * (1.0 - (y - 8) / 14.0) ** 1.3
+        if w < 0.6:
+            continue
+        wob = 1.1 * np.sin(y * 0.31)
+        for x in range(TILE):
+            d = min(abs(x - (16 + wob)), TILE - abs(x - (16 + wob)))
+            if d < w:
+                t[y, x] = b[y, x]
+    # V row 63 is the tail cap fan's whole sample row (cap apex v = 255 and the
+    # end ring's v = 255, so every cap pixel lands here): keep it flat pigment
+    # so the cap reads as a solid tip, not a streak.
+    t[63, :] = GREEN
     return t
+
+
+
+# The eye disc in Side.png, in the 2000-wide display space: the yellow ball,
+# its heavy black ring, and the red-orange wavy slit pupil through it.
+EYE_BOX = (1412, 556, 1568, 712)
+EYE_ROW = 20    # first texel row down the head tile (V runs along the head)
+# The eyes sit HIGH: the front sheet has them nearly meeting across the top
+# of the face. Top is column 48; these put each eye ~45 deg up its flank.
+EYE_COL_A = 54  # upper +Z flank
+EYE_COL_B = 42  # upper -Z flank
+# TEXEL FOOTPRINT (2026-08-26). The first pass painted the eye 26 x 26 -- but
+# U texels measure ANGLE around the head, and 26 of 64 is 40% of the whole
+# circumference: two such discs tiled nearly the entire skull with yellow,
+# which is most of why the face read as mangled. The measured eye is ~220 mm
+# on a ~500 mm skull: 52 deg of arc = 9-10 texels of U, and ~23 texels of V
+# along a ~600 mm head chain. The patch is anisotropic because the mapping is.
+EYE_TEX_U = 12  # texels of U (angle around the head)
+EYE_TEX_V = 26  # texels of V (length along the head)
+
+
+def eye_patch():
+    """Sabina drew a better eye than I can model. Take it.
+
+    The eye is not geometry any more. A yellow ball stuck on the side of the
+    head was the obvious thing and it looked exactly like what it was -- a
+    sphere glued to a tube. MODELINGGUIDE asks for eyes "integrated into the
+    head contour" so they influence the SILHOUETTE rather than sitting on it,
+    and the cheapest honest way to do that at 240p is: a shallow LATERAL BULGE
+    in the head's own rings, with the drawing's own eye painted onto it.
+
+    THE CROP IS TRANSPOSED. On the flank, +U runs VERTICALLY around the body
+    and +V runs nose-to-tail -- so the drawing's x axis must land on the tile's
+    y axis or the slit pupil comes out horizontal. Drawing-vertical (the slit)
+    -> tile x (U) -> vertical on the model, as drawn.
+
+    Returns (rgb, alpha) at EYE_TEX_V rows x EYE_TEX_U cols. Alpha is the
+    disc, taken from the ink ring outward, so the eye composites onto the blue
+    head without a square edge.
+    """
+    im = Image.open(CONCEPT / "Side.png").convert("RGB")
+    sc = im.size[0] / 2000.0
+    x0, y0, x1, y1 = EYE_BOX
+    crop = im.crop((int(x0 * sc), int(y0 * sc), int(x1 * sc), int(y1 * sc)))
+    crop = crop.transpose(Image.TRANSPOSE)
+    crop = crop.resize((EYE_TEX_U, EYE_TEX_V), Image.BOX)
+    a = np.asarray(crop).astype(np.float64)
+    yy, xx = np.mgrid[0:EYE_TEX_V, 0:EYE_TEX_U]
+    cy = (EYE_TEX_V - 1) / 2.0
+    cx = (EYE_TEX_U - 1) / 2.0
+    r = np.hypot((xx - cx) / cx, (yy - cy) / cy)
+    alpha = np.clip((1.02 - r) * 6.0, 0.0, 1.0)
+    return a, alpha
+
+
+def paint_eye(tile):
+    """Composite the eye onto both flanks of the head tile, wrapping in U."""
+    rgb, alpha = eye_patch()
+    for col in (EYE_COL_A, EYE_COL_B):
+        for j in range(EYE_TEX_V):
+            ty = EYE_ROW + j
+            if ty < 0 or ty >= TILE:
+                continue
+            for i in range(EYE_TEX_U):
+                tx = (col - EYE_TEX_U // 2 + i) % TILE  # U wraps around the head
+                w = alpha[j, i]
+                if w <= 0.0:
+                    continue
+                tile[ty, tx] = tile[ty, tx] * (1.0 - w) + rgb[j, i] * w
+    return tile
+
+
+def paint_face(tile):
+    """The rest of the face: the nose-cap row and the mouth.
+
+    V row 0 is the WHOLE nose cap: the cap apex carries v = 0 and so does ring
+    0, so every pixel of the cap fan samples row 0. Any grain there smears into
+    angular streaks on the cap -- keep the row flat pigment.
+
+    The mouth is Front.png's small white slit, on the underside just behind
+    the nose (belly is U = 64 -> column 16), with a thin ink rim so it reads
+    at 240p the way the drawing's ink line does.
+    """
+    tile[0, :] = BLUE
+    for y in range(3, 8):
+        for x in range(10, 23):
+            tile[y, x] = INK
+    for y in range(4, 7):
+        for x in range(11, 22):
+            tile[y, x] = WHITE
+    return tile
 
 
 def build_tiles():
@@ -137,16 +265,22 @@ def build_tiles():
     names = []
     tiles.append(body_tile(g["green"], g["pink"], None))
     names.append("body flank, with the dorsal band painted at U=192")
-    tiles.append(tint(BLUE, g["blue"]))
-    names.append("head and throat")
+    tiles.append(paint_face(paint_eye(tint(BLUE, g["blue"]))))
+    names.append("head and throat: eyes from the drawing, mouth, flat nose-cap row")
     tiles.append(tint(YELLOW, g["yellow"]))
     names.append("eye")
     tiles.append(tint(ORANGE, g["orange"]))
     names.append("eye rim / pupil")
-    tiles.append(tint(GREEN, g["green"]))
-    names.append("tail blade")
-    tiles.append(tint(PINK, g["pink"]))
-    names.append("crest / blade edging")
+    gb = tint(GREEN, g["green"])
+    gb[0, :] = GREEN
+    gb[63, :] = GREEN
+    tiles.append(gb)
+    names.append("tail blade, green (cap rows flat)")
+    pb = tint(PINK, g["pink"])
+    pb[0, :] = PINK
+    pb[63, :] = PINK
+    tiles.append(pb)
+    names.append("tail blade, neon pink / spike (cap rows flat)")
     return tiles, names
 
 
