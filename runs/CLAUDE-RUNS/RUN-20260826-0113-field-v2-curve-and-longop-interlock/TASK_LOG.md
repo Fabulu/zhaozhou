@@ -1070,3 +1070,62 @@ the two writes, rather than infer from `pc_o` again.
 
 Front end and its differential remain uncommitted and unregistered; `main` is
 green; all fourteen Field operations remain committed and evidenced.
+
+## 2026-08-26 - The real cause: TWO OPCODE ENCODINGS. 7 of 10 now pass.
+
+Tapping `sel_valid`, `issue_fire`, `s1_valid`, `s1_op`, `s1_dst` and `alu_y[0]`
+-- the step I said was next -- answered it in one trace:
+
+    cyc  s1_op s1_dst  alu_y0
+      5   03     20      28      "ADD" produced a*b
+      7   05     21    1000      "MUL" produced min(a,b)
+      9   00      0    1000      "END" WROTE a register
+
+### The cause
+
+`zhao_field_v2_core` has its own compact ALU encoding, and it is NOT the
+reference's:
+
+    core:       MOV 0x00  ADD 0x01  SUB 0x02  MUL 0x03  MAD 0x04 ...  END 0xFF
+    reference:  END 0x00  MOV 0x01  ADD 0x03  MUL 0x05 ...
+
+They collide in the worst way: **every reference opcode is a VALID but DIFFERENT
+core opcode.** Sending reference numbers does not fault -- it silently computes
+something else. My front-end test used the reference numbers, so 0x03 became
+MUL, 0x05 became MIN, and 0x00 became MOV, which is exactly what the trace shows.
+
+The core's own differential avoids this by writing the DUT program in core
+opcodes and the oracle program in reference opcodes. The front-end test now does
+the same, with `to_ref()` as the single place the mapping lives and a `default`
+that returns a deliberately invalid opcode so a newly added op cannot silently
+inherit a wrong translation.
+
+**The RTL was never wrong here.** Two of my three earlier diagnoses were also
+wrong, and this is the third correction today; the pattern is that I inferred
+from partial observations instead of instrumenting, three times, before
+instrumenting settled it in one run.
+
+### Result: 7 of 10 checks pass
+
+Sections 1 (full batch), 2 (partial batch) and 4 (a second program) are green.
+
+### The one real remaining bug, precisely localised
+
+Section 3 (39 points = one full batch + 7) fails on exactly ONE point:
+
+    first mismatch at index 32 (batch slot 0): want=73984 got=65792 prev=73728
+
+Index 32 is the FIRST POINT OF THE SECOND BATCH. `got = 65792 = b + 256`, and
+256 is point 0's `a`; point 32's `a` is 8448. Point 31 is correct, so batch 1 is
+clean and the fault is at the batch RESTART: the first point of a new batch runs
+with the previous batch's operand still in its slot.
+
+That is a genuine defect in `zhao_field_v2_front` -- almost certainly the first
+fill write of a batch not landing before the wavefronts are started -- and it is
+mine to fix, not the core's.
+
+### State
+
+Front end and its differential remain UNCOMMITTED and UNREGISTERED; `main` is
+green. The core was restored byte-identical after tapping (`git diff` empty) and
+all taps and the tracer are gone.
