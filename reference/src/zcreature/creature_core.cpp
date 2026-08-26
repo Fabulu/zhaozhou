@@ -46,6 +46,41 @@ quat16 quat16_axis_angle(fx16 ax, fx16 ay, fx16 az, fx16 half_sin, fx16 half_cos
                          fx_mul(az, half_sin, L));
 }
 
+quat16 quat16_nlerp(const quat16& a, const quat16& b, int32_t num, int32_t den) {
+  if (den <= 0 || num <= 0) return a;
+  if (num >= den) return b;
+  // Hemisphere: q and -q are the same rotation, so blend toward whichever of
+  // b, -b is nearer. Without this a key pair that quantized into opposite
+  // hemispheres blends the LONG way round and the joint snaps through half a
+  // turn between two frames.
+  int64_t d = 0;
+  for (int i = 0; i < 4; ++i) d += static_cast<int64_t>(a.q[i]) * b.q[i];
+  const int64_t sgn = d < 0 ? -1 : 1;
+
+  int64_t lane[4];
+  int64_t mag2 = 0;
+  for (int i = 0; i < 4; ++i) {
+    // exact in s64: (a*(den-num) + sgn*b*num) / den, ONE rounding
+    const int64_t v = static_cast<int64_t>(a.q[i]) * (den - num) + sgn * b.q[i] * num;
+    lane[i] = (v + den / 2) / den;
+    mag2 += lane[i] * lane[i];
+  }
+  // RENORMALIZE. A plain lerp shortens the quaternion, and quat16_to_mat3's
+  // 9-product formula scales the whole matrix by |q|^2 -- which reads on
+  // screen as the creature pulsing in size at every half-key.
+  if (mag2 <= 0) return a;
+  const int64_t mag = static_cast<int64_t>(isqrt_u64(static_cast<uint64_t>(mag2)));
+  if (mag <= 0) return a;
+  quat16 out{};
+  for (int i = 0; i < 4; ++i) {
+    int64_t r = (lane[i] * kQuatOne * 2 + mag) / (mag * 2);  // round-half-up
+    if (r > kQuatOne) r = kQuatOne;
+    if (r < -kQuatOne) r = -kQuatOne;
+    out.q[i] = static_cast<int16_t>(r);
+  }
+  return out;
+}
+
 void quat16_to_mat3(const quat16& q, mat3x4fx& out, SatLedger* L) {
   const int64_t qw = q.q[0], qx = q.q[1], qy = q.q[2], qz = q.q[3];
   // 9-product formula on S 1.0.14 lanes; each element ONE rescale(.,11):
@@ -131,14 +166,29 @@ bool bake_skeleton(const Skeleton& sk, SkeletonBake& out) {
 // ---------------------------------------------------------- pose decode ----
 
 void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
-                 std::array<mat3x4fx, kMaxBones>& out, SatLedger* L) {
+                 std::array<mat3x4fx, kMaxBones>& out, SatLedger* L, uint8_t sub) {
   const Skeleton& sk = type.skeleton;
   const uint8_t bc = type.bank.bone_count;
   const int32_t* disp = clip.root.data() + static_cast<size_t>(frame) * 3;
+  int32_t disp_i[3] = {disp[0], disp[1], disp[2]};
+  if (clip.interpolate && sub != 0) {
+    const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+    const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
+    for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
+  }
+  disp = disp_i;
   std::array<mat3x4fx, kMaxBones> a{};  // animated world chains
   for (int b = 0; b < bc; ++b) {
     mat3x4fx r;
-    quat16_to_mat3(clip.quats[static_cast<size_t>(frame) * bc + b], r, L);
+    // PRESENTATION INTERPOLATION (section 8): keys are 30 Hz held for two sim
+    // ticks, so without this the pose only moves every other tick. Opt-in per
+    // clip; the sim clock and every event frame are untouched.
+    quat16 q = clip.quats[static_cast<size_t>(frame) * bc + b];
+    if (clip.interpolate && sub != 0) {
+      const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+      q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
+    }
+    quat16_to_mat3(q, r, L);
     mat3x4fx lr = r;  // LR = R with the rest translation (+ root displacement)
     lr.m[3] += sk.bones[b].tx + (b == 0 ? disp[0] : 0);
     lr.m[7] += sk.bones[b].ty + (b == 0 ? disp[1] : 0);
@@ -167,7 +217,8 @@ void PoseBank::begin_frame() {
   for (auto& s : slots_) s.this_frame = false;
 }
 
-const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint16_t frame) {
+const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint16_t frame,
+                                  uint8_t sub) {
   const Clip* clip = nullptr;
   for (const Clip& c : type.bank.clips)
     if (c.slot_id == slot) clip = &c;
@@ -176,7 +227,8 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
     return kIdentityPose.data();
   }
   for (auto& s : slots_) {
-    if (s.valid && s.type == type.type_id && s.clip == slot && s.frame == frame) {
+    if (s.valid && s.type == type.type_id && s.clip == slot && s.frame == frame &&
+        s.sub == sub) {
       ++ctr_.hits;
       s.this_frame = true;
       s.lru = ++lru_ctr_;
@@ -202,7 +254,7 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
     // every slot referenced this frame: a content-tier violation — decode
     // without inserting and count it (the deterministic clamp)
     ++ctr_.clamped_inserts;
-    decode_pose(type, *clip, frame, scratch_, nullptr);
+    decode_pose(type, *clip, frame, scratch_, nullptr, sub);
     return scratch_.data();
   }
   Slot& s = slots_[victim];
@@ -211,9 +263,10 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
   s.type = type.type_id;
   s.clip = slot;
   s.frame = frame;
+  s.sub = sub;
   s.lru = ++lru_ctr_;
   s.this_frame = true;
-  decode_pose(type, *clip, frame, s.pose, nullptr);
+  decode_pose(type, *clip, frame, s.pose, nullptr, sub);
   return s.pose.data();
 }
 
@@ -340,6 +393,17 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     y = ny;
     z = nz;
   };
+  // TEXTURE SEAM LAW (2026-08-26). U is periodic (a full turn is 256) but a
+  // SkinVertex u is 8-bit, so the ring's closing face used to interpolate
+  // u 2xx -> 0 BACKWARD across the whole tile — one face per ring wearing the
+  // entire texture as a smeared streak, worst wherever a painted feature
+  // (Zixxtrixx's eye) sat near U = 0. The fix is a per-ring DUPLICATE of
+  // vertex 0 carrying u = 255 (the true value is 256; the 1/256-turn error is
+  // invisible), and the closing face indexes the duplicate. Applied ONLY to
+  // textured parts with align == 0 (align != 0 moves the wrap into the ring
+  // interior, which nothing authored uses): untextured parts — the watchdog,
+  // every pinned CRC — are bit-identical.
+  const uint32_t dup = part.page != 255 && part.align == 0 ? 1u : 0u;
   const auto add_ring = [&](int ri) -> uint32_t {
     ring_cache.push_back(build_ring(part.rings[ri], part.align, v_lane_of(ri)));
     for (BuiltVert& bv : ring_cache.back()) orient(bv.x, bv.y, bv.z);
@@ -355,6 +419,10 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     for (const BuiltVert& bv : ring_cache.back()) {
       cur.verts.push_back(SkinVertex{bv.x, bv.y, bv.z, vb0, vb1, vw0, bv.u, bv.v});
     }
+    if (dup != 0) {
+      const BuiltVert& b0 = ring_cache.back()[0];
+      cur.verts.push_back(SkinVertex{b0.x, b0.y, b0.z, vb0, vb1, vw0, 255, b0.v});
+    }
     return base;
   };
 
@@ -365,7 +433,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     const bool bottom_cap = ri == 0 && (part.caps & kCapBot) != 0;
     const bool top_cap = ri + 2 == n_rings && (part.caps & kCapTop) != 0;
     const int tris_needed = n + m + (bottom_cap ? n : 0) + (top_cap ? m : 0);
-    const int verts_needed = m + (bottom_cap ? 1 : 0) + (top_cap ? 1 : 0);
+    const int verts_needed = m + static_cast<int>(dup) + (bottom_cap ? 1 : 0) + (top_cap ? 1 : 0);
     if (static_cast<int>(cur.verts.size()) + verts_needed > kMeshletMaxVerts ||
         static_cast<int>(cur.idx.size()) / 3 + tris_needed > kMeshletMaxTris) {
       cur.page = part.page;
@@ -378,7 +446,11 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       add_ring(ri);  // duplicate the seam ring: the split stays watertight
     }
     const uint32_t hi = add_ring(ri + 1);
-    const uint32_t lo = hi - n;
+    const uint32_t lo = hi - (static_cast<uint32_t>(n) + dup);
+    // ring position n is the wrap: the u=255 duplicate when textured, vertex 0
+    // otherwise
+    const uint32_t lo_wrap = dup != 0 ? static_cast<uint32_t>(n) : 0u;
+    const uint32_t hi_wrap = dup != 0 ? static_cast<uint32_t>(m) : 0u;
 
     // zig-zag zipper (the donor's ring merge): advance the side whose
     // fractional arc position lags — i*m <= j*n compares the arc fractions
@@ -387,14 +459,14 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     while (i < n || j < m) {
       const bool adv_lo = (j >= m) || (i < n && i * m <= j * n);
       if (adv_lo) {
-        cur.idx.push_back(static_cast<uint8_t>(lo + (i == n ? 0 : i)));
+        cur.idx.push_back(static_cast<uint8_t>(lo + (i == n ? lo_wrap : i)));
         cur.idx.push_back(static_cast<uint8_t>(hi + j));
-        cur.idx.push_back(static_cast<uint8_t>(lo + (i + 1 == n ? 0 : i + 1)));
+        cur.idx.push_back(static_cast<uint8_t>(lo + (i + 1 == n ? lo_wrap : i + 1)));
         ++i;
       } else {
-        cur.idx.push_back(static_cast<uint8_t>(lo + (i == n ? 0 : i)));
+        cur.idx.push_back(static_cast<uint8_t>(lo + (i == n ? lo_wrap : i)));
         cur.idx.push_back(static_cast<uint8_t>(hi + j));
-        cur.idx.push_back(static_cast<uint8_t>(hi + (j + 1 == m ? 0 : j + 1)));
+        cur.idx.push_back(static_cast<uint8_t>(hi + (j + 1 == m ? hi_wrap : j + 1)));
         ++j;
       }
     }
@@ -411,7 +483,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
                                      static_cast<uint8_t>(part.align), 0});
       for (int k = 0; k < n; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(lo + k));
-        cur.idx.push_back(static_cast<uint8_t>(lo + (k + 1 == n ? 0 : k + 1)));
+        cur.idx.push_back(static_cast<uint8_t>(lo + (k + 1 == n ? lo_wrap : k + 1)));
         cur.idx.push_back(static_cast<uint8_t>(apex));
       }
     }
@@ -427,7 +499,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
                                      static_cast<uint8_t>(part.align), 255});
       for (int k = 0; k < m; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(hi + k));
-        cur.idx.push_back(static_cast<uint8_t>(hi + (k + 1 == m ? 0 : k + 1)));
+        cur.idx.push_back(static_cast<uint8_t>(hi + (k + 1 == m ? hi_wrap : k + 1)));
         cur.idx.push_back(static_cast<uint8_t>(apex));
       }
     }
