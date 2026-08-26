@@ -1200,3 +1200,61 @@ So this commit names its files EXPLICITLY rather than using `git add -A`, which
 would have swept up another agent's half-finished creature work. My own area is
 green: `ctest -R field_v2` passes 3/3, the ledger check is OK, and the front-end
 sweep is 7/7.
+
+## 2026-08-26 (evening) - Field is being MEASURED; and GEOM.WCACHE's proof was
+## asking an unbound question
+
+### The Field fit is running
+
+Fabian asked what the big issue is and how long until Field can be measured. The
+answer to the first is the second: **v2 has never been fitted.** Every number
+reported for it -- 3.97 vertex-instructions/clock, 27.8x v1 -- is SIMULATION. It
+has no ledger entry, so the census reading 119% ALM does not include it.
+
+`tools/quartus/run_block_fit.ps1 -Module zhao_field_v2_front` is running over
+the complete engine: core, serialiser, curve, length, ring, reciprocal, noise,
+rot, sine, normalize, the shared multiplier and square root and both ROMs.
+Sixteen modules. That is the honest unit -- the core alone would flatter the
+number by leaving out the units it cannot work without.
+
+Timeout is 3000 s deliberately: a block once reported `timeout` at the old 900 s
+default and then fitted cleanly in 749 s, and ten rows in the committed report
+still carry that misleading status.
+
+### GEOM.WCACHE: five refuted hypotheses, then a real one
+
+The failing property had never even been NAMED -- the shipped engine is
+`btor btormc`, which reports FAIL and nothing else. Under `smtbmc yices` it is
+`p_array_implies_shadow` at step 3, not `a_hit_implies_written` at k=4 as the
+file had recorded.
+
+Then, by asking the solver directly instead of theorising:
+
+    assert (f_arena <= 2'd3 && f_index <= 3'd7)   PASSES  (trivially true)
+    assert (f_arena < ARENA_W'(ARENAS))           FAILS   (the assumed bound)
+
+**Asserting what the harness assumes fails.** In all three forms -- `always_ff`,
+`always_comb`, and `assume property`. The solver reads the signal correctly and
+picks a forbidden value anyway.
+
+So the counterexample was produced with an UNBOUND watched key, and the arena is
+not implicated by it in either direction.
+
+### And I over-reached, then narrowed it
+
+I first wrote that every proof bounding a variable with an assume was suspect.
+`video_scanout_linebuf.sby` refutes that: fourteen assumes on ordinary ports,
+bmc AND cover both PASS. Assumptions bind fine on ordinary signals; it is the
+`(* anyconst *)` case that does not, and `zhao_vertex_arena.sv` is the only file
+using it. One file to audit, not a sweep.
+
+### A technique worth keeping
+
+**BMC reports only the FIRST failing assertion at a step.** Probes added beside
+a failing property look like they passed. Silencing them one at a time is what
+exposed the real defect:
+
+    probes + p_array_implies_shadow -> only p_array_implies_shadow named
+    p_array_implies_shadow silenced -> a_probe_slot_clear FAILS
+    that silenced too               -> a_probe_no_watched_fill FAILS
+    those silenced too              -> a_probe_key_bounded FAILS
