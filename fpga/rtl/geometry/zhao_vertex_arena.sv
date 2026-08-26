@@ -522,12 +522,22 @@ module zhao_vertex_arena #(
       // So the solver reads `f_arena` correctly and picks 2 or 3 for it anyway,
       // in defiance of three assumptions that forbid exactly that.
       //
-      // WHAT THAT MEANS BEYOND THIS BLOCK. Every proof in this tree that bounds
-      // a free or `anyconst` variable with an assume is resting on the same
-      // mechanism. If assumptions do not constrain here, the ones elsewhere
-      // deserve the same one-line check -- ASSERT WHAT YOU ASSUME, and see
-      // whether it holds -- before their PASS results are treated as evidence.
-      // That check costs one assertion and is the cheapest audit available.
+      // HOW FAR THIS REACHES -- NARROWED BY EXPERIMENT, because the first
+      // version of this note over-reached.
+      //
+      // It said every proof bounding a variable with an assume was suspect.
+      // `tests/formal/video_scanout_linebuf.sby` refutes that: fourteen assumes
+      // on ORDINARY PORTS, and both its bmc and cover tasks PASS -- the covers
+      // being what stops a vacuous pass from looking like a real one. So
+      // assumptions DO bind in this flow on ordinary signals.
+      //
+      // What does not bind is the `(* anyconst *)` case, and this file is the
+      // ONLY one in the tree that uses it. The audit is therefore one file, not
+      // a sweep of every proof.
+      //
+      // The check itself is still the cheapest one available and worth keeping
+      // in mind for any future free-variable proof: ASSERT WHAT YOU ASSUME, and
+      // see whether it holds.
       //
       // NOT YET KNOWN: whether this is `read_slang` dropping assumptions, a
       // yosys/sby handling of `anyconst` under this flow, or something specific
