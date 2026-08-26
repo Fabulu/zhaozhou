@@ -54,6 +54,7 @@ constexpr uint8_t OP_LEN3 = 0x13;         // the length unit, mode 1
 constexpr uint8_t OP_DIST2 = 0x14;        // the length unit, mode 2
 constexpr uint8_t OP_RING = 0x21;         // its own unit, no mode
 constexpr uint8_t OP_RIDGE = 0x22;        // the noise unit, is_ridge = 1
+constexpr uint8_t OP_NOISE2 = 0x1C;       // the noise unit, is_ridge = 0, TWO results
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -1186,6 +1187,104 @@ check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.
     for (int l = 0; l < kLanes; ++l)
       if (got[0][w][l] == got[1][w][l]) ++same;
   check(same == 0, "15.a different seed gives a different ridge on every lane", 0, same);
+}
+
+// ---- 16. NOISE2: the first instruction that writes TWO registers ---------
+// Every long op before this returned one value, so the reply carried one. The
+// remaining opcode set does not: NOISE2 and ROT2 write a pair, ROT3 and
+// NORMALIZE3 a triple. This section is the multi-result reply's first use.
+//
+// NOISE2 needs both new mechanisms at once. It reads reg[a] and reg[a+1], so
+// it takes the SECOND READ PASS built for the length family -- the predicate
+// that used to mean "is a length" now means "needs a second pass" -- and it
+// writes dst and dst+1, so it needs the widened reply.
+//
+// WHAT MUST BE PROVEN IS THE SECOND REGISTER. A reply that carries only lane
+// 0 back, or writes dst twice, agrees with the oracle on dst and is wrong on
+// dst+1 -- and a test checking only dst would pass. Both are checked, and
+// they are required to DIFFER from each other, because the noise unit's two
+// lanes are different hashes and a pair that matched would mean one value had
+// been written to both.
+{
+  auto noise2_oracle = [&](int32_t x, int32_t y, uint32_t seed, int32_t& o0, int32_t& o1) {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    zfield::Instr ins{};
+    ins.op = zfield::OP_NOISE2;
+    ins.dst = 16;
+    ins.a = 0;
+    ins.b = 0;
+    ins.c = 0;
+    ins.imm = seed;
+    prog.instrs.push_back(ins);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 2; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    zfield::IoLane o0l{}, o1l{};
+    o0l.name = "y0";
+    o0l.type = 0;
+    o0l.reg = 16;
+    o1l.name = "y1";
+    o1l.type = 0;
+    o1l.reg = 17;
+    prog.out_lanes.push_back(o0l);
+    prog.out_lanes.push_back(o1l);
+    int32_t in[2] = {x, y};
+    int32_t out[2] = {0, 0};
+    zfield::interpret(prog, in, 2, out, 2);
+    o0 = out[0];
+    o1 = out[1];
+  };
+
+  Bench b(dut);
+  const uint32_t seed = 0xBEEF01u;
+  b.prog = {{OP_NOISE2, 16, 0, 0, 0, seed}, {OP_END, 0, 0, 0, 0}};
+
+  int32_t x[kWfs][kLanes], y[kWfs][kLanes];
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      x[w][l] = (w * kLanes + l + 1) * 65536 * 5;
+      y[w][l] = -(w * kLanes + l + 2) * 65536 * 11;
+      b.write_reg(w, l, 0, x[w][l]);
+      b.write_reg(w, l, 1, y[w][l]);
+      // dst+1 is pre-loaded with a value the instruction must OVERWRITE. If
+      // the second write never happens, this survives and the check fails
+      // loudly instead of finding a convenient zero.
+      b.write_reg(w, l, 17, static_cast<int32_t>(0xD00DBEEF));
+    }
+
+  const uint32_t before = dut.instr_retired_o;
+  const int clocks = b.run((1u << kWfs) - 1u);
+  check(clocks < 20000, "16.NOISE2 program finished", 1, clocks < 20000 ? 1 : 0);
+
+  uint64_t bad0 = 0, bad1 = 0, same = 0, untouched = 0;
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      int32_t w0 = 0, w1 = 0;
+      noise2_oracle(x[w][l], y[w][l], seed, w0, w1);
+      const int32_t g0 = b.read_reg(w, l, 16);
+      const int32_t g1 = b.read_reg(w, l, 17);
+      if (g0 != w0) ++bad0;
+      if (g1 != w1) ++bad1;
+      if (g0 == g1) ++same;
+      if (g1 == static_cast<int32_t>(0xD00DBEEF)) ++untouched;
+    }
+  check(bad0 == 0, "16.NOISE2 dst matches zfield::interpret", 0, bad0);
+  check(bad1 == 0, "16.NOISE2 dst+1 matches zfield::interpret", 0, bad1);
+  check(untouched == 0, "16.dst+1 was actually written, not left as it was", 0, untouched);
+  check(same == 0, "16.the two lanes differ (one value was not written twice)", 0, same);
+
+  const uint32_t retired = dut.instr_retired_o - before;
+  check(retired == static_cast<uint32_t>(kWfs * 2),
+        "16.each wavefront retired exactly two instructions", kWfs * 2, retired);
+  std::printf("  v2 NOISE2 %u instructions in %d clocks\n", retired, clocks);
 }
 
 dut.final();

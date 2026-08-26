@@ -125,8 +125,23 @@ def main():
                     sys.stderr.write('       ' + l[:160] + '\n')
             return 3
 
+    # ---- A SUBSET RUN LINTS ITS SUBSET ------------------------------------
+    # Reading the same SWEEP_ONLY the sweep reads, so the two cannot disagree
+    # about which mutants a run covers. Linting all 134 for a 3-mutant re-score
+    # costs about ten minutes to check three things, and re-scoring after a fix
+    # is the most frequent operation in this loop -- that is the cost that
+    # compounds.
+    #
+    # The BASELINE check above is NOT subject to this: it runs every time,
+    # because a dirty tree invalidates every mutant whether or not it was
+    # selected.
+    only = os.environ.get('SWEEP_ONLY', '').split()
+    idx = [int(x) for x in only] if only else list(range(len(M.MUTS)))
+    if only:
+        sys.stderr.write('preflight: SUBSET, %d of %d mutants\n' % (len(idx), len(M.MUTS)))
+
     bad = []
-    for k in range(len(M.MUTS)):
+    for k in idx:
         name, path, _, _ = M.MUTS[k]
         if not restore(gold):
             sys.stderr.write('ABORT: could not restore before %s\n' % name)
@@ -150,7 +165,7 @@ def main():
         return 2
 
     print('linted %d mutants across %d files, %d do not build'
-          % (len(M.MUTS), len(gold), len(bad)))
+          % (len(idx), len(gold), len(bad)))
     for n, why in bad:
         print('   %-56s %s' % (n, why))
     return 1 if bad else 0

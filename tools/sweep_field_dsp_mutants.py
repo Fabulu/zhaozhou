@@ -557,8 +557,8 @@ MUTS = [
      """  assign rsp_dst_o   = dst_q;""",
      """  assign rsp_dst_o   = (state == S_DONE) ? req_dst_i : dst_q;"""),
     ("M87 a lane's answer is written to the NEXT lane's slot", F_LMUX,
-     """          y_q[lane] <= u_result_i;""",
-     """          y_q[(lane + LW'(1)) & LW'(LANES-1)] <= u_result_i;"""),
+     """          y_q[lane]  <= u_result_i;""",
+     """          y_q[(lane + LW'(1)) & LW'(LANES-1)]  <= u_result_i;"""),
     ("M88 the last lane is skipped, so one lane keeps a stale answer", F_LMUX,
      """          if (lane == LW'(LANES-1)) begin""",
      """          if (lane >= LW'(LANES-2)) begin"""),
@@ -580,8 +580,8 @@ MUTS = [
      """      OP_DCURVE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
       OP_SPLINE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end"""),
     ("M91 the long-op reply broadcasts lane 0 to every lane", F_V2,
-     """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];""",
-     """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[0];"""),
+     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];""",
+     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[0];"""),
     ("M92 a long op releases its wavefront at DISPATCH, not at reply", F_V2,
      """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
      """        inflight[s1_wf] <= 1'b0;"""),
@@ -754,6 +754,47 @@ MUTS = [
           nz_sat_add)                                 sat_add_o     <= 1'b1;""",
      """      if ((cv_sat_add || ln_sat_add || rg_sat_add) &&
           nz_sat_add)                                 sat_add_o     <= 1'b1;"""),
+    # ---- THE MULTI-RESULT REPLY, and NOISE2 as its first user --------------
+    # Every long op before NOISE2 returned one value. Four of the remaining six
+    # return two or three, and they write CONSECUTIVE registers -- which is
+    # exactly where the next instruction's operands live, so a write that lands
+    # in the wrong place or does not land at all is a wrong answer somewhere
+    # else entirely.
+    ("M125 a multi-result op writes only its first register", F_V2,
+     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
+     """          if (lm_rsp_nres >= 2'd3) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];"""),
+    ("M126 the two results are swapped between dst and dst+1", F_V2,
+     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
+          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
+     """          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];
+          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y[l];"""),
+    ("M127 the second result lands on dst instead of dst+1", F_V2,
+     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
+     """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];"""),
+    ("M128 every op claims a single result", F_V2,
+     """  wire [1:0]  s1_nres = s1_is_noise2 ? 2'd2 : 2'd1;""",
+     """  wire [1:0]  s1_nres = s1_is_noise2 ? 2'd1 : 2'd1;"""),
+    ("M129 the second read pass is for lengths only again", F_V2,
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2;""",
+     """  wire s1_needs_pass2 = s1_is_len;"""),
+    ("M130 the pass-2 path still hard-wires the length unit", F_V2,
+     """        lq_unit  <= ln_unit;
+        lq_nres  <= ln_nres;""",
+     """        lq_unit  <= ln_unit ^ 2'd1;
+        lq_nres  <= ln_nres;"""),
+    ("M131 a pass-2 op loses its immediate", F_V2,
+     """        lq_imm   <= ln_imm;  // NOISE2 takes this path AND reads a seed""",
+     """        lq_imm   <= ~ln_imm;"""),
+    # ---- the serialiser's half of it ---------------------------------------
+    ("M132 the result count is taken LIVE rather than carried", F_LMUX,
+     """  assign rsp_nres_o  = nres_q;""",
+     """  assign rsp_nres_o  = (state == S_DONE) ? req_nres_i : nres_q;"""),
+    ("M133 the second result lane is captured for the NEXT lane", F_LMUX,
+     """          y1_q[lane] <= u_result1_i;""",
+     """          y1_q[(lane + LW'(1)) & LW'(LANES-1)] <= u_result1_i;"""),
+    ("M134 the reply carries lane 0's second result to every lane", F_LMUX,
+     """      rsp_y1_o[l] = y1_q[l];""",
+     """      rsp_y1_o[l] = y1_q[0];"""),
 ]
 
 

@@ -316,6 +316,21 @@ for k in $K_LIST; do
 
   rebuild "$targets"
 
+  # A LINK THAT FAILED ONCE MAY BE THE MACHINE, NOT THE MUTANT. The executable
+  # is deleted and relinked every iteration (guard 5), and Windows intermittently
+  # holds the old file while that happens. On 2026-08-26 three of 55 iterations
+  # discarded for this, and all three were CAUGHT on a re-run -- so the coverage
+  # was lost to the environment, not to a broken mutation.
+  #
+  # Trying again separates them: the environment succeeds on the second attempt,
+  # a mutation that cannot compile fails twice. THE RETRY IS ANNOUNCED, because
+  # silently retrying turns a flaky machine into unexplained slowness and the
+  # flakiness is worth seeing.
+  if ! models_present "$targets" || ! exes_present "$targets"; then
+    echo "  $name  build did not produce a target; RETRYING ONCE"
+    rebuild "$targets"
+  fi
+
   if ! models_present "$targets"; then
     echo "  $name  DISCARDED: a model was absent after regeneration"
     restore || { echo "ABORT: revert failed"; exit 4; }

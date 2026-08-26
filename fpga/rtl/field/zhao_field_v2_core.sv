@@ -143,6 +143,7 @@ module zhao_field_v2_core #(
   localparam logic [7:0] OP_DIST2  = 8'h14;   // len mode 2
   localparam logic [7:0] OP_RING   = 8'h21;   // its own unit, no mode
   localparam logic [7:0] OP_RIDGE  = 8'h22;   // the noise unit, is_ridge = 1
+  localparam logic [7:0] OP_NOISE2 = 8'h1C;   // the noise unit, is_ridge = 0
 
   // Which long-op unit a request is for. Carried through the serialiser, which
   // stays unit-agnostic; the routing is done here.
@@ -308,7 +309,7 @@ module zhao_field_v2_core #(
         OP_END:    ;                       // retires the wavefront, writes nothing
         OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
         OP_LEN2, OP_LEN3, OP_DIST2:     ;  // dispatched, not executed here
-        OP_RING, OP_RIDGE:              ;  // dispatched, not executed here
+        OP_RING, OP_RIDGE, OP_NOISE2:   ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
     end
@@ -332,15 +333,22 @@ module zhao_field_v2_core #(
   // NOISE2 does not: it reads a+1 and writes TWO registers, and waits on the
   // multi-result reply that does not exist yet.
   wire s1_is_ridge = s1_valid && (s1_op == OP_RIDGE);
+  // NOISE2 is RIDGE's sibling on the same unit, but it reads reg[a+1] and writes
+  // TWO registers, so it takes the second read pass and the multi-result reply.
+  wire s1_is_noise2 = s1_valid && (s1_op == OP_NOISE2);
   // "Long" is the property that matters to the scoreboard: dispatched to a unit
   // over the request/reply seam rather than executed here. Both families are.
-  wire s1_is_long  = s1_is_curve || s1_is_len || s1_is_ring || s1_is_ridge;
+  wire s1_is_long  = s1_is_curve || s1_is_len || s1_is_ring || s1_is_ridge ||
+                     s1_is_noise2;
 
   // The mode is per-UNIT, so the two families have independent encodings and
   // the unit selector is what disambiguates them. zhao_field_curve reads
   // 0/1/2 = CURVE/DCURVE/SPLINE; zhao_field_len reads 0/1/2 = LEN2/LEN3/DIST2.
   logic [1:0] s1_mode;
   logic [1:0] s1_unit;
+  // How many CONSECUTIVE registers this instruction writes. Everything built so
+  // far writes one; NOISE2 is the first that does not.
+  wire [1:0]  s1_nres = s1_is_noise2 ? 2'd2 : 2'd1;
   always_comb begin
     unique case (s1_op)
       OP_DCURVE: begin s1_mode = 2'd1; s1_unit = UNIT_CURVE; end
@@ -350,16 +358,24 @@ module zhao_field_v2_core #(
       OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end
       OP_RING:   begin s1_mode = 2'd0; s1_unit = UNIT_RING;  end
       OP_RIDGE:  begin s1_mode = 2'd1; s1_unit = UNIT_NOISE; end
+      OP_NOISE2: begin s1_mode = 2'd0; s1_unit = UNIT_NOISE; end
       default:   begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
     endcase
   end
 
-  // The length's tag, held across the steal cycle. s1_wf and s1_dst happen to
-  // survive -- nothing issues, so nothing overwrites them -- but depending on
-  // that is depending on a stall staying exactly as it is today.
+  // The PASS-2 instruction's tag, held across the steal cycle. s1_wf and s1_dst
+  // happen to survive -- nothing issues, so nothing overwrites them -- but
+  // depending on that is depending on a stall staying exactly as it is today.
+  //
+  // It carries the unit and result count as well now: the steal path used to
+  // serve only lengths, so it could hard-wire UNIT_LEN and one result. NOISE2
+  // takes the same path to a different unit with two.
   logic [WFW-1:0]     ln_wf;
   logic [RW-1:0]      ln_dst;
   logic [1:0]         ln_mode;
+  logic [1:0]         ln_unit;
+  logic [1:0]         ln_nres;
+  logic [31:0]        ln_imm;
 
   logic               lq_valid;
   logic [WFW-1:0]     lq_wf;
@@ -367,6 +383,7 @@ module zhao_field_v2_core #(
   logic [1:0]         lq_mode;
   logic [1:0]         lq_unit;
   logic [31:0]        lq_imm;
+  logic [1:0]         lq_nres;
   logic signed [31:0] lq_a  [LANES];
   logic signed [31:0] lq_a1 [LANES];
   logic signed [31:0] lq_a2 [LANES];
@@ -376,7 +393,10 @@ module zhao_field_v2_core #(
   logic               lm_req_ready, lm_rsp_valid;
   logic [WFW-1:0]     lm_rsp_wf;
   logic [RW-1:0]      lm_rsp_dst;
-  logic signed [31:0] lm_rsp_y [LANES];
+  logic [1:0]         lm_rsp_nres;
+  logic signed [31:0] lm_rsp_y  [LANES];
+  logic signed [31:0] lm_rsp_y1 [LANES];
+  logic signed [31:0] lm_rsp_y2 [LANES];
 
   // ---- THE LONG-OP INTERLOCK ---------------------------------------------
   // The dispatch slot holds ONE request. It is filled at stage 2 -- two cycles
@@ -399,7 +419,8 @@ module zhao_field_v2_core #(
   wire ins_is_long = (ins_op_i == OP_CURVE) || (ins_op_i == OP_DCURVE) ||
                      (ins_op_i == OP_SPLINE) || (ins_op_i == OP_LEN2) ||
                      (ins_op_i == OP_LEN3) || (ins_op_i == OP_DIST2) ||
-                     (ins_op_i == OP_RING) || (ins_op_i == OP_RIDGE);
+                     (ins_op_i == OP_RING) || (ins_op_i == OP_RIDGE) ||
+                     (ins_op_i == OP_NOISE2);
   // A LENGTH IS LONG FOR THREE CYCLES, not two: stage 1, the steal, and the
   // dispatch. Between stage 1 and the dispatch there is a cycle where s1_valid
   // is already 0 and lq_valid is not yet 1, and a long op issuing into that
@@ -418,7 +439,11 @@ module zhao_field_v2_core #(
   // reads replaced by the length's second pass and would then compute on
   // another instruction's values. That is a WRONG ANSWER rather than a hang,
   // which makes it the more dangerous of the two failures.
-  wire steal_now = s1_is_len;   // stage 1 holds a length: steal the next cycle
+  // NOT "is a length" any more: NOISE2 reads reg[a+1] too, and ROT2/ROT3 and
+  // NORMALIZE2/3 will. The steal fetches {a+1, a+2, b+1} and every one of them
+  // wants some part of that, so the predicate is about the NEED, not the family.
+  wire s1_needs_pass2 = s1_is_len || s1_is_noise2;
+  wire steal_now = s1_needs_pass2;
   assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
                       !(ins_is_long && long_slot_busy);
 
@@ -463,6 +488,10 @@ module zhao_field_v2_core #(
       ln_wf          <= '0;
       ln_dst         <= '0;
       ln_mode        <= 2'd0;
+      ln_unit        <= UNIT_LEN;
+      ln_nres        <= 2'd1;
+      ln_imm         <= 32'd0;
+      lq_nres        <= 2'd1;
       steal_q        <= 1'b0;
       sat_add_o      <= 1'b0;
       sat_mul_o      <= 1'b0;
@@ -531,10 +560,13 @@ module zhao_field_v2_core #(
 
       // ---- stage 2 retire ----
       // ---- long-op dispatch, held until the serialiser accepts -----------
-      if (s1_is_len) begin
+      if (s1_needs_pass2) begin
         ln_wf   <= s1_wf;
         ln_dst  <= s1_dst;
         ln_mode <= s1_mode;
+        ln_unit <= s1_unit;
+        ln_nres <= s1_nres;
+        ln_imm  <= s1_imm;
       end
 
       // The curve family dispatches straight from stage 1: one operand, already
@@ -548,6 +580,7 @@ module zhao_field_v2_core #(
         lq_mode  <= s1_mode;
         lq_unit  <= s1_unit;
         lq_imm   <= s1_imm;
+        lq_nres  <= s1_nres;
         for (l = 0; l < LANES; l++) begin
           lq_a[l]  <= rd_a[l];
           // RING's r0 and r1 ride a1/a2. A curve reads neither, and zeroing
@@ -563,11 +596,12 @@ module zhao_field_v2_core #(
         end
       end else if (steal_q) begin
         lq_valid <= 1'b1;
-        lq_imm   <= 32'd0;   // no length op reads an immediate
+        lq_imm   <= ln_imm;  // NOISE2 takes this path AND reads a seed
         lq_wf    <= ln_wf;
         lq_dst   <= ln_dst;
         lq_mode  <= ln_mode;
-        lq_unit  <= UNIT_LEN;
+        lq_unit  <= ln_unit;
+        lq_nres  <= ln_nres;
         for (l = 0; l < LANES; l++) begin
           lq_a[l]  <= s2_a0[l];   // reg[a],   saved before the steal
           lq_a1[l] <= rd_a[l];    // reg[a+1], from the steal
@@ -598,7 +632,17 @@ module zhao_field_v2_core #(
 
       // ---- long-op reply: write back and release the wavefront -----------
       if (lm_rsp_valid) begin
-        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
+        // UP TO THREE CONSECUTIVE REGISTERS. The count rides with the reply, so
+        // this does not re-decode an opcode that left stage 1 several cycles
+        // ago. A write is issued only when the count says so: writing dst+1
+        // unconditionally would clobber a register a single-result op never
+        // claimed, and the neighbouring register is exactly where the NEXT
+        // instruction's operand is most likely to live.
+        for (l = 0; l < LANES; l++) begin
+          rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];
+          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];
+          if (lm_rsp_nres >= 2'd3) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(2))}] <= lm_rsp_y2[l];
+        end
         inflight[lm_rsp_wf] <= 1'b0;
         instr_retired_o     <= instr_retired_o + 32'd1;
       end
@@ -642,17 +686,18 @@ module zhao_field_v2_core #(
   logic               u_valid, u_ready, u_rvalid, u_rready;
   logic [1:0]         u_mode, u_unit;
   logic [31:0]        u_imm;
-  logic signed [31:0] u_a, u_a1, u_a2, u_b0, u_b1, u_result;
+  logic signed [31:0] u_a, u_a1, u_a2, u_b0, u_b1;
+  // The unit port's three result lanes. Units producing one drive only the
+  // first; the request's COUNT decides how many are written, so a unit leaving
+  // the others at whatever it leaves them at cannot corrupt anything.
+  logic signed [31:0] u_result, u_result1, u_result2;
   logic               cv_ready, cv_rvalid, ln_ready, ln_rvalid;
   logic               rg_ready, rg_rvalid;
   logic               nz_ready, nz_rvalid;
-  // o1_o is NOISE2's second lane and is zero for RIDGE by that unit's own law.
-  // Nothing reads it yet: carrying it back needs the multi-result reply, which
-  // is the next increment. Waived WITH the reason, because an unexplained
-  // waiver is how a dropped output becomes permanent.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic signed [31:0] nz_o1_unused;
-  /* verilator lint_on UNUSEDSIGNAL */
+  // o1_o is NOISE2's second lane, zero for RIDGE by that unit's own law. It is
+  // READ now -- the multi-result reply carries it back -- so the lint waiver it
+  // used to need is gone rather than merely re-justified.
+  logic signed [31:0] nz_result1;
   logic signed [31:0] cv_result, ln_result, rg_result, nz_result;
 
   // RING's own call into the shared reciprocal.
@@ -709,7 +754,7 @@ module zhao_field_v2_core #(
       .is_ridge_i(u_mode[0]),
       .a0_i(u_a), .a1_i(u_a1), .seed_i(u_imm),
       .r_valid_o(nz_rvalid), .r_ready_i(u_rready && to_noise),
-      .o0_o(nz_result), .o1_o(nz_o1_unused),
+      .o0_o(nz_result), .o1_o(nz_result1),
       .sat_add_o(nz_sat_add), .sat_rescale_o(nz_sat_resc),
       .mul_issue_o(nz_mul_issue), .mul_a_o(nz_mul_a), .mul_b_o(nz_mul_b),
       .mul_p_i(mul_p), .mul_valid_i(mul_p_valid)
@@ -723,15 +768,17 @@ module zhao_field_v2_core #(
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(lq_valid), .req_ready_o(lm_req_ready),
       .req_wf_i(lq_wf), .req_dst_i(lq_dst), .req_mode_i(lq_mode),
-      .req_unit_i(lq_unit), .req_imm_i(lq_imm),
+      .req_unit_i(lq_unit), .req_imm_i(lq_imm), .req_nres_i(lq_nres),
       .req_a_i(lq_a), .req_a1_i(lq_a1), .req_a2_i(lq_a2),
       .req_b0_i(lq_b0), .req_b1_i(lq_b1),
       .u_valid_o(u_valid), .u_ready_i(u_ready),
       .u_mode_o(u_mode), .u_unit_o(u_unit), .u_imm_o(u_imm),
       .u_a_o(u_a), .u_a1_o(u_a1), .u_a2_o(u_a2), .u_b0_o(u_b0), .u_b1_o(u_b1),
-      .u_rvalid_i(u_rvalid), .u_rready_o(u_rready), .u_result_i(u_result),
+      .u_rvalid_i(u_rvalid), .u_rready_o(u_rready),
+      .u_result_i(u_result), .u_result1_i(u_result1), .u_result2_i(u_result2),
       .rsp_valid_o(lm_rsp_valid), .rsp_ready_i(1'b1),
-      .rsp_wf_o(lm_rsp_wf), .rsp_dst_o(lm_rsp_dst), .rsp_y_o(lm_rsp_y)
+      .rsp_wf_o(lm_rsp_wf), .rsp_dst_o(lm_rsp_dst), .rsp_nres_o(lm_rsp_nres),
+      .rsp_y_o(lm_rsp_y), .rsp_y1_o(lm_rsp_y1), .rsp_y2_o(lm_rsp_y2)
   );
 
   // v1's curve unit, UNMODIFIED -- the same silicon the frozen engine uses and
@@ -754,10 +801,13 @@ module zhao_field_v2_core #(
   wire to_noise = (u_unit == UNIT_NOISE);
 
   always_comb begin
+    u_result1 = 32'sd0;
+    u_result2 = 32'sd0;
     if (to_noise) begin
-      u_ready  = nz_ready;
-      u_rvalid = nz_rvalid;
-      u_result = nz_result;
+      u_ready   = nz_ready;
+      u_rvalid  = nz_rvalid;
+      u_result  = nz_result;
+      u_result1 = nz_result1;   // NOISE2's second lane; zero for RIDGE by law
     end else if (to_ring) begin
       u_ready  = rg_ready;
       u_rvalid = rg_rvalid;

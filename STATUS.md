@@ -5,6 +5,50 @@ at the top.*
 
 ---
 
+## 2026-08-26 (late) — the engine can now hand back more than one answer
+
+### The bottleneck nobody would have guessed
+
+Four of the six remaining kinds of maths were blocked on the same small thing,
+and it was not arithmetic. **Rotations, noise pairs and normalise all produce
+two or three answers at once** — a rotated point has an x and a y — and the
+engine's return path could carry exactly one.
+
+That is now built. NOISE2, the first operation to use it, works.
+
+So the remaining work is smaller than the list looks: rotations need one more
+shared part (a sine table, which the old engine already has and the new one can
+borrow), and normalise needs nothing new at all.
+
+### The test that pre-loads garbage
+
+Worth a note because it is the cheap trick that makes this kind of test honest.
+
+If the engine wrote the first answer correctly and never wrote the second, the
+second register would usually still contain zero — and zero is a plausible
+answer. The test would pass.
+
+So before running, the second register is filled with a deliberate junk value.
+If the engine does not write it, the junk is still there and the test fails
+pointing straight at it. The two answers are also required to *differ*, because
+writing one answer into both places would otherwise look correct.
+
+### And a run that failed for a boring reason
+
+The checking pass that deliberately breaks the hardware 55 ways reported
+**three of the 55 as "could not build"** rather than pass or fail.
+
+I initially read that as a flaw in the checking tools. It was not — rebuilding
+those three by hand works fine. It was the machine: Windows occasionally holds a
+program file open while the tool tries to replace it, and three failures in 55
+rebuilds is exactly what that looks like.
+
+The tools were right to refuse to score them: a build that did not happen must
+never be counted as a pass. They will retry once before giving up, which
+recovers the coverage without hiding a genuinely broken case.
+
+---
+
 ## 2026-08-26 (night) — ridges, and a test that would have lied
 
 ### What now works

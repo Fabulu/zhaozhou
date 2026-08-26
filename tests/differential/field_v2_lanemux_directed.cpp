@@ -109,6 +109,10 @@ struct Bench {
     d.u_ready_i = unit.ready() ? 1 : 0;
     d.u_rvalid_i = unit.has_result ? 1 : 0;
     d.u_result_i = static_cast<uint32_t>(unit.result);
+    // Three DISTINCT lanes. A reply that carried lane 0 into all three, or
+    // crossed two of them, would be invisible if they held the same number.
+    d.u_result1_i = static_cast<uint32_t>(unit.result + 0x1000);
+    d.u_result2_i = static_cast<uint32_t>(unit.result + 0x2000);
     d.eval();
   }
 
@@ -141,12 +145,13 @@ struct Bench {
 
   /** Push one vector request and run until its reply is taken. Returns clocks. */
   int transact(int wf, int dst, int mode, const int32_t* a, int32_t* y, int guard = 4096,
-               int unit_sel = 0, uint32_t imm = 0) {
+               int unit_sel = 0, uint32_t imm = 0, int nres = 1) {
     d.req_wf_i = wf;
     d.req_dst_i = dst;
     d.req_mode_i = mode;
     d.req_unit_i = unit_sel;
     d.req_imm_i = imm;
+    d.req_nres_i = nres;
     for (int l = 0; l < kLanes; ++l) {
       d.req_a_i[l] = static_cast<uint32_t>(a[l]);
       // The rest of the bundle is derived from a0 so every component of every
@@ -193,6 +198,12 @@ struct Bench {
     // interlock keeps one request in flight, so the core's lq_imm sits stable
     // while the serialiser works and live equals captured by construction.
     d.req_imm_i = ~imm;
+    // The RESULT COUNT is poisoned on the same terms, at the same time as it
+    // was added. M119 was a field added to this request without a poison line,
+    // and it survived the whole suite: the poison block IS the proof that a
+    // field is carried rather than read live, so a field missing from it has no
+    // proof at all.
+    d.req_nres_i = 3 - nres;
     for (int l = 0; l < kLanes; ++l) {
       d.req_a_i[l] = 0xDEAD0000u;
       d.req_a1_i[l] = 0xDEAD0001u;
@@ -297,7 +308,7 @@ int main(int argc, char** argv) {
     Bench b(dut, 3);
     const int32_t a[kLanes] = {101, 202, 303, 404};
     int32_t y[kLanes] = {};
-    b.transact(2, 9, 2, a, y, 4096, /*unit_sel=*/1, /*imm=*/0xA5C3F00Du);
+    b.transact(2, 9, 2, a, y, 4096, /*unit_sel=*/1, /*imm=*/0xA5C3F00Du, /*nres=*/2);
 
     check(b.obs.size() == static_cast<size_t>(kLanes),
           "5.the unit saw exactly one request per lane", kLanes, b.obs.size());
@@ -323,6 +334,24 @@ int main(int argc, char** argv) {
     for (size_t k = 0; k < b.obs.size() && k < kLanes; ++k)
       if (b.obs[k].imm != 0xA5C3F00Du) ++bad_imm;
     check(bad_imm == 0, "5.the immediate is the CAPTURED one on every lane", 0, bad_imm);
+
+    // ---- the multi-result reply --------------------------------------------
+    // The count and all three result lanes come back per lane. What this has to
+    // prove is that lane 1 and lane 2 are DISTINCT from lane 0 and from each
+    // other: a reply that carried one value into all three, or crossed two of
+    // them, agrees on lane 0 and is silently wrong on the rest -- and the core
+    // writes those to dst+1 and dst+2, which is where the NEXT instruction's
+    // operands usually live.
+    check(dut.rsp_nres_o == 2, "5.the result count is the CAPTURED one", 2, dut.rsp_nres_o);
+
+    uint64_t bad_y = 0;
+    for (int l = 0; l < kLanes; ++l) {
+      const int32_t y0 = static_cast<int32_t>(dut.rsp_y_o[l]);
+      const int32_t y1 = static_cast<int32_t>(dut.rsp_y1_o[l]);
+      const int32_t y2 = static_cast<int32_t>(dut.rsp_y2_o[l]);
+      if (y1 != y0 + 0x1000 || y2 != y0 + 0x2000) ++bad_y;
+    }
+    check(bad_y == 0, "5.all three result lanes arrive intact on every lane", 0, bad_y);
   }
 
   dut.final();

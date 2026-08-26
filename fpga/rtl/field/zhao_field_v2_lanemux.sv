@@ -40,6 +40,13 @@
 // The tag is captured ONCE at accept and travels with the transaction. It is
 // not recomputed from whatever the front end is doing when the reply lands.
 //
+// THE SAME APPLIES TO EVERY FIELD ADDED SINCE: the mode, the unit selector, the
+// immediate and the result count. That is not a style rule, it is the only
+// thing making them checkable -- the differential proves a field is CARRIED by
+// poisoning the request line after accept, so a field that is not in the poison
+// list has no proof at all. `req_imm_i` was added without one and mutant M119
+// survived the whole suite until the omission was found.
+//
 // The OPERAND BUNDLE and the UNIT SELECTOR are captured on the same terms. The
 // bundle is five components wide because zhao_field_len's DIST2 takes five
 // (a0,a1,a2,b0,b1) while zhao_field_curve takes one; a unit that reads fewer
@@ -70,6 +77,12 @@ module zhao_field_v2_lanemux #(
     // for the same reason: a unit given it live reads whatever the front end is
     // doing when its turn comes, not what the instruction asked for.
     input  logic [31:0]               req_imm_i,
+    // HOW MANY REGISTERS THE REPLY WRITES: 1, 2 or 3. NOISE2 and ROT2 produce a
+    // pair, ROT3 and NORMALIZE3 a triple, everything built before them a single
+    // value. Carried with the request rather than derived at write-back, so the
+    // reply is self-describing and the core need not re-decode an opcode that
+    // left stage 1 long ago.
+    input  logic [1:0]                req_nres_i,
     // THE OPERAND BUNDLE. CURVE takes one value; the length family takes up to
     // five (a0,a1,a2 for LEN3, plus b0,b1 for DIST2), which is why this is a
     // bundle rather than a single operand. Named after zhao_field_len's own
@@ -94,13 +107,18 @@ module zhao_field_v2_lanemux #(
     input  logic                      u_rvalid_i,
     output logic                      u_rready_o,
     input  logic signed [31:0]        u_result_i,
+    input  logic signed [31:0]        u_result1_i,
+    input  logic signed [31:0]        u_result2_i,
 
     // ---- vector reply ----------------------------------------------------
     output logic                      rsp_valid_o,
     input  logic                      rsp_ready_i,
     output logic [$clog2(WFS)-1:0]    rsp_wf_o,
     output logic [$clog2(REGS)-1:0]   rsp_dst_o,
-    output logic signed [31:0]        rsp_y_o [LANES]
+    output logic [1:0]                rsp_nres_o,
+    output logic signed [31:0]        rsp_y_o  [LANES],
+    output logic signed [31:0]        rsp_y1_o [LANES],
+    output logic signed [31:0]        rsp_y2_o [LANES]
 );
 
   localparam int LW = $clog2(LANES);
@@ -115,6 +133,8 @@ module zhao_field_v2_lanemux #(
   logic signed [31:0] b0_q  [LANES];
   logic signed [31:0] b1_q  [LANES];
   logic signed [31:0] y_q   [LANES];
+  logic signed [31:0] y1_q  [LANES];
+  logic signed [31:0] y2_q  [LANES];
 
   // THE TAG, captured once at accept.
   logic [$clog2(WFS)-1:0]  wf_q;
@@ -122,6 +142,7 @@ module zhao_field_v2_lanemux #(
   logic [1:0]              mode_q;
   logic [1:0]              unit_q;
   logic [31:0]             imm_q;
+  logic [1:0]              nres_q;
 
   assign req_ready_o = (state == S_IDLE);
   assign u_valid_o   = (state == S_ISSUE);
@@ -137,9 +158,14 @@ module zhao_field_v2_lanemux #(
   assign rsp_valid_o = (state == S_DONE);
   assign rsp_wf_o    = wf_q;
   assign rsp_dst_o   = dst_q;
+  assign rsp_nres_o  = nres_q;
 
   always_comb begin
-    for (int l = 0; l < LANES; l++) rsp_y_o[l] = y_q[l];
+    for (int l = 0; l < LANES; l++) begin
+      rsp_y_o[l]  = y_q[l];
+      rsp_y1_o[l] = y1_q[l];
+      rsp_y2_o[l] = y2_q[l];
+    end
   end
 
   integer l;
@@ -152,6 +178,7 @@ module zhao_field_v2_lanemux #(
       mode_q <= 2'd0;
       unit_q <= 2'd0;
       imm_q  <= 32'd0;
+      nres_q <= 2'd1;
       for (l = 0; l < LANES; l++) begin
         a_q[l]  <= '0;
         a1_q[l] <= '0;
@@ -159,6 +186,8 @@ module zhao_field_v2_lanemux #(
         b0_q[l] <= '0;
         b1_q[l] <= '0;
         y_q[l]  <= '0;
+        y1_q[l] <= '0;
+        y2_q[l] <= '0;
       end
     end else begin
       unique case (state)
@@ -170,6 +199,7 @@ module zhao_field_v2_lanemux #(
             mode_q <= req_mode_i;
             unit_q <= req_unit_i;
             imm_q  <= req_imm_i;
+            nres_q <= req_nres_i;
             for (l = 0; l < LANES; l++) begin
               a_q[l]  <= req_a_i[l];
               a1_q[l] <= req_a1_i[l];
@@ -189,7 +219,13 @@ module zhao_field_v2_lanemux #(
         // is written to `y_q[lane]` -- the lane that ASKED -- and not to
         // whatever lane the counter would hold after an increment.
         S_WAIT: if (u_rvalid_i) begin
-          y_q[lane] <= u_result_i;
+          // All three lanes of the answer are captured for the lane that
+          // ASKED. A unit producing fewer drives the rest to whatever it drives
+          // them to, and the COUNT -- not the value -- decides how many reach
+          // the register file.
+          y_q[lane]  <= u_result_i;
+          y1_q[lane] <= u_result1_i;
+          y2_q[lane] <= u_result2_i;
           if (lane == LW'(LANES-1)) begin
             state <= S_DONE;
           end else begin

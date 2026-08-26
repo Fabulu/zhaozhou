@@ -1108,3 +1108,125 @@ found it by reading `zhao_field_normalize`'s ports for an unrelated reason.
 evidence standard as a claim about behaviour.** "NORMALIZE calls the reciprocal"
 was checkable in one grep and I did not run it.
 
+
+---
+
+## NEXT: ROT2 and ROT3, and the fifth shared resource
+
+*2026-08-26, before any RTL. The multi-result reply exists now, so these are the
+first ops it was built for.*
+
+### The oracle resolves and the unit is ready
+
+`zfield_interpret.cpp` gives ROT2 as a plane rotation of `reg[a]`,`reg[a+1]` by
+`reg[b] & 0xFFFF`, and ROT3 as the same about an axis chosen by `ins.imm`, with
+the third lane carried through unchanged. `zhao_field_rot` implements both on
+`is_rot3_i` + `axis_i`, and its header states the four cases explicitly:
+
+    ROT2         p = a0, q = a1                     (two lanes only)
+    ROT3 imm=0   p = a1, q = a2,  a0 passes through  (X)
+    ROT3 imm=1   p = a2, q = a0,  a1 passes through  (Y)
+    ROT3 else    p = a0, q = a1,  a2 passes through  (Z)
+
+### Everything they read is already in hand
+
+| needed | where it comes from |
+| --- | --- |
+| `reg[a]` | pass 1, saved in `s2_a0` |
+| `reg[a+1]`, `reg[a+2]` | the steal cycle |
+| angle `reg[b]` | pass 1, saved in `s2_b0` |
+| axis | `ins.imm`, which RIDGE already added |
+| 2 or 3 results | the reply the last increment widened |
+
+So ROT costs no new front-end mechanism at all. Both take `s1_needs_pass2`.
+
+### What is new: THE SINE TABLE, v2's fifth shared unit
+
+`zhao_field_rot` does not own a sine table -- it borrows the engine's one
+`zhao_field_sin` through `sin_angle_o`/`sin_is_cos_o`/`sin_result_i`. v2 has no
+sine table at all, because nothing it executes has needed one.
+
+Its contract is stated in its own header and is unusually pleasant: **latency 2,
+initiation interval 1** -- registered result, registered table read, and a
+request may still be issued every clock.
+
+v1 arbitrates it in one line:
+
+```systemverilog
+assign sin_angle = op_is_rot ? rt_sin_angle : a0_i[15:0];
+```
+
+ROT is v2's only consumer today. **OP_SIN and OP_COS would be the second** --
+and they become nearly free once the table is there: one operand on a natural
+port, one result, no steal. That is a bonus this increment buys, not a cost.
+
+It also means the M116 pattern repeats: any "the sine mux is unobservable"
+equivalence would be SCOPED to ROT being the only consumer, and re-scored the
+moment SIN/COS land.
+
+### The test that matters: THE AXIS
+
+ROT3's `ins.imm` is an axis select, and this is the case flagged when the
+immediate was built: **a dropped or hard-wired axis rotates about the wrong
+axis, and the result is still a rotation of the right vector by the right
+angle.** It is a plausible world. Nothing about the value's shape betrays it.
+
+So ROT3 gets the seed test's structure, sharpened: the SAME vector and angle
+under all THREE axes, required to give three different answers, and each matched
+against `zfield::interpret` for that axis. A hard-wired axis collapses two of
+the three into agreement and fails immediately.
+
+The pass-through lane is the tell: X carries `a0`, Y carries `a1`, Z carries
+`a2`. Checking that the untouched lane is the RIGHT untouched lane is the
+cheapest possible axis proof, and it is checked separately from the rotated pair.
+
+---
+
+## The multi-result sweep, and three discards that were the ENVIRONMENT
+
+*2026-08-26.*
+
+    attempted=55 expected=55 accounted=52 caught=50 equivalent=2
+    CROSS-CHECK FAILED (attempted/accounted must both equal 55)
+
+50 caught, 2 proven equivalent, **3 DISCARDED** -- and the cross-check failed,
+which is correct: a run with discards has not tested what it claims to.
+
+### What a discard means, and why it is not a pass
+
+`DISCARDED: a target did not LINK` is guard 5. Without it, a mutant that fails
+to compile leaves the previous binary in place and is scored as CAUGHT -- the
+most flattering possible way to be wrong. So a discard is the guard working;
+what it leaves behind is an UNSCORED mutant, which is a hole in the evidence
+rather than a failure of the run.
+
+### My first diagnosis was wrong
+
+Seeing three mutants pass preflight lint and fail the test build, I concluded the
+two checks disagreed and the preflight was overstating its coverage.
+
+**They do not disagree.** Applying M120 by hand and building it succeeds. The
+preflight was right; the failure was environmental -- almost certainly the
+executable being held while the sweep deletes and relinks it, which is a normal
+Windows hazard and exactly the kind of thing that strikes three times in 55
+iterations and never in one.
+
+The wrong diagnosis was cheap to hold and would have been expensive to act on: I
+would have gone looking for a flag difference between two paths that agree.
+
+**The first reproduction attempt was also wrong** and is worth recording: I ran
+`cmake --build` alone and saw it succeed. `verilate()` elaborates at CONFIGURE
+time -- that is guard 1, written in this sweep's own header -- so a build without
+`cmake -S . -B build` does not re-elaborate and proves nothing. I walked into the
+guard the file exists to warn about.
+
+### The fix: retry once, and SAY SO
+
+A transient link failure should not cost a mutant's coverage, and a genuine
+build failure must still be discarded. Those are distinguishable by trying
+again: the environment succeeds on the second attempt, a broken mutation fails
+twice.
+
+The retry prints that it happened. Silently retrying would convert a flaky
+machine into invisible slowness; printing it keeps the flakiness visible while
+recovering the coverage.
