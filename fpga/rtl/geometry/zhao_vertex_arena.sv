@@ -97,6 +97,19 @@ module zhao_vertex_arena #(
     output logic [31:0]                arena_misses_o,
     output logic [31:0]                arena_refusals_o,
     output logic                       arena_overflow_o
+`ifdef FORMAL
+    ,// FORMAL ONLY -- the symbolic watched key of the shadow proof below.
+    // It is a PORT, not a local, because the frontend of this flow ties
+    // attribute-carrying LOCALS to constants/x: an `(* anyconst *) logic`
+    // declared inside the module is NOT free, and assumptions written about
+    // it do not bind. video_linebuf_fv.sv records the same trap and uses the
+    // same escape -- the symbolic constant enters through the port list and
+    // is held constant by assumption. Proven here: with the key local, an
+    // `assert` of the assumed bound FAILS at step 3; moved to a port, with
+    // nothing else changed, the identical assert PASSES.
+    input logic [ARENA_W-1:0] f_arena,
+    input logic [INDEX_W-1:0] f_index
+`endif
 );
 
   localparam int unsigned AW = $clog2(ARENAS);
@@ -305,8 +318,7 @@ module zhao_vertex_arena #(
     if (f_past_valid && $past(rst_n)) assume (rst_n);
   end
 
-  (* anyconst *) logic [ARENA_W-1:0] f_arena;
-  (* anyconst *) logic [INDEX_W-1:0] f_index;
+  // f_arena / f_index arrive as FORMAL-only PORTS (see the port list for why).
 
   // THE WATCHED KEY MUST NAME A REAL SLOT.
   // Without this the solver may choose f_arena/f_index OUT OF RANGE -- the
@@ -315,9 +327,18 @@ module zhao_vertex_arena #(
   // the truncated address aliases onto one that does. That is a defect in the
   // QUESTION, not in the arena: 'a lookup never wraps into another vertex' is a
   // claim about real vertices.
+  // A PORT is free every cycle, where an anyconst would have been constant by
+  // construction, so the constancy the watched-slot technique needs is now
+  // stated explicitly alongside the bound.
+  // ENFORCED-BY: tests/formal/geom_wcache_arena_bounds.sby:a_probe_key_bounded
+  // ENFORCED-BY: tests/formal/geom_wcache_arena_bounds.sby:a_probe_key_constant
   always_ff @(posedge clk) begin
     assume (f_arena < ARENA_W'(ARENAS));
     assume (f_index < INDEX_W'(DEPTH));
+    if (f_past_valid) begin
+      assume (f_arena == $past(f_arena));
+      assume (f_index == $past(f_index));
+    end
   end
 
   logic [PAYLOAD_W-1:0] f_shadow;
@@ -390,6 +411,20 @@ module zhao_vertex_arena #(
 
   always_ff @(posedge clk) begin
     if (f_past_valid && rst_n && $past(rst_n)) begin
+      // 0. THE HARNESS ITSELF. Assert what the harness assumes, so that a
+      //    binding failure is a LOUD failure rather than a proof that quietly
+      //    asks nothing. This is FIRST on purpose: bmc names only the first
+      //    failing assertion at a step, so if the watched key ever comes
+      //    unbound again this is the name the log carries, instead of a
+      //    property about lookups failing on a trace where nothing is looked
+      //    up. Three days were spent on that reading once.
+      a_probe_key_bounded: assert (f_arena < ARENA_W'(ARENAS) &&
+                                   f_index < INDEX_W'(DEPTH));
+      if (f_past_valid) begin
+        a_probe_key_constant: assert (f_arena == $past(f_arena) &&
+                                      f_index == $past(f_index));
+      end
+
       // 1. + 2. THE ONE THAT MATTERS. A hit on the watched key returns the
       //         value written to THAT key, never another slot's and never a
       //         previous generation's. This is "it must never wrap into
@@ -539,11 +574,55 @@ module zhao_vertex_arena #(
       // in mind for any future free-variable proof: ASSERT WHAT YOU ASSUME, and
       // see whether it holds.
       //
-      // NOT YET KNOWN: whether this is `read_slang` dropping assumptions, a
-      // yosys/sby handling of `anyconst` under this flow, or something specific
-      // to this file. That is a toolchain question, and it is the next one --
-      // not another theory about the arena, which the evidence no longer
-      // implicates at all.
+      // 2026-08-26, RESOLVED. IT WAS THE LOCAL, AND THE RULE WAS ALREADY
+      // WRITTEN DOWN IN THIS TREE.
+      //
+      // The question above -- read_slang, yosys, or this file -- has a fourth
+      // answer: the declaration. The frontend of this flow ties
+      // ATTRIBUTE-CARRYING LOCALS to constants/x, so an `(* anyconst *) logic`
+      // declared inside a module is not a free variable at all, and every
+      // assumption written about it constrains nothing. Move the same signal
+      // into the PORT LIST and it becomes free, assumptions bind, and the
+      // proof asks the question it was written to ask.
+      //
+      // The experiment, one variable at a time, same file, same engine:
+      //
+      //     f_arena/f_index as (* anyconst *) LOCALS
+      //         assert (f_arena < ARENAS && f_index < DEPTH)   FAILS  step 3
+      //     the attribute removed, held constant by assumption, still LOCAL
+      //         same assert                                    FAILS  step 3
+      //     the identical signals moved to the PORT LIST
+      //         same assert                                    PASSES
+      //
+      // The middle row is the one that matters: dropping the attribute did not
+      // help, so it is not `anyconst` that is broken. The note above saying
+      // 'what does not bind is the (* anyconst *) case' is therefore WRONG in
+      // the same way its predecessor was -- both narrowed to the last thing
+      // that had changed instead of to the thing that was different. What does
+      // not bind is a free variable declared as a LOCAL.
+      //
+      // AND THIS WAS NOT NEW. Four files in tests/formal already record it:
+      //
+      //     video_linebuf_fv.sv     'the anyconst idiom, but as a port'
+      //     formal_mem_arbiter.sv   'must be PORTS, not (* anyseq *) locals'
+      //     formal_mem_guard.sv     'deliberately NOT (* anyseq *) locals'
+      //     formal_mem_refresh.sv   'carried on PORTS because locals do not'
+      //
+      // It is called the W2.5 ratification note there. This file is the only
+      // one in the tree that broke the rule, and the cost of breaking it was
+      // three separate wrong diagnoses -- read-during-write ordering, then the
+      // unpacked-array reset, then anyconst itself -- each of which was a real
+      // finding about something else and none of which was this.
+      //
+      // THE READING THAT WOULD HAVE SHORTENED THIS: the first counterexample
+      // was an IDLE trace, and an idle trace cannot violate a property about
+      // lookups. That is a harness signature, not a design signature, and it
+      // was visible on day one. A counterexample that exercises nothing is
+      // evidence about the question, not about the machine.
+      //
+      // The cheapest check remains the one this file already names: ASSERT
+      // WHAT YOU ASSUME. It located this in one run once it was finally asked
+      // of the declaration rather than of the assumption.
 
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so

@@ -202,7 +202,7 @@ void oracle(const std::vector<Instr>& prog, const std::vector<Point>& pts, int n
   }
   want.clear();
   for (const Point& p : pts) {
-    int32_t in[kNin];
+    int32_t in[kNin] = {};
     for (int k = 0; k < n_in; ++k) in[k] = p.in[k];
     int32_t out[kNout] = {0, 0, 0, 0};
     zfield::interpret(dec, in, static_cast<size_t>(n_in), out, static_cast<size_t>(n_out));

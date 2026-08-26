@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "6bad5f8d13e58c7bef9a1854ef6d19220905deab",
+    "newestRunCommit":  "7f1189b5011eb19b0bebdafe44775d8fefd45247",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -105,6 +105,14 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  58.99,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_field_v2_front",
+                       "status":  "failed:quartus_fit.exe",
+                       "sourceCommit":  "7f1189b5011eb19b0bebdafe44775d8fefd45247",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  5747.8,
+                       "sourcesHashed":  44
                    },
                    {
                        "module":  "zhao_forge_cliff",

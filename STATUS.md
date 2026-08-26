@@ -5,6 +5,116 @@ at the top.*
 
 ---
 
+## 2026-08-26 (later) -- the proof that would not bind, and what is left to build
+
+### The short version
+
+Two things this stretch. A proof that had been failing for three days was
+failing for a reason that had nothing to do with the hardware, and I found out
+why. And I went through the nine blocks that are still open and worked out what
+each one actually needs -- the answer is not more SystemVerilog.
+
+### The vertex cache proof
+
+There is a piece of hardware, the vertex cache, whose job is to hand back the
+vertex you asked for and never a different one. Proving that means asking a
+solver to try every possible sequence of events and fail to find a case where
+it hands back the wrong one.
+
+You cannot ask about every slot at once, so the standard trick is: let the
+solver pick ONE slot, in secret, and hold it. If it cannot break the rule for
+the slot it chose, it cannot break it for any of them.
+
+The proof kept failing. Three times I diagnosed it and three times the
+diagnosis was a real finding about something else. What was actually wrong:
+**the solver was never allowed to pick a slot.** The way the secret slot was
+declared, the tool quietly turned it into a fixed value instead of a free
+choice -- and every rule I wrote to keep it sensible ('it has to be a slot that
+exists') bound to nothing. So it was picking slots that do not exist, walking
+off the end, and reporting that as a failure of the hardware.
+
+The failing traces should have told me sooner. They showed **nothing
+happening** -- no lookups, no writes, an idle machine. A rule about lookups
+cannot be broken by a machine that never looks anything up. That is the
+signature of a broken question, not a broken part, and it was visible on day
+one.
+
+### The part I am least happy about
+
+The rule I broke was already written down in this repo. Four separate proof
+files say, in their own words, that the secret variable has to enter through
+the module's port list and not be declared inside it. One of them even calls
+it by name. The vertex cache is the only file in the tree that broke it, and
+the three days were spent rediscovering a note I had already written.
+
+The fix is two lines, it is in, and the proof now runs clean far past the point
+it used to fail. I have written the whole trail into the file itself, including
+which of my earlier conclusions were wrong, so the next person reading it does
+not inherit the wrong ones.
+
+### What the nine remaining blocks actually need
+
+I checked every one. The rule here is that a piece of hardware does not get
+written until there is an independent model of what it should do, so the
+hardware can be tested against something other than itself.
+
+Six of the nine have no such model. That reads like 'six models to write'. It
+is not. Going through them one at a time:
+
+* **Five** of them do not have a written specification at all -- the design
+  documents are still the generated skeleton, with no packet layout and no
+  number formats. There is nothing to write a model *from*.
+* **One** of them, the vertex decoder, is worse: its own note says the file
+  format it decodes is owned by the asset packing tool. There is no asset
+  packing tool. The format does not exist at either end.
+* **One**, the histogram, has a complete specification -- and what the
+  specification says, in full sentences, is that the block cannot be built
+  without four decisions that are yours. That one is honest paperwork, not a
+  lane to pick up.
+
+So: none of the six is short of hardware. They are short of decisions and
+specifications. Two of them (the compositor and 2D paths) are the ones I have
+been leaving alone on purpose, and they stay left alone.
+
+### The Field measurement: it ran for 96 minutes and then failed
+
+You asked how long until we can measure Field. The run finished while I was
+writing this, and the answer is not a number yet.
+
+The tool got all the way through the first stage and 96 minutes into the
+second, then exited with an error. Not a timeout -- the harness reports those
+separately, and this was a genuine failure. So the engine, as it stands, did
+not place on the chip.
+
+I do not yet know why, and I want to be careful here because I have a specific
+reason to suspect something and no evidence for it yet. The suspicion: the
+engine's register file is written in a shape that needs **four values read and
+up to four written in the same clock, per lane**. Chip memories give you two
+ports. When the tool cannot use a memory it builds the storage out of
+individual flip-flops instead, and this file would need about 65,000 of them --
+against roughly 84,000 on the whole device, before anything else is built.
+That would not fit, and 'does not fit' is exactly the kind of error that shows
+up 96 minutes in.
+
+If that is what it is, it is a real problem and not a small one: it is the
+difference between an engine that exists in simulation and an engine that
+exists. Every throughput number I have given you is from simulation and none of
+it is affected by being wrong about the storage -- but none of it is worth
+anything until the thing places.
+
+**What makes this findable rather than guesswork:** the harness deletes its
+working directory on failure, so the actual error message is gone. I have
+relaunched with the workspace kept and a budget big enough to finish, which
+gives the tool's own report on how the storage was built and how big it came
+out. That is the number that settles it, and it is running now.
+
+One reference point for scale, already measured: the OLD Field engine fits in
+4,494 of the chip's 41,910 logic blocks and clocks at **59 MHz**. A separate
+probe built specifically to test a 3-read-port register file did fit, cleanly,
+in 12 memory blocks at 96 MHz -- so the shape CAN be built. What changed since
+that probe is the multi-write side, which is the part I now suspect.
+---
+
 ## 2026-08-26 (last) — the Field engine is now actually USABLE
 
 ### What changed
