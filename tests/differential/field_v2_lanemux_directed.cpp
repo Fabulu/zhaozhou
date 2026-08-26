@@ -112,23 +112,50 @@ struct Bench {
     d.eval();
   }
 
+  // What the unit was actually shown, in acceptance order. The serialiser
+  // issues lane 0 first, so obs[k] is lane k's bundle.
+  struct Obs {
+    int32_t a, a1, a2, b0, b1;
+    int mode, unit;
+  };
+  std::vector<Obs> obs;
+
   void step() {
     drive_unit();
     const bool accepting = d.u_valid_o && unit.ready();
     const int32_t a = static_cast<int32_t>(d.u_a_o);
+    const Obs seen{static_cast<int32_t>(d.u_a_o),  static_cast<int32_t>(d.u_a1_o),
+                   static_cast<int32_t>(d.u_a2_o), static_cast<int32_t>(d.u_b0_o),
+                   static_cast<int32_t>(d.u_b1_o), static_cast<int>(d.u_mode_o),
+                   static_cast<int>(d.u_unit_o)};
     const bool taking = d.u_rready_o && unit.has_result;
     zhao::tick(d);
-    if (accepting) unit.accept(a);
+    if (accepting) {
+      unit.accept(a);
+      obs.push_back(seen);
+    }
     unit.tick(taking);
     drive_unit();
   }
 
   /** Push one vector request and run until its reply is taken. Returns clocks. */
-  int transact(int wf, int dst, int mode, const int32_t* a, int32_t* y, int guard = 4096) {
+  int transact(int wf, int dst, int mode, const int32_t* a, int32_t* y, int guard = 4096,
+               int unit_sel = 0) {
     d.req_wf_i = wf;
     d.req_dst_i = dst;
     d.req_mode_i = mode;
-    for (int l = 0; l < kLanes; ++l) d.req_a_i[l] = static_cast<uint32_t>(a[l]);
+    d.req_unit_i = unit_sel;
+    for (int l = 0; l < kLanes; ++l) {
+      d.req_a_i[l] = static_cast<uint32_t>(a[l]);
+      // The rest of the bundle is derived from a0 so every component of every
+      // lane is a different number. A component crossed with another -- a1 read
+      // where a2 was meant, or lane 2's b0 handed to lane 3 -- then cannot land
+      // on a value that happens to be right anyway.
+      d.req_a1_i[l] = static_cast<uint32_t>(a[l] + 1000);
+      d.req_a2_i[l] = static_cast<uint32_t>(a[l] + 2000);
+      d.req_b0_i[l] = static_cast<uint32_t>(a[l] + 3000);
+      d.req_b1_i[l] = static_cast<uint32_t>(a[l] + 4000);
+    }
     d.req_valid_i = 1;
     drive_unit();
     int clocks = 0;
@@ -151,6 +178,18 @@ struct Bench {
     d.req_valid_i = 0;
     d.req_wf_i = poison_wf(wf);
     d.req_dst_i = poison_dst(dst);
+    // The bundle, the mode and the unit selector are captured on the same terms
+    // as the tag, so they are poisoned on the same terms too. Without this, a
+    // component taken LIVE reads what it read before and the carry is untested.
+    d.req_mode_i = 3 - mode;
+    d.req_unit_i = 3 - unit_sel;
+    for (int l = 0; l < kLanes; ++l) {
+      d.req_a_i[l] = 0xDEAD0000u;
+      d.req_a1_i[l] = 0xDEAD0001u;
+      d.req_a2_i[l] = 0xDEAD0002u;
+      d.req_b0_i[l] = 0xDEAD0003u;
+      d.req_b1_i[l] = 0xDEAD0004u;
+    }
     drive_unit();
     while (!d.rsp_valid_o && clocks < guard) {
       step();
@@ -233,6 +272,38 @@ int main(int argc, char** argv) {
     check(clocks >= lat * kLanes,
           "4.a vector long op costs at least LANES x II, as the model assumes", 1,
           (clocks >= lat * kLanes) ? 1 : 0);
+  }
+
+  // ---- 5. THE OPERAND BUNDLE AND THE UNIT SELECTOR ------------------------
+  // CURVE takes one operand; zhao_field_len's DIST2 takes five (a0,a1,a2,b0,b1).
+  // So the request is a bundle, and the unit selector rides with it -- this
+  // block stays unit-agnostic and the core routes on what comes back out.
+  //
+  // Every component of every lane is a different number, and all of them are
+  // POISONED after the accept. A component sourced from the live input rather
+  // than the captured copy therefore reads 0xDEADxxxx and fails loudly, which
+  // is the same trap that caught M85/M86 on the tag.
+  {
+    Bench b(dut, 3);
+    const int32_t a[kLanes] = {101, 202, 303, 404};
+    int32_t y[kLanes] = {};
+    b.transact(2, 9, 2, a, y, 4096, /*unit_sel=*/1);
+
+    check(b.obs.size() == static_cast<size_t>(kLanes),
+          "5.the unit saw exactly one request per lane", kLanes, b.obs.size());
+
+    uint64_t bad_comp = 0, bad_mode = 0, bad_unit = 0;
+    for (size_t k = 0; k < b.obs.size() && k < kLanes; ++k) {
+      const Bench::Obs& o = b.obs[k];
+      if (o.a != a[k] || o.a1 != a[k] + 1000 || o.a2 != a[k] + 2000 || o.b0 != a[k] + 3000 ||
+          o.b1 != a[k] + 4000)
+        ++bad_comp;
+      if (o.mode != 2) ++bad_mode;
+      if (o.unit != 1) ++bad_unit;
+    }
+    check(bad_comp == 0, "5.every component of every lane arrives intact", 0, bad_comp);
+    check(bad_mode == 0, "5.the mode is the CAPTURED one on every lane", 0, bad_mode);
+    check(bad_unit == 0, "5.the unit selector is the CAPTURED one on every lane", 0, bad_unit);
   }
 
   dut.final();

@@ -530,7 +530,7 @@ MUTS = [
     # lanes, and each of those is a new way to be wrong.
     ("M80 a wavefront may reissue while its instruction is still in flight", F_V2,
      """  assign ready = active & ~inflight & ~finished;""",
-     """  assign ready = active & ~finished;"""),
+     """  assign ready = active & ~(inflight & finished) & ~finished;"""),
     ("M81 write-back uses the ISSUING wavefront, not the retiring one", F_V2,
      """        for (l = 0; l < LANES; l++) rf[l][{s1_wf, s1_dst}] <= alu_y[l];""",
      """        for (l = 0; l < LANES; l++) rf[l][{sel, s1_dst}] <= alu_y[l];"""),
@@ -552,10 +552,10 @@ MUTS = [
     # attack the tag, the lane index, and the request/reply conservation.
     ("M85 the reply is tagged with the LIVE request, not the captured one", F_LMUX,
      """  assign rsp_wf_o    = wf_q;""",
-     """  assign rsp_wf_o    = req_wf_i;"""),
+     """  assign rsp_wf_o    = (state == S_DONE) ? req_wf_i : wf_q;"""),
     ("M86 the destination tag is taken live rather than carried", F_LMUX,
      """  assign rsp_dst_o   = dst_q;""",
-     """  assign rsp_dst_o   = req_dst_i;"""),
+     """  assign rsp_dst_o   = (state == S_DONE) ? req_dst_i : dst_q;"""),
     ("M87 a lane's answer is written to the NEXT lane's slot", F_LMUX,
      """          y_q[lane] <= u_result_i;""",
      """          y_q[(lane + LW'(1)) & LW'(LANES-1)] <= u_result_i;"""),
@@ -571,11 +571,14 @@ MUTS = [
     # v2's short-op core could be: a mode lost in translation, a reply written
     # to the wrong lanes, a wavefront released before its answer came back, or
     # a long op counted twice because it passes the retire logic twice.
+    # M90 and M96 were re-anchored when the length family landed: the mode case
+    # gained a unit selector and issue_fire gained the steal stall. Rewritten
+    # onto the live lines, defects unchanged.
     ("M90 every curve mode collapses to plain CURVE", F_V2,
-     """      OP_DCURVE: s1_mode = 2'd1;
-      OP_SPLINE: s1_mode = 2'd2;""",
-     """      OP_DCURVE: s1_mode = 2'd0;
-      OP_SPLINE: s1_mode = 2'd0;"""),
+     """      OP_DCURVE: begin s1_mode = 2'd1; s1_unit = UNIT_CURVE; end
+      OP_SPLINE: begin s1_mode = 2'd2; s1_unit = UNIT_CURVE; end""",
+     """      OP_DCURVE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
+      OP_SPLINE: begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end"""),
     ("M91 the long-op reply broadcasts lane 0 to every lane", F_V2,
      """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[l];""",
      """        for (l = 0; l < LANES; l++) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y[0];"""),
@@ -592,18 +595,82 @@ MUTS = [
         end"""),
     ("M94 the unit is given the LIVE mode rather than the captured one", F_LMUX,
      """  assign u_mode_o    = mode_q;""",
-     """  assign u_mode_o    = req_mode_i;"""),
+     """  assign u_mode_o    = (lane == '0) ? req_mode_i : mode_q;"""),
     ("M95 a request retires without the serialiser having accepted it", F_V2,
      """      end else if (lq_valid && lm_req_ready) begin""",
-     """      end else if (lq_valid) begin"""),
+     """      end else if (lq_valid || !lm_req_ready) begin"""),
     # M96 is the interlock the sweep itself produced. M93/M94/M95 survived the
     # single-wavefront sections, section 8 was written to reach them, and it
     # HUNG on the shipped RTL: the two-cycle-late guard below let a second long
     # op overwrite a pending request. This mutant restores that guard, so the
     # defect can never come back unnoticed.
     ("M96 the long-op interlock reverts to its two-cycle-late form", F_V2,
-     """  assign issue_fire = sel_valid && !pc_overrun && !(ins_is_long && long_slot_busy);""",
-     """  assign issue_fire = sel_valid && !pc_overrun && !lq_valid;"""),
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+                      !(ins_is_long && long_slot_busy);""",
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+                      !(ins_is_long && long_slot_busy && lq_valid);"""),
+    # ---- THE LENGTH FAMILY, and the second read pass -----------------------
+    # LEN2/LEN3/DIST2 are the first ops that want more operands than the
+    # register file hands out. The core spends one clock redirecting its three
+    # read ports at {a+1, a+2, b+1} rather than growing two more ports. Every
+    # mutant below attacks that trade: the addresses, the saved first pass, the
+    # stall that protects the stolen cycle, and the routing to a SECOND unit.
+    ("M97 the steal cycle no longer stalls issue", F_V2,
+     """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+                      !(ins_is_long && long_slot_busy);""",
+     """  assign issue_fire = sel_valid && !pc_overrun &&
+                      !(ins_is_long && long_slot_busy);"""),
+    ("M98 the second pass reads from the WRONG base register", F_V2,
+     """  wire [RW-1:0] addr_a = steal_now ? RW'(s1_a + RW'(1)) : ins_a_i;""",
+     """  wire [RW-1:0] addr_a = steal_now ? RW'(s1_b + RW'(1)) : ins_a_i;"""),
+    ("M99 the second pass reads a+1 twice instead of a+1 and a+2", F_V2,
+     """  wire [RW-1:0] addr_b = steal_now ? RW'(s1_a + RW'(2)) : ins_b_i;""",
+     """  wire [RW-1:0] addr_b = steal_now ? RW'(s1_a + RW'(1)) : ins_b_i;"""),
+    ("M100 the first pass's a is not saved before the steal overwrites it", F_V2,
+     """          s2_a0[l] <= rd_a[l];
+          s2_b0[l] <= rd_b[l];""",
+     """          s2_a0[l] <= rd_b[l];
+          s2_b0[l] <= rd_b[l];"""),
+    ("M101 a length dispatches from stage 1, before its second pass lands", F_V2,
+     """      if (s1_is_curve) begin
+        lq_valid <= 1'b1;""",
+     """      if (s1_is_long) begin
+        lq_valid <= 1'b1;"""),
+    ("M102 the interlock forgets the length's dispatch window", F_V2,
+     """  wire long_slot_busy = lq_valid || (s1_valid && s1_is_long) || steal_now || steal_q;""",
+     """  wire long_slot_busy = lq_valid || (s1_valid && s1_is_long);"""),
+    ("M103 the steal reads the wrong wavefront's registers", F_V2,
+     """  wire [WFW-1:0] rd_wf = steal_now ? s1_wf : sel;""",
+     """  wire [WFW-1:0] rd_wf = sel;"""),
+    ("M104 every long op is routed to the curve unit", F_V2,
+     """  wire to_len = (u_unit == UNIT_LEN);""",
+     """  wire to_len  = (u_unit != UNIT_LEN);"""),
+    ("M105 the multiplier is always given the curve unit's request", F_V2,
+     """  assign mul_issue = to_len ? ln_mul_issue : cv_mul_issue;""",
+     """  assign mul_issue = to_len ? cv_mul_issue : ln_mul_issue;"""),
+    ("M106 the length's saturation never reaches the ledger", F_V2,
+     """      if (cv_sat_add  || ln_sat_add)  sat_add_o     <= 1'b1;""",
+     """      if (cv_sat_add  && ln_sat_add)  sat_add_o     <= 1'b1;"""),
+    ("M107 LEN3 and DIST2 collapse to LEN2's mode", F_V2,
+     """      OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
+      OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end""",
+     """      OP_LEN3:   begin s1_mode = 2'd0; s1_unit = UNIT_LEN;   end
+      OP_DIST2:  begin s1_mode = 2'd0; s1_unit = UNIT_LEN;   end"""),
+    # ---- the serialiser's operand bundle ------------------------------------
+    ("M108 a bundle component is taken LIVE rather than carried", F_LMUX,
+     """  assign u_a1_o      = a1_q[lane];""",
+     """  assign u_a1_o      = (lane == '0) ? req_a1_i[lane] : a1_q[lane];"""),
+    ("M109 two bundle components are crossed", F_LMUX,
+     """  assign u_a1_o      = a1_q[lane];
+  assign u_a2_o      = a2_q[lane];""",
+     """  assign u_a1_o      = a2_q[lane];
+  assign u_a2_o      = a1_q[lane];"""),
+    ("M110 the unit selector is taken LIVE rather than carried", F_LMUX,
+     """  assign u_unit_o    = unit_q;""",
+     """  assign u_unit_o    = (lane == '0) ? req_unit_i : unit_q;"""),
+    ("M111 every lane is shown lane 0's b operand", F_LMUX,
+     """  assign u_b0_o      = b0_q[lane];""",
+     """  assign u_b0_o      = b0_q[0];"""),
 ]
 
 

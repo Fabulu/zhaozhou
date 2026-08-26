@@ -40,6 +40,13 @@
 // The tag is captured ONCE at accept and travels with the transaction. It is
 // not recomputed from whatever the front end is doing when the reply lands.
 //
+// The OPERAND BUNDLE and the UNIT SELECTOR are captured on the same terms. The
+// bundle is five components wide because zhao_field_len's DIST2 takes five
+// (a0,a1,a2,b0,b1) while zhao_field_curve takes one; a unit that reads fewer
+// simply ignores the rest, which is a property of that unit and not a hole
+// here. The selector exists so this block can stay unit-agnostic: it serialises
+// and it tags, and the core does the routing.
+//
 // ENFORCED-BY: tests/differential/field_v2_lanemux_directed.cpp:main
 module zhao_field_v2_lanemux #(
     parameter int LANES = 4,
@@ -55,13 +62,30 @@ module zhao_field_v2_lanemux #(
     input  logic [$clog2(WFS)-1:0]    req_wf_i,
     input  logic [$clog2(REGS)-1:0]   req_dst_i,
     input  logic [1:0]                req_mode_i,
-    input  logic signed [31:0]        req_a_i [LANES],
+    // WHICH UNIT, carried like the tag. This block stays unit-agnostic -- it
+    // serialises and tags, it does not know what a curve or a length is -- so
+    // the selector travels with the transaction and the core routes on it.
+    input  logic [1:0]                req_unit_i,
+    // THE OPERAND BUNDLE. CURVE takes one value; the length family takes up to
+    // five (a0,a1,a2 for LEN3, plus b0,b1 for DIST2), which is why this is a
+    // bundle rather than a single operand. Named after zhao_field_len's own
+    // ports so the wiring can be read against the unit it feeds.
+    input  logic signed [31:0]        req_a_i  [LANES],
+    input  logic signed [31:0]        req_a1_i [LANES],
+    input  logic signed [31:0]        req_a2_i [LANES],
+    input  logic signed [31:0]        req_b0_i [LANES],
+    input  logic signed [31:0]        req_b1_i [LANES],
 
     // ---- scalar unit port (ready/valid, one value at a time) -------------
     output logic                      u_valid_o,
     input  logic                      u_ready_i,
     output logic [1:0]                u_mode_o,
+    output logic [1:0]                u_unit_o,
     output logic signed [31:0]        u_a_o,
+    output logic signed [31:0]        u_a1_o,
+    output logic signed [31:0]        u_a2_o,
+    output logic signed [31:0]        u_b0_o,
+    output logic signed [31:0]        u_b1_o,
     input  logic                      u_rvalid_i,
     output logic                      u_rready_o,
     input  logic signed [31:0]        u_result_i,
@@ -81,17 +105,27 @@ module zhao_field_v2_lanemux #(
 
   logic [LW-1:0]      lane;         // which lane is in flight
   logic signed [31:0] a_q   [LANES];
+  logic signed [31:0] a1_q  [LANES];
+  logic signed [31:0] a2_q  [LANES];
+  logic signed [31:0] b0_q  [LANES];
+  logic signed [31:0] b1_q  [LANES];
   logic signed [31:0] y_q   [LANES];
 
   // THE TAG, captured once at accept.
   logic [$clog2(WFS)-1:0]  wf_q;
   logic [$clog2(REGS)-1:0] dst_q;
   logic [1:0]              mode_q;
+  logic [1:0]              unit_q;
 
   assign req_ready_o = (state == S_IDLE);
   assign u_valid_o   = (state == S_ISSUE);
   assign u_mode_o    = mode_q;
+  assign u_unit_o    = unit_q;
   assign u_a_o       = a_q[lane];
+  assign u_a1_o      = a1_q[lane];
+  assign u_a2_o      = a2_q[lane];
+  assign u_b0_o      = b0_q[lane];
+  assign u_b1_o      = b1_q[lane];
   assign u_rready_o  = (state == S_WAIT);
   assign rsp_valid_o = (state == S_DONE);
   assign rsp_wf_o    = wf_q;
@@ -109,9 +143,14 @@ module zhao_field_v2_lanemux #(
       wf_q   <= '0;
       dst_q  <= '0;
       mode_q <= 2'd0;
+      unit_q <= 2'd0;
       for (l = 0; l < LANES; l++) begin
-        a_q[l] <= '0;
-        y_q[l] <= '0;
+        a_q[l]  <= '0;
+        a1_q[l] <= '0;
+        a2_q[l] <= '0;
+        b0_q[l] <= '0;
+        b1_q[l] <= '0;
+        y_q[l]  <= '0;
       end
     end else begin
       unique case (state)
@@ -121,7 +160,14 @@ module zhao_field_v2_lanemux #(
             wf_q   <= req_wf_i;
             dst_q  <= req_dst_i;
             mode_q <= req_mode_i;
-            for (l = 0; l < LANES; l++) a_q[l] <= req_a_i[l];
+            unit_q <= req_unit_i;
+            for (l = 0; l < LANES; l++) begin
+              a_q[l]  <= req_a_i[l];
+              a1_q[l] <= req_a1_i[l];
+              a2_q[l] <= req_a2_i[l];
+              b0_q[l] <= req_b0_i[l];
+              b1_q[l] <= req_b1_i[l];
+            end
             lane   <= '0;
             state  <= S_ISSUE;
           end

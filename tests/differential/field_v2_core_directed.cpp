@@ -27,9 +27,11 @@
 
 #include "zhao_sim.hpp"
 #include "zfield/zfield.hpp"
+#include "zref/zref_fixp.hpp"
 
 #include <cstdint>
 #include <cstdio>
+#include <set>
 #include <vector>
 
 namespace {
@@ -46,6 +48,9 @@ constexpr uint8_t OP_END = 0xFF;
 constexpr uint8_t OP_CURVE = 0x1A;        // dispatched to the serialiser
 constexpr uint8_t OP_SPLINE = 0x1B;       // same unit, mode 2
 constexpr uint8_t OP_DCURVE = 0x1D;       // same unit, mode 1
+constexpr uint8_t OP_LEN2 = 0x12;         // the length unit, mode 0
+constexpr uint8_t OP_LEN3 = 0x13;         // the length unit, mode 1
+constexpr uint8_t OP_DIST2 = 0x14;        // the length unit, mode 2
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -570,6 +575,282 @@ int main(int argc, char** argv) {
     check(retired == static_cast<uint32_t>(kWfs * 3),
           "8.each wavefront retired exactly its three instructions", kWfs * 3, retired);
     std::printf("  v2 long-op mix: %u instructions in %d clocks\n", retired, clocks);
+  }
+
+  // ---- 9. THE LENGTH FAMILY: LEN2, LEN3, DIST2 ----------------------------
+  // The second long-op unit, and the first that needs MORE OPERANDS THAN THE
+  // REGISTER FILE HANDS OUT. LEN3 reads a, a+1, a+2; DIST2 also reads b, b+1.
+  // Three read ports supply a/b/c and `a+1` is reachable from none of them.
+  //
+  // The core spends ONE CLOCK instead of two more register-file ports: with the
+  // length held in stage 1 it redirects those same three ports at
+  // {a+1, a+2, b+1} and dispatches a cycle later. The alternative was ~4 more
+  // M10K permanently (the banked file measured 12 at three ports) for a
+  // minority of the opcode histogram.
+  //
+  // Oracle: zfield::interpret, the same one v1's length differential uses, on
+  // the same unit -- v2 changes how work reaches zhao_field_len, not what it
+  // computes.
+  {
+    struct LenCase {
+      uint8_t op;
+      uint8_t z_op;
+      int comps;  // how many registers the op consumes from base a
+      bool two_bases;
+      const char* name;
+    };
+    const LenCase cases[] = {
+        {OP_LEN2, zfield::OP_LEN2, 2, false, "LEN2"},
+        {OP_LEN3, zfield::OP_LEN3, 3, false, "LEN3"},
+        {OP_DIST2, zfield::OP_DIST2, 2, true, "DIST2"},
+    };
+
+    for (const LenCase& lc : cases) {
+      Bench b(dut);
+      // Base a = r0, base b = r8. Deliberately NOT adjacent: a run that
+      // confused the two bases would still land inside the file, and equal or
+      // neighbouring bases would let a wrong address read a right value.
+      b.prog = {{lc.op, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+
+      auto oracle = [&](const int32_t* av, const int32_t* bv) -> int32_t {
+        zfield::Decoded prog;
+        prog.profile = 0;
+        zfield::Instr ins{};
+        ins.op = lc.z_op;
+        ins.dst = 16;
+        ins.a = 0;
+        ins.b = 8;
+        ins.c = 0;
+        ins.imm = 0;
+        prog.instrs.push_back(ins);
+        zfield::Instr end{};
+        end.op = zfield::OP_END;
+        prog.instrs.push_back(end);
+        int32_t in[16] = {0};
+        // The interpreter's registers are the machine's registers: place the
+        // operands where the instruction says they are, not where a helper
+        // would like them.
+        for (int k = 0; k < lc.comps + 1; ++k) in[k] = av[k];
+        int32_t out[1] = {0};
+        for (int k = 0; k < 16; ++k) {
+          zfield::IoLane il{};
+          il.name = "i";
+          il.type = 0;
+          il.reg = static_cast<uint8_t>(k);
+          prog.in_lanes.push_back(il);
+        }
+        if (lc.two_bases) {
+          in[8] = bv[0];
+          in[9] = bv[1];
+        }
+        zfield::IoLane ol{};
+        ol.name = "y";
+        ol.type = 0;
+        ol.reg = 16;
+        prog.out_lanes.push_back(ol);
+        zfield::interpret(prog, in, 16, out, 1);
+        return out[0];
+      };
+
+      int32_t av[kWfs][kLanes][3];
+      int32_t bv[kWfs][kLanes][2];
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          for (int k = 0; k < 3; ++k) {
+            av[w][l][k] = (w * kLanes + l + 1) * (k + 1) * 977;
+            b.write_reg(w, l, k, av[w][l][k]);
+          }
+          for (int k = 0; k < 2; ++k) {
+            bv[w][l][k] = -((w * kLanes + l + 1) * (k + 3) * 613);
+            b.write_reg(w, l, 8 + k, bv[w][l][k]);
+          }
+        }
+
+      const uint32_t before = dut.instr_retired_o;
+      const int clocks = b.run((1u << kWfs) - 1u);
+
+      uint64_t bad = 0;
+      // DISTINCT, NON-ZERO answers. Every check in this section is "DUT equals
+      // oracle", and that passes just as happily when both are zero -- which is
+      // what a mis-mapped io lane or an unrun program would produce. So the
+      // oracle is required to be non-degenerate before its agreement counts.
+      std::set<int32_t> distinct;
+      uint64_t zero_oracle = 0;
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          const int32_t want = oracle(av[w][l], bv[w][l]);
+          if (want == 0) ++zero_oracle;
+          distinct.insert(want);
+          if (b.read_reg(w, l, 16) != want) ++bad;
+        }
+      check(zero_oracle == 0, "9.oracle is non-degenerate (no zero answers)", 0, zero_oracle);
+      check(distinct.size() == static_cast<size_t>(kWfs * kLanes),
+            "9.every wavefront/lane has a DISTINCT answer", kWfs * kLanes, distinct.size());
+
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "9.%s matches zfield::interpret on every wavefront and lane",
+                    lc.name);
+      check(bad == 0, nm, 0, bad);
+
+      const uint32_t retired = dut.instr_retired_o - before;
+      std::snprintf(nm, sizeof nm, "9.%s retired exactly two instructions per wavefront", lc.name);
+      check(retired == static_cast<uint32_t>(kWfs * 2), nm, kWfs * 2, retired);
+      std::printf("  v2 %-6s %u instructions in %d clocks\n", lc.name, retired, clocks);
+    }
+  }
+
+  // ---- 10. A SHORT OP ISSUING INTO THE STEAL CYCLE ------------------------
+  // The steal reuses the three register read ports. An instruction that issues
+  // into that cycle has its OWN operand reads replaced by the length's second
+  // pass, and then computes on another instruction's values -- a wrong answer,
+  // not a hang, which makes it worse than the failure the long-op interlock
+  // prevents.
+  //
+  // Section 9 cannot reach it: its program is one length and an END, so the
+  // only thing that could issue into a steal is another length. This program
+  // surrounds the length with ADDs, on registers the length never touches, so a
+  // stolen read shows up as a wrong SUM rather than a wrong length.
+  //
+  // The ADDs are checked against plain C++ rather than the interpreter: what
+  // must be proven here is that they were NOT disturbed, and the simplest
+  // statement of an undisturbed add is the add itself.
+  {
+    Bench b(dut);
+    b.prog = {
+        {OP_ADD, 20, 12, 13, 0},  // short, before the length
+        {OP_LEN3, 16, 0, 8, 0},   // long, and steals a read cycle
+        {OP_ADD, 21, 13, 14, 0},  // short, in the window the steal opens
+        {OP_ADD, 22, 12, 14, 0},  // short, right behind it
+        {OP_END, 0, 0, 0, 0},
+    };
+
+    int32_t r[kWfs][kLanes][15];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l)
+        for (int k = 0; k < 15; ++k) {
+          r[w][l][k] = (w * kLanes + l + 1) * (k + 1) * 131 - 7717;
+          b.write_reg(w, l, k, r[w][l][k]);
+        }
+
+    const int clocks = b.run((1u << kWfs) - 1u);
+    check(clocks < 20000, "10.mixed short/long program finished", 1, clocks < 20000 ? 1 : 0);
+
+    uint64_t bad_add = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        if (b.read_reg(w, l, 20) != r[w][l][12] + r[w][l][13]) ++bad_add;
+        if (b.read_reg(w, l, 21) != r[w][l][13] + r[w][l][14]) ++bad_add;
+        if (b.read_reg(w, l, 22) != r[w][l][12] + r[w][l][14]) ++bad_add;
+      }
+    check(bad_add == 0, "10.no short op was disturbed by the steal cycle", 0, bad_add);
+
+    // And the length itself still has to be right, or "undisturbed" could be
+    // bought by not stealing at all.
+    uint64_t bad_len = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        zfield::Decoded prog;
+        prog.profile = 0;
+        zfield::Instr ins{};
+        ins.op = zfield::OP_LEN3;
+        ins.dst = 16;
+        ins.a = 0;
+        ins.b = 8;
+        ins.c = 0;
+        ins.imm = 0;
+        prog.instrs.push_back(ins);
+        zfield::Instr end{};
+        end.op = zfield::OP_END;
+        prog.instrs.push_back(end);
+        int32_t in[15];
+        for (int k = 0; k < 15; ++k) {
+          in[k] = r[w][l][k];
+          zfield::IoLane il{};
+          il.name = "i";
+          il.type = 0;
+          il.reg = static_cast<uint8_t>(k);
+          prog.in_lanes.push_back(il);
+        }
+        zfield::IoLane ol{};
+        ol.name = "y";
+        ol.type = 0;
+        ol.reg = 16;
+        prog.out_lanes.push_back(ol);
+        int32_t out[1] = {0};
+        zfield::interpret(prog, in, 15, out, 1);
+        if (b.read_reg(w, l, 16) != out[0]) ++bad_len;
+      }
+    check(bad_len == 0, "10.and the length beside them is still correct", 0, bad_len);
+    std::printf("  v2 mixed short/long: %d clocks\n", clocks);
+  }
+
+  // ---- 12. THE SATURATION LEDGER, which values alone never test -----------
+  // Found by the sweep, not by inspection. M106 makes the length's saturation
+  // reach the ledger only when a curve also saturated -- and it SURVIVED every
+  // section above, because every section above checks values and saturation is
+  // not a value.
+  //
+  // It matters for the same reason the dangling sat_* pins mattered when CURVE
+  // landed: this engine's answer is the number AND the account of what it had
+  // to clamp to produce it. An engine that drops the account reports clean
+  // arithmetic over clamped arithmetic, which is worse than reporting nothing.
+  //
+  // Expectation from zref::SatLedger + zref::fx_sub, the same construction
+  // field_len_directed.cpp uses for this question.
+  {
+    // ---- 12a. a DIST2 whose difference cannot fit -------------------------
+    {
+      Bench b(dut);
+      b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+      const int32_t a0 = INT32_MAX, a1 = 0, b0 = INT32_MIN, b1 = 0;
+
+      zref::SatLedger L{};
+      (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
+      (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
+      const bool want_add = L.add != 0;
+      check(want_add, "12.the chosen operands really do saturate (oracle)", 1, want_add ? 1 : 0);
+
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          b.write_reg(w, l, 0, a0);
+          b.write_reg(w, l, 1, a1);
+          b.write_reg(w, l, 8, b0);
+          b.write_reg(w, l, 9, b1);
+        }
+      b.run((1u << kWfs) - 1u);
+      check(dut.sat_add_o == 1, "12.a saturating length reaches SatLedger::add", 1, dut.sat_add_o);
+    }
+
+    // ---- 12b. and a length that does NOT saturate -------------------------
+    // Without this, a ledger wired stuck-at-one would pass 12a. The lanes are
+    // sticky across a run, so this needs its own reset -- which is what a fresh
+    // Bench is.
+    {
+      Bench b(dut);
+      b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+      const int32_t a0 = 3 << 16, a1 = 4 << 16, b0 = 0, b1 = 0;
+
+      zref::SatLedger L{};
+      (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
+      (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
+      check(L.add == 0, "12.the quiet operands really do not saturate (oracle)", 0, L.add);
+
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l) {
+          b.write_reg(w, l, 0, a0);
+          b.write_reg(w, l, 1, a1);
+          b.write_reg(w, l, 8, b0);
+          b.write_reg(w, l, 9, b1);
+        }
+      b.run((1u << kWfs) - 1u);
+      check(dut.sat_add_o == 0, "12.a quiet length leaves SatLedger::add alone", 0, dut.sat_add_o);
+      // 3-4-5: the answer is still right while nothing clamped.
+      uint64_t bad = 0;
+      for (int w = 0; w < kWfs; ++w)
+        for (int l = 0; l < kLanes; ++l)
+          if (b.read_reg(w, l, 16) != (5 << 16)) ++bad;
+      check(bad == 0, "12.and the quiet length still answers 5.0", 0, bad);
+    }
   }
 
   dut.final();

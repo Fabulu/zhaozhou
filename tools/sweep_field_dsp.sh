@@ -69,6 +69,38 @@ set -u
 
 MUTPY=tools/sweep_field_dsp_mutants.py
 
+# ---------------------------------------------------------------------------
+# GUARD 8: ONE SWEEP AT A TIME. This is not hygiene, it is the guard that was
+# missing on 2026-08-26 and cost a working session.
+#
+# A sweep MUTATES THE WORKING TREE and restores it between iterations. A second
+# sweep -- or a preflight, or an editor script -- running beside it reads files
+# mid-mutation. What that looks like from the outside is NOT an obvious clash:
+# it looks like anchors that are present in the file yet report NOT UNIQUE, a
+# different mutant failing on every run, and a preflight capturing a MUTATED
+# baseline as gold and then reporting 32 of 111 mutants as broken.
+#
+# It also defeats the usual liveness check. `ps | grep verilator` was empty
+# between two iterations, the sweep was declared dead, and a second one was
+# started on top of the first.
+#
+# The lock records the PID and the start time so a stale lock can be told from
+# a live one by a human rather than by guesswork.
+LOCK=.sweep_field_dsp.lock
+if [ -e "$LOCK" ]; then
+  echo "ABORT: a Field sweep is already running (or died without cleaning up):"
+  sed "s/^/       /" "$LOCK"
+  echo "       Two sweeps share one working tree and will corrupt each other."
+  echo "       If that process is gone, delete $LOCK and check the tree with:"
+  echo "         git diff --stat fpga/rtl/field/"
+  exit 10
+fi
+printf "pid=%s
+started=%s
+only=%s
+" "$$" "$(date -u +%FT%TZ)" "${SWEEP_ONLY:-all}" > "$LOCK"
+
+
 # The union of every consumer, for a reader. Cross-checked below against what
 # the build system actually says.
 DECLARED_TARGETS="test_field_seq_directed test_field_alu_ops test_field_len_directed test_field_normalize_directed test_field_noise_directed test_field_rot_directed test_field_ring_directed test_field_curve_directed test_field_rcp_directed test_field_sinks_directed test_field_sin_directed test_field_progcache_directed test_field_v2_core_directed test_field_v2_lanemux_directed"
@@ -104,6 +136,7 @@ on_exit() {
   local rc=$?
   # The successful path deletes GOLDDIR, and without this every clean run
   # would compare against nothing, read as mutated, and cry wolf.
+  rm -f "$LOCK"
   [ -d "$GOLDDIR" ] || return $rc
   if moved_from_gold; then
     echo "== interrupted with the tree mutated -- restoring" >&2

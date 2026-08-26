@@ -23,6 +23,7 @@ import io
 import os
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sweep_field_dsp_mutants as M   # noqa: E402
@@ -46,6 +47,21 @@ CONE = [
     'fpga/rtl/field/zhao_field_curve.sv',
 ]
 
+# THE v2 CONE, which this file did not have and needed the moment v2 existed.
+# zhao_field_v2_core.sv and zhao_field_v2_lanemux.sv are in the MUTANT list but
+# were in NO cone, so every v2 mutant was linted against a composition that does
+# not contain it: the lint passed by not looking. A mutant in a file the cone
+# omits is a mutant with no preflight at all.
+CONE_V2 = [
+    'fpga/rtl/field/zhao_field_v2_core.sv',
+    'fpga/rtl/field/zhao_field_v2_lanemux.sv',
+    'fpga/rtl/field/zhao_field_curve.sv',
+    'fpga/rtl/field/zhao_field_len.sv',
+    'fpga/rtl/field/zhao_field_isqrt.sv',
+    'fpga/rtl/field/zhao_field_mul.sv',
+]
+V2_FILES = ('zhao_field_v2_core.sv', 'zhao_field_v2_lanemux.sv')
+
 
 def main():
     vr = os.environ['VERILATOR_ROOT']
@@ -57,23 +73,77 @@ def main():
     for f in M.files():
         gold[f] = io.open(f, encoding='utf-8', newline='').read()
 
+    def restore(gold):
+        """Write every file back and PROVE it took.
+
+        The old code wrote and walked on. That assumes a write is immediately
+        visible to the next read, and on this platform it intermittently is not
+        -- runs of this preflight failed on M80 once and on M84/M92 the next
+        time, with anchors that were present in the file the whole while. The
+        sweep already knew: its own restore() reads back, compares and retries
+        up to ten times. This is that, and for the same reason.
+
+        A restore that cannot be proven is fatal. Continuing would lint mutant
+        k against mutant k-1's source and call the result evidence.
+        """
+        for _ in range(10):
+            ok = True
+            for f, raw in gold.items():
+                io.open(f, 'w', encoding='utf-8', newline='').write(raw)
+            for f, raw in gold.items():
+                if io.open(f, encoding='utf-8', newline='').read() != raw:
+                    ok = False
+            if ok:
+                return True
+            time.sleep(1)
+        return False
+
+    # ---- THE BASELINE MUST LINT BEFORE ANY MUTANT IS JUDGED ---------------
+    # `gold` is captured from the WORKING TREE, and a working tree is not
+    # necessarily pristine: a sweep killed mid-iteration leaves a mutation in
+    # it. On 2026-08-26 that happened, gold captured a mutated baseline, and
+    # this file reported 32 of 111 mutants as broken -- every one of them a
+    # signal orphaned by the STUCK mutation rather than by the mutant under
+    # test. Thirty-two false failures are worse than none, because they read
+    # like a bad mutant list and send you editing correct mutants.
+    #
+    # So: lint the baseline first. If the tree is dirty, say so and stop.
+    for top, cone in (('zhao_field_seq', CONE), ('zhao_field_v2_core', CONE_V2)):
+        rc = subprocess.run([exe, '--lint-only', '-Wall', '--top-module', top] + cone,
+                            capture_output=True, text=True)
+        if rc.returncode != 0:
+            sys.stderr.write('ABORT: the BASELINE does not lint with top %s.\n' % top)
+            sys.stderr.write('       Nothing below would mean anything. The likeliest\n')
+            sys.stderr.write('       cause is a mutation stranded by a killed sweep:\n')
+            sys.stderr.write('         git diff --stat fpga/rtl/field/\n')
+            for l in (rc.stdout + rc.stderr).splitlines():
+                if '%Error' in l or '%Warning' in l:
+                    sys.stderr.write('       ' + l[:160] + '\n')
+            return 3
+
     bad = []
     for k in range(len(M.MUTS)):
         name, path, _, _ = M.MUTS[k]
-        for f, raw in gold.items():
-            io.open(f, 'w', encoding='utf-8', newline='').write(raw)
+        if not restore(gold):
+            sys.stderr.write('ABORT: could not restore before %s\n' % name)
+            return 2
         if not M.apply(k):
             bad.append((name, 'anchor'))
             continue
-        rc = subprocess.run([exe, '--lint-only', '-Wall', '--top-module', 'zhao_field_seq'] + CONE,
+        if path.replace(chr(92), '/').split('/')[-1] in V2_FILES:
+            top, cone = 'zhao_field_v2_core', CONE_V2
+        else:
+            top, cone = 'zhao_field_seq', CONE
+        rc = subprocess.run([exe, '--lint-only', '-Wall', '--top-module', top] + cone,
                             capture_output=True, text=True)
         if rc.returncode != 0:
             lines = [l for l in (rc.stdout + rc.stderr).splitlines()
                      if '%Error' in l or '%Warning' in l]
             bad.append((name, lines[0][:100] if lines else 'rc=%d' % rc.returncode))
 
-    for f, raw in gold.items():
-        io.open(f, 'w', encoding='utf-8', newline='').write(raw)
+    if not restore(gold):
+        sys.stderr.write('ABORT: final restore could not be proven\n')
+        return 2
 
     print('linted %d mutants across %d files, %d do not build'
           % (len(M.MUTS), len(gold), len(bad)))

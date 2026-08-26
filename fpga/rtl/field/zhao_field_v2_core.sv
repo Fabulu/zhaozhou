@@ -131,6 +131,14 @@ module zhao_field_v2_core #(
   localparam logic [7:0] OP_CURVE  = 8'h1A;   // mode 0
   localparam logic [7:0] OP_SPLINE = 8'h1B;   // mode 2
   localparam logic [7:0] OP_DCURVE = 8'h1D;   // mode 1
+  localparam logic [7:0] OP_LEN2   = 8'h12;   // len mode 0
+  localparam logic [7:0] OP_LEN3   = 8'h13;   // len mode 1
+  localparam logic [7:0] OP_DIST2  = 8'h14;   // len mode 2
+
+  // Which long-op unit a request is for. Carried through the serialiser, which
+  // stays unit-agnostic; the routing is done here.
+  localparam logic [1:0] UNIT_CURVE = 2'd0;
+  localparam logic [1:0] UNIT_LEN   = 2'd1;
 
   localparam logic [7:0] ST_OK             = 8'd0;
   localparam logic [7:0] ST_PC_OVERRUN     = 8'd2;
@@ -149,6 +157,25 @@ module zhao_field_v2_core #(
   logic signed [31:0] rd_b [LANES];
   logic signed [31:0] rd_c [LANES];
   logic signed [31:0] h_rd [LANES];
+
+  // ---- THE SECOND READ PASS ---------------------------------------------
+  // Three read ports per lane supply a/b/c. The length family wants up to FIVE
+  // values, and a+1 is not reachable from any of them. The alternative was five
+  // ports: the banked file measured 12 M10K at three (zhao_probe_banked_rf) and
+  // port count is what M10K replication scales with, so that is roughly +4 M10K
+  // permanently, for a minority of the opcode histogram.
+  //
+  // Instead ONE CLOCK is spent. With the length op held in stage 1, the read
+  // addresses are driven from {s1_a+1, s1_a+2, s1_b+1} for one cycle and those
+  // answers land beside the first pass. A long operation already costs about
+  // LANES x II -- the measured CURVE+SPLINE mix was 2,020 clocks for 24
+  // instructions -- so this is under 1% of the operation it belongs to.
+  //
+  // The first pass's a and b must be SAVED before the steal overwrites them,
+  // because the steal reuses those same three ports.
+  logic signed [31:0] s2_a0 [LANES];
+  logic signed [31:0] s2_b0 [LANES];
+  logic               steal_q;      // a steal cycle is in progress
 
   // ---- wavefront state --------------------------------------------------
   logic [7:0]     pc      [WFS];
@@ -191,6 +218,11 @@ module zhao_field_v2_core #(
   logic [WFW-1:0] s1_wf;
   logic [7:0]     s1_op;
   logic [RW-1:0]  s1_dst;
+  // The length family addresses CONSECUTIVE registers from a base -- LEN3 reads
+  // a, a+1, a+2 and DIST2 also reads b, b+1 -- so unlike every short op it needs
+  // the operand INDEX after the first read has already happened.
+  logic [RW-1:0]  s1_a;
+  logic [RW-1:0]  s1_b;
 
   wire pc_overrun = sel_valid && (pc[sel] >= instr_count_i);
   // issue_fire is assigned further down, once s1_is_long exists: the long-op
@@ -263,6 +295,7 @@ module zhao_field_v2_core #(
                      alu_y[l] = (rd_a[l] < rd_b[l]) ? 32'sh0001_0000 : 32'sd0;
         OP_END:    ;                       // retires the wavefront, writes nothing
         OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
+        OP_LEN2, OP_LEN3, OP_DIST2:     ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
     end
@@ -273,22 +306,47 @@ module zhao_field_v2_core #(
   // which serialises the LANES lanes through one scalar unit and carries the
   // {wavefront, destination} tag back. The wavefront stays IN FLIGHT until the
   // reply lands: the scoreboard does not care how long an instruction takes.
-  wire s1_is_long = s1_valid && ((s1_op == OP_CURVE) || (s1_op == OP_DCURVE) ||
-                                 (s1_op == OP_SPLINE));
+  wire s1_is_len  = s1_valid && ((s1_op == OP_LEN2) || (s1_op == OP_LEN3) ||
+                                (s1_op == OP_DIST2));
+  wire s1_is_curve = s1_valid && ((s1_op == OP_CURVE) || (s1_op == OP_DCURVE) ||
+                                  (s1_op == OP_SPLINE));
+  // "Long" is the property that matters to the scoreboard: dispatched to a unit
+  // over the request/reply seam rather than executed here. Both families are.
+  wire s1_is_long  = s1_is_curve || s1_is_len;
+
+  // The mode is per-UNIT, so the two families have independent encodings and
+  // the unit selector is what disambiguates them. zhao_field_curve reads
+  // 0/1/2 = CURVE/DCURVE/SPLINE; zhao_field_len reads 0/1/2 = LEN2/LEN3/DIST2.
   logic [1:0] s1_mode;
+  logic [1:0] s1_unit;
   always_comb begin
     unique case (s1_op)
-      OP_DCURVE: s1_mode = 2'd1;
-      OP_SPLINE: s1_mode = 2'd2;
-      default:   s1_mode = 2'd0;
+      OP_DCURVE: begin s1_mode = 2'd1; s1_unit = UNIT_CURVE; end
+      OP_SPLINE: begin s1_mode = 2'd2; s1_unit = UNIT_CURVE; end
+      OP_LEN2:   begin s1_mode = 2'd0; s1_unit = UNIT_LEN;   end
+      OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
+      OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end
+      default:   begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
     endcase
   end
+
+  // The length's tag, held across the steal cycle. s1_wf and s1_dst happen to
+  // survive -- nothing issues, so nothing overwrites them -- but depending on
+  // that is depending on a stall staying exactly as it is today.
+  logic [WFW-1:0]     ln_wf;
+  logic [RW-1:0]      ln_dst;
+  logic [1:0]         ln_mode;
 
   logic               lq_valid;
   logic [WFW-1:0]     lq_wf;
   logic [RW-1:0]      lq_dst;
   logic [1:0]         lq_mode;
-  logic signed [31:0] lq_a [LANES];
+  logic [1:0]         lq_unit;
+  logic signed [31:0] lq_a  [LANES];
+  logic signed [31:0] lq_a1 [LANES];
+  logic signed [31:0] lq_a2 [LANES];
+  logic signed [31:0] lq_b0 [LANES];
+  logic signed [31:0] lq_b1 [LANES];
 
   logic               lm_req_ready, lm_rsp_valid;
   logic [WFW-1:0]     lm_rsp_wf;
@@ -314,9 +372,40 @@ module zhao_field_v2_core #(
   // for. Wavefronts write disjoint register regions, so a short op retiring
   // beside a long reply cannot collide with it.
   wire ins_is_long = (ins_op_i == OP_CURVE) || (ins_op_i == OP_DCURVE) ||
-                     (ins_op_i == OP_SPLINE);
-  wire long_slot_busy = lq_valid || (s1_valid && s1_is_long);
-  assign issue_fire = sel_valid && !pc_overrun && !(ins_is_long && long_slot_busy);
+                     (ins_op_i == OP_SPLINE) || (ins_op_i == OP_LEN2) ||
+                     (ins_op_i == OP_LEN3) || (ins_op_i == OP_DIST2);
+  // A LENGTH IS LONG FOR THREE CYCLES, not two: stage 1, the steal, and the
+  // dispatch. Between stage 1 and the dispatch there is a cycle where s1_valid
+  // is already 0 and lq_valid is not yet 1, and a long op issuing into that
+  // window would reach stage 1 exactly as the length filled the slot, and
+  // overwrite it -- the same hang the interlock exists to prevent, reached by a
+  // different door.
+  wire long_slot_busy = lq_valid || (s1_valid && s1_is_long) || steal_now || steal_q;
+
+  // ---- THE STEAL-CYCLE STALL, which is stricter than the interlock -------
+  // The interlock above holds only LONG ops, deliberately: short ops touch
+  // neither the slot nor the serialiser, and stalling the machine behind one
+  // curve lookup gives back the throughput v2 exists for.
+  //
+  // The steal cycle is different and must stall EVERYTHING. It reuses the three
+  // read ports, so an instruction issuing into it would have its own operand
+  // reads replaced by the length's second pass and would then compute on
+  // another instruction's values. That is a WRONG ANSWER rather than a hang,
+  // which makes it the more dangerous of the two failures.
+  wire steal_now = s1_is_len;   // stage 1 holds a length: steal the next cycle
+  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
+                      !(ins_is_long && long_slot_busy);
+
+  // ---- read addresses ----------------------------------------------------
+  // Pass 1 is the natural addressing every short op uses. Pass 2 -- the steal
+  // -- redirects the same three ports at {a+1, a+2, b+1} of the length held in
+  // stage 1. Nothing else in the machine reads the file on that cycle.
+  wire [RW-1:0] addr_a = steal_now ? RW'(s1_a + RW'(1)) : ins_a_i;
+  wire [RW-1:0] addr_b = steal_now ? RW'(s1_a + RW'(2)) : ins_b_i;
+  wire [RW-1:0] addr_c = steal_now ? RW'(s1_b + RW'(1)) : ins_c_i;
+  // The wavefront being read is the LENGTH's during a steal, not whatever the
+  // round robin happens to be pointing at -- `sel` is free to move.
+  wire [WFW-1:0] rd_wf = steal_now ? s1_wf : sel;
 
   wire s1_is_end = s1_valid && (s1_op == OP_END);
   wire s1_writes = s1_valid && !s1_is_end && !unsupported && !s1_is_long;
@@ -335,15 +424,30 @@ module zhao_field_v2_core #(
       s1_wf          <= '0;
       s1_op          <= 8'd0;
       s1_dst         <= '0;
+      s1_a           <= '0;
+      s1_b           <= '0;
       instr_retired_o<= 32'd0;
       lq_valid       <= 1'b0;
       lq_wf          <= '0;
       lq_dst         <= '0;
       lq_mode        <= 2'd0;
+      lq_unit        <= UNIT_CURVE;
+      ln_wf          <= '0;
+      ln_dst         <= '0;
+      ln_mode        <= 2'd0;
+      steal_q        <= 1'b0;
       sat_add_o      <= 1'b0;
       sat_mul_o      <= 1'b0;
       sat_rescale_o  <= 1'b0;
-      for (i = 0; i < LANES; i++) lq_a[i] <= '0;
+      for (i = 0; i < LANES; i++) begin
+        lq_a[i]  <= '0;
+        lq_a1[i] <= '0;
+        lq_a2[i] <= '0;
+        lq_b0[i] <= '0;
+        lq_b1[i] <= '0;
+        s2_a0[i] <= '0;
+        s2_b0[i] <= '0;
+      end
     end else begin
       // start pulses
       for (i = 0; i < WFS; i++) begin
@@ -360,6 +464,8 @@ module zhao_field_v2_core #(
         s1_wf    <= sel;
         s1_op    <= ins_op_i;
         s1_dst   <= ins_dst_i;
+        s1_a     <= ins_a_i;
+        s1_b     <= ins_b_i;
         inflight[sel] <= 1'b1;
         pc[sel]  <= pc[sel] + 8'd1;
         rr_ptr   <= (sel == WFW'(WFS-1)) ? '0 : (sel + WFW'(1));
@@ -375,28 +481,73 @@ module zhao_field_v2_core #(
 
       // ---- register reads land here ----
       for (l = 0; l < LANES; l++) begin
-        rd_a[l] <= rf[l][{sel, ins_a_i}];
-        rd_b[l] <= rf[l][{sel, ins_b_i}];
-        rd_c[l] <= rf[l][{sel, ins_c_i}];
+        rd_a[l] <= rf[l][{rd_wf, addr_a}];
+        rd_b[l] <= rf[l][{rd_wf, addr_b}];
+        rd_c[l] <= rf[l][{rd_wf, addr_c}];
         h_rd[l] <= rf[l][{h_rwf_i, h_rreg_i}];
+      end
+
+      // Save pass 1's a and b before the steal overwrites those ports. This
+      // fires on the cycle the length is in stage 1, which is the last cycle
+      // rd_a and rd_b still hold its first-pass values.
+      steal_q <= steal_now;
+      if (steal_now) begin
+        for (l = 0; l < LANES; l++) begin
+          s2_a0[l] <= rd_a[l];
+          s2_b0[l] <= rd_b[l];
+        end
       end
 
       // ---- stage 2 retire ----
       // ---- long-op dispatch, held until the serialiser accepts -----------
-      if (s1_is_long) begin
+      if (s1_is_len) begin
+        ln_wf   <= s1_wf;
+        ln_dst  <= s1_dst;
+        ln_mode <= s1_mode;
+      end
+
+      // The curve family dispatches straight from stage 1: one operand, already
+      // read. The length family dispatches ONE CYCLE LATER, when the second
+      // read pass has landed -- which is the whole cost of not adding two more
+      // register-file ports.
+      if (s1_is_curve) begin
         lq_valid <= 1'b1;
         lq_wf    <= s1_wf;
         lq_dst   <= s1_dst;
         lq_mode  <= s1_mode;
-        for (l = 0; l < LANES; l++) lq_a[l] <= rd_a[l];
+        lq_unit  <= s1_unit;
+        for (l = 0; l < LANES; l++) begin
+          lq_a[l]  <= rd_a[l];
+          lq_a1[l] <= 32'sd0;
+          lq_a2[l] <= 32'sd0;
+          lq_b0[l] <= 32'sd0;
+          lq_b1[l] <= 32'sd0;
+        end
+      end else if (steal_q) begin
+        lq_valid <= 1'b1;
+        lq_wf    <= ln_wf;
+        lq_dst   <= ln_dst;
+        lq_mode  <= ln_mode;
+        lq_unit  <= UNIT_LEN;
+        for (l = 0; l < LANES; l++) begin
+          lq_a[l]  <= s2_a0[l];   // reg[a],   saved before the steal
+          lq_a1[l] <= rd_a[l];    // reg[a+1], from the steal
+          lq_a2[l] <= rd_b[l];    // reg[a+2], from the steal
+          lq_b0[l] <= s2_b0[l];   // reg[b],   saved before the steal
+          lq_b1[l] <= rd_c[l];    // reg[b+1], from the steal
+        end
       end else if (lq_valid && lm_req_ready) begin
         lq_valid <= 1'b0;
       end
 
       // Saturation is STICKY, as in v1: a run that saturated once did so.
-      if (cv_sat_add)  sat_add_o     <= 1'b1;
-      if (cv_sat_mul)  sat_mul_o     <= 1'b1;
-      if (cv_sat_resc) sat_rescale_o <= 1'b1;
+      // Both units feed the sticky ledger. The length unit's sat_add_o is
+      // DIST2's differences and its sat_rescale_o the narrow to s32; dropping
+      // them would lose half the semantics of a length exactly as dangling
+      // sat_* pins would have lost half of a curve's.
+      if (cv_sat_add  || ln_sat_add)  sat_add_o     <= 1'b1;
+      if (cv_sat_mul)                 sat_mul_o     <= 1'b1;
+      if (cv_sat_resc || ln_sat_resc) sat_rescale_o <= 1'b1;
 
       // ---- long-op reply: write back and release the wavefront -----------
       if (lm_rsp_valid) begin
@@ -435,18 +586,36 @@ module zhao_field_v2_core #(
   // ---- the serialiser, the scalar unit, and its multiplier lane ---------
   logic [5:0]         cv_seg_unused;
   logic               cv_sat_add, cv_sat_mul, cv_sat_resc;
+  logic               ln_sat_add, ln_sat_resc;
+
+  // The serialiser's single unit port, and the two units behind the mux.
   logic               u_valid, u_ready, u_rvalid, u_rready;
-  logic [1:0]         u_mode;
-  logic signed [31:0] u_a, u_result;
+  logic [1:0]         u_mode, u_unit;
+  logic signed [31:0] u_a, u_a1, u_a2, u_b0, u_b1, u_result;
+  logic               cv_ready, cv_rvalid, ln_ready, ln_rvalid;
+  logic signed [31:0] cv_result, ln_result;
+
+  // One multiplier, muxed on the captured unit id -- see the routing note.
   logic               mul_issue, mul_p_valid;
   logic signed [32:0] mul_a, mul_b;
   logic signed [65:0] mul_p;
+  logic               cv_mul_issue, ln_mul_issue;
+  logic signed [32:0] cv_mul_a, cv_mul_b, ln_mul_a, ln_mul_b;
+
+  // The shared integer square root, used only by the length family today.
+  logic        sq_valid, sq_ready, sq_rvalid, sq_rready;
+  logic [63:0] sq_n, sq_r;
 
   zhao_field_v2_lanemux #(.LANES(LANES), .WFS(WFS), .REGS(REGS)) u_lanemux (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(lq_valid), .req_ready_o(lm_req_ready),
-      .req_wf_i(lq_wf), .req_dst_i(lq_dst), .req_mode_i(lq_mode), .req_a_i(lq_a),
-      .u_valid_o(u_valid), .u_ready_i(u_ready), .u_mode_o(u_mode), .u_a_o(u_a),
+      .req_wf_i(lq_wf), .req_dst_i(lq_dst), .req_mode_i(lq_mode),
+      .req_unit_i(lq_unit),
+      .req_a_i(lq_a), .req_a1_i(lq_a1), .req_a2_i(lq_a2),
+      .req_b0_i(lq_b0), .req_b1_i(lq_b1),
+      .u_valid_o(u_valid), .u_ready_i(u_ready),
+      .u_mode_o(u_mode), .u_unit_o(u_unit),
+      .u_a_o(u_a), .u_a1_o(u_a1), .u_a2_o(u_a2), .u_b0_o(u_b0), .u_b1_o(u_b1),
       .u_rvalid_i(u_rvalid), .u_rready_o(u_rready), .u_result_i(u_result),
       .rsp_valid_o(lm_rsp_valid), .rsp_ready_i(1'b1),
       .rsp_wf_o(lm_rsp_wf), .rsp_dst_o(lm_rsp_dst), .rsp_y_o(lm_rsp_y)
@@ -458,17 +627,62 @@ module zhao_field_v2_core #(
   // private ones to one shared lane and 79 DSPs to 3, so v2 supplies the lane.
   // That seam is MUL_LANES in reports/FIELD_V2_MODEL.md, which prices 1/2/3/4
   // at 3/6/9/12 DSPs and finds width 4 needs at least two.
+  // ---- ROUTING, and why an arbiter is not needed -------------------------
+  // Two long-op units now share one serialiser port and one multiplier. The
+  // interlock guarantees at most ONE long operation is in the machine at a
+  // time, so at most one unit is ever active, and the selection is a MUX on the
+  // captured unit id rather than an arbiter. That is v1's own structure: it
+  // muxed ten units on the executing opcode for exactly this reason.
+  //
+  // If MUL_LANES > 1 ever lets two long ops run concurrently, this mux becomes
+  // wrong and must become an arbiter. Stated here rather than discovered then.
+  wire to_len = (u_unit == UNIT_LEN);
+
+  assign u_ready  = to_len ? ln_ready  : cv_ready;
+  assign u_rvalid = to_len ? ln_rvalid : cv_rvalid;
+  assign u_result = to_len ? ln_result : cv_result;
+
+  assign mul_issue = to_len ? ln_mul_issue : cv_mul_issue;
+  assign mul_a     = to_len ? ln_mul_a     : cv_mul_a;
+  assign mul_b     = to_len ? ln_mul_b     : cv_mul_b;
+
   zhao_field_curve u_curve (
       .clk(clk), .rst_n(rst_n),
-      .v_valid_i(u_valid), .v_ready_o(u_ready),
+      .v_valid_i(u_valid && !to_len), .v_ready_o(cv_ready),
       .mode_i(u_mode), .a_i(u_a),
       .tbl_n_i(tbl_n_i), .tbl_idx_o(tbl_idx_o),
       .tbl_x_i(tbl_x_i), .tbl_y_i(tbl_y_i), .tbl_dy_i(tbl_dy_i),
-      .r_valid_o(u_rvalid), .r_ready_i(u_rready), .result_o(u_result),
+      .r_valid_o(cv_rvalid), .r_ready_i(u_rready && !to_len), .result_o(cv_result),
       .seg_idx_o(cv_seg_unused),
       .sat_add_o(cv_sat_add), .sat_mul_o(cv_sat_mul), .sat_rescale_o(cv_sat_resc),
-      .mul_issue_o(mul_issue), .mul_a_o(mul_a), .mul_b_o(mul_b),
+      .mul_issue_o(cv_mul_issue), .mul_a_o(cv_mul_a), .mul_b_o(cv_mul_b),
       .mul_p_i(mul_p), .mul_valid_i(mul_p_valid)
+  );
+
+  // v1's length unit, also UNMODIFIED. It covers LEN2, LEN3 and DIST2 in three
+  // modes, exactly as the curve unit covers its three -- which is why this is
+  // wiring rather than arithmetic, and why the oracle it is checked against is
+  // the same zfield::interpret the frozen engine uses.
+  zhao_field_len u_len (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(u_valid && to_len), .v_ready_o(ln_ready),
+      .mode_i(u_mode),
+      .a0_i(u_a), .a1_i(u_a1), .a2_i(u_a2), .b0_i(u_b0), .b1_i(u_b1),
+      .r_valid_o(ln_rvalid), .r_ready_i(u_rready && to_len), .result_o(ln_result),
+      .sat_add_o(ln_sat_add), .sat_rescale_o(ln_sat_resc),
+      .mul_issue_o(ln_mul_issue), .mul_a_o(ln_mul_a), .mul_b_o(ln_mul_b),
+      .mul_p_i(mul_p), .mul_valid_i(mul_p_valid),
+      .sqrt_valid_o(sq_valid), .sqrt_ready_i(sq_ready), .sqrt_n_o(sq_n),
+      .sqrt_rvalid_i(sq_rvalid), .sqrt_rready_o(sq_rready), .sqrt_r_i(sq_r)
+  );
+
+  // The shared integer square root. Only the length family uses it today, so it
+  // is wired directly; NORMALIZE would be the second consumer, and no committed
+  // Earth program calls NORMALIZE.
+  zhao_field_isqrt u_isqrt (
+      .clk(clk), .rst_n(rst_n),
+      .n_valid_i(sq_valid), .n_ready_o(sq_ready), .n_i(sq_n),
+      .r_valid_o(sq_rvalid), .r_ready_i(sq_rready), .r_o(sq_r)
   );
 
   zhao_field_mul u_mul (

@@ -5,6 +5,86 @@ at the top.*
 
 ---
 
+## 2026-08-26 (later) — distances too, and the register file said no
+
+### What now works
+
+The new Field engine can do **distances**: LEN2, LEN3 and DIST2. With curves,
+that is the top two entries of what the three real Earth programs actually ask
+for.
+
+### The interesting part: the engine ran out of hands
+
+Every instruction so far needed at most three values at once, and the register
+file hands out exactly three. Distances need up to five — a length in 3D reads
+three consecutive registers, and a distance between two points reads four.
+
+Two ways to fix that:
+
+* **Give the register file more outputs.** Costs memory blocks permanently, on
+  every wavefront, whether or not it ever computes a distance. Roughly four more
+  of the chip's 553 memory blocks.
+* **Spend a clock.** Read three values, then reuse the same three outputs one
+  clock later to read the other two.
+
+I spent the clock. A distance already costs about 85 clocks, so one more is
+under 1% of it — against memory that would be spent forever.
+
+**But that stolen clock is dangerous**, and worth understanding because it is
+the kind of bug that does not announce itself. During it, the register file is
+answering the distance's question. Any *other* instruction that started in that
+clock would get the distance's answers instead of its own — and then compute a
+perfectly reasonable-looking wrong number. Not a crash. Not a stall. Just quietly
+wrong terrain.
+
+So the machine now stops everything for that one clock, and there is a test that
+puts ordinary arithmetic on both sides of a distance and checks it was not
+disturbed.
+
+### And one thing I did not trust
+
+The distance tests passed on the first run. That is unusual enough to be
+suspicious, and the reason is worth stating: every one of those checks says "the
+hardware agrees with the reference". **That passes just as happily when both are
+zero** — which is exactly what a mis-wired test would produce.
+
+So the reference is now required to produce non-zero, all-different answers
+before its agreement counts for anything. It does: 32 different answers across
+32 vertex slots. The agreement is real.
+
+### The test that was green and wrong
+
+After the distance work passed, the sweep broke the hardware on purpose 32 ways
+to check the tests would notice. **Thirty-one were caught. One was not**, and it
+is the most interesting thing in this section.
+
+The engine returns two things for every calculation: the number, and an account
+of whether it had to *clamp* — squash a value that would not fit. The broken
+version quietly threw away that account for distances. Every test still passed,
+because every test checked the number.
+
+That is the failure mode worth watching for: not a wrong answer, but a right
+answer with its warning label removed. Terrain built on clamped arithmetic looks
+fine until it doesn't, and the account is how we would know.
+
+There is now a test for it, and one for the opposite mistake — a warning light
+wired permanently on would have passed the first test by itself.
+
+### Where the Field engine stands
+
+| | old engine | new engine |
+|---|---|---|
+| simple arithmetic | yes | yes |
+| curves (CURVE/DCURVE/SPLINE) | yes | yes |
+| distances (LEN2/LEN3/DIST2) | yes | **yes, as of today** |
+| rings, noise, rotations | yes | not yet — refused, never skipped |
+
+Rings next. After that, a second multiplier — because four vertices at a time
+through one multiplier is the next ceiling, and that one is arithmetic rather
+than plumbing.
+
+---
+
 ## 2026-08-26 — curves run on the new engine, and a hang that was hiding in it
 
 ### What now works

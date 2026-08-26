@@ -592,3 +592,183 @@ to**, against a permanent ~4 M10K on a device with 553.
 * The mutant for it therefore writes itself: **remove the steal-cycle stall and
   the sweep must fail.** If it does not, the test does not run a short op behind
   a length, and that is the gap to close first.
+
+---
+
+## After the length family: RING, and the multiplier stops being a mux
+
+*2026-08-26, written before the RTL.*
+
+### The oracle resolves
+
+`zfield_interpret.cpp` implements `OP_RING` as two `smoothstep`s about the
+midpoint of `[r0, r1]` and a product of the first with the complement of the
+second, over `reg[a]`, `reg[b]`, `reg[c]`. `OP_RIDGE` is a `noise2_hash` fold.
+v1's `zhao_field_ring` covers RING in one unit.
+
+### RING is CHEAPER to reach than the length family
+
+It takes three operands, and it takes them from `a`, `b` and `c` — the natural
+ports. **No steal cycle**: it dispatches straight from stage 1 like a curve,
+with `a0/a1/a2` of the existing bundle carrying `d/r0/r1`. The bundle built for
+DIST2 pays for itself here.
+
+### What it does cost: the multiplier stops being a two-way mux
+
+`zhao_field_ring` drives BOTH the shared multiplier and the shared reciprocal,
+and `zhao_field_rcp` drives the multiplier too. So while one RING executes,
+**two consumers want the lane** — and the "only one long op is in flight, so
+only one unit is active" argument that justified v2's mux no longer covers it.
+
+v1 solved this with a fixed PRIORITY rather than a wider mux:
+
+```systemverilog
+if (rcp_mul_issue)  mul <= rcp;      // the reciprocal outranks
+else                mul <= unit;     // the executing unit's own request
+```
+
+v2 will mirror it exactly, for the reason it should: the same priority, feeding
+the same units, checked against the same oracle. Inventing a different
+arbitration here would mean re-proving something v1's differential already
+covers.
+
+The routing comment in `zhao_field_v2_core` currently says the mux becomes wrong
+if two long ops ever run concurrently. RING is the first case where two
+CONSUMERS run inside one operation, which is a different thing and does not
+break that argument — but it is why the mul selection becomes a priority chain
+rather than a widened `to_len ? : ` ternary.
+
+### RIDGE and NOISE2 need something v2 does not have yet
+
+Both read `ins.imm`. v2's instruction interface is `{op, dst, a, b, c}` — there
+is **no immediate port at all**. That is an interface change to the core, its
+bench and every caller, so it is its own increment and not a rider on RING.
+Recorded here so it is not discovered halfway through wiring NOISE2.
+
+### Order, by measured demand
+
+RING, then the immediate port, then NOISE2/RIDGE. NORMALIZE2/3 stay last
+regardless of their position in the opcode list: no committed Earth program
+calls them, verified against the three shipped program hashes.
+
+---
+
+## THE REST OF THE OPCODE SET IS ONE SEAM CHANGE, NOT FIVE UNIT WIRINGS
+
+*2026-08-26, from reading the oracle before writing anything. This changes the
+order of the remaining work, so it is worth stating on its own.*
+
+I had the remaining Field opcodes queued as five separate increments — NOISE2,
+RIDGE, ROT2, ROT3, NORMALIZE2/3 — each "wire v1's unit to the seam", the way
+CURVE and the length family went. Reading `zfield_interpret.cpp` for all of them
+first says that is wrong, and in a way that would have been discovered halfway
+through the first one.
+
+### Every remaining opcode writes MORE THAN ONE REGISTER
+
+| op | reads | writes | immediate |
+| --- | --- | --- | --- |
+| NOISE2 | `a`, `a+1` | `dst`, `dst+1` | seed |
+| RIDGE | `a`, `b` | `dst` | seed |
+| ROT2 | `a`, `a+1`, `b` | `dst`, `dst+1` | — |
+| ROT3 | `a`, `a+1`, `a+2`, `b` | `dst`, `dst+1`, `dst+2` | axis |
+| NORMALIZE2 | `a`, `a+1` | `dst`, `dst+1` | — |
+| NORMALIZE3 | `a`, `a+1`, `a+2` | `dst` … `dst+2` | — |
+
+**v2's reply path returns ONE value per lane and writes ONE register.** Every
+long op built so far — CURVE, DCURVE, SPLINE, LEN2, LEN3, DIST2, and RING next —
+is single-result, so the seam has never been asked for more. Five of the six
+remaining opcodes ask for more.
+
+### The v1 units are already wide
+
+This is not a units problem. `zhao_field_rot` has `o0_o`, `o1_o`, `o2_o`
+(`o2_o` zero for ROT2 by its law 5) and `zhao_field_noise` has `o0_o`, `o1_o`
+with `seed_i` for the immediate. The arithmetic exists and is proven. What does
+not exist is a way to carry three answers back through
+`zhao_field_v2_lanemux` and land them in three consecutive registers.
+
+### So the work is TWO interface changes, then five cheap wirings
+
+1. **An immediate port.** v2's instruction interface is `{op, dst, a, b, c}`.
+   RIDGE, NOISE2 and ROT3 all need `imm` — as a hash seed for the first two and
+   as an AXIS SELECT for ROT3, where getting it wrong rotates about the wrong
+   axis and produces terrain that looks plausible and is wrong.
+2. **A multi-result reply.** The serialiser's unit port and vector reply widen
+   to three values, and the core's write-back writes `dst`, `dst+1`, `dst+2`
+   under a per-op count. The reads are already covered: the operand bundle built
+   for DIST2 carries `a0/a1/a2/b0/b1`, and `a+1`/`a+2` arrive on the steal cycle.
+
+After those, NOISE2/RIDGE/ROT2/ROT3/NORMALIZE2/3 are the same "one unit, N
+modes" wiring the curve and length families already were.
+
+### What this does NOT change
+
+NORMALIZE stays last. No committed Earth program calls it, verified against the
+three shipped program hashes, and being cheap to add once the seam is wide is
+not a reason to add it before something that is actually used.
+
+### The hazard the multi-result write-back introduces, named now
+
+Writing `dst`, `dst+1`, `dst+2` means a long op can write registers a LATER
+instruction has already read — v2's whole no-forwarding argument rests on "the
+previous instruction has written back before the next is fetched", and that
+argument was made about ONE register. A three-register write from a long op that
+retires late is the first thing that could break it. That is a scoreboard
+question, and it is the reason this is its own increment with its own sweep
+rather than a rider on an opcode.
+
+---
+
+## The length family's sweep: 31 of 32, and what the one survivor taught
+
+*2026-08-26.*
+
+    attempted=32 expected=32 accounted=32 caught=31
+    SURVIVOR: M106 the length's saturation never reaches the ledger
+
+### The survivor is a category, not a mutant
+
+M106 makes a length's saturation register only when a curve also saturated. It
+survived all 38 checks, and the reason generalises past this one op:
+
+> **Every section checked VALUES, and saturation is not a value.**
+
+The numbers stay right while the engine's account of what it had to clamp is
+silently dropped. That account is half of what this engine returns -- it is the
+same thing the dangling `sat_*` pins would have lost when CURVE landed, caught
+then by a lint and this time by nothing.
+
+**Any future unit wired to the seam needs a saturation case, not just a value
+case.** RING has five ledger lanes (`add`, `mul`, `rescale`, `rcp`, and `rcp0`,
+which is a reciprocal of zero rather than a saturation) and every one of them is
+a place this can happen again.
+
+### The fix, and why it is two cases
+
+Section 12 builds its expectation from `zref::SatLedger` and `zref::fx_sub` --
+the construction `field_len_directed.cpp` already uses for this question, rather
+than my own reasoning about when a subtraction overflows.
+
+* a DIST2 whose difference cannot fit, asserting the lane fires;
+* a quiet 3-4-5 length asserting it stays clear. Without it, a ledger wired
+  stuck-at-one passes the first case.
+
+Both first assert that the ORACLE agrees the operands do, and do not, saturate.
+A saturation test whose operands quietly stopped overflowing would otherwise go
+vacuous and still report green.
+
+### Two tooling defects the run exposed, both now fixed
+
+* **The preflight had no v2 lint cone.** `zhao_field_v2_core.sv` and
+  `zhao_field_v2_lanemux.sv` were in the mutant list and in no cone, so every v2
+  mutant was linted against a composition that does not contain it -- it passed
+  by not looking. Closing that exposed **twelve malformed mutants**, five of
+  which had already been scored CAUGHT. All twelve rewritten to keep the defect
+  without orphaning a signal.
+* **Guard 8: one sweep at a time.** A second sweep started beside a live one
+  corrupts both trees, and the symptom is not an obvious clash: it is anchors
+  that are present reporting NOT UNIQUE, a different mutant failing every run,
+  and a preflight capturing a MUTATED baseline as gold. The sweep now takes a
+  lock recording pid, start time and subset.
+

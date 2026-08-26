@@ -1,5 +1,91 @@
 # What is actually blocking every remaining block
 
+> ## STATE AS OF 2026-08-26. This block supersedes everything below it.
+> ## Read this first.
+>
+> ### The Field engine's blocker was never the clock, and v2 is the answer
+>
+> Seven fitter-measured waves took `zhao_field_seq` from **8.59 to 58.99 MHz**
+> and it did not matter, because the terrain cost model assumes one instruction
+> per clock and v1 delivers one per SEVEN. The measured gap was throughput.
+>
+> `zhao_field_v2_core` is the replacement: LANES=4 vertices under one PC, WFS=8
+> wavefronts resident, one instruction in flight per wavefront.
+>
+> | | v1 | v2 |
+> | --- | ---: | ---: |
+> | vertex-instructions per clock | 0.143 | **3.97** (27.8x) |
+>
+> **v1 is FROZEN, not deleted.** It says so in its own header, and it is the
+> reference v2 is differentially checked against. It was not converted: its whole
+> design rests on one instruction in flight, that assumption is baked into a
+> dozen places, and converting it would have falsified them one at a time with
+> every test still green.
+>
+> ### What v2 executes, and what it refuses
+>
+> | | status |
+> | --- | --- |
+> | MOV/LDC/ADD/SUB/MUL/MAD/MIN/MAX/ABS/CLAMP/SELECT/CMP | executes |
+> | CURVE, DCURVE, SPLINE | executes (one unit, three modes) |
+> | LEN2, LEN3, DIST2 | executes (one unit, three modes) |
+> | RING, RIDGE, NOISE2, ROT2, ROT3, NORMALIZE2/3 | **REFUSED with a status**, never skipped |
+>
+> Refused rather than ignored is the law: an instruction quietly skipped
+> produces a plausible field and a wrong world.
+>
+> ### THE DEFECT THE SWEEP FOUND, because it is the pattern to expect
+>
+> Three mutants survived the CURVE tests. All three were unreachable for one
+> reason: every test section started ONE wavefront, so only one long operation
+> was ever in the machine. The real workload is eight wavefronts on one program,
+> drifting apart in pc, contending for the same unit.
+>
+> The test written to reach them **hung**: the dispatch slot is filled at stage
+> 2, two cycles after issue, so the guard on `lq_valid` was two cycles late and a
+> second long op overwrote the first's pending request. Not a wrong answer -- a
+> stop.
+>
+> **The generalisation worth keeping:** v2's whole point is concurrency, and a
+> test that exercises one wavefront tests the part of v2 that is still v1.
+>
+> ### What the Field engine still needs, in measured order
+>
+> 1. **RING** -- oracle resolves, v1 unit exists, three operands on the natural
+>    ports so no steal cycle. Cost is that `zhao_field_ring` and
+>    `zhao_field_rcp` both want the multiplier inside one operation, so the mux
+>    becomes v1's priority chain.
+> 2. **An IMMEDIATE PORT.** v2's instruction interface is `{op, dst, a, b, c}`.
+>    RIDGE and NOISE2 both read `ins.imm` and there is no immediate at all. Its
+>    own increment.
+> 3. **NOISE2, RIDGE, ROT2, ROT3**, then a **second multiplier lane** -- the
+>    model prices MUL_LANES 1/2/3/4 at 3/6/9/12 DSPs and finds width 4 needs at
+>    least two.
+> 4. **NORMALIZE2/3 last**, regardless of its position in the op list: no
+>    committed Earth program calls it, verified against the three shipped program
+>    hashes. It has the worst II in the engine and would have been a day spent
+>    making something faster that this game never calls.
+>
+> ### TWO THINGS THAT ARE NOT DONE AND MUST NOT READ AS DONE
+>
+> * **v2 HAS NO LEDGER ENTRY.** It is not a registered block, because it has no
+>   fit. `ledger:check` is green *without* it. Nothing in the ALM/DSP/M10K census
+>   accounts for v2, and the census must not be read as covering it.
+> * **v2 HAS NEVER BEEN FITTED.** Every number above is simulation. The area and
+>   Fmax of a 4-lane, 8-wavefront barrel core with a banked register file are
+>   unmeasured. The nearest evidence is `zhao_probe_banked_rf` -- 12 M10K, 375
+>   ALM, 96.54 MHz -- which is the register file alone.
+>
+> ### DEBUG.FRAMEBLIT is closed
+>
+> `RTL_VERIFIED` on the composed path, mutation-swept 20/20 on the atomicity law
+> itself, and step 8's composed Quartus fit landed: **7,442 ALM (17.8%), 13
+> M10K, 0 DSP**. The CMD.DMA defect that blocked it -- a 156-byte serial CRC
+> chain in one cycle -- was fixed; the block that could not fit is now smaller
+> than most of the design.
+
+
+
 > ## STATE AS OF 2026-08-24 (morning). This block supersedes everything below it.
 > ## Read this first.
 >
