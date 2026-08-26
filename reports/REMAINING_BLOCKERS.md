@@ -49,6 +49,40 @@
 > stays unregistered rather than claiming otherwise.
 >
 > That is the next piece of real hardware work with an oracle behind it.
+>
+> ### GEOM.VDECODE IS BLOCKED ONE LEVEL DEEPER THAN 'NO REFERENCE MODEL'
+>
+> The survey above lists GEOM.VDECODE as missing `zref::VertexDecode`, which
+> reads like 'write the model'. Checked what writing it would require, and it
+> is not writable yet.
+>
+> `design/contracts/GEOM.VDECODE.md` is a generated stub -- every section still
+> says TODO, including the packet layout and the Q formats -- and its one real
+> line is the note:
+>
+> > Compression format owned by SW.TOOLS.ASSET (pack side) -- one spec, two ends.
+>
+> **There is no pack side.** `tools/pack/` holds one file, `mkcreaturepage.py`,
+> which is a contact-sheet generator; grepping the whole reference tree for a
+> vertex packing or unpacking format finds none. So the spec that VDECODE is
+> supposed to be one END of does not exist at either end.
+>
+> That means the honest order for this block is three steps, not one:
+>
+> 1. define the compressed vertex format (positions / normals / UV, and the
+> quantisation each gets),
+> 2. write the packer, because a decode model with no encoder has nothing to
+> round-trip against and becomes its own specification -- the exact failure
+> rule 1 exists to prevent,
+> 3. then `zref::VertexDecode`, then RTL.
+>
+> Step 1 is a format decision that binds the asset pipeline and the silicon
+> together for good. It is recorded here rather than taken.
+>
+> The same question has NOT yet been asked of the other five oracle-less
+> blocks; VDECODE was checked because it looked like the most mechanical of
+> them, and it was not mechanical. Assume the others are at least as deep
+> until each is checked the same way.
 
 > ## STATE AS OF 2026-08-26 (evening). This block supersedes everything below it.
 > ## Read this first.
