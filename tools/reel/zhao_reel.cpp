@@ -1744,8 +1744,12 @@ int render_scene(const SceneSubject& sub) {
     // frame 0; the watchdog keeps its authored front-quarter read.
     dog_inst.facing = zref::angle16{zixx_subject ? uint16_t{0} : uint16_t{0x1000}};
     dog_inst.anim.cut(zixx_subject ? (sub.creature == 3 ? 1 : 2) : (sub.creature == 1 ? 2 : 1));
-    // start the slither behind the orbit centre so it travels THROUGH frame
-    if (sub.creature == 3) dog_inst.x = -fxm(zixx::kSlitherStartBack);
+    // Stand the animal on its OWN centre, not its root bone, or the orbit
+    // swings its body out of frame (see kBodyCentreX). The slither then
+    // starts half its travel back from there and crosses through.
+    if (zixx_subject) dog_inst.x = fxm(zixx::kBodyCentreX);
+    if (sub.creature == 3)
+      dog_inst.x -= fxm(zixx::kSlitherSpeed * zixx::kSlitherFrames) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     cr_ctx.gibs = &gibs;
@@ -2905,7 +2909,7 @@ SceneSubject subject_zixx_slither() {
   // azimuth, and every azimuth re-shades sky and terrain into new palette
   // entries -- at 128 frames this subject could not be encoded inside the
   // 256-colour law at all. 64 frames is one clean cycle and one clean turn.
-  s.frames = zixx::kSlitherKeys * 2;
+  s.frames = zixx::kSlitherFrames;
   s.step = 1;
   s.creature = 3;
   s.orbit = true;
@@ -2913,8 +2917,14 @@ SceneSubject subject_zixx_slither() {
   // is ~200 px broadside, which leaves room for the +-1.25 m of travel without
   // running off a 384 px frame.
   s.bump_ext = 6;
-  s.cam_k = 260000;
-  s.cam_eye = 12;
+  // 240000, not 300000: at 3.9 m long the animal ran off both edges of a
+  // 384 px frame once the lateral wave extended it. Framing a creature is
+  // framing its WIDEST pose, not its rest pose.
+  s.cam_k = 240000;
+  // eye 13, not 12: the aim point is eye - 0.4877*dist, so raising the eye
+  // raises the aim and drops the creature from the horizon toward the middle
+  // of the frame. At 12 it sat at 40% height over a dead foreground.
+  s.cam_eye = 13;
   s.cam_dist = 8;
   s.cam_bias = 0;
   // DRY GROUND, not the default olive. The creature's flank green comes
@@ -2922,9 +2932,9 @@ SceneSubject subject_zixx_slither() {
   // green of almost the same value -- the animal vanished into it. Changing
   // the ground is the cheaper fix than repainting a creature whose colours
   // are the point.
-  s.mat_r = 150;
-  s.mat_g = 116;
-  s.mat_b = 74;
+  s.mat_r = 104;
+  s.mat_g = 78;
+  s.mat_b = 50;
   // a shallow swell, not the walk subject's 0.5 m crest: the creature is the
   // subject here, and a ground that throws it around costs legibility
   // NO animated terrain field. A moving field re-shades the lattice every
@@ -2939,6 +2949,7 @@ SceneSubject subject_zixx_slither() {
       "38 rigid ring parts. The pink dorsal crest is GEOMETRY, not texture -- "
       "there is no CLUT8 page pipeline yet, and the concept's stripe runs along "
       "the body where a ring part's texture runs around it";
+  s.expect_seq_crc = 0x46759455u;  // pinned 2026-08-26, first Zixxtrixx render
   return s;
 }
 
@@ -2950,13 +2961,20 @@ SceneSubject subject_zixx_strike() {
   s.creature = 4;
   s.orbit = true;
   s.bump_ext = 6;
-  s.cam_k = 290000;
-  s.cam_eye = 12;
+  // same pull-back as the slither: the throw carries the tail a metre and a
+  // half above the body, and at 300000 the animal sat jammed against the
+  // bottom edge with the arc clipped.
+  s.cam_k = 240000;
+  s.cam_eye = 13;
   s.cam_dist = 8;
   s.cam_bias = 0;
-  s.mat_r = 150;
-  s.mat_g = 116;
-  s.mat_b = 74;
+  s.mat_r = 104;
+  s.mat_g = 78;
+  s.mat_b = 50;
+  s.sky_variant = 1;
+  // Flat upper sky band. The dusk gradient alone was spending over a hundred
+  // palette entries on sky the creature is not standing in.
+  s.sky_variant = 1;
   // NO animated terrain field. A moving field re-shades the lattice every
   // frame and each new shade is a palette entry; with the creature's own
   // bands on top, the subject blew through the 256-colour law at 359. The
@@ -2968,6 +2986,7 @@ SceneSubject subject_zixx_strike() {
       "end travels furthest; the head ducks under the passing tail on key 23 "
       "and presses down with the strike. 48 keys against the donor's 45-key "
       "melee median, kEvAttack on the contact key";
+  s.expect_seq_crc = 0xAB9FE046u;  // pinned 2026-08-26, first Zixxtrixx render
   return s;
 }
 

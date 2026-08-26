@@ -58,7 +58,11 @@ constexpr int kBodySegs = 10;       // segments == bend smoothness (bones!)
 constexpr int32_t kBodyR0 = 205;    // body radius at the neck end
 constexpr int32_t kBodyR1 = 84;     // body radius at the fork end
 constexpr int32_t kBodyY = 232;     // body axis height above ground
-constexpr int kBodySegsRound = 8;   // ring segments around the body
+// 6, not 8. Every distinct face normal is a distinct shade and every shade
+// is a palette entry against the 256-colour law; the body alone was
+// spending 49 of them at 8. Six also reads blockier, which is the
+// direction this creature was asked to go.
+constexpr int kBodySegsRound = 6;   // ring segments around the body
 
 // -- neck and head ----------------------------------------------------------
 constexpr int32_t kNeckLen = 340;   // root to head bone
@@ -109,7 +113,7 @@ constexpr int32_t kProngSplayMid = 900;
 // Median RGB over named regions of both sheets, paper and ink excluded. The
 // two sheets agree to within a few counts, which is why these are used raw.
 constexpr uint8_t kGreen[3] = {116, 205, 147};   // flank
-constexpr uint8_t kPink[3] = {228, 146, 194};    // dorsal, SATURATED
+constexpr uint8_t kPink[3] = {206, 130, 175};    // dorsal, SATURATED
 // from the sheet's 226,203,221: at 240p under the scene light the raw
 // pencil pink resolved to near-white and the crest read as a grey helmet.
 // Hue kept, saturation pushed. Set it back to 226,203,221 to see why.
@@ -118,7 +122,11 @@ constexpr uint8_t kYellow[3] = {250, 226, 92};   // eye, SATURATED
 // from the sheet's 246,236,167, for the same reason as kPink: the raw
 // pencil yellow came out olive under the scene light and the eye stopped
 // reading as an eye.
-constexpr uint8_t kOrange[3] = {212, 121, 96};   // eye rim
+// kOrange (212,121,96 on the sheet) is GONE, not unused: the eye rim was a
+// sixth material carrying its own ~20 shading bands, and the subject could
+// not fit the 256-colour law with it. The rim is now the crest pink, which
+// still separates the eye from the blue skull. This is the one place the
+// concept art lost a colour outright rather than a shade of one.
 // The concept blends blue into green under the chin. That transition cost a
 // whole shading band against the 256-colour ceiling and was invisible at
 // 240p, so the neck simply carries the head's blue.
@@ -129,11 +137,18 @@ constexpr uint8_t kOrange[3] = {212, 121, 96};   // eye rim
 // AND against the orbit: the subject's frame count must be a whole number of
 // cycles or the GIF will not loop.
 constexpr int kSlitherKeys = 32;   // 64 frames per cycle, 1.07 s
+constexpr int kSlitherFrames = kSlitherKeys * 2;
 constexpr int kAttackKeys = 48;    // 96 frames, 1.60 s — donor melee median 45
 constexpr int kSlitherWaves = 2;   // Fabian: two waves
 constexpr int32_t kSlitherAmp = 3750;   // per-joint lateral yaw, angle16
 constexpr int32_t kSlitherHeadHold = 62;  // % of the wave the head cancels
-constexpr int32_t kAttackArc = 2900;    // per-joint tail pitch at full arc
+// Per-joint tail pitch at full arc. THE ARITHMETIC MATTERS HERE: the pitch is
+// rear-weighted by w = j/kBodySegs, so the ACCUMULATED rotation down the chain
+// is kAttackArc * sum(w) = kAttackArc * 5.5, not kAttackArc. At 2900 that
+// summed to 87 degrees -- the tail rose to vertical and came back down behind
+// the animal, which is not the attack. Reaching over its own head and down in
+// FRONT needs about 210 degrees, so 210/360*65536/5.5.
+constexpr int32_t kAttackArc = 6620;
 constexpr int32_t kAttackHead = 2600;   // head pitch authority
 constexpr uint16_t kAttackStrikeKey = 23;  // where kEvAttack fires
 
@@ -141,8 +156,19 @@ constexpr uint16_t kAttackStrikeKey = 23;  // where kEvAttack fires
 // The orbit camera yaws the WORLD about the origin, so a creature that
 // travels must cross the origin or it swings out of frame. Zixxtrixx starts
 // kSlitherStartBack behind it and slithers through.
-constexpr int32_t kSlitherSpeed = 14;       // mm per reel frame
-constexpr int32_t kSlitherStartBack = 900; // mm behind the origin at frame 0
+constexpr int32_t kSlitherSpeed = 7;  // mm per reel frame
+
+// WHERE THE ANIMAL STANDS, and this one is not obvious.
+//
+// The orbit yaws the WORLD about the origin. The root bone sits at the FRONT
+// of the animal -- the nose is +755 mm ahead of it and the prong tips are
+// -3530 mm behind it -- so putting the root on the origin orbits the creature
+// about its own head and swings three and a half metres of body out through
+// both edges of a 384 px frame. Offsetting it by its own centre is what keeps
+// it in shot for the whole turn.
+constexpr int32_t kNoseX = kNeckLen + kHeadFwd;                      // +755
+constexpr int32_t kTailX = -(kBodySegs * kSegLen + kSegLen + kProngLen);  // -3530
+constexpr int32_t kBodyCentreX = (kNoseX + kTailX) / 2 * -1;         // +1387
 
 // ============================ END KNOBS ====================================
 
@@ -275,8 +301,15 @@ inline zc::Clip build_attack() {
 
   // tail arc, thousandths: negative pitch lifts the tail (a point at -X
   // rotated about +Z by a negative angle rises)
-  static const Key kArc[] = {{0, 0},    {6, 150},   {14, -700}, {20, -1000}, {23, 480},
-                             {27, 660}, {34, 590},  {41, -140}, {47, 0}};
+  // Tail arc, thousandths of kAttackArc. Negative pitch lifts the tail: a
+  // point at -X rotated about +Z by a negative angle rises, passes vertical
+  // near -90 accumulated, points forward at -180, and drives down beyond it.
+  // -1050 is roughly -210 degrees: over the head and stabbing down in FRONT,
+  // which is the whole attack. At the old reach it topped out at vertical and
+  // came back down BEHIND the animal.
+  static const Key kArc[] = {{0, 0},      {6, 120},    {14, -620},  {20, -880},
+                             {23, -1050}, {27, -1120}, {34, -1080}, {41, -400},
+                             {47, 0}};
   // head pitch: rears up, then ducks under the passing tail and presses down
   static const Key kHead[] = {{0, 0},     {8, -300},  {16, -540}, {20, -570}, {23, -60},
                               {26, 430},  {34, 390},  {42, -70},  {47, 0}};
@@ -414,7 +447,7 @@ inline const zc::CreatureType& type() {
       rim.pitch_q = 1;
       rim.yaw_q = yq;
       rim.bone = bone;
-      set_rgb(rim, kOrange);
+      set_rgb(rim, kPink);
       parts.push_back(rim);
 
       zc::RingPart eye;
