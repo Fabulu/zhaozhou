@@ -1356,6 +1356,10 @@ void cel_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, 
 
 namespace zc = zref::creature;
 
+// Zixxtrixx (Upheaval's first creature) is authored in its own header so every
+// knob Fabian might turn sits in one findable place.
+#include "zixxtrixx.h"
+
 // The demo subject: a watchdog quadruped. Ring parts are rigid per bone
 // (donor law). Its authored forward axis is +X: pitch maps each body/head ring
 // stack +Y -> +Z, then yaw maps +Z -> +X. Six bones/parts: torso, head, and
@@ -1726,11 +1730,22 @@ int render_scene(const SceneSubject& sub) {
   int32_t gib_initial_span = 0;
   int32_t gib_max_span = 0;
   if (sub.creature != 0) {
-    dog = &watchdog_type();
+    // 1,2 = the watchdog (wave-walk, bulk-pop). 3,4 = Zixxtrixx (slither,
+    // tail-strike) — the Upheaval bestiary lane.
+    const bool zixx_subject = sub.creature >= 3;
+    dog = zixx_subject ? &zixx::type() : &watchdog_type();
     dog_inst.type = dog;
-    dog_inst.tilt_mode = zc::TiltMode::kCompletely;
-    dog_inst.facing = zref::angle16{0x1000};       // front-quarter read, 22.5 degrees
-    dog_inst.anim.cut(sub.creature == 1 ? 2 : 1);  // walk / idle
+    // A quadruped pitches and rolls with the ground under its feet. A 3.9 m
+    // serpent lying ON the ground does not: tilting the whole animal off one
+    // column sample lifted its tail a metre into the air over a crest. Roll
+    // only for Zixxtrixx.
+    dog_inst.tilt_mode = zixx_subject ? zc::TiltMode::kSideways : zc::TiltMode::kCompletely;
+    // Zixxtrixx is shot on an orbit, so its facing only has to look right at
+    // frame 0; the watchdog keeps its authored front-quarter read.
+    dog_inst.facing = zref::angle16{zixx_subject ? uint16_t{0} : uint16_t{0x1000}};
+    dog_inst.anim.cut(zixx_subject ? (sub.creature == 3 ? 1 : 2) : (sub.creature == 1 ? 2 : 1));
+    // start the slither behind the orbit centre so it travels THROUGH frame
+    if (sub.creature == 3) dog_inst.x = -fxm(zixx::kSlitherStartBack);
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     cr_ctx.gibs = &gibs;
@@ -1832,7 +1847,28 @@ int render_scene(const SceneSubject& sub) {
       const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
           patch, rtest::xform_identity(), fapps, tick, nullptr, nullptr);
 
-      if (sub.creature == 1) {
+      if (sub.creature >= 3) {
+        // Zixxtrixx. The slither travels along the authored +X forward axis;
+        // the tail-strike stays planted, because the whole point of the shot
+        // is that the animal pins something in one place. No bulk and no gibs
+        // on this lane — those belong to the watchdog's demo.
+        if (sub.creature == 3) {
+          const int32_t fc = zref::fx_cos(dog_inst.facing).raw;
+          const int32_t fs = zref::fx_sin(dog_inst.facing).raw;
+          dog_inst.x +=
+              zref::rescale_s32(static_cast<int64_t>(fxm(zixx::kSlitherSpeed)) * fc, 16, nullptr);
+          dog_inst.z -=
+              zref::rescale_s32(static_cast<int64_t>(fxm(zixx::kSlitherSpeed)) * fs, 16, nullptr);
+        }
+        for (uint32_t t = 0; t < sub.step; ++t) {
+          const zc::ClipEvent* fired = nullptr;
+          uint8_t nf = 0;
+          zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+        }
+        zc::ground_tilt_update(dog_inst.tilt, dog_inst.tilt_mode, dog_inst.facing, lat,
+                               zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z}, zref::fx16{fxm(40)},
+                               zref::fx16{fxm(20)});
+      } else if (sub.creature == 1) {
         // walk: root motion follows the authored +X forward axis at a
         // front-quarter yaw; four independent legs carry the 16-key stride.
         // The clip clock runs on the sim clock (sub.step ticks per frame), so
@@ -2856,6 +2892,85 @@ SceneSubject subject_creaturewalk() {
   return s;
 }
 
+// Zixxtrixx, the first Upheaval creature. Both shots are framed for the
+// bestiary site: the camera makes exactly ONE orbit over the subject's frame
+// count while the creature performs on the ground, so the GIF loops in both
+// the camera and the animation at once. Frame counts are therefore not free —
+// reel frames = clip keys x 2 at step 1, and the subject length must be a
+// whole number of cycles.
+SceneSubject subject_zixx_slither() {
+  SceneSubject s;
+  s.name = "zixxtrixx-slither";
+  // ONE gait cycle per orbit, not two. Every extra frame is another camera
+  // azimuth, and every azimuth re-shades sky and terrain into new palette
+  // entries -- at 128 frames this subject could not be encoded inside the
+  // 256-colour law at all. 64 frames is one clean cycle and one clean turn.
+  s.frames = zixx::kSlitherKeys * 2;
+  s.step = 1;
+  s.creature = 3;
+  s.orbit = true;
+  // framing: the animal is ~3.9 m nose to prong tip. At k=235000 / dist 8 that
+  // is ~200 px broadside, which leaves room for the +-1.25 m of travel without
+  // running off a 384 px frame.
+  s.bump_ext = 6;
+  s.cam_k = 260000;
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  // DRY GROUND, not the default olive. The creature's flank green comes
+  // straight off the concept sheet and the default terrain material is a
+  // green of almost the same value -- the animal vanished into it. Changing
+  // the ground is the cheaper fix than repainting a creature whose colours
+  // are the point.
+  s.mat_r = 150;
+  s.mat_g = 116;
+  s.mat_b = 74;
+  // a shallow swell, not the walk subject's 0.5 m crest: the creature is the
+  // subject here, and a ground that throws it around costs legibility
+  // NO animated terrain field. A moving field re-shades the lattice every
+  // frame and each new shade is a palette entry; with the creature's own
+  // bands on top, the subject blew through the 256-colour law at 359. The
+  // creature is the subject here, so the ground holds still.
+  s.note =
+      "Zixxtrixx slithers along its authored +X axis while the camera makes one "
+      "full orbit. Two complete lateral waves ride the body at once (10 spine "
+      "joints, phase-shifted a fifth of a turn each); the head cancels 62% of "
+      "its own joint's sway so it holds its line instead of whipping. 28 bones, "
+      "38 rigid ring parts. The pink dorsal crest is GEOMETRY, not texture -- "
+      "there is no CLUT8 page pipeline yet, and the concept's stripe runs along "
+      "the body where a ring part's texture runs around it";
+  return s;
+}
+
+SceneSubject subject_zixx_strike() {
+  SceneSubject s;
+  s.name = "zixxtrixx-strike";
+  s.frames = zixx::kAttackKeys * 2;  // exactly one strike per orbit
+  s.step = 1;
+  s.creature = 4;
+  s.orbit = true;
+  s.bump_ext = 6;
+  s.cam_k = 290000;
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  s.mat_r = 150;
+  s.mat_g = 116;
+  s.mat_b = 74;
+  // NO animated terrain field. A moving field re-shades the lattice every
+  // frame and each new shade is a palette entry; with the creature's own
+  // bands on top, the subject blew through the 256-colour law at 359. The
+  // creature is the subject here, so the ground holds still.
+  s.note =
+      "Zixxtrixx does not bite. It rears, throws its TAIL up and over its own "
+      "head and drives the three prongs down into what is in front of it. The "
+      "arc is per-joint pitch weighted toward the rear of the body, so the far "
+      "end travels furthest; the head ducks under the passing tail on key 23 "
+      "and presses down with the strike. 48 keys against the donor's 45-key "
+      "melee median, kEvAttack on the contact key";
+  return s;
+}
+
 // 17. creature-bulk-pop — bulk inflation then a detached-geometry burst: the
 // watchdog idles while its root SCALE inflates 1.0 -> ~2.3; crossing the species
 // pop threshold (2.2) removes the mesh. Eighteen deterministic donor samples
@@ -2922,6 +3037,13 @@ constexpr LibraryEntry kLibrary[] = {
      "Six-part quadruped strides through a wave, LOD ladder to glint", true},
     {"creature-bulk-pop", "Bulk inflate and pop",
      "Root-scale inflation releases 18 detached rotating chunks", true},
+
+    // Upheaval bestiary lane (Upheaval/creature/) -- creature subjects shot
+    // for the creature site: one camera orbit per loop, performed on ground
+    {"zixxtrixx-slither", "Zixxtrixx slither",
+     "Two-wave serpentine gait travelling through one camera orbit", true},
+    {"zixxtrixx-strike", "Zixxtrixx tail strike",
+     "Rears, throws its tail over its head and drives the prongs down", true},
 
     // Dead classes (no flare capability, stub entries only)
     {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -3026,5 +3148,7 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
+  if (wanted("zixxtrixx-slither")) rc |= render_scene(subject_zixx_slither());
+  if (wanted("zixxtrixx-strike")) rc |= render_scene(subject_zixx_strike());
   return rc;
 }
