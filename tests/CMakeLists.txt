@@ -1754,6 +1754,33 @@ verilate(test_field_v2_core_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+# FIELD v2's FRONT END. Program in, points in, answers out one per point IN
+# ORDER -- order is a correctness property: zref::terrain accumulates out[0]
+# into a lattice index taken from its loop counters.
+add_executable(test_field_v2_front_directed differential/field_v2_front_directed.cpp)
+target_link_libraries(test_field_v2_front_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v2_front_directed
+  PREFIX Vzhao_field_v2_front
+  TOP_MODULE zhao_field_v2_front
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_front.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_lanemux.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+add_test(NAME field_v2_front_directed COMMAND test_field_v2_front_directed)
+set_tests_properties(field_v2_front_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME field_v2_core_directed COMMAND test_field_v2_core_directed)
 set_tests_properties(field_v2_core_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 

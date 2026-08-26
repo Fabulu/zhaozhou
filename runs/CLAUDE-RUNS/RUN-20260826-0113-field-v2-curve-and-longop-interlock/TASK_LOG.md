@@ -1129,3 +1129,74 @@ mine to fix, not the core's.
 Front end and its differential remain UNCOMMITTED and UNREGISTERED; `main` is
 green. The core was restored byte-identical after tapping (`git diff` empty) and
 all taps and the tracer are gone.
+
+## 2026-08-26 - THE FRONT END WORKS. The Field engine is usable end to end.
+
+13 checks. `zhao_field_v2_front` holds a program, takes a stream of points, and
+returns one answer per point IN ORDER, matched against `zfield::interpret` --
+the reference's own driving pattern from `zref::terrain`.
+
+### The bug, found by instrumenting after three failed inferences
+
+`done_o` is `finished` and it is STICKY -- it still holds the PREVIOUS batch's
+bits when the next launches. `busy_o` is `active`, which is also low before a
+wavefront starts. The start pulse is REGISTERED. So immediately after launching,
+"idle" and "done" were both already true, and the batch completed **without
+executing anything**, draining the previous batch's registers. In a trace it is
+`F_RUN` lasting exactly one cycle.
+
+My comment on that line had claimed testing `done` made it SAFER than testing
+idle alone. It was the cause.
+
+The fix needs no delay constant: `start_i` CLEARS `finished`, so the start
+landing is observable. Wait for the started wavefronts' done bits to go LOW (the
+pulse arrived), then for them to come back HIGH (the work finished). Staleness
+cannot fool it in either direction.
+
+### Three bugs total, all mine, all in the front end
+
+1. `pt_ready_o` asserted on the FIRST of the n_in write cycles, not the last, so
+   a correct producer advanced and the remaining lanes came from the next point.
+2. The drain read was phase-ambiguous; now an explicit present/settle/capture.
+3. The batch-restart race above.
+
+### And one that was never a bug: TWO OPCODE ENCODINGS
+
+The core has its own compact ALU numbering and it is NOT the reference's. Every
+reference opcode is a VALID but DIFFERENT core opcode, so sending reference
+numbers does not fault -- it silently computes something else. `to_ref()` is now
+the single translation point, with an invalid default so a new op cannot
+silently inherit a wrong mapping.
+
+### Sweep: 7 mutants, 7 caught
+
+M155 ("a partial batch launches every wavefront") survived the first pass. It is
+invisible to every value check -- the extra slots are never drained -- but it
+runs the program over stale registers and feeds them into the status and
+saturation outputs. `instr_retired_o` is where it shows, and the check now pins
+it: **the engine must not execute work nobody asked for.**
+
+That is the third survivor today that was a MISSING KIND OF CHECK rather than a
+missing case: the saturation ledger (M106), the rescale lane (M149), and now
+wasted execution.
+
+### V20 refused a claim, correctly
+
+The header claimed a pc past `instr_count_i` is refused by the core. **Nothing
+in the tree tested that** -- the core carried the RTL and no test ever drove a
+program off its own end. Rather than name an unenforced claim, section 5 adds
+the enforcement: a program with NO END must still drain and must report
+ST_PC_OVERRUN. It does.
+
+### The gate, honestly
+
+`ctest -L fast` has TWO failures that are NOT mine: `reel --check` and a
+clang-format error in `reference/src/zcreature/creature_sim.cpp`. Another
+session is editing THE SAME WORKING TREE -- its edits to `zref_creature.hpp` and
+`creature_core.cpp` are visible in `git status` -- and those are its in-flight
+work.
+
+So this commit names its files EXPLICITLY rather than using `git add -A`, which
+would have swept up another agent's half-finished creature work. My own area is
+green: `ctest -R field_v2` passes 3/3, the ledger check is OK, and the front-end
+sweep is 7/7.
