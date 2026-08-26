@@ -231,3 +231,54 @@ Fmax. Everything above is Analysis & Synthesis; none of it is placed or timed.
 The old v1 engine, `zhao_field_seq`, fits at 4,494 ALMs and closes at
 **59.0 MHz**, and that is the number this has to beat to be worth its extra
 area. A fit is running.
+
+---
+
+# THE FIT. FIELD v2 IS MEASURED.
+
+`quartus_fit` + `quartus_sta`, 2,351.6 s, **`rtlCleanAtHead: true`** — a clean
+tree, unlike the map runs above.
+
+| | v1 `zhao_field_seq` | **v2 front** | on the device |
+| --- | --- | --- | --- |
+| ALMs | 4,494 | **8,104** | 41,910 — **19.3%** |
+| registers | 3,725 | 10,057 | ~83,820 |
+| M10K | 5 | **33** | 553 — 6.0% |
+| DSP | 3 | 27 | 112 — 24% |
+| **Fmax** | **58.99 MHz** | **52.13 MHz** | restricted Fmax identical |
+
+33 M10K is 32 register-file memories plus the sine ROM — the predicted number,
+on the nose.
+
+## What it costs and what it buys, in real time rather than per clock
+
+Every throughput figure quoted for v2 so far has been **per clock**, and per
+clock is not a rate until it is multiplied by a clock that exists.
+
+| | instr/clock | × Fmax | vertex-instructions/second |
+| --- | --- | --- | --- |
+| v1 | 0.143 | 58.99 MHz | 8.4 M |
+| v2 | 3.97 | 52.13 MHz | **207.0 M** |
+
+**24.6× the real throughput for 1.80× the area.** The engine is slower per
+clock than v1 — 52.13 against 58.99, a 12% loss — and it does not matter,
+because it retires 27.8 instructions in the time v1 retires one.
+
+The honest way to state the headline from here on is **24.6×, not 27.8×**. The
+27.8 figure was never wrong, it was just never a rate.
+
+## The number that is NOT good, and is not hidden
+
+**52 MHz is low.** This flow constrains the clock at 10.000 ns — 100 MHz — and
+the block does not come close to it. Neither does v1, at 59 MHz, so this is not
+a regression introduced by the rebuild; it is where the Field engine has always
+been, now visible because it can finally be placed at all.
+
+That has to be dealt with, and the choice is a real one:
+
+* run the Field engine in its own slower clock domain and pay for the crossing;
+* or pipeline the critical path until it closes at the system clock.
+
+Nothing here decides that. What this fit establishes is that the block EXISTS
+in silicon terms — 19% of the logic, 6% of the memory — which was not true this
+morning, when it was 289% of the logic and could not be placed at all.
