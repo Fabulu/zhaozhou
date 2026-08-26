@@ -154,3 +154,43 @@ Two related notes:
   from inside bash does not reach the child. Build from PowerShell.
 * An all-tests-fail result is not evidence about the tree. Before believing a
   red gate, check that ONE test fails for a reason printed inside the test.
+
+## Reconfiguring the build must happen in Git Bash, with `VERILATOR_ROOT` set
+
+`build/` was configured from Git Bash: its cache records the source directory as
+`/c/programmieren/...`. Running `cmake -S . -B build` from PowerShell therefore
+fails twice over —
+
+```
+CMake Error: The current CMakeCache.txt directory C:/Programmieren/.../build
+is different than the directory /c/programmieren/.../build where it was created
+%Error: Cannot find verilated_std.sv ... '/yosyshq/share/verilator\include/...'
+```
+
+— the second because `verilator_bin.exe` falls back to a baked-in
+`/yosyshq/...` path when `VERILATOR_ROOT` is absent from the environment, and
+PowerShell does not carry it unless `tools/env/zhao-env.ps1` has been sourced.
+
+What works:
+
+```bash
+export VERILATOR_ROOT="C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator"
+export PATH="/c/programmieren/dsstuff/mingw64/bin:$PATH"
+cmake -S . -B build
+```
+
+Then **build** from PowerShell (ccache needs `USERPROFILE`, see above) and run
+tests with the ctest the cache names. Three shells, one for each job, which is
+ugly but is what this toolchain actually wants.
+
+**This matters more than it looks.** `verilate()` elaborates at CONFIGURE time,
+so adding a `.sv` file to a target's `SOURCES` does nothing until the configure
+succeeds — and a failed configure leaves the old `build.ninja` in place, so the
+build carries on with the OLD source list and reports `MODMISSING` for a module
+whose file you just added and listed correctly. The error names the instantiating
+file, not the configure failure that is actually responsible.
+
+Also note `cmake` itself is shadowed on PATH exactly like `ctest`: a bare
+`cmake -S . -B build` picked up a different CMake and reported
+`The CMAKE_CXX_COMPILER: C is not a full path`, which is a corrupted-looking
+error with a PATH cause.
