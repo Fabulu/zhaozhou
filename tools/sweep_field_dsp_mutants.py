@@ -706,7 +706,7 @@ MUTS = [
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_rot) begin""",
+    end else if (to_norm) begin""",
      """    if (to_ring && rg_mul_issue) begin
       mul_issue = rg_mul_issue;
       mul_a     = rg_mul_a;
@@ -715,13 +715,13 @@ MUTS = [
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_rot) begin"""),
+    end else if (to_norm) begin"""),
     ("M115 the band's two radii are swapped at the unit", F_V2,
      """      .d_i(u_a), .r0_i(u_a1), .r1_i(u_a2),""",
      """      .d_i(u_a), .r0_i(u_a2), .r1_i(u_a1),"""),
     ("M116 a reciprocal of zero reaches the ledger only if BOTH report it", F_V2,
-     """      if (rg_rcp0    || rc_rcp0)                     rcp_zero_o    <= 1'b1;""",
-     """      if (rg_rcp0    && rc_rcp0)                     rcp_zero_o    <= 1'b1;"""),
+     """      if (rg_rcp0    || rc_rcp0    || nm_rcp0)       rcp_zero_o    <= 1'b1;""",
+     """      if (rg_rcp0    && rc_rcp0    || nm_rcp0)       rcp_zero_o    <= 1'b1;"""),
     ("M117 RING's multiply saturation reaches the ledger only beside a curve's", F_V2,
      """      if (cv_sat_mul  || rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;""",
      """      if (cv_sat_mul  && rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;"""),
@@ -772,15 +772,15 @@ MUTS = [
      """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, RW'(lm_rsp_dst + RW'(1))}] <= lm_rsp_y1[l];""",
      """          if (lm_rsp_nres >= 2'd2) rf[l][{lm_rsp_wf, lm_rsp_dst}] <= lm_rsp_y1[l];"""),
     ("M128 every op claims a single result", F_V2,
-     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd3
-                      : (s1_is_noise2 || s1_is_rot2) ? 2'd2
-                                                     : 2'd1;""",
-     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd1
-                      : (s1_is_noise2 || s1_is_rot2) ? 2'd1
-                                                     : 2'd1;"""),
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd2
+                                                                   : 2'd1;""",
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd1
+                      : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd1
+                                                                   : 2'd1;"""),
     ("M129 the second read pass is for lengths only again", F_V2,
-     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;""",
-     """  wire s1_needs_pass2 = s1_is_len || s1_is_rot;"""),
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot || s1_is_nrm;""",
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_rot || s1_is_nrm;"""),
     ("M130 the pass-2 path still hard-wires the length unit", F_V2,
      """        lq_unit  <= ln_unit;
         lq_nres  <= ln_nres;""",
@@ -811,12 +811,12 @@ MUTS = [
      """      .is_rot3_i(u_mode[0]), .axis_i(u_imm[1:0]),""",
      """      .is_rot3_i(1'b0), .axis_i(u_imm[1:0]),"""),
     ("M137 ROT2 writes a third register it does not own", F_V2,
-     """  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd3
-                      : (s1_is_noise2 || s1_is_rot2) ? 2'd2
-                                                     : 2'd1;""",
-     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_rot2) ? 2'd3
-                      : s1_is_noise2                ? 2'd2
-                                                    : 2'd1;"""),
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd2
+                                                                   : 2'd1;""",
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3 || s1_is_rot2) ? 2'd3
+                      : (s1_is_noise2 || s1_is_nrm2)              ? 2'd2
+                                                                  : 2'd1;"""),
     ("M138 the rotation angle is read from the wrong register", F_V2,
      """      .ang_i(u_b0),""",
      """      .ang_i(u_a),"""),
@@ -830,8 +830,43 @@ MUTS = [
      """      if (cv_sat_mul  || rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;""",
      """      if ((cv_sat_mul || rg_sat_mul) && rt_sat_mul)  sat_mul_o     <= 1'b1;"""),
     ("M142 a rotation never takes its second read pass", F_V2,
-     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;""",
-     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2;"""),
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot || s1_is_nrm;""",
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_nrm;"""),
+    # ---- NORMALIZE2/3, and the square root's SECOND consumer ---------------
+    # The isqrt was wired straight to the length unit until normalize arrived.
+    # These attack the mux both ways: normalize starved, and the length family
+    # starved by normalize -- the second is the one that would pass a test
+    # checking only the new opcode.
+    ("M143 NORMALIZE3 collapses to NORMALIZE2", F_V2,
+     """      .is3_i(u_mode[0]),""",
+     """      .is3_i(1'b0),"""),
+    ("M144 NORMALIZE2 writes a third register it does not own", F_V2,
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd2
+                                                                   : 2'd1;""",
+     """  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3 || s1_is_nrm2) ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2)              ? 2'd2
+                                                                  : 2'd1;"""),
+    ("M145 the square root always answers the length unit", F_V2,
+     """  assign isq_valid  = to_norm ? nm_sq_valid  : sq_valid;""",
+     """  assign isq_valid  = sq_valid && !nm_sq_valid;"""),
+    ("M146 the square root is handed the wrong operand", F_V2,
+     """  assign isq_n      = to_norm ? nm_sq_n      : sq_n;""",
+     """  assign isq_n      = to_norm ? sq_n         : nm_sq_n;"""),
+    ("M147 the length family is starved once normalize exists", F_V2,
+     """  assign sq_rvalid  = to_norm ? 1'b0 : isq_rvalid;""",
+     """  assign sq_rvalid  = to_norm ? isq_rvalid : 1'b0;"""),
+    ("M148 normalize never takes its second read pass", F_V2,
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot || s1_is_nrm;""",
+     """  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;"""),
+    ("M149 normalize's rescale saturation never reaches the ledger", F_V2,
+     """      if (cv_sat_resc || ln_sat_resc || rg_sat_resc ||
+          nz_sat_resc  || nm_sat_resc)                sat_rescale_o <= 1'b1;""",
+     """      if ((cv_sat_resc || ln_sat_resc || rg_sat_resc ||
+           nz_sat_resc) && nm_sat_resc)               sat_rescale_o <= 1'b1;"""),
+    ("M150 normalize is routed to the rot unit's code", F_V2,
+     """  wire to_norm  = (u_unit == UNIT_NORM);""",
+     """  wire to_norm  = (u_unit == UNIT_ROT);"""),
 ]
 
 

@@ -57,6 +57,8 @@ constexpr uint8_t OP_RIDGE = 0x22;        // the noise unit, is_ridge = 1
 constexpr uint8_t OP_NOISE2 = 0x1C;       // the noise unit, is_ridge = 0, TWO results
 constexpr uint8_t OP_ROT2 = 0x28;         // the rot unit, TWO results
 constexpr uint8_t OP_ROT3 = 0x29;         // the rot unit, THREE results, axis in imm
+constexpr uint8_t OP_NRM2 = 0x15;         // the normalize unit, is3 = 0
+constexpr uint8_t OP_NRM3 = 0x16;         // the normalize unit, is3 = 1
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -827,6 +829,60 @@ int main(int argc, char** argv) {
   check(dut.sat_add_o == 1, "12.a saturating length reaches SatLedger::add", 1, dut.sat_add_o);
 }
 
+// ---- 12c. THE RESCALE LANE, which nothing tested at all -------------------
+// Found by mutant M149. Its mutation makes sat_rescale_o depend on the NORMALIZE
+// unit having saturated too -- and normalize's rescale lane is PROVABLY
+// unreachable: its output is a unit vector, |out| <= 65536, while the lane fires
+// above 2^31. Six million random vectors through the shipped primitives give
+// zero. So the mutant silences sat_rescale_o for EVERY unit, and it survived
+// because `sat_rescale_o` appeared NOWHERE in this file.
+//
+// Where the lane IS reachable is the length family: a DIST2 whose two
+// differences both saturate to INT32_MAX has length MAX*sqrt(2) = 3,037,000,498,
+// which does not fit in s32.
+{
+  Bench b(dut);
+  b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+  const int32_t a0 = INT32_MAX, a1 = INT32_MAX, b0 = INT32_MIN, b1 = INT32_MIN;
+
+  zref::SatLedger L{};
+  const int32_t d0 = zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L).raw;
+  const int32_t d1 = zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L).raw;
+  const uint64_t n2 = static_cast<uint64_t>(static_cast<int64_t>(d0)) * d0 +
+                      static_cast<uint64_t>(static_cast<int64_t>(d1)) * d1;
+  const uint64_t len = zref::isqrt_u64(n2);
+  check(len > static_cast<uint64_t>(INT32_MAX),
+        "12.the chosen operands really do overflow the length (oracle)", 1,
+        len > static_cast<uint64_t>(INT32_MAX) ? 1 : 0);
+
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, a0);
+      b.write_reg(w, l, 1, a1);
+      b.write_reg(w, l, 8, b0);
+      b.write_reg(w, l, 9, b1);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.sat_rescale_o == 1, "12.an overflowing length reaches SatLedger::rescale", 1,
+        dut.sat_rescale_o);
+}
+
+// ---- 12d. and a quiet length leaves the rescale lane alone ----------------
+{
+  Bench b(dut);
+  b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, 3 << 16);
+      b.write_reg(w, l, 1, 4 << 16);
+      b.write_reg(w, l, 8, 0);
+      b.write_reg(w, l, 9, 0);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.sat_rescale_o == 0, "12.a quiet length leaves SatLedger::rescale alone", 0,
+        dut.sat_rescale_o);
+}
+
 // ---- 12b. and a length that does NOT saturate -------------------------
 // Without this, a ledger wired stuck-at-one would pass 12a. The lanes are
 // sticky across a run, so this needs its own reset -- which is what a fresh
@@ -1444,6 +1500,181 @@ check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.
           "17.axis X and axis Z do not give the same answer", 0, xz == 0 ? 0 : 1);
   }
   std::printf("  v2 ROT2/ROT3 checked on all three axes\n");
+}
+
+// ---- 18. NORMALIZE2 and NORMALIZE3, the last two operations --------------
+// They need no new front-end mechanism: reg[a..a+2] arrive on the second read
+// pass and two or three results ride the reply. What they add is a SECOND
+// CONSUMER for the shared integer square root, which until now was wired
+// straight to the length unit.
+//
+// So this section has to prove two different things: that the answers are
+// right, and that ADDING A SECOND CONSUMER DID NOT BREAK THE FIRST. A length
+// and a normalize in the same program, checked together, is the cheap way to
+// say so -- section 18c.
+{
+  auto nrm_oracle = [&](uint8_t z_op, const int32_t* v, int32_t* out3) {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    zfield::Instr ins{};
+    ins.op = z_op;
+    ins.dst = 16;
+    ins.a = 0;
+    ins.b = 0;
+    ins.c = 0;
+    ins.imm = 0;
+    prog.instrs.push_back(ins);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 3; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    for (int k = 0; k < 3; ++k) {
+      zfield::IoLane ol{};
+      ol.name = "y";
+      ol.type = 0;
+      ol.reg = static_cast<uint8_t>(16 + k);
+      prog.out_lanes.push_back(ol);
+    }
+    int32_t in[3] = {v[0], v[1], v[2]};
+    int32_t out[3] = {0, 0, 0};
+    zfield::interpret(prog, in, 3, out, 3);
+    out3[0] = out[0];
+    out3[1] = out[1];
+    out3[2] = out[2];
+  };
+
+  // ---- 18a. NORMALIZE2: two results, dst+2 untouched --------------------
+  {
+    Bench b(dut);
+    b.prog = {{OP_NRM2, 16, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        // THE DIRECTION MUST VARY, NOT THE LENGTH. The first version scaled
+        // one vector by the lane index, which keeps the RATIO fixed at 3:4 --
+        // and normalize discards magnitude, so all 32 lanes came back as the
+        // same unit vector and the check below caught it. Same family of
+        // mistake as picking 45 degrees for a rotation: a symmetry introduced
+        // by the convenient way to generate inputs.
+        const int idx = w * kLanes + l;
+        v[w][l][0] = (idx + 1) * 7717;
+        v[w][l][1] = (idx * idx + 3) * 4099;
+        v[w][l][2] = (idx + 2) * 1301 - 20011;
+        for (int k = 0; k < 3; ++k) b.write_reg(w, l, k, v[w][l][k]);
+        b.write_reg(w, l, 18, static_cast<int32_t>(0xC0FFEE00));
+      }
+    b.run((1u << kWfs) - 1u);
+
+    uint64_t bad = 0, clobbered = 0;
+    std::set<int32_t> distinct;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        int32_t want[3];
+        nrm_oracle(zfield::OP_NORMALIZE2, v[w][l], want);
+        if (b.read_reg(w, l, 16) != want[0]) ++bad;
+        if (b.read_reg(w, l, 17) != want[1]) ++bad;
+        if (b.read_reg(w, l, 18) != static_cast<int32_t>(0xC0FFEE00)) ++clobbered;
+        distinct.insert(want[0]);
+      }
+    check(bad == 0, "18.NORMALIZE2 matches zfield::interpret on both lanes", 0, bad);
+    check(clobbered == 0, "18.NORMALIZE2 did NOT write dst+2", 0, clobbered);
+    check(distinct.size() > 4, "18.NORMALIZE2's answers actually vary", 4, distinct.size());
+  }
+
+  // ---- 18b. NORMALIZE3: three results ------------------------------------
+  {
+    Bench b(dut);
+    b.prog = {{OP_NRM3, 16, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        const int idx = w * kLanes + l;
+        v[w][l][0] = (idx + 1) * 5501 - 90001;
+        v[w][l][1] = (idx * 3 + 7) * 2749;
+        v[w][l][2] = (idx * idx + 11) * 1637 - 4001;
+        for (int k = 0; k < 3; ++k) b.write_reg(w, l, k, v[w][l][k]);
+      }
+    b.run((1u << kWfs) - 1u);
+
+    uint64_t bad = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        int32_t want[3];
+        nrm_oracle(zfield::OP_NORMALIZE3, v[w][l], want);
+        for (int k = 0; k < 3; ++k)
+          if (b.read_reg(w, l, static_cast<int>(16 + k)) != want[k]) ++bad;
+      }
+    check(bad == 0, "18.NORMALIZE3 matches zfield::interpret on all three lanes", 0, bad);
+  }
+
+  // ---- 18c. THE SQUARE ROOT STILL SERVES THE LENGTH FAMILY ---------------
+  // The isqrt was wired straight to the length unit until this increment. A
+  // mux that fed normalize by starving the length family would pass 18a and
+  // 18b completely. So: both ops in ONE program, both checked.
+  {
+    Bench b(dut);
+    b.prog = {{OP_NRM3, 16, 0, 0, 0}, {OP_LEN3, 20, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        const int idx = w * kLanes + l;
+        v[w][l][0] = (idx + 1) * 3313;
+        v[w][l][1] = (idx * 5 + 2) * 1777;
+        v[w][l][2] = (idx * idx + 1) * 911;
+        for (int k = 0; k < 3; ++k) b.write_reg(w, l, k, v[w][l][k]);
+      }
+    const int clocks = b.run((1u << kWfs) - 1u);
+    check(clocks < 20000, "18.a program using the square root TWICE finished", 1,
+          clocks < 20000 ? 1 : 0);
+
+    uint64_t bad_n = 0, bad_l = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        int32_t want[3];
+        nrm_oracle(zfield::OP_NORMALIZE3, v[w][l], want);
+        for (int k = 0; k < 3; ++k)
+          if (b.read_reg(w, l, static_cast<int>(16 + k)) != want[k]) ++bad_n;
+
+        zfield::Decoded prog;
+        prog.profile = 0;
+        zfield::Instr ins{};
+        ins.op = zfield::OP_LEN3;
+        ins.dst = 20;
+        ins.a = 0;
+        ins.b = 0;
+        ins.c = 0;
+        ins.imm = 0;
+        prog.instrs.push_back(ins);
+        zfield::Instr end{};
+        end.op = zfield::OP_END;
+        prog.instrs.push_back(end);
+        for (int k = 0; k < 3; ++k) {
+          zfield::IoLane il{};
+          il.name = "i";
+          il.type = 0;
+          il.reg = static_cast<uint8_t>(k);
+          prog.in_lanes.push_back(il);
+        }
+        zfield::IoLane ol{};
+        ol.name = "y";
+        ol.type = 0;
+        ol.reg = 20;
+        prog.out_lanes.push_back(ol);
+        int32_t in[3] = {v[w][l][0], v[w][l][1], v[w][l][2]};
+        int32_t out[1] = {0};
+        zfield::interpret(prog, in, 3, out, 1);
+        if (b.read_reg(w, l, 20) != out[0]) ++bad_l;
+      }
+    check(bad_n == 0, "18.the normalize in that program is still right", 0, bad_n);
+    check(bad_l == 0, "18.and the LENGTH beside it is still right", 0, bad_l);
+    std::printf("  v2 NORMALIZE + LEN3 sharing the square root: %d clocks\n", clocks);
+  }
 }
 
 dut.final();

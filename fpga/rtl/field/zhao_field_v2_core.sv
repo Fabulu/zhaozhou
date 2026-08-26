@@ -146,6 +146,8 @@ module zhao_field_v2_core #(
   localparam logic [7:0] OP_NOISE2 = 8'h1C;   // the noise unit, is_ridge = 0
   localparam logic [7:0] OP_ROT2   = 8'h28;   // the rot unit, is_rot3 = 0
   localparam logic [7:0] OP_ROT3   = 8'h29;   // the rot unit, is_rot3 = 1, axis in imm
+  localparam logic [7:0] OP_NRM2   = 8'h15;   // the normalize unit, is3 = 0
+  localparam logic [7:0] OP_NRM3   = 8'h16;   // the normalize unit, is3 = 1
 
   // Which long-op unit a request is for. Carried through the serialiser, which
   // stays unit-agnostic; the routing is done here.
@@ -158,6 +160,7 @@ module zhao_field_v2_core #(
   localparam logic [2:0] UNIT_RING  = 3'd2;
   localparam logic [2:0] UNIT_NOISE = 3'd3;
   localparam logic [2:0] UNIT_ROT   = 3'd4;
+  localparam logic [2:0] UNIT_NORM  = 3'd5;
 
   localparam logic [7:0] ST_OK             = 8'd0;
   localparam logic [7:0] ST_PC_OVERRUN     = 8'd2;
@@ -317,7 +320,8 @@ module zhao_field_v2_core #(
         OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
         OP_LEN2, OP_LEN3, OP_DIST2:     ;  // dispatched, not executed here
         OP_RING, OP_RIDGE, OP_NOISE2,
-        OP_ROT2, OP_ROT3:               ;  // dispatched, not executed here
+        OP_ROT2, OP_ROT3,
+        OP_NRM2, OP_NRM3:               ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
     end
@@ -350,10 +354,16 @@ module zhao_field_v2_core #(
   wire s1_is_rot2  = s1_valid && (s1_op == OP_ROT2);
   wire s1_is_rot3  = s1_valid && (s1_op == OP_ROT3);
   wire s1_is_rot   = s1_is_rot2 || s1_is_rot3;
+  // NORMALIZE2/3 read reg[a..a+2] and write two or three registers -- the
+  // second read pass and the multi-result reply, both already here. The one
+  // thing they add is a SECOND CONSUMER for the integer square root.
+  wire s1_is_nrm2  = s1_valid && (s1_op == OP_NRM2);
+  wire s1_is_nrm3  = s1_valid && (s1_op == OP_NRM3);
+  wire s1_is_nrm   = s1_is_nrm2 || s1_is_nrm3;
   // "Long" is the property that matters to the scoreboard: dispatched to a unit
   // over the request/reply seam rather than executed here. Both families are.
   wire s1_is_long  = s1_is_curve || s1_is_len || s1_is_ring || s1_is_ridge ||
-                     s1_is_noise2 || s1_is_rot;
+                     s1_is_noise2 || s1_is_rot || s1_is_nrm;
 
   // The mode is per-UNIT, so the two families have independent encodings and
   // the unit selector is what disambiguates them. zhao_field_curve reads
@@ -365,9 +375,9 @@ module zhao_field_v2_core #(
   // ROT3 is the first op to write THREE. ROT2 writes two: its third lane is
   // zero by the unit's law 5 and must NOT be written, because dst+2 belongs to
   // whatever the program put there.
-  wire [1:0]  s1_nres = s1_is_rot3               ? 2'd3
-                      : (s1_is_noise2 || s1_is_rot2) ? 2'd2
-                                                     : 2'd1;
+  wire [1:0]  s1_nres = (s1_is_rot3 || s1_is_nrm3)              ? 2'd3
+                      : (s1_is_noise2 || s1_is_rot2 || s1_is_nrm2) ? 2'd2
+                                                                   : 2'd1;
   always_comb begin
     unique case (s1_op)
       OP_DCURVE: begin s1_mode = 2'd1; s1_unit = UNIT_CURVE; end
@@ -380,6 +390,8 @@ module zhao_field_v2_core #(
       OP_NOISE2: begin s1_mode = 2'd0; s1_unit = UNIT_NOISE; end
       OP_ROT2:   begin s1_mode = 2'd0; s1_unit = UNIT_ROT;   end
       OP_ROT3:   begin s1_mode = 2'd1; s1_unit = UNIT_ROT;   end
+      OP_NRM2:   begin s1_mode = 2'd0; s1_unit = UNIT_NORM;  end
+      OP_NRM3:   begin s1_mode = 2'd1; s1_unit = UNIT_NORM;  end
       default:   begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
     endcase
   end
@@ -442,7 +454,8 @@ module zhao_field_v2_core #(
                      (ins_op_i == OP_LEN3) || (ins_op_i == OP_DIST2) ||
                      (ins_op_i == OP_RING) || (ins_op_i == OP_RIDGE) ||
                      (ins_op_i == OP_NOISE2) || (ins_op_i == OP_ROT2) ||
-                     (ins_op_i == OP_ROT3);
+                     (ins_op_i == OP_ROT3) || (ins_op_i == OP_NRM2) ||
+                     (ins_op_i == OP_NRM3);
   // A LENGTH IS LONG FOR THREE CYCLES, not two: stage 1, the steal, and the
   // dispatch. Between stage 1 and the dispatch there is a cycle where s1_valid
   // is already 0 and lq_valid is not yet 1, and a long op issuing into that
@@ -464,7 +477,7 @@ module zhao_field_v2_core #(
   // NOT "is a length" any more: NOISE2 reads reg[a+1] too, and ROT2/ROT3 and
   // NORMALIZE2/3 will. The steal fetches {a+1, a+2, b+1} and every one of them
   // wants some part of that, so the predicate is about the NEED, not the family.
-  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot;
+  wire s1_needs_pass2 = s1_is_len || s1_is_noise2 || s1_is_rot || s1_is_nrm;
   wire steal_now = s1_needs_pass2;
   assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
                       !(ins_is_long && long_slot_busy);
@@ -644,13 +657,13 @@ module zhao_field_v2_core #(
           nz_sat_add   || rt_sat_add)                 sat_add_o     <= 1'b1;
       if (cv_sat_mul  || rg_sat_mul  || rt_sat_mul)  sat_mul_o     <= 1'b1;
       if (cv_sat_resc || ln_sat_resc || rg_sat_resc ||
-          nz_sat_resc)                                sat_rescale_o <= 1'b1;
+          nz_sat_resc  || nm_sat_resc)                sat_rescale_o <= 1'b1;
       // The reciprocal's two lanes come from BOTH the ring's own accounting and
       // the reciprocal itself: the ring reports what it was told, and the unit
       // reports what it did. Taking only one of them would lose a reciprocal of
       // zero that the ring never asked about.
       if (rg_sat_rcp || rc_sat_rcp)                  sat_rcp_o     <= 1'b1;
-      if (rg_rcp0    || rc_rcp0)                     rcp_zero_o    <= 1'b1;
+      if (rg_rcp0    || rc_rcp0    || nm_rcp0)       rcp_zero_o    <= 1'b1;
 
       // ---- long-op reply: write back and release the wavefront -----------
       if (lm_rsp_valid) begin
@@ -703,6 +716,7 @@ module zhao_field_v2_core #(
   logic               rg_sat_add, rg_sat_mul, rg_sat_resc, rg_sat_rcp, rg_rcp0;
   logic               nz_sat_add, nz_sat_resc;
   logic               rt_sat_add, rt_sat_mul;
+  logic               nm_rcp0, nm_sat_resc;
   logic               rc_sat_rcp, rc_rcp0;
 
   // The serialiser's single unit port, and the two units behind the mux.
@@ -720,6 +734,14 @@ module zhao_field_v2_core #(
   logic               nz_ready, nz_rvalid;
   logic               rt_ready, rt_rvalid;
   logic signed [31:0] rt_o0, rt_o1, rt_o2;
+  logic               nm_ready, nm_rvalid;
+  logic signed [31:0] nm_o0, nm_o1, nm_o2;
+
+  // The normalize unit's own call into the shared integer square root. This is
+  // the SECOND consumer -- the length family was the first -- which is why the
+  // isqrt's four wires become a mux below rather than a direct connection.
+  logic        nm_sq_valid, nm_sq_rready;
+  logic [63:0] nm_sq_n;
 
   // v2's FIFTH shared resource. zhao_field_rot does not own a sine table -- it
   // borrows the engine's one, and v2 had none because nothing it executed
@@ -748,8 +770,8 @@ module zhao_field_v2_core #(
   logic signed [32:0] mul_a, mul_b;
   logic signed [65:0] mul_p;
   logic               cv_mul_issue, ln_mul_issue, rg_mul_issue, rc_mul_issue;
-  logic               nz_mul_issue, rt_mul_issue;
-  logic signed [32:0] nz_mul_a, nz_mul_b, rt_mul_a, rt_mul_b;
+  logic               nz_mul_issue, rt_mul_issue, nm_mul_issue;
+  logic signed [32:0] nz_mul_a, nz_mul_b, rt_mul_a, rt_mul_b, nm_mul_a, nm_mul_b;
   logic signed [32:0] cv_mul_a, cv_mul_b, ln_mul_a, ln_mul_b;
   logic signed [32:0] rg_mul_a, rg_mul_b, rc_mul_a, rc_mul_b;
 
@@ -821,9 +843,51 @@ module zhao_field_v2_core #(
       .result_o(sin_result)
   );
 
-  // The shared integer square root, used only by the length family today.
+  // v1's normalize unit, UNMODIFIED. NORMALIZE2 is is3_i = 0 and NORMALIZE3 is
+  // is3_i = 1. It does NOT use the shared reciprocal -- it carries its own
+  // rcp24 ROM -- and it DOES use the shared square root, which is why that is
+  // now muxed.
+  //
+  // rcp0_o is raised by NORMALIZE2 ONLY, by that unit's law 3. NORMALIZE3 does
+  // not raise it. That asymmetry is the unit's and the oracle's; a test
+  // expecting the lane on NORMALIZE3 would be testing an assumption.
+  zhao_field_normalize u_norm (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(u_valid && to_norm), .v_ready_o(nm_ready),
+      .is3_i(u_mode[0]),
+      .a0_i(u_a), .a1_i(u_a1), .a2_i(u_a2),
+      .r_valid_o(nm_rvalid), .r_ready_i(u_rready && to_norm),
+      .o0_o(nm_o0), .o1_o(nm_o1), .o2_o(nm_o2),
+      .rcp0_o(nm_rcp0), .sat_rescale_o(nm_sat_resc),
+      .mul_issue_o(nm_mul_issue), .mul_a_o(nm_mul_a), .mul_b_o(nm_mul_b),
+      .mul_p_i(mul_p), .mul_valid_i(mul_p_valid),
+      .sqrt_valid_o(nm_sq_valid), .sqrt_ready_i(isq_ready), .sqrt_n_o(nm_sq_n),
+      .sqrt_rvalid_i(isq_rvalid), .sqrt_rready_o(nm_sq_rready), .sqrt_r_i(isq_r)
+  );
+
+  // The shared integer square root, now serving the length family AND normalize.
   logic        sq_valid, sq_ready, sq_rvalid, sq_rready;
   logic [63:0] sq_n, sq_r;
+
+  // ---- THE INTEGER SQUARE ROOT NOW HAS TWO CONSUMERS ---------------------
+  // It was wired straight to u_len, because the length family was the only
+  // caller. NORMALIZE is the second, so the four wires become a mux on the
+  // captured unit id -- the same shape as the multiplier's, licensed by the
+  // same fact: the interlock keeps ONE long operation in the machine, so at
+  // most one unit is asking.
+  //
+  // It is a MUX, NOT AN ARBITER, and it becomes wrong the moment two long ops
+  // can run concurrently. Stated here rather than discovered then.
+  logic        isq_valid, isq_ready, isq_rvalid, isq_rready;
+  logic [63:0] isq_n, isq_r;
+
+  assign isq_valid  = to_norm ? nm_sq_valid  : sq_valid;
+  assign isq_n      = to_norm ? nm_sq_n      : sq_n;
+  assign isq_rready = to_norm ? nm_sq_rready : sq_rready;
+
+  assign sq_ready   = to_norm ? 1'b0 : isq_ready;
+  assign sq_rvalid  = to_norm ? 1'b0 : isq_rvalid;
+  assign sq_r       = isq_r;
 
   zhao_field_v2_lanemux #(.LANES(LANES), .WFS(WFS), .REGS(REGS)) u_lanemux (
       .clk(clk), .rst_n(rst_n),
@@ -861,11 +925,18 @@ module zhao_field_v2_core #(
   wire to_ring  = (u_unit == UNIT_RING);
   wire to_noise = (u_unit == UNIT_NOISE);
   wire to_rot   = (u_unit == UNIT_ROT);
+  wire to_norm  = (u_unit == UNIT_NORM);
 
   always_comb begin
     u_result1 = 32'sd0;
     u_result2 = 32'sd0;
-    if (to_rot) begin
+    if (to_norm) begin
+      u_ready   = nm_ready;
+      u_rvalid  = nm_rvalid;
+      u_result  = nm_o0;
+      u_result1 = nm_o1;
+      u_result2 = nm_o2;
+    end else if (to_rot) begin
       u_ready   = rt_ready;
       u_rvalid  = rt_rvalid;
       u_result  = rt_o0;
@@ -907,6 +978,10 @@ module zhao_field_v2_core #(
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
+    end else if (to_norm) begin
+      mul_issue = nm_mul_issue;
+      mul_a     = nm_mul_a;
+      mul_b     = nm_mul_b;
     end else if (to_rot) begin
       mul_issue = rt_mul_issue;
       mul_a     = rt_mul_a;
@@ -965,8 +1040,8 @@ module zhao_field_v2_core #(
   // Earth program calls NORMALIZE.
   zhao_field_isqrt u_isqrt (
       .clk(clk), .rst_n(rst_n),
-      .n_valid_i(sq_valid), .n_ready_o(sq_ready), .n_i(sq_n),
-      .r_valid_o(sq_rvalid), .r_ready_i(sq_rready), .r_o(sq_r)
+      .n_valid_i(isq_valid), .n_ready_o(isq_ready), .n_i(isq_n),
+      .r_valid_o(isq_rvalid), .r_ready_i(isq_rready), .r_o(isq_r)
   );
 
   zhao_field_mul u_mul (

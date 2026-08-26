@@ -5,6 +5,62 @@ at the top.*
 
 ---
 
+## 2026-08-26 — THE FIELD ENGINE DOES EVERYTHING NOW
+
+### All fourteen
+
+The new Field engine runs **every operation the instruction set has**. The last
+two — normalise, in its 2D and 3D forms — went in tonight.
+
+| | |
+|---|---|
+| plain arithmetic (12 operations) | yes |
+| curves, in three forms | yes |
+| distances, in three forms | yes |
+| rings | yes |
+| ridges and noise | yes |
+| rotations, 2D and 3D | yes |
+| **normalise, 2D and 3D** | **yes** |
+
+**And it is still 27.8x faster than the old engine.** That number has not moved
+while all of this was added, which was the thing to protect: it would have been
+easy to complete the instruction set by slowing the common path down.
+
+### What that means in plain terms
+
+The Field engine is the part that shapes terrain — it runs a small program over
+every point of the ground, thousands of points per patch. It was the measured
+bottleneck. It is no longer missing anything.
+
+### What is genuinely left
+
+**The front of it.** The engine executes programs; something has to hand it
+programs and point it at each patch of ground. The old engine does that; the new
+one is currently fed by test code.
+
+That is the last piece of the Field work.
+
+### Two mistakes tonight, both mine, both caught by the same kind of check
+
+Worth telling because they were the same mistake twice.
+
+When you write a test you have to invent inputs, and it is natural to pick
+convenient ones. Convenient numbers tend to be *symmetric* — and symmetry is
+exactly where two different things accidentally become equal.
+
+* For rotations I picked an angle of 45 degrees, where sine and cosine are the
+  same number. A hardware fault that swapped them would have been invisible.
+* For normalise I built test vectors by scaling one direction, so every one of
+  them pointed the same way. Normalise throws away length and keeps direction —
+  so all 32 test cases returned the identical answer, and any fault that got the
+  direction wrong for *specific* inputs would have been invisible.
+
+The first was caught by deliberately breaking the hardware and noticing the test
+did not complain. The second was caught by a rule added after the first: every
+test must check its own answers are actually *different* from each other.
+
+---
+
 ## 2026-08-26 — rotations, and eleven of fourteen
 
 ### What now works

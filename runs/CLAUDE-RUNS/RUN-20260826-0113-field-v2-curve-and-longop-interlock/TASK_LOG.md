@@ -884,3 +884,46 @@ section went 79 -> **99 checks** and M139 is now CAUGHT.
 
 The reason for the angle choice is now written into the test itself, because the
 failure mode is reusable and the next person will reach for a round number too.
+
+## 2026-08-26 09:30 UTC+02:00 - NORMALIZE2/3: ALL FOURTEEN FIELD OPS RUN ON v2
+
+106 checks. The last two operations needed no new front-end machinery -- the
+second read pass and the multi-result reply already covered them.
+
+The one addition: **the integer square root got a SECOND CONSUMER.** It was
+wired straight to `u_len` because the length family was the only caller. It is
+now muxed on the captured unit id -- the same shape as the multiplier, licensed
+by the same interlock, carrying the same recorded caveat that it is a mux and
+not an arbiter.
+
+### Section 18c is the check that actually matters
+
+A mux that fed normalize by STARVING the length family would pass 18a and 18b
+completely -- both only exercise the new opcode. So 18c runs NORMALIZE3 and LEN3
+in ONE program and checks both: 3,269 clocks, both right. Two of the eight new
+mutants attack that in each direction (M145 starves normalize, M147 starves the
+length family).
+
+### My non-degeneracy guard caught MY OWN TEST, again
+
+`18.NORMALIZE2's answers actually vary` FAILED: 1 distinct value across 32
+wavefront/lane pairs.
+
+I generated vectors as `(idx+1) * (k+3) * 7717`, which scales one direction by
+the lane index -- **the ratio stays 3:4 for every lane, and normalize discards
+magnitude.** All 32 lanes normalised to the same unit vector.
+
+That is the SAME FAMILY as picking 45 degrees for a rotation: a symmetry
+introduced by the convenient way to generate inputs, not by the design. Twice in
+one session, which is the argument for the guards paying their cost.
+
+Fixed in all three sub-sections by varying DIRECTION rather than length, with
+the reasoning written into the test.
+
+### Eight mutants (M143-M150), seven older ones re-anchored
+
+M114, M116, M128, M129, M137, M142 drifted (the count expression, the pass-2
+predicate, the mul chain and the rcp0 fold all grew a normalize arm) and M145
+orphaned a signal. Fifth time this session that editing a shared line
+invalidated other mutants' anchors; the preflight caught all of them before the
+sweep started.

@@ -1293,3 +1293,59 @@ OP_RCP, and wiring NORMALIZE does not fire it.
 `rcp0_o` is documented as "set only by NORMALIZE2, see law 3". NORMALIZE3 does
 not raise it. That asymmetry is the unit's law and the oracle's; a test that
 expects the lane on NORMALIZE3 would be testing my assumption, not the design.
+
+---
+
+## ALL FOURTEEN OPERATIONS RUN ON v2, and M149's two wrong readings
+
+*2026-08-26.* NORMALIZE2/3 landed at 109 checks. The instruction set is complete
+on the new engine, and the ALU path is still **3.97 vertex-instructions per
+clock**, 27.8x v1 -- unchanged from the day it was measured, which was the thing
+to protect while everything else was added.
+
+    sweep: 71 mutants = 69 caught + 2 proven equivalent, 0 unexplained
+
+### The square root got a second consumer
+
+It was wired straight to `u_len` because the length family was the only caller.
+NORMALIZE makes it two, so it is muxed on the captured unit id -- the same shape
+as the multiplier, licensed by the same interlock, carrying the same caveat.
+
+**Section 18c is the check that earns it.** A mux that fed normalize by
+STARVING the length family passes 18a and 18b completely, because both only
+exercise the new opcode. 18c runs NORMALIZE3 and LEN3 in one program and checks
+both. Two mutants attack it in each direction.
+
+### M149, and why I was wrong twice
+
+    M149 normalize's rescale saturation never reaches the ledger  *** SURVIVED ***
+
+**First reading: "another ledger hole -- write a saturation test for
+normalize."** Wrong. A probe of the shipped primitives -- 6,000,000 random
+vectors plus the extremes -- gives ZERO rescale saturations, with the worst
+output magnitude exactly 65,536. Normalize returns a UNIT VECTOR; the lane fires
+above 2^31. It is unreachable by construction, not by omission.
+
+**Second reading: "then it is a proven equivalent."** Also wrong, and this is
+the one worth keeping. The mutation is `(cv || ln || rg || nz) && nm`. If `nm`
+can never fire, the mutant does not merely neuter normalize -- **it silences
+`sat_rescale_o` for EVERY unit in the engine.** It survived because
+`sat_rescale_o` appeared NOWHERE in the differential: an entire ledger lane was
+untested across all fourteen operations.
+
+Had I stopped at the first reading I would have written a test that can never
+fire. Had I stopped at the second I would have signed a FALSE PROOF OF
+EQUIVALENCE -- which this sweep's own rules call worse than an open hole,
+because it is believed and stops anyone looking again.
+
+The fix goes where the lane is reachable: a DIST2 whose two differences both
+saturate to INT32_MAX has length 3,037,000,498, which does not fit in s32. Both
+directions, with the oracle asserting first that the operands really do overflow.
+
+### The generalisation
+
+A mutant that ANDs a never-firing term into a condition does not test that term
+-- it tests **everything else in the condition**. When a survivor's mutation
+touches a signal that cannot fire, the question is not "is this equivalent" but
+"what else did I just disable, and was any of it tested".
+
