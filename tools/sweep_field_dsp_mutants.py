@@ -914,9 +914,13 @@ MUTS = [
     ("M159 the queue advances even on a clock the ALU took the write port", F_V2,
      """  wire                wbq_go = wbq_busy && !s1_writes;""",
      """  wire                wbq_go = wbq_busy;"""),
+    # M160 moved with the storage: the replicas are module instances now, so
+    # "one replica is never written" is a write-enable tied off on one of them.
     ("M160 one replica is never written, so operand b reads stale", F_V2,
-     """          rf_b[l][wb_addr] <= wb_data[l];""",
-     """          rf_c[l][wb_addr] <= wb_data[l];"""),
+     """      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_b (
+          .clk(clk), .we_i(wb_we[gl]), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),""",
+     """      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_b (
+          .clk(clk), .we_i(1'b0), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),"""),
     ("M161 a host write broadcasts to every lane", F_V2,
      """      wb_we[h_lane_i]   = 1'b1;""",
      """      for (wl = 0; wl < LANES; wl++) wb_we[wl] = 1'b1;"""),

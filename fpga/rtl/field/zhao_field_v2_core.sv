@@ -187,10 +187,10 @@ module zhao_field_v2_core #(
   // reader -- a, b, c and the host -- with every write mirrored into all
   // four. Replication buys READ ports; it does nothing for write ports, so
   // the write side is reduced to exactly one port below.
-  logic signed [31:0] rf_a [LANES][0:(1<<RFAW)-1];
-  logic signed [31:0] rf_b [LANES][0:(1<<RFAW)-1];
-  logic signed [31:0] rf_c [LANES][0:(1<<RFAW)-1];
-  logic signed [31:0] rf_h [LANES][0:(1<<RFAW)-1];
+  // The arrays themselves live in zhao_field_rf_ram, one instance per lane per
+  // reader, because `[LANES][0:511]` inside this always_ff is two-dimensional
+  // and shares a process with the whole issue machine -- measured 2026-08-26 to
+  // infer as 75,835 flops with zero ram-conversion warnings either way.
   logic signed [31:0] rd_a [LANES];
   logic signed [31:0] rd_b [LANES];
   logic signed [31:0] rd_c [LANES];
@@ -578,6 +578,30 @@ module zhao_field_v2_core #(
     end
   end
 
+  // ---- the storage ------------------------------------------------------
+  // LANES x 4 memories: one per lane per reader. Every one takes the SAME
+  // write -- address, data and enable -- which is what keeps the replicas
+  // identical and lets any of them answer for the file. Replication buys read
+  // ports; it does nothing for write ports, which is why there is exactly one
+  // write port above.
+  genvar gl;
+  generate
+    for (gl = 0; gl < LANES; gl++) begin : g_rf
+      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_a (
+          .clk(clk), .we_i(wb_we[gl]), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),
+          .raddr_i({rd_wf, addr_a}), .rdata_o(rd_a[gl]));
+      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_b (
+          .clk(clk), .we_i(wb_we[gl]), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),
+          .raddr_i({rd_wf, addr_b}), .rdata_o(rd_b[gl]));
+      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_c (
+          .clk(clk), .we_i(wb_we[gl]), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),
+          .raddr_i({rd_wf, addr_c}), .rdata_o(rd_c[gl]));
+      zhao_field_rf_ram #(.AW(RFAW), .DW(32)) u_rf_h (
+          .clk(clk), .we_i(wb_we[gl]), .waddr_i(wb_addr), .wdata_i(wb_data[gl]),
+          .raddr_i({h_rwf_i, h_rreg_i}), .rdata_o(h_rd[gl]));
+    end
+  endgenerate
+
   // ---- sequential ------------------------------------------------------
   integer i, l;
   always_ff @(posedge clk or negedge rst_n) begin
@@ -661,14 +685,7 @@ module zhao_field_v2_core #(
       end
 
       // ---- register reads land here ----
-      // One reader per replica, and each replica is written identically, so
-      // any of them answers for the file as a whole.
-      for (l = 0; l < LANES; l++) begin
-        rd_a[l] <= rf_a[l][{rd_wf, addr_a}];
-        rd_b[l] <= rf_b[l][{rd_wf, addr_b}];
-        rd_c[l] <= rf_c[l][{rd_wf, addr_c}];
-        h_rd[l] <= rf_h[l][{h_rwf_i, h_rreg_i}];
-      end
+      // The register reads happen in the rams, not here.
 
       // Save pass 1's a and b before the steal overwrites those ports. This
       // fires on the cycle the length is in stage 1, which is the last cycle
@@ -807,18 +824,7 @@ module zhao_field_v2_core #(
       // and not when its reply arrives.
       instr_retired_o <= instr_retired_o + 32'(retire_s1) + 32'(retire_long);
 
-      // ---- the single write port, mirrored into every replica ----
-      // Same address, same data, same clock, four times. That is what keeps
-      // the replicas identical, and it is why any one of them can answer a
-      // read on its own port.
-      for (l = 0; l < LANES; l++) begin
-        if (wb_we[l]) begin
-          rf_a[l][wb_addr] <= wb_data[l];
-          rf_b[l][wb_addr] <= wb_data[l];
-          rf_c[l][wb_addr] <= wb_data[l];
-          rf_h[l][wb_addr] <= wb_data[l];
-        end
-      end
+      // The register writes happen in the rams, not here.
     end
   end
 

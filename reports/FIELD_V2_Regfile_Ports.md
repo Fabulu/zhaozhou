@@ -174,3 +174,60 @@ once the storage is rebuilt.
 It does not say the engine is wrong. It says the storage is written in a shape
 no FPGA can build. Every throughput result stands as a simulation result and
 none of them is affected by how the registers are physically held.
+---
+
+# THE REBUILD, AND WHAT EACH STEP ACTUALLY BOUGHT
+
+Three measurements, one variable at a time. Same tool, same device, same top.
+
+| | ALMs | comb ALUTs | registers | block mem bits | inferred memories | map time |
+| --- | --- | --- | --- | --- | --- | --- |
+| one array, 4 read ports, 4 write sources | 121,292 | 133,338 | 75,438 | 4,369 | 1 | 2,907 s |
+| four read replicas, one write port | 66,386 | 66,292 | 75,835 | 4,369 | 1 | 2,326 s |
+| **the same, with the arrays in their own module** | **8,663** | **10,586** | **9,787** | **266,513** | **17** | **258 s** |
+
+Against a device with 41,910 ALMs and 553 M10K: **21% of the logic.**
+
+## The middle row is the interesting one
+
+Replicating for reads and reducing to one write port **halved the
+combinational logic** — the read multiplexers went away, which is what
+replication is for — and moved the storage **not at all**. 75,835 registers,
+the same 4,369 memory bits, still zero RAM-conversion warnings.
+
+So the port count was never the whole problem, and if the work had stopped
+there it would have looked like a failed theory. What was still wrong was the
+*shape of the declaration*:
+
+1. `rf_a [LANES][0:511]` is a **two-dimensional** unpacked array. A memory has
+   one dimension. The lane index had to become separate module instances, not
+   an outer array dimension.
+2. The reads and writes lived inside the core's main `always_ff`, alongside the
+   entire issue-and-retire machine. Inference wants the memory process to
+   contain the memory and nothing else.
+
+`zhao_field_rf_ram.sv` is that module and is deliberately nothing more.
+
+## The cheap check that should have come first
+
+Mapping the 30-line module **on its own** took **39.9 seconds** and reported
+`membits 16384` — exactly 512 × 32. One minute to know the shape infers,
+against forty for the whole block. Every future storage question should be
+asked that way round.
+
+## The arithmetic closes
+
+266,513 = 16 × 16,384 + 4,369: sixteen register-file memories (four lanes ×
+four readers) plus the sine ROM, to the bit. The prediction written before the
+first report said 3 read ports per lane and reasoned about banking; what
+shipped is 4 readers per lane and no banking, because sequencing the
+multi-result reply removed the need for it. The banking arithmetic in the
+section above is therefore **superseded, not confirmed** — it was a workable
+plan for a problem that a simpler change dissolved.
+
+## What is still not known
+
+Fmax. Everything above is Analysis & Synthesis; none of it is placed or timed.
+The old v1 engine, `zhao_field_seq`, fits at 4,494 ALMs and closes at
+**59.0 MHz**, and that is the number this has to beat to be worth its extra
+area. A fit is running.

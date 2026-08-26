@@ -1741,6 +1741,7 @@ verilate(test_field_v2_core_directed
   TOP_MODULE zhao_field_v2_core
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_core.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_lanemux.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rf_ram.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -1765,6 +1766,7 @@ verilate(test_field_v2_front_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_front.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_core.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v2_lanemux.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rf_ram.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
