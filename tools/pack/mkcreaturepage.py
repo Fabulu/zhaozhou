@@ -135,7 +135,10 @@ def body_tile(g_green, g_pink, rng):
     t = tint(GREEN, g_green)
     p = tint(PINK, g_pink)
     back = 48  # U = 192/256
-    half = 6.0  # a delicate ribbon, as drawn -- 7 read heavy from the side
+    # 4.5, not 6. A 26-degree-down camera shows mostly the animal's BACK, so
+    # a band sized to look right in the side-view drawing dominates the render.
+    # Narrowed together with a shallower showcase camera; judged from a render.
+    half = 4.5
     for y in range(TILE):
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
         # the page is byte-identical on every machine

@@ -2954,7 +2954,16 @@ void zixx_common(SceneSubject& s) {
   // frame -- too small to judge, let alone enjoy. A creature showcase should
   // fill its frame; the orbit keeps it centred.
   s.cam_k = 400000;
-  s.cam_eye = 13;
+  // SHALLOWER CAMERA for the showcase. The default 26-degree-down look shows
+  // mostly the creature's BACK, so the dorsal band dominated and the S was
+  // foreshortened into a half-bend. The concept sheets are a SIDE view -- get
+  // closer to that. sin/cos of ~15 degrees.
+  s.cam_ps = 16962;
+  s.cam_pc = 63313;
+  // 11, not 13: the aim point is eye - tan(pitch)*dist, so flattening the
+  // pitch RAISES the aim. Left at 13 the shot looked at empty sky above the
+  // animal. tan(15) = 0.268, so 11 - 2.14 lands back on the terrain crown.
+  s.cam_eye = 11;
   s.cam_dist = 8;
   s.cam_bias = 0;
   // dry ground: the flank green comes off the concept sheet and the default
