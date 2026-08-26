@@ -447,6 +447,38 @@ module zhao_vertex_arena #(
       // STILL FAILING, AND NOT CLAIMED OTHERWISE: bmc does not pass. The
       // packed-vector change removed one real modelling gap and did not close
       // the proof. The CI lane stays unregistered.
+      //
+      // 2026-08-26, RE-RUN WITH A SOLVER THAT NAMES THE PROPERTY. The shipped
+      // engine is `btor btormc`, which reports only FAIL and leaves the reader
+      // to guess which assertion broke; the stored logfile names nothing. Run
+      // under `smtbmc yices` instead, the answer is explicit:
+      //
+      //     failed assertion zhao_vertex_arena.p_array_implies_shadow
+      //     at zhao_vertex_arena.sv:423 step 3
+      //
+      // TWO THINGS THAT CHANGES.
+      //
+      // 1. The note above says re-asking this with the packed vector "returns
+      //    UNSAT at k=3 in BOTH directions -- so the invariant HOLDS". **The
+      //    shipped assertion still fails at step 3.** Whatever was re-asked, it
+      //    was not this. That claim should not be relied on.
+      //
+      // 2. The counterexample is again a COMPLETELY IDLE trace: rst_n released,
+      //    no open, no fill, `valid_q` all zeros, `f_shadow_valid` zero. With
+      //    `valid_q` all zero, `!valid_q[f_addr]` is true for every in-range
+      //    f_addr and the assertion is trivially satisfied -- so the dump is not
+      //    showing the signals the solver is reasoning about. That is the SAME
+      //    trap this file records twice above, and it survived the packed-vector
+      //    change, which means the packed vector was not the whole of it.
+      //
+      // What is NOT yet ruled out, and is the next thing to ask the solver
+      // DIRECTLY rather than dump: whether `f_arena`/`f_index` are constrained
+      // at the step the assertion is evaluated. The assumes bounding them sit
+      // in a clocked block; if they do not hold at every step the solver may
+      // pick an out-of-range watched key, and `valid_q[f_addr]` is then an
+      // out-of-range bit-select -- which is X, and `!X || 0` is not true.
+      // That is a HYPOTHESIS. It has not been tested, and the four before it
+      // were all refuted, so it is written as a question and not as a finding.
 
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so
