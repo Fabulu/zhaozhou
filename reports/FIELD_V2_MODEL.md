@@ -772,3 +772,202 @@ vacuous and still report green.
   and a preflight capturing a MUTATED baseline as gold. The sweep now takes a
   lock recording pid, start time and subset.
 
+---
+
+## RING landed, and the multiplier's rule was wrong in a way worth stating
+
+*2026-08-26.*
+
+RING executes: 52 checks, 16 instructions in 1,556 clocks, matched per lane
+against `zfield::interpret` inside the band, at both edges, and outside them.
+
+### The prediction held
+
+The note above said RING would be CHEAPER to reach than the length family
+because it takes three operands from the natural a/b/c ports. It was. No steal
+cycle, no new read path, and the operand bundle built for DIST2 carried
+`d/r0/r1` with no change at all. The expensive increment paid for the cheap one.
+
+### The rule that was wrong
+
+v2's multiplier mux rested on this, written in the core's own comment:
+
+> the interlock guarantees at most ONE long operation is in the machine at a
+> time, so at most one unit is ever active
+
+That is true, and it is not sufficient. **One operation can contain two
+consumers.** `zhao_field_ring` drives the lane, and the `zhao_field_rcp` it calls
+twice drives it too. Nothing about the interlock prevents that, because the
+interlock is about operations and this is about users.
+
+The correction is v1's, verbatim in structure: a priority chain with the
+reciprocal on top.
+
+```systemverilog
+if (rc_mul_issue)       mul <= rcp;     // the reciprocal outranks
+else if (to_ring)       mul <= ring;
+else if (to_len)        mul <= len;
+else                    mul <= curve;
+```
+
+Mirroring rather than inventing is the point. v1's differential already proves
+this arrangement against this oracle for these units; a different scheme would
+be a new thing to prove, for no gain.
+
+**The generalisation for whoever adds the next unit:** ask not "can two
+operations overlap" but "does this operation call anything that also needs the
+shared lane". NORMALIZE calls the reciprocal too.
+
+### Section 13, and why rcp0 is the interesting lane
+
+Applying M106's rule -- every unit on this seam needs a saturation case -- RING's
+five lanes include one that is not a saturation: `rcp0`, a reciprocal of zero.
+
+RING reaches it from an input any caller can supply. `r0 == r1` is a band of zero
+width; the midpoint collapses onto both edges; both smoothsteps get
+`e1 - e0 == 0` and hit the pinned `field_rcp` zero rule that `zref_trig.hpp`
+SS7.3 documents in its own comment. This is not an exotic overflow -- it is a
+degenerate band, and a caller computing radii from game state will produce one.
+
+Tested in both directions, because a lane wired stuck-at-one passes the
+degenerate case unaided.
+
+---
+
+## Correction to the work order: RIDGE is cheap, and it comes before NOISE2
+
+*2026-08-26. The section above bundled RIDGE with NOISE2 behind two interface
+changes. Reading `zhao_field_noise`'s ports says that is wrong and costs an
+increment.*
+
+`zhao_field_noise` serves both ops on an `is_ridge_i` select, and RIDGE is the
+easy half:
+
+| | reads | writes | needs |
+| --- | --- | --- | --- |
+| RIDGE | `reg[a]`, `reg[b]` -- **both natural ports** | `o0_o` only | the immediate |
+| NOISE2 | `reg[a]`, `reg[a+1]` | `o0_o`, `o1_o` | the immediate, a steal cycle, TWO results |
+
+So **RIDGE needs only the immediate port.** No steal cycle, no multi-result
+reply, no priority-chain change (it drives the multiplier but calls no
+reciprocal). That makes it the same shape as RING: one unit, a mode select,
+operands already in hand.
+
+### Revised order
+
+1. **The immediate port, and RIDGE with it.** One interface change, one opcode,
+   one sweep. `ins_imm_i` on the core, captured at issue, carried through the
+   request like the mode and the unit selector.
+2. **The multi-result write-back**, which is the only thing then standing between
+   v2 and NOISE2, ROT2, ROT3, NORMALIZE2/3.
+
+### The steal cycle generalises for free
+
+It is triggered today by `s1_is_len`. NOISE2, ROT2, ROT3 and NORMALIZE2/3 all
+read `a+1` (and ROT3/NORMALIZE3 `a+2`), which is exactly what the steal already
+fetches. That predicate becomes "needs a second pass" rather than "is a length",
+and nothing else about it changes -- including the stall, which is the part that
+matters and is already swept by M97.
+
+### So the remaining Field work is smaller than the opcode list suggests
+
+Six opcodes, but only ONE unbuilt mechanism between here and all of them: a reply
+that carries more than one value. Everything else is either built (the bundle,
+the steal, the interlock, the priority chain) or a mode select on a unit v1
+already proved.
+
+---
+
+## RING's sweep, and the sweep learns what "equivalent" means
+
+*2026-08-26.* 39 mutants, **36 caught, 2 proven equivalent, 1 real gap.**
+
+### The gap: M117
+
+RING's multiply saturation reached the ledger only beside a curve's, and nothing
+noticed. Sections 11 and 13 do not make a ring saturate a product -- 13 exercises
+`rcp0`, which is a different lane.
+
+It is reachable from an input a caller produces: RING divides by the band's
+half-span, so a **narrow band** gives a large reciprocal and `(x - e0) * r`
+overflows before smoothstep clamps `t`. A band 1/128 wide with the point 1,000
+units away does it. That is a thin ring seen from far off, not a contrived
+number. Section 14, both directions.
+
+This is the third time the ledger has been the hole and the values have been
+fine. The pattern is now explicit enough to state as a rule: **when a unit is
+wired to the seam, every ledger lane it can raise needs a case.** RING raises
+four; two of them (`rcp0`, `mul`) needed a test that did not exist.
+
+### The two equivalents, and why they are not the same kind
+
+**M114 -- the reciprocal loses its precedence on the multiplier.** Equivalent
+UNCONDITIONALLY. `zhao_field_ring` asserts `rcp_valid_o` only in `G_SPAN` and
+`mul_issue_o` only in `G_T/G_T2/G_2T/G_CUBE/G_FIN`, and waits in `G_SPANW` with
+`mul_issue_o` low while the reciprocal computes. The two cannot drive the lane in
+the same cycle. I had predicted this mutant would survive and predicted the wrong
+reason: I expected a test gap I could close by forcing contention. **No test can
+force it** -- the unit serialises its own demands. The chain stays because it is
+v1's and because a future unit may contend.
+
+**M116 -- rcp0 reaches the ledger only if both report it.** Equivalent TODAY.
+The ring latches `rcp0_o <= rcp0_o || rcp_zero_i` and is the reciprocal's only
+consumer, so the lanes always overlap. The `||` is defensive for a SECOND
+consumer, and NORMALIZE will be one. **Re-score M116 the moment a second consumer
+is wired**; it should then be caught, and if it is not, the OR is untested.
+
+### The mechanism, because the law was stated and enforced nowhere
+
+The sweep's header has always said survivors carry a proof of equivalence or they
+are holes. It printed both identically and, worse, **exited 0 either way** -- a
+hole could pass a gate that checked only the exit code.
+
+Now: `EQUIVALENT` in the mutants file maps a mutant's id token to its proof, and
+
+* declared + survived -> reported as equivalent, proof printed, run passes;
+* declared + **caught** -> **ABORT**. The proof is false, and a false proof is
+  worse than an unproven survivor because it is believed and stops anyone
+  looking again;
+* undeclared + survived -> the run **fails**, which it did not before.
+
+The last rule is what keeps the category from becoming a way to launder holes:
+declaring an equivalent costs writing a proof someone can check.
+
+---
+
+## NEXT INCREMENT: the immediate port, and RIDGE riding on it
+
+*2026-08-26. DESIGN AND RTL DRAFTED, NOT YET GATED -- no differential, no
+sweep, not committed. Written down before the evidence exists so the shape
+is on the record; do not read the tenses below as landed work.*
+
+*2026-08-26.* v2's instruction interface has been `{op, dst, a, b, c}` since it
+was written, because nothing it executed needed more. `ins_imm_i` is the first
+addition to it.
+
+Three opcodes read the immediate and they read it for **two different kinds of
+reason**, which is worth separating because only one of them is obvious:
+
+* RIDGE and NOISE2 take it as a hash **seed** -- a wrong seed gives different
+  noise, which is visibly wrong terrain and would be caught by any value test;
+* ROT3 takes it as an **axis select** -- and a dropped axis rotates about the
+  wrong one, which is a *plausible* world rather than a broken one. That is the
+  dangerous half, and it is why the immediate is carried through the serialiser
+  captured-once like the tag rather than read live.
+
+### RIDGE cost nothing beyond the port
+
+`zhao_field_noise` serves RIDGE on `is_ridge_i = 1`, reads `reg[a]` and `reg[b]`
+from the natural ports, and returns one value on `o0_o`. So it dispatches from
+stage 1 beside RING and CURVE, and the operand bundle carries `reg[b]` in `a1`
+exactly as RING's inner radius does.
+
+**NOISE2 is deliberately NOT wired**, though it is the same unit and one mode
+bit away. It writes two registers and the reply carries one. Wiring it now would
+mean either dropping `o1_o` -- half an answer, silently -- or bolting a second
+write onto a path not designed for it. It stays REFUSED with a status until the
+multi-result reply exists, which is the next increment.
+
+`o1_o` is therefore lint-waived as unused with a comment saying why and what
+will read it. An unexplained waiver is how a dropped output becomes permanent.
+

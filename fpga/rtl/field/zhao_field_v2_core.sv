@@ -111,6 +111,8 @@ module zhao_field_v2_core #(
     output logic        sat_add_o,
     output logic        sat_mul_o,
     output logic        sat_rescale_o,
+    output logic        sat_rcp_o,     // SatLedger::rcp
+    output logic        rcp_zero_o,    // SatLedger::rcp0 -- a reciprocal of zero
 
     // ---- observability ---------------------------------------------------
     output logic [31:0] instr_retired_o   // vector instructions retired
@@ -134,11 +136,13 @@ module zhao_field_v2_core #(
   localparam logic [7:0] OP_LEN2   = 8'h12;   // len mode 0
   localparam logic [7:0] OP_LEN3   = 8'h13;   // len mode 1
   localparam logic [7:0] OP_DIST2  = 8'h14;   // len mode 2
+  localparam logic [7:0] OP_RING   = 8'h21;   // its own unit, no mode
 
   // Which long-op unit a request is for. Carried through the serialiser, which
   // stays unit-agnostic; the routing is done here.
   localparam logic [1:0] UNIT_CURVE = 2'd0;
   localparam logic [1:0] UNIT_LEN   = 2'd1;
+  localparam logic [1:0] UNIT_RING  = 2'd2;
 
   localparam logic [7:0] ST_OK             = 8'd0;
   localparam logic [7:0] ST_PC_OVERRUN     = 8'd2;
@@ -296,6 +300,7 @@ module zhao_field_v2_core #(
         OP_END:    ;                       // retires the wavefront, writes nothing
         OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
         OP_LEN2, OP_LEN3, OP_DIST2:     ;  // dispatched, not executed here
+        OP_RING:                        ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
     end
@@ -310,9 +315,13 @@ module zhao_field_v2_core #(
                                 (s1_op == OP_DIST2));
   wire s1_is_curve = s1_valid && ((s1_op == OP_CURVE) || (s1_op == OP_DCURVE) ||
                                   (s1_op == OP_SPLINE));
+  // RING reads a, b and c -- the natural ports -- so it needs NO steal cycle and
+  // dispatches from stage 1 exactly as a curve does. It is grouped with the
+  // curve family for dispatch timing and separated from it only by the unit id.
+  wire s1_is_ring  = s1_valid && (s1_op == OP_RING);
   // "Long" is the property that matters to the scoreboard: dispatched to a unit
   // over the request/reply seam rather than executed here. Both families are.
-  wire s1_is_long  = s1_is_curve || s1_is_len;
+  wire s1_is_long  = s1_is_curve || s1_is_len || s1_is_ring;
 
   // The mode is per-UNIT, so the two families have independent encodings and
   // the unit selector is what disambiguates them. zhao_field_curve reads
@@ -326,6 +335,7 @@ module zhao_field_v2_core #(
       OP_LEN2:   begin s1_mode = 2'd0; s1_unit = UNIT_LEN;   end
       OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
       OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end
+      OP_RING:   begin s1_mode = 2'd0; s1_unit = UNIT_RING;  end
       default:   begin s1_mode = 2'd0; s1_unit = UNIT_CURVE; end
     endcase
   end
@@ -373,7 +383,8 @@ module zhao_field_v2_core #(
   // beside a long reply cannot collide with it.
   wire ins_is_long = (ins_op_i == OP_CURVE) || (ins_op_i == OP_DCURVE) ||
                      (ins_op_i == OP_SPLINE) || (ins_op_i == OP_LEN2) ||
-                     (ins_op_i == OP_LEN3) || (ins_op_i == OP_DIST2);
+                     (ins_op_i == OP_LEN3) || (ins_op_i == OP_DIST2) ||
+                     (ins_op_i == OP_RING);
   // A LENGTH IS LONG FOR THREE CYCLES, not two: stage 1, the steal, and the
   // dispatch. Between stage 1 and the dispatch there is a cycle where s1_valid
   // is already 0 and lq_valid is not yet 1, and a long op issuing into that
@@ -439,6 +450,8 @@ module zhao_field_v2_core #(
       sat_add_o      <= 1'b0;
       sat_mul_o      <= 1'b0;
       sat_rescale_o  <= 1'b0;
+      sat_rcp_o      <= 1'b0;
+      rcp_zero_o     <= 1'b0;
       for (i = 0; i < LANES; i++) begin
         lq_a[i]  <= '0;
         lq_a1[i] <= '0;
@@ -510,7 +523,7 @@ module zhao_field_v2_core #(
       // read. The length family dispatches ONE CYCLE LATER, when the second
       // read pass has landed -- which is the whole cost of not adding two more
       // register-file ports.
-      if (s1_is_curve) begin
+      if (s1_is_curve || s1_is_ring) begin
         lq_valid <= 1'b1;
         lq_wf    <= s1_wf;
         lq_dst   <= s1_dst;
@@ -518,8 +531,14 @@ module zhao_field_v2_core #(
         lq_unit  <= s1_unit;
         for (l = 0; l < LANES; l++) begin
           lq_a[l]  <= rd_a[l];
-          lq_a1[l] <= 32'sd0;
-          lq_a2[l] <= 32'sd0;
+          // RING's r0 and r1 ride a1/a2. A curve reads neither, and zeroing
+          // them there keeps a curve's request from carrying a stale radius
+          // that a mis-routed unit could read as real.
+          // RING's r0 and r1 ride a1/a2. A curve reads neither, and zeroing
+          // them there keeps a curve's request from carrying a stale radius
+          // that a mis-routed unit could read as real.
+          lq_a1[l] <= s1_is_ring ? rd_b[l] : 32'sd0;
+          lq_a2[l] <= s1_is_ring ? rd_c[l] : 32'sd0;
           lq_b0[l] <= 32'sd0;
           lq_b1[l] <= 32'sd0;
         end
@@ -545,9 +564,15 @@ module zhao_field_v2_core #(
       // DIST2's differences and its sat_rescale_o the narrow to s32; dropping
       // them would lose half the semantics of a length exactly as dangling
       // sat_* pins would have lost half of a curve's.
-      if (cv_sat_add  || ln_sat_add)  sat_add_o     <= 1'b1;
-      if (cv_sat_mul)                 sat_mul_o     <= 1'b1;
-      if (cv_sat_resc || ln_sat_resc) sat_rescale_o <= 1'b1;
+      if (cv_sat_add  || ln_sat_add  || rg_sat_add)  sat_add_o     <= 1'b1;
+      if (cv_sat_mul  || rg_sat_mul)                 sat_mul_o     <= 1'b1;
+      if (cv_sat_resc || ln_sat_resc || rg_sat_resc) sat_rescale_o <= 1'b1;
+      // The reciprocal's two lanes come from BOTH the ring's own accounting and
+      // the reciprocal itself: the ring reports what it was told, and the unit
+      // reports what it did. Taking only one of them would lose a reciprocal of
+      // zero that the ring never asked about.
+      if (rg_sat_rcp || rc_sat_rcp)                  sat_rcp_o     <= 1'b1;
+      if (rg_rcp0    || rc_rcp0)                     rcp_zero_o    <= 1'b1;
 
       // ---- long-op reply: write back and release the wavefront -----------
       if (lm_rsp_valid) begin
@@ -587,20 +612,58 @@ module zhao_field_v2_core #(
   logic [5:0]         cv_seg_unused;
   logic               cv_sat_add, cv_sat_mul, cv_sat_resc;
   logic               ln_sat_add, ln_sat_resc;
+  logic               rg_sat_add, rg_sat_mul, rg_sat_resc, rg_sat_rcp, rg_rcp0;
+  logic               rc_sat_rcp, rc_rcp0;
 
   // The serialiser's single unit port, and the two units behind the mux.
   logic               u_valid, u_ready, u_rvalid, u_rready;
   logic [1:0]         u_mode, u_unit;
   logic signed [31:0] u_a, u_a1, u_a2, u_b0, u_b1, u_result;
   logic               cv_ready, cv_rvalid, ln_ready, ln_rvalid;
-  logic signed [31:0] cv_result, ln_result;
+  logic               rg_ready, rg_rvalid;
+  logic signed [31:0] cv_result, ln_result, rg_result;
+
+  // RING's own call into the shared reciprocal.
+  logic               rg_rcp_valid, rg_rcp_rready;
+  logic signed [31:0] rg_rcp_a;
+  logic               rc_ready, rc_rvalid;
+  logic signed [31:0] rc_result;
 
   // One multiplier, muxed on the captured unit id -- see the routing note.
   logic               mul_issue, mul_p_valid;
   logic signed [32:0] mul_a, mul_b;
   logic signed [65:0] mul_p;
-  logic               cv_mul_issue, ln_mul_issue;
+  logic               cv_mul_issue, ln_mul_issue, rg_mul_issue, rc_mul_issue;
   logic signed [32:0] cv_mul_a, cv_mul_b, ln_mul_a, ln_mul_b;
+  logic signed [32:0] rg_mul_a, rg_mul_b, rc_mul_a, rc_mul_b;
+
+  // v1's ring unit, UNMODIFIED. Three operands straight off the natural ports,
+  // so it needs no steal cycle -- it is the cheapest long op to reach, and the
+  // operand bundle built for DIST2 carries d/r0/r1 unchanged.
+  zhao_field_ring u_ring (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(u_valid && to_ring), .v_ready_o(rg_ready),
+      .d_i(u_a), .r0_i(u_a1), .r1_i(u_a2),
+      .r_valid_o(rg_rvalid), .r_ready_i(u_rready && to_ring), .result_o(rg_result),
+      .sat_add_o(rg_sat_add), .sat_mul_o(rg_sat_mul), .sat_rescale_o(rg_sat_resc),
+      .sat_rcp_o(rg_sat_rcp), .rcp0_o(rg_rcp0),
+      .rcp_valid_o(rg_rcp_valid), .rcp_ready_i(rc_ready), .rcp_a_o(rg_rcp_a),
+      .rcp_rvalid_i(rc_rvalid), .rcp_rready_o(rg_rcp_rready),
+      .rcp_result_i(rc_result), .rcp_sat_i(rc_sat_rcp), .rcp_zero_i(rc_rcp0),
+      .mul_issue_o(rg_mul_issue), .mul_a_o(rg_mul_a), .mul_b_o(rg_mul_b),
+      .mul_p_i(mul_p), .mul_valid_i(mul_p_valid)
+  );
+
+  // The shared reciprocal. RING is its only caller today; RCP and NORMALIZE
+  // would be the others, and no committed Earth program calls NORMALIZE.
+  zhao_field_rcp u_rcp (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(rg_rcp_valid), .v_ready_o(rc_ready), .a_i(rg_rcp_a),
+      .r_valid_o(rc_rvalid), .r_ready_i(rg_rcp_rready), .result_o(rc_result),
+      .sat_rcp_o(rc_sat_rcp), .rcp0_o(rc_rcp0),
+      .mul_issue_o(rc_mul_issue), .mul_a_o(rc_mul_a), .mul_b_o(rc_mul_b),
+      .mul_p_i(mul_p), .mul_valid_i(mul_p_valid)
+  );
 
   // The shared integer square root, used only by the length family today.
   logic        sq_valid, sq_ready, sq_rvalid, sq_rready;
@@ -636,15 +699,54 @@ module zhao_field_v2_core #(
   //
   // If MUL_LANES > 1 ever lets two long ops run concurrently, this mux becomes
   // wrong and must become an arbiter. Stated here rather than discovered then.
-  wire to_len = (u_unit == UNIT_LEN);
+  wire to_len  = (u_unit == UNIT_LEN);
+  wire to_ring = (u_unit == UNIT_RING);
 
-  assign u_ready  = to_len ? ln_ready  : cv_ready;
-  assign u_rvalid = to_len ? ln_rvalid : cv_rvalid;
-  assign u_result = to_len ? ln_result : cv_result;
+  always_comb begin
+    if (to_ring) begin
+      u_ready  = rg_ready;
+      u_rvalid = rg_rvalid;
+      u_result = rg_result;
+    end else if (to_len) begin
+      u_ready  = ln_ready;
+      u_rvalid = ln_rvalid;
+      u_result = ln_result;
+    end else begin
+      u_ready  = cv_ready;
+      u_rvalid = cv_rvalid;
+      u_result = cv_result;
+    end
+  end
 
-  assign mul_issue = to_len ? ln_mul_issue : cv_mul_issue;
-  assign mul_a     = to_len ? ln_mul_a     : cv_mul_a;
-  assign mul_b     = to_len ? ln_mul_b     : cv_mul_b;
+  // ---- THE MULTIPLIER IS NO LONGER A MUX --------------------------------
+  // RING is the first operation with TWO consumers inside it: zhao_field_ring
+  // drives the lane, and so does the zhao_field_rcp it calls twice. The
+  // one-long-op-in-flight argument covers one UNIT being active, not one unit
+  // making two demands, so selection becomes a PRIORITY CHAIN.
+  //
+  // The reciprocal outranks the executing unit. That is v1's own arrangement
+  // (zhao_field_exec_shared), feeding the same units against the same oracle --
+  // inventing a different arbitration here would mean re-proving what v1's
+  // differential already covers.
+  always_comb begin
+    if (rc_mul_issue) begin
+      mul_issue = rc_mul_issue;
+      mul_a     = rc_mul_a;
+      mul_b     = rc_mul_b;
+    end else if (to_ring) begin
+      mul_issue = rg_mul_issue;
+      mul_a     = rg_mul_a;
+      mul_b     = rg_mul_b;
+    end else if (to_len) begin
+      mul_issue = ln_mul_issue;
+      mul_a     = ln_mul_a;
+      mul_b     = ln_mul_b;
+    end else begin
+      mul_issue = cv_mul_issue;
+      mul_a     = cv_mul_a;
+      mul_b     = cv_mul_b;
+    end
+  end
 
   zhao_field_curve u_curve (
       .clk(clk), .rst_n(rst_n),

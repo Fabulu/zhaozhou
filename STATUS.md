@@ -5,6 +5,47 @@ at the top.*
 
 ---
 
+## 2026-08-26 (evening) — rings, and the first time two things wanted one part
+
+### What now works
+
+The new Field engine can do **rings** — the banded shapes the terrain uses for
+craters, shockwaves and anything that falls off from a centre. With curves and
+distances, that is the top three of what the real Earth programs ask for.
+
+Rings were the *cheapest* thing to add so far, which is worth noting because it
+was not obvious in advance: they take their three inputs from the three places
+the engine already hands out, so none of the machinery that distances needed was
+required again. The awkward work paid for the easy work.
+
+### The interesting part: two things wanted the multiplier at once
+
+Up to now the engine could rely on one simple fact — only one slow operation is
+ever in flight, so only one unit is ever using the shared multiplier.
+
+Rings break that, and not because two operations overlap. **One ring operation
+contains two users of the multiplier**: the ring itself, and the divider it calls
+twice. The rule was never about operations; it was about users, and one operation
+can have two.
+
+The fix is the old engine's own arrangement — the divider goes first, always.
+I reused it rather than invent something, because the old engine's arrangement is
+already checked against the same reference by the same tests. A new scheme would
+be a new thing to prove.
+
+### Applying yesterday's lesson
+
+Last section's survivor taught that a unit can produce right numbers while
+silently losing its record of what it had to clamp. Rings get that test now — and
+the case that matters is not a clamp at all, but **a division by zero**, which a
+ring reaches from an input anyone could pass: a band of zero width. Ask for a
+ring whose inner and outer edge are the same, and the maths divides by nothing.
+
+The hardware records it. There is a test proving it records it, and another
+proving it does not cry wolf on an ordinary ring.
+
+---
+
 ## 2026-08-26 (later) — distances too, and the register file said no
 
 ### What now works

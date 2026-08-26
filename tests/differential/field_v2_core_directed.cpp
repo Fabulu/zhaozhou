@@ -28,6 +28,7 @@
 #include "zhao_sim.hpp"
 #include "zfield/zfield.hpp"
 #include "zref/zref_fixp.hpp"
+#include "zref/zref_trig.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -51,6 +52,7 @@ constexpr uint8_t OP_DCURVE = 0x1D;       // same unit, mode 1
 constexpr uint8_t OP_LEN2 = 0x12;         // the length unit, mode 0
 constexpr uint8_t OP_LEN3 = 0x13;         // the length unit, mode 1
 constexpr uint8_t OP_DIST2 = 0x14;        // the length unit, mode 2
+constexpr uint8_t OP_RING = 0x21;         // its own unit, no mode
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
@@ -797,62 +799,300 @@ int main(int argc, char** argv) {
   //
   // Expectation from zref::SatLedger + zref::fx_sub, the same construction
   // field_len_directed.cpp uses for this question.
+  {// ---- 12a. a DIST2 whose difference cannot fit -------------------------
+   {Bench b(dut);
+  b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+  const int32_t a0 = INT32_MAX, a1 = 0, b0 = INT32_MIN, b1 = 0;
+
+  zref::SatLedger L{};
+  (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
+  (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
+  const bool want_add = L.add != 0;
+  check(want_add, "12.the chosen operands really do saturate (oracle)", 1, want_add ? 1 : 0);
+
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, a0);
+      b.write_reg(w, l, 1, a1);
+      b.write_reg(w, l, 8, b0);
+      b.write_reg(w, l, 9, b1);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.sat_add_o == 1, "12.a saturating length reaches SatLedger::add", 1, dut.sat_add_o);
+}
+
+// ---- 12b. and a length that does NOT saturate -------------------------
+// Without this, a ledger wired stuck-at-one would pass 12a. The lanes are
+// sticky across a run, so this needs its own reset -- which is what a fresh
+// Bench is.
+{
+  Bench b(dut);
+  b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
+  const int32_t a0 = 3 << 16, a1 = 4 << 16, b0 = 0, b1 = 0;
+
+  zref::SatLedger L{};
+  (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
+  (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
+  check(L.add == 0, "12.the quiet operands really do not saturate (oracle)", 0, L.add);
+
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, a0);
+      b.write_reg(w, l, 1, a1);
+      b.write_reg(w, l, 8, b0);
+      b.write_reg(w, l, 9, b1);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.sat_add_o == 0, "12.a quiet length leaves SatLedger::add alone", 0, dut.sat_add_o);
+  // 3-4-5: the answer is still right while nothing clamped.
+  uint64_t bad = 0;
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l)
+      if (b.read_reg(w, l, 16) != (5 << 16)) ++bad;
+  check(bad == 0, "12.and the quiet length still answers 5.0", 0, bad);
+}
+}
+
+// ---- 11. RING, the cheapest long op to reach ----------------------------
+// Three operands -- d, r0, r1 -- on the natural a/b/c ports, so RING needs NO
+// steal cycle: it dispatches from stage 1 like a curve, and the operand
+// bundle built for DIST2 carries it unchanged.
+//
+// What RING does cost is the multiplier. zhao_field_ring drives the shared
+// lane AND the shared reciprocal, and zhao_field_rcp drives the lane too, so
+// for the first time TWO CONSUMERS live inside one operation. The
+// one-long-op-in-flight argument covers one unit being active, not one unit
+// making two demands, so the selection is now a priority chain with the
+// reciprocal on top -- v1's own arrangement.
+//
+// Oracle: zfield::interpret. RING is two smoothsteps about the midpoint of
+// [r0,r1] and a product of the first with the complement of the second, and
+// reimplementing that here would be testing my arithmetic against itself.
+{
+  auto ring_oracle = [&](int32_t d, int32_t r0, int32_t r1) -> int32_t {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    zfield::Instr ins{};
+    ins.op = zfield::OP_RING;
+    ins.dst = 16;
+    ins.a = 0;
+    ins.b = 1;
+    ins.c = 2;
+    ins.imm = 0;
+    prog.instrs.push_back(ins);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 3; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    zfield::IoLane ol{};
+    ol.name = "y";
+    ol.type = 0;
+    ol.reg = 16;
+    prog.out_lanes.push_back(ol);
+    int32_t in[3] = {d, r0, r1};
+    int32_t out[1] = {0};
+    zfield::interpret(prog, in, 3, out, 1);
+    return out[0];
+  };
+
+  // ---- 11a. inside the band ---------------------------------------------
+  // r0 = 1.0, r1 = 5.0, midpoint 3.0. Every d sits strictly between r0 and the
+  // midpoint, so every answer is non-zero and they are all different -- the
+  // agreement below therefore means something. A band test whose answers were
+  // all 0 would pass against a DUT that does nothing at all.
   {
-    // ---- 12a. a DIST2 whose difference cannot fit -------------------------
-    {
-      Bench b(dut);
-      b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
-      const int32_t a0 = INT32_MAX, a1 = 0, b0 = INT32_MIN, b1 = 0;
+    Bench b(dut);
+    b.prog = {{
+                  OP_RING,
+                  16,
+                  0,
+                  1,
+                  2,
+              },
+              {OP_END, 0, 0, 0, 0}};
+    const int32_t r0 = 1 << 16, r1 = 5 << 16;
+    int32_t d[kWfs][kLanes];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        const int idx = w * kLanes + l;
+        d[w][l] = r0 + (idx + 1) * ((2 << 16) / 33);
+        b.write_reg(w, l, 0, d[w][l]);
+        b.write_reg(w, l, 1, r0);
+        b.write_reg(w, l, 2, r1);
+      }
 
-      zref::SatLedger L{};
-      (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
-      (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
-      const bool want_add = L.add != 0;
-      check(want_add, "12.the chosen operands really do saturate (oracle)", 1, want_add ? 1 : 0);
+    const uint32_t before = dut.instr_retired_o;
+    const int clocks = b.run((1u << kWfs) - 1u);
 
-      for (int w = 0; w < kWfs; ++w)
-        for (int l = 0; l < kLanes; ++l) {
-          b.write_reg(w, l, 0, a0);
-          b.write_reg(w, l, 1, a1);
-          b.write_reg(w, l, 8, b0);
-          b.write_reg(w, l, 9, b1);
-        }
-      b.run((1u << kWfs) - 1u);
-      check(dut.sat_add_o == 1, "12.a saturating length reaches SatLedger::add", 1, dut.sat_add_o);
-    }
+    uint64_t bad = 0, zeros = 0;
+    std::set<int32_t> distinct;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        const int32_t want = ring_oracle(d[w][l], r0, r1);
+        if (want == 0) ++zeros;
+        distinct.insert(want);
+        if (b.read_reg(w, l, 16) != want) ++bad;
+      }
+    check(bad == 0, "11.RING matches zfield::interpret on every wavefront and lane", 0, bad);
+    check(zeros == 0, "11.oracle is non-degenerate inside the band", 0, zeros);
+    check(distinct.size() == static_cast<size_t>(kWfs * kLanes),
+          "11.every wavefront/lane has a DISTINCT answer", kWfs * kLanes, distinct.size());
 
-    // ---- 12b. and a length that does NOT saturate -------------------------
-    // Without this, a ledger wired stuck-at-one would pass 12a. The lanes are
-    // sticky across a run, so this needs its own reset -- which is what a fresh
-    // Bench is.
-    {
-      Bench b(dut);
-      b.prog = {{OP_DIST2, 16, 0, 8, 0}, {OP_END, 0, 0, 0, 0}};
-      const int32_t a0 = 3 << 16, a1 = 4 << 16, b0 = 0, b1 = 0;
-
-      zref::SatLedger L{};
-      (void)zref::fx_sub(zref::fx16{a0}, zref::fx16{b0}, &L);
-      (void)zref::fx_sub(zref::fx16{a1}, zref::fx16{b1}, &L);
-      check(L.add == 0, "12.the quiet operands really do not saturate (oracle)", 0, L.add);
-
-      for (int w = 0; w < kWfs; ++w)
-        for (int l = 0; l < kLanes; ++l) {
-          b.write_reg(w, l, 0, a0);
-          b.write_reg(w, l, 1, a1);
-          b.write_reg(w, l, 8, b0);
-          b.write_reg(w, l, 9, b1);
-        }
-      b.run((1u << kWfs) - 1u);
-      check(dut.sat_add_o == 0, "12.a quiet length leaves SatLedger::add alone", 0, dut.sat_add_o);
-      // 3-4-5: the answer is still right while nothing clamped.
-      uint64_t bad = 0;
-      for (int w = 0; w < kWfs; ++w)
-        for (int l = 0; l < kLanes; ++l)
-          if (b.read_reg(w, l, 16) != (5 << 16)) ++bad;
-      check(bad == 0, "12.and the quiet length still answers 5.0", 0, bad);
-    }
+    const uint32_t retired = dut.instr_retired_o - before;
+    check(retired == static_cast<uint32_t>(kWfs * 2),
+          "11.each wavefront retired exactly two instructions", kWfs * 2, retired);
+    std::printf("  v2 RING   %u instructions in %d clocks\n", retired, clocks);
   }
 
-  dut.final();
-  return zhao::report_and_exit("field_v2_core_directed");
+  // ---- 11b. outside the band, and on it ---------------------------------
+  // Below r0, above r1, and exactly on both edges. These are where a
+  // smoothstep is easiest to get wrong by one, and where the answer is
+  // allowed to be 0 -- so they are checked against the oracle only, with no
+  // non-degeneracy requirement that would contradict the point of the case.
+  {
+    Bench b(dut);
+    b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+    const int32_t r0 = 1 << 16, r1 = 5 << 16;
+    const int32_t edge[4] = {0, r0, r1, 9 << 16};
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        b.write_reg(w, l, 0, edge[l]);
+        b.write_reg(w, l, 1, r0);
+        b.write_reg(w, l, 2, r1);
+      }
+    b.run((1u << kWfs) - 1u);
+
+    uint64_t bad = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l)
+        if (b.read_reg(w, l, 16) != ring_oracle(edge[l], r0, r1)) ++bad;
+    check(bad == 0, "11.RING agrees at and outside both band edges", 0, bad);
+  }
+}
+
+// ---- 13. RING'S LEDGER, by the rule M106 established ---------------------
+// M106 -- a length's saturation never reaching the ledger -- survived the
+// whole differential because every section checked values, and saturation is
+// not a value. The rule that came out of it: any unit wired to this seam needs
+// a saturation case, not just a value case.
+//
+// RING has FIVE ledger lanes and the interesting one is not a saturation at
+// all. `rcp0` records a RECIPROCAL OF ZERO, and RING reaches it by an input a
+// caller can easily supply: a band of zero width. r0 == r1 makes the midpoint
+// equal to both edges, so both smoothsteps get e1 - e0 == 0 and hit the pinned
+// field_rcp zero rule (zref_trig.hpp SS7.3).
+//
+// Expectation from zref::smoothstep with a real SatLedger -- the shipped
+// primitive RING is built from -- rather than my own account of when a
+// reciprocal is degenerate.
+{// ---- 13a. a band of zero width ----------------------------------------
+ {Bench b(dut);
+b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+const int32_t d = 2 << 16, r0 = 3 << 16, r1 = 3 << 16;  // r0 == r1
+
+zref::SatLedger L{};
+(void)zref::smoothstep(zref::fx16{r0}, zref::fx16{r0}, zref::fx16{d}, &L);
+check(L.rcp0 != 0, "13.a zero-width band really is degenerate (oracle)", 1, L.rcp0 != 0 ? 1 : 0);
+
+for (int w = 0; w < kWfs; ++w)
+  for (int l = 0; l < kLanes; ++l) {
+    b.write_reg(w, l, 0, d);
+    b.write_reg(w, l, 1, r0);
+    b.write_reg(w, l, 2, r1);
+  }
+b.run((1u << kWfs) - 1u);
+check(dut.rcp_zero_o == 1, "13.a degenerate RING reaches SatLedger::rcp0", 1, dut.rcp_zero_o);
+}
+
+// ---- 13b. and an ordinary band ----------------------------------------
+// Without this, an rcp0 lane wired stuck-at-one passes 13a. The lanes are
+// sticky for the whole run, so this needs its own reset -- a fresh Bench.
+{
+  Bench b(dut);
+  b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+  const int32_t d = 2 << 16, r0 = 1 << 16, r1 = 5 << 16;
+
+  zref::SatLedger L{};
+  const int32_t m = (r0 + r1) / 2;
+  (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
+  (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
+  check(L.rcp0 == 0, "13.an ordinary band really is not degenerate (oracle)", 0, L.rcp0);
+
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, d);
+      b.write_reg(w, l, 1, r0);
+      b.write_reg(w, l, 2, r1);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.rcp_zero_o == 0, "13.an ordinary RING leaves SatLedger::rcp0 alone", 0, dut.rcp_zero_o);
+}
+}
+
+// ---- 14. A RING WHOSE MULTIPLY SATURATES -------------------------------
+// M117 -- RING's multiply saturation reaching the ledger only beside a
+// curve's -- survived sections 11 and 13, because neither makes a ring
+// saturate a product. Section 13 exercises rcp0, which is a different lane.
+//
+// It is reachable, and by an input a caller can produce: RING divides by the
+// band's half-span, so a NARROW band gives a large reciprocal, and
+// (x - e0) * r overflows before smoothstep clamps t. A narrow band with a
+// distant d is not exotic -- it is a thin ring seen from far away.
+{
+  // ---- 14a. narrow band, distant point ---------------------------------
+  {
+    Bench b(dut);
+    b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+    const int32_t r0 = 1 << 16;
+    const int32_t r1 = r0 + (1 << 16) / 128;  // a band 1/128 wide
+    const int32_t d = 1000 << 16;             // far outside it
+
+    zref::SatLedger L{};
+    const int32_t m = (r0 + r1) / 2;
+    (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
+    (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
+    check(L.mul != 0, "14.a narrow band really does saturate a product (oracle)", 1,
+          L.mul != 0 ? 1 : 0);
+
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        b.write_reg(w, l, 0, d);
+        b.write_reg(w, l, 1, r0);
+        b.write_reg(w, l, 2, r1);
+      }
+    b.run((1u << kWfs) - 1u);
+    check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.sat_mul_o);
+  }
+
+  // ---- 14b. and a wide band, so the lane is not simply stuck -----------
+  {
+    Bench b(dut);
+    b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+    const int32_t r0 = 1 << 16, r1 = 5 << 16, d = 2 << 16;
+
+    zref::SatLedger L{};
+    const int32_t m = (r0 + r1) / 2;
+    (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
+    (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
+    check(L.mul == 0, "14.an ordinary band really does not (oracle)", 0, L.mul);
+
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        b.write_reg(w, l, 0, d);
+        b.write_reg(w, l, 1, r0);
+        b.write_reg(w, l, 2, r1);
+      }
+    b.run((1u << kWfs) - 1u);
+    check(dut.sat_mul_o == 0, "14.an ordinary RING leaves SatLedger::mul alone", 0, dut.sat_mul_o);
+  }
+}
+
+dut.final();
+return zhao::report_and_exit("field_v2_core_directed");
 }

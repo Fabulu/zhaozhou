@@ -52,3 +52,6 @@ desktop.ini
 # Python bytecode from the sweep preflights
 __pycache__/
 .sweep_field_dsp.lock
+gate.log
+sweep_*.log
+pf.txt

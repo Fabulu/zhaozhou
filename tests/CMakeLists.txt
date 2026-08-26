@@ -1744,6 +1744,9 @@ verilate(test_field_v2_core_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
 add_test(NAME field_v2_core_directed COMMAND test_field_v2_core_directed)
 set_tests_properties(field_v2_core_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)

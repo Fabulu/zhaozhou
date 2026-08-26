@@ -632,7 +632,7 @@ MUTS = [
      """          s2_a0[l] <= rd_b[l];
           s2_b0[l] <= rd_b[l];"""),
     ("M101 a length dispatches from stage 1, before its second pass lands", F_V2,
-     """      if (s1_is_curve) begin
+     """      if (s1_is_curve || s1_is_ring) begin
         lq_valid <= 1'b1;""",
      """      if (s1_is_long) begin
         lq_valid <= 1'b1;"""),
@@ -643,14 +643,30 @@ MUTS = [
      """  wire [WFW-1:0] rd_wf = steal_now ? s1_wf : sel;""",
      """  wire [WFW-1:0] rd_wf = sel;"""),
     ("M104 every long op is routed to the curve unit", F_V2,
-     """  wire to_len = (u_unit == UNIT_LEN);""",
+     """  wire to_len  = (u_unit == UNIT_LEN);""",
      """  wire to_len  = (u_unit != UNIT_LEN);"""),
     ("M105 the multiplier is always given the curve unit's request", F_V2,
-     """  assign mul_issue = to_len ? ln_mul_issue : cv_mul_issue;""",
-     """  assign mul_issue = to_len ? cv_mul_issue : ln_mul_issue;"""),
+     """    end else if (to_len) begin
+      mul_issue = ln_mul_issue;
+      mul_a     = ln_mul_a;
+      mul_b     = ln_mul_b;
+    end else begin
+      mul_issue = cv_mul_issue;
+      mul_a     = cv_mul_a;
+      mul_b     = cv_mul_b;
+    end""",
+     """    end else if (to_len) begin
+      mul_issue = cv_mul_issue;
+      mul_a     = cv_mul_a;
+      mul_b     = cv_mul_b;
+    end else begin
+      mul_issue = ln_mul_issue;
+      mul_a     = ln_mul_a;
+      mul_b     = ln_mul_b;
+    end"""),
     ("M106 the length's saturation never reaches the ledger", F_V2,
-     """      if (cv_sat_add  || ln_sat_add)  sat_add_o     <= 1'b1;""",
-     """      if (cv_sat_add  && ln_sat_add)  sat_add_o     <= 1'b1;"""),
+     """      if (cv_sat_add  || ln_sat_add  || rg_sat_add)  sat_add_o     <= 1'b1;""",
+     """      if ((cv_sat_add || rg_sat_add) && ln_sat_add)  sat_add_o     <= 1'b1;"""),
     ("M107 LEN3 and DIST2 collapse to LEN2's mode", F_V2,
      """      OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
       OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end""",
@@ -671,7 +687,85 @@ MUTS = [
     ("M111 every lane is shown lane 0's b operand", F_LMUX,
      """  assign u_b0_o      = b0_q[lane];""",
      """  assign u_b0_o      = b0_q[0];"""),
+    # ---- RING: a third unit, and the multiplier's PRIORITY CHAIN -----------
+    # RING is the first operation with two consumers inside it -- the ring unit
+    # and the reciprocal it calls twice -- so the multiplier stopped being a mux
+    # and became a priority chain. These attack the routing, the operands, that
+    # chain, and RING's ledger lanes. The ledger ones exist because M106 proved
+    # a unit can be value-correct and account-wrong, and nothing noticed.
+    ("M112 RING is routed to whichever unit is not RING", F_V2,
+     """  wire to_ring = (u_unit == UNIT_RING);""",
+     """  wire to_ring = (u_unit != UNIT_RING);"""),
+    ("M113 RING's inner radius is handed the outer one", F_V2,
+     """          lq_a1[l] <= s1_is_ring ? rd_b[l] : 32'sd0;""",
+     """          lq_a1[l] <= s1_is_ring ? rd_c[l] : 32'sd0;"""),
+    ("M114 the reciprocal loses its precedence on the multiplier", F_V2,
+     """    if (rc_mul_issue) begin
+      mul_issue = rc_mul_issue;
+      mul_a     = rc_mul_a;
+      mul_b     = rc_mul_b;
+    end else if (to_ring) begin""",
+     """    if (to_ring && rg_mul_issue) begin
+      mul_issue = rg_mul_issue;
+      mul_a     = rg_mul_a;
+      mul_b     = rg_mul_b;
+    end else if (rc_mul_issue) begin
+      mul_issue = rc_mul_issue;
+      mul_a     = rc_mul_a;
+      mul_b     = rc_mul_b;
+    end else if (to_ring) begin"""),
+    ("M115 the band's two radii are swapped at the unit", F_V2,
+     """      .d_i(u_a), .r0_i(u_a1), .r1_i(u_a2),""",
+     """      .d_i(u_a), .r0_i(u_a2), .r1_i(u_a1),"""),
+    ("M116 a reciprocal of zero reaches the ledger only if BOTH report it", F_V2,
+     """      if (rg_rcp0    || rc_rcp0)                     rcp_zero_o    <= 1'b1;""",
+     """      if (rg_rcp0    && rc_rcp0)                     rcp_zero_o    <= 1'b1;"""),
+    ("M117 RING's multiply saturation reaches the ledger only beside a curve's", F_V2,
+     """      if (cv_sat_mul  || rg_sat_mul)                 sat_mul_o     <= 1'b1;""",
+     """      if (cv_sat_mul  && rg_sat_mul)                 sat_mul_o     <= 1'b1;"""),
+    ("M118 RING never dispatches at all", F_V2,
+     """      if (s1_is_curve || s1_is_ring) begin""",
+     """      if (s1_is_curve) begin"""),
 ]
+
+
+# ---------------------------------------------------------------------------
+# PROVEN EQUIVALENTS
+# ---------------------------------------------------------------------------
+# The sweep's header has always said survivors are recorded with a PROOF of
+# equivalence or they are holes, and that 'probably equivalent' is not a
+# category this project has. It said it and enforced it nowhere: a proven
+# equivalent and a real gap printed identically.
+#
+# Keyed by the mutant's id token, which is stable when mutants are inserted;
+# indices are not.
+#
+# THE RULES, enforced in sweep_field_dsp.sh:
+#   * declared + SURVIVED -> reported as equivalent with its proof, run passes;
+#   * declared + CAUGHT   -> ABORT. The proof is false, and a false proof is
+#                            worse than an unproven survivor because it is
+#                            believed and stops anyone looking again;
+#   * undeclared + SURVIVED -> the run FAILS, exactly as before. That rule is
+#                            what stops this becoming a way to launder holes.
+EQUIVALENT = {
+    'M114': 
+        "zhao_field_ring asserts rcp_valid_o ONLY in G_SPAN (4'd2) and "
+        "mul_issue_o ONLY in G_T/G_T2/G_2T/G_CUBE/G_FIN (4,6,8,10,12), and it "
+        "waits in G_SPANW (3) with mul_issue_o low while the reciprocal "
+        "computes. The ring and the reciprocal therefore CANNOT drive the "
+        "multiplier in the same cycle, so the order of the priority chain is "
+        "unobservable. Not a test gap: no test CAN force the contention, "
+        "because the unit serialises its own two demands. The chain is kept "
+        "because it is v1's and because a future unit may contend.",
+    'M116': 
+        "SCOPED. zhao_field_ring latches rcp0_o <= rcp0_o || rcp_zero_i, so it "
+        "holds whatever the reciprocal reported, and the ring is the "
+        "reciprocal's ONLY consumer today. The two lanes always overlap and "
+        "&& cannot be told from ||. The || is defensive for a SECOND consumer "
+        "and there will be one: NORMALIZE calls the reciprocal. RE-SCORE THIS "
+        "THE MOMENT A SECOND CONSUMER IS WIRED -- it should then be caught, "
+        "and if it is not, the OR is genuinely untested.",
+}
 
 
 def _nl(raw):
@@ -716,6 +810,12 @@ def main():
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == '--file':
         print(MUTS[int(sys.argv[2])][1])
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == '--equiv':
+        proof = EQUIVALENT.get(sys.argv[2])
+        if proof is None:
+            return 1
+        print(proof)
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == '--apply':
         return 0 if apply(int(sys.argv[2])) else 9

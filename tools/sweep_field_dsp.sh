@@ -293,6 +293,7 @@ attempted=0
 accounted=0
 caught=0
 survivors=()
+equivalents=()
 
 for k in $K_LIST; do
   name=$(python "$MUTPY" --name "$k" | tr -d '\r')
@@ -336,9 +337,27 @@ for k in $K_LIST; do
     continue
   fi
 
+  # The mutant's id token -- stable across insertions, unlike its index.
+  mid=${name%% *}
+  proof=$(python "$MUTPY" --equiv "$mid" 2>/dev/null | tr -d '')
+
   if ! run_lanes "$targets"; then
+    if [ -n "$proof" ]; then
+      # A DECLARED EQUIVALENT THAT IS CAUGHT MEANS THE PROOF IS FALSE. That is
+      # worse than an unproven survivor: a false proof is believed, and stops
+      # anyone looking again. It is fatal rather than a warning.
+      echo "  $name  *** DECLARED EQUIVALENT BUT CAUGHT ***"
+      echo "        The proof below is FALSE and must be withdrawn:"
+      echo "        $proof"
+      restore
+      exit 11
+    fi
     echo "  $name  caught   [$targets]"
     caught=$((caught + 1))
+  elif [ -n "$proof" ]; then
+    echo "  $name  equivalent (proven)   [$targets]"
+    echo "        $proof"
+    equivalents+=("$name")
   else
     echo "  $name  *** SURVIVED ***   [$targets]"
     survivors+=("$name")
@@ -357,8 +376,20 @@ if ! run_lanes "$ALL"; then
 fi
 
 echo "----"
-echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught"
+echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught equivalent=${#equivalents[@]}"
+for e in "${equivalents[@]:-}"; do [ -n "$e" ] && echo "EQUIVALENT (proven): $e"; done
 for s in "${survivors[@]:-}"; do [ -n "$s" ] && echo "SURVIVOR: $s"; done
+
+# AN UNDECLARED SURVIVOR NOW FAILS THE RUN. It did not before -- the sweep
+# listed survivors and exited 0, so a hole could pass a gate that only checked
+# the exit code. Declaring one equivalent requires writing a proof into
+# EQUIVALENT in the mutants file, which is the friction that keeps the category
+# honest.
+if [ -n "${survivors[*]:-}" ]; then
+  echo "FAILED: ${#survivors[@]} mutant(s) survived without a proof of equivalence"
+  rm -rf "$GOLDDIR"
+  exit 12
+fi
 if [ "$attempted" != "$expected" ] || [ "$accounted" != "$expected" ]; then
   echo "CROSS-CHECK FAILED (attempted/accounted must both equal $expected)"
   exit 5

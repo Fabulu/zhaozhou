@@ -386,3 +386,163 @@ All caught, including every one of the twelve rewritten after the v2 lint cone
 was added, and the three (M93/M94/M95) that survived before section 8 existed.
 M96 and M102 -- the two forms of the long-op hang -- are both caught, so that
 defect cannot return unnoticed through either door.
+
+## 2026-08-26 03:05 UTC+02:00 - Length family committed (cc4dbfb), then RING
+
+Gate: 43 checks, sweep 32/32 after the M106 gap was closed, `ctest -L fast`
+277/277, `ledger:check` OK. Committed and pushed.
+
+`.sweep_field_dsp.lock` added to `.gitignore` -- it is process state, not source.
+
+### RING went in first try, because the groundwork was already paid for
+
+52 checks (was 43). Three operands on the natural a/b/c ports, so NO steal cycle:
+RING dispatches from stage 1 like a curve, and the operand bundle built for
+DIST2 carries d/r0/r1 unchanged. 16 instructions in 1,556 clocks.
+
+**What it actually cost was the multiplier.** RING is the first operation with
+TWO CONSUMERS INSIDE IT -- `zhao_field_ring` drives the lane, and so does the
+`zhao_field_rcp` it calls twice. The argument that justified v2's mux ("one long
+op in flight, so one active unit") covers one unit being active, not one unit
+making two demands. So selection became a PRIORITY CHAIN with the reciprocal on
+top, which is v1's own arrangement in `zhao_field_exec_shared`. Mirroring it
+means the same units against the same oracle; inventing different arbitration
+would mean re-proving what v1's differential already covers.
+
+### Section 13 applies the rule M106 bought
+
+M106 established: any unit on this seam needs a SATURATION case, not just a
+value case. RING has five ledger lanes and the interesting one is not a
+saturation at all -- `rcp0` records a RECIPROCAL OF ZERO, and RING reaches it
+from an input any caller can supply: **a band of zero width**. r0 == r1 collapses
+the midpoint onto both edges, so both smoothsteps get e1 - e0 == 0 and hit the
+pinned field_rcp zero rule (`zref_trig.hpp` SS7.3, which states it explicitly).
+
+Both directions tested, since a lane wired stuck-at-one passes the degenerate
+case by itself. Expectation from `zref::smoothstep` with a real SatLedger --
+the shipped primitive RING is built from.
+
+### Mutants M112-M118, and four re-anchors
+
+New: wrong-unit routing, inner radius handed the outer one, the reciprocal
+losing precedence on the multiplier, radii swapped at the unit, both ledger
+lanes suppressed, and RING never dispatching at all.
+
+M101, M104, M105 and M106 were re-anchored -- the RING wiring consumed their
+anchor lines (the dispatch condition grew `|| s1_is_ring`, `to_len` gained a
+sibling, the mul assign became an always_comb chain, and the sat_add line grew a
+third term). Rewritten onto the live lines with their defects unchanged.
+
+The v2 lint cone was extended with ring/rcp/rcp_rom, so RING's mutants are
+actually linted rather than passing by not being looked at -- the hole that hid
+twelve malformed mutants earlier today.
+
+**The one I am watching: M114**, the reciprocal losing its precedence. If it
+survives, the priority chain is untested and the test must force real contention
+rather than assume the two consumers collide on their own.
+
+## 2026-08-26 03:45 UTC+02:00 - RING's sweep: 37 caught, 2 EQUIVALENT
+
+M114 and M116 survived. Both are provable equivalents rather than test gaps, and
+the proofs differ in an important way: one is unconditional, the other is SCOPED.
+
+### M114 -- the reciprocal loses its precedence on the multiplier
+
+**Equivalent, unconditionally, by the ring unit's state encoding.**
+
+`zhao_field_ring` asserts `rcp_valid_o` only in `G_SPAN` (4'd2) and `mul_issue_o`
+only in `G_T`/`G_T2`/`G_2T`/`G_CUBE`/`G_FIN` (4, 6, 8, 10, 12). While the
+reciprocal computes, the ring sits in `G_SPANW` (3) with `mul_issue_o` low.
+
+So the ring and the reciprocal CANNOT drive the multiplier in the same cycle,
+and the order of the priority chain is unobservable. The chain is still right --
+it is v1's -- but it is arbitrating a contention that this composition cannot
+produce.
+
+I predicted this mutant was the one to watch and predicted the wrong reason. I
+expected a test gap ("the test never forces contention"). The truth is stronger:
+**no test can force it**, because the unit serialises the two demands itself.
+
+### M116 -- rcp0 reaches the ledger only if BOTH report it
+
+**Equivalent TODAY, and only today.** The ring latches
+`rcp0_o <= rcp0_o || rcp_zero_i`, so it holds whatever the reciprocal reported,
+and the ring is the reciprocal's ONLY consumer. The two lanes therefore always
+overlap and `&&` cannot be told from `||`.
+
+The `||` is defensive for a SECOND consumer, and there will be one: NORMALIZE
+calls the reciprocal. **The moment a second consumer is wired, M116 stops being
+equivalent and must be re-scored** -- it should then be caught, and if it is not,
+the OR is genuinely untested.
+
+### This needs a mechanism, not a comment
+
+The sweep has no notion of an equivalent mutant. Its header already states the
+law -- "Survivors are recorded with a PROOF of equivalence or they are holes;
+'probably equivalent' is not a category this project has" -- but enforces it
+nowhere, so a proven equivalent and a real hole look identical in the output and
+both fail the run.
+
+Implementing: an EQUIVALENT table keyed by mutant index carrying the proof text,
+with three rules.
+
+* a declared-equivalent mutant that SURVIVES is reported as equivalent, with its
+  proof printed, and does not fail the run;
+* a declared-equivalent mutant that is CAUGHT is an **ABORT** -- the proof is
+  false, and a false proof is worse than an unproven survivor because it is
+  believed;
+* an undeclared survivor still fails, exactly as now.
+
+The third rule is what keeps this from becoming a way to launder holes.
+
+## 2026-08-26 04:05 UTC+02:00 - All three survivors resolved, three different ways
+
+Re-scored under the new rules:
+
+    M114  equivalent (proven)
+    M116  equivalent (proven)   [scoped: re-score when NORMALIZE lands]
+    M117  caught
+    attempted=3 accounted=3 caught=1 equivalent=2
+
+56 checks (was 52).
+
+### M117 was a real gap, and it is the THIRD ledger hole this session
+
+M106 (length's sat_add), M116/M117 (RING's rcp0 and mul). Every one of them:
+values correct, account lost, every test green.
+
+Stated as a rule in the model report rather than rediscovered a fourth time:
+**when a unit is wired to the seam, every ledger lane it can raise needs a
+case.** RING raises four and two had no test.
+
+The input that reaches it is not exotic. RING divides by the band's half-span,
+so a NARROW band gives a large reciprocal and (x - e0) * r overflows before
+smoothstep clamps t. A band 1/128 wide with the point 1,000 units away -- a thin
+ring seen from far off.
+
+### I was wrong about M114 in an instructive way
+
+I called it "the one I am watching" and expected a TEST GAP I would close by
+forcing contention. The truth is stronger and the opposite in character: **no
+test can force it.** zhao_field_ring asserts rcp_valid_o only in G_SPAN and
+mul_issue_o only in G_T/G_T2/G_2T/G_CUBE/G_FIN, waiting in G_SPANW with
+mul_issue_o low. The unit serialises its own two demands.
+
+The prediction was right, the reasoning was wrong, and the difference matters:
+one conclusion sends you writing a test, the other sends you writing a proof.
+
+### The sweep now knows what "equivalent" means
+
+Its header has said since it was written that survivors carry a proof or they
+are holes. It enforced none of it: both printed identically, and the run **exited
+0 either way**, so a hole could pass a gate that checked only the exit code.
+
+`EQUIVALENT` maps a mutant's id token -> proof. Declared+survived reports and
+passes; declared+CAUGHT **aborts** (a false proof is believed, which is worse
+than an unproven survivor); undeclared+survived now FAILS. The last rule is the
+one that keeps the category honest -- declaring costs writing a proof someone can
+check.
+
+Keyed by id token, not index: indices move when mutants are inserted, and four
+anchors have already had to be rewritten this session for exactly that kind of
+drift.
