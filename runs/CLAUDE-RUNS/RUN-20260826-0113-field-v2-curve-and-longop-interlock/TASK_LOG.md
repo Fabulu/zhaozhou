@@ -1025,3 +1025,48 @@ and unregistered; `main` stays green. Debug taps and the tracer are removed --
 the front end still lints clean across 17 modules with them gone. Two real bugs
 were fixed on the way (the ready/valid handshake, the drain phase walk) and both
 are worth keeping when this resumes.
+
+## 2026-08-26 - CORRECTION: the pc_o claim was WRONG
+
+The previous entry, and commit 3de62fd, said the flapping `pc_o` was a core
+interface defect that broke the long-op interlock. **That is wrong and I am
+withdrawing it.**
+
+Checking every use of the instruction bus in `zhao_field_v2_core`:
+
+| use | line | gated by |
+| --- | --- | --- |
+| `ins_is_long` | 452 | feeds `issue_fire`, which is `sel_valid && ...` |
+| `addr_a/b/c` | 489-491 | feed the read walk; `rd_*` consumed only when `s1_valid` |
+| `s1_op/dst/a/b/imm` | 559-563 | captured inside `if (issue_fire)` |
+
+`issue_fire = sel_valid && ...`, so on a non-issue cycle it is zero no matter
+what `ins_is_long` says. Every consumer is gated. **The flapping is harmless.**
+
+`pc_o` returning zero when nothing is issuing is still an interface wart -- a
+front end cannot distinguish it from a real pc of zero -- but it is NOT the
+cause of the failing differential, and saying it was is precisely the "false
+proof" failure this project treats as worse than an open hole. I applied that
+standard to a mutant's equivalence proof this morning and then failed to apply
+it to my own root-cause claim eight hours later.
+
+### What is actually known
+
+* fill writes are CORRECT: the trace shows `we=1 reg=0 wd=1000` then
+  `we=1 reg=1 wd=1803` into (wf0, lane0);
+* the register file afterwards holds r20 = a*b and r21 = a, where the program
+  says r20 = a+b and r21 = a*b;
+* so a write carried the MUL's VALUE to the ADD's DESTINATION -- `s1_op` and
+  `s1_dst` disagreeing, which the source says cannot happen since both are
+  captured in the same `if (issue_fire)`.
+
+That contradiction is unresolved. It means one of my assumptions about the trace
+is wrong -- most likely that `pc_o == 0` in the trace meant "not issuing", since
+I never tapped `sel_valid` and zero is also a legal pc. **The next step is to tap
+`sel_valid`, `issue_fire`, `s1_valid`, `s1_op` and `s1_dst` directly** and watch
+the two writes, rather than infer from `pc_o` again.
+
+### Status unchanged
+
+Front end and its differential remain uncommitted and unregistered; `main` is
+green; all fourteen Field operations remain committed and evidenced.
