@@ -546,3 +546,130 @@ check.
 Keyed by id token, not index: indices move when mutants are inserted, and four
 anchors have already had to be rewritten this session for exactly that kind of
 drift.
+
+## 2026-08-26 04:35 UTC+02:00 - I committed RING without RING's RTL, and caught it
+
+RING committed as 1faf6da. Before that, I committed it BROKEN and had to undo it.
+
+**What happened.** RING's evidence was complete and the gate was running against
+the RING binaries. While waiting I wrote the NEXT increment (the immediate port
+and RIDGE) into the same two .sv files. Editing RTL during a ctest run is safe --
+ctest runs already-built exes -- so that part was fine.
+
+The mistake was the fix for it. To commit RING without the untested RIDGE work I
+ran `git stash push` on the two .sv files. **RING's RTL was uncommitted too**, so
+the stash took BOTH increments out of the working tree and reverted those files
+to HEAD, which had no RING at all. The commit went in with RING's tests, RING's
+mutants and RING's reports -- and no RING hardware. It would not have built.
+
+**Caught by checking, not by luck**: `git show --stat HEAD` plus
+`git show HEAD:...zhao_field_v2_core.sv | grep -c OP_RING` returned 0. Not
+pushed, so `git reset --soft HEAD~1` and `git stash pop` restored everything.
+
+**The recovery, and why not the easy way.** Both increments were tangled in two
+files with no saved RING-only state. The easy route was to finish RIDGE and
+commit both together, which would have buried an untested opcode inside a gated
+commit. Instead I reversed the RIDGE edits mechanically -- every one of them
+new->old, in the same anchored form they were applied -- then PROVED the reversal
+by rebuilding: 56 + 14 checks, exactly the pre-RIDGE numbers, and a residue grep
+showing no RIDGE token left except a pre-existing header comment.
+
+**The lesson, which is not "be careful with stash".** It is: *`git stash` is only
+a safe way to set aside work when the base state is committed.* On a dirty tree
+carrying two increments in one file, it does not separate them -- it removes
+both. The check that caught it (does HEAD actually contain the thing the commit
+message claims?) is cheap and should be habitual for any commit made after a
+stash.
+
+`gate.log` also slipped into that first commit via `git add -A`. Now in
+`.gitignore` along with `sweep_*.log` and `pf.txt`.
+
+## 2026-08-26 04:50 UTC+02:00 - The immediate port, and RIDGE
+
+63 checks (was 56). RIDGE: 16 instructions in **532 clocks** -- three times
+cheaper than RING's 1,556, because the noise unit is a hash rather than an
+iterative walk. The first opcode that costs the engine almost nothing.
+
+`ins_imm_i` is the first new field in v2's instruction word since the engine was
+written. Captured at issue into `s1_imm`, carried in the request beside the mode
+and unit selector, and held once at accept in the serialiser.
+
+### The immediate needed a test shape the value checks could not give
+
+A seed dropped to zero, hard-wired, or read live still produces perfectly
+plausible noise. Worse: it would AGREE with an oracle handed the same wrong
+seed, so the test and the bug cancel out and the section reports green.
+
+So section 15 runs **the same coordinates under two different seeds and requires
+them to disagree on every lane**. That is what proves the immediate arrived --
+the per-lane value match against `zfield::interpret` alone does not.
+
+The same trap is waiting for ROT3, where the immediate is an AXIS SELECT: a
+dropped axis rotates about the wrong one and the world stays plausible.
+
+### Corrections found by building rather than by reading
+
+* `zhao_field_noise.sv` was not in the v2 target's source list -- caught
+  immediately as verilator MODMISSING.
+* My first draft of this wiring invented a `.result_o_unused()` port on
+  `zhao_field_noise`, which has `o0_o`/`o1_o` and no `result_o` at all. It never
+  ran: the heredoc carrying it failed to terminate, and rewriting it directly
+  against the real port list avoided the error. A lucky escape, not a method.
+
+### NOISE2 stays refused
+
+Same unit, one mode bit away, and deliberately not wired: it writes two
+registers and the reply carries one. Wiring it now means either dropping `o1_o`
+silently -- half an answer -- or bolting a second write onto a path not built for
+it. `o1_o` is lint-waived WITH the reason and the name of what will read it.
+
+### Anchor drift, again
+
+Six mutants needed re-anchoring: four RING ones (M112, M113, M114, M118) and two
+length ones (M101, M106). The RIDGE wiring touched the same shared lines --
+`to_ring`, the dispatch condition, the priority chain, the sat_add fold.
+
+This is now routine enough to be a cost worth naming: **every increment that
+edits a shared line invalidates the anchors of every mutant on it.** The
+preflight catches it every time, which is why it runs before the sweep rather
+than after.
+
+## 2026-08-26 05:30 UTC+02:00 - The new rule failed its first real run, correctly
+
+    attempted=45 accounted=45 caught=42 equivalent=2
+    EQUIVALENT (proven): M114, M116
+    SURVIVOR: M119 the immediate is taken LIVE rather than carried
+    FAILED: 1 mutant(s) survived without a proof of equivalence
+
+**Exit 12.** Before today this run would have exited 0 with the survivor listed
+in the output, and any gate checking only the exit code would have passed it.
+The equivalence rules earned their place on their first outing.
+
+### M119, and why NEITHER existing test could catch it
+
+The immediate is carried through the serialiser exactly like the tag. The tag's
+own mutants (M85, M86) are caught only because the lanemux bench POISONS the
+request lines after accept -- without that, a live-read tag reads the same value
+as a carried one and the difference is invisible.
+
+`req_imm_i` was added to the RTL **after** that test was written. The bench had
+zero references to it: it never drove it and never poisoned it.
+
+And the core-level test cannot catch it either, which is structural rather than
+an oversight worth fixing there: **the long-op interlock keeps one request in
+flight, so the core's `lq_imm` sits stable while the serialiser works and live
+equals captured by construction.** No core test can distinguish them.
+
+Fixed where it belongs -- section 5 of the lanemux differential now drives a
+distinct immediate, poisons the request line with its complement after accept,
+and checks `u_imm_o` on every lane. 15 checks.
+
+### The generalisation
+
+**When a new field is added to a request that is captured-once, the poison list
+must grow with it.** The poison block is the entire proof that anything is
+carried rather than read live, and it is a hand-maintained list -- so a field
+added later is a field silently exempt from the proof.
+
+The same applies to the multi-result reply next: `rsp_y1_o`/`rsp_y2_o` will need
+the same treatment, and the count carried with the request will too.

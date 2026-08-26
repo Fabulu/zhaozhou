@@ -61,6 +61,7 @@ CONE_V2 = [
     'fpga/rtl/field/zhao_field_ring.sv',
     'fpga/rtl/field/zhao_field_rcp.sv',
     'fpga/rtl/field/zhao_field_rcp_rom.sv',
+    'fpga/rtl/field/zhao_field_noise.sv',
     'fpga/rtl/field/zhao_field_mul.sv',
 ]
 V2_FILES = ('zhao_field_v2_core.sv', 'zhao_field_v2_lanemux.sv')

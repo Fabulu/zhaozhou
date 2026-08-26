@@ -935,11 +935,7 @@ declaring an equivalent costs writing a proof someone can check.
 
 ---
 
-## NEXT INCREMENT: the immediate port, and RIDGE riding on it
-
-*2026-08-26. DESIGN AND RTL DRAFTED, NOT YET GATED -- no differential, no
-sweep, not committed. Written down before the evidence exists so the shape
-is on the record; do not read the tenses below as landed work.*
+## The immediate port, and RIDGE riding on it
 
 *2026-08-26.* v2's instruction interface has been `{op, dst, a, b, c}` since it
 was written, because nothing it executed needed more. `ins_imm_i` is the first
@@ -970,4 +966,145 @@ multi-result reply exists, which is the next increment.
 
 `o1_o` is therefore lint-waived as unused with a comment saying why and what
 will read it. An unexplained waiver is how a dropped output becomes permanent.
+
+### Measured
+
+RIDGE: 16 instructions in **532 clocks** across 8 wavefronts -- three times
+cheaper than RING and two and a half times cheaper than a length. The noise unit
+is a hash, not an iterative walk, so it answers in a handful of cycles and the
+serialiser's LANES x II is small.
+
+### The seed needed a test that value-matching could not give
+
+A seed dropped to zero, hard-wired, or read live still produces perfectly
+plausible noise -- and it AGREES with an oracle handed the same wrong seed, so
+the check and the defect cancel and the section reports green.
+
+Section 15 therefore runs **the same coordinates under two seeds and requires
+them to disagree on every lane**. That, not the per-lane match against
+`zfield::interpret`, is what proves the immediate arrived.
+
+**The same trap is waiting for ROT3**, where the immediate is an axis select:
+rotate about the wrong axis and the world is still a world.
+
+### The sweep: 45 mutants, 42 caught, 2 equivalent, and one that FAILED the run
+
+    attempted=45 accounted=45 caught=42 equivalent=2
+    SURVIVOR: M119 the immediate is taken LIVE rather than carried
+    FAILED: 1 mutant(s) survived without a proof of equivalence
+
+Exit 12. Before this session that run would have exited 0 with the survivor
+merely listed, and a gate checking only the exit code would have passed it. The
+equivalence rules earned their place on their first outing.
+
+**M119 could not have been caught by either existing test, for two different
+reasons.**
+
+The lanemux test *should* have caught it: the tag's own mutants (M85, M86) fall
+only because that bench POISONS the request lines after accept, and without the
+poison a live-read tag reads the same bits as a carried one. But `req_imm_i` was
+added to the RTL **after** that test was written, and the bench had zero
+references to it -- it drove nothing and poisoned nothing.
+
+The core test could never have caught it, and that is structural: **the long-op
+interlock keeps one request in flight, so `lq_imm` sits stable while the
+serialiser works and live equals captured by construction.**
+
+### The rule this produces
+
+> When a field is added to a captured-once request, THE POISON LIST MUST GROW
+> WITH IT.
+
+That block is the entire proof that anything is carried rather than read live,
+and it is a hand-maintained list. A field added later is a field silently exempt
+from the proof, and it will not show up as a missing test -- it shows up as a
+mutant that survives for reasons that look like equivalence.
+
+This applies immediately to the next increment: `rsp_y1_o`, `rsp_y2_o` and the
+result count all join the same request/reply and all need the same treatment.
+
+---
+
+## NEXT: the multi-result reply, the last mechanism the opcode set needs
+
+*2026-08-26, before any RTL.*
+
+Four opcodes remain -- NOISE2, ROT2, ROT3, NORMALIZE2/3 -- and they are blocked
+on one thing between them: **a reply that carries more than one value.**
+
+| op | writes | unit output |
+| --- | --- | --- |
+| NOISE2 | dst, dst+1 | `o0_o`, `o1_o` |
+| ROT2 | dst, dst+1 | `o0_o`, `o1_o` (`o2_o` zero by law 5) |
+| ROT3 | dst, dst+1, dst+2 | `o0_o`, `o1_o`, `o2_o` |
+| NORMALIZE2/3 | dst .. dst+2 | its own pair/triple |
+
+The v1 units already produce all of it. The seam does not carry it.
+
+### What changes
+
+* `zhao_field_v2_lanemux`: the unit port gains `u_result1_i`/`u_result2_i` and
+  the vector reply gains `rsp_y1_o`/`rsp_y2_o`, captured per lane exactly as
+  `y_q` is today.
+* `zhao_field_v2_core`: the write-back writes `{lm_rsp_wf, lm_rsp_dst + k}` for
+  k in 0..count-1, with the count carried in the request like the mode.
+* the steal predicate generalises from `s1_is_len` to "needs a second pass",
+  since all four read `a+1` and two read `a+2`.
+
+### The hazard, named before it is built
+
+v2 has **no forwarding**, and the argument for that is: a wavefront issues again
+only after its previous instruction has written back. That argument was made
+about ONE register.
+
+A three-register write-back does not obviously break it -- the writes still land
+before the wavefront is released, because the release happens at the reply. But
+the reasoning must be re-made rather than assumed, and it wants its own mutant:
+**a write-back that lands dst+1 one cycle late** would be invisible to any test
+whose next instruction does not read dst+1 immediately.
+
+That mutant is the point of the increment. The RTL is the easy half.
+
+---
+
+## Correction: NORMALIZE does not call the shared reciprocal
+
+*2026-08-26. A committed proof said it did. It was wrong, and a wrong proof is
+the failure the equivalence mechanism exists to make expensive.*
+
+M116's declaration named NORMALIZE as the shared reciprocal's future second
+consumer, and the routing note above told the next person to ask "does this
+operation call anything that also needs the shared lane -- NORMALIZE does".
+
+**`zhao_field_normalize` has no `rcp_*` ports at all.** It carries its own
+`zhao_field_rcp24_rom` and shares only the integer square root
+(`sqrt_valid_o`/`sqrt_r_i`).
+
+The shared reciprocal's real second consumer is **OP_RCP**, the standalone
+reciprocal opcode, and v1 says so in one line:
+
+```systemverilog
+assign rcp_valid = op_is_ring ? rg_rcp_valid : (v_valid_i && op_is_rcp);
+```
+
+### What this changes and what it does not
+
+The **equivalence still holds**: the ring is the only consumer today, so `&&`
+still cannot be told from `||`. What was wrong is the RE-SCORE TRIGGER -- the
+event that ends the equivalence. Someone wiring NORMALIZE and dutifully
+re-scoring M116 would have found it still surviving and concluded the proof was
+unreliable; someone wiring OP_RCP would not have known to re-score it at all.
+
+The declaration now names OP_RCP, cites v1's line, and records that an earlier
+version named NORMALIZE and was wrong.
+
+### The lesson about proofs specifically
+
+This error was cheap to make and cheap to catch: I asserted a module's
+dependency from memory of a related module rather than from its port list, and
+found it by reading `zhao_field_normalize`'s ports for an unrelated reason.
+
+**A proof of equivalence is a claim about the design, and it deserves the same
+evidence standard as a claim about behaviour.** "NORMALIZE calls the reciprocal"
+was checkable in one grep and I did not run it.
 

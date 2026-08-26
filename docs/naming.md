@@ -3,7 +3,8 @@
 **Decision (wave 1, plan 1.F — hybrid, docs-only):** the programming language
 for the Zhaozhou console is **Form**. The *nanquan* repository will later
 become the standalone **toolchain distribution** for Form. No wave-1 commits
-touch `nanquan/` or `untitled-game/`.
+touch `nanquan/` or `Upheaval/` (the game folder, named *Upheaval* on
+2026-08-26; it was `untitled-game/` when this was written).
 
 ## Why
 
@@ -11,7 +12,7 @@ touch `nanquan/` or `untitled-game/`.
   wins inside `zhaozhou/`. Introducing a second name for the language would
   fork the spec.
 - The nanquan README ("the programming language for the Zhaozhou console")
-  and untitled-game ("written in Nanquan") predate this decision; the intent
+  and the game folder ("written in Nanquan") predate this decision; the intent
   recorded here is that nanquan repurposes as the *distribution* channel
   (installer, pinned toolchain versions, release packaging) rather than the
   language's home.

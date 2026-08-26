@@ -378,7 +378,7 @@ behaviour this lane must stay consistent with.
 
 ## OPEN: persistent scars or healing wake — NOT ratified anywhere
 
-`untitled-game/docs/DESIGN.md` lists it under Wacko mode's **Open questions**:
+`Upheaval/docs/DESIGN.md` lists it under Wacko mode's **Open questions**:
 "whether the deformation waves are persistent scars or heal behind you". It is
 open in the specs too, and this contract records that rather than choosing:
 

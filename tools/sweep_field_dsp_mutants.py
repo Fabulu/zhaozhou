@@ -632,7 +632,7 @@ MUTS = [
      """          s2_a0[l] <= rd_b[l];
           s2_b0[l] <= rd_b[l];"""),
     ("M101 a length dispatches from stage 1, before its second pass lands", F_V2,
-     """      if (s1_is_curve || s1_is_ring) begin
+     """      if (s1_is_curve || s1_is_ring || s1_is_ridge) begin
         lq_valid <= 1'b1;""",
      """      if (s1_is_long) begin
         lq_valid <= 1'b1;"""),
@@ -665,8 +665,10 @@ MUTS = [
       mul_b     = ln_mul_b;
     end"""),
     ("M106 the length's saturation never reaches the ledger", F_V2,
-     """      if (cv_sat_add  || ln_sat_add  || rg_sat_add)  sat_add_o     <= 1'b1;""",
-     """      if ((cv_sat_add || rg_sat_add) && ln_sat_add)  sat_add_o     <= 1'b1;"""),
+     """      if (cv_sat_add  || ln_sat_add  || rg_sat_add ||
+          nz_sat_add)                                 sat_add_o     <= 1'b1;""",
+     """      if ((cv_sat_add || rg_sat_add || nz_sat_add) &&
+          ln_sat_add)                                 sat_add_o     <= 1'b1;"""),
     ("M107 LEN3 and DIST2 collapse to LEN2's mode", F_V2,
      """      OP_LEN3:   begin s1_mode = 2'd1; s1_unit = UNIT_LEN;   end
       OP_DIST2:  begin s1_mode = 2'd2; s1_unit = UNIT_LEN;   end""",
@@ -694,17 +696,17 @@ MUTS = [
     # chain, and RING's ledger lanes. The ledger ones exist because M106 proved
     # a unit can be value-correct and account-wrong, and nothing noticed.
     ("M112 RING is routed to whichever unit is not RING", F_V2,
-     """  wire to_ring = (u_unit == UNIT_RING);""",
-     """  wire to_ring = (u_unit != UNIT_RING);"""),
+     """  wire to_ring  = (u_unit == UNIT_RING);""",
+     """  wire to_ring  = (u_unit != UNIT_RING);"""),
     ("M113 RING's inner radius is handed the outer one", F_V2,
-     """          lq_a1[l] <= s1_is_ring ? rd_b[l] : 32'sd0;""",
-     """          lq_a1[l] <= s1_is_ring ? rd_c[l] : 32'sd0;"""),
+     """          lq_a1[l] <= (s1_is_ring || s1_is_ridge) ? rd_b[l] : 32'sd0;""",
+     """          lq_a1[l] <= (s1_is_ring || s1_is_ridge) ? rd_c[l] : 32'sd0;"""),
     ("M114 the reciprocal loses its precedence on the multiplier", F_V2,
      """    if (rc_mul_issue) begin
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_ring) begin""",
+    end else if (to_noise) begin""",
      """    if (to_ring && rg_mul_issue) begin
       mul_issue = rg_mul_issue;
       mul_a     = rg_mul_a;
@@ -713,7 +715,7 @@ MUTS = [
       mul_issue = rc_mul_issue;
       mul_a     = rc_mul_a;
       mul_b     = rc_mul_b;
-    end else if (to_ring) begin"""),
+    end else if (to_noise) begin"""),
     ("M115 the band's two radii are swapped at the unit", F_V2,
      """      .d_i(u_a), .r0_i(u_a1), .r1_i(u_a2),""",
      """      .d_i(u_a), .r0_i(u_a2), .r1_i(u_a1),"""),
@@ -724,8 +726,34 @@ MUTS = [
      """      if (cv_sat_mul  || rg_sat_mul)                 sat_mul_o     <= 1'b1;""",
      """      if (cv_sat_mul  && rg_sat_mul)                 sat_mul_o     <= 1'b1;"""),
     ("M118 RING never dispatches at all", F_V2,
-     """      if (s1_is_curve || s1_is_ring) begin""",
-     """      if (s1_is_curve) begin"""),
+     """      if (s1_is_curve || s1_is_ring || s1_is_ridge) begin""",
+     """      if (s1_is_curve || s1_is_ridge) begin"""),
+    # ---- the IMMEDIATE, and RIDGE ------------------------------------------
+    # v2's instruction word grew its first new field since the engine was
+    # written. The immediate is a hash SEED here and an AXIS SELECT for ROT3
+    # later, and the axis is the dangerous one: dropped, it rotates about the
+    # wrong axis and the world stays plausible. These attack the capture, the
+    # carry, the routing and the mode.
+    ("M119 the immediate is taken LIVE rather than carried", F_LMUX,
+     """  assign u_imm_o     = imm_q;""",
+     """  assign u_imm_o     = (lane == '0) ? req_imm_i : imm_q;"""),
+    ("M120 the immediate loses its low half on the way to the unit", F_V2,
+     """        lq_imm   <= s1_imm;""",
+     """        lq_imm   <= s1_imm & 32'hFFFF_0000;"""),
+    ("M121 RIDGE is routed to whichever unit is not the noise unit", F_V2,
+     """  wire to_noise = (u_unit == UNIT_NOISE);""",
+     """  wire to_noise = (u_unit != UNIT_NOISE);"""),
+    ("M122 RIDGE's second coordinate is never carried", F_V2,
+     """          lq_a1[l] <= (s1_is_ring || s1_is_ridge) ? rd_b[l] : 32'sd0;""",
+     """          lq_a1[l] <= s1_is_ring ? rd_b[l] : 32'sd0;"""),
+    ("M123 the noise unit is always told it is NOISE2, never RIDGE", F_V2,
+     """      .is_ridge_i(u_mode[0]),""",
+     """      .is_ridge_i(1'b0),"""),
+    ("M124 the noise unit's saturation reaches the ledger only beside another", F_V2,
+     """      if (cv_sat_add  || ln_sat_add  || rg_sat_add ||
+          nz_sat_add)                                 sat_add_o     <= 1'b1;""",
+     """      if ((cv_sat_add || ln_sat_add || rg_sat_add) &&
+          nz_sat_add)                                 sat_add_o     <= 1'b1;"""),
 ]
 
 
@@ -762,7 +790,12 @@ EQUIVALENT = {
         "holds whatever the reciprocal reported, and the ring is the "
         "reciprocal's ONLY consumer today. The two lanes always overlap and "
         "&& cannot be told from ||. The || is defensive for a SECOND consumer "
-        "and there will be one: NORMALIZE calls the reciprocal. RE-SCORE THIS "
+        "and there will be one: OP_RCP, the standalone reciprocal opcode, which "
+        "v1 routes to this same unit (zhao_field_exec_shared: rcp_valid = "
+        "op_is_ring ? rg_rcp_valid : (v_valid_i && op_is_rcp)). NOT normalize: "
+        "zhao_field_normalize has no rcp_* ports at all -- it carries its own "
+        "rcp24 ROM and shares only the isqrt. An earlier version of this proof "
+        "named NORMALIZE and was WRONG. RE-SCORE THIS "
         "THE MOMENT A SECOND CONSUMER IS WIRED -- it should then be caught, "
         "and if it is not, the OR is genuinely untested.",
 }

@@ -53,10 +53,12 @@ constexpr uint8_t OP_LEN2 = 0x12;         // the length unit, mode 0
 constexpr uint8_t OP_LEN3 = 0x13;         // the length unit, mode 1
 constexpr uint8_t OP_DIST2 = 0x14;        // the length unit, mode 2
 constexpr uint8_t OP_RING = 0x21;         // its own unit, no mode
+constexpr uint8_t OP_RIDGE = 0x22;        // the noise unit, is_ridge = 1
 constexpr uint8_t OP_UNSUPPORTED = 0x17;  // RCP: real opcode, not yet in v2
 
 struct Instr {
   uint8_t op, dst, a, b, c;
+  uint32_t imm = 0;  // RIDGE/NOISE2 seed, ROT3 axis; zero for everything else
 };
 
 // The oracle, in the exact arithmetic of the reference: saturating add/sub and
@@ -176,6 +178,7 @@ struct Bench {
     d.ins_a_i = in.a;
     d.ins_b_i = in.b;
     d.ins_c_i = in.c;
+    d.ins_imm_i = in.imm;
     d.eval();
   }
 
@@ -1044,53 +1047,145 @@ check(dut.rcp_zero_o == 1, "13.a degenerate RING reaches SatLedger::rcp0", 1, du
 // band's half-span, so a NARROW band gives a large reciprocal, and
 // (x - e0) * r overflows before smoothstep clamps t. A narrow band with a
 // distant d is not exotic -- it is a thin ring seen from far away.
+{// ---- 14a. narrow band, distant point ---------------------------------
+ {Bench b(dut);
+b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+const int32_t r0 = 1 << 16;
+const int32_t r1 = r0 + (1 << 16) / 128;  // a band 1/128 wide
+const int32_t d = 1000 << 16;             // far outside it
+
+zref::SatLedger L{};
+const int32_t m = (r0 + r1) / 2;
+(void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
+(void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
+check(L.mul != 0, "14.a narrow band really does saturate a product (oracle)", 1,
+      L.mul != 0 ? 1 : 0);
+
+for (int w = 0; w < kWfs; ++w)
+  for (int l = 0; l < kLanes; ++l) {
+    b.write_reg(w, l, 0, d);
+    b.write_reg(w, l, 1, r0);
+    b.write_reg(w, l, 2, r1);
+  }
+b.run((1u << kWfs) - 1u);
+check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.sat_mul_o);
+}
+
+// ---- 14b. and a wide band, so the lane is not simply stuck -----------
 {
-  // ---- 14a. narrow band, distant point ---------------------------------
-  {
+  Bench b(dut);
+  b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
+  const int32_t r0 = 1 << 16, r1 = 5 << 16, d = 2 << 16;
+
+  zref::SatLedger L{};
+  const int32_t m = (r0 + r1) / 2;
+  (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
+  (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
+  check(L.mul == 0, "14.an ordinary band really does not (oracle)", 0, L.mul);
+
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      b.write_reg(w, l, 0, d);
+      b.write_reg(w, l, 1, r0);
+      b.write_reg(w, l, 2, r1);
+    }
+  b.run((1u << kWfs) - 1u);
+  check(dut.sat_mul_o == 0, "14.an ordinary RING leaves SatLedger::mul alone", 0, dut.sat_mul_o);
+}
+}
+
+// ---- 15. RIDGE, and the first instruction that reads an IMMEDIATE --------
+// v2's instruction interface was {op, dst, a, b, c} until now. RIDGE reads
+// ins.imm as a hash seed, so this section is as much about the immediate
+// reaching the unit intact as about the ridge value itself.
+//
+// THE SEED IS TESTED BY VARYING IT. A seed dropped to zero, hard-wired, or
+// read live from whatever the front end is doing when the unit's turn comes
+// still produces a plausible-looking noise value. So the same coordinates run
+// under two different seeds and are required to DISAGREE. Without that, a
+// hard-wired seed passes every value check against an oracle handed the same
+// hard-wired seed -- the test and the bug cancelling out.
+{
+  auto ridge_oracle = [&](int32_t x, int32_t y, uint32_t seed) -> int32_t {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    zfield::Instr ins{};
+    ins.op = zfield::OP_RIDGE;
+    ins.dst = 16;
+    ins.a = 0;
+    ins.b = 1;
+    ins.c = 0;
+    ins.imm = seed;
+    prog.instrs.push_back(ins);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 2; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    zfield::IoLane ol{};
+    ol.name = "y";
+    ol.type = 0;
+    ol.reg = 16;
+    prog.out_lanes.push_back(ol);
+    int32_t in[2] = {x, y};
+    int32_t out[1] = {0};
+    zfield::interpret(prog, in, 2, out, 1);
+    return out[0];
+  };
+
+  int32_t x[kWfs][kLanes], y[kWfs][kLanes];
+  const uint32_t seeds[2] = {0x1234u, 0x9E37u};
+  int32_t got[2][kWfs][kLanes];
+
+  for (int si = 0; si < 2; ++si) {
     Bench b(dut);
-    b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
-    const int32_t r0 = 1 << 16;
-    const int32_t r1 = r0 + (1 << 16) / 128;  // a band 1/128 wide
-    const int32_t d = 1000 << 16;             // far outside it
-
-    zref::SatLedger L{};
-    const int32_t m = (r0 + r1) / 2;
-    (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
-    (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
-    check(L.mul != 0, "14.a narrow band really does saturate a product (oracle)", 1,
-          L.mul != 0 ? 1 : 0);
-
+    b.prog = {{OP_RIDGE, 16, 0, 1, 0, seeds[si]}, {OP_END, 0, 0, 0, 0}};
     for (int w = 0; w < kWfs; ++w)
       for (int l = 0; l < kLanes; ++l) {
-        b.write_reg(w, l, 0, d);
-        b.write_reg(w, l, 1, r0);
-        b.write_reg(w, l, 2, r1);
+        x[w][l] = (w * kLanes + l + 1) * 65536 * 3;
+        y[w][l] = -(w * kLanes + l + 1) * 65536 * 7;
+        b.write_reg(w, l, 0, x[w][l]);
+        b.write_reg(w, l, 1, y[w][l]);
       }
-    b.run((1u << kWfs) - 1u);
-    check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.sat_mul_o);
-  }
+    const uint32_t before = dut.instr_retired_o;
+    const int clocks = b.run((1u << kWfs) - 1u);
 
-  // ---- 14b. and a wide band, so the lane is not simply stuck -----------
-  {
-    Bench b(dut);
-    b.prog = {{OP_RING, 16, 0, 1, 2}, {OP_END, 0, 0, 0, 0}};
-    const int32_t r0 = 1 << 16, r1 = 5 << 16, d = 2 << 16;
-
-    zref::SatLedger L{};
-    const int32_t m = (r0 + r1) / 2;
-    (void)zref::smoothstep(zref::fx16{r0}, zref::fx16{m}, zref::fx16{d}, &L);
-    (void)zref::smoothstep(zref::fx16{m}, zref::fx16{r1}, zref::fx16{d}, &L);
-    check(L.mul == 0, "14.an ordinary band really does not (oracle)", 0, L.mul);
-
+    uint64_t bad = 0;
+    std::set<int32_t> distinct;
     for (int w = 0; w < kWfs; ++w)
       for (int l = 0; l < kLanes; ++l) {
-        b.write_reg(w, l, 0, d);
-        b.write_reg(w, l, 1, r0);
-        b.write_reg(w, l, 2, r1);
+        const int32_t want = ridge_oracle(x[w][l], y[w][l], seeds[si]);
+        got[si][w][l] = b.read_reg(w, l, 16);
+        distinct.insert(want);
+        if (got[si][w][l] != want) ++bad;
       }
-    b.run((1u << kWfs) - 1u);
-    check(dut.sat_mul_o == 0, "14.an ordinary RING leaves SatLedger::mul alone", 0, dut.sat_mul_o);
+    char nm[96];
+    std::snprintf(nm, sizeof nm, "15.RIDGE matches zfield::interpret under seed 0x%X", seeds[si]);
+    check(bad == 0, nm, 0, bad);
+    // Noise returning one value everywhere would agree with an equally broken
+    // oracle, so require the coordinates to actually matter.
+    std::snprintf(nm, sizeof nm, "15.seed 0x%X gives varied values across lanes", seeds[si]);
+    check(distinct.size() > 8, nm, 8, distinct.size());
+
+    const uint32_t retired = dut.instr_retired_o - before;
+    check(retired == static_cast<uint32_t>(kWfs * 2),
+          "15.each wavefront retired exactly two instructions", kWfs * 2, retired);
+    std::printf("  v2 RIDGE  %u instructions in %d clocks (seed 0x%X)\n", retired, clocks,
+                seeds[si]);
   }
+
+  // THE SEED REACHED THE UNIT. Same coordinates, different seeds: if the
+  // immediate were dropped, hard-wired, or read live, these would agree.
+  uint64_t same = 0;
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l)
+      if (got[0][w][l] == got[1][w][l]) ++same;
+  check(same == 0, "15.a different seed gives a different ridge on every lane", 0, same);
 }
 
 dut.final();

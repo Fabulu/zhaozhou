@@ -117,6 +117,7 @@ struct Bench {
   struct Obs {
     int32_t a, a1, a2, b0, b1;
     int mode, unit;
+    uint32_t imm;
   };
   std::vector<Obs> obs;
 
@@ -127,7 +128,7 @@ struct Bench {
     const Obs seen{static_cast<int32_t>(d.u_a_o),  static_cast<int32_t>(d.u_a1_o),
                    static_cast<int32_t>(d.u_a2_o), static_cast<int32_t>(d.u_b0_o),
                    static_cast<int32_t>(d.u_b1_o), static_cast<int>(d.u_mode_o),
-                   static_cast<int>(d.u_unit_o)};
+                   static_cast<int>(d.u_unit_o),   static_cast<uint32_t>(d.u_imm_o)};
     const bool taking = d.u_rready_o && unit.has_result;
     zhao::tick(d);
     if (accepting) {
@@ -140,11 +141,12 @@ struct Bench {
 
   /** Push one vector request and run until its reply is taken. Returns clocks. */
   int transact(int wf, int dst, int mode, const int32_t* a, int32_t* y, int guard = 4096,
-               int unit_sel = 0) {
+               int unit_sel = 0, uint32_t imm = 0) {
     d.req_wf_i = wf;
     d.req_dst_i = dst;
     d.req_mode_i = mode;
     d.req_unit_i = unit_sel;
+    d.req_imm_i = imm;
     for (int l = 0; l < kLanes; ++l) {
       d.req_a_i[l] = static_cast<uint32_t>(a[l]);
       // The rest of the bundle is derived from a0 so every component of every
@@ -183,6 +185,14 @@ struct Bench {
     // component taken LIVE reads what it read before and the carry is untested.
     d.req_mode_i = 3 - mode;
     d.req_unit_i = 3 - unit_sel;
+    // THE IMMEDIATE IS POISONED FOR THE SAME REASON THE TAG IS. It was added to
+    // this block after the tag test was written, so nothing drove it and
+    // nothing could tell a CARRIED immediate from a LIVE one -- mutant M119
+    // survived the whole suite on exactly that. The core cannot catch it
+    // either, and that is structural rather than an oversight: the long-op
+    // interlock keeps one request in flight, so the core's lq_imm sits stable
+    // while the serialiser works and live equals captured by construction.
+    d.req_imm_i = ~imm;
     for (int l = 0; l < kLanes; ++l) {
       d.req_a_i[l] = 0xDEAD0000u;
       d.req_a1_i[l] = 0xDEAD0001u;
@@ -287,7 +297,7 @@ int main(int argc, char** argv) {
     Bench b(dut, 3);
     const int32_t a[kLanes] = {101, 202, 303, 404};
     int32_t y[kLanes] = {};
-    b.transact(2, 9, 2, a, y, 4096, /*unit_sel=*/1);
+    b.transact(2, 9, 2, a, y, 4096, /*unit_sel=*/1, /*imm=*/0xA5C3F00Du);
 
     check(b.obs.size() == static_cast<size_t>(kLanes),
           "5.the unit saw exactly one request per lane", kLanes, b.obs.size());
@@ -304,6 +314,15 @@ int main(int argc, char** argv) {
     check(bad_comp == 0, "5.every component of every lane arrives intact", 0, bad_comp);
     check(bad_mode == 0, "5.the mode is the CAPTURED one on every lane", 0, bad_mode);
     check(bad_unit == 0, "5.the unit selector is the CAPTURED one on every lane", 0, bad_unit);
+
+    // The immediate is a hash SEED for RIDGE/NOISE2 and an AXIS SELECT for
+    // ROT3. Both fail QUIETLY when wrong: different noise, or the same world
+    // rotated about the wrong axis. So it is checked on every lane against the
+    // value that was requested, with the request line holding its complement.
+    uint64_t bad_imm = 0;
+    for (size_t k = 0; k < b.obs.size() && k < kLanes; ++k)
+      if (b.obs[k].imm != 0xA5C3F00Du) ++bad_imm;
+    check(bad_imm == 0, "5.the immediate is the CAPTURED one on every lane", 0, bad_imm);
   }
 
   dut.final();

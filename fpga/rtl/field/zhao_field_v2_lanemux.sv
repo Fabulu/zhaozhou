@@ -66,6 +66,10 @@ module zhao_field_v2_lanemux #(
     // serialises and tags, it does not know what a curve or a length is -- so
     // the selector travels with the transaction and the core routes on it.
     input  logic [1:0]                req_unit_i,
+    // The instruction's immediate, captured on the same terms as the tag and
+    // for the same reason: a unit given it live reads whatever the front end is
+    // doing when its turn comes, not what the instruction asked for.
+    input  logic [31:0]               req_imm_i,
     // THE OPERAND BUNDLE. CURVE takes one value; the length family takes up to
     // five (a0,a1,a2 for LEN3, plus b0,b1 for DIST2), which is why this is a
     // bundle rather than a single operand. Named after zhao_field_len's own
@@ -81,6 +85,7 @@ module zhao_field_v2_lanemux #(
     input  logic                      u_ready_i,
     output logic [1:0]                u_mode_o,
     output logic [1:0]                u_unit_o,
+    output logic [31:0]               u_imm_o,
     output logic signed [31:0]        u_a_o,
     output logic signed [31:0]        u_a1_o,
     output logic signed [31:0]        u_a2_o,
@@ -116,11 +121,13 @@ module zhao_field_v2_lanemux #(
   logic [$clog2(REGS)-1:0] dst_q;
   logic [1:0]              mode_q;
   logic [1:0]              unit_q;
+  logic [31:0]             imm_q;
 
   assign req_ready_o = (state == S_IDLE);
   assign u_valid_o   = (state == S_ISSUE);
   assign u_mode_o    = mode_q;
   assign u_unit_o    = unit_q;
+  assign u_imm_o     = imm_q;
   assign u_a_o       = a_q[lane];
   assign u_a1_o      = a1_q[lane];
   assign u_a2_o      = a2_q[lane];
@@ -144,6 +151,7 @@ module zhao_field_v2_lanemux #(
       dst_q  <= '0;
       mode_q <= 2'd0;
       unit_q <= 2'd0;
+      imm_q  <= 32'd0;
       for (l = 0; l < LANES; l++) begin
         a_q[l]  <= '0;
         a1_q[l] <= '0;
@@ -161,6 +169,7 @@ module zhao_field_v2_lanemux #(
             dst_q  <= req_dst_i;
             mode_q <= req_mode_i;
             unit_q <= req_unit_i;
+            imm_q  <= req_imm_i;
             for (l = 0; l < LANES; l++) begin
               a_q[l]  <= req_a_i[l];
               a1_q[l] <= req_a1_i[l];

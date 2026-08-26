@@ -5,6 +5,61 @@ at the top.*
 
 ---
 
+## 2026-08-26 (night) — ridges, and a test that would have lied
+
+### What now works
+
+**Ridges** — the noise the terrain uses for rocky, veined, wrinkled ground. With
+curves, distances and rings, that is four of the six kinds of maths the Earth
+programs ask for, and it was by far the cheapest: a ridge costs the engine about
+a third of what a ring does, because it is a hash rather than a repeated
+calculation.
+
+### The instruction word grew a field, for the first time
+
+Every instruction until now was *what to do* and *which three registers*. Ridges
+need a fifth thing: a **seed** — the number that decides which noise you get.
+Same coordinates, different seed, different landscape.
+
+### The test that would have lied
+
+Here is the part worth reading, because it is a trap I nearly walked into.
+
+If the hardware lost the seed — dropped it, or always used the same one — it
+would still produce noise that looks entirely correct. And the check compares
+the hardware against the reference **using the same seed**, so if the seed never
+arrived at either, both would be wrong in the same direction and the test would
+pass.
+
+The test and the bug would cancel out.
+
+So the real check is different: run the **same coordinates twice with two
+different seeds and demand the answers differ**. If the seed is being dropped,
+they come back identical and it fails immediately.
+
+I mention it because the same trap is waiting for the next piece of maths.
+Rotations take a similar extra number, and there it chooses *which axis to
+rotate around*. Get that wrong and the world still looks like a world — just
+the wrong one.
+
+### Where the Field engine stands
+
+| | new engine |
+|---|---|
+| simple arithmetic | yes |
+| curves | yes |
+| distances | yes |
+| rings | yes |
+| ridges | **yes, as of tonight** |
+| noise pairs, rotations, normalise | not yet — refused, never skipped |
+
+**The four that remain all need one same missing piece**, which is worth knowing
+because it makes the rest smaller than the list suggests: they each produce
+*two or three* answers at once, and the engine's return path currently carries
+one. Build that once and all four follow.
+
+---
+
 ## 2026-08-26 (evening) — rings, and the first time two things wanted one part
 
 ### What now works
