@@ -53,6 +53,7 @@ CONE = [
 # not contain it: the lint passed by not looking. A mutant in a file the cone
 # omits is a mutant with no preflight at all.
 CONE_V2 = [
+    'fpga/rtl/field/zhao_field_v2_front.sv',
     'fpga/rtl/field/zhao_field_v2_core.sv',
     'fpga/rtl/field/zhao_field_v2_lanemux.sv',
     'fpga/rtl/field/zhao_field_curve.sv',
@@ -69,7 +70,8 @@ CONE_V2 = [
     'fpga/rtl/field/zhao_field_rcp24_rom.sv',
     'fpga/rtl/field/zhao_field_mul.sv',
 ]
-V2_FILES = ('zhao_field_v2_core.sv', 'zhao_field_v2_lanemux.sv')
+V2_FILES = ('zhao_field_v2_core.sv', 'zhao_field_v2_lanemux.sv',
+            'zhao_field_v2_front.sv')
 
 
 def main():
@@ -117,7 +119,7 @@ def main():
     # like a bad mutant list and send you editing correct mutants.
     #
     # So: lint the baseline first. If the tree is dirty, say so and stop.
-    for top, cone in (('zhao_field_seq', CONE), ('zhao_field_v2_core', CONE_V2)):
+    for top, cone in (('zhao_field_seq', CONE), ('zhao_field_v2_front', CONE_V2)):
         rc = subprocess.run([exe, '--lint-only', '-Wall', '--top-module', top] + cone,
                             capture_output=True, text=True)
         if rc.returncode != 0:
@@ -155,7 +157,7 @@ def main():
             bad.append((name, 'anchor'))
             continue
         if path.replace(chr(92), '/').split('/')[-1] in V2_FILES:
-            top, cone = 'zhao_field_v2_core', CONE_V2
+            top, cone = 'zhao_field_v2_front', CONE_V2
         else:
             top, cone = 'zhao_field_seq', CONE
         rc = subprocess.run([exe, '--lint-only', '-Wall', '--top-module', top] + cone,

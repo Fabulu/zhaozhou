@@ -52,6 +52,7 @@ F_SIN = 'fpga/rtl/field/zhao_field_sin.sv'
 F_PROG = 'fpga/rtl/field/zhao_field_progcache.sv'
 F_V2 = 'fpga/rtl/field/zhao_field_v2_core.sv'
 F_LMUX = 'fpga/rtl/field/zhao_field_v2_lanemux.sv'
+F_FRONT = 'fpga/rtl/field/zhao_field_v2_front.sv'
 
 MUTS = [
     # ---- the lane -----------------------------------------------------------
@@ -867,6 +868,41 @@ MUTS = [
     ("M150 normalize is routed to the rot unit's code", F_V2,
      """  wire to_norm  = (u_unit == UNIT_NORM);""",
      """  wire to_norm  = (u_unit == UNIT_ROT);"""),
+    # ---- THE FRONT END: program in, points in, answers out IN ORDER --------
+    # The block that makes the engine usable. Its failure modes are not
+    # arithmetic, they are SEQUENCING. M151 is the bug that shipped here first:
+    # done_o is STICKY from the previous batch and busy_o is low before a
+    # wavefront starts, so testing them immediately after a REGISTERED start
+    # pulse completes a batch that never executed -- and the drain then returns
+    # the PREVIOUS batch's answers.
+    ("M151 a batch completes without waiting for its start to land", F_FRONT,
+     """        F_RUN: if (!launched) begin
+          if ((core_done & started) == '0) launched <= 1'b1;
+        end else if (core_busy == '0 && (core_done & started) == started) begin""",
+     """        F_RUN: if (launched || (core_busy == '0 &&
+                       (core_done & started) == started)) begin"""),
+    ("M152 ready fires on the FIRST lane of a point, not the last", F_FRONT,
+     """  assign pt_ready_o = (state == F_FILL) && (filled != SW'(SLOTS)) &&
+                      (fill_lane + 1 == n_in_i);""",
+     """  assign pt_ready_o = (state == F_FILL) && (filled != SW'(SLOTS)) &&
+                      (fill_lane == '0);"""),
+    ("M153 an input lane is written to the wrong register", F_FRONT,
+     """            h_reg   <= RW'(fill_lane);""",
+     """            h_reg   <= RW'(fill_lane + 1);"""),
+    ("M154 the drain reads the wrong lane of the slot", F_FRONT,
+     """  wire [LW-1:0]  h_rlane = drain_ln;""",
+     """  wire [LW-1:0]  h_rlane = LW'(drain_ln + LW'(1));"""),
+    ("M155 a partial batch launches every wavefront", F_FRONT,
+     """            core_start <= WFS'((1 << wf_used) - 1);
+            started    <= WFS'((1 << wf_used) - 1);""",
+     """            core_start <= {WFS{1'b1}};
+            started    <= WFS'((1 << wf_used) - 1);"""),
+    ("M156 the drain captures before the address has settled", F_FRONT,
+     """              2'd1:    rd_phase <= 2'd2;""",
+     """              2'd1:    rd_phase <= 2'd0;"""),
+    ("M157 a drained point never advances, so the first repeats", F_FRONT,
+     """              drained <= drained + SW'(1);""",
+     """              drained <= drained;"""),
 ]
 
 

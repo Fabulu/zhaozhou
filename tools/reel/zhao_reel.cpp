@@ -1017,6 +1017,15 @@ struct SceneSubject {
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
+  // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
+  // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
+  // deleted an eye colour, a mouth and a throat transition, and it forced a
+  // one-scalar shading model that turned the concept's pastels grey. A subject
+  // that sets this is exempt from the palette gate and ships full-colour
+  // frames; GIF becomes an optional degraded fallback for it, never a content
+  // gate. Terrain and sky subjects keep the gate -- their GIFs are the
+  // deliverable.
+  bool full_colour = false;
   int32_t bump_ext = 12;  // bump_patch half-extent (creature shots: 6 m so the
                           // near camera at dist 8 stands OUTSIDE the envelope —
                           // Phase-3 culls the whole patch when any lattice
@@ -2133,7 +2142,11 @@ int render_scene(const SceneSubject& sub) {
   }
 
   // ---- the palette law: a shipped GIF must be palette-exact ----
-  if (pal.count() > 256) {
+  // ...but only where a GIF is what ships. See SceneSubject::full_colour.
+  if (sub.full_colour && pal.count() > 256) {
+    std::printf("%s: %zu unique colours — full-colour lane, palette gate not applied\n",
+                sub.name, pal.count());
+  } else if (pal.count() > 256) {
     std::fprintf(stderr,
                  "%s: %zu unique colours (> 256) — the frame set cannot be encoded "
                  "palette-exactly. Re-author the scene; NEVER fall back to palettegen.\n",
@@ -2141,7 +2154,7 @@ int render_scene(const SceneSubject& sub) {
     return 3;
   }
 
-  if (g_write) {
+  if (g_write && pal.count() <= 256) {
     std::vector<uint8_t> pl(4);
     const uint32_t n = static_cast<uint32_t>(pal.count());
     for (int i = 0; i < 4; ++i) pl[i] = static_cast<uint8_t>(n >> (8 * i));
@@ -2849,6 +2862,13 @@ SceneSubject subject_creaturewalk() {
   // lays down ~0.70 m per cycle -- a planted walk, not a 4-frame scramble.
   s.step = 1;
   s.creature = 1;
+  // The creature light rig became per-channel on 2026-08-26 and this
+  // subject's shade count went 229 -> 348. It is a CREATURE subject, and
+  // the 256-colour rule is a GIF-export constraint that must not shape a
+  // creature -- the same law that deleted Zixxtrixx's orange. Full-colour
+  // lane. NOTE: zhaozhou-site's shipped GIF for this subject is now stale
+  // and needs regenerating through the full-colour path.
+  s.full_colour = true;
   // near phase: camera aims AT the creature (aim y = eye - 0.4877*dist =
   // 8 m, the bump-patch crown it walks on); focal 3.36 puts the ~1 m
   // watchdog at ~70 px (the legibility rule)
@@ -2892,7 +2912,10 @@ SceneSubject subject_creaturewalk() {
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x6BEECDE5u;  // re-pinned 2026-08-18: stride back on the sim clock
+  s.expect_seq_crc = 0x4B8730D6u;  // RE-PINNED 2026-08-26: the creature light
+  // rig became per-channel (white key + cool ambient + warm bounce fill).
+  // Intentional and measured; it moves every creature render. Previous
+  // value 0x6BEECDE5 (2026-08-18, stride back on the sim clock).
   return s;
 }
 
@@ -2913,6 +2936,7 @@ SceneSubject subject_zixx_slither() {
   s.step = 1;
   s.creature = 3;
   s.orbit = true;
+  s.full_colour = true;  // the creature is the subject, not the GIF
   // framing: the animal is ~3.9 m nose to prong tip. At k=235000 / dist 8 that
   // is ~200 px broadside, which leaves room for the +-1.25 m of travel without
   // running off a 384 px frame.
@@ -2949,7 +2973,9 @@ SceneSubject subject_zixx_slither() {
       "38 rigid ring parts. The pink dorsal crest is GEOMETRY, not texture -- "
       "there is no CLUT8 page pipeline yet, and the concept's stripe runs along "
       "the body where a ring part's texture runs around it";
-  s.expect_seq_crc = 0x46759455u;  // pinned 2026-08-26, first Zixxtrixx render
+  // expect_seq_crc DELIBERATELY UNPINNED while the remake is in flight.
+  // MODELINGGUIDE section 12: "Do not pin final visual CRCs until the new
+  // appearance has been inspected." Re-pin when the likeness is approved.
   return s;
 }
 
@@ -2960,6 +2986,7 @@ SceneSubject subject_zixx_strike() {
   s.step = 1;
   s.creature = 4;
   s.orbit = true;
+  s.full_colour = true;  // the creature is the subject, not the GIF
   s.bump_ext = 6;
   // same pull-back as the slither: the throw carries the tail a metre and a
   // half above the body, and at 300000 the animal sat jammed against the
@@ -2986,7 +3013,9 @@ SceneSubject subject_zixx_strike() {
       "end travels furthest; the head ducks under the passing tail on key 23 "
       "and presses down with the strike. 48 keys against the donor's 45-key "
       "melee median, kEvAttack on the contact key";
-  s.expect_seq_crc = 0xAB9FE046u;  // pinned 2026-08-26, first Zixxtrixx render
+  // expect_seq_crc DELIBERATELY UNPINNED while the remake is in flight.
+  // MODELINGGUIDE section 12: "Do not pin final visual CRCs until the new
+  // appearance has been inspected." Re-pin when the likeness is approved.
   return s;
 }
 
@@ -3000,6 +3029,13 @@ SceneSubject subject_creaturepop() {
   s.frames = 72;
   s.step = 8;
   s.creature = 2;
+  // The creature light rig became per-channel on 2026-08-26 and this
+  // subject's shade count went 229 -> 348. It is a CREATURE subject, and
+  // the 256-colour rule is a GIF-export constraint that must not shape a
+  // creature -- the same law that deleted Zixxtrixx's orange. Full-colour
+  // lane. NOTE: zhaozhou-site's shipped GIF for this subject is now stale
+  // and needs regenerating through the full-colour path.
+  s.full_colour = true;
   // fixed camera on the bump-patch crown (aim y = 8.1 m; the inflated 2.3x
   // creature reaches ~135 px before the pop)
   s.bump_ext = 6;
@@ -3013,7 +3049,10 @@ SceneSubject subject_creaturepop() {
       "2.2 pop threshold removes the mesh and releases 18 detached rotating "
       "chunks, deterministically sampled from donor gibs, with integer "
       "ballistics, gravity, and damped ground bounce";
-  s.expect_seq_crc = 0x327DBB91u;  // re-pinned 2026-08-18 after visible chunk repair
+  s.expect_seq_crc = 0xEDBA0DD2u;  // RE-PINNED 2026-08-26: the creature light
+  // rig became a white key + cool ambient + warm bounce fill, per channel
+  // (creature_sim.cpp). Intentional, measured, and it moves every creature
+  // render. Previous value 0x327DBB91.  // re-pinned 2026-08-18 after visible chunk repair
   return s;
 }
 

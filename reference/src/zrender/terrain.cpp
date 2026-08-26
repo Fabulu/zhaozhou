@@ -58,8 +58,9 @@ namespace render {
 // The ONE flat-shade law (hoisted verbatim from the draw_heightfield lambda
 // 2026-08-16 when the creature lane needed the identical arithmetic —
 // charter 29-6; the golden CRCs pin that nothing changed but the address).
-int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
-                       int32_t cx, int32_t cy, int32_t cz, SatLedger* L) {
+int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
+                           int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
+                           SatLedger* L) {
   const int64_t e1x = static_cast<int64_t>(bx) - ax;
   const int64_t e1y = static_cast<int64_t>(by) - ay;
   const int64_t e1z = static_cast<int64_t>(bz) - az;
@@ -85,8 +86,8 @@ int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t b
   const int32_t fx = rescale_s32(n0, 16, L);  // -> Q16.16 world-units^2
   const int32_t fy = rescale_s32(n1, 16, L);
   const int32_t fz = rescale_s32(n2, 16, L);
-  const __int128 ndot = static_cast<__int128>(fx) * kLightX + static_cast<__int128>(fy) * kLightY +
-                        static_cast<__int128>(fz) * kLightZ;
+  const __int128 ndot = static_cast<__int128>(fx) * lx + static_cast<__int128>(fy) * ly +
+                        static_cast<__int128>(fz) * lz;
   const uint64_t nmag2 = static_cast<uint64_t>(fx) * static_cast<uint64_t>(fx) +
                          static_cast<uint64_t>(fy) * static_cast<uint64_t>(fy) +
                          static_cast<uint64_t>(fz) * static_cast<uint64_t>(fz);
@@ -97,6 +98,14 @@ int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t b
   // rounding). No extra shift.
   const int32_t shade = div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
   return shade < 0 ? 0 : (shade > 0x10000 ? 0x10000 : shade);
+}
+
+// The renderer's ONE key light, unchanged. Terrain still calls this and its
+// arithmetic is bit-identical to what it was before the directional form was
+// factored out.
+int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
+                       int32_t cx, int32_t cy, int32_t cz, SatLedger* L) {
+  return shade_flat_tri_dir(ax, ay, az, bx, by, bz, cx, cy, cz, kLightX, kLightY, kLightZ, L);
 }
 
 namespace {

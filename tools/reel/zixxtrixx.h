@@ -106,30 +106,39 @@ constexpr int32_t kProngLenMid = 400; // the short middle one
 constexpr int32_t kProngR0 = 96;
 constexpr int32_t kProngR1 = 18;
 constexpr int32_t kProngTipFrom = 60;  // % of the prong that is the pink tip
-constexpr int32_t kProngSplay = 4200;  // +-23 degrees, in angle16 units
-constexpr int32_t kProngSplayMid = 900;
+// Fabian, 2026-08-26: "two prongs, left and right, far apart, flat, but
+// pointy. And in the middle, there's a tiny one." The first model splayed them
+// about Z -- up and down in the side view -- which is the wrong axis. The
+// separation is LATERAL, and "far apart" wants more than the old 23 degrees.
+constexpr int32_t kProngSplay = 7100;  // +-39 degrees, about Y (left/right)
+constexpr int32_t kProngSplayMid = 0;  // the tiny middle one points straight back
 
-// -- colours, sampled from the concept scans -------------------------------
-// Median RGB over named regions of both sheets, paper and ink excluded. The
-// two sheets agree to within a few counts, which is why these are used raw.
-constexpr uint8_t kGreen[3] = {116, 205, 147};   // flank
-constexpr uint8_t kPink[3] = {206, 130, 175};    // dorsal, SATURATED
-// from the sheet's 226,203,221: at 240p under the scene light the raw
-// pencil pink resolved to near-white and the crest read as a grey helmet.
-// Hue kept, saturation pushed. Set it back to 226,203,221 to see why.
-constexpr uint8_t kBlue[3] = {20, 163, 213};     // head
-constexpr uint8_t kYellow[3] = {250, 226, 92};   // eye, SATURATED
-// from the sheet's 246,236,167, for the same reason as kPink: the raw
-// pencil yellow came out olive under the scene light and the eye stopped
-// reading as an eye.
-// kOrange (212,121,96 on the sheet) is GONE, not unused: the eye rim was a
-// sixth material carrying its own ~20 shading bands, and the subject could
-// not fit the 256-colour law with it. The rim is now the crest pink, which
-// still separates the eye from the blue skull. This is the one place the
-// concept art lost a colour outright rather than a shade of one.
-// The concept blends blue into green under the chin. That transition cost a
-// whole shading band against the 256-colour ceiling and was invisible at
-// 240p, so the neck simply carries the head's blue.
+// -- colours: MEASURED from the sheets, not chosen -------------------------
+// Full method, evidence and the RGB565 roundtrip: Upheaval/creature/Zixxtrixx/
+// PALETTE.md and PALETTE-PROOF.png.
+//
+// These replace the first pass's hand-saturated values. That pass took the
+// MEDIAN of each crayon region, which is the pigment lightened by however much
+// white paper showed through the strokes -- so every colour came out pale, by
+// a different amount per region. The pale colours then looked washed out when
+// rendered, so they were saturated by eye and the correction was recorded as
+// art direction. It was not art direction; it was compensating for a
+// measurement error AND for a one-light multiply-only shading model. Both
+// causes are now fixed at the source, so the sheet's own pigment is used raw.
+//
+//   pink   was 206,130,175 (too magenta and too dark)
+//   yellow was 250,226,92  (too acid)
+//   blue   was  20,163,213 (too pale)
+//   green  was 116,205,147 (far too mint; the sheet is a grass green)
+//   orange was DELETED to fit the GIF palette
+constexpr uint8_t kGreen[3] = {120, 184, 68};    // flank, Side.png
+constexpr uint8_t kPink[3] = {233, 188, 206};    // dorsal band, both sheets
+constexpr uint8_t kBlue[3] = {3, 145, 205};      // head and throat
+constexpr uint8_t kYellow[3] = {243, 232, 142};  // eye
+// ONE pencil serving TWO features: the ring around the eye in Front.png and
+// the wavy vertical slit pupil in Side.png. Measured (211,96,68) and
+// (220,110,73) -- the same crayon at different coverage.
+constexpr uint8_t kOrange[3] = {218, 106, 71};
 
 // -- animation --------------------------------------------------------------
 // A key is held 2 sim ticks, so REEL FRAMES = KEYS x 2 at step 1. Both clip
@@ -275,9 +284,9 @@ inline zc::Clip build_slither() {
     c.quats[base + kBFork] = quat_y((zref::fx_sin(fp).raw * 900) >> 16);
     // the prong splay is baked in: rest rotations are identity, so there is
     // nowhere else for it to live
-    c.quats[base + kBProngA] = quat_z(kProngSplay);
-    c.quats[base + kBProngB] = quat_z(-kProngSplay);
-    c.quats[base + kBProngC] = quat_z(kProngSplayMid);
+    c.quats[base + kBProngA] = quat_y(kProngSplay);
+    c.quats[base + kBProngB] = quat_y(-kProngSplay);
+    c.quats[base + kBProngC] = quat_y(kProngSplayMid);
   }
   c.events = {{0, zc::kEvFoot, 0},
               {static_cast<uint16_t>(kSlitherKeys / 2), zc::kEvFoot, 1}};
@@ -343,9 +352,9 @@ inline zc::Clip build_attack() {
     }
     c.quats[base + kBHead] = quat_z((kAttackHead * head) / 1000);
     c.quats[base + kBFork] = quat_z((kAttackArc * arc) / 1000);
-    c.quats[base + kBProngA] = quat_z(kProngSplay);
-    c.quats[base + kBProngB] = quat_z(-kProngSplay);
-    c.quats[base + kBProngC] = quat_z(kProngSplayMid);
+    c.quats[base + kBProngA] = quat_y(kProngSplay);
+    c.quats[base + kBProngB] = quat_y(-kProngSplay);
+    c.quats[base + kBProngC] = quat_y(kProngSplayMid);
   }
   c.events = {{kAttackStrikeKey, zc::kEvAttack, 0}};
   return c;
@@ -370,9 +379,10 @@ inline const zc::CreatureType& type() {
     }
     sk.bones[kBFork] =
         zc::Bone{static_cast<uint8_t>(kBSpine0 + kBodySegs - 1), -fxm(kSegLen), 0, 0};
-    sk.bones[kBProngA] = zc::Bone{kBFork, 0, fxm(28), 0};
-    sk.bones[kBProngB] = zc::Bone{kBFork, 0, -fxm(28), 0};
-    sk.bones[kBProngC] = zc::Bone{kBFork, 0, 0, 0};
+    // left / right / the tiny middle one
+    sk.bones[kBProngA] = zc::Bone{kBFork, 0, 0, fxm(34)};
+    sk.bones[kBProngB] = zc::Bone{kBFork, 0, 0, -fxm(34)};
+    sk.bones[kBProngC] = zc::Bone{kBFork, 0, fxm(20), 0};
     sk.bones[kBCap] = zc::Bone{kBHead, fxm(kCapX), fxm(kCapY), 0};
     sk.bones[kBEyeL] = zc::Bone{kBHead, fxm(kEyeX), fxm(kEyeY), fxm(kEyeZ)};
     sk.bones[kBEyeR] = zc::Bone{kBHead, fxm(kEyeX), fxm(kEyeY), -fxm(kEyeZ)};
@@ -447,7 +457,7 @@ inline const zc::CreatureType& type() {
       rim.pitch_q = 1;
       rim.yaw_q = yq;
       rim.bone = bone;
-      set_rgb(rim, kPink);
+      set_rgb(rim, kOrange);
       parts.push_back(rim);
 
       zc::RingPart eye;

@@ -325,8 +325,89 @@ inline int32_t quant_shade(int32_t shade) {
   return q;
 }
 
-// the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) — the
-// same Phase-3 stand-in, so a creature's underside is not pitch black
+// ---------------------------------------------------------------------------
+// THE CREATURE LIGHT RIG (rewritten 2026-08-26)
+//
+// It used to be one white key light and a grey scalar ambient:
+//     s = 0.25 + 0.75 * lambert;   pixel_c = authored_c * s
+//
+// That is a MULTIPLY-ONLY model with a single scalar applied to R, G and B
+// alike, and it has two measured consequences (FINDINGS-R1 D.3):
+//
+//   1. On a body of revolution lit from one side, SIX OF TWELVE FACES -- a
+//      full half of the surface -- land on the identical ambient floor. They
+//      are not shaded; they are one flat dark colour with no form at all.
+//
+//   2. A scalar multiply preserves the hue RATIO exactly while collapsing
+//      ABSOLUTE chroma toward zero. The concept's dorsal pink has a channel
+//      spread of 23 counts at full light and SIX at the floor. Six of 255 is
+//      not a colour, it is grey -- and that is precisely the "grey helmet"
+//      the first Zixxtrixx pass reported, which was then "fixed" by pushing
+//      the artwork's saturation. The artwork was never the problem.
+//
+// So: a white KEY, a cool FILL from the opposite side, and a small per-channel
+// AMBIENT. The fill is what gives the shadow side form; the fill and ambient
+// being COOL and PER-CHANNEL is what stops a pastel from going grey, because
+// the shadow now ADDS blue instead of only subtracting everything equally.
+//
+// MODELINGGUIDE:249 asked for exactly this -- "Do not solve pastel colours
+// becoming muddy merely by pushing saturation harder. First correct the
+// material response, lighting and texture."
+//
+// Still deliberately cheap: two dot products and three multiply-adds per
+// triangle, flat per face, no specular, no shadows. Nothing here needs
+// silicon; this is the reference renderer's material response.
+// ---------------------------------------------------------------------------
+
+// The rig below was SOLVED, not chosen: a 120,000-point sweep over fill
+// direction, key strength, ambient tint and fill tint, scored on (a) no face
+// darker than the shadow floor, (b) worst-case chroma spread of the concept's
+// dorsal pink, (c) distinct face values across a body of revolution, and
+// (d) a near-neutral highlight. `tools/tune_creature_light.py` reproduces it.
+//
+// Measured against the old one-light model, over 36 faces of a horizontal
+// cylinder, with the concept's raw dorsal pink (233,188,206):
+//
+//                          OLD      NEW
+//   darkest face gain      0.250 -> 0.375   (the shadow side stops being a
+//                                            flat silhouette)
+//   distinct face values   7     -> 21      (form instead of six identical
+//                                            faces)
+//   worst chroma spread    11    -> 17      (+55%; the pastel survives)
+//   brightest face         0.938 -> 1.000   (unity was unreachable before)
+//   highlight neutrality   n/a   -> exact   (a white key reads white)
+//
+// The fill came out as a WARM bounce from BELOW under a cool neutral ambient.
+// That is ground light off the ochre terrain plus sky -- the sweep was not
+// told to prefer it; it scored best. Physical coherence for free.
+inline constexpr int32_t kFillX = -14301;  // -0.21822
+inline constexpr int32_t kFillY = -57205;  // -0.87287
+inline constexpr int32_t kFillZ = -28602;  // -0.43644
+
+inline constexpr int32_t kAmbR = 22282, kAmbG = 23265, kAmbB = 24248;   // .34 .355 .37
+inline constexpr int32_t kKey = 48497;                                  // .74, white
+inline constexpr int32_t kFillR = 19661, kFillG = 15073, kFillB = 10486; // .30 .23 .16
+
+struct Shade3 {
+  int32_t r, g, b;  // Q16.16 gain per channel
+};
+
+// Compose the rig into a per-channel gain. Each channel is quantised on the
+// same 1/16 ladder the palette tool counts, so the shade COUNT per material is
+// unchanged -- what changes is that the three channels no longer move
+// together, which is the whole point.
+inline Shade3 creature_light(int32_t lam_key, int32_t lam_fill) {
+  const auto mix = [](int32_t amb, int32_t fill, int32_t lk, int32_t lf) {
+    const int64_t k = (static_cast<int64_t>(kKey) * lk) >> 16;
+    const int64_t f = (static_cast<int64_t>(fill) * lf) >> 16;
+    return quant_shade(static_cast<int32_t>(amb + k + f));
+  };
+  return Shade3{mix(kAmbR, kFillR, lam_key, lam_fill), mix(kAmbG, kFillG, lam_key, lam_fill),
+                mix(kAmbB, kFillB, lam_key, lam_fill)};
+}
+
+// the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
+// because the gib/debris path still uses the single-scalar form
 inline int32_t ambient_floor(int32_t shade) {
   return 16384 + static_cast<int32_t>((static_cast<int64_t>(shade) * 49152 + 32768) >> 16);
 }
@@ -453,11 +534,15 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const PV& b = pvs[m.idx[ti + 1]];
         const PV& c = pvs[m.idx[ti + 2]];
         if (!a.in || !b.in || !c.in) continue;  // Phase-3 near-plane law
-        const int32_t shade = quant_shade(ambient_floor(
-            render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L)));
+        const int32_t lam_key =
+            render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L);
+        const int32_t lam_fill =
+            render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
+                                       kFillX, kFillY, kFillZ, L);
+        const Shade3 sh = creature_light(lam_key, lam_fill);
         render::TriMode tm;  // opaque: depth test + write
-        render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * shade + 32768) >> 16),
-                           sat_u8((m.g * shade + 32768) >> 16), sat_u8((m.b * shade + 32768) >> 16),
+        render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * sh.r + 32768) >> 16),
+                           sat_u8((m.g * sh.g + 32768) >> 16), sat_u8((m.b * sh.b + 32768) >> 16),
                            tm);
       }
     }

@@ -192,6 +192,17 @@ inline constexpr int32_t kLightZ = 26758;
  * weight in [0, 0x10000]; a zero-area triangle returns 0. Defined once in
  * zrender/terrain.cpp, shared per charter 29-6.
  */
+/**
+ * As shade_flat_tri, but against an ARBITRARY unit light (Q16.16 components).
+ * Added 2026-08-26 for the creature fill light: the one-light model left half
+ * of a body of revolution at an identical flat ambient floor with no form and
+ * no chroma (see RUN-20260826-1615 FINDINGS-R1 section D.3). The arithmetic is
+ * verbatim shade_flat_tri; only the light is a parameter.
+ */
+int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
+                           int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
+                           SatLedger* L);
+
 int32_t shade_flat_tri(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
                        int32_t cx, int32_t cy, int32_t cz, SatLedger* L);
 
