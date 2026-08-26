@@ -73,6 +73,16 @@ reads weightless — so deliberate, declared penetration is correct and its
 *absence* is also a bug. Each clip declares where, when and how deep; anything
 outside that is the fault.
 
+**Measure it with a COMMITTED 3D pose probe, not from the rendered frame.**
+The obvious shortcut -- find the terrain in the image and count creature pixels
+below it -- is unsound and will report a confident, wrong number: with a ground
+plane receding in perspective, an animal STANDING on the ground is always below
+the horizon, and one 2D frame cannot separate "in front of the dirt" from
+"inside it". It reported 94.8% submerged on a clip that was barely touching.
+Real penetration means walking every posed vertex of every clip frame against
+terrain height. A probe that does this was written once and thrown away, so its
+numbers are unreproducible -- commit the probe.
+
 ---
 
 ## Process
