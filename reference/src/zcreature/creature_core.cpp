@@ -271,13 +271,18 @@ struct BuiltVert {
 // arithmetic, deterministic; the donor's all-integer ring construction).
 std::vector<BuiltVert> build_ring(const RingSpec& spec, uint8_t align, uint8_t v_lane) {
   std::vector<BuiltVert> out(spec.segments);
+  // Elliptical when either per-axis radius is set, circular otherwise. The
+  // circular case is bit-identical to what it was, because rx == rz == radius
+  // reduces to the same two products.
+  const int32_t rx = spec.rx != 0 || spec.rz != 0 ? spec.rx : spec.radius;
+  const int32_t rz = spec.rx != 0 || spec.rz != 0 ? spec.rz : spec.radius;
   for (int k = 0; k < spec.segments; ++k) {
     const uint16_t ang = static_cast<uint16_t>((k * 65536 / spec.segments + align * 256) & 0xFFFF);
-    out[k].x =
-        rescale_s32(static_cast<int64_t>(spec.radius) * fx_cos(angle16{ang}).raw, 16, nullptr);
+    out[k].x = spec.cx + rescale_s32(static_cast<int64_t>(rx) * fx_cos(angle16{ang}).raw, 16,
+                                     nullptr);
     out[k].y = spec.y;
-    out[k].z =
-        rescale_s32(static_cast<int64_t>(spec.radius) * fx_sin(angle16{ang}).raw, 16, nullptr);
+    out[k].z = spec.cz + rescale_s32(static_cast<int64_t>(rz) * fx_sin(angle16{ang}).raw, 16,
+                                     nullptr);
     out[k].u = static_cast<uint8_t>(ang >> 8);
     out[k].v = v_lane;
   }
@@ -394,7 +399,8 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     }
     if (bottom_cap) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
-      int32_t ax0 = 0, ay0 = part.rings[0].y, az0 = 0;
+      // the apex sits at the ring CENTRE, which offset rings move
+      int32_t ax0 = part.rings[0].cx, ay0 = part.rings[0].y, az0 = part.rings[0].cz;
       orient(ax0, ay0, az0);
       // a chain end cap follows its own end ring, not a part-wide bone
       cur.verts.push_back(SkinVertex{ax0, ay0, az0,
@@ -410,7 +416,8 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     }
     if (top_cap) {
       const uint32_t apex = static_cast<uint32_t>(cur.verts.size());
-      int32_t ax1 = 0, ay1 = part.rings[n_rings - 1].y, az1 = 0;
+      int32_t ax1 = part.rings[n_rings - 1].cx, ay1 = part.rings[n_rings - 1].y,
+              az1 = part.rings[n_rings - 1].cz;
       orient(ax1, ay1, az1);
       cur.verts.push_back(SkinVertex{ax1, ay1, az1,
                                      part.chain ? part.rings[n_rings - 1].b0 : part.bone,

@@ -314,10 +314,21 @@ struct RingSpec {
   int32_t y;       // fx16 along the part axis
   int32_t radius;  // fx16
   uint8_t segments;
-  // CHAIN MODE ONLY (see RingPart::chain). This ring's two bones and the
+  // CHAIN MODE ONLY (see RingPart::chain). This ring s two bones and the
   // weight of the first in 1/64 quanta; w1 = 64 - w0 by construction, so the
   // normalisation law cannot be violated. Ignored by rigid parts.
   uint8_t b0 = 0, b1 = 0, w0 = 64;
+  // OFFSET rings (added 2026-08-26). The ring centre, perpendicular to the
+  // part axis. A stack of rings is otherwise a straight tube, so a curved form
+  // -- an S-posture serpent, a bent neck -- had to be chopped into separately
+  // oriented rigid parts, which is what opened the cracks. With an offset the
+  // curve lives in the ring table and the surface stays continuous.
+  int32_t cx = 0, cz = 0;
+  // ELLIPTICAL rings (added 2026-08-26). Per-axis radii; both zero means
+  // circular, using `radius`. A rotationally symmetric stack cannot express a
+  // flattened tail blade or a skull that is wider than it is deep, and
+  // MODELINGGUIDE asks for both.
+  int32_t rx = 0, rz = 0;
 };
 
 inline constexpr uint8_t kCapTop = 1;  // fan cap closing the +Y end
