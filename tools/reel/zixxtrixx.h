@@ -69,29 +69,37 @@ constexpr int kSpineBones = 20;  // chain bones nose -> fork
 // ---- the body, authored by eye --------------------------------------------
 constexpr int kProfileStations = 57;   // ring stations nose -> fork
 constexpr int32_t kBodyLenMm = 3050;   // nose to fork
-constexpr int32_t kHeadHalfMm = 270;   // half-thickness at the skull
+// SLIMMED 2026-08-26. The sheet's animal is ~12 body-widths long; at 270 the
+// model was 5.6 -- a slug, and it is most of why "the front is so much fatter
+// than the back" read as weird: a fat head on a body that thinned away.
+constexpr int32_t kHeadHalfMm = 160;   // half-thickness at the skull
 
 // THE TAPER, HAND-SET (Fabian, 2026-08-26: author visually, render, look,
 // compare, adjust -- the drawing-derived profile measured a projection, not
 // the animal). {position along the body in 1/1000, half-thickness in 1/1000
-// of kHeadHalfMm}. Bulbous skull, a deep neck pinch, a full easy mid-body,
-// then one long clean taper out to the fork.
+// of kHeadHalfMm}. The sheet's body is nearly UNIFORM: the head is barely
+// fatter than the trunk, the trunk holds its girth for two thirds of the
+// length, and only the tail stem thins -- to about a quarter, not to a hair.
 struct TaperKey {
   int t, r;
 };
 constexpr TaperKey kTaper[] = {
-    {0, 1000},  {50, 990},  {100, 950}, {150, 810}, {205, 640},  // skull + pinch
-    {280, 730}, {400, 790}, {520, 760}, {620, 680},              // the full body
-    {720, 560}, {820, 420}, {900, 300}, {960, 210}, {1000, 170}  // out to the fork
+    {0, 1000},  {60, 1000}, {150, 960}, {230, 900},              // skull, soft jaw
+    {320, 880}, {500, 880}, {620, 860},                          // the even trunk
+    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}  // tail stem
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
-// Bind height of the body axis. This is the HEAD height, not the body height:
-// bone 0 is the nose and the reel ground-snaps the ROOT, so at 300 mm the
-// animal was pinned to the terrain by its face and reared backwards. The
-// stance arches the body UP behind the head (the sheets' apex is above the
-// skull) and brings the middle down to the ground from here. TUNED against
-// the pose probe (scratchpad zixx_check): belly rides 0..25 mm.
-constexpr int32_t kBodyY = 540;
+// Bind height of the body axis. This is the HEAD height: bone 0 is the nose
+// and the reel ground-snaps the ROOT, so the head is CARRIED at this height
+// and the whole S hangs from it. TUNED against the pose probe
+// (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
+// The skinned mesh sits ~15 mm below the centreline prototype (ring blending
+// sags into the bends), so this is chosen off the PROBE, not the sketch.
+constexpr int32_t kBodyY = 595;
+// Planform centre of the posed S, nose to tail extent midpoint, for staging:
+// the folded S spans ~1.8 m behind the nose, so the reel offsets the instance
+// by this to keep the animal centred in an orbit shot.
+constexpr int32_t kStageCentreMm = 920;
 
 // THE NOSE IS A DOME, NOT A DISC. The measured profile starts at full
 // half-thickness, so station 0 used to be a full-radius ring closed by a flat
@@ -118,7 +126,8 @@ constexpr int kHeadStations = 9;       // how many stations read as head
 // That also deleted two bones and four ring parts.
 constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
 constexpr int kEyeStation1 = 8;      // last
-constexpr int32_t kEyeBulgeNum = 34; // extra lateral half-width, % of the ring
+constexpr int32_t kEyeBulgeNum = 40; // extra lateral half-width, % of the ring
+                                     // (Front.png's eyes are ENORMOUS bulges)
 
 // the dorsal crest: geometry, because there is no texture page pipeline yet
 constexpr int32_t kCrestNum = 46;   // crest half-width = body half-width * n/100
@@ -130,11 +139,15 @@ constexpr int32_t kCrestLift = 104;  // crest centre, as a % of body half-height
 // blade at 39% of the animal; the sketch's slivers are a sixth of that mass.
 constexpr int kBladeSides = 8;
 constexpr int kBladeRings = 7;
-constexpr int32_t kBladeLen = 480;
+// 780: the sheet's fins are LONG slivers -- ~26% of the body's path length --
+// not paddles (the first "gargantuan" verdict was about their WIDTH). Length
+// up, half-width kept slim.
+constexpr int32_t kBladeLen = 780;
 constexpr int32_t kBladeW0 = 70;       // half-width at the root (LATERAL)
 constexpr int32_t kBladeThick0 = 16;   // half-thickness at the root (VERTICAL)
 constexpr int32_t kBladeSplay = 6900;  // ~38 deg apart, about the vertical axis
-constexpr int32_t kBladeRise = 1500;   // lifted, so they read against the sky
+constexpr int32_t kBladeRise = 2600;   // lifted past the raised stem, so the
+                                       // fan reads against the sky as drawn
 constexpr int32_t kSpikeLen = 190;
 constexpr int32_t kSpikeR = 26;
 
@@ -159,28 +172,44 @@ constexpr uint8_t kOrange[3] = {218, 106, 71};
 constexpr int kIdleKeys = 96;  // SLOW. 3.2 s of breathing.
 constexpr int kWalkKeys = 40;
 constexpr int kAttackKeys = 72;
-constexpr int kFallKeys = 48;
+constexpr int kFallKeys = 96;  // SLOW. One 3.2 s tumble per loop (Fabian,
+                               // 2026-08-26: "slowly flailing", not jitter).
 
 // THE CANONICAL S, as a slope table. d[k] is the direction of body segment k
 // (walking BACKWARD from the nose) in angle16, POSITIVE = DESCENDING (the
-// sign convention positive joint pitch established). The sheets' S is: the
-// neck arches UP behind the head to an apex ABOVE the skull (Front.png's
-// "big bulgey head" is this arch seen end-on -- Fabian's own correction),
-// sweeps down to the ground, runs flat along it, and the tail rises behind.
+// sign convention positive joint pitch established).
+//
+// REBUILT 2026-08-26. Fabian: "There is no S, just a single half S bend.
+// Terrible." The old table arched ONCE behind the head and then lay flat --
+// half an S. The sheet's S, traced curve by curve (Side.png):
+//   - the head is carried HIGH at the front, nose level, and the neck rises
+//     only GENTLY to an apex a little above the skull;
+//   - from the apex the body DIVES: past vertical, DOUBLING BACK under
+//     itself (the middle stroke of the letter runs down-forward) -- slope
+//     137 deg > 90 deg is that doubling, and it is what makes the shape
+//     read as an S instead of an arch;
+//   - the bottom curve lands the belly on the ground for a short grounded
+//     run (slopes just past 0 keep the thinning belly ON the ground);
+//   - the tail rises steeply behind, and the blade fan carries on up.
 // Joint pitch is the DIFFERENCE of adjacent slopes, so the whole chain makes
 // the shape and no single joint carries a corner.
 constexpr int kStanceSlopes = kSpineBones - 1;  // 19 segments
 constexpr int32_t kStanceSlope[kStanceSlopes] = {
-    // neck: a LONG easy rise, the head carried well forward of the arch
-    -3000, -5200, -6600, -6200, -4300,
-    // the great arch: over the apex and down to the ground
-    1500, 5200, 8600, 10800, 11600, 10200, 6600, 2400,
-    // grounded run (the caterpillar's working span)
-    0, 0, 0,
+    // neck: a REAL cobra hook (amplified 2026-08-26 after a side-by-side
+    // with the sheet: the drawn head hangs well BELOW a high arch, nose
+    // tipped down -- the first cut carried the head almost at apex height
+    // and the top curve read weak)
+    -2900, -4400, -5500, -5500, -4400, -2200,
+    // apex
+    0,
+    // the dive, past vertical and back under itself
+    7282, 14927, 20934, 24939, 19114, 12742,
+    // grounded run (slightly positive: the belly stays down as the body thins)
+    546, 1092, 1274,
     // the tail rises behind
-    -3300, -6200, -8700};
+    -4551, -8192, -10922};
 // which slope entries the descent lobe occupies (breathing deepens these)
-constexpr int kStanceDescend0 = 5;
+constexpr int kStanceDescend0 = 7;
 constexpr int kStanceDescend1 = 12;
 // and which are the grounded run (the walk's hump travels here)
 constexpr int kStanceGround0 = 13;
@@ -190,8 +219,9 @@ constexpr int kStanceGround1 = 15;
 // (the nose) rises to match, so the head and the arch visibly bob while the
 // grounded belly stays put -- the only way to bob a creature whose root is
 // ground-snapped by the nose without floating or burying it.
-constexpr int32_t kIdleDeepen = 90;       // 1/1000 extra descent authority
-constexpr int32_t kIdleBobComp = 46;      // mm of root rise at full breath, TUNED
+constexpr int32_t kIdleDeepen = 130;      // 1/1000 extra descent authority
+constexpr int32_t kIdleBobComp = 40;      // mm of root rise at full breath,
+                                          // TUNED against the pose probe
 constexpr int32_t kIdleGirth = 42;        // girth swing, 1/1000 of scale
 constexpr int32_t kIdleTailSway = 2200;   // lazy left-right tail sway
 
@@ -199,8 +229,14 @@ constexpr int32_t kIdleTailSway = 2200;   // lazy left-right tail sway
 // run carries a travelling hump. The hump is authored as a HEIGHT field and
 // converted to joint pitches by second difference, so it is a bump above the
 // ground line by construction and can never reach below it.
-constexpr int32_t kWalkHumpMm = 95;     // hump height
-constexpr int32_t kWalkSway = 500;      // secondary lateral life only
+// 2026-08-26: hump 95 -> 230 ("caterpillar wave is too small") and sway
+// 500 -> 150 ("too much side to side"). The wave is the walk; the sway is
+// seasoning.
+constexpr int32_t kWalkHumpMm = 210;      // hump height
+constexpr int32_t kWalkHumpHalf = 1600;   // hump half-width, milli-bones: narrow
+                                          // enough that an edge node of the short
+                                          // grounded run keeps contact mid-traverse
+constexpr int32_t kWalkSway = 150;        // secondary lateral life only
 constexpr int32_t kWalkSpeed = 11;      // mm per reel frame
 constexpr int32_t kWalkBob = 26;        // mm of breath-bob while walking
 
@@ -208,7 +244,22 @@ constexpr int32_t kWalkBob = 26;        // mm of breath-bob while walking
 // (kBodyLenMm / 2 pi), spins about the coil's centre, and the tail-first
 // spear dive needs the root this high for the tail tip to just reach ground.
 constexpr int32_t kCoilR = 485;
-constexpr int32_t kSpearPitch = 23300;  // ~128 deg: tail points forward-down
+
+// FALL: the slow distress tumble. The whole S rotates about its own centre
+// (re-pivoted off the nose exactly the way the salto re-pivots its spin to
+// the coil centre -- "I think we did that well on salto"), one full pitch
+// turn per loop, so it stands on its head at the half and comes back up;
+// slow roll and yaw wobbles ride along so every axis moves. The pivot is the
+// posed S's planform centre, measured by the pose probe.
+constexpr int32_t kFallPivotX = -990;   // mm behind the nose
+constexpr int32_t kFallPivotY = -60;    // mm below the nose
+constexpr int32_t kFallLift = 1300;     // mm of air under the nose; the probe
+                                        // verifies the loop never touches
+                                        // (1150 left the longer blades 24 mm)
+constexpr int32_t kFallRollAmp = 6400;  // ~35 deg of slow roll wobble
+constexpr int32_t kFallYawAmp = 5100;   // ~28 deg of slow yaw wobble
+constexpr int32_t kFallNeckAmp = 3300;  // slow loose head/neck flail
+constexpr int32_t kFallWritheAmp = 1300;  // mid-body writhe
 
 // ============================ END KNOBS ====================================
 
@@ -245,6 +296,48 @@ inline zc::quat16 quat_mul(const zc::quat16& a, const zc::quat16& b) {
                      r(aw * bx + ax * bw + ay * bz - az * by),
                      r(aw * by - ax * bz + ay * bw + az * bx),
                      r(aw * bz + ax * by - ay * bx + az * bw)}};
+}
+
+/**
+ * Rotate an integer mm vector by a quat16 (S 1.0.14 lanes), integer-only:
+ * t = 2 (qv x v); v' = v + w t + qv x t. The fall clip needs this to re-pivot
+ * its whole-body tumble from the nose (bone 0) to the S's planform centre,
+ * the same job the salto's disp = c - R(theta) c does with sin/cos -- but the
+ * tumble turns about three axes at once, so it needs the full rotation.
+ */
+inline void quat_rot_vec(const zc::quat16& q, int32_t vx, int32_t vy, int32_t vz,
+                         int32_t& ox, int32_t& oy, int32_t& oz) {
+  const int64_t w = q.q[0], x = q.q[1], y = q.q[2], z = q.q[3];  // 2^14 = 1.0
+  const int64_t tx = 2 * (y * vz - z * vy);  // scale 2^14
+  const int64_t ty = 2 * (z * vx - x * vz);
+  const int64_t tz = 2 * (x * vy - y * vx);
+  ox = vx + static_cast<int32_t>((w * tx + y * tz - z * ty) >> 28);
+  oy = vy + static_cast<int32_t>((w * ty + z * tx - x * tz) >> 28);
+  oz = vz + static_cast<int32_t>((w * tz + x * ty - y * tx) >> 28);
+}
+
+/**
+ * asin in angle16 by integer bisection on fx_sin: the angle whose sine lifts
+ * a segment of length L (mm) by dh (mm). Monotone on [-90, 90] deg, 18
+ * halvings, deterministic. The walk's hump needs the EXACT angle: at 230 mm
+ * of hump the small-angle dd*65 conversion accumulated 93 mm of belly dig
+ * (pose probe, 2026-08-26) because sin(a) < a by 7% at 40 deg.
+ */
+inline int32_t asin16(int32_t dh, int32_t L) {
+  const bool neg = dh < 0;
+  if (neg) dh = -dh;
+  if (dh >= L) return neg ? -16384 : 16384;
+  const int64_t target = (static_cast<int64_t>(dh) << 16) / L;
+  int32_t lo = 0, hi = 16384;
+  for (int i = 0; i < 18; ++i) {
+    const int32_t mid = (lo + hi) / 2;
+    if (zref::fx_sin(zref::angle16{static_cast<uint16_t>(mid)}).raw < target) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return neg ? -hi : hi;
 }
 
 // piecewise-linear keyed curve in thousandths, integer, clamped at both ends
@@ -325,12 +418,12 @@ inline Bind station_bind(int i) {
 // indices below are the page's own order, and they are what a part's
 // `page` field selects.
 enum : uint8_t {
-  kTileBody = 0,   // flank, with the dorsal band painted at U=192
-  kTileHead = 1,   // head and throat
-  kTileEye = 2,    // eye
-  kTileRim = 3,    // eye rim / pupil
-  kTileBlade = 4,  // tail blade
-  kTileCrest = 5   // crest / blade edging
+  kTileBody = 0,         // flank: dorsal band at U=192, throat wedge on the belly
+  kTileHead = 1,         // head: blue front/underside, pink crown, side eyes
+  kTileEye = 2,          // (reserved)
+  kTileRim = 3,          // (reserved)
+  kTileBladePinkUp = 4,  // tail blade: PINK upper face, GREEN lower
+  kTileBladeGreenUp = 5  // tail blade: GREEN upper face, PINK lower
 };
 
 inline const zref::render::Tileset& page() {
@@ -379,8 +472,17 @@ inline void apply_stance(Rig& g, int32_t authority, int32_t deepen = 0) {
   int32_t prev = 0;
   for (int k = 0; k < kStanceSlopes; ++k) {
     int64_t d = kStanceSlope[k];
-    if (k >= kStanceDescend0 && k <= kStanceDescend1) {
-      d += (d * deepen) / 1000;
+    if (k >= kStanceDescend0 && k <= kStanceDescend1 && deepen != 0) {
+      // The breath pushes every lobe slope toward MORE DESCENT. sin() rises
+      // with the angle only below 90 deg (16384); past vertical it falls
+      // again, so a doubled-back slope must move DOWN toward 90 to drop
+      // deeper. A plain multiplicative deepen INVERTS there -- the pose
+      // probe caught the belly LIFTING on the in-breath (2026-08-26).
+      if (d <= 16384) {
+        d += (d * deepen) / 1000;
+      } else {
+        d -= ((32768 - d) * deepen) / 1000;
+      }
     }
     d = (d * authority) / 1000;
     const int32_t pitch = static_cast<int32_t>(d) - prev;
@@ -465,46 +567,79 @@ inline zc::Clip build_walk() {
   c.root.assign(static_cast<size_t>(kWalkKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kWalkKeys) * kBoneCount, zc::quat16_identity());
   const int32_t per_key = 65536 / kWalkKeys;
-  // hump window: one bone either side of the grounded run, so the hump can
-  // fade in from the arch side and out into the tail side without a corner
-  const int32_t bLo = kStanceGround0 - 1;                     // first bone of the window
-  const int32_t bHi = kStanceGround1 + 2;                     // last bone of the window
+  // hump window: STRICTLY the near-flat grounded run. The height-field trick
+  // assumes the base line under it is the ground line; letting the window
+  // reach into the steep lobe segments swung the whole tail off a high joint
+  // and dug the belly (probe, 2026-08-26).
+  const int32_t bLo = kStanceGround0;                         // first node of the span
+  const int32_t bHi = kStanceGround1 + 2;                     // last node of the span
   const int32_t span1000 = (bHi - bLo) * 1000;                // window width, milli-bones
+  const int32_t segL = kBodyLenMm / (kSpineBones - 1);        // segment length, mm
   for (int f = 0; f < kWalkKeys; ++f) {
     Rig g;
     g.reset();
-    // gentle breath while walking: same deepen+root pairing as the idle so
-    // the belly never floats or digs (the ratio deepen:root-mm is calibrated)
-    const int32_t bs =
-        zref::fx_sin(zref::angle16{static_cast<uint16_t>((f * per_key * 2) & 0xFFFF)}).raw;
-    const int32_t breath = ((bs + 65536) * 500) >> 16;  // 0..1000
-    apply_stance(g, 1000,
-                 (breath * kIdleDeepen * kWalkBob) / (kIdleBobComp * 1000));
+    // the full S, every frame; the gait must not disturb the grounded belly,
+    // so the walk carries NO deepen-breath (the head-bob lives on the neck
+    // joints below, high off the ground, where it can do no harm)
+    apply_stance(g, 1000);
 
-    // THE CATERPILLAR HUMP, as a height field converted to joint pitches by
-    // second difference. h[b] >= 0 by construction, so the belly line can arch
-    // UP off the ground but never through it. The hump travels the grounded
-    // window once per loop and its amplitude fades in and out at the window's
-    // ends (sin envelope), so the loop closes without a pop.
+    // THE CATERPILLAR HUMP, as a height field h >= 0 over the grounded nodes,
+    // converted to joint pitches through EXACT segment angles (asin16), so
+    // the posed heights ARE the authored heights and the belly can arch UP
+    // off the ground but never through it. The hump travels the window once
+    // per loop; its amplitude fades in and out at the ends (sin envelope) so
+    // the loop closes without a pop.
     int32_t h[kSpineBones] = {};
     const int32_t c1000 = bLo * 1000 + (f * span1000) / kWalkKeys;  // hump centre
     const int32_t env = zref::fx_sin(zref::angle16{static_cast<uint16_t>(
                             ((c1000 - bLo * 1000) * 32768 / span1000) & 0xFFFF)})
                             .raw;  // 0..65536 over the traverse
-    for (int b = 0; b < kSpineBones; ++b) {
+    for (int b = bLo; b <= bHi; ++b) {
       const int32_t d = b * 1000 - c1000;  // milli-bones from the hump centre
-      if (d <= -2000 || d >= 2000) continue;
-      // cos^2 bump, half-width two bones
-      const int32_t ca =
-          zref::fx_cos(zref::angle16{static_cast<uint16_t>(((d * 16384) / 2000) & 0xFFFF)}).raw;
+      if (d <= -kWalkHumpHalf || d >= kWalkHumpHalf) continue;
+      // cos^2 bump
+      const int32_t ca = zref::fx_cos(zref::angle16{static_cast<uint16_t>(
+                             ((d * 16384) / kWalkHumpHalf) & 0xFFFF)})
+                             .raw;
       const int64_t bump = (static_cast<int64_t>(ca) * ca) >> 16;  // 0..65536
       h[b] = static_cast<int32_t>((bump * env >> 16) * kWalkHumpMm >> 16);
     }
-    // pitch delta at joint k = change of slope: second difference of h, in
-    // angle16 (~65 angle16 per mm over a 160 mm segment, small-angle)
-    for (int k = 1; k < kSpineBones - 1; ++k) {
-      const int32_t dd = h[k + 1] - 2 * h[k] + h[k - 1];
-      if (dd != 0) g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(-dd * 65));
+    // Convert to pitches through EXACT total segment slopes OVER THE BASE
+    // stance: desired dy of segment k = its stance dy + (h[k+1]-h[k]), and
+    // asin16 finds the one slope that produces it -- so the posed heights
+    // ARE base + h whatever the base slope under the window is. (Treating
+    // the window as flat ground mis-posed the 70-deg lobe segment at its
+    // edge by tens of mm -- probe, 2026-08-26.)
+    int32_t prev_extra = 0;
+    for (int k = bLo - 1; k <= bHi && k < kSpineBones - 1; ++k) {
+      const int32_t base = kStanceSlope[k];
+      const int32_t dy_base = -static_cast<int32_t>(
+          (static_cast<int64_t>(segL) *
+           zref::fx_sin(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw) >>
+          16);
+      const int32_t dh = h[k + 1] - h[k];
+      const int32_t s_new = -asin16(dy_base + dh, segL);
+      const int32_t extra = s_new - base;
+      if (extra != prev_extra) {
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(extra - prev_extra));
+      }
+      prev_extra = extra;
+    }
+
+    // the neck bows with the gait -- a ZERO-SUM curl (+a,-a,-a,+a over
+    // joints 1..4): the neck visibly flexes, but both the net rotation and
+    // the net offset cancel before the body, so the grounded belly and the
+    // tail never feel it. (A plain per-joint nod rotates the ENTIRE chain
+    // behind it: 5 deg at joint 1 dug the belly 233 mm -- probe, 2026-08-26.)
+    {
+      const int32_t pn = f * per_key * 2;
+      const int32_t sn = zref::fx_sin(zref::angle16{static_cast<uint16_t>(pn & 0xFFFF)}).raw;
+      const int32_t na = (sn * 700) >> 16;
+      static const int8_t kNodSign[4] = {1, -1, -1, 1};
+      for (int k = 1; k <= 4; ++k) {
+        g.q[kBSpine0 + k] =
+            quat_mul(g.q[kBSpine0 + k], quat_z(na * kNodSign[k - 1]));
+      }
     }
 
     // secondary lateral life on the mid-body only, a fraction of the gait
@@ -516,7 +651,6 @@ inline zc::Clip build_walk() {
     }
     g.tail_rest();
     g.write(c, f);
-    c.root[f * 3 + 1] = fxm((breath * kWalkBob) / 1000);
   }
   c.events = {{0, zc::kEvFoot, 0}, {static_cast<uint16_t>(kWalkKeys / 2), zc::kEvFoot, 1}};
   return c;
@@ -560,36 +694,40 @@ inline zc::Clip build_attack() {
   //   5. the spin completes the fourth turn as the animal falls back to the
   //      ground and the S re-gathers, so the loop closes clean.
 
-  // 1000 = rolled into the coil, 0 = straight
-  static const Key kCurl[] = {{0, 0}, {8, 350}, {16, 1000}, {44, 1000}, {50, 0}, {71, 0}};
+  // 1000 = rolled into the coil, 0 = straight. STRAIGHT BEFORE THE DIVE:
+  // the unroll finishes at the apex (key 47), so the whole descent is flown
+  // rigid (Fabian, 2026-08-26: "come down at a ground while shaped
+  // completely straight like a spear").
+  static const Key kCurl[] = {{0, 0}, {8, 350}, {16, 1000}, {40, 1000}, {47, 0}, {71, 0}};
   // how much of the canonical S remains
   static const Key kAuth[] = {{0, 1000}, {8, 450}, {16, 0}, {58, 0}, {66, 650}, {71, 1000}};
   // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
-  // the three somersaults; 3394 = spear (kSpearPitch further); 4000 = the
-  // fourth turn that lands it. The -40 at key 10 is the wind-up.
-  static const Key kSpin[] = {{0, 0},     {10, -40},  {16, 0},    {22, 600},
-                              {30, 1500}, {38, 2500}, {44, 3000}, {52, 3394},
-                              {56, 3394}, {62, 3720}, {68, 4000}, {71, 4000}};
-  // root lift in mm: the leap, the high unroll, the dive PAST surface
-  // contact. The spear's true tip is the BLADE tips, so the reach is
-  // kBodyLenMm + kBladeLen = 3530: surface contact at the 142-deg spear is
-  // 3530*sin(142) - kBodyY = ~1550, and 1350 buries the blades 200 mm --
-  // the strike must BITE: deep, localised, brief, AUTHORED penetration.
-  // Keys 46..51 track the swing where the tail hangs nearest vertical
-  // (need = 3530*sin(phi) - 630, phi = (spin-3000)*0.36 deg).
-  // LOWERED 2026-08-26 after looking at a contact sheet. The apex was 2950 mm
-  // -- nearly three metres -- which threw the animal above the terrain horizon
-  // and shrank it to a speck, so the strike read as FLYING AWAY rather than
-  // driving down. Contact at key 52 is unchanged at 1350 (the geometry that
-  // buries the blades 200 mm); only the arc over it is flattened, which also
-  // keeps the whole action inside frame.
-  static const Key kLift[] = {{0, 0},     {8, 40},    {16, 560},  {30, 900},
-                              {44, 820},  {46, 1150}, {48, 1780}, {49, 1900},
-                              {50, 1850}, {51, 1640}, {52, 1350}, {56, 1350},
-                              {60, 860},  {66, 290},  {71, 0}};
+  // the three somersaults; 3260 = the VERTICAL spear (the tail hangs 93.6 deg
+  // past level -- straight down), held rigid through the dive and the bite;
+  // then the fourth turn (fast through the ground-adjacent quadrant, see
+  // kLift) lands it. The -40 at key 10 is the wind-up.
+  static const Key kSpin[] = {{0, 0},     {10, -40},  {16, 0},    {22, 700},
+                              {30, 1600}, {38, 2600}, {44, 3000}, {47, 3260},
+                              {56, 3260}, {59, 3500}, {64, 3800}, {71, 4000}};
+  // root lift in mm. HIGH ON PURPOSE (Fabian, 2026-08-26: "it should
+  // actually go up high in the air, can be outside picture"): the apex
+  // carries the nose ~4.4 m up, the body goes vertical AT the top, and the
+  // whole spear PLUNGES straight down. The spear's true tip is the BLADE
+  // tips (reach = kBodyLenMm + kBladeLen = 3530), so surface contact at the
+  // vertical spear is 3830 - kBodyY = 3235; 3035 buries the blades ~200 mm
+  // -- the strike must BITE: deep, localised, brief, AUTHORED penetration
+  // (probe-checked, tools/reel/zixx_probe.cpp). Keys 56..59 swing the body
+  // through the ground-adjacent quadrant BEFORE the lift comes down (at
+  // spin 3420, need = 3830*sin(151 deg) - 595 = 1263 << 3035), so the
+  // fourth turn cannot re-dig.
+  static const Key kLift[] = {{0, 0},     {8, 40},    {16, 560},  {24, 1100},
+                              {32, 2100}, {40, 3000}, {44, 3600}, {47, 4100},
+                              {50, 4100}, {51, 3650}, {53, 3035}, {58, 3035},
+                              {60, 2300}, {63, 1150}, {66, 320},  {69, 0},
+                              {71, 0}};
   // root forward drive in mm during the dive, returned to zero by the wrap
-  static const Key kFwd[] = {{0, 0},   {44, 0},   {48, 220}, {52, 520},
-                             {57, 520}, {66, 160}, {71, 0}};
+  static const Key kFwd[] = {{0, 0},   {44, 0},   {48, 100}, {53, 220},
+                             {57, 220}, {66, 80}, {71, 0}};
   const int nC = static_cast<int>(sizeof(kCurl) / sizeof(Key));
   const int nA = static_cast<int>(sizeof(kAuth) / sizeof(Key));
   const int nS = static_cast<int>(sizeof(kSpin) / sizeof(Key));
@@ -635,27 +773,32 @@ inline zc::Clip build_attack() {
     c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
     c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000);
   }
-  c.events = {{52, zc::kEvAttack, 0}};
+  c.events = {{53, zc::kEvAttack, 0}};  // contact key: reel frame 106
   return c;
 }
 
-// Slot 4 - FALLING FLAIL. Fabian, 2026-08-26: "it should look more
-// distressed, more frantic flailing with the face. Even here, have it keep
-// its S shape. The S shape should be signature everywhere."
+// Slot 4 - FALLING, the slow helpless tumble. REWRITTEN 2026-08-26. Fabian:
+// "The falling it's become super jittery and rigid. It should be the
+// opposite, slowly flailing. Particularly head and 'neck' needs to move
+// instead of being rigid. And instead of this hyperactive jitter, slowly
+// rotate it on all axes so it stands on its head at one point and comes up
+// again. I think we did that well on salto."
 //
-// So: the canonical S is applied at FULL authority every frame and the panic
-// rides on top of it -- a whole-body tumble wobble on bone 0 (airborne, so
-// swinging the world about the nose is exactly the flailing physics wants),
-// a fast frantic flail on the head joints, a writhe through the mid-body
-// small enough to leave the S legible, a tail whip, and the blades beating.
+// So, borrowed from the salto: the whole S turns about its OWN CENTRE -- the
+// rotation lives on bone 0 and the root displacement c - R(q) c re-pivots it
+// from the nose to the planform centre (quat_rot_vec, because this rotation
+// runs on three axes at once). One full pitch turn per 3.2 s loop, so it is
+// head-down at the half and comes back up; slow roll and yaw wobbles ride
+// along so every axis moves. The flail is SLOW and LOOSE: the head and neck
+// loll on one- and two-cycle waves, the mid-body writhes gently, the blades
+// wave. The S is applied at full authority every frame -- the signature.
 // The animal is AIRBORNE for the whole loop (kFallLift), no contact at all.
-constexpr int32_t kFallLift = 900;  // mm of air under the S
 inline zc::Clip build_fall() {
   zc::Clip c;
   c.slot_id = 4;
   // 60 Hz presentation interpolation. Keys stay authored at 30 Hz and every
   // event frame is untouched; only the shown pose is blended at the half
-  // tick. Without it the somersault and the flail visibly step.
+  // tick. Without it the tumble visibly steps.
   c.interpolate = true;
   c.frame_count = static_cast<uint16_t>(kFallKeys);
   c.root.assign(static_cast<size_t>(kFallKeys) * 3, 0);
@@ -668,48 +811,58 @@ inline zc::Clip build_fall() {
     // THE S FIRST. Everything else is decoration on it.
     apply_stance(g, 1000);
 
-    // whole-body tumble: three slow incommensurate axes on the root bone
-    const int32_t t1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
-    const int32_t t2 =
-        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 17000) & 0xFFFF)}).raw;
-    const int32_t t3 =
-        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 3 + 40000) & 0xFFFF)}).raw;
-    g.q[kBSpine0] = quat_mul(
-        quat_mul(quat_z((t1 * 2100) >> 16), quat_x((t2 * 2600) >> 16)),
-        quat_mul(quat_y((t3 * 1700) >> 16), g.q[kBSpine0]));
-
-    // FRANTIC FACE: fast, large, multi-axis flail on the first joints. 5 and
-    // 7 cycles per loop, different phases per joint, so the head never
-    // repeats a gesture inside the loop.
-    for (int k = 1; k <= 3; ++k) {
-      const int32_t pf1 = ph * 5 + k * 21000;
-      const int32_t pf2 = ph * 7 + k * 9000;
-      const int32_t s1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(pf1 & 0xFFFF)}).raw;
-      const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(pf2 & 0xFFFF)}).raw;
-      const int32_t amp = 3400 - k * 700;  // strongest right at the head
+    // SLOW LOOSE NECK: the head lolls on one- and two-cycle waves, phase
+    // staggered down the first joints so the motion travels instead of
+    // snapping. Strongest right at the head.
+    for (int k = 1; k <= 4; ++k) {
+      const int32_t p1 = ph + k * 7000;
+      const int32_t p2 = ph * 2 + 16000 + k * 9000;
+      const int32_t s1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p1 & 0xFFFF)}).raw;
+      const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p2 & 0xFFFF)}).raw;
+      const int32_t amp = kFallNeckAmp - (k - 1) * 500;
       g.q[kBSpine0 + k] =
           quat_mul(g.q[kBSpine0 + k],
                    quat_mul(quat_z((s1 * amp) >> 16), quat_y((s2 * (amp * 2 / 3)) >> 16)));
     }
-    // a small writhe through the middle -- distress, not enough to erase the S
-    for (int k = 5; k <= 13; ++k) {
-      const int32_t pw = ph * 3 - k * (65536 / 9);
+    // a slow travelling writhe through the middle -- distress, not enough to
+    // erase the S
+    for (int k = 6; k <= 14; ++k) {
+      const int32_t pw = ph - k * (65536 / 12) + 30000;
       const int32_t sw = zref::fx_sin(zref::angle16{static_cast<uint16_t>(pw & 0xFFFF)}).raw;
-      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_x((sw * 900) >> 16));
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_x((sw * kFallWritheAmp) >> 16));
     }
-    // the tail whips harder than the middle
-    for (int k = 15; k < kSpineBones - 1; ++k) {
-      const int32_t pt = ph * 4 + k * 15000;
+    // the tail waves slowly, a little more than the middle
+    for (int k = 16; k < kSpineBones - 1; ++k) {
+      const int32_t pt = ph * 2 + k * 12000;
       const int32_t st = zref::fx_sin(zref::angle16{static_cast<uint16_t>(pt & 0xFFFF)}).raw;
-      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y((st * 2200) >> 16));
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y((st * 1600) >> 16));
     }
-    // the blades beat fast
+    // the blades wave, slow
     const int32_t fl =
-        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 6) & 0xFFFF)}).raw;
-    g.tail_rest(kBladeSplay + ((fl * 2600) >> 16), kBladeRise + ((fl * 1400) >> 16));
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 9000) & 0xFFFF)}).raw;
+    g.tail_rest(kBladeSplay + ((fl * 1800) >> 16), kBladeRise + ((fl * 1000) >> 16));
+
+    // THE TUMBLE. One full pitch turn per loop (wraps exactly: 65536 = 0) so
+    // the loop closes; slow roll and yaw wobbles complete whole cycles too.
+    const int32_t theta =
+        static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
+    const int32_t t2 =
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
+    const int32_t t3 =
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 40000) & 0xFFFF)}).raw;
+    const zc::quat16 tumble =
+        quat_mul(quat_z(theta), quat_mul(quat_x((t2 * kFallRollAmp) >> 16),
+                                         quat_y((t3 * kFallYawAmp) >> 16)));
+    g.q[kBSpine0] = quat_mul(tumble, g.q[kBSpine0]);
     g.write(c, f);
-    // airborne the whole loop, with a slow drift so the fall reads as motion
-    c.root[f * 3 + 1] = fxm(kFallLift + ((t2 * 90) >> 16));
+
+    // re-pivot the tumble from the nose to the S's planform centre, exactly
+    // the salto's disp = c - R(theta) c but with the full 3-axis rotation
+    int32_t rx, ry, rz;
+    quat_rot_vec(tumble, kFallPivotX, kFallPivotY, 0, rx, ry, rz);
+    c.root[f * 3 + 0] = fxm(kFallPivotX - rx);
+    c.root[f * 3 + 1] = fxm(kFallLift + kFallPivotY - ry);
+    c.root[f * 3 + 2] = fxm(-rz);
   }
   return c;
 }
@@ -846,9 +999,12 @@ inline const zc::CreatureType& type() {
         rs.w0 = static_cast<uint8_t>(64 - wroot);
         p.rings.push_back(rs);
       }
-      // the sheets colour the two blades differently: one neon pink, one
-      // green (Front.png: left green, right pink)
-      p.page = side == 0 ? kTileCrest : kTileBlade;
+      // each fin is PINK on one face and GREEN on the other (Fabian,
+      // 2026-08-26: "One side of the fin parts at the tail will have the
+      // pink, the other the green, a bit difficult to texture") -- solved by
+      // the U-split blade tiles; the two blades mirror which face is which,
+      // so Front.png reads one green blade and one pink one.
+      p.page = side == 0 ? kTileBladePinkUp : kTileBladeGreenUp;
       set_rgb(p, side == 0 ? kPink : kGreen);
       parts.push_back(p);
     }
@@ -863,7 +1019,7 @@ inline const zc::CreatureType& type() {
       p.rings = {{0, fxm(kSpikeR), 6},
                  {fxm(kSpikeLen / 2), fxm(kSpikeR * 6 / 10), 6},
                  {fxm(kSpikeLen), fxm(kSpikeR / 5), 6}};
-      p.page = kTileCrest;
+      p.page = 255;  // a 26 mm spike does not repay a texture page
       set_rgb(p, kPink);
       parts.push_back(p);
     }

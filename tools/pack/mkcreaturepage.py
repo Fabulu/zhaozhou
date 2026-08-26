@@ -135,7 +135,7 @@ def body_tile(g_green, g_pink, rng):
     t = tint(GREEN, g_green)
     p = tint(PINK, g_pink)
     back = 48  # U = 192/256
-    half = 6.0
+    half = 6.0  # a delicate ribbon, as drawn -- 7 read heavy from the side
     for y in range(TILE):
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
         # the page is byte-identical on every machine
@@ -152,8 +152,8 @@ def body_tile(g_green, g_pink, rng):
     # The head chain covers V rows 0..~12 of this tile; the wedge takes over
     # where it ends and tapers away by row 21. Belly is U = 64 -> column 16.
     b = tint(BLUE, g_green)
-    for y in range(8, 22):
-        w = 10.0 * (1.0 - (y - 8) / 14.0) ** 1.3
+    for y in range(8, 28):
+        w = 13.0 * (1.0 - (y - 8) / 20.0) ** 1.3
         if w < 0.6:
             continue
         wob = 1.1 * np.sin(y * 0.31)
@@ -172,39 +172,28 @@ def body_tile(g_green, g_pink, rng):
 # The eye disc in Side.png, in the 2000-wide display space: the yellow ball,
 # its heavy black ring, and the red-orange wavy slit pupil through it.
 EYE_BOX = (1412, 556, 1568, 712)
-EYE_ROW = 20    # first texel row down the head tile (V runs along the head)
-# The eyes sit HIGH: the front sheet has them nearly meeting across the top
-# of the face. Top is column 48; these put each eye ~45 deg up its flank.
-EYE_COL_A = 54  # upper +Z flank
-EYE_COL_B = 42  # upper -Z flank
-# TEXEL FOOTPRINT (2026-08-26). The first pass painted the eye 26 x 26 -- but
-# U texels measure ANGLE around the head, and 26 of 64 is 40% of the whole
-# circumference: two such discs tiled nearly the entire skull with yellow,
-# which is most of why the face read as mangled. The measured eye is ~220 mm
-# on a ~500 mm skull: 52 deg of arc = 9-10 texels of U, and ~23 texels of V
-# along a ~600 mm head chain. The patch is anisotropic because the mapping is.
-EYE_TEX_U = 12  # texels of U (angle around the head)
-EYE_TEX_V = 26  # texels of V (length along the head)
+# THE EYES SIT ON THE SIDES (Fabian, asked three times, 2026-08-26: "Eyes
+# clearly need to be on the side"). U columns 0 and 32 ARE the side lines of
+# the ring (top is 48, belly is 16), so the eye discs are centred exactly
+# there, at mid-head V. Each eye rides inside an ORANGE SOCKET, the crescent
+# that Front.png shows wrapping the outer edge of the skull.
+EYE_ROW = 18     # first texel row of the socket down the head tile
+EYE_COL_A = 32   # side line, +Z flank
+EYE_COL_B = 0    # side line, -Z flank
+EYE_TEX_U = 12   # texels of U for the yellow ball (angle around the head)
+EYE_TEX_V = 26   # texels of V for the yellow ball (length along the head)
+SOCK_U = 16      # socket footprint, U
+SOCK_V = 32      # socket footprint, V
 
 
 def eye_patch():
     """Sabina drew a better eye than I can model. Take it.
 
-    The eye is not geometry any more. A yellow ball stuck on the side of the
-    head was the obvious thing and it looked exactly like what it was -- a
-    sphere glued to a tube. MODELINGGUIDE asks for eyes "integrated into the
-    head contour" so they influence the SILHOUETTE rather than sitting on it,
-    and the cheapest honest way to do that at 240p is: a shallow LATERAL BULGE
-    in the head's own rings, with the drawing's own eye painted onto it.
-
     THE CROP IS TRANSPOSED. On the flank, +U runs VERTICALLY around the body
     and +V runs nose-to-tail -- so the drawing's x axis must land on the tile's
-    y axis or the slit pupil comes out horizontal. Drawing-vertical (the slit)
-    -> tile x (U) -> vertical on the model, as drawn.
+    y axis or the slit pupil comes out horizontal.
 
-    Returns (rgb, alpha) at EYE_TEX_V rows x EYE_TEX_U cols. Alpha is the
-    disc, taken from the ink ring outward, so the eye composites onto the blue
-    head without a square edge.
+    Returns (rgb, alpha) at EYE_TEX_V rows x EYE_TEX_U cols.
     """
     im = Image.open(CONCEPT / "Side.png").convert("RGB")
     sc = im.size[0] / 2000.0
@@ -221,16 +210,33 @@ def eye_patch():
     return a, alpha
 
 
-def paint_eye(tile):
-    """Composite the eye onto both flanks of the head tile, wrapping in U."""
+def paint_eyes(tile, g_orange):
+    """Orange socket first, then the drawing's eye on top, on BOTH side lines."""
     rgb, alpha = eye_patch()
+    ok = tint(ORANGE, g_orange)
     for col in (EYE_COL_A, EYE_COL_B):
-        for j in range(EYE_TEX_V):
+        # the socket: an orange ellipse under the eye, slightly larger
+        scy = EYE_ROW + SOCK_V / 2.0 - 0.5
+        for j in range(SOCK_V):
             ty = EYE_ROW + j
             if ty < 0 or ty >= TILE:
                 continue
+            for i in range(SOCK_U):
+                tx = (col - SOCK_U // 2 + i) % TILE
+                r = np.hypot((i - (SOCK_U - 1) / 2.0) / (SOCK_U / 2.0),
+                             (ty - scy) / (SOCK_V / 2.0))
+                w = float(np.clip((1.0 - r) * 5.0, 0.0, 1.0))
+                if w <= 0.0:
+                    continue
+                tile[ty, tx] = tile[ty, tx] * (1.0 - w) + ok[ty % TILE, tx] * w
+        # the eyeball, centred in the socket
+        ey0 = EYE_ROW + (SOCK_V - EYE_TEX_V) // 2
+        for j in range(EYE_TEX_V):
+            ty = ey0 + j
+            if ty < 0 or ty >= TILE:
+                continue
             for i in range(EYE_TEX_U):
-                tx = (col - EYE_TEX_U // 2 + i) % TILE  # U wraps around the head
+                tx = (col - EYE_TEX_U // 2 + i) % TILE
                 w = alpha[j, i]
                 if w <= 0.0:
                     continue
@@ -238,25 +244,91 @@ def paint_eye(tile):
     return tile
 
 
-def paint_face(tile):
-    """The rest of the face: the nose-cap row and the mouth.
+def head_tile(g_blue, g_green, g_pink, g_orange):
+    """The head, laid out the way the SHEETS say (Fabian, 2026-08-26: "you
+    made its entire head blue ... you'd know that if you looked at the concept
+    art"):
 
-    V row 0 is the WHOLE nose cap: the cap apex carries v = 0 and so does ring
-    0, so every pixel of the cap fan samples row 0. Any grain there smears into
-    angular streaks on the cap -- keep the row flat pigment.
-
-    The mouth is Front.png's small white slit, on the underside just behind
-    the nose (belly is U = 64 -> column 16), with a thin ink rim so it reads
-    at 240p the way the drawing's ink line does.
+      - BLUE is the FRONT and UNDERSIDE only, and it runs on down the throat
+        (the body tile's wedge continues it past this part);
+      - the TOP of the skull is PINK -- the dorsal band runs over the crown
+        (clear in Side.png), narrowing toward the nose;
+      - the rear flanks turn GREEN behind the skull, the same single green as
+        the body, so the side view reads green neck / blue throat / pink top;
+      - the EYES are on the SIDE LINES (U columns 0 and 32), yellow ball in an
+        orange socket, from the drawing itself.
     """
-    tile[0, :] = BLUE
+    t = tint(BLUE, g_blue)
+    gr = tint(GREEN, g_green)
+    pk = tint(PINK, g_pink)
+    # widths per V row: the pink cap is WIDE over the skull and narrows to the
+    # body band behind it; the throat pinches slightly behind the jaw. What is
+    # left between them on the rear rows is the GREEN neck flank -- Side.png
+    # shows green riding high on the neck right behind the skull.
+    def pink_half(y):
+        # the NOSE stays blue: the sheet's pink band fades out before the tip
+        if y < 6:
+            return 0.0
+        if y < 16:
+            return 3.0 + (13.0 - 3.0) * (y - 6) / 10.0
+        if y < 38:
+            return 13.0
+        if y < 50:
+            return 13.0 - 5.0 * (y - 38) / 12.0
+        return 8.0
+    def throat_half(y):
+        return 12.0 if y < 38 else 10.0
+    # green rear flanks: fade in behind the skull; wobbly hand edge
+    for x in range(TILE):
+        start = 34 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
+        for y in range(max(0, int(start)), TILE):
+            dtop = min(abs(x - 48), TILE - abs(x - 48))
+            dbel = min(abs(x - 16), TILE - abs(x - 16))
+            if dtop <= pink_half(y) or dbel <= throat_half(y):
+                continue  # pink cap / blue throat own these columns
+            t[y, x] = gr[y, x]
+    # pink cap over the crown, narrowing toward the nose and easing back to
+    # the body band's width at the tail end of the part
+    for y in range(2, TILE):
+        half = pink_half(y)
+        wob = 1.8 * np.sin(y * 0.23) + 1.1 * np.sin(y * 0.071 + 0.8)
+        for x in range(TILE):
+            d = min(abs(x - (48 + wob)), TILE - abs(x - (48 + wob)))
+            if d < half:
+                t[y, x] = pk[y, x]
+    t = paint_eyes(t, g_orange)
+    # the mouth: Front.png's small white slit on the underside, ink rim
     for y in range(3, 8):
         for x in range(10, 23):
-            tile[y, x] = INK
+            t[y, x] = INK
     for y in range(4, 7):
         for x in range(11, 22):
-            tile[y, x] = WHITE
-    return tile
+            t[y, x] = WHITE
+    # V row 0 is the WHOLE nose cap fan's sample row: flat pigment, no streaks
+    t[0, :] = BLUE
+    return t
+
+
+def blade_tile(g_green, g_pink, pink_up):
+    """A tail blade: PINK on one face, GREEN on the other (Fabian, 2026-08-26:
+    "One side of the fin parts at the tail will have the pink, the other the
+    green, a bit difficult to texture"). U wraps the blade's flat section, so
+    the upper face is the columns around 48 and the lower face the columns
+    around 16 -- half the tile each, split with a wobbly hand edge. Two tiles,
+    mirrored, so the two blades can disagree about which face is which."""
+    gr = tint(GREEN, g_green)
+    pk = tint(PINK, g_pink)
+    t = np.zeros((TILE, TILE, 3), dtype=np.float64)
+    for y in range(TILE):
+        wob = 1.6 * np.sin(y * 0.19 + 0.5) + 0.9 * np.sin(y * 0.055 + 1.9)
+        for x in range(TILE):
+            d = min(abs(x - (48 + wob)), TILE - abs(x - (48 + wob)))
+            up = d < 16
+            t[y, x] = (pk if up == pink_up else gr)[y, x]
+    # cap rows flat so the tip fan cannot streak
+    t[0, :] = PINK if pink_up else GREEN
+    t[63, :] = PINK if pink_up else GREEN
+    return t
 
 
 def build_tiles():
@@ -264,23 +336,17 @@ def build_tiles():
     tiles = []
     names = []
     tiles.append(body_tile(g["green"], g["pink"], None))
-    names.append("body flank, with the dorsal band painted at U=192")
-    tiles.append(paint_face(paint_eye(tint(BLUE, g["blue"]))))
-    names.append("head and throat: eyes from the drawing, mouth, flat nose-cap row")
+    names.append("body flank, dorsal band at U=192, throat wedge on the belly")
+    tiles.append(head_tile(g["blue"], g["green"], g["pink"], g["orange"]))
+    names.append("head: blue front/underside, pink crown, green rear flanks, side eyes")
     tiles.append(tint(YELLOW, g["yellow"]))
-    names.append("eye")
+    names.append("eye (reserved)")
     tiles.append(tint(ORANGE, g["orange"]))
-    names.append("eye rim / pupil")
-    gb = tint(GREEN, g["green"])
-    gb[0, :] = GREEN
-    gb[63, :] = GREEN
-    tiles.append(gb)
-    names.append("tail blade, green (cap rows flat)")
-    pb = tint(PINK, g["pink"])
-    pb[0, :] = PINK
-    pb[63, :] = PINK
-    tiles.append(pb)
-    names.append("tail blade, neon pink / spike (cap rows flat)")
+    names.append("eye rim / pupil (reserved)")
+    tiles.append(blade_tile(g["green"], g["pink"], True))
+    names.append("tail blade, pink upper face / green lower face")
+    tiles.append(blade_tile(g["green"], g["pink"], False))
+    names.append("tail blade, green upper face / pink lower face")
     return tiles, names
 
 

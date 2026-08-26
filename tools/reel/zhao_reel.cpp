@@ -1762,7 +1762,7 @@ int render_scene(const SceneSubject& sub) {
     // Stand the animal on its OWN centre, not its root bone, or the orbit
     // swings its body out of frame. The walk starts half its travel back
     // from there so it crosses through the middle of the shot.
-    if (zixx_subject) dog_inst.x = fxm(zixx::kBodyLenMm / 2);
+    if (zixx_subject) dog_inst.x = fxm(zixx::kStageCentreMm);
     if (sub.creature == 4)
       dog_inst.x -= fxm(zixx::kWalkSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
@@ -2980,13 +2980,14 @@ SceneSubject subject_zixx_idle() {
   s.orbit = true;
   zixx_common(s);
   s.note =
-      "Zixxtrixx at rest in the canonical S: head carried high and forward, "
-      "the body arching UP behind it to an apex above the skull, down to a "
-      "grounded run (authored sink ~17 mm -- resting at exactly zero reads "
-      "as hovering), tail raised behind. The 3.2 s breath deepens the arch "
-      "while the root rises to match, so the head and arch visibly bob while "
-      "the belly stays planted; girth swells through the instance bulk; the "
-      "tail sways lazily on its own period. Three breaths per revolution";
+      "Zixxtrixx at rest in the canonical S (rebuilt 2026-08-26 to the "
+      "sheet's full letter: head carried high, gentle neck rise to an apex "
+      "just above the skull, then the dive PAST vertical back under itself, "
+      "a short grounded run sunk an authored few mm, and the tail rising "
+      "steeply into the blade fan). The 3.2 s breath deepens the dive while "
+      "the root rises to match, so the head and arch bob while the belly "
+      "stays planted; girth swells through the instance bulk; the tail "
+      "sways lazily on its own period. Three breaths per revolution";
   return s;
 }
 
@@ -3000,15 +3001,25 @@ SceneSubject subject_zixx_walk() {
   s.frames = zixx::kWalkKeys * 2 * 3;  // three full gait cycles
   s.orbit = false;
   zixx_common(s);
-  s.cam_k = 340000;  // the walk travels, so a little wider
+  // Framing on the flat ground: the camera pitch is fixed, so past ~330000
+  // the horizon leaves the top of the frame entirely and the gait floats in
+  // a brown void. 310000 keeps the skyline in shot (like the attack's
+  // 235000 does) while the animal still fills over half the frame width.
+  s.cam_k = 310000;
+  // FLAT GROUND for the gait shot (2026-08-26). At bump_ext 6 the mound's
+  // curvature under the 3 m body swallowed the belly along most of the
+  // traverse -- the "massive sink" Fabian rejected was the TERRAIN, not the
+  // clip: the reel snaps the root to one column and the ground rose under
+  // the rest of the animal. The clip's own authored sink is a few mm.
+  s.bump_ext = 18;
   s.note =
       "Caterpillar locomotion, fixed three-quarter camera so the gait is "
       "legible before any orbit is applied. The S holds throughout: head "
       "glides high, and ONLY the grounded run carries the travelling hump -- "
       "authored as a height field turned into joint pitches by second "
       "difference, so it arches up off the ground and can never reach below "
-      "it. The hump travels rearward at roughly ground speed, so contact "
-      "points barely skate. Three complete cycles";
+      "it (authored sink: a few mm). Flat ground so one column's snap speaks "
+      "for the whole body. Three complete cycles";
   return s;
 }
 
@@ -3032,23 +3043,24 @@ SceneSubject subject_zixx_attack() {
 
   // SCREEN SHAKE ON IMPACT -- showcase only, at Fabian's request, and
   // deliberately NOT a general feature: it lives on this presentation
-  // subject, not in the creature and not in the sim. Contact is clip key 52,
-  // which is reel frame 104 (keys are held two ticks; the reel runs one tick
-  // per frame). A hard first jolt then a decaying alternation, so it reads as
-  // one heavy blow rather than a wobble.
-  s.shake_frame = 104;
+  // subject, not in the creature and not in the sim. Contact is clip key 53
+  // (moved with the 2026-08-26 high-apex retime), which is reel frame 106
+  // (keys are held two ticks; the reel runs one tick per frame). A hard
+  // first jolt then a decaying alternation, so it reads as one heavy blow
+  // rather than a wobble.
+  s.shake_frame = 106;
   {
     static const int32_t kJolt[] = {-2100, 1500, -1050, 700, -430, 260, -140, 70, -30};
     for (int32_t v : kJolt) s.shake.push_back(v);
   }
   s.note =
       "The attack. Zixxtrixx rolls up into a wheel, and the WHOLE BODY "
-      "somersaults three times -- the spin lives on bone 0 with the root "
-      "displacement re-pivoting it to the coil's centre. Past the third turn "
-      "it snaps straight and flies TAIL FIRST at the ground: the spin runs on "
-      "to the 142-degree spear line while the root tracks the blade-tip "
-      "clearance envelope, then the strike BITES 200 mm (authored, brief) "
-      "before the fourth turn lands it back in the S. Contact on key 52";
+      "somersaults three times while climbing HIGH -- the apex carries the "
+      "nose ~4.4 m up and may leave frame, which is authored (Fabian: 'can "
+      "be outside picture'). At the top it unrolls to a rigid VERTICAL spear "
+      "and plunges straight down tail first; the strike BITES ~200 mm "
+      "(authored, brief) before the fourth turn lands it back in the S. "
+      "Contact on key 53 (reel frame 106)";
   return s;
 }
 
@@ -3057,16 +3069,17 @@ SceneSubject subject_zixx_fall() {
   SceneSubject s;
   s.name = "zixxtrixx-fall";
   s.creature = 6;
-  s.frames = zixx::kFallKeys * 2 * 4;
+  s.frames = zixx::kFallKeys * 2 * 2;  // two 3.2 s tumbles per revolution
   s.orbit = true;
   zixx_common(s);
   s.note =
-      "The falling flail loop: airborne for the whole loop, and the S is "
-      "applied at full authority every frame with the panic riding on top -- "
-      "a slow three-axis tumble on the root bone, a FRANTIC multi-axis flail "
-      "on the head joints (5 and 7 cycles per loop), a small mid-body writhe, "
-      "a tail whip and fast-beating blades. Distress without losing the "
-      "signature. Four flail cycles per camera revolution";
+      "The falling loop, SLOW on purpose (2026-08-26 rewrite): airborne "
+      "throughout, the S at full authority every frame, and the whole animal "
+      "turns about its own centre -- one full pitch revolution per 3.2 s "
+      "loop (head-down at the half, back up by the end, the salto's re-pivot "
+      "trick on all three axes) with slow roll/yaw wobbles. The head and "
+      "neck loll on one- and two-cycle waves; gentle mid-body writhe; "
+      "slow-waving blades. Two tumbles per camera revolution";
   return s;
 }
 
