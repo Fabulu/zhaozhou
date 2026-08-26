@@ -673,3 +673,113 @@ added later is a field silently exempt from the proof.
 
 The same applies to the multi-result reply next: `rsp_y1_o`/`rsp_y2_o` will need
 the same treatment, and the count carried with the request will too.
+
+## 2026-08-26 06:20 UTC+02:00 - The multi-result reply, and NOISE2 on it
+
+69 checks (was 63). NOISE2: 16 instructions in 725 clocks.
+
+This was the ONE mechanism standing between v2 and the whole remaining opcode
+set. Three things changed shape rather than merely growing:
+
+* **The serialiser carries three result lanes and a COUNT.** The count rides
+  with the request, so the reply is self-describing and the core does not
+  re-decode an opcode that left stage 1 several cycles earlier.
+* **The second read pass stopped being about lengths.** `s1_is_len` became
+  `s1_needs_pass2`. The steal already fetched {a+1, a+2, b+1}, which is exactly
+  what NOISE2, ROT2, ROT3 and NORMALIZE2/3 all want, so the mechanism
+  generalised without changing.
+* **The pass-2 slot stopped hard-wiring UNIT_LEN and one result.** It was built
+  when lengths were its only user; NOISE2 takes the same path to a different
+  unit, with two results and a seed.
+
+### The M119 lesson applied at the right time
+
+`req_nres_i` was added to the lanemux bench's POISON LIST in the same edit that
+added it to the RTL -- not after a sweep found it missing, which is how the
+immediate went. The three result lanes are driven with distinct values
+(`result`, `+0x1000`, `+0x2000`) so a reply carrying one into all three cannot
+hide.
+
+### NOISE2's test proves the SECOND register, not just the first
+
+`dst+1` is pre-loaded with `0xD00DBEEF` before the run, so a second write that
+never happens fails loudly instead of landing on a convenient zero. The two
+lanes are also required to DIFFER, because one value written twice would
+otherwise pass.
+
+### Ten mutants (M125-M134), five of which had to be rewritten
+
+Two anchors were consumed by the widened capture and write-back (M87, M91), and
+three orphaned a signal under -Wall (M126, M130, M131). M126 became "the two
+results are SWAPPED between dst and dst+1", which is a better mutant than the
+one I first wrote.
+
+### ROT2/ROT3 checked while the sweep held the tree
+
+They need NO new front-end mechanism -- every operand is already in hand. What
+they do need is v2's FIFTH shared unit, `zhao_field_sin`, which
+`zhao_field_rot` borrows rather than owns. Latency 2, II 1. OP_SIN and OP_COS
+become nearly free once it is there.
+
+## 2026-08-26 06:35 UTC+02:00 - M120 DISCARDED, and that is a hole not a pass
+
+    M120 the immediate loses its low half on the way to the unit
+      DISCARDED: a target did not LINK
+
+Guard 5 caught it. Without that guard a mutant that fails to compile leaves the
+previous binary in place and gets scored as CAUGHT -- the most flattering
+possible way to be wrong.
+
+**It is unscored, which means the mutation is unproven.** Not a failure of the
+run, but not evidence either, and it must not be left looking like a pass.
+
+What makes it worth a real look rather than a shrug: **M120 PASSED PREFLIGHT
+LINT.** All 134 linted clean, in a cone containing zhao_field_v2_core. So either
+the test build applies flags the lint cone does not, or the failure was
+transient. Reproduce directly -- apply M120, build the target, read the error --
+rather than guessing. To be done when the sweep releases the tree.
+
+## 2026-08-26 07:10 UTC+02:00 - Three discards, two wrong diagnoses, one real cause
+
+    attempted=55 expected=55 accounted=52 caught=50 equivalent=2
+    CROSS-CHECK FAILED (attempted/accounted must both equal 55)
+
+The cross-check failing is CORRECT: 3 mutants were DISCARDED, so the run did not
+test what it claims to.
+
+### Wrong diagnosis #1
+
+I saw three mutants pass preflight lint and fail the test build, and concluded
+the two checks disagreed -- that the preflight was overstating its coverage and
+the guard was defective. I said so.
+
+**They do not disagree.** Applying M120 by hand and rebuilding succeeds. The
+preflight was right. The cause is environmental: the executable is deleted and
+relinked every iteration, and Windows intermittently holds it. Three failures in
+55 rebuilds is exactly that shape.
+
+### Wrong diagnosis #2, walked straight into the guard
+
+My first reproduction ran `cmake --build` alone, saw it succeed, and nearly
+concluded the mutant was fine. **`verilate()` elaborates at CONFIGURE time** --
+which is GUARD 1, written in this sweep's own header -- so a build without
+`cmake -S . -B build` does not re-elaborate and proves nothing.
+
+I read that guard aloud earlier today and still walked into it. The lesson is
+not "read the header": it is that a reproduction which SKIPS a step the real
+process performs is not a reproduction, and the burden is to match the process
+step for step before believing the result.
+
+### Two fixes, queued for when the lock releases
+
+1. **Retry a failed link ONCE before discarding.** A transient succeeds on the
+   second attempt; a genuinely broken mutation fails twice. The retry PRINTS
+   that it happened -- silently retrying converts a flaky machine into invisible
+   slowness, and the flakiness is worth seeing.
+2. **Preflight only the SELECTED mutants on a subset run.** A 3-mutant re-score
+   currently pays for 134 lints, roughly ten minutes to check three things. Re-
+   scoring after a fix is the most frequent operation in this loop, so this is
+   the cost that actually compounds.
+
+Neither can be applied while a sweep is running: bash re-reads a script it is
+executing, and the preflight is invoked by that same script.

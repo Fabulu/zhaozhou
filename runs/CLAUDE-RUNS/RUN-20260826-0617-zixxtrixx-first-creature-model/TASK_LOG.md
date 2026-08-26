@@ -1,7 +1,7 @@
 # Task Log: RUN-20260826-0617 - Zixxtrixx, first creature
 
 **Created:** 2026-08-26 06:17 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260826-0617-zixxtrixx-first-creature-model/
 
 ---
@@ -169,6 +169,65 @@ does, the reel RE-RENDERS THE STALE BINARY and reports the old numbers. Twice I
 read an unchanged colour count as "the fix did nothing". Run
 `cmake -S . -B build` directly (~67 s) and rebuild.
 
+### 2026-08-26 - Shipped
+
+**https://upheaval.pages.dev** — Cloudflare Pages project `upheaval` created,
+production branch `main`, deployed on Fabian's explicit instruction. Unlisted
+and `noindex`; the `noindex` gate in `deploy.ps1` passed. Verified live: page
+200, both GIFs 200, style.css 200, tab markup present.
+
+**NOT verified: the tabs in a real browser.** There is no browser automation in
+this session, so the radio/label/panel structure and the CSS selectors were
+checked by reading, and the assets by fetching. Nobody has clicked them.
+
+Both animations encoded through the ported `togif.py`: palette-exact, dithering
+off, never palettegen, then the GIF DECODED BACK and compared byte-for-byte
+against every source frame. Both verified byte-exact.
+
+| subject | frames | colours | gif | frame-change median |
+| --- | ---: | ---: | ---: | ---: |
+| zixxtrixx-slither | 64 | 239 / 256 | 871 KB | 20.6% |
+| zixxtrixx-strike | 96 | 249 / 256 | 1.24 MB | 17.5% |
+
+`expect_seq_crc` pinned for both; `reel --check` passes across the whole
+library, so no existing subject drifted.
+
+**Two mistakes worth keeping.**
+
+1. **I twice read a stale binary's output as evidence.** `cmake --build`
+   intermittently fails regenerating `build.ninja` (a Verilator output caught
+   mid-write) and the shell then runs the OLD exe, which reports the OLD
+   numbers. Both times I briefly concluded "the fix did nothing". The tell is
+   an unchanged number after a change that must have moved it. Workaround that
+   ended up being faster than fighting it: compile and link the reel directly,
+   since it depends on nothing Verilator produces.
+   `g++ -Itests/render -Icompiler/tests/generated -Ireference/src
+   -Ireference/include -Iruntime/include -O3 -DNDEBUG -std=c++17 -c
+   tools/reel/zhao_reel.cpp -o <obj>` then link with
+   `build/reference/libzhao_zref.a`.
+2. **Two scripted edits corrupted source files** — a here-doc ate `
+` escapes
+   in generated Python, and a slice-based replacement whose two bounds were in
+   the wrong order inserted a block at the top of the header. Both were caught
+   by the compiler and by looking at the output, but the second one silently
+   de-indented a `return` and produced a page with every creature card
+   truncated after the blurb, which the build did NOT catch. Read what a
+   scripted edit produced.
+
+**Left undone, deliberately:**
+
+- Stance loop and the four idle flourishes (86 of 86 donor entities have them),
+  hit reaction, death at ~2x attack.
+- The strike's prongs land just above the head rather than clearly past it.
+  Pushing the drive further is one number (`kArc` key 27) but the subject has
+  only 7 colours of headroom, and a bigger arc exposes more surface.
+- The mouth, the chin transition and the orange eye rim are all recoverable if
+  the palette ever loosens or the creature is shot in close-up.
+- sacengine was never run. DMD 2.112.0 is installed, but the existing measured
+  notes answered every question this creature actually raised, so building it
+  would have been work for its own sake. The lane is open when a question needs
+  it.
+
 ---
 
 ## Subagent Spawns
@@ -222,9 +281,12 @@ questions in SPEC_v1 "Open Questions". Findings that constrain those choices:*
 
 ## Next Steps
 
-1. Fabian to answer the three Open Questions in SPEC_v1 (scale, slither cycle,
-   whether to install a D toolchain for donor measurements).
-2. Decide the dorsal-stripe question from Decision 3.
-3. Author the part/bone decomposition; size it with the triangle anchor BEFORE
-   modelling.
-4. Slither + stance clips; reel subject; GIF to the Upheaval creature site.
+1. Fabian to look at https://upheaval.pages.dev and say what is wrong with the
+   creature. It is a first concept and was built to be argued with; the knobs
+   in `tools/reel/zixxtrixx.h` exist so the argument is cheap to act on.
+2. Someone should click the tabs in a browser. See above.
+3. The rest of the animation set: stance, four idle flourishes, hit reaction,
+   death.
+4. Push the strike's prongs past the head, if the palette allows.
+
+**Status: complete.** Both animations shipped, site published.

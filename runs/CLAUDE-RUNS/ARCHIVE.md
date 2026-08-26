@@ -34,6 +34,60 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260826-0617] Zixxtrixx — the first Upheaval creature, concept art to published site
+
+**Archived:** 2026-08-26 UTC+02:00
+**Created:** 2026-08-26 06:17 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260826-0617-zixxtrixx-first-creature-model/`
+**Branch:** main
+
+**Summary:**
+Two concept sheets by S. Hofer became a creature that compiles through
+`zref::creature` and renders at 384x240: 28 bones, ~38 rigid ring parts, a
+slither and a tail strike, both published at **https://upheaval.pages.dev**
+(unlisted, `noindex`). Every tunable is a named constant in one KNOBS block so
+the first concept is cheap to argue with.
+
+**The structural finding that made the design affordable:** `compile_creature`
+does not require part bones to be unique — it validates only
+`bone < bone_count`. So "one part, one bone" bounds how a part BENDS, not how
+many parts a bone may CARRY. The oversized eyes, their rims, the dorsal ridge
+and the two-tone prongs are all extra parts on existing bones. They cost
+meshlets, not bones, and bones are the scarce resource for a serpent.
+
+**Deliverables:**
+- `zhaozhou/tools/reel/zixxtrixx.h` (the model, clips and knobs)
+- `zhaozhou/tools/reel/zhao_reel.cpp` (two subjects, both CRC-pinned)
+- `Upheaval/website/` (one card per creature, a tab per animation, no script)
+- `Upheaval/website/tools/togif.py`, `topng.py` (ported encoder + verifier)
+- `Upheaval/creature/Zixxtrixx/README.md` (the decisions and their reasons)
+
+**Notes:**
+**The 256-colour law is the binding constraint on the creature lane and was
+underestimated.** It is not a creature budget: sky, terrain and creature
+compete for the same 256 entries, and every extra frame costs, because each
+frame is another camera azimuth that re-shades the scene into new entries.
+Getting from 359 to 239 cost the animated terrain field, a gait cycle per
+orbit, two ring segments, a darker terrain base (darker bases quantise to
+fewer distinct shades), and three of the creature's own materials — the chin
+transition, the mouth, and the orange eye rim.
+
+**Two process mistakes worth remembering.** `cmake --build` intermittently
+fails regenerating `build.ninja` on a Verilator output caught mid-write, and
+the shell then runs the STALE binary and reports the OLD numbers; twice that
+was briefly read as "the fix did nothing". And two scripted edits corrupted
+source — one silently de-indented a `return` and shipped a page with every
+card truncated after the blurb, which no build step caught.
+
+**Outcome:** Complete and live. Not verified: nobody has clicked the tabs in a
+real browser (no browser automation in the session; structure and assets were
+checked instead). Left undone deliberately: the stance loop and four idle
+flourishes, hit reaction and death; and the strike's prongs land just above the
+head rather than clearly past it, which is one number away but the subject has
+only 7 colours of headroom.
+
+---
+
 ### [RUN-20260824-0522] The two projectors are one core — and the 66 → 33 does not follow from it
 
 **Archived:** 2026-08-24 UTC+02:00
