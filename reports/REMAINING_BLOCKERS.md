@@ -1,5 +1,55 @@
 # What is actually blocking every remaining block
 
+> ## RULE-1 SURVEY, 2026-08-26. Read before planning any greenfield block.
+>
+> ### SIX OF THE NINE REMAINING NON-GAMEPLAY BLOCKS HAVE NO ORACLE
+>
+> The working rule is *check the reference resolves BEFORE writing any RTL*.
+> `design/blocks.yml` names a `reference_model` for every block, and a name in
+> the ledger is not a model in the tree. Grepped for both the CamelCase symbol
+> and the snake_case spelling:
+>
+> | block | reference_model | in the tree? |
+> | --- | --- | --- |
+> | GEOM.WCACHE | `zref::geom::VertexArena` | **YES** -- `zref_geom_wcache.hpp` |
+> | GEOM.PROJECT | `zref::render::project_vertex` | **YES** -- `zref_cull.hpp` |
+> | GEOM.MESHFETCH | `zref::MeshFetch` | **NO** |
+> | GEOM.VDECODE | `zref::VertexDecode` | **NO** |
+> | GEOM.LOOM | `zref::TransformLoom` | **NO** |
+> | GEOM.WARP | `zref::GeomWarp` | **NO** |
+> | MEASURE.HISTOGRAM | `zref::MeasureHistogram` | **NO** |
+> | FORGE.PRIM | `zref::ForgePrim` | **NO** |
+> | POST.GATHER | `zref::PostGather` | **NO** |
+>
+> GEOM.MESHFETCH is not an oversight and says so in its own words:
+> `zref_cull.hpp` states that the model there **is not** `zref::MeshFetch` and
+> that `zref::MeshFetch` *stays unresolved*.
+>
+> ### What this means for "finish the hardware"
+>
+> Those six cannot be started under rule 1. The work in front of them is
+> **writing the reference model**, which is a different activity from writing
+> RTL and has to happen first -- otherwise a differential has nothing to differ
+> against and the RTL becomes its own specification.
+>
+> It also means a plan that counts them as "RTL to write" is counting the
+> smaller half of the job.
+>
+> ### The one block that IS startable, and its state
+>
+> **GEOM.WCACHE.** Oracle resolves (`zref::geom::VertexArena`), RTL exists
+> (`zhao_vertex_arena.sv`), and `geom_wcache_directed` PASSES.
+>
+> Its FORMAL proof does not. `a_hit_implies_written` fails at k=4. The file
+> records the diagnosis honestly and keeps the failure visible: a bulk async
+> reset over an unpacked array is not expressible as a memory reset, so the
+> solver could start cells at 1; `valid_q` became a PACKED vector and
+> `p_array_implies_shadow` now returns UNSAT at k=3 in BOTH directions. That
+> closed one real modelling gap and did **not** close the proof, and the CI lane
+> stays unregistered rather than claiming otherwise.
+>
+> That is the next piece of real hardware work with an oracle behind it.
+
 > ## STATE AS OF 2026-08-26 (evening). This block supersedes everything below it.
 > ## Read this first.
 >

@@ -5,6 +5,52 @@ at the top.*
 
 ---
 
+## 2026-08-26 (last) — the Field engine is now actually USABLE
+
+### What changed
+
+The engine could do everything. It could not be *used*: it executed programs
+handed to it one instruction at a time by test code. Nothing fed it.
+
+It has a front end now. You give it a program and a stream of ground points; it
+gives you back one answer per point, in the right order. That is the whole Field
+job, end to end.
+
+### Why "in the right order" is not a detail
+
+The terrain code adds each answer into a specific spot on the ground, worked out
+from its position in the loop. If the answers come back correct but shuffled,
+every individual number is right and the landscape is wrong — and every test
+that checks numbers still passes. So there is a test whose only job is to prove
+the order holds, including across the boundary where the engine refills.
+
+### Three bugs, all mine, and one that was never a bug
+
+The interesting one: the engine reports "busy" and "finished" flags, and I
+checked them one clock too early — at that moment they still described the
+*previous* batch. So a batch could report itself complete **without having run
+at all**, and hand back the previous batch's answers.
+
+My own comment on that line claimed the check was the safe way to do it. It was
+the cause. It is fixed by watching for the start signal to actually land rather
+than assuming it already has.
+
+The one that was never a bug: the engine and the reference use **different
+numbers for the same instructions**. Every reference number is a valid but
+different engine instruction, so sending the wrong ones does not fail — it
+quietly computes something else. "Add" came back as a multiply. There is now a
+single translation point with a deliberate trap for anything unmapped.
+
+### And a claim that had to be earned
+
+The code said "a program that runs off its end is stopped by the engine". The
+bookkeeping tool rejected that, because **nothing in the project actually tested
+it** — the hardware had the logic and no test ever drove a program past its own
+end. Rather than reword the claim, I wrote the test. A program with no ending
+now provably stops and reports it.
+
+---
+
 ## 2026-08-26 — THE FIELD ENGINE DOES EVERYTHING NOW
 
 ### All fourteen
