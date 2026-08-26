@@ -2974,14 +2974,13 @@ SceneSubject subject_zixx_idle() {
   s.orbit = true;
   zixx_common(s);
   s.note =
-      "Zixxtrixx at rest in the canonical S: front reared, middle dipped, tail "
-      "carried high. The idle is deliberately RELAXED and slow -- the whole S "
-      "gathers and releases on a 3.2 s breath, the animal bobs vertically, the "
-      "body swells and shrinks in girth (through the instance bulk, because a "
-      "clip carries rotations and a root offset but not scale), and the tail "
-      "sways lazily left and right. All four run on different periods so the "
-      "loop never reads as one oscillation. Three full breaths per camera "
-      "revolution";
+      "Zixxtrixx at rest in the canonical S: head carried high and forward, "
+      "the body arching UP behind it to an apex above the skull, down to a "
+      "grounded run (authored sink ~17 mm -- resting at exactly zero reads "
+      "as hovering), tail raised behind. The 3.2 s breath deepens the arch "
+      "while the root rises to match, so the head and arch visibly bob while "
+      "the belly stays planted; girth swells through the instance bulk; the "
+      "tail sways lazily on its own period. Three breaths per revolution";
   return s;
 }
 
@@ -2998,11 +2997,12 @@ SceneSubject subject_zixx_walk() {
   s.cam_k = 230000;
   s.note =
       "Caterpillar locomotion, fixed three-quarter camera so the gait is "
-      "legible before any orbit is applied. The motion is VERTICAL and "
-      "longitudinal, not lateral: an arch travels down the body, the middle "
-      "rises and bunches, the rear is drawn forward. The head and neck bob "
-      "with it. A small roll survives as secondary life at a fraction of the "
-      "vertical authority. Three complete cycles";
+      "legible before any orbit is applied. The S holds throughout: head "
+      "glides high, and ONLY the grounded run carries the travelling hump -- "
+      "authored as a height field turned into joint pitches by second "
+      "difference, so it arches up off the ground and can never reach below "
+      "it. The hump travels rearward at roughly ground speed, so contact "
+      "points barely skate. Three complete cycles";
   return s;
 }
 
@@ -3016,12 +3016,13 @@ SceneSubject subject_zixx_attack() {
   zixx_common(s);
   s.cam_k = 200000;
   s.note =
-      "The attack. Zixxtrixx does not bite: it coils, throws its whole body "
-      "through THREE overhead somersaults, and then STRAIGHTENS INTO A RIGID "
-      "SPEAR and drives straight down. The turn is spread across all 19 spine "
-      "joints rather than wagging the last three tail bones, and the coil "
-      "parameter runs 1000 to 0 so the relaxation leaves the animal entirely "
-      "at the moment of the stab. Contact on key 45";
+      "The attack. Zixxtrixx rolls up into a wheel, and the WHOLE BODY "
+      "somersaults three times -- the spin lives on bone 0 with the root "
+      "displacement re-pivoting it to the coil's centre. Past the third turn "
+      "it snaps straight and flies TAIL FIRST at the ground: the spin runs on "
+      "to the 142-degree spear line while the root tracks the blade-tip "
+      "clearance envelope, then the strike BITES 200 mm (authored, brief) "
+      "before the fourth turn lands it back in the S. Contact on key 52";
   return s;
 }
 
@@ -3034,10 +3035,12 @@ SceneSubject subject_zixx_fall() {
   s.orbit = true;
   zixx_common(s);
   s.note =
-      "The falling flail loop: panicked and uncontrolled. The body corkscrews, "
-      "the head end counter-rotates against the tail end, the blades flap and "
-      "splay. Three incommensurate periods per joint so the loop never "
-      "resolves into a single sine. Four flail cycles per camera revolution";
+      "The falling flail loop: airborne for the whole loop, and the S is "
+      "applied at full authority every frame with the panic riding on top -- "
+      "a slow three-axis tumble on the root bone, a FRANTIC multi-axis flail "
+      "on the head joints (5 and 7 cycles per loop), a small mid-body writhe, "
+      "a tail whip and fast-beating blades. Distress without losing the "
+      "signature. Four flail cycles per camera revolution";
   return s;
 }
 
