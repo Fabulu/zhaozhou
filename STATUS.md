@@ -5,6 +5,98 @@ at the top.*
 
 ---
 
+## 2026-08-27 (early) -- THE FIELD ENGINE IS MEASURED. IT FITS.
+
+### The answer to your question
+
+You asked how bad it was. It was bad, it is fixed, and there is now a real
+number.
+
+| | the old engine | **the new one** | the chip has |
+| --- | --- | --- | --- |
+| logic | 4,494 | **8,104** | 41,910 -- so **19%** |
+| memory blocks | 5 | **33** | 553 |
+| multipliers | 3 | 27 | 112 |
+| clock speed | 59.0 MHz | **52.1 MHz** | |
+
+That is a real fit on a clean tree: placed, routed and timed, not estimated.
+
+### What it actually buys, and I have been quoting this wrong
+
+Every speed figure I have given you for the new engine -- the 27.8x -- was
+**per clock tick**. Per tick is not a speed until you multiply it by a clock
+that exists, and until tonight no clock existed, because the thing could not be
+built.
+
+Now it can:
+
+| | work per tick | ticks per second | work per second |
+| --- | --- | --- | --- |
+| old engine | 0.14 | 59.0 M | 8.4 M |
+| new engine | 3.97 | 52.1 M | **207 M** |
+
+**24.6x the real throughput, for 1.8x the area.** The new engine is 12%
+*slower* per tick than the old one and it does not matter in the slightest,
+because it does twenty-eight things per tick instead of one.
+
+From here I will quote **24.6x**. The 27.8 was never a lie, it just was not a
+speed.
+
+### What went wrong, because it is worth knowing
+
+The engine's register file -- the scratchpad every calculation reads and writes
+-- was written as one big table that four things read from and four things
+wrote to on the same tick. Real chip memories give you one read and one write.
+Faced with that, the tool does not complain: it silently builds the whole thing
+out of individual flip-flops and multiplexers instead.
+
+The result was **121,292 units of logic on a chip that has 41,910** -- nearly
+three times the entire device, for one block. That is why the run failed 96
+minutes in.
+
+### The part I got half-right, and how I found the other half
+
+I wrote the prediction down BEFORE measuring, so the measurement could
+contradict it. It confirmed it -- and then the fix only got half way:
+
+| | logic | still flip-flops? |
+| --- | --- | --- |
+| original | 121,292 | yes |
+| after splitting the reads and reducing to one writer | 66,386 | **yes, unchanged** |
+| after moving the storage into its own small module | **8,663** | no -- it became memory |
+
+The middle row is the lesson. The first fix halved the logic and changed the
+storage **not at all**. The port count was never the whole story: the tool also
+needs the storage written on its own, in a module that does nothing else. Same
+behaviour, same ports, entirely different silicon.
+
+And the check that should have come first: mapping that one 30-line module by
+itself took **40 seconds** and answered the question outright. I had spent three
+runs of forty minutes each asking it the expensive way.
+
+### One real bug fell out on the way
+
+While rewriting the write path I found the instruction counter being
+incremented by two separate lines in the same block. When a long operation
+finished on the same tick as a short one, the second line overwrote the first
+and **one completed instruction was silently not counted**. Every value it
+computed was correct; only the tally was short. Fixed, and there is now a
+permanent test that fails if it ever comes back.
+
+### The number that is not good, and I am not hiding it
+
+**52 MHz is slow.** The flow asks for 100 MHz and this does not come close.
+Neither does the old engine at 59 MHz, so it is not something I broke -- it is
+where Field has always been, and it only became visible now that the block can
+be placed at all.
+
+That is a real decision for later: either Field runs in its own slower clock
+domain and we pay for the crossing, or the slowest path gets broken up until it
+keeps pace with the rest of the machine. I have not chosen. I have written it
+down.
+
+---
+
 ## 2026-08-26 (later) -- the proof that would not bind, and what is left to build
 
 ### The short version
