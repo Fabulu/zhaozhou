@@ -83,6 +83,41 @@
 > blocks; VDECODE was checked because it looked like the most mechanical of
 > them, and it was not mechanical. Assume the others are at least as deep
 > until each is checked the same way.
+>
+> ### CHECKED. ALL SIX ARE BLOCKED ON SPECIFICATION, NOT ON RTL
+>
+> Counted the generated-stub sections in each contract (a stub still carries
+> its `gen-contracts` TODO line verbatim):
+>
+> | block | stub sections | what is actually missing |
+> | --- | --- | --- |
+> | GEOM.MESHFETCH | 14 of 17 | meshlet limits are unfrozen Phase-0 data |
+> | GEOM.VDECODE | 14 of 17 | the compression format, at both ends |
+> | GEOM.LOOM | 15 of 17 | packet layout, Q formats, latency |
+> | GEOM.WARP | 15 of 17 | packet layout, Q formats, latency |
+> | FORGE.PRIM | 15 of 17 | packet layout, Q formats, latency |
+> | POST.GATHER | 15 of 17 | packet layout, Q formats, latency |
+> | MEASURE.HISTOGRAM | **0 of 19** | see below -- it is the exception |
+>
+> MEASURE.HISTOGRAM's contract has no stubs left, which looks like the one
+> startable block until you read it. Every section was filled in with the
+> truth, and the truth is that it cannot be built: its Scalar reference
+> function section says `zref::MeasureHistogram` **does not resolve and never
+> has** -- the TENTH phantom in the ledger -- and that no oracle was written
+> because writing one would mean making four inventions. Its packet layout
+> section says the declared `fragment_error` input resolves to a one-bit
+> protocol flag on RASTER.FRAGMENT, not to an error magnitude, so the block's
+> stated input does not carry the quantity the block is for.
+>
+> So a complete contract here means completely documented as blocked, which is
+> the discipline working, not a lane to pick up.
+>
+> **NET: zero of the six are startable, and none of them is short of RTL.**
+> Five are short of a packet layout and a Q format; one is short of a file
+> format with no owner; one is short of four product decisions. That is
+> specification work and decision work, and the two that touch the compositor
+> and 2D path (FORGE.PRIM, POST.GATHER) are exactly the ones Fabian has
+> reserved. None of it is unblocked by writing more SystemVerilog.
 
 > ## STATE AS OF 2026-08-26 (evening). This block supersedes everything below it.
 > ## Read this first.
