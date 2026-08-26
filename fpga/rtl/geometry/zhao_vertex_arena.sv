@@ -471,14 +471,43 @@ module zhao_vertex_arena #(
       //    trap this file records twice above, and it survived the packed-vector
       //    change, which means the packed vector was not the whole of it.
       //
-      // What is NOT yet ruled out, and is the next thing to ask the solver
-      // DIRECTLY rather than dump: whether `f_arena`/`f_index` are constrained
-      // at the step the assertion is evaluated. The assumes bounding them sit
-      // in a clocked block; if they do not hold at every step the solver may
-      // pick an out-of-range watched key, and `valid_q[f_addr]` is then an
-      // out-of-range bit-select -- which is X, and `!X || 0` is not true.
-      // That is a HYPOTHESIS. It has not been tested, and the four before it
-      // were all refuted, so it is written as a question and not as a finding.
+      // 2026-08-26, TESTED, AND IT IS THE HARNESS: THE BOUNDING ASSUMES DO
+      // NOT BIND.
+      //
+      // Asserting the EXACT expression the harness assumes --
+      //
+      //     assert (f_arena < ARENA_W'(ARENAS) && f_index < INDEX_W'(DEPTH));
+      //
+      // -- FAILS at step 3. The watched key is not constrained at the step the
+      // property is checked, so the solver is free to pick a key naming no real
+      // slot, which is the very defect the assume block's own comment says it
+      // exists to prevent.
+      //
+      // HOW THIS HID FOR SO LONG, and it is worth knowing for every proof in
+      // this tree: **BMC reports only the FIRST failing assertion at a step.**
+      // With `p_array_implies_shadow` present, that is the one named, and any
+      // probe added beside it looks like it passed. Silencing the compound
+      // assertion one at a time is what made the harness defect visible:
+      //
+      //     probes with p_array_implies_shadow present -> only it is named
+      //     p_array_implies_shadow silenced             -> a_probe_slot_clear FAILS
+      //     that silenced too                           -> a_probe_no_watched_fill FAILS
+      //     those silenced too                          -> a_probe_key_bounded FAILS
+      //
+      // So the earlier readings that the array bit was set and a watched fill
+      // occurred are TRUE, and the reason both are reachable is that the key is
+      // unconstrained underneath them.
+      //
+      // WHAT THIS DOES NOT SAY. It does not say the arena is correct. It says
+      // the current counterexample is not evidence that it is wrong, because
+      // the question was asked with an unbound key. The proof cannot be
+      // believed in either direction until the assume binds -- and the fix
+      // belongs in the HARNESS, not in the arena.
+      //
+      // The mechanism is not yet established: `f_arena`/`f_index` are anyconst
+      // and therefore constant, so a clocked assume ought to bind them at every
+      // step. Establishing WHY it does not is the next question, and it is a
+      // question about yosys/sby semantics rather than about this block.
 
       // 3. a hit implies the slot was filled since the last open of its arena.
       //    The shadow only becomes valid on a fill and is cleared by open, so
