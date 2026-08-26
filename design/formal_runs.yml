@@ -1036,6 +1036,44 @@ runs:
     # contract leads with -- a lookup must never wrap into another vertex -- and
     # a proof that passes because the claim was softened is worth less than one
     # that honestly fails.
+    #
+    # 2026-08-26, RESOLVED, AND IT IS (a) -- THE QUESTION, NOT THE ARENA.
+    #
+    # The note above lists two possibilities and says they are not equally
+    # serious. It is the harmless one: the watched-slot harness mis-modelled,
+    # and it mis-modelled in the most complete way available -- THE WATCHED KEY
+    # WAS NEVER A FREE VARIABLE AT ALL.
+    #
+    # f_arena/f_index were declared `(* anyconst *) logic` INSIDE the module.
+    # This frontend ties attribute-carrying locals to constants/x, so they were
+    # not free, and the assume block bounding them to real slots constrained
+    # nothing. Every counterexample was the solver walking off the end of the
+    # arena with a key naming no slot.
+    #
+    # Established one variable at a time, same file, same engine, by asserting
+    # the exact bound the harness assumes:
+    #     (* anyconst *) LOCALS                       FAILS at step 3
+    #     attribute dropped, still LOCAL              FAILS at step 3
+    #     same signals moved to the PORT LIST         PASSES
+    # The middle line is the one that matters: anyconst was not the culprit
+    # either. What does not bind is a free variable declared as a LOCAL.
+    #
+    # The rule was ALREADY IN THIS TREE, as the W2.5 ratification note, in
+    # video_linebuf_fv.sv, formal_mem_arbiter.sv, formal_mem_guard.sv and
+    # formal_mem_refresh.sv. zhao_vertex_arena.sv was the only file breaking it.
+    #
+    # The tell that was there from the first run: every counterexample was an
+    # IDLE trace. A property about lookups cannot be refuted by a machine that
+    # never looks anything up. That is a broken question, not a broken part.
+    #
+    # a_probe_key_bounded and a_probe_key_constant now ship in the RTL, FIRST
+    # in the assertion block, so a future binding regression is named by bmc
+    # instead of surfacing as a lookup property failing on an empty trace.
+    #
+    # STILL `pending`, ON PURPOSE: with the fix, bmc runs clean through k=17
+    # where it was refuted at k=3, but the full depth-24 run against the final
+    # file has not completed yet. This flips to `passing` when it does and not
+    # before -- 'much further than it used to get' is not a proof.
     date: "2026-08-24"
     commit: "2edbcc1"
     lane: formal_geom_wcache_arena_bounds
