@@ -1571,3 +1571,38 @@ whose coverage rested on "these two values happen to be equal" silently stops
 covering anything. M166 was the same shape in the ALU.
 
 `ctest -L fast` 278/278, ledger green. A fit is running; no number claimed yet.
+
+---
+
+## 08:45 — the reciprocal fit TIMED OUT, and the harness refused to lie about it
+
+`run_block_fit.ps1` ran 9,172.1 s against my 9,000 s budget and reported
+`timeout`. It then did the right thing and said so:
+
+    WARNUNG: this run ended 'timeout'; KEEPING the previous measurement
+    (7860 ALM / 15 DSP) rather than erasing it
+
+**So there is still NO number for the reciprocal change.** The row in
+`zhao_block_fit.json` describes `sourceCommit 3e87a0a` — the ALU-stage fit —
+not `5f2f89b`. Reading it as the new result would have been the stale-binary
+trap in a different costume: identical ALMs, identical Fmax, identical
+`seconds: 2655.5`, all perfectly plausible and all describing the previous
+commit.
+
+**The tell was `seconds`.** The run had visibly taken about 150 minutes and the
+row said 44. A measurement that did not move after a change that must have
+moved it is the tell CLAUDE.md already names; here it was a measurement that
+did not move after a run that took three times as long.
+
+Why so slow: the fitter spent **1:24:21 in placement preparation alone** under
+Advanced Physical Optimization, against a few minutes on the previous run —
+and the creature lane was rendering on the same machine throughout. Placement
+itself then took only 8:10 and routing finished; it was inside `quartus_sta`
+when the budget expired. It was minutes from done.
+
+Re-launched at 21,600 s.
+
+**Process note worth keeping:** `-KeepWorkspace` is what made this diagnosable
+at all. The `quartus_fit.exe.log` in the kept workspace is what showed the
+1:24:21 preparation stage and the stage it died in. The first failed fit of
+this whole effort deleted its workspace and cost the diagnosis entirely.
