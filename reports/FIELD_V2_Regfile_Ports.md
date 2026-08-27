@@ -282,3 +282,64 @@ That has to be dealt with, and the choice is a real one:
 Nothing here decides that. What this fit establishes is that the block EXISTS
 in silicon terms — 19% of the logic, 6% of the memory — which was not true this
 morning, when it was 289% of the logic and could not be placed at all.
+
+---
+
+# WHERE THE 52 MHz ACTUALLY GOES
+
+From the kept fit workspace, `blockfit_setup_paths.rpt`. Worst setup slack
+**-9.182 ns** against a 10.000 ns requirement, and total negative slack
+**-9,943 ns** across the endpoints — so this is not one unlucky path, it is a
+structural one repeated across the file.
+
+All twelve worst paths run **register-file RAM to register-file RAM**. The
+breakdown of the worst one:
+
+| stage | element | ns |
+| --- | --- | --- |
+| RAM read out | `u_rf_a ... portbdataout` | 1.02 |
+| route to the DSP | | 1.60 |
+| **the multiply** | `Mult6~690` | **3.94** |
+| the product's adder | `Add23` carry chain | 3.19 |
+| the Q16.16 rescale | `q16_mul~20..23` | 1.24 |
+| the second adder | `Add24` carry chain | 2.07 |
+| the write-back mux | `wb_data[2][30]~650` | 1.34 |
+| route in + RAM setup | `u_rf_b ... portadatain` | 1.78 |
+| **data path total** | | **18.02** |
+
+## What that says
+
+**One clock currently contains a whole multiply-add.** Register read, 18x18
+multiply, add, Q16.16 rescale, add again, write-back mux, register write — all
+combinational, end to end. 18 ns of it.
+
+Nothing here is wasteful; it is simply too much work for one clock. The engine
+was designed for throughput per clock and the clock was never the constraint,
+because until tonight the block could not be placed and therefore had no clock
+at all.
+
+## The obvious first move, and what it is worth
+
+**The DSP's output register is free.** A 5CSEBA6 DSP block has optional input
+and output registers built into it; the multiplier here uses none of them, so
+`Mult6` sits combinationally in the middle of the path. Registering its output
+removes the 3.94 ns of the multiply plus some of the routing either side of it
+from this path, and costs no ALMs at all.
+
+That alone does not reach 100 MHz — roughly 14 ns would remain, about 71 MHz —
+so closing at the system clock needs the path split at least twice, most
+naturally after the multiply and after the rescale.
+
+## Why this is not being done in the same breath
+
+Adding a pipeline stage to the ALU moves when a result is WRITTEN, and the
+machine's correctness rests on when it is written: the one-instruction-per-
+wavefront interlock, the write-back queue's priority over the ALU, and the
+retire accounting all reference that clock. It is a real architectural change
+with a real differential and sweep behind it, not a constraint tweak.
+
+It is also **not the only option**. Field could run in its own slower clock
+domain and pay for the crossing, which costs nothing in the engine and
+something at its edges. Which of the two is right depends on what else shares
+the clock, and that is Fabian's call to make, so it is recorded here rather
+than taken.
