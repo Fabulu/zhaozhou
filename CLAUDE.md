@@ -97,10 +97,17 @@ numbers are unreproducible -- commit the probe.
 * **Publishing is always an explicit call** — with ONE standing exception.
   `Upheaval/website/deploy.ps1` requires `-Project` and `-Branch` and refuses a
   page without `noindex`.
-  * **The bestiary is authorised to publish on every change** (Fabian,
-    2026-08-27: *"just publish it whenever it changes"*). Site changed → run
-    `deploy.ps1 -Project upheaval -Branch main`. Do not stop to ask. The
-    exception is that site and nothing else; it does not generalise to other
+  * **The bestiary is authorised to publish on every FINISHED CREATURE PASS**
+    (Fabian, 2026-08-27: *"publish on every finished zixxtrixx, not every
+    individual change"*). Do not stop to ask — but the trigger is **a pass that
+    is done and worth looking at**, not a file save. A tweaked constant, a
+    half-fixed head, a re-render mid-iteration: not a publish. The complete
+    reworked creature with its clips encoded: publish, immediately, via
+    `deploy.ps1 -Project upheaval -Branch main`.
+  * Site-structure work (a card layout, an archive tab) ships with the next
+    creature pass rather than on its own, unless Fabian asked for that change
+    specifically — then it goes up when it is done.
+  * The exception is that site and nothing else; it does not generalise to other
     outward-facing actions, and the page stays `noindex` — unlisted, for the
     owner, not public.
   * **`-Branch` is mandatory.** Wrangler accepts a missing branch, silently
