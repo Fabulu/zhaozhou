@@ -496,9 +496,16 @@ int main(int argc, char** argv) {
   // the CRC never reaches a length gate at all.
   {
     // D04: command_bytes must be a multiple of 16.
+    //
+    // The count must be ZERO here. With count = 1 the "count fits in the
+    // bytes" gate fires first and ALSO reports BAD_LENGTH, so pristine and
+    // mutant agree and the case proves nothing. This block reports BAD_LENGTH
+    // from nine separate gates, so isolating one means making sure no earlier
+    // gate can fire.
     DmaBench t;
     std::vector<uint8_t> pkt = makePacket(2, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
     put32at(pkt, 28, 8);  // 8 is not a multiple of 16
+    put32at(pkt, 24, 0);
     reseal(pkt);
     t.load(kSlotBody0, pkt);
     t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
@@ -541,8 +548,14 @@ int main(int argc, char** argv) {
   {
     // D14/D15: a record length must be a multiple of 16 AND at least 16. A
     // zero-length record is the dangerous one: the walk cannot advance past it.
+    //
+    // AN UNKNOWN OPCODE, deliberately. With a known one the mutated gate falls
+    // through to "size disagrees with the opcode", which also reports
+    // BAD_LENGTH -- pristine and mutant agree and nothing is proved. An
+    // unknown opcode makes the mutant land on UNKNOWN_OPCODE instead, which is
+    // a different verdict and therefore visible.
     DmaBench t;
-    std::vector<uint8_t> pkt = makePacket(5, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    std::vector<uint8_t> pkt = makePacket(5, 0, 20, 0, {makeRecord(0x7FFE, 16, {})});
     pkt[36 + 2] = 24;  // record_bytes = 24, not a multiple of 16
     pkt[36 + 3] = 0;
     reseal(pkt);
@@ -554,8 +567,9 @@ int main(int argc, char** argv) {
   }
 
   {
+    // Unknown opcode again, for the same reason as D14 above.
     DmaBench t;
-    std::vector<uint8_t> pkt = makePacket(6, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    std::vector<uint8_t> pkt = makePacket(6, 0, 20, 0, {makeRecord(0x7FFE, 16, {})});
     pkt[36 + 2] = 0;  // record_bytes = 0: the walk could never advance
     pkt[36 + 3] = 0;
     reseal(pkt);

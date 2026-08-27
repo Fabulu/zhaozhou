@@ -238,15 +238,31 @@ if ! run_lanes; then
 fi
 echo "   pristine model ${PRISTINE_MODEL:0:16}, all lanes green"
 
-expected=$(python tools/sweep_cmd_dma_mutants.py --count)
+TOTAL=$(python tools/sweep_cmd_dma_mutants.py --count)
+
+# SWEEP_ONLY runs a SUBSET, for re-scoring one increment without a full
+# re-sweep. It is LOUD on purpose: a subset run must never be readable as a
+# full sweep in a log, because "the sweep was green" is the claim this file
+# exists to support. Unset (the default) means all of them.
+#
+# It exists because a full run of this block is ~35 minutes -- 21 mutants x
+# reconfigure + rebuild + two test lanes over 1,033 lines of RTL -- and
+# iterating on four survivors should not cost that.
+if [ -n "${SWEEP_ONLY:-}" ]; then
+  K_LIST="$SWEEP_ONLY"
+  expected=$(echo $K_LIST | wc -w)
+  echo "!! SUBSET RUN: $expected of $TOTAL mutants -- NOT a full sweep"
+else
+  K_LIST=$(seq 0 $((TOTAL - 1)))
+  expected=$TOTAL
+fi
 attempted=0
 accounted=0
 caught=0
 survivors=()
 equivalents=()
 
-k=0
-while [ "$k" -lt "$expected" ]; do
+for k in $K_LIST; do
   name=$(python tools/sweep_cmd_dma_mutants.py --name "$k")
   attempted=$((attempted + 1))
 
@@ -270,20 +286,17 @@ while [ "$k" -lt "$expected" ]; do
   if ! models_present; then
     echo "  $name  DISCARDED: a model was absent after regeneration"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1))
     continue
   fi
   if ! exes_present; then
     echo "  $name  DISCARDED: a target did not LINK (a build failure would"
     echo "                    otherwise be scored as a caught mutant)"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1))
     continue
   fi
   if [ "$(model_hash)" = "$PRISTINE_MODEL" ]; then
     echo "  $name  DISCARDED: model identical to pristine (did not re-elaborate)"
     restore || { echo "ABORT: revert failed"; exit 4; }
-    k=$((k + 1))
     continue
   fi
 
@@ -308,7 +321,6 @@ while [ "$k" -lt "$expected" ]; do
   accounted=$((accounted + 1))
 
   restore || { echo "  $name  ABORT: revert was not byte-identical"; exit 4; }
-  k=$((k + 1))
 done
 
 echo "== restoring the pristine build"
