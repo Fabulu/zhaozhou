@@ -60,13 +60,31 @@ namespace zixx {
 // ============================== KNOBS ======================================
 // Millimetres unless noted. Angles in angle16: 65536 = one turn, 182 ~ 1 deg.
 
-// 30 sides (was 28; Fabian 2026-08-27, "I see a bit too many polygon
-// edges"): 30 puts a ring at 31 verts (the textured seam duplicate), and
-// 31 x 2 = 62 still fits two rings under the 64-vert meshlet cap -- the
-// last free step before meshlet splitting has to change (32 would not
-// fit). The bigger cure for the faceting is smooth vertex normals in the
-// renderer, which is a hardware-lane decision, not an authoring knob.
-constexpr int kSides = 30;       // sides around the body at LOD0
+// VARIABLE RADIAL DETAIL (G2, 2026-08-27 round-skull run; Fabian: "you
+// really need to get the poly reduction ... most important thing for
+// smooth Zixxtrixx"). The 30-sides-everywhere answer was buying triangles
+// where nothing curves: with SMOOTH VERTEX NORMALS now in the renderer the
+// shading cannot facet, so the sides go where the SILHOUETTE needs them --
+// the ball skull and the eye corners -- and the calm trunk and thin tail
+// run far leaner. The ring zipper stitches unequal counts (verified,
+// creature_core.cpp), and U is the ring ANGLE so the texture never
+// notices. ~1,930 tris at LOD0, inside the 1,400-2,000 authored target
+// (was 3,680); the micro rung still derives by halving (min 3).
+constexpr int kSidesSkull = 22;  // stations 0..kHeadEnd: the ball + eyes
+constexpr int kSidesNeck = 18;   // the hook behind the skull
+// 16, not 14, and NOT for the silhouette: with align 0 a 16-gon puts a
+// vertex EXACTLY on the belly line (k=4 -> angle 16384 = straight down),
+// so the grounded run's authored millimetre sink survives the poly cut --
+// at 14 the bottom chord rode ~3 mm high and the probe's idle band went
+// [-8..-3] -> [-8..-1], one key from reading as hover (ground-contact
+// doctrine: the absence of declared penetration is also a bug).
+constexpr int kSidesTrunk = 16;  // the long calm body + the grounded run
+constexpr int kSidesTail = 10;   // the raised thinning stem
+constexpr int kNeckEndStation = 17;   // last neck-count station
+constexpr int kTrunkEndStation = 48;  // last trunk-count station: PAST the
+                                      // grounded run's final node, so every
+                                      // ground-touching ring keeps its
+                                      // belly-line vertex
 constexpr int kSpineBones = 20;  // chain bones nose -> fork
 
 // ---- the body, authored by eye --------------------------------------------
@@ -223,8 +241,11 @@ constexpr int32_t kCrestLift = 104;  // crest centre, as a % of body half-height
 // spike. Fabian, 2026-08-26: "The fins are gargantuan while on the reference
 // sketch they are small." The first sizing (1180 mm on a 3050 mm body) put a
 // blade at 39% of the animal; the sketch's slivers are a sixth of that mass.
-constexpr int kBladeSides = 8;
-constexpr int kBladeRings = 7;
+// 6/6, was 8/7 (G2): a blade is a thin flat sliver -- with smooth normals
+// the faces cannot facet, and six sides keep the sharp lateral rim the
+// sheet draws while dropping a third of the fin cost.
+constexpr int kBladeSides = 6;
+constexpr int kBladeRings = 6;
 // 780: the sheet's fins are LONG slivers -- ~26% of the body's path length --
 // not paddles (the first "gargantuan" verdict was about their WIDTH). Length
 // up, half-width kept slim.
@@ -698,6 +719,16 @@ inline int32_t station_r(int i) {
 }
 // station -> how wide the section is relative to how tall
 inline int32_t station_wide(int i) { return i < kHeadStations ? kHeadWideNum : kBodyWideNum; }
+
+// station -> radial segment count (variable detail, see the knobs). The
+// junction ring (kHeadEnd) takes the SKULL count in both parts -- a function
+// of the station alone, so the two parts' shared ring stays bit-identical.
+inline int station_sides(int i) {
+  if (i <= kHeadEnd) return kSidesSkull;
+  if (i <= kNeckEndStation) return kSidesNeck;
+  if (i <= kTrunkEndStation) return kSidesTrunk;
+  return kSidesTail;
+}
 
 // THE HEAD RING, shared by the mesh builder and the pose probe so the probe
 // measures the surface that is actually built. Returns the LATERAL (rx) and
@@ -1459,7 +1490,7 @@ inline const zc::CreatureType& type() {
         zc::RingSpec rs;
         rs.y = fxm(station_x(i));
         rs.radius = fxm(station_r(i));
-        rs.segments = static_cast<uint8_t>(kSides);
+        rs.segments = static_cast<uint8_t>(station_sides(i));
         rs.b0 = bd.b0;
         rs.b1 = bd.b1;
         rs.w0 = bd.w0;
@@ -1486,7 +1517,7 @@ inline const zc::CreatureType& type() {
         zc::RingSpec rs;
         rs.y = fxm(station_x(i));
         rs.radius = fxm(r);
-        rs.segments = static_cast<uint8_t>(kSides);
+        rs.segments = static_cast<uint8_t>(station_sides(i));
         rs.b0 = bd.b0;
         rs.b1 = bd.b1;
         rs.w0 = bd.w0;

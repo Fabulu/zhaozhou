@@ -141,3 +141,45 @@ Baseline binary built from clean tree at f8f6681.
   palette out of the way (evidence/direct1-*.png). Crayon grain survives at
   zoom but is softened at distance — T5's multi-scale converter remains the
   counter, not done this run.
+
+## Website: archive restructure (main session, parallel to the model work)
+
+Owner call: *"archive the snakes we have now on the website, i have a feeling
+they will be completely eclipsed by the new ones. Make an archive tab instead of
+how it is now with archived ones."*
+
+* **Snapshotted the four current clips first**, as
+  `public/renders/archive-2026-08-27-{idle,walk,attack,fall}.{webm,png}`. This
+  had to happen before the in-flight rework re-renders over the canonical
+  filenames, or the record being asked for would have been destroyed by the
+  thing it is a record of.
+* `assemble.py` no longer gives each archived render its own tab. Archived
+  renders collect behind a **single `Archive` tab**, newest first, each with the
+  caption saying what was wrong with that pass. Only LIVE renders count toward
+  `MAX_TABS`.
+* Card now reads: Idle / Walk / Triple salto / Falling flail / Archive (6).
+* **Gotcha recorded for whoever edits `style.css` next:** the panel-reveal rules
+  are `nth-child`; the label rules directly above them are `nth-of-type`. That
+  difference is load-bearing -- it is the only reason a `<div>` archive panel
+  can sit among `<figure>` panels and still be revealed. Do not harmonise them.
+* Committed and pushed as `d397ff0`. **Not deployed** -- publishing is an
+  explicit call, and the sensible moment is when the new renders land, so the
+  eclipse and the archive go up together.
+
+## Poly reduction with better distribution (G2) — 3,680 -> 2,076 tris
+- Variable radial detail: skull 22 (the ball + eye corners own the sides),
+  neck 18, trunk 16, tail 10; blades 6 sides x 6 rings. The zipper stitches
+  unequal counts; U is the ring angle so the texture never notices.
+- Trunk is 16 NOT 14, and not for looks: a 16-gon at align 0 puts a vertex
+  EXACTLY on the belly line, so the grounded run's authored sink survives
+  the cut (at 14 the bottom chord rode ~3 mm high; idle band went to
+  [-8..-1] -- one key from reading as hover). kTrunkEndStation=48 keeps
+  every ground-touching ring on the 16 count.
+- Probe: idle [-8..-2] (golden [-8..-3]; 1 mm at the shallow end, chord of
+  the leaner ring), walk [-13..+10] EXACT, attack -426 @56 EXACT, fall 584
+  EXACT. Overlaps all within allowances. Pose CRCs + clip bytes IDENTICAL.
+- reel --check: all match (creature test subjects use their own types; the
+  zixxtrixx counts do not touch them).
+- LOOK: at 240p the 2,076-tri creature is indistinguishable from the
+  3,680-tri one in every fixed view (evidence/poly2-*.png) -- exactly what
+  smooth normals + filtered direct colour were supposed to buy.
