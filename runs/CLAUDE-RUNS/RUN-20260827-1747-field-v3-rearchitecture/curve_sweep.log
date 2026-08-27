@@ -1,0 +1,44 @@
+== consumer roster ==
+== preflight ==
+preflight ok: C01 lanes 0/2 search only five steps
+preflight ok: C02 the lower clamp bound is dropped (search on raw a below x[0])
+preflight ok: C03 the mid guard is off by one (top knot never landed)
+preflight ok: C04 the entry x is not captured on a taken step (stale x_ent)
+preflight ok: C05 entry-0 init reads dy0 into y (swapped meta lanes)
+preflight ok: C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)
+preflight ok: C07 the barrel de-pipelines (II gate must bite)
+preflight ok: C08 the add flags collapse onto lane 0
+preflight ok: C09 the mad's y term is halved
+preflight ok: C10 the result rescale truncates instead of rounding half-up
+preflight ok: C11 DCURVE returns y instead of dy
+preflight ok: C12 a held reply is clobbered by the next push (early reuse)
+preflight ok: C13 a fifth group is accepted while replies are blocked
+preflight ok: C14 the table-cache commit writes the wrong slot's entry count
+preflight ok: C15 the staging register is never popped (group re-runs forever)
+PREFLIGHT: all 15 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 03425eee7c403971)
+  C01 lanes 0/2 search only five steps  caught
+  C02 the lower clamp bound is dropped (search on raw a below x[0])  caught
+  C03 the mid guard is off by one (top knot never landed)  caught
+  C04 the entry x is not captured on a taken step (stale x_ent)  caught
+  C05 entry-0 init reads dy0 into y (swapped meta lanes)  caught
+  C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)  caught
+  C07 the barrel de-pipelines (II gate must bite)  caught
+  C08 the add flags collapse onto lane 0  caught
+  C09 the mad's y term is halved  caught
+  C10 the result rescale truncates instead of rounding half-up  caught
+  C11 DCURVE returns y instead of dy  caught
+  C12 a held reply is clobbered by the next push (early reuse)  caught
+  C13 a fifth group is accepted while replies are blocked  caught
+  C14 the table-cache commit writes the wrong slot's entry count  caught
+  C15 the staging register is never popped (group re-runs forever)  caught
+== final restore ==
+
+== tally ==
+  attempted:  15 / 15
+  caught:     15
+  equivalent: 0
+  survived:   0
+  discarded:  0
+SWEEP OK

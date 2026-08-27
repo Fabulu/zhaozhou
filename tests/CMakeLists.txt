@@ -1393,6 +1393,22 @@ set_tests_properties(field_dist_svc_random PROPERTIES LABELS "fast;nightly" TIME
 add_test(NAME field_dist_svc_random_nightly COMMAND test_field_dist_svc_directed --random 5000)
 set_tests_properties(field_dist_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 3 probe: barrel curve service. The directed lane carries the
+# acceptance GATE (measured four-point CURVE II <= 14); the random lane is the
+# exactness differential against zfield::exec_op (the one semantic layer).
+add_executable(test_field_curve_svc_directed differential/field_curve_svc_directed.cpp)
+target_link_libraries(test_field_curve_svc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_curve_svc_directed
+  PREFIX Vzhao_probe_curve_svc
+  TOP_MODULE zhao_probe_curve_svc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv)
+add_test(NAME field_curve_svc_directed COMMAND test_field_curve_svc_directed)
+set_tests_properties(field_curve_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_curve_svc_random COMMAND test_field_curve_svc_directed --random 400)
+set_tests_properties(field_curve_svc_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_curve_svc_random_nightly COMMAND test_field_curve_svc_directed --random 5000)
+set_tests_properties(field_curve_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_field_len_directed differential/field_len_directed.cpp)
 target_link_libraries(test_field_len_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_len_directed

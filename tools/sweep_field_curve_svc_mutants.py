@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Mutation table for the FIELD v3 barrel curve service probe sweep
+(tools/sweep_field_curve_svc.sh).
+
+Target: fpga/rtl/synth/zhao_probe_curve_svc.sv ONLY — the probe has exactly
+one consumer (guard 7).
+
+Classes from reports/Fieldv3.md where they exist in this seam: wrong segment
+(search depth, guard off-by-one, raw-vs-clamped, port slaving), stale entry
+capture, stale table-cache meta (reload, wrong slot, swapped entry-0 lanes),
+value law (mad y term, rounding, DCURVE lane), saturation-lane collapse,
+reply clobber under backpressure, capacity violation, staging loss — plus
+"the barrel de-pipelines", which proves the II gate in the directed test
+actually bites.
+"""
+
+RTL = "fpga/rtl/synth/zhao_probe_curve_svc.sv"
+
+MUTANTS = [
+    ("C01 lanes 0/2 search only five steps",
+     RTL,
+     "    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd11);",
+     "    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd9);"),
+
+    # Reshaped for lint: deleting the whole clamp orphans meta_xn1
+    # (UNUSEDSIGNAL); dropping only the LOWER bound keeps every signal read
+    # and is the exact "search runs on raw a" defect below the table.
+    ("C02 the lower clamp bound is dropped (search on raw a below x[0])",
+     RTL,
+     "      req_clamped[l] = (req_a[l] < meta_x0[req_tbl_i]) ? meta_x0[req_tbl_i]\n"
+     "                     : ((req_a[l] > meta_xn1[req_tbl_i]) ? meta_xn1[req_tbl_i] : req_a[l]);",
+     "      req_clamped[l] = (req_a[l] > meta_xn1[req_tbl_i]) ? meta_xn1[req_tbl_i] : req_a[l];"),
+
+    ("C03 the mid guard is off by one (top knot never landed)",
+     RTL,
+     "      if (consume[l] && (s_mid[l] <= s_nm1) && (rd_x[l] <= s_clamped[l])) begin",
+     "      if (consume[l] && (s_mid[l] < s_nm1) && (rd_x[l] <= s_clamped[l])) begin"),
+
+    ("C04 the entry x is not captured on a taken step (stale x_ent)",
+     RTL,
+     "        upd_xe[l]  = rd_x[l];",
+     "        upd_xe[l]  = s_xe[l];"),
+
+    ("C05 entry-0 init reads dy0 into y (swapped meta lanes)",
+     RTL,
+     "            s_ye[l]      <= meta_y0[req_tbl_i];",
+     "            s_ye[l]      <= meta_dy0[req_tbl_i];"),
+
+    ("C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)",
+     RTL,
+     "    rb_addr = {s_tbl, cyc[0] ? s_mid[3][5:0] : s_mid[2][5:0]};",
+     "    rb_addr = ra_addr;"),
+
+    ("C07 the barrel de-pipelines (II gate must bite)",
+     RTL,
+     "  assign req_ready_o = !st_valid;",
+     "  assign req_ready_o = !st_valid && !s_busy && (f_state == F_IDLE);"),
+
+    ("C08 the add flags collapse onto lane 0",
+     RTL,
+     "          f_sat_add[l] <= sub_fired(s_clamped[l], upd_xe[l]);",
+     "          f_sat_add[l] <= sub_fired(s_clamped[0], upd_xe[0]);"),
+
+    # Reshaped for lint: dropping the y term entirely orphans f_ye
+    # (UNUSEDSIGNAL); halving its shift keeps it read and is the same class
+    # of mad-law defect.
+    ("C09 the mad's y term is halved",
+     RTL,
+     "    for (int l = 0; l < LANES; l++) curve_p[l] = mul_p[l] + (sx(f_ye[l]) <<< 16);",
+     "    for (int l = 0; l < LANES; l++) curve_p[l] = mul_p[l] + (sx(f_ye[l]) <<< 15);"),
+
+    ("C10 the result rescale truncates instead of rounding half-up",
+     RTL,
+     "    logic signed [64:0] r;\n"
+     "    begin\n"
+     "      r = (65'(v) + (65'sd1 <<< 15)) >>> 16;\n"
+     "      if (r > 65'sd2147483647) resc16 = 32'sh7FFF_FFFF;",
+     "    logic signed [64:0] r;\n"
+     "    begin\n"
+     "      r = 65'(v) >>> 16;\n"
+     "      if (r > 65'sd2147483647) resc16 = 32'sh7FFF_FFFF;"),
+
+    ("C11 DCURVE returns y instead of dy",
+     RTL,
+     "          f_res[l] <= upd_dye[l];",
+     "          f_res[l] <= upd_ye[l];"),
+
+    ("C12 a held reply is clobbered by the next push (early reuse)",
+     RTL,
+     "        F_PUSH: begin\n"
+     "          if (!rsp_valid_o || rsp_ready_i) begin",
+     "        F_PUSH: begin\n"
+     "          if (1'b1) begin"),
+
+    ("C13 a fifth group is accepted while replies are blocked",
+     RTL,
+     "  assign req_ready_o = !st_valid;",
+     "  assign req_ready_o = 1'b1;"),
+
+    ("C14 the table-cache commit writes the wrong slot's entry count",
+     RTL,
+     "        meta_n[tl_tbl_i]   <= tl_n_i;",
+     "        meta_n[~tl_tbl_i]  <= tl_n_i;"),
+
+    ("C15 the staging register is never popped (group re-runs forever)",
+     RTL,
+     "      end else if (start_fire && st_valid) begin\n"
+     "        st_valid <= 1'b0;",
+     "      end else if (start_fire && st_valid) begin\n"
+     "        st_valid <= st_valid;"),
+]
+
+# Machine-readable, so a survivor is either PROVEN equivalent here or fails
+# the sweep. Nothing is declared until the first run says what survives.
+EQUIVALENT = {}
+
+
+def mutate(gold, old, new):
+    """Return the mutated text, or raise if the anchor is not unique."""
+    nl = "\r\n" if "\r\n" in gold else "\n"
+    o = old.replace("\n", nl)
+    n = new.replace("\n", nl)
+    count = gold.count(o)
+    if count != 1:
+        raise ValueError("anchor matches %d times" % count)
+    if o == n:
+        raise ValueError("mutant identical to base")
+    return gold.replace(o, n, 1)
+
+
+if __name__ == "__main__":
+    import sys
+
+    # LF-only stdout: bash command substitution must not capture CRs
+    sys.stdout.reconfigure(newline="\n")
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "--count":
+        print(len(MUTANTS))
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--name":
+        print(MUTANTS[int(sys.argv[2])][0])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--file":
+        print(MUTANTS[int(sys.argv[2])][1])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--apply":
+        idx = int(sys.argv[2])
+        name, path, old, new = MUTANTS[idx]
+        with open(path, "r", encoding="utf-8", newline="") as f:
+            gold = f.read()
+        out = mutate(gold, old, new)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(out)
+        print("applied %s to %s" % (name.split()[0], path))
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--equiv":
+        tok = sys.argv[2]
+        if tok in EQUIVALENT:
+            print(EQUIVALENT[tok])
+        else:
+            sys.exit(1)
+    else:
+        print("usage: --count | --name N | --file N | --apply N | --equiv TOK")
+        sys.exit(2)
