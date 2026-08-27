@@ -459,3 +459,28 @@ WHEN this lands in RTL is the owner's scheduling decision. The reel is the
 oracle it will be verified against; until then the console shows flat
 shading and the site's clips honestly come from the reference oracle, as
 they always have.
+
+---
+
+## AMENDMENT (2026-08-28) — the continuous body atlas: page V ranges and per-page mode words
+
+The 2026-08-27 format-tag amendment made a direct-colour page lawful. Building
+the first one (Zixxtrixx's 128×256 body atlas, T4 of the presentation-v2 plan)
+needed two more small format facts, both authoring-side, both zero silicon:
+
+* **A part may claim a V RANGE of its page.** `RingPart` gains `v0`/`v1`
+  (default 0..255 — every existing part is bit-identical): the part's rings
+  span page rows v0..v1 instead of the whole axis, so several parts can share
+  ONE continuous atlas (U = circumference, V = nose-to-tail) with the shared
+  seam ring's V agreeing on both sides. This is what deletes the V restart at
+  the head/body junction and buys a longitudinally continuous painted surface.
+* **Pages in one set may differ in shape, so the mode word is per page.** The
+  TMU mode word is per-BIND by contract; a creature's page set records one
+  mode per page (`DirectPageSet::tile_mode`, empty = the shared word as
+  before). Zixxtrixx: the 128×256 atlas (LOG2W=7, LOG2H=8 — rectangular
+  power-of-two, legal since the TMU was built) beside two 64×64 fin pages.
+  Fins are separate pages BY RULE: bilinear + mips bleed across atlas
+  neighbours, so unrelated surface regions must not share one atlas.
+* The upstream req_lod texel-density Measure generalises to the page's own
+  log2 dims (the 64×64 constant was a special case; floored-division identity
+  keeps the old pages bit-identical).
