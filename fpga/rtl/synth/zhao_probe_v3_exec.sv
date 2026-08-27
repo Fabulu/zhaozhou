@@ -269,6 +269,18 @@ module zhao_probe_v3_exec #(
 
   // A DOT op reaching this increment is unsupported even though the ALU could
   // name it, because the products it needs were never computed.
+  //
+  // AND IT MUST NOT WRITE. The ALU KNOWS OP_DOT2/OP_DOT3 -- they are real arms
+  // of its decode, not the `default` refusal -- so it leaves writes_o HIGH and
+  // produces a result computed from the zero I hand it on dot2_i/dot3_i. Left
+  // to itself the block would therefore flag the op as unsupported AND write
+  // the garbage anyway, which is the worst of both: a wrong value in a live
+  // register, under a flag that says it was refused.
+  //
+  // Found 2026-08-28 by the test written to close mutant X11, which had
+  // survived precisely because nothing checked that a refused op leaves the
+  // register file alone. The header of this file already CLAIMED the write was
+  // refused; the claim was wrong until this line existed.
   logic dot_here_c;
   assign dot_here_c = s4_v_r && (s4_op_r == 8'h10 || s4_op_r == 8'h11);
 
@@ -282,16 +294,16 @@ module zhao_probe_v3_exec #(
       rf_wreg_c  = pre_reg_i;
       rf_wdata_c = pre_data_i;
     end else begin
-      rf_we_c    = s4_v_r && alu_writes && !alu_is_end;
+      rf_we_c    = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
       rf_wctx_c  = s4_ctx_r;
       rf_wreg_c  = s4_dst_r;
       rf_wdata_c = alu_result;
     end
   end
 
-  assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end;
+  assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
   assign wb_ctx_o   = s4_ctx_r;
-  assign wb_reg_o   = s4_dst_r;
+  assign wb_reg_o   = s4_dst_r + RW'(1);
   assign wb_data_o  = alu_result;
 
   assign done_valid_o = s4_v_r && alu_is_end;

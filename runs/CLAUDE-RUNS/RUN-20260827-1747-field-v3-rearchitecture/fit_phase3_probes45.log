@@ -1,0 +1,4 @@
+﻿=== probe 4: zhao_probe_curve_svc ===
+zhao_probe_curve_svc               timeout           5206.1s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (70 block(s); 1 measured this run)
+=== probe 5: zhao_probe_patch_acc ===

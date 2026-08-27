@@ -194,10 +194,13 @@ struct Dut {
     t.start_i = 0;
   }
 
+  int writebacks = 0;  // how many writes the block has actually made
+
   // Advance one clock, folding any writeback into the shadow. Returns true if
   // a context finished this clock, and reports which.
   bool step(int* done_ctx) {
     const bool wb = t.wb_valid_o != 0;
+    if (wb) ++writebacks;
     const int wctx = (int)t.wb_ctx_o, wreg = (int)t.wb_reg_o;
     const int32_t wdata = (int32_t)t.wb_data_o;
     const bool dn = t.done_valid_o != 0;
@@ -312,6 +315,104 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
   check(top.unsupported_o == 1, "a DOT op raises unsupported rather than writing a zero", 1,
         (int)top.unsupported_o);
   check(top.desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.desync_o);
+
+  // RAISING THE FLAG IS NOT THE SAME AS NOT WRITING, and the first sweep of
+  // this block proved the difference matters: X11 -- dropping `alu_writes`
+  // from the write enable -- SURVIVED, because nothing checked that a refused
+  // op leaves the register file alone.
+  //
+  // Only two things clear the ALU's writes_o: END, which the separate
+  // !alu_is_end term already blocks, and the unsupported default. So for an
+  // op like DOT, `alu_writes` is the ONLY thing standing between a refusal
+  // and a garbage value written into a live register.
+  check(d.writebacks == 0, "and it writes NOTHING -- a refusal must not touch the file", 0,
+        d.writebacks);
+
+  // THERE ARE TWO REFUSAL PATHS AND THEY ARE NOT THE SAME GATE. A DOT is
+  // refused by THIS block (dot_here_c), because the ALU knows the opcode and
+  // would happily write. An opcode the ALU does not know at all is refused by
+  // the ALU's own `default` arm, which clears writes_o -- and `alu_writes` is
+  // then the only thing stopping the write.
+  //
+  // X11 dropped `alu_writes` and SURVIVED the re-score, because after the
+  // dot_here_c fix every op the test drove was either a DOT (blocked by the
+  // new term) or an op the ALU implements. Covering one path had hidden the
+  // other. An unknown opcode drives the second one.
+  // AND THE STRAY WRITE MUST BE READ BACK, not inferred from the valid port.
+  // The write enable and the observation port are SEPARATELY GATED --
+  // `rf_we_c` drives the file, `wb_valid_o` drives what the test sees -- so a
+  // mutation to one is invisible through the other. X11 survived twice on
+  // exactly that: it dropped `alu_writes` from the write enable only, wrote
+  // into the register file, and left the valid port silent.
+  //
+  // The only way to observe the file is to READ IT with a following
+  // instruction. r4 is seeded with a sentinel; the refused op targets r4; a
+  // MOV then copies r4 out where the writeback stream can be seen. If the
+  // refusal wrote, the sentinel is gone.
+  constexpr int32_t kSentinel = 0x00BEEF00;
+  Dut u(top);
+  u.reset();
+  u.preload(0, 0, 5 << 16);
+  u.preload(0, 4, kSentinel);
+  u.load_uop(0, 0, 0x2A /* not a canonical opcode */, 4, 0, 0, 0, 0);
+  u.load_uop(0, 1, zfield::OP_MOV, 5, 4, 0, 0, 0);
+  u.load_uop(0, 2, zfield::OP_END, 0, 0, 0, 0, 0);
+  u.start(0);
+  int udone = -1, uguard = 0;
+  while (uguard++ < 200) {
+    if (u.step(&udone) && udone == 0) break;
+  }
+  check(top.unsupported_o == 1, "an opcode the ALU does not know is refused too", 1,
+        (int)top.unsupported_o);
+  check(u.shadow[0][5] == kSentinel,
+        "the refused op left the register FILE untouched, read back through a MOV",
+        (uint64_t)(uint32_t)kSentinel, (uint64_t)(uint32_t)u.shadow[0][5]);
+}
+
+// EACH SATURATION LANE, ALONE. The first sweep survived two mutants that
+// widened a flag's source -- the ADD flag also latching on a MUL clamp (X16)
+// and the MUL flag also latching on a rescale clamp (X17). Nothing caught
+// them because the only ledger comparison ran on a random program where
+// several lanes fired together, and a flag that is too eager is invisible
+// beside a flag that should be set anyway.
+//
+// So each lane gets a program that fires THAT lane and no other, and all
+// three flags are checked every time -- including sat_rescale, which no test
+// read at all until X17 pointed at it. OP_ABS is the reachable rescale: the
+// ALU sets sat_rescale_o from abs_sat_fired, and |INT32_MIN| is off the rail.
+void test_each_saturation_lane_alone(Vzhao_probe_v3_exec& top) {
+  printf("-- each saturation lane fires alone\n");
+  struct Case {
+    const char* what;
+    uint8_t op;
+    int32_t a, b;
+    int add, mul, resc;
+  };
+  const Case cases[3] = {
+      {"ADD", zfield::OP_ADD, INT32_MAX, INT32_MAX, 1, 0, 0},
+      {"MUL", zfield::OP_MUL, INT32_MAX, INT32_MAX, 0, 1, 0},
+      {"ABS", zfield::OP_ABS, INT32_MIN, 0, 0, 0, 1},
+  };
+  for (const Case& c : cases) {
+    Dut d(top);
+    d.reset();  // the flags are sticky, so each case needs a clean block
+    d.preload(0, 0, c.a);
+    d.preload(0, 1, c.b);
+    d.load_uop(0, 0, c.op, 4, 0, 1, 0, 0);
+    d.load_uop(0, 1, zfield::OP_END, 0, 0, 0, 0, 0);
+    d.start(0);
+    int done = -1, guard = 0;
+    while (guard++ < 200) {
+      if (d.step(&done) && done == 0) break;
+    }
+    char msg[128];
+    snprintf(msg, sizeof msg, "%s saturates: the ADD flag is %d", c.what, c.add);
+    check((int)top.sat_add_o == c.add, msg, c.add, (int)top.sat_add_o);
+    snprintf(msg, sizeof msg, "%s saturates: the MUL flag is %d", c.what, c.mul);
+    check((int)top.sat_mul_o == c.mul, msg, c.mul, (int)top.sat_mul_o);
+    snprintf(msg, sizeof msg, "%s saturates: the RESCALE flag is %d", c.what, c.resc);
+    check((int)top.sat_rescale_o == c.resc, msg, c.resc, (int)top.sat_rescale_o);
+  }
 }
 
 // The barrel property, measured on both sides of it.
@@ -354,6 +455,19 @@ void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
          issued_1, clocks_1, issued_8, clocks_8);
   check(finished == kCtx, "all eight contexts finished", kCtx, finished);
   check(top.desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.desync_o);
+
+  // THE CYCLE COUNTS ARE PINNED, and that is the point of measuring them.
+  // X05 -- releasing a context for re-issue one stage early -- SURVIVED the
+  // first sweep. It is harmless for VALUES (the write lands before the
+  // re-issued read can reach the file) but it changes OCCUPANCY, and nothing
+  // was looking at occupancy: the only timing check was the loose inequality
+  // below. A pipeline whose depth silently changes is a pipeline whose budget
+  // is no longer the one the deadline was computed from.
+  //
+  // 65 and 126 are MEASURED on this program, not targets. If a change moves
+  // them, that is a fact to look at and re-pin, not a test to relax.
+  check(clocks_1 == 65, "one context: the measured cost, pinned", 65, clocks_1);
+  check(clocks_8 == 126, "eight contexts: the measured cost, pinned", 126, clocks_8);
 
   // Eight contexts do eight times the work in far less than eight times the
   // clocks -- that IS the barrel. Stated as a measured inequality rather than
@@ -424,6 +538,7 @@ int main(int argc, char** argv) {
   } else {
     test_one_point_matches_the_interpreter(top);
     test_dot_is_refused_not_answered(top);
+    test_each_saturation_lane_alone(top);
     test_barrel_occupancy(top);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");

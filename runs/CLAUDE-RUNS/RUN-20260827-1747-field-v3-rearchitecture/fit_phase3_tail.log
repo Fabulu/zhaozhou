@@ -1,2 +1,3 @@
-﻿zhao_probe_curve_svc               failed:quartus_fit.exe  3065.8s   ALM -
+﻿=== probe 4 curve_svc ===
+zhao_probe_curve_svc               failed:quartus_map.exe    40.1s   ALM -
 WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (70 block(s); 1 measured this run)

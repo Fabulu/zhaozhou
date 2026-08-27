@@ -417,3 +417,62 @@ is the one that was measured; the note records what would reverse it.
 **Still not claimed:** probes 4 and 5 place-and-route. The probe 4 fit is at
 3,453 s and still running.
 
+### 2026-08-28 - the executor: a real defect, found through the sweep
+
+**Differential first (478a244).** Both sides run the SAME FPLAN: the test
+lowers a canonical program with `zfield::plan`, then runs `prepare` +
+`execute_point` on one side and loads that plan's uops into the block on the
+other. 440 randomized programs, every output register matching.
+
+**It found a pipeline bug on the first run.** `zhao_field_mul` is TWO clocks
+deep -- issue_i registers the operands, the product appears the clock after.
+The ALU was at S3, one clock early, consuming the PREVIOUS instruction's
+product. Every context still retired and every counter looked healthy.
+`desync_o` caught it -- and that signal only exists because `prod_valid` came
+back from the linter as unused and the choice was to delete it or make it
+evidence.
+
+**Then the sweep: 18 attempted, 9 caught, 8 SURVIVED, 1 discarded.** On a
+block whose differential had just passed 440 real programs against the
+shipped interpreter. That is the coverage audit's thesis in one result.
+
+FOUR WERE REAL GAPS:
+
+* **X11** -- nothing checked that a REFUSED op leaves the register file alone.
+  Closing it exposed a genuine RTL DEFECT: the ALU KNOWS OP_DOT2/OP_DOT3 --
+  they are real arms of its decode, not the `default` refusal -- so it leaves
+  writes_o HIGH and computes a result from the zero fed to dot2_i. The block
+  was flagging the op unsupported AND writing the garbage anyway. The file's
+  own header already CLAIMED the write was refused; the claim was false until
+  the fix. A comment is not an enforcement.
+* **X16, X17** -- the saturation flags. The only ledger comparison ran on a
+  random program where several lanes fired at once, and a flag that is too
+  eager is invisible beside one that should be set anyway. Each lane now has
+  a program that fires it ALONE, and sat_rescale is checked at all for the
+  first time (OP_ABS reaches it: |INT32_MIN| is off the rail).
+* **X05** -- releasing a context one stage early. Harmless for VALUES (the
+  write lands before the re-issued read can reach the file) but it changes
+  OCCUPANCY, and nothing was looking. The barrel test now PINS the measured
+  counts, 65 clocks for one context and 126 for eight.
+
+FIVE WERE EQUIVALENCES, each declared with a proof AND the condition that
+reopens it: X08 (post-END pc is dead state, start_i resets it), X10
+(degenerate while PLAN == REGS -- X20 added with a literal stride so the
+indexing is scored today), X12 (alu_is_end implies !alu_writes, proven from
+the ALU's own decode), X18 (issue order is not program order), X19
+(multiplication is commutative, and both operands are sign-extended by the
+same expression so the products are bit-identical).
+
+24 directed checks, up from 12.
+
+**A discipline note worth keeping:** the fix moved the write-enable line, so
+the X11 and X12 anchors stopped matching -- and the preflight refused the run
+rather than scoring against a stale anchor. Also: do NOT `git add` the RTL
+while a sweep is running. The sweep mutates the file in place, and staging
+mid-run would commit a mutant.
+
+**Probe 4's fit TIMED OUT at 5,206 s** with no measurement -- the curve
+service is far harder to place than the other probes (678-1,590 s). Requeued
+at 14,000 s, waiting for probe 5's fit to finish so two never share the
+machine. No Fmax is claimed for either probe.
+
