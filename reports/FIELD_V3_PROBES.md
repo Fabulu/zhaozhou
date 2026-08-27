@@ -58,6 +58,24 @@ multiplier bank supplies the squares, per the brief).
 | mutation sweep | measured: 13 mutants → 12 caught + 1 proven equivalent, 0 survivors (`sweep_field_dist_svc.sh`); D06 (single-bank) proves the II gate bites |
 | fit (Fmax, setup AND hold, ALM/DSP/M10K) | **measured** — row `zhao_probe_dist_svc` (sourceCommit cb48f48; the first attempt died in quartus_map because Quartus 17 rejects inline `genvar` in a generate-for — fixed): **1,745 ALM, 2,199 regs, 0 M10K, 0 DSP, restricted Fmax 90.6 MHz**; at 100 MHz setup −1.038 ns (TNS −546), **hold +0.268 ns (positive)** |
 
+**Provenance footnote, added on review.** Both this row and
+`zhao_probe_banked_rf@v3hot` carry `rtlCleanAtHead: false`, and this row's
+`sourceCommit` is `cb48f48` -- the commit BEFORE the `genvar` fix the line
+above describes. Those two facts together are the whole story: the fit ran on
+the FIXED source while that fix was still uncommitted, so the runner stamped
+the then-HEAD and flagged the tree dirty.
+
+Checked rather than assumed: `git diff cb48f48 HEAD` on the probe is 19 lines
+and all of it is the genvar hoist -- `for (genvar b = ...)` becoming a
+`genvar gb, gl;` declared ahead, with the loop variables renamed in the port
+connections. Same generate structure, same connections, no logic. **The
+measurement therefore describes the logic HEAD carries**, and the number
+stands.
+
+It is written down because a row whose `sourceCommit` predates the code it
+measured is exactly the shape of a stale-measurement trap, and the next
+reader should not have to re-derive that it is benign here.
+
 The measured 1,745 ALM ≈ 218/root across eight roots — inside the brief's
 "~2,000 leaf ALMs, plausible rather than catastrophic". 90.6 MHz standalone
 sits above the 80 MHz credibility floor and below the 100 MHz design point;
