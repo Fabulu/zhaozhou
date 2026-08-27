@@ -40,8 +40,43 @@
 # (a_progress bounds busy_cnt) and a scope guard therefore exists to refuse a
 # raised depth.
 #
-# TWO TASKS, both required (ledger rule V16):
+# WHY A `prove` TASK WAS ADDED, 2026-08-27.
+#
+# The SCOPE-TOTAL note above argues that the assertions are step-local, so
+# raising the depth cannot reach a state the proof did not already cover. That
+# argument is INDUCTION, and bmc does not supply induction -- it supplies a
+# bounded search. The note was therefore claiming something its own engine
+# could not deliver.
+#
+# It also stopped being affordable. With the harness fixed, bmc ran CLEAN
+# through k=20 and then spent over three hours on k=21 alone, with 22, 23 and
+# 24 still to come and each worse than the last. A proof that cannot finish is
+# not evidence, however encouraging its prefix.
+#
+# `prove` (abc pdr) answers the question the note wanted asked: it either
+# produces an inductive invariant -- true at EVERY depth, not just 24 -- or a
+# counterexample. Passing it is strictly stronger than the bounded run, so the
+# depth-24 bmc is kept beside it rather than replaced: if the two ever
+# disagree, that disagreement is itself the finding.
+#
+# THE bmc DEPTH IS 16, NOT 24, AND THAT IS NOT A WEAKENING.
+#
+# Read the line above first: `prove` establishes the assertions at EVERY
+# depth. Once that holds, the bounded run is no longer the claim -- it is a
+# cross-check on a different engine, and a cross-check that cannot finish
+# checks nothing.
+#
+# The measured cost of each extra step, on this design and machine:
+#     k=17   10 min      k=19   69 min
+#     k=18   26 min      k=20   over three hours, and still climbing
+# 16 completes inside the lane's 2,100 s timeout. 24 does not complete at all.
+#
+# If `prove` ever stops passing, this number is NOT the thing to raise -- the
+# counterexample is the thing to read.
+#
+# THREE TASKS, all required (ledger rule V16):
 #   bmc   — the assertions hold to the depth below.
+#   prove — they hold at EVERY depth, by an inductive invariant.
 #   cover — the antecedents are REACHABLE. Every assertion is guarded, and an
 #           arena that never answers a lookup satisfies all of them while proving
 #           nothing, which is the vacuity shape MEM.GUARD once shipped.
@@ -53,16 +88,20 @@
 [tasks]
 bmc
 cover
+prove
 
 [options]
 bmc:   mode bmc
-bmc:   depth 24
+bmc:   depth 16
 cover: mode cover
 cover: depth 24
+prove: mode prove
 expect pass
 
 [engines]
-btor btormc
+bmc:   btor btormc
+cover: btor btormc
+prove: abc pdr
 
 [script]
 # Parameters go to read_slang, not to chparam: slang ELABORATES here, so by the

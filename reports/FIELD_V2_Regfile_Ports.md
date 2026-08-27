@@ -343,3 +343,70 @@ domain and pay for the crossing, which costs nothing in the engine and
 something at its edges. Which of the two is right depends on what else shares
 the clock, and that is Fabian's call to make, so it is recorded here rather
 than taken.
+
+---
+
+# THE SECOND STAGE, MEASURED. AND THE BOTTLENECK MOVED.
+
+`quartus_fit` + `quartus_sta`, 2,655.5 s, `rtlCleanAtHead: true`.
+
+| | before the stage | **after** | device |
+| --- | --- | --- | --- |
+| ALMs | 8,104 | **7,860** | 41,910 |
+| registers | 10,057 | 10,455 | ~83,820 |
+| M10K | 33 | 33 | 553 |
+| DSP | 27 | **15** | 112 |
+| **Fmax** | 52.13 MHz | **58.85 MHz** | |
+
+**+12.9%.** ALMs went DOWN and DSP usage nearly halved, because a registered
+product lets the fitter use the DSP's own output register instead of building
+the pipeline out of fabric.
+
+## I predicted ~90 MHz. It is 58.85. That matters more than the gain.
+
+The estimate assumed the remaining half of the old path — rescale, two adder
+chains, write-back mux — would be what limits. It is not. **The critical path
+left the register file entirely.**
+
+The new worst path, slack -6.992 ns:
+
+    zhao_field_ring|e1[17]  ->  zhao_field_mul|b_q[11]
+
+and its breakdown:
+
+| stage | ns |
+| --- | --- |
+| ring's `Add2` carry chain | 1.98 |
+| reciprocal `Add0` carry chain | 2.19 |
+| reciprocal `Equal1/3/4` compares | 2.77 |
+| **leading-zero detect** `lz_t` | 1.11 |
+| **barrel shift** `ShiftLeft0` | 2.11 |
+| **reciprocal ROM** `u_rom|Ram0` | 2.07 |
+| routing and setup | ~4.2 |
+| **total** | **16.41** |
+
+One clock holds the reciprocal's whole NORMALISE: subtract, count leading
+zeros, barrel-shift to normalise, then look up the ROM.
+
+## The finding that is worth more than the 13%
+
+**v1 sits at 58.99 MHz. v2 now sits at 58.85 MHz.** That is not a coincidence
+and it is not v2 converging on v1 by accident: `zhao_field_rcp` is a v1 module
+that v2 uses unchanged, and it is now the limit for BOTH.
+
+The register file was masking it. With the register file fixed and the multiply
+pipelined, v2 lands exactly where v1 always was, on the same path, in a module
+neither version has ever had to pipeline because nothing else was ever slower.
+
+So "Field runs at 59 MHz" was never a v2 property. It is a property of the
+reciprocal's normalise stage, and it has been the ceiling the whole time.
+
+## What that makes the next move
+
+Pipelining `zhao_field_rcp`'s normalise — the leading-zero count and the barrel
+shift are the obvious cut, with the ROM lookup after it. It is a v1 module with
+its own differential (`test_field_rcp_directed`) and its own place in the sweep,
+so it is a properly scoped increment rather than a rewrite.
+
+It also raises v1's ceiling at the same time, which nothing else in this report
+does.

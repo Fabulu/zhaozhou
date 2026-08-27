@@ -479,9 +479,9 @@ module zhao_vertex_arena #(
       // proof's remaining failure is not here, and an assertion that passes is
       // not evidence of the thing that does not.
       //
-      // STILL FAILING, AND NOT CLAIMED OTHERWISE: bmc does not pass. The
-      // packed-vector change removed one real modelling gap and did not close
-      // the proof. The CI lane stays unregistered.
+      // (That was true when written. 2026-08-27: the proof PASSES -- see the
+      // resolution below -- and the CI lane is registered as
+      // formal_geom_wcache_arena_bounds.)
       //
       // 2026-08-26, RE-RUN WITH A SOLVER THAT NAMES THE PROPERTY. The shipped
       // engine is `btor btormc`, which reports only FAIL and leaves the reader
@@ -619,6 +619,29 @@ module zhao_vertex_arena #(
       // lookups. That is a harness signature, not a design signature, and it
       // was visible on day one. A counterexample that exercises nothing is
       // evidence about the question, not about the machine.
+      //
+      // 2026-08-27, PROVED -- AND BY A STRONGER QUESTION THAN THE ONE THAT
+      // WOULD NOT FINISH.
+      //
+      // With the key bound, bmc ran CLEAN to k=20 and then spent over three
+      // hours on k=21, with three more steps to go and each worse. It was not
+      // failing; it could not finish, which is a different problem and not a
+      // better one.
+      //
+      // The SCOPE-TOTAL note in the .sby had been arguing all along that these
+      // assertions are step-local, so depth cannot matter. That argument is
+      // INDUCTION, and bmc does not do induction -- it does bounded search. So
+      // the file was asking an engine for something it structurally could not
+      // give, and paying in hours.
+      //
+      // `prove` (abc pdr) returns PASS in FOUR SECONDS: an inductive
+      // invariant, true at every depth rather than to 24. `cover` passes with
+      // six traces, so none of this is vacuous.
+      //
+      // The lesson is not about this arena. It is that the SHAPE of the
+      // question decides the cost, twice over in one file: an unbound key made
+      // three days of counterexamples meaningless, and a bounded engine made
+      // the answer unaffordable. Neither was a fact about the hardware.
       //
       // The cheapest check remains the one this file already names: ASSERT
       // WHAT YOU ASSUME. It located this in one run once it was finally asked

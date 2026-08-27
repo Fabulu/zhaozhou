@@ -2769,6 +2769,30 @@ verilate(test_geom_wcache_directed
 add_test(NAME geom_wcache_directed COMMAND test_geom_wcache_directed)
 set_tests_properties(geom_wcache_directed PROPERTIES LABELS "fast;nightly")
 
+# formal: the arena bounds law -- a lookup must never wrap into another vertex.
+# REGISTERED 2026-08-27, and it was deliberately unregistered before that: the
+# proof failed for three days and the notes in design/formal_runs.yml said so
+# rather than quietly shipping a lane nobody ran. It now passes by `prove`
+# (abc pdr), an INDUCTIVE result that holds at every depth, plus `cover` for
+# non-vacuity. See tests/formal/geom_wcache_arena_bounds.sby.
+if(ZHAO_SBY_BIN)
+  set(PROP "geom_wcache_arena_bounds")
+  set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
+  set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  configure_file(formal/mem_formal_lane.cmake.in
+                 formal/geom_wcache_arena_bounds_lane.cmake @ONLY)
+  set(zhao_formal_script
+      "${CMAKE_CURRENT_BINARY_DIR}/formal/geom_wcache_arena_bounds_lane.cmake")
+  string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
+  add_test(NAME formal_geom_wcache_arena_bounds
+           COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  set_tests_properties(formal_geom_wcache_arena_bounds PROPERTIES
+    LABELS "formal;nightly"
+    RUN_SERIAL TRUE
+    TIMEOUT 2100
+    SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
+endif()
+
 add_executable(test_geom_binner_directed geometry/geom_binner_directed.cpp)
 target_link_libraries(test_geom_binner_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_geom_binner_directed PRIVATE

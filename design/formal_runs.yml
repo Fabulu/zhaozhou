@@ -957,7 +957,25 @@ runs:
       have one.
 
   - property: tests/formal/geom_wcache_arena_bounds.sby
-    status: pending
+    status: passing
+    # 2026-08-27: PASSING, AND BY A STRONGER TASK THAN THE ONE IT KEPT
+    # FAILING. `prove` (abc pdr) returns PASS in FOUR SECONDS, which is an
+    # inductive invariant -- the assertions hold at every depth, not merely to
+    # 24. `cover` passes with six traces, so no assertion is vacuous.
+    #
+    # THE COST OF ASKING THE BOUNDED QUESTION INSTEAD. With the harness fixed,
+    # bmc ran clean to k=20 and then spent OVER THREE HOURS on k=21, with 22,
+    # 23 and 24 still ahead and each worse. It was stopped, not because it was
+    # failing, but because it could not finish -- and the whole time the answer
+    # was four seconds away under a different engine.
+    #
+    # The file's own SCOPE-TOTAL note had been arguing that the assertions are
+    # step-local so depth cannot matter. That argument is INDUCTION, and bmc
+    # does not do induction. The note was claiming something its engine could
+    # not deliver; `prove` delivers it.
+    #
+    # bmc is KEPT beside prove rather than replaced. If the two ever disagree,
+    # the disagreement is the finding.
     # PENDING BECAUSE bmc FAILS, and that is recorded rather than hidden.
     # cover PASSES (every antecedent reachable: hit, miss, refuse, watched hit,
     # overflow, regeneration). bmc is refuted at k = 4 on property 0,
