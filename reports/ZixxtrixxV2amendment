@@ -1,0 +1,632 @@
+We forgot some things in the last brief, so here is bro rearchitecting the rearchitecture of Zixxtrixx:
+
+Fuck we need to offer a corection. You forgot LOD is done by hardware. We only need one model. Read the repo and double check that, then write a correction. Also, for the salto in particular but for other things as well: If it attacks flying enemies, it will jump either up, do more salto flips, and shoot forward instead of down. How it saltos is dependant on situation. Right now we have one animation. We need to prepare for this to be dynamic and programmable for different situations.
+
+You’re right. I conflated one authored creature model with the multiple representations automatically derived from it. That was a real architectural mistake in reports/ZixxtrixxV2.
+
+The repository is explicit:
+
+Artists author one creature form, never separate LOD faces or models.
+compile_creature automatically generates the full mesh, derives the micro rung from the same source, and measures the micro representation’s geometric error.
+The hardware GEOM.LOD block chooses among mesh → micro → splat → glint from projected screen error, with hysteresis and a minimum hold.
+
+So hardware owns the runtime LOD decision; the asset compiler owns automatic derivation; the modeler owns exactly one canonical Zixxtrixx model.
+
+The lines giving separate targets for “LOD0” and “micro LOD,” the suggestion that “hero LOD gets the direct material,” and the implementation step “regenerate micro LOD normals” all need to be superseded.
+
+Correction to append to reports/ZixxtrixxV2
+CORRECTION — ONE AUTHORED MODEL; COMPILER-DERIVED REPRESENTATIONS; HARDWARE LOD
+
+The preceding report describes the model’s LOD ownership incorrectly.
+
+There must be exactly one canonical authored Zixxtrixx model. The modelling agent must not create, maintain or art-direct separate LOD0 and micro models.
+
+The correct repository architecture is:
+
+one authored creature model
+         ↓
+asset compiler expands it into meshlets
+         ↓
+asset compiler automatically derives the micro representation
+         ↓
+asset compiler measures and records representation error
+         ↓
+hardware GEOM.LOD selects
+mesh → micro → splat → glint
+from projected screen error, with hysteresis and minimum hold
+
+The artist authors the form once. The compiler derives lower representations. The hardware decides which representation is visible.
+
+What remains correct
+
+Zixxtrixx should still be rebuilt as one substantially more efficient production model:
+
+one unified body-and-head shell rather than an overlapping blue head tube;
+a real cranium behind the nose;
+dedicated head-attitude control;
+geometry concentrated around the skull, neck hook, S reversal and fin roots;
+fewer radial segments on calm or narrow portions;
+proper fin topology;
+smooth vertex-normal lighting.
+
+A working target of roughly 1,400–1,800 triangles may still be used, but it applies to the one canonical authored/full representation only. It is not an instruction to produce a separate 350–500-triangle micro model.
+
+The generated micro triangle count is a compiler result, not an art target. Its acceptance criterion is measured screen-space error and a clean hardware transition—not whether an artist manually hit a particular polygon number.
+
+Normals and automatic collapse
+
+Smooth normals must remain part of this one-model pipeline.
+
+Generate or preserve the canonical surface normals from the authored model. When the compiler derives the micro representation, it must also automatically produce valid normals for that derived surface:
+
+preferably recompute normals from the generated micro topology;
+preserve the intended smoothing groups;
+keep body, neck and skull smooth;
+keep fin planes and rims deliberately hard;
+prevent lighting seams at duplicated meshlet boundaries.
+
+There is no separate “micro normal authoring” task.
+
+If the proposed generic MeshPart is added for proper fins, it must not reintroduce artist-authored LOD. The compiler must either:
+
+automatically collapse that topology for the micro rung; or
+retain the already-cheap fin mesh unchanged in the micro representation when its measured cost/error justifies that.
+
+In neither case does the modelling agent make another fin model.
+
+Texture correction
+
+The earlier phrase:
+
+“Keep CLUT8 nearest as the cheap path for ordinary or distant creatures. Zixxtrixx’s hero LOD gets the direct material.”
+
+is wrong for Zixxtrixx’s LOD architecture.
+
+Zixxtrixx should have one canonical material/atlas source. If RGB565, bilinear filtering and mipmaps are adopted, that same material identity follows the automatically derived mesh and micro representations. Texture mip levels are generated from the one source atlas and selected by the existing primary TMU machinery; they are not separately painted near/far textures. The TMU already owns direct colour, filtering and mip selection.
+
+CLUT8 may remain an asset-format option for other creature types or content budgets. It must not be described as a manually substituted “distant Zixxtrixx material.”
+
+Therefore the production asset is:
+
+one Zixxtrixx model
+one UV layout
+one canonical crayon atlas
+one automatically generated mip chain
+one set of authored clips
+
+The machine derives and selects everything below that.
+
+Corrected implementation order
+Run B — one production Zixxtrixx model
+
+Build the single canonical model:
+
+unified skull/body shell;
+cranium behind the nose;
+dedicated head-attitude bone;
+fewer, intelligently distributed polygons;
+proper fins;
+small mouth;
+overlap probes;
+source-model target around 1,400–1,800 triangles, subject to visual proof.
+
+Do not produce a second model.
+
+Run C — one production texture source
+
+Build one continuous crayon atlas with:
+
+broad pink crown;
+continuous dorsal band;
+correct blue throat and two greens;
+richer multi-scale crayon structure;
+generated RGB565 mip chain;
+no manually painted distance variant.
+Run E — automatic LOD verification and publication
+
+Replace “regenerate micro LOD normals” with:
+
+compile the canonical model once;
+inspect the automatically generated mesh and micro representations;
+verify generated normals, UVs and material references;
+measure the compiler-recorded micro error;
+exercise the hardware mesh → micro → splat → glint transitions;
+verify hysteresis and minimum hold;
+render the same creature asset across a distance sweep;
+confirm that transitions do not pop, shimmer, lose the pink crown or damage the silhouette.
+
+LOD silhouette error remains a valuable probe, but it tests the compiler-generated and hardware-selected results. It is not an invitation for the artist to make another model.
+
+Final corrected ruling
+
+Do not build Zixxtrixx several times. Build him correctly once.
+
+Smooth normals should allow the one canonical model to use far fewer polygons while looking rounder. The compiler must derive its reduced representation. The hardware must choose the representation. Mips must derive from the same texture source.
+
+One model. One material source. One rig. One animation bank.
+
+Automatic collapse below it; hardware selection at runtime.
+
+That preserves the useful part of the previous architecture—lower polygon count, smooth normals, better texture, richer animation—without accidentally assigning the modelling agent work the console was explicitly designed to do automatically.
+
+Correction — one authored model, hardware LOD, programmable Zixxtrixx choreography
+
+You are right. My previous LOD section was architecturally wrong.
+
+I described a separately targeted “LOD0 model” and “micro LOD model” as though the creature agent should author and optimize both. Delete that entire idea.
+
+1. The actual LOD architecture
+
+Zixxtrixx needs one production model.
+
+The repository divides the work correctly:
+
+The modeller authors one source creature.
+compile_creature expands that model into the full mesh, automatically derives the micro representation by retaining alternating rings and halving circumference segments, and measures the resulting geometric error.
+At runtime, hardware chooses between mesh, micro, splat and glint from projected size, the camera’s error target, hysteresis and minimum hold time.
+
+This is not merely an architectural intention. The LOD-selection portion of GEOM.MESHFETCH already exists as zhao_geom_lod, is differential-tested against the reference implementation, and takes five clocks per instance evaluation.
+
+So the correct instruction is:
+
+Author exactly one excellent Zixxtrixx model. Do not author a second low-detail model and do not art-direct individual LOD rungs.
+
+The compiler derives the lower representation and measures its error. Hardware selects the representation per camera at runtime.
+
+There is one nuance worth preserving: hardware selects the rung; the asset compiler derives the micro geometry. Hardware does not invent a decimated mesh each frame. But from the modelling agent’s point of view, there is only one model.
+
+The same principle should govern the texture:
+
+one highest-quality source atlas;
+packer-generated mip chain;
+TMU-selected mip at runtime;
+no separately hand-painted “far texture.”
+2. What “reduce the polygons” means after this correction
+
+The one authored model should still be retopologized intelligently:
+
+remove the duplicate head/throat shell;
+make the main shell form the skull;
+use fewer circumference segments along ordinary trunk sections;
+spend vertices around the eyes, neck hook, tight S reversal and fin roots;
+replace tubular fins with proper planar blade topology;
+add smooth normals so roundness comes from shading rather than thirty flat-shaded sides.
+
+But there is no second model target.
+
+A reasonable result might be one production model around 1,500–2,000 triangles, subject to the visual comparison. From that one model, the compiler derives the micro rung. If smooth normals are added, the compiler must also generate or recompute correct normals for the derived micro geometry. No artist touches it manually.
+
+3. The current salto is a showcase clip, not a production attack system
+
+The larger correction is the attack architecture.
+
+Right now build_attack() is one fixed 220-key monolith. It bakes all of this into one clip:
+
+one compression curve;
+one coiling curve;
+one fixed number of rotations;
+one 12-metre lift curve;
+one fixed forward curve;
+one fixed 30-degree downward spear direction;
+one fixed ground-impact key;
+one five-second buried hold;
+one fixed extraction and recovery.
+
+That is an excellent Ground Dive showcase preset. It is not the general Zixxtrixx attack.
+
+A real combat attack cannot assume:
+
+the target is on the ground;
+the target is below the apex;
+exactly three flips are appropriate;
+the spear must point down and forward;
+contact happens at clip key 56;
+the result must remain embedded in terrain.
+
+A flying enemy might require:
+
+a higher launch;
+more rotations because the flight lasts longer;
+a forward shot;
+an upward shot;
+a diagonal intercept;
+no ground burial at all;
+a mid-air impact recoil;
+a miss-and-recover branch.
+
+The attack therefore needs to become programmable choreography.
+
+4. The lasting architecture
+                   SIMULATION / GAMEPLAY TRUTH
+
+target + target velocity + terrain + Zixxtrixx position
+                              │
+                              ▼
+                        AttackPlanner
+                              │
+                              ▼
+                          AttackPlan
+          trajectory, timings, turns, spear axis, impact mode
+                              │
+                 ┌────────────┴────────────┐
+                 ▼                         ▼
+          ChoreographyPlayer        Collision / events
+          shared pose phases        actual hit decision
+                 │
+                 ▼
+       GEOM.POSE shared palette cache
+                 │
+                 ▼
+        one per-instance root trajectory
+        + one full 3D root orientation
+                 │
+                 ▼
+            skin / render / hardware LOD
+
+The essential separation is:
+
+Shared local deformation
+
+The bones describe what the animal is doing with its body:
+
+compressing the S;
+coiling;
+holding the coil;
+unrolling into a spear;
+flexing on impact;
+reforming the S.
+
+These can remain shared compressed clip phases, decoded and cached by GEOM.POSE. The existing pose contract explicitly says clip selection and clip clocks are simulation truth, while the hardware cache serves shared (type, clip, frame) poses.
+
+Per-instance root choreography
+
+The attack plan describes where the whole creature goes and which way it points:
+
+root position;
+root velocity;
+full 3D orientation;
+total spin turns;
+attack vector;
+target intercept point.
+
+This must be per instance and must live outside the shared skeletal pose.
+
+That preserves the pose-cache economy. Two Zixxtrixxes can share the same “coiled body, frame 7” palette while one flies upward toward a bird and another dives down into the terrain.
+
+5. Add a full 3D choreography-root transform
+
+The current reference CreatureInstance has:
+
+x/y/z;
+a single yaw facing;
+ground tilt;
+bulk;
+animation;
+LOD.
+
+It has no general 3D root orientation.
+
+That is why the current salto puts the entire somersault rotation on bone 0 inside the clip. It works for one authored path but makes target-dependent flight awkward.
+
+Add a generic per-instance choreography transform:
+
+ChoreoRoot
+    translation: vec3fx
+    orientation: quat16 or equivalent full 3D rotation
+
+Conceptually, the creature’s world transform becomes:
+
+world translation
+× ordinary facing
+× choreography-root orientation
+× ground tilt when grounded
+× bulk scale
+× shared skeletal pose
+
+While airborne, ground tilt should be disabled or frozen at takeoff.
+
+This is not a Zixxtrixx-only hack. The same root lane will support:
+
+flying creatures;
+creatures thrown by explosions;
+knockback tumbles;
+aerial attacks;
+creatures falling from islands;
+giant grab-and-throw sequences.
+
+And it still obeys the repository’s central economy: the CPU is not uploading thirty-two individual bone matrices. It supplies one root transform for one creature, while GEOM.POSE continues sharing the local palette.
+
+6. Split the salto into seam-matched pose phases
+
+Do not create one pre-baked clip for every possible target height, direction and flip count.
+
+Instead, create reusable local-body phases:
+
+attack_compress
+attack_release_to_coil
+attack_coil_hold
+attack_unroll_to_spear
+attack_spear_flex
+attack_ground_stick
+attack_air_hit
+attack_recover_to_s
+
+The repository deliberately uses hard-cut clip transitions and a rich 64-slot vocabulary rather than an animation blending unit. Therefore these phase clips must have bit-identical seam poses:
+
+end of compression equals start of release;
+end of release equals coil hold;
+coil hold loops exactly;
+unroll begins at the exact coil pose;
+spear branches begin at the exact straight pose;
+recovery ends at the canonical S.
+
+The asset compiler should enforce seam hashes rather than trusting the eye.
+
+Move the actual flips out of the clip
+
+The coiled body can remain in a shared coil pose.
+
+The per-instance choreography root rotates that coil:
+
+spin_angle(t) = planned_turns × eased_flight_phase
+
+That means:
+
+one flip;
+three flips;
+five flips;
+faster or slower flips;
+a different spin plane;
+
+all use the same local coil pose.
+
+The current attack spends clip frames rotating bone 0 through a fixed number of turns. That is precisely the part that needs to move into the programmable root layer.
+
+During unrolling, smoothly blend the root orientation from its current spin orientation toward the planned spear orientation. At spear commitment, the body’s long axis and the planned attack vector must agree.
+
+7. The AttackPlan
+
+A deterministic fixed-point plan should contain approximately:
+
+target position and velocity
+predicted intercept position
+launch duration
+compression tier
+compression duration
+hold duration
+release duration
+flight duration
+spin axis
+total spin turns
+unroll duration
+spear direction
+spear acceleration / duration
+impact mode
+recovery mode
+
+It should be created by the simulation when the attack begins.
+
+The planner does not need an expensive continuously homing solution. A clean game rule would be:
+
+Predict or choose the target intercept.
+Permit limited aim correction during the coiled flight.
+Lock the spear vector when unrolling begins.
+From spear commitment onward, Zixxtrixx is a projectile, not a guided missile.
+
+That gives the move commitment, readability and counterplay.
+
+8. The spring launch needs more time
+
+The current pass technically added anticipation, but it is still brief: approximately six keys of compression and three keys of hold before release.
+
+For the production phase, give the compression enough screen time to explain the height:
+
+Settle
+
+About 3–5 keys. Weight gathers; fins begin closing.
+
+Compression
+
+About 12–18 keys, or 0.4–0.6 seconds at the 30 Hz authored rate.
+
+Do not merely deepen one lobe. Author a genuinely compressed-S centreline:
+
+lower the upper arch;
+pull the rear forward;
+draw the head inward;
+compress both lobes;
+shorten the animal visibly;
+bring the tail beneath the body;
+keep the grounded contact planted.
+Hold
+
+About 4–6 keys.
+
+The pose should become almost still. This is where the audience recognizes the loaded spring.
+
+Release
+
+About 6–10 keys.
+
+Extension should travel from tail/rear through the middle into the head. The root should not simply begin moving upward because a lift curve says so; the body should visibly push it upward.
+
+The stronger/higher the planned attack, the planner may choose a stronger compression tier or slightly longer hold. But use a small number of authored compression tiers rather than generating arbitrary unique bone poses per creature.
+
+9. Situation-dependent attack examples
+Ground target: current golden preset
+
+Preserve the current magnificent middle of the attack as the first plan:
+
+full spring compression;
+approximately three flips;
+very high apex;
+downward-forward spear vector;
+terrain contact;
+deep burial;
+five-second stick;
+elastic extraction and travelling recovery.
+
+The present published attack becomes the golden visual oracle for this plan.
+
+High flying target
+deeper or longer compression;
+higher and more forward launch;
+longer flight;
+more root-transform flips;
+unroll toward a predicted aerial intercept;
+spear vector may be upward or forward;
+no ground stick;
+air-hit recoil followed by mid-air recovery or fall.
+Low flying or distant target
+smaller apex;
+fewer flips;
+stronger horizontal displacement;
+forward lance trajectory;
+short air-hit recoil.
+Target below or across an island gap
+launch to gain clearance;
+flips chosen from available flight time;
+diagonal or downward spear vector;
+ground stick only if the actual endpoint is terrain.
+Missed target
+no fictional impact event;
+continue through the committed spear path;
+flex out of spear form;
+transition into recovery or falling.
+10. Impact can no longer be a fixed animation key
+
+The current clip emits its attack event at a fixed impact frame. That only works because the current trajectory is fixed.
+
+With dynamic trajectories:
+
+launch can remain a phase event;
+spear_commit can remain a phase event;
+audio and visual whoosh cues can remain authored;
+actual impact must come from simulation collision or terrain contact.
+
+The simulation already owns gameplay truth and consumes animation tags; GEOM.POSE explicitly does not process events or choose clips.
+
+On actual contact, the choreography player branches:
+
+terrain contact  -> ground_stick
+creature contact -> air_hit
+no contact       -> miss_recover
+
+This prevents an airborne Zixxtrixx from playing a ground-impact event in empty sky merely because clip key 56 arrived.
+
+11. Recovery also becomes programmable
+
+The current fixed recovery tries to:
+
+extract;
+finish another turn;
+restore the S;
+return the root;
+close the loop;
+
+within a very short tail section of the monolithic clip.
+
+Replace it with explicit branches.
+
+Ground recovery
+Remain embedded.
+Small biological bow and impact wave.
+Pull out along the spear axis.
+Confirm the tip is clear.
+Reform the S head-to-tail.
+Settle onto the terrain.
+Air recovery
+Recoil from the hit.
+Spear shape loosens.
+Head and neck regain curvature first.
+The S travels down the body.
+Transition into controlled fall, flight or landing.
+Miss recovery
+Continue past the target.
+Bend out of the spear while retaining momentum.
+Transition into fall or turn-around.
+
+The same recover_to_s deformation can be shared, but its root trajectory and endpoint are plan-dependent.
+
+12. Corrected implementation order
+Phase A — correct the documentation
+
+State explicitly:
+
+One artist-authored creature model.
+Compiler-generated micro representation and measured error.
+Runtime hardware LOD selection.
+
+Remove all separate artist-authored LOD budgets from my prior report.
+
+Phase B — preserve the current attack as an oracle
+
+Keep:
+
+the published Ground Dive frames;
+current lift and impact evidence;
+current trajectory measurements;
+current salto contact sheet;
+current pose CRCs.
+
+Rename the conceptual result ground_dive_golden. Do not destroy it while building the general system.
+
+Phase C — add root choreography
+
+In the reference path first:
+
+full 3D per-instance root orientation;
+per-instance trajectory translation;
+deterministic fixed-point evaluation;
+ground tilt disabled after takeoff;
+shared GEOM.POSE palette unchanged.
+
+Prove that two instances using the same local clip/frame but different trajectories receive the same cached pose and different world transforms.
+
+Phase D — split the clip
+
+Extract:
+
+compression;
+release;
+coil;
+unroll;
+straight spear;
+ground impact;
+air impact;
+recovery.
+
+Add exact seam tests.
+
+Phase E — build the planner
+
+Start with three committed plans:
+
+current Ground Dive;
+high aerial intercept with additional flips;
+long forward aerial attack with fewer flips.
+
+Then add miss handling.
+
+Phase F — visual and gameplay gates
+
+Test:
+
+final spear axis versus planned trajectory;
+correct number of root turns;
+no phase-boundary pop;
+no fixed phantom impact;
+terrain and air branches;
+target movement before commitment;
+recovery from every branch;
+pose-cache sharing;
+hardware LOD unchanged across all plans.
+Replacement ruling for the agent
+
+CORRECTION: Zixxtrixx has one artist-authored model. Do not build or art-direct separate LOD models. compile_creature derives the micro representation and its measured error from that one source; GEOM.LOD/GEOM.MESHFETCH chooses mesh, micro, splat or glint per camera in hardware.
+
+Also stop treating the existing 220-key salto as the production attack system. Preserve it as the golden Ground Dive preset, but build a programmable choreography layer. Shared clips own local body shape—compress, release, coil, unroll, spear, recoil, recover. A per-instance full-3D root transform owns trajectory, spin count, spin plane and attack direction. The simulation creates an AttackPlan from the target and branches on actual collision.
+
+A ground target may receive the current three-flip downward-forward burial. A high flying target may receive a higher jump, more flips and an upward or forward spear. A low or distant target may receive fewer flips and a long horizontal shot. The body phases remain shared and cacheable; only the root choreography varies.
+
+Give the spring compression real time: settle, 0.4–0.6 seconds of whole-S compression, a readable hold, then a tail-to-head release that visibly causes the launch. Move whole-body flips out of bone 0 and into the programmable root orientation. Never again bind actual impact to one fixed clip key.
