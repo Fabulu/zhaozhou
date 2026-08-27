@@ -1444,3 +1444,74 @@ whose premise is untested is a hole with a note attached.
   BASELINE LINT guard caught that and refused to run. Working exactly as built.
 * M125's mutation left `lm_rsp_nres` unused, so it failed the **linter** rather
   than the tests. A mutant must fail the tests; reshaped to keep the signal read.
+
+---
+
+## 03:45 — the ALU gets a second stage, because the multiply was in the write clock
+
+The fit located the 52 MHz precisely: worst path 18.02 ns against 10.00
+required, running register file -> multiply -> add -> Q16.16 rescale -> add ->
+write-back mux -> register file, all combinational. The multiply alone was
+3.94 ns of it, in a DSP whose own output register was going unused.
+
+`q16_mul` is split into `q16_prod` (stage 1) and `q16_fin` (stage 2). The two
+compose to exactly what the one function computed — a pipeline cut, not a
+change of arithmetic, and the differential against `zfield::interpret` is what
+says so rather than my reading of it.
+
+### Why stage 2 is UNIFORM and not just for MUL
+
+If only the multiply took two stages, a MUL in stage 2 and an ADD in stage 1
+would both want the single write port on the same clock, and that port has no
+arbiter — it has a priority chain built on there being exactly one short-op
+write per clock. One shared stage 2 keeps that true.
+
+**Throughput cost, measured: 3.97 -> 3.94 vertex-instructions per clock.**
+0.8%, which is the extra pipeline fill. Issue is still one per clock and a
+wavefront still holds one instruction in flight; it now waits one more clock
+for its own result, and with WFS=8 there is other work to fill it.
+
+### The sweep found two REAL gaps, and both were the same shape
+
+Not timing bugs — *accounting and carrying* bugs, invisible to every value
+check in the file:
+
+* **M93**: a refused opcode counted as retired. Section 5 checked `status_o`
+  and never the account, so a refusal could be booked as work done and every
+  test still passed. It now checks that exactly one instruction retired.
+* **M166**: MAD's addend read LIVE in stage 2 instead of carried with its
+  product. Every existing MAD test had the following instruction reading the
+  same register, so live and captured agreed **by accident**. Section 20 gives
+  the instruction behind it a different `c` register and per-wavefront values,
+  so they cannot coincide.
+
+M166 is the one worth remembering: a new pipeline stage silently invalidates
+every test whose coverage depended on two operands happening to be equal.
+
+    16 attempted, 12 caught, 2 equivalent (proven), 2 gaps found and closed
+
+### Mutants that moved
+
+Six re-anchored rather than dropped (M81, M84, M92, M93, M159, M164), four new
+for stage 2 (M165–M168). M92 and M93 had to be RE-POINTED, not just
+re-anchored: a long op is now kept out of stage 2 by one predicate that governs
+release and counting together, which made their two edits identical. M93 now
+covers the other half of the account instead of duplicating M92.
+
+Two of the new mutants first failed the LINTER rather than the tests, by
+orphaning a signal — the same trap M125 hit. A mutant that cannot build is not
+a mutant. Both reshaped to keep the signal read.
+
+`ctest -L fast` 278/278, ledger green. A fit is running to measure what the
+stage bought.
+
+### Two tool traps, both mine, both worth not repeating
+
+* My mutant re-targeting helper found an entry by name and replaced the span up
+  to the *next* entry. For the LAST entry in the list there is no next one, so
+  it ran on and ate the list's closing bracket and several EQUIVALENT proofs.
+  `git checkout` and a rewrite that replaces the two quoted LITERALS instead of
+  a span. Edit by anchor, never by "everything until the next thing".
+* Appending to the list with `rfind(']')` put the new mutants after
+  `sys.exit(main())`. The syntax error named a line 60 lines away from the
+  cause.
