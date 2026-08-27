@@ -265,3 +265,45 @@ stdout twice when piped; redirect to a file and read the file.
   profile is right; the frontal read is not yet.
 * T4 atlas, C2/C4-C7, F1/F2, A1, W1, P2 not started.
 * Idle shallow-end sink is -2 mm vs the approved -3 mm.
+
+## Owner art direction after seeing the published pass (2026-08-27, late)
+
+Handed to the fable agent already running the V2 backlog; it outranks Wave D.
+Verbatim asks, with the reading of each:
+
+1. **"Head shape is extremely wrong. Head and neck and body flow into each other,
+   there's no big distinction."** — THE OVER-CORRECTION. The previous run was
+   told the junction was "a sheer drop like a cliff" and answered by easing the
+   skull envelope to zero at the junction ring; the head has now dissolved into
+   the neck. Both failure modes are now on record: a cliff, and a tube. The head
+   must read as a DISTINCT BULB that still connects. Author between them by eye.
+2. **"Head should look up more... snout should point horizontal and maybe even up
+   a little."** — The -12000 attitude the previous run re-swept and kept is
+   OVERTURNED by the owner looking at the render. Re-sweep, one contact sheet,
+   fixed side camera, pick by looking.
+3. **"Eyes... move them up a little and give them more bulge. They should look
+   like they're on the sides when seen from the front, but they're not."** —
+   bulge comes back (it was cut 85 -> 22 to kill the 1.97:1 disc) WITHOUT
+   re-flattening the skull: the round swell stays, the bulge is a local rim.
+4. **"Top of head should be pink, but from front you only see the blue."** —
+   crown pink is not reaching forward far enough over the skull.
+5. **"The blue should also go down its front body a bit before it goes into the
+   dark green... then turns into the light green. We need a bit more of that."**
+   — the progression is ENDORSED; he wants more of it in the front body.
+6. **"For falling animation, it should be less rigid and S shape needs to relax
+   by a ton."** — F1/F2 now has a target. House style holds: fewer and slower,
+   not more and faster.
+7. **"Sounds like you have good instincts on the crayons."** — T5 endorsed as
+   briefed.
+
+Also carried: the two calls I made rather than parking the run — orange eye
+surround YES (it is plainly in `Concept/Front.png` and is the frontal-read fix);
+idle -2 mm vs -3 mm sink LEAVE IT (touching a frozen clip or +2 mm trunk radius
+to buy 1 mm is a bad trade).
+
+**Consequences flagged to the agent:** attitude and envelope changes move POSE
+CRCs while clip bytes stay bit-identical — re-pin with provenance naming the
+owner instruction, never let it read as drift. Re-run the probe: a head that
+lifts changes ground contact, and clip slot 4's overlap allowances (4,585 hits,
+188 mm against 200) were authored against the old falling pose; re-author them
+against worst-key renders rather than widening them to fit the new number.
