@@ -1357,3 +1357,90 @@ passed a partially-uninitialised array; now zero-initialised).
 
 **Note: a second session is committing to this repo concurrently** (the creature
 lane, commits `bceeaf4`..`e7d2995`). Only my own files are being staged.
+
+---
+
+## 02:00 — FIELD v2 IS FITTED. 8,104 ALMs, 33 M10K, 52.13 MHz
+
+The block that could not be placed this morning is placed, routed and timed on
+a clean tree.
+
+| | v1 `zhao_field_seq` | v2 front | device |
+| --- | --- | --- | --- |
+| ALMs | 4,494 | **8,104** | 41,910 (19.3%) |
+| M10K | 5 | **33** | 553 |
+| DSP | 3 | 27 | 112 |
+| Fmax | 58.99 MHz | **52.13 MHz** | |
+
+### The rebuild, one variable at a time
+
+| | ALMs | comb ALUTs | registers | mem bits | memories |
+| --- | --- | --- | --- | --- | --- |
+| one array, 4 reads, 4 write sources | 121,292 | 133,338 | 75,438 | 4,369 | 1 |
+| four read replicas, one write port | 66,386 | 66,292 | 75,835 | 4,369 | 1 |
+| the arrays in their own module | **8,663** | 10,586 | 9,787 | 266,513 | 17 |
+
+**The middle row is the finding.** Replication halved the combinational logic
+and moved the storage NOT AT ALL. The port count was never the whole problem.
+What was also wrong was the declaration: `rf_a[LANES][0:511]` is
+two-dimensional and a memory is not, and the reads and writes shared an
+`always_ff` with the entire issue machine.
+
+**The check that should have come first:** mapping the 30-line
+`zhao_field_rf_ram` on its own took **39.9 s** and printed `membits 16384` =
+512 x 32. One minute to settle what three forty-minute whole-block maps had
+been asked. Ask storage questions of the storage.
+
+### The headline number was wrong, and is corrected
+
+Every v2 throughput figure so far was per CLOCK. Per clock is not a rate.
+
+    v1   0.143 instr/clk x 58.99 MHz =   8.4 M vertex-instr/s
+    v2   3.97  instr/clk x 52.13 MHz = 207.0 M vertex-instr/s
+
+**24.6x real throughput for 1.80x the area.** Not 27.8x.
+
+### 52 MHz is low and is not hidden
+
+The flow constrains 10.000 ns and this does not come close. Neither does v1 at
+59 MHz — it is where Field has always been, visible only now that it places.
+Either Field gets its own slower clock domain and pays for the crossing, or the
+critical path is pipelined. Recorded, not taken.
+
+## 02:00 — the sweep, and what it took to close it
+
+Five mutants of the new write-back queue survived every existing section:
+M158, M159, M162, M163, M164. All five need one situation — a long op's result
+landing while other wavefronts are still writing ALU results — and nothing in
+the file created it.
+
+**Two attempts failed before one worked, and both failures are informative:**
+
+1. *A 4-instruction ADD tail after the long op.* Caught nothing. With a short
+   tail, every wavefront sits at instruction 0 waiting for the single long
+   slot, so when a reply lands **nothing else is executing**. A 160-instruction
+   tail keeps a wavefront that has taken its result writing for long enough to
+   still be going when the NEXT wavefront's reply arrives. M158, M159 fall.
+2. *Sweeping the tail length 1..8 for M164.* Caught nothing. M164 needs stage 1
+   to hold an **END** on the exact clock a single-result reply lands — every
+   other retiring instruction also WRITES, and a write blocks the queue's port,
+   so no other instruction can be the collision partner. The gap between the
+   two events is the long op's own latency, **~200 clocks**. 1..8 was two
+   orders of magnitude short. Swept 1..240 it is caught.
+
+M162 and M163 are **equivalent, with a proof, and the proof has its own
+mutant**: `inflight[]` only gates wavefront selection, and `issue_fire` carries
+a separate `!wbq_busy` term, so nothing issues while the queue owes anything —
+released early or not. M158 removes that term and IS caught. An equivalence
+whose premise is untested is a hole with a note attached.
+
+    16 attempted, 16 accounted, 14 caught, 2 equivalent (proven), 0 survivors
+
+`ctest -L fast` **278/278**, ledger green.
+
+### Two more traps for the harness log
+
+* The sweep preflight's `CONE_V2` did not know about the new file, and its
+  BASELINE LINT guard caught that and refused to run. Working exactly as built.
+* M125's mutation left `lm_rsp_nres` unused, so it failed the **linter** rather
+  than the tests. A mutant must fail the tests; reshaped to keep the signal read.
