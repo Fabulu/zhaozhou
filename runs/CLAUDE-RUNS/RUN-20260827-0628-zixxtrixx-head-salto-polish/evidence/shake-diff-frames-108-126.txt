@@ -1,0 +1,18 @@
+frame  109: mean|diff|=   4.76  best vertical shift= +0 px
+frame  110: mean|diff|=   5.99  best vertical shift=-16 px
+frame  111: mean|diff|=   5.66  best vertical shift=-18 px
+frame  112: mean|diff|=  12.73  best vertical shift=-30 px
+frame  113: mean|diff|=   9.90  best vertical shift=+20 px
+frame  114: mean|diff|=   8.50  best vertical shift=-16 px
+frame  115: mean|diff|=   7.61  best vertical shift=+12 px
+frame  116: mean|diff|=   6.80  best vertical shift= -8 px
+frame  117: mean|diff|=   5.97  best vertical shift= +8 px
+frame  118: mean|diff|=   5.15  best vertical shift= -4 px
+frame  119: mean|diff|=   4.45  best vertical shift= +4 px
+frame  120: mean|diff|=   3.75  best vertical shift= -4 px
+frame  121: mean|diff|=   3.06  best vertical shift= +4 px
+frame  122: mean|diff|=   2.43  best vertical shift= -4 px
+frame  123: mean|diff|=   1.91  best vertical shift= +4 px
+frame  124: mean|diff|=   1.49  best vertical shift= -2 px
+frame  125: mean|diff|=   1.13  best vertical shift= +0 px
+frame  126: mean|diff|=   0.80  best vertical shift= +0 px
