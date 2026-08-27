@@ -5,6 +5,102 @@ at the top.*
 
 ---
 
+## 2026-08-27 (late) -- Field v3 Phase 3 is DONE. Phase 4 has started.
+
+*Short version: all five decisive probes are built and measured, every one of
+them hit its target, and the engine composition has begun. Also: Gouraud
+landed, and I found a bug in our own test machinery that was reporting
+half-finished runs as clean.*
+
+### The five probes are through
+
+The brief said: build five probes, measure each one, and kill any topology
+that misses its target before it contaminates the engine. All five are now
+built, differentiated against the reference, and mutation-swept.
+
+| probe | target | measured |
+| --- | --- | --- |
+| ready-context FIFO scheduler | -- | 257 ALM, 97.8 MHz, sweep clean |
+| banked vector register file | -- | 372 ALM, 93.1 MHz, sweep clean |
+| two-bank distance service | II <= 20 | fits at 90.6 MHz, sweep clean |
+| barrel curve service | II <= 14 | **II 13**, swept 15/15 |
+| four-bank patch accumulator | 1 update/clock | **297 groups in 297 clocks**, swept 15/15 |
+
+The two new ones landed tonight. Place-and-route for those two is running as
+I write this, so their ALM and Fmax rows are the only Phase 3 numbers not yet
+in -- everything else above is measured, not estimated.
+
+Read against v2's leaf (59.2 MHz, negative setup AND hold), every v3 probe is
+31-38 MHz faster with positive hold. The one honest caveat is unchanged: none
+of them reaches 100 MHz standalone. 80-90 MHz is the credible number, which is
+what the brief itself argued.
+
+### Two laws nobody had ever written down
+
+Building the accumulator turned up two output lanes that the tree POINTS AT
+but never actually defines -- there is no entry anywhere for how `material`
+picks a winner or how `nav_cost` reduces. Rather than pick one in silicon and
+let it become law by accident, both are now written into the contract as
+**chosen, not found**:
+
+* **material** -- the last field in command order that covers the vertex and
+  writes the lane wins, wholesale.
+* **nav_cost** -- command-ordered saturating add chain, same argument as
+  velocity: one evaluation must never be reduced by two different rules.
+
+These are reducer semantics rather than game content, but they are still a
+choice someone has to own, and they are flagged so changing either is a
+contract change rather than a quiet edit. **If either is wrong, say so and it
+costs one edit now instead of a re-verify later.**
+
+### Phase 4 has started: the walker
+
+Phase 4 composes the actual Earth machine. Its first piece is the one with no
+probe: the **lattice walker**, which is what deletes the 27,225-clock
+transport that killed v2.
+
+It works because of a property of our own reference walk that is easy to miss:
+the world coordinates are **separable**. x depends only on the column and z
+only on the row -- 33 + 33 numbers, not 1,089 pairs. So the walker holds two
+tiny tables and generates every point itself.
+
+### A number in the contract was wrong, and it was the budget number
+
+The contract said a full patch is 273 four-wide groups. For the update path
+that is wrong: the walk is row-major and 33 is not a multiple of 4, so a group
+cannot straddle a row and every row costs 9 -- **297 per patch, not 273**.
+273 is still right for the accumulator's init and drain, which walk the flat
+lattice aligned. Corrected in the contract. It matters because anyone
+budgeting the executor from that line would have come up 8.8% short, and over
+128 associations that is 3,000 hidden clocks.
+
+### The test machinery was lying, quietly
+
+Worth telling you because it is the kind of thing that rots a whole tree.
+
+Our mutation sweeps deliberately DISCARD a mutant that fails to build -- a
+mutant that cannot compile is not evidence. Five of the newer sweep drivers
+counted those discards as "accounted for" and then printed **SWEEP OK and
+exited clean**. One run tonight scored 8 of 15 mutants, discarded the other 7,
+and reported success.
+
+Cause: three sessions were sharing one build directory and fighting over it.
+Fixed both ends -- every sweep that can now runs in its own build tree, and a
+discarded mutant now FAILS the run instead of being footnoted. Re-run in
+isolation, that same sweep caught all 15.
+
+Nothing shipped on a bad number: the affected result was never committed as
+evidence, and the one committed probe score had zero discards.
+
+### Gouraud
+
+You asked. It landed today on the reference/oracle side: smooth vertex normals
+and per-vertex creature lighting, so the faceting you were seeing in the reels
+is gone. The **hardware** half is not done -- the raster path still
+interpolates nothing, and that needs the setup and fragment blocks to change
+together. It is recorded as an open shortfall rather than quietly closed.
+
+---
 ## 2026-08-27 (evening) -- WHERE THE PROJECT IS, and Field v3 has started
 
 *Written for reading on the go. The short version is: v2 is finished and

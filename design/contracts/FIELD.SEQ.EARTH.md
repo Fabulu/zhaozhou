@@ -134,7 +134,24 @@ deadline below.
 
 ## Target throughput — THE REAL DEADLINE
 
-One full patch = 1,089 lattice vertices = **273 four-wide vector groups**.
+One full patch = 1,089 lattice vertices = **273 four-wide vector groups** if
+the groups are packed flat and aligned.
+
+**CORRECTED 2026-08-27 (Phase 4 walker): the UPDATE path costs 297, not 273,
+and budgeting it at 273 under-provisions the executor by 8.8%.** The walk is
+row-major — z-then-x, the cartridge patch order the reference records
+velocity in — and 33 is not a multiple of 4, so a four-wide group cannot
+straddle a row boundary. Every row costs `ceil(33/4) = 9` groups and a full
+patch costs `9 × 33 = 297`. The last group of each row carries one live lane
+of four.
+
+273 is still the right number for the patch accumulator's INIT and DRAIN,
+which walk the flat 1,089 in ALIGNED groups; probe 5 measures both (273 for
+INIT/DRAIN, 297 update groups) and they are different traversals of the same
+store rather than a disagreement. The 6,000-clock per-association target
+below has room for 297; the correction matters because a reader budgeting
+executor issue slots from this line would come up 24 groups short per
+association, and 128 associations would hide 3,072 clocks.
 
 Per-service targets (the Phase 3 probe gates; a probe that misses kills or
 changes its topology before it reaches the engine):
