@@ -31,9 +31,24 @@
 # nothing -- matching either no text or, worse, DIFFERENT text than the one
 # written down.
 #
-# NO SCORE IS RECORDED HERE YET. This header will not claim one until the
-# sweep has run; a copied provenance is how a sweep comes to describe results
-# it never produced.
+# SCORE, first run 2026-08-27: attempted=17 accounted=17 CAUGHT=17.
+# No survivors, nothing to declare equivalent.
+#
+# That is an unusual result and worth reading correctly. It does NOT mean the
+# block is beyond suspicion -- it means this suite already had teeth, which is
+# exactly what the four blocks before it did not. The white-rail clamp, the
+# absolute Bayer phase, the CRC byte order and the tag's exclusion from the
+# CRC were all already exercised by something. RASTER.RESOLVE is the first
+# block in reports/SWEEP_COVERAGE_AUDIT.md to come back clean on its first
+# run.
+#
+# The one caveat, stated because a perfect score invites complacency: R05
+# perturbs the tile row phase rather than making it purely tile-relative,
+# because the pure version orphaned a signal and failed the LINTER. The
+# absolute-phase law is therefore tested by a NEIGHBOUR of the defect the
+# header warns about, not by that defect itself. If that law ever matters more
+# than it does today, the right move is a directed case placing a tile at an
+# off-grid base, not a sharper mutant.
 ##   1. `verilate()` elaborates at CONFIGURE time, so `ninja` alone relinks a
 #      CACHED model against changed source. Reconfigure every iteration.
 #   2. Never stamp the mutated source's mtime forward; a future mtime makes a
