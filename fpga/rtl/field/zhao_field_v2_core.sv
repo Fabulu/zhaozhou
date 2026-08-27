@@ -283,7 +283,29 @@ module zhao_field_v2_core #(
   wire issue_fire;
 
   // ---- stage 2: execute and write back ---------------------------------
-  logic signed [31:0] alu_y [LANES];
+  // ---- the ALU's two stages ----------------------------------------------
+  logic signed [63:0] alu_pre [LANES];   // stage 1 out: product, or the answer
+  logic               alu_is_mul;        // stage 2 must rescale
+  logic               alu_is_mad;        // ...and then add c
+  logic signed [31:0] alu_y  [LANES];    // stage 2 out: the value written
+
+  // STAGE 2 EXISTS SO THE MULTIPLY IS NOT IN THE SAME CLOCK AS THE WRITE.
+  // It is uniform -- EVERY short op passes through it, not just MUL. That is
+  // deliberate: if only the multiply took two stages, a MUL in stage 2 and an
+  // ADD in stage 1 would both want the single write port on the same clock,
+  // and the port would need an arbiter it does not have. With one shared
+  // stage 2 there is exactly one short-op write per clock, as before.
+  //
+  // Throughput is unaffected. Issue is still one instruction per clock and a
+  // wavefront still holds one instruction in flight; the wavefront now waits
+  // one extra clock for its own result, and with WFS=8 resident wavefronts
+  // there is more than enough other work to fill it.
+  logic           s2_valid;
+  logic [WFW-1:0] s2_wf;
+  logic [RW-1:0]  s2_dst;
+  logic           s2_is_mul, s2_is_mad, s2_is_end, s2_unsup;
+  logic signed [63:0] s2_pre [LANES];
+  logic signed [31:0] s2_c   [LANES];
   logic               unsupported;
 
   function automatic logic signed [31:0] sat_add(input logic signed [31:0] a,
@@ -308,44 +330,70 @@ module zhao_field_v2_core #(
     end
   endfunction
 
-  // Q16.16 multiply with round-half-up, matching the reference's rescale.
-  function automatic logic signed [31:0] q16_mul(input logic signed [31:0] a,
-                                                 input logic signed [31:0] b);
-    logic signed [63:0] p;
+  // Q16.16 multiply with round-half-up, matching the reference's rescale --
+  // SPLIT IN TWO, because the whole of it used to sit in one clock.
+  //
+  // MEASURED 2026-08-27, from the fit: the worst setup path was 18.02 ns
+  // against a 10.00 ns requirement, and it ran register file -> multiply ->
+  // add -> rescale -> add -> write-back mux -> register file, all
+  // combinational. The multiply alone was 3.94 ns of it in the DSP.
+  // reports/FIELD_V2_Regfile_Ports.md has the hop-by-hop breakdown.
+  //
+  // So the product is taken in stage 1 and everything after it in stage 2.
+  // The two halves compose to exactly what the single function computed --
+  // this is a pipeline cut, not a change of arithmetic, and the differential
+  // against zfield::interpret is what says so.
+  function automatic logic signed [63:0] q16_prod(input logic signed [31:0] a,
+                                                  input logic signed [31:0] b);
+    q16_prod = 64'(a) * 64'(b);
+  endfunction
+
+  function automatic logic signed [31:0] q16_fin(input logic signed [63:0] p);
     logic signed [63:0] r;
     begin
-      p = 64'(a) * 64'(b);
       r = (p + 64'sd32768) >>> 16;
-      if (r > 64'sd2147483647)       q16_mul = 32'sh7FFF_FFFF;
-      else if (r < -64'sd2147483648) q16_mul = 32'sh8000_0000;
-      else                           q16_mul = r[31:0];
+      if (r > 64'sd2147483647)       q16_fin = 32'sh7FFF_FFFF;
+      else if (r < -64'sd2147483648) q16_fin = 32'sh8000_0000;
+      else                           q16_fin = r[31:0];
     end
   endfunction
 
+  // STAGE 1 OF THE ALU. Every op lands in a 64-bit `alu_pre`: for MUL and MAD
+  // that is the raw product, for everything else the finished 32-bit answer
+  // sign-extended. The two flags say which, so stage 2 does not re-decode an
+  // opcode it would have to carry anyway.
   always_comb begin
     unsupported = 1'b0;
-    for (int l = 0; l < LANES; l++) alu_y[l] = 32'sd0;
+    alu_is_mul  = 1'b0;
+    alu_is_mad  = 1'b0;
+    for (int l = 0; l < LANES; l++) alu_pre[l] = 64'sd0;
     if (s1_valid) begin
       unique case (s1_op)
-        OP_MOV:    for (int l = 0; l < LANES; l++) alu_y[l] = rd_a[l];
-        OP_ADD:    for (int l = 0; l < LANES; l++) alu_y[l] = sat_add(rd_a[l], rd_b[l]);
-        OP_SUB:    for (int l = 0; l < LANES; l++) alu_y[l] = sat_sub(rd_a[l], rd_b[l]);
-        OP_MUL:    for (int l = 0; l < LANES; l++) alu_y[l] = q16_mul(rd_a[l], rd_b[l]);
-        OP_MAD:    for (int l = 0; l < LANES; l++)
-                     alu_y[l] = sat_add(q16_mul(rd_a[l], rd_b[l]), rd_c[l]);
+        OP_MOV:    for (int l = 0; l < LANES; l++) alu_pre[l] = 64'(rd_a[l]);
+        OP_ADD:    for (int l = 0; l < LANES; l++) alu_pre[l] = 64'(sat_add(rd_a[l], rd_b[l]));
+        OP_SUB:    for (int l = 0; l < LANES; l++) alu_pre[l] = 64'(sat_sub(rd_a[l], rd_b[l]));
+        OP_MUL:    begin
+                     alu_is_mul = 1'b1;
+                     for (int l = 0; l < LANES; l++) alu_pre[l] = q16_prod(rd_a[l], rd_b[l]);
+                   end
+        OP_MAD:    begin
+                     alu_is_mul = 1'b1;
+                     alu_is_mad = 1'b1;
+                     for (int l = 0; l < LANES; l++) alu_pre[l] = q16_prod(rd_a[l], rd_b[l]);
+                   end
         OP_MIN:    for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_a[l] < rd_b[l]) ? rd_a[l] : rd_b[l];
+                     alu_pre[l] = 64'(32'((rd_a[l] < rd_b[l]) ? rd_a[l] : rd_b[l]));
         OP_MAX:    for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_a[l] > rd_b[l]) ? rd_a[l] : rd_b[l];
+                     alu_pre[l] = 64'(32'((rd_a[l] > rd_b[l]) ? rd_a[l] : rd_b[l]));
         OP_ABS:    for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_a[l] < 0) ? sat_sub(32'sd0, rd_a[l]) : rd_a[l];
+                     alu_pre[l] = 64'(32'((rd_a[l] < 0) ? sat_sub(32'sd0, rd_a[l]) : rd_a[l]));
         OP_CLAMP:  for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_a[l] < rd_b[l]) ? rd_b[l]
-                              : (rd_a[l] > rd_c[l]) ? rd_c[l] : rd_a[l];
+                     alu_pre[l] = 64'(32'((rd_a[l] < rd_b[l]) ? rd_b[l]
+                                        : (rd_a[l] > rd_c[l]) ? rd_c[l] : rd_a[l]));
         OP_SELECT: for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_c[l] != 0) ? rd_a[l] : rd_b[l];
+                     alu_pre[l] = 64'(32'((rd_c[l] != 0) ? rd_a[l] : rd_b[l]));
         OP_CMP:    for (int l = 0; l < LANES; l++)
-                     alu_y[l] = (rd_a[l] < rd_b[l]) ? 32'sh0001_0000 : 32'sd0;
+                     alu_pre[l] = 64'(32'((rd_a[l] < rd_b[l]) ? 32'sh0001_0000 : 32'sd0));
         OP_END:    ;                       // retires the wavefront, writes nothing
         OP_CURVE, OP_DCURVE, OP_SPLINE: ;  // dispatched, not executed here
         OP_LEN2, OP_LEN3, OP_DIST2:     ;  // dispatched, not executed here
@@ -354,6 +402,19 @@ module zhao_field_v2_core #(
         OP_NRM2, OP_NRM3:               ;  // dispatched, not executed here
         default:   unsupported = 1'b1;     // REFUSED, not skipped and not zero
       endcase
+    end
+  end
+
+  // STAGE 2 OF THE ALU. The rescale, the saturation and MAD's addition -- the
+  // whole tail of the old single-clock path.
+  always_comb begin
+    for (int l = 0; l < LANES; l++) begin
+      if (s2_is_mul) begin
+        alu_y[l] = s2_is_mad ? sat_add(q16_fin(s2_pre[l]), s2_c[l])
+                             : q16_fin(s2_pre[l]);
+      end else begin
+        alu_y[l] = s2_pre[l][31:0];
+      end
     end
   end
 
@@ -531,7 +592,10 @@ module zhao_field_v2_core #(
   wire [WFW-1:0] rd_wf = steal_now ? s1_wf : sel;
 
   wire s1_is_end = s1_valid && (s1_op == OP_END);
-  wire s1_writes = s1_valid && !s1_is_end && !unsupported && !s1_is_long;
+  // A SHORT OP IS ANYTHING THAT GOES THROUGH STAGE 2. Long ops leave stage 1
+  // for the serialiser and come back through the write-back queue instead.
+  wire s1_short  = s1_valid && !s1_is_long;
+  wire s2_writes = s2_valid && !s2_is_end && !s2_unsup;
 
   // ---- THE ONE WRITE PORT ------------------------------------------------
   // Three sources, in strict priority: the ALU write-back, then the queued
@@ -544,9 +608,8 @@ module zhao_field_v2_core #(
   logic               wb_we   [LANES];
   logic [RFAW-1:0]    wb_addr;
   logic signed [31:0] wb_data [LANES];
-  wire                wbq_go = wbq_busy && !s1_writes;
-  wire                retire_s1   = s1_valid && !unsupported &&
-                                    (s1_is_end || !s1_is_long);
+  wire                wbq_go = wbq_busy && !s2_writes;
+  wire                retire_s2   = s2_valid && !s2_unsup;
   wire                retire_long = wbq_go && (wbq_cnt == 2'd1);
 
   always_comb begin
@@ -556,8 +619,8 @@ module zhao_field_v2_core #(
       wb_data[wl] = '0;
     end
     wb_addr = '0;
-    if (s1_writes) begin
-      wb_addr = {s1_wf, s1_dst};
+    if (s2_writes) begin
+      wb_addr = {s2_wf, s2_dst};
       for (wl = 0; wl < LANES; wl++) begin
         wb_we[wl]   = 1'b1;
         wb_data[wl] = alu_y[wl];
@@ -612,6 +675,13 @@ module zhao_field_v2_core #(
       finished       <= '0;
       status_o       <= ST_OK;
       rr_ptr         <= '0;
+      s2_valid       <= 1'b0;
+      s2_wf          <= '0;
+      s2_dst         <= '0;
+      s2_is_mul      <= 1'b0;
+      s2_is_mad      <= 1'b0;
+      s2_is_end      <= 1'b0;
+      s2_unsup       <= 1'b0;
       wbq_cnt        <= 2'd0;
       wbq_idx        <= 2'd0;
       wbq_wf         <= '0;
@@ -798,19 +868,34 @@ module zhao_field_v2_core #(
         if (wbq_cnt == 2'd1) inflight[wbq_wf] <= 1'b0;
       end
 
-      if (s1_valid) begin
-        // A LONG OP KEEPS ITS WAVEFRONT IN FLIGHT. Clearing it here would let
-        // the wavefront issue again while the serialiser still owed it an
-        // answer -- the hazard the one-in-flight rule exists to prevent, and
-        // invisible until two wavefronts contend for the unit.
-        if (!s1_is_long) inflight[s1_wf] <= 1'b0;
-        if (unsupported) begin
+      // ---- stage 2 capture ----
+      // A LONG OP DOES NOT ENTER STAGE 2. It left for the serialiser and comes
+      // back through the write-back queue, which is also what keeps its
+      // wavefront in flight: clearing that bit early would let the wavefront
+      // issue again while the serialiser still owed it an answer.
+      s2_valid <= s1_short;
+      if (s1_short) begin
+        s2_wf     <= s1_wf;
+        s2_dst    <= s1_dst;
+        s2_is_mul <= alu_is_mul;
+        s2_is_mad <= alu_is_mad;
+        s2_is_end <= s1_is_end;
+        s2_unsup  <= unsupported;
+        for (l = 0; l < LANES; l++) begin
+          s2_pre[l] <= alu_pre[l];
+          s2_c[l]   <= rd_c[l];
+        end
+      end
+
+      if (s2_valid) begin
+        inflight[s2_wf] <= 1'b0;
+        if (s2_unsup) begin
           if (status_o == ST_OK) status_o <= ST_UNSUPPORTED_OP;
-          active[s1_wf]   <= 1'b0;
-          finished[s1_wf] <= 1'b1;
-        end else if (s1_is_end) begin
-          active[s1_wf]   <= 1'b0;
-          finished[s1_wf] <= 1'b1;
+          active[s2_wf]   <= 1'b0;
+          finished[s2_wf] <= 1'b1;
+        end else if (s2_is_end) begin
+          active[s2_wf]   <= 1'b0;
+          finished[s2_wf] <= 1'b1;
         end
       end
 
@@ -822,7 +907,7 @@ module zhao_field_v2_core #(
       // terms into a single assignment is the only form that cannot drop one.
       // A long op counts when its last result LANDS, not when it dispatches
       // and not when its reply arrives.
-      instr_retired_o <= instr_retired_o + 32'(retire_s1) + 32'(retire_long);
+      instr_retired_o <= instr_retired_o + 32'(retire_s2) + 32'(retire_long);
 
       // The register writes happen in the rams, not here.
     end

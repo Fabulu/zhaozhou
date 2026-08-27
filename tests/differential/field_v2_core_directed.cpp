@@ -343,9 +343,17 @@ int main(int argc, char** argv) {
     Bench b(dut);
     b.prog = {{OP_MOV, 2, 0, 0, 0}, {OP_UNSUPPORTED, 3, 0, 0, 0}, {OP_END, 0, 0, 0, 0}};
     for (int l = 0; l < kLanes; ++l) b.write_reg(0, l, 0, 1 << 16);
+    const uint32_t before = dut.instr_retired_o;
     b.run(1u);
+    const uint32_t retired = dut.instr_retired_o - before;
     check(dut.status_o == 3, "5.an opcode v2 cannot execute is refused, not skipped", 3,
           dut.status_o);
+    // A REFUSAL IS NOT A RETIREMENT. The MOV before it ran and counts; the
+    // refused opcode does not, and the END after it is never reached because
+    // the refusal finishes the wavefront. Checking the status alone left that
+    // open -- the sweep found it as M93, which made a refusal count as work
+    // done and passed every test in this file.
+    check(retired == 1u, "5.a refused opcode is not counted as retired", 1, retired);
   }
 
   // ---- 6. CURVE: a LONG op, through the tagged serialiser -----------------
@@ -1886,6 +1894,79 @@ check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.
   }
   check(bad_all == 0, "19b.LEN3 and its ADDs are right at every tail length", 0, bad_all);
   check(bad_count == 0, "19b.every instruction counted once, at every tail length", 0, bad_count);
+}
+
+// ---- 20. MAD's THIRD OPERAND MUST CROSS THE STAGE WITH ITS PRODUCT -------
+//
+// The ALU is two stages now: stage 1 takes the product, stage 2 rescales it
+// and adds MAD's c. That addend has to be CAPTURED with the product, because
+// by the time stage 2 runs, the register-read outputs belong to whatever
+// instruction is in stage 1 -- a different wavefront's, one clock later.
+//
+// The sweep found this as M166 and no section caught it: the MAD tests above
+// run a program where the following instruction happens to read the same
+// register, so live and captured agree by accident.
+//
+// Here the c register differs per wavefront AND the instruction behind it in
+// the pipe reads a DIFFERENT register, so live and captured cannot agree.
+{
+  Bench b(dut);
+  b.prog = {{OP_MAD, 16, 0, 1, 2},  // c = r2
+            {OP_MAD, 17, 0, 1, 3},  // c = r3, deliberately not r2
+            {OP_END, 0, 0, 0, 0}};
+  int32_t v[kWfs][kLanes][4];
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l)
+      for (int k = 0; k < 4; ++k) {
+        // r2 and r3 are far apart and differ per wavefront, so reading the
+        // wrong one -- or the right one a clock late -- cannot coincide.
+        v[w][l][k] = ((w * kLanes + l + 1) * (k + 1) * 7919) << 3;
+        b.write_reg(w, l, k, v[w][l][k]);
+      }
+  b.run((1u << kWfs) - 1u);
+
+  uint64_t bad = 0;
+  for (int w = 0; w < kWfs; ++w)
+    for (int l = 0; l < kLanes; ++l) {
+      zfield::Decoded prog;
+      prog.profile = 0;
+      auto push = [&](uint8_t op, uint8_t dst, uint8_t a, uint8_t bb, uint8_t c) {
+        zfield::Instr in{};
+        in.op = op;
+        in.dst = dst;
+        in.a = a;
+        in.b = bb;
+        in.c = c;
+        in.imm = 0;
+        prog.instrs.push_back(in);
+      };
+      push(zfield::OP_MAD, 16, 0, 1, 2);
+      push(zfield::OP_MAD, 17, 0, 1, 3);
+      zfield::Instr end{};
+      end.op = zfield::OP_END;
+      prog.instrs.push_back(end);
+      for (int k = 0; k < 4; ++k) {
+        zfield::IoLane il{};
+        il.name = "i";
+        il.type = 0;
+        il.reg = static_cast<uint8_t>(k);
+        prog.in_lanes.push_back(il);
+      }
+      const uint8_t outs[2] = {16, 17};
+      for (int k = 0; k < 2; ++k) {
+        zfield::IoLane ol{};
+        ol.name = "y";
+        ol.type = 0;
+        ol.reg = outs[k];
+        prog.out_lanes.push_back(ol);
+      }
+      int32_t in[4] = {v[w][l][0], v[w][l][1], v[w][l][2], v[w][l][3]};
+      int32_t want[2] = {0, 0};
+      zfield::interpret(prog, in, 4, want, 2);
+      if (b.read_reg(w, l, 16) != want[0]) ++bad;
+      if (b.read_reg(w, l, 17) != want[1]) ++bad;
+    }
+  check(bad == 0, "20.MAD's addend crosses the stage with its own product", 0, bad);
 }
 
 dut.final();

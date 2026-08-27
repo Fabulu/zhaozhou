@@ -533,8 +533,8 @@ MUTS = [
      """  assign ready = active & ~inflight & ~finished;""",
      """  assign ready = active & ~(inflight & finished) & ~finished;"""),
     ("M81 write-back uses the ISSUING wavefront, not the retiring one", F_V2,
-     """      wb_addr = {s1_wf, s1_dst};""",
-     """      wb_addr = {sel, s1_dst};"""),
+     """      wb_addr = {s2_wf, s2_dst};""",
+     """      wb_addr = {sel, s2_dst};"""),
     ("M82 every lane is written lane 0's result", F_V2,
      """        wb_data[wl] = alu_y[wl];""",
      """        wb_data[wl] = alu_y[0];"""),
@@ -545,8 +545,8 @@ MUTS = [
     # guard. Rewritten onto the live line rather than relaxed -- the defect it
     # names (a wavefront that never comes back) is unchanged.
     ("M84 the retiring wavefront's in-flight bit is never cleared", F_V2,
-     """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
-     """        if (!s1_is_long) inflight[s1_wf] <= 1'b1;"""),
+     """        inflight[s2_wf] <= 1'b0;""",
+     """        inflight[s2_wf] <= 1'b1;"""),
     # ---- v2's tagged lane serialiser ---------------------------------------
     # The tag is the whole point: v1 needed none because one instruction was in
     # flight, so a reply could only belong to the one thing waiting. These
@@ -583,13 +583,12 @@ MUTS = [
     ("M91 the long-op reply broadcasts lane 0 to every lane", F_V2,
      """          wbq_y[l][0] <= lm_rsp_y[l];""",
      """          wbq_y[l][0] <= lm_rsp_y[0];"""),
-    ("M92 a long op releases its wavefront at DISPATCH, not at reply", F_V2,
-     """        if (!s1_is_long) inflight[s1_wf] <= 1'b0;""",
-     """        inflight[s1_wf] <= 1'b0;"""),
-    ("M93 a long op is counted at dispatch AND again when it lands", F_V2,
-     """  wire                retire_s1   = s1_valid && !unsupported &&
-                                    (s1_is_end || !s1_is_long);""",
-     """  wire                retire_s1   = s1_valid && !unsupported;"""),
+    ("M92 a long op enters stage 2, so it is released at DISPATCH", F_V2,
+     """      s2_valid <= s1_short;""",
+     """      s2_valid <= s1_valid;"""),
+    ("M93 a REFUSED op is counted as retired", F_V2,
+     """  wire                retire_s2   = s2_valid && !s2_unsup;""",
+     """  wire                retire_s2   = s2_valid;"""),
     ("M94 the unit is given the LIVE mode rather than the captured one", F_LMUX,
      """  assign u_mode_o    = mode_q;""",
      """  assign u_mode_o    = (lane == '0) ? req_mode_i : mode_q;"""),
@@ -912,7 +911,7 @@ MUTS = [
      """  assign issue_fire = sel_valid && !pc_overrun && !steal_now &&
                       !(ins_is_long && long_slot_busy);"""),
     ("M159 the queue advances even on a clock the ALU took the write port", F_V2,
-     """  wire                wbq_go = wbq_busy && !s1_writes;""",
+     """  wire                wbq_go = wbq_busy && !s2_writes;""",
      """  wire                wbq_go = wbq_busy;"""),
     # M160 moved with the storage: the replicas are module instances now, so
     # "one replica is never written" is a write-enable tied off on one of them.
@@ -932,8 +931,25 @@ MUTS = [
      """        if (wbq_cnt == 2'd1) inflight[wbq_wf] <= 1'b0;""",
      """        if (wbq_cnt <= 2'd2) inflight[wbq_wf] <= 1'b0;"""),
     ("M164 the two retirements are OR'd, so a simultaneous pair counts once", F_V2,
-     """      instr_retired_o <= instr_retired_o + 32'(retire_s1) + 32'(retire_long);""",
-     """      instr_retired_o <= instr_retired_o + 32'(retire_s1 | retire_long);"""),
+     """      instr_retired_o <= instr_retired_o + 32'(retire_s2) + 32'(retire_long);""",
+     """      instr_retired_o <= instr_retired_o + 32'(retire_s2 | retire_long);"""),
+
+    # ---- the ALU's second stage, 2026-08-27 --------------------------------
+    # The multiply moved out of the write clock: stage 1 takes the product,
+    # stage 2 rescales, saturates and adds MAD's third operand. Nothing above
+    # was written against a stage 2, because until now there was not one.
+    ("M165 stage 2 rescales on the LIVE flag rather than the captured one", F_V2,
+     """      if (s2_is_mul) begin""",
+     """      if (s2_is_mul || alu_is_mul) begin"""),
+    ("M166 MAD's addend is taken live, not carried with the product", F_V2,
+     """        alu_y[l] = s2_is_mad ? sat_add(q16_fin(s2_pre[l]), s2_c[l])""",
+     """        alu_y[l] = s2_is_mad ? sat_add(q16_fin(s2_pre[l]), (s2_is_mad ? rd_c[l] : s2_c[l]))"""),
+    ("M167 the product is never rescaled -- Q16.16 becomes Q32.32", F_V2,
+     """                             : q16_fin(s2_pre[l]);""",
+     """                             : s2_pre[l][31:0];"""),
+    ("M168 every lane is given lane 0's product", F_V2,
+     """          s2_pre[l] <= alu_pre[l];""",
+     """          s2_pre[l] <= alu_pre[0];"""),
 
 ]
 
