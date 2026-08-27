@@ -74,3 +74,24 @@
 - PROBE (committed zixx-probe): idle [-13..-4] mm, walk [-4..+11] mm,
   attack stick EXACTLY -420 mm keys 53..203 then clean extraction (-97 at
   204, clear by 205, no re-dig), fall min +346 airborne. kBodyY 520->542.
+
+
+## 2026-08-27 -- wave 2: render-look-adjust loop, closed out
+
+- Eye classifier fixed (red-minus-GREEN, not red-minus-blue -- the first cut
+  inverted the eye to orange-with-yellow-rim; tile dump caught it).
+- Mouth widened to a 130-deg wrap of the lower nose, one-texel ink rim.
+- First neck slope gentled (-3400) so the face is visible; hook behind it
+  keeps the same sine sum (same apex).
+- Walk framing: back to 310000, TWO gait cycles (speed 13 traverse fits);
+  kWalkDeepen 400 after two rounds of measured-but-invisible bob (the head
+  is the ROOT: only the computed root comp moves it). Head-top travel
+  6 -> 10 px at equal zoom.
+- Idle wave 2100, walk wave 2400.
+- FINAL probe: idle [-11..-4], walk [-10..+12], attack stick -420 constant
+  keys 53..203, fall min +387. `zhao-reel --check`: all sequence CRCs match.
+- Evidence in evidence/ (before/after pair, contact sheets for walk, attack
+  and fall, idle breath sequence, impact frames with visible shake, head
+  views side+front, tail prong pair, tile dumps, final clip reports).
+- WORKLOG appended under a dated heading; both repos committed and pushed
+  as the work happened.
