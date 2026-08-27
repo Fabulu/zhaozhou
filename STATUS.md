@@ -5,6 +5,68 @@ at the top.*
 
 ---
 
+## 2026-08-27 (morning) -- the vertex cache is PROVED, and we found the real ceiling
+
+### The proof is done
+
+The vertex-cache proof that had been failing for three days, and then running
+for seven hours without finishing, **passes**. It took four seconds.
+
+Not by weakening anything -- by asking a better question. I had been asking the
+tool to check every possible sequence of events up to 24 steps deep, which gets
+exponentially more expensive each step: step 17 took ten minutes, step 19 took
+over an hour, step 21 ran for three hours and was still going.
+
+There is a different mode that instead looks for a **proof by induction** --
+an argument that the rule holds at every step, forever, rather than checking
+steps one at a time. That mode answered in four seconds, and its answer is
+*stronger*: it covers all depths, not the first 24.
+
+The file had been arguing in its own comments that the rule was step-local and
+so depth could not matter. That argument was induction all along. I had been
+asking an engine that cannot do induction to confirm it, and paying in hours.
+
+It is now a registered test that runs in the suite in 138 seconds.
+
+### The engine's real speed limit, and it was never where I said
+
+I pipelined the multiply out of the write clock, as planned. Result:
+
+| | before | after |
+| --- | --- | --- |
+| speed | 52.1 MHz | **58.9 MHz** |
+| logic | 8,104 | **7,860** |
+| multiplier blocks | 27 | **15** |
+
+Faster AND smaller -- registering the multiply lets the chip use the
+multiplier's own built-in register instead of building one out of fabric.
+
+**But I predicted about 90 MHz and got 58.9, and that gap is the useful part.**
+
+The slow path is no longer in the register file at all. It moved. It is now in
+the **reciprocal** -- the divide helper -- which in one clock does a subtract,
+counts leading zeros, barrel-shifts to normalise, and then reads a lookup
+table. 16.4 ns of it.
+
+And that explains something I could not explain before. **The old engine runs
+at 58.99 MHz. The new one now runs at 58.85.** That is not a coincidence: the
+reciprocal is an old-engine module the new one uses unchanged, and it is the
+limit for both. The register file was hiding it. Fix that, and the new engine
+lands exactly where the old one always was, on a path neither has ever had to
+pipeline because nothing else was ever slower.
+
+So "Field runs at 59 MHz" was never a fact about the new engine. It is a fact
+about the reciprocal, and it has been the ceiling the whole time.
+
+### What that makes next
+
+Pipelining the reciprocal's normalise step. It is a self-contained module with
+its own test and its own place in the mutation sweep, so it is a properly sized
+piece of work rather than a rewrite -- and it lifts the OLD engine's ceiling at
+the same time, which nothing else on my list does.
+
+---
+
 ## 2026-08-27 (early) -- THE FIELD ENGINE IS MEASURED. IT FITS.
 
 ### The answer to your question
