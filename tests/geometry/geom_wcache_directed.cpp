@@ -189,6 +189,70 @@ int main(int argc, char** argv) {
   check(top->arena_overflow_o == 1, "overflow is sticky after a dropped fill", 1,
         top->arena_overflow_o);
 
+  // ---- 8b. THE GAPS THE MUTATION SWEEP FOUND ------------------------------
+  //
+  // GEOM.WCACHE is PROVED -- an inductive invariant, not a bounded run -- and
+  // its simulation lane had still never been mutated. The first sweep scored
+  // 15 of 18. What survived says exactly what a proof does not cover.
+  //
+  // W01/W02: the FILL bounds at the exact boundary. Section 3 above tests
+  // index == DEPTH and arena == ARENAS on the LOOKUP side, and those mutants
+  // are caught -- but nothing ever offered a FILL at the boundary, so a check
+  // written `> DEPTH` instead of `>= DEPTH` accepted a write one past the end
+  // and every test passed. That write lands in the next arena's first slot,
+  // which is precisely the wrap the contract's leading law forbids.
+  {
+    const uint32_t gb = d.open(0);
+    d.fill(0, kDepth, 0xBAD0'0000'0000'0001ull);   // index == DEPTH
+    d.fill(kArenas, 0, 0xBAD0'0000'0000'0002ull);  // arena == ARENAS
+    d.seal(0);
+    // The boundary fills must have been DROPPED, so slot 0 of arena 0 -- the
+    // slot an index of DEPTH would wrap onto -- still misses.
+    d.expect_lookup(0, gb, 0, "W01/W02: a fill at index == DEPTH wrapped nowhere");
+    top->eval();
+    check(top->arena_overflow_o == 1, "W01/W02: and the out-of-range fills were counted as drops",
+          1, top->arena_overflow_o);
+  }
+
+  // W17: the payload register must read the LOOKUP address. Every lookup in
+  // this file happens with the fill port idle, so `mem[rd_addr]` and
+  // `mem[wr_addr]` were never asked to differ -- reading the write address
+  // returned the right answer by coincidence. Here a fill to a DIFFERENT slot
+  // is driven in the same cycle as the lookup.
+  {
+    const uint32_t gc = d.open(1);
+    d.fill(1, 2, 0xC0DE'0000'0000'0002ull);
+    d.fill(1, 9, 0xC0DE'0000'0000'0009ull);
+    d.seal(1);
+
+    // Drive both ports at once: look up slot 2 while offering a fill at slot 9
+    // (which is refused anyway, arena 1 being sealed -- the point is only that
+    // wr_addr differs from rd_addr while the read register latches).
+    d.idle();
+    d.v->look_valid_i = 1;
+    d.v->look_arena_i = 1;
+    d.v->look_gen_i = gc & 0xFF;
+    d.v->look_index_i = 2;
+    d.v->fill_valid_i = 1;
+    d.v->fill_arena_i = 1;
+    d.v->fill_index_i = 9;
+    d.v->fill_payload_i = 0xFFFF'FFFF'FFFF'FFFFull;
+    d.tick();
+    d.idle();
+    d.v->eval();
+    // The oracle must see this lookup too. It is driven by hand rather than
+    // through expect_lookup (which cannot drive both ports at once), and
+    // section 9 compares the DUT's counters against the model -- so a lookup
+    // the model never saw shows up there as a phantom hit. It did, on the
+    // first run of this case.
+    (void)d.ref.lookup(1, gc, 2);
+    check(d.v->rep_valid_o == 1, "W17: the concurrent lookup replies", 1, d.v->rep_valid_o);
+    check(d.v->rep_hit_o == 1, "W17: and it hits", 1, d.v->rep_hit_o);
+    check(d.v->rep_payload_o == 0xC0DE'0000'0000'0002ull,
+          "W17: with the LOOKED-UP slot's payload, not the fill port's", 0xC0DE'0000'0000'0002ull,
+          d.v->rep_payload_o);
+  }
+
   // ---- 9. counters agree with the oracle ----------------------------------
   top->eval();
   check(top->arena_hits_o == d.ref.hits(), "hit count matches oracle", d.ref.hits(),
