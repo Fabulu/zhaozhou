@@ -1037,6 +1037,10 @@ struct SceneSubject {
   int32_t planet_sun_x = 192, planet_sun_y0 = 150, planet_sun_y1 = 150;
   int32_t planet_sun2_mag = 0;  // >0: a binary system, companion at these px
   int32_t planet_sun2_x = 0, planet_sun2_y = 0;
+  // DIAGNOSTIC shade mode for creature subjects (P2): 0 off, 1 unlit
+  // (fullbright/texture-only), 2 normal viz, 3 wireframe. Never set on a
+  // pinned subject.
+  int creature_shade = 0;
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
@@ -1764,6 +1768,7 @@ int render_scene(const SceneSubject& sub) {
   if (sub.creature != 0) {
     // 1,2 = the watchdog (wave-walk, bulk-pop). 3,4 = Zixxtrixx (slither,
     // tail-strike) — the Upheaval bestiary lane.
+    zc::g_debug_shade = static_cast<zc::DebugShade>(sub.creature_shade);
     const bool zixx_subject = sub.creature >= 3;
     dog = zixx_subject ? &zixx::type() : &watchdog_type();
     dog_inst.type = dog;
@@ -3388,6 +3393,44 @@ SceneSubject subject_zixx_look() {
   return s;
 }
 
+// P2 DIAGNOSTIC SHADE SUBJECTS: the acceptance-gate views. One idle key,
+// fixed side + head-on pairs, in unlit / normal-viz / wireframe; plus the
+// full walk loop unlit (W1's first diagnostic: does the edge survive in
+// the unlit silhouette?). None in kLibrary, none in --check.
+SceneSubject subject_zixx_mode(const char* name, int shade, bool front, int frames) {
+  SceneSubject s;
+  s.name = name;
+  s.creature = 3;
+  s.frames = frames;
+  s.orbit = false;
+  zixx_common(s);
+  s.creature_shade = shade;
+  if (front) {
+    s.cam_yaw = 16384;
+    s.cam_ps = 4571;
+    s.cam_pc = 65377;
+    s.cam_eye = 10;
+  }
+  s.note = "DIAGNOSTIC: acceptance-gate shade mode";
+  return s;
+}
+SceneSubject subject_zixx_walk_unlit() {
+  SceneSubject s;
+  s.name = "zixxtrixx-walk-unlit";
+  s.creature = 4;
+  s.frames = zixx::kWalkKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.creature_shade = 1;
+  s.cam_k = 310000;
+  s.bump_ext = 18;
+  s.note =
+      "DIAGNOSTIC (W1): the golden walk with the light rig OUT -- if the "
+      "perceived edge survives in this unlit silhouette it is animation; "
+      "if not it was shading. The default verdict is NO walk change.";
+  return s;
+}
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3621,6 +3664,11 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-death")) rc |= render_scene(subject_zixx_death());
   if (wanted("zixxtrixx-balance")) rc |= render_scene(subject_zixx_balance());
   if (wanted("zixxtrixx-look")) rc |= render_scene(subject_zixx_look());
+  if (wanted("zixxtrixx-unlit")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit", 1, false, 1));
+  if (wanted("zixxtrixx-unlit-front")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit-front", 1, true, 1));
+  if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));
+  if (wanted("zixxtrixx-wire")) rc |= render_scene(subject_zixx_mode("zixxtrixx-wire", 3, false, 1));
+  if (wanted("zixxtrixx-walk-unlit")) rc |= render_scene(subject_zixx_walk_unlit());
 #ifdef ZIXX_SWEEP
   if (wanted("zixxtrixx-sweep")) rc |= render_scene(subject_zixx_sweep());
 #endif

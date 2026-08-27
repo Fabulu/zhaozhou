@@ -779,6 +779,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
                        SatLedger* L);
 
+/**
+ * DIAGNOSTIC shade modes for the acceptance gate (P2, 2026-08-28): unlit
+ * (fullbright / texture-only), packed-normal visualisation, and wireframe.
+ * A process-global because it is REEL TOOLING, not part of the oracle
+ * surface: kOff (the default) is bit-identical to not having the enum at
+ * all, no pinned subject sets it, and no RTL contract sees it.
+ */
+enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire };
+extern DebugShade g_debug_shade;
+
 /* ---------------------------------------------------------------------------
  * THE CREATURE EXTENT LAW (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 3)
  * ---------------------------------------------------------------------------

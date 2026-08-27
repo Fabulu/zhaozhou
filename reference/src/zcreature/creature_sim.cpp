@@ -422,6 +422,8 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 
 }  // namespace
 
+DebugShade g_debug_shade = DebugShade::kOff;
+
 void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, const mat4fx& vp,
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
                        SatLedger* L) {
@@ -581,6 +583,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         int32_t wx, wy, wz;
         int32_t lam_k, lam_f;  // per-vertex clamped Lamberts (Q16.16)
         bool lit;              // vertex carries a compiled normal
+        int8_t nx, ny, nz;     // the packed bind normal (diagnostic viz)
       };
       std::vector<PV> pvs(m.verts.size());
       for (size_t vi = 0; vi < m.verts.size(); ++vi) {
@@ -598,6 +601,9 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // clamped responses (see the law at blight above); (0,0,0) = the
         // vertex predates normals -> flat fallback for its triangles
         pvs[vi].lit = sv.nx != 0 || sv.ny != 0 || sv.nz != 0;
+        pvs[vi].nx = sv.nx;
+        pvs[vi].ny = sv.ny;
+        pvs[vi].nz = sv.nz;
         if (pvs[vi].lit) {
           const BoneLight& A = blight[sv.b0];
           const BoneLight& B = blight[sv.b1];
@@ -651,13 +657,58 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         } else {
           shc[0] = shc[1] = shc[2] = creature_light(lam_key, lam_fill);
         }
+        // ---- DIAGNOSTIC SHADE MODES (P2; reel tooling, default off) ----
+        if (g_debug_shade == DebugShade::kUnlit) {
+          // fullbright / texture-only: unit gain everywhere -- what the
+          // surface (or the flat material) looks like with the rig out
+          shc[0] = shc[1] = shc[2] = Shade3{65536, 65536, 65536};
+        } else if (g_debug_shade == DebugShade::kNormals) {
+          // packed-normal visualisation: gain encodes the bind normal
+          // (x,y,z) -> (r,g,b), 0 -> 128. Rides the same gouraud lanes.
+          const PV* corner[3] = {&a, &b, &c};
+          for (int k = 0; k < 3; ++k) {
+            shc[k] = Shade3{(corner[k]->nx + 128) * 65536 / 255,
+                            (corner[k]->ny + 128) * 65536 / 255,
+                            (corner[k]->nz + 128) * 65536 / 255};
+          }
+          tm.gouraud = gouraud;
+        } else if (g_debug_shade == DebugShade::kWire) {
+          // wireframe: the triangle's three edges, Bresenham, no fill --
+          // the mesh structure itself, see-through on purpose
+          const auto line = [&](int32_t x0q, int32_t y0q, int32_t x1q, int32_t y1q) {
+            int x0 = x0q >> 8, y0 = y0q >> 8, x1 = x1q >> 8, y1 = y1q >> 8;
+            const int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0);
+            const int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy;
+            for (;;) {
+              if (x0 >= 0 && y0 >= 0 && x0 < static_cast<int>(w) && y0 < static_cast<int>(h)) {
+                uint8_t* px = &surf.rgb[(static_cast<size_t>(y0) * w + x0) * 3];
+                px[0] = px[1] = px[2] = 235;
+              }
+              if (x0 == x1 && y0 == y1) break;
+              const int e2 = 2 * err;
+              if (e2 >= dy) { err += dy; x0 += sx; }
+              if (e2 <= dx) { err += dx; y0 += sy; }
+            }
+          };
+          line(a.s.x, a.s.y, b.s.x, b.s.y);
+          line(b.s.x, b.s.y, c.s.x, c.s.y);
+          line(c.s.x, c.s.y, a.s.x, a.s.y);
+          continue;  // no fill
+        }
         const Shade3& sh = shc[0];
         // TEXTURED PATH. raster_tri has always been able to sample CLUT8
         // through a TextureSpan; nothing on the creature side ever built one.
         // The light gain rides mod_r/g/b (flat) or the interpolated colour
         // lanes (Gouraud): texel colour TIMES the per-channel rig, one
         // multiply, no second shading model.
-        if ((T.page_direct != nullptr || T.page_set != nullptr) && m.page != 255) {
+        const bool want_tex = (T.page_direct != nullptr || T.page_set != nullptr) &&
+                              m.page != 255 &&
+                              g_debug_shade != DebugShade::kNormals;
+        const uint8_t em_r = g_debug_shade == DebugShade::kNormals ? 255 : m.r;
+        const uint8_t em_g = g_debug_shade == DebugShade::kNormals ? 255 : m.g;
+        const uint8_t em_b = g_debug_shade == DebugShade::kNormals ? 255 : m.b;
+        if (want_tex) {
           render::TextureSpan tex;
           tex.ts = T.page_set;
           tex.tile_a = m.page;
@@ -714,21 +765,21 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           render::raster_tri(surf, vpp, sa, sb, sc, 255, 255, 255, tm, &tex);
         } else {
           render::ScreenV sa = a.s, sb = b.s, sc = c.s;
-          if (gouraud) {
+          if (tm.gouraud) {
             // pre-lit colour on the 255 scale per corner, ONE rounding at
             // the multiply (the raster's write rounds the interpolant once)
-            sa.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[0].r));
-            sa.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[0].g));
-            sa.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[0].b));
-            sb.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[1].r));
-            sb.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[1].g));
-            sb.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[1].b));
-            sc.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[2].r));
-            sc.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[2].g));
-            sc.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[2].b));
+            sa.cr = static_cast<int32_t>((static_cast<int64_t>(em_r) * shc[0].r));
+            sa.cg = static_cast<int32_t>((static_cast<int64_t>(em_g) * shc[0].g));
+            sa.cb = static_cast<int32_t>((static_cast<int64_t>(em_b) * shc[0].b));
+            sb.cr = static_cast<int32_t>((static_cast<int64_t>(em_r) * shc[1].r));
+            sb.cg = static_cast<int32_t>((static_cast<int64_t>(em_g) * shc[1].g));
+            sb.cb = static_cast<int32_t>((static_cast<int64_t>(em_b) * shc[1].b));
+            sc.cr = static_cast<int32_t>((static_cast<int64_t>(em_r) * shc[2].r));
+            sc.cg = static_cast<int32_t>((static_cast<int64_t>(em_g) * shc[2].g));
+            sc.cb = static_cast<int32_t>((static_cast<int64_t>(em_b) * shc[2].b));
           }
-          render::raster_tri(surf, vpp, sa, sb, sc, sat_u8((m.r * sh.r + 32768) >> 16),
-                             sat_u8((m.g * sh.g + 32768) >> 16), sat_u8((m.b * sh.b + 32768) >> 16),
+          render::raster_tri(surf, vpp, sa, sb, sc, sat_u8((em_r * sh.r + 32768) >> 16),
+                             sat_u8((em_g * sh.g + 32768) >> 16), sat_u8((em_b * sh.b + 32768) >> 16),
                              tm);
         }
       }
