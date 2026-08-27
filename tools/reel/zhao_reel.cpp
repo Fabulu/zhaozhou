@@ -3044,13 +3044,16 @@ SceneSubject subject_zixx_walk() {
   SceneSubject s;
   s.name = "zixxtrixx-walk";
   s.creature = 4;
-  s.frames = zixx::kWalkKeys * 2 * 3;  // three full gait cycles
+  s.frames = zixx::kWalkKeys * 2 * 2;  // two full gait cycles
   s.orbit = false;
   zixx_common(s);
   // Framing on the flat ground: the camera pitch is fixed, so past ~330000
   // the horizon leaves the top of the frame entirely and the gait floats in
-  // a brown void. 310000 keeps the skyline in shot (like the attack's
-  // 235000 does) while the animal still fills over half the frame width.
+  // a brown void. 310000 keeps the skyline in shot while the animal fills
+  // over half the frame width -- and the CLOSE shot is what lets the new
+  // breath-bob and front wave read at all (a 2026-08-27 pull-back to 260000
+  // shrank a 50 mm head bob to 4 px). The traverse fits because the shot
+  // now runs TWO gait cycles, not three: kWalkSpeed grew 11 -> 13.
   s.cam_k = 310000;
   // FLAT GROUND for the gait shot (2026-08-26). At bump_ext 6 the mound's
   // curvature under the 3 m body swallowed the belly along most of the

@@ -273,7 +273,10 @@ constexpr int32_t kIdleTailSway = 2200;   // lazy left-right tail sway
 // lobe -- the walk's caterpillar principle applied to the part of the animal
 // that is off the ground. Slope-delta per joint; apply_stance compensates
 // the root so the grounded belly never feels it.
-constexpr int32_t kIdleWaveAmp = 1500;     // peak slope delta (~8 deg)
+constexpr int32_t kIdleWaveAmp = 2100;     // peak slope delta (~11 deg).
+                                           // 2100, was 1500: at 1500 the
+                                           // arch's travel measured 2 px on
+                                           // screen -- present, invisible.
 constexpr int32_t kIdleWaveSpatial = 5200; // phase step per joint: one slow
                                            // wave over the whole front lobe
 constexpr int32_t kIdleHeadSway = 800;     // slight head side-to-side yaw
@@ -297,10 +300,21 @@ constexpr int32_t kWalkSpeed = 13;      // mm per reel frame. 13, was 11: the
                                         // per cycle; 13*80 = 1040 mm of
                                         // advance keeps the contact points
                                         // from skating.
-constexpr int32_t kWalkBob = 26;        // mm of breath-bob while walking
+// The walk's breath: the head is BONE 0, the root, so no joint wave can
+// move it -- the visible head-bob IS the root compensation, and the wave
+// alone compensates to almost nothing (its sine deltas half-cancel across
+// the lobe: measured 8 px of head travel). The deepen drives a real comp
+// exactly the way the idle's breath does, at gait rate.
+constexpr int32_t kWalkDeepen = 400;    // 1/1000 extra descent authority.
+                                        // 400: at 150 the bob was ~50 mm =
+                                        // 4 px at shot distance -- present,
+                                        // invisible; at 400 the arch and
+                                        // head surge ~100 mm with the gait.
 // the walk's own front wave: same mechanism as the idle's, faster, so the
 // head and raised body surge with the gait instead of gliding rigidly
-constexpr int32_t kWalkWaveAmp = 1000;
+constexpr int32_t kWalkWaveAmp = 2400;  // 2400, was 1000: clip_report showed
+                                        // 6 px of head travel -- the wave
+                                        // existed and did not read
 constexpr int32_t kWalkWaveSpatial = 5600;
 
 // ATTACK geometry: the body coils into a near-circle of this radius
@@ -777,7 +791,12 @@ inline zc::Clip build_walk() {
       wave[k] = static_cast<int32_t>(
           (static_cast<int64_t>(sw) * kWalkWaveAmp * env / 1000) >> 16);
     }
-    const int32_t rise = apply_stance(g, 1000, 0, wave);
+    // the gait breath: two cycles per loop, phased a quarter ahead of the
+    // wave so the surge reads as one motion travelling through the animal
+    const int32_t sb =
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((phw * 2 + 26000) & 0xFFFF)}).raw;
+    const int32_t breath = ((sb + 65536) * 500) >> 16;  // 0..1000
+    const int32_t rise = apply_stance(g, 1000, (breath * kWalkDeepen) / 1000, wave);
 
     // THE CATERPILLAR HUMP, as a height field h >= 0 over the grounded nodes,
     // converted to joint pitches through EXACT segment angles (asin16), so
