@@ -223,6 +223,7 @@ attempted=0
 accounted=0
 caught=0
 survivors=()
+equivalents=()
 
 k=0
 while [ "$k" -lt "$expected" ]; do
@@ -267,8 +268,19 @@ while [ "$k" -lt "$expected" ]; do
   fi
 
   if run_lanes; then
-    echo "  $name  *** SURVIVED ***"
-    survivors+=("$name")
+    # A SURVIVOR IS EITHER PROVEN EQUIVALENT OR A HOLE. The proof lives in the
+    # mutant module, keyed by the mutant's token, so it cannot drift from the
+    # table it explains -- and an UNDECLARED survivor fails the sweep rather
+    # than being listed and forgotten.
+    tok=${name%% *}
+    if proof=$(python tools/sweep_debug_frameblit_mutants.py --equiv "$tok" 2>/dev/null); then
+      echo "  $name  equivalent (proven)"
+      echo "        $proof"
+      equivalents+=("$name")
+    else
+      echo "  $name  *** SURVIVED ***"
+      survivors+=("$name")
+    fi
   else
     echo "  $name  caught"
     caught=$((caught + 1))
@@ -284,8 +296,13 @@ restore || { echo "ABORT: final restore failed"; exit 4; }
 rebuild
 
 echo "----"
-echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught"
+echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught equivalent=${#equivalents[@]}"
+for s in "${equivalents[@]:-}"; do [ -n "$s" ] && echo "EQUIVALENT (proven): $s"; done
 for s in "${survivors[@]:-}"; do [ -n "$s" ] && echo "SURVIVOR: $s"; done
+if [ "${#survivors[@]}" -gt 0 ] && [ -n "${survivors[0]:-}" ]; then
+  echo "FAILED: ${#survivors[@]} mutant(s) survived without a proof of equivalence"
+  exit 12
+fi
 if [ "$attempted" != "$expected" ] || [ "$accounted" != "$expected" ]; then
   echo "CROSS-CHECK FAILED (attempted/accounted must both equal $expected)"
   exit 5

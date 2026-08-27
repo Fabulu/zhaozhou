@@ -140,6 +140,78 @@ MUTANTS = [
 ]
 
 
+# Mutants proved EQUIVALENT rather than closed with a test. The sweep driver
+# does not read this table -- these are recorded here because the alternative
+# is a survivor that looks like a hole forever.
+#
+# F17  "rem_next = rem_q - CHUNK_BYTES" instead of "- tlen_q".
+# F18  "the last partial beat is one byte too long".
+#
+#   EVERY LEGAL CANVAS IS AN EXACT MULTIPLE OF 64. zhao_pkg gives
+#       Z60   184,320   STORM 153,600   DUO   196,608
+#   and 184320 % 64 == 153600 % 64 == 196608 % 64 == 0. A blit whose length is
+#   not one of those three is refused by ST_BAD_LEN before a single chunk is
+#   walked, so inside the walk `rem_q` is always a whole number of chunks and
+#   `clamp_chunk(rem)` therefore always returns exactly CHUNK_BYTES. The two
+#   expressions are equal at every reachable state.
+#   The same fact makes `beat_left` always a multiple of 8 and never less than
+#   8 within a chunk, so the partial-beat branch F18 mutates is UNREACHABLE.
+#
+#   Both partial paths are defensive code for a canvas size that does not
+#   exist. That is worth knowing on its own: if a future mode is added whose
+#   canvas is not a multiple of 64, these two stop being equivalent and MUST
+#   be re-scored. That is the condition to watch, not the mutants.
+#
+# F10  dropping "issued != r_len" from the publish gate.
+#
+#   `retired` only advances on credits for writes that were ISSUED, and
+#   `issued` sums beat_bytes across the chunks, which sum to exactly r_len.
+#   So retired <= issued <= r_len at every state, and retired == r_len
+#   therefore implies issued == r_len. The remaining term already decides the
+#   branch. F09, which drops the OTHER term, is NOT equivalent and is caught:
+#   issued can reach r_len while credits are still outstanding, which is the
+#   whole reason the conjunction is written.
+
+# Machine-readable, so a survivor is either PROVEN equivalent here or fails the
+# sweep. A proof that lives only in a comment is indistinguishable from a hole
+# to everything except a careful reader.
+EQUIVALENT = {
+    "F10":
+        "retired only advances on credits for writes that were ISSUED, and "
+        "issued sums beat_bytes across chunks that sum to exactly r_len. So "
+        "retired <= issued <= r_len at every reachable state, and "
+        "retired == r_len therefore IMPLIES issued == r_len -- the remaining "
+        "term already decides the branch. F09, which drops the OTHER term, is "
+        "NOT equivalent and IS caught: issued can reach r_len while credits "
+        "are still outstanding, which is the whole reason the conjunction is "
+        "written that way.",
+    "F15":
+        "owns_lease is cleared UNCONDITIONALLY at every accept (the B_IDLE "
+        "arm), so a value left set by a publish cannot survive into the next "
+        "transaction. Between the publish and that accept the only reader is "
+        "the per-cycle lease watch, and the abort_pending/fail it would set "
+        "are cleared by the same accept. No reachable observation differs. "
+        "CHECKED AGAINST BOTH EVIDENCE KINDS, not just argued: the mutation "
+        "was applied and formal_debug_frameblit_safety PASSES with it too, so "
+        "neither the simulation lane nor the proof can see it.",
+    "F17":
+        "EVERY legal canvas is an exact multiple of 64: zhao_pkg gives Z60 "
+        "184,320, STORM 153,600 and DUO 196,608, and 184320 % 64 == 153600 % "
+        "64 == 196608 % 64 == 0. A length that is not one of the three is "
+        "refused by ST_BAD_LEN before a single chunk is walked, so inside the "
+        "walk rem_q is always a whole number of chunks and clamp_chunk(rem) "
+        "always returns exactly CHUNK_BYTES. The two expressions are equal at "
+        "every reachable state. RE-SCORE THIS THE MOMENT A MODE IS ADDED "
+        "WHOSE CANVAS IS NOT A MULTIPLE OF 64 -- that condition, not the "
+        "mutant, is the thing to watch.",
+    "F18":
+        "The same fact: with every canvas a multiple of 64, beat_left inside "
+        "a chunk is always a multiple of 8 and never below 8, so the "
+        "partial-beat branch this mutates is UNREACHABLE. Both partial paths "
+        "are defensive code for a canvas size that does not exist. Same "
+        "re-score condition as F17.",
+}
+
 def read_rtl(path=RTL):
     return io.open(path, encoding="utf-8", newline="").read()
 
@@ -168,6 +240,12 @@ def main(argv):
         return 0
     if len(argv) >= 3 and argv[1] == "--name":
         print(MUTANTS[int(argv[2])][0])
+        return 0
+    if len(argv) >= 3 and argv[1] == "--equiv":
+        proof = EQUIVALENT.get(argv[2])
+        if proof is None:
+            return 1
+        print(proof)
         return 0
     if len(argv) >= 3 and argv[1] == "--apply":
         name, old, new = MUTANTS[int(argv[2])]

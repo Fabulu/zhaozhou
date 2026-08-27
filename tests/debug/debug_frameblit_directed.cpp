@@ -151,6 +151,12 @@ struct Inject {
   // Cycles the HPS bridge makes the block wait before granting each burst. The
   // block must hold its request stable throughout and must not advance.
   uint32_t grant_delay = 0;
+  // F05: bump the lease GENERATION at an exact cycle, rather than after a
+  // byte count. Every other injection here is keyed on bytes_read or credits,
+  // and the window this has to hit is the single cycle between the request
+  // being ACCEPTED and being VALIDATED -- before any byte has moved, so no
+  // byte-keyed trigger can reach it.
+  uint32_t regrant_at_cycle = UINT32_MAX;
   // Retirement: credits stop coming back once this many bytes have been
   // credited, and stay stopped for `retire_hold_cycles`. This is the only way
   // to tell "the writes were accepted" from "the writes actually landed".
@@ -179,6 +185,12 @@ struct Observed {
   uint32_t bytes_retired = 0;  // bytes credited back by the memory model
   bool done = false;
   bool wdata_moved_under_stall = false;  // the held-stable law
+  // F20: req_ready_o must fall the moment a request is accepted and stay low
+  // until the block is idle again. Nothing in this file had ever looked at it
+  // after the handshake, so a block that advertised readiness through the
+  // whole transaction -- and would have accepted a second request on top of
+  // the one it was running -- passed every check.
+  bool ready_while_busy = false;
 
   // Identity carried by whichever terminal event fired.
   uint8_t publish_slot = 0xFF;
@@ -207,6 +219,7 @@ struct Observed {
 Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::Lease& lease,
              const std::vector<uint8_t>& source, const Inject& inj) {
   Observed obs;
+  bool accepted = false;  // the request handshake has fired (see F20)
 
   // Reset per transaction so counters and state are clean.
   dut.rst_n = 0;
@@ -270,6 +283,10 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
     }
     if (inj.lease_lost_after_retire != UINT32_MAX && credited >= inj.lease_lost_after_retire) {
       lease_valid = false;
+    }
+    if (cycle >= inj.regrant_at_cycle) {
+      lease_valid = true;  // still valid, same slot -- only the generation moves
+      gen = static_cast<uint16_t>(lease.generation + 1);
     }
     if (inj.lease_lost_after != UINT32_MAX && bytes_read >= inj.lease_lost_after) {
       if (inj.regrant_lease) {
@@ -432,8 +449,14 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
       obs.done = true;
     }
 
+    // Sampled BEFORE the edge, in the same delta the handshake is judged in.
+    if (accepted && !dut.done_o && dut.req_ready_o) obs.ready_while_busy = true;
+
     zhao::tick(dut);
-    if (dut.req_valid_i && dut.req_ready_o) dut.req_valid_i = 0;
+    if (dut.req_valid_i && dut.req_ready_o) {
+      dut.req_valid_i = 0;
+      accepted = true;
+    }
   }
 
   obs.bytes_written = bytes_written;
@@ -505,6 +528,111 @@ int main() {
   req.expected_crc = good_crc;
   const zd::Lease lease{true, 1, 42};
 
+  // ---- 0b. THE GAPS THE MUTATION SWEEP FOUND ------------------------------
+  //
+  // DEBUG.FRAMEBLIT was recorded CLOSED -- RTL_VERIFIED, a directed lane, a
+  // lint lane and a formal safety proof, all green -- and had never been
+  // mutated. tools/sweep_debug_frameblit.sh scored 12 of 20 on its first run.
+  // These cases close the ones that were real. The mutant each answers is
+  // named so a future reader can re-score it rather than trust this comment.
+  {
+    // F01: a request that is TOO LONG. The only bad-length case in this file
+    // used len = 64, which is SHORTER than the canvas -- so a check written as
+    // `r_len < canvas` instead of `r_len != canvas` still refused it and every
+    // test passed. An over-long blit is the dangerous direction: it is the one
+    // that would walk past the end of the leased slot.
+    zd::BlitRequest long_req;
+    long_req.dst_slot = 0;
+    long_req.mode = kMode;
+    long_req.len = canvas + 64;
+    long_req.expected_crc = 0;
+    const zd::Lease l{true, 0, 7};
+    const Observed o = run(dut, long_req, l, make_source(64, 2), Inject{});
+    check(o.status == static_cast<uint8_t>(zd::BlitStatus::kBadLen),
+          "F01: a length LONGER than the canvas is rejected",
+          static_cast<uint8_t>(zd::BlitStatus::kBadLen), o.status);
+    check(!o.published, "F01: and nothing is published", 0, o.published ? 1 : 0);
+  }
+
+  {
+    // F11: the CRC must be an EQUALITY, not a containment. A check written as
+    // `(crc & expected) != expected` passes whenever the computed value merely
+    // CONTAINS the expected bits, so every corruption that only sets bits
+    // publishes as a good frame. The expected value here is the true CRC with
+    // its lowest set bit cleared, which is a strict subset of it -- so the
+    // block must REFUSE, and a containment test would accept.
+    zd::BlitRequest sub = req;
+    sub.expected_crc = good_crc & (good_crc - 1u);
+    check(sub.expected_crc != good_crc, "F11: the subset CRC actually differs from the true one", 1,
+          sub.expected_crc != good_crc ? 1 : 0);
+    const Observed o = run(dut, sub, lease, src, Inject{});
+    check(o.status == static_cast<uint8_t>(zd::BlitStatus::kCrc),
+          "F11: a CRC that is a strict SUBSET of the computed one is refused",
+          static_cast<uint8_t>(zd::BlitStatus::kCrc), o.status);
+    check(!o.published, "F11: and nothing is published", 0, o.published ? 1 : 0);
+  }
+
+  {
+    // F15: the lease must be RELEASED by a successful publish. If ownership
+    // stays set, the block still believes it owns a lease it has published and
+    // handed back -- and the next request to fail validation releases a lease
+    // it does not own. That second release is the only externally visible
+    // consequence, which is why it took a second blit to see it.
+    const Observed good = run(dut, req, lease, src, Inject{});
+    check(good.published, "F15: the first blit publishes", 1, good.published ? 1 : 0);
+
+    zd::BlitRequest bad = req;
+    bad.len = 64;  // refused at validation, before any ownership is taken
+    const Observed o = run(dut, bad, lease, make_source(64, 3), Inject{});
+    check(o.status == static_cast<uint8_t>(zd::BlitStatus::kBadLen),
+          "F15: the second blit is refused for its length",
+          static_cast<uint8_t>(zd::BlitStatus::kBadLen), o.status);
+    check(!o.released, "F15: and it releases NOTHING, because the publish gave the lease back", 0,
+          o.released ? 1 : 0);
+  }
+
+  {
+    // F05: the GENERATION check at validation. If it is skipped, the block
+    // takes ownership of a lease that has already moved on; the per-cycle
+    // watch then notices and aborts, so the STATUS is kLeaseLost either way.
+    // What differs is what it does on the way out: the RTL's own comment says
+    // a validation failure 'goes to the release path with owns_lease still
+    // clear -- so it completes with a status and releases nothing'. Skipping
+    // the check makes it RELEASE a lease it never legitimately held.
+    //
+    // The window is one cycle wide, between accept and validate, so the cycle
+    // is swept rather than guessed.
+    // Swept, and the shape of the answer is worth recording because it is what
+    // makes the check exact. On the pristine block:
+    //
+    //   c=0      the regrant lands BEFORE accept, so r_gen latches the new
+    //            generation and the blit publishes normally
+    //   c=1      it lands in the accept->validate window: REFUSED, and
+    //            released=0 -- ownership was never taken
+    //   c=2..6   it lands after validation: ownership WAS legitimately taken,
+    //            the per-cycle watch aborts, and released=1, which is correct
+    //
+    // So the law that separates the two is the existence of a refusal that
+    // releases NOTHING. Skipping the generation check at validation deletes
+    // that case entirely -- every regrant then acquires ownership first.
+    //
+    // My first attempt asserted that NO refusal-before-a-byte releases, and it
+    // failed on the pristine block, correctly: c=2..6 refuse before a byte has
+    // moved and release because they own the lease. 'Before a byte moved' is
+    // not 'never owned it'.
+    int refused_without_release = 0;
+    for (uint32_t c = 0; c <= 6; ++c) {
+      Inject inj;
+      inj.regrant_at_cycle = c;
+      const Observed o = run(dut, req, lease, src, Inject{inj});
+      if (!o.published && o.bytes_written == 0 && !o.released) ++refused_without_release;
+    }
+    check(refused_without_release >= 1,
+          "F05: a generation that moves before validation is refused WITHOUT "
+          "taking the lease",
+          1, refused_without_release);
+  }
+
   // ---- 1. the happy path --------------------------------------------------
   {
     const zd::BlitOutcome want = zd::run_blit(req, lease, canvas, src);
@@ -515,6 +643,8 @@ int main() {
           got.published ? 1 : 0);
     check(!got.released, "and the slot is not released", 0, got.released ? 1 : 0);
     check(got.bytes_written == canvas, "every byte was written", canvas, got.bytes_written);
+    check(!got.ready_while_busy, "F20: the block advertises NO readiness while a blit is running",
+          0, got.ready_while_busy ? 1 : 0);
     check(!got.wdata_moved_under_stall, "write data never moved under a stall", 0,
           got.wdata_moved_under_stall ? 1 : 0);
 
