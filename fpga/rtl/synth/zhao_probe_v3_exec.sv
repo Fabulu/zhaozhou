@@ -149,9 +149,28 @@ module zhao_probe_v3_exec #(
   logic [CW-1:0]  issue_ctx_c;
   logic [CTX-1:0] ready_c;
 
+  // ---- DOT sequencing: one multiplier, two or three products -------------
+  // A DOT2 needs two products and a DOT3 three, against a budget of ONE
+  // multiplier per lane (reports/Fieldv3.md: four 33-bit lanes at ~12 DSPs).
+  // So they are sequenced, and the schedule is in
+  // reports/FIELD_V3_DOT_SEQUENCING.md.
+  //
+  // THE ONE RULE THAT MAKES THIS SIMPLE: a DOT anywhere in the pipe freezes
+  // ISSUE. Nothing can enter behind it, so no two instructions ever want the
+  // multiplier in the same clock and there is no arbiter. Instructions AHEAD
+  // of the DOT are unaffected -- each issued its own a0*b0 at its own S2, and
+  // back-to-back issues are exactly what this multiplier supports.
+  function automatic logic is_dot(input logic [7:0] op);
+    is_dot = (op == 8'h10) || (op == 8'h11);  // OP_DOT2, OP_DOT3
+  endfunction
+
+  logic dot_inflight_c;
+  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||
+                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));
+
   always_comb begin
     ready_c = active_r & ~inflight_r;
-    issue_c = |ready_c;
+    issue_c = |ready_c && !dot_inflight_c && !hold_c;
     issue_ctx_c = '0;
     for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);
   end
@@ -207,11 +226,16 @@ module zhao_probe_v3_exec #(
   logic [RW-1:0] rf_wreg_c;
   logic signed [31:0] rf_wdata_c;
 
-  zhao_probe_banked_rf #(
+  // THE FUNCTIONAL register file, not the fit probe. `zhao_probe_banked_rf`
+  // measures the storage shape and says in its own header that it implements
+  // no Field semantics: it addresses every bank with the SAME row, which
+  // cannot read a group that crosses a multiple of four. This block used it
+  // until 2026-08-28 and the differential passed 440 programs, because scalar
+  // ops never read a+1 or a+2. The first DOT2 disagreed with the interpreter
+  // on exactly the group starts that are 2 or 3 modulo 4.
+  zhao_field_v3_rf #(
       .CONTEXTS(CTX),
-      .REGS    (REGS),
-      .BANKS   (4),
-      .COPIES  (3)
+      .REGS    (REGS)
   ) u_rf (
       .clk    (clk),
       .wr_en_i(rf_we_c),
@@ -228,18 +252,58 @@ module zhao_probe_v3_exec #(
   );
 
   // ---- one multiplier, registered both sides ------------------------------
+  // Its operand ports are MULTIPLEXED by which stage currently needs a
+  // product. Ordinary ops issue a0*b0 at S2. A DOT additionally issues
+  // a1*b1 at S3 and, for DOT3, a2*b2 at S4 -- taking each pair from the
+  // stage where it is still live, because the register file's outputs are
+  // valid for exactly one clock.
   logic signed [65:0] prod_ab;
   logic               prod_valid;
+
+  logic               mul_issue_c;
+  logic signed [32:0] mul_a_c, mul_b_c;
+
+  // How many products this instruction still owes, counted down at S4.
+  logic [1:0] dot_cnt_r;
+  logic signed [65:0] dot_acc_r;
+
+  logic dot2_at_s4_c, dot3_at_s4_c, hold_c;
+  assign dot2_at_s4_c = s4_v_r && (s4_op_r == 8'h10);
+  assign dot3_at_s4_c = s4_v_r && (s4_op_r == 8'h11);
+  // DOT2 owes one more product after its first, DOT3 owes two. The hold ends
+  // when the last one has been accumulated.
+  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);
+
+  always_comb begin
+    mul_issue_c = s2_v_r;
+    mul_a_c     = 33'(rf_a0);
+    mul_b_c     = 33'(rf_b0);
+    if (s3_v_r && is_dot(s3_op_r)) begin
+      mul_issue_c = 1'b1;
+      mul_a_c     = 33'(s3_a1_r);
+      mul_b_c     = 33'(s3_b1_r);
+    end else if (dot3_at_s4_c && dot_cnt_r == 2'd0) begin
+      mul_issue_c = 1'b1;
+      mul_a_c     = 33'(s4_a2_r);
+      mul_b_c     = 33'(s4_b2_r);
+    end
+  end
 
   zhao_field_mul u_mul (
       .clk    (clk),
       .rst_n  (rst_n),
-      .issue_i(s2_v_r),
-      .a_i    (33'(rf_a0)),
-      .b_i    (33'(rf_b0)),
+      .issue_i(mul_issue_c),
+      .a_i    (mul_a_c),
+      .b_i    (mul_b_c),
       .p_o    (prod_ab),
       .p_valid_o(prod_valid)
   );
+
+  // The sum is formed at the FULL 66-bit product width and rescaled ONCE by
+  // the ALU. Rescaling each product and adding is a different answer, and
+  // zfield's dot2/dot3 are the single-rounding form.
+  logic signed [65:0] dot_sum_c;
+  assign dot_sum_c = dot_acc_r + prod_ab;
 
   // ---- the op law, reused verbatim from the v2 engine ---------------------
   logic signed [31:0] alu_result;
@@ -253,11 +317,12 @@ module zhao_probe_v3_exec #(
       .b0_i  (s4_b0_r), .b1_i(s4_b1_r), .b2_i(s4_b2_r),
       .c_i   (s4_c_r),
       .prod_ab_i(prod_ab),
-      // DOT2/DOT3 are NOT part of this increment. Feeding them zero would be a
-      // wrong ANSWER; the ALU's own op_unsupported_o is the honest signal, and
-      // it is surfaced on a port rather than swallowed.
-      .dot2_i(66'sd0),
-      .dot3_i(66'sd0),
+      // The accumulated sum, at full product width. The ALU rescales it once.
+      // Only one of these is read per op, and both carry the same accumulator
+      // because only one DOT is ever in flight -- the issue freeze guarantees
+      // it.
+      .dot2_i(dot_sum_c),
+      .dot3_i(dot_sum_c),
       .result_o(alu_result),
       .is_end_o(alu_is_end),
       .writes_o(alu_writes),
@@ -281,8 +346,12 @@ module zhao_probe_v3_exec #(
   // survived precisely because nothing checked that a refused op leaves the
   // register file alone. The header of this file already CLAIMED the write was
   // refused; the claim was wrong until this line existed.
+  // DOT USED TO BE REFUSED HERE and is now IMPLEMENTED, so this term is gone
+  // from the write enable. What remains refused is an opcode the ALU itself
+  // does not know, via its own `default` arm clearing writes_o -- a different
+  // gate, and the one mutant X11 attacks.
   logic dot_here_c;
-  assign dot_here_c = s4_v_r && (s4_op_r == 8'h10 || s4_op_r == 8'h11);
+  assign dot_here_c = 1'b0;
 
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
@@ -320,6 +389,8 @@ module zhao_probe_v3_exec #(
       inflight_r    <= '0;
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;
+      dot_acc_r     <= '0;
+      dot_cnt_r     <= 2'd0;
       sat_add_o     <= 1'b0;
       sat_mul_o     <= 1'b0;
       sat_rescale_o <= 1'b0;
@@ -336,6 +407,21 @@ module zhao_probe_v3_exec #(
         pc_r[start_ctx_i]     <= '0;
       end
 
+      // THE DOT HOLD, and it lives OUTSIDE the freeze below on purpose: this
+      // is the counter that ENDS the hold, so gating it with `!hold_c` would
+      // deadlock the pipe -- which is exactly what the first version did, and
+      // the barrel test caught it as every context failing to finish.
+      if (hold_c) begin
+        dot_acc_r <= dot_sum_c;
+        dot_cnt_r <= dot_cnt_r + 2'd1;
+      end else if (s4_v_r) begin
+        dot_acc_r <= '0;
+        dot_cnt_r <= 2'd0;
+      end
+
+      // Every stage advance below is gated on `!hold_c`: a held DOT must not
+      // be overwritten, and nothing behind it may move past it.
+      if (!hold_c) begin
       // S0 -> S1: issue and fetch
       s1_v_r <= issue_c;
       if (issue_c) begin
@@ -370,6 +456,7 @@ module zhao_probe_v3_exec #(
 
       if (s4_v_r != prod_valid) desync_o <= 1'b1;
 
+
       // S3 -> S4: carry a second clock so the operands meet their product
       s4_v_r   <= s3_v_r;
       s4_ctx_r <= s3_ctx_r;
@@ -397,6 +484,7 @@ module zhao_probe_v3_exec #(
         if (alu_sat_mul) sat_mul_o <= 1'b1;
         if (alu_sat_rescale) sat_rescale_o <= 1'b1;
       end
+      end  // !hold_c
     end
   end
 

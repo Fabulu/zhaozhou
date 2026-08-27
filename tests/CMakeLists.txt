@@ -1419,7 +1419,7 @@ verilate(test_field_v3_exec_directed
   PREFIX Vzhao_probe_v3_exec
   TOP_MODULE zhao_probe_v3_exec
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_banked_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
 add_test(NAME field_v3_exec_directed COMMAND test_field_v3_exec_directed)

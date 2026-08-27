@@ -97,11 +97,15 @@ struct Prng {
   }
 };
 
-// The ops this increment implements. DOT2/DOT3 are excluded on purpose: they
-// need two and three products against a one-multiplier-per-lane budget.
-const uint8_t kOps[] = {zfield::OP_MOV, zfield::OP_ADD,    zfield::OP_SUB, zfield::OP_MUL,
-                        zfield::OP_MAD, zfield::OP_MIN,    zfield::OP_MAX, zfield::OP_ABS,
-                        zfield::OP_CLAMP, zfield::OP_SELECT};
+// The ops this block implements. DOT2/DOT3 joined on 2026-08-28 when the
+// sequencer landed -- they need two and three products against a
+// one-multiplier-per-lane budget, so they hold the pipe while the extra
+// products are collected. They are in the RANDOM set deliberately: the
+// sequencer's interaction with ordinary ops around it is the part most likely
+// to be wrong, and only mixed programs exercise it.
+const uint8_t kOps[] = {zfield::OP_MOV, zfield::OP_ADD,    zfield::OP_SUB,  zfield::OP_MUL,
+                        zfield::OP_MAD, zfield::OP_MIN,    zfield::OP_MAX,  zfield::OP_ABS,
+                        zfield::OP_CLAMP, zfield::OP_SELECT, 0x10 /*DOT2*/, 0x11 /*DOT3*/};
 
 // Build a canonical program over `n_in` varying lanes using only kOps.
 // Maintains the validator's shape: def-before-use, dst outside the input
@@ -121,9 +125,22 @@ zfield::Decoded alu_program(Prng& rng, int n_in, int n_body) {
   for (int k = 0; k < n_body && next_reg < 20; ++k) {
     zfield::Instr ins = {};
     ins.op = kOps[rng.below((uint32_t)(sizeof kOps))];
+
+    // DOT2 and DOT3 read a GROUP of consecutive registers -- a, a+1 (and a+2)
+    // -- not a single one. A group start chosen without room for its members
+    // points the tail of the group at registers that were never defined, and
+    // the planner then correctly lowers those members as SCALAR sources. That
+    // is not an RTL fault and not a planner fault; it is an invalid program.
+    // 114 of 400 randomized programs were being generated that way.
+    const int width = (ins.op == 0x10) ? 2 : (ins.op == 0x11) ? 3 : 1;
+    if (next_reg < width) {  // no room for the group yet
+      ins.op = zfield::OP_ADD;
+    }
+    const int span = (ins.op == 0x10) ? 2 : (ins.op == 0x11) ? 3 : 1;
+    const uint32_t hi = (uint32_t)(next_reg - span + 1);
     ins.dst = (uint8_t)next_reg;
-    ins.a = (uint8_t)rng.below((uint32_t)next_reg);
-    ins.b = (uint8_t)rng.below((uint32_t)next_reg);
+    ins.a = (uint8_t)rng.below(hi);
+    ins.b = (uint8_t)rng.below(hi);
     ins.c = (uint8_t)rng.below((uint32_t)next_reg);
     d.instrs.push_back(ins);
     ++next_reg;
@@ -217,14 +234,40 @@ bool install(Dut& d, int ctx, const zfield::Fplan& fp, const int32_t* in, size_t
              bool* saw_scalar) {
   for (size_t u = 0; u < fp.uops.size(); ++u) {
     const zfield::VecUop& q = fp.uops[u];
+
+    // THE FPLAN FLATTENS SOURCE GROUPS; THE HARDWARE WANTS GROUP STARTS.
+    // zfield_plan lowers sources group by group -- `for g, for w:
+    // src[k++] = starts[g] + w` -- so a DOT2 arrives as [a, a+1, b, b+1] and a
+    // DOT3 as [a, a+1, a+2, b, b+1, b+2]. The register file reads a, a+1, a+2
+    // from ONE address, so what it needs is the start of each group.
+    //
+    // The members are guaranteed consecutive after planning: compact_vregs is
+    // order-preserving and notes that "group members are consecutive integers
+    // and are all referenced, so nothing can fall between them". The hardware
+    // depends on that, so it is ASSERTED below rather than assumed.
+    const int aw = (q.op == 0x10) ? 2 : (q.op == 0x11) ? 3 : 1;
     int src[3] = {0, 0, 0};
-    for (int s = 0; s < 3; ++s) {
+    const int starts[3] = {0, aw, aw * 2};
+    for (int g = 0; g < 3; ++g) {
+      const int s = starts[g];
       if (s < (int)q.n_src) {
         if (q.src[s].kind != zfield::SrcKind::kVec) {
           *saw_scalar = true;
           return false;
         }
-        src[s] = (int)q.src[s].idx;
+        src[g] = (int)q.src[s].idx;
+      }
+    }
+    // Consecutiveness of every member within each group.
+    for (int g = 0; g < 2; ++g) {
+      for (int w = 1; w < aw; ++w) {
+        const int s = starts[g] + w;
+        if (s >= (int)q.n_src) continue;
+        if (q.src[s].kind != zfield::SrcKind::kVec ||
+            (int)q.src[s].idx != src[g] + w) {
+          *saw_scalar = true;  // not consecutive: outside what the RF can read
+          return false;
+        }
       }
     }
     d.load_uop(ctx, (int)u, q.op, (int)q.dst, src[0], src[1], src[2], q.imm);
@@ -297,7 +340,7 @@ void test_one_point_matches_the_interpreter(Vzhao_probe_v3_exec& top) {
 
 // A DOT program must be REFUSED, not answered with a zero product.
 void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
-  printf("-- an op this increment omits is refused, not answered\n");
+  printf("-- DOT is now COMPUTED, and an unknown opcode is still refused\n");
   Dut d(top);
   d.reset();
   d.preload(0, 0, 3 << 16);
@@ -312,21 +355,22 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
   while (guard++ < 200) {
     if (d.step(&done_ctx) && done_ctx == 0) break;
   }
-  check(top.unsupported_o == 1, "a DOT op raises unsupported rather than writing a zero", 1,
+  // THIS ASSERTION INVERTED ON 2026-08-28, and that inversion is the point:
+  // reports/FIELD_V3_DOT_SEQUENCING.md predicted it as the signal that the
+  // RTL's scope note and this test moved together rather than one drifting
+  // from the other. DOT is implemented; it must be COMPUTED, not refused.
+  check(top.unsupported_o == 0, "a DOT op is implemented now, not refused", 0,
         (int)top.unsupported_o);
   check(top.desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.desync_o);
+  // 3*7 + 5*11 in fx16 = (3<<16)*(7<<16)>>16 + ... -- the value is checked
+  // against the interpreter by the randomized lane; here the point is that a
+  // DOT PRODUCES a write at all, which the refusing version never did.
+  check(d.writebacks > 0, "and it writes its result", 1, d.writebacks > 0 ? 1 : 0);
 
-  // RAISING THE FLAG IS NOT THE SAME AS NOT WRITING, and the first sweep of
-  // this block proved the difference matters: X11 -- dropping `alu_writes`
-  // from the write enable -- SURVIVED, because nothing checked that a refused
-  // op leaves the register file alone.
-  //
-  // Only two things clear the ALU's writes_o: END, which the separate
-  // !alu_is_end term already blocks, and the unsupported default. So for an
-  // op like DOT, `alu_writes` is the ONLY thing standing between a refusal
-  // and a garbage value written into a live register.
-  check(d.writebacks == 0, "and it writes NOTHING -- a refusal must not touch the file", 0,
-        d.writebacks);
+  // The "a refusal writes nothing" check that used to live here moved to the
+  // UNKNOWN-OPCODE case below when DOT became implemented. It was never about
+  // DOT specifically -- it is about the ALU's own `default` refusal, which is
+  // the path `alu_writes` actually gates.
 
   // THERE ARE TWO REFUSAL PATHS AND THEY ARE NOT THE SAME GATE. A DOT is
   // refused by THIS block (dot_here_c), because the ALU knows the opcode and
@@ -464,10 +508,27 @@ void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
   // below. A pipeline whose depth silently changes is a pipeline whose budget
   // is no longer the one the deadline was computed from.
   //
-  // 65 and 126 are MEASURED on this program, not targets. If a change moves
-  // them, that is a fact to look at and re-pin, not a test to relax.
-  check(clocks_1 == 65, "one context: the measured cost, pinned", 65, clocks_1);
-  check(clocks_8 == 126, "eight contexts: the measured cost, pinned", 126, clocks_8);
+  // These are MEASURED on this program, not targets. If a change moves them,
+  // that is a fact to look at and re-pin, not a test to relax.
+  //
+  // RE-PINNED 2026-08-28 when DOT sequencing landed and DOT joined the random
+  // op set. The movement is the finding:
+  //
+  //     one context    65 -> 66 clocks   (+1)
+  //     eight contexts 126 -> 166 clocks (+32%)
+  //
+  // One context barely notices: it is already stalled by the five-stage depth,
+  // so the DOT hold overlaps with waiting it was doing anyway. Eight contexts
+  // pay 32%, and that asymmetry is the honest cost of the design choice --
+  // a DOT freezes ISSUE GLOBALLY, so one context's dot product stalls all
+  // seven others. That bought a sequencer with no multiplier arbiter.
+  //
+  // The alternative -- stalling only the DOT's own context and letting the
+  // others issue -- needs an arbiter on the multiplier port. Whether it is
+  // worth it depends on DOT density in real Earth programs, which the Phase 4
+  // composition test measures and this microbenchmark cannot.
+  check(clocks_1 == 66, "one context: the measured cost, pinned", 66, clocks_1);
+  check(clocks_8 == 166, "eight contexts: the measured cost, pinned", 166, clocks_8);
 
   // Eight contexts do eight times the work in far less than eight times the
   // clocks -- that IS the barrel. Stated as a measured inequality rather than
