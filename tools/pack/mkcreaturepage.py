@@ -382,8 +382,12 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # rear half of the SKULL, and a head-on view showed it as a green rim
     # ringing the face -- Front.png's ball has no green on it at all. At 40
     # the green begins on the neck rows only.
+    # ...and again in the head-only run (40 -> 47): the skull is now LEVEL
+    # on its own bone, so a frontal camera sees its whole crown -- at 40 the
+    # ball's top read as a green cap where Front.png paints blue and pink.
+    # 47 leaves the green to the blend-zone neck rows.
     for x in range(TILE):
-        start = 40 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
+        start = 47 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
         for y in range(max(0, int(start)), TILE):
             dtop = min(abs(x - 48), TILE - abs(x - 48))
             dbel = min(abs(x - 16), TILE - abs(x - 16))

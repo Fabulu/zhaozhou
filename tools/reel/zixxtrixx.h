@@ -1196,6 +1196,12 @@ inline zc::Clip build_fall() {
     // SLOW LOOSE NECK: the head lolls on one- and two-cycle waves, phase
     // staggered down the first joints so the motion travels instead of
     // snapping. Strongest right at the head.
+    // Neck loll: the PITCH half runs at 60% since the head-only run -- the
+    // skull is a rigid ball on its own bone now, and a full-amp pitch loll
+    // folded the hook CLOSED over it: at key 92 the whole head vanished
+    // inside the front loop (fall-k92-k126.png in the run folder; the
+    // overlap probe measured it 229 mm deep). The LATERAL half keeps its
+    // full amplitude -- the wobble the owner asked for is side-to-side.
     for (int k = 1; k <= 4; ++k) {
       const int32_t p1 = ph + k * 7000;
       const int32_t p2 = ph * 2 + 16000 + k * 9000;
@@ -1204,18 +1210,18 @@ inline zc::Clip build_fall() {
       const int32_t amp = kFallNeckAmp - (k - 1) * 500;
       g.q[kBSpine0 + k] =
           quat_mul(g.q[kBSpine0 + k],
-                   quat_mul(quat_z((s1 * amp) >> 16), quat_y((s2 * (amp * 2 / 3)) >> 16)));
+                   quat_mul(quat_z((s1 * (amp * 3 / 5)) >> 16),
+                            quat_y((s2 * (amp * 2 / 3)) >> 16)));
     }
-    // THE SKULL BONE lolls hardest of all -- the rigid cranium no longer
-    // bends with joints 1..3, so it gets its own leading loll (a half-step
-    // ahead of the k=1 wave) on top of the attitude. Slow, loose, one- and
-    // two-cycle periods: wobble, not jitter.
+    // THE SKULL BONE lolls loosely on top of the attitude: a leading pitch
+    // loll at half amp and the lateral yaw at full -- slow one- and
+    // two-cycle periods, wobble not jitter.
     {
       const int32_t p1 = ph + 3500;
       const int32_t p2 = ph * 2 + 16000 + 4500;
       const int32_t s1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p1 & 0xFFFF)}).raw;
       const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p2 & 0xFFFF)}).raw;
-      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + ((s1 * kFallNeckAmp) >> 16)),
+      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + ((s1 * (kFallNeckAmp / 2)) >> 16)),
                              quat_y((s2 * (kFallNeckAmp * 2 / 3)) >> 16));
     }
     // THE LATERAL WAVE (2026-08-27): a slow serpentine undulation travelling
