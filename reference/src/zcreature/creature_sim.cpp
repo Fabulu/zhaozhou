@@ -392,6 +392,12 @@ struct Shade3 {
   int32_t r, g, b;  // Q16.16 gain per channel
 };
 
+// The smooth/face mix, in 1/1024 (N3, owner direction: keep a blend knob —
+// 100% smooth normals erase the hand-cut low-poly read entirely). 819/1024
+// = 0.8 of the per-vertex smooth Lambert + 0.2 of the face Lambert at each
+// corner, applied to key and fill alike, BEFORE the rig composes gains.
+inline constexpr int32_t kSmoothMixNum = 819;
+
 // Compose the rig into a per-channel gain. Each channel is quantised on the
 // same 1/16 ladder the palette tool counts, so the shade COUNT per material is
 // unchanged -- what changes is that the three channels no longer move
@@ -514,24 +520,94 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     for (int b = 0; b < T.bank.bone_count; ++b) {
       mat3x4_mul(world, pose[b], worldm[b], L);
     }
+
+    // ---- PER-VERTEX LIGHTING (N3): pull each light back into BIND space,
+    // once per bone, instead of rotating every normal into the world.
+    //   N · (R_b^T L) == (R_b N) · L, and worldm's rotation block is the
+    // pose rotation TIMES the uniform bulk scale, so each pulled-back
+    // component is divided by the scale to restore a unit direction — one
+    // §4 round-half-up division per component, 6 per bone, per light.
+    // The per-vertex Lambert is then the SKIN-WEIGHT BLEND OF THE TWO
+    // BONES' CLAMPED RESPONSES (the N5 probe's option (b), chosen as the
+    // law: no renormalisation, no normal lane through the skin datapath —
+    // the cheap form the silicon increment would build).
+    struct BoneLight {
+      int32_t kx, ky, kz;  // key dir in bone bind space, Q16.16
+      int32_t fx, fy, fz;  // fill dir likewise
+    };
+    std::array<BoneLight, kMaxBones> blight{};
+    const int32_t bulk = ci.bulk.scale > 0 ? ci.bulk.scale : 1 << 16;
+    for (int b = 0; b < T.bank.bone_count; ++b) {
+      const mat3x4fx& M = worldm[b];
+      const auto pull = [&](int32_t lx, int32_t ly, int32_t lz, int col) {
+        const __int128 p = static_cast<__int128>(M.m[col]) * lx +
+                           static_cast<__int128>(M.m[col + 4]) * ly +
+                           static_cast<__int128>(M.m[col + 8]) * lz;
+        // rescale(.,16) puts the transpose product back in Q16.16 (times the
+        // bulk scale); the division removes the scale. Two roundings total,
+        // each a §4 round-half-up.
+        const int32_t scaled = rescale_s32(p, 16, L, &SatLedger::mul);
+        return render::div_rhu_s128(static_cast<__int128>(scaled) << 16, bulk);
+      };
+      blight[b].kx = pull(render::kLightX, render::kLightY, render::kLightZ, 0);
+      blight[b].ky = pull(render::kLightX, render::kLightY, render::kLightZ, 1);
+      blight[b].kz = pull(render::kLightX, render::kLightY, render::kLightZ, 2);
+      blight[b].fx = pull(kFillX, kFillY, kFillZ, 0);
+      blight[b].fy = pull(kFillX, kFillY, kFillZ, 1);
+      blight[b].fz = pull(kFillX, kFillY, kFillZ, 2);
+    }
+    // one bone's clamped Lambert of a packed S1.7 normal: dot in s64,
+    // /127 with ONE round-half-up, clamp to [0, 1<<16]
+    const auto bone_lambert = [](const int8_t nx, const int8_t ny, const int8_t nz,
+                                 const int32_t lx, const int32_t ly, const int32_t lz) {
+      const int64_t dot = static_cast<int64_t>(nx) * lx + static_cast<int64_t>(ny) * ly +
+                          static_cast<int64_t>(nz) * lz;
+      if (dot <= 0) return 0;
+      int32_t lam = static_cast<int32_t>((dot + 63) / 127);
+      return lam > 65536 ? 65536 : lam;
+    };
     const std::vector<Meshlet>& mset = ci.lod.rung == LodRung::kMicro ? T.micro : T.mesh;
     for (const Meshlet& m : mset) {
       struct PV {
         render::ScreenV s;
         bool in;
         int32_t wx, wy, wz;
+        int32_t lam_k, lam_f;  // per-vertex clamped Lamberts (Q16.16)
+        bool lit;              // vertex carries a compiled normal
       };
       std::vector<PV> pvs(m.verts.size());
       for (size_t vi = 0; vi < m.verts.size(); ++vi) {
-        skin_vertex(worldm.data(), m.verts[vi], pvs[vi].wx, pvs[vi].wy, pvs[vi].wz, L);
+        const SkinVertex& sv = m.verts[vi];
+        skin_vertex(worldm.data(), sv, pvs[vi].wx, pvs[vi].wy, pvs[vi].wz, L);
         const render::ProjOut po = render::project_vertex(vp, vpp, fx16{pvs[vi].wx},
                                                           fx16{pvs[vi].wy}, fx16{pvs[vi].wz}, L);
         pvs[vi].s = po.s;
         // UVs: SkinVertex carries u/v as 0..255, ScreenV wants Q16.16 TILE
         // units, so u8 << 8 puts one full wrap across exactly one tile.
-        pvs[vi].s.u = static_cast<int32_t>(m.verts[vi].u) << 8;
-        pvs[vi].s.v = static_cast<int32_t>(m.verts[vi].v) << 8;
+        pvs[vi].s.u = static_cast<int32_t>(sv.u) << 8;
+        pvs[vi].s.v = static_cast<int32_t>(sv.v) << 8;
         pvs[vi].in = po.in;
+        // N3: per-vertex Lambert = skin-weight blend of the two bones'
+        // clamped responses (see the law at blight above); (0,0,0) = the
+        // vertex predates normals -> flat fallback for its triangles
+        pvs[vi].lit = sv.nx != 0 || sv.ny != 0 || sv.nz != 0;
+        if (pvs[vi].lit) {
+          const BoneLight& A = blight[sv.b0];
+          const BoneLight& B = blight[sv.b1];
+          const int32_t w0 = sv.w0, w1 = 64 - sv.w0;
+          pvs[vi].lam_k = static_cast<int32_t>(
+              (static_cast<int64_t>(w0) * bone_lambert(sv.nx, sv.ny, sv.nz, A.kx, A.ky, A.kz) +
+               static_cast<int64_t>(w1) * bone_lambert(sv.nx, sv.ny, sv.nz, B.kx, B.ky, B.kz) +
+               32) >>
+              6);
+          pvs[vi].lam_f = static_cast<int32_t>(
+              (static_cast<int64_t>(w0) * bone_lambert(sv.nx, sv.ny, sv.nz, A.fx, A.fy, A.fz) +
+               static_cast<int64_t>(w1) * bone_lambert(sv.nx, sv.ny, sv.nz, B.fx, B.fy, B.fz) +
+               32) >>
+              6);
+        } else {
+          pvs[vi].lam_k = pvs[vi].lam_f = 0;
+        }
       }
       for (size_t ti = 0; ti + 2 < m.idx.size(); ti += 3) {
         const PV& a = pvs[m.idx[ti]];
@@ -542,13 +618,38 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L);
         const int32_t lam_fill = render::shade_flat_tri_dir(
             a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, kFillX, kFillY, kFillZ, L);
-        const Shade3 sh = creature_light(lam_key, lam_fill);
         render::TriMode tm;  // opaque: depth test + write
+        // GOURAUD (N3): when the compiled mesh carries normals, each corner
+        // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
+        // response, the rest the face response (the owner's smooth/face
+        // blend knob: 100% smooth erases the hand-cut read entirely) — and
+        // the rig's per-channel gains ride the interpolated colour lanes.
+        // A mesh with no normals takes the flat path bit-identically.
+        const bool gouraud = a.lit && b.lit && c.lit;
+        Shade3 shc[3];
+        if (gouraud) {
+          const PV* corner[3] = {&a, &b, &c};
+          for (int k = 0; k < 3; ++k) {
+            const int32_t lk = static_cast<int32_t>(
+                (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_k +
+                 static_cast<int64_t>(1024 - kSmoothMixNum) * lam_key + 512) >>
+                10);
+            const int32_t lf = static_cast<int32_t>(
+                (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_f +
+                 static_cast<int64_t>(1024 - kSmoothMixNum) * lam_fill + 512) >>
+                10);
+            shc[k] = creature_light(lk, lf);
+          }
+          tm.gouraud = true;
+        } else {
+          shc[0] = shc[1] = shc[2] = creature_light(lam_key, lam_fill);
+        }
+        const Shade3& sh = shc[0];
         // TEXTURED PATH. raster_tri has always been able to sample CLUT8
         // through a TextureSpan; nothing on the creature side ever built one.
-        // The light gain rides mod_r/g/b, which is exactly the lane it wants:
-        // texel colour TIMES the per-channel rig, one multiply, no second
-        // shading model.
+        // The light gain rides mod_r/g/b (flat) or the interpolated colour
+        // lanes (Gouraud): texel colour TIMES the per-channel rig, one
+        // multiply, no second shading model.
         if (T.page_set != nullptr && m.page != 255) {
           render::TextureSpan tex;
           tex.ts = T.page_set;
@@ -558,9 +659,29 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           tex.mod_r = sh.r;
           tex.mod_g = sh.g;
           tex.mod_b = sh.b;
-          render::raster_tri(surf, vpp, a.s, b.s, c.s, 255, 255, 255, tm, &tex);
+          render::ScreenV sa = a.s, sb = b.s, sc = c.s;
+          if (gouraud) {
+            sa.cr = shc[0].r; sa.cg = shc[0].g; sa.cb = shc[0].b;
+            sb.cr = shc[1].r; sb.cg = shc[1].g; sb.cb = shc[1].b;
+            sc.cr = shc[2].r; sc.cg = shc[2].g; sc.cb = shc[2].b;
+          }
+          render::raster_tri(surf, vpp, sa, sb, sc, 255, 255, 255, tm, &tex);
         } else {
-          render::raster_tri(surf, vpp, a.s, b.s, c.s, sat_u8((m.r * sh.r + 32768) >> 16),
+          render::ScreenV sa = a.s, sb = b.s, sc = c.s;
+          if (gouraud) {
+            // pre-lit colour on the 255 scale per corner, ONE rounding at
+            // the multiply (the raster's write rounds the interpolant once)
+            sa.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[0].r));
+            sa.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[0].g));
+            sa.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[0].b));
+            sb.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[1].r));
+            sb.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[1].g));
+            sb.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[1].b));
+            sc.cr = static_cast<int32_t>((static_cast<int64_t>(m.r) * shc[2].r));
+            sc.cg = static_cast<int32_t>((static_cast<int64_t>(m.g) * shc[2].g));
+            sc.cb = static_cast<int32_t>((static_cast<int64_t>(m.b) * shc[2].b));
+          }
+          render::raster_tri(surf, vpp, sa, sb, sc, sat_u8((m.r * sh.r + 32768) >> 16),
                              sat_u8((m.g * sh.g + 32768) >> 16), sat_u8((m.b * sh.b + 32768) >> 16),
                              tm);
         }

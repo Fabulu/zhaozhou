@@ -97,3 +97,28 @@ Baseline binary built from clean tree at f8f6681.
   the pupil is the sheet's vertical top-to-bottom band with middle swell.
 - Eye COLOUR deliberately untouched: judged again after direct RGB565 lands
   (quantisation is flattening it; fix the cause first).
+
+## GOURAUD in the oracle (N1+N2+N3) — the missing reference model, built
+- SkinVertex gains a packed S1.7 bind-space normal (12 -> 15 B); (0,0,0) =
+  no normal = flat fallback, so pre-normal assets render bit-identically.
+- compile_creature generates area-weighted smooth normals, POSITION-KEYED so
+  seam/meshlet-boundary duplicates share one normal (no lighting seams);
+  micro rung recomputed from micro topology. Integer-only. The ring zipper
+  winds inward under the double-sided raster: cross negated, verified by the
+  first render (lit from above, not from inside).
+- Lighting law (written as LAW): per-bone light pullback Lb = R^T L / bulk
+  (one rhu division per component); per-vertex Lambert = skin-weight blend of
+  the two bones' CLAMPED responses (N5 option (b): no renormalisation, no
+  normal lane through the skin datapath); kSmoothMixNum = 819/1024 smooth vs
+  face (owner knob); the existing per-channel rig composes gains per corner.
+- rast.cpp: three Q16.16 colour lanes on ScreenV, TriMode.gouraud; row starts
+  RE-EVALUATE the full barycentric form, pixels step affine — the per-row
+  model kept DELIBERATELY (a setup-emitted plane would not be bit-exact with
+  this oracle; the row walker owns the division in RTL too). Default off:
+  every existing caller bit-identical.
+- Textured path: interpolated gain replaces mod_*; untextured: pre-lit lanes.
+- Rebuilt EVERY zref .cpp + archive (struct layout change). Probe exit 0,
+  bands exact, pose CRCs + clip bytes IDENTICAL to goldens.
+- reel --check: only creature-wave-walk and creature-bulk-pop moved (the
+  point); re-pinned with provenance; all sequence CRCs match.
+- THE FACETING IS GONE (evidence/gour1-side.png, gour1-tq.png).

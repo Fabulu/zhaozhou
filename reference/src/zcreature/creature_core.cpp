@@ -9,7 +9,10 @@
 #include "zref/zref_trig.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
+#include <map>
+#include <tuple>
 
 namespace zref {
 namespace creature {
@@ -341,6 +344,81 @@ std::vector<BuiltVert> build_ring(const RingSpec& spec, uint8_t align, uint8_t v
   return out;
 }
 
+// ---- SMOOTH VERTEX NORMALS (N2) -------------------------------------------
+// Generated at compile time over a finished meshlet set, in creature-global
+// BIND space. Area-weighted: the unnormalised cross product of a triangle's
+// edges IS 2*area times its unit normal, so summing raw crosses weights each
+// face by its area for free. The accumulator is keyed on the EXACT bind
+// position (x,y,z), so the textured seam duplicate (u=255), the ring-closing
+// wrap vertex and every meshlet-boundary duplicate receive the SAME packed
+// normal — a lighting seam cannot open where the surface is closed.
+//
+// Deterministic integer arithmetic throughout (authoring-time, like
+// build_ring's trig): edges are pre-shifted >>8 (quarter-mm units) so a
+// cross term fits s64 for any legal extent; the accumulated vector is
+// range-reduced before the isqrt so the magnitude square fits u64.
+//
+// The micro rung calls this on its OWN meshlets — normals recomputed from
+// micro topology, never copied from the full mesh (the amendment's rule).
+namespace {
+void generate_smooth_normals(std::vector<Meshlet>& mesh) {
+  std::map<std::tuple<int32_t, int32_t, int32_t>, std::array<int64_t, 3>> acc;
+  for (const Meshlet& m : mesh) {
+    for (size_t t = 0; t + 2 < m.idx.size(); t += 3) {
+      const SkinVertex& a = m.verts[m.idx[t]];
+      const SkinVertex& b = m.verts[m.idx[t + 1]];
+      const SkinVertex& c = m.verts[m.idx[t + 2]];
+      const int64_t e1x = (static_cast<int64_t>(b.x) - a.x) >> 8;
+      const int64_t e1y = (static_cast<int64_t>(b.y) - a.y) >> 8;
+      const int64_t e1z = (static_cast<int64_t>(b.z) - a.z) >> 8;
+      const int64_t e2x = (static_cast<int64_t>(c.x) - a.x) >> 8;
+      const int64_t e2y = (static_cast<int64_t>(c.y) - a.y) >> 8;
+      const int64_t e2z = (static_cast<int64_t>(c.z) - a.z) >> 8;
+      // The ring zipper winds its triangles INWARD under the double-sided
+      // Phase-3 raster (verified by render: the first smooth-lit frame was
+      // lit from inside the tube), so the accumulated cross is NEGATED to
+      // make the stored normal point OUT of the surface.
+      const int64_t nx = -(e1y * e2z - e1z * e2y);
+      const int64_t ny = -(e1z * e2x - e1x * e2z);
+      const int64_t nz = -(e1x * e2y - e1y * e2x);
+      for (const uint8_t vi : {m.idx[t], m.idx[t + 1], m.idx[t + 2]}) {
+        const SkinVertex& v = m.verts[vi];
+        auto& s = acc[{v.x, v.y, v.z}];
+        s[0] += nx;
+        s[1] += ny;
+        s[2] += nz;
+      }
+    }
+  }
+  for (Meshlet& m : mesh) {
+    for (SkinVertex& v : m.verts) {
+      const auto it = acc.find({v.x, v.y, v.z});
+      if (it == acc.end()) continue;
+      int64_t x = it->second[0], y = it->second[1], z = it->second[2];
+      // range-reduce so x^2+y^2+z^2 fits u64 comfortably
+      int64_t mx = std::max({x < 0 ? -x : x, y < 0 ? -y : y, z < 0 ? -z : z});
+      while (mx >= (int64_t{1} << 30)) {
+        x >>= 8;
+        y >>= 8;
+        z >>= 8;
+        mx >>= 8;
+      }
+      const uint64_t mag2 = static_cast<uint64_t>(x * x) + static_cast<uint64_t>(y * y) +
+                            static_cast<uint64_t>(z * z);
+      if (mag2 == 0) continue;  // degenerate: leave "no normal" (flat fallback)
+      const int64_t norm = static_cast<int64_t>(isqrt_u64(mag2));
+      const auto pack = [norm](int64_t c) {
+        const int64_t s = (c * 127 + (c >= 0 ? norm / 2 : -norm / 2)) / norm;
+        return static_cast<int8_t>(s > 127 ? 127 : (s < -127 ? -127 : s));
+      };
+      v.nx = pack(x);
+      v.ny = pack(y);
+      v.nz = pack(z);
+    }
+  }
+}
+}  // namespace
+
 }  // namespace
 
 std::vector<Meshlet> build_ring_part(const RingPart& part) {
@@ -629,6 +707,10 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   }
   out.bound_radius = static_cast<int32_t>(isqrt_u64(static_cast<uint64_t>(max_r2)));
 
+  // N2: smooth vertex normals over the finished full-rung meshlet set
+  // (position-keyed across meshlet boundaries — see generate_smooth_normals)
+  generate_smooth_normals(out.mesh);
+
   // micro rung: decimate (every 2nd ring kept — first and last always;
   // segments halved, min 3) and MEASURE the geometric error (charter 9:
   // compiler-generated LOD errors, never artist faces).
@@ -685,6 +767,9 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       if (dev > micro_err) micro_err = dev;
     }
   }
+  // N2: micro-rung normals recomputed from MICRO topology, never copied
+  generate_smooth_normals(out.micro);
+
   out.micro_error = micro_err;
   out.splat_error = out.bound_radius / 2;
   out.glint_error = out.bound_radius;

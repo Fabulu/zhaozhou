@@ -177,6 +177,24 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                          static_cast<__int128>(dw2_dx) * C.v,
                      area);
   }
+  // Gouraud colour-lane x-gradients: the SAME one-rounding plane setup as
+  // depth/alpha/UV (see TriMode.gouraud in internal.hpp for the deliberate
+  // per-row model choice)
+  int32_t cr_grad_x = 0, cg_grad_x = 0, cb_grad_x = 0;
+  if (m.gouraud) {
+    cr_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.cr + static_cast<__int128>(dw1_dx) * B.cr +
+                         static_cast<__int128>(dw2_dx) * C.cr,
+                     area);
+    cg_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.cg + static_cast<__int128>(dw1_dx) * B.cg +
+                         static_cast<__int128>(dw2_dx) * C.cg,
+                     area);
+    cb_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.cb + static_cast<__int128>(dw1_dx) * B.cb +
+                         static_cast<__int128>(dw2_dx) * C.cb,
+                     area);
+  }
 
   for (int32_t py = min_y; py <= max_y; ++py) {
     const int64_t cy = (static_cast<int64_t>(py) << 8) + 128;  // pixel centre
@@ -204,6 +222,18 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
       a = div_rhu_s128(static_cast<__int128>(w0) * A.a + static_cast<__int128>(w1) * B.a +
                            static_cast<__int128>(w2) * C.a,
                        area);
+    }
+    int32_t cr = 0, cg = 0, cb = 0;
+    if (m.gouraud) {  // row start: full barycentric re-evaluation per lane
+      cr = div_rhu_s128(static_cast<__int128>(w0) * A.cr + static_cast<__int128>(w1) * B.cr +
+                            static_cast<__int128>(w2) * C.cr,
+                        area);
+      cg = div_rhu_s128(static_cast<__int128>(w0) * A.cg + static_cast<__int128>(w1) * B.cg +
+                            static_cast<__int128>(w2) * C.cg,
+                        area);
+      cb = div_rhu_s128(static_cast<__int128>(w0) * A.cb + static_cast<__int128>(w1) * B.cb +
+                            static_cast<__int128>(w2) * C.cb,
+                        area);
     }
     for (int32_t px = min_x; px <= max_x; ++px) {
       // §8: inside ⟺ E0 + bias >= 0, bias 0 (top-left) / -1, applied to the
@@ -238,8 +268,12 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 // ONE primary sample (charter §15/§26): mirrored-repeat fold
                 // to the texel (zref::terrain::mirror_texel — the §6.2 frozen
                 // law), optional per-texel Mosaic pick between the cell's two
-                // candidates, then the per-primitive modulation with ONE
-                // rounding per channel
+                // candidates, then the modulation with ONE rounding per
+                // channel. Gouraud: the modulation gain is the INTERPOLATED
+                // vertex lane (the §8 "fogged colour rides the ordinary
+                // Gouraud path" model — texel x interpolated lit gain);
+                // otherwise the per-primitive mod_* constant, bit-identical
+                // to what it always was.
                 const int32_t tx = terrain::mirror_texel(u);
                 const int32_t ty = terrain::mirror_texel(v);
                 const uint8_t tile = tex->mosaic
@@ -250,9 +284,18 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                     tex->ts->tiles[tile][(static_cast<size_t>(ty) << 6) + static_cast<size_t>(tx)];
                 const uint16_t c565 = tex->ts->palette[ci8];
                 const uint32_t r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F, b5 = c565 & 0x1F;
-                dst[0] = sat_u8((((r5 * 255 + 15) / 31) * tex->mod_r + 32768) >> 16);
-                dst[1] = sat_u8((((g6 * 255 + 31) / 63) * tex->mod_g + 32768) >> 16);
-                dst[2] = sat_u8((((b5 * 255 + 15) / 31) * tex->mod_b + 32768) >> 16);
+                const int32_t mr = m.gouraud ? cr : tex->mod_r;
+                const int32_t mg = m.gouraud ? cg : tex->mod_g;
+                const int32_t mb = m.gouraud ? cb : tex->mod_b;
+                dst[0] = sat_u8((((r5 * 255 + 15) / 31) * mr + 32768) >> 16);
+                dst[1] = sat_u8((((g6 * 255 + 31) / 63) * mg + 32768) >> 16);
+                dst[2] = sat_u8((((b5 * 255 + 15) / 31) * mb + 32768) >> 16);
+              } else if (m.gouraud) {
+                // untextured Gouraud: the lanes carry pre-lit colour on the
+                // 255 scale; ONE rounding per channel
+                dst[0] = sat_u8((cr + 32768) >> 16);
+                dst[1] = sat_u8((cg + 32768) >> 16);
+                dst[2] = sat_u8((cb + 32768) >> 16);
               } else {
                 dst[0] = r;
                 dst[1] = g;
@@ -287,6 +330,11 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
       if (tex != nullptr) {
         u += u_grad_x;
         v += v_grad_x;
+      }
+      if (m.gouraud) {
+        cr += cr_grad_x;
+        cg += cg_grad_x;
+        cb += cb_grad_x;
       }
     }
   }

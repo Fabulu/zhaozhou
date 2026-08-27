@@ -75,6 +75,14 @@ struct ScreenV {
   int32_t a = 0;         // Q16.16 interpolated attribute (vertex alpha)
   int32_t u = 0, v = 0;  // Q16.16 TILE units (terrain texturing, §6.2);
                          // read only when raster_tri carries a TextureSpan
+  // Gouraud lanes (qformats §8: the fogged colour "rides the ordinary
+  // Gouraud path" — this IS that path, produced 2026-08-27 as the reference
+  // model GEOM.SETUP.md names: "until that exists there is nothing to be
+  // bit-exact against"). Q16.16; read only when TriMode.gouraud.
+  //   - textured (TextureSpan present): per-channel light GAIN, unity =
+  //     1<<16 — the interpolated replacement for TextureSpan::mod_*.
+  //   - untextured: pre-lit COLOUR on the 255 scale (material x gain).
+  int32_t cr = 0, cg = 0, cb = 0;
 };
 
 struct ProjOut {
@@ -110,6 +118,15 @@ struct TriMode {
   int32_t fixed_depth = 0;       // Q16.16
   BlendMode blend = BlendMode::kOpaque;
   bool interp_alpha = false;  // blend with v[i].a (Q16.16)
+  // Interpolate the ScreenV cr/cg/cb lanes across the triangle (kOpaque
+  // only). THE MODEL IS DELIBERATELY THE PER-ROW ONE: row starts re-evaluate
+  // the full barycentric form (one §4 division per lane per row) and pixels
+  // step by the affine x-gradient, exactly as depth/alpha/UV do above — NOT
+  // a setup-emitted (c0, dc/dx, dc/dy) plane, which would not be bit-exact
+  // with this oracle (GEOM.SETUP.md's own argument, kept on purpose: the
+  // row walker owns the division in RTL too). Default false: every existing
+  // caller renders bit-identically.
+  bool gouraud = false;
 };
 
 /**

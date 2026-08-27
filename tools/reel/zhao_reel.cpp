@@ -2989,10 +2989,13 @@ SceneSubject subject_creaturewalk() {
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x4B8730D6u;  // RE-PINNED 2026-08-26: the creature light
-  // rig became per-channel (white key + cool ambient + warm bounce fill).
-  // Intentional and measured; it moves every creature render. Previous
-  // value 0x6BEECDE5 (2026-08-18, stride back on the sim clock).
+  s.expect_seq_crc = 0xF46B3B4Au;  // RE-PINNED 2026-08-27: GOURAUD. The
+  // compiler now generates smooth vertex normals and the compositor lights
+  // per vertex (per-bone Lambert blend, 0.8 smooth + 0.2 face), with the
+  // three colour lanes interpolated by the raster's per-row model — the
+  // reference model the GEOM.SETUP/RASTER.FRAGMENT interpolator increment
+  // will be verified against. Intentional; moves every creature render.
+  // Previous 0x4B8730D6 (2026-08-26, per-channel light rig).
   return s;
 }
 
@@ -3316,10 +3319,10 @@ SceneSubject subject_creaturepop() {
       "2.2 pop threshold removes the mesh and releases 18 detached rotating "
       "chunks, deterministically sampled from donor gibs, with integer "
       "ballistics, gravity, and damped ground bounce";
-  s.expect_seq_crc = 0xEDBA0DD2u;  // RE-PINNED 2026-08-26: the creature light
-  // rig became a white key + cool ambient + warm bounce fill, per channel
-  // (creature_sim.cpp). Intentional, measured, and it moves every creature
-  // render. Previous value 0x327DBB91.  // re-pinned 2026-08-18 after visible chunk repair
+  s.expect_seq_crc = 0x3D259C7Eu;  // RE-PINNED 2026-08-27: GOURAUD (see
+  // creature-wave-walk's note — smooth vertex normals + per-vertex rig,
+  // interpolated colour lanes). Intentional; moves every creature render.
+  // Previous 0xEDBA0DD2 (2026-08-26, per-channel light rig).
   return s;
 }
 
