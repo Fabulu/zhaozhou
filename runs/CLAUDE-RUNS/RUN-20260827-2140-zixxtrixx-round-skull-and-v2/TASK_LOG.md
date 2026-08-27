@@ -220,3 +220,9 @@ the 256-colour law binds the GIF export lane alone.
 - Shipped attack clip STILL bit-identical to golden (clip-3.bin, pose CRCs);
   probe exit 0; --check all match. Determinism: both paths are pure integer
   functions of the key index -- replay-exact by construction.
+
+**Correction, same hour:** *"publish on every finished zixxtrixx, not every
+individual change."* The trigger is a **finished creature pass**, not a file
+save — a tweaked constant or a mid-iteration re-render does not go up. Amended
+in all three `CLAUDE.md` copies and the memory; the agent was told too, since
+the first message had implied every landed render publishes.
