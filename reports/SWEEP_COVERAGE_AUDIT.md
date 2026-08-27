@@ -57,28 +57,64 @@ Grouped by subsystem, so the list can be worked rather than admired.
 `zhao_audio_fifo`, `zhao_input_rumble`, `zhao_input_snapshot`,
 `zhao_video_slotmgr`, `zhao_part_expand`, `zhao_part_soft`, `zhao_stub_top`
 
-## PROGRESS, 2026-08-27
+## PROGRESS, 2026-08-27 (updated late)
 
 | block | first run | after closing gaps |
 | --- | --- | --- |
 | TERRAIN.PATCH | 19/20, one real gap | **20/20** |
 | DEBUG.FRAMEBLIT | 12/20, eight survivors | **16 caught + 4 proven equivalent** |
 | GEOM.WCACHE | 15/18, three real gaps | **18/18** |
+| CMD.DMA | 6/21 -> 12/21 (harness bug) | **19 caught + 1 proven equivalent** |
+| RASTER.RESOLVE | 17/17 first run | **17/17** |
+| RASTER.EARLYZ | 15/16, one real gap | **16/16** |
 
-**Three blocks swept, six real test gaps found and closed, four equivalences
-proved.** Every one of the six was a law the block's own contract leads with,
+**Six blocks swept, nine real test gaps found and closed, five equivalences
+proved.** Every one of the nine was a law the block's own contract leads with,
 and every one had a green test suite sitting on top of it.
 
-The remaining count is therefore **35**, not 38. The rate is roughly one block
-per one to two hours, most of it waiting on rebuilds -- the mutant table is the
-only part that needs thought, and the driver and preflight are now derived
-almost verbatim (compare `sweep_terrain_patch.sh`, `sweep_debug_frameblit.sh`
-and `sweep_geom_wcache.sh`).
+The remaining count is therefore **32**, not 38.
 
-The equivalence mechanism moved forward too: the frameblit and wcache drivers
-consult a machine-readable `EQUIVALENT` table and **fail on an undeclared
-survivor** rather than listing it. The terrain-derived drivers do not yet;
-porting that back is worth doing before the next few.
+### The two failures that were in the SWEEP MACHINERY, not the RTL
+
+Both were found late on 2026-08-27, and both made a run that tested less than
+it claimed look like a clean pass. They are recorded here because this
+document exists to say how much the evidence is worth.
+
+**A discarded mutant was being counted as accounted for.** Five field-family
+drivers added the discard count into `accounted`, so the cross-check that
+exists to catch a short run passed; the discard block then printed a NOTE and
+fell through to `SWEEP OK` with exit 0. The patch accumulator's sweep printed
+that after scoring 8 of 15 -- and, on the run before, 6 of 15. The seventeen
+older drivers exclude discards from `accounted`, which is exactly what made
+the RASTER.EARLYZ re-score fail with `attempted=16 accounted=12` instead of
+quietly scoring 12 of 16. All five now exit 13 on an unscored mutant
+(9ddf067).
+
+**Every discard had the same cause: one shared build directory.** Three
+sessions were building in `build/` at once, so targets would not link and
+mutants were dropped. Re-run in isolation, the patch accumulator caught all
+15 and RASTER.EARLYZ all 16 -- so those were catches lost to contention, not
+survivors. Sweeps now configure their own build tree, with the generator and
+compiler pinned so a stray CMakePresets cannot redirect them.
+
+The lesson generalises past this tree: **a guard that can be satisfied by
+work not being done is not a guard.** Both failures had that shape.
+
+### Field v3 blocks, swept as they were built
+
+These are not part of the 38 -- they did not exist when this audit was
+written -- but they are swept to the same standard and belong in the count of
+what the tree's evidence is worth.
+
+| block | result |
+| --- | --- |
+| FIELD.PLAN (software planner) | 16/16 |
+| FIELD.CTX.FIFO | clean |
+| FIELD.RF (banked register file) | clean |
+| FIELD.DIST.SVC | clean |
+| FIELD.CURVE.SVC | 15/15 |
+| FIELD.PATCH.ACC | 15/15 |
+| FIELD.WALK.EARTH | 17 mutants, running |
 
 ## Two entries worth calling out by name
 
