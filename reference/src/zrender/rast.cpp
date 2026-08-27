@@ -275,7 +275,7 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 rq.u = u;  // Q16.16 tile units == the TMU's texture units
                 rq.v = v;
                 rq.base = tex->direct->tile_base[tex->tile_a];
-                rq.mode = tex->direct->mode;
+                rq.mode = tex->direct->mode_of(tex->tile_a);
                 rq.lod = tex->lod;
                 const Tmu::Sample smp = Tmu::sample(rq, tex->direct->mem);
                 const int32_t mr = m.gouraud ? cr : tex->mod_r;

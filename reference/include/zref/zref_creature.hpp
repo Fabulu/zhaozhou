@@ -421,6 +421,13 @@ struct RingPart {
   // Tileset. 255 = untextured, and the flat r/g/b above is used instead --
   // which is what every part did before a page pipeline existed.
   uint8_t page = 255;
+  // V RANGE on the page (T4, 2026-08-28): the part's rings span page V rows
+  // v0..v1 instead of always 0..255, so several parts can share ONE
+  // continuous atlas (U = circumference, V = nose-to-tail) with the seam
+  // ring's V agreeing on both sides. Defaults keep every existing part
+  // bit-identical.
+  uint8_t v0 = 0;
+  uint8_t v1 = 255;
 };
 
 /**

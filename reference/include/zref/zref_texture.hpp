@@ -227,7 +227,15 @@ struct Tmu {
 struct DirectPageSet {
   TextureMemory mem;                // every tile's packed mip chain
   std::vector<uint32_t> tile_base;  // level-0 byte address per tile
-  uint32_t mode = 0;                // packed Tmu::Mode for every tile
+  uint32_t mode = 0;                // packed Tmu::Mode for every tile...
+  // ...unless tile_mode is populated (T4, 2026-08-28): a page set may mix
+  // page shapes (the 128x256 body atlas beside 64x64 fin pages), and the
+  // TMU mode word is per-BIND by contract, so each tile may carry its own.
+  // Empty = every tile uses `mode` (bit-identical to what it always was).
+  std::vector<uint32_t> tile_mode;
+  uint32_t mode_of(uint8_t tile) const {
+    return tile < tile_mode.size() ? tile_mode[tile] : mode;
+  }
 };
 
 }  // namespace zref

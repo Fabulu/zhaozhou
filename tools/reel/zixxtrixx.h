@@ -929,31 +929,48 @@ inline const zref::render::Tileset& page() {
 // pixels: filtering requires direct colour (stars_and_flares 1), and the
 // TMU decodes RGB565 today. The CLUT8 page above stays as the
 // ordinary-creature format tier and the fallback.
+// THE LAYOUT (T4, 2026-08-28): tiles 0..3 all address the ONE 128x256
+// BODY ATLAS at byte 0 (head and body parts share it -- their v0/v1 ranges
+// split the V axis at the junction row); tiles 4..5 are the fins' own
+// 64x64 pages appended after the atlas chain, each with its own mode word
+// (per-tile modes are lawful: the TMU mode is per-bind). Bilinear + mips
+// BLEED across atlas neighbours, which is exactly why the fins do NOT live
+// in the atlas.
 inline const zref::DirectPageSet& page_direct() {
   static const zref::DirectPageSet ps = [] {
     zref::DirectPageSet p;
     constexpr int kWords = static_cast<int>(sizeof(kPageDirect[0]) / sizeof(uint16_t));
     p.mem.base = 0;
-    p.mem.bytes.resize(static_cast<size_t>(kPageTiles) * kWords * 2);
-    for (int t = 0; t < kPageTiles; ++t) {
-      p.tile_base.push_back(static_cast<uint32_t>(t) * kWords * 2);
-      for (int i = 0; i < kWords; ++i) {  // little-endian halfwords
-        p.mem.bytes[static_cast<size_t>(t) * kWords * 2 + i * 2] =
-            static_cast<uint8_t>(kPageDirect[t][i] & 0xFF);
-        p.mem.bytes[static_cast<size_t>(t) * kWords * 2 + i * 2 + 1] =
-            static_cast<uint8_t>(kPageDirect[t][i] >> 8);
+    const uint32_t atlas_bytes = static_cast<uint32_t>(kPageAtlasWords) * 2;
+    p.mem.bytes.resize(atlas_bytes + static_cast<size_t>(2) * kWords * 2);
+    for (int i = 0; i < kPageAtlasWords; ++i) {  // little-endian halfwords
+      p.mem.bytes[static_cast<size_t>(i) * 2] = static_cast<uint8_t>(kPageAtlas[i] & 0xFF);
+      p.mem.bytes[static_cast<size_t>(i) * 2 + 1] = static_cast<uint8_t>(kPageAtlas[i] >> 8);
+    }
+    for (int t = 0; t < 2; ++t) {  // the two blade tiles (page indices 4, 5)
+      const size_t dst = atlas_bytes + static_cast<size_t>(t) * kWords * 2;
+      for (int i = 0; i < kWords; ++i) {
+        p.mem.bytes[dst + i * 2] = static_cast<uint8_t>(kPageDirect[4 + t][i] & 0xFF);
+        p.mem.bytes[dst + i * 2 + 1] = static_cast<uint8_t>(kPageDirect[4 + t][i] >> 8);
       }
     }
-    zref::Tmu::Mode m;
-    m.fmt = zref::Tmu::kRgb565;
-    m.bilinear = true;
-    m.wrap_u = zref::Tmu::kRepeat;
-    m.wrap_v = zref::Tmu::kClamp;
-    m.log2w = 6;
-    m.log2h = 6;
-    m.max_level = 6;
-    m.mip_en = true;
-    p.mode = m.pack();
+    zref::Tmu::Mode ma;  // the atlas
+    ma.fmt = zref::Tmu::kRgb565;
+    ma.bilinear = true;
+    ma.wrap_u = zref::Tmu::kRepeat;  // seamless around the ring
+    ma.wrap_v = zref::Tmu::kClamp;   // the nose must not bleed into the fork
+    ma.log2w = 7;                    // 128
+    ma.log2h = 8;                    // 256 -- LOG2W != LOG2H is legal today
+    ma.max_level = 7;
+    ma.mip_en = true;
+    zref::Tmu::Mode mb = ma;  // the blade pages
+    mb.log2w = 6;
+    mb.log2h = 6;
+    mb.max_level = 6;
+    const uint32_t am = ma.pack(), bm = mb.pack();
+    p.mode = am;
+    p.tile_base = {0, 0, 0, 0, atlas_bytes, atlas_bytes + kWords * 2};
+    p.tile_mode = {am, am, am, am, bm, bm};
     return p;
   }();
   return ps;
@@ -1674,6 +1691,11 @@ inline const zc::CreatureType& type() {
         p.rings.push_back(rs);
       }
       p.page = kTileHead;
+      // T4: the head part owns atlas V rows 0..50 (nose to the junction
+      // station); the body part continues at 50 with the SAME junction V,
+      // so the painted surface is continuous across the shared ring.
+      p.v0 = 0;
+      p.v1 = 50;
       set_rgb(p, kBlue);
       parts.push_back(p);
     }
@@ -1701,6 +1723,8 @@ inline const zc::CreatureType& type() {
         p.rings.push_back(rs);
       }
       p.page = kTileBody;
+      p.v0 = 50;   // T4: continues the atlas exactly where the head ends
+      p.v1 = 255;
       set_rgb(p, kGreen);  // fallback if the page is ever absent
       parts.push_back(p);
     }

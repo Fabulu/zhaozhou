@@ -683,12 +683,21 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             if (cuv < 0) cuv = -cuv;
             int64_t cpx = e1x * e2y - e1y * e2x;
             if (cpx < 0) cpx = -cpx;
-            // ratio in texel^2/px^2 = cuv * 4096 * 2^16 / (2^32 * cpx)
-            //                       = cuv / (16 * cpx), floored
+            // ratio in texel^2/px^2 = cuv * (W*H) * 2^16 / (2^32 * cpx)
+            //                       = cuv / (2^(16-log2w-log2h) * cpx), floored
+            // (generalised 2026-08-28 for T4: pages are no longer always
+            // 64x64 -- the body atlas is 128x256 -- so the texel area and
+            // the level cap come from the tile's own mode word)
+            const Tmu::Mode md = Tmu::Mode::unpack(T.page_direct->mode_of(m.page));
+            const int sh = 16 - md.log2w - md.log2h;
+            const uint8_t cap =
+                std::min<uint8_t>(md.max_level, std::min(md.log2w, md.log2h));
             uint8_t level = 0;
             if (cpx > 0) {
-              uint64_t ratio = static_cast<uint64_t>(cuv) / (16u * static_cast<uint64_t>(cpx));
-              while (ratio >= 4 && level < 6) {  // each mip level is 4x area
+              uint64_t ratio =
+                  sh >= 0 ? (static_cast<uint64_t>(cuv) >> sh) / static_cast<uint64_t>(cpx)
+                          : (static_cast<uint64_t>(cuv) << -sh) / static_cast<uint64_t>(cpx);
+              while (ratio >= 4 && level < cap) {  // each mip level is 4x area
                 ratio >>= 2;
                 ++level;
               }

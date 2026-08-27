@@ -459,8 +459,12 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
   std::vector<std::vector<BuiltVert>> ring_cache;  // rings emitted into `cur`
 
   const auto v_lane_of = [&](int ri) {
-    return static_cast<uint8_t>((static_cast<int64_t>(ri) * 255 + (n_rings - 1) / 2) /
-                                (n_rings - 1));
+    // T4: map the ring index into the part's page V RANGE [v0..v1] (defaults
+    // 0..255 keep every pre-atlas part bit-identical)
+    const int span = part.v1 - part.v0;
+    return static_cast<uint8_t>(part.v0 +
+                                (static_cast<int64_t>(ri) * span + (n_rings - 1) / 2) /
+                                    (n_rings - 1));
   };
   const auto orient = [&](int32_t& x, int32_t& y, int32_t& z) {
     const int32_t nx = rot[0] / 65536 * x + rot[1] / 65536 * y + rot[2] / 65536 * z;

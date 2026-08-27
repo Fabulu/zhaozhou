@@ -17,7 +17,7 @@ for s in $ZREF_SRCS; do
     echo "CC $s"; $CXX $FLAGS -c "$src" -o "$o" &
   fi
 done
-wait
+for j in $(jobs -p); do wait "$j" || { echo "COMPILE FAILED"; exit 1; }; done
 LIBOBJS=$(for s in $ZREF_SRCS; do echo "$OBJ/$(echo $s | tr / _).o"; done)
 want() { [ -z "$1" ] || [ "$1" = all ] || [ "$1" = "$2" ]; }
 T="$ROOT/tools/reel"
@@ -25,5 +25,5 @@ if want "$1" reel;   then echo "LD zhao-reel";   $CXX $FLAGS "$T/zhao_reel.cpp" 
 if want "$1" probe;  then echo "LD zixx-probe";  $CXX $FLAGS "$T/zixx_probe.cpp"  $LIBOBJS -o "$ROOT/build/tools/zixx-probe.exe" & fi
 if want "$1" golden; then echo "LD zixx-golden"; $CXX $FLAGS "$T/zixx_golden.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-golden.exe" & fi
 if want "$1" choreo; then echo "LD zixx-choreo"; $CXX $FLAGS "$T/zixx_choreo.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-choreo.exe" & fi
-wait
+for j in $(jobs -p); do wait "$j" || { echo "LINK FAILED"; exit 1; }; done
 echo "build-direct: done"
