@@ -367,3 +367,53 @@ shell QSF cone and must be passed with -ExtraSources. Worth noting that the fit
 harness exits 0 on a failed fit and writes a `failed:` row, so a caller that
 checks only the exit code would read that as success.
 
+### 2026-08-28 - Phase 4 walker MEASURED and swept 18/18
+
+**The block.** `zhao_probe_walk_earth.sv`, committed 0dce2a3. Differential
+against `compose_lattice`'s own two rules (lattice_lerp and the 9.1 closed
+interval), not a hand-written expectation.
+
+MEASURED: a full 33x33 association is 297 vector groups and lands in **297
+clocks** -- one group per clock, no stall. 440 randomized associations over
+arbitrary envelopes, footprints and backpressure schedules all match the
+reference element by element. 23 directed checks.
+
+That 297 is the number the contract correction predicted and is now measured
+rather than argued.
+
+**The sweep found two real gaps on its first run** (14 caught, 2 survived, 1
+discarded). Both survivors were the same shape -- the test computed a thing
+for itself instead of reading what the block said:
+
+* **W15**: the emptiness guard is `(i0 > i1) || (j0 > j1)` and the test drove
+  only the column half, so dropping the row half changed nothing it could
+  see. A two-term guard needs a case per TERM; one case per guard is not the
+  same thing.
+* **W17**: coverage was recomputed from the emitted masks, so
+  `verts_covered_o` was never read and could have counted anything. Now both
+  counters are checked against numbers that differ -- 297 groups against
+  1,089 vertices -- so counting groups where lanes were meant cannot pass.
+
+**W08 taught the driver something.** It swaps LAT_W for LAT_H, both 33, so
+Verilator emits a byte-identical model and the binary-hash guard called it a
+discard. But rebuild() deletes the model directory before every mutant, so
+elaboration definitely RAN -- an identical model means the mutation was
+semantically null. The driver now reads that as EQUIVALENT when a proof
+exists for that mutant, and keeps it a discard otherwise. The proof carries
+its expiry (re-score the moment LAT_W != LAT_H), and W18 states the same
+defect as a literal so the index arithmetic is scored today.
+
+FINAL: attempted 18/18, caught 17, equivalent 1, survived 0, discarded 0,
+SWEEP OK, RTL restored clean.
+
+**Design note committed** (`reports/FIELD_V3_EXECUTOR_REGFILE.md`): the brief
+and the owner's directive cut the executor's register file on different axes
+-- four LANES x three readers versus four RESIDUE BANKS x three replicas.
+Both are twelve memories of 8,192 bits, so the Phase 3 fit measures either
+one's storage, but they serve different operand sets per clock and the IR HAS
+multi-member operands. Phase 4 builds on the residue-banked shape because it
+is the one that was measured; the note records what would reverse it.
+
+**Still not claimed:** probes 4 and 5 place-and-route. The probe 4 fit is at
+3,453 s and still running.
+
