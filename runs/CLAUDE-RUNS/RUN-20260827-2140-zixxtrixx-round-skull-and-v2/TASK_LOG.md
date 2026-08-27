@@ -77,3 +77,12 @@ Baseline binary built from clean tree at f8f6681.
 - Frozen check: pose CRCs + clip bytes IDENTICAL to goldens; probe bands
   idle [-8..-3], walk [-13..+10], attack -426 @56, fall min 584 — all exact.
 - reel --check: all sequence CRCs match.
+
+## Dorsal pink covers the whole top
+- body_tile half 4.5 -> 13.0 texels (~41% of circumference), neck thinning
+  deleted (it compensated the old 26-deg camera, which is gone).
+- head crown pink_half ramps 3->13 from brow (y=20) to mid-skull, holds 13 to
+  the junction -- one continuous pink top across head and body.
+- Judged on renders at the current ~15 deg cameras (evidence/pink1-*.png):
+  tq reads as the whole top; side reads as a broad dorsal region; front reads
+  blue face in a pink cap, green chest -- Front.png's layout.

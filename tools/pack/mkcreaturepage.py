@@ -173,23 +173,22 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
             if d < w:
                 t[y, x] = dk[y, x]
     back = 48  # U = 192/256
-    # 4.5, not 6. A 26-degree-down camera shows mostly the animal's BACK, so
-    # a band sized to look right in the side-view drawing dominates the render.
-    # Narrowed together with a shallower showcase camera; judged from a render.
+    # 13, not 4.5 (Fabian, 2026-08-27: "the pink should cover the entire top
+    # of the snake, right now it's just a thin line. Top also means part of
+    # the sideways dropoff. The part you see if you look at it from the
+    # top"). Half-width 13 of 64 texels is ~41% of the circumference centred
+    # on the back -- the upper surface INCLUDING the shoulder of the tube,
+    # green keeping the flanks and belly. The old 4.5 was itself a narrowing
+    # (6 -> 4.5) made to compensate a 26-degree-down showcase camera that
+    # showed mostly back; the camera has since flattened to ~15 degrees, so
+    # that compensation was for a problem that no longer exists.
     #
-    # ...and THINNED OVER THE NECK (rows <= 26), 2026-08-27 pass 3: with the
-    # head lifted, the steep neck hook stands directly behind the skull and
-    # presents its BACK to a frontal camera -- a full-width band there merged
-    # with the head's cap into one big pink mass, where Front.png shows green
-    # chest behind the ball. The drawn band thins toward the head anyway.
+    # The neck thinning (rows <= 17) is GONE with it: it existed so the neck
+    # hook's back would not merge with the head cap into one pink mass under
+    # the old steep camera. A gentle taper at the very first rows keeps the
+    # junction row matched to the head tile's crown width.
     for y in range(TILE):
-        # thin over the neck (which is now only the FIRST rows of this tile)
-        if y <= 4:
-            half = 2.2
-        elif y < 17:
-            half = 2.2 + (4.5 - 2.2) * (y - 4) / 13.0
-        else:
-            half = 4.5
+        half = 13.0
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
         # the page is byte-identical on every machine
         wob = 2.2 * np.sin(y * 0.21) + 1.4 * np.sin(y * 0.077 + 1.1)
@@ -354,27 +353,20 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # shows green riding high on the neck right behind the skull.
     def pink_half(y):
         # the NOSE stays blue: the sheet's pink band fades out before the tip.
-        # NARROWED 2026-08-27 pass 3 (13 -> 9): Front.png's cap is only the
-        # top ~30% of the ball -- at 13 the crown wrapped down PAST the eye
-        # line (col 32 +- 6.5 vs cap reaching col 35) and the head-on view
-        # read as a pink ball with a blue chin instead of a blue face in a
-        # pink cap. At 9 the cap stops at col 39 and blue owns the sides.
-        # ...and it starts WELL BEHIND the brow (26, was 6): a frontal camera
-        # sees the TOP of the head tube as the middle of the ball, so any cap
-        # rows forward of the mid-skull paint pink exactly where the sketch's
-        # frontal ball is blue (found with a debug page that recoloured each
-        # pink source: the "ball centre" was the cap rows 18-38). Starting at
-        # 26 leaves the forehead blue between the eyes, and the cap reads as
-        # the ball's top rim -- the sketch's layout in both views.
-        if y < 26:
+        # WIDENED 2026-08-27 round-skull run (Fabian: "Carry the same logic to
+        # the head: the pink crown should be the head's whole top" -- the same
+        # everything-you-see-from-above rule as the body band). The crown now
+        # ramps in from the brow (y=20) to the body band's own half-width (13)
+        # by mid-skull and HOLDS it to the junction row, so head and body read
+        # as one continuous pink top. The eyes are painted after the cap and
+        # stay on top of it; blue keeps the face, the sides below the cap and
+        # the whole underside. (The old start-at-26 / max-7 cap was tuned for
+        # the pre-ball skull under the old steep camera.)
+        if y < 20:
             return 0.0
-        if y < 34:
-            return 2.5 + (7.0 - 2.5) * (y - 26) / 8.0
-        if y < 38:
-            return 7.0
-        if y < 50:
-            return 7.0 - 2.0 * (y - 38) / 12.0
-        return 5.0
+        if y < 30:
+            return 3.0 + (13.0 - 3.0) * (y - 20) / 10.0
+        return 13.0
     def throat_half(y):
         return 12.0 if y < 38 else 10.0
     # green rear flanks: fade in behind the skull; wobbly hand edge.
