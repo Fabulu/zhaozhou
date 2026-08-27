@@ -5,6 +5,73 @@ at the top.*
 
 ---
 
+## 2026-08-28 -- the walker works, and it is the piece v3 was for
+
+*Short version: the thing that killed v2 is gone, measured rather than argued.
+Two blocks closed tonight at full marks. One number in the contract was wrong
+and is fixed.*
+
+### The 27,225 clocks are gone
+
+v2's fatal number was point TRANSPORT: 27,225 clocks per patch to move points
+into the engine, against a budget of 10,416. The whole front end was at 261%
+of the frame before a single instruction ran.
+
+The walker deletes it. Instead of receiving points it GENERATES them, and it
+now measures:
+
+**a full 33x33 patch in 297 clocks — one four-point group per clock, no stall.**
+
+It works because of something in our own reference code that was easy to miss:
+the coordinates are SEPARABLE. The x of a point depends only on its column and
+the z only on its row. So the engine needs 33 + 33 numbers, not 1,089 pairs —
+it holds two tiny tables and indexes them.
+
+440 randomised runs against the reference, all matching. Mutation sweep 18/18.
+
+### Two blocks closed at full marks
+
+| block | before | now |
+| --- | --- | --- |
+| RASTER.EARLYZ | 15/16, one real gap | **16/16** |
+| FIELD.WALK.EARTH | 14/17 on its first run | **17 caught + 1 proven equivalent** |
+
+Three real test gaps found and closed between them. Worth naming one, because
+the shape repeats: the walker's emptiness check has two terms, and the test
+only ever drove one of them, so deleting the other changed nothing the test
+could see. **A two-term guard needs a case per term.** The other two were the
+same family — the test recomputing a thing for itself instead of reading what
+the block actually reported.
+
+### A budget number in the contract was wrong
+
+The contract said a full patch is 273 groups. For the path that matters it is
+**297** — the walk goes row by row and 33 is not divisible by 4, so a group
+cannot straddle a row. 273 is still right for a different phase, so both
+numbers stay, but anyone sizing the engine from the old line would have come
+up 8.8% short — about 3,000 hidden clocks a frame. Now measured at 297 rather
+than argued.
+
+### One thing that needs you, and one that does not
+
+**Needs you:** the two reducer laws from the last note (how `material` picks a
+winner, how `nav_cost` reduces) are still flagged as *chosen, not found*. They
+are written down so changing either is one edit. No rush, but they are yours.
+
+**Does not need you:** the executor's register file. The brief and your
+PIPELINEINGHINTS directive cut it on different axes. They cost the SAME
+twelve memories, so the measured fit covers either — but yours serves seven
+operands a clock where the brief's serves three, at no extra cost. Phase 4 is
+built on yours, because it is the one Quartus has actually measured. Recorded
+in `reports/FIELD_V3_EXECUTOR_REGFILE.md`, and reversible in one module if
+you disagree.
+
+### Still running
+
+Place-and-route for the last two Phase 3 probes. One has been going an hour;
+it is working, not stuck. No Fmax claimed for those two until it lands.
+
+---
 ## 2026-08-27 (late) -- Field v3 Phase 3 is DONE. Phase 4 has started.
 
 *Short version: all five decisive probes are built and measured, every one of
