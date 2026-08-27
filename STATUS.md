@@ -5,6 +5,75 @@ at the top.*
 
 ---
 
+## 2026-08-27 (late morning) -- the clock has a PLATEAU, not a slow part
+
+### I was wrong twice, and the second time told us something
+
+I pipelined the reciprocal, expecting it to be the ceiling. Measured:
+**58.85 -> 59.22 MHz.** Half a percent. Nothing.
+
+Here is why, and it is the most useful thing I learned all night. Three fixes,
+three different slowest paths, all almost exactly the same length:
+
+| after | what the slowest path was | length |
+| --- | --- | --- |
+| rebuilding the register file | scratchpad -> multiply -> rescale -> add -> write | 18.0 ns |
+| pipelining the multiply | ring -> the divide helper -> lookup table -> multiplier | 16.4 ns |
+| pipelining the divide helper | **the wavefront scheduler, feeding itself** | 16.3 ns |
+
+Each fix removed the path it aimed at. Each time another was waiting a
+fraction of a nanosecond behind it.
+
+**The engine does not have one slow part. It has a plateau** -- a dozen
+unrelated structures all landing at 16-18 ns. That is why the clock went 52 ->
+58.9 -> 59.2 instead of 52 -> 90 -> 120. Cutting one buys the gap to its
+neighbour, not the gap to the rest of the design.
+
+The third one is not even arithmetic: the scheduler picks which wavefront runs
+and then, in the same tick, uses that pick to look up that wavefront's state,
+compare it, and write the scoreboard back. It is the machine arguing with
+itself about whose turn it is.
+
+### What that means for the decision I owe you
+
+A plateau is a **pipeline-depth** problem, not a hot-spot problem. Getting to
+100 MHz is not three more clever fixes -- it is deciding the engine gets
+another stage boundary everywhere, and paying for it in latency, in reworking
+the interlocks, and in a mutation sweep per stage.
+
+Against that: giving Field its own slower clock domain costs **nothing inside
+the engine** and something at its edges.
+
+I am not choosing that one for you. But I now know what the choice actually
+is, which I did not this morning when I thought there was a single slow part
+to find.
+
+### Meanwhile: the terrain block that had no safety net
+
+TERRAIN.PATCH is the entry point for the whole terrain system -- it composes
+the ground you walk on out of the base heightfield, the baked scars and the
+live field effects. It had working code, a complete written spec, a reference
+model and four passing tests.
+
+It had **no mutation sweep**, while both its sibling blocks had one. Passing
+tests tell you the code works. Only a sweep tells you the tests would NOTICE
+if it stopped working.
+
+So I wrote one: twenty deliberate sabotages aimed at the laws the spec leads
+with -- the two clamps that stop a wave punching through the underside of the
+island and faking a breach, the rule that a vertex exactly on a field's edge
+counts as inside it, the sixteen-effect limit and what happens at seventeen.
+
+**First run: 19 of 20 caught, and the survivor was a real hole.** Making the
+intake stall when full -- instead of rejecting the extra effect and moving on
+-- passed all 1,400 checks, because nothing in the test file had ever looked at
+the signal that says "I am ready". The spec's own words are that the frame
+never stalls. Now every offer in the file checks it.
+
+**Second run: 20 of 20, no survivors.**
+
+---
+
 ## 2026-08-27 (morning) -- the vertex cache is PROVED, and we found the real ceiling
 
 ### The proof is done
