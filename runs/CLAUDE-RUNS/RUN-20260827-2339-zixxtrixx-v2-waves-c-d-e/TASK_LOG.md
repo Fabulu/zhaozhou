@@ -95,3 +95,30 @@ Gate baseline confirmed green before any change: probe 0, choreo 0,
 goldens IDENTICAL (all four clips + pose CRCs), --check "all sequence
 CRCs match" (redirected to file). Direct g++ build harness committed
 (build-direct.sh); fresh binaries reproduce the green gates.
+
+## 2026-08-28 — owner art pass LANDED (commits pushed as they happened)
+1. ONE CULMINATING TUBE: kTaper reworked by eye vs Side.png; ball envelope
+   retired; peak ~1.58x trunk, blunt dome.
+2. ATTITUDE -6000: zixx_headaim.cpp (committed) measured the posed snout
+   axis and exposed the inverted sign convention that had burned four
+   passes (-34000 read "good" on my own sweep because the head was folded
+   149 deg under -- the render lied, the measurement removed the bias, the
+   render then chose the value at -6000 = +4.6 deg).
+3. Eyes raised+bulged+orange-surrounded; pink crown behind the dome (front
+   read clean) then full width; blue throat to row 30. Front camera beside
+   Front.png: pink cap / blue face / side eyes / mouth -- the sheet's layout.
+4. Idle sideways snake: world-vertical by quat CONJUGATION (exact) after
+   three approximate axes leaked 15-30 mm; belly band [-8..-2] EXACT at
+   full amplitude. Breath-lift on the head bone.
+5. Fall relaxed by a ton: 10,768 overlap hits -> 67; allowance TIGHTENED
+   200 -> 40. Contact sheet: straightens, collapses, S recurs. 
+6. Salto apex hold +6 keys (licensed); impact 56 -> 62; stick still 5.000 s.
+7. T4/T5/T6/T7: 128x256 atlas + multi-scale crayon + artistic mips +
+   debug atlas; grain reads at walk distance (the T5 goal).
+8. Goldens RE-PINNED with provenance; diff scope proven per clip (walk =
+   bone 25 only). --check all match.
+9. NEW VOCABULARY slots 5-8: hit / death / tail-balance / look-around.
+   Ten probe-caught ground bugs fixed by construction (wave-lane neck,
+   corpse slopes, rear-node constraint, keyed fork curve, conjugated
+   look follow). Contact sheets read as intended; look-around PROVES the
+   head-aim rig with the body planted.
