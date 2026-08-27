@@ -303,7 +303,7 @@ module zhao_probe_v3_exec #(
 
   assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
   assign wb_ctx_o   = s4_ctx_r;
-  assign wb_reg_o   = s4_dst_r + RW'(1);
+  assign wb_reg_o   = s4_dst_r;
   assign wb_data_o  = alu_result;
 
   assign done_valid_o = s4_v_r && alu_is_end;
