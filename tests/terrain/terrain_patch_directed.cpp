@@ -67,6 +67,21 @@ bool offer(Vzhao_terrain_patch& dut, const zt::FieldRecord& f, uint16_t patch_id
   dut.fld_add_z1_i = f.z1;
   dut.fld_add_hash_i = f.program_hash;
   dut.fld_add_cmd_i = f.cmd_index;
+
+  // THE FRAME NEVER STALLS (terrain_rules 9.1). A record is accepted or
+  // REJECTED in the cycle it is offered; the intake may never answer by
+  // deasserting ready and making the producer wait. Checked on EVERY offer,
+  // including the ones past capacity, because that is the only place the law
+  // can be broken and it is exactly where a full list would tempt an
+  // implementation to stall.
+  //
+  // The mutation sweep found this hole as P16: making the intake stall when
+  // full passed every test in this file, because the helper below read
+  // fld_add_accept_o and nothing ever read fld_add_ready_o at all.
+  dut.eval();
+  check(dut.fld_add_ready_o != 0, "the intake never stalls, full or not", 1,
+        dut.fld_add_ready_o != 0 ? 1 : 0);
+
   zhao::tick(dut);
   dut.fld_add_valid_i = 0;
   dut.list_clear_i = 0;
