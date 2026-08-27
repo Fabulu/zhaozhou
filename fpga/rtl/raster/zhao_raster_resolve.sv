@@ -7,14 +7,27 @@
 //   reference/src/zrender/resolve.cpp — THE dither oracle. Its header states
 //       the law this module reproduces bit for bit:
 //         r5 = min(31, (r*31 + (B*16 + 8)) / 255)
-//         g6 = min(63, (g*63 + (B*32 + 16)) / 255)
+//         g6 = min(63, (g*63 + (B*16 + 8)) / 255)
 //         b5 = min(31, (b*31 + (B*16 + 8)) / 255)
 //       with B the 4×4 Bayer value at (y & 3, x & 3) — the threshold
-//       t = (B + 0.5)/16 of one quantization step. GREEN IS DIFFERENT: its
-//       dither amplitude is 32, not 16, and its rounding term 16, not 8,
-//       because RGB565 gives green SIX bits. Getting that wrong is the
-//       classic subtle resolve defect and it is caught here by
-//       test_green_amplitude and by every random tile.
+//       t = (B + 0.5)/16 of one quantization step.
+//
+//       GREEN IS NOT DIFFERENT, AND THIS COMMENT USED TO SAY IT WAS.
+//       Until 2026-08-27 these lines quoted `(B*32 + 16)` for green and
+//       declared its amplitude doubled. That was the law BEFORE the
+//       2026-08-16 white-rail fix, and resolve.cpp has said so ever since:
+//       one quantization step is 255 numerator units for ALL THREE channels,
+//       because all three divide by 255, so (B + 0.5)/16 of a step is
+//       (B*16 + 8) everywhere. The old 32/16 is exactly what WRAPPED the
+//       six-bit field -- (255*63 + 15*32 + 16)/255 = 64 -- and turned full
+//       white into a white/magenta checkerboard.
+//
+//       The RTL below has always instantiated green at AMP=16, RND=8 and has
+//       always been right; only this header was stale. It is corrected rather
+//       than deleted because a header that contradicts the code it heads is
+//       how someone eventually 'fixes' working silicon into the bug it warns
+//       about. zhao_raster_quant.sv carries the same argument at its
+//       parameters, and reference/src/zrender/resolve.cpp is the law.
 //       The `min` clamps are the 2026-08-16 white-rail fix, also from that
 //       header: green at B ≥ 8 with g ≥ 252 quantizes to 64, which WRAPS in
 //       a 6-bit field, and full white resolved to a white/magenta pixel

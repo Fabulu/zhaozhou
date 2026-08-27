@@ -193,10 +193,21 @@ void test_channel_sweep() {
 
 // --------------------------------------------------------------------------
 void test_green_amplitude() {
-  // Green's dither amplitude is 32 and its rounding term 16 — NOT 16 and 8 —
-  // because RGB565 gives green six bits (resolve.cpp header). Step one: prove
-  // the vector set can TELL, by counting the (g, B) pairs at which the two
-  // candidate laws disagree. Step two: check the RTL against the ORACLE, as
+  // STALE PREMISE CORRECTED 2026-08-27. This comment used to assert that
+  // green's amplitude is 32 and its rounding term 16. That was the law before
+  // the 2026-08-16 white-rail fix; resolve.cpp:81 has used (B*16 + 8) for
+  // green ever since, the same as red and blue, because one quantization step
+  // is 255 numerator units for all three channels. The old 32/16 is precisely
+  // what wrapped the six-bit field at full white.
+  //
+  // THE TEST ITSELF WAS NEVER WRONG, which is why it kept passing: the
+  // candidate arithmetic below is never the expected value of a check, it
+  // only measures whether the vectors could TELL the two laws apart, and
+  // every actual check is against the oracle. Only the prose had rotted.
+  //
+  // Step one: prove the vector set can TELL, by counting the (g, B) pairs at
+  // which the two candidate laws disagree. Step two: check the RTL against
+  // the ORACLE, as
   // everywhere else. The candidate arithmetic below is never the expected
   // value of a check — it only measures the discriminating power of the
   // vectors, which is the difference between a test and a decoration.
@@ -234,7 +245,7 @@ void test_green_amplitude() {
     const Resolved got = diff(w, 0, 0, "red", 0, false);
     if (got != oracle_resolve(w, 0, 0)) ++bad;
   }
-  check(bad == 0, "green amplitude: red keeps amplitude 16 (not green's 32)", 0, bad);
+  check(bad == 0, "green amplitude: red keeps amplitude 16, as green now does too", 0, bad);
 }
 
 // --------------------------------------------------------------------------
