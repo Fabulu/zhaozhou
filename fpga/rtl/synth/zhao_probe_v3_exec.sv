@@ -183,6 +183,22 @@ module zhao_probe_v3_exec #(
   logic signed [31:0] s3_b0_r, s3_b1_r, s3_b2_r;
   logic signed [31:0] s3_c_r;
 
+  // ---- S4: the product lands ----------------------------------------------
+  // MEASURED, not assumed: zhao_field_mul is TWO clocks deep -- issue_i
+  // registers the operands, and the product appears the clock after that. The
+  // first version of this datapath put the ALU at S3, one clock early, and fed
+  // it the PREVIOUS instruction's product. desync_o caught it on the first
+  // run, which is the whole reason that signal is a port rather than a
+  // comment. The operands are carried a second clock to meet the product.
+  logic          s4_v_r;
+  logic [CW-1:0] s4_ctx_r;
+  logic [7:0]    s4_op_r;
+  logic [RW-1:0] s4_dst_r;
+  logic [31:0]   s4_imm_r;
+  logic signed [31:0] s4_a0_r, s4_a1_r, s4_a2_r;
+  logic signed [31:0] s4_b0_r, s4_b1_r, s4_b2_r;
+  logic signed [31:0] s4_c_r;
+
   // ---- the register file, banked on register[1:0] -------------------------
   logic signed [31:0] rf_a0, rf_a1, rf_a2, rf_b0, rf_b1, rf_b2, rf_c;
 
@@ -231,11 +247,11 @@ module zhao_probe_v3_exec #(
   logic               alu_sat_add, alu_sat_mul, alu_sat_rescale;
 
   zhao_field_alu u_alu (
-      .op_i  (s3_op_r),
-      .imm_i (s3_imm_r),
-      .a0_i  (s3_a0_r), .a1_i(s3_a1_r), .a2_i(s3_a2_r),
-      .b0_i  (s3_b0_r), .b1_i(s3_b1_r), .b2_i(s3_b2_r),
-      .c_i   (s3_c_r),
+      .op_i  (s4_op_r),
+      .imm_i (s4_imm_r),
+      .a0_i  (s4_a0_r), .a1_i(s4_a1_r), .a2_i(s4_a2_r),
+      .b0_i  (s4_b0_r), .b1_i(s4_b1_r), .b2_i(s4_b2_r),
+      .c_i   (s4_c_r),
       .prod_ab_i(prod_ab),
       // DOT2/DOT3 are NOT part of this increment. Feeding them zero would be a
       // wrong ANSWER; the ALU's own op_unsupported_o is the honest signal, and
@@ -254,7 +270,7 @@ module zhao_probe_v3_exec #(
   // A DOT op reaching this increment is unsupported even though the ALU could
   // name it, because the products it needs were never computed.
   logic dot_here_c;
-  assign dot_here_c = s3_v_r && (s3_op_r == 8'h10 || s3_op_r == 8'h11);
+  assign dot_here_c = s4_v_r && (s4_op_r == 8'h10 || s4_op_r == 8'h11);
 
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
@@ -266,20 +282,20 @@ module zhao_probe_v3_exec #(
       rf_wreg_c  = pre_reg_i;
       rf_wdata_c = pre_data_i;
     end else begin
-      rf_we_c    = s3_v_r && alu_writes && !alu_is_end;
-      rf_wctx_c  = s3_ctx_r;
-      rf_wreg_c  = s3_dst_r;
+      rf_we_c    = s4_v_r && alu_writes && !alu_is_end;
+      rf_wctx_c  = s4_ctx_r;
+      rf_wreg_c  = s4_dst_r;
       rf_wdata_c = alu_result;
     end
   end
 
-  assign wb_valid_o = s3_v_r && alu_writes && !alu_is_end;
-  assign wb_ctx_o   = s3_ctx_r;
-  assign wb_reg_o   = s3_dst_r;
+  assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end;
+  assign wb_ctx_o   = s4_ctx_r;
+  assign wb_reg_o   = s4_dst_r;
   assign wb_data_o  = alu_result;
 
-  assign done_valid_o = s3_v_r && alu_is_end;
-  assign done_ctx_o   = s3_ctx_r;
+  assign done_valid_o = s4_v_r && alu_is_end;
+  assign done_ctx_o   = s4_ctx_r;
 
   // ---- the pipe -----------------------------------------------------------
   always_ff @(posedge clk or negedge rst_n) begin
@@ -287,6 +303,7 @@ module zhao_probe_v3_exec #(
       s1_v_r        <= 1'b0;
       s2_v_r        <= 1'b0;
       s3_v_r        <= 1'b0;
+      s4_v_r        <= 1'b0;
       active_r      <= '0;
       inflight_r    <= '0;
       unsupported_o <= 1'b0;
@@ -339,15 +356,29 @@ module zhao_probe_v3_exec #(
       s3_b2_r  <= rf_b2;
       s3_c_r   <= rf_c;
 
-      if (s3_v_r != prod_valid) desync_o <= 1'b1;
+      if (s4_v_r != prod_valid) desync_o <= 1'b1;
 
-      // S3: retire
-      if (s3_v_r) begin
-        inflight_r[s3_ctx_r] <= 1'b0;
+      // S3 -> S4: carry a second clock so the operands meet their product
+      s4_v_r   <= s3_v_r;
+      s4_ctx_r <= s3_ctx_r;
+      s4_op_r  <= s3_op_r;
+      s4_dst_r <= s3_dst_r;
+      s4_imm_r <= s3_imm_r;
+      s4_a0_r  <= s3_a0_r;
+      s4_a1_r  <= s3_a1_r;
+      s4_a2_r  <= s3_a2_r;
+      s4_b0_r  <= s3_b0_r;
+      s4_b1_r  <= s3_b1_r;
+      s4_b2_r  <= s3_b2_r;
+      s4_c_r   <= s3_c_r;
+
+      // S4: retire
+      if (s4_v_r) begin
+        inflight_r[s4_ctx_r] <= 1'b0;
         if (alu_is_end) begin
-          active_r[s3_ctx_r] <= 1'b0;
+          active_r[s4_ctx_r] <= 1'b0;
         end else begin
-          pc_r[s3_ctx_r] <= pc_r[s3_ctx_r] + PW'(1);
+          pc_r[s4_ctx_r] <= pc_r[s4_ctx_r] + PW'(1);
         end
         if (alu_unsupported || dot_here_c) unsupported_o <= 1'b1;
         if (alu_sat_add) sat_add_o <= 1'b1;

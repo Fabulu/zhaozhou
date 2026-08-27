@@ -1409,6 +1409,26 @@ set_tests_properties(field_curve_svc_random PROPERTIES LABELS "fast;nightly" TIM
 add_test(NAME field_curve_svc_random_nightly COMMAND test_field_curve_svc_directed --random 5000)
 set_tests_properties(field_curve_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: the vector executor DATAPATH, one lane. The differential
+# runs the SAME FPLAN through the RTL and through zfield::execute_point --
+# the interpreter the whole Field IR is defined by, not a model written
+# alongside the RTL.
+add_executable(test_field_v3_exec_directed differential/field_v3_exec_directed.cpp)
+target_link_libraries(test_field_v3_exec_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_exec_directed
+  PREFIX Vzhao_probe_v3_exec
+  TOP_MODULE zhao_probe_v3_exec
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_banked_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+add_test(NAME field_v3_exec_directed COMMAND test_field_v3_exec_directed)
+set_tests_properties(field_v3_exec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_exec_random COMMAND test_field_v3_exec_directed --random 40)
+set_tests_properties(field_v3_exec_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_exec_random_nightly COMMAND test_field_v3_exec_directed --random 400)
+set_tests_properties(field_v3_exec_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),

@@ -1,0 +1,430 @@
+// field_v3_exec_directed.cpp — the differential for the Field v3 executor
+// datapath (fpga/rtl/synth/zhao_probe_v3_exec.sv), Phase 4.
+//
+// THE ORACLE IS THE SHIPPED PLANNER, END TO END
+// ----------------------------------------------
+// Both sides run the SAME FPLAN. The test builds a canonical program, lowers
+// it with `zfield::plan`, and then:
+//
+//   * the software side runs `zfield::prepare` + `zfield::execute_point`,
+//     which is the reference the Phase 2 planner was swept 16/16 against;
+//   * the hardware side has that same plan's uops loaded into its store and
+//     the same point's inputs preloaded into its register file.
+//
+// So this is not "RTL against a model written next to it". It is RTL against
+// the interpreter the whole Field IR is defined by.
+//
+// EVERYTHING IS VARYING, DELIBERATELY
+// ------------------------------------
+// `plan()` is given a varying mask covering every input lane, so no uniform
+// elimination happens and every uop source is a VECTOR register. That is not
+// a convenience: this increment has NO SCALAR BANK, and a plan that reached it
+// with a `kSca` source would be executed against a register file that does not
+// hold that value. The test ASSERTS the absence rather than assuming it, so
+// the day the scalar bank arrives this check fails loudly instead of silently
+// passing on a wrong read.
+//
+// WHAT IS CHECKED, AND WHY EACH ONE IS NOT REDUNDANT
+// ---------------------------------------------------
+//  1. THE OUTPUT VALUES, reconstructed from the WRITEBACK STREAM rather than
+//     read out at the end. There is no host read port, and that turns out to
+//     be the better test: every intermediate write is observed, so a program
+//     that reaches the right answer through wrong intermediates is still
+//     visible as a wrong write.
+//  2. THE SATURATION LEDGER. `execute_point` reports the varying half's
+//     ledger; the block ORs its own. A block that computes the right number
+//     while lying about whether it clamped is wrong in the way that matters
+//     later, when the ledger is what tells the game a value was pinned.
+//  3. `desync_o` MUST STAY LOW. It latches if the multiplier's valid ever
+//     fails to line up with S3 — meaning the product feeding the ALU belongs
+//     to another instruction. That is a wrong answer, not a slow one.
+//  4. `unsupported_o` IS CHECKED IN BOTH DIRECTIONS. Low for programs this
+//     increment implements, and HIGH for a DOT program — because an op whose
+//     products were never computed must be refused, not answered with zero.
+//  5. THE BARREL PROPERTY, MEASURED. The datapath is five stages deep with one
+//     instruction in flight per context, so one context alone can only issue
+//     every fifth clock. Running eight contexts must fill the pipe. Both
+//     numbers are measured rather than asserted, because "it should pipeline"
+//     is exactly the claim that goes quietly wrong.
+
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "verilated.h"
+
+#include "Vzhao_probe_v3_exec.h"
+
+#include "zfield/zfield.hpp"
+#include "zfield/zfield_plan.hpp"
+#include "zhao_sim.hpp"
+#include "zref/zref_sat.hpp"
+
+namespace {
+
+using zhao::check;
+
+constexpr int kCtx = 8;
+constexpr int kRegs = 32;
+constexpr int kPlan = 32;
+
+struct Prng {
+  uint64_t s;
+  explicit Prng(uint64_t seed) : s(seed * 6364136223846793005ULL + 1442695040888963407ULL) {}
+  uint64_t next64() {
+    s = s * 6364136223846793005ULL + 1442695040888963407ULL;
+    uint64_t x = s;
+    x ^= x >> 33;
+    x *= 0xFF51AFD7ED558CCDULL;
+    x ^= x >> 33;
+    return x;
+  }
+  uint32_t below(uint32_t n) { return n ? (uint32_t)(next64() % n) : 0; }
+  // Values that actually exercise the fx16 rails, not just the middle.
+  int32_t interesting() {
+    switch (below(8)) {
+      case 0: return 0;
+      case 1: return 1 << 16;
+      case 2: return -(1 << 16);
+      case 3: return INT32_MAX;
+      case 4: return INT32_MIN;
+      case 5: return INT32_MAX - (int32_t)below(4);
+      case 6: return INT32_MIN + (int32_t)below(4);
+      default: return (int32_t)next64();
+    }
+  }
+};
+
+// The ops this increment implements. DOT2/DOT3 are excluded on purpose: they
+// need two and three products against a one-multiplier-per-lane budget.
+const uint8_t kOps[] = {zfield::OP_MOV, zfield::OP_ADD,    zfield::OP_SUB, zfield::OP_MUL,
+                        zfield::OP_MAD, zfield::OP_MIN,    zfield::OP_MAX, zfield::OP_ABS,
+                        zfield::OP_CLAMP, zfield::OP_SELECT};
+
+// Build a canonical program over `n_in` varying lanes using only kOps.
+// Maintains the validator's shape: def-before-use, dst outside the input
+// lanes, exactly one END and it last.
+zfield::Decoded alu_program(Prng& rng, int n_in, int n_body) {
+  zfield::Decoded d;
+  d.profile = 0;
+  static const char* names[8] = {"x", "z", "p0", "p1", "p2", "p3", "p4", "p5"};
+  for (int i = 0; i < n_in; ++i) {
+    zfield::IoLane l;
+    l.name = names[i];
+    l.type = 0;
+    l.reg = (uint8_t)i;
+    d.in_lanes.push_back(l);
+  }
+  int next_reg = n_in;
+  for (int k = 0; k < n_body && next_reg < 20; ++k) {
+    zfield::Instr ins = {};
+    ins.op = kOps[rng.below((uint32_t)(sizeof kOps))];
+    ins.dst = (uint8_t)next_reg;
+    ins.a = (uint8_t)rng.below((uint32_t)next_reg);
+    ins.b = (uint8_t)rng.below((uint32_t)next_reg);
+    ins.c = (uint8_t)rng.below((uint32_t)next_reg);
+    d.instrs.push_back(ins);
+    ++next_reg;
+  }
+  zfield::Instr end = {};
+  end.op = zfield::OP_END;
+  d.instrs.push_back(end);
+
+  zfield::IoLane o;
+  o.name = "h";
+  o.type = 0;
+  o.reg = (uint8_t)(next_reg - 1);
+  d.out_lanes.push_back(o);
+  d.program_hash = 0xA10A0000u | (uint32_t)n_body;
+  return d;
+}
+
+// ---------------------------------------------------------------------------
+
+struct Dut {
+  Vzhao_probe_v3_exec& t;
+  // Shadow of the register file, rebuilt from the writeback stream.
+  int32_t shadow[kCtx][kRegs] = {};
+
+  explicit Dut(Vzhao_probe_v3_exec& top) : t(top) {}
+
+  void reset() {
+    t.rst_n = 0;
+    t.up_we_i = 0;
+    t.pre_we_i = 0;
+    t.start_i = 0;
+    t.eval();
+    for (int i = 0; i < 3; ++i) zhao::tick(t);
+    t.rst_n = 1;
+    t.eval();
+    zhao::tick(t);
+    std::memset(shadow, 0, sizeof shadow);
+  }
+
+  void load_uop(int ctx, int pc, uint8_t op, int dst, int a, int b, int c, uint32_t imm) {
+    t.up_we_i = 1;
+    t.up_ctx_i = (uint8_t)ctx;
+    t.up_pc_i = (uint8_t)pc;
+    t.up_op_i = op;
+    t.up_dst_i = (uint8_t)dst;
+    t.up_a_i = (uint8_t)a;
+    t.up_b_i = (uint8_t)b;
+    t.up_c_i = (uint8_t)c;
+    t.up_imm_i = imm;
+    zhao::tick(t);
+    t.up_we_i = 0;
+  }
+
+  void preload(int ctx, int reg, int32_t v) {
+    t.pre_we_i = 1;
+    t.pre_ctx_i = (uint8_t)ctx;
+    t.pre_reg_i = (uint8_t)reg;
+    t.pre_data_i = (uint32_t)v;
+    zhao::tick(t);
+    t.pre_we_i = 0;
+    shadow[ctx][reg] = v;
+  }
+
+  void start(int ctx) {
+    t.start_i = 1;
+    t.start_ctx_i = (uint8_t)ctx;
+    zhao::tick(t);
+    t.start_i = 0;
+  }
+
+  // Advance one clock, folding any writeback into the shadow. Returns true if
+  // a context finished this clock, and reports which.
+  bool step(int* done_ctx) {
+    const bool wb = t.wb_valid_o != 0;
+    const int wctx = (int)t.wb_ctx_o, wreg = (int)t.wb_reg_o;
+    const int32_t wdata = (int32_t)t.wb_data_o;
+    const bool dn = t.done_valid_o != 0;
+    if (done_ctx && dn) *done_ctx = (int)t.done_ctx_o;
+    zhao::tick(t);
+    if (wb) shadow[wctx][wreg] = wdata;
+    return dn;
+  }
+};
+
+// Load one plan into one context and preload that point's inputs.
+// Returns false if the plan is outside this increment (a scalar source).
+bool install(Dut& d, int ctx, const zfield::Fplan& fp, const int32_t* in, size_t n_in,
+             bool* saw_scalar) {
+  for (size_t u = 0; u < fp.uops.size(); ++u) {
+    const zfield::VecUop& q = fp.uops[u];
+    int src[3] = {0, 0, 0};
+    for (int s = 0; s < 3; ++s) {
+      if (s < (int)q.n_src) {
+        if (q.src[s].kind != zfield::SrcKind::kVec) {
+          *saw_scalar = true;
+          return false;
+        }
+        src[s] = (int)q.src[s].idx;
+      }
+    }
+    d.load_uop(ctx, (int)u, q.op, (int)q.dst, src[0], src[1], src[2], q.imm);
+  }
+  d.load_uop(ctx, (int)fp.uops.size(), zfield::OP_END, 0, 0, 0, 0, 0);
+
+  for (size_t l = 0; l < n_in && l < fp.in_vreg.size(); ++l) {
+    if (fp.in_vreg[l] == 0xFF) continue;  // uniform: not this increment
+    d.preload(ctx, (int)fp.in_vreg[l], in[l]);
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+
+// One program, one point, compared against execute_point.
+void test_one_point_matches_the_interpreter(Vzhao_probe_v3_exec& top) {
+  printf("-- one point against zfield::execute_point\n");
+  Dut d(top);
+  d.reset();
+
+  Prng rng(0xC0FFEE01);
+  const int n_in = 4;
+  const zfield::Decoded prog = alu_program(rng, n_in, 10);
+  const uint32_t vmask = (1u << n_in) - 1u;  // everything varies
+  const zfield::Fplan fp = zfield::plan(prog, vmask);
+
+  int32_t in[8] = {};
+  for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
+
+  bool saw_scalar = false;
+  const bool ok = install(d, 0, fp, in, (size_t)n_in, &saw_scalar);
+  check(!saw_scalar, "an all-varying plan has no scalar-bank sources", 0, saw_scalar ? 1 : 0);
+  if (!ok) return;
+
+  d.start(0);
+  int done_ctx = -1;
+  int guard = 0;
+  while (guard++ < 4000) {
+    if (d.step(&done_ctx) && done_ctx == 0) break;
+  }
+  check(guard < 4000, "the context reached END", 1, guard < 4000 ? 1 : 0);
+  check(top.desync_o == 0, "the multiplier stayed in step with the pipeline", 0,
+        (int)top.desync_o);
+  check(top.unsupported_o == 0, "every op in the program is implemented", 0,
+        (int)top.unsupported_o);
+
+  // The oracle.
+  const zfield::Prepared prep = zfield::prepare(fp, prog, in, (size_t)n_in);
+  int32_t want[4] = {};
+  zref::SatLedger led;
+  zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), &led);
+
+  bool all = true;
+  for (size_t o = 0; o < fp.out_map.size(); ++o) {
+    if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+    const int32_t got = d.shadow[0][fp.out_map[o].idx];
+    if (got != want[o]) {
+      printf("   out lane %zu: want %d got %d\n", o, want[o], got);
+      all = false;
+    }
+  }
+  check(all, "every output register matches the interpreter", 1, all ? 1 : 0);
+
+  check(top.sat_add_o == (led.add != 0), "the ADD saturation flag matches the ledger",
+        led.add != 0, (int)top.sat_add_o);
+  check(top.sat_mul_o == (led.mul != 0), "the MUL saturation flag matches the ledger",
+        led.mul != 0, (int)top.sat_mul_o);
+}
+
+// A DOT program must be REFUSED, not answered with a zero product.
+void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
+  printf("-- an op this increment omits is refused, not answered\n");
+  Dut d(top);
+  d.reset();
+  d.preload(0, 0, 3 << 16);
+  d.preload(0, 1, 5 << 16);
+  d.preload(0, 2, 7 << 16);
+  d.preload(0, 3, 11 << 16);
+  d.load_uop(0, 0, 0x10 /* OP_DOT2 */, 8, 0, 2, 0, 0);
+  d.load_uop(0, 1, zfield::OP_END, 0, 0, 0, 0, 0);
+  d.start(0);
+  int done_ctx = -1;
+  int guard = 0;
+  while (guard++ < 200) {
+    if (d.step(&done_ctx) && done_ctx == 0) break;
+  }
+  check(top.unsupported_o == 1, "a DOT op raises unsupported rather than writing a zero", 1,
+        (int)top.unsupported_o);
+  check(top.desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.desync_o);
+}
+
+// The barrel property, measured on both sides of it.
+void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
+  printf("-- the barrel: one context stalls, eight fill the pipe\n");
+  Prng rng(0xBA22E1);
+  const int n_in = 4;
+  const zfield::Decoded prog = alu_program(rng, n_in, 12);
+  const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+  int32_t in[8] = {};
+  for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
+
+  // One context alone.
+  Dut d1(top);
+  d1.reset();
+  bool sc = false;
+  if (!install(d1, 0, fp, in, (size_t)n_in, &sc)) return;
+  d1.start(0);
+  int done = -1, clocks_1 = 0;
+  while (clocks_1++ < 4000) {
+    if (d1.step(&done) && done == 0) break;
+  }
+  const uint32_t issued_1 = top.uops_issued_o;
+
+  // Eight contexts together.
+  Dut d8(top);
+  d8.reset();
+  for (int c = 0; c < kCtx; ++c) {
+    if (!install(d8, c, fp, in, (size_t)n_in, &sc)) return;
+  }
+  for (int c = 0; c < kCtx; ++c) d8.start(c);
+  int finished = 0, clocks_8 = 0;
+  while (clocks_8++ < 8000 && finished < kCtx) {
+    int dc = -1;
+    if (d8.step(&dc)) ++finished;
+  }
+  const uint32_t issued_8 = top.uops_issued_o;
+
+  printf("   MEASURED: 1 context = %u uops in %d clocks; 8 contexts = %u uops in %d clocks\n",
+         issued_1, clocks_1, issued_8, clocks_8);
+  check(finished == kCtx, "all eight contexts finished", kCtx, finished);
+  check(top.desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.desync_o);
+
+  // Eight contexts do eight times the work in far less than eight times the
+  // clocks -- that IS the barrel. Stated as a measured inequality rather than
+  // a target, because the depth is what it is and the point is to see it.
+  check(clocks_8 < clocks_1 * kCtx, "eight contexts cost less than eight serial runs",
+        clocks_1 * kCtx, clocks_8);
+}
+
+// Randomized: many programs, many points.
+void test_random(Vzhao_probe_v3_exec& top, int iters) {
+  printf("-- randomized differential, %d programs\n", iters);
+  Prng rng(0x5A1AD5);
+  int bad = 0, scalar_plans = 0, ran = 0;
+  for (int k = 0; k < iters; ++k) {
+    Dut d(top);
+    d.reset();
+    const int n_in = 2 + (int)rng.below(4);
+    const zfield::Decoded prog = alu_program(rng, n_in, 4 + (int)rng.below(12));
+    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
+
+    int32_t in[8] = {};
+    for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
+
+    bool sc = false;
+    if (!install(d, 0, fp, in, (size_t)n_in, &sc)) {
+      ++scalar_plans;
+      continue;
+    }
+    d.start(0);
+    int done = -1, guard = 0;
+    while (guard++ < 4000) {
+      if (d.step(&done) && done == 0) break;
+    }
+    ++ran;
+
+    const zfield::Prepared prep = zfield::prepare(fp, prog, in, (size_t)n_in);
+    int32_t want[4] = {};
+    zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), nullptr);
+    for (size_t o = 0; o < fp.out_map.size(); ++o) {
+      if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+      if (d.shadow[0][fp.out_map[o].idx] != want[o]) {
+        ++bad;
+        break;
+      }
+    }
+  }
+  printf("   %d programs executed, %d skipped for scalar sources\n", ran, scalar_plans);
+  check(ran > 0, "some programs actually ran", 1, ran > 0 ? 1 : 0);
+  check(scalar_plans == 0, "an all-varying plan never produces a scalar source", 0, scalar_plans);
+  check(bad == 0, "every randomized program matches the interpreter", 0, bad);
+  check(top.desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.desync_o);
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Verilated::commandArgs(argc, argv);
+  int iters = 0;
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--random" && i + 1 < argc) iters = std::atoi(argv[++i]);
+  }
+
+  Vzhao_probe_v3_exec top;
+
+  if (iters > 0) {
+    test_random(top, iters);
+  } else {
+    test_one_point_matches_the_interpreter(top);
+    test_dot_is_refused_not_answered(top);
+    test_barrel_occupancy(top);
+  }
+  return zhao::report_and_exit("FIELD.V3.EXEC");
+}
