@@ -223,10 +223,26 @@ struct Clip {
   bool interpolate = false;
 };
 
+/**
+ * PHASE-SEAM DECLARATION (C2, 2026-08-28). The hard-cut law means clip
+ * transitions blend nothing: a programmable choreography built from phase
+ * clips (compress -> coil -> unroll -> spear -> ...) stays pop-free only if
+ * the poses on both sides of every intended cut are BIT-IDENTICAL. That is
+ * an asset invariant, so the asset compiler enforces it: each declared pair
+ * (slot_a, key_a) == (slot_b, key_b) is byte-compared (quats + root) at
+ * compile_creature time and the compile FAILS on any mismatch -- the seam
+ * law is checked where the bytes are made, not trusted to the eye.
+ */
+struct SeamPair {
+  uint16_t slot_a, key_a;
+  uint16_t slot_b, key_b;
+};
+
 /** The 64-slot clip bank (creature_rules 2.1; slot ids need not be dense). */
 struct ClipBank {
   uint8_t bone_count = 0;
   std::vector<Clip> clips;
+  std::vector<SeamPair> seams;  // enforced by compile_creature (C2)
 };
 
 /** Byte size of one frame as shipped: 12 + 8 * bone_count (creature_rules 2.1). */
@@ -778,6 +794,52 @@ struct CreatureInstance {
 void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, const mat4fx& vp,
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
                        SatLedger* L);
+
+/**
+ * THE ATTACK PLAN (C4/C5, 2026-08-28; the programmable-salto amendment).
+ *
+ * "Shared clips own local body shape; a per-instance full-3D root transform
+ * owns trajectory, spin count, spin plane and attack direction. The sim
+ * builds an AttackPlan and branches on actual collision."
+ *
+ * The plan is a pure fixed-point record built by the SIM at the trigger
+ * tick from sim truth (target position/velocity, terrain). Everything is
+ * integer: mm, 30 Hz key counts, 1/1000 turns. Replay from a capture
+ * reproduces plan, trajectory and branch bit-exactly. The COMMITMENT RULE:
+ * limited aim correction is allowed while coiled; the spear vector LOCKS at
+ * unroll -- from spear commit onward the creature is a projectile, not a
+ * missile (the counterplay).
+ */
+struct AttackPlan {
+  bool preset_golden = false;  // the approved 226-key Ground Dive, verbatim
+  // phase durations, 30 Hz keys (the local phase clips play against these)
+  uint16_t compress_keys = 10, release_keys = 10, coil_keys = 20;
+  uint16_t unroll_keys = 9, plunge_keys = 10;
+  // trajectory
+  int32_t apex_mm = 0;        // root lift at the top of the coil flight
+  int32_t apex_fwd_mm = 0;    // forward travel by the apex
+  int32_t spin_mturns = 0;    // total coil spin, 1/1000 turns (the ROOT's)
+  // the committed spear: from the commit point (apex) toward the intercept
+  int32_t spear_dx_mm = 0, spear_dy_mm = 0;
+  // sim expectation (the BRANCH still comes from actual collision -- C5)
+  int32_t intercept_x_mm = 0, intercept_y_mm = 0;
+};
+
+/** C5: what actually happened at the end of the committed spear path. */
+enum class AttackOutcome : uint8_t { kGroundStick, kAirHit, kMissRecover };
+
+/**
+ * THE BRANCH LAW (C5): impact is a COLLISION VERDICT, never a clip key.
+ * The sim reports what the committed path actually met -- terrain, a
+ * creature, or nothing -- and the choreography player cuts to the matching
+ * phase clip. An airborne Zixxtrixx can no longer play a ground-impact
+ * event in empty sky because key 62 arrived.
+ */
+inline AttackOutcome attack_plan_branch(bool hit_terrain, bool hit_creature) {
+  if (hit_terrain) return AttackOutcome::kGroundStick;
+  if (hit_creature) return AttackOutcome::kAirHit;
+  return AttackOutcome::kMissRecover;
+}
 
 /**
  * DIAGNOSTIC shade modes for the acceptance gate (P2, 2026-08-28): unlit

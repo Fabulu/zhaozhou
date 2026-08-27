@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <map>
 #include <tuple>
@@ -613,6 +614,43 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   }
   out.skeleton = sk;
   out.bank = bank;
+
+  // ---- C2: enforce the declared phase seams (bit-identical poses) --------
+  for (const SeamPair& sp : bank.seams) {
+    const Clip* a = nullptr;
+    const Clip* b = nullptr;
+    for (const Clip& c : bank.clips) {
+      if (c.slot_id == sp.slot_a) a = &c;
+      if (c.slot_id == sp.slot_b) b = &c;
+    }
+    if (a == nullptr || b == nullptr || sp.key_a >= a->frame_count ||
+        sp.key_b >= b->frame_count) {
+      if (reason) *reason = "seam pair references a missing clip/key";
+      return false;
+    }
+    const size_t bc = bank.bone_count;
+    bool same = true;
+    size_t bad_bone = 999;
+    for (size_t k = 0; k < bc && same; ++k) {
+      bad_bone = k;
+      const quat16& qa = a->quats[static_cast<size_t>(sp.key_a) * bc + k];
+      const quat16& qb = b->quats[static_cast<size_t>(sp.key_b) * bc + k];
+      same = qa.q[0] == qb.q[0] && qa.q[1] == qb.q[1] && qa.q[2] == qb.q[2] &&
+             qa.q[3] == qb.q[3];
+    }
+    for (int k = 0; k < 3 && same; ++k)
+      same = a->root[static_cast<size_t>(sp.key_a) * 3 + k] ==
+             b->root[static_cast<size_t>(sp.key_b) * 3 + k];
+    if (!same) {
+      static char msg[96];
+      std::snprintf(msg, sizeof(msg),
+                    "phase seam mismatch (C2): slot %u key %u != slot %u key %u (bone %u)",
+                    sp.slot_a, sp.key_a, sp.slot_b, sp.key_b,
+                    static_cast<unsigned>(bad_bone));
+      if (reason) *reason = msg;
+      return false;
+    }
+  }
 
   for (const RingPart& p : parts) {
     if (p.rings.size() < 2) {
