@@ -1360,6 +1360,39 @@ set_tests_properties(lint_zhao_field_curve PROPERTIES
 # The sum of squares is UNSIGNED because three squares reach 3*2^62 -- which
 # overflows s64 and fits u64, exactly why the reference uses uint64_t -- and the
 # root is a FLOOR, never rounded.
+# FIELD v3 Phase 3 probe: ready-context FIFO scheduler with registered plan
+# fetch. The directed lane carries the rate gate (1 issue/clock with eight
+# resident contexts) and the dynamic form of the Fieldv3 context invariants.
+add_executable(test_field_ctx_fifo_directed differential/field_ctx_fifo_directed.cpp)
+target_link_libraries(test_field_ctx_fifo_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_ctx_fifo_directed
+  PREFIX Vzhao_probe_ctx_fifo
+  TOP_MODULE zhao_probe_ctx_fifo
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_ctx_fifo.sv)
+add_test(NAME field_ctx_fifo_directed COMMAND test_field_ctx_fifo_directed)
+set_tests_properties(field_ctx_fifo_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_ctx_fifo_random COMMAND test_field_ctx_fifo_directed --random 60)
+set_tests_properties(field_ctx_fifo_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_ctx_fifo_random_nightly COMMAND test_field_ctx_fifo_directed --random 800)
+set_tests_properties(field_ctx_fifo_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# FIELD v3 Phase 3 probe: two-bank exact distance service. The directed lane
+# carries the acceptance GATE (measured four-point II <= 20); the random lane
+# is the exactness differential against zref::isqrt_u64.
+add_executable(test_field_dist_svc_directed differential/field_dist_svc_directed.cpp)
+target_link_libraries(test_field_dist_svc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_dist_svc_directed
+  PREFIX Vzhao_probe_dist_svc
+  TOP_MODULE zhao_probe_dist_svc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_dist_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
+add_test(NAME field_dist_svc_directed COMMAND test_field_dist_svc_directed)
+set_tests_properties(field_dist_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_dist_svc_random COMMAND test_field_dist_svc_directed --random 400)
+set_tests_properties(field_dist_svc_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_dist_svc_random_nightly COMMAND test_field_dist_svc_directed --random 5000)
+set_tests_properties(field_dist_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_field_len_directed differential/field_len_directed.cpp)
 target_link_libraries(test_field_len_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_len_directed

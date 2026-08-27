@@ -61,6 +61,118 @@ Execute reports/Fieldv3.md phases in strict order:
 
 ---
 
+
+### 2026-08-27 19:10 - Phase 2 complete: exact software planner, differential GREEN, sweep 16/16
+
+Built (no v3 RTL touched, per the gate):
+- compiler/src/field_ir/gen_optable.ts: canonical->uop table GENERATOR reading
+  OP_INFO (the one canonical table); emits reference/include/zfield/generated/
+  zfield_optable.hpp with static_asserts pinning every code to the zfield::Op
+  enum. --check lane added to ctest (field_optable_check) so it cannot go stale.
+- reference/include/zfield/zfield_steps.hpp: the ONE semantic step layer,
+  extracted VERBATIM from the interpreter switch; exec_op() + ring_mid() +
+  ring_prepared(). interpret(), prepare() and the executor all call it.
+- reference/src/zfield/zfield_interpret.cpp: refactored to gather/exec_op/
+  scatter driven by the generated shapes. Bit-identical; witnessed by the
+  golden .zvec replay and every RTL differential lane staying green.
+- reference/{include,src}/zfield/zfield_plan.{hpp,cpp}: the FPLAN planner.
+  Forward-taint uniform/varying split (kill on overwrite), SSA-slotted scalar
+  bank, prepared-ring lowering (m/rA/rB prepared once, ONE UOP_RING_PREP with
+  the nine separately-rounded products), order-preserving vreg compaction
+  (adjacency argument in the code), demand vectors per cost-model.md section 5,
+  hot/cold admission. prepare() + execute_point() with per-lane ledgers.
+- tests/differential/field_fplan_diff.cpp, 3 ctest lanes (bare, --random 40
+  fast, --random 600 nightly): committed programs (demand vectors PINNED to
+  the cost model: 16/13, 17/9, 13/14 splits reproduced), boundary grids,
+  prepared/cold/rcp0 ring, uniform-redef kill, uniform-only saturation,
+  occupancy-driven cold, ring_mid law pins, random legal programs.
+  MEASURED: directed 22,927 checks green; --random 600 = 324,000 checks green.
+- tools/sweep_field_plan.{sh} + _mutants.py + _preflight.py: 16 mutants over
+  the brief's software failure classes. MEASURED: 16/16 caught, 0 equivalent,
+  0 discarded, SWEEP OK.
+
+THE SWEEP FOUND A REAL HOLE before its closure: P07 (ring midpoint rounding
+replaced by saturating-add-then-floor) SURVIVED the whole differential corpus
+AND the crater golden .zvec replay - no vector ever sampled an odd or
+overflowing radii sum. Closed with direct ring_mid law pins (round-half-up,
+33-bit-sum-never-saturates cases) in the directed lane; re-run caught 16/16.
+
+Environment note for the next author: the Bash tool's heredoc collapses
+backslash escapes (
+ became a literal newline INSIDE a tr argument,
+silently turning it into "delete all newlines"). Write scripts with the
+Write/Edit tools; the brief's warning extends beyond SystemVerilog.
+
+---
+
+
+### 2026-08-27 20:30 - Phase 3 in progress: probes 1 and 3 built and measured (sim)
+
+Probe 3 (two-bank exact distance service, zhao_probe_dist_svc.sv):
+- 8x the frozen zhao_field_isqrt in two banks of four; service boundary is
+  n2 (the mul bank supplies squares, per the brief); accept-order reply FIFO.
+- MEASURED (Verilator): lone-reply latency 34 cycles; four-point II over 32
+  streamed groups = 17 clocks -- THE GATE (<=20) PASSES in simulation.
+  367 directed + 3,600 random checks green.
+- The first backpressure section EXPECTED wrong behaviour: the reply register
+  is a skid buffer, so the service legally holds THREE requests with replies
+  blocked. Test corrected to pin the real capacity + fourth-refusal.
+- Mutation sweep: 12 mutants (3 reshaped for -Wall lint, house precedent).
+
+Probe 1 (ready-context FIFO scheduler, zhao_probe_ctx_fifo.sv):
+- S0 dequeue+register, S1 REGISTERED plan fetch (true sync RAM), S2 dispatch;
+  modeled countdown service; invariants exported for audit.
+- THE PROBE'S OWN TEST FOUND A REAL ARCHITECTURAL FLAW in the first draft:
+  one FIFO write port with short-requeue priority let eight circulating
+  all-short contexts starve service completions and host starts FOREVER
+  (measured: issue wedged at 28 slots in a 64-cycle window). Fixed with a
+  second write port (service-over-start priority). This is exactly the class
+  the brief's formal list names (lost contexts / starvation) and exactly what
+  a probe is for -- found before any fit, at zero cost.
+- MEASURED (Verilator): 1 instruction/clock sustained over a 64/64 steady
+  window with 8 resident contexts; 39 directed checks + 60 random storms
+  green (no lost/duplicated instruction, one-in-flight law, restart refusal).
+- Harness lesson recorded: an audit that starts after start_ctx calls
+  miscounts (contexts issue during their siblings' starts) -- run_storm now
+  performs starts INSIDE the audited loop.
+
+Phase 2 addendum: V20 caught a claim without ENFORCED-BY in the dist probe
+header (fixed); format tier caught unformatted new C++ (clang-formatted);
+the optable ctest lane was REMOVED in favour of compiler/tests/optable.test.ts
+because compiler/dist is gitignored and CI does not build the compiler -- a
+SKIP-if-absent ctest lane would be the drift-hiding failure MEMORY warns of.
+
+---
+
+
+### 2026-08-27 (late) - sweeps final, fits in flight, one process error caught by the tooling
+
+Sweep tallies, all MEASURED:
+- planner sweep:   16/16 caught, 0 equivalent, 0 survivors, 0 discards. SWEEP OK.
+- dist svc sweep:  13 mutants -> 12 caught + 1 PROVEN equivalent (D01: sat_len's
+  > vs >= coincide at the single differing input; flag compare is separate and
+  its own mutant D13 is caught). SWEEP OK.
+- ctx fifo sweep:  13 mutants -> 12 caught + 1 PROVEN equivalent (F03: pc
+  increment at S0-exit vs S1-exit is unobservable because a context is never
+  in S0 and S1 simultaneously; the real cross-context increment F13 is
+  caught). SWEEP OK.
+Both equivalence proofs carry RE-SCORE triggers in the machine-readable table.
+
+PROCESS ERROR, honestly recorded: the ctx-fifo mutation sweep was launched
+while the ctx-fifo Quartus fit was still running -- the sweep mutates the very
+file in the fit's source cone. The fit runner's provenance enforcement CAUGHT
+it: the row records status "contaminated:source-changed-during-fit" with the
+contaminated file named, and no numbers were recorded. The fit is re-run
+clean after the sweeps. The rule ("do not edit any file in a fit's source
+cone while one runs") failed at the operator, not the tooling.
+
+Environment note: the sweep rebuild() needed BOTH the VERILATOR_ROOT export
+AND the winlibs PATH pin -- a bare cmake in the sweep's bash env resolves to
+the msys2 cmake, fails the preset, and leaves the OLD build.ninja, exactly as
+BUILD.md warns. Both are pinned inside the sweep scripts now.
+
+---
+
 ## Subagent Spawns
 
 *Log subagent spawns and their findings here*
