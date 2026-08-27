@@ -114,7 +114,39 @@ what the tree's evidence is worth.
 | FIELD.DIST.SVC | clean |
 | FIELD.CURVE.SVC | 15/15 |
 | FIELD.PATCH.ACC | 15/15 |
-| FIELD.WALK.EARTH | 17 mutants, running |
+| FIELD.WALK.EARTH | 17 caught + 1 proven equivalent (18/18) |
+| FIELD.V3.EXEC | 15 caught + 4 proven equivalent (19/19) |
+
+### A THIRD failure in the machinery, and the worst of the three
+
+2026-08-28. **A mutant reached a pushed commit.** `wb_reg_o = s4_dst_r +
+RW'(1)` rode into a commit whose message said the block was fixed. Three
+things had to line up, and all three are worth knowing:
+
+* **A killed sweep left ORPHANED processes.** The harness reported the task
+  dead; two driver processes were found alive minutes later, still applying
+  and restoring mutants. A tree verified clean at one moment was dirty when
+  it was staged. The same night, a killed Quartus fit orphaned identically.
+* **The mutant changed an OBSERVATION port only.** Every computed value
+  stayed correct, so the differential passed 440 programs with it in place.
+* **The pre-commit diff was filtered through `head -8`.** A glance, not a
+  review.
+
+**Why no sweep can catch this itself:** `restore` copies back a `gold`
+snapshot taken at startup. If the file is already mutated when the snapshot
+is taken, restore faithfully restores the mutant, the model hash matches it,
+the lanes pass against it, and every guard in the driver agrees the tree is
+pristine. The snapshot is the thing being trusted, so nothing downstream of
+it can check it.
+
+`tools/sweep_check_clean.py` checks from outside that chain: does any
+mutant's replacement text appear in the RTL at all? Not a diff against HEAD
+-- HEAD itself carried the mutant for one commit. Every field driver now runs
+it after the final restore and aborts with exit 14 if it fires.
+
+That makes three machinery failures in two days, all the same shape:
+**a guard that can be satisfied by work not being done, or by the thing it
+trusts being wrong.**
 
 ## Two entries worth calling out by name
 
