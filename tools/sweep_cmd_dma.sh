@@ -1,26 +1,30 @@
 #!/usr/bin/env bash
-# sweep_terrain_patch.sh -- mutation sweep for zhao_terrain_patch.sv
+# sweep_cmd_dma.sh -- mutation sweep for zhao_cmd_dma.sv
 # (TERRAIN.PATCH, the Mantle entry point, phase 6 / ZH-033).
 #
 # ---------------------------------------------------------------------------
 # WHY THIS SWEEP DID NOT EXIST UNTIL NOW, WHICH IS THE POINT OF IT
 # ---------------------------------------------------------------------------
-# TERRAIN.PATCH had RTL, a contract with none of its seventeen sections left as
-# a generated stub, an oracle that resolves (`zref::terrain::compose_vertex`),
-# and FOUR green test lanes. Both its siblings -- TERRAIN.LOD and
-# TERRAIN.NORMALS -- had a mutation sweep. This block had none.
+# reports/SWEEP_COVERAGE_AUDIT.md lists CMD.DMA among the modules with a test
+# lane and no mutation sweep, in the tier after the blocks declared closed:
+# it is on the hot path everything else depends on, because every command the
+# machine executes arrives through it.
 #
-# Green lanes with no sweep say the tests PASS. They do not say the tests would
-# NOTICE if the block were wrong, and the difference between those two claims
-# is the entire reason this file exists.
+# The block is a GATE CHAIN and the chain IS the block -- magic, ABI version,
+# reserved flags, four length laws, the header CRC, the resource epoch, then
+# per record: length, opcode, size agreement, truncation, debug permission.
+# Twelve distinct status codes exist because each gate must be
+# DISTINGUISHABLE: reporting 'bad length' when the fault was a stale epoch
+# sends the caller looking in the wrong place.
 #
-# What the block gets wrong is not arithmetic noise: it is the shape of the
-# ground. So the twenty mutations aim at the laws the contract leads with --
-# the two clamps of terrain_rules 3.4 and their `dual` guards, the
-# closed-interval footprint test, the exact sign-extending `raw << 8`, the
-# saturating order-dependent `fx_add` the loop transpose rests on, and 9.1's
-# overflow law (append in command order, reject the tail, NEVER evict, never
-# stall the frame).
+# So the mutations attack two things -- gates that stop refusing, and gates
+# that refuse under the WRONG NAME. The fail-safe ORDER is a law too, which
+# the random lane predicts, so several mutants move a gate past its neighbour
+# rather than deleting it.
+#
+# BOTH LANES OF THE SAME BINARY ARE SCORED: cmd_dma_directed and the --random
+# 400 lane are the same executable, so running the exe once covers the
+# directed cases; the random timeline is what the ordering mutants need.
 #
 # The guards below are NOT new. Every one was earned by a real failure
 # elsewhere in this repository and they are inherited deliberately rather than
@@ -46,10 +50,10 @@
 #      to compile leaves the previous binary in place and the sweep runs THAT.
 #      Delete the exe too, and require it to exist after the build.
 #   6. NEW HERE: a mutation containing `$` cannot live in a double-quoted bash
-#      array. `zhao_terrain_patch.sv` forms its coordinate differences with
+#      array. `zhao_cmd_dma.sv` forms its coordinate differences with
 #      `$signed(...)`; inside `"..."` bash expands `$signed` to nothing, so the
 #      anchor silently becomes a DIFFERENT string than the one written down.
-#      The table therefore lives in `tools/sweep_terrain_patch_mutants.py` and no
+#      The table therefore lives in `tools/sweep_cmd_dma_mutants.py` and no
 #      shell ever reads a mutation. See that file's header.
 #
 #   7. IT ESCAPED A SWEEP AND BROKE main ON 2026-08-23 -- in the LOD sweep,
@@ -62,7 +66,7 @@
 #      failed 55 of 72 checks on the Duo-fairness property against RTL that was
 #      provably correct.
 #
-#      FIVE targets elaborate `zhao_terrain_patch` -- they are listed in
+#      FIVE targets elaborate `zhao_cmd_dma` -- they are listed in
 #      TARGETS below and the roster is checked against tests/CMakeLists.txt at
 #      startup, so adding a sixth without listing it ABORTS the sweep rather
 #      than silently narrowing it.
@@ -86,29 +90,14 @@
 # ---------------------------------------------------------------------------
 # WHAT IS SCORED
 # ---------------------------------------------------------------------------
-# ALL FIVE lanes that elaborate this module. Guard 7 requires all five to be
-# CLEANED anyway, and once cmake has re-elaborated them the marginal cost of
-# also building and running them is a few seconds each, so there is no reason
-# to score fewer than are already being rebuilt.
+# ONE lane elaborates this module: test_cmd_dma_directed. Guard 7's
+# roster check below is still run, so the day a second consumer appears the
+# sweep ABORTS rather than silently leaving mutant model sources in its
+# directory for someone else's build to compile.
 #
-# They are not redundant -- they fail on different things:
-#
-#   terrain_patch_directed   the composition chain and the law's own
-#                            properties. The closed-interval footprint edge and
-#                            the `dual` guard on each clamp are exact-equality
-#                            events that random input does not produce.
-#   terrain_patch_random     the same chain over thousands of vertices and
-#                            field lists, where saturation and command order
-#                            actually interact.
-#   field_out_height         FIELD's height lanes arriving at the patch: the
-#                            vertex-major delivery this block's loop transpose
-#                            REQUIRES, which no block-level differential can
-#                            check on its own.
-#   terrain_bake_chain       baked scars composed with live fields -- the
-#                            layer interaction, end to end.
-#   terrain_velocity_chain   the patch feeding velocity: a downstream consumer
-#                            that sees the composed surface rather than its
-#                            parts.
+# That single lane is a composed one -- it drives the blit against a model HPS
+# bridge, a lease, and a memory guard that can deny -- which is why twenty
+# mutations against a 802-line refusal machine are scoreable from it at all.
 #
 # A mutant is CAUGHT if ANY lane fails.
 #
@@ -124,11 +113,11 @@
 # ---------------------------------------------------------------------------
 set -u
 
-RTL=fpga/rtl/terrain/zhao_terrain_patch.sv
+RTL=fpga/rtl/command/zhao_cmd_dma.sv
 
 # EVERY target that verilates this module. If you add one in tests/CMakeLists.txt
 # you MUST add it here -- see guard 7. Checked against the build system below.
-TARGETS="test_terrain_patch_directed test_terrain_patch_random test_field_out_height test_terrain_bake_chain test_terrain_velocity_chain"
+TARGETS="test_cmd_dma_directed"
 
 GOLD=$(mktemp)
 cp "$RTL" "$GOLD"
@@ -137,7 +126,7 @@ GOLDHASH=$(sha256sum <"$GOLD" | cut -d' ' -f1)
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build/tests/CMakeFiles/$t.dir/Vzhao_terrain_patch.dir" -type f \
+    h="$h$(find "build/tests/CMakeFiles/$t.dir/Vzhao_cmd_dma.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -147,7 +136,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build/tests/CMakeFiles/$t.dir/Vzhao_terrain_patch.dir" ] || return 1
+    [ -d "build/tests/CMakeFiles/$t.dir/Vzhao_cmd_dma.dir" ] || return 1
   done
   return 0
 }
@@ -183,30 +172,25 @@ restore() {
   return 1
 }
 
-# A BINARY IS NOT ALWAYS ONE CTEST LANE, AND THE SWEEP MUST RUN WHAT CTEST
-# RUNS. tests/CMakeLists.txt registers test_field_out_height ONLY as
-# `--random 300` (and a nightly 4000); there is no bare lane for it at all.
-# Invoked bare it runs a 103-check directed set that ctest never runs, instead
-# of the 1,200-check lane that it does.
+# THE BINARY IS THREE CTEST LANES, NOT ONE, AND THE SWEEP MUST RUN THEM ALL.
 #
-# FOUND IN THE CMD.DMA SWEEP, where the same mistake mattered much more: that
-# binary is three ctest lanes over one executable, and running only the bare
-# one scored 6 of 21 instead of 12. That number would have been alarming and
-# wrong.
+# tests/CMakeLists.txt registers cmd_dma_directed, cmd_dma_random (--random
+# 400) and cmd_dma_random_nightly (--random 5000) as three tests over the SAME
+# executable. A run_lanes() that invokes the bare binary scores only the
+# directed cases -- and the random lane is precisely where the gate coverage
+# and the fail-safe ORDER live, because it generates packet timelines with
+# predicted verdicts.
 #
-# It did NOT invalidate this sweep's 20/20, and the reason is worth stating:
-# adding lanes can only ever INCREASE the catch count, never reduce it. The
-# result stands; the coverage behind it was simply thinner than it should have
-# been, and is now what ctest actually runs.
+# MEASURED: with the bare binary alone this sweep scored 6 of 21. That number
+# was an artefact of the harness, not a fact about the block, and it would
+# have been alarming and wrong to report. The fast random lane is included
+# here; the nightly 5000 is not, because the sweep runs it once per mutant and
+# the marginal catch does not pay for the time.
 run_lanes() {
   local t
   for t in $TARGETS; do
-    case "$t" in
-      test_field_out_height)
-        "./build/tests/$t.exe" --random 300 >/dev/null 2>&1 || return 1 ;;
-      *)
-        "./build/tests/$t.exe" >/dev/null 2>&1 || return 1 ;;
-    esac
+    "./build/tests/$t.exe" >/dev/null 2>&1 || return 1
+    "./build/tests/$t.exe" --random 400 >/dev/null 2>&1 || return 1
   done
   return 0
 }
@@ -216,7 +200,7 @@ run_lanes() {
 # silently reverts this file to the behaviour that broke main.
 check_consumers() {
   local declared found missing=""
-  declared=$(grep -B12 "TOP_MODULE zhao_terrain_patch" tests/CMakeLists.txt \
+  declared=$(grep -B12 "TOP_MODULE zhao_cmd_dma" tests/CMakeLists.txt \
              | grep -oE "verilate\(test_[a-z_]+" | sed 's/verilate(//' | sort -u)
   for found in $declared; do
     case " $TARGETS " in
@@ -225,7 +209,7 @@ check_consumers() {
     esac
   done
   if [ -n "$missing" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_terrain_patch into target(s)"
+    echo "ABORT: tests/CMakeLists.txt elaborates zhao_cmd_dma into target(s)"
     echo "      ,$missing, which TARGETS does not list. Every consumer must be"
     echo "       cleaned and rebuilt or the sweep leaves mutant model sources on"
     echo "       disk for someone else's build to compile. See guard 7."
@@ -237,7 +221,7 @@ check_consumers() {
 check_consumers || exit 9
 
 # PREFLIGHT: EVERY MUTANT MUST LINT BEFORE ANY OF THEM IS SCORED.
-python tools/sweep_terrain_patch_preflight.py || {
+python tools/sweep_cmd_dma_preflight.py || {
   echo "ABORT: at least one mutant does not build -- fix the mutation, not the guard"
   exit 8
 }
@@ -254,20 +238,21 @@ if ! run_lanes; then
 fi
 echo "   pristine model ${PRISTINE_MODEL:0:16}, all lanes green"
 
-expected=$(python tools/sweep_terrain_patch_mutants.py --count)
+expected=$(python tools/sweep_cmd_dma_mutants.py --count)
 attempted=0
 accounted=0
 caught=0
 survivors=()
+equivalents=()
 
 k=0
 while [ "$k" -lt "$expected" ]; do
-  name=$(python tools/sweep_terrain_patch_mutants.py --name "$k")
+  name=$(python tools/sweep_cmd_dma_mutants.py --name "$k")
   attempted=$((attempted + 1))
 
   restore || { echo "  $name  ABORT: could not restore before applying"; exit 4; }
 
-  if ! python tools/sweep_terrain_patch_mutants.py --apply "$k"; then
+  if ! python tools/sweep_cmd_dma_mutants.py --apply "$k"; then
     echo "  $name  ABORT: could not apply"
     restore
     exit 3
@@ -303,8 +288,19 @@ while [ "$k" -lt "$expected" ]; do
   fi
 
   if run_lanes; then
-    echo "  $name  *** SURVIVED ***"
-    survivors+=("$name")
+    # A SURVIVOR IS EITHER PROVEN EQUIVALENT OR A HOLE. The proof lives in the
+    # mutant module, keyed by the mutant's token, so it cannot drift from the
+    # table it explains -- and an UNDECLARED survivor fails the sweep rather
+    # than being listed and forgotten.
+    tok=${name%% *}
+    if proof=$(python tools/sweep_cmd_dma_mutants.py --equiv "$tok" 2>/dev/null); then
+      echo "  $name  equivalent (proven)"
+      echo "        $proof"
+      equivalents+=("$name")
+    else
+      echo "  $name  *** SURVIVED ***"
+      survivors+=("$name")
+    fi
   else
     echo "  $name  caught"
     caught=$((caught + 1))
@@ -320,8 +316,13 @@ restore || { echo "ABORT: final restore failed"; exit 4; }
 rebuild
 
 echo "----"
-echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught"
+echo "attempted=$attempted expected=$expected accounted=$accounted caught=$caught equivalent=${#equivalents[@]}"
+for s in "${equivalents[@]:-}"; do [ -n "$s" ] && echo "EQUIVALENT (proven): $s"; done
 for s in "${survivors[@]:-}"; do [ -n "$s" ] && echo "SURVIVOR: $s"; done
+if [ "${#survivors[@]}" -gt 0 ] && [ -n "${survivors[0]:-}" ]; then
+  echo "FAILED: ${#survivors[@]} mutant(s) survived without a proof of equivalence"
+  exit 12
+fi
 if [ "$attempted" != "$expected" ] || [ "$accounted" != "$expected" ]; then
   echo "CROSS-CHECK FAILED (attempted/accounted must both equal $expected)"
   exit 5
