@@ -1677,6 +1677,217 @@ check(dut.sat_mul_o == 1, "14.a saturating RING reaches SatLedger::mul", 1, dut.
   }
 }
 
+// ---- 19. A MULTI-RESULT REPLY LANDING WHILE SHORT OPS ARE RETIRING ------
+//
+// WRITTEN BECAUSE THE SWEEP SAID SO. The register file was rebuilt around one
+// write port and a queue that spends a long op's three results one per clock.
+// Five mutants of that machinery SURVIVED every section above:
+//
+//   M159  the queue advances on a clock the ALU took the port (a result lost)
+//   M162  the wavefront is released when the reply ARRIVES, not when it lands
+//   M163  the wavefront is released one result early
+//   M164  the two retirements are OR'd, so a simultaneous pair counts once
+//
+// Every one of them needs the SAME situation and no section above creates it:
+// a multi-result reply landing while OTHER wavefronts are still writing ALU
+// results, followed by instructions that READ the multi-result registers. The
+// long-op sections run a program that is one long op and then END, so nothing
+// ever reads the results back inside the machine and nothing else is retiring
+// beside them.
+//
+// So: ROT3 into r16..r18, then four ADDs that chain through all three of them,
+// across all eight wavefronts. The ADDs of one wavefront overlap the reply of
+// another by construction -- round robin guarantees it -- and an early release
+// makes the first ADD read a register the queue has not written yet.
+{
+  const int kTail = 160;  // long enough to outlast a long op's latency
+  auto mixed_oracle = [&](uint32_t axis, const int32_t* v, int32_t ang, int32_t* out7) {
+    zfield::Decoded prog;
+    prog.profile = 0;
+    auto push = [&](uint8_t op, uint8_t dst, uint8_t a, uint8_t b, uint32_t imm) {
+      zfield::Instr in{};
+      in.op = op;
+      in.dst = dst;
+      in.a = a;
+      in.b = b;
+      in.c = 0;
+      in.imm = imm;
+      prog.instrs.push_back(in);
+    };
+    push(zfield::OP_ROT3, 16, 0, 8, axis);
+    push(zfield::OP_ADD, 20, 16, 17, 0);
+    for (int t = 0; t < kTail; ++t) push(zfield::OP_ADD, 20, 20, 18, 0);
+    push(zfield::OP_ADD, 21, 20, 16, 0);
+    zfield::Instr end{};
+    end.op = zfield::OP_END;
+    prog.instrs.push_back(end);
+    for (int k = 0; k < 9; ++k) {
+      zfield::IoLane il{};
+      il.name = "i";
+      il.type = 0;
+      il.reg = static_cast<uint8_t>(k);
+      prog.in_lanes.push_back(il);
+    }
+    const uint8_t outs[5] = {16, 17, 18, 20, 21};
+    for (int k = 0; k < 5; ++k) {
+      zfield::IoLane ol{};
+      ol.name = "y";
+      ol.type = 0;
+      ol.reg = outs[k];
+      prog.out_lanes.push_back(ol);
+    }
+    int32_t in[9] = {0};
+    in[0] = v[0];
+    in[1] = v[1];
+    in[2] = v[2];
+    in[8] = ang;
+    zfield::interpret(prog, in, 9, out7, 5);
+  };
+
+  const int32_t ang = 0x1234;  // not 45 degrees: sin != cos, so a swap shows
+  for (uint32_t axis = 0; axis < 3; ++axis) {
+    Bench b(dut);
+    b.prog.clear();
+    b.prog.push_back({OP_ROT3, 16, 0, 8, 0, axis});
+    b.prog.push_back({OP_ADD, 20, 16, 17, 0});
+    // THE TAIL IS THE POINT. Without it every wavefront sits at instruction 0
+    // waiting for the one long slot, so when a reply lands NOTHING ELSE IS
+    // EXECUTING and the collision the queue was built for never happens. With
+    // it, a wavefront that has taken its result runs ALU work for long enough
+    // to still be writing when the NEXT wavefront's reply arrives.
+    for (int t = 0; t < kTail; ++t) b.prog.push_back({OP_ADD, 20, 20, 18, 0});
+    b.prog.push_back({OP_ADD, 21, 20, 16, 0});
+    b.prog.push_back({OP_END, 0, 0, 0, 0});
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        for (int k = 0; k < 3; ++k) {
+          v[w][l][k] = (w * kLanes + l + 1) * (k + 2) * 4099;
+          b.write_reg(w, l, k, v[w][l][k]);
+        }
+        b.write_reg(w, l, 8, ang);
+      }
+    const uint32_t before = dut.instr_retired_o;
+    b.run((1u << kWfs) - 1u);
+    const uint32_t retired = dut.instr_retired_o - before;
+
+    uint64_t bad_rot = 0, bad_chain = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        int32_t want[7];
+        mixed_oracle(axis, v[w][l], ang, want);
+        for (int k = 0; k < 3; ++k)
+          if (b.read_reg(w, l, 16 + k) != want[k]) ++bad_rot;
+        for (int k = 0; k < 2; ++k)
+          if (b.read_reg(w, l, 20 + k) != want[3 + k]) ++bad_chain;
+      }
+    char nm[112];
+    std::snprintf(nm, sizeof nm, "19.axis %u ROT3's three results are right", axis);
+    check(bad_rot == 0, nm, 0, bad_rot);
+    // THE ONE THAT CATCHES AN EARLY RELEASE. These four ADDs read r16, r17 and
+    // r18 from inside the machine. A wavefront let go before its last result
+    // lands reads a register the queue still owes it.
+    std::snprintf(nm, sizeof nm, "19.axis %u the ADDs that READ them are right", axis);
+    check(bad_chain == 0, nm, 0, bad_chain);
+    // THE ONE THAT CATCHES A LOST RETIREMENT. Six instructions, eight
+    // wavefronts, and a long op retiring on the same clock as a short one is
+    // exactly the collision that used to be counted once.
+    std::snprintf(nm, sizeof nm, "19.axis %u every instruction was counted once", axis);
+    check(retired == static_cast<uint32_t>(kWfs * (kTail + 4)), nm, kWfs * (kTail + 4), retired);
+  }
+}
+
+// ---- 19b. A SINGLE-RESULT LONG OP RETIRING ON THE SAME CLOCK AS AN END ---
+//
+// M164 restores a defect the rebuild removed: instr_retired_o used to be
+// incremented by two separate statements in one always_ff, so when a long op
+// and a short one retired on the SAME clock the later assignment won and one
+// retirement vanished. Values all correct; the count quietly short.
+//
+// 19a above cannot reach it. Both terms can only be true together when stage 1
+// holds an END -- any other retiring instruction also WRITES, and a write
+// blocks the queue's port, so the long op cannot land on that clock. 19a's
+// ENDs all happen after a 160-instruction tail, nowhere near a reply.
+//
+// So: a SINGLE-result long op, a tail of length T, then END. T shifts the
+// phase between one wavefront's END and another's result landing, and T is
+// swept so the alignment is found rather than hoped for.
+{
+  // THE TAIL IS SWEPT DENSELY, AND WIDELY, ON PURPOSE. The alignment needed is
+  // one wavefront issuing its END on the very clock another wavefront's single
+  // result lands, and the gap between those two events is the long op's own
+  // latency -- measured elsewhere in this file at roughly 200 clocks for the
+  // length family. A tail of 1..8, which is what this swept first, is two
+  // orders of magnitude short of it and found nothing.
+  uint64_t bad_all = 0, bad_count = 0;
+  for (int tail = 1; tail <= 240; ++tail) {
+    Bench b(dut);
+    b.prog.clear();
+    b.prog.push_back({OP_LEN3, 16, 0, 0, 0});
+    b.prog.push_back({OP_ADD, 20, 16, 16, 0});
+    for (int t = 1; t < tail; ++t) b.prog.push_back({OP_ADD, 20, 20, 16, 0});
+    b.prog.push_back({OP_END, 0, 0, 0, 0});
+
+    int32_t v[kWfs][kLanes][3];
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l)
+        for (int k = 0; k < 3; ++k) {
+          v[w][l][k] = (w * kLanes + l + 1) * (k + 2) * 2731;
+          b.write_reg(w, l, k, v[w][l][k]);
+        }
+    const uint32_t before = dut.instr_retired_o;
+    b.run((1u << kWfs) - 1u);
+    const uint32_t retired = dut.instr_retired_o - before;
+
+    uint64_t bad = 0;
+    for (int w = 0; w < kWfs; ++w)
+      for (int l = 0; l < kLanes; ++l) {
+        zfield::Decoded prog;
+        prog.profile = 0;
+        auto push = [&](uint8_t op, uint8_t dst, uint8_t a, uint8_t bb) {
+          zfield::Instr in{};
+          in.op = op;
+          in.dst = dst;
+          in.a = a;
+          in.b = bb;
+          in.c = 0;
+          in.imm = 0;
+          prog.instrs.push_back(in);
+        };
+        push(zfield::OP_LEN3, 16, 0, 0);
+        push(zfield::OP_ADD, 20, 16, 16);
+        for (int t = 1; t < tail; ++t) push(zfield::OP_ADD, 20, 20, 16);
+        zfield::Instr end{};
+        end.op = zfield::OP_END;
+        prog.instrs.push_back(end);
+        for (int k = 0; k < 3; ++k) {
+          zfield::IoLane il{};
+          il.name = "i";
+          il.type = 0;
+          il.reg = static_cast<uint8_t>(k);
+          prog.in_lanes.push_back(il);
+        }
+        const uint8_t outs[2] = {16, 20};
+        for (int k = 0; k < 2; ++k) {
+          zfield::IoLane ol{};
+          ol.name = "y";
+          ol.type = 0;
+          ol.reg = outs[k];
+          prog.out_lanes.push_back(ol);
+        }
+        int32_t in[3] = {v[w][l][0], v[w][l][1], v[w][l][2]};
+        int32_t want[2] = {0, 0};
+        zfield::interpret(prog, in, 3, want, 2);
+        if (b.read_reg(w, l, 16) != want[0]) ++bad;
+        if (b.read_reg(w, l, 20) != want[1]) ++bad;
+      }
+    bad_all += bad;
+    if (retired != static_cast<uint32_t>(kWfs * (tail + 2))) ++bad_count;
+  }
+  check(bad_all == 0, "19b.LEN3 and its ADDs are right at every tail length", 0, bad_all);
+  check(bad_count == 0, "19b.every instruction counted once, at every tail length", 0, bad_count);
+}
+
 dut.final();
 return zhao::report_and_exit("field_v2_core_directed");
 }

@@ -56,6 +56,10 @@ CONE_V2 = [
     'fpga/rtl/field/zhao_field_v2_front.sv',
     'fpga/rtl/field/zhao_field_v2_core.sv',
     'fpga/rtl/field/zhao_field_v2_lanemux.sv',
+    # The register file's storage. Not in the mutant list -- it has no logic to
+    # mutate -- but the cone will not ELABORATE without it, and the baseline
+    # lint guard catches that as loudly as it should.
+    'fpga/rtl/field/zhao_field_rf_ram.sv',
     'fpga/rtl/field/zhao_field_curve.sv',
     'fpga/rtl/field/zhao_field_len.sv',
     'fpga/rtl/field/zhao_field_isqrt.sv',

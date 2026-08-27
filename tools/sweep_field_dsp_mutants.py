@@ -759,7 +759,7 @@ MUTS = [
     # else entirely.
     ("M125 a multi-result op writes only its first register", F_V2,
      """        wbq_cnt <= lm_rsp_nres;""",
-     """        wbq_cnt <= 2'd1;"""),
+     """        wbq_cnt <= (lm_rsp_nres != 2'd0) ? 2'd1 : 2'd0;"""),
     ("M126 the two results are swapped between dst and dst+1", F_V2,
      """          wbq_y[l][0] <= lm_rsp_y[l];
           wbq_y[l][1] <= lm_rsp_y1[l];""",
@@ -957,6 +957,26 @@ MUTS = [
 #   * undeclared + SURVIVED -> the run FAILS, exactly as before. That rule is
 #                            what stops this becoming a way to launder holes.
 EQUIVALENT = {
+    # --- the write-back queue's release point, 2026-08-27 -------------------
+    'M162':
+        "EQUIVALENT, AND ITS GUARD IS TESTED. Clearing inflight[] when the "
+        "reply ARRIVES rather than when its last result lands cannot be "
+        "observed, because inflight[] only gates WAVEFRONT SELECTION and "
+        "issue_fire carries a separate `!wbq_busy` term: while the queue has "
+        "anything owed, NO wavefront issues, released or not. So the earliest "
+        "instruction that can read the multi-result registers is the same in "
+        "both versions -- the clock after the last write. "
+        "THIS IS NOT AN UNTESTED ASSUMPTION: M158 removes exactly that "
+        "`!wbq_busy` term and IS CAUGHT (19a), so the property this "
+        "equivalence rests on has its own mutant. The early release is still "
+        "wrong to write -- it makes correctness depend on a term two "
+        "expressions away instead of on the release itself -- which is why the "
+        "mutant is kept rather than deleted.",
+    'M163':
+        "EQUIVALENT, for exactly the reason M162 is: releasing one result "
+        "early still cannot let the wavefront issue early, because issue is "
+        "blocked by `!wbq_busy` until the queue is empty. Same guard, same "
+        "proof, and the same mutant (M158) covering it.",
     'M114': 
         "zhao_field_ring asserts rcp_valid_o ONLY in G_SPAN (4'd2) and "
         "mul_issue_o ONLY in G_T/G_T2/G_2T/G_CUBE/G_FIN (4,6,8,10,12), and it "
