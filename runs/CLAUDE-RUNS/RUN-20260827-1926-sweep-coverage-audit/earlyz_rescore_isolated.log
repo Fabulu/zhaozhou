@@ -1,0 +1,22 @@
+linted 16 mutants, 0 do not build
+== establishing the pristine baseline
+   pristine model 892f4ea0c0ec4dfc, all lanes green
+  E01 the rejection test is inverted, so surviving geometry is discarded  caught
+  E02 the rejection is one ulp too greedy  caught
+  E03 ties are no longer rejected, costing throughput but not pixels  caught
+  E04 rejection happens only when the depth test is DISABLED  caught
+  E05 the floor is assigned rather than maxed, so it can fall  caught
+  E06 the floor rises on ties too, one ulp beyond what was proved  caught
+  E07 a tile starts one ulp ABOVE its clear depth  caught
+  E08 ONLY blended fragments raise the floor, never opaque ones  caught
+  E09 only fragments that do NOT write depth raise the floor  caught
+  E10 only alpha-TESTED fragments raise the floor  caught
+  E11 only stencil-conditional fragments raise the floor  caught
+  E12 a REJECTED fragment still contributes to the floor  caught
+  E13 z_force_far swaps its two arms  caught
+  E14 the coarse bin is taken from the wrong depth bits  caught
+  E15 the bin mask records a different bin than the fragment carries  caught
+  E16 a fragment is accepted while the output stage is still full  caught
+== restoring the pristine build
+----
+attempted=16 expected=16 accounted=16 caught=16 equivalent=0

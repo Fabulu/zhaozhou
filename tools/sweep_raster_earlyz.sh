@@ -153,7 +153,7 @@ GOLDHASH=$(sha256sum <"$GOLD" | cut -d' ' -f1)
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build/tests/CMakeFiles/$t.dir/Vzhao_raster_earlyz.dir" -type f \
+    h="$h$(find "build-earlyz/tests/CMakeFiles/$t.dir/Vzhao_raster_earlyz.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -163,7 +163,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build/tests/CMakeFiles/$t.dir/Vzhao_raster_earlyz.dir" ] || return 1
+    [ -d "build-earlyz/tests/CMakeFiles/$t.dir/Vzhao_raster_earlyz.dir" ] || return 1
   done
   return 0
 }
@@ -171,7 +171,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build/tests/$t.exe" ] || return 1
+    [ -x "build-earlyz/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -179,12 +179,19 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build/tests/CMakeFiles/$t.dir"
-    rm -f "build/tests/$t.exe"   # guard 5: the exe lives OUTSIDE the target dir
+    rm -rf "build-earlyz/tests/CMakeFiles/$t.dir"
+    rm -f "build-earlyz/tests/$t.exe"   # guard 5: the exe lives OUTSIDE the target dir
   done
-  cmake -S . -B build >/dev/null 2>&1
+  # DEDICATED BUILD DIR (build-earlyz). The 2026-08-27 run of this sweep
+  # against the shared build/ scored attempted=16 accounted=12 because a
+  # concurrent session held the tree; the cross-check refused it. Pin the
+  # generator and compiler so a stray CMakePresets cannot redirect it.
+  cmake -S . -B build-earlyz -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe \
+    -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe \
+    >/dev/null 2>&1
   # shellcheck disable=SC2086
-  ninja -C build $TARGETS >/dev/null 2>&1
+  ninja -C build-earlyz $TARGETS >/dev/null 2>&1
 }
 
 # Restore the pristine source and PROVE it, retrying through any lingering file
@@ -207,9 +214,9 @@ restore() {
 run_lanes() {
   local t
   for t in $TARGETS; do
-    "./build/tests/$t.exe" >/dev/null 2>&1 || return 1
+    "./build-earlyz/tests/$t.exe" >/dev/null 2>&1 || return 1
   done
-  "./build/tests/test_raster_earlyz_random.exe" --nightly >/dev/null 2>&1 || return 1
+  "./build-earlyz/tests/test_raster_earlyz_random.exe" --nightly >/dev/null 2>&1 || return 1
   return 0
 }
 

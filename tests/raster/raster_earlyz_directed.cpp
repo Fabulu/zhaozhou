@@ -534,6 +534,59 @@ void test_backpressure_and_reject_throughput() {
 }
 
 // -------------------------------------------------------------------- 10 ---
+// A REJECTED FRAGMENT MUST NOT REACH THE ACCUMULATOR AT ALL.
+//
+// Found by tools/sweep_raster_earlyz.sh: E12 drops `!reject_c` from
+// hiz_qualify and survived every case in this file.
+//
+// It is safe in the depth sense -- a rejected fragment has depth <= floor, it
+// enters a MIN, so acc_min can never exceed the floor and the `> floor` guard
+// blocks any rise. The floor cannot move backwards. What DOES change is
+// coverage: the rejected fragment marks its pixel, so the accumulator fills
+// and RESETS early, discarding evidence the oracle still holds. The next
+// legitimate round then fails to raise the floor, and the reject count
+// diverges a whole tile later.
+//
+// Reaching it needs two phases, which is why nothing here had: the floor must
+// be RAISED first, because with the clear depth at 0 and larger-is-closer
+// almost nothing is rejected at the start of a tile.
+void test_rejected_fragment_never_accumulates() {
+  zref::EarlyZ ez;
+  fresh(&ez);
+  begin_tile(&ez, 0x000000u);
+
+  const uint32_t MID = 0x400000u;
+
+  // Phase 1: cover the whole tile with qualifying opaque fragments at MID, so
+  // the floor rises to MID and the accumulator resets clean.
+  std::vector<EzFrag> phase1;
+  push_full_tile(&phase1, MID, st_opaque_tested());
+  EzRun got1;
+  check(run_seq(ez, phase1, 0x5EEDu, 0xB17Eu, "reject-acc phase 1", &got1),
+        "E12: the floor rises to MID on a full opaque cover", 1, 1);
+  check(ez.floor() == MID, "E12: oracle floor is MID after the cover", MID, ez.floor());
+
+  // Phase 2: fragments that are REJECTED (depth <= floor) but otherwise
+  // qualify in every way -- opaque, depth-writing, no alpha test, stencil
+  // ALWAYS. These are exactly the fragments E12 lets into the accumulator.
+  // Half the tile, so the accumulator is left partly marked rather than
+  // completing, which is where the two behaviours separate.
+  std::vector<EzFrag> phase2;
+  for (int i = 0; i < kEzWords / 2; ++i) {
+    phase2.push_back(frag(static_cast<uint8_t>(i), MID - 1u, st_opaque_tested()));
+  }
+  // Then a genuine, deeper-than-floor cover of the WHOLE tile. Under the law
+  // this completes an accumulation and raises the floor again; with E12 the
+  // accumulator was already polluted and the outcome differs.
+  push_full_tile(&phase2, MID + 0x10000u, st_opaque_tested());
+
+  EzRun got2;
+  check(run_seq(ez, phase2, 0xC0DEu, 0xFACEu, "reject-acc phase 2", &got2),
+        "E12: a rejected fragment contributes nothing to the floor evidence", 1, 1);
+  check(ez.floor() == MID + 0x10000u, "E12: the later legitimate cover still raises the floor",
+        MID + 0x10000u, ez.floor());
+}
+
 void test_counters() {
   zref::EarlyZ ez;
   fresh(&ez);
@@ -576,6 +629,7 @@ int main() {
   test_coarse_depth_bins();
   test_payload_passthrough();
   test_backpressure_and_reject_throughput();
+  test_rejected_fragment_never_accumulates();
   test_counters();
   return zhao::report_and_exit("raster_earlyz_directed");
 }
