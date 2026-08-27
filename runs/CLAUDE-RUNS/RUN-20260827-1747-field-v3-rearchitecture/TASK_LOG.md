@@ -173,6 +173,30 @@ BUILD.md warns. Both are pinned inside the sweep scripts now.
 
 ---
 
+
+### 2026-08-28 - all three fit probes MEASURED; Phase 3 probes 1-3 closed
+
+| probe | fit (5CSEBA6U23I7, Quartus 17.0.2) | at the 100 MHz constraint |
+|---|---|---|
+| ctx FIFO scheduler | 257 ALM, 221 reg, 1 M10K, 0 DSP, restricted Fmax 97.8 MHz (678 s, cb48f48, clean re-fit) | setup -0.225 (TNS -0.239, ~one path), HOLD +0.445 |
+| banked RF @ 8x32 (v3hot) | 372 ALM, 12 M10K, 0 DSP, 93.14 MHz (1,366 s, e706f69) | setup -0.736, HOLD +0.691 |
+| two-bank dist service | 1,745 ALM, 2,199 reg, 0 M10K, 0 DSP, 90.6 MHz (1,590 s, cb48f48) | setup -1.038 (TNS -546), HOLD +0.268 |
+
+Read against v2's leaf (59.22 MHz, setup -6.886, HOLD -1.938): every v3
+probe is 31-38 MHz faster than the v2 plateau and every one has POSITIVE
+hold. The brief's structural claims survive contact: the FIFO killed the
+scheduler loop; the reduced RF is exactly 12 M10K; eight roots price at
+~218 ALM each. The one finding AGAINST the naive envelope: none of the
+three probes reaches 100.0 MHz standalone -- 90.6-97.8 -- which supports the
+brief's own 80-90 MHz-credible / design-for-100 framing rather than the
+100-MHz-for-free reading.
+
+Quartus 17 gotcha recorded: inline genvar declarations in a generate-for
+are a map-time syntax error (10170); declare genvars ahead. Cost one fit
+cycle (35 s failure + refit).
+
+---
+
 ## Subagent Spawns
 
 *Log subagent spawns and their findings here*

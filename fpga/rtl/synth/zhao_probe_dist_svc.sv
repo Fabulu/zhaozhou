@@ -63,18 +63,21 @@ module zhao_probe_dist_svc (
   logic [1:0]                  bank_r_ready;
   logic [1:0][LANES-1:0][63:0] bank_r;
 
+  // Quartus 17.0 rejects inline genvar declarations inside a generate-for;
+  // declare them ahead (measured: Error 10170 at map, 2026-08-28 fit).
+  genvar gb, gl;
   generate
-    for (genvar b = 0; b < 2; b++) begin : g_bank
-      for (genvar l = 0; l < LANES; l++) begin : g_lane
+    for (gb = 0; gb < 2; gb++) begin : g_bank
+      for (gl = 0; gl < LANES; gl++) begin : g_lane
         zhao_field_isqrt u_root (
             .clk      (clk),
             .rst_n    (rst_n),
-            .n_valid_i(bank_n_valid[b]),
-            .n_ready_o(bank_n_ready[b][l]),
-            .n_i      (req_n2[l]),
-            .r_valid_o(bank_r_valid[b][l]),
-            .r_ready_i(bank_r_ready[b]),
-            .r_o      (bank_r[b][l])
+            .n_valid_i(bank_n_valid[gb]),
+            .n_ready_o(bank_n_ready[gb][gl]),
+            .n_i      (req_n2[gl]),
+            .r_valid_o(bank_r_valid[gb][gl]),
+            .r_ready_i(bank_r_ready[gb]),
+            .r_o      (bank_r[gb][gl])
         );
       end
     end

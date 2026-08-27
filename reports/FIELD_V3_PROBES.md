@@ -15,8 +15,8 @@ word the next).
 |---|---|
 | issue rate, 8 resident all-short contexts | **measured (Verilator): 64 issue slots in a 64-cycle steady window — 1 instruction/clock** |
 | context invariants (loss/dup/one-in-flight/restart-refusal) | measured green: 39 directed checks + 60 random storms (`field_ctx_fifo_directed`, `--random 60`) |
-| mutation sweep | `tools/sweep_field_ctx_fifo.sh` — see tally below |
-| fit (Fmax, setup AND hold, ALM) | pending / see `reports/synthesis/zhao_block_fit.json` row `zhao_probe_ctx_fifo` |
+| mutation sweep | measured: 13 mutants → 12 caught + 1 proven equivalent, 0 survivors (`sweep_field_ctx_fifo.sh`) |
+| fit (Fmax, setup AND hold, ALM) | **measured** — row `zhao_probe_ctx_fifo` (sourceCommit cb48f48, clean re-fit after the contaminated first attempt): **257 ALM, 221 regs, 1 M10K (the plan RAM), 0 DSP, restricted Fmax 97.8 MHz**; at 100 MHz setup −0.225 ns with TNS −0.239 (essentially ONE marginal path), **hold +0.445 ns (positive)** |
 
 **The probe already paid for itself before any fit:** the first draft gave
 the ready FIFO ONE write port with the short-op requeue preferred; eight
@@ -35,11 +35,13 @@ variant: `-TopParameters CONTEXTS=8 REGS=32 -RowLabel "@v3hot"`.
 
 | what | result |
 |---|---|
-| fit at 8×32 | pending / row `zhao_probe_banked_rf@v3hot` |
+| fit at 8×32 | **measured** — row `zhao_probe_banked_rf@v3hot` (sourceCommit e706f69): **372 ALM, 12 M10K (24,576 bits), 0 DSP, restricted Fmax 93.14 MHz**; at the 100 MHz constraint setup −0.736 ns (TNS −35.5), **hold +0.691 ns (positive)** |
 
-Per-bank storage at 8×32 is 8 ctx × 8 regs × 32 b = 2,048 bits per replica —
-small enough that Quartus may choose MLABs over M10Ks; either answer is the
-point of fitting rather than predicting.
+The brief's hypothesis held exactly: one M10K per replica, 4 banks × 3
+copies = **12 M10Ks** (Quartus chose M10Ks, not MLABs). Standalone the probe
+misses 100 MHz by 0.736 ns with 284 virtual pins in the timing set — the
+same family as the 16×64 geometry's 96.54 MHz; the composed number is the
+one that binds, and hold is clean.
 
 ## Probe 3 — two-bank exact distance service (`zhao_probe_dist_svc.sv`)
 
@@ -53,8 +55,18 @@ multiplier bank supplies the squares, per the brief).
 | lone-reply latency | measured: 34 cycles (32-step root + handshakes) |
 | exactness vs `zref::isqrt_u64` + `len_of` saturation | measured green: 367 directed + 3,600 random checks (incl. per-lane sat flags mixed within one group) |
 | backpressure capacity | measured: three requests held with replies blocked (reply register is a skid buffer), fourth refused, replies drain in accept order |
-| mutation sweep | `tools/sweep_field_dist_svc.sh` — see tally below |
-| fit (Fmax, setup AND hold, ALM/DSP/M10K) | pending / row `zhao_probe_dist_svc` |
+| mutation sweep | measured: 13 mutants → 12 caught + 1 proven equivalent, 0 survivors (`sweep_field_dist_svc.sh`); D06 (single-bank) proves the II gate bites |
+| fit (Fmax, setup AND hold, ALM/DSP/M10K) | **measured** — row `zhao_probe_dist_svc` (sourceCommit cb48f48; the first attempt died in quartus_map because Quartus 17 rejects inline `genvar` in a generate-for — fixed): **1,745 ALM, 2,199 regs, 0 M10K, 0 DSP, restricted Fmax 90.6 MHz**; at 100 MHz setup −1.038 ns (TNS −546), **hold +0.268 ns (positive)** |
+
+The measured 1,745 ALM ≈ 218/root across eight roots — inside the brief's
+"~2,000 leaf ALMs, plausible rather than catastrophic". 90.6 MHz standalone
+sits above the 80 MHz credibility floor and below the 100 MHz design point;
+the pressure is the root's 64-bit compare-subtract recurrence, which is
+precisely the radix-4-vs-duplicated-root decision the brief reserved for a
+second fitted probe. VERDICT: topology sound (II 17 ≤ 20 with margin, hold
+clean, resource cost as priced); the root's inner loop is the named
+follow-up before the composed engine, not a reason to change the two-bank
+shape.
 
 The demand model makes this probe the binding one: all three committed Earth
 programs bind on this service at 273 × II clocks/association
@@ -82,5 +94,9 @@ bit-exact comparison, plus the vertex-major/field-major agreement test.
 | sweep | result |
 |---|---|
 | planner (`sweep_field_plan.sh`, 16 mutants) | measured: 16 caught / 0 equivalent / 0 survived / 0 discarded — after closing the ring_mid rounding hole its first run FOUND (odd/overflowing radii sums were never sampled by any lane) |
-| distance service (`sweep_field_dist_svc.sh`, 12 mutants) | see TASK_LOG for the current tally |
-| scheduler (`sweep_field_ctx_fifo.sh`, 12 mutants) | see TASK_LOG for the current tally |
+| distance service (`sweep_field_dist_svc.sh`, 13 mutants) | measured: 12 caught / 1 PROVEN equivalent (D01, with re-score trigger) / 0 survived / 0 discarded — SWEEP OK |
+| scheduler (`sweep_field_ctx_fifo.sh`, 13 mutants) | measured: 12 caught / 1 PROVEN equivalent (F03, with re-score trigger) / 0 survived / 0 discarded — SWEEP OK |
+
+Both "equivalent" rulings were first SURVIVORS: the sweeps forced either a
+machine-readable proof or a reshaped mutant, and each also gained a sharper
+sibling (D13 flag-compare, F13 cross-context increment) that IS caught.

@@ -241,9 +241,8 @@ int main(int argc, char** argv) {
       // the reply stays blocked, and the three replies must then drain in
       // ACCEPT order with their own tags.
       dut.rsp_ready_i = 0;
-      const uint64_t grp[3][4] = {{1000, 2000, 3000, 4000},
-                                  {5000, 6000, 7000, 8000},
-                                  {9000, 10000, 11000, 12000}};
+      const uint64_t grp[3][4] = {
+          {1000, 2000, 3000, 4000}, {5000, 6000, 7000, 8000}, {9000, 10000, 11000, 12000}};
       const uint8_t tags[3] = {0xA1, 0xB2, 0xC3};
       for (int g = 0; g < 3; ++g) {
         drive_req(dut, grp[g], tags[g]);

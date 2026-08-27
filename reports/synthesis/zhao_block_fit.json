@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "a03d3365cfaffa97abd99f214c9930ee6cce83e9",
-    "newestRunClean":  true,
+    "newestRunCommit":  "cb48f4818231330ef415af82bba30f86c66ff72e",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -445,6 +445,27 @@
                        "fmaxClock":  "clk"
                    },
                    {
+                       "module":  "zhao_probe_banked_rf@v3hot",
+                       "status":  "ok",
+                       "sourceCommit":  "e706f690472ac5ab1c536e4538ed5ef2c6ba8db5",
+                       "rtlCleanAtHead":  false,
+                       "topParameters":  "CONTEXTS=8 REGS=32",
+                       "variantOf":  "zhao_probe_banked_rf",
+                       "seconds":  1366.5,
+                       "sourcesHashed":  29,
+                       "alms":  372,
+                       "registers":  10,
+                       "blockMemoryBits":  24576,
+                       "ramBlocks":  12,
+                       "dspBlocks":  0,
+                       "virtualPins":  284,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  93.14,
+                       "fmaxClock":  "clk"
+                   },
+                   {
                        "module":  "zhao_probe_compose_pipe_s16",
                        "status":  "ok",
                        "sourceCommit":  "6bad5f8d13e58c7bef9a1854ef6d19220905deab",
@@ -505,6 +526,44 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  86.76,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_probe_ctx_fifo",
+                       "status":  "ok",
+                       "sourceCommit":  "cb48f4818231330ef415af82bba30f86c66ff72e",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  678.1,
+                       "sourcesHashed":  29,
+                       "alms":  257,
+                       "registers":  221,
+                       "blockMemoryBits":  1536,
+                       "ramBlocks":  1,
+                       "dspBlocks":  0,
+                       "virtualPins":  57,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  97.8,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_probe_dist_svc",
+                       "status":  "ok",
+                       "sourceCommit":  "cb48f4818231330ef415af82bba30f86c66ff72e",
+                       "rtlCleanAtHead":  false,
+                       "seconds":  1590,
+                       "sourcesHashed":  30,
+                       "alms":  1745,
+                       "registers":  2199,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  410,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  90.6,
                        "fmaxClock":  "clk"
                    },
                    {
