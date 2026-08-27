@@ -299,3 +299,71 @@ source cone while it runs" -- the rule extends from fits to sweeps.
 ## Next Steps
 
 *Updated as progress is made*
+
+### 2026-08-27 (late, main session) - Phase 3 CLOSED, Phase 4 started
+
+Took this over after the subagent parked five consecutive times holding for a
+notification that was never going to arrive (346k tokens, 233 tool uses, no
+forward motion). Stopped it and finished the work directly.
+
+**Probe 5 landed (c87b5c4).** Four-bank patch accumulator. MEASURED: a full
+33x33 field is 297 vector updates and lands in 297 clocks; INIT and DRAIN move
+one aligned group per clock (273 each). Mutation sweep 15/15 caught, 0
+survived, 0 discarded, in an isolated build tree.
+
+**A sweep-driver defect, found from probe 5 own logs (9ddf067).** The first
+two runs of that sweep scored 8/15 with 7 DISCARDED -- and printed SWEEP OK and
+exited 0. Cause: the five field drivers add discards into `accounted`, so the
+cross-check that exists to catch a short run passes, and the discard block only
+printed a NOTE. The seventeen older drivers exclude discards from `accounted`,
+which is exactly what made my RASTER.EARLYZ rerun fail its cross-check
+(attempted=16 accounted=12) instead of quietly scoring 12 of 16. All five now
+exit 13 on an unscored mutant. Isolated re-run caught all 15, so those seven
+were catches lost to build contention, not survivors.
+
+**A second defect in the isolation patch itself.** Guard 5 deletes the exe
+because it lives OUTSIDE the verilated model directory. After the move to
+build-fieldv3 that deletion still pointed at the shared build tree -- wrong in
+both directions: it left the real stale exe in place, defeating the guard that
+stands between this lane and the stale-binary trap, and it removed another
+session binary from the shared tree. Does not invalidate 15/15: rebuild still
+clears the verilated model dir and the binary hash covers it, so a failed
+re-elaboration DISCARDS rather than scores, and a stale binary can only
+manufacture a false SURVIVOR, never a false catch.
+
+**Phase 4 opened: the Earth lattice walker** (`zhao_probe_walk_earth.sv`), the
+one piece of the composed machine with no Phase 3 probe. Design decisions, each
+stated as a knob rather than a discovered constant:
+
+* **The coordinates are SEPARABLE.** In `compose_lattice`, wx depends only on
+  the column and wz only on the row -- 33 + 33 values, not 1,089 pairs. That is
+  the whole reason the walker can generate points instead of receiving them,
+  and it is what deletes v2 27,225-clock transport.
+* **The tables are PREPARED by the ARM, not computed in fabric.**
+  `lattice_lerp` is a rounded divide (`a + (span*i + den/2)/den`), NOT an
+  `origin + i*pitch` accumulation; the two disagree at interior vertices in a
+  way no single-vertex test would catch. Rather than put a divider in the
+  fabric to recompute a value identical for every association on the patch,
+  the ARM prepares 66 words with the same zref primitives the oracle uses.
+* **The covered index box is a HINT; the per-vertex closed-interval test is
+  the LAW.** The box only bounds where the walk starts and stops, so an
+  oversized box costs clocks and never changes coverage, and an undersized one
+  shows up as missing coverage rather than as silently wrong heights.
+
+Lints clean under `-Wall` first pass. Differential written against the
+reference own two rules (lattice_lerp and the 9.1 closed-interval test)
+rather than a hand-written expectation; build in build-verify is running.
+
+**Contract correction (2b2ad97).** FIELD.SEQ.EARTH "273 four-wide vector
+groups" is the ALIGNED flat packing, which is what INIT/DRAIN use. The update
+path is row-major over a 33-wide lattice, so a group cannot straddle a row and
+a patch costs 9 x 33 = 297. Budgeting the executor from the old line comes up
+24 groups short per association, 3,072 clocks over 128.
+
+**NOT claimed yet:** place-and-route, Fmax, setup and hold for probes 4 and 5.
+Both fits are running. The first attempt failed at quartus_map with
+"Top-level design entity is undefined" -- the probe sources are not in the
+shell QSF cone and must be passed with -ExtraSources. Worth noting that the fit
+harness exits 0 on a failed fit and writes a `failed:` row, so a caller that
+checks only the exit code would read that as success.
+
