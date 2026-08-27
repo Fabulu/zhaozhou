@@ -5,6 +5,84 @@ at the top.*
 
 ---
 
+## 2026-08-27 (evening) -- WHERE THE PROJECT IS, and Field v3 has started
+
+*Written for reading on the go. The short version is: v2 is finished and
+measured, it is not good enough, we know exactly why, and v3 is being built.*
+
+### Field v3 is underway
+
+An agent is working your rearchitecture brief (`reports/Fieldv3.md`) now. It
+has the whole 661 lines and is already in the code.
+
+I read the brief before handing it over and I agree with its ruling. The
+number that settles it is not the clock speed -- it is this one:
+
+**Moving the points in and out of the engine costs 27,225 clocks per patch,
+and the entire budget for that patch is 10,416.** So before a single
+instruction runs, the front end alone is at 261% of the frame. The earlier
+model that looked encouraging had assumed moving points was free, so it was
+never describing the front end we actually built.
+
+That cannot be tuned away, and neither can the other three faults, and fixing
+one leaves the rest. Hence v3.
+
+### What v3 changes, in one line each
+
+* **The ARM does the work that does not vary.** In your Earth programs only x
+  and z change from point to point; age, phase and parameters are the same for
+  the whole spell. Roughly half of every program can be computed ONCE per
+  spell instead of once per point.
+* **The engine generates its own points** instead of having them copied in a
+  lane at a time. That is the 27,225 clocks gone.
+* **The slow operations get queues instead of one shared scalar slot**, so a
+  curve stops costing four times what it should.
+* **The terrain composer is turned inside out** so it accumulates field by
+  field rather than vertex by vertex, which is the order Field naturally runs
+  in. Same arithmetic, same result, no giant temporary lattices.
+
+Programmability is kept. Nothing is hardwired and nothing is approximated --
+the exactness rule stands.
+
+### What v2 leaves behind, which is a lot
+
+It is frozen as the exact reference the new engine is checked against. It
+proved the whole instruction set fits, that four-lane parallelism is worth it,
+that the arithmetic matches the software exactly, and that the register file
+can be real memory. Final measured state: **7,870 logic blocks, 33 memories,
+59.2 MHz.**
+
+### The other thing I did today, and it is uncomfortable
+
+I checked which blocks have tests that have never been deliberately broken to
+see whether the tests would notice. **38 of 59 had never been checked that
+way.** So far I have done four of them, and every single one had real holes:
+
+| block | defects its tests could not see |
+| --- | --- |
+| the terrain composer | 1 of 20 |
+| the frame blitter | 8 of 20 |
+| the vertex cache | 3 of 18 |
+| the command reader | 9 of 21 |
+
+All now closed or proved harmless. None of these were bugs in the hardware --
+they were places where the hardware could break and nothing would tell us.
+The frame blitter is the one that stings: it was marked finished, with a
+mathematical proof attached, and its tests still missed eight.
+
+34 blocks still have not been checked. It is about an hour or two each.
+
+### What is waiting on you
+
+1. **The Field clock domain.** v3 targets the shared 100 MHz. If it lands
+   lower, we either give Field its own slower clock and pay at the edges, or
+   pipeline harder. The brief says 80 MHz is about the lowest credible answer.
+2. **Six blocks have no specification at all** -- not missing code, missing
+   decisions. Two of them are the compositor and 2D paths I have been leaving
+   alone on purpose.
+
+---
+
 ## 2026-08-27 (late morning) -- the clock has a PLATEAU, not a slow part
 
 ### I was wrong twice, and the second time told us something
