@@ -3254,6 +3254,25 @@ SceneSubject subject_zixx_still() {
   return s;
 }
 
+// One STILL frame, head-on at face height: the fast unit of the Front.png
+// comparison loop (P2). The full frontfix subject renders a whole idle loop;
+// authoring a face by eye needs a seconds-cheap render per knob turn.
+SceneSubject subject_zixx_still_front() {
+  SceneSubject s;
+  s.name = "zixxtrixx-still-front";
+  s.creature = 3;
+  s.frames = 1;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 16384;  // quarter turn: nose-on
+  s.cam_ps = 4571;    // near-level, like zixxtrixx-front
+  s.cam_pc = 65377;
+  s.cam_eye = 10;
+  s.note = "DIAGNOSTIC: single idle key 0 frame, fixed head-on camera at "
+           "face height, for the Front.png authoring loop";
+  return s;
+}
+
 #ifdef ZIXX_SWEEP
 // The nine-attitude orientation sweep (see build_sweep in zixxtrixx.h):
 // 18 frames = 9 keys held twice, fixed side camera, no orbit. Exists only
@@ -3269,6 +3288,20 @@ SceneSubject subject_zixx_sweep() {
   return s;
 }
 #endif
+
+// DIAGNOSTIC: the falling loop on a FIXED side camera (P2; V2 section 10's
+// "fixed-camera falling loop"). Camera rotation plus body rotation makes
+// the flail impossible to diagnose on the orbiting site subject.
+SceneSubject subject_zixx_fall_side() {
+  SceneSubject s;
+  s.name = "zixxtrixx-fall-side";
+  s.creature = 6;
+  s.frames = zixx::kFallKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.note = "DIAGNOSTIC: one full falling loop, fixed side camera, no orbit";
+  return s;
+}
 
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
@@ -3489,6 +3522,8 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-tq")) rc |= render_scene(subject_zixx_tq());
   if (wanted("zixxtrixx-frontfix")) rc |= render_scene(subject_zixx_frontfix());
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
+  if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
+  if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());
 #ifdef ZIXX_SWEEP
   if (wanted("zixxtrixx-sweep")) rc |= render_scene(subject_zixx_sweep());
 #endif

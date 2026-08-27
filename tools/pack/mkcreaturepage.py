@@ -205,9 +205,17 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # starts AT row 0 -- matched to the head tile's ~10-texel throat width so
     # the two read as one marking across the junction -- and tapers away by
     # row 19 (~1.3 m behind the nose, the owner's authored length).
+    # LONGER AND FULLER, 2026-08-28 (Fabian: "The blue should also go down
+    # its front body a bit before it goes into the dark green ... We need a
+    # bit more of that in the front body" -- and Side.png runs the blue a
+    # substantial way back along the tube). The wedge now HOLDS its full
+    # width for the first rows and tapers out by row 30 (~1.2 m behind the
+    # junction), so the read is blue -> dark green -> light green with the
+    # blue owning the chest.
     b = tint(BLUE, g_green)
-    for y in range(0, 20):
-        w = 11.0 * (1.0 - y / 19.0) ** 1.3
+    for y in range(0, 31):
+        yt = max(0.0, (y - 10) / 20.0)
+        w = 12.0 * (1.0 - yt) ** 1.3
         if w < 0.6:
             continue
         wob = 1.1 * np.sin(y * 0.31)
@@ -247,12 +255,21 @@ EYE_ROW = 12     # first texel row of the eyeball down the head tile.
                  # sliding the eye 7 rows nose-ward wraps its front edge onto
                  # the frontal silhouette while the centre stays on the side
                  # line. Judged on head-on + side zooms, not derived.
-EYE_COL_A = 32   # side line, +Z flank
-EYE_COL_B = 0    # side line, -Z flank
-EYE_TEX_U = 15   # texels of U for the yellow ball (angle around the head)
-                 # 15, was 13 (pass 3): Front.png's eyes are HUGE --
-                 # wider wrap puts more yellow on the frontal silhouette
-EYE_TEX_V = 30   # texels of V for the yellow ball (length along the head)
+EYE_COL_A = 38   # +Z flank, RAISED 4 texels toward the back line (Fabian,
+                 # 2026-08-28: "Eyes should be more visible in front. Move
+                 # them up a little") -- toward U=48 is up on the ring
+EYE_COL_B = 58   # -Z flank, raised the same 4 texels (0 -> 60, wrapping
+                 # toward the back line from the other side)
+EYE_TEX_U = 17   # texels of U for the yellow ball (angle around the head).
+                 # 17, was 15: the sheet's eye is a LARGE disc, a
+                 # substantial fraction of the head's height
+EYE_TEX_V = 33   # texels of V for the yellow ball (length along the head)
+# THE ORANGE SURROND (Fabian, ruled YES; Front.png brackets each eye in
+# orange/red). Painted UNDER the lifted eye disc as a feathered ring a few
+# texels wider than the ball, so the drawn eye sits inside an orange rim
+# that reads head-on the way the front sheet draws it.
+EYE_RING_EXTRA = 2     # texels of surround beyond the ball's edge
+EYE_RING_RGB = (206, 88, 46)  # judged on the front render, not the scan
 # ORIENTATION KNOB. -30 RE-PICKED 2026-08-27 round-skull run (Fabian: "pupils
 # should be rotated right"): settled off an 8-angle fan of the PAINTED tile
 # viewed through the true screen mapping (U up, nose right), then confirmed
@@ -325,9 +342,23 @@ def paint_eyes(tile, g_orange):
     """The drawing's own eye -- yellow ball, ink rim, top-to-bottom orange
     slit swelling in the middle -- on BOTH side lines. Nothing else: the
     invented orange socket is gone (see the note at EYE_BOX)."""
-    del g_orange  # the pupil's orange arrives inside the lifted crop
     rgb, alpha = eye_patch()
+    ring = tint(EYE_RING_RGB, g_orange) if g_orange is not None else None
     for col in (EYE_COL_A, EYE_COL_B):
+        # the orange surround first, so the drawn eye sits ON it: a feathered
+        # ellipse EYE_RING_EXTRA texels wider than the ball in each axis
+        if ring is not None:
+            ru = EYE_TEX_U / 2.0 + EYE_RING_EXTRA
+            rv = EYE_TEX_V / 2.0 + EYE_RING_EXTRA
+            cy = EYE_ROW + (EYE_TEX_V - 1) / 2.0
+            for ty in range(max(0, int(cy - rv) - 1), min(TILE, int(cy + rv) + 2)):
+                for i in range(-int(ru) - 1, int(ru) + 2):
+                    tx = (col + i) % TILE
+                    r = np.hypot(i / ru, (ty - cy) / rv)
+                    w = np.clip((1.04 - r) * 5.0, 0.0, 1.0)
+                    if w <= 0.0:
+                        continue
+                    tile[ty, tx] = tile[ty, tx] * (1.0 - w) + ring[ty, tx] * w
         for j in range(EYE_TEX_V):
             ty = EYE_ROW + j
             if ty < 0 or ty >= TILE:
@@ -366,20 +397,22 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # left between them on the rear rows is the GREEN neck flank -- Side.png
     # shows green riding high on the neck right behind the skull.
     def pink_half(y):
-        # the NOSE stays blue: the sheet's pink band fades out before the tip.
-        # WIDENED 2026-08-27 round-skull run (Fabian: "Carry the same logic to
-        # the head: the pink crown should be the head's whole top" -- the same
-        # everything-you-see-from-above rule as the body band). The crown now
-        # ramps in from the brow (y=20) to the body band's own half-width (13)
-        # by mid-skull and HOLDS it to the junction row, so head and body read
-        # as one continuous pink top. The eyes are painted after the cap and
-        # stay on top of it; blue keeps the face, the sides below the cap and
-        # the whole underside. (The old start-at-26 / max-7 cap was tuned for
-        # the pre-ball skull under the old steep camera.)
-        if y < 20:
+        # THE PINK RUNS TO THE NOSE TIP (2026-08-28; Side.png -- the shape
+        # authority -- draws the dorsal band continuing OVER the head to the
+        # very tip, and Fabian: "Top of head should be pink, but from front
+        # you only see the blue"). A slim band from the first dome rows,
+        # widening over the crown to the body band's half-width by y=30 and
+        # holding it to the junction, so head-on the top of the head reads
+        # PINK with the blue face beneath it.
+        # the band begins BEHIND the visible dome (y=16 ~ station 3): the
+        # front read wins -- a band on the dome rows painted a pink stripe
+        # down the middle of the face head-on (r5/r6 renders), which
+        # Front.png does not draw. From the side the crown pink now starts
+        # just behind the nose and widens over the skull.
+        if y < 16:
             return 0.0
-        if y < 30:
-            return 3.0 + (13.0 - 3.0) * (y - 20) / 10.0
+        if y < 32:
+            return 4.0 + (13.0 - 4.0) * (y - 16) / 16.0
         return 13.0
     def throat_half(y):
         return 12.0 if y < 38 else 10.0
@@ -486,8 +519,69 @@ def to565(r, g, b):
     return ((int(r) >> 3) << 11) | ((int(g) >> 2) << 5) | (int(b) >> 3)
 
 
+def debug_tile():
+    """T7's debug atlas tile: coloured U sectors + banded, ticked V rows, so a
+    render PROVES where each texel faces before anything real is painted
+    ("avoids the fourth wrong-UV confident paint").
+
+      U (angle round the ring): col 48 = BACK -> WHITE band; col 16 = BELLY ->
+      near-BLACK band; col 32 = +Z side -> RED band; col 0 = -Z side -> BLUE
+      band; quadrants between are the mixed hues.
+      V (along the body): brightness saw every 8 rows, plus a full-width
+      YELLOW line at rows 0, 16, 32, 48 so V position is countable on screen.
+    """
+    t = np.zeros((TILE, TILE, 3), dtype=np.float64)
+    for x in range(TILE):
+        d_back = min(abs(x - 48), TILE - abs(x - 48))
+        d_bel = min(abs(x - 16), TILE - abs(x - 16))
+        d_zp = min(abs(x - 32), TILE - abs(x - 32))
+        d_zn = min(x, TILE - x)
+        if d_back <= 3:
+            base = (255, 255, 255)
+        elif d_bel <= 3:
+            base = (30, 30, 30)
+        elif d_zp <= 3:
+            base = (230, 40, 40)
+        elif d_zn <= 3:
+            base = (40, 80, 230)
+        else:  # quadrant fills: top-right magenta-ish, etc.
+            if 3 < x < 13:
+                base = (60, 160, 160)
+            elif 19 < x < 29:
+                base = (160, 60, 160)
+            elif 35 < x < 45:
+                base = (200, 140, 40)
+            else:
+                base = (90, 200, 60)
+        for y in range(TILE):
+            k = 0.55 + 0.45 * ((y % 8) / 7.0)
+            t[y, x] = tuple(c * k for c in base)
+    for y in (0, 16, 32, 48):
+        t[y, :] = (255, 230, 0)
+    return t
+
+
 def main():
+    if "--debug" in sys.argv:
+        # T7: the sector/band debug page. Same symbol layout as the real one,
+        # written to zixxtrixx_page_debug.h; the reel selects it with
+        # -DZIXX_DEBUG_PAGE. Every tile is the same debug field so any part
+        # of the animal reports its own UV on screen.
+        sys.argv = [a for a in sys.argv if a != "--debug"]
+        d = debug_tile()
+        tiles = [d.copy() for _ in range(6)]
+        names = ["DEBUG sector/band field"] * 6
+        emit(tiles, names,
+             Path(sys.argv[1]) if len(sys.argv) > 1
+             else HERE.parents[1] / "tools" / "reel" / "zixxtrixx_page_debug.h")
+        return
     tiles, names = build_tiles()
+    emit(tiles, names,
+         Path(sys.argv[1]) if len(sys.argv) > 1
+         else HERE.parents[1] / "tools" / "reel" / "zixxtrixx_page.h")
+
+
+def emit(tiles, names, dst):
     n = len(tiles)
     # one shared 256-entry palette across every tile, quantised together so a
     # creature's materials cannot fight each other for entries
@@ -495,6 +589,7 @@ def main():
     img = Image.fromarray(sheet, "RGB").quantize(colors=256, method=Image.MEDIANCUT, dither=Image.NONE)
     idx = np.asarray(img).reshape(n, TILE, TILE)
     pal = img.getpalette()[: 256 * 3]
+    pal = pal + [0] * (256 * 3 - len(pal))  # a low-colour page (debug) pads out
     pal565 = [to565(pal[i * 3], pal[i * 3 + 1], pal[i * 3 + 2]) for i in range(256)]
     used = len(set(idx.reshape(-1).tolist()))
 
@@ -552,7 +647,6 @@ def main():
     out.append("};")
     out.append("")
 
-    dst = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parents[1] / "tools" / "reel" / "zixxtrixx_page.h"
     dst.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {dst}")
     print(f"  {n} tiles of {TILE}x{TILE}, {used}/256 palette entries")

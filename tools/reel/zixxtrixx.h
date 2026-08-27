@@ -46,8 +46,15 @@
 
 namespace zixx {
 
-// the crayon page, generated from the sheets (pigment IS measurable)
+// the crayon page, generated from the sheets (pigment IS measurable).
+// -DZIXX_DEBUG_PAGE swaps in the T7 sector/band debug page (same symbols,
+// mkcreaturepage.py --debug) so a render proves the UV mapping before any
+// real paint is judged. Diagnostic builds only, never shipped.
+#ifdef ZIXX_DEBUG_PAGE
+#include "zixxtrixx_page_debug.h"
+#else
 #include "zixxtrixx_page.h"
+#endif
 
 // NOTE 2026-08-26: zixxtrixx_profile.h (the taper derived from the drawing's
 // distance transform) is DEMOTED to a comparison tool and no longer included.
@@ -104,21 +111,21 @@ constexpr int32_t kHeadHalfMm = 160;   // half-thickness at the skull
 struct TaperKey {
   int t, r;
 };
-// SLIMMED AT THE FRONT 2026-08-27 (Fabian: "The upper part is too fat") --
-// the raised front lobe (skull through the arch) drops ~13%, the grounded
-// rear keeps its girth, so the snakelike part reads full while the reared
-// part reads lean.
-// SKULL REBUILT 2026-08-27 head-only run (Headache.md: "larger cranium, not
-// larger muzzle"). Pass 3 inflated the whole forward tube, nose dome
-// included ({0,1050},{60,1060}), which grew the protruding snout. Now the
-// volume sits REARWARD, around the eye stations (3..8 = t 54..143): the
-// nose keys return near their pre-enlargement size (870/840) and smaller
-// still, the radial peak lands mid-eye at t=100, and the taper falls away
-// decisively on both sides of it -- widest at the eyes, blunt small nose.
-// Body thickness from t=320 back stays EXACTLY as approved (frozen).
+// ONE TUBE, CULMINATING IN A HEAD (2026-08-28, Fabian: "There should
+// really be no skull. It's one tube that bulges more and more towards the
+// end, culminating in a head."). The previous profile dipped at the neck
+// (800 at t=320 against a trunk of 860) and hid the head's volume in a
+// separate ball envelope that eased back to nothing -- so head, neck and
+// body flowed into each other with no culmination. Now the radius GROWS
+// MONOTONICALLY from the trunk forward, accelerating toward the nose, and
+// peaks just behind the blunt dome: the head is simply where the tube has
+// become widest, exactly as Side.png draws it (the authority on shape).
+// Authored BY EYE against Side.png; the sheet's widest point reads about
+// 1.5-1.7x the mid-body width, which is a comparison-side check, not a
+// generator. Body thickness from t=620 back stays EXACTLY as approved.
 constexpr TaperKey kTaper[] = {
-    {0, 820},   {45, 950},  {100, 1085}, {160, 1040}, {230, 880},  // the CRANIUM
-    {320, 800}, {500, 840}, {620, 860},                            // trunk swells rearward
+    {0, 1150},  {40, 1290}, {90, 1360}, {150, 1330}, {230, 1190},  // the CULMINATION
+    {330, 1040}, {450, 940}, {560, 885}, {620, 860},               // the swell builds in
     {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}    // tail stem
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
@@ -180,10 +187,27 @@ constexpr int kHeadEnd = kHeadStations + 2;  // station 11, x = 599 mm
 // after the whole first sheet still hung nose-down): the skull rides level
 // with a slight forward-up lift, the eye reads mid-ball, the nose stays
 // clear of both the ground and the hook.
+// -6000, RE-PICKED 2026-08-28 (run 2339; owner: "Head should look up more.
+// You should see the face straight on ... Snout should point horizontal
+// and maybe even up a little" — the -12000 verdict was overturned by the
+// published render). HOW IT WAS FOUND, because the sign convention burned
+// its FOURTH pass first: the -12000..-40000 visual sweeps read "better"
+// the more negative they got, but the committed head-axis probe
+// (zixx_headaim.cpp — skins the actual station centres) showed NEGATIVE
+// pitches the nose DOWN (~5.5 deg per 1000): -12000 was snout -28 deg,
+// -34000 was the head folded 149 deg under with its BACK reading as a
+// convincing "face". The old comment's "POSITIVE PITCHES THE NOSE DOWN"
+// was inverted. At -6000 the measured snout axis is +4.6 deg (horizontal,
+// a touch up) and the RENDER agrees: front camera reads pink cap / blue
+// face / side eyes / mouth like Front.png; the measurement removed the
+// bias, the render chose the value.
 #ifndef ZIXX_ATTITUDE
-#define ZIXX_ATTITUDE (-12000)
+#define ZIXX_ATTITUDE (-6000)
 #endif
 constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
+// where the skull bone pivots, mm behind the nose (~station 3.5, the
+// culminating head's centroid — see the bone-table note)
+constexpr int32_t kHeadPivotMm = 0;
 constexpr int kSkullRigidTo = 5;  // stations 0..5 fully on the head bone
 constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
                                   // stations: three collapsed the fold onto
@@ -201,37 +225,27 @@ constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
 // That also deleted two bones and four ring parts.
 constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
 constexpr int kEyeStation1 = 8;      // last
-constexpr int32_t kEyeBulgeNum = 22; // extra lateral half-width, % of the ring.
-                                     // 22, was 85: the 85 was solving "the
-                                     // eyes must read left and right from the
-                                     // front" by widening the SKULL -- at the
-                                     // eye stations the section reached
-                                     // ~1.97r wide by 1.00r tall, a 2:1 disc.
-                                     // Fabian 2026-08-27: "Face is too flat
-                                     // now. You need to compare with initial
-                                     // art." The volume that made the eyes
-                                     // read now lives in kBallNum below,
-                                     // which grows EVERY axis; this is just
-                                     // the googly rim riding on the ball.
+constexpr int32_t kEyeBulgeNum = 42; // extra lateral half-width, % of the ring.
+                                     // 42, was 22 (Fabian 2026-08-28: "give
+                                     // them more bulge. They should look
+                                     // like they're on the sides when seen
+                                     // from the front"). A LOCAL googly rim
+                                     // riding on the culminating tube -- NOT
+                                     // a skull widening: the 85-era 1.97:1
+                                     // flattened disc is the recorded
+                                     // failure on the other side. Judged on
+                                     // the front diagnostic beside Front.png.
 
-// THE CRANIUM IS A BALL (2026-08-27 round-skull run). The sketch head
-// (Concept/Front.png) is a round ball a bit wider than the trunk -- NOT a
-// flattened disc. So the skull swells in EVERY axis: kBallNum is the peak
-// swell (1/1000 of the station radius) applied to the vertical AND the
-// lateral, the section runs toward CIRCULAR at full swell (the wide-aspect
-// residual fades with the envelope), and the envelope smoothsteps in from
-// the nose dome and eases out to ZERO at the junction ring (kHeadEnd) --
-// so the skull GROWS OUT OF THE NECK and returns to it instead of flaring
-// and dropping off a cliff (Fabian: "the head now doesn't connect smoothly
-// to the neck and body. It shouldn't be a sheer drop like a cliff").
-constexpr int kBallStation0 = 1;   // envelope starts past the nose tip
-constexpr int kBallPeak = 4;       // front-of-eye: the skull is fattest here
-                                   // (5 dug the SKULL REAR 75 mm into the
-                                   // dive stroke at the breath extreme --
-                                   // the volume belongs at the FACE, and
-                                   // the longer 7-station fall-off eases
-                                   // the junction further)
-constexpr int32_t kBallNum = 280;  // peak swell, 1/1000 of station radius
+// THE BALL ENVELOPE IS RETIRED (2026-08-28). Fabian: "There should really
+// be no skull. It's one tube that bulges more and more towards the end,
+// culminating in a head." The culmination now lives IN kTaper itself --
+// one hand-authored radius profile for the one tube -- so a second local
+// swell grafted on top would re-create exactly the seam he rejected.
+// kBallNum stays as a knob (0 = off) because the machinery also carries
+// the eye rim; the envelope stations are kept for it.
+constexpr int kBallStation0 = 1;   // envelope start (unused at kBallNum 0)
+constexpr int kBallPeak = 4;       // envelope peak (unused at kBallNum 0)
+constexpr int32_t kBallNum = 0;    // peak swell, 1/1000 of station radius
 
 // the dorsal crest: geometry, because there is no texture page pipeline yet
 constexpr int32_t kCrestNum = 46;   // crest half-width = body half-width * n/100
@@ -289,12 +303,17 @@ constexpr uint8_t kOrange[3] = {218, 106, 71};
 // A key is held 2 sim ticks, so reel frames = keys * 2 at step 1.
 constexpr int kIdleKeys = 96;  // SLOW. 3.2 s of breathing.
 constexpr int kWalkKeys = 40;
-// 220 keys = 440 frames = 7.33 s at 60 Hz. The salto sticks its landing as
+// 226 keys = 452 frames = 7.53 s at 60 Hz. The salto sticks its landing as
 // a planted spear for FIVE REAL SECONDS (Fabian: "Make it stick for 5
-// actual seconds"): keys 56..206 are the stick -- 150 keys, 300 frames,
+// actual seconds"): keys 62..212 are the stick -- 150 keys, 300 frames,
 // 5.000 s at the site's 60 fps -- and the remaining 13 keys pull it out and
-// close the loop.
-constexpr int kAttackKeys = 220;
+// close the loop. 220 -> 226 keys 2026-08-28, OWNER-LICENSED EDIT to the
+// frozen salto (Fabian: "the salto is great. Maybe have it hold a tad
+// longer at its apex before the spear comes down, for effect"): the apex
+// HANG grows from 2 keys (~0.07 s) to 8 (~0.27 s) -- a hang-time beat,
+// not slow motion; the plunge keeps its exact speed and violence, every
+// later key shifts +6. clip-3.bin re-pins with this provenance.
+constexpr int kAttackKeys = 226;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -394,6 +413,13 @@ constexpr int32_t kIdleWaveSpatial = 5200; // phase step per joint: one slow
                                            // wave over the whole front lobe
 constexpr int32_t kIdleHeadSway = 800;     // slight head side-to-side yaw
                                            // ("only slight")
+// THE HEAD RISES WITH THE IN-BREATH (2026-08-28). Two jobs in one knob:
+// the culminating head + look-up attitude nests ~235 mm into the deepened
+// hook at the breath extreme (probe, run 2339), and lifting the face as
+// the S gathers moves the skull rear DOWN away from the stroke (positive
+// attitude = nose up, zixx_headaim) while reading as the animal actually
+// inhaling. Angle16 of extra attitude at full breath.
+constexpr int32_t kIdleBreathLift = 2200;
 // TORSIONAL BREATH for the grounded run (2026-08-27, reports/
 // ZixxtrixxReport: the middle is deliberately protected from both the
 // front wave and the tail sway -- "animated front | dead zone | animated
@@ -403,6 +429,27 @@ constexpr int32_t kIdleHeadSway = 800;     // slight head side-to-side yaw
 // belly stays planted (elliptical-section depth change at +-4 deg is
 // under half a millimetre; probe-verified).
 constexpr int32_t kIdleTorsion = 800;
+// SIDEWAYS SNAKING for the grounded run (2026-08-28, Fabian: "Our idle has
+// an unmoving part where it's standing. Find something for that to do,
+// maybe sideways snaking."). The idle's dead zone was exactly the part
+// that is touching the ground, and the house rule says that is where the
+// travelling motion belongs -- this is the walk's principle at rest: a
+// slow lateral S travels the grounded joints, one temporal cycle per
+// 3.2 s loop (loop-exact, wobble not jitter). Two recorded traps steered
+// the numbers: a lateral wave once measured INVISIBLE at 240p (so the
+// amplitude is real, ~17 deg at the crest, judged on a contact sheet),
+// and a lateral quat on a PITCHED grounded joint digs the belly (so the
+// envelope tapers hard over the rear joints where the grounded slopes
+// steepen -- the probe's idle band is the arbiter).
+constexpr int32_t kIdleSnakeAmp = 2900;      // peak yaw per joint
+// EXACTLY one full wavelength across the six grounded joints (65536/6), so
+// the accumulated yaw over the run is ~ZERO at every phase: the steep tail
+// rise behind the run stays in the sagittal plane. The first cut used an
+// arbitrary 7200 step with a tapered envelope, and the accumulated ~30 deg
+// of yaw tilted the -5600/-11400 rise sideways -- the blade tips dug
+// -71 mm and one key HOVERED (+4). Zero-sum is the same trick as the
+// walk's zero-sum neck curl, sideways.
+constexpr int32_t kIdleSnakeSpatial = 10923;
 
 // CATERPILLAR walk: the S holds, the head glides high, and ONLY the grounded
 // run carries a travelling hump. The hump is authored as a HEIGHT field and
@@ -471,8 +518,8 @@ constexpr int32_t kAtkTipDrop = 3317;    // reach * sin(60 deg), see above
 constexpr int32_t kAtkTipFwd = 1915;     // reach * cos(60 deg): how far the
                                          // buried tip leads the nose in +X
 constexpr int32_t kAtkStickLift = kAtkTipDrop - kBodyY - kAtkStickDepth;
-constexpr int kAtkImpactKey = 56;        // reel frame 112 (keys held 2 ticks)
-constexpr int kAtkStickEnd = 206;        // impact + 150 keys = 5.0 s stuck
+constexpr int kAtkImpactKey = 62;        // reel frame 124 (keys held 2 ticks)
+constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
 
 // FALL: the slow distress tumble. The whole S rotates about its own centre
 // (re-pivoted off the nose exactly the way the salto re-pivots its spin to
@@ -504,6 +551,18 @@ constexpr int32_t kFallWritheAmp = 1700;  // mid-body roll-twist writhe
 constexpr int32_t kFallWaveAmp = 3600;     // ~20 deg at the head (was 14 --
                                            // "should wobble more")
 constexpr int32_t kFallWaveSpatial = 4700; // ~1.3 wavelengths down the body
+// THE S RELAXES BY A TON (2026-08-28, Fabian: "it should be less rigid and
+// S shape needs to relax by a ton" — F1's time- and region-varying
+// authority, landed with the owner's own number on it). The falling body
+// no longer holds the full canonical S every frame: per-joint authority
+// swings kFallAuthMid ± kFallAuthSwing on ONE slow cycle per loop
+// (loop-exact), phase-stepped kFallAuthSpatial per joint so the gather
+// and release TRAVEL down the body — the animal stretches almost
+// straight, collapses into a tighter curve, and the recognisable S
+// RECURS instead of being mandatory. Wobble not jitter: one term, slow.
+constexpr int32_t kFallAuthMid = 500;      // mean S authority, 1/1000
+constexpr int32_t kFallAuthSwing = 340;    // swing: 16%..84% over the loop
+constexpr int32_t kFallAuthSpatial = 3400; // phase step per joint
 // NONUNIFORM tumble (2026-08-27, reports/ZixxtrixxReport: "a perfectly
 // uniform full revolution reads like a display turntable"). The tumble
 // phase is warped by this * sin(phase): it accelerates through one half of
@@ -546,6 +605,13 @@ inline zc::quat16 quat_mul(const zc::quat16& a, const zc::quat16& b) {
                      r(aw * bx + ax * bw + ay * bz - az * by),
                      r(aw * by - ax * bz + ay * bw + az * bx),
                      r(aw * bz + ax * by - ay * bx + az * bw)}};
+}
+
+// quaternion conjugate (unit inverse): the tool that lets a WORLD-axis
+// rotation be expressed exactly in a joint's local frame, L = q* W q.
+inline zc::quat16 quat_conj(const zc::quat16& q) {
+  return zc::quat16{{q.q[0], static_cast<int16_t>(-q.q[1]),
+                     static_cast<int16_t>(-q.q[2]), static_cast<int16_t>(-q.q[3])}};
 }
 
 /**
@@ -631,29 +697,29 @@ static const Key kAtkLift[] = {
     {0, 0},          {10, 0},        {12, 180},      {14, 700},
     {16, 1500},      {20, 3200},     {26, 5600},     {32, 8200},
     {38, 10600},     {43, 11700},
-    {47, kAtkApexLift}, {49, kAtkApexLift},
-    {50, 11803},     {51, 11213},    {52, 10228},    {53, 8851},
-    {54, 7079},      {55, 4914},
+    {47, kAtkApexLift}, {55, kAtkApexLift},   // the LICENSED longer hang
+    {56, 11803},     {57, 11213},    {58, 10228},    {59, 8851},
+    {60, 7079},      {61, 4914},
     {kAtkImpactKey, kAtkStickLift},  {kAtkStickEnd, kAtkStickLift},
-    {208, 3200},     {210, 3400},    {213, 2200},    {216, 900},
-    {218, 200},      {219, 0}};
+    {214, 3200},     {216, 3400},    {219, 2200},    {222, 900},
+    {224, 200},      {225, 0}};
 // forward drive in mm. THE PLUNGE IS THE STRAIGHT SHOT: over the dive keys
 // the drive is 1850 + t^2 * 5570 -- the SAME t^2 as the lift, so every dive
 // key sits exactly on the 30-degrees-from-vertical line the spear points
 // along. Held through the stick, returned across the landing for the loop.
 static const Key kAtkFwd[] = {
     {0, 0},     {14, 0},    {18, 150},  {26, 500},  {34, 1000},
-    {42, 1550}, {49, 1850},
-    {50, 1964}, {51, 2305}, {52, 2873}, {53, 3669}, {54, 4692}, {55, 5942},
+    {42, 1550}, {49, 1850}, {55, 1850},  // the drive hangs with the lift
+    {56, 1964}, {57, 2305}, {58, 2873}, {59, 3669}, {60, 4692}, {61, 5942},
     {kAtkImpactKey, kAtkFwdMax},
-    {kAtkStickEnd, kAtkFwdMax}, {210, 5200}, {214, 2600}, {219, 0}};
+    {kAtkStickEnd, kAtkFwdMax}, {216, 5200}, {220, 2600}, {225, 0}};
 // THE PRELOAD (anticipation): 1/1000 of extra descent-lobe authority fed to
 // apply_stance's deepen -- the same mechanism as the idle's breath, pushed
 // far past it, so the S visibly TIGHTENS and shortens ("stored energy"),
 // with the computed root rise keeping the belly planted. Released as the
 // coil begins.
 static const Key kAtkPre[] = {
-    {0, 0}, {3, 380}, {6, 700}, {9, 700}, {12, 260}, {15, 0}, {219, 0}};
+    {0, 0}, {3, 380}, {6, 700}, {9, 700}, {12, 260}, {15, 0}, {225, 0}};
 constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // how much the TRACKING CAMERA aims at the spear's midpoint instead of the
 // nose, in 1/1000 (Fabian, 2026-08-27 pass 3: the camera "doesn't catch the
@@ -663,7 +729,7 @@ constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // five-second stick -- the buried tail is the shot -- and released only as
 // the extraction re-gathers the S.
 static const Key kAtkAim[] = {
-    {0, 0}, {40, 0}, {47, 1000}, {208, 1000}, {214, 0}, {219, 0}};
+    {0, 0}, {40, 0}, {47, 1000}, {214, 1000}, {220, 0}, {225, 0}};
 constexpr int kAtkLiftN = static_cast<int>(sizeof(kAtkLift) / sizeof(Key));
 constexpr int kAtkFwdN = static_cast<int>(sizeof(kAtkFwd) / sizeof(Key));
 constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
@@ -680,7 +746,7 @@ static const Key kAtkCurl[] = {
 // how much of the canonical S remains -- FULL through the compress/hold
 // (the preload deepens it on top), gone by the time the coil owns the body
 static const Key kAtkAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
-                               {208, 0},           {214, 650}, {kAttackKeys - 1, 1000}};
+                               {214, 0},           {220, 650}, {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
 // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
 // 60 deg below horizontal pointing down-and-forward, HELD from the apex
@@ -693,8 +759,8 @@ static const Key kAtkAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
 static const Key kAtkSpin[] = {{0, 0},          {10, 0},          {12, -40},
                                {15, 0},         {20, 700},        {28, 1600},
                                {36, 2600},      {43, 3050},       {47, kAtkSpinStick},
-                               {208, kAtkSpinStick},              {212, 3650},
-                               {215, 3900},     {kAttackKeys - 1, 4000}};
+                               {214, kAtkSpinStick},              {218, 3650},
+                               {221, 3900},     {kAttackKeys - 1, 4000}};
 constexpr int kAtkCurlN = static_cast<int>(sizeof(kAtkCurl) / sizeof(Key));
 constexpr int kAtkAuthN = static_cast<int>(sizeof(kAtkAuth) / sizeof(Key));
 constexpr int kAtkSpinN = static_cast<int>(sizeof(kAtkSpin) / sizeof(Key));
@@ -1036,7 +1102,8 @@ inline zc::Clip build_idle() {
       // slope-deltas (the nod the flexible skull used to carry) and two
       // steps of the sway yaw -- so the head's idle life is unchanged
       // while its pitch is owned by kHeadAttitude, not by the hook.
-      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + wave[1] + wave[2]),
+      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + wave[1] + wave[2] +
+                                    (breath * kIdleBreathLift) / 1000),
                              quat_y(2 * ((sh * kIdleHeadSway) >> 16)));
     }
 
@@ -1048,12 +1115,40 @@ inline zc::Clip build_idle() {
     // past kStanceGround1.
     // the grounded run's TORSIONAL breath (see kIdleTorsion): a slow roll
     // wave through the protected middle, phase-lagged behind the breath
+    // the accumulated chain rotation up to (not including) the grounded run,
+    // for expressing the snake's WORLD-vertical yaw exactly in each joint's
+    // frame: L = acc* Y(psi) acc. Approximate per-joint axis corrections
+    // leaked first-order pitch into the steep tail rise behind the run
+    // (probe: +15 mm hover at half amplitude); the conjugation is exact up
+    // to quat16 rounding, so the authored belly sink survives the wave.
+    zc::quat16 snacc = zc::quat16_identity();
+    for (int j = 0; j < kStanceGround0; ++j)
+      snacc = quat_mul(snacc, g.q[kBSpine0 + j]);
     for (int k = kStanceGround0; k <= kStanceGround1; ++k) {
+      // THE SIDEWAYS SNAKE first (kIdleSnake*): a slow lateral S travelling
+      // the grounded joints -- the idle's dead zone was exactly the part
+      // touching the ground, and that is where the travelling motion
+      // belongs (the walk's principle at rest). One temporal cycle per
+      // loop, one full wavelength across the six joints (zero-sum), yaw
+      // about the TRUE world vertical by conjugation.
+      snacc = quat_mul(snacc, g.q[kBSpine0 + k]);  // this joint's stance pitch
+      const int32_t psn = ph - (k - kStanceGround0) * kIdleSnakeSpatial - 4000;
+      const int32_t ss =
+          zref::fx_sin(zref::angle16{static_cast<uint16_t>(psn & 0xFFFF)}).raw;
+      {
+        const zc::quat16 W = quat_y((ss * kIdleSnakeAmp) >> 16);
+        const zc::quat16 L = quat_mul(quat_mul(quat_conj(snacc), W), snacc);
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], L);
+        snacc = quat_mul(snacc, L);
+      }
+      // the TORSION roll composes AFTER the snake: a roll about the
+      // (yawed) tube axis moves no nodes
       const int32_t pt = ph - 9000 - (k - kStanceGround0) * 5400;
       const int32_t sr =
           zref::fx_sin(zref::angle16{static_cast<uint16_t>(pt & 0xFFFF)}).raw;
-      g.q[kBSpine0 + k] =
-          quat_mul(g.q[kBSpine0 + k], quat_x((sr * kIdleTorsion) >> 16));
+      const zc::quat16 tq = quat_x((sr * kIdleTorsion) >> 16);
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], tq);
+      snacc = quat_mul(snacc, tq);
     }
 
     const int32_t sway = (st * kIdleTailSway) >> 16;
@@ -1375,8 +1470,25 @@ inline zc::Clip build_fall() {
     const int32_t ph = f * per_key;
     Rig g;
     g.reset();
-    // THE S FIRST. Everything else is decoration on it.
-    apply_stance(g, 1000);
+    // THE S RECURS, IT IS NOT MANDATORY (2026-08-28; was apply_stance at a
+    // flat 1000 — "THE S FIRST" made the fall a rigid S-shaped sign with
+    // wobble attached). Per-joint authority swings on one slow loop-exact
+    // cycle, phase-travelling down the body: nearly straight at one beat,
+    // bunched tighter than rest at another. See the kFallAuth knobs.
+    {
+      int32_t prev = 0;
+      for (int k = 0; k < kStanceSlopes; ++k) {
+        const int32_t pa = ph - k * kFallAuthSpatial + 21000;
+        const int32_t sa =
+            zref::fx_sin(zref::angle16{static_cast<uint16_t>(pa & 0xFFFF)}).raw;
+        const int32_t auth = kFallAuthMid + ((sa * kFallAuthSwing) >> 16);
+        const int32_t d =
+            static_cast<int32_t>((static_cast<int64_t>(kStanceSlope[k]) * auth) / 1000);
+        const int32_t pitch = d - prev;
+        prev = d;
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
+      }
+    }
 
     // SLOW LOOSE NECK: the head lolls on one- and two-cycle waves, phase
     // staggered down the first joints so the motion travels instead of
@@ -1519,9 +1631,15 @@ inline const zc::CreatureType& type() {
     sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(56)};
     sk.bones[kBBladeR2] = zc::Bone{kBBladeR, -fxm(kBladeLen / 2), 0, 0};
     sk.bones[kBSpike] = zc::Bone{kBFork, 0, fxm(30), 0};
-    // the skull bone: at the nose, child of the root. All of the cranium's
-    // pitch lives on it (kHeadAttitude plus per-clip head motion).
-    sk.bones[kBHead] = zc::Bone{kBSpine0, 0, 0, 0};
+    // the skull bone: child of the root, PIVOT AT THE SKULL'S OWN CENTRE
+    // (2026-08-28; was at the nose). Pitching about the nose swung the
+    // skull's REAR down into the hook -- the owner's look-up attitude dug
+    // the cranium ~235 mm into the dive stroke (probe). About the centroid
+    // (~station 3.5) the same axis angle lifts the nose and drops the rear
+    // half as much each, so the culminating head rides the hook the way
+    // Side.png nests it. All of the cranium's pitch lives on this bone
+    // (kHeadAttitude plus per-clip head motion).
+    sk.bones[kBHead] = zc::Bone{kBSpine0, -fxm(kHeadPivotMm), 0, 0};
     std::vector<zc::RingPart> parts;
 
     // ---- THE HEAD: the skull surface itself, stations 0..kHeadEnd --------

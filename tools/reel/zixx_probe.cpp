@@ -150,31 +150,34 @@ int main() {
   }
   // AUTHORED NESTING ALLOWANCES, per clip slot -- the same doctrine as
   // ground contact: declared overlap is design, anything beyond it is the
-  // fault. The concept NESTS the ball inside the S's hook, so ring centres
-  // legitimately come within radii of each other:
-  // RE-AUTHORED 2026-08-27 round-skull run: the cranium is now a BALL
-  // (kBallNum swells every axis; the probe measures the swollen rz), so the
-  // authored nesting of the skull into the S's hook is genuinely deeper --
-  // the sheet nests the ball into the hook too. Each figure was re-judged
-  // on the worst key's RENDER before being re-authored:
-  //   idle 80:   the ball presses into the dive stroke ~69 mm at the
-  //              breath's extreme (k78 zoom: crown inside the fold's own
-  //              shadow, eye untouched -- the sheet's nesting, deeper);
-  //   walk 80:   the travelling hump bunches the grounded run ~67 mm --
-  //              pre-existing in the APPROVED walk, not a head artefact;
-  //   attack 175: the full coil closes the wheel, the nose BALL meets the
-  //              tail ~169 mm for a few spinning keys (k18 render: reads
-  //              as the wheel closing, unread at spin speed);
-  //   fall 200:  the lolling ball presses against the coils ~188 mm at the
-  //              fold's deepest key (k124 render: head in front of the
-  //              coil, face and eye clean -- loose flail against own body).
+  // fault. The concept NESTS the head inside the S's hook, so ring centres
+  // legitimately come within radii of each other.
+  // RE-AUTHORED 2026-08-28 (run 2339): the head is now the CULMINATION of
+  // the one tube (kTaper peak ~218 mm) and looks UP (-6000 attitude, owner
+  // order) -- a bigger head riding higher inside the same approved hook
+  // nests deeper by construction, exactly as Side.png merges the head
+  // against the descending stroke. Each figure was re-judged on the worst
+  // key's RENDER before being re-authored (run 2339 scratch r10/r11):
+  //   idle 250:  breath extreme k81 presses the crown ~239 mm into the
+  //              deepened fold (render: head tucked into the coil, eye and
+  //              face fully clean -- the sheet's nesting, transient);
+  //   walk 165:  gait fold k16 ~154 mm, head in front of the arch, eye
+  //              clean; the grounded-run bunching is the approved walk;
+  //   attack 210: the REST pose itself nests the culminating head ~199 mm
+  //              against the dive stroke (k0 render = the approved S read);
+  //              the coil's own closing stays under this;
+  //   fall 40:   TIGHTENED from 200: the 2026-08-28 S-authority relax
+  //              (owner: "relax by a ton") took the flail from 10,768
+  //              hits/307 mm to 67 hits/18 mm -- the loose fall genuinely
+  //              stopped folding through itself, so the allowance follows
+  //              the evidence DOWN, not up.
   // A regression that digs DEEPER than these prints and exits 1.
   const auto allow_mm = [](int slot) -> int32_t {
     switch (slot) {
-      case 1: return 80;
-      case 2: return 80;
-      case 3: return 175;
-      case 4: return 200;
+      case 1: return 250;
+      case 2: return 165;
+      case 3: return 210;
+      case 4: return 40;
       default: return 0;
     }
   };
