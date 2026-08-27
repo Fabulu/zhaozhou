@@ -192,6 +192,12 @@ if [ "$attempted" != "$expected" ] || [ "$accounted" != "$expected" ]; then
   exit 5
 fi
 if [ "${#discards[@]}" -gt 0 ]; then
-  echo "NOTE: ${#discards[@]} discarded mutant(s) were NOT scored — fix and re-run"
+  # A mutant that could not build was never SCORED. Counting it as accounted
+  # and then printing SWEEP OK reports a run that tested nothing as a clean
+  # sweep -- which is what the 2026-08-27 22:40 patch-accumulator rerun did:
+  # 7 of 15 unscored, tally printed, exit 0.
+  echo "FAILED: ${#discards[@]} discarded mutant(s) were NOT scored -- fix and re-run"
+  printf '  %s\n' "${discards[@]}"
+  exit 6
 fi
 echo "SWEEP OK"
