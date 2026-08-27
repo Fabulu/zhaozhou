@@ -226,3 +226,42 @@ individual change."* The trigger is a **finished creature pass**, not a file
 save — a tweaked constant or a mid-iteration re-render does not go up. Amended
 in all three `CLAUDE.md` copies and the memory; the agent was told too, since
 the first message had implied every landed render publishes.
+
+## Published — the finished pass (main session verification)
+
+Deployed **https://upheaval.pages.dev** (build `979b54ce`, 9 files changed).
+This is the first publish under the new standing authorisation, and the trigger
+was met exactly: a finished creature pass.
+
+**Verified independently before publishing, not taken on the agent's report:**
+
+* `zixx-golden.exe` re-dumped into a scratch dir and `cmp`'d against the
+  committed goldens: `clip-1..4.bin` and `pose-crcs.txt` all **IDENTICAL**. The
+  frozen walk / salto / idle / fall genuinely survived every wave.
+* `zixx-probe.exe` exit 0 — 7,686 station-pair hits, all inside authored
+  allowances (worst 188 mm against a 200 mm allowance, clip 4 key 124).
+* `zixx-choreo.exe` exit 0 — palette pointer-identical across roots, spin
+  migration worst |Δ| 2 mm at key 13 against a 12 mm tolerance.
+* `zhao-reel.exe --check` → **"all sequence CRCs match"**.
+* **Looked at it**, which is the part that actually decides: head-on zoom beside
+  `Concept/Front.png`, profile zoom, and a BEFORE/AFTER crop of the idle head
+  built from the archived 08-27 poster against the new one.
+
+**What the before/after shows, honestly:** faceting on the neck is gone, the
+skull has real volume instead of the 1.97:1 disc, the pink covers the whole top
+and drops down the flank, and the eye reads with its orange marking. All four
+owner asks landed. The tight neck hairpin with a gap through it is present in
+BOTH frames — pre-existing S stance, not a regression, and the S was explicitly
+not to be changed.
+
+**Gate note for next time:** `--check` writes a lot and the harness dropped its
+stdout twice when piped; redirect to a file and read the file.
+
+### Still open, carried forward
+* T5 crayon converter — bilinear softens the stroke grain at distance. The
+  agent names this as the main remaining look gap and I agree from the renders.
+* Head-on, the eyes read as thin yellow slivers at the silhouette edge while
+  `Front.png` gives them an **orange surround** and far more presence. The
+  profile is right; the frontal read is not yet.
+* T4 atlas, C2/C4-C7, F1/F2, A1, W1, P2 not started.
+* Idle shallow-end sink is -2 mm vs the approved -3 mm.
