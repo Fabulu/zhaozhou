@@ -37,6 +37,47 @@ namespace {
 int32_t to_mm(int64_t fx) { return static_cast<int32_t>(fx * 1000 >> 16); }
 }  // namespace
 
+// ---- THE SELF-INTERSECTION PROBE (2026-08-27 head-only run) ---------------
+// Headache.md: "compare non-neighbouring ring-centre distances against their
+// radii. It does not need triangle-exact collision -- it needs to SHOUT when
+// the skull overlaps the neck or trunk." So: every body/head station's ring
+// CENTRE is skinned through the same pose the mesh uses (bind centre at
+// (-station_x, kBodyY, 0), the station's own bind), its radius is the ring's
+// LATERAL half-width (the larger axis, eye bulge included), and every pair
+// of stations that is genuinely non-neighbouring -- bind-pose centre
+// separation > 1.15 * (r_i + r_j), so the tube's own continuity can never
+// trigger it -- is checked posed: centre distance < r_i + r_j is an overlap,
+// printed with its depth. Run over EVERY key of EVERY clip.
+//
+// TWO HONESTY RULES, both learned from the first run of this probe:
+//   - the radius used is the VERTICAL one (station_r), not the lateral
+//     half-width: the S lives in the X-Y plane and the ring's in-plane
+//     extent IS rz -- the googly-eye bulge sticks out in +-Z where there is
+//     nothing to hit, and counting it flagged phantom overlaps ~150 mm deep;
+//   - pairs closer than 8 stations along the body are skipped outright: the
+//     walk's hump legitimately BUNCHES the grounded run, so stations 6 apart
+//     can approach through the surface without any clipping (station 38 vs
+//     44 fired at "180 mm" on the approved walk).
+namespace probe {
+struct Station {
+  zc::SkinVertex v;   // bind centre + bind, for skin_vertex
+  int32_t r_mm;       // vertical (in-plane) half-thickness in mm
+};
+inline std::vector<Station> stations() {
+  std::vector<Station> s;
+  for (int i = 0; i < zixx::kProfileStations; ++i) {
+    const zixx::Bind bd =
+        i <= zixx::kHeadEnd ? zixx::head_station_bind(i) : zixx::station_bind(i);
+    Station st;
+    st.v = zc::SkinVertex{-fxm(zixx::station_x(i)), fxm(zixx::kBodyY), 0,
+                          bd.b0, bd.b1, bd.w0, 0, 0};
+    st.r_mm = zixx::station_r(i);
+    s.push_back(st);
+  }
+  return s;
+}
+}  // namespace probe
+
 int main() {
   const zc::CreatureType& T = zixx::type();
   size_t nv = 0, nt = 0;
@@ -85,5 +126,65 @@ int main() {
     std::printf("  WORST minY %d mm at key %d; apex %d mm; belly band [%d..%d] mm\n",
                 to_mm(worst_min), worst_f, to_mm(worst_max), to_mm(belly_lo), to_mm(belly_hi));
   }
-  return 0;
+
+  // ---- non-adjacent ring overlap, every key of every clip -----------------
+  const std::vector<probe::Station> sts = probe::stations();
+  const int n = static_cast<int>(sts.size());
+  // pairs to check: bind separation strictly beyond tube continuity
+  std::vector<std::pair<int, int>> pairs;
+  for (int i = 0; i < n; ++i) {
+    for (int j = i + 8; j < n; ++j) {
+      const int64_t bind_mm = zixx::station_x(j) - zixx::station_x(i);
+      if (bind_mm * 100 > static_cast<int64_t>(sts[i].r_mm + sts[j].r_mm) * 115)
+        pairs.push_back({i, j});
+    }
+  }
+  int total_overlaps = 0;
+  for (const zc::Clip& clip : T.bank.clips) {
+    int clip_overlaps = 0;
+    int32_t worst_depth = 0;
+    int worst_key = -1, worst_i = -1, worst_j = -1;
+    for (uint16_t f = 0; f < clip.frame_count; ++f) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+      zc::decode_pose(T, clip, f, pose, nullptr, 0);
+      std::vector<int64_t> cx(n), cy(n), cz(n);
+      for (int i = 0; i < n; ++i) {
+        int32_t x, y, z;
+        zc::skin_vertex(pose.data(), sts[i].v, x, y, z, nullptr);
+        cx[i] = to_mm(x);
+        cy[i] = to_mm(y);
+        cz[i] = to_mm(z);
+      }
+      for (const auto& pr : pairs) {
+        const int i = pr.first, j = pr.second;
+        const int64_t dx = cx[i] - cx[j], dy = cy[i] - cy[j], dz = cz[i] - cz[j];
+        const int64_t d2 = dx * dx + dy * dy + dz * dz;
+        const int64_t rr = sts[i].r_mm + sts[j].r_mm;
+        if (d2 < rr * rr) {
+          const int32_t depth =
+              static_cast<int32_t>(rr - static_cast<int64_t>(zref::isqrt_u64(static_cast<uint64_t>(d2))));
+          ++clip_overlaps;
+          if (depth > worst_depth) {
+            worst_depth = depth;
+            worst_key = f;
+            worst_i = i;
+            worst_j = j;
+          }
+        }
+      }
+    }
+    total_overlaps += clip_overlaps;
+    if (clip_overlaps > 0) {
+      std::printf(
+          "clip slot %d OVERLAP: %d station-pair hits; worst %d mm deep, key %d, "
+          "stations %d vs %d\n",
+          clip.slot_id, clip_overlaps, worst_depth, worst_key, worst_i, worst_j);
+    } else {
+      std::printf("clip slot %d overlap: none\n", clip.slot_id);
+    }
+  }
+  std::printf(total_overlaps == 0 ? "OVERLAP PROBE: clean\n"
+                                  : "OVERLAP PROBE: %d hits -- SHOUTING\n",
+              total_overlaps);
+  return total_overlaps == 0 ? 0 : 1;
 }

@@ -90,14 +90,18 @@ struct TaperKey {
 // the raised front lobe (skull through the arch) drops ~13%, the grounded
 // rear keeps its girth, so the snakelike part reads full while the reared
 // part reads lean.
-// HEAD RE-FATTENED 2026-08-27 pass 3 (Fabian: "the head is not thick
-// enough ... make the head biger"): the SKULL keys swell ~21% into a real
-// bulb -- Front.png's head is a big round ball on a leaner neck -- easing
-// back to the untouched trunk by t=320. Body thickness stays as approved.
+// SKULL REBUILT 2026-08-27 head-only run (Headache.md: "larger cranium, not
+// larger muzzle"). Pass 3 inflated the whole forward tube, nose dome
+// included ({0,1050},{60,1060}), which grew the protruding snout. Now the
+// volume sits REARWARD, around the eye stations (3..8 = t 54..143): the
+// nose keys return near their pre-enlargement size (870/840) and smaller
+// still, the radial peak lands mid-eye at t=100, and the taper falls away
+// decisively on both sides of it -- widest at the eyes, blunt small nose.
+// Body thickness from t=320 back stays EXACTLY as approved (frozen).
 constexpr TaperKey kTaper[] = {
-    {0, 1050},  {60, 1060}, {150, 1000}, {230, 860},             // the skull BULB
-    {320, 800}, {500, 840}, {620, 860},                          // trunk swells rearward
-    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}  // tail stem
+    {0, 820},   {45, 950},  {100, 1085}, {160, 1040}, {230, 880},  // the CRANIUM
+    {320, 800}, {500, 840}, {620, 860},                            // trunk swells rearward
+    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}    // tail stem
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // Bind height of the body axis. This is the HEAD height: bone 0 is the nose
@@ -120,14 +124,52 @@ constexpr int32_t kStageCentreMm = 920;
 // half-thickness, so station 0 used to be a full-radius ring closed by a flat
 // 20-gon cap -- the "weird spinning disc" at the front of the face. These
 // factors (1/1000 of the profile value) round the first stations into a
-// blunt dome; the cap that remains is a dot.
+// blunt dome; the cap that remains is a dot. Factors raised slightly with
+// the head-only retaper: the nose base radius shrank, so the dome rounds
+// off BLUNTER rather than drawing the smaller radius out into a point.
 constexpr int kNoseDomeStations = 4;
-constexpr int16_t kNoseDome[kNoseDomeStations] = {320, 720, 910, 980};
+constexpr int16_t kNoseDome[kNoseDomeStations] = {380, 760, 925, 985};
 
 // section ellipticity, measured: wider than tall
 constexpr int32_t kHeadWideNum = 112;  // head 1.12 : 1
 constexpr int32_t kBodyWideNum = 119;  // body 1.19 : 1
 constexpr int kHeadStations = 9;       // how many stations read as head
+// The last station of the HEAD PART (inclusive). The head is no longer an
+// overlay shell riding 3 mm over the body (2026-08-27 head-only run,
+// Headache.md: "stop using the overlay as the head shape" -- twelve rings of
+// near-duplicate anatomy fought the body the moment the bulb got fatter and
+// the hook tighter). The head part now IS the surface for stations
+// 0..kHeadEnd and the body part begins AT kHeadEnd with the identical ring
+// spec, so the two meet vertex-for-vertex and nothing overlaps by
+// construction. The blue/pink/green split stays on the TEXTURE tiles.
+constexpr int kHeadEnd = kHeadStations + 2;  // station 11, x = 599 mm
+
+// ---- THE HEAD-ATTITUDE BONE (2026-08-27 head-only run) --------------------
+// The droop survived a +4000 first stance slope because the visible skull is
+// NOT the first segment: the bulb spans stations 0..8 = 2.7 segments, and
+// stations 3..8 -- the cranium -- ride bones 1..3, which are the steep
+// -11200/-12800/-12000 hook. The nose tipped up 22 deg while the mass of
+// the head bent down around the hook behind it. So the skull now binds to
+// ONE dedicated bone (kBHead, child of bone 0 at the nose): the cranium is
+// a rigid mass whose pitch is THIS knob, the canonical S is untouched, and
+// the neck blend eases the skull into the hook over three stations.
+// kHeadAttitude is angle16 relative to the first segment's slope, and the
+// SIGN WAS LEARNED FROM THE RENDER, not derived: POSITIVE PITCHES THE NOSE
+// DOWN in the composed skeleton -- the inverse of what every slope comment
+// assumed, which is why pass 3's "+4000 = 22 deg of nose lift" shipped as
+// droop. -12000 was PICKED OFF THE EIGHTEEN-POSE ORIENTATION SWEEP
+// (attitude-sweep.png in the run folder; -8000..+8000, then -14000..+2000
+// after the whole first sheet still hung nose-down): the skull rides level
+// with a slight forward-up lift, the eye reads mid-ball, the nose stays
+// clear of both the ground and the hook.
+#ifndef ZIXX_ATTITUDE
+#define ZIXX_ATTITUDE (-12000)
+#endif
+constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
+constexpr int kSkullRigidTo = 5;  // stations 0..5 fully on the head bone
+constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
+                                  // stations: three collapsed the fold onto
+                                  // the eye's rear -- seen on the sweep)
 
 // THE EYE IS NOT GEOMETRY. A yellow ball on the side of the head was the
 // obvious thing and it looked exactly like what it was: a sphere glued to a
@@ -602,7 +644,10 @@ enum : uint8_t {
   kBBladeR = static_cast<uint8_t>(kSpineBones + 2),
   kBBladeR2 = static_cast<uint8_t>(kSpineBones + 3),
   kBSpike = static_cast<uint8_t>(kSpineBones + 4),
-  kBoneCount = static_cast<uint8_t>(kSpineBones + 5)
+  // the dedicated skull bone: child of the root at the nose, carries the
+  // rigid cranium (see kHeadAttitude). 26 of 32.
+  kBHead = static_cast<uint8_t>(kSpineBones + 5),
+  kBoneCount = static_cast<uint8_t>(kSpineBones + 6)
 };
 static_assert(kBoneCount <= 32, "creature_rules 1.2: <= 32 bones");
 
@@ -647,6 +692,21 @@ inline Bind station_bind(int i) {
   const int w = 64 - ((frac * 64 + 512) >> 10);
   return Bind{static_cast<uint8_t>(kBSpine0 + k), static_cast<uint8_t>(kBSpine0 + k + 1),
               static_cast<uint8_t>(w)};
+}
+
+// The HEAD PART's binding: the skull is rigid on kBHead, eases into the
+// spine over kSkullBlendTo, and matches station_bind exactly by the last
+// head stations -- so the junction ring at kHeadEnd is bit-identical
+// between the head part and the body part and the surfaces meet closed.
+inline Bind head_station_bind(int i) {
+  if (i <= kSkullRigidTo) return Bind{kBHead, kBHead, 64};
+  if (i <= kSkullBlendTo) {
+    const Bind sb = station_bind(i);
+    const uint8_t spine = sb.w0 >= 32 ? sb.b0 : sb.b1;  // the majority bone
+    const int w = 51 - (i - kSkullRigidTo - 1) * 13;    // 51, 38, 25, 12 of 64
+    return Bind{kBHead, spine, static_cast<uint8_t>(w)};
+  }
+  return station_bind(i);
 }
 
 // ------------------------------------------------------------ the page ----
@@ -811,6 +871,13 @@ inline zc::Clip build_idle() {
         g.q[kBSpine0 + k] =
             quat_mul(g.q[kBSpine0 + k], quat_y((sh * kIdleHeadSway) >> 16));
       }
+      // THE SKULL BONE: the fixed attitude, plus what the rigid skull no
+      // longer inherits from joints 1..2 -- the front wave's first two
+      // slope-deltas (the nod the flexible skull used to carry) and two
+      // steps of the sway yaw -- so the head's idle life is unchanged
+      // while its pitch is owned by kHeadAttitude, not by the hook.
+      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + wave[1] + wave[2]),
+                             quat_y(2 * ((sh * kIdleHeadSway) >> 16)));
     }
 
     // 3. the tail plays: a lazy left-right sway on the RAISED tail only.
@@ -943,6 +1010,12 @@ inline zc::Clip build_walk() {
     // neck and upper-body motion now, and its belly cost is compensated
     // exactly instead of being forced to cancel)
 
+    // THE SKULL BONE: attitude plus the gait wave's first two slope-deltas
+    // (the nod the flexible skull used to inherit from joints 1..2), so the
+    // head surges with the gait exactly as approved while its pitch is
+    // owned by kHeadAttitude. The visible head-BOB stays the root comp.
+    g.q[kBHead] = quat_z(kHeadAttitude + wave[1] + wave[2]);
+
     // secondary lateral life on the RAISED mid-body only (not the grounded
     // run -- a lateral quat on a pitched grounded joint digs the belly)
     for (int k = 5; k <= kStanceGround0 - 1; ++k) {
@@ -1066,6 +1139,14 @@ inline zc::Clip build_attack() {
     const int32_t piv_x = static_cast<int32_t>((static_cast<int64_t>(kCoilR) * sth) >> 16);
     const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
 
+    // THE SKULL BONE. The attitude fades with the S authority -- at the
+    // spear (auth 0) the skull lies dead straight on the javelin line, so
+    // the head bone cannot bend the weapon. While the body is a wheel, the
+    // skull follows the coil's own curvature (one joint's worth of coil
+    // pitch approximates the bulb's 1.7-segment arc) instead of chording
+    // across it.
+    g.q[kBHead] = quat_z((kHeadAttitude * auth) / 1000 + (coil_pitch * curl) / 1000);
+
     // the blades close to the spear line while coiled or straight-diving,
     // and flare as the S returns
     g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5,
@@ -1124,6 +1205,18 @@ inline zc::Clip build_fall() {
       g.q[kBSpine0 + k] =
           quat_mul(g.q[kBSpine0 + k],
                    quat_mul(quat_z((s1 * amp) >> 16), quat_y((s2 * (amp * 2 / 3)) >> 16)));
+    }
+    // THE SKULL BONE lolls hardest of all -- the rigid cranium no longer
+    // bends with joints 1..3, so it gets its own leading loll (a half-step
+    // ahead of the k=1 wave) on top of the attitude. Slow, loose, one- and
+    // two-cycle periods: wobble, not jitter.
+    {
+      const int32_t p1 = ph + 3500;
+      const int32_t p2 = ph * 2 + 16000 + 4500;
+      const int32_t s1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p1 & 0xFFFF)}).raw;
+      const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p2 & 0xFFFF)}).raw;
+      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + ((s1 * kFallNeckAmp) >> 16)),
+                             quat_y((s2 * (kFallNeckAmp * 2 / 3)) >> 16));
     }
     // THE LATERAL WAVE (2026-08-27): a slow serpentine undulation travelling
     // nose -> tail through EVERY spine joint -- the walk's caterpillar
@@ -1184,6 +1277,38 @@ inline zc::Clip build_fall() {
   return c;
 }
 
+#ifdef ZIXX_SWEEP
+#ifndef ZIXX_SWEEP_BASE
+#define ZIXX_SWEEP_BASE (-8000)
+#endif
+// DIAGNOSTIC ONLY (compiled solely by the -DZIXX_SWEEP build, never shipped):
+// the head-attitude ORIENTATION SWEEP. Nine keys of the plain stance, each
+// with a different skull attitude, -8000..+8000 in steps of 2000 -- rendered
+// from one fixed side camera and judged on one contact sheet, per
+// Headache.md: "ten minutes of brute-force visual evidence".
+inline zc::Clip build_sweep() {
+  zc::Clip c;
+  c.slot_id = 5;
+  c.interpolate = false;
+  c.frame_count = 9;
+  c.root.assign(9 * 3, 0);
+  c.quats.assign(9 * static_cast<size_t>(kBoneCount), zc::quat16_identity());
+  // NOTE the sweep's own first lesson, kept for the record: POSITIVE
+  // attitude pitches the nose DOWN in the composed skeleton -- the axis
+  // convention every slope comment assumed was inverted, which is exactly
+  // why pass 3's "+4000 = 22 deg of nose lift" rendered as droop.
+  for (int f = 0; f < 9; ++f) {
+    Rig g;
+    g.reset();
+    apply_stance(g, 1000);
+    g.q[kBHead] = quat_z(ZIXX_SWEEP_BASE + f * 2000);
+    g.tail_rest();
+    g.write(c, f);
+  }
+  return c;
+}
+#endif
+
 // ------------------------------------------------------------ the build ----
 
 inline const zc::CreatureType& type() {
@@ -1203,16 +1328,61 @@ inline const zc::CreatureType& type() {
     sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(56)};
     sk.bones[kBBladeR2] = zc::Bone{kBBladeR, -fxm(kBladeLen / 2), 0, 0};
     sk.bones[kBSpike] = zc::Bone{kBFork, 0, fxm(30), 0};
+    // the skull bone: at the nose, child of the root. All of the cranium's
+    // pitch lives on it (kHeadAttitude plus per-clip head motion).
+    sk.bones[kBHead] = zc::Bone{kBSpine0, 0, 0, 0};
     std::vector<zc::RingPart> parts;
 
-    // ---- THE BODY: ONE continuous chain part, nose to fork ---------------
+    // ---- THE HEAD: the skull surface itself, stations 0..kHeadEnd --------
+    // NOT an overlay any more (2026-08-27 head-only run). This part IS the
+    // front of the animal: the nose dome, the cranium with the eye bulges,
+    // the throat -- bound to the dedicated skull bone and easing into the
+    // spine. The body part below begins at the same station with the same
+    // ring spec, so the junction is vertex-coincident and closed.
     {
       zc::RingPart p;
       p.chain = true;
       p.pitch_q = 1;
       p.yaw_q = 3;
-      p.caps = zc::kCapBot | zc::kCapTop;
-      for (int i = 0; i < kProfileStations; ++i) {
+      p.caps = zc::kCapBot;
+      for (int i = 0; i <= kHeadEnd; ++i) {
+        const int32_t r = station_r(i);
+        // THE EYE, as a lateral swell in the skull itself. Eased in and out
+        // over the stations it spans so the head reads as one form with a wide
+        // brow, not a tube with two lumps.
+        int32_t eye_w = 0;
+        if (i >= kEyeStation0 && i <= kEyeStation1) {
+          const int span = kEyeStation1 - kEyeStation0;
+          const int t = span > 0 ? ((i - kEyeStation0) * 1000) / span : 500;
+          const int ease = 1000 - (2 * t - 1000) * (2 * t - 1000) / 1000;  // 0..1000..0
+          eye_w = static_cast<int32_t>((static_cast<int64_t>(r) * kEyeBulgeNum * ease) / 100000);
+        }
+        const Bind bd = head_station_bind(i);
+        zc::RingSpec rs;
+        rs.y = fxm(station_x(i));
+        rs.radius = fxm(r);
+        rs.segments = static_cast<uint8_t>(kSides);
+        rs.b0 = bd.b0;
+        rs.b1 = bd.b1;
+        rs.w0 = bd.w0;
+        rs.rx = fxm(r * station_wide(i) / 100 + eye_w);  // LATERAL, + the eye
+        rs.rz = fxm(r);
+        rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
+        p.rings.push_back(rs);
+      }
+      p.page = kTileHead;
+      set_rgb(p, kBlue);
+      parts.push_back(p);
+    }
+
+    // ---- THE BODY: one chain part, junction station to fork --------------
+    {
+      zc::RingPart p;
+      p.chain = true;
+      p.pitch_q = 1;
+      p.yaw_q = 3;
+      p.caps = zc::kCapTop;  // the fork cap; the front closes against the head
+      for (int i = kHeadEnd; i < kProfileStations; ++i) {
         const int32_t r = station_r(i);
         const Bind bd = station_bind(i);
         zc::RingSpec rs;
@@ -1224,50 +1394,11 @@ inline const zc::CreatureType& type() {
         rs.w0 = bd.w0;
         rs.rx = fxm(r * station_wide(i) / 100);  // LATERAL
         rs.rz = fxm(r);                          // VERTICAL
-        rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
+        rs.cz = -fxm(kBodyY);
         p.rings.push_back(rs);
       }
       p.page = kTileBody;
       set_rgb(p, kGreen);  // fallback if the page is ever absent
-      parts.push_back(p);
-    }
-
-    // ---- HEAD AND THROAT: a second chain over the SAME bones -------------
-    // Marginally larger so it sits ON the body, and blue. Sharing the binds
-    // means it deforms identically and no seam between them can ever open.
-    {
-      zc::RingPart p;
-      p.chain = true;
-      p.pitch_q = 1;
-      p.yaw_q = 3;
-      p.caps = zc::kCapBot;
-      for (int i = 0; i < kHeadStations + 3; ++i) {
-        const int32_t r = station_r(i) + 3;
-        // THE EYE, as a lateral swell in the skull itself. Eased in and out
-        // over the stations it spans so the head reads as one form with a wide
-        // brow, not a tube with two lumps.
-        int32_t eye_w = 0;
-        if (i >= kEyeStation0 && i <= kEyeStation1) {
-          const int span = kEyeStation1 - kEyeStation0;
-          const int t = span > 0 ? ((i - kEyeStation0) * 1000) / span : 500;
-          const int ease = 1000 - (2 * t - 1000) * (2 * t - 1000) / 1000;  // 0..1000..0
-          eye_w = static_cast<int32_t>((static_cast<int64_t>(r) * kEyeBulgeNum * ease) / 100000);
-        }
-        const Bind bd = station_bind(i);
-        zc::RingSpec rs;
-        rs.y = fxm(station_x(i));
-        rs.radius = fxm(r);
-        rs.segments = static_cast<uint8_t>(kSides);
-        rs.b0 = bd.b0;
-        rs.b1 = bd.b1;
-        rs.w0 = bd.w0;
-        rs.rx = fxm(r * station_wide(i) / 100 + eye_w);  // LATERAL, + the eye
-        rs.rz = fxm(r);
-        rs.cz = -fxm(kBodyY);
-        p.rings.push_back(rs);
-      }
-      p.page = kTileHead;
-      set_rgb(p, kBlue);
       parts.push_back(p);
     }
 
@@ -1347,6 +1478,9 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_walk());
     bank.clips.push_back(build_attack());
     bank.clips.push_back(build_fall());
+#ifdef ZIXX_SWEEP
+    bank.clips.push_back(build_sweep());
+#endif
 
     zc::CreatureType type;
     type.type_id = 2;

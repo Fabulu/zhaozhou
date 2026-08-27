@@ -988,6 +988,10 @@ struct SceneSubject {
   // per loop when frames divides 65536 (the integer step keeps the loop
   // seamless); the sky rotates with it so the world-fixed sun sweeps round
   bool orbit = false;
+  // constant world yaw (angle16): a FIXED three-quarter or front camera for
+  // the diagnostic subjects -- same matrix as the orbit, held still. Applied
+  // to the view and the sky exactly like the orbit's theta.
+  int32_t cam_yaw = 0;
   bool cam_pull = false;
   uint32_t cam_pull0 = 0;
   int32_t cam2_eye = 0, cam2_dist = 0, cam2_bias = 0;  // (cam2_k == cam_k)
@@ -2055,6 +2059,11 @@ int render_scene(const SceneSubject& sub) {
                                                      (sub.frames > 0 ? sub.frames : 1));
         sv.payload.view_projection = mat4_mul(sv.payload.view_projection, rot_world_yaw(theta));
       }
+      if (sub.cam_yaw != 0) {
+        sv.payload.view_projection = mat4_mul(
+            sv.payload.view_projection,
+            rot_world_yaw(static_cast<uint16_t>(sub.cam_yaw & 0xFFFF)));
+      }
       if (trk_x != 0 || trk_y != 0) {
         // the tracking camera: a true world translation, so the creature
         // stays in frame while the GROUND moves -- the sky, at infinity,
@@ -2098,6 +2107,10 @@ int render_scene(const SceneSubject& sub) {
           const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
                                                        (sub.frames > 0 ? sub.frames : 1));
           sk.payload.rot_proj[0] = mat4_mul(sk.payload.rot_proj[0], rot_world_yaw(theta));
+        }
+        if (sub.cam_yaw != 0) {
+          sk.payload.rot_proj[0] = mat4_mul(
+              sk.payload.rot_proj[0], rot_world_yaw(static_cast<uint16_t>(sub.cam_yaw & 0xFFFF)));
         }
         sk.payload.rot_proj[1] = sk.payload.rot_proj[0];
         sk.payload.drum_yaw = 0x0C00;
@@ -3176,6 +3189,84 @@ SceneSubject subject_zixx_front() {
   return s;
 }
 
+// DIAGNOSTIC ACCEPTANCE-GATE CAMERAS (2026-08-27 head-only run; none in
+// kLibrary, none in --check). Headache.md: one curated frontal portrait let a
+// side droop, a snout, a self-intersection and a 101-degree mouth all ship.
+// The gate is now fixed SIDE + fixed FRONT + fixed THREE-QUARTER + the slow
+// orbit + max idle/walk bend + the salto anticipation + the overlap probe.
+SceneSubject subject_zixx_side() {
+  SceneSubject s;
+  s.name = "zixxtrixx-side";
+  s.creature = 3;
+  s.frames = zixx::kIdleKeys * 2;  // one full idle loop: max idle bend is IN here
+  s.orbit = false;
+  zixx_common(s);
+  s.note =
+      "DIAGNOSTIC: fixed true-side camera over one full idle loop -- the view "
+      "that caught the droop the frontal portrait missed. Also the max-idle-"
+      "bend evidence: every key of the loop passes this camera";
+  return s;
+}
+
+SceneSubject subject_zixx_tq() {
+  SceneSubject s;
+  s.name = "zixxtrixx-tq";
+  s.creature = 3;
+  s.frames = zixx::kIdleKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;  // 45 deg: the fixed three-quarter
+  s.note = "DIAGNOSTIC: fixed three-quarter camera, one full idle loop";
+  return s;
+}
+
+SceneSubject subject_zixx_frontfix() {
+  SceneSubject s;
+  s.name = "zixxtrixx-frontfix";
+  s.creature = 3;
+  s.frames = zixx::kIdleKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 16384;  // quarter turn: nose-on
+  // near-level, like zixxtrixx-front: the face must be judged at face height
+  s.cam_ps = 4571;
+  s.cam_pc = 65377;
+  s.cam_eye = 10;
+  s.note = "DIAGNOSTIC: fixed head-on camera at face height, one full idle loop";
+  return s;
+}
+
+// One STILL frame, fixed side camera: the orientation-sweep unit. Rebuilt
+// once per candidate kHeadAttitude (-DZIXX_ATTITUDE=...), rendered once,
+// and the nine stills go on ONE contact sheet to be judged by eye.
+SceneSubject subject_zixx_still() {
+  SceneSubject s;
+  s.name = "zixxtrixx-still";
+  s.creature = 3;
+  s.frames = 1;
+  s.orbit = false;
+  zixx_common(s);
+  s.note = "DIAGNOSTIC: single idle key 0 frame, fixed side camera, for the "
+           "head-attitude orientation sweep";
+  return s;
+}
+
+#ifdef ZIXX_SWEEP
+// The nine-attitude orientation sweep (see build_sweep in zixxtrixx.h):
+// 18 frames = 9 keys held twice, fixed side camera, no orbit. Exists only
+// in the -DZIXX_SWEEP diagnostic build.
+SceneSubject subject_zixx_sweep() {
+  SceneSubject s;
+  s.name = "zixxtrixx-sweep";
+  s.creature = 7;  // clip slot 5
+  s.frames = 18;
+  s.orbit = false;
+  zixx_common(s);
+  s.note = "DIAGNOSTIC: head-attitude sweep, -8000..+8000 step 2000, one key each";
+  return s;
+}
+#endif
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3391,5 +3482,12 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
   if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
+  if (wanted("zixxtrixx-side")) rc |= render_scene(subject_zixx_side());
+  if (wanted("zixxtrixx-tq")) rc |= render_scene(subject_zixx_tq());
+  if (wanted("zixxtrixx-frontfix")) rc |= render_scene(subject_zixx_frontfix());
+  if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
+#ifdef ZIXX_SWEEP
+  if (wanted("zixxtrixx-sweep")) rc |= render_scene(subject_zixx_sweep());
+#endif
   return rc;
 }

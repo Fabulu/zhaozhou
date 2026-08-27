@@ -150,6 +150,11 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     """
     t = tint(GREEN, g_green)
     p = tint((255, 0, 0) if DEBUG_IDENT else PINK, g_pink)
+    # V ORIGIN MOVED, 2026-08-27 head-only run: the head part is no longer an
+    # overlay, so the body part now starts AT the junction station (11 of 57,
+    # x = 599 mm) and this tile's 64 V rows span stations 11..56 -- ~38.9 mm
+    # per row instead of ~54.5 with row 0 at the START OF THE NECK, not the
+    # nose. Every row range below was re-derived for that mapping.
     # THE DARK FRONT GREEN (Fabian, 2026-08-27). Side.png lays it between the
     # blue throat and the light flank; Front.png paints the whole chest in it.
     # So: a belly-adjacent band (columns around U=64 -> texel 16) over the
@@ -157,9 +162,9 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # mid-body with a wobbly hand edge. Painted before the dorsal band and
     # the throat wedge so both stay on top.
     dk = tint(GREEN_DARK, g_green_dark)
-    for y in range(0, 40):
+    for y in range(0, 35):
         # width of the dark band around the belly line, in texels of U
-        w = 24.0 * (1.0 - (y / 38.0) ** 1.6)
+        w = 24.0 * (1.0 - (y / 33.0) ** 1.6)
         if w < 1.0:
             continue
         wob = 2.0 * np.sin(y * 0.24 + 0.4) + 1.2 * np.sin(y * 0.066 + 1.7)
@@ -178,10 +183,11 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # with the head's cap into one big pink mass, where Front.png shows green
     # chest behind the ball. The drawn band thins toward the head anyway.
     for y in range(TILE):
-        if y <= 14:
+        # thin over the neck (which is now only the FIRST rows of this tile)
+        if y <= 4:
             half = 2.2
-        elif y < 26:
-            half = 2.2 + (4.5 - 2.2) * (y - 14) / 12.0
+        elif y < 17:
+            half = 2.2 + (4.5 - 2.2) * (y - 4) / 13.0
         else:
             half = 4.5
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
@@ -196,11 +202,13 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
                 t[y, x] = p[y, x]
     # THE THROAT RUNS ON PAST THE HEAD (both sheets: the blue continues along
     # the underside behind the skull, a teardrop down the chest in Front.png).
-    # The head chain covers V rows 0..~12 of this tile; the wedge takes over
-    # where it ends and tapers away by row 21. Belly is U = 64 -> column 16.
+    # The head part now ends exactly where this tile begins, so the wedge
+    # starts AT row 0 -- matched to the head tile's ~10-texel throat width so
+    # the two read as one marking across the junction -- and tapers away by
+    # row 19 (~1.3 m behind the nose, the owner's authored length).
     b = tint(BLUE, g_green)
-    for y in range(8, 28):
-        w = 13.0 * (1.0 - (y - 8) / 20.0) ** 1.3
+    for y in range(0, 20):
+        w = 11.0 * (1.0 - y / 19.0) ** 1.3
         if w < 0.6:
             continue
         wob = 1.1 * np.sin(y * 0.31)
@@ -392,21 +400,26 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
             if d < half:
                 t[y, x] = pk[y, x]
     t = paint_eyes(t, g_orange)
-    # the mouth: Front.png's white slit on the underside, ink rim. SHRUNK
-    # 2026-08-27 pass 3 (Fabian: "the mouth, which I think is actually too
-    # big now"). The 130-degree wrap was a fix for a head that hung nose-down
-    # and hid it; the head now looks UP (kStanceSlope[0]), so the slit can be
-    # the drawing's own modest centre-bottom mouth again: ~85 deg of the
-    # lower nose (U 9..24), a few rows tall, mostly WHITE with a one-texel
-    # ink rim (a fat border ate the visible texels at grazing angles).
-    # ...and it sits ON THE DOME rows (V 1..8), not behind them: the dome's
-    # lower half faces forward-down, which with the lifted head is exactly
-    # the camera -- rows 3..9 sat on the tube underside and curved away.
-    for y in range(1, 8):
-        for x in range(8, 26):
+    # the mouth. SHRUNK AGAIN, 2026-08-27 head-only run (Headache.md: the
+    # pass-3 "85-95 deg" claim measured 18 of 64 angular texels = ~101 deg
+    # of circumference -- a grin wrapping a quarter of the head). Now a
+    # SMALL WEIRD SLIT: 9 ink texels of U (~51 deg), 4 rows, a ONE-texel ink
+    # boundary, and hand-wobbled per row -- each row's ends shift by one so
+    # no two rows share both endpoints and the slit reads drawn, not
+    # stamped. Slightly off-centre of the belly line (16) toward +U, the
+    # way Side.png's mouth sits. Still on the dome rows (V 1..5): the
+    # dome's lower half faces the lifted head's camera.
+    mouth = [  # (v row, ink x0..x1 inclusive) -- white is the row inset 1
+        (1, 13, 20),
+        (2, 12, 21),
+        (3, 13, 21),
+        (4, 14, 20),
+    ]
+    for y, x0, x1 in mouth:
+        for x in range(x0, x1 + 1):
             t[y, x] = INK
-    for y in range(2, 7):
-        for x in range(9, 25):
+    for y, x0, x1 in mouth[1:3]:  # white only in the middle rows
+        for x in range(x0 + 1, x1):
             t[y, x] = WHITE
     # V row 0 is the WHOLE nose cap fan's sample row: flat pigment, no streaks
     t[0, :] = BLUE
