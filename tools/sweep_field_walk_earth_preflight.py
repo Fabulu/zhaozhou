@@ -35,7 +35,9 @@ def main():
         return 1
 
     bad = 0
-    for name, rel, old, new in MUTANTS:
+    # This block's mutants all live in one file, so the table is a 3-tuple
+    # (name, old, new) rather than the multi-file 4-tuple form.
+    for name, old, new in MUTANTS:
         try:
             with open(path, "w", encoding="utf-8", newline="") as f:
                 f.write(mutate(gold, old, new))

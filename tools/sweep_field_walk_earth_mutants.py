@@ -45,24 +45,34 @@ RTL = "fpga/rtl/synth/zhao_probe_walk_earth.sv"
 # name, old, new -- each applied to the PRISTINE file, one at a time.
 MUTANTS = [
     # ---- the coverage law: the box must never decide -----------------------
-    # W01 is THE mutant of this block. It swaps the law for the hint, which is
-    # correct whenever the box is exact and wrong whenever it is conservative.
-    # If it survives, no test drives a conservative box -- and a conservative
-    # box is precisely what the ARM is permitted to prepare.
-    ("W01 the prepared box is used INSTEAD of the closed-interval test",
+    # W01 is THE mutant of this block: it lets the HINT grant coverage the
+    # LAW would refuse. It is correct on every association whose box is exact
+    # and wrong exactly when the box is conservative -- which is the case the
+    # ARM is permitted to produce. If it survives, no test drives an inflated
+    # box, and the block's central claim is untested.
+    #
+    # First written as a straight deletion of the coordinate test. That
+    # orphaned fp_x1_r and in_z_c and failed the LINTER rather than the
+    # tests, and a mutant that cannot build is a discard, not evidence.
+    # ORing the box in keeps every operand and keeps the defect.
+    ("W01 the prepared box also grants coverage, so a conservative box over-covers",
      "      mask_c[l] = busy_r && (li_c[l] < 6'(LAT_W)) && in_z_c &&\n"
      "                  (lx_c[l] >= fp_x0_r) && (lx_c[l] <= fp_x1_r);",
      "      mask_c[l] = busy_r && (li_c[l] < 6'(LAT_W)) &&\n"
-     "                  (li_c[l] >= box_i0_r) && (li_c[l] <= box_i1_r);"),
+     "                  (((li_c[l] >= box_i0_r) && (li_c[l] <= box_i1_r)) ||\n"
+     "                   (in_z_c && (lx_c[l] >= fp_x0_r) && (lx_c[l] <= fp_x1_r)));"),
     ("W02 the x footprint becomes half-open, so the far border falls outside",
      "                  (lx_c[l] >= fp_x0_r) && (lx_c[l] <= fp_x1_r);",
      "                  (lx_c[l] >= fp_x0_r) && (lx_c[l] < fp_x1_r);"),
     ("W03 the z footprint becomes half-open on the near side",
      "  assign in_z_c = (wz[cur_j_r] >= fp_z0_r) && (wz[cur_j_r] <= fp_z1_r);",
      "  assign in_z_c = (wz[cur_j_r] > fp_z0_r) && (wz[cur_j_r] <= fp_z1_r);"),
-    ("W04 the x coordinate is tested against the z bounds",
+    # Reshaped: swapping the axis outright orphaned both x registers. The
+    # cross-axis copy-paste that actually happens is an EXTRA constraint.
+    ("W04 the z far bound is also applied to x",
      "                  (lx_c[l] >= fp_x0_r) && (lx_c[l] <= fp_x1_r);",
-     "                  (lx_c[l] >= fp_z0_r) && (lx_c[l] <= fp_z1_r);"),
+     "                  (lx_c[l] >= fp_x0_r) && (lx_c[l] <= fp_x1_r) &&\n"
+     "                  (lx_c[l] <= fp_z1_r);"),
     ("W05 a lane past the end of the row is still marked covered",
      "      mask_c[l] = busy_r && (li_c[l] < 6'(LAT_W)) && in_z_c &&",
      "      mask_c[l] = busy_r && in_z_c &&"),
@@ -74,7 +84,7 @@ MUTANTS = [
     ("W07 a new row restarts at column 0 instead of the box's first column",
      "          cur_i_r <= box_i0_r;\n"
      "          cur_j_r <= cur_j_r + 6'd1;",
-     "          cur_i_r <= 6'd0;\n"
+     "          cur_i_r <= box_i0_r + 6'd1;\n"
      "          cur_j_r <= cur_j_r + 6'd1;"),
     ("W08 the vertex index is strided by the lattice HEIGHT",
      "  assign out_iv_o    = 11'(cur_j_r) * 11'(LAT_W) + 11'(cur_i_r);",
@@ -100,15 +110,18 @@ MUTANTS = [
      "      else wz[lt_idx_i] <= lt_val_i;"),
 
     # ---- intake and handshake ----------------------------------------------
-    ("W14 an EMPTY box starts a walk that cannot terminate",
+    # Reshaped: dropping the term orphaned box_empty_c. Inverting it keeps
+    # the operand and keeps a real defect -- only EMPTY boxes start a walk.
+    ("W14 the emptiness guard is inverted, so real associations never start",
      "        if (as_valid_i && !box_empty_c) begin",
-     "        if (as_valid_i) begin"),
+     "        if (as_valid_i && box_empty_c) begin"),
     ("W15 the emptiness test only looks at the column range",
      "  assign box_empty_c = (as_box_i0_i > as_box_i1_i) || (as_box_j0_i > as_box_j1_i);",
      "  assign box_empty_c = (as_box_i0_i > as_box_i1_i);"),
-    ("W16 the walk advances without the consumer taking the group",
+    # Reshaped: dropping out_ready_i orphaned the port.
+    ("W16 the walk advances when EITHER side is ready, not both",
      "  assign accept_c = out_valid_o && out_ready_i;",
-     "  assign accept_c = out_valid_o;"),
+     "  assign accept_c = out_valid_o || out_ready_i;"),
     ("W17 the covered-vertex counter counts groups rather than lanes",
      "        verts_covered_o  <= verts_covered_o + 32'($countones(mask_c));",
      "        verts_covered_o  <= verts_covered_o + 32'd1;"),
