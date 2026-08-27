@@ -60,3 +60,20 @@ plane form).
 Order: goldens -> head ball + junction -> pink -> eyes -> RGB565+bilinear+mips
 -> normals+Gouraud -> poly reduction -> amendments/proposal + worklog.
 Baseline binary built from clean tree at f8f6681.
+
+## Head: the cranium is a BALL (kBallNum)
+- Goldens committed to Upheaval/creature/Zixxtrixx/golden/ FIRST (clip bytes,
+  per-key pose CRCs, probe, 60 Hz sheets, source commit) — Wave 0 done.
+- kEyeBulgeNum 85 -> 22; new kBallNum=280 envelope swells EVERY axis,
+  smoothsteps from station 1, peak at 4 (5 dug the skull rear 75 mm into the
+  dive stroke), falls to ZERO at the junction ring (kHeadEnd) — the skull
+  grows out of the neck; junction ring stays bit-identical with the body part.
+- head_ring() is shared by mesh builder and probe: the probe now measures the
+  swollen vertical radius (honesty rule kept: in-plane axis).
+- Attitude RE-SWEPT after the geometry change (evidence/sweep1-headzoom.png):
+  -12000 still carries the skull level. KEPT, picked off the sheet.
+- Overlap allowances re-authored on worst-key RENDERS (idle 80, attack 175,
+  fall 200 — the ball nests deeper by design, like the sheet). Probe exit 0.
+- Frozen check: pose CRCs + clip bytes IDENTICAL to goldens; probe bands
+  idle [-8..-3], walk [-13..+10], attack -426 @56, fall min 584 — all exact.
+- reel --check: all sequence CRCs match.

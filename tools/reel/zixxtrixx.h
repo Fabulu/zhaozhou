@@ -183,13 +183,37 @@ constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
 // That also deleted two bones and four ring parts.
 constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
 constexpr int kEyeStation1 = 8;      // last
-constexpr int32_t kEyeBulgeNum = 85; // extra lateral half-width, % of the ring.
-                                     // 72, was 40: Fabian 2026-08-27, "the
-                                     // eyes do need to be a bit googly so
-                                     // that even from front, you can see the
-                                     // orange left and right" -- the flush
-                                     // swell kept the eye off the front
-                                     // silhouette entirely.
+constexpr int32_t kEyeBulgeNum = 22; // extra lateral half-width, % of the ring.
+                                     // 22, was 85: the 85 was solving "the
+                                     // eyes must read left and right from the
+                                     // front" by widening the SKULL -- at the
+                                     // eye stations the section reached
+                                     // ~1.97r wide by 1.00r tall, a 2:1 disc.
+                                     // Fabian 2026-08-27: "Face is too flat
+                                     // now. You need to compare with initial
+                                     // art." The volume that made the eyes
+                                     // read now lives in kBallNum below,
+                                     // which grows EVERY axis; this is just
+                                     // the googly rim riding on the ball.
+
+// THE CRANIUM IS A BALL (2026-08-27 round-skull run). The sketch head
+// (Concept/Front.png) is a round ball a bit wider than the trunk -- NOT a
+// flattened disc. So the skull swells in EVERY axis: kBallNum is the peak
+// swell (1/1000 of the station radius) applied to the vertical AND the
+// lateral, the section runs toward CIRCULAR at full swell (the wide-aspect
+// residual fades with the envelope), and the envelope smoothsteps in from
+// the nose dome and eases out to ZERO at the junction ring (kHeadEnd) --
+// so the skull GROWS OUT OF THE NECK and returns to it instead of flaring
+// and dropping off a cliff (Fabian: "the head now doesn't connect smoothly
+// to the neck and body. It shouldn't be a sheer drop like a cliff").
+constexpr int kBallStation0 = 1;   // envelope starts past the nose tip
+constexpr int kBallPeak = 4;       // front-of-eye: the skull is fattest here
+                                   // (5 dug the SKULL REAR 75 mm into the
+                                   // dive stroke at the breath extreme --
+                                   // the volume belongs at the FACE, and
+                                   // the longer 7-station fall-off eases
+                                   // the junction further)
+constexpr int32_t kBallNum = 280;  // peak swell, 1/1000 of station radius
 
 // the dorsal crest: geometry, because there is no texture page pipeline yet
 constexpr int32_t kCrestNum = 46;   // crest half-width = body half-width * n/100
@@ -674,6 +698,42 @@ inline int32_t station_r(int i) {
 }
 // station -> how wide the section is relative to how tall
 inline int32_t station_wide(int i) { return i < kHeadStations ? kHeadWideNum : kBodyWideNum; }
+
+// THE HEAD RING, shared by the mesh builder and the pose probe so the probe
+// measures the surface that is actually built. Returns the LATERAL (rx) and
+// VERTICAL (rz) half-extents in mm for a head-part station 0..kHeadEnd.
+//   - the ball envelope e (0..1000) smoothsteps up from kBallStation0 to
+//     kBallPeak and back down to ZERO at kHeadEnd, so the junction ring is
+//     bit-identical with the body part's formula (rx = r*wide/100, rz = r)
+//     and the skull eases into the neck over six stations;
+//   - both axes carry the swell; the wide-aspect residual (station_wide - 1)
+//     fades with e, so at full swell the section is CIRCULAR plus the eye rim;
+//   - the eye bulge is the modest googly rim (kEyeBulgeNum), eased over the
+//     eye stations exactly as before.
+inline void head_ring(int i, int32_t& rx_mm, int32_t& rz_mm) {
+  const int32_t r = station_r(i);
+  int e = 0;
+  if (i >= kBallStation0 && i < kHeadEnd) {
+    const int t = i <= kBallPeak
+                      ? ((i - kBallStation0) * 1000) / (kBallPeak - kBallStation0)
+                      : ((kHeadEnd - i) * 1000) / (kHeadEnd - kBallPeak);
+    e = t * t * (3000 - 2 * t) / 1000000;  // integer smoothstep, 0..1000
+  }
+  const int32_t swollen =
+      r + static_cast<int32_t>((static_cast<int64_t>(r) * kBallNum * e) / 1000000);
+  int32_t eye_w = 0;
+  if (i >= kEyeStation0 && i <= kEyeStation1) {
+    const int span = kEyeStation1 - kEyeStation0;
+    const int t = span > 0 ? ((i - kEyeStation0) * 1000) / span : 500;
+    const int ease = 1000 - (2 * t - 1000) * (2 * t - 1000) / 1000;  // 0..1000..0
+    eye_w = static_cast<int32_t>((static_cast<int64_t>(r) * kEyeBulgeNum * ease) / 100000);
+  }
+  const int32_t wide = station_wide(i);
+  rz_mm = swollen;
+  rx_mm = static_cast<int32_t>(
+      (static_cast<int64_t>(swollen) * (100 + ((wide - 100) * (1000 - e)) / 1000)) / 100 +
+      eye_w);
+}
 
 // Which two bones a station blends between, and the first one's weight in
 // 1/64. This linear ramp across every segment is what makes the chain one
@@ -1352,27 +1412,21 @@ inline const zc::CreatureType& type() {
       p.yaw_q = 3;
       p.caps = zc::kCapBot;
       for (int i = 0; i <= kHeadEnd; ++i) {
-        const int32_t r = station_r(i);
-        // THE EYE, as a lateral swell in the skull itself. Eased in and out
-        // over the stations it spans so the head reads as one form with a wide
-        // brow, not a tube with two lumps.
-        int32_t eye_w = 0;
-        if (i >= kEyeStation0 && i <= kEyeStation1) {
-          const int span = kEyeStation1 - kEyeStation0;
-          const int t = span > 0 ? ((i - kEyeStation0) * 1000) / span : 500;
-          const int ease = 1000 - (2 * t - 1000) * (2 * t - 1000) / 1000;  // 0..1000..0
-          eye_w = static_cast<int32_t>((static_cast<int64_t>(r) * kEyeBulgeNum * ease) / 100000);
-        }
+        // THE BALL (head_ring): every axis swells toward the mid-eye peak
+        // and eases back to the body formula at the junction ring, with the
+        // googly eye rim riding on top. See head_ring for the law.
+        int32_t rx_mm, rz_mm;
+        head_ring(i, rx_mm, rz_mm);
         const Bind bd = head_station_bind(i);
         zc::RingSpec rs;
         rs.y = fxm(station_x(i));
-        rs.radius = fxm(r);
+        rs.radius = fxm(station_r(i));
         rs.segments = static_cast<uint8_t>(kSides);
         rs.b0 = bd.b0;
         rs.b1 = bd.b1;
         rs.w0 = bd.w0;
-        rs.rx = fxm(r * station_wide(i) / 100 + eye_w);  // LATERAL, + the eye
-        rs.rz = fxm(r);
+        rs.rx = fxm(rx_mm);    // LATERAL, ball + the eye rim
+        rs.rz = fxm(rz_mm);    // VERTICAL, ball
         rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
         p.rings.push_back(rs);
       }

@@ -71,7 +71,16 @@ inline std::vector<Station> stations() {
     Station st;
     st.v = zc::SkinVertex{-fxm(zixx::station_x(i)), fxm(zixx::kBodyY), 0,
                           bd.b0, bd.b1, bd.w0, 0, 0};
-    st.r_mm = zixx::station_r(i);
+    // the in-plane (vertical) half-extent of the ring ACTUALLY BUILT: for
+    // head stations that is the ball-swollen rz (head_ring), not the bare
+    // taper radius -- the probe must measure the surface the mesh has.
+    if (i <= zixx::kHeadEnd) {
+      int32_t rx_mm, rz_mm;
+      zixx::head_ring(i, rx_mm, rz_mm);
+      st.r_mm = rz_mm;
+    } else {
+      st.r_mm = zixx::station_r(i);
+    }
     s.push_back(st);
   }
   return s;
@@ -143,21 +152,29 @@ int main() {
   // ground contact: declared overlap is design, anything beyond it is the
   // fault. The concept NESTS the ball inside the S's hook, so ring centres
   // legitimately come within radii of each other:
-  //   idle 50:   the ball kisses the dive stroke ~37 mm at the breath's
-  //              extreme (3-4 px at showcase distance, hidden in the fold);
-  //   walk 80:   the travelling hump bunches the grounded run ~66 mm --
+  // RE-AUTHORED 2026-08-27 round-skull run: the cranium is now a BALL
+  // (kBallNum swells every axis; the probe measures the swollen rz), so the
+  // authored nesting of the skull into the S's hook is genuinely deeper --
+  // the sheet nests the ball into the hook too. Each figure was re-judged
+  // on the worst key's RENDER before being re-authored:
+  //   idle 80:   the ball presses into the dive stroke ~69 mm at the
+  //              breath's extreme (k78 zoom: crown inside the fold's own
+  //              shadow, eye untouched -- the sheet's nesting, deeper);
+  //   walk 80:   the travelling hump bunches the grounded run ~67 mm --
   //              pre-existing in the APPROVED walk, not a head artefact;
-  //   attack 160: the full coil closes the wheel, nose region meets the
-  //              tail ~143 mm for a few spinning keys;
-  //   fall 170:  the lolling head presses against the coils ~150 mm at the
-  //              fold's deepest key (fall-check.png, judged readable).
+  //   attack 175: the full coil closes the wheel, the nose BALL meets the
+  //              tail ~169 mm for a few spinning keys (k18 render: reads
+  //              as the wheel closing, unread at spin speed);
+  //   fall 200:  the lolling ball presses against the coils ~188 mm at the
+  //              fold's deepest key (k124 render: head in front of the
+  //              coil, face and eye clean -- loose flail against own body).
   // A regression that digs DEEPER than these prints and exits 1.
   const auto allow_mm = [](int slot) -> int32_t {
     switch (slot) {
-      case 1: return 50;
+      case 1: return 80;
       case 2: return 80;
-      case 3: return 160;
-      case 4: return 170;
+      case 3: return 175;
+      case 4: return 200;
       default: return 0;
     }
   };
