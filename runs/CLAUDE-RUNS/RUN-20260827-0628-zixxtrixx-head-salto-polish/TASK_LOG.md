@@ -59,6 +59,20 @@ STRONG visible screen shake; (6) fall rotation weaker, wobble stronger.
 
 ---
 
+### 2026-08-27 ~08:20 UTC+02:00 - Mid-run owner report adopted (addendum)
+
+reports/ZixxtrixxReport.md arrived on origin mid-run ("give this to the
+animating agent"). Most headline defects were already fixed by pass 3;
+adopted from it: salto anticipation (compress/hold/release via kAtkPre,
+belly planted through the compress; wind-up moved into the release after
+the probe caught it floating the rear 750 mm), idle torsional breath for
+the static grounded middle (kIdleTorsion, belly band [-8..-3] mm), fall
+tumble phase warp (kFallTumbleWarp), kSides 28 -> 30. Response appended to
+the report itself. Deferred with reasons: Gouraud normals (hardware lane),
+fin topology, head bone, spring-chain fall.
+
+---
+
 ## Subagent Spawns
 
 *Log subagent spawns and their findings here*

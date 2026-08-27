@@ -60,10 +60,13 @@ namespace zixx {
 // ============================== KNOBS ======================================
 // Millimetres unless noted. Angles in angle16: 65536 = one turn, 182 ~ 1 deg.
 
-// 28 sides: Fabian 2026-08-26, "give more polygons for this thing to actually
-// look rount". 28 puts a ring at 29 verts (the textured seam duplicate), two
-// rings per meshlet under the 64-vert cap; 32 sides would not fit two rings.
-constexpr int kSides = 28;       // sides around the body at LOD0
+// 30 sides (was 28; Fabian 2026-08-27, "I see a bit too many polygon
+// edges"): 30 puts a ring at 31 verts (the textured seam duplicate), and
+// 31 x 2 = 62 still fits two rings under the 64-vert meshlet cap -- the
+// last free step before meshlet splitting has to change (32 would not
+// fit). The bigger cure for the faceting is smooth vertex normals in the
+// renderer, which is a hardware-lane decision, not an authoring knob.
+constexpr int kSides = 30;       // sides around the body at LOD0
 constexpr int kSpineBones = 20;  // chain bones nose -> fork
 
 // ---- the body, authored by eye --------------------------------------------
@@ -304,6 +307,15 @@ constexpr int32_t kIdleWaveSpatial = 5200; // phase step per joint: one slow
                                            // wave over the whole front lobe
 constexpr int32_t kIdleHeadSway = 800;     // slight head side-to-side yaw
                                            // ("only slight")
+// TORSIONAL BREATH for the grounded run (2026-08-27, reports/
+// ZixxtrixxReport: the middle is deliberately protected from both the
+// front wave and the tail sway -- "animated front | dead zone | animated
+// tail" -- and it read static). A tiny local-axis ROLL wave travels the
+// grounded joints: it turns the cross-section, so the dorsal stripe and
+// the crayon visibly breathe, but it cannot lift the centreline -- the
+// belly stays planted (elliptical-section depth change at +-4 deg is
+// under half a millimetre; probe-verified).
+constexpr int32_t kIdleTorsion = 800;
 
 // CATERPILLAR walk: the S holds, the head glides high, and ONLY the grounded
 // run carries a travelling hump. The hump is authored as a HEIGHT field and
@@ -405,6 +417,12 @@ constexpr int32_t kFallWritheAmp = 1700;  // mid-body roll-twist writhe
 constexpr int32_t kFallWaveAmp = 3600;     // ~20 deg at the head (was 14 --
                                            // "should wobble more")
 constexpr int32_t kFallWaveSpatial = 4700; // ~1.3 wavelengths down the body
+// NONUNIFORM tumble (2026-08-27, reports/ZixxtrixxReport: "a perfectly
+// uniform full revolution reads like a display turntable"). The tumble
+// phase is warped by this * sin(phase): it accelerates through one half of
+// the turn and hesitates through the other, while the endpoints stay exact
+// so the loop still closes. ~9% of a turn of maximum lead/lag.
+constexpr int32_t kFallTumbleWarp = 5800;
 
 // ============================ END KNOBS ====================================
 
@@ -510,15 +528,22 @@ inline int curve(const Key* k, int n, int f) {
 // the authored path -- not the decoded pose, whose root also carries the
 // coil re-pivot wobble that would shake the shot.
 //
-// Lift in mm. A LOT HIGHER (kAtkApexLift = 12 m, Fabian 2026-08-27 pass 3):
-// the whole spear hangs a beat at the apex (keys 47..49), then PLUNGES on a
-// quadratic-in-time ramp -- dive keys 49..56 are lift = apex - t^2 * 9645,
-// accelerating the whole way down, landing on kAtkStickLift EXACTLY at
-// kAtkImpactKey; held, dead still, to kAtkStickEnd; then it pulls straight
-// out along the lift axis BEFORE the fourth turn is allowed to swing.
+// Lift in mm. A LOT HIGHER (kAtkApexLift = 12 m, Fabian 2026-08-27 pass 3),
+// and the launch now has ANTICIPATION (owner, via reports/ZixxtrixxReport:
+// "lack of a cool jump start that compresses the snake S then shoots up"):
+// keys 0..6 COMPRESS (kAtkPre deepens the S while the root stays down),
+// keys 6..9 HOLD the loaded pose almost still, and the RELEASE at key 10+
+// is a hard acceleration -- the lift stays at 0 through the hold and then
+// snaps 0 -> 3200 mm inside six keys. The climb tops out at the apex hang
+// (keys 47..49), then PLUNGES on a quadratic-in-time ramp -- dive keys
+// 49..56 are lift = apex - t^2 * 9645, accelerating the whole way down,
+// landing on kAtkStickLift EXACTLY at kAtkImpactKey; held, dead still, to
+// kAtkStickEnd; then it pulls straight out along the lift axis BEFORE the
+// fourth turn is allowed to swing.
 static const Key kAtkLift[] = {
-    {0, 0},          {8, 40},        {16, 560},      {24, 1400},
-    {32, 3200},      {38, 5600},     {42, 8200},     {45, 10600},
+    {0, 0},          {10, 0},        {12, 180},      {14, 700},
+    {16, 1500},      {20, 3200},     {26, 5600},     {32, 8200},
+    {38, 10600},     {43, 11700},
     {47, kAtkApexLift}, {49, kAtkApexLift},
     {50, 11803},     {51, 11213},    {52, 10228},    {53, 8851},
     {54, 7079},      {55, 4914},
@@ -530,11 +555,19 @@ static const Key kAtkLift[] = {
 // key sits exactly on the 30-degrees-from-vertical line the spear points
 // along. Held through the stick, returned across the landing for the loop.
 static const Key kAtkFwd[] = {
-    {0, 0},     {12, 0},    {16, 120},  {24, 450},  {32, 900},
-    {40, 1400}, {45, 1750}, {49, 1850},
+    {0, 0},     {14, 0},    {18, 150},  {26, 500},  {34, 1000},
+    {42, 1550}, {49, 1850},
     {50, 1964}, {51, 2305}, {52, 2873}, {53, 3669}, {54, 4692}, {55, 5942},
     {kAtkImpactKey, kAtkFwdMax},
     {kAtkStickEnd, kAtkFwdMax}, {210, 5200}, {214, 2600}, {219, 0}};
+// THE PRELOAD (anticipation): 1/1000 of extra descent-lobe authority fed to
+// apply_stance's deepen -- the same mechanism as the idle's breath, pushed
+// far past it, so the S visibly TIGHTENS and shortens ("stored energy"),
+// with the computed root rise keeping the belly planted. Released as the
+// coil begins.
+static const Key kAtkPre[] = {
+    {0, 0}, {3, 380}, {6, 700}, {9, 700}, {12, 260}, {15, 0}, {219, 0}};
+constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // how much the TRACKING CAMERA aims at the spear's midpoint instead of the
 // nose, in 1/1000 (Fabian, 2026-08-27 pass 3: the camera "doesn't catch the
 // most important thing, which is the ground hit where the tail actually
@@ -786,6 +819,16 @@ inline zc::Clip build_idle() {
     // pitched GROUNDED joint tilts its descent sideways -- the probe caught
     // the belly digging 30 mm in time with the sway. The raised stem starts
     // past kStanceGround1.
+    // the grounded run's TORSIONAL breath (see kIdleTorsion): a slow roll
+    // wave through the protected middle, phase-lagged behind the breath
+    for (int k = kStanceGround0; k <= kStanceGround1; ++k) {
+      const int32_t pt = ph - 9000 - (k - kStanceGround0) * 5400;
+      const int32_t sr =
+          zref::fx_sin(zref::angle16{static_cast<uint16_t>(pt & 0xFFFF)}).raw;
+      g.q[kBSpine0 + k] =
+          quat_mul(g.q[kBSpine0 + k], quat_x((sr * kIdleTorsion) >> 16));
+    }
+
     const int32_t sway = (st * kIdleTailSway) >> 16;
     for (int k = kStanceGround1 + 1; k < kSpineBones; ++k) {
       const int reach = ((k - kStanceGround1 - 1) * 1000) / (kSpineBones - kStanceGround1 - 1);
@@ -960,21 +1003,28 @@ inline zc::Clip build_attack() {
   // Lift and forward drive live at file scope (kAtkLift / kAtkFwd) because
   // the reel's TRACKING CAMERA follows the same authored path.
 
-  // 1000 = rolled into the coil, 0 = straight.
+  // 1000 = rolled into the coil, 0 = straight. The roll-up now waits for
+  // the anticipation (keys 0..9 are the compress + hold): the body starts
+  // coiling only as the release fires, so the stored-energy pose is legible
+  // BEFORE anything leaves the ground.
   static const Key kCurl[] = {
-      {0, 0}, {8, 350}, {16, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
-  // how much of the canonical S remains
-  static const Key kAuth[] = {{0, 1000},          {8, 450},   {16, 0},
+      {0, 0}, {9, 0}, {13, 350}, {18, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
+  // how much of the canonical S remains -- FULL through the compress/hold
+  // (the preload deepens it on top), gone by the time the coil owns the body
+  static const Key kAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
                               {208, 0},           {214, 650}, {kAttackKeys - 1, 1000}};
   // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
   // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
   // 60 deg below horizontal pointing down-and-forward, HELD from the apex
   // through the dive, the impact and the whole stick; the extraction keeps
   // it held until the tip is probed clear of the ground (key 206), and only
-  // then does the fourth turn land it. The -40 at key 10 is the wind-up.
-  static const Key kSpin[] = {{0, 0},          {10, -40},        {16, 0},
-                              {22, 700},       {30, 1600},       {38, 2600},
-                              {44, 3050},      {47, kAtkSpinStick},
+  // then does the fourth turn land it. The -40 at key 12 is the wind-up --
+  // INSIDE the release, not the hold: at spin -40 the whole body pitches
+  // about the nose, and during the grounded compress that floated the rear
+  // 750 mm off the dirt (probe). By key 12 the launch is already airborne.
+  static const Key kSpin[] = {{0, 0},          {10, 0},          {12, -40},
+                              {15, 0},         {20, 700},        {28, 1600},
+                              {36, 2600},      {43, 3050},       {47, kAtkSpinStick},
                               {208, kAtkSpinStick},              {212, 3650},
                               {215, 3900},     {kAttackKeys - 1, 4000}};
   const int nC = static_cast<int>(sizeof(kCurl) / sizeof(Key));
@@ -992,8 +1042,12 @@ inline zc::Clip build_attack() {
     const int spin = curve(kSpin, nS, f);
     const int lift = curve(kAtkLift, kAtkLiftN, f);
     const int fwd = curve(kAtkFwd, kAtkFwdN, f);
+    const int pre = curve(kAtkPre, kAtkPreN, f);
 
-    apply_stance(g, auth);
+    // the anticipation preload deepens the S (same lever as the idle's
+    // breath, much harder); the returned rise keeps the belly planted
+    // through the compress -- it is ~0 whenever pre is 0.
+    const int32_t pre_rise = apply_stance(g, auth, pre);
     // the coil: every interior joint bends the same way, so the body is a
     // wheel; bone 0 is left to the spin alone
     for (int k = 1; k < kSpineBones - 1; ++k) {
@@ -1018,7 +1072,7 @@ inline zc::Clip build_attack() {
                 (kBladeRise * auth) / 1000);
     g.write(c, f);
     c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
-    c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000);
+    c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_rise);
   }
   c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 112
   return c;
@@ -1099,8 +1153,16 @@ inline zc::Clip build_fall() {
 
     // THE TUMBLE. One full pitch turn per loop (wraps exactly: 65536 = 0) so
     // the loop closes; slow roll and yaw wobbles complete whole cycles too.
-    const int32_t theta =
+    // The phase is WARPED (kFallTumbleWarp) so the revolution hesitates and
+    // then tips over instead of turning like a turntable -- sin(0) = 0 at
+    // both ends, so the loop seam is untouched.
+    const int32_t theta_u =
         static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
+    const int32_t theta =
+        theta_u + static_cast<int32_t>(
+                      (static_cast<int64_t>(kFallTumbleWarp) *
+                       zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >>
+                      16);
     const int32_t t2 =
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
     const int32_t t3 =

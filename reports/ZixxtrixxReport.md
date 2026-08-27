@@ -501,3 +501,57 @@ Falling from a fixed camera, then replace coherent sine layering with baked iner
 This is no longer “maybe the project can work.”
 
 It works. Now you are art-directing it.
+
+
+---
+
+## Response from the animating agent (2026-08-27, RUN-20260827-0628, pass 3)
+
+Read mid-run, after the pass-3 items had already landed. Where this report
+and the pass-3 verbatim brief overlap, the brief was followed; several of
+the report's headline defects were already fixed by the time it arrived:
+
+- **Spear axis vs velocity vector**: fixed exactly as option 1 -- the dive
+  keys now share one t^2 ramp across lift AND forward drive (9645 mm down,
+  5570 mm forward), so the plunge travels along the spear's own 30-deg
+  line. It is ~11 m of straight shot now (the apex went to 12 m).
+- **Camera**: the tracking camera aims at a blended focus point -- root
+  through the coil, spear midpoint from the unroll through the dive, the
+  impact and the whole stick (kAtkAim). The burial is framed; verified on
+  the frames around contact. Full skinned-bounds tracking with damped lag
+  remains a good future step.
+- **Pupil**: solved exactly as prescribed -- brute-force render variants
+  through an EYE_ROT_DEG knob (12 shipped); derivation failed three times
+  first, as predicted.
+- **Fins/head/pink**: raked, both-coloured, bigger lifted head, softened
+  pink (the pass-3 brief's items).
+
+Taken from this report IN this pass (addendum commit):
+
+- **Salto anticipation**: compress (kAtkPre deepens the S, belly planted by
+  the exact-compensation mechanism) -> 3-key hold -> explosive release
+  (lift 0 -> 3.2 m in six keys). The wind-up beat moved into the release --
+  during the grounded compress it floated the rear 750 mm (probe caught it).
+- **Idle's static middle**: the torsional breathing wave, as suggested --
+  kIdleTorsion rolls the grounded run +-4 deg, travelling, phase-lagged
+  behind the breath; centreline unmoved, probe band [-8..-3] mm.
+- **Fall turntable read**: tumble phase warped by kFallTumbleWarp*sin(phase)
+  -- hesitates and tips instead of metronoming; loop seam exact.
+- **Polygon edges**: agreed with the diagnosis -- the dominant cause is the
+  flat per-face lighting, and smooth vertex normals are a RENDERER/hardware
+  -lane decision (the reference implementation defines what silicon must
+  produce), so they are deliberately NOT smuggled in through authoring.
+  Took the one free authoring step: kSides 28 -> 30 (31 verts/ring, two
+  rings still fit the 64-vert meshlet). One correction for the record: the
+  mirror note cites zhao_reel.cpp:1649 `kFaceShade[ti / 2]` as the creature
+  shading -- that line is the DEBRIS-CUBE path. The creature's per-face
+  light rig lives in the zref reference renderer, which is exactly why
+  smoothing it is a hardware-lane call and not a reel patch.
+
+Deferred, deliberately, with agreement they are the right next steps:
+Gouraud/smooth normals (hardware lane decision first), custom fin blade
+topology, a dedicated head-attitude bone (touches the golden-master walk's
+hierarchy -- wants its own run with before/after), spring-chain baked fall
+secondary motion, S-authority variation in the fall, fixed-camera fall
+evaluation subject. The walk was treated as the golden master throughout:
+its motion is untouched and its probe band re-verified every build.
