@@ -1,0 +1,52 @@
+== consumer roster ==
+== preflight ==
+preflight ok: W01 the prepared box also grants coverage, so a conservative box over-covers
+preflight ok: W02 the x footprint becomes half-open, so the far border falls outside
+preflight ok: W03 the z footprint becomes half-open on the near side
+preflight ok: W04 the z far bound is also applied to x
+preflight ok: W05 a lane past the end of the row is still marked covered
+preflight ok: W06 the group stride is 3, so vertices are visited twice
+preflight ok: W07 a new row restarts at column 0 instead of the box's first column
+preflight ok: W08 the vertex index is strided by the lattice HEIGHT
+preflight ok: W18 the vertex index is strided by 32 rather than the lattice width
+preflight ok: W09 the row ends one group early, dropping each row's tail
+preflight ok: W10 the association ends one row early
+preflight ok: W11 the row's z is indexed by the COLUMN counter
+preflight ok: W12 the z coverage test reads a different row than the group carries
+preflight ok: W13 the table select is inverted, so x and z land in each other's table
+preflight ok: W14 the emptiness guard is inverted, so real associations never start
+preflight ok: W15 the emptiness test only looks at the column range
+preflight ok: W16 the walk advances when EITHER side is ready, not both
+preflight ok: W17 the covered-vertex counter counts groups rather than lanes
+PREFLIGHT: all 18 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 8435915de24eaa44)
+  W01 the prepared box also grants coverage, so a conservative box over-covers  caught
+  W02 the x footprint becomes half-open, so the far border falls outside  caught
+  W03 the z footprint becomes half-open on the near side  caught
+  W04 the z far bound is also applied to x  caught
+  W05 a lane past the end of the row is still marked covered  caught
+  W06 the group stride is 3, so vertices are visited twice  caught
+  W07 a new row restarts at column 0 instead of the box's first column  caught
+  W08 the vertex index is strided by the lattice HEIGHT  equivalent (proven, and the model is byte-identical)
+        DEGENERATE WHILE THE LATTICE IS SQUARE. The Earth profile sets LAT_W = LAT_H = 33, so `cur_j * LAT_W` and `cur_j * LAT_H` are the same expression and Verilator emits a BYTE-IDENTICAL model. The sweep's binary-hash check reported it as a discard rather than a survivor, which is the guard working: it cannot tell 'semantically identical' from 'failed to re-elaborate', and refusing to score either is right. The defect this mutant was meant to probe -- a wrong row stride in the vertex index -- IS scored, by W18, which uses a literal 32 and so does not depend on the two parameters being equal. RE-SCORE THIS THE MOMENT LAT_W != LAT_H. A non-square lattice makes it a real mutant again, and the parameters, not this note, are the thing to watch.
+  W18 the vertex index is strided by 32 rather than the lattice width  caught
+  W09 the row ends one group early, dropping each row's tail  caught
+  W10 the association ends one row early  caught
+  W11 the row's z is indexed by the COLUMN counter  caught
+  W12 the z coverage test reads a different row than the group carries  caught
+  W13 the table select is inverted, so x and z land in each other's table  caught
+  W14 the emptiness guard is inverted, so real associations never start  caught
+  W15 the emptiness test only looks at the column range  caught
+  W16 the walk advances when EITHER side is ready, not both  caught
+  W17 the covered-vertex counter counts groups rather than lanes  caught
+== final restore ==
+
+== tally ==
+  attempted:  18 / 18
+  caught:     17
+  equivalent: 1
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0

@@ -224,6 +224,17 @@ void test_full_patch_gate(Vzhao_probe_walk_earth& t) {
   int covered = 0;
   for (const Group& g : got) covered += __builtin_popcount(g.mask);
   check(covered == kVerts, "every lattice vertex covered exactly once", kVerts, covered);
+
+  // THE COUNTERS ARE PORTS, AND A PORT NO TEST READS IS NOT TESTED. The
+  // first sweep of this block survived W17 -- "the covered-vertex counter
+  // counts groups rather than lanes" -- because coverage was only ever
+  // recomputed from the emitted masks on this side. 297 groups and 1,089
+  // covered vertices are different numbers, so reading both distinguishes
+  // them.
+  check((int)t.groups_emitted_o == (int)got.size(), "groups_emitted_o counts the groups",
+        (int)got.size(), (int)t.groups_emitted_o);
+  check((int)t.verts_covered_o == covered,
+        "verts_covered_o counts covered LANES, not groups", covered, (int)t.verts_covered_o);
 }
 
 // Every group must lie in ONE row -- the property that lets a group carry a
@@ -298,11 +309,9 @@ void test_footprint_border_is_inside(Vzhao_probe_walk_earth& t) {
 }
 
 // An empty box costs one acceptance and no groups -- and must not hang.
-void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
-  printf("-- an empty association is accepted and emits nothing\n");
-  const Lattice lat(0, 32 << 16, 0, 32 << 16);
-  load_tables(t, lat);
-  Assoc a{0, 1 << 16, 0, 1 << 16, 20, 4, 0, kLat - 1};  // i0 > i1
+// Offer one association and count the groups it emits, without waiting for a
+// `last` that an empty box will never produce.
+int emitted_groups_for(Vzhao_probe_walk_earth& t, const Assoc& a, int clocks) {
   t.as_valid_i = 1;
   t.as_fp_x0_i = (uint32_t)a.x0;
   t.as_fp_x1_i = (uint32_t)a.x1;
@@ -314,12 +323,44 @@ void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
   t.as_box_j1_i = (uint8_t)a.j1;
   t.out_ready_i = 1;
   int emitted = 0;
-  for (int k = 0; k < 40; ++k) {
+  for (int k = 0; k < clocks; ++k) {
     if (t.out_valid_o) ++emitted;
     zhao::tick(t);
   }
   t.as_valid_i = 0;
-  check(emitted == 0, "an empty box emits no groups", 0, emitted);
+  t.out_ready_i = 0;
+  zhao::tick(t);
+  return emitted;
+}
+
+// An empty box costs one acceptance and no groups -- and must not hang.
+//
+// BOTH AXES, and the second one is not decoration. The emptiness test is
+// `(i0 > i1) || (j0 > j1)`, and a version that checks only the COLUMN half
+// SURVIVED the first mutation sweep of this block (W15): the original case
+// drove `i0 > i1` alone, so dropping the row half changed nothing it could
+// see. An empty ROW range must be refused by its own term.
+void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
+  printf("-- an empty association is accepted and emits nothing, on either axis\n");
+  const Lattice lat(0, 32 << 16, 0, 32 << 16);
+  load_tables(t, lat);
+
+  const Assoc empty_cols{0, 1 << 16, 0, 1 << 16, 20, 4, 0, kLat - 1};   // i0 > i1
+  const Assoc empty_rows{0, 1 << 16, 0, 1 << 16, 0, kLat - 1, 25, 3};   // j0 > j1
+  const Assoc empty_both{0, 1 << 16, 0, 1 << 16, 20, 4, 25, 3};
+
+  check(emitted_groups_for(t, empty_cols, 40) == 0, "an empty COLUMN range emits no groups", 0,
+        emitted_groups_for(t, empty_cols, 40));
+  check(t.as_ready_o != 0, "and the walker is still ready after it", 1,
+        t.as_ready_o != 0 ? 1 : 0);
+
+  check(emitted_groups_for(t, empty_rows, 40) == 0, "an empty ROW range emits no groups", 0,
+        emitted_groups_for(t, empty_rows, 40));
+  check(t.as_ready_o != 0, "and the walker is still ready after that too", 1,
+        t.as_ready_o != 0 ? 1 : 0);
+
+  check(emitted_groups_for(t, empty_both, 40) == 0, "a box empty on both axes emits no groups", 0,
+        emitted_groups_for(t, empty_both, 40));
   check(t.as_ready_o != 0, "and the walker is still ready for the next association", 1,
         t.as_ready_o != 0 ? 1 : 0);
 }

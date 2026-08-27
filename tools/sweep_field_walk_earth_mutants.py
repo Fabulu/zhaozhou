@@ -86,9 +86,16 @@ MUTANTS = [
      "          cur_j_r <= cur_j_r + 6'd1;",
      "          cur_i_r <= box_i0_r + 6'd1;\n"
      "          cur_j_r <= cur_j_r + 6'd1;"),
+    # W08 is DEGENERATE while the lattice is square and is declared
+    # equivalent below. W18 states the same defect as a LITERAL so the index
+    # arithmetic is actually scored -- a mutant whose meaning depends on two
+    # parameters happening to be equal is not coverage.
     ("W08 the vertex index is strided by the lattice HEIGHT",
      "  assign out_iv_o    = 11'(cur_j_r) * 11'(LAT_W) + 11'(cur_i_r);",
      "  assign out_iv_o    = 11'(cur_j_r) * 11'(LAT_H) + 11'(cur_i_r);"),
+    ("W18 the vertex index is strided by 32 rather than the lattice width",
+     "  assign out_iv_o    = 11'(cur_j_r) * 11'(LAT_W) + 11'(cur_i_r);",
+     "  assign out_iv_o    = 11'(cur_j_r) * 11'd32 + 11'(cur_i_r);"),
     ("W09 the row ends one group early, dropping each row's tail",
      "  assign row_last_c   = (cur_i_r + 6'd4) > box_i1_r;",
      "  assign row_last_c   = (cur_i_r + 6'd4) >= box_i1_r;"),
@@ -148,7 +155,22 @@ def mutate(gold, old, new):
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. Nothing is declared until the first run says what actually survives --
 # writing a proof before the evidence is how a hole acquires a note.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "W08":
+        "DEGENERATE WHILE THE LATTICE IS SQUARE. The Earth profile sets "
+        "LAT_W = LAT_H = 33, so `cur_j * LAT_W` and `cur_j * LAT_H` are the "
+        "same expression and Verilator emits a BYTE-IDENTICAL model. The "
+        "sweep's binary-hash check reported it as a discard rather than a "
+        "survivor, which is the guard working: it cannot tell 'semantically "
+        "identical' from 'failed to re-elaborate', and refusing to score "
+        "either is right. "
+        "The defect this mutant was meant to probe -- a wrong row stride in "
+        "the vertex index -- IS scored, by W18, which uses a literal 32 and "
+        "so does not depend on the two parameters being equal. "
+        "RE-SCORE THIS THE MOMENT LAT_W != LAT_H. A non-square lattice makes "
+        "it a real mutant again, and the parameters, not this note, are the "
+        "thing to watch."
+}
 
 
 def write_rtl(text, path=RTL):

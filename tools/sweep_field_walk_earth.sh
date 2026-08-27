@@ -154,8 +154,23 @@ while [ "$k" -lt "$expected" ]; do
     continue
   fi
   if [ "$(model_hash)" = "$PRISTINE_MODEL" ]; then
-    echo "  $name  DISCARDED (model identical to pristine — did not re-elaborate)"
-    discards+=("$name")
+    # An identical model has TWO possible causes and they are not the same
+    # finding. rebuild() deletes the verilated model directory before every
+    # mutant, so elaboration definitely RAN; an identical result therefore
+    # means the mutation was semantically null -- the mutant is EQUIVALENT,
+    # not unscored. The guard cannot tell that apart from a genuine failure
+    # to re-elaborate on its own, so it only accepts the equivalence reading
+    # when a PROOF has been written down for this mutant. Everything else
+    # stays a discard and still fails the run.
+    tok=${name%% *}
+    if proof=$(python "$MUT" --equiv "$tok" 2>/dev/null); then
+      echo "  $name  equivalent (proven, and the model is byte-identical)"
+      echo "        $proof"
+      equivalents+=("$name")
+    else
+      echo "  $name  DISCARDED (model identical to pristine — did not re-elaborate)"
+      discards+=("$name")
+    fi
     k=$((k + 1))
     continue
   fi
