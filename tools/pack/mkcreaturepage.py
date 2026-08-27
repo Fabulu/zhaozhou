@@ -41,7 +41,18 @@ CONCEPT = HERE.parents[1].parent / "Upheaval" / "creature" / "Zixxtrixx" / "Conc
 TILE = 64
 
 # Pigment, measured. Upheaval/creature/Zixxtrixx/PALETTE.md.
-GREEN = (120, 184, 68)
+#
+# TWO GREENS (Fabian, 2026-08-27: "The concept art has two greens, a darker
+# green for the front, and a lighter green for most other things"). Both
+# sheets say so once you look: Side.png lays a dark blue-green band between
+# the blue throat and the light flank at the neck, and Front.png paints the
+# whole front-facing chest in it, while the outer flanks, the rear body and
+# the tail run the light yellow-green. Measured (saturated-quartile):
+# light ~ (117,196,88) on the arch flank, dark ~ (67,191,105) on the neck
+# band -- and then art-directed DARKER for the read: the scanner lightens,
+# and at 240p on dark ochre the two must separate at a glance.
+GREEN = (122, 192, 70)        # LIGHT green: most of the animal
+GREEN_DARK = (44, 146, 86)    # DARK green: the front
 # ART DIRECTION OVERRIDE (Fabian, 2026-08-26): "The pink on the back should be
 # like neon pink, it's just not even close to strong enough." The sheet's
 # measured pale pink (233,188,206) is therefore NOT what ships on the dorsal
@@ -65,6 +76,9 @@ INK = (34, 30, 34)
 # field: same pencil, same hand, same direction as the body it rides on.
 GRAIN_SOURCES = {
     "green": ("Side", (700, 600, 900, 900)),
+    # the dark green's own strokes: the bottom curve of the S, 85% honest
+    # crayon by the same probe that vetted the light box
+    "green_dark": ("Side", (1050, 1150, 1350, 1330)),
     "pink": ("Side", (700, 600, 900, 900)),
     "blue": ("Side", (1215, 585, 1360, 700)),
     "yellow": ("Side", (1440, 580, 1540, 680)),
@@ -120,7 +134,7 @@ def tint(base, g):
     return np.clip(out, 0, 255)
 
 
-def body_tile(g_green, g_pink, rng):
+def body_tile(g_green, g_green_dark, g_pink, rng):
     """The flank, with the dorsal band painted ON it.
 
     The concept's pink runs ALONG the animal, which in this UV convention is a
@@ -134,6 +148,23 @@ def body_tile(g_green, g_pink, rng):
     """
     t = tint(GREEN, g_green)
     p = tint(PINK, g_pink)
+    # THE DARK FRONT GREEN (Fabian, 2026-08-27). Side.png lays it between the
+    # blue throat and the light flank; Front.png paints the whole chest in it.
+    # So: a belly-adjacent band (columns around U=64 -> texel 16) over the
+    # FRONT rows of the body, widest right behind the head, fading out by
+    # mid-body with a wobbly hand edge. Painted before the dorsal band and
+    # the throat wedge so both stay on top.
+    dk = tint(GREEN_DARK, g_green_dark)
+    for y in range(0, 40):
+        # width of the dark band around the belly line, in texels of U
+        w = 24.0 * (1.0 - (y / 38.0) ** 1.6)
+        if w < 1.0:
+            continue
+        wob = 2.0 * np.sin(y * 0.24 + 0.4) + 1.2 * np.sin(y * 0.066 + 1.7)
+        for x in range(TILE):
+            d = min(abs(x - (16 + wob)), TILE - abs(x - (16 + wob)))
+            if d < w:
+                t[y, x] = dk[y, x]
     back = 48  # U = 192/256
     # 4.5, not 6. A 26-degree-down camera shows mostly the animal's BACK, so
     # a band sized to look right in the side-view drawing dominates the render.
@@ -173,20 +204,26 @@ def body_tile(g_green, g_pink, rng):
 
 
 # The eye disc in Side.png, in the 2000-wide display space: the yellow ball,
-# its heavy black ring, and the red-orange wavy slit pupil through it.
-EYE_BOX = (1412, 556, 1568, 712)
+# its heavy black ring, and the red-orange slit pupil through it. The box is
+# sized to hold the WHOLE disc including where the slit meets the rim at top
+# and bottom -- the old box clipped the right and bottom edges.
+EYE_BOX = (1418, 556, 1594, 734)
 # THE EYES SIT ON THE SIDES (Fabian, asked three times, 2026-08-26: "Eyes
 # clearly need to be on the side"). U columns 0 and 32 ARE the side lines of
 # the ring (top is 48, belly is 16), so the eye discs are centred exactly
-# there, at mid-head V. Each eye rides inside an ORANGE SOCKET, the crescent
-# that Front.png shows wrapping the outer edge of the skull.
-EYE_ROW = 18     # first texel row of the socket down the head tile
+# there, at mid-head V.
+#
+# NO SOCKET. 2026-08-27, Fabian: "the eye texture is wrong. The orange goes
+# from top to bottom, it's a line and in the middle there's a larger part."
+# The orange is the drawing's own PUPIL -- a top-to-bottom slit that swells
+# in the middle -- and it is already inside EYE_BOX. The orange ellipse this
+# file used to paint UNDER the eye was an invention, and it is what read as
+# a socket/ring. Deleted; the drawn eye is painted alone, slightly larger.
+EYE_ROW = 19     # first texel row of the eyeball down the head tile
 EYE_COL_A = 32   # side line, +Z flank
 EYE_COL_B = 0    # side line, -Z flank
-EYE_TEX_U = 12   # texels of U for the yellow ball (angle around the head)
-EYE_TEX_V = 26   # texels of V for the yellow ball (length along the head)
-SOCK_U = 16      # socket footprint, U
-SOCK_V = 32      # socket footprint, V
+EYE_TEX_U = 13   # texels of U for the yellow ball (angle around the head)
+EYE_TEX_V = 30   # texels of V for the yellow ball (length along the head)
 
 
 def eye_patch():
@@ -214,28 +251,14 @@ def eye_patch():
 
 
 def paint_eyes(tile, g_orange):
-    """Orange socket first, then the drawing's eye on top, on BOTH side lines."""
+    """The drawing's own eye -- yellow ball, ink rim, top-to-bottom orange
+    slit swelling in the middle -- on BOTH side lines. Nothing else: the
+    invented orange socket is gone (see the note at EYE_BOX)."""
+    del g_orange  # the pupil's orange arrives inside the lifted crop
     rgb, alpha = eye_patch()
-    ok = tint(ORANGE, g_orange)
     for col in (EYE_COL_A, EYE_COL_B):
-        # the socket: an orange ellipse under the eye, slightly larger
-        scy = EYE_ROW + SOCK_V / 2.0 - 0.5
-        for j in range(SOCK_V):
-            ty = EYE_ROW + j
-            if ty < 0 or ty >= TILE:
-                continue
-            for i in range(SOCK_U):
-                tx = (col - SOCK_U // 2 + i) % TILE
-                r = np.hypot((i - (SOCK_U - 1) / 2.0) / (SOCK_U / 2.0),
-                             (ty - scy) / (SOCK_V / 2.0))
-                w = float(np.clip((1.0 - r) * 5.0, 0.0, 1.0))
-                if w <= 0.0:
-                    continue
-                tile[ty, tx] = tile[ty, tx] * (1.0 - w) + ok[ty % TILE, tx] * w
-        # the eyeball, centred in the socket
-        ey0 = EYE_ROW + (SOCK_V - EYE_TEX_V) // 2
         for j in range(EYE_TEX_V):
-            ty = ey0 + j
+            ty = EYE_ROW + j
             if ty < 0 or ty >= TILE:
                 continue
             for i in range(EYE_TEX_U):
@@ -247,7 +270,7 @@ def paint_eyes(tile, g_orange):
     return tile
 
 
-def head_tile(g_blue, g_green, g_pink, g_orange):
+def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     """The head, laid out the way the SHEETS say (Fabian, 2026-08-26: "you
     made its entire head blue ... you'd know that if you looked at the concept
     art"):
@@ -261,8 +284,11 @@ def head_tile(g_blue, g_green, g_pink, g_orange):
       - the EYES are on the SIDE LINES (U columns 0 and 32), yellow ball in an
         orange socket, from the drawing itself.
     """
+    # the neck flanks behind the skull are the FRONT of the animal, so they
+    # take the DARK green (Fabian, 2026-08-27) -- the light green begins on
+    # the body tile behind them
     t = tint(BLUE, g_blue)
-    gr = tint(GREEN, g_green)
+    gr = tint(GREEN_DARK, g_green_dark)
     pk = tint(PINK, g_pink)
     # widths per V row: the pink cap is WIDE over the skull and narrows to the
     # body band behind it; the throat pinches slightly behind the jaw. What is
@@ -300,12 +326,14 @@ def head_tile(g_blue, g_green, g_pink, g_orange):
             if d < half:
                 t[y, x] = pk[y, x]
     t = paint_eyes(t, g_orange)
-    # the mouth: Front.png's small white slit on the underside, ink rim
-    for y in range(3, 8):
-        for x in range(10, 23):
+    # the mouth: Front.png's white slit on the underside, ink rim. ENLARGED
+    # 2026-08-27 (Fabian: "the mouth is not visible enough") -- wider across
+    # the face and taller, so it survives 240p from the front.
+    for y in range(4, 12):
+        for x in range(8, 25):
             t[y, x] = INK
-    for y in range(4, 7):
-        for x in range(11, 22):
+    for y in range(5, 11):
+        for x in range(9, 24):
             t[y, x] = WHITE
     # V row 0 is the WHOLE nose cap fan's sample row: flat pigment, no streaks
     t[0, :] = BLUE
@@ -338,10 +366,10 @@ def build_tiles():
     g = {k: grain(v[0], v[1], i) for i, (k, v) in enumerate(GRAIN_SOURCES.items())}
     tiles = []
     names = []
-    tiles.append(body_tile(g["green"], g["pink"], None))
-    names.append("body flank, dorsal band at U=192, throat wedge on the belly")
-    tiles.append(head_tile(g["blue"], g["green"], g["pink"], g["orange"]))
-    names.append("head: blue front/underside, pink crown, green rear flanks, side eyes")
+    tiles.append(body_tile(g["green"], g["green_dark"], g["pink"], None))
+    names.append("body flank, dark-green front band, dorsal band at U=192, throat wedge")
+    tiles.append(head_tile(g["blue"], g["green_dark"], g["pink"], g["orange"]))
+    names.append("head: blue front/underside, pink crown, dark-green rear flanks, side eyes")
     tiles.append(tint(YELLOW, g["yellow"]))
     names.append("eye (reserved)")
     tiles.append(tint(ORANGE, g["orange"]))

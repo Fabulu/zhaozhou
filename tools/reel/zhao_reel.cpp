@@ -250,6 +250,16 @@ zhao_abi::ZhMat4fx rot_world_yaw(uint16_t theta_turns) {
   return rtest::mat(m);
 }
 
+// World translation (Q16.16 metres) for the TRACKING camera: composing
+// view * T shifts the whole world before the pitched projection, which is a
+// true camera translation -- and translation does not move a sky at
+// infinity, so the sky matrices are correctly left alone.
+zhao_abi::ZhMat4fx mat_world_translate(int32_t tx, int32_t ty, int32_t tz) {
+  const int32_t m[16] = {1 << 16, 0, 0, tx, 0, 1 << 16, 0, ty,
+                         0, 0, 1 << 16, tz, 0, 0, 0, 1 << 16};
+  return rtest::mat(m);
+}
+
 // Pitched perspective camera: at (0, E, −D) looking down by θ (sin/cos in
 // Q16.16), plus a raw additive Y-screen offset (screen shake). Rows built
 // with exact s64 products, one >>16 rescale each — the same hand-matrix
@@ -989,9 +999,18 @@ struct SceneSubject {
                                    // sets this BELOW the island so debris
                                    // visibly falls through the hole
   std::vector<Debris> debris;
-  // screen shake: raw Y offsets per frame, starting at shake_frame
+  // screen shake: raw Y offsets per frame, starting at shake_frame.
+  // SCALE NOTE (2026-08-27): these are added to the projection's y row
+  // CONSTANT, so the on-screen shift is shake/w NDC -- and w for the
+  // creature subjects is ~10.6 m = ~693000 raw. The first Zixxtrixx jolt was
+  // authored at 2100, which is 0.003 NDC: a third of a PIXEL. Mathematically
+  // present, visually absent -- the crayon-grain failure mode again. A
+  // visible hit needs ~0.1 NDC, i.e. tens of thousands raw at this w.
   uint32_t shake_frame = 0;
   std::vector<int32_t> shake;
+  // tracking camera (creature subjects): follow the authored flight path
+  bool cam_track = false;
+  int32_t cam_track_num = 850;  // 1/1000 of the lift the camera follows
   // sky-sweep mode: no terrain, camera pitch ping-pongs from pitch0 to
   // pitch1 (angle16 turns, pitch-down positive) across the loop — the §1.2
   // continuity demo: the cap and under rims must cross the frame invisibly
@@ -1830,6 +1849,17 @@ int render_scene(const SceneSubject& sub) {
     if (!sub.shake.empty() && f >= sub.shake_frame && f < sub.shake_frame + sub.shake.size())
       shake_raw = sub.shake[f - sub.shake_frame];
 
+    // TRACKING CAMERA (Fabian, 2026-08-27: "It is very important the camera
+    // follow it, you did not do that"): follow the salto's AUTHORED flight
+    // path -- lift and forward drive from the same file-scope curves the
+    // clip is built from, evaluated at reel-frame resolution. Not the
+    // decoded root, which also carries the coil re-pivot wobble.
+    int32_t trk_x = 0, trk_y = 0;
+    if (sub.cam_track && sub.creature == 5) {
+      trk_x = fxm(zixx::attack_fwd_mm(static_cast<int>(f)));
+      trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000);
+    }
+
     // ---- creature sim (the driver composes the tick cadence; the laws are
     // zref::creature's). One lattice compose per frame feeds the tilt taps —
     // the SAME compose_lattice the renderer's DrawProcedural runs inside
@@ -2013,6 +2043,13 @@ int render_scene(const SceneSubject& sub) {
         const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
                                                      (sub.frames > 0 ? sub.frames : 1));
         sv.payload.view_projection = mat4_mul(sv.payload.view_projection, rot_world_yaw(theta));
+      }
+      if (trk_x != 0 || trk_y != 0) {
+        // the tracking camera: a true world translation, so the creature
+        // stays in frame while the GROUND moves -- the sky, at infinity,
+        // correctly does not (no sky matrix touched)
+        sv.payload.view_projection =
+            mat4_mul(sv.payload.view_projection, mat_world_translate(-trk_x, -trk_y, 0));
       }
       if (dog != nullptr) {
         cr_ctx.vp = rtest::to_zref(sv.payload.view_projection);
@@ -3050,26 +3087,39 @@ SceneSubject subject_zixx_attack() {
   s.bump_ext = 18;
   s.cam_k = 235000;
 
+  // THE TRACKING CAMERA (2026-08-27). Fabian: "keep the camera on it ... It
+  // is very important the camera follow it, you did not do that." The view
+  // follows the authored flight path (lift at 85% so the climb still reads
+  // as climbing, forward drive in full); the creature never leaves frame.
+  s.cam_track = true;
+
   // SCREEN SHAKE ON IMPACT -- showcase only, at Fabian's request, and
   // deliberately NOT a general feature: it lives on this presentation
-  // subject, not in the creature and not in the sim. Contact is clip key 53
-  // (moved with the 2026-08-26 high-apex retime), which is reel frame 106
-  // (keys are held two ticks; the reel runs one tick per frame). A hard
-  // first jolt then a decaying alternation, so it reads as one heavy blow
-  // rather than a wobble.
+  // subject, not in the creature and not in the sim. Contact is clip key
+  // kAtkImpactKey = 53, which is reel frame 106 (keys are held two ticks;
+  // the reel runs one tick per frame). A hard first jolt then a decaying
+  // alternation, so it reads as one heavy blow rather than a wobble.
+  //
+  // AMPLIFIED ~40x, 2026-08-27 (Fabian: "There's no screen shake, we said
+  // there should be"). The old first jolt was 2100 raw against a projection
+  // w of ~693000: 0.003 NDC, a third of a pixel -- set, invisible. 83000 is
+  // ~0.12 NDC, a dozen-plus pixels, and it decays the same way.
   s.shake_frame = 106;
   {
-    static const int32_t kJolt[] = {-2100, 1500, -1050, 700, -430, 260, -140, 70, -30};
+    static const int32_t kJolt[] = {-83000, 59000, -41000, 27000, -17000,
+                                    10000,  -5500, 2800,   -1200};
     for (int32_t v : kJolt) s.shake.push_back(v);
   }
   s.note =
-      "The attack. Zixxtrixx rolls up into a wheel, and the WHOLE BODY "
-      "somersaults three times while climbing HIGH -- the apex carries the "
-      "nose ~4.4 m up and may leave frame, which is authored (Fabian: 'can "
-      "be outside picture'). At the top it unrolls to a rigid VERTICAL spear "
-      "and plunges straight down tail first; the strike BITES ~200 mm "
-      "(authored, brief) before the fourth turn lands it back in the S. "
-      "Contact on key 53 (reel frame 106)";
+      "The attack, retimed 2026-08-27. Zixxtrixx rolls up into a wheel, "
+      "somersaults three times while climbing to a ~6.1 m apex AND leaping "
+      "forward ~1.9 m, unrolls to a rigid spear at the top, hangs a beat, "
+      "and plunges DIAGONALLY (30 deg from vertical, tail down-and-forward, "
+      "a javelin). The tip bites 420 mm into the ground -- the authorised "
+      "clipping exception, deep and lasting -- and STICKS, dead straight, "
+      "for 150 keys = 300 frames = 5.0 s, then pulls out and the loop "
+      "closes. The camera TRACKS the whole flight; screen shake at contact "
+      "(reel frame 106)";
   return s;
 }
 
@@ -3176,7 +3226,7 @@ constexpr LibraryEntry kLibrary[] = {
     {"zixxtrixx-walk", "Zixxtrixx walk",
      "Caterpillar gait, vertical and longitudinal, fixed camera", true},
     {"zixxtrixx-attack", "Zixxtrixx triple salto",
-     "Three somersaults, then a rigid spear driven straight down", true},
+     "Three somersaults, a diagonal javelin strike, 5 s planted; tracked", true},
     {"zixxtrixx-fall", "Zixxtrixx falling flail",
      "Panicked airborne corkscrew loop", true},
 
