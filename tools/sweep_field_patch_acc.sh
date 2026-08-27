@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# sweep_field_ctx_fifo.sh — mutation sweep for the FIELD v3 ready-context
-# FIFO scheduler probe (fpga/rtl/synth/zhao_probe_ctx_fifo.sv; Phase 3
-# probe of reports/Fieldv3.md).
+# sweep_field_patch_acc.sh — mutation sweep for the FIELD v3 four-bank patch
+# probe (fpga/rtl/synth/zhao_probe_patch_acc.sv; accumulator; Phase 3 probe 5 of
+# reports/Fieldv3.md).
 #
 # Inherits the house guards (sweep_geom_wcache.sh / sweep_cmd_dma.sh):
 #   6  the mutant table is Python — bash mangles $ and quotes;
@@ -11,28 +11,37 @@
 #   7  consumer roster — the probe must be elaborated by exactly the targets
 #      this sweep runs, or mutant-derived models could survive in unscored
 #      consumers;
-#   8  the binary is THREE ctest lanes (bare, --random 60, nightly 800);
+#   8  the binary is THREE ctest lanes (bare, --random 40, nightly 400);
 #      the sweep runs every FAST lane; the nightly is excluded by the
 #      cmd_dma precedent.
 #
 # Exit codes: 3 apply, 4 restore, 5 cross-check, 6 pristine build,
 #             7 pristine tests red, 8 preflight, 9 consumer roster,
 #             12 undeclared survivor.
+#
+# DEDICATED BUILD DIR (build-fieldv3), added after a MEASURED collision:
+# 2026-08-27, this sweep ran against the shared build/ while a concurrent
+# session's ninja was live in it; nine of fifteen mutants were DISCARDED
+# with "model or exe absent after rebuild" -- two writers, one build dir.
+# The sweep now configures its own tree (same pinned toolchain as the
+# windows-native preset). Sources are still the LIVE working tree, so the
+# guard-7 single-consumer rule is what keeps a concurrently-edited file
+# out of this sweep's scored cone.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-MUT=tools/sweep_field_ctx_fifo_mutants.py
-RTL=fpga/rtl/synth/zhao_probe_ctx_fifo.sv
-TARGETS="test_field_ctx_fifo_directed"
+MUT=tools/sweep_field_patch_acc_mutants.py
+RTL=fpga/rtl/synth/zhao_probe_patch_acc.sv
+TARGETS="test_field_patch_acc_directed"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
 check_consumers() {
   local declared
-  declared=$(grep -B12 "TOP_MODULE zhao_probe_ctx_fifo" tests/CMakeLists.txt \
+  declared=$(grep -B12 "TOP_MODULE zhao_probe_patch_acc" tests/CMakeLists.txt \
              | grep -oE "verilate\(test_[a-z_0-9]+" | sed 's/verilate(//' | sort -u)
   if [ "$declared" != "$TARGETS" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_probe_ctx_fifo into target(s):"
+    echo "ABORT: tests/CMakeLists.txt elaborates zhao_probe_patch_acc into target(s):"
     echo "$declared"
     echo "but this sweep runs: $TARGETS — update TARGETS or the roster."
     return 1
@@ -43,7 +52,7 @@ check_consumers() {
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build/tests/CMakeFiles/$t.dir/Vzhao_probe_ctx_fifo.dir" -type f \
+    h="$h$(find "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_patch_acc.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -53,7 +62,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build/tests/CMakeFiles/$t.dir/Vzhao_probe_ctx_fifo.dir" ] || return 1
+    [ -d "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_patch_acc.dir" ] || return 1
   done
   return 0
 }
@@ -61,7 +70,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build/tests/$t.exe" ] || return 1
+    [ -x "build-fieldv3/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -69,7 +78,7 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build/tests/CMakeFiles/$t.dir"
+    rm -rf "build-fieldv3/tests/CMakeFiles/$t.dir"
     rm -f "build/tests/$t.exe"  # guard 5: the exe lives OUTSIDE the target dir
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
@@ -78,16 +87,16 @@ rebuild() {
   export VERILATOR_ROOT="${VERILATOR_ROOT:-C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator}"
   # BUILD.md: three cmakes are on PATH and the msys2 one reports MSYS, which
   # disables every preset and leaves the OLD build.ninja in place. Pin it.
-  export PATH="/c/programmieren/dsstuff/mingw64/bin:$PATH"
-  cmake -S . -B build >/dev/null 2>&1
+  export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/bin:$PATH"
+  cmake -S . -B build-fieldv3 -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
   # shellcheck disable=SC2086
-  ninja -C build $TARGETS >/dev/null 2>&1
+  ninja -C build-fieldv3 $TARGETS >/dev/null 2>&1
 }
 
-# Guard 8: bare AND --random 60, the two fast ctest lanes of this binary.
+# Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
 run_lanes() {
-  ./build/tests/test_field_ctx_fifo_directed.exe >/dev/null 2>&1 || return 1
-  ./build/tests/test_field_ctx_fifo_directed.exe --random 60 >/dev/null 2>&1 || return 1
+  ./build-fieldv3/tests/test_field_patch_acc_directed.exe >/dev/null 2>&1 || return 1
+  ./build-fieldv3/tests/test_field_patch_acc_directed.exe --random 40 >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -95,7 +104,7 @@ echo "== consumer roster =="
 check_consumers || exit 9
 
 echo "== preflight =="
-python tools/sweep_field_ctx_fifo_preflight.py || exit 8
+python tools/sweep_field_patch_acc_preflight.py || exit 8
 
 expected=$(python "$MUT" --count) || exit 3
 
@@ -194,8 +203,8 @@ fi
 if [ "${#discards[@]}" -gt 0 ]; then
   # A mutant that could not build was never SCORED. Counting it as accounted
   # and then printing SWEEP OK reports a run that tested nothing as a clean
-  # sweep -- which is what the 2026-08-27 22:40 patch-accumulator rerun did:
-  # 7 of 15 unscored, tally printed, exit 0.
+  # sweep -- which is what this driver's 22:40 rerun did: 7 of 15 unscored,
+  # tally printed, exit 0.
   echo "FAILED: ${#discards[@]} discarded mutant(s) were NOT scored -- fix and re-run"
   printf '  %s\n' "${discards[@]}"
   exit 13

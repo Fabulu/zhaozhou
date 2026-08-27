@@ -1,0 +1,45 @@
+== consumer roster ==
+== preflight ==
+preflight ok: P01 material pools into an add (the generic-reducer defect)
+preflight ok: P02 the height add wraps instead of saturating
+preflight ok: P03 the RMW bypass hits on the WRONG address compare (inverted)
+preflight ok: P04 the height and velocity bypass gates are crossed
+preflight ok: P05 the bank rotation runs the wrong way
+preflight ok: P06 the rotated vertex forgets its lane offset (wrong row address)
+preflight ok: P07 the lane mask is indexed by BANK instead of lane
+preflight ok: P08 the INIT bottom clamp is inverted
+preflight ok: P09 the DRAIN final clamp is inverted
+preflight ok: P10 the dirty law is inverted
+preflight ok: P11 a legacy page reports fx(bottom) instead of live_top
+preflight ok: P12 the height sat pulse is gated by the VELOCITY write bit
+preflight ok: P13 INIT leaks compose_top into the velocity lane
+preflight ok: P14 the update values are routed by BANK instead of rotation
+preflight ok: P15 a non-writer clobbers the material lane (adds-zero defect)
+PREFLIGHT: all 15 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 447b6534a5f2611e)
+  P01 material pools into an add (the generic-reducer defect)  caught
+  P02 the height add wraps instead of saturating  DISCARDED (model or exe absent after rebuild)
+  P03 the RMW bypass hits on the WRONG address compare (inverted)  DISCARDED (model or exe absent after rebuild)
+  P04 the height and velocity bypass gates are crossed  DISCARDED (model or exe absent after rebuild)
+  P05 the bank rotation runs the wrong way  DISCARDED (model or exe absent after rebuild)
+  P06 the rotated vertex forgets its lane offset (wrong row address)  DISCARDED (model or exe absent after rebuild)
+  P07 the lane mask is indexed by BANK instead of lane  DISCARDED (model or exe absent after rebuild)
+  P08 the INIT bottom clamp is inverted  DISCARDED (model or exe absent after rebuild)
+  P09 the DRAIN final clamp is inverted  DISCARDED (model or exe absent after rebuild)
+  P10 the dirty law is inverted  DISCARDED (model or exe absent after rebuild)
+  P11 a legacy page reports fx(bottom) instead of live_top  caught
+  P12 the height sat pulse is gated by the VELOCITY write bit  caught
+  P13 INIT leaks compose_top into the velocity lane  caught
+  P14 the update values are routed by BANK instead of rotation  caught
+  P15 a non-writer clobbers the material lane (adds-zero defect)  caught
+== final restore ==
+
+== tally ==
+  attempted:  15 / 15
+  caught:     6
+  equivalent: 0
+  survived:   0
+  discarded:  9
+NOTE: 9 discarded mutant(s) were NOT scored — fix and re-run
+SWEEP OK

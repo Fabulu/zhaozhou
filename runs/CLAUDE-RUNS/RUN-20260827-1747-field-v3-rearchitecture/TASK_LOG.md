@@ -197,6 +197,83 @@ cycle (35 s failure + refit).
 
 ---
 
+### 2026-08-27 (resumed session) - Phase 3 probes 4 and 5: built, measured in sim
+
+Probe 4 (barrel curve service, zhao_probe_curve_svc.sv):
+- Four scalar lane contexts as a barrel over an active-program table cache
+  with two read ports; lanes 0/1 interleave on port A, 2/3 on port B, so a
+  registered-read wait is the partner lane's address cycle. SIX reads per
+  lane, not nine: the clamp bounds and entry 0 are TABLE properties latched
+  at load (the cache meta), and the selected entry is CAPTURED ON THE WAY
+  DOWN (a taken step's read IS the entry at the new lo).
+- MEASURED (Verilator): four-point CURVE II over 32 streamed groups =
+  13 clocks -- THE GATE (<=14) PASSES; structural minimum 12; the extra
+  clock is the search->finish handoff. Lone-reply latency 17 cycles.
+  4,589 directed + 7,200/90,000 random checks green vs zfield::exec_op
+  (the one semantic layer), including per-lane add/mul flag attribution
+  mixed within one group, slot reload, and capacity-4 backpressure.
+- SPLINE is deliberately NOT barreled (the brief's own cold-lane split).
+- Mutation sweep: 15 mutants in flight at log time (12/12 caught so far).
+
+Probe 5 (four-bank patch accumulator, zhao_probe_patch_acc.sv):
+- Vertex-mod-4 banking, rotated crossbar for unaligned vector updates,
+  2-stage RMW with a per-output-lane one-deep bypass; INIT/ACCUM/DRAIN
+  phases (273 + updates + 273+3 clocks per patch).
+- EACH OUTPUT ITS OWN REDUCER: height = compose_vertex's chain with both
+  clamps; velocity = TERRAIN.VELOCITY V1 chain; material = last covering
+  writer wins; nav = V1-style chain.
+- FINDING (brief assumption vs tree): the "exact writer-selection law"
+  (material) and nav_cost's "declared reduction" were NAMED in
+  FIELD.SEQ.EARTH.md, TERRAIN.PATCH.md and the brief but DECLARED NOWHERE
+  -- no FIELD.OUT.MATERIAL/NAV in ops.yml, no oracle, no text. Probe 5 is
+  their first written form; FIELD.SEQ.EARTH.md now carries the declaration
+  with a chosen-not-found note for negotiation.
+- Test written (oracle = zref::terrain::compose_vertex + V1 chains +
+  declared laws; sat-pulse totals vs SatLedger); not yet run (build/ owned
+  by the curve sweep at log time).
+
+### 2026-08-27 (late, resumed) - the shared-build-dir collision, measured and fixed
+
+The patch-acc mutation sweep DISCARDED mutants ("model or exe absent after
+rebuild") across three runs: 9/15, then 7/15 on a fully hands-off re-run --
+with DIFFERENT discard sets each time (union of caught = all 15, but a
+discarded mutant is NOT scored; house rules demand one fully-scored run).
+
+Root cause, measured not guessed: TWO ninja processes live at once -- this
+sweep's rebuild loop and the CONCURRENT session's builds, both writing the
+shared build/ tree (their dirty files at the time included
+zref_creature.hpp, which feeds zhao_zref, which the probe test links). My
+first theory (my own concurrent tool calls holding file locks) was
+FALSIFIED by the hands-off re-run discarding P02 with zero activity from
+this session.
+
+Fix: tools/sweep_field_patch_acc.sh now configures its OWN build tree
+(build-sweep/, same pinned toolchain as the windows-native preset) so the
+mutant rebuild loop shares nothing with the interactive build dir. The
+curve sweep's clean 15/15 run predates the collision window and stands.
+
+Two operator process errors also recorded honestly: (1) edited the probe
+RTL header mid-sweep (comment-only; the sweep's gold-restore stomped it,
+re-applied after); (2) ran clang-format on the probe test source mid-sweep.
+Neither caused the discards, but both violate "do not touch a sweep's
+source cone while it runs" -- the rule extends from fits to sweeps.
+
+### 2026-08-27 (later) - build-fieldv3 stood up; probe 4 committed (bc68866) and fitting
+
+- Coordinator confirmed THREE sessions share build/ (their RASTER.EARLYZ
+  sweep failed its cross-check from the same collision; their build died on
+  my probe-4 verilate cmake mid-edit). Resolution: this session now owns
+  build-fieldv3/ (same pinned toolchain; configure needs BOTH mingw64 and
+  oss-cad-suite on PATH -- the fresh-dir configure fails without
+  verilator_bin). Both probe sweeps' rebuild loops are ported to it.
+- Both probe tests rebuilt + re-run green out of build-fieldv3 (39,232 +
+  4,589 directed checks).
+- Probe 4 committed BEFORE its fit as bc68866 (RTL, test, sweep tools,
+  curve sweep log, CMake registration -- the CMakeLists staged via
+  hash-object with the probe-5 block stripped so the commit configures
+  standalone). Fit launched from bc68866 with -KeepWorkspace.
+- Patch-acc sweep re-running ISOLATED in build-fieldv3.
+
 ## Subagent Spawns
 
 *Log subagent spawns and their findings here*

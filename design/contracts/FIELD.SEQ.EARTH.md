@@ -73,6 +73,25 @@ input lanes mapping to R0.. in record order:
 | `material` | u32 | exact writer-selection law |
 | `nav_cost` | fx | its declared reduction |
 
+**DECLARED 2026-08-27 (Field v3 probe 5), chosen not found.** The two rows
+above that POINT at laws had no declaration anywhere in the tree: no
+document defined the material writer-selection and none defined nav_cost's
+reduction (there is no FIELD.OUT.MATERIAL / FIELD.OUT.NAV entry in
+`design/ops.yml`). Their first written forms are:
+
+- **material**: the LAST field in COMMAND ORDER that covers the vertex AND
+  writes the material lane wins, wholesale (the u32 is opaque per
+  `spec/form/domains-and-effects.md` §5); the accumulator initialises to 0.
+- **nav_cost**: command-ordered saturating `fx_add` chain, init 0 — the
+  same one-reduction argument TERRAIN.VELOCITY's V1 makes: one evaluation
+  must never be reduced by two different rules.
+
+Declared in `fpga/rtl/synth/zhao_probe_patch_acc.sv` (the probe that first
+needed them) and pinned by
+`tests/differential/field_patch_acc_directed.cpp`. Recorded here for
+negotiation: amending either is a contract change plus a probe-test change,
+not a silent RTL edit.
+
 Outputs take their values from the registers the program's I/O map names at
 END. In v3 the plan marks those registers and writeback SNOOPS them into
 per-context export registers, so END enqueues a complete four-point result

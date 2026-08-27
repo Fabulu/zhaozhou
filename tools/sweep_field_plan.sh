@@ -170,6 +170,6 @@ if [ "${#discards[@]}" -gt 0 ]; then
   # 7 of 15 unscored, tally printed, exit 0.
   echo "FAILED: ${#discards[@]} discarded mutant(s) were NOT scored -- fix and re-run"
   printf '  %s\n' "${discards[@]}"
-  exit 6
+  exit 13
 fi
 echo "SWEEP OK"

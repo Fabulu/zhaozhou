@@ -1409,6 +1409,23 @@ set_tests_properties(field_curve_svc_random PROPERTIES LABELS "fast;nightly" TIM
 add_test(NAME field_curve_svc_random_nightly COMMAND test_field_curve_svc_directed --random 5000)
 set_tests_properties(field_curve_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 3 probe: four-bank patch accumulator with exact
+# command-order reducers. The directed lane carries the acceptance GATE (one
+# vector update per clock, measured); the random lane is the differential
+# against zref::terrain::compose_vertex + the declared reducer laws.
+add_executable(test_field_patch_acc_directed differential/field_patch_acc_directed.cpp)
+target_link_libraries(test_field_patch_acc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_patch_acc_directed
+  PREFIX Vzhao_probe_patch_acc
+  TOP_MODULE zhao_probe_patch_acc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_patch_acc.sv)
+add_test(NAME field_patch_acc_directed COMMAND test_field_patch_acc_directed)
+set_tests_properties(field_patch_acc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_patch_acc_random COMMAND test_field_patch_acc_directed --random 40)
+set_tests_properties(field_patch_acc_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_patch_acc_random_nightly COMMAND test_field_patch_acc_directed --random 400)
+set_tests_properties(field_patch_acc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 add_executable(test_field_len_directed differential/field_len_directed.cpp)
 target_link_libraries(test_field_len_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_len_directed
