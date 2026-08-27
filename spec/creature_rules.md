@@ -41,7 +41,7 @@ loads.
 - Body part ↦ one or more meshlets (charter §10: ≤64 unique vertices,
   ≤96–126 triangles, one primary material each); parts larger than a
   meshlet are split by rings.
-- One texture (CLUT8 page) per part; optional 1-bit alpha key.
+- One texture page per part; optional 1-bit alpha key. **SUPERSEDED 2026-08-27**: the page carries a FORMAT tag and may be CLUT8 or direct colour (RGB565) -- see the amendment at the end of this file. Filtering REQUIRES direct colour, so a CLUT8-only page made bilinear permanently unreachable.
 - **≤ 32 bones per creature** (hard, donor-proven sufficient from peasant
   to Hellmouth-class).
 - Vertices carry **≤ 2 bone influences** (hardware law, charter §10);
@@ -322,3 +322,66 @@ restricted to chain ends.
 **Not a creature law, but it governs creature work:** the 256-colour rule is a
 GIF-export constraint and must never shape a creature. `SceneSubject::full_colour`
 exempts a subject from it.
+
+---
+
+# AMENDED 2026-08-27 — the texture page carries a FORMAT
+
+## 1.2 supersedes "One texture (CLUT8 page) per part"
+
+**A creature page may be CLUT8 or a direct-colour format. The page carries a
+format tag; CLUT8 remains available and remains the default.**
+
+### Why the old line had to go
+
+§1.2 froze the creature page as CLUT8. That was never a hardware limit — it was
+a narrower option than the silicon has, and it had become load-bearing in the
+wrong direction:
+
+* **TEXTURE.TMU decodes five formats today**, CLUT8 and **RGB565** among them,
+  with mip selection and wrap/clamp/mirror, and by charter §26 it is the ONLY
+  sampler in the machine. Nothing had to be built to make this legal.
+* **`spec/stars_and_flares.md` §1 is a hard law: "nearest sampling mandatory —
+  bilinear must never touch a palette."** Therefore **filtering requires direct
+  colour.** A CLUT8-only creature page does not merely prefer nearest sampling;
+  it makes bilinear *unreachable*, permanently, for every creature in the game.
+  The first creature's surface reads as pixelated for exactly this reason.
+* The freeze was cheap to lift and cheap to lift NOW: kind-8 byte layouts do not
+  freeze until Phase 12 entry (§9), so this amendment costs a spec edit and
+  **zero silicon**.
+
+### What changes
+
+* The page gains a **per-page format tag**. `RingPart`/`Meshlet::page` and
+  `CreatureType::page_set` (added 2026-08-26) are unchanged; the format rides
+  the page, not the part.
+* **CLUT8 stays.** It remains correct where a creature wants hard indexed
+  colour, palette animation, or the smallest possible page. It is a choice now
+  rather than the only option.
+* **Direct colour unlocks bilinear and mips together**, which is the actual cure
+  for a hand-drawn surface reading as pixels.
+* 1-bit alpha keying survives in both.
+
+### The rule that comes with it
+
+**Choose the format from what the surface needs, not from habit.** A palette
+buys indexed tricks and costs filtering. Direct colour buys filtering and costs
+the tricks. Neither is the default answer for every creature.
+
+### What this amendment does NOT do
+
+It does **not** touch lighting. Per-vertex (Gouraud) creature lighting is a
+SEPARATE and genuinely unbuilt thing: the consuming end exists
+(`RASTER.FRAGMENT`'s `frag_vert_rgb_i` and SHADE_MOD), the frozen fog law in
+`spec/qformats.md` §8 already assumes "the ordinary Gouraud path", but the
+PRODUCING end does not — `GEOM.PROJECT` emits no colour lane and
+`GEOM.SETUP.md` states plainly that "the gradients are NOT built", with two
+reasons that are arguments rather than omissions (a plane-form gradient would
+not be bit-exact with the oracle's per-scanline barycentric re-division, and
+there is no consumer). That gap is **already on the ledger and is not opened by
+this amendment.** Smooth normals in the software reference renderer are an
+authoring-side change; smooth normals in silicon are a costed proposal that
+belongs to the hardware lane.
+
+*Evidence and the full change census:
+`Upheaval/creature/Zixxtrixx/PRESENTATION-V2-PLAN.md`.*
