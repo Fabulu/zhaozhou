@@ -3280,11 +3280,11 @@ SceneSubject subject_zixx_still_front() {
 SceneSubject subject_zixx_sweep() {
   SceneSubject s;
   s.name = "zixxtrixx-sweep";
-  s.creature = 7;  // clip slot 5
+  s.creature = 11;  // clip slot 9 (after the 2026-08-28 vocabulary)
   s.frames = 18;
   s.orbit = false;
   zixx_common(s);
-  s.note = "DIAGNOSTIC: head-attitude sweep, -8000..+8000 step 2000, one key each";
+  s.note = "DIAGNOSTIC: head-attitude sweep, one key each";
   return s;
 }
 #endif
@@ -3300,6 +3300,91 @@ SceneSubject subject_zixx_fall_side() {
   s.orbit = false;
   zixx_common(s);
   s.note = "DIAGNOSTIC: one full falling loop, fixed side camera, no orbit";
+  return s;
+}
+
+
+// The HIT flinch, fixed three-quarter, repeated three times so the site
+// loop is watchable (one flinch is 0.6 s).
+SceneSubject subject_zixx_hit() {
+  SceneSubject s;
+  s.name = "zixxtrixx-hit";
+  s.creature = 7;  // clip slot 5
+  s.frames = zixx::kHitKeys * 2 * 3;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "The damage flinch (2026-08-28 vocabulary): the S snaps tighter, the "
+      "head whips back-up and aside with the first neck joints carrying a "
+      "third of it, one damped overshoot, and the canonical S is back "
+      "inside 0.6 s -- both ends sit on the rest pose so hard cuts land "
+      "clean. Shown three times per loop";
+  return s;
+}
+
+// The DEATH, fixed three-quarter. Once through; the last keys are still.
+SceneSubject subject_zixx_death() {
+  SceneSubject s;
+  s.name = "zixxtrixx-death";
+  s.creature = 8;  // clip slot 6
+  s.frames = zixx::kDeathKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 280000;
+  s.bump_ext = 18;
+  s.note =
+      "Death (2026-08-28 vocabulary): two slow shudders, the S drains out "
+      "of the body as the carried front sinks, it keels onto its flank "
+      "about a ground line under the S's centre, the tail curls once and "
+      "releases, and the last second is deliberately almost still -- "
+      "stillness after motion is what reads as death";
+  return s;
+}
+
+// The TAIL-BALANCE stunt, fixed side so the almost-spear reads in profile.
+SceneSubject subject_zixx_balance() {
+  SceneSubject s;
+  s.name = "zixxtrixx-balance";
+  s.creature = 9;  // clip slot 7
+  s.frames = zixx::kBalKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 150000;  // the nose reaches ~3 m: this shot needs headroom
+  s.bump_ext = 18;
+  s.note =
+      "The tail-balance idle stunt (2026-08-28): Zixx gathers onto its "
+      "planted tail, stretches up toward vertical -- ALMOST the attack's "
+      "rigid spear, but effortful, wobbling, fins flared for balance, "
+      "never straight -- loses the fight, topples flat forward with an "
+      "authored ground bite, and gets back up into the canonical S. The "
+      "root is computed from the tail-tip ground constraint, so the stunt "
+      "pivots on the tail like a real balance";
+  return s;
+}
+
+// The LOOK-AROUND, near-level three-quarter so the gaze reads.
+SceneSubject subject_zixx_look() {
+  SceneSubject s;
+  s.name = "zixxtrixx-look";
+  s.creature = 10;  // clip slot 8
+  s.frames = zixx::kLookKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 12288;  // between three-quarter and head-on
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "The look-around idle (2026-08-28): the head-aim rig performed. The "
+      "body idles on a quiet half-breath while the head turns left, "
+      "glances up, turns right, dips down and comes home -- eased, with "
+      "tiny arrival overshoots, the first two neck joints following "
+      "softly. The head is bone 0 (the ROOT), so the aim lives on the "
+      "dedicated skull bone: the body stays planted while the head turns, "
+      "which is the rig capability the sim will later drive";
   return s;
 }
 
@@ -3409,6 +3494,14 @@ constexpr LibraryEntry kLibrary[] = {
      "Three somersaults, a diagonal javelin strike, 5 s planted; tracked", true},
     {"zixxtrixx-fall", "Zixxtrixx falling flail",
      "Panicked airborne corkscrew loop", true},
+    {"zixxtrixx-hit", "Zixxtrixx hit flinch",
+     "Damage recoil: the S snaps tighter, head whips, damped return", true},
+    {"zixxtrixx-death", "Zixxtrixx death",
+     "Shudder, the S drains, keels onto its flank, one last tail curl", true},
+    {"zixxtrixx-balance", "Zixxtrixx tail-balance",
+     "Rears up on its tail toward an almost-spear, topples, gets back up", true},
+    {"zixxtrixx-look", "Zixxtrixx look-around",
+     "Curious head-aim idle: left, up, right, down, home", true},
 
     // Dead classes (no flare capability, stub entries only)
     {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -3524,6 +3617,10 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
   if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
   if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());
+  if (wanted("zixxtrixx-hit")) rc |= render_scene(subject_zixx_hit());
+  if (wanted("zixxtrixx-death")) rc |= render_scene(subject_zixx_death());
+  if (wanted("zixxtrixx-balance")) rc |= render_scene(subject_zixx_balance());
+  if (wanted("zixxtrixx-look")) rc |= render_scene(subject_zixx_look());
 #ifdef ZIXX_SWEEP
   if (wanted("zixxtrixx-sweep")) rc |= render_scene(subject_zixx_sweep());
 #endif

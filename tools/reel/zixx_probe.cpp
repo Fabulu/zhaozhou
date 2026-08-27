@@ -100,6 +100,7 @@ int main() {
   for (const zc::Clip& clip : T.bank.clips) {
     int32_t worst_min = INT32_MAX, worst_max = INT32_MIN;
     int worst_f = -1;
+    int worst_b0 = -1, worst_b1 = -1;  // the min vertex's bind at the worst key
     int32_t belly_lo = INT32_MAX, belly_hi = INT32_MIN;  // per-loop belly band
     std::printf("clip slot %d (%d keys)\n", clip.slot_id, clip.frame_count);
     for (uint16_t f = 0; f < clip.frame_count; ++f) {
@@ -110,10 +111,12 @@ int main() {
       // cheaper and robust to just track the min over vertices bound to the
       // blade bones.
       int32_t blade_mn = INT32_MAX;
+      int mnb0 = -1, mnb1 = -1;
       for (const auto& m : T.mesh) {
         for (const auto& v : m.verts) {
           int32_t x, y, z;
           zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+          if (y < mn) { mnb0 = v.b0; mnb1 = v.b1; }
           mn = std::min(mn, y);
           mx = std::max(mx, y);
           if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
@@ -123,6 +126,8 @@ int main() {
       if (mn < worst_min) {
         worst_min = mn;
         worst_f = f;
+        worst_b0 = mnb0;
+        worst_b1 = mnb1;
       }
       worst_max = std::max(worst_max, mx);
       belly_lo = std::min(belly_lo, mn);
@@ -132,8 +137,10 @@ int main() {
         std::printf("  k%3d  minY %6d  maxY %6d  bladeMin %6d  (mm)\n", f, to_mm(mn), to_mm(mx),
                     to_mm(blade_mn));
     }
-    std::printf("  WORST minY %d mm at key %d; apex %d mm; belly band [%d..%d] mm\n",
-                to_mm(worst_min), worst_f, to_mm(worst_max), to_mm(belly_lo), to_mm(belly_hi));
+    std::printf("  WORST minY %d mm at key %d (bones %d/%d); apex %d mm; "
+                "belly band [%d..%d] mm\n",
+                to_mm(worst_min), worst_f, worst_b0, worst_b1, to_mm(worst_max),
+                to_mm(belly_lo), to_mm(belly_hi));
   }
 
   // ---- non-adjacent ring overlap, every key of every clip -----------------
@@ -172,12 +179,23 @@ int main() {
   //              stopped folding through itself, so the allowance follows
   //              the evidence DOWN, not up.
   // A regression that digs DEEPER than these prints and exits 1.
+  // The 2026-08-28 vocabulary (each judged on its worst-key render,
+  // run 2339): hit 215 (the recoil presses the head into the hook, the
+  // rest-nesting family); death 265 (the shudder's deepen at k5 presses
+  // like the idle breath extreme; the keeled corpse itself sits at -44);
+  // balance 210 (the rest nesting; the flop's -191 ground bite is the
+  // declared impact, not an overlap); look 250 (the full right turn swings
+  // the skull closest to the hook, k72 render: clean overlap layering).
   const auto allow_mm = [](int slot) -> int32_t {
     switch (slot) {
       case 1: return 250;
       case 2: return 165;
       case 3: return 210;
       case 4: return 40;
+      case 5: return 215;
+      case 6: return 265;
+      case 7: return 210;
+      case 8: return 250;
       default: return 0;
     }
   };
