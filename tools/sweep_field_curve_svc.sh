@@ -182,6 +182,22 @@ if [ "$(model_hash)" != "$PRISTINE_MODEL" ]; then
   exit 4
 fi
 run_lanes || { echo "ABORT: restored tree fails its lanes"; exit 4; }
+
+# THE RESTORE CANNOT VOUCH FOR ITSELF. `restore` copies back the `gold`
+# snapshot taken at startup, so if the file was ALREADY mutated when that
+# snapshot was taken -- because a previous run was killed and left a mutant,
+# or because an orphaned run was still writing -- then "restore" faithfully
+# restores the mutant, the model hash matches it, and every guard above
+# agrees the tree is pristine.
+#
+# 2026-08-28: that is not hypothetical. A killed run left orphaned processes
+# still mutating the file, and one of those mutants reached a pushed commit.
+# This check comes from OUTSIDE the sweep: it asks whether any mutant's
+# replacement text is present in the RTL at all.
+if ! python tools/sweep_check_clean.py "$MUT"; then
+  echo "ABORT: a mutant's text is still in the RTL after the final restore"
+  exit 14
+fi
 rm -f "$GOLDTMP"
 
 attempted=$k
