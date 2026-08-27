@@ -1,0 +1,686 @@
+Zixxtrixx is in a neat place right now, but there are literally some rough edges. Luckily, bro comes to the rescue. I'm afraid it's gonna be a bunch of work: 
+
+Zixxtrixx needs a small Creature Presentation v2, not another knob-twiddling pass
+
+The current creature has four different kinds of roughness piled on top of one another:
+
+Geometry roughness: 4,370 triangles, but most of them are subdividing tubes.
+Lighting roughness: every triangle still receives one flat lighting value.
+Texture roughness: 64×64 CLUT8 tiles are sampled nearest-neighbour.
+Motion roughness: animation parameters are piecewise linear, presentation only inserts one nlerped half-frame, and the public site resamples the result down to 20 fps.
+
+Those problems need separate fixes. Trying to cure all of them by raising kSides, increasing wave amplitudes or enlarging the crayon grain will continue producing a technically more expensive creature that still looks polygonal, pixelated or jerky.
+
+The current model has 57 body rings at 30 sides, plus a second overlapping 12-ring head shell, flattened ring-tube fins and a central spike. That works out to 4,370 triangles, of which 4,110 are tubes.
+
+The lasting architecture should be:
+
+one lower-poly unified shell
+        +
+packed smooth normals and Gouraud lighting
+        +
+direct RGB565 filtered/mipped crayon textures
+        +
+30 Hz gameplay clips with baked 60 Hz presentation poses
+        +
+centreline-based animation authoring
+
+That moves the character from:
+
+many flat-shaded polygons wearing a little indexed texture
+
+to:
+
+fewer intelligently placed polygons forming a smooth body, carrying a rich handmade surface, animated through continuous curves.
+
+1. Geometry: one shell, fewer triangles, better anatomy
+Delete the duplicate head shell
+
+The blue head/throat is currently a second complete surface laid only 3 mm outside the green body and skinned to the same chain. That is why enlargement, tight bends and the drooping pose produce clipping and nearly coincident surfaces.
+
+The body and head should become one continuous geometric shell. Colour separation belongs in the texture, not in overlapping geometry.
+
+A material boundary may duplicate one exact seam ring if necessary, but there must not be one tube inside another tube.
+
+This immediately removes about 690 triangles, fixes one whole class of clipping, and gives the head a chance to read as anatomy rather than a blue sleeve.
+
+Build a cranium, not a muzzle
+
+Everything in Headache.md remains correct:
+
+restore the first nose rings closer to their earlier size;
+put the extra volume around and behind the eyes;
+make the skull widest around eye stations 3–8;
+taper decisively into a short blunt nose;
+shrink the mouth;
+add independent head attitude control.
+
+The current taper enlarged the first rings while retaining the four-station dome, which is why “bigger head” became “dumb nose.”
+
+Append a dedicated head bone without disturbing the golden walk
+
+There are currently 25 bones under the 32-bone ceiling.
+
+Do not renumber the existing spine and tail bones. Append a new head-attitude bone at the end:
+
+bone 25: head_attitude
+parent: spine bone 0
+rest translation: zero or skull pivot
+
+The first skull rings can follow this bone; transition rings blend between head_attitude and the existing neck chain. Existing clips leave the new bone at identity, so the accepted walk does not change accidentally.
+
+This new bone gives us:
+
+head pitch independent of the canonical S;
+better idle gaze;
+head lag during falling;
+tuck during spring compression;
+clean recovery after the spear attack;
+a real solution to the droop instead of repeatedly re-solving the first four S slopes.
+
+The angle should still be selected by the requested side-view sweep, not by trusting another sign-convention paragraph.
+
+Variable radial detail, not 30 sides everywhere
+
+The ring zipper already permits neighbouring rings with unequal segment counts, so there is no reason for the skull, trunk and thin tail to all use 30 sides.
+
+A sensible starting distribution is:
+
+skull and eye silhouette: 20–22 sides;
+neck and raised S: 16–18 sides;
+ordinary trunk: 14–16 sides;
+narrow tail stem: 10–12 sides;
+fins: custom planar meshes, not rings.
+
+Keep more longitudinal rings where deformation and curvature demand them: skull, neck hook, S reversal and tail base. Remove rings from long calm stretches.
+
+The target should be approximately:
+
+LOD0: 1,400–1,800 triangles;
+micro LOD: 350–500 triangles;
+then the existing splat and glint rungs.
+
+That is not “make it low-poly.” It is spend polygons on silhouette and deformation instead of roundness that lighting can provide.
+
+Give fins real topology
+
+Each current fin is seven eight-sided elliptical rings: 112 triangles for a flattened tube that still does not look like a fin.
+
+Add a generic tool-side MeshPart alongside RingPart. Hardware still receives the same compiled meshlets; this is only a better authoring primitive.
+
+A fin should be approximately 20–30 triangles:
+
+one broad front face;
+one broad back face;
+a narrow bevel/rim;
+curved root;
+long tapered point;
+hard normal split around its edge.
+
+The two fins and central prong together can become cheaper while looking much more deliberate.
+
+2. Smooth form: add vertex normals and Gouraud lighting
+
+This is the biggest visual return.
+
+SkinVertex currently contains position, two bones, weight and UV—but no normal. The creature compositor skins the positions, calculates one normal from each finished triangle, and applies one lighting result to the entire triangle.
+
+That is why adding sides did not remove the faceting. It merely created more, smaller flat-shaded facets.
+
+Proposed vertex payload
+
+Add a compact bind-space normal:
+
+struct SkinVertexV2 {
+    int32_t x, y, z;
+    uint8_t b0, b1, w0;
+    uint8_t u, v;
+    int8_t nx, ny, nz;   // normalized S1.7 bind normal
+};
+
+Three signed bytes are probably preferable to octahedral two-byte normals here:
+
+one byte more per vertex;
+no octahedral decode hardware;
+simple fixed-point dot products;
+the 60% geometry reduction more than pays for it.
+
+Generate normals before meshlet splitting, then copy the exact same packed normal onto duplicated seam vertices. Otherwise meshlet boundaries will appear as lighting seams.
+
+For the ring shell, calculate normals from the actual neighbouring surface:
+
+circumference tangent × longitudinal tangent
+
+rather than merely pointing outward from each ring. That allows the normal to follow:
+
+taper;
+eye bulge;
+skull volume;
+neck transitions;
+unequal ring spacing.
+
+Use normal splits only where genuinely wanted:
+
+smooth body, skull and neck;
+hard fin planes and rims;
+hard or semi-hard central spike.
+Lighting path
+
+At each vertex:
+
+transform/skinning the bind normal with the same two bones;
+calculate the existing white-key and warm-fill responses;
+produce a per-vertex RGB lighting multiplier;
+interpolate that multiplier across the triangle;
+multiply the filtered texture sample by it.
+
+The raster already interpolates depth, UV and alpha with plane equations, so this is conceptually three more interpolated attributes rather than a new renderer.
+
+Do not add specular. Do not turn him into a plastic toy. Smooth diffuse form plus rough crayon albedo is the right pairing.
+
+A hardware probe should compare two normal-skinning options:
+
+blend transformed normals and use a small normalization lookup;
+blend the two bones’ Lambert responses directly.
+
+The second may be substantially cheaper and could look perfectly good at 240p. Ratify whichever wins the reference comparison and fit. Do not redesign the whole geometry pipeline before fitting that isolated probe.
+
+The crucial artistic rule is:
+
+Smooth form; rough pigment.
+
+The handmade appearance should come from the crayon surface and drawn boundaries, not from every polygon visibly changing brightness.
+
+3. Texture architecture: direct-colour crayon materials, bilinear filtering and mips
+
+The current texture path has done real useful work, but it has reached its limit.
+
+It takes a single scan crop per pigment, converts luminance to a multiplier, amplifies it, resizes it to 64×64, generates six CLUT8 tiles, and quantizes everything into one shared 256-entry RGB565 palette with no dithering.
+
+Then the reference raster takes one nearest-neighbour sample per fragment.
+
+So the grain is real, but:
+
+it is low-resolution;
+one patch repeats over large anatomy;
+material regions fight for one 256-colour palette;
+close shots expose individual texels;
+distant shots can shimmer;
+hard binary colour masks look like pixel boundaries.
+Use the existing primary TMU properly
+
+The hardware TMU already supports:
+
+direct RGB565;
+bilinear filtering;
+explicit mip selection;
+rectangular textures;
+repeat, clamp and mirror addressing.
+
+It explicitly forbids bilinear filtering on CLUT textures, because blending palette indices is not blending colours.
+
+Therefore the production Zixxtrixx material should use:
+
+direct RGB565 + bilinear + mipmaps through the existing primary TMU
+
+No second sampler. No forbidden architecture.
+
+Keep CLUT8 nearest as the cheap path for ordinary or distant creatures. Zixxtrixx’s hero LOD gets the direct material.
+
+One continuous body atlas
+
+A strong starting point is one 128×256 RGB565 atlas for the entire unified skull/body/tail shell:
+
+U = circumference;
+V = nose-to-tail position;
+head, crown, eyes, throat, two greens and dorsal band all occupy one continuous surface;
+no restart at the head/body boundary;
+no repeated 64-pixel body tile.
+
+Level 0 is 64 KiB. The complete mip chain is roughly 85 KiB. That is a very reasonable hero-creature texture, especially after cutting roughly 2,700 unnecessary triangles.
+
+Fins can use one small direct-colour texture of their own.
+
+A smaller content tier can use 64×128 or CLUT8. The architecture should support both rather than declaring every creature a hero.
+
+Make richer crayon, not merely stronger grain
+
+The current texture is primarily:
+
+base pigment × one luminance multiplier field
+
+That creates unevenness but not enough material character.
+
+The upgraded deterministic converter should separate three scan-derived scales:
+
+Low frequency: pigment coverage
+
+Broad regions where the crayon was pressed harder or laid more densely. Slow colour/value shifts over tens of texels.
+
+Mid frequency: strokes
+
+Directional crayon strokes, overlaps and pressure bands. This is the visually important layer.
+
+High frequency: paper tooth
+
+Small paper/fibre variation. Keep this subtle because it disappears in mips and can alias at 240p.
+
+Use several honest pigment crops from the concept sheets, normalize them, and assemble the long atlas with deterministic patch quilting and overlap blending. Do not repeat one square 4–8 times down the animal. Fixed-seed generation is fine because the generated bytes are committed.
+
+The colour should also vary slightly, not only brightness:
+
+light green can drift a little yellow/olive;
+dark green can drift blue-green;
+pink can have small warm/cool pressure changes;
+blue can vary slightly in saturation;
+exposed paper should be rare and softly blended, not white holes.
+
+The result remains unmistakably the actual drawing, but no longer looks like a flat colour with a noise filter.
+
+Generate mipmaps artistically
+
+Mips must be produced from the high-resolution RGB image before RGB565 conversion:
+
+downsample in RGB888 using an area filter;
+reduce high-frequency paper tooth as resolution falls;
+preserve some low-frequency pigment variation;
+quantize each level to RGB565;
+apply stable texture-space ordered dithering only where needed for banding.
+
+Do not downsample the indexed result. Do not dither per frame.
+
+Bilinear filtering solves close-range chunky texels. Mips solve distant sparkle. The final 384×240 frame can remain crisp and nearest-scaled on display—the filtering happens inside the 3D material, not by blurring the finished game.
+
+4. Fix the pink crown as a real head region
+
+The current head mask is almost perfectly explaining what you see.
+
+pink_half(y) returns zero before row 26, rises to only about seven texels of half-width, then shrinks again. It was deliberately pushed behind the brow to stop the earlier frontal render becoming a pink ball. The result is now the opposite overcorrection: a small stripe instead of a pink skull top.
+
+Do not fix this with one wider constant stripe.
+
+On the new continuous atlas, author a crown whose width varies with skull position:
+
+small but nonzero over the blunt nose dome;
+broadest over the actual skull and eye region;
+covering roughly the upper quarter-to-third of the head;
+narrowing smoothly into the dorsal body band;
+irregular feathered crayon edge instead of binary texel replacement.
+
+First generate a debug atlas with:
+
+numbered V bands;
+coloured U sectors;
+obvious markers for top, belly and both sides.
+
+Render fixed front, side and three-quarter views. Once orientation is proven, paint the real crown mask.
+
+This avoids a fourth round of confidently painting the correct colour in the wrong UV region.
+
+5. Motion architecture: stop using piecewise-linear knobs as the final animator
+
+The current animation has two good foundations:
+
+30 Hz gameplay keys with optional 60 Hz presentation interpolation;
+normalized quaternion interpolation rather than held poses.
+
+But the parameter curves are still piecewise linear, and current presentation only inserts the halfway nlerp and averages the root position.
+
+That raises the sample rate but does not guarantee continuous velocity or acceleration. A parameter can change direction sharply at a key, and the whole body reacts immediately.
+
+Add a derived 60 Hz presentation stream
+
+Keep the 30 Hz clip as gameplay truth:
+
+same event frames;
+same attack contact;
+same simulation timing;
+same deterministic behaviour.
+
+At asset-compile time, generate an optional 60 Hz presentation companion:
+
+gameplay key 0
+baked presentation midpoint
+gameplay key 1
+baked presentation midpoint
+gameplay key 2
+...
+
+The midpoints should be generated using neighbouring keys:
+
+cubic Hermite for root translation;
+SQUAD or quaternion log-space Catmull–Rom for rotations;
+monotonic constraints around impact, burial and extraction so curves cannot overshoot.
+
+Runtime does no complex spline evaluation. sub=0/1 simply selects an explicit presentation pose. Existing nlerp remains the cheap fallback for ordinary creatures.
+
+Zixxtrixx currently has approximately 500 authored keys across four clips and 25 bones. A complete second pose stream is only around another 106 KiB. That is an excellent trade for the flagship creature.
+
+Publish the actual 60 Hz result
+
+The site currently plays the showcase at 20 fps, even though the reel produces 60 Hz frames. The code has already had to enlarge screen shake specifically so a 60→20 fps resample does not erase it.
+
+That means some of the remaining perceived animation edge may be export aliasing, not the clip.
+
+The publication gate should include:
+
+raw 60 Hz PNG sequence;
+60 fps WebM/MP4 loop;
+current site encoding for comparison.
+
+Use GIF only as a fallback/poster. A 20 fps public clip cannot be the final judge of a 60 fps animation system.
+
+6. Walking: preserve the gait, remove the possible deformation seam
+
+Walking remains the golden master in character and timing. Do not “reimagine” it.
+
+But the implementation currently builds its result in layers:
+
+apply canonical S and front wave;
+calculate exact root compensation;
+separately build a grounded height hump;
+convert the hump to additional joint rotations;
+add lateral movement to another region.
+
+The front wave stops immediately before the grounded hump owns the chain. That spatial ownership boundary is a plausible source of the little edge you see.
+
+First determine whether it is actually animation:
+
+render fullbright/unlit walk;
+render smooth-normal walk;
+render bone/curvature overlay;
+compare first and last frames for a loop seam.
+
+If the edge remains in the unlit silhouette, replace the layered-joint approach with one centreline deformation compositor:
+
+desired centreline =
+    canonical S
+  + front surge field
+  + grounded caterpillar hump
+  + tiny lateral field
+
+Blend the fields across two or three joints using C² spatial masks, then solve one final set of segment slopes and quaternions. Do not solve the S and then bolt a second curvature solution onto it.
+
+Use a periodic cubic B-spline hump rather than a bump that appears at one end and disappears at the other. Preserve:
+
+current forward speed;
+current grounded-contact band;
+current head surge;
+current gait duration;
+current fixed camera.
+
+Accept the new walk only when a side-by-side 60 Hz comparison is either identical in character or visibly better. The current clip remains the rollback reference.
+
+7. Salto Mortale: make the height come from a readable spring launch
+
+The current pass already contains a preload, but it only deepens the descent lobe over roughly six keys, holds it for three, then begins turning the creature into the wheel. It does not yet create a clearly compressed whole-body spring.
+
+That is why the leap can be spectacular while the cause of the leap still looks somewhat arbitrary.
+
+Separate spring compression from aerial wheel coiling
+
+The launch should have four distinct phases.
+
+Settle — about 0.15 seconds
+
+The body briefly gathers its weight. Fins start closing. Very little root movement.
+
+Compress — about 0.4 seconds
+
+Author a separate compressed-S centreline, not merely a stronger descent multiplier:
+
+lower the arch;
+tuck the head slightly;
+pull the grounded rear forward;
+shorten the animal’s screen-space length;
+deepen both S lobes;
+bring the tail closer under the body;
+reduce overall vertical extent by perhaps 30–40%.
+
+The belly/rear anchor remains planted.
+
+Hold — about 0.15–0.2 seconds
+
+Four or five 30 Hz keys where the pose is visibly loaded and nearly still.
+
+This pause is what lets the audience read stored energy.
+
+Release — about 0.3 seconds
+
+A straightening wave travels tail to head:
+
+grounded rear extends first;
+middle follows;
+head and root launch last;
+vertical acceleration rises sharply only after the release begins;
+the aerial wheel coil starts after clear liftoff rather than hiding the propulsion.
+
+Then preserve the part that is already fucking sick:
+
+12 m climb;
+three somersaults;
+apex unroll;
+aligned 11 m spear plunge;
+tracked burial;
+five-second stick.
+
+The animation should visually say:
+
+“He reached 12 metres because that entire S was compressed into a loaded spring.”
+
+—not “the root curve moved him 12 metres upward.”
+
+8. Salto recovery: stop rebuilding the whole creature in 0.37 seconds
+
+This is the other major animation defect.
+
+The current attack holds zero S authority through key 208, then restores it globally to 65% at key 214 and 100% by key 219. During those same eleven keys, it also advances the final rotation and returns the root’s height and forward displacement.
+
+So in roughly 0.37 seconds, the creature:
+
+pulls out of the ground;
+stops being a spear;
+reforms the complete S;
+completes the fourth turn;
+returns several metres;
+closes the loop.
+
+Of course it looks sketchy.
+
+There is no reason to protect the 220-key duration. Five seconds are spent stuck in the ground; another half-second or second of good recovery is cheap.
+
+Use these phases:
+
+Impact recoil
+
+While still embedded, give the otherwise straight spear a small elastic bow. Send a damped compression wave from the tail tip toward the head. Keep the mean axis straight.
+
+Extraction
+
+Pull out entirely along the spear axis. Do not restore the S until the overlap probe says the tip is clear.
+
+Unbend
+
+Once clear, the head initiates the recovery. A curvature wave travels head-to-tail:
+
+authority[k] = smoothstep(recovery_time - delay_per_segment * k)
+
+The head and neck curl first, then the middle, then the tail. The fins reopen last.
+
+Final rotation and settle
+
+Only after the body is flexible again should the final turn and landing settle complete.
+
+Use quintic easing or cubic tangents so angular velocity reaches zero at the final loop pose. Do not make global auth the only control for the entire body.
+
+9. Falling: stop forcing the logo pose underneath every movement
+
+The code states the problem literally:
+
+“THE S FIRST. Everything else is decoration on it.”
+
+It calls apply_stance(g, 1000) every falling frame, then layers neck waves, lateral waves, writhe and tumble on top.
+
+So even when the amplitudes increase, the animal remains a rigid S-shaped sign with wobble attached.
+
+Immediate interim fix
+
+Make S authority time- and region-dependent:
+
+overall authority varies approximately 25%–80%;
+head/neck, middle and tail have phase-shifted authority;
+allow the body to stretch almost straight;
+allow it to bunch into a tighter curve;
+let the recognizable S recur instead of remaining mandatory.
+
+Also evaluate the animation from a fixed side and fixed three-quarter camera before restoring the orbit. Camera rotation plus body rotation currently makes diagnosis harder.
+
+Lasting fix: deterministic baked spring-chain secondary motion
+
+Falling is exactly where a tiny offline dynamics baker is worth building.
+
+For each spine joint, maintain pitch/yaw/roll angle and angular velocity:
+
+acceleration =
+    spring_to_weak_rest_curve
+  + neighbour_bend_coupling
+  + root-angular-inertia
+  + low-frequency aerodynamic forcing
+  - damping
+
+Give regions different behaviour:
+
+head: heavy, strong lag and overshoot;
+neck: loose;
+middle: heavier and slower;
+tail: light, large delayed waves;
+fins: very high drag and independent springiness.
+
+The rest curve is a weak, changing S—not full authority.
+
+Run the simulation deterministically in fixed point at 60 Hz, bake the resulting presentation poses, and ship no runtime physics whatsoever.
+
+This will create what additional sine waves cannot:
+
+inertia;
+delayed response;
+overshoot;
+propagation;
+different masses;
+nonuniform rotation speed;
+genuine helplessness.
+
+The creature should occasionally look almost straight, then collapse into a distorted S, then reverse as the head and tail lag behind the torso.
+
+That is “way more wobble” without becoming jitter.
+
+10. Acceptance architecture
+
+The public page caught failures that the curated frontal evidence missed. The new gate should be mandatory for every creature pass:
+
+Geometry and head
+fixed front;
+fixed side;
+fixed three-quarter;
+slow orbit;
+fullbright silhouette;
+wireframe;
+normal visualization;
+texture-only render.
+Animation
+raw 60 Hz walk;
+walk loop boundary;
+idle maximum/minimum breath;
+fully compressed spring pose;
+liftoff;
+apex;
+spear impact;
+first clear extraction frame;
+midpoint of S recovery;
+fixed-camera falling loop.
+Automated probes
+
+Extend zixx_probe with:
+
+nonadjacent ring-overlap warning;
+skull/body minimum separation;
+ground-contact band;
+spear tip clearance before recovery;
+per-bone angular velocity and acceleration spikes;
+last-frame/first-frame loop discontinuity;
+triangle and vertex count;
+texel-density report per material and camera;
+LOD silhouette error.
+
+The live site output is part of acceptance, not an afterthought.
+
+Implementation order
+
+Do not hand this to one agent as “fix everything” and hope.
+
+Run A — generic presentation infrastructure
+
+Build and visually prove:
+
+packed smooth normals;
+per-vertex/Gouraud creature lighting;
+direct RGB565 creature material;
+bilinear reference sampling matching the existing TMU law;
+mip generation;
+60 fps publication output.
+
+Use the current Zixxtrixx mesh as the test donor. No model or animation art changes yet.
+
+Run B — production Zixxtrixx mesh and head
+
+Apply Headache.md plus:
+
+unified body/head shell;
+cranium behind the nose;
+appended head-attitude bone;
+variable ring segments;
+custom fins;
+small mouth;
+self-overlap probe;
+target 1,400–1,800 triangles.
+
+Keep current poses and cameras to isolate the model change.
+
+Run C — final texture asset
+
+Build the continuous 128×256 RGB565 crayon atlas:
+
+richer scan-derived multi-scale texture;
+broad pink crown;
+continuous dorsal stripe;
+correct throat and greens;
+better eye resolution;
+mip chain;
+texture-space dithering.
+Run D — animation polish
+
+In this order:
+
+diagnose the walk edge;
+unify the walk centreline deformation only if needed;
+replace the salto preload with a real spring compression/hold/release;
+preserve the accepted aerial salto and plunge;
+rebuild spear recovery as extraction plus travelling S reformation;
+replace full-authority falling S with baked spring-chain flailing;
+bake 60 Hz presentation poses.
+Run E — LOD and publication
+regenerate micro LOD normals;
+measure transitions;
+publish 60 fps;
+compare raw frames against the public encoding;
+final multi-view acceptance.
+
+The core ruling I would give the agent is:
+
+Do not make Zixxtrixx round by adding tube polygons. Make him round with smooth normals, and spend geometry on skull, silhouette, deformation and fins.
+
+Do not make the texture richer by amplifying one 64×64 noise field. Build a continuous direct-colour crayon atlas with multiple real stroke scales, bilinear filtering and mips.
+
+Do not make the animation looser by adding larger sine waves on top of a mandatory S. Author one continuous centreline for intentional motion and bake spring-driven secondary motion where the creature is supposed to be helpless.
+
+Preserve the excellent walk character and the magnificent middle of the salto. Replace the weak launch explanation, the rushed recovery, the rigid fall and the fucked face around them.
