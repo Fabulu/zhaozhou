@@ -70,7 +70,12 @@ rebuild() {
   local t
   for t in $TARGETS; do
     rm -rf "build/tests/CMakeFiles/$t.dir"
-    rm -f "build/tests/$t.exe"  # guard 5: the exe lives OUTSIDE the target dir
+    # guard 5: the exe lives OUTSIDE the target dir, so it must be deleted
+    # too -- and it must be deleted from THIS sweep's own build dir. This
+    # line said "build/tests" until 2026-08-27, which both left the real
+    # stale exe in place (defeating the guard) and deleted another
+    # session's binary out of the shared tree.
+    rm -f "build-fieldv3/tests/$t.exe"
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
   # (the house sweeps learned this the same way); VERILATOR_ROOT must be set
