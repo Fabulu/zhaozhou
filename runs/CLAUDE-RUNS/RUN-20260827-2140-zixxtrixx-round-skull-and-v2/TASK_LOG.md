@@ -349,3 +349,57 @@ naming this instruction, before/after shown, and written so it cannot be misread
 as drift. Re-run the probe — slot 3's 169 mm overlap (allowance 175) and the
 -426 mm contact at key 56 were authored against the old timing. And check the
 SHOT: a longer apex hold needs the tracking camera to still frame the moment.
+
+### More animations, and the idle dead zone
+
+Fabian: *"it didn't include all the sacrifice animations. Hit, death, maybe more
+idle."* Four clips against a 64-slot donor vocabulary. Owed now: **HIT**
+(flinch), **DEATH** (a moment the player watches — deserves real authorship),
+and idle variants. The agent must also NAME the remaining vocabulary gap rather
+than leave it to be discovered later.
+
+*"Our idle has an unmoving part where it's standing. Find something for that to
+do, maybe sideways snaking."* The grounded run sits dead while the reared front
+breathes. Sideways snaking is the right instinct — the idle equivalent of the
+walk's travelling wave, and the walk already proved motion belongs on the part
+that is touching something. Two recorded traps apply: a lateral wave was once
+INVISIBLE at 240p where a vertical arch read instantly, so amplitude must be
+checked on a contact sheet; and it stays slow and loose (wobble, not jitter).
+**The approved four-period composition — breathing, head-bob, girth swell, tail
+sway — is not to be touched.** Motion is added to the dead section only.
+
+New idle variant, the **tail-balance spear**: gather onto the tail, stretch up
+toward vertical *almost* becoming a spear, lose balance, fall, get back up. The
+word "almost" is the performance — it reaches for the attack's rigid spear and
+fails, so the straightened form should RHYME with the attack while being weaker
+and unsteadier.
+
+### Which sheet wins: SIDE, for shape
+
+Fabian: *"always look at the sketch, sideways sketch is accurate about head
+shape, front sketch is a bit confusing."*
+
+This retires the head saga's root cause. He flagged the illusion early — the
+front sheet makes the head look big and bulbous while the side view does not —
+and every pass that chased the frontal read produced either a protruding snout
+or a flattened disc. **Side.png is the authority on FORM. Front.png is for
+COLOUR AND MARKINGS placement only.**
+
+I looked at Side.png directly and recorded what it shows, for the agent to check
+against (observations for comparison, never inputs to generate from):
+* One continuous tube, widening toward the head, ending in a blunt ROUNDED tip.
+  No constriction, no junction. Widest point roughly 1.5-1.7x mid-body, and the
+  swell builds over a long run rather than appearing suddenly.
+* Head axis essentially HORIZONTAL — confirms the hunched read is wrong.
+* **The eye is not what we built.** The sheet has a LARGE yellow circle with a
+  bold ORANGE/RED VERTICAL WAVY SLIT pupil through it, black-outlined, high and
+  forward on the head. We have a small dark dot with an orange smear. That slit
+  is a lot of the creature's character and we lost it.
+* PINK is one continuous dorsal band the whole length **and over the crown** —
+  which is the fix for "top of head should be pink".
+* BLUE covers the head and runs a long way BACK ALONG THE FRONT BODY before
+  green takes over. Not a throat patch. This is the "more of that in the front
+  body" ask.
+* The GREEN is two-tone: darker upper flank, lighter below — so "dark then light
+  green" is also an upper/lower split, not only front-to-back. Check which
+  reading the texture implements; the sheet shows both.
