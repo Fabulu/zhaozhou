@@ -242,6 +242,29 @@ target_compile_definitions(test_field_crater_ring PRIVATE
 add_test(NAME field_crater_ring COMMAND test_field_crater_ring)
 set_tests_properties(field_crater_ring PROPERTIES LABELS "fast;nightly")
 
+# FIELD v3 Phase 2 gate (reports/Fieldv3.md): full canonical interpret ==
+# uniform preparation + FPLAN vector reference executor, on every output,
+# every saturation lane, rcp0, boundaries, random legal programs and the
+# three committed Earth programs. THREE ctest lanes over ONE binary — a
+# mutation sweep must run all of the fast ones (tools/sweep_field_plan.sh).
+add_executable(test_field_fplan_diff differential/field_fplan_diff.cpp)
+target_link_libraries(test_field_fplan_diff PRIVATE zhao_zref)
+target_include_directories(test_field_fplan_diff PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME field_fplan_diff COMMAND test_field_fplan_diff)
+set_tests_properties(field_fplan_diff PROPERTIES LABELS "fast;nightly")
+add_test(NAME field_fplan_random COMMAND test_field_fplan_diff --random 40)
+set_tests_properties(field_fplan_random PROPERTIES LABELS "fast;nightly")
+add_test(NAME field_fplan_random_nightly COMMAND test_field_fplan_diff --random 600)
+set_tests_properties(field_fplan_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+# The generated canonical-operation table (reference/include/zfield/generated/
+# zfield_optable.hpp) is pinned against OP_INFO by compiler/tests/
+# optable.test.ts — the same place the other TS-generated committed artifacts
+# (crater_ring.hpp etc.) are pinned. A ctest lane was deliberately NOT
+# registered: compiler/dist is gitignored and CI does not build the compiler,
+# and a SKIP-if-absent gate is the drift-hiding failure the repo has already
+# paid for once. The C++ side is guarded by the header's own static_asserts.
+
 # fuzz corpus replay: TS-vs-C++ interpretation parity over the committed
 # corpus (tests/fuzz/corpus/field, generated + committed by
 # tests/fuzz/field_corpus_gen.ts). Nightly label per plan W5.

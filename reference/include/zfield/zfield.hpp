@@ -196,4 +196,12 @@ constexpr uint32_t programHashConst(const uint8_t* p, size_t n) {
  */
 Status interpret(const Decoded& prog, const int32_t* in, size_t n_in, int32_t* out, size_t n_out);
 
+/**
+ * As above, additionally exposing the final SatLedger (Field v3 Phase 2:
+ * the planner differential compares EVERY saturation lane, not only the
+ * collapsed Status). `ledger_out` may be nullptr.
+ */
+Status interpret(const Decoded& prog, const int32_t* in, size_t n_in, int32_t* out, size_t n_out,
+                 zref::SatLedger* ledger_out);
+
 }  // namespace zfield
