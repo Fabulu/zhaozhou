@@ -94,8 +94,17 @@ numbers are unreproducible -- commit the probe.
   state the assumption, make it cheap to reverse, keep moving. Blocking costs a
   working session; a wrong call costs one edit. This does not extend to
   destructive or outward-facing actions.
-* **Publishing is always an explicit call.** `Upheaval/website/deploy.ps1`
-  requires `-Project` and `-Branch` and refuses a page without `noindex`.
+* **Publishing is always an explicit call** — with ONE standing exception.
+  `Upheaval/website/deploy.ps1` requires `-Project` and `-Branch` and refuses a
+  page without `noindex`.
+  * **The bestiary is authorised to publish on every change** (Fabian,
+    2026-08-27: *"just publish it whenever it changes"*). Site changed → run
+    `deploy.ps1 -Project upheaval -Branch main`. Do not stop to ask. The
+    exception is that site and nothing else; it does not generalise to other
+    outward-facing actions, and the page stays `noindex` — unlisted, for the
+    owner, not public.
+  * **`-Branch` is mandatory.** Wrangler accepts a missing branch, silently
+    demotes the deploy to a PREVIEW, and production keeps serving the old build.
 
 ## Build note
 
