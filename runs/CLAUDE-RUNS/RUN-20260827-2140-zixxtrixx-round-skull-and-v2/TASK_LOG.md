@@ -403,3 +403,41 @@ against (observations for comparison, never inputs to generate from):
 * The GREEN is two-tone: darker upper flank, lighter below — so "dark then light
   green" is also an upper/lower split, not only front-to-back. Check which
   reading the texture implements; the sheet shows both.
+
+### Independent head aim — and the root trap is the crux
+
+Fabian: *"Head should be able to look left and right independently (maybe more
+at the neck. It's hard to really tell where that should be, it being a tube).
+Zixx should be able to look left and right, up and down. Material for another
+idle animation."*
+
+A permanent RIG capability, not one clip: the head aims in yaw and pitch
+independently of the body, usable by any clip and eventually by the sim.
+
+**The root trap decides the design.** The head is bone 0 = the ROOT. Rotating
+the first neck joint does not swing the head; it swings the whole body while the
+head stays. This exact misunderstanding already cost two passes on the head-bob.
+The mechanism the V2 plan anticipated is **bone 25 `head_attitude`**, a
+dedicated head bone (27 of 32 bones in use, so there is room). Acceptance is
+visual: render a head turn with the body visibly planted — if the body swings,
+the trap has been re-earned. Legacy clips must assert identity with the bone
+present and neutral.
+
+**Where the "neck" is cannot be derived.** He said it himself: the creature has
+no anatomical neck, it is one tube culminating in a head. So the aim origin and
+its falloff are CHOSEN BY EYE — candidates on one contact sheet, pick the one
+where the bend reads as "turned its head" rather than "bent its body". A soft
+weighted falloff over several stations, because a hard hinge creases a smooth
+tube. This is the art law working as intended: nothing here is measurable.
+
+New idle from it: a **look-around** — left, up, right, down, curious and
+unhurried, returning to the canonical S, carrying the head-bob's quality rather
+than becoming a turret sweep.
+
+**Tab budget now overflows.** idle, walk, attack, fall, hit, death, tail-balance,
+look-around = 8 live + Archive = 9 > MAX_TABS 8. Raising it means editing
+`assemble.py` AND both selector families in `style.css` together; `assemble.py`
+refuses the build if only one moves, which is the safety net working as designed.
+
+**Scope is now closed** — Fabian: *"There, that should give you enough material
+to work on it."* Six batches of direction, all delivered to the agent.
