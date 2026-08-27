@@ -86,3 +86,14 @@ Baseline binary built from clean tree at f8f6681.
 - Judged on renders at the current ~15 deg cameras (evidence/pink1-*.png):
   tq reads as the whole top; side reads as a broad dorsal region; front reads
   blue face in a pink cap, green chest -- Front.png's layout.
+
+## Eyes on the ball
+- EYE_ROW 19 -> 12: on the ball the rows forward of the radial peak face
+  forward, so the eye's front edge wraps onto the frontal silhouette while
+  staying mostly on the side (evidence/eye4-front-zoom.png: yellow reads
+  left and right, like Front.png).
+- EYE_ROT_DEG 12 -> -30: settled off an 8-angle fan of the PAINTED tile in
+  true screen mapping (evidence/pupil-fan.png), confirmed on the reel zoom --
+  the pupil is the sheet's vertical top-to-bottom band with middle swell.
+- Eye COLOUR deliberately untouched: judged again after direct RGB565 lands
+  (quantisation is flattening it; fix the cause first).

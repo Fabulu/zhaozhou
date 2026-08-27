@@ -239,20 +239,34 @@ EYE_BOX = (1418, 556, 1594, 734)
 # in the middle -- and it is already inside EYE_BOX. The orange ellipse this
 # file used to paint UNDER the eye was an invention, and it is what read as
 # a socket/ring. Deleted; the drawn eye is painted alone, slightly larger.
-EYE_ROW = 19     # first texel row of the eyeball down the head tile
+EYE_ROW = 12     # first texel row of the eyeball down the head tile.
+                 # 12, was 19 (Fabian, 2026-08-27: "eyes need to be more in
+                 # front. Not completely, they still should be mostly on the
+                 # side"): on the BALL skull the rows forward of the radial
+                 # peak (station 4 ~ V row 23) face increasingly FORWARD, so
+                 # sliding the eye 7 rows nose-ward wraps its front edge onto
+                 # the frontal silhouette while the centre stays on the side
+                 # line. Judged on head-on + side zooms, not derived.
 EYE_COL_A = 32   # side line, +Z flank
 EYE_COL_B = 0    # side line, -Z flank
 EYE_TEX_U = 15   # texels of U for the yellow ball (angle around the head)
                  # 15, was 13 (pass 3): Front.png's eyes are HUGE --
                  # wider wrap puts more yellow on the frontal silhouette
 EYE_TEX_V = 30   # texels of V for the yellow ball (length along the head)
-# ORIENTATION KNOB (Fabian, 2026-08-27: "the eye texture ... should be rotate
+# ORIENTATION KNOB. -30 RE-PICKED 2026-08-27 round-skull run (Fabian: "pupils
+# should be rotated right"): settled off an 8-angle fan of the PAINTED tile
+# viewed through the true screen mapping (U up, nose right), then confirmed
+# on a reel head zoom -- at -30 the pupil is the sheet's vertical
+# top-to-bottom band with the middle swell. The old note said 12 was
+# "verified by head-zoom render"; the ball skull and the forward eye move
+# changed the read.
+# (original note: the eye texture should be rotate
 # a bit more than 90 degrees counter clockwise. That way the orange pupil
 # should look about right"). Degrees of extra rotation applied to the crop
 # AFTER the transpose, positive = counter-clockwise AS RENDERED on the flank
 # (verified by head-zoom render, not derived). The disc and its ink ring are
 # rotationally symmetric, so only the pupil band moves.
-EYE_ROT_DEG = 12
+EYE_ROT_DEG = -30
 
 
 def eye_patch():
