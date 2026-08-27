@@ -385,3 +385,77 @@ belongs to the hardware lane.
 
 *Evidence and the full change census:
 `Upheaval/creature/Zixxtrixx/PRESENTATION-V2-PLAN.md`.*
+
+---
+
+# AMENDED 2026-08-27 (RUN-20260827-2140) — the vertex carries a packed NORMAL, and the reference renderer is Gouraud
+
+## 1.1/1.2 gain a vertex normal lane
+
+**Each `SkinVertex` (and its compiled meshlet twin) carries a packed
+bind-space smooth normal, s8×3 (S1.7, 127 = 1.0). (0,0,0) means "no
+normal" and selects flat face shading, so every pre-amendment asset
+renders bit-identically.** Charter §10's meshlet field list has carried
+"compact normal and UV encoding" since the start; kind-8 layouts do not
+freeze until Phase 12 entry (§9), so — like the format tag above — this
+costs a spec edit and an asset-tool change, zero silicon TODAY.
+
+* **Generated, not authored**: `compile_creature` computes area-weighted
+  smooth normals over the finished meshlet set, keyed on the exact bind
+  position so seam duplicates (the u=255 wrap vertex) and meshlet-boundary
+  duplicates receive the SAME packed normal — a lighting seam cannot open
+  where the surface is closed. The micro rung's normals are recomputed
+  from micro topology, never copied (LOD is hardware's job; the compiler
+  derives).
+* **s8×3 over octahedral**, by the V2 brief's own argument: no decode
+  hardware, simple fixed-point dots; vertex grows 12 → 15 bytes against a
+  ~45% authored-vertex-count cut in the same run.
+
+## 2.x — the per-vertex lighting LAW (the missing reference model, now built)
+
+`spec/qformats.md` §8 (frozen) has the fogged colour "riding the ordinary
+Gouraud path"; `design/blocks.yml` gives GEOM.PROJECT "projection +
+LIGHTING" and GEOM.SETUP "edge coefficients, GRADIENTS"; GEOM.SETUP.md
+records the gap: *"until that exists there is nothing to be bit-exact
+against."* The reference model now exists, in
+`reference/src/zcreature/creature_sim.cpp` + `zrender/rast.cpp`:
+
+1. **Light pullback, per bone**: `L_b = R_b^T · L / bulk_scale` for the key
+   and the fill (6 round-half-up divisions per bone per light). The normal
+   never leaves bind space and GEOM.SKIN's datapath is untouched.
+2. **Per-vertex Lambert = the skin-weight blend of the two bones' CLAMPED
+   responses**: `lam = (w0·clamp(N·L_b0) + w1·clamp(N·L_b1) + 32) >> 6`,
+   each dot divided by 127 with one rounding. This is the N5 probe's
+   option (b), adopted as LAW: no renormalisation anywhere, which is the
+   cheap form the silicon increment would build.
+3. **Smooth/face blend knob**: `kSmoothMixNum`/1024 (currently 819) parts
+   smooth, remainder the face Lambert — the owner's control over how much
+   hand-cut read survives.
+4. **The per-channel rig composes per corner** (unchanged rig), and the
+   raster interpolates the three colour lanes with the SAME per-row model
+   as depth/alpha/UV: **row starts re-evaluate the full barycentric form
+   (one §4 division per lane per row); pixels step by the affine
+   x-gradient.** A setup-emitted `(c0, dc/dx, dc/dy)` plane is REJECTED —
+   it would not be bit-exact with this oracle; the row walker owns the
+   division, in RTL as in the reference.
+
+### What the silicon increment now costs (the hardware lane's docket, stated once)
+
+* **GEOM.VDECODE**: unpack s8×3 → fx (a shift; the block is a stub and
+  gains the lane when designed at all).
+* **GEOM.PROJECT lighting stage**: per vertex, 2×2 fixed-point dots
+  (key+fill × two bones' pulled-back dirs are per-INSTANCE constants
+  computed once, 12 multiplies per bone per frame) + the w0/w1 blend + the
+  rig's 3 saturating mul-adds — small beside its 31-stage divider.
+* **GEOM.SETUP + RASTER.FRAGMENT**: three more interpolated attributes on
+  the row-walker division the contract already names as "what lands it";
+  `frag_vert_rgb_i` and SHADE_MOD are already built and verified.
+* **Payoff measured in this run**: with Gouraud + filtered direct colour,
+  the authored model dropped 3,680 → 2,076 triangles with no visible cost
+  at 240p — the interpolator increment BUYS BACK more geometry than it
+  spends.
+
+WHEN this lands in RTL is the owner's scheduling decision. The reel is the
+oracle it will be verified against; until then the console shows flat
+shading and the site's clips honestly come from the reference oracle, as
+they always have.
