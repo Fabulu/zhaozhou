@@ -307,3 +307,45 @@ owner instruction, never let it read as drift. Re-run the probe: a head that
 lifts changes ground contact, and clip slot 4's overlap allowances (4,585 hits,
 188 mm against 200) were authored against the old falling pose; re-author them
 against worst-key renders rather than widening them to fit the new number.
+
+### CORRECTION: there is no skull — one tube culminating in a head
+
+Fabian: *"There should really be no skull. It's one tube that bulges more and
+more towards the end, culminating in a head."*
+
+**I had relayed the previous complaint wrongly.** From *"head and neck and body
+flow into each other, there's no big distinction"* I inferred "make the head a
+distinct bulb on a neck" and told the agent so. Wrong inference, corrected
+before it authored against it.
+
+The complaint was never asking for a BOUNDARY. It was saying the taper does not
+CULMINATE — the swell is too weak and too gradual, so nothing reads as a head.
+The form is **one continuous tube whose radius grows progressively toward the
+nose and peaks there**. No separate skull, no discrete junction, nothing to
+smooth — the head is simply where the tube has become widest, and it must be
+unmistakably the climax of the taper.
+
+This is worth keeping as a shape note for future creatures: **"no distinction"
+can mean "the transition is not a boundary" or "the destination is not
+arriving".** Here it was the second. Ask which before authoring a seam.
+
+It also argues for a hand-authored radius profile that accelerates toward the
+nose, on the single chain part, rather than an envelope grafted onto a base
+taper — and emphatically NOT a profile derived from the drawing, which is the
+project's canonical measurement-replacing-judgement failure.
+
+### The salto: approved, with one licensed edit
+
+Fabian: *"the salto is great. Maybe have it hold a tad longer at its apex before
+the spear comes down, for effect."*
+
+Approved — do not redesign it. The single change is a longer HANG at the apex,
+the beat between the last somersault and the spear committing. A hold, not a
+slow-motion; the plunge keeps its speed and violence.
+
+This is an owner-authorised edit to a FROZEN clip, so: `clip-3.bin` will stop
+being bit-identical to the golden, which is CORRECT here. Re-pin with provenance
+naming this instruction, before/after shown, and written so it cannot be misread
+as drift. Re-run the probe — slot 3's 169 mm overlap (allowance 175) and the
+-426 mm contact at key 56 were authored against the old timing. And check the
+SHOT: a longer apex hold needs the tracking camera to still frame the moment.
