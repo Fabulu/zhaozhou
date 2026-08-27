@@ -1,0 +1,62 @@
+# Task Log: RUN-20260827-2140 - [Describe objective here]
+
+**Created:** 2026-08-27 21:40 UTC+02:00
+**Status:** In Progress
+**Working Directory:** runs/CLAUDE-RUNS/RUN-20260827-2140-zixxtrixx-round-skull-and-v2/
+
+---
+
+## Objective
+
+[Clear statement of what this task aims to accomplish]
+
+---
+
+## Progress Timeline
+
+### 2026-08-27 21:40 UTC+02:00 - Task Started
+
+- Generated Run ID: RUN-20260827-2140
+- Created working directory
+- Initial context: [brief description]
+
+---
+
+## Subagent Spawns
+
+*Log subagent spawns and their findings here*
+
+| Timestamp | Agent ID | Purpose | Status | Findings Link |
+|-----------|----------|---------|--------|---------------|
+| | | | | |
+
+---
+
+## Files Created
+
+*Updated as files are created*
+
+---
+
+## Decisions Made
+
+*Updated as decisions are made*
+
+---
+
+## Next Steps
+
+*Updated as progress is made*
+
+## 2026-08-27 21:45 — plan settled after three coordinator updates
+Scope grew mid-briefing: (1) dorsal pink must cover the whole upper surface
+(body + head crown, ~40-50% of circumference, judged at the ~15 deg camera);
+(2) eyes more front / pupil rotation / colour AFTER round skull and AFTER
+direct colour; (3) Gouraud REVERSED BACK IN: qformats.md §8 (frozen) and
+blocks.yml purpose lines already ratify per-vertex lighting + gradients —
+zref implementing it is the oracle doing its job. Keep the per-row
+barycentric re-evaluation model in rast.cpp (do NOT switch to a setup-side
+plane form).
+Order: goldens -> head ball + junction -> pink -> eyes -> RGB565+bilinear+mips
+-> normals+Gouraud -> poly reduction -> amendments/proposal + worklog.
+Baseline binary built from clean tree at f8f6681.
