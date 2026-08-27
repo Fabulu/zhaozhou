@@ -1,5 +1,37 @@
 // zhao_field_v2_core.sv — FIELD v2: a small SIMD barrel engine.
 //
+// ---------------------------------------------------------------------------
+// STATUS RULING 2026-08-27 (reports/Fieldv3.md, Phase 1): FIELD v2 IS FROZEN.
+// ---------------------------------------------------------------------------
+// v2 is, from this commit on:
+//   * the EXACT FALLBACK engine;
+//   * the DIFFERENTIAL REFERENCE RTL for Field v3;
+//   * NOT the Earth60 production path, and it will not become it.
+// Changes are limited to correctness bugs against zfield::interpret.
+//
+// Why (all measured; reports/synthesis/zhao_block_fit.json row
+// zhao_field_v2_front, sourceCommit a03d336, and its .sta.rpt):
+//   * 7,870 ALM / 10,482 regs / 33 M10K / 15 DSP; restricted Fmax 59.22 MHz.
+//     At the 100 MHz constraint: setup slack -6.886 ns (TNS -5,134 ns) and
+//     HOLD slack -1.938 ns. Three unrelated ~16-18 ns paths — a pipeline-
+//     depth plateau, not one defective block. Hold failure is not cured by
+//     lowering the clock.
+//   * Even at a hypothetical 100 MHz, the committed Earth programs cost
+//     439%-930% of the reserved Field budget (reports/FIELD_V2_MODEL.md
+//     Scenario A) with the present ready-only-when-idle long units.
+//   * The fill/run/drain front's point transport alone is 27,225 clocks per
+//     association against a 10,416 allowance — 261% of the whole reserved
+//     frame before one instruction executes (reports/Fieldv3.md §3).
+//   * The private compact opcode encoding below COLLIDES with canonical
+//     .zprog opcode values as valid-but-different operations (see
+//     tests/differential/field_v2_front_directed.cpp, to_ref()). A
+//     production front must never load canonical programs into v2 as
+//     presently encoded.
+// The production path is FIELD v3: canonical program -> exact ARM/FPLAN
+// preparation (translation GENERATED from the canonical operation table) ->
+// direct profile walkers -> queued four-wide vector services -> field-major
+// patch reduction.
+//
 // Authorised by owner ruling 2026-08-25. FIELD v1 (`zhao_field_seq.sv`) is
 // FROZEN as the exact serial reference, the differential oracle and the
 // fallback; this is built ALONGSIDE it, not out of it.

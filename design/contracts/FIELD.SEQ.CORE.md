@@ -17,6 +17,42 @@ cache, which is `FIELD.PROGCACHE`'s; and the lane MAP, which is per-program
 metadata. The host writes input registers and reads output registers through the
 file's own port, so the map stays where it belongs — with the program.
 
+## AMENDED 2026-08-27 — one semantic engine, profile adapters permitted (Field v3)
+
+Ruling from `reports/Fieldv3.md` (Phase 1), superseding nothing about the
+semantics and everything about which machine runs them in production:
+
+**One SEMANTIC engine.** The canonical ISA (`spec/form/field-ir.md`), its
+validator, its program hash and `zfield::interpret` remain the single law.
+Three RTL realisations of that law now exist or are ruled, and their statuses
+are part of this contract:
+
+| engine | files | status |
+|---|---|---|
+| v1 scalar walker | `zhao_field_seq.sv` + units | FROZEN — exact serial reference and differential oracle (the machine the body of this contract describes) |
+| v2 SIMD barrel | `zhao_field_v2_core.sv` / `_front.sv` / `_lanemux.sv` | FROZEN — exact fallback and differential reference RTL; **not** the Earth60 production path (measured: 59.22 MHz restricted Fmax, −6.886 ns setup / **−1.938 ns hold** at 100 MHz, 27,225 transport clocks/association, 439–930 % of the reserved budget even at a hypothetical 100 MHz — see the ruling block in `zhao_field_v2_core.sv`) |
+| v3 prepared vector fabric | to be built (Phase 3 probes first) | the production path: FPLAN-prepared programs, ready-context FIFO scheduler, four-wide vector execution, queued long-op services, field-major patch reduction |
+
+**Profile adapters are PERMITTED and are the v3 front end.** A profile is a
+program set plus a STREAM ADAPTER — a small generator that produces the
+varying input lanes directly (Earth: lattice x,z from patch origin + pitch;
+Warp: vertex position/normal; Flow: particle state; Formation:
+instance/index; Stamp: stencil u,v) and consumes the outputs directly from
+snooped export registers. Adapters generate and consume streams; they NEVER
+re-implement an op, and there are not five engines. The generic
+12-in/4-out per-point host transport of the v2 front is measured off the
+production path for good (261 % of the reserved frame before one instruction
+executes).
+
+**FPLAN is a derived artifact, not a second ISA.** A canonical program is
+lowered by the exact software planner into vector uops + a prepared uniform
+block; the canonical→uop translation is GENERATED from the canonical
+operation table, never hand-written per opcode — the v2 private encoding that
+collides with canonical values (`tests/differential/field_v2_front_directed.cpp`,
+`to_ref()`) is the failure class this rule exists to kill. A canonical
+program without an FPLAN still runs on the frozen engines or in software; it
+just carries no Earth60 certificate.
+
 ## Clock and reset semantics
 
 Single `clk`, asynchronous active-low `rst_n`, `gpu` domain. Reset zeroes the

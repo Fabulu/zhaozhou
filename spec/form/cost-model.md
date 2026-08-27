@@ -26,6 +26,13 @@ estimated cycles, DSP demand, table bytes, register high-water mark. The
 numbers are provisional until the RTL profile engine pins real latencies;
 the *mechanics* (class assignment, per-program report) are frozen.
 
+**AMENDED 2026-08-27 (Field v3, `reports/Fieldv3.md` Phase 1):** a single
+estimated cycle count is no longer the admission currency for the realtime
+path. A field program's hardware cost is its **resource-demand vector** (§5),
+computed by the exact software planner from the derived FPLAN. `cycles_est`
+remains emitted for continuity but certifies nothing; the regenerated
+measured model lives in `reports/FIELD_V3_COST_MODEL.md`.
+
 Instruction ceilings per profile: field-ir.md §7.3 (earth 32, warp 48,
 flow 48, formation 64, stamp 32; global 64 — provisional, R7).
 
@@ -162,3 +169,37 @@ Static estimates do not replace runtime counters (FORM §14): the §25 counter
 `field_instructions_by_profile` is the runtime mirror of the static
 `programs[].instr_count`; the e2e gate (W3.7) asserts the island sequence's
 measured counts against this report.
+
+## 5. Resource-demand vectors (Field v3 — 2026-08-27)
+
+The v2 model's single per-program cycle estimate failed in exactly the way a
+scalar must: it assumed one binding resource and free transport, and the
+measured engine had neither (`reports/Fieldv3.md` §2–§3). The planner
+therefore emits, per linked program, a **demand vector** — one integer per
+hardware resource per full 1,089-vertex association, derived from the FPLAN:
+
+| component | meaning |
+|---|---|
+| `vec_groups` | vector groups per association (273 for a full patch) |
+| `vec_issue` | vector instructions issued (varying uops × groups) |
+| `vmul_slots` | vector multiply/MAD bank slots (MUL/MAD/DOT, curve interpolation, prepared-ring products — 9/group per prepared RING) |
+| `curve_req` | four-point CURVE/DCURVE/SPLINE service requests |
+| `dist_req` | four-point DIST2/LEN service requests |
+| `cold_ops` | scalar cold-lane operations (varying NORMALIZE, NOISE, ROT, SPLINE, unprepared RING) |
+| `uniform_ops` | uniform instructions executed ONCE per association on the ARM |
+| `table_bytes` | table data the curve service must have resident |
+| `vreg_hwm` | vector registers the hot plan allocates (≤ 32) |
+| `sreg_hwm` | scalar (uniform) bank registers |
+
+**Admission law.** A program is `realtime/hot` for a profile if and only if
+every component of its demand vector fits the MEASURED machine — measured
+service initiation intervals, measured issue rate, measured clock — inside
+the profile's deadline (Earth: ≤ 6,000 clocks/association, ≤ 850,000
+clocks for the 128-association stress frame). A program whose vector does
+not fit is `cold` or `software`; it stays exact and it stays legal. An
+opcode count below the ceiling certifies nothing by itself.
+
+`costs.zcost.programs[]` rows gain the optional member `demand` (object,
+integer components, names above). Readers ignore unknown members (§2.1
+forward-compat law), so this is a schema-constant addition, never a break.
+

@@ -6,6 +6,45 @@
 
 Cache Field IR microprograms + constant tables with hash/version check; a program that fails validation is safely rejected (charter §19.4), never executed.
 
+## AMENDED 2026-08-27 — FPLAN storage and lookup (Field v3)
+
+Ruling from `reports/Fieldv3.md` (Phase 1). The cache gains a second derived
+artifact class beside the decoded canonical program: the **FPLAN** — the
+prepared hardware execution plan the v3 fabric consumes (uniform instruction
+block, prepared uniform register values, vector uops, source-kind tags,
+output map, per-resource demand vector, source mappings).
+
+**Identity law.** An FPLAN is keyed by the TRIPLE:
+
+    canonical_program_hash + field-plan ABI version + execution-fabric version
+
+The canonical program hash remains the game-visible identity; the two version
+components are hardware-lane facts. A lookup that matches the hash but not
+both versions is a MISS, never a "close enough" hit — a stale plan executed
+against a newer fabric is the stale-prepared-values failure class, and it is
+a mutation-sweep target, not a tolerated state.
+
+**Storage rules.**
+
+- The directory entry carries {valid, canonical hash, plan ABI version,
+  fabric version, performance class, LRU stamp}. The store (still owned by
+  the caller, as below) holds the plan body and its table data.
+- **Performance classification travels with the plan**: `realtime/hot`
+  (certified against the profile deadline by its demand vector), `cold`
+  (exact but uncertified for the maximum live-field workload), `software`
+  (evaluate the patch on ARM, upload the lattice). The classification is the
+  planner's output; the cache stores it and never computes it.
+- A canonical program WITHOUT an FPLAN remains executable through the frozen
+  fallback engines or software — it is simply not admitted to the Earth60
+  path. Absence of a plan is therefore a routing fact, not an error.
+- Table data (curve/spline {x,y,dy} triples) is stored WITH the plan so the
+  barrel curve service's active-program table cache loads from one place;
+  a plan whose tables are absent is invalid, never partially resident.
+- The rejection law is unchanged and extends to plans: a plan that fails its
+  own validation (hash mismatch against its canonical program, demand vector
+  malformed, version skew) is rejected, never cached, and counted in
+  `programs_rejected`.
+
 ## Clock and reset semantics
 
 Single clock `clk`, asynchronous active-low `rst_n`, `gpu` domain per the ledger.

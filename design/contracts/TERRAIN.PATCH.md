@@ -264,11 +264,79 @@ increment, and it is where a port-level mistake would surface: it did for
 tile-index-versus-pixel error no isolated test could see, and it did again in
 this very increment for `TERRAIN.TESS` → `TERRAIN.NORMALS`.
 
+## AMENDED 2026-08-27 — the internal seam becomes FIELD-MAJOR (Field v3)
+
+Ruling from `reports/Fieldv3.md` (Phase 1). The intake (§9.1, 16 rectangles,
+accept/reject/trace) and the composition LAW are unchanged. What changes is
+the internal seam between this block and the field engine: chosen law 1
+below ("field results arrive VERTEX-MAJOR") is SUPERSEDED for the v3
+production path, exactly along the turn-around clause that law already
+recorded.
+
+**Why it must turn.** The Field engine naturally evaluates one program over
+all points of one patch (field-major). The vertex-major seam demands every
+field's result at each vertex in command order, which forces either storing
+sixteen complete temporary field lattices and transposing, or destroying
+program locality by switching programs at every vertex. Neither bridge
+exists, and the measured v2 front's per-point transport (27,225
+clocks/association) is what feeding the vertex-major seam generically costs.
+
+**The field-major reducer, per patch:**
+
+1. load `compose_top = max(base + scar, bottom)` into an on-chip
+   accumulator (the patch scratch);
+2. process accepted fields in COMMAND ORDER;
+3. for each field, run its program over the patch and read-modify-write each
+   affected accumulator vertex;
+4. after the last field, apply the final bottom clamp and publish the
+   composed lattice.
+
+**This is bit-exact**, and the argument is the one law 1 itself made: the
+composition law is
+
+    live_top[v] = max(compose_top[v] + field0[v] + field1[v] + ...
+                      in command order, bottom[v])
+
+and swapping the loops from `for vertex: for field:` to
+`for field: for vertex:` does not change the order of additions AT ANY
+INDIVIDUAL VERTEX. Vertices are independent; command order per vertex is
+intact; `fx_add` saturation order per vertex is intact. The existing
+directed §3 saturation-order case remains the pin.
+
+**The patch scratch** is four-bank M10K storage indexed by `vertex mod 4`,
+allowing one four-vertex vector update per clock — the accumulator law 1
+already identified as §4.2's composed-height cache (1,089 × 32 b per output
+lane). Four Earth output reducers cost roughly 16–20 M10Ks for one patch in
+flight, depending on packed widths. Budget gate: the complete Earth slice
+including this scratch stays ≤ 64 M10K.
+
+**Each output follows ITS OWN reducer law** — it is not one generic "add all
+four outputs" block:
+
+| output | reducer |
+|---|---|
+| height | command-ordered saturating add (`fx_add`, one add at a time, never wide-accumulate-then-narrow) |
+| velocity / nav | their exact declared accumulation |
+| material | exact writer-selection law |
+| hazard / categorical | its declared reduction |
+
+This simultaneously matches Field's program-major execution, eliminates the
+sixteen temporary lattices, preserves exact order, gives both cameras one
+composed result, and is the natural home of the dirty masks and counters.
+
+**What stays as built.** The current `zhao_terrain_patch.sv` vertex-major
+compose lane remains valid RTL and remains the differential comparison
+point: the two seams must agree bit-for-bit on every composed vertex, which
+is itself a v3 test (mutation target: field-order transposition; output
+reducer swapped; masked vertex incorrectly written).
+
 ## Notes
 
 **LAWS CHOSEN, NOT FOUND.** Each is also argued in the RTL header.
 
-1. **Field results arrive VERTEX-MAJOR**, one per accepted lane per vertex, in
+1. **Field results arrive VERTEX-MAJOR** *(SUPERSEDED for the v3 production
+   path by the 2026-08-27 amendment above; retained as the as-built seam and
+   the differential comparison point)*, one per accepted lane per vertex, in
    list order. The reference composes lane-major (apps outer, vertices inner,
    mutating one lattice in place). The two agree bit-for-bit — `fx_add`
    saturates and is order-dependent, but the order that can change a result is

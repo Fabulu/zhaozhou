@@ -1,5 +1,15 @@
 // zhao_field_v2_front.sv — the front end that DRIVES zhao_field_v2_core.
 //
+// STATUS RULING 2026-08-27 (reports/Fieldv3.md, Phase 1): FROZEN with the v2
+// core — exact fallback and differential reference RTL, NOT the Earth60
+// production path. This fill/run/drain front is the measured reason: its
+// point transport alone is 12x1,089 + 13x1,089 = 27,225 clocks/association
+// against a 10,416 allowance — 261% of the reserved frame before one
+// instruction executes. The v3 production path replaces it with direct
+// profile walkers that generate four x,z points per vector group and export
+// results without the three-phase host-port reads. Changes here are limited
+// to correctness bugs. See zhao_field_v2_core.sv for the full ruling.
+//
 // v2 executes programs. It does not fetch them, it does not know where points
 // come from, and it does not know which registers the answers live in. Until
 // now a testbench did all three, which is why "the Field engine is finished"
