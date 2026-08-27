@@ -1,0 +1,29 @@
+#!/bin/bash
+# Direct g++ build for the reel + zixx tools. NEVER cmake --build (stale-binary
+# race, zhaozhou CLAUDE.md). Usage: build-direct.sh [clean|reel|probe|golden|choreo|all]
+# Objects live in the run-local objdir; a struct-layout change => run 'clean'.
+set -e
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+OBJ="$ROOT/runs/CLAUDE-RUNS/RUN-20260827-2339-zixxtrixx-v2-waves-c-d-e/obj"
+mkdir -p "$OBJ" "$ROOT/build/tools"
+CXX=g++
+FLAGS="-O2 -std=c++17 -I$ROOT/reference/include -I$ROOT/runtime/include -I$ROOT/tests/render -I$ROOT/compiler/tests/generated -I$ROOT/reference/src"
+ZREF_SRCS="zref_frame zref zref_audio zref_video zfield/zfield_decode zfield/zfield_interpret zfield/zfield_plan zterrain/terrain_core zrender/render_frame zrender/rast zrender/edgewalk zrender/geom zrender/terrain zrender/sprites zrender/resolve zrender/tilestore zrender/tileresolve zrender/earlyz zrender/fragment zrender/texture zsky/emit_layers zsky/star_gamut zsky/star_bake zsky/star_flare zsky/star_field zsky/star_compose zsky/env_state zcreature/creature_core zcreature/creature_sim"
+[ "$1" = clean ] && rm -f "$OBJ"/*.o
+for s in $ZREF_SRCS; do
+  o="$OBJ/$(echo $s | tr / _).o"
+  src="$ROOT/reference/src/$s.cpp"
+  if [ ! -f "$o" ] || [ "$src" -nt "$o" ]; then
+    echo "CC $s"; $CXX $FLAGS -c "$src" -o "$o" &
+  fi
+done
+wait
+LIBOBJS=$(for s in $ZREF_SRCS; do echo "$OBJ/$(echo $s | tr / _).o"; done)
+want() { [ -z "$1" ] || [ "$1" = all ] || [ "$1" = "$2" ]; }
+T="$ROOT/tools/reel"
+if want "$1" reel;   then echo "LD zhao-reel";   $CXX $FLAGS "$T/zhao_reel.cpp"   $LIBOBJS -o "$ROOT/build/tools/zhao-reel.exe" & fi
+if want "$1" probe;  then echo "LD zixx-probe";  $CXX $FLAGS "$T/zixx_probe.cpp"  $LIBOBJS -o "$ROOT/build/tools/zixx-probe.exe" & fi
+if want "$1" golden; then echo "LD zixx-golden"; $CXX $FLAGS "$T/zixx_golden.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-golden.exe" & fi
+if want "$1" choreo; then echo "LD zixx-choreo"; $CXX $FLAGS "$T/zixx_choreo.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-choreo.exe" & fi
+wait
+echo "build-direct: done"

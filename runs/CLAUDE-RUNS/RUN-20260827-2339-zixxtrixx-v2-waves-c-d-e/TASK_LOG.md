@@ -74,3 +74,24 @@ falling relax (F1 with owner target) -> tile-space colour asks (pink
 front, blue down) -> P2 diagnostic modes -> Wave C atlas (T7 debug ->
 T4 -> T5 -> T6, colour asks carried as constraints) -> W1 diagnosis ->
 Wave D (C2 -> C4/C5 -> C6/C7 -> F2 -> A1) -> Wave E.
+
+## 2026-08-28 00:10 — corrections + batch 3 from the owner
+CORRECTION on the head: "There should really be no skull. It's one tube
+that bulges more and more towards the end, culminating in a head." NOT a
+distinct bulb — the culmination of a single tube's progressive bulge. The
+earlier complaint meant the swell does not CULMINATE, not that a boundary
+is missing. Author the whole radius profile by eye vs Side.png/Front.png.
+SALTO: approved ("the salto is great") + ONE licensed edit: hold a tad
+longer at the apex before the spear comes down. Hang-time pause, not
+slow-mo; plunge speed unchanged. clip-3.bin re-pins with provenance.
+BATCH 3: (1) vocabulary incomplete vs the donor's 64 slots — owe HIT,
+DEATH, more idle; name the remaining gap explicitly in FINDINGS. (2) idle
+dead zone: grounded run gets SIDEWAYS SNAKING (licensed clip-1 edit; the
+four approved motions untouched; before/after sheet). (3) new idle
+variant: tail-balance almost-spear, wobbling, falls, gets back up —
+rhymes with the attack spear. (4) site: new clips = new live tabs;
+7 live + Archive = MAX_TABS 8.
+Gate baseline confirmed green before any change: probe 0, choreo 0,
+goldens IDENTICAL (all four clips + pose CRCs), --check "all sequence
+CRCs match" (redirected to file). Direct g++ build harness committed
+(build-direct.sh); fresh binaries reproduce the green gates.
