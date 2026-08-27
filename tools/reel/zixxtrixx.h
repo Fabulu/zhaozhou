@@ -793,6 +793,44 @@ inline const zref::render::Tileset& page() {
   return ts;
 }
 
+// THE DIRECT-COLOUR PAGE (T1/T2, 2026-08-27). The same painted tiles as
+// RGB565 mip chains, sampled through the actual Tmu model: bilinear with
+// the frozen weight law, mips, REPEAT around the ring (U — the wrap must
+// be seamless), CLAMP along the body (V — the nose row must not bleed
+// into the junction row). This is why the surface stops reading as
+// pixels: filtering requires direct colour (stars_and_flares 1), and the
+// TMU decodes RGB565 today. The CLUT8 page above stays as the
+// ordinary-creature format tier and the fallback.
+inline const zref::DirectPageSet& page_direct() {
+  static const zref::DirectPageSet ps = [] {
+    zref::DirectPageSet p;
+    constexpr int kWords = static_cast<int>(sizeof(kPageDirect[0]) / sizeof(uint16_t));
+    p.mem.base = 0;
+    p.mem.bytes.resize(static_cast<size_t>(kPageTiles) * kWords * 2);
+    for (int t = 0; t < kPageTiles; ++t) {
+      p.tile_base.push_back(static_cast<uint32_t>(t) * kWords * 2);
+      for (int i = 0; i < kWords; ++i) {  // little-endian halfwords
+        p.mem.bytes[static_cast<size_t>(t) * kWords * 2 + i * 2] =
+            static_cast<uint8_t>(kPageDirect[t][i] & 0xFF);
+        p.mem.bytes[static_cast<size_t>(t) * kWords * 2 + i * 2 + 1] =
+            static_cast<uint8_t>(kPageDirect[t][i] >> 8);
+      }
+    }
+    zref::Tmu::Mode m;
+    m.fmt = zref::Tmu::kRgb565;
+    m.bilinear = true;
+    m.wrap_u = zref::Tmu::kRepeat;
+    m.wrap_v = zref::Tmu::kClamp;
+    m.log2w = 6;
+    m.log2h = 6;
+    m.max_level = 6;
+    m.mip_en = true;
+    p.mode = m.pack();
+    return p;
+  }();
+  return ps;
+}
+
 inline void set_rgb(zc::RingPart& p, const uint8_t c[3]) {
   p.r = c[0];
   p.g = c[1];
@@ -1549,6 +1587,7 @@ inline const zc::CreatureType& type() {
       std::fprintf(stderr, "zixxtrixx: compile failed: %s\n", reason);
     }
     type.page_set = &page();
+    type.page_direct = &page_direct();  // RGB565 + bilinear + mips (T1/T2)
     return type;
   }();
   return t;

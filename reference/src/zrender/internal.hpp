@@ -13,6 +13,7 @@
 
 #include "zref/zref_render.hpp"
 #include "zref/zref_terrain.hpp"
+#include "zref/zref_texture.hpp"
 
 namespace zref {
 namespace render {
@@ -145,6 +146,15 @@ struct TextureSpan {
   uint8_t tile_a = 0, tile_b = 0, weight = 0;
   bool mosaic = false;
   int32_t mod_r = 1 << 16, mod_g = 1 << 16, mod_b = 1 << 16;
+  // Direct-colour path (T1/T2): when set it WINS over `ts`. The fragment
+  // samples through Tmu::sample itself (RGB565 + bilinear + mips, the
+  // frozen weight law, half-texel bias, per-axis wrap from direct->mode),
+  // with `lod` the per-primitive U4.4 req_lod computed upstream from
+  // projected texel density (charter 9, the Measure — the TMU contract
+  // excludes LOD derivation by design). No second sampler: this IS the
+  // primary TMU's law, called by address.
+  const DirectPageSet* direct = nullptr;
+  uint8_t lod = 0;
 };
 
 /**

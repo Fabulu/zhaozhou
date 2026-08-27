@@ -212,4 +212,22 @@ struct Tmu {
   static Sample sample(const Req& r, const TextureMemory& mem);
 };
 
+/**
+ * A direct-colour tile page for the software raster's creature material
+ * path (T1/T2, 2026-08-27): the asset side packs each tile's full mip
+ * chain into `mem` (level offsets per level_offset_texels, row-major,
+ * RGB565 halfwords little-endian), records each tile's level-0 byte
+ * address, and states the packed Tmu mode word ONCE. The raster samples
+ * through Tmu::sample itself — the reel and the RTL share one law by
+ * construction, not by re-implementation. This is the lawful use of
+ * hardware that already exists: filtering requires direct colour
+ * (stars_and_flares 1 — bilinear must never touch a palette), and the TMU
+ * decodes RGB565 with bilinear and mips today.
+ */
+struct DirectPageSet {
+  TextureMemory mem;                // every tile's packed mip chain
+  std::vector<uint32_t> tile_base;  // level-0 byte address per tile
+  uint32_t mode = 0;                // packed Tmu::Mode for every tile
+};
+
 }  // namespace zref

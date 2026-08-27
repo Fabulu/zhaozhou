@@ -514,7 +514,30 @@ def main():
     for i, nm in enumerate(names):
         out.append(f"//   tile {i}: {nm}")
     out.append("")
+    # ---- DIRECT-COLOUR PAYLOAD (T1/T2, 2026-08-27) ----------------------
+    # The same painted tiles, WITHOUT the shared-palette quantisation, as
+    # RGB565 mip chains for the TMU's direct path: area-filter each level in
+    # RGB888 (BOX = true texel averaging), THEN quantise each level to 565 --
+    # never downsample quantised values (T6). Level offsets follow
+    # Tmu::level_offset_texels (row-major, level-major). 64x64 -> 7 levels.
     out.append(f"constexpr int kPageTiles = {n};")
+    total = sum((TILE >> l) * (TILE >> l) for l in range(7))
+    out.append(f"// direct RGB565 mip chains: {total} halfwords per tile")
+    out.append(f"constexpr uint16_t kPageDirect[{n}][{total}] = {{")
+    for t in tiles:
+        base = Image.fromarray(t.astype(np.uint8), "RGB")
+        words = []
+        for l in range(7):
+            sz = TILE >> l
+            lv = np.asarray(base.resize((sz, sz), Image.BOX)).astype(np.int64)
+            for row in lv.reshape(sz * sz, 3):
+                words.append(to565(row[0], row[1], row[2]))
+        out.append("    {")
+        for i in range(0, len(words), 12):
+            out.append("        " + " ".join(f"0x{v:04X}," for v in words[i : i + 12]))
+        out.append("    },")
+    out.append("};")
+    out.append("")
     out.append("constexpr uint16_t kPagePalette[256] = {")
     for i in range(0, 256, 12):
         out.append("    " + " ".join(f"0x{v:04X}," for v in pal565[i : i + 12]))

@@ -122,3 +122,22 @@ Baseline binary built from clean tree at f8f6681.
 - reel --check: only creature-wave-walk and creature-bulk-pop moved (the
   point); re-pinned with provenance; all sequence CRCs match.
 - THE FACETING IS GONE (evidence/gour1-side.png, gour1-tq.png).
+
+## Direct RGB565 + bilinear + mips (T1/T2) — through the ONE TMU law
+- zref_texture.hpp gains DirectPageSet (packed mip chains + tile bases + ONE
+  mode word); rast.cpp's opaque path samples it through Tmu::sample ITSELF —
+  the reel and the RTL share the law by construction, no re-implementation.
+- Mode: RGB565, bilinear (frozen factored weights, half-texel bias), mips
+  0..6, REPEAT around the ring (U), CLAMP along the body (V).
+- creature_sim computes the per-triangle U4.4 req_lod from projected texel
+  density (the Measure; the TMU contract excludes LOD derivation by design).
+- mkcreaturepage.py emits kPageDirect: area-filter each level in RGB888,
+  THEN quantise to 565 (never downsample quantised values). CLUT8 payload
+  kept as the ordinary-creature tier + fallback.
+- CreatureType.page_direct wins over page_set; only Zixxtrixx sets it, so
+  the two --check creature subjects did NOT move again. Probe exit 0,
+  --check all match.
+- LOOK: the pixel read is GONE; eye colour visibly stronger with the shared
+  palette out of the way (evidence/direct1-*.png). Crayon grain survives at
+  zoom but is softened at distance — T5's multi-scale converter remains the
+  counter, not done this run.

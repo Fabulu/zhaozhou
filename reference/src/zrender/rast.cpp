@@ -264,7 +264,27 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
           uint8_t* dst = &s.rgb[idx * 3];
           switch (m.blend) {
             case BlendMode::kOpaque:
-              if (tex != nullptr && tex->ts != nullptr) {
+              if (tex != nullptr && tex->direct != nullptr) {
+                // DIRECT-COLOUR CREATURE MATERIAL (T1/T2): one primary
+                // sample through the actual Tmu model — RGB565, bilinear
+                // (frozen factored weight law, half-texel bias), mips from
+                // the upstream per-primitive req_lod, per-axis wrap from
+                // the page's ONE mode word. Not a re-implementation: the
+                // reel and the RTL share Tmu::sample by construction.
+                Tmu::Req rq;
+                rq.u = u;  // Q16.16 tile units == the TMU's texture units
+                rq.v = v;
+                rq.base = tex->direct->tile_base[tex->tile_a];
+                rq.mode = tex->direct->mode;
+                rq.lod = tex->lod;
+                const Tmu::Sample smp = Tmu::sample(rq, tex->direct->mem);
+                const int32_t mr = m.gouraud ? cr : tex->mod_r;
+                const int32_t mg = m.gouraud ? cg : tex->mod_g;
+                const int32_t mb = m.gouraud ? cb : tex->mod_b;
+                dst[0] = sat_u8((smp.r * mr + 32768) >> 16);
+                dst[1] = sat_u8((smp.g * mg + 32768) >> 16);
+                dst[2] = sat_u8((smp.b * mb + 32768) >> 16);
+              } else if (tex != nullptr && tex->ts != nullptr) {
                 // ONE primary sample (charter §15/§26): mirrored-repeat fold
                 // to the texel (zref::terrain::mirror_texel — the §6.2 frozen
                 // law), optional per-texel Mosaic pick between the cell's two

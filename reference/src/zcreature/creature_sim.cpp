@@ -650,7 +650,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // The light gain rides mod_r/g/b (flat) or the interpolated colour
         // lanes (Gouraud): texel colour TIMES the per-channel rig, one
         // multiply, no second shading model.
-        if (T.page_set != nullptr && m.page != 255) {
+        if ((T.page_direct != nullptr || T.page_set != nullptr) && m.page != 255) {
           render::TextureSpan tex;
           tex.ts = T.page_set;
           tex.tile_a = m.page;
@@ -659,6 +659,36 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           tex.mod_r = sh.r;
           tex.mod_g = sh.g;
           tex.mod_b = sh.b;
+          if (T.page_direct != nullptr) {
+            // T1/T2: the direct page wins; the per-triangle req_lod is the
+            // Measure the TMU contract says arrives from upstream. Texel
+            // density: |uv cross| in texels^2 over |screen cross| in px^2,
+            // level = floor(log2(ratio))/2 (area is length squared), U4.4
+            // with zero fraction (the TMU truncates level = lod >> 4).
+            //   uv lanes are Q16.16 TILE units; one tile edge is 64 texels,
+            //   so texels^2 = cross_uv * 4096 / 2^32. Screen lanes are
+            //   S12.8: px^2 = cross_px / 2^16.
+            const int64_t e1u = b.s.u - a.s.u, e1v = b.s.v - a.s.v;
+            const int64_t e2u = c.s.u - a.s.u, e2v = c.s.v - a.s.v;
+            const int64_t e1x = b.s.x - a.s.x, e1y = b.s.y - a.s.y;
+            const int64_t e2x = c.s.x - a.s.x, e2y = c.s.y - a.s.y;
+            int64_t cuv = e1u * e2v - e1v * e2u;
+            if (cuv < 0) cuv = -cuv;
+            int64_t cpx = e1x * e2y - e1y * e2x;
+            if (cpx < 0) cpx = -cpx;
+            // ratio in texel^2/px^2 = cuv * 4096 * 2^16 / (2^32 * cpx)
+            //                       = cuv / (16 * cpx), floored
+            uint8_t level = 0;
+            if (cpx > 0) {
+              uint64_t ratio = static_cast<uint64_t>(cuv) / (16u * static_cast<uint64_t>(cpx));
+              while (ratio >= 4 && level < 6) {  // each mip level is 4x area
+                ratio >>= 2;
+                ++level;
+              }
+            }
+            tex.direct = T.page_direct;
+            tex.lod = static_cast<uint8_t>(level << 4);
+          }
           render::ScreenV sa = a.s, sb = b.s, sc = c.s;
           if (gouraud) {
             sa.cr = shc[0].r; sa.cg = shc[0].g; sa.cb = shc[0].b;

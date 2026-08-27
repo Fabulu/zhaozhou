@@ -66,6 +66,10 @@ namespace render {
 struct Tileset;
 }
 
+// forward: the direct-colour page variant (zref_texture.hpp) — RGB565 mip
+// chains sampled through the one Tmu law
+struct DirectPageSet;
+
 namespace creature {
 
 // ---------------------------------------------------------------- formats --
@@ -467,6 +471,11 @@ struct CreatureType {
   // The creature's texture page. Null means every meshlet falls back to
   // its flat material colour, so an untextured creature still renders.
   const render::Tileset* page_set = nullptr;
+  // Direct-colour page (RGB565 + bilinear + mips through the one TMU law
+  // — zref_texture.hpp DirectPageSet). When set it WINS over page_set:
+  // the CLUT8 page remains the ordinary-creature format tier
+  // (creature_rules 1.2 as amended: the page carries a FORMAT tag).
+  const DirectPageSet* page_direct = nullptr;
 };
 
 /**
