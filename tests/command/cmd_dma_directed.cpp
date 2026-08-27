@@ -96,6 +96,10 @@ class DmaBench {
 
   bool dmaBusy() const { return top_->fetch_req_ready_o == 0; }
 
+  // D21: readiness must fall the moment a descriptor is accepted and stay
+  // down until the verdict. Nothing had ever sampled it after the handshake.
+  bool saw_ready_while_busy_ = false;
+
   void park() {
     top_->fetch_req_valid_i = 0;
     top_->fetch_slot_i = 0;
@@ -186,7 +190,13 @@ class DmaBench {
     top_->fetch_epoch_i = epoch;
     cycle();  // accepted (IDLE)
     top_->fetch_req_valid_i = 0;
-    for (int i = 0; i < max_cycles && verdicts_.empty(); ++i) cycle();
+    saw_ready_while_busy_ = false;
+    for (int i = 0; i < max_cycles && verdicts_.empty(); ++i) {
+      cycle();
+      // Sampled while the transaction is still running: once the verdict has
+      // landed the block is idle again and readiness is CORRECT.
+      if (verdicts_.empty() && top_->fetch_req_ready_o) saw_ready_while_busy_ = true;
+    }
   }
 
   uint8_t& mem(uint32_t a) {
@@ -275,6 +285,30 @@ std::vector<uint8_t> makeRecord(uint16_t opcode, uint16_t rb,
     }
   }
   return r;
+}
+
+// Re-seal a hand-mangled packet: recompute BOTH CRCs from whatever the bytes
+// now say. The builders above emit only lawful frames, so a malformed-but-
+// CRC-intact packet -- the only kind that reaches the LENGTH gates -- has to
+// be made by editing a field and resealing. The payload CRC is taken over the
+// DECLARED command_bytes, which is what the RTL does.
+void reseal(std::vector<uint8_t>& p) {
+  auto get32 = [&](uint32_t off) {
+    return static_cast<uint32_t>(p[off]) | (static_cast<uint32_t>(p[off + 1]) << 8) |
+           (static_cast<uint32_t>(p[off + 2]) << 16) | (static_cast<uint32_t>(p[off + 3]) << 24);
+  };
+  auto put32 = [&](uint32_t off, uint32_t v) {
+    for (int i = 0; i < 4; ++i) p[off + i] = static_cast<uint8_t>(v >> (8 * i));
+  };
+  const uint32_t cb = get32(28);
+  if (36u + cb + 4u <= p.size()) {
+    put32(36 + cb, zhao_abi::zhao_crc32c(0, p.data() + 36, cb));
+  }
+  put32(32, zhao_abi::zhao_crc32c(0, p.data(), 32));
+}
+
+void put32at(std::vector<uint8_t>& p, uint32_t off, uint32_t v) {
+  for (int i = 0; i < 4; ++i) p[off + i] = static_cast<uint8_t>(v >> (8 * i));
 }
 
 }  // namespace
@@ -447,6 +481,140 @@ int main(int argc, char** argv) {
       check(b.len >= 8 && b.len <= 64, "happy: burst len in [8,64]", 8, b.len);
     }
     t.idle(4);
+  }
+
+  // ---- 1b. THE BOUND LAWS THE MUTATION SWEEP FOUND UNTESTED ------------------
+  //
+  // tools/sweep_cmd_dma.sh scored 12 of 21, and the nine survivors were ONE
+  // coherent pattern: every ARITHMETIC gate. Magic, ABI version, flags, header
+  // CRC, epoch, unknown opcode and the debug permission were all caught. The
+  // gates that decide HOW FAR THE WALK MAY READ were not tested at their
+  // boundaries -- which is the half of the chain standing between a hostile
+  // frame and the end of the staging buffer.
+  //
+  // Each case below is malformed but CRC-INTACT, because a frame that fails
+  // the CRC never reaches a length gate at all.
+  {
+    // D04: command_bytes must be a multiple of 16.
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(2, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    put32at(pkt, 28, 8);  // 8 is not a multiple of 16
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D04: command_bytes not a multiple of 16 is BAD_LENGTH", zhao_abi::ZH_ABI_BAD_LENGTH,
+          t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+    check(t.pkt_bytes_.empty(), "D04: and zero bytes go downstream", 0, t.pkt_bytes_.size());
+  }
+
+  {
+    // D05: the command COUNT may not exceed what command_bytes can hold.
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(3, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    put32at(pkt, 24, 2);  // 2 records claimed, 16 bytes -> room for one
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D05: a count larger than the bytes can hold is BAD_LENGTH", zhao_abi::ZH_ABI_BAD_LENGTH,
+          t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+  }
+
+  {
+    // D07: the STAGING BOUND. SLOT_BUF_BYTES is 4096, so 40 + command_bytes
+    // must not exceed it. 4064 is a lawful multiple of 16 that is over the
+    // line by exactly one record -- the boundary a `+16` slip would let past.
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(4, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    put32at(pkt, 28, 4064);
+    put32at(pkt, 24, 1);
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, 40 + 4064, 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D07: a packet past the staging buffer is BAD_LENGTH", zhao_abi::ZH_ABI_BAD_LENGTH,
+          t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+    check(t.pkt_bytes_.empty(), "D07: and zero bytes go downstream", 0, t.pkt_bytes_.size());
+  }
+
+  {
+    // D14/D15: a record length must be a multiple of 16 AND at least 16. A
+    // zero-length record is the dangerous one: the walk cannot advance past it.
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(5, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    pkt[36 + 2] = 24;  // record_bytes = 24, not a multiple of 16
+    pkt[36 + 3] = 0;
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D14: a record length that is not a multiple of 16 is BAD_LENGTH",
+          zhao_abi::ZH_ABI_BAD_LENGTH, t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+  }
+
+  {
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(6, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 16, {})});
+    pkt[36 + 2] = 0;  // record_bytes = 0: the walk could never advance
+    pkt[36 + 3] = 0;
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D15: a ZERO-length record is BAD_LENGTH, not an infinite walk",
+          zhao_abi::ZH_ABI_BAD_LENGTH, t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+  }
+
+  {
+    // D17: the record's declared size must EQUAL the opcode's, not merely be
+    // no smaller. NOP is a 16-byte opcode; here it claims 32.
+    DmaBench t;
+    std::vector<uint8_t> pkt = makePacket(7, 0, 20, 0, {makeRecord(ZHAO_OP_NOP, 32, {})});
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1 && t.verdicts_[0].status == zhao_abi::ZH_ABI_BAD_LENGTH,
+          "D17: a record larger than its opcode's size is BAD_LENGTH", zhao_abi::ZH_ABI_BAD_LENGTH,
+          t.verdicts_.empty() ? 0xFF : t.verdicts_[0].status);
+  }
+
+  {
+    // D18: a record may not run past the command block.
+    //
+    // The record must be CANONICALLY sized or the "size disagrees with the
+    // opcode" gate fires first and reports BAD_LENGTH for both pristine and
+    // mutant. BEGIN_FRAME is a 32-byte opcode, so one lawful BEGIN_FRAME
+    // inside a command block declared as 16 bytes reaches the truncation gate
+    // and nothing earlier: 0 + 32 > 16.
+    DmaBench t;
+    std::vector<uint8_t> pkt =
+        makePacket(8, 0, 20, 0, {makeRecord(ZHAO_OP_BEGIN_FRAME, 32, {8, 0, 0, 20})});
+    put32at(pkt, 28, 16);  // declared 16, but the record is 32
+    put32at(pkt, 24, 1);
+    reseal(pkt);
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.verdicts_.size() == 1, "D18: a record running past the command block ends the frame", 1,
+          t.verdicts_.size());
+    check(!t.verdicts_.empty() && t.verdicts_[0].status != 0,
+          "D18: and it is refused, not executed", 1,
+          t.verdicts_.empty() ? 0 : (t.verdicts_[0].status != 0 ? 1 : 0));
+  }
+
+  {
+    // D21: the block advertises NO readiness while a fetch is running. Nothing
+    // had ever sampled fetch_req_ready_o after the descriptor was accepted, so
+    // a block that accepted a second descriptor mid-fetch passed everything.
+    DmaBench t;
+    const std::vector<uint8_t> pkt = makePacket(
+        10, 0, 50, 0,
+        {makeRecord(ZHAO_OP_BEGIN_FRAME, 32, {10, 0, 0, 50}), makeRecord(ZHAO_OP_NOP, 16, {}),
+         makeRecord(ZHAO_OP_END_FRAME, 32, {0, 0, 0, 0})});
+    t.load(kSlotBody0, pkt);
+    t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+    check(t.saw_ready_while_busy_ == false,
+          "D21: the block never advertises readiness while a fetch runs", 0,
+          t.saw_ready_while_busy_ ? 1 : 0);
   }
 
   // ---- 2. corrupt header CRC: the GATE ---------------------------------------

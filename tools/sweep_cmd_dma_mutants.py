@@ -141,7 +141,21 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. Nothing is declared until the first run says what actually survives.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "D08":
+        "UNREACHABLE BY ARITHMETIC. The FRAME_SLOT_BYTES law fires when "
+        "40 + command_bytes exceeds FRAME_SLOT_BYTES - 40 = 1,048,536, so it "
+        "needs command_bytes > 1,048,496. But the STAGING bound two lines "
+        "above it fires at 40 + command_bytes > SLOT_BUF_BYTES = 4,096, i.e. "
+        "command_bytes > 4,056 -- and it is checked FIRST. Every frame large "
+        "enough to trip the FRAME_SLOT_BYTES law has already been refused by "
+        "the staging bound, so both the shipped expression and the mutated one "
+        "are dead code and no test can tell them apart. "
+        "The check is defensive for a LARGER staging buffer, which is a "
+        "reasonable thing to keep. RE-SCORE THIS THE MOMENT SLOT_BUF_BYTES "
+        "RISES ABOVE 1,048,536 -- that parameter, not the mutant, is the thing "
+        "to watch.",
+}
 
 
 def write_rtl(text, path=RTL):
