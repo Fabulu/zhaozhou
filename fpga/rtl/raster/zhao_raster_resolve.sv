@@ -208,9 +208,13 @@ module zhao_raster_resolve (
   end
 
   // One zhao_raster_quant per channel, with resolve.cpp's constants NAMED at
-  // the instantiation: the 5-bit channels take (31, 16, 8) and green takes
-  // (63, 32, 16). Nothing is derived here — green's doubled amplitude is the
-  // oracle's stated constant, not a formula (see zhao_raster_quant.sv).
+  // the instantiation. All three take AMP=16, RND=8; only MAXQ and QW differ
+  // (31/5 for the 5-bit channels, 63/6 for green). Nothing is derived here --
+  // the constants are the oracle's, carried as parameters so this line names
+  // them and nothing has to guess.
+  //
+  // This comment used to say green takes (63, 32, 16). It does not, and never
+  // did in this code; see the header for why that law was retired.
   logic [4:0] c_r5, c_b5;
   logic [5:0] c_g6;
   zhao_raster_quant #(.MAXQ(31), .QW(5), .AMP(16), .RND(8))

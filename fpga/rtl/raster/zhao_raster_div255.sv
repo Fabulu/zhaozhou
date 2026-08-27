@@ -6,7 +6,7 @@
 // with C++ integer division on a NON-NEGATIVE numerator, i.e. floor:
 //
 //     r5 = min(31, (r*31 + B*16 + 8) / 255)
-//     g6 = min(63, (g*63 + B*32 + 16) / 255)
+//     g6 = min(63, (g*63 + B*16 +  8) / 255)   <- 16/8, like the others
 //     b5 = min(31, (b*31 + B*16 + 8) / 255)
 //
 // A divider is not synthesisable at one pixel per clock, so the RTL uses the
@@ -37,7 +37,11 @@
 // The failure needs q ≥ 257, i.e. n ≥ 255·257 = 65,535. This block ships
 // W = 15 (n ≤ 32,767 ⇒ q ≤ 128), so the identity is exact with a factor-of-2
 // margin, and the widest numerator the resolve ever forms is
-// 255·63 + 15·32 + 16 = 16,561 (green — the widest channel), q ≤ 64.
+// 255·63 + 15·16 + 8 = 16,313 (green — the widest channel), q ≤ 64.
+// (This read 15·32 + 16 = 16,561 until 2026-08-27, from the pre-white-rail
+// green amplitude. The margin argument is unaffected: the stale figure was
+// the LARGER one, so W = 15 was conservative rather than wrong, and the
+// .sby proves the bound for EVERY n at the shipping width regardless.)
 //
 // tests/formal/raster_resolve_div255.sby proves `q·255 ≤ n < (q+1)·255` for
 // EVERY n at the shipping width — the bound argument above is a theorem the
