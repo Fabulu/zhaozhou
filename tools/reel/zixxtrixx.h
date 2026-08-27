@@ -668,6 +668,37 @@ constexpr int kAtkLiftN = static_cast<int>(sizeof(kAtkLift) / sizeof(Key));
 constexpr int kAtkFwdN = static_cast<int>(sizeof(kAtkFwd) / sizeof(Key));
 constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 
+// The coil / stance-authority / spin curves live at FILE SCOPE (moved
+// 2026-08-27 round-skull run) because the CHOREO PROOF needs them: the
+// programmable-salto architecture (C1) re-derives the per-key root from
+// these same numbers, and tools/reel/zixx_choreo.cpp diffs the result
+// against the golden decomposition.
+// 1000 = rolled into the coil, 0 = straight. The roll-up waits for the
+// anticipation (keys 0..9 are the compress + hold).
+static const Key kAtkCurl[] = {
+    {0, 0}, {9, 0}, {13, 350}, {18, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
+// how much of the canonical S remains -- FULL through the compress/hold
+// (the preload deepens it on top), gone by the time the coil owns the body
+static const Key kAtkAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
+                               {208, 0},           {214, 650}, {kAttackKeys - 1, 1000}};
+// accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
+// the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
+// 60 deg below horizontal pointing down-and-forward, HELD from the apex
+// through the dive, the impact and the whole stick; the extraction keeps
+// it held until the tip is probed clear of the ground (key 206), and only
+// then does the fourth turn land it. The -40 at key 12 is the wind-up --
+// INSIDE the release, not the hold: at spin -40 the whole body pitches
+// about the nose, and during the grounded compress that floated the rear
+// 750 mm off the dirt (probe). By key 12 the launch is already airborne.
+static const Key kAtkSpin[] = {{0, 0},          {10, 0},          {12, -40},
+                               {15, 0},         {20, 700},        {28, 1600},
+                               {36, 2600},      {43, 3050},       {47, kAtkSpinStick},
+                               {208, kAtkSpinStick},              {212, 3650},
+                               {215, 3900},     {kAttackKeys - 1, 4000}};
+constexpr int kAtkCurlN = static_cast<int>(sizeof(kAtkCurl) / sizeof(Key));
+constexpr int kAtkAuthN = static_cast<int>(sizeof(kAtkAuth) / sizeof(Key));
+constexpr int kAtkSpinN = static_cast<int>(sizeof(kAtkSpin) / sizeof(Key));
+
 // evaluate a key-domain curve at REEL-FRAME resolution (2 frames per key,
 // lerped at the half key) -- the tracking camera calls these per frame
 inline int32_t curve_half(const Key* k, int n, int frame) {
@@ -1171,7 +1202,15 @@ inline zc::Clip build_walk() {
 // So `curl` runs 1000 (coiled, relaxed) -> 0 (a rigid straight spear) and the
 // stance's authority goes with it: at the moment of the stab there is no
 // relaxation left in the animal at all.
-inline zc::Clip build_attack() {
+// `choreo`: build the LOCAL-BODY-SHAPE-ONLY variant (C1/C3): the bone-0
+// somersault spin and EVERY root channel (fwd, lift, preload rise, coil
+// re-pivot) are omitted -- they move to the per-instance ChoreoRoot, which
+// is exactly the amendment's split ("shared clips own local body shape; a
+// per-instance root transform owns trajectory, spin count, spin plane and
+// attack direction"). tools/reel/zixx_choreo.cpp proves the recomposition
+// reproduces the golden world-space result. Default false: the shipped
+// clip is bit-identical to the approved one.
+inline zc::Clip build_attack(bool choreo = false) {
   zc::Clip c;
   c.slot_id = 3;
   // 60 Hz presentation interpolation. Keys stay authored at 30 Hz and every
@@ -1205,33 +1244,9 @@ inline zc::Clip build_attack() {
   // Lift and forward drive live at file scope (kAtkLift / kAtkFwd) because
   // the reel's TRACKING CAMERA follows the same authored path.
 
-  // 1000 = rolled into the coil, 0 = straight. The roll-up now waits for
-  // the anticipation (keys 0..9 are the compress + hold): the body starts
-  // coiling only as the release fires, so the stored-energy pose is legible
-  // BEFORE anything leaves the ground.
-  static const Key kCurl[] = {
-      {0, 0}, {9, 0}, {13, 350}, {18, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
-  // how much of the canonical S remains -- FULL through the compress/hold
-  // (the preload deepens it on top), gone by the time the coil owns the body
-  static const Key kAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
-                              {208, 0},           {214, 650}, {kAttackKeys - 1, 1000}};
-  // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
-  // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
-  // 60 deg below horizontal pointing down-and-forward, HELD from the apex
-  // through the dive, the impact and the whole stick; the extraction keeps
-  // it held until the tip is probed clear of the ground (key 206), and only
-  // then does the fourth turn land it. The -40 at key 12 is the wind-up --
-  // INSIDE the release, not the hold: at spin -40 the whole body pitches
-  // about the nose, and during the grounded compress that floated the rear
-  // 750 mm off the dirt (probe). By key 12 the launch is already airborne.
-  static const Key kSpin[] = {{0, 0},          {10, 0},          {12, -40},
-                              {15, 0},         {20, 700},        {28, 1600},
-                              {36, 2600},      {43, 3050},       {47, kAtkSpinStick},
-                              {208, kAtkSpinStick},              {212, 3650},
-                              {215, 3900},     {kAttackKeys - 1, 4000}};
-  const int nC = static_cast<int>(sizeof(kCurl) / sizeof(Key));
-  const int nA = static_cast<int>(sizeof(kAuth) / sizeof(Key));
-  const int nS = static_cast<int>(sizeof(kSpin) / sizeof(Key));
+  const int nC = kAtkCurlN;
+  const int nA = kAtkAuthN;
+  const int nS = kAtkSpinN;
 
   // rolling up: 360 degrees spread over the 18 interior joints
   const int32_t coil_pitch = -(65536 / (kSpineBones - 2));
@@ -1239,9 +1254,9 @@ inline zc::Clip build_attack() {
   for (int f = 0; f < kAttackKeys; ++f) {
     Rig g;
     g.reset();
-    const int curl = curve(kCurl, nC, f);
-    const int auth = curve(kAuth, nA, f);
-    const int spin = curve(kSpin, nS, f);
+    const int curl = curve(kAtkCurl, nC, f);
+    const int auth = curve(kAtkAuth, nA, f);
+    const int spin = curve(kAtkSpin, nS, f);
     const int lift = curve(kAtkLift, kAtkLiftN, f);
     const int fwd = curve(kAtkFwd, kAtkFwdN, f);
     const int pre = curve(kAtkPre, kAtkPreN, f);
@@ -1256,11 +1271,12 @@ inline zc::Clip build_attack() {
       g.q[kBSpine0 + k] =
           quat_mul(g.q[kBSpine0 + k], quat_z((coil_pitch * curl) / 1000));
     }
-    // the somersault: the whole body turns on bone 0
+    // the somersault: the whole body turns on bone 0 -- unless the choreo
+    // split owns it (then the ROOT carries this same theta)
     const int32_t theta = static_cast<int32_t>(
         (static_cast<int64_t>(spin) * 65536) / 1000);
     const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
-    g.q[kBSpine0] = quat_mul(quat_z(theta), g.q[kBSpine0]);
+    if (!choreo) g.q[kBSpine0] = quat_mul(quat_z(theta), g.q[kBSpine0]);
 
     // re-pivot the spin from the nose to the coil centre, faded with the curl
     const int32_t sth = zref::fx_sin(zref::angle16{th16}).raw;
@@ -1281,11 +1297,51 @@ inline zc::Clip build_attack() {
     g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5,
                 (kBladeRise * auth) / 1000);
     g.write(c, f);
-    c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
-    c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_rise);
+    if (!choreo) {
+      c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
+      c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_rise);
+    }  // choreo: root channels stay ZERO -- trajectory is the instance's
   }
   c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 112
   return c;
+}
+
+// The per-key ROOT the choreo split hands the instance (the AttackPlan's
+// trajectory sample): the same fwd/lift/preload/re-pivot arithmetic the
+// monolithic clip used to bake, exposed so the sim (and the proof) compute
+// it from the plan instead of the clip. Returns mm; theta in angle16.
+struct ChoreoSample {
+  int32_t x_mm, y_mm;   // instance translation
+  int32_t theta;        // spin angle (angle16) about the world Z
+};
+inline ChoreoSample attack_choreo_sample(int key) {
+  const int curl = curve(kAtkCurl, kAtkCurlN, key);
+  const int auth = curve(kAtkAuth, kAtkAuthN, key);
+  const int spin = curve(kAtkSpin, kAtkSpinN, key);
+  const int lift = curve(kAtkLift, kAtkLiftN, key);
+  const int fwd = curve(kAtkFwd, kAtkFwdN, key);
+  const int pre = curve(kAtkPre, kAtkPreN, key);
+  Rig g;
+  g.reset();
+  const int32_t pre_rise = apply_stance(g, auth, pre);  // the belly-planting rise
+  const int32_t theta = static_cast<int32_t>((static_cast<int64_t>(spin) * 65536) / 1000);
+  const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
+  const int32_t sth = zref::fx_sin(zref::angle16{th16}).raw;
+  const int32_t cth = zref::fx_cos(zref::angle16{th16}).raw;
+  const int32_t piv_x = static_cast<int32_t>((static_cast<int64_t>(kCoilR) * sth) >> 16);
+  const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
+  ChoreoSample out;
+  out.x_mm = fwd + (piv_x * curl) / 1000;
+  out.y_mm = lift + (piv_y * curl) / 1000 + pre_rise;
+  out.theta = theta;
+  // PIVOT CORRECTION: on bone 0 the spin acted about the NOSE at kBodyY;
+  // the instance rotation acts about the world origin under it. Re-pivot
+  // with the same c - R(c) law the fall clip uses (quat_rot_vec).
+  int32_t rx, ry, rz;
+  quat_rot_vec(quat_z(theta), 0, kBodyY, 0, rx, ry, rz);
+  out.x_mm += 0 - rx;
+  out.y_mm += kBodyY - ry;
+  return out;
 }
 
 // Slot 4 - FALLING, the slow helpless tumble. REWRITTEN 2026-08-26. Fabian:

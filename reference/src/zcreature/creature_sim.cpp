@@ -461,13 +461,20 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
 
     lod_update(ci.lod, radius_q8, thresh_q8, T);
 
-    // ---- world transform: T(x,y,z) * RotY(facing) * tilt * bulk-scale
-    const int32_t fc = fx_cos(ci.facing).raw;
-    const int32_t fs = fx_sin(ci.facing).raw;
-    mat3x4fx roty{{fc, 0, fs, 0, 0, 1 << 16, 0, 0, -fs, 0, fc, 0}};
-    const mat3x4fx tilt = tilt_matrix(ci.tilt, L);
+    // ---- world transform: T(x,y,z) * RotY(facing) * tilt * bulk-scale —
+    // or, with the ChoreoRoot armed, T(x,y,z) * R(orient) * bulk-scale:
+    // the full-3D per-instance orientation that owns trajectory and spin
+    // while the clips keep local body shape (C1; see CreatureInstance).
     mat3x4fx local{};
-    mat3x4_mul(roty, tilt, local, L);
+    if (ci.choreo) {
+      quat16_to_mat3(ci.orient, local, L);
+    } else {
+      const int32_t fc = fx_cos(ci.facing).raw;
+      const int32_t fs = fx_sin(ci.facing).raw;
+      mat3x4fx roty{{fc, 0, fs, 0, 0, 1 << 16, 0, 0, -fs, 0, fc, 0}};
+      const mat3x4fx tilt = tilt_matrix(ci.tilt, L);
+      mat3x4_mul(roty, tilt, local, L);
+    }
     const int32_t sc = ci.bulk.scale;
     mat3x4fx world = local;
     for (int i = 0; i < 3; ++i) {

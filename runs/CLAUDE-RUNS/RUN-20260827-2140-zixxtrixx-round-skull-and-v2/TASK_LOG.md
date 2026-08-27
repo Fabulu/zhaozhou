@@ -183,3 +183,40 @@ how it is now with archived ones."*
 - LOOK: at 240p the 2,076-tri creature is indistinguishable from the
   3,680-tri one in every fixed view (evidence/poly2-*.png) -- exactly what
   smooth normals + filtered direct colour were supposed to buy.
+
+### Published, and publishing is now standing
+
+Deployed the archive restructure: **https://upheaval.pages.dev** (build
+`f1e4ba12`, 2 files changed of 24).
+
+Fabian, 2026-08-27: *"just publish it whenever it changes. Now too, and then
+when new Zixxtrixx hits."* This is a **standing authorisation** and it amends a
+project law, so it was written down in three places rather than left in a
+transcript: the `Process` section of all three `CLAUDE.md` copies, and the
+`upheaval-creature-site` memory. Scoped to this one site — it does not
+generalise to other outward-facing actions, and `noindex` stays.
+
+**So: the new Zixxtrixx renders go live the moment they land.** No approval step
+between the rework finishing and it being on the site.
+
+Same memory file was also brought up to date while it was open: it still
+described `togif.py`/GIF as the shipping format. Full-colour **webm is primary**;
+the 256-colour law binds the GIF export lane alone.
+
+## ChoreoRoot (C1) + the spin-migration proof (C3's precondition)
+- CreatureInstance gains {choreo, orient(quat16)}: world = T * R(orient) *
+  bulk, replacing RotY(facing)*tilt when armed. Default off; decode is the
+  ratified 9-product quat16->mat3. Recorded for GEOM.LOOM's contract lane in
+  the creature_rules amendment trail.
+- build_attack(choreo=true) builds the LOCAL-BODY-SHAPE-ONLY variant (no
+  bone-0 spin, ZERO root channels); attack_choreo_sample() exposes the
+  per-key trajectory (same curves, same fx trig, c - R(c) re-pivot -- the
+  correction for bone 0 sitting at kBodyY was derived and verified).
+- tools/reel/zixx_choreo.cpp (COMMITTED) proves: (1) one cached palette
+  serves two instances with different roots (pointer-identical -- the 2.2
+  economy untouched); (2) the recomposed salto matches the golden skinned
+  world-space stations to worst 2 mm over all 220 keys (tolerance 12 mm =
+  ~1 px; the paths round differently by construction). Exit 0.
+- Shipped attack clip STILL bit-identical to golden (clip-3.bin, pose CRCs);
+  probe exit 0; --check all match. Determinism: both paths are pure integer
+  functions of the key index -- replay-exact by construction.

@@ -737,6 +737,21 @@ struct CreatureInstance {
   AnimPlayer anim;
   LodState lod;
   bool visible = true;
+  // THE CHOREO ROOT (C1, 2026-08-27; ZixxtrixxV2amendment). When `choreo`
+  // is set the instance's world transform is T(x,y,z) · R(orient) ·
+  // bulk-scale — a FULL 3D orientation replacing RotY(facing)·tilt, so
+  // trajectory, spin count, spin plane and attack direction live on the
+  // INSTANCE while shared clips keep only local body shape. The sim owns
+  // building `orient` (folding facing in, freezing ground tilt at takeoff);
+  // the pose cache still serves shared (type, clip, frame) palettes —
+  // nothing about the creature_rules 2.2 economy changes, which is the
+  // point (sharing proof: tools/reel/zixx_choreo.cpp). Decode: quat16 →
+  // 3×3 is the same frozen 9-product formula GEOM.POSE ratified
+  // (qformats 7.6); on the silicon side per-instance transforms are
+  // GEOM.LOOM's chartered purpose, and this lane is recorded for its
+  // contract. Default false: existing callers unchanged.
+  bool choreo = false;
+  quat16 orient = quat16_identity();
 };
 
 /**
