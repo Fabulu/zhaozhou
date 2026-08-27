@@ -57,6 +57,29 @@ Grouped by subsystem, so the list can be worked rather than admired.
 `zhao_audio_fifo`, `zhao_input_rumble`, `zhao_input_snapshot`,
 `zhao_video_slotmgr`, `zhao_part_expand`, `zhao_part_soft`, `zhao_stub_top`
 
+## PROGRESS, 2026-08-27
+
+| block | first run | after closing gaps |
+| --- | --- | --- |
+| TERRAIN.PATCH | 19/20, one real gap | **20/20** |
+| DEBUG.FRAMEBLIT | 12/20, eight survivors | **16 caught + 4 proven equivalent** |
+| GEOM.WCACHE | 15/18, three real gaps | **18/18** |
+
+**Three blocks swept, six real test gaps found and closed, four equivalences
+proved.** Every one of the six was a law the block's own contract leads with,
+and every one had a green test suite sitting on top of it.
+
+The remaining count is therefore **35**, not 38. The rate is roughly one block
+per one to two hours, most of it waiting on rebuilds -- the mutant table is the
+only part that needs thought, and the driver and preflight are now derived
+almost verbatim (compare `sweep_terrain_patch.sh`, `sweep_debug_frameblit.sh`
+and `sweep_geom_wcache.sh`).
+
+The equivalence mechanism moved forward too: the frameblit and wcache drivers
+consult a machine-readable `EQUIVALENT` table and **fail on an undeclared
+survivor** rather than listing it. The terrain-derived drivers do not yet;
+porting that back is worth doing before the next few.
+
 ## Two entries worth calling out by name
 
 **`zhao_debug_frameblit`.** DEBUG.FRAMEBLIT is recorded as CLOSED in
