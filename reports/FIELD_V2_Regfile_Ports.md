@@ -410,3 +410,70 @@ so it is a properly scoped increment rather than a rewrite.
 
 It also raises v1's ceiling at the same time, which nothing else in this report
 does.
+
+---
+
+# THE RECIPROCAL PIPELINE, MEASURED: +0.6%. AND WHAT THAT ACTUALLY MEANS.
+
+`quartus_fit` + `quartus_sta`, 4,623.2 s, `rtlCleanAtHead: true`.
+
+| | before S_NORM | **after** |
+| --- | --- | --- |
+| ALMs | 7,860 | 7,870 |
+| M10K | 33 | 33 |
+| DSP | 15 | 15 |
+| **Fmax** | 58.85 MHz | **59.22 MHz** |
+
+**+0.6%.** I expected this to be the ceiling. It was not, and the reason is the
+most useful thing measured all night.
+
+## Three cuts, three different critical paths, all the same length
+
+| after | worst path | data delay |
+| --- | --- | --- |
+| the register file rebuild | register file -> multiply -> rescale -> add -> write | **18.02 ns** |
+| the ALU's second stage | ring -> reciprocal normalise -> seed ROM -> multiplier | **16.41 ns** |
+| the reciprocal's S_NORM | **the wavefront scoreboard, feeding itself** | **16.32 ns** |
+
+Each fix removed the path it targeted. Each time, another path was waiting
+within a fraction of a nanosecond of it.
+
+**This design does not have a critical path. It has a PLATEAU** — a broad set
+of independent structures all landing at 16–18 ns. That is why 52.13 -> 58.85
+-> 59.22 and not 52 -> 90 -> 120: cutting one exposes the next at almost the
+same delay, so each cut buys the difference between two neighbours on the
+plateau, not the difference between one path and the rest of the design.
+
+## The third path, and it is not arithmetic at all
+
+    zhao_field_v2_core|finished[5]  ->  zhao_field_v2_core|finished[2]
+
+    finished[5] -> ready[5] -> Mux6 (round robin) -> sel[1]
+                -> Mux12 (per-wavefront state indexed BY sel)
+                -> LessThan0 (1.93 ns)  -> finished[2]   ... 16.32 ns
+
+The scoreboard selects a wavefront and then, in the SAME clock, uses the
+selection to index per-wavefront state, compare it, and write the scoreboard
+back. Classic select-then-use. There is no multiplier in it and no memory in
+it; it is the scheduler arguing with itself.
+
+## What this changes about the plan
+
+Chasing paths one at a time is the wrong shape of work here, and two wrong
+predictions in a row are the evidence:
+
+* "the remaining half of the old path will limit at ~90 MHz" — it was 58.85,
+  because the path moved to another structure entirely;
+* "the reciprocal is the ceiling both engines sit on" — cutting it bought 0.6%,
+  because the next structure was already level with it.
+
+**A plateau is a pipeline-depth problem, not a hot-spot problem.** Reaching
+100 MHz means deciding that the engine gets another stage boundary
+*everywhere* — register the wavefront selection, and expect the next
+measurement to find yet another 16 ns structure rather than a clear win.
+
+That is a real architectural decision with a real cost (latency, interlock
+rework, and a sweep for each stage), and it should be weighed against simply
+giving Field its own clock domain, which costs nothing in the engine.
+
+Recorded, not taken.
