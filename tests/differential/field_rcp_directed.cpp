@@ -89,6 +89,51 @@ Res run(Vzhao_field_rcp_tb& dut, int32_t a) {
   return r;
 }
 
+// THE SAME WALK, WITH THE OPERAND YANKED THE INSTANT IT IS ACCEPTED.
+//
+// zhao_field_rcp's own comment states the contract: "The caller is not
+// required to hold `a_i` for the whole walk, so everything derived from it is
+// captured on the accepting edge." Nothing tested that. `run` above leaves
+// a_i sitting at its value after dropping v_valid_i, so a unit that kept
+// reading it live would pass every vector in this file.
+//
+// That went unnoticed while the normalise was combinational off a_i and the
+// product was issued on the accepting edge -- there was no later clock in
+// which a_i could be read, so the contract could not be broken. Adding S_NORM
+// created that clock, and the mutation sweep found the hole immediately
+// (M169: shift the LIVE operand instead of the held one, and every test
+// still passed).
+Res run_hostile(Vzhao_field_rcp_tb& dut, int32_t a, int32_t poison) {
+  dut.v_valid_i = 1;
+  dut.a_i = static_cast<uint32_t>(a);
+  dut.r_ready_i = 1;
+  dut.eval();
+
+  int guard = 0;
+  while (!dut.v_ready_o && guard++ < 128) {
+    zhao::tick(dut);
+    dut.eval();
+  }
+  zhao::tick(dut);  // the accepting edge
+  dut.v_valid_i = 0;
+  dut.a_i = static_cast<uint32_t>(poison);  // and the operand is gone
+  dut.eval();
+
+  int cycles = 0;
+  while (!dut.r_valid_o && cycles++ < 256) {
+    zhao::tick(dut);
+    dut.eval();
+  }
+
+  Res r;
+  r.value = static_cast<int32_t>(dut.result_o);
+  r.sat_rcp = dut.sat_rcp_o != 0;
+  r.rcp0 = dut.rcp0_o != 0;
+  zhao::tick(dut);
+  dut.eval();
+  return r;
+}
+
 void diff(Vzhao_field_rcp_tb& dut, int32_t a, const char* what) {
   const Res want = oracle(a);
   const Res got = run(dut, a);
@@ -336,6 +381,27 @@ int main(int argc, char** argv) {
           (first_gap > 0 && first_gap < 512) ? 1 : 0);
     check(first_gap == worst_gap, "the initiation interval is STEADY, not a first-shot figure",
           first_gap, worst_gap);
+  }
+
+  // ---- the operand is NOT held, and the answer must not care ---------------
+  {
+    // Each poison is chosen to normalise DIFFERENTLY from its operand -- a
+    // different leading-zero count, so a unit reading it live shifts by the
+    // wrong amount and lands on a different ROM entry. A poison with the same
+    // magnitude class would agree by accident and prove nothing.
+    const int32_t cases[][2] = {
+        {1 << 16, 0x7FFF0000}, {3 << 16, 1},     {-(5 << 16), 0x0000FFFF},
+        {1, 0x40000000},       {0x00010000, -1}, {-1, 0x00000100},
+        {0x7FFFFFFF, 2},       {2, 0x7FFFFFFF},  {-(1 << 16), 0x00000003},
+    };
+    for (const auto& c : cases) {
+      const Res want = oracle(c[0]);
+      const Res got = run_hostile(dut, c[0], c[1]);
+      char nm[96];
+      std::snprintf(nm, sizeof nm, "operand dropped after accept: a=%d poison=%d", c[0], c[1]);
+      check(got.value == want.value, nm, static_cast<uint32_t>(want.value),
+            static_cast<uint32_t>(got.value));
+    }
   }
 
   return zhao::report_and_exit("field_rcp_directed");

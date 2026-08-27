@@ -122,6 +122,7 @@ module zhao_field_rcp (
 );
 
   localparam logic [2:0] S_IDLE = 3'd0;
+  localparam logic [2:0] S_NORM = 3'd7;   // normalise + seed lookup
   localparam logic [2:0] S_P    = 3'd1;   // waiting on n * seed
   localparam logic [2:0] S_CLO  = 3'd2;   // issue seed * corr_lo
   localparam logic [2:0] S_CHI  = 3'd3;   // issue seed * corr_hi
@@ -141,15 +142,37 @@ module zhao_field_rcp (
   logic [31:0] mag;
   assign mag = neg ? (~$unsigned(a_i) + 32'd1) : $unsigned(a_i);
 
+  // The accepted magnitude, held so the normalise below is not a path from
+  // the caller's operand straight into the multiplier.
+  logic [31:0] h_mag;
+
   // ---- normalise: shift left until bit 31 is set --------------------------
   // `e` counts down from 31 by the number of leading zeros, exactly as the
   // reference's while-loop does.
+  //
+  // IT READS h_mag, NOT mag, AND THAT IS THE WHOLE POINT OF S_NORM.
+  //
+  // MEASURED 2026-08-27, from the Field fit: with the register file rebuilt
+  // and the ALU's multiply pipelined, THIS became the critical path of the
+  // whole engine, at 16.41 ns against 10.00 required:
+  //
+  //     zhao_field_ring|e1 -> ring's subtract -> this magnitude -> the
+  //     leading-zero detect -> the barrel shift -> the seed ROM -> the
+  //     shared multiplier's input register
+  //
+  // all in ONE clock, because the S_IDLE case issued the product on the
+  // accepting edge itself. Its comment said so and called it a saved clock.
+  // It cost the engine its clock rate instead -- and not only v2's: v1 sits
+  // at 58.99 MHz and v2 at 58.85 on this same path, in this same module.
+  //
+  // So the clock is spent. The magnitude is registered on accept and
+  // everything after it happens in S_NORM.
   logic [ 4:0] lz;
   logic [31:0] lz_t;
   always_comb begin
     lz = 5'd0;
-    lz_t = mag;
-    if (mag != 32'd0) begin
+    lz_t = h_mag;
+    if (h_mag != 32'd0) begin
       if (lz_t[31:16] == 16'd0) begin lz = lz + 5'd16; lz_t = lz_t << 16; end
       if (lz_t[31:24] == 8'd0)  begin lz = lz + 5'd8;  lz_t = lz_t << 8;  end
       if (lz_t[31:28] == 4'd0)  begin lz = lz + 5'd4;  lz_t = lz_t << 4;  end
@@ -160,7 +183,7 @@ module zhao_field_rcp (
 
   logic [31:0] n;
   logic [ 5:0] e;
-  assign n = mag << lz;
+  assign n = h_mag << lz;
   assign e = 6'd31 - 6'({1'b0, lz});
 
   // ---- the seed --------------------------------------------------------------
@@ -196,10 +219,11 @@ module zhao_field_rcp (
     mul_a_o     = '0;
     mul_b_o     = '0;
     case (state)
-      S_IDLE: begin
-        // Issued on the accepting edge itself, from the combinational normalise
-        // above, so the walk does not spend a clock re-presenting what it has.
-        mul_issue_o = v_valid_i && v_ready_o && !is_zero;
+      S_NORM: begin
+        // One clock after accept, from the REGISTERED magnitude. This used to
+        // be issued on the accepting edge itself; see the normalise above for
+        // what that cost.
+        mul_issue_o = 1'b1;
         mul_a_o     = $signed({1'b0, n});
         mul_b_o     = $signed({17'd0, seed});
       end
@@ -262,8 +286,12 @@ module zhao_field_rcp (
       case (state)
         S_IDLE: begin
           if (v_valid_i && v_ready_o) begin
-            h_seed <= seed;
-            h_e    <= e;
+            // ONLY THE MAGNITUDE AND THE TWO FLAGS. h_seed and h_e used to be
+            // captured here too, from a normalise that ran combinationally off
+            // the caller's operand -- which is precisely the path that made
+            // this module the engine's speed limit. They are captured in
+            // S_NORM now, one clock later, from a registered magnitude.
+            h_mag  <= mag;
             h_neg  <= neg;
             h_zero <= is_zero;
             if (is_zero) begin
@@ -274,9 +302,17 @@ module zhao_field_rcp (
               r_valid_o <= 1'b1;
               state     <= S_OUT;
             end else begin
-              state <= S_P;
+              state <= S_NORM;
             end
           end
+        end
+
+        S_NORM: begin
+          // The normalise and the seed lookup happen this clock, on h_mag, and
+          // the product is issued from them combinationally in the block above.
+          h_seed <= seed;
+          h_e    <= e;
+          state  <= S_P;
         end
 
         S_P: begin

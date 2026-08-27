@@ -951,6 +951,18 @@ MUTS = [
      """          s2_pre[l] <= alu_pre[l];""",
      """          s2_pre[l] <= alu_pre[0];"""),
 
+    # ---- the reciprocal's S_NORM, 2026-08-27 -------------------------------
+    # The normalise used to run combinationally off the caller's operand and
+    # issue the product on the accepting edge. That was the whole engine's
+    # critical path at 16.41 ns. It now happens one clock later, from a held
+    # magnitude, in its own state -- and the new state brings its own hazards.
+    ("M169 the normalise shifts the LIVE operand, not the held one", F_RCP,
+     """  assign n = h_mag << lz;""",
+     """  assign n = mag << lz;"""),
+    ("M170 the reciprocal accepts a new operand while still normalising", F_RCP,
+     """  assign v_ready_o = (state == S_IDLE) && (!r_valid_o || r_ready_i);""",
+     """  assign v_ready_o = ((state == S_IDLE) || (state == S_NORM)) && (!r_valid_o || r_ready_i);"""),
+
 ]
 
 
