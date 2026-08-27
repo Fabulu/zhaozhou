@@ -114,3 +114,63 @@ the bug it warns about.
 half-edited; every sweep runs `cmake -S . -B build` and would configure
 against work in progress. Authoring the mutant table is the useful part that
 needs no build.
+
+## 22:10 — RASTER.RESOLVE 17/17, RASTER.EARLYZ 15/16
+
+**RASTER.RESOLVE: 17 of 17 caught**, first run, no survivors, nothing to
+declare equivalent (`a4919a8`). The first block in the audit to come back
+clean.
+
+That is not "beyond suspicion" — it is "this suite already had teeth", which
+the four before it did not. The difference is visible in how it was written:
+its checks go to the ORACLE rather than to remembered RTL behaviour, and
+`test_green_amplitude` measures its own discriminating power (2,037 of 4,096
+(g, Bayer) pairs) before it checks anything. A suite that asks *could these
+vectors even tell the two laws apart* is the one that survives a sweep.
+
+**RASTER.EARLYZ: 15 of 16 caught** (`f0db971` authored the table). The block
+is unlike the rest of the audit and the table was built around that: almost
+every other block is wrong when it computes a wrong value, but this one is
+wrong when it REJECTS SOMETHING IT SHOULD NOT HAVE — invisible in a pixel
+comparison unless a test draws geometry the exact late test would have kept.
+So the mutants were split into reject-less (safe, costs throughput) and
+reject-more (silent correctness failure), and every reject-more mutant was
+caught, including the inverted test.
+
+### The survivor, E12, and why it took two phases to reach
+
+`hiz_qualify` drops its `!reject_c` term, letting a REJECTED fragment into the
+hierarchical-Z accumulator.
+
+It is safe in the depth sense, and the reasoning matters: a rejected fragment
+has `depth <= floor`, it enters a MIN, so `acc_min` can never exceed the floor
+and the `> floor` guard blocks any rise. **The floor cannot move backwards.**
+
+What changes is COVERAGE. The rejected fragment marks its pixel, so the
+accumulator fills and RESETS early, discarding evidence the oracle still
+holds — and the divergence surfaces a whole tile later, as a floor that fails
+to rise and a reject count that drifts. The oracle carries the same `!reject`
+term, so this is a real divergence and not an equivalence.
+
+Nothing in the file reached it because rejection needs the floor RAISED first:
+with the clear depth at 0 and larger-is-closer, almost nothing is rejected at
+the start of a tile. The closing case is therefore two-phase — cover the tile
+to raise the floor, then submit rejected-but-otherwise-qualifying fragments
+over half the tile, then a genuine cover.
+
+### Status: WRITTEN, NOT VERIFIED
+
+The case is authored and **deliberately not committed**. Three sessions now
+share one build tree and I could not build it:
+
+    ninja: error: failed recompaction: Permission denied
+    Error copying ... Vzhao_probe_curve_svc.cmake: No such file or directory
+
+The second is the Field agent mid-build on probe 4 (the curve service), whose
+CMake entry names files that do not exist yet. My earlier "63 checks passed"
+in that window was the OLD binary — the build had failed and the run proved
+nothing about the new case.
+
+Committing an unverified test would be worse than waiting: my first attempt at
+the CMD.DMA F05 case failed on PRISTINE RTL, which is exactly what verification
+is for. It goes in when the tree is free.
