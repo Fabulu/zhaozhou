@@ -1515,3 +1515,59 @@ stage bought.
 * Appending to the list with `rfind(']')` put the new mutants after
   `sys.exit(main())`. The syntax error named a line 60 lines away from the
   cause.
+
+---
+
+## 06:10 — the reciprocal, which was the ceiling for BOTH engines
+
+`zhao_field_rcp` issued its product on the accepting edge, from a normalise
+that ran combinationally off the caller's operand. Its own comment called that
+a saved clock. With the register file rebuilt and the ALU's multiply pipelined,
+that saved clock was the critical path of the entire engine — 16.41 ns against
+10.00 required:
+
+    ring's subtract -> magnitude -> leading-zero detect -> barrel shift ->
+    seed ROM -> the shared multiplier's input register
+
+**And it was never a v2 problem.** v1 sits at 58.99 MHz, v2 at 58.85, on this
+same path in this same module. v1 uses it unchanged. The register file was
+merely hiding it in v2; fix that and v2 lands exactly where v1 always was.
+
+`S_NORM` holds the magnitude on accept and does the normalise, the seed lookup
+and the issue one clock later.
+
+### Cost, measured rather than estimated
+
+| | before | after |
+| --- | --- | --- |
+| RCP initiation interval | 9 clocks | 10 clocks |
+| RING, 16 instructions | 1,558 clocks | **1,558 clocks** |
+| v2 ALU throughput | 3.94 v-instr/clk | 3.94 |
+
+The ring number is the interesting one: the extra reciprocal clock is absorbed
+*entirely* by the wait the ring already had. It cost nothing measurable.
+
+### The sweep found a hole this change CREATED THE CHANCE to have
+
+M169 — normalise the LIVE operand instead of the held one — survived every
+test. The module's own comment states the contract: *"The caller is not
+required to hold `a_i` for the whole walk."* Nothing tested it, and nothing
+needed to: while the normalise was combinational off `a_i` and the product went
+out on the accepting edge, **there was no later clock in which `a_i` could be
+read**, so the contract was unbreakable by construction.
+
+Adding a state created that clock, and the contract became something a defect
+could violate. `field_rcp_directed` now has `run_hostile()`, which yanks the
+operand to a deliberately different magnitude class the instant it is accepted
+— a poison in the same class would agree by accident and prove nothing. Nine
+cases. 341 checks, was 332.
+
+M170 (accepting a second operand while still normalising — the other hazard the
+new state brings) is caught too.
+
+**The pattern, twice in one night:** adding a pipeline stage does not only move
+timing. It makes previously-unbreakable contracts breakable, and every test
+whose coverage rested on "these two values happen to be equal" silently stops
+covering anything. M166 was the same shape in the ALU.
+
+`ctest -L fast` 278/278, ledger green. A fit is running; no number claimed yet.
