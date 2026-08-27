@@ -242,6 +242,27 @@ def eye_patch():
     crop = crop.transpose(Image.TRANSPOSE)
     crop = crop.resize((EYE_TEX_U, EYE_TEX_V), Image.BOX)
     a = np.asarray(crop).astype(np.float64)
+    # SATURATE TOWARD THE READ (2026-08-27). The raw lift shipped the SCAN's
+    # values, and the scan is pale: at 240p under the key light the yellow
+    # ball read as beige and the pupil as brown -- the dorsal-pink lesson
+    # again (matching the paper is not matching the READ). Classify each
+    # texel by what the artist MEANT -- ink ring, orange pupil, yellow ball
+    # -- and pull it two thirds of the way to a saturated version of that
+    # intent, keeping a third of the original so the hand wobble survives.
+    lum = a @ [0.299, 0.587, 0.114]
+    # red-minus-GREEN separates the orange pupil from the yellow ball: the
+    # scanned yellow is (250,230,150)-ish so red-minus-BLUE flags IT too
+    # (first attempt painted the whole disc orange with a yellow rim --
+    # exactly inverted). Orange has R >> G; yellow has R ~ G.
+    rg = a[..., 0] - a[..., 1]
+    ink = lum < 96
+    pupil = (~ink) & (rg > 55) & (a[..., 0] > 120)
+    ball = (~ink) & (~pupil)
+    tgt = np.zeros_like(a)
+    tgt[ink] = (26, 22, 26)
+    tgt[pupil] = (234, 88, 30)
+    tgt[ball] = (252, 224, 74)
+    a = a * 0.34 + tgt * 0.66
     yy, xx = np.mgrid[0:EYE_TEX_V, 0:EYE_TEX_U]
     cy = (EYE_TEX_V - 1) / 2.0
     cx = (EYE_TEX_U - 1) / 2.0
@@ -329,11 +350,20 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # the mouth: Front.png's white slit on the underside, ink rim. ENLARGED
     # 2026-08-27 (Fabian: "the mouth is not visible enough") -- wider across
     # the face and taller, so it survives 240p from the front.
-    for y in range(4, 12):
-        for x in range(8, 25):
+    # THE MOUTH WRAPS (2026-08-27, "the mouth is not visible enough"). On a
+    # tube-nose head the drawn face's centre-bottom mouth is the underside of
+    # the nose dome, and a narrow 13-column slit there is edge-on to every
+    # camera. So it spans a wide arc of the lower face (U 5..28, ~130 deg)
+    # over the dome rows, so its near half reads from the front and from the
+    # side alike.
+    # Mostly WHITE with a one-texel ink rim: at a grazing angle the visible
+    # strip is only a few texels tall, and a fat ink border ate all of them
+    # -- the mouth rendered as a dark band with white specks.
+    for y in range(2, 12):
+        for x in range(4, 30):
             t[y, x] = INK
-    for y in range(5, 11):
-        for x in range(9, 24):
+    for y in range(3, 11):
+        for x in range(5, 29):
             t[y, x] = WHITE
     # V row 0 is the WHOLE nose cap fan's sample row: flat pigment, no streaks
     t[0, :] = BLUE

@@ -227,8 +227,11 @@ constexpr int kFallKeys = 96;  // SLOW. One 3.2 s tumble per loop (Fabian,
 //   - the TAIL rise drops to 2 steep segments.
 constexpr int kStanceSlopes = kSpineBones - 1;  // 19 segments
 constexpr int32_t kStanceSlope[kStanceSlopes] = {
-    // neck: the cobra hook, tighter than ever
-    -5200, -7800, -8800, -4800,
+    // neck: the cobra hook, tighter than ever -- but the FIRST segment is
+    // gentler (the nose was pitched 29 deg at the dirt, which hid the face,
+    // the eye and the mouth from every camera; the drawn head hangs roughly
+    // level under the arch). Same sine sum, so the apex height is unchanged.
+    -3400, -7600, -9800, -6200,
     // apex
     0,
     // the dive, past vertical and back under itself, exaggerated
