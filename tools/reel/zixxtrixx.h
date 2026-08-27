@@ -87,8 +87,12 @@ struct TaperKey {
 // the raised front lobe (skull through the arch) drops ~13%, the grounded
 // rear keeps its girth, so the snakelike part reads full while the reared
 // part reads lean.
+// HEAD RE-FATTENED 2026-08-27 pass 3 (Fabian: "the head is not thick
+// enough ... make the head biger"): the SKULL keys swell ~21% into a real
+// bulb -- Front.png's head is a big round ball on a leaner neck -- easing
+// back to the untouched trunk by t=320. Body thickness stays as approved.
 constexpr TaperKey kTaper[] = {
-    {0, 870},   {60, 870},  {150, 840}, {230, 800},              // skull, soft jaw
+    {0, 1050},  {60, 1060}, {150, 1000}, {230, 860},             // the skull BULB
     {320, 800}, {500, 840}, {620, 860},                          // trunk swells rearward
     {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}  // tail stem
 };
@@ -99,8 +103,11 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 542;  // retuned 2026-08-27 for the new stance
-                                 // (probe: idle belly [-13..-4] mm)
+constexpr int32_t kBodyY = 539;  // retuned 2026-08-27 pass 3: the blade
+                                 // re-rake and the neck re-sum left the idle
+                                 // belly touching 0 at one key -- 3 mm down
+                                 // restores the authored sink (probe: idle
+                                 // [-7..-3] mm, walk [-13..+10] mm)
 // Planform centre of the posed S, nose to tail extent midpoint, for staging:
 // the folded S spans ~1.8 m behind the nose, so the reel offsets the instance
 // by this to keep the animal centred in an orbit shot.
@@ -131,7 +138,7 @@ constexpr int kHeadStations = 9;       // how many stations read as head
 // That also deleted two bones and four ring parts.
 constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
 constexpr int kEyeStation1 = 8;      // last
-constexpr int32_t kEyeBulgeNum = 72; // extra lateral half-width, % of the ring.
+constexpr int32_t kEyeBulgeNum = 85; // extra lateral half-width, % of the ring.
                                      // 72, was 40: Fabian 2026-08-27, "the
                                      // eyes do need to be a bit googly so
                                      // that even from front, you can see the
@@ -155,7 +162,11 @@ constexpr int kBladeRings = 7;
 constexpr int32_t kBladeLen = 780;
 constexpr int32_t kBladeW0 = 70;       // half-width at the root (LATERAL)
 constexpr int32_t kBladeThick0 = 16;   // half-thickness at the root (VERTICAL)
-constexpr int32_t kBladeSplay = 6900;  // ~38 deg apart, about the vertical axis
+// 1500, was 6900 (Fabian, 2026-08-27 pass 3: the fins "should be rotated
+// almost 90 degrees so [the fins] are almost lined up with body. But not
+// quite"): each blade now trails ~8 deg off the tail's own axis instead of
+// splaying ~38 deg across it.
+constexpr int32_t kBladeSplay = 1500;
 constexpr int32_t kBladeRise = 2600;   // lifted past the raised stem, so the
                                        // fan reads against the sky as drawn
 // 280: Fabian 2026-08-27, "make the middle prong of the tail a bit longer"
@@ -172,9 +183,12 @@ constexpr int32_t kSpikeR = 26;
 // The page carries the split; these are the flat-colour fallbacks.
 constexpr uint8_t kGreen[3] = {122, 192, 70};      // LIGHT green: most of the body
 constexpr uint8_t kGreenDark[3] = {44, 146, 86};   // DARK green: the front
-// ART DIRECTION OVERRIDE (Fabian, 2026-08-26): "The pink on the back should
-// be like neon pink." The measured pale sheet pink is overruled by the owner.
-constexpr uint8_t kPink[3] = {255, 32, 168};     // dorsal band, NEON
+// PINK, third pass (Fabian, 2026-08-27): "a bit less neon and a bit more
+// like on the sketch. A bit neon-y is fine though" -- pulled ~40% from the
+// 2026-08-26 neon toward the measured sheet pigment (233,188,206), NOT all
+// the way back to the pale rose that failed. Keep tools/pack/mkcreaturepage.py
+// in step.
+constexpr uint8_t kPink[3] = {246, 94, 183};     // dorsal band
 constexpr uint8_t kBlue[3] = {3, 145, 205};      // head and throat
 constexpr uint8_t kYellow[3] = {243, 232, 142};  // eye
 // ONE pencil serving TWO features: the ring round the eye in Front.png and the
@@ -185,14 +199,17 @@ constexpr uint8_t kOrange[3] = {218, 106, 71};
 // A key is held 2 sim ticks, so reel frames = keys * 2 at step 1.
 constexpr int kIdleKeys = 96;  // SLOW. 3.2 s of breathing.
 constexpr int kWalkKeys = 40;
-// 220 keys = 440 frames = 7.33 s at 60 Hz. The 2026-08-27 salto sticks its
-// landing as a planted spear for FIVE REAL SECONDS (Fabian: "Make it stick
-// for 5 actual seconds"): keys 53..203 are the stick -- 150 keys, 300
-// frames, 5.000 s at the site's 60 fps -- and the remaining 17 keys pull it
-// out and close the loop.
+// 220 keys = 440 frames = 7.33 s at 60 Hz. The salto sticks its landing as
+// a planted spear for FIVE REAL SECONDS (Fabian: "Make it stick for 5
+// actual seconds"): keys 56..206 are the stick -- 150 keys, 300 frames,
+// 5.000 s at the site's 60 fps -- and the remaining 13 keys pull it out and
+// close the loop.
 constexpr int kAttackKeys = 220;
-constexpr int kFallKeys = 96;  // SLOW. One 3.2 s tumble per loop (Fabian,
-                               // 2026-08-26: "slowly flailing", not jitter).
+constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
+                                // "When falling, the rotation is too
+                                // strong"): one tumble now takes 4.8 s, so
+                                // the full turn keeps its stand-on-its-head
+                                // moment but at 2/3 the angular speed.
 
 // THE CANONICAL S, as a slope table. d[k] is the direction of body segment k
 // (walking BACKWARD from the nose) in angle16, POSITIVE = DESCENDING (the
@@ -227,11 +244,17 @@ constexpr int kFallKeys = 96;  // SLOW. One 3.2 s tumble per loop (Fabian,
 //   - the TAIL rise drops to 2 steep segments.
 constexpr int kStanceSlopes = kSpineBones - 1;  // 19 segments
 constexpr int32_t kStanceSlope[kStanceSlopes] = {
-    // neck: the cobra hook, tighter than ever -- but the FIRST segment is
-    // gentler (the nose was pitched 29 deg at the dirt, which hid the face,
-    // the eye and the mouth from every camera; the drawn head hangs roughly
-    // level under the arch). Same sine sum, so the apex height is unchanged.
-    -3400, -7600, -9800, -6200,
+    // neck: the cobra hook. THE HEAD LOOKS UP (2026-08-27 pass 3, Fabian:
+    // "it looks to ofar downward. You can't see most of the blue face, and
+    // you can't see the mouth ... make it look up more"): the FIRST segment
+    // is now POSITIVE -- the nose rides ~14 deg ABOVE level, so the blue
+    // face and the mouth present to the camera -- and the three hook
+    // segments behind it steepen to keep the neck's SINE SUM (so the apex
+    // height and every grounded number are unchanged; probe-verified).
+    // +4000 (~22 deg up), not less: the showcase cameras look DOWN ~15 deg,
+    // so a merely-level head still presents its crown -- the lift must beat
+    // the camera pitch before the face reads (checked on head-on frames).
+    4000, -11200, -12800, -12000,
     // apex
     0,
     // the dive, past vertical and back under itself, exaggerated
@@ -321,28 +344,36 @@ constexpr int32_t kWalkWaveSpatial = 5600;
 // (kBodyLenMm / 2 pi), spins about the coil's centre, and the tail-first
 // spear dive needs the root this high for the tail tip to just reach ground.
 constexpr int32_t kCoilR = 485;
-// THE 2026-08-27 SALTO REWORK (Fabian, verbatim guidance):
-//   "make it jump up higher"            -> apex lift 4100 -> 5600 mm
-//   "It should jump forward"            -> 1900 mm of forward travel
-//   "hit while it's diagonal 30 degrees"-> spin 3333: the tail points 60 deg
-//      below horizontal, down-and-FORWARD, a javelin -- not straight down
-//   "ignore the clipping rule and actually stick in the ground some"
-//                                       -> tip buried 420 mm, AUTHORED
-//   "Make it stick for 5 actual seconds. Completely straight."
-//                                       -> lift/spin/curl all HELD for 150
-//                                          keys = 300 frames = 5.000 s
+// THE SALTO, third pass (Fabian, 2026-08-27 pass 3: "it should go up
+// higher ... I mean a lot higher. And it should shoot downward many meters,
+// maybe tens of meters. All at about 30 degree angle ... the skewering
+// should be one very long straight shot. It should stick in the ground."):
+//   - apex lift 5600 -> 12000 mm: a twelve-metre leap;
+//   - the PLUNGE IS ONE STRAIGHT SHOT ALONG THE SPEAR'S OWN 30-DEG LINE:
+//     from the apex the root drops 9645 mm while driving 5570 mm forward --
+//     dy/dx = tan(60) exactly, so the flight path is parallel to the held
+//     javelin axis: ~11.1 m of dead-straight travel into the ground;
+//   - spin 3333 holds the tail 60 deg below horizontal, down-and-FORWARD;
+//   - the tip buries 420 mm (the authorised clipping exception) and STICKS
+//     for 150 keys = 300 frames = 5.000 s, bit-constant;
+//   - the tracking camera aims at the SPEAR MIDPOINT through the dive and
+//     the stick (kAtkAim below), so the ground hit -- THE shot -- is framed.
 // Tail direction at spin s (1/1000 turn, minus the 3 whole somersaults):
 // 180 deg + s*0.36 deg. At 3333 that is 300 deg == 60 deg below horizontal
 // toward +X. Tip drop from the nose = reach * sin(60) = 3830 * 0.86603 =
-// 3317 mm (reach = kBodyLenMm + kBladeLen with the blades on the spear line).
-constexpr int32_t kAtkApexLift = 5600;   // mm of root lift at the apex
-constexpr int32_t kAtkFwdMax = 1900;     // mm of forward travel at impact
+// 3317 mm (reach = kBodyLenMm + kBladeLen with the blades on the spear line);
+// tip forward reach = 3830 * 0.5 = 1915 mm.
+constexpr int32_t kAtkApexLift = 12000;  // mm of root lift at the apex
+constexpr int32_t kAtkFwdMax = 7420;     // mm forward at impact: 1850 by the
+                                         // apex + 5570 on the 30-deg plunge
 constexpr int32_t kAtkSpinStick = 3333;  // 1/1000 turns: 30 deg from vertical
 constexpr int32_t kAtkStickDepth = 420;  // mm of authored burial
 constexpr int32_t kAtkTipDrop = 3317;    // reach * sin(60 deg), see above
+constexpr int32_t kAtkTipFwd = 1915;     // reach * cos(60 deg): how far the
+                                         // buried tip leads the nose in +X
 constexpr int32_t kAtkStickLift = kAtkTipDrop - kBodyY - kAtkStickDepth;
-constexpr int kAtkImpactKey = 53;        // reel frame 106 (keys held 2 ticks)
-constexpr int kAtkStickEnd = 203;        // impact + 150 keys = 5.0 s stuck
+constexpr int kAtkImpactKey = 56;        // reel frame 112 (keys held 2 ticks)
+constexpr int kAtkStickEnd = 206;        // impact + 150 keys = 5.0 s stuck
 
 // FALL: the slow distress tumble. The whole S rotates about its own centre
 // (re-pivoted off the nose exactly the way the salto re-pivots its spin to
@@ -355,17 +386,24 @@ constexpr int32_t kFallPivotY = -60;    // mm below the nose
 constexpr int32_t kFallLift = 1300;     // mm of air under the nose; the probe
                                         // verifies the loop never touches
                                         // (1150 left the longer blades 24 mm)
-constexpr int32_t kFallRollAmp = 6400;  // ~35 deg of slow roll wobble
-constexpr int32_t kFallYawAmp = 5100;   // ~28 deg of slow yaw wobble
-constexpr int32_t kFallNeckAmp = 4200;  // slow loose head/neck flail (up
-                                        // 2026-08-27: "with head movement")
-constexpr int32_t kFallWritheAmp = 1300;  // mid-body roll-twist writhe
+// ROTATION DOWN, WOBBLE UP (2026-08-27 pass 3, Fabian: "When falling, the
+// rotation is too strong. On the other hand, the snake should be wobbly ...
+// creature in fall mode should wobble more, not jitter"). The rigid-body
+// rotation amplitudes shrink; the BENDY amplitudes -- neck loll, serpentine
+// wave, writhe -- grow, all on the same slow one-per-loop periods (slower
+// still now the loop is 4.8 s), so the extra motion is loose and continuous,
+// never a twitch. The idle/walk wobble is the reference.
+constexpr int32_t kFallRollAmp = 4400;  // ~24 deg of slow roll wobble (was 35)
+constexpr int32_t kFallYawAmp = 3400;   // ~19 deg of slow yaw wobble (was 28)
+constexpr int32_t kFallNeckAmp = 5000;  // slow loose head/neck flail, up again
+constexpr int32_t kFallWritheAmp = 1700;  // mid-body roll-twist writhe
 // THE LATERAL WAVE (Fabian, 2026-08-27: "It needs to be wobbly side to
 // side ... It needs to be wavey. The walk does waveyness pretty well for the
 // caterpillar part"). A slow serpentine wave travelling nose -> tail through
 // every spine joint, strongest at the head, free of the ground because the
 // fall never touches it. This is the walk's principle turned sideways.
-constexpr int32_t kFallWaveAmp = 2600;     // ~14 deg at the head
+constexpr int32_t kFallWaveAmp = 3600;     // ~20 deg at the head (was 14 --
+                                           // "should wobble more")
 constexpr int32_t kFallWaveSpatial = 4700; // ~1.3 wavelengths down the body
 
 // ============================ END KNOBS ====================================
@@ -472,27 +510,43 @@ inline int curve(const Key* k, int n, int f) {
 // the authored path -- not the decoded pose, whose root also carries the
 // coil re-pivot wobble that would shake the shot.
 //
-// Lift in mm. HIGH ON PURPOSE, and now HIGHER (kAtkApexLift): the whole
-// spear hangs a beat at the apex, then PLUNGES on an accelerating ramp --
-// the last key drops 1400+ mm in two frames, which is what "strong and
-// hard" costs. It lands on kAtkStickLift EXACTLY at kAtkImpactKey and holds
-// it, dead still, to kAtkStickEnd; then pulls straight out along the lift
-// axis BEFORE the fourth turn is allowed to swing.
+// Lift in mm. A LOT HIGHER (kAtkApexLift = 12 m, Fabian 2026-08-27 pass 3):
+// the whole spear hangs a beat at the apex (keys 47..49), then PLUNGES on a
+// quadratic-in-time ramp -- dive keys 49..56 are lift = apex - t^2 * 9645,
+// accelerating the whole way down, landing on kAtkStickLift EXACTLY at
+// kAtkImpactKey; held, dead still, to kAtkStickEnd; then it pulls straight
+// out along the lift axis BEFORE the fourth turn is allowed to swing.
 static const Key kAtkLift[] = {
-    {0, 0},          {8, 40},        {16, 560},      {24, 1250},
-    {32, 2600},      {40, 4200},     {44, 5100},     {47, kAtkApexLift},
-    {49, kAtkApexLift}, {50, 5480},  {51, 4900},     {52, 3800},
+    {0, 0},          {8, 40},        {16, 560},      {24, 1400},
+    {32, 3200},      {38, 5600},     {42, 8200},     {45, 10600},
+    {47, kAtkApexLift}, {49, kAtkApexLift},
+    {50, 11803},     {51, 11213},    {52, 10228},    {53, 8851},
+    {54, 7079},      {55, 4914},
     {kAtkImpactKey, kAtkStickLift},  {kAtkStickEnd, kAtkStickLift},
-    {205, 3000},     {207, 3100},    {210, 1800},    {214, 700},
-    {217, 150},      {219, 0}};
-// forward drive in mm: the leap TRAVELS (kAtkFwdMax by impact, held through
-// the stick, returned across the landing so the loop closes)
+    {208, 3200},     {210, 3400},    {213, 2200},    {216, 900},
+    {218, 200},      {219, 0}};
+// forward drive in mm. THE PLUNGE IS THE STRAIGHT SHOT: over the dive keys
+// the drive is 1850 + t^2 * 5570 -- the SAME t^2 as the lift, so every dive
+// key sits exactly on the 30-degrees-from-vertical line the spear points
+// along. Held through the stick, returned across the landing for the loop.
 static const Key kAtkFwd[] = {
-    {0, 0},    {12, 0},    {16, 120},  {24, 450},  {32, 900},
-    {40, 1400}, {47, 1750}, {50, 1850}, {kAtkImpactKey, kAtkFwdMax},
-    {206, kAtkFwdMax}, {210, 1400}, {214, 700}, {219, 0}};
+    {0, 0},     {12, 0},    {16, 120},  {24, 450},  {32, 900},
+    {40, 1400}, {45, 1750}, {49, 1850},
+    {50, 1964}, {51, 2305}, {52, 2873}, {53, 3669}, {54, 4692}, {55, 5942},
+    {kAtkImpactKey, kAtkFwdMax},
+    {kAtkStickEnd, kAtkFwdMax}, {210, 5200}, {214, 2600}, {219, 0}};
+// how much the TRACKING CAMERA aims at the spear's midpoint instead of the
+// nose, in 1/1000 (Fabian, 2026-08-27 pass 3: the camera "doesn't catch the
+// most important thing, which is the ground hit where the tail actually
+// buries"). 0 while the body is a coil around the root; blended in as the
+// spear forms at the apex; HELD through the dive, the impact and the whole
+// five-second stick -- the buried tail is the shot -- and released only as
+// the extraction re-gathers the S.
+static const Key kAtkAim[] = {
+    {0, 0}, {40, 0}, {47, 1000}, {208, 1000}, {214, 0}, {219, 0}};
 constexpr int kAtkLiftN = static_cast<int>(sizeof(kAtkLift) / sizeof(Key));
 constexpr int kAtkFwdN = static_cast<int>(sizeof(kAtkFwd) / sizeof(Key));
+constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 
 // evaluate a key-domain curve at REEL-FRAME resolution (2 frames per key,
 // lerped at the half key) -- the tracking camera calls these per frame
@@ -504,6 +558,7 @@ inline int32_t curve_half(const Key* k, int n, int frame) {
 }
 inline int32_t attack_lift_mm(int frame) { return curve_half(kAtkLift, kAtkLiftN, frame); }
 inline int32_t attack_fwd_mm(int frame) { return curve_half(kAtkFwd, kAtkFwdN, frame); }
+inline int32_t attack_aim_mille(int frame) { return curve_half(kAtkAim, kAtkAimN, frame); }
 
 // ------------------------------------------------------------- bone map ----
 enum : uint8_t {
@@ -570,8 +625,8 @@ enum : uint8_t {
   kTileHead = 1,         // head: blue front/underside, pink crown, side eyes
   kTileEye = 2,          // (reserved)
   kTileRim = 3,          // (reserved)
-  kTileBladePinkUp = 4,  // tail blade: PINK upper face, GREEN lower
-  kTileBladeGreenUp = 5  // tail blade: GREEN upper face, PINK lower
+  kTileBladePinkUp = 4,  // tail blade: both faces pink, green slice at one edge
+  kTileBladeGreenUp = 5  // tail blade: both faces pink, green slice at the other
 };
 
 inline const zref::render::Tileset& page() {
@@ -910,7 +965,7 @@ inline zc::Clip build_attack() {
       {0, 0}, {8, 350}, {16, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
   // how much of the canonical S remains
   static const Key kAuth[] = {{0, 1000},          {8, 450},   {16, 0},
-                              {206, 0},           {212, 650}, {kAttackKeys - 1, 1000}};
+                              {208, 0},           {214, 650}, {kAttackKeys - 1, 1000}};
   // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
   // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
   // 60 deg below horizontal pointing down-and-forward, HELD from the apex
@@ -920,8 +975,8 @@ inline zc::Clip build_attack() {
   static const Key kSpin[] = {{0, 0},          {10, -40},        {16, 0},
                               {22, 700},       {30, 1600},       {38, 2600},
                               {44, 3050},      {47, kAtkSpinStick},
-                              {206, kAtkSpinStick},              {210, 3650},
-                              {214, 3900},     {kAttackKeys - 1, 4000}};
+                              {208, kAtkSpinStick},              {212, 3650},
+                              {215, 3900},     {kAttackKeys - 1, 4000}};
   const int nC = static_cast<int>(sizeof(kCurl) / sizeof(Key));
   const int nA = static_cast<int>(sizeof(kAuth) / sizeof(Key));
   const int nS = static_cast<int>(sizeof(kSpin) / sizeof(Key));
@@ -965,7 +1020,7 @@ inline zc::Clip build_attack() {
     c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
     c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000);
   }
-  c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 106
+  c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 112
   return c;
 }
 
@@ -1199,11 +1254,11 @@ inline const zc::CreatureType& type() {
         rs.w0 = static_cast<uint8_t>(64 - wroot);
         p.rings.push_back(rs);
       }
-      // each fin is PINK on one face and GREEN on the other (Fabian,
-      // 2026-08-26: "One side of the fin parts at the tail will have the
-      // pink, the other the green, a bit difficult to texture") -- solved by
-      // the U-split blade tiles; the two blades mirror which face is which,
-      // so Front.png reads one green blade and one pink one.
+      // BOTH faces of each fin carry BOTH colours (Fabian, 2026-08-27
+      // pass 3: "both sides should actually have both colors. big slice of
+      // pink, weaker slice of creen") -- each blade tile is pink with a
+      // green slice laid along one thin edge, and the two blades put the
+      // slice on opposite edges so they stay distinguishable.
       p.page = side == 0 ? kTileBladePinkUp : kTileBladeGreenUp;
       set_rgb(p, side == 0 ? kPink : kGreen);
       parts.push_back(p);

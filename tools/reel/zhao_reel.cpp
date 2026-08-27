@@ -1856,8 +1856,19 @@ int render_scene(const SceneSubject& sub) {
     // decoded root, which also carries the coil re-pivot wobble.
     int32_t trk_x = 0, trk_y = 0;
     if (sub.cam_track && sub.creature == 5) {
-      trk_x = fxm(zixx::attack_fwd_mm(static_cast<int>(f)));
-      trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000);
+      // AIM AT THE SPEAR, NOT THE NOSE (Fabian, 2026-08-27 pass 3: the shot
+      // missed "the most important thing, which is the ground hit where the
+      // tail actually buries"). The root is the NOSE, and at impact the nose
+      // hangs 2.4 m above the ground while the tail tip is 3.3 m below it
+      // and 1.9 m ahead -- so a nose-framed camera puts the burial at the
+      // bottom edge or off it. kAtkAim blends the tracked point from the
+      // nose to the SPEAR'S MIDPOINT as the javelin forms, and holds it
+      // there through the dive, the impact and the whole five-second stick.
+      const int32_t aim = zixx::attack_aim_mille(static_cast<int>(f));
+      trk_x = fxm(zixx::attack_fwd_mm(static_cast<int>(f)) +
+                  (aim * (zixx::kAtkTipFwd / 2)) / 1000);
+      trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000 -
+                  (aim * (zixx::kAtkTipDrop / 2)) / 1000);
     }
 
     // ---- creature sim (the driver composes the tick cadence; the laws are
@@ -3092,37 +3103,76 @@ SceneSubject subject_zixx_attack() {
 
   // THE TRACKING CAMERA (2026-08-27). Fabian: "keep the camera on it ... It
   // is very important the camera follow it, you did not do that." The view
-  // follows the authored flight path (lift at 85% so the climb still reads
-  // as climbing, forward drive in full); the creature never leaves frame.
+  // follows the authored flight path; the creature never leaves frame.
   s.cam_track = true;
+  // 1000, was 850: at a 12 m apex, following only 85% of the lift parks the
+  // creature 1.8 m above frame centre -- add the spear-midpoint aim shift
+  // and it clipped the top of the frame. Full lift tracking keeps the
+  // javelin centred the whole flight; the climb still reads because the
+  // GROUND rushes away (a world translation does not move the sky).
+  s.cam_track_num = 1000;
 
   // SCREEN SHAKE ON IMPACT -- showcase only, at Fabian's request, and
   // deliberately NOT a general feature: it lives on this presentation
   // subject, not in the creature and not in the sim. Contact is clip key
-  // kAtkImpactKey = 53, which is reel frame 106 (keys are held two ticks;
-  // the reel runs one tick per frame). A hard first jolt then a decaying
+  // kAtkImpactKey, reel frame 2*kAtkImpactKey (keys are held two ticks; the
+  // reel runs one tick per frame). A hard first jolt then a decaying
   // alternation, so it reads as one heavy blow rather than a wobble.
   //
-  // AMPLIFIED ~40x, 2026-08-27 (Fabian: "There's no screen shake, we said
-  // there should be"). The old first jolt was 2100 raw against a projection
-  // w of ~693000: 0.003 NDC, a third of a pixel -- set, invisible. 83000 is
-  // ~0.12 NDC, a dozen-plus pixels, and it decays the same way.
-  s.shake_frame = 106;
+  // STRONGER AND LONGER, 2026-08-27 pass 3 (Fabian, third ask: "we have no
+  // screenshake at point of impact I can see, so make that strong"). The
+  // previous 9-frame burst decayed inside a third of a second, so a video
+  // resampling 60 -> 20 fps kept at most two visibly-shaken frames. Now the
+  // first jolt is ~0.25 NDC (~30 px of a 240 px frame) and the alternation
+  // runs 16 frames, so even a 20 fps resample carries five-plus frames of
+  // it. VERIFIED on rendered frames (diffed around contact), not from these
+  // constants.
+  s.shake_frame = static_cast<uint32_t>(zixx::kAtkImpactKey) * 2;
   {
-    static const int32_t kJolt[] = {-83000, 59000, -41000, 27000, -17000,
-                                    10000,  -5500, 2800,   -1200};
+    static const int32_t kJolt[] = {-170000, 132000, -101000, 78000, -60000,
+                                    46000,   -34000, 25000,   -18000, 13000,
+                                    -9000,   6000,   -4000,   2500,   -1400,
+                                    0};
     for (int32_t v : kJolt) s.shake.push_back(v);
   }
   s.note =
-      "The attack, retimed 2026-08-27. Zixxtrixx rolls up into a wheel, "
-      "somersaults three times while climbing to a ~6.1 m apex AND leaping "
-      "forward ~1.9 m, unrolls to a rigid spear at the top, hangs a beat, "
-      "and plunges DIAGONALLY (30 deg from vertical, tail down-and-forward, "
-      "a javelin). The tip bites 420 mm into the ground -- the authorised "
-      "clipping exception, deep and lasting -- and STICKS, dead straight, "
-      "for 150 keys = 300 frames = 5.0 s, then pulls out and the loop "
-      "closes. The camera TRACKS the whole flight; screen shake at contact "
-      "(reel frame 106)";
+      "The attack, third pass 2026-08-27. Zixxtrixx rolls up into a wheel, "
+      "somersaults three times while climbing to a ~12.5 m apex, unrolls to "
+      "a rigid spear at the top, hangs a beat, and PLUNGES ~11 m in ONE "
+      "STRAIGHT SHOT along the spear's own 30-deg-from-vertical line (root "
+      "drops 9.6 m while driving 5.6 m forward -- the flight path IS the "
+      "javelin axis). The tip bites 420 mm into the ground -- the authorised "
+      "clipping exception -- and STICKS, dead straight, for 150 keys = 300 "
+      "frames = 5.0 s, then pulls out and the loop closes. The camera "
+      "TRACKS the flight AND aims at the spear midpoint through the dive "
+      "and stick so the ground hit is framed; strong 16-frame screen shake "
+      "at contact (reel frame 112)";
+  return s;
+}
+
+// DIAGNOSTIC (deliberately NOT in kLibrary, so it never ships to the site):
+// a near-LEVEL orbit for the Front.png acceptance test -- "a straight-on
+// view must look like the frontal sketch". The showcase camera looks down
+// 15 deg and therefore photographs the CROWN of even a lifted head; the
+// sketch's frontal is level with the face, so the comparison must be too.
+SceneSubject subject_zixx_front() {
+  SceneSubject s;
+  s.name = "zixxtrixx-front";
+  s.creature = 3;
+  s.frames = zixx::kIdleKeys * 2 * 3;
+  s.orbit = true;
+  zixx_common(s);
+  s.cam_ps = 4571;   // sin ~4 deg
+  s.cam_pc = 65377;  // cos ~4 deg
+  // THE STAGE IS THE MOUND CROWN AT ~8 m (the bump patch's hill -- see the
+  // bulk-pop subject's "aim y = 8.1 m"), so a level camera must ride just
+  // above it: eye 10, aim = 10 - tan(4 deg)*8 ~ 9.4 m, the lifted head.
+  // eye 3 put the camera INSIDE the hill and photographed sky.
+  s.cam_eye = 10;
+  s.note =
+      "DIAGNOSTIC: near-level orbit at head height so a head-on frame can "
+      "be compared against Concept/Front.png (the 15-deg showcase pitch "
+      "shows the crown, not the face)";
   return s;
 }
 
@@ -3340,5 +3390,6 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
+  if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
   return rc;
 }

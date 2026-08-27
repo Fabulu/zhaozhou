@@ -53,11 +53,12 @@ TILE = 64
 # and at 240p on dark ochre the two must separate at a glance.
 GREEN = (122, 192, 70)        # LIGHT green: most of the animal
 GREEN_DARK = (44, 146, 86)    # DARK green: the front
-# ART DIRECTION OVERRIDE (Fabian, 2026-08-26): "The pink on the back should be
-# like neon pink, it's just not even close to strong enough." The sheet's
-# measured pale pink (233,188,206) is therefore NOT what ships on the dorsal
-# band -- the owner's call beats the measurement.
-PINK = (255, 32, 168)
+# PINK, third pass (Fabian, 2026-08-27): "The pink for the entire creature can
+# be a bit less neon and a bit more like on the sketch. A bit neon-y is fine
+# though." So: pulled ~40% of the way from the 2026-08-26 neon (255,32,168)
+# toward the measured sheet pigment (233,188,206) -- NOT all the way back to
+# the pale rose that failed on dark ground at 240p. Judged on a render.
+PINK = (246, 94, 183)
 BLUE = (3, 145, 205)
 YELLOW = (243, 232, 142)
 ORANGE = (218, 106, 71)
@@ -134,6 +135,7 @@ def tint(base, g):
     return np.clip(out, 0, 255)
 
 
+DEBUG_IDENT = False  # debug fingerprint of the pink sources (leave off)
 def body_tile(g_green, g_green_dark, g_pink, rng):
     """The flank, with the dorsal band painted ON it.
 
@@ -147,7 +149,7 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     that would announce this was not drawn by hand.
     """
     t = tint(GREEN, g_green)
-    p = tint(PINK, g_pink)
+    p = tint((255, 0, 0) if DEBUG_IDENT else PINK, g_pink)
     # THE DARK FRONT GREEN (Fabian, 2026-08-27). Side.png lays it between the
     # blue throat and the light flank; Front.png paints the whole chest in it.
     # So: a belly-adjacent band (columns around U=64 -> texel 16) over the
@@ -169,8 +171,19 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # 4.5, not 6. A 26-degree-down camera shows mostly the animal's BACK, so
     # a band sized to look right in the side-view drawing dominates the render.
     # Narrowed together with a shallower showcase camera; judged from a render.
-    half = 4.5
+    #
+    # ...and THINNED OVER THE NECK (rows <= 26), 2026-08-27 pass 3: with the
+    # head lifted, the steep neck hook stands directly behind the skull and
+    # presents its BACK to a frontal camera -- a full-width band there merged
+    # with the head's cap into one big pink mass, where Front.png shows green
+    # chest behind the ball. The drawn band thins toward the head anyway.
     for y in range(TILE):
+        if y <= 14:
+            half = 2.2
+        elif y < 26:
+            half = 2.2 + (4.5 - 2.2) * (y - 14) / 12.0
+        else:
+            half = 4.5
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
         # the page is byte-identical on every machine
         wob = 2.2 * np.sin(y * 0.21) + 1.4 * np.sin(y * 0.077 + 1.1)
@@ -222,8 +235,17 @@ EYE_BOX = (1418, 556, 1594, 734)
 EYE_ROW = 19     # first texel row of the eyeball down the head tile
 EYE_COL_A = 32   # side line, +Z flank
 EYE_COL_B = 0    # side line, -Z flank
-EYE_TEX_U = 13   # texels of U for the yellow ball (angle around the head)
+EYE_TEX_U = 15   # texels of U for the yellow ball (angle around the head)
+                 # 15, was 13 (pass 3): Front.png's eyes are HUGE --
+                 # wider wrap puts more yellow on the frontal silhouette
 EYE_TEX_V = 30   # texels of V for the yellow ball (length along the head)
+# ORIENTATION KNOB (Fabian, 2026-08-27: "the eye texture ... should be rotate
+# a bit more than 90 degrees counter clockwise. That way the orange pupil
+# should look about right"). Degrees of extra rotation applied to the crop
+# AFTER the transpose, positive = counter-clockwise AS RENDERED on the flank
+# (verified by head-zoom render, not derived). The disc and its ink ring are
+# rotationally symmetric, so only the pupil band moves.
+EYE_ROT_DEG = 12
 
 
 def eye_patch():
@@ -240,6 +262,13 @@ def eye_patch():
     x0, y0, x1, y1 = EYE_BOX
     crop = im.crop((int(x0 * sc), int(y0 * sc), int(x1 * sc), int(y1 * sc)))
     crop = crop.transpose(Image.TRANSPOSE)
+    # EYE_ROT_DEG: spin the disc so the pupil band lands the way the owner
+    # asked (see the knob above). The crop is near-square and the elliptical
+    # alpha below clips the corners, so the rotation's fill never shows; the
+    # fill colour is the ball yellow just in case a texel of it survives.
+    if EYE_ROT_DEG:
+        crop = crop.rotate(EYE_ROT_DEG, resample=Image.BICUBIC,
+                           fillcolor=(250, 226, 120))
     crop = crop.resize((EYE_TEX_U, EYE_TEX_V), Image.BOX)
     a = np.asarray(crop).astype(np.float64)
     # SATURATE TOWARD THE READ (2026-08-27). The raw lift shipped the SCAN's
@@ -310,27 +339,43 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # the body tile behind them
     t = tint(BLUE, g_blue)
     gr = tint(GREEN_DARK, g_green_dark)
-    pk = tint(PINK, g_pink)
+    pk = tint((0, 255, 255) if DEBUG_IDENT else PINK, g_pink)
     # widths per V row: the pink cap is WIDE over the skull and narrows to the
     # body band behind it; the throat pinches slightly behind the jaw. What is
     # left between them on the rear rows is the GREEN neck flank -- Side.png
     # shows green riding high on the neck right behind the skull.
     def pink_half(y):
-        # the NOSE stays blue: the sheet's pink band fades out before the tip
-        if y < 6:
+        # the NOSE stays blue: the sheet's pink band fades out before the tip.
+        # NARROWED 2026-08-27 pass 3 (13 -> 9): Front.png's cap is only the
+        # top ~30% of the ball -- at 13 the crown wrapped down PAST the eye
+        # line (col 32 +- 6.5 vs cap reaching col 35) and the head-on view
+        # read as a pink ball with a blue chin instead of a blue face in a
+        # pink cap. At 9 the cap stops at col 39 and blue owns the sides.
+        # ...and it starts WELL BEHIND the brow (26, was 6): a frontal camera
+        # sees the TOP of the head tube as the middle of the ball, so any cap
+        # rows forward of the mid-skull paint pink exactly where the sketch's
+        # frontal ball is blue (found with a debug page that recoloured each
+        # pink source: the "ball centre" was the cap rows 18-38). Starting at
+        # 26 leaves the forehead blue between the eyes, and the cap reads as
+        # the ball's top rim -- the sketch's layout in both views.
+        if y < 26:
             return 0.0
-        if y < 16:
-            return 3.0 + (13.0 - 3.0) * (y - 6) / 10.0
+        if y < 34:
+            return 2.5 + (7.0 - 2.5) * (y - 26) / 8.0
         if y < 38:
-            return 13.0
+            return 7.0
         if y < 50:
-            return 13.0 - 5.0 * (y - 38) / 12.0
-        return 8.0
+            return 7.0 - 2.0 * (y - 38) / 12.0
+        return 5.0
     def throat_half(y):
         return 12.0 if y < 38 else 10.0
-    # green rear flanks: fade in behind the skull; wobbly hand edge
+    # green rear flanks: fade in behind the skull; wobbly hand edge.
+    # PUSHED BACK 2026-08-27 pass 3 (34 -> 40): at 34 the green covered the
+    # rear half of the SKULL, and a head-on view showed it as a green rim
+    # ringing the face -- Front.png's ball has no green on it at all. At 40
+    # the green begins on the neck rows only.
     for x in range(TILE):
-        start = 34 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
+        start = 40 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
         for y in range(max(0, int(start)), TILE):
             dtop = min(abs(x - 48), TILE - abs(x - 48))
             dbel = min(abs(x - 16), TILE - abs(x - 16))
@@ -347,48 +392,51 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
             if d < half:
                 t[y, x] = pk[y, x]
     t = paint_eyes(t, g_orange)
-    # the mouth: Front.png's white slit on the underside, ink rim. ENLARGED
-    # 2026-08-27 (Fabian: "the mouth is not visible enough") -- wider across
-    # the face and taller, so it survives 240p from the front.
-    # THE MOUTH WRAPS (2026-08-27, "the mouth is not visible enough"). On a
-    # tube-nose head the drawn face's centre-bottom mouth is the underside of
-    # the nose dome, and a narrow 13-column slit there is edge-on to every
-    # camera. So it spans a wide arc of the lower face (U 5..28, ~130 deg)
-    # over the dome rows, so its near half reads from the front and from the
-    # side alike.
-    # Mostly WHITE with a one-texel ink rim: at a grazing angle the visible
-    # strip is only a few texels tall, and a fat ink border ate all of them
-    # -- the mouth rendered as a dark band with white specks.
-    for y in range(2, 12):
-        for x in range(4, 30):
+    # the mouth: Front.png's white slit on the underside, ink rim. SHRUNK
+    # 2026-08-27 pass 3 (Fabian: "the mouth, which I think is actually too
+    # big now"). The 130-degree wrap was a fix for a head that hung nose-down
+    # and hid it; the head now looks UP (kStanceSlope[0]), so the slit can be
+    # the drawing's own modest centre-bottom mouth again: ~85 deg of the
+    # lower nose (U 9..24), a few rows tall, mostly WHITE with a one-texel
+    # ink rim (a fat border ate the visible texels at grazing angles).
+    # ...and it sits ON THE DOME rows (V 1..8), not behind them: the dome's
+    # lower half faces forward-down, which with the lifted head is exactly
+    # the camera -- rows 3..9 sat on the tube underside and curved away.
+    for y in range(1, 8):
+        for x in range(8, 26):
             t[y, x] = INK
-    for y in range(3, 11):
-        for x in range(5, 29):
+    for y in range(2, 7):
+        for x in range(9, 25):
             t[y, x] = WHITE
     # V row 0 is the WHOLE nose cap fan's sample row: flat pigment, no streaks
     t[0, :] = BLUE
     return t
 
 
-def blade_tile(g_green, g_pink, pink_up):
-    """A tail blade: PINK on one face, GREEN on the other (Fabian, 2026-08-26:
-    "One side of the fin parts at the tail will have the pink, the other the
-    green, a bit difficult to texture"). U wraps the blade's flat section, so
-    the upper face is the columns around 48 and the lower face the columns
-    around 16 -- half the tile each, split with a wobbly hand edge. Two tiles,
-    mirrored, so the two blades can disagree about which face is which."""
+def blade_tile(g_green, g_pink, green_at_lead):
+    """A tail blade: BOTH faces carry BOTH colours (Fabian, 2026-08-27: "right
+    now you have one side of fin colored pink, the other green. I think both
+    sides should actually have both colors. big slice of pink, weaker slice of
+    creen"). U wraps the blade's flat section -- upper face is the columns
+    around 48, lower face around 16, the thin edges at 0 and 32. Each face is
+    a BIG pink slice with a WEAKER green slice laid along one edge, split with
+    a wobbly hand edge. The two tiles put the green slice along opposite
+    edges so the two blades stay distinguishable."""
     gr = tint(GREEN, g_green)
-    pk = tint(PINK, g_pink)
+    pk = tint((255, 128, 0) if DEBUG_IDENT else PINK, g_pink)
     t = np.zeros((TILE, TILE, 3), dtype=np.float64)
+    edge = 0 if green_at_lead else 32  # which thin edge the green rides
     for y in range(TILE):
         wob = 1.6 * np.sin(y * 0.19 + 0.5) + 0.9 * np.sin(y * 0.055 + 1.9)
         for x in range(TILE):
-            d = min(abs(x - (48 + wob)), TILE - abs(x - (48 + wob)))
-            up = d < 16
-            t[y, x] = (pk if up == pink_up else gr)[y, x]
+            # wrap-aware distance from the green edge line: within ~10 texels
+            # of it (on either face) is the weaker green slice, the rest of
+            # both faces stays pink -- ~2/3 pink, ~1/3 green per face
+            d = min(abs(x - (edge + wob)), TILE - abs(x - (edge + wob)))
+            t[y, x] = (gr if d < 10 else pk)[y, x]
     # cap rows flat so the tip fan cannot streak
-    t[0, :] = PINK if pink_up else GREEN
-    t[63, :] = PINK if pink_up else GREEN
+    t[0, :] = PINK
+    t[63, :] = PINK
     return t
 
 
@@ -405,9 +453,9 @@ def build_tiles():
     tiles.append(tint(ORANGE, g["orange"]))
     names.append("eye rim / pupil (reserved)")
     tiles.append(blade_tile(g["green"], g["pink"], True))
-    names.append("tail blade, pink upper face / green lower face")
+    names.append("tail blade, both faces pink with green slice at the U0 edge")
     tiles.append(blade_tile(g["green"], g["pink"], False))
-    names.append("tail blade, green upper face / pink lower face")
+    names.append("tail blade, both faces pink with green slice at the U32 edge")
     return tiles, names
 
 
