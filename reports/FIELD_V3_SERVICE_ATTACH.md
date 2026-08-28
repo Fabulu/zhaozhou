@@ -108,6 +108,24 @@ Four pieces, in the order they should be built and measured:
 
 Found while specifying the curve-service attach, before writing it.
 
+> **CORRECTION TO THIS CORRECTION, 2026-08-28.** Two things below are wrong,
+> and both came from grepping for a port name instead of reading the block.
+>
+> * **`zhao_probe_dist_svc` never had a multiplier at all.** It takes
+>   `req_n2_*` already squared -- the service boundary its own header states,
+>   in the same words as this document's section on keeping multipliers out of
+>   the probes. There is nothing to refuse it, so it has no defect here.
+> * **The curve service's failure was a HANG, not a wrong value.** It did
+>   advance out of `F_ISSUE` unconditionally, but the next state waits on
+>   `mul_valid_i`, which after a refusal never arrives. It stalls forever
+>   rather than consuming a phantom product.
+>
+> Fixed the same day -- AUTHORED, NOT YET BUILT, because a sweep owns the
+> build trees: `mul_ready_i` added, `F_ISSUE` holds until granted.
+> What survives unchanged is the conclusion below -- services-first is a
+> requirement, not a preference -- and it is now belt AND braces rather than
+> the only thing standing between the design and a deadlock.
+
 **Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
 input.** Grepped both: zero matches. The curve service simply asserts
 

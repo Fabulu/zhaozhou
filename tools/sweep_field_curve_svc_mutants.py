@@ -108,6 +108,30 @@ MUTANTS = [
      "        st_valid <= 1'b0;",
      "      end else if (start_fire && st_valid) begin\n"
      "        st_valid <= st_valid;"),
+
+    # ---- the refusal loop, added 2026-08-28 with mul_ready_i ---------------
+    # The bank is shared and can say no. Before this port the finish stage
+    # advanced out of F_ISSUE regardless and then waited for a product that a
+    # refusal had never started -- a HANG, and one that could only appear
+    # after the service was attached to the engine. Section 7 of the
+    # differential refuses on a pseudo-random schedule; these attack the three
+    # ways the hold can be got wrong.
+    ("C16 the finish stage advances on a REFUSED issue, so it waits forever",
+     RTL,
+     "        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT;",
+     "        F_ISSUE: f_state <= F_WAIT;"),
+    ("C17 the grant is read inverted, so it advances only when refused",
+     RTL,
+     "        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT;",
+     "        F_ISSUE: if (!mul_ready_i) f_state <= F_WAIT;"),
+    # The request must stay asserted across a refusal or the retry never
+    # happens. Gating the issue with the grant is the plausible-looking
+    # version of that mistake, and it deadlocks: ready is only offered to a
+    # claimant that is asking.
+    ("C18 the request is withdrawn while it is being refused",
+     RTL,
+     "  assign mul_issue_o = (f_state == F_ISSUE);",
+     "  assign mul_issue_o = (f_state == F_ISSUE) && mul_ready_i;"),
 ]
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails

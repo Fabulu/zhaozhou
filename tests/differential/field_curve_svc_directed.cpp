@@ -67,6 +67,17 @@ struct MulBank {
   bool busy = false;
   int cnt = 0;
   int64_t p[4] = {0, 0, 0, 0};
+
+  // THE BANK CAN REFUSE, AND UNTIL NOW THIS MODEL COULD NOT.
+  //
+  // `grant` drives mul_ready_i. A model that always grants makes the whole
+  // refusal path unreachable, which is exactly how the executor's DOT
+  // sequencer kept full marks while carrying an open-loop defect: a claimant
+  // that is never refused has no refusal behaviour to test. `refusals` counts
+  // how often it actually said no, so a contention test can PROVE it
+  // contended rather than passing vacuously.
+  bool grant = true;
+  int refusals = 0;
 };
 
 int64_t sx33(uint64_t v) { return ((int64_t)(v << 31)) >> 31; }
@@ -80,6 +91,7 @@ void set66(W& w, int64_t p) {
 
 /** One cycle: serve the mul bank, then clock the DUT. */
 void step(Vzhao_probe_curve_svc& dut, MulBank& mb) {
+  dut.mul_ready_i = mb.grant ? 1 : 0;
   if (mb.busy && mb.cnt == 0) {
     set66(dut.mul_p_0_i, mb.p[0]);
     set66(dut.mul_p_1_i, mb.p[1]);
@@ -91,7 +103,11 @@ void step(Vzhao_probe_curve_svc& dut, MulBank& mb) {
     dut.mul_valid_i = 0;
   }
   dut.eval();
-  if (dut.mul_issue_o) {
+  if (dut.mul_issue_o && !mb.grant) {
+    // Refused: nothing is started, so nothing may ever arrive. The service
+    // must hold the request and ask again.
+    ++mb.refusals;
+  } else if (dut.mul_issue_o) {
     mb.p[0] = sx33(dut.mul_a_0_o) * sx33(dut.mul_b_0_o);
     mb.p[1] = sx33(dut.mul_a_1_o) * sx33(dut.mul_b_1_o);
     mb.p[2] = sx33(dut.mul_a_2_o) * sx33(dut.mul_b_2_o);
@@ -275,6 +291,7 @@ int main(int argc, char** argv) {
   dut.tl_we_i = 0;
   dut.tl_commit_i = 0;
   dut.mul_valid_i = 0;
+  dut.mul_ready_i = 1;
   dut.eval();
   for (int i = 0; i < 4; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -455,6 +472,67 @@ int main(int argc, char** argv) {
         check_rsp(dut, want[g], tags[g], msg);
         step(dut, mb);
       }
+    }
+
+    printf("== section 7: the bank refuses, and the answers do not move ==
+");
+    {
+      // THE SERVICE COULD NOT BE ATTACHED WITHOUT THIS.
+      //
+      // The multiplier bank is shared with the executor and the other
+      // services, so it can say no. The finish stage used to advance out of
+      // F_ISSUE regardless and then wait for a product that a refusal had
+      // never started -- a HANG, not a wrong number, and one that would only
+      // ever appear after the service was wired into the engine.
+      //
+      // So the model refuses on a pseudo-random schedule while real groups
+      // run. Two things must hold: every answer is still exactly the
+      // interpreter's, and refusals must ACTUALLY HAPPEN -- a contention test
+      // that never contends is the failure this whole exercise is about.
+      dut.rsp_ready_i = 1;
+      dut.eval();
+      Prng crng(0x5EF5EDu);
+      mb.refusals = 0;
+      const int kGroups = 24;
+      for (int i = 0; i < kGroups; ++i) {
+        const int tbl = (int)crng.below(4);
+        const bool dc = crng.below(4) == 0;
+        int32_t a[4];
+        for (int l = 0; l < 4; ++l) a[l] = interesting_a(crng, tabs[(size_t)tbl]);
+        const Want w = oracle(tabs, tbl, dc, a);
+
+        drive_req(dut, tbl, dc, a, (uint8_t)(0x80 + i));
+        dut.eval();
+        int guard = 0;
+        while (!(dut.req_valid_i && dut.req_ready_o) && guard++ < 256) {
+          mb.grant = (crng.below(2) != 0);
+          step(dut, mb);
+        }
+        mb.grant = true;
+        step(dut, mb);
+        dut.req_valid_i = 0;
+        dut.eval();
+
+        int cycles = 0;
+        while (!dut.rsp_valid_o && cycles < 512) {
+          mb.grant = (crng.below(2) != 0);
+          step(dut, mb);
+          ++cycles;
+        }
+        mb.grant = true;
+        char msg[56];
+        snprintf(msg, sizeof msg, "contended group %d", i);
+        check(cycles < 512, (std::string(msg) + ": reply arrived, no hang").c_str(), 1,
+              cycles < 512 ? 1 : 0);
+        check_rsp(dut, w, (uint8_t)(0x80 + i), msg);
+        step(dut, mb);
+        dut.eval();
+      }
+      printf("   MEASURED: %d groups under refusal, %d refusals issued
+", kGroups,
+             mb.refusals);
+      check(mb.refusals > 0, "the bank ACTUALLY refused -- the test is not vacuous", 1,
+            mb.refusals > 0 ? 1 : 0);
     }
   } else {
     printf("== random differential: %d groups against zfield::exec_op ==\n", random_n);

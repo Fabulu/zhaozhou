@@ -109,14 +109,37 @@
 > is banned here; three sessions share this worktree. The record is in
 > `runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture/TASK_LOG.md`.
 >
-> ### STILL OPEN: the two services
+> ### CORRECTION: it was ONE service, not two, and it hangs rather than lies
 >
-> Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
-> input at all, so a refused service advances as though its multiply happened.
-> Both are already probed and fitted, so their numbers need redoing with the
-> port added. The structural answer above applies unchanged to both: issue
-> from a stage that does not move, count ISSUE and ARRIVAL separately, retry
-> on refusal.
+> The entry above said both services had the identical defect. I read the RTL
+> instead of the note. **`zhao_probe_dist_svc` has no multiplier port at all**
+> -- it takes `req_n2_*` already squared, by the service boundary its own
+> header states -- so there is nothing for the bank to refuse and no defect to
+> fix. The claim was inherited and never checked.
+>
+> **`zhao_probe_curve_svc` did have it, and its failure is a HANG, not a wrong
+> answer.** The finish FSM advanced `F_ISSUE -> F_WAIT` unconditionally and
+> then waited on `mul_valid_i`, which after a refusal never arrives: the stage
+> waits forever and the barrel behind it never drains. Loud, at least, unlike
+> the executor's silent wrong sums.
+>
+> It is also LATENT: nothing instantiates the service yet. The real statement
+> is not "the service is broken" but "the service had no port to be refused
+> on, so it could not be attached".
+>
+> **Fixed 2026-08-28 -- AUTHORED, NOT YET BUILT.** The executor's own sweep
+> owns the build trees for the next couple of hours and nothing else may build
+> while a sweep is in flight, so this is written and unverified. It becomes a
+> claim when it compiles and section 7 passes; until then read it as intent.
+>
+> `mul_ready_i` added, `F_ISSUE` holds until granted.
+> The operands are already parked in the finish registers and `mul_issue_o`
+> stays asserted across the refusal, so a retry costs one clock. Section 7 of
+> the differential refuses on a pseudo-random schedule and asserts that
+> refusals ACTUALLY HAPPENED -- the same vacuity that hid the executor's bug
+> for a whole sweep. Three mutants (C16-C18) attack the hold.
+>
+> Its fit numbers predate the port and need redoing.
 
 
 

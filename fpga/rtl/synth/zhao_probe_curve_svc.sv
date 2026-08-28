@@ -82,6 +82,20 @@ module zhao_probe_curve_svc (
     input  logic        [ 7:0] req_tag_i,
 
     // ---- the vector multiplier bank (engine property, not probe silicon) --
+    //
+    // `mul_ready_i` IS THE PORT THIS SERVICE COULD NOT BE ATTACHED WITHOUT.
+    //
+    // The bank is shared and it can REFUSE. Until this port existed the
+    // service issued into F_WAIT unconditionally and then waited for a
+    // product that, when the request had been refused, was never started --
+    // so the failure mode is not a wrong answer, it is a HANG: the finish
+    // stage waits forever and the barrel behind it never drains.
+    //
+    // That is the same open loop the executor's DOT sequencer had, and the
+    // same rule closes it: an instruction cannot advance past ISSUE until the
+    // issue is GRANTED. The executor's version is the harder case (its
+    // operands move); here the group is already parked in the finish
+    // registers, so holding in F_ISSUE is the whole fix.
     output logic               mul_issue_o,
     output logic signed [32:0] mul_a_0_o,
     output logic signed [32:0] mul_a_1_o,
@@ -91,6 +105,7 @@ module zhao_probe_curve_svc (
     output logic signed [32:0] mul_b_1_o,
     output logic signed [32:0] mul_b_2_o,
     output logic signed [32:0] mul_b_3_o,
+    input  logic               mul_ready_i,
     input  logic               mul_valid_i,
     // The bank lane is 66 bits (DOT3 sums three products); a curve consumes
     // one 32x32 product and reads the low 64 — a property of the op, not a
@@ -509,7 +524,12 @@ module zhao_probe_curve_svc (
 
       // ---- finish FSM ------------------------------------------------------
       case (f_state)
-        F_ISSUE: f_state <= F_WAIT;
+        // HOLD UNTIL GRANTED. `mul_issue_o` stays asserted across the refusal
+        // -- it is `f_state == F_ISSUE` -- and the operands are already in
+        // f_doff/f_dye, which do not move, so the retry costs a clock and
+        // nothing else. Advancing here on a refused request is what makes
+        // F_WAIT wait for a product nobody started.
+        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT;
         F_WAIT: begin
           if (mul_valid_i) begin
             for (int l = 0; l < LANES; l++) begin
