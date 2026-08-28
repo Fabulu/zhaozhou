@@ -268,6 +268,42 @@ Recorded this way on purpose. A rule inferred from a failure that was later
 explained by something else is worse than no rule -- it is a superstition
 with a changelog entry.
 
+### 6. `Start-Process -ArgumentList` with an ARRAY silently drops arguments
+
+This one invalidated a chain of reasoning before it was found.
+
+```powershell
+# DOES NOT WORK -- bash receives no arguments, silently
+Start-Process $bash -ArgumentList 'tools/run_sweep_detached.sh','field_v3_engine','build-exec'
+
+# WORKS -- one string, verified by probe
+Start-Process $bash -ArgumentList 'tools/run_sweep_detached.sh field_v3_engine LOGDIR build-exec'
+```
+
+What it cost: a launch intended to run the ENGINE sweep in its own tree
+instead ran a SECOND COPY of the bank sweep in the same tree as the first.
+Two identical sweeps then raced, deleting each other's target between
+rebuilds, and both aborted on `pristine target did not link`.
+
+The failure was silent and plausible at every step: the script name defaulted,
+the build directory defaulted, and the resulting run looked exactly like a
+legitimate one in its own log. It was only visible in the PROCESS LIST, where
+two `sweep_field_v3_mulbank.sh` appeared when there should have been one.
+
+**So verify the launch, do not assume it.** After starting a detached sweep,
+check that the process actually running is the one intended:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='bash.exe'" |
+  Where-Object { $_.CommandLine -like '*sweep_field*' } |
+  Select-Object ProcessId, CommandLine
+```
+
+The wider lesson, which cost the most time tonight: **a default that is
+plausible hides the failure that produced it.** Every silent fallback here --
+the sweep name, the build directory, `/tmp`, `USERPROFILE` -- produced a run
+that looked normal and was wrong.
+
 ### And check the tree afterwards, from outside the sweep
 
 ```
