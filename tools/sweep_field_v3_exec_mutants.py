@@ -94,10 +94,10 @@ MUTANTS = [
 
     # ---- one instruction in flight per context -----------------------------
     ("X05 a context is released for re-issue a stage before its write lands",
-     "      if (s4_v_r) begin\n"
+     "      end else if (s4_v_r) begin\n"
      "        inflight_r[s4_ctx_r] <= 1'b0;",
-     "      if (s3_v_r) inflight_r[s3_ctx_r] <= 1'b0;\n"
-     "      if (s4_v_r) begin"),
+     "      end else if (s4_v_r) begin\n"
+     "        inflight_r[s3_ctx_r] <= 1'b0;"),
     # Reshaped: dropping the term orphaned inflight_r. ORing it keeps the
     # operand and keeps the defect -- an in-flight context is offered again
     # before its own write has landed.
@@ -135,11 +135,15 @@ MUTANTS = [
     # The write enable grew a `!dot_here_c` term on 2026-08-28 -- the fix for
     # the defect X11 exposed -- so these two anchors moved with it.
     ("X11 every op writes, including the ones that do not",
-     "      rf_we_c    = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;",
-     "      rf_we_c    = s4_v_r && !alu_is_end && !dot_here_c;"),
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;",
+     "  assign wb_req_c   = s4_v_r && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;"),
     ("X12 END writes its result over a register",
-     "      rf_we_c    = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;",
-     "      rf_we_c    = s4_v_r && alu_writes && !dot_here_c;"),
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;",
+     "  assign wb_req_c   = s4_v_r && alu_writes && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;"),
     ("X13 the writeback lands in the wrong context",
      "      rf_wctx_c  = s4_ctx_r;",
      "      rf_wctx_c  = s4_ctx_r + CW'(1);"),
@@ -174,8 +178,9 @@ MUTANTS = [
      "  assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;",
      "  assign dot_need_c  = dot_at_s4_c ? 2'd3 : 2'd2;"),
     ("X22 the hold ends one product early, dropping the last one",
-     "  assign hold_c = dot_at_s4_c && (dot_cnt_r < dot_need_c);",
-     "  assign hold_c = dot_at_s4_c && (dot_cnt_r < (dot_need_c - 2'd1));"),
+     "  assign retire_hold_c = (dot_at_s4_c && (dot_cnt_r < dot_need_c)) || long_hold_c;",
+     "  assign retire_hold_c = (dot_at_s4_c && (dot_cnt_r < (dot_need_c - 2'd1))) ||\n"
+     "                         long_hold_c;"),
     ("X23 the DOT2 and DOT3 product counts are swapped",
      "  assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;",
      "  assign dot_need_c  = dot3_at_s4_c ? 2'd2 : 2'd3;"),
@@ -280,6 +285,41 @@ MUTANTS = [
      "    mul_b_c     = 33'(rf_b0);",
      "    mul_a_c     = 33'(rf_b0);\n"
      "    mul_b_c     = 33'(rf_a0);"),
+    # ---- the writeback port, which gained a GRANT on 2026-08-28 ------------
+    # `wb_valid_o` was pure observation until then: a bare assign mirroring a
+    # write already committed to this block's own register file. It is a
+    # REQUEST now, because zhao_field_v3_svcpath's arbiter refuses the ALU by
+    # design -- eight clocks per four-point group, measured -- and an
+    # unrefusable write would lose every one of them.
+    #
+    # X33 IS A REGRESSION MUTANT FOR A REAL BUG. The write used to fire on
+    # EVERY clock the instruction sat at S4, so a DOT wrote its destination
+    # once per accumulation hold clock. The last write carried the right
+    # value, so all 34 checks passed and nothing saw it -- until the port
+    # could refuse and the transfer COUNTS diverged, 20 granted to 16 refused.
+    ("X33 the write fires while the pipe is still HELD",
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;",
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !mul_denied_c;"),
+    ("X34 the write fires while a multiply is DENIED",
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c && !mul_denied_c;",
+     "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
+     "                      !retire_hold_c;"),
+    # Reshaped: dropping wb_hold_c from hold_c ORPHANS it -- read in exactly
+    # one place. Requiring BOTH keeps it live and states the same defect: a
+    # refused write no longer freezes the pipe on its own, so the instruction
+    # retires and its write is LOST.
+    ("X35 a refused write does not hold the pipe by itself",
+     "  assign hold_c        = retire_hold_c || wb_hold_c;",
+     "  assign hold_c        = retire_hold_c && wb_hold_c;"),
+    ("X36 the register file is written without a grant",
+     "      rf_we_c    = wb_req_c && wb_ready_i;",
+     "      rf_we_c    = wb_req_c;"),
+    ("X37 the writeback hold reads its grant inverted",
+     "  assign wb_hold_c  = wb_req_c && !wb_ready_i;",
+     "  assign wb_hold_c  = wb_req_c && wb_ready_i;"),
 ]
 
 
