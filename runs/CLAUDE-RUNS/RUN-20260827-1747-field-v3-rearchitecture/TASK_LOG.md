@@ -2119,3 +2119,55 @@ port and the file count the same duplicated events.
 
 **One register per uop, per context** is the only statement that catches it, and
 it is exact on the correct design: 608 against 608.
+
+## FIELD.V3.EXEC closes at 42/42, and the skid was innocent all along
+
+    attempted 42   caught 38   equivalent 4 (proven)   survived 0   discarded 0
+
+**The skid works.** I reverted it this afternoon because it failed a
+strengthened test. It was never the cause: the register file mispaired operands
+on every bank denial, so the baseline was already wrong under exactly the
+contention the skid's test drives. With that fixed, the same design passes the
+same test -- 42 checks at full barrel occupancy, eight contexts, burst
+refusals, bank contended, 2311 clocks genuinely refused.
+
+I changed two things and blamed the one I had just written. The isolation pass
+that settled it -- port always granting, skid unused, fails identically -- took
+four minutes and belonged BEFORE the revert, not after.
+
+### X46 needed the whole barrel, and that is the point
+
+`X46` states the off-by-one I actually made: gating issue on the REGISTERED
+`sk_ne_c` stops it a clock late, so a fifth instruction is already entering S1
+when the depth allows four.
+
+It SURVIVED at four contexts and is CAUGHT at eight. Four leaves gaps in
+S1..S3, and the skid's depth argument is precisely about how many instructions
+are already past issue when the queue fills -- with gaps, a gate that stops a
+clock late never actually admits the extra instruction. The mutant was stating
+a real fragility that the traffic could not reach.
+
+**One context is not a weaker test than eight. It is a different one.** Two
+shipped defects this run needed four contexts to appear; this one needed eight.
+
+### And widening it found a bug in the test itself
+
+Eight contexts immediately failed: 1170 writes against 1200, and the file's own
+counter disagreeing with the observed transfers on 10 programs. That reads
+exactly like a queue too shallow, and I nearly filed it as one.
+
+`start()` ticked the clock RAW. Starting eight contexts takes eight clocks and
+the first context is RUNNING for the last seven, so those writes landed in the
+register file -- and in its counter -- while the shadow and the tally never saw
+them. Four contexts hid it: three uncounted clocks are rarely enough for a
+write.
+
+**It was invisible until an ABSOLUTE law arrived.** Every earlier check compared
+two counts against EACH OTHER, and both were short by the same amount. Only
+"one register per uop, per context" has an outside reference -- and it is the
+same law that caught the duplicate write. A comparison between two things the
+same bug touches is worth much less than one statement about what SHOULD have
+happened.
+
+`start()` goes through `step()` now, so nothing advances the hardware without
+the test looking.
