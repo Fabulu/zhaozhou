@@ -134,10 +134,20 @@ MUTANTS = [
     # ---- writeback ----------------------------------------------------------
     # The write enable grew a `!dot_here_c` term on 2026-08-28 -- the fix for
     # the defect X11 exposed -- so these two anchors moved with it.
-    ("X11 every op writes, including the ones that do not",
+    # RESHAPED BY MY OWN REFACTOR. This dropped `alu_writes` entirely, which
+    # was buildable while the signal had TWO readers -- rf_we_c and
+    # wb_valid_o. Consolidating those into one `wb_req_c` left it with one,
+    # so dropping it now orphans it and Verilator refuses the file.
+    #
+    # Inverting keeps it live and is the sharper claim anyway: not "the
+    # write enable is missing" but "the write enable is backwards", so every
+    # op that should write is silent and every op that should not writes
+    # garbage. Both halves are wrong at once, and the second half is the one
+    # that corrupts a register rather than merely losing a result.
+    ("X11 the write enable is INVERTED -- only the ops that do not write, write",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c && !mul_denied_c;",
-     "  assign wb_req_c   = s4_v_r && !alu_is_end && !dot_here_c &&\n"
+     "  assign wb_req_c   = s4_v_r && !alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c && !mul_denied_c;"),
     ("X12 END writes its result over a register",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
