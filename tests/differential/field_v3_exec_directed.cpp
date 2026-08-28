@@ -280,6 +280,17 @@ struct Dut {
     }
     t.eval();
 
+    // THE HARNESS GRANTS THE PORT, because the engine is a CLAIMANT for it and
+    // nothing else is attached here. In the composed design this loopback is
+    // zhao_field_v3_svcpath's arbiter instead, which can hand the same port to
+    // the long-op drain -- which is exactly why the engine does not do it
+    // internally.
+    t.wr_en_i = (t.wb_valid_o != 0) && (t.wb_ready_i != 0);
+    t.wr_ctx_i = t.wb_ctx_o;
+    t.wr_reg_i = t.wb_reg_o;
+    t.wr_data_i = t.wb_data_o;
+    t.eval();
+
     // A WRITE LANDS ON A TRANSFER, NOT ON A VALID. The shadow IS the register
     // file as far as every check in this file is concerned, so folding in a
     // REFUSED write would make the test agree with a block that lost it --

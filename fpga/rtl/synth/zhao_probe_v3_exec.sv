@@ -131,6 +131,27 @@ module zhao_probe_v3_exec #(
     // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_results_survive_contention
     output var logic [31:0]             rf_writes_o,
 
+    // THE GRANTED WRITE, COMING BACK IN.
+    //
+    // This block asks for the port through `wb_valid_o` and the answer arrives
+    // on `wb_ready_i`, but the REGISTER FILE IS IN HERE -- so whoever wins the
+    // port has to be able to reach it. `zhao_field_v3_svcpath` arbitrates this
+    // ALU against the long-op drain and its `wr_*_o` IS the write port; those
+    // wires land here.
+    //
+    // The alternative was lifting the register file out of the executor, which
+    // is a larger change to a block that is closed at 42/42, for no behaviour
+    // that this does not already give.
+    //
+    // `zhao_probe_v3_engine` loops this straight back from the ALU's own
+    // request, so an engine with nothing attached behaves exactly as it did --
+    // which is what keeps every existing test meaningful rather than merely
+    // passing.
+    input  var logic                    wr_en_i,
+    input  var logic [$clog2(CTX)-1:0]  wr_ctx_i,
+    input  var logic [$clog2(REGS)-1:0] wr_reg_i,
+    input  var logic signed [31:0]      wr_data_i,
+
     // THE SKID OVERFLOWED: a write was dropped for want of room. Sticky, and
     // an output rather than an assertion, because the depth is DERIVED and a
     // derivation can be wrong -- mine was, by one, and it cost 11 of 12
@@ -681,15 +702,15 @@ module zhao_probe_v3_exec #(
       // port -- and then, once granted, write it a SECOND time through the
       // shared port. A duplicated write is invisible for an idempotent value
       // and wrong for every accumulating one.
-      // ONE SOURCE FOR THE FILE AND THE PORT. `wb_*_o` already selects skid
-      // head or S4; the file follows it exactly, so the two can never disagree
-      // about what was written.
-      // ONE SOURCE FOR THE FILE AND THE PORT, so the two cannot disagree about
-      // what was written.
-      rf_we_c    = wb_valid_o && wb_ready_i;
-      rf_wctx_c  = wb_ctx_o;
-      rf_wreg_c  = wb_reg_o;
-      rf_wdata_c = wb_data_o;
+      // THE FILE IS WRITTEN BY WHOEVER WON THE PORT, not by this block's own
+      // request. With the engine looping it back these are the same wires and
+      // the same clock; with an arbiter in between they are not, and that is
+      // the entire point -- the drain's writes have to be able to land here
+      // too.
+      rf_we_c    = wr_en_i;
+      rf_wctx_c  = wr_ctx_i;
+      rf_wreg_c  = wr_reg_i;
+      rf_wdata_c = wr_data_i;
     end
   end
 
@@ -872,7 +893,7 @@ module zhao_probe_v3_exec #(
       // combinational and this must tick once per CLOCK on which the file is
       // written. Preload excluded: that is the host filling the file, not the
       // machine writing a result.
-      if (rf_we_c && !pre_we_i) rf_writes_o <= rf_writes_o + 32'd1;
+      if (rf_we_c && !pre_we_i) rf_writes_o <= rf_writes_o + 32'd1;  // whoever won it
 
       // Every stage advance below is gated on `!hold_c` AND `!mul_denied_c`.
       //

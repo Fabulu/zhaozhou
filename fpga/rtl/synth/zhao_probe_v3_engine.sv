@@ -87,6 +87,19 @@ module zhao_probe_v3_engine #(
     // and the engine behaves exactly as it did before.
     output var logic                    wb_valid_o,
     input  var logic                    wb_ready_i,
+
+    // THE GRANTED WRITE, COMING BACK IN. The register file is inside the
+    // executor, so whoever wins the write port has to be able to reach it.
+    //
+    // NOT LOOPED BACK INTERNALLY, deliberately. This engine is a CLAIMANT for
+    // that port -- something outside has to grant it, and pretending otherwise
+    // would hide the very seam `zhao_field_v3_svcpath` exists to arbitrate.
+    // With nothing attached the caller ties `wr_en_i` to
+    // `wb_valid_o && wb_ready_i` and the behaviour is exactly what it was.
+    input  var logic                    wr_en_i,
+    input  var logic [$clog2(CTX)-1:0]  wr_ctx_i,
+    input  var logic [$clog2(REGS)-1:0] wr_reg_i,
+    input  var logic signed [31:0]      wr_data_i,
     // The register file's own write count, so a test can check that the file
     // was written exactly as often as the port was asked -- see the port's
     // comment in zhao_probe_v3_exec.
@@ -236,6 +249,8 @@ module zhao_probe_v3_engine #(
       .mul_rsp_valid_i(ex_rsp_valid),
       .mul_rsp_p_i    (ex_rsp_p),
       .wb_valid_o(wb_valid_o), .wb_ready_i(wb_ready_i),
+      .wr_en_i(wr_en_i), .wr_ctx_i(wr_ctx_i),
+      .wr_reg_i(wr_reg_i), .wr_data_i(wr_data_i),
       .rf_writes_o(rf_writes_o), .sk_overflow_o(sk_overflow_o),
       .wb_ctx_o(wb_ctx_o), .wb_reg_o(wb_reg_o),
       .wb_data_o(wb_data_o),
