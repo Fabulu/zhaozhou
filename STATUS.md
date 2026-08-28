@@ -40,6 +40,44 @@ not add one.
 
 ---
 
+## FABIAN — THE ZIXXTRIXX NOTE IS NOW WHERE IT BELONGS
+
+You were right, and the diagnosis is worse than "wrong folder".
+
+The relay was written into
+`runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/` at **09:14**. That
+run had already closed: `RUN-20260828-0757-zixxtrixx-v5-notch-fins-vocab`
+started at **07:57**, seventy-seven minutes earlier. The v4 log stopped at
+07:55 and that was read as "idle or between passes" instead of "finished, and
+the next run began two minutes later". One `ls` of the run folders would have
+shown it.
+
+**And a run folder was the wrong home anyway**, for a reason that does not
+depend on the mistake: every creature pass creates a new run, so anything
+filed in the current one is stale by the next pass. Owner direction has a
+proper place, and your previous two notes are already in it:
+
+    Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-2026-08-27.md
+    Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-2-2026-08-27.md
+
+Yours is now beside them, pushed:
+
+    Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-3-2026-08-28.md
+
+Your text is verbatim and unedited, stray URL included — 4,692 bytes, compared
+byte-for-byte rather than eyeballed. The stale copy in the v4 run is now a stub
+pointing at the new location, so it cannot mislead anyone who finds it.
+
+All four copies you posted (`zixxheadadvice`, `2`, `3`, `zixxheavadvice4`) are
+the same note; 2, 3 and 4 are byte-identical and the first differs only by that
+URL. You do not need to post it a fifth time.
+
+**I have not touched anything the note names** — no model, skeleton, animation,
+texture, atlas, silhouette, golden or clip. I am the hardware session and I
+have no opinion on the geometry.
+
+---
+
 ## 2026-08-28 (night) -- the deliberate-defect runs are closing, and one of
 ## them proved a comment of mine wrong
 
