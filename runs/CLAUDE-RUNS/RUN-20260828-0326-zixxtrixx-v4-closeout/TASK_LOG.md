@@ -63,3 +63,24 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
   Evidence: death-lastframes-fixed.png (189/190/191 all hold the corpse).
 - Golden drift scope PROVEN: clip-6.bin + pose-crcs clip-6 keys 31..95 only.
   Re-pinned with provenance (zhaozhou 1ac98b0, Upheaval d9e1084).
+
+### 2026-08-28 04:2x - PART 1 items 2/3/4 DONE
+
+- Item 2 (balance hop): probe showed minY +65 mm at k128 — the whole
+  half-flat body hovered during the get-up. kBalFork recovery keys
+  re-authored ({123,-145},{128,-82},{132,-48},{136,-26}); minY now
+  [-19..+2] through the rise; render confirms tail run pressed to dirt
+  (bal-getup-before-after.png). clip-7 re-pinned, provenance in golden.
+- Item 4 (frontal eyes): head-on at bulge 16 each eye was a thin crescent
+  at the silhouette rim. Ladder 16/22/28 (bulge-ladder-16-22-28.png):
+  22 = two proper eye pads, crown gap intact, no ridge, profile unchanged
+  (bulge22-side-still.png). ZIXX_EYEBULGE 16 -> 22. Between the two
+  recorded failure modes (brim at 42, chinstrap) — well clear of both.
+- Item 3 (pupil): at the walk camera the disc is ~10 px; 0.05 delivered a
+  red crescent hugging the rim. PUPIL_BOLD ladder 0.05/0.08/0.11 on
+  delivered walk pixels (pupil-ladder-walk.png): 0.08 reads as a red slit
+  crossing the disc, middle swell hinted; 0.11 merges into the rim blob.
+  PUPIL_BOLD -> 0.08. The full wavy shape does NOT survive gameplay
+  distance — declared; it reads at look/idle poster distance.
+- Page regen reproducible (two regens cmp-identical). Goldens cmp-clean
+  after texture+mesh changes (clip payloads untouched, as expected).

@@ -322,7 +322,13 @@ EYE_RING_RGB = (206, 88, 46)  # judged on the front render, not the scan
 EYE_ROT_DEG = -30
 # native-res pupil dilation radius, as a fraction of the crop's height (see
 # the classify-then-shrink note in eye_patch). 0.025 ~= 1.5x the drawn width.
-PUPIL_BOLD = 0.05
+# 0.08, was 0.05 (run 0326): at the WALK camera the disc is ~10 px and 0.05
+# delivered a thin red crescent hugging the rim -- presence, not slit. A
+# 0.05/0.08/0.11 ladder judged on the delivered walk pixels: 0.08 reads as
+# a red slit crossing the disc with the middle swell hinted; 0.11 merges
+# slit and rim into one blob. The accurate wavy line does not survive 240p
+# at gameplay distance -- a bolder simpler slit that DOES was the brief.
+PUPIL_BOLD = 0.08
 
 
 def eye_patch(u_tex=None, v_tex=None):

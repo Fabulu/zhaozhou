@@ -230,10 +230,18 @@ constexpr int kEyeStation1 = 7;      // last. 4..7, was 3..8 (v3 run): six
                                      // whole head -- the "brim". Two fewer
                                      // stations localise it at the eyes.
 #ifndef ZIXX_EYEBULGE
-#define ZIXX_EYEBULGE 16
+#define ZIXX_EYEBULGE 22
 #endif
 constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
                                      // extra lateral half-width, % of the ring.
+                                     // 22, was 16 (run 0326): head-on at 16
+                                     // each eye was a thin crescent hugging
+                                     // the silhouette rim. A 16/22/28 ladder
+                                     // on the head-on still: 22 reads as two
+                                     // proper eye pads with the crown gap
+                                     // intact; 28 starts wedging the skull
+                                     // outline. Profile checked, unchanged
+                                     // read. 16's note kept below.
                                      // 16, was 42 (v3 run): at 42 the head's
                                      // head-on silhouette was a narrow pink
                                      // dome sitting on a wide flat disc -- a
