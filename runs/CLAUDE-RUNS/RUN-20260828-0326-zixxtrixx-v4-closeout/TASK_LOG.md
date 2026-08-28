@@ -552,3 +552,48 @@ rather than another oscillation.
 - FINAL GATES: probe 0 / choreo 0 / planner 0 / goldens 30 clips +
   pose-crcs cmp-clean / reel --check "all sequence CRCs match" (file).
 - Status: Complete.
+
+## Published — main-session verification of run 0326
+
+Deployed https://upheaval.pages.dev (build `0a19e258`). **17 live tabs in three
+groups + Archive.** Renders 8 minutes old at publish — genuinely current, unlike
+the previous snapshot.
+
+**Gates re-run independently, not taken on report:** goldens re-dumped and
+cmp'd — **31/31 identical**; `zixx-probe` **exit 0** (75,580 hits, all within
+authored allowances — it was exiting 1 with 12 clips beyond allowance an hour
+ago, so that genuinely cleared); `zixx-choreo` exit 0; `zixx-planner` exit 0.
+
+**Looked at `evidence/sidecmp-06-colours.png` beside the sheet.** The front half
+is now visibly the sheet's proportion — thick and comma-like where it used to be
+a wire. The head reads roughly horizontal at the end of the arc with a large
+eye and a bold slit. This is the closest the creature has been.
+
+### The root cause is the most valuable finding in the run
+**The tube was a WIRE: ~22% of loop height against the sheet's ~40%.** Every
+previous head pass was adjusting the head while the whole front half was half
+the thickness it should have been — so no head size, attitude or blend could
+have matched the drawing. It also explains the "huge dropoff" and "no neck":
+a thin body cannot carry a broad neck into a big head without a step somewhere.
+
+Second finding, equally concrete: **`kHeadPivotMm` was 0 — the nose tip — while
+its own comment said "centroid".** That is the literal "drops 5 meters" the
+owner described; rotating about the nose swings the head through a huge arc.
+At 190 mm the head turns about itself. **A comment that disagrees with its
+constant is worse than no comment**, and this one survived several passes.
+
+### Standing faults after this run
+1. **Fins are short and broad where the sheet draws long slender blades.** Moved
+   apart and rolled 80° as instructed, but the blade shape itself is unaddressed
+   — a mesh change awaiting the owner's call (`fins-rolled.png`).
+2. A **notch remains at the head/neck junction** in the coloured render — the
+   contour is much better but not yet the sheet's single unbroken curve.
+3. Front-half outline IoU ~35%, blunted by crop alignment and by comparing our
+   grounded gameplay stance against the sheet's aerial S. **The number is weak
+   evidence here; the sidecmp sequence is the real record** — which is the art
+   law working as intended rather than a metric to chase.
+4. Uncommitted sacengine working-tree artifacts remain at `C:\programmieren\
+   sacengine` (data reconstruction, keycodes patch, DLLs). Owner ordered the
+   lane dropped; these are inert but should be cleaned up on his say-so.
+5. Documented non-blocking gaps: two idle flourishes, a third death, melee
+   variants, `tumble`, `stance2`, the personality block.
