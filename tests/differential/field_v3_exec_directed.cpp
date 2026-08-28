@@ -222,9 +222,19 @@ struct Dut {
   }
 
   void start(int ctx) {
+    // THROUGH step(), NOT A RAW TICK. Starting eight contexts takes eight
+    // clocks, and the first context is RUNNING for the last seven of them. A
+    // raw tick advances the hardware without the test looking, so those writes
+    // land in the register file and in its counter while the shadow and the
+    // writeback tally never see them.
+    //
+    // Invisible until an ABSOLUTE law arrived: with the counts only ever
+    // compared against each other, both sides were short by the same amount.
+    // Against "one register per uop, per context" it showed up as 30 writes
+    // missing out of 1200 -- which reads exactly like a queue too shallow.
     t.start_i = 1;
     t.start_ctx_i = (uint8_t)ctx;
-    zhao::tick(t);
+    step(nullptr);
     t.start_i = 0;
   }
 
@@ -708,8 +718,13 @@ void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int program
   printf("-- the WRITE PORT refuses while the bank is contended; no write may be lost\n");
   Prng rng(0x0B7A1E5);
   int ran = 0, bad_val = 0, bad_count = 0, bad_rf = 0, total_denied = 0;
-  int wrote = 0, expect = 0;
-  const int kUse = 4;
+  int wrote = 0, expect = 0, unfinished = 0;
+  // EIGHT CONTEXTS, THE WHOLE BARREL. Four leaves gaps in S1..S3, and the
+  // skid's depth argument is precisely about how many instructions are ALREADY
+  // past issue when the queue fills. With gaps, a gate that stops issue a clock
+  // late never actually admits the extra instruction, and the mutant that
+  // states that defect (X46) survives while the design is genuinely fragile.
+  const int kUse = kCtx;
 
   // FOUR CONTEXTS AND BURST REFUSALS FROM THE FIRST LINE, because every weaker
   // version of this test passed over broken silicon. One context with
@@ -723,11 +738,11 @@ void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int program
     const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
     if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
 
-    int32_t in[4][8] = {};
+    int32_t in[kCtx][8] = {};
     for (int c = 0; c < kUse; ++c)
       for (int i = 0; i < n_in; ++i) in[c][i] = rng.interesting();
 
-    int32_t got[4][kRegs] = {};
+    int32_t got[kCtx][kRegs] = {};
     int writes = 0, rfw = 0, denied = 0;
     bool skipped = false;
     {
@@ -746,11 +761,17 @@ void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int program
       for (int c = 0; c < kUse; ++c) d.start(c);
       int fin = 0, guard = 0, done = -1;
       Prng rv(0x0DEA1u + (uint32_t)k);
-      while (guard++ < 40000 && fin < kUse) {
+      // THE BUDGET IS GENEROUS AND THE COMPLETION IS CHECKED. Eight contexts
+      // under burst refusals AND bank contention is slow by construction; a
+      // budget that ran out would leave writes still queued and read as a
+      // LOST-WRITE defect. It nearly did: at 40000 the counts came up 30
+      // short and looked exactly like a skid too shallow.
+      while (guard++ < 400000 && fin < kUse) {
         top.rival_req_i = (rv.below(2) != 0) ? 1 : 0;
         if (d.step(&done)) ++fin;
       }
       top.rival_req_i = 0;
+      if (fin < kUse) ++unfinished;
       // DRAIN BEFORE READING. A context reports DONE when its last instruction
       // retires, which with a skid is no longer the clock its write lands.
       d.wb_refuse = false;
