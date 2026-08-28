@@ -1820,3 +1820,56 @@ lines.** Reworded so each block states its claim once and ends with its
 enforcer.
 
     ledger: check OK -- 92 blocks (6 blocked_on: hardware) / 40 ops
+
+## Fabian's Zixxtrixx note: filed in a run that had already CLOSED
+
+He pushed `reports/Hardwareguyfixzixxtrixx`: *"you put the zixxtrixx
+instructions in the wrong folder, there's a newer one. Please fix."*
+
+He is right, and the cause is sharper than "wrong folder". An earlier session
+relayed his note into
+
+    runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/
+
+at **09:14**. That run was already closed:
+`RUN-20260828-0757-zixxtrixx-v5-notch-fins-vocab` started at **07:57**,
+seventy-seven minutes earlier. The v4 log's last write at 07:55 was read as
+"idle or between passes" rather than "finished, and the next run began two
+minutes later". **One `ls` of the run folders would have shown it.**
+
+Same error shape as the rest of today: a plausible reading of a measurement,
+never checked against the obvious alternative.
+
+### And a run folder was the wrong home REGARDLESS
+
+Independent of the mistake: every creature pass creates a new run, so anything
+filed in the current one is stale by the next. Owner direction already has a
+place and his previous two notes are in it:
+
+    Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-2026-08-27.md
+    Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-2-2026-08-27.md
+
+His is now beside them as `OWNER-DIRECTION-3-2026-08-28.md`, pushed to
+Upheaval. Verbatim and unedited, stray URL included -- 4,692 bytes, compared
+BYTE-FOR-BYTE rather than eyeballed. All four copies he posted are the same
+note; 2, 3 and 4 are byte-identical and the first differs only by that URL.
+
+The stale copy became a STUB pointing at the new location rather than being
+deleted, so anyone who finds it is redirected instead of misled.
+
+**Nothing the note names was touched** -- no model, skeleton, animation,
+texture, atlas, silhouette, golden or clip. This is the hardware session and it
+has no opinion on the geometry.
+
+## I broke my own one-tree-one-writer rule
+
+Launched a full rebuild of `build-verify` while an earlier task was still
+running `ctest` against the same tree. BUILD.md mode 5 exists for exactly this.
+Stopped the older task; no stray `ctest` process was left behind (checked,
+because a stopped TASK is not a stopped PROCESS -- BUILD.md mode 2).
+
+Also: the first build's failure could not be diagnosed at all, because the
+command piped it through `tail -5` and threw the error away. Re-running with
+the whole log to a file. **Not guessing at the cause from a truncated log** --
+the last time a truncated observation was read as a cause today, it produced
+the v4/v5 mistake above.
