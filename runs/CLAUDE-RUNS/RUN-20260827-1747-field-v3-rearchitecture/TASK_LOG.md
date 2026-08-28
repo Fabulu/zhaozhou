@@ -476,3 +476,85 @@ service is far harder to place than the other probes (678-1,590 s). Requeued
 at 14,000 s, waiting for probe 5's fit to finish so two never share the
 machine. No Fmax is claimed for either probe.
 
+### 2026-08-28 (early hours) - DOT, the register file, the arbiter, and three
+### failures in my own process
+
+**FIELD.V3.EXEC closed at 31/31** (27 caught, 4 proven equivalent, 0 survived,
+0 discarded) with DOT2/DOT3 sequenced against the one-multiplier-per-lane
+budget. Barrel re-pinned: 66 clocks for one context, 166 for eight -- the
++32% is the global issue freeze, which stalls seven contexts for one
+context's dot product.
+
+**A real RTL defect, found through the sweep.** The ALU KNOWS OP_DOT2/OP_DOT3
+-- they are real arms of its decode, not the `default` refusal -- so it left
+writes_o HIGH and computed a result from the zero fed to dot2_i. The block
+was flagging the op unsupported AND writing the garbage anyway. The file's
+own header already claimed the write was refused. A comment is not an
+enforcement.
+
+**The executor was built on a register file that implements no semantics.**
+`zhao_probe_banked_rf` exists to PRICE the owner's banked shape and says so
+in its header. It addresses every bank with the same row, which cannot read
+a group crossing a multiple of four. 440 randomized programs passed because
+scalar ops never read a+1. The first DOT2 broke 30 of 400, exactly the group
+starts 2 and 3 mod 4. `zhao_field_v3_rf.sv` is the functional version, and
+the probe's 372 ALM / 93.14 MHz is now a FLOOR for it, not a measurement.
+
+**The multiplier bank and its arbiter now exist** (`zhao_field_v3_mulbank`).
+Reading the service probes first showed the bank is FOUR WIDE and is engine
+property -- `zhao_probe_curve_svc` contains no multiplier, it drives one --
+so one bank has three claimants and nothing arbitrated them. MEASURED: 18,202
+accepted, 18,202 delivered, 18,202 grants over 20,000 clocks; one four-wide
+request per clock sustained; priority exactly as declared, with the lane
+group taking ZERO while a service asks; 8,884 lane stalls, which is the
+measured price of fixed priority rather than a worry about it.
+
+---
+
+**THREE FAILURES IN MY OWN PROCESS, recorded because they cost more than the
+bugs did.**
+
+**1. I committed a mutant and pushed it.** `wb_reg_o = s4_dst_r + RW'(1)`
+rode into a commit whose message said the block was fixed. Three things
+lined up: killed tasks left ORPHANED processes still editing files after the
+harness reported them dead; the mutant changed only an OBSERVATION port, so
+440 programs passed with it in place; and my pre-commit diff was piped
+through `head -8`. A glance is not a review.
+
+`tools/sweep_check_clean.py` now asks whether any mutant's replacement text
+is present, from OUTSIDE the sweep -- not a diff against HEAD, because HEAD
+itself carried the mutant. Every field driver runs it after the final restore
+and aborts with exit 14. It has caught two stranded mutants since.
+
+**2. The sweep driver restored one file out of two.** The table, preflight
+and apply path had all learned to span a cone; the driver's gold snapshot had
+not. X30/X31/X32 touch different lines, so they ACCUMULATED and every
+register-file verdict in that run was contaminated. Both guards fired -- exit
+4, "the tree is NOT clean" -- and the driver now snapshots every path the
+table can reach.
+
+**3. I declared two equivalences predictively, against my own written rule,
+and then trusted a run that had already declared itself unclean.** X18 and
+X19 were given proofs before any evidence. A contaminated run reported both
+CAUGHT so I retracted them; a clean run then showed X19 SURVIVING, so its
+proof was right all along -- the contaminated register file had been
+returning wrong operands, which made a commutative swap observable.
+
+X18's retraction stands (the staggered start makes it genuinely observable).
+X19's proof is restored with the whole history attached.
+
+The lesson is not about commutativity. **A run that fails its own integrity
+check has no verdicts, only noise** -- and the guard said so before I read
+per-mutant results out of it anyway.
+
+---
+
+**Process change that actually worked:** the probe fits are now launched
+DETACHED via Start-Process, so they are not children of an agent task. Four
+fits had been lost -- one to a timeout I set too low, one to genuine
+contention, and two to the task being killed mid-flight. The detached runner
+has since survived several task kills.
+
+**Outstanding:** the mulbank sweep score; place-and-route for probes 4 and 5;
+the composition against the 850,000-cycle gate; the scalar bank.
+
