@@ -106,3 +106,52 @@ clips re-rendered and encoded at 60 fps (Upheaval ae1fd2c). Evidence
 committed. NOT deployed per the run instruction. See FINDINGS.md.
 
 **Status: COMPLETE**
+
+## Main-session verification of run 0227
+
+**Repo integrity first**, because this run force-pushed a rewritten tip to remove
+830 MB of scratch frames: `git fetch` + `status -sb` show local and origin in
+sync, all four of my earlier run commits (`cee3547`, `01939cb`, `d30c11c`,
+`c75dfe4`) still reachable, the parallel FIELD lane's commit sits on top
+undisturbed, and `.git` is 56 MB. Nothing was lost. The rewrite was contained to
+its own tip and repaired within minutes.
+
+**Gates re-run independently:** goldens re-dumped and cmp'd — **17/17
+bit-identical**, so no clip byte moved, which is the correct result for a
+surface-and-geometry run. `zixx-probe` exit 0 (28,884 hits within allowances),
+`zixx-choreo` exit 0, `zixx-planner` exit 0.
+
+**Looked at it, on the diagnostic cameras and across all eight clips:**
+* **Fault 1 FIXED and it is unmistakable.** New 8-poster sheet
+  (`evidence/verify-all-8-posters-after.png`) beside the before
+  (`RUN-...-2339/evidence/verify-all-8-posters.png`): green is the body colour
+  again in seven of eight clips, pink is a band along the back. That is
+  `Side.png`'s proportion.
+* **Fault 2 FIXED.** Head-on (`evidence/verify-front-headon-after.png` vs the
+  2339 run's `verify-front-headon.png`): the lateral BRIM is gone — the head no
+  longer reads as a hat — and the yellow CHINSTRAP is gone, now two separate
+  patches with blue face between and green showing on the flanks.
+* The agent found the chinstrap's real mechanism rather than nudging a number:
+  the discs had been pushed so far toward the back line that their orange rings
+  MET across the crown gap. That is a proper root cause.
+
+### Standing faults after this run
+1. **DEATH still reads pink-forward** — confirmed on the poster sheet, and the
+   stated cause is right: the authored keel rolls the animal's back toward the
+   camera, so it shows its dorsal. Arguably natural for a death, but it is the
+   one clip where pink still dominates. Fixing it means touching clip motion,
+   correctly out of scope for a surgical run. One knob, owner's call.
+2. Frontal eye presence is better than the chinstrap but still reads as small
+   patches at the silhouette edge, where `Front.png` gives large ovals. Note the
+   owner ruled `Front.png` "a bit confusing" and `Side.png` authoritative for
+   shape, so this is a judgement call rather than a clear miss.
+3. Pupil is a red presence at walk distance, not the full wavy slit — 6 px of
+   eye at 240p is close to the floor of what 240p can carry.
+
+### The determinism bug is the most valuable find in this run
+`hash(mat)` is PROCESS-SALTED in Python, so every texture regeneration re-rolled
+the T5 quilt and the committed page bytes were unreproducible. Fixed with
+`zlib.crc32`; two regens now cmp identical. This is the same class of fault as
+the thrown-away pose probe: **a result that cannot be reproduced is not
+evidence**, and it had been sitting under a "committed bytes, fixed seed"
+requirement that was silently not being met.
