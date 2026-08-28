@@ -277,3 +277,46 @@ the body's liveliness is the slow layer, the gesture is the fast layer on top.
 Judging note: **a roll is nearly invisible in pure side view** — use a front or
 three-quarter camera, and check it at 240p, where a subtle tilt on a small head
 can vanish entirely and may need more amplitude than looks right in a zoom.
+
+### Item 15: texture experiments — licence, with the colour scheme fixed
+
+*"See if you can make textures cooler. Not with more resolution, but by changing
+the textures. Make some experiments and put them up next to the normal snake
+animations. Tag them as experimental so you can go ham."* Then, clarifying:
+*"The colour scheme should stick but texture details are fair game."*
+
+**Explicitly NOT resolution** — the 256×512 atlas stays. The surface itself is
+what should get more interesting, and the experimental tag exists so bold swings
+are free. A timid variation wastes the licence.
+
+**FIXED:** the palette (fought for hard — a pink measured off the scan read grey
+at 240p and had to be re-chosen by eye; that is `CLAUDE.md`'s canonical lesson),
+and the circumferential law (pink top / light-green sides / dark-green underside
+/ blue triangular bib).
+
+**FAIR GAME:** how the pigment is laid down (stroke direction, tooth, coverage,
+wax build-up, paper showing through, hatching); how the colour boundaries behave
+(hand-wobbled edges, crayon overlap, heavier deposit where a stroke turned,
+instead of computed gradients); detail WITHIN a colour (chevrons, banding, scale
+suggestion, in the creature's own colours); value/saturation variation.
+
+**The strongest single idea, and it has never been tried: THE BLACK INK CONTOUR.**
+Both sheets carry a bold black outline around the creature and around every
+colour region. Our renders have none. That line is the drawing's most recognisable
+feature, and black line work is not a palette change.
+
+**Scope test recorded:** *would someone glancing at it still say "that is
+Zixxtrixx, drawn differently"?* Yes → texture detail. "That is a different
+creature's colours" → out of scope.
+
+Constraints: determinism (fixed seed, `zlib.crc32`, two regens cmp-identical),
+RGB565 direct colour, and **judged at gameplay distance through the mip chain** —
+a texture that is gorgeous at zoom and mush at 240p has failed, which is why
+grain amplitude had to be raised once already. Published as clearly-labelled
+experimental tabs in their own group beside the normal animations; raising
+`MAX_TABS` means moving `assemble.py` and all three `style.css` selector families
+together. **The normal snake must render byte-identically before and after** —
+that is precisely what makes a wild experiment safe.
+
+**Queued LAST**, behind the head/neck block, the rigidity pass and the salto
+family. It must not delay the head.
