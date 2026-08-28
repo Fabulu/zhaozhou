@@ -1,0 +1,58 @@
+diff --git a/tools/reel/zixxtrixx.h b/tools/reel/zixxtrixx.h
+index 9ec3a51..cd8ab1b 100644
+--- a/tools/reel/zixxtrixx.h
++++ b/tools/reel/zixxtrixx.h
+@@ -165,6 +165,21 @@ struct TaperKey {
+ // and finishes by t~400: still the owner's fast drop-off behind the neck
+ // (girth order untouched: neck 1900 > head 1830 > body 860), the corner
+ // gone. Judged on the unlit outline beside Side.png (sidecmp-08).
++// THE GIRTH KNOB (RUN 0757). The matched-pose instrument (our station radii
++// drawn along the sheet's own traced pose -- sheetpose-girth-overlay.png)
++// showed the tube ~2x the DRAWN tube: v4's "the tube is a WIRE at ~22% of
++// loop height" verdict was itself the pose confound (our loop is far
++// tighter than the sheet's), and the fatten moved girth the wrong way.
++// The owner's own eye said it first: "the upper S part gets a bit too
++// broad and big." Per-mille scale on every body/head radius; the girth
++// ORDER (body < head < neck, fast drop) is a ratio law and survives any
++// uniform scale. The VALUE is picked off a rendered ladder by eye (the
++// overlay removes the bias; the render chooses the value) -- one edit here
++// is the owner's whole redirect.
++#ifndef ZIXX_GIRTH
++#define ZIXX_GIRTH 1000
++#endif
++
+ constexpr TaperKey kTaper[] = {
+     {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1780},
+     {330, 1400}, {400, 1000}, {470, 890}, {560, 860}, {620, 860},
+@@ -177,7 +192,11 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
+ // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
+ // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
+ // sags into the bends), so this is chosen off the PROBE, not the sketch.
+-constexpr int32_t kBodyY = 570;  // +32, RUN 0757: the notch-campaign neck
++constexpr int32_t kBodyY =
++    570 - (138 * (1000 - ZIXX_GIRTH)) / 1000;  // +32, RUN 0757; the girth
++                                 // term drops the carry with the grounded
++                                 // radius (~138 mm at full girth) so the
++                                 // belly stays planted at every rung: the notch-campaign neck
+                                  // redistribution (sine sum -2.859 -> -2.637
+                                  // over seg0..4) lowered everything behind the
+                                  // head by 36 mm; re-planted, then probe-run  // re-solved with the taller loop (sidecmp-02,
+@@ -507,7 +526,9 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
+     // a flat centreline here lifts the thinning belly off the ground and a
+     // flat 900-ish table dug it 30 mm under (probe, 2026-08-27). Each slope
+     // is asin(radius drop / segment): the belly rides the ground exactly.
+-    40, 380, 710, 960, 1100, 1220,
++    (40 * ZIXX_GIRTH) / 1000, (380 * ZIXX_GIRTH) / 1000,
++    (710 * ZIXX_GIRTH) / 1000, (960 * ZIXX_GIRTH) / 1000,
++    (1100 * ZIXX_GIRTH) / 1000, (1220 * ZIXX_GIRTH) / 1000,
+     // the tail rises behind, short and steep
+     -5600, -11400};
+ // which slope entries the descent lobe occupies (breathing deepens these)
+@@ -958,6 +979,7 @@ inline int32_t station_r(int i) {
+     }
+   }
+   int64_t r = (static_cast<int64_t>(kHeadHalfMm) * r1000) / 1000;
++  r = (r * ZIXX_GIRTH) / 1000;  // the girth knob (see kTaper's header note)
+   if (i < kNoseDomeStations) r = (r * kNoseDome[i]) / 1000;
+   return static_cast<int32_t>(r);
+ }
