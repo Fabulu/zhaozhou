@@ -104,6 +104,78 @@ Four pieces, in the order they should be built and measured:
 4. **The remaining ops**, which split into two groups that need different
    work — see below.
 
+## CORRECTION, 2026-08-28: there are FIVE shared resources, not one, and
+## v2 already arbitrates them
+
+Everything above about the multiplier bank stands. The claim below it --
+that ROT2, ROT3 and RING need "the ALU lanes plus the bank arbiter, no
+service" -- is **wrong**, and reading the RTL before building them is what
+caught it.
+
+`zhao_field_rot` owns neither a multiplier nor a sine table. It borrows
+BOTH, through ports, exactly like the curve service. It is a service.
+
+And `fpga/rtl/field/zhao_field_exec_shared.sv` ALREADY EXISTS. It is v2's
+answer to this entire problem, and it was built from a measured disaster --
+its own header records the first synthesis of the Field engine at **10,623
+ALMs and 79 DSPs against a device with 112**, because ten op units each owned
+a private multiplier while nine of them sat idle at any instant.
+
+It holds one of everything:
+
+| resource | who takes turns on it |
+| --- | --- |
+| `zhao_field_mul` | every MUL/MAD/DOT, and CURVE, LEN, NOISE, NORMALIZE, RCP, RING, ROT |
+| `zhao_field_isqrt` | LEN and NORMALIZE |
+| `zhao_field_sin` | OP_SIN, OP_COS, and ROT's two reads |
+| `zhao_field_rcp` | OP_RCP and RING's two smoothstep spans |
+| `zhao_field_rcp24_rom` | NORMALIZE's other seed table |
+
+So the nine remaining ops do not reduce to "bank clients" and "service
+clients". They reduce to WHICH SHARED RESOURCES each one borrows:
+
+| op | multiplier | sine | isqrt | rcp |
+| --- | :-: | :-: | :-: | :-: |
+| ROT2, ROT3 | yes | **yes** | | |
+| NORMALIZE2/3 | yes | | **yes** | rcp24 rom |
+| RING | yes | | | **yes** |
+| CURVE, DCURVE, SPLINE | yes | | | |
+| NOISE2, RIDGE | yes | | | |
+
+### The owner's ruling is the law here, and it is quoted in that file
+
+> Give each major subsystem the smallest local multiplier farm its SUSTAINED
+> RATE actually needs, and share only operations that are MUTUALLY EXCLUSIVE
+> inside that subsystem. DSP allocation is justified by sustained frame
+> demand, not by preserving one-clock placeholder throughputs.
+
+That decides the width question, and it decides it AGAINST uniformity.
+`zhao_field_v3_mulbank` is four wide because **every instruction** may need a
+product -- the sustained rate is one per instruction per lane. The sine,
+isqrt and reciprocal units are needed only by specific ops, so making them
+four wide as well would multiply the exact cost that produced the 79-DSP
+measurement in the first place.
+
+**So the working assumption for v3 is: the multiplier bank is four wide; the
+other four resources stay ONE wide with a queue in front, until a measured
+sustained rate says otherwise.** That is an assumption, not a result, and the
+composition test is what turns it into one.
+
+### What this changes about the build order
+
+The order stated above -- "the arbiter unblocks ROT2/ROT3/RING immediately"
+-- was wrong. The corrected order:
+
+1. **CURVE, DCURVE, SPLINE, NOISE2, RIDGE** need only the multiplier, which
+   is now arbitrated. These are the ops the arbiter actually unblocks.
+2. **ROT2/ROT3** additionally need a shared sine table with its own arbiter.
+3. **RING** additionally needs the shared reciprocal.
+4. **NORMALIZE2/3** additionally need isqrt and the rcp24 seed ROM.
+
+And the honest reading of `zhao_field_exec_shared` is that v3 does not need a
+new design for any of this -- it needs that block widened where the sustained
+rate demands it and left alone where it does not.
+
 ## The nine ops are not nine problems
 
 | op | what it needs |
