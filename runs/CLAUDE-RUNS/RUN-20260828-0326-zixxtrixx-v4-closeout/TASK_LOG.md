@@ -476,3 +476,22 @@ rather than another oscillation.
   beside Side.png at matched scale. sidecmp-01.png committed: the front
   half now reads as the sheet (fat horizontal head at height, eye
   high-forward, blue running back, pink over the whole crown).
+
+### 2026-08-28 10:0x - ORGANIC WAVE: death in stages, the fall fights
+
+- DEATH ("unusually good... needs to be more organic"): the collapse now
+  gives UNEVENLY — first give to 43%, a half-CATCH (recovers to 37%), a
+  sudden second give, slow settle — plus THE LAST SETTLE at k82..93: one
+  small head-shift + tail-tip lift after the body looks finished.
+  Evidence: death-staged-sheet.png (the catch visible in row 2).
+- FALL ("try making it more alive"): a second warp harmonic makes the
+  tumble SLOW near upright (righting attempts that fail), and the head
+  now LOOKS WHERE IT FALLS through the aim rig (kFallHeadAim 4600,
+  eased by the tumble's own sine — layered under the loose loll, no new
+  fast terms). Evidence: fall-alive-sheet.png — the loop's character
+  varies section to section.
+- Pivot fallout re-authored on worst-key renders: attack family 210->240
+  (the coil's wheel rides the pivoted skull 22mm deeper — rendered clean,
+  attack-coil-worstkey.png), hit 255->265. Probe exit 0 everywhere.
+- Goldens: clips 4+6 re-pinned (deliberate); pose-crcs re-pinned for the
+  skeleton pivot (clip payloads pivot-independent, proven by cmp).

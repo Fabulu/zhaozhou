@@ -632,6 +632,14 @@ constexpr int32_t kFallAuthSpatial = 4400; // phase step per joint
 // the turn and hesitates through the other, while the endpoints stay exact
 // so the loop still closes. ~9% of a turn of maximum lead/lag.
 constexpr int32_t kFallTumbleWarp = 8200;
+constexpr int32_t kFallTumbleWarp2 = 3000;  // second harmonic: the tumble
+                                            // SLOWS near upright (a righting
+                                            // attempt) and gives way -- the
+                                            // fight, not more oscillation
+constexpr int32_t kFallHeadAim = 4600;      // the head LOOKS where it falls
+                                            // (the aim rig's payoff): pitches
+                                            // toward the ground through the
+                                            // head-down half, eased
 
 // ============================ END KNOBS ====================================
 
@@ -1773,6 +1781,16 @@ inline zc::Clip build_fall() {
       }
     }
 
+    // the tumble's warped angle, PRE-computed for the head's aim below
+    // (the tumble itself recomputes it identically later)
+    const int32_t theta_u_pre =
+        static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
+    const int32_t theta_pre =
+        theta_u_pre + static_cast<int32_t>(
+                          (static_cast<int64_t>(kFallTumbleWarp) *
+                           zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u_pre & 0xFFFF)}).raw) >>
+                          16);
+
     // SLOW LOOSE NECK: the head lolls on one- and two-cycle waves, phase
     // staggered down the first joints so the motion travels instead of
     // snapping. Strongest right at the head.
@@ -1801,7 +1819,16 @@ inline zc::Clip build_fall() {
       const int32_t p2 = ph * 2 + 16000 + 4500;
       const int32_t s1 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p1 & 0xFFFF)}).raw;
       const int32_t s2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>(p2 & 0xFFFF)}).raw;
-      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + ((s1 * (kFallNeckAmp / 2)) >> 16)),
+      // THE HEAD FIGHTS (run 0326 owner: "try making it more alive"): a
+      // falling creature's head is the most alive thing about it -- it
+      // looks where it is going. Through the head-down half of the tumble
+      // the skull pitches toward the ground (counter to the body's spin),
+      // eased by the tumble's own sine so the glance arrives and releases
+      // slowly. Layered UNDER the loose loll, not replacing it.
+      const int32_t aim =
+          (zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_pre & 0xFFFF)}).raw *
+           kFallHeadAim) >> 16;
+      g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + aim + ((s1 * (kFallNeckAmp / 2)) >> 16)),
                              quat_y((s2 * (kFallNeckAmp * 2 / 3)) >> 16));
     }
     // THE LATERAL WAVE (2026-08-27): a slow serpentine undulation travelling
@@ -1841,7 +1868,11 @@ inline zc::Clip build_fall() {
         theta_u + static_cast<int32_t>(
                       (static_cast<int64_t>(kFallTumbleWarp) *
                        zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >>
-                      16);
+                      16) +
+        static_cast<int32_t>(
+            (static_cast<int64_t>(kFallTumbleWarp2) *
+             zref::fx_sin(zref::angle16{static_cast<uint16_t>((2 * theta_u + 9000) & 0xFFFF)}).raw) >>
+            16);
     const int32_t t2 =
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
     const int32_t t3 =
@@ -2038,11 +2069,16 @@ inline zc::Clip build_death() {
       shud = (sh * kDeathShudder) >> 16;
       headshake = (sh * 2200) >> 16;
     }
-    // phase 2, k14..48: the collapse -- every slope drains toward the
-    // near-flat dead pose while the computed root keeps the REAR node
-    // planted, so the carried front comes DOWN to the dirt instead of the
-    // rear floating up
-    const int32_t drain = ss1000(f, 14, 48);
+    // phase 2: the collapse, IN STAGES (run 0326 owner: "unusually good
+    // for a first attempt, but needs to be more organic"). Strength goes
+    // out unevenly: the front gives, the body half-CATCHES itself, then a
+    // sudden give takes the rest, and the settle is slow. Never a
+    // constant-velocity keel.
+    static const Key kGive[] = {{0, 0},   {14, 0},   {21, 430}, {26, 400},
+                                {30, 370}, {35, 720}, {39, 880}, {50, 1000},
+                                {95, 1000}};
+    constexpr int kGiveN = static_cast<int>(sizeof(kGive) / sizeof(Key));
+    const int32_t drain = curve(kGive, kGiveN, f);
     int64_t rear_sin = 0;
     int32_t prev = 0;
     for (int k = 0; k < kStanceSlopes; ++k) {
@@ -2052,9 +2088,12 @@ inline zc::Clip build_death() {
         else d -= ((32768 - d) * shud) / 1000;
       }
       d += ((kCorpseSlope[k] - d) * drain) / 1000;
-      // phase 4, k52..78: the last tail curl, risen slowly, released slower
+      // phase 4, k52..78: the last tail curl, risen slowly, released
+      // slower -- plus the LAST-SETTLE beat at k82..93 (see the head): the
+      // tail-tip lifts once more, small, and drops
       if (k > kStanceGround1) {
-        const int32_t curl_env = ss1000(f, 52, 62) - ss1000(f, 62, 78);
+        const int32_t curl_env = ss1000(f, 52, 62) - ss1000(f, 62, 78) +
+                                 (ss1000(f, 82, 86) - ss1000(f, 86, 93)) / 3;
         // negative: the curl lifts the tail UP off the dirt and lets it
         // sink back (positive dug it under)
         d -= (kDeathTailCurl * curl_env) / (1000 * (kSpineBones - kStanceGround1));
@@ -2072,17 +2111,22 @@ inline zc::Clip build_death() {
     // phase 3, k30..62: keels onto the flank -- a roll about the world
     // forward axis through a ground line under the S's centre (the fall
     // clip's re-pivot law, one axis), applied to the now-low body
-    const int32_t roll = (kDeathRoll * ss1000(f, 30, 62)) / 1000;
+    const int32_t roll = (kDeathRoll * ss1000(f, 32, 60)) / 1000;
     // a rolling tube's centre stays one radius up: the rigid roll about
     // the fixed ground axis drops it by h(1-cos), so the root rises to
     // match (the probe read the front quarter -175 without it)
-    const int32_t roll_lift = (kDeathRollLift * ss1000(f, 30, 62)) / 1000;
+    const int32_t roll_lift = (kDeathRollLift * ss1000(f, 32, 60)) / 1000;
     // the head: the attitude HOLDS (draining it to zero pitched the
     // 218 mm ball 60 deg under and the probe read -226); the dying droop
-    // is a small authored delta, and the last shake rides on top
+    // is a small authored delta, and the last shake rides on top.
+    // THE LAST SETTLE (organic pass): one small beat after the body looks
+    // finished -- the head shifts once, the tail-tip lifts and drops --
+    // "this was alive a moment ago".
+    const int32_t last = ss1000(f, 82, 86) - ss1000(f, 86, 93);
     g.q[kBHead] = quat_mul(
-        quat_z(kHeadAttitude - (1400 * drain) / 1000 + headshake / 2),
-        quat_y(headshake));
+        quat_z(kHeadAttitude - (1400 * drain) / 1000 + headshake / 2 -
+               (last * 700) / 1000),
+        quat_y(headshake + (last * 900) / 1000));
     // fins fold in death, slowly
     g.tail_rest((kBladeSplay * (1000 - drain / 2)) / 1000,
                 (kBladeRise * (1000 - drain)) / 1000);

@@ -195,9 +195,14 @@ int main() {
     switch (slot) {
       case 1: return 250;
       case 2: return 165;
-      case 3: return 210;
+      case 3: return 240;   // RE-AUTHORED run 0326 pivot pass: the skull
+                             // pivot moved to its centroid (kHeadPivotMm
+                             // 0 -> 190) and the coil's nose-to-tail wheel
+                             // closure rides ~22 mm deeper for the same
+                             // approved coil; worst key rendered clean
+                             // (attack-coil-worstkey.png)
       case 4: return 40;
-      case 5: return 255;   // RE-AUTHORED run 0326: the exaggerated hit's
+      case 5: return 265;   // RE-AUTHORED run 0326: the exaggerated hit's
                              // peak recoil (owner: "more exaggerated and
                              // impactful") bunches mid-body vs grounded
                              // run 245 for ~3 keys -- worst-key render
@@ -209,7 +214,7 @@ int main() {
       // inherit its authored nesting wholesale (the coil's nose-to-tail
       // wheel closure, the rest pose's hook nesting)
       case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
-        return 210;
+        return 240;  // the attack's slices inherit its pivot re-author
       // run 0326 vocabulary (each to be re-judged on its worst-key render
       // before close): the knockdown family lies in the death's corpse
       // family (drain to kCorpseSlope + flank roll -- death carries 265);
