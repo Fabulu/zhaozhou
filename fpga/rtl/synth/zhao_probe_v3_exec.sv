@@ -617,6 +617,12 @@ module zhao_probe_v3_exec #(
   // contexts fill the pipe and every denial lands behind a real instruction:
   // 21 of 48 context-programs wrong, and the single-context test green
   // throughout.
+  // The upstream stage registers do not move on these clocks -- and the
+  // register file's read does. Exactly the condition guarding the upstream
+  // block below, named once so the two cannot drift apart.
+  logic               upstream_frozen_c;
+  assign upstream_frozen_c = hold_c || mul_denied_c;
+
   logic               opnd_held_r;
   logic signed [31:0] h_a0_r, h_a1_r, h_a2_r, h_b0_r, h_b1_r, h_b2_r, h_c_r;
 
@@ -625,13 +631,25 @@ module zhao_probe_v3_exec #(
     // On the denial clock the data IS the stalled instruction's, so take it
     // and remember it. On the clocks after, the file has moved on: use what
     // was remembered.
-    use_a0_c = (opnd_held_r && !mul_denied_c) ? h_a0_r : rf_a0;
-    use_a1_c = (opnd_held_r && !mul_denied_c) ? h_a1_r : rf_a1;
-    use_a2_c = (opnd_held_r && !mul_denied_c) ? h_a2_r : rf_a2;
-    use_b0_c = (opnd_held_r && !mul_denied_c) ? h_b0_r : rf_b0;
-    use_b1_c = (opnd_held_r && !mul_denied_c) ? h_b1_r : rf_b1;
-    use_b2_c = (opnd_held_r && !mul_denied_c) ? h_b2_r : rf_b2;
-    use_c_c  = (opnd_held_r && !mul_denied_c) ? h_c_r  : rf_c;
+    // EVERY UPSTREAM FREEZE, NOT JUST A DENIAL.
+    //
+    // The first version of this held operands only across `mul_denied_c`, and
+    // that was half the problem. `hold_c` freezes the upstream too -- for a
+    // DOT accumulating, for a long op waiting to be handed over -- and the
+    // register file's read does not stop for either. Same defect, second
+    // freeze.
+    //
+    // It surfaced in the composed machine as the PENULTIMATE context started
+    // receiving the LAST-started context's answer, and only with eight
+    // contexts: the long-op handover wait is the freeze, and it takes a full
+    // second group for one to sit behind another.
+    use_a0_c = (opnd_held_r && !upstream_frozen_c) ? h_a0_r : rf_a0;
+    use_a1_c = (opnd_held_r && !upstream_frozen_c) ? h_a1_r : rf_a1;
+    use_a2_c = (opnd_held_r && !upstream_frozen_c) ? h_a2_r : rf_a2;
+    use_b0_c = (opnd_held_r && !upstream_frozen_c) ? h_b0_r : rf_b0;
+    use_b1_c = (opnd_held_r && !upstream_frozen_c) ? h_b1_r : rf_b1;
+    use_b2_c = (opnd_held_r && !upstream_frozen_c) ? h_b2_r : rf_b2;
+    use_c_c  = (opnd_held_r && !upstream_frozen_c) ? h_c_r  : rf_c;
   end
 
 
@@ -855,7 +873,7 @@ module zhao_probe_v3_exec #(
       // CAPTURE ON THE FIRST DENIED CLOCK, RELEASE WHEN THE INSTRUCTION MOVES.
       // On the denial clock the file is still presenting the stalled
       // instruction's operands, so that is the moment to keep them.
-      if (mul_denied_c) begin
+      if (upstream_frozen_c) begin
         if (!opnd_held_r) begin
           opnd_held_r <= 1'b1;
           h_a0_r <= rf_a0;

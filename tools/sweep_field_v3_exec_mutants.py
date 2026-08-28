@@ -155,11 +155,11 @@ MUTANTS = [
      "  assign wb_req_c   = s4_v_r && alu_writes && !dot_here_c &&\n"
      "                      !retire_hold_c;"),
     ("X13 the writeback lands in the wrong context",
-     "      rf_wctx_c  = wb_ctx_o;",
-     "      rf_wctx_c  = s4_ctx_r;"),
+     "      rf_wctx_c  = wr_ctx_i;",
+     "      rf_wctx_c  = wr_ctx_i + CW'(1);"),
     ("X14 the observed writeback stream disagrees with what the file was told",
-     "      rf_wdata_c = wb_data_o;",
-     "      rf_wdata_c = alu_result;"),
+     "      rf_wdata_c = wr_data_i;",
+     "      rf_wdata_c = wr_data_i + 32'sd1;"),
 
     # ---- refusal and the ledger --------------------------------------------
     # Reshaped: dropping the term orphaned dot_here_c. AND keeps the operand
@@ -337,8 +337,8 @@ MUTANTS = [
     # defect -- the stalled instruction is paired with operands that are not
     # its own, just on the opposite clock.
     ("X38 the hold applies on the wrong clock, so the stale pair is used",
-     "    use_a0_c = (opnd_held_r && !mul_denied_c) ? h_a0_r : rf_a0;",
-     "    use_a0_c = (opnd_held_r && mul_denied_c) ? h_a0_r : rf_a0;"),
+     "    use_a0_c = (opnd_held_r && !upstream_frozen_c) ? h_a0_r : rf_a0;",
+     "    use_a0_c = (opnd_held_r && upstream_frozen_c) ? h_a0_r : rf_a0;"),
     ("X39 the hold is captured a clock late, after the file has moved on",
      "        if (!opnd_held_r) begin\n"
      "          opnd_held_r <= 1'b1;\n"
@@ -361,9 +361,10 @@ MUTANTS = [
     ("X41 the skid pops whether or not the port granted",
      "  assign sk_pop_c  = sk_ne_c && wb_ready_i;",
      "  assign sk_pop_c  = sk_ne_c;"),
-    ("X42 the register file is written without a grant",
-     "      rf_we_c    = wb_valid_o && wb_ready_i;",
-     "      rf_we_c    = wb_valid_o;"),
+    # X42 REMOVED. "The file is written without a grant" stopped being this
+    # block's claim when the register file began taking the ARBITER's output:
+    # rf_we_c is now just wr_en_i. The claim lives in zhao_field_v3_svcpath,
+    # where wr_en_o is produced, and is checked there.
     ("X43 a refused write is not pushed, so it is simply dropped",
      "  assign sk_push_c = wb_req_c && (sk_ne_c || !wb_ready_i);",
      "  assign sk_push_c = wb_req_c && sk_ne_c;"),
@@ -384,6 +385,19 @@ MUTANTS = [
     ("X46 the issue gate is registered, so it stops a clock too late",
      "  assign sk_busy_c = sk_ne_c || sk_push_c;",
      "  assign sk_busy_c = sk_ne_c;"),
+    # ---- the operand hold, widened 2026-08-28 ------------------------------
+    # The register file's read is a pipeline stage that NO upstream freeze
+    # stops. The first version of the hold covered only `mul_denied_c`; the
+    # composed machine showed `hold_c` has the identical defect -- the
+    # penultimate context started received the LAST-started context's answer,
+    # and only with eight contexts, because a long-op handover wait is the
+    # freeze and it takes a full second group for one to sit behind another.
+    ("X47 the operand hold covers only a DENIAL, not every upstream freeze",
+     "  assign upstream_frozen_c = hold_c || mul_denied_c;",
+     "  assign upstream_frozen_c = mul_denied_c;"),
+    ("X48 the operand hold covers only a HOLD, not a denial",
+     "  assign upstream_frozen_c = hold_c || mul_denied_c;",
+     "  assign upstream_frozen_c = hold_c;"),
 ]
 
 

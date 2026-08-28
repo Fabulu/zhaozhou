@@ -345,6 +345,19 @@ int main(int argc, char** argv) {
     }
   }
 
+  {
+    int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+    for (int c = 0; c < kCtx; ++c) {
+      xs[c] = (int32_t)((c + 1) << 16);
+      ys[c] = (int32_t)((c + 2) << 16);
+    }
+    int clocks = 0;
+    (void)run_long(top, zfield::OP_NOISE2, kCtx, xs, ys, 0x11u, 1, false, got, &clocks);
+    printf("   n=8 groups=%u partial=%u drain_writes=%u served[0]=%u served[1]=%u\n",
+           (unsigned)top.groups_o, (unsigned)top.partial_o, (unsigned)top.drain_writes_o,
+           (unsigned)top.wb_served_o[0], (unsigned)top.wb_served_o[1]);
+  }
+
   printf("== section 4: THE POLICY, measured on the composed machine ==\n");
   {
     // wbarb's policy was measured on the service path alone: ALU-first starves
