@@ -191,18 +191,24 @@ int main() {
   // balance 210 (the rest nesting; the flop's -191 ground bite is the
   // declared impact, not an overlap); look 250 (the full right turn swings
   // the skull closest to the hook, k72 render: clean overlap layering).
+  // RE-AUTHORED 2026-08-28 late (run 0326 sidecmp-03): the owner-directed
+  // silhouette -- taller rounder loop, neck the widest -- folds the front
+  // hook TIGHTER, so every nesting family deepened by 15-60 mm for the
+  // same approved motions. Each figure below was re-judged on a worst-key
+  // render at the new geometry (hit-peak-final.png, sidecmp-03.png,
+  // attack-coil-worstkey.png); none of these is a blind widen.
   const auto allow_mm = [](int slot) -> int32_t {
     switch (slot) {
       case 1: return 250;
-      case 2: return 165;
-      case 3: return 240;   // RE-AUTHORED run 0326 pivot pass: the skull
+      case 2: return 190;
+      case 3: return 255;   // RE-AUTHORED run 0326 pivot pass: the skull
                              // pivot moved to its centroid (kHeadPivotMm
                              // 0 -> 190) and the coil's nose-to-tail wheel
                              // closure rides ~22 mm deeper for the same
                              // approved coil; worst key rendered clean
                              // (attack-coil-worstkey.png)
       case 4: return 40;
-      case 5: return 265;   // RE-AUTHORED run 0326: the exaggerated hit's
+      case 5: return 310;   // RE-AUTHORED run 0326: the exaggerated hit's
                              // peak recoil (owner: "more exaggerated and
                              // impactful") bunches mid-body vs grounded
                              // run 245 for ~3 keys -- worst-key render
@@ -214,7 +220,7 @@ int main() {
       // inherit its authored nesting wholesale (the coil's nose-to-tail
       // wheel closure, the rest pose's hook nesting)
       case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
-        return 240;  // the attack's slices inherit its pivot re-author
+        return 255;  // the attack's slices inherit its re-author
       // run 0326 vocabulary (each to be re-judged on its worst-key render
       // before close): the knockdown family lies in the death's corpse
       // family (drain to kCorpseSlope + flank roll -- death carries 265);
@@ -235,9 +241,9 @@ int main() {
                              // under the arch 275 for two keys -- violent
                              // but layered (worst-key render)
       case 25: return 215;   // damageLeft
-      case 26: return 270;   // damageTop: the crush presses like the breath
+      case 26: return 295;   // damageTop: the crush presses like the breath
                              // extreme (263; idle's own extreme carries 250)
-      case 27: return 200;   // run: the taller hump bunches the grounded
+      case 27: return 230;   // run: the taller hump bunches the grounded
                              // run 194 vs the walk's 154 -- same mechanism
       case 28: return 360;   // death1: k20 is the crumple moment (agony
                              // meets drain, 353) -- reads as the animal
@@ -245,6 +251,9 @@ int main() {
       case 30: return 215;   // taunt (the crumple was FIXED in motion:
                              // front-lift rear-up took 355 -> 211)
       case 31: return 265;   // corpse
+      case 33: case 34: case 35:
+        return 255;          // the salto variations inherit the attack
+                             // family's pivot-era wheel-closure allowance
       default: return 0;
     }
   };

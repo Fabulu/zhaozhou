@@ -1063,6 +1063,11 @@ struct SceneSubject {
   // .first the instance cuts to clip slot .second, exactly the game's own
   // hard-cut state change (no blend exists anywhere). Empty = single clip.
   std::vector<std::pair<uint32_t, uint16_t>> clip_cuts;
+  // run 0326 salto variations: a TARGET DUMMY -- the watchdog quadruped
+  // (the owner's pick) -- standing or hovering in the shot. Reel-only:
+  // never part of the shipped creature or its site card.
+  bool dummy = false;
+  int32_t dummy_x_mm = 0, dummy_y_mm = 0;
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
   // legitimately change — update it in the same commit and say so.
@@ -1576,6 +1581,7 @@ void advance_reel_gibs(std::vector<ReelGibPiece>& pieces, int32_t ground, int32_
 
 struct CreatureReelCtx {
   zc::CreatureInstance* inst = nullptr;
+  zc::CreatureInstance* dummy = nullptr;  // run 0326: the target dummy
   zc::PoseBank* poses = nullptr;
   zref::mat4fx vp;
   std::vector<ReelGibPiece>* gibs = nullptr;
@@ -1607,7 +1613,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                  pc.in ? pc.s.x >> 8 : -1, pc.in ? pc.s.y >> 8 : -1, clip.w.raw);
   }
 #endif
-  zc::compose_creatures(rgb, depth, w, h, c.vp, &c.inst, 1, *c.poses, nullptr);
+  {
+    zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
+    zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
+                          c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
+  }
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
 
@@ -1760,6 +1770,7 @@ int render_scene(const SceneSubject& sub) {
   // creature subject state (zref::creature — the laws live there)
   const zc::CreatureType* dog = nullptr;
   zc::CreatureInstance dog_inst;
+  zc::CreatureInstance dummy_inst;  // run 0326: the salto target dummy
   zc::PoseBank dog_poses;
   std::vector<ReelGibPiece> gibs;
   CreatureReelCtx cr_ctx;
@@ -1802,6 +1813,15 @@ int render_scene(const SceneSubject& sub) {
       dog_inst.x -= fxm(zixx::kRunSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
+    if (sub.dummy) {
+      dummy_inst.type = &watchdog_type();
+      dummy_inst.tilt_mode = zc::TiltMode::kCompletely;
+      dummy_inst.facing = zref::angle16{uint16_t{0x8000}};  // faces the snake
+      dummy_inst.anim.cut(1);  // its idle breath
+      dummy_inst.x = fxm(zixx::kStageCentreMm + sub.dummy_x_mm);
+      dummy_inst.y = fxm(sub.dummy_y_mm);
+      cr_ctx.dummy = &dummy_inst;
+    }
     cr_ctx.gibs = &gibs;
     pop_threshold = 22 * (1 << 16) / 10;  // bulk 2.2 pops (species constant)
     gib_gravity = fxm(18);                // per frame^2
@@ -1885,6 +1905,20 @@ int render_scene(const SceneSubject& sub) {
                   (aim * (zixx::kAtkTipFwd / 2)) / 1000);
       trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000 -
                   (aim * (zixx::kAtkTipDrop / 2)) / 1000);
+    } else if (sub.cam_track && sub.creature >= 35 && sub.creature <= 37) {
+      // run 0326 salto variations: follow the BAKED ROOT of the variant
+      // clip (the whole trajectory lives in its root channels). The camera
+      // rides a fraction of the lift so the ground never leaves frame.
+      const uint16_t slot = static_cast<uint16_t>(sub.creature - 2);
+      for (const zc::Clip& cc : zixx::type().bank.clips) {
+        if (cc.slot_id != slot) continue;
+        uint32_t fr = f / 2;
+        if (fr >= cc.frame_count) fr = cc.frame_count - 1;
+        trk_x = cc.root[fr * 3 + 0];
+        trk_y = static_cast<int32_t>(
+            (static_cast<int64_t>(cc.root[fr * 3 + 1]) * sub.cam_track_num) / 1000);
+        break;
+      }
     }
 
     // ---- creature sim (the driver composes the tick cadence; the laws are
@@ -1962,10 +1996,19 @@ int render_scene(const SceneSubject& sub) {
           const zc::ClipEvent* fired = nullptr;
           uint8_t nf = 0;
           zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+          if (sub.dummy) {
+            const zc::ClipEvent* df = nullptr;
+            uint8_t dn = 0;
+            zc::anim_advance(dummy_inst.anim, watchdog_type().bank, &df, dn);
+          }
         }
         zc::ground_tilt_update(dog_inst.tilt, dog_inst.tilt_mode, dog_inst.facing, lat,
                                zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z}, zref::fx16{fxm(40)},
                                zref::fx16{fxm(20)});
+        if (sub.dummy)
+          zc::ground_tilt_update(dummy_inst.tilt, dummy_inst.tilt_mode, dummy_inst.facing, lat,
+                                 zref::fx16{dummy_inst.x}, zref::fx16{dummy_inst.z},
+                                 zref::fx16{fxm(40)}, zref::fx16{fxm(20)});
       } else if (sub.creature == 1) {
         // walk: root motion follows the authored +X forward axis at a
         // front-quarter yaw; four independent legs carry the 16-key stride.
@@ -3632,6 +3675,78 @@ SceneSubject subject_zixx_corpse() {
   return s;
 }
 
+// ---- run 0326: the salto variations (attack1/attack2, owner's ask) --------
+// Wide fixed side shots -- the whole flight must stay in frame, and the
+// target dummy (the watchdog quadruped) stands where the plan aims.
+SceneSubject subject_zixx_salto_dummy() {
+  SceneSubject s;
+  s.name = "zixxtrixx-salto-dummy";
+  s.creature = 35;  // clip slot 33
+  s.frames = 85 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 180000;
+  s.cam_eye = 13;
+  s.cam_dist = 11;
+  s.bump_ext = 18;
+  s.cam_track = true;
+  s.cam_track_num = 780;
+  s.dummy = true;
+  s.dummy_x_mm = 4600;
+  s.note =
+      "Salto variation (run 0326; the donor's attack1): the planner aims "
+      "the committed spear at the grounded target dummy 4.6 m out -- the "
+      "watchdog quadruped from the console demos -- and the strike is a "
+      "MID-AIR HIT: the spear meets the body, recoils off it, and the "
+      "snake falls out of the sky, gathers, and settles back into its S. "
+      "Projectile, not missile: the vector locks at the apex";
+  return s;
+}
+SceneSubject subject_zixx_salto_fly() {
+  SceneSubject s;
+  s.name = "zixxtrixx-salto-fly";
+  s.creature = 36;  // clip slot 34
+  s.frames = 86 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 170000;
+  s.cam_eye = 14;
+  s.cam_dist = 12;
+  s.bump_ext = 18;
+  s.cam_track = true;
+  s.cam_track_num = 780;
+  s.dummy = true;
+  s.dummy_x_mm = 3800;
+  s.dummy_y_mm = 3200;
+  s.note =
+      "Salto variation (run 0326): the FLYING target dummy hovers at "
+      "3.2 m and the plan intercepts it there -- a shorter climb, the "
+      "spear locked upward-forward, the recoil and the long fall back to "
+      "the dirt. The planner sized apex, spin and plunge from the "
+      "intercept alone";
+  return s;
+}
+SceneSubject subject_zixx_salto_six() {
+  SceneSubject s;
+  s.name = "zixxtrixx-salto-six";
+  s.creature = 37;  // clip slot 35
+  s.frames = 108 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 150000;
+  s.cam_eye = 15;
+  s.cam_dist = 13;
+  s.bump_ext = 18;
+  s.cam_track = true;
+  s.cam_track_num = 780;
+  s.note =
+      "Salto variation (run 0326; 'One with 6 saltos'): the full showcase "
+      "apex earns SIX somersaults on a 44-key flight before the committed "
+      "dive onto a far ground mark -- the spin law spends them all on the "
+      "way up and the diagonal spear arrives exactly oriented";
+  return s;
+}
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3758,6 +3873,12 @@ constexpr LibraryEntry kLibrary[] = {
      "Agony rear-up, forward collapse to prone, two tail slaps, still", true},
     {"zixxtrixx-taunt", "Zixxtrixx taunt",
      "Rears up proud, blades flared, head wagging side to side", true},
+    {"zixxtrixx-salto-dummy", "Zixxtrixx salto: grounded target",
+     "The planner aims the spear at a standing dummy; mid-air hit, recoil", true},
+    {"zixxtrixx-salto-fly", "Zixxtrixx salto: flying target",
+     "The committed spear intercepts a hovering dummy at 3.2 m", true},
+    {"zixxtrixx-salto-six", "Zixxtrixx salto: six somersaults",
+     "The full apex earns six flips before the committed dive", true},
 
     // Dead classes (no flare capability, stub entries only)
     {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -3884,6 +4005,9 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-death2")) rc |= render_scene(subject_zixx_death2());
   if (wanted("zixxtrixx-taunt")) rc |= render_scene(subject_zixx_taunt());
   if (wanted("zixxtrixx-corpse")) rc |= render_scene(subject_zixx_corpse());
+  if (wanted("zixxtrixx-salto-dummy")) rc |= render_scene(subject_zixx_salto_dummy());
+  if (wanted("zixxtrixx-salto-fly")) rc |= render_scene(subject_zixx_salto_fly());
+  if (wanted("zixxtrixx-salto-six")) rc |= render_scene(subject_zixx_salto_six());
   if (wanted("zixxtrixx-unlit")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit", 1, false, 1));
   if (wanted("zixxtrixx-unlit-front")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit-front", 1, true, 1));
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));

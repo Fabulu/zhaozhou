@@ -136,10 +136,23 @@ struct TaperKey {
 // THE GROUNDED RUN'S RADII (t >= 560) ARE LOAD-BEARING: the grounded
 // slope table is asin(radius drop/segment) against exactly these values,
 // so they stay UNTOUCHED to the millimetre.
+// sidecmp-02: the first neck build put the girth peak at t=220 -- BEHIND
+// the head part, hidden inside the tight curl -- so the render showed a
+// PINCH: narrow behind the skull, then the bulb. The sheet widens
+// MONOTONICALLY into the head with no reversal anywhere. The peak now
+// sits at t=110, inside the skull itself: body -> neck -> head is one
+// unbroken rise, and the dome rounds it off at the tip.
+// sidecmp-03, the owner's EXACT order: "the head shouldn't be the widest
+// part, the neck should be. After neck, body should quickly become
+// smaller until it's normal. Head meanwhile should be maybe the second
+// widest part." So: one monotone rise nose -> head (1360) -> NECK PEAK
+// (1430, at the head/body junction) -> a FAST drop to normal body width
+// by t~340. No pinch anywhere; the reduction neck -> head is the drawn
+// one, not a reversal in the middle.
 constexpr TaperKey kTaper[] = {
-    {0, 1120},  {40, 1250}, {90, 1330}, {150, 1370}, {220, 1410},  // head, then the NECK: broadest
-    {320, 1090}, {430, 890}, {560, 860}, {620, 860},               // the upper S, slimmed
-    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}    // tail stem (approved, exact)
+    {0, 1150},  {50, 1290}, {110, 1360}, {180, 1430}, {260, 1250},
+    {340, 1000}, {440, 880}, {560, 860}, {620, 860},
+    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // Bind height of the body axis. This is the HEAD height: bone 0 is the nose
@@ -148,8 +161,10 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 648;  // 539 + the head's rise (owner: "way up");
-                                 // solved so node 11 keeps its height  // retuned 2026-08-27 pass 3: the blade
+constexpr int32_t kBodyY = 608;  // re-solved with the taller loop (sidecmp-02,
+                                 // then corrected -11 against the PROBE --
+                                 // the sine table is hand-added);
+                                 // node 11 keeps its height exactly  // retuned 2026-08-27 pass 3: the blade
                                  // re-rake and the neck re-sum left the idle
                                  // belly touching 0 at one key -- 3 mm down
                                  // restores the authored sink (probe: idle
@@ -420,11 +435,16 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // rounded (-1500 instead of a flat 0 corner); the dive is slightly
     // softened. kBodyY rises with it so the grounded run lands EXACTLY
     // where it always did (sine-sum solved, then probe-verified).
-    3000, -5000, -8600, -11000,
-    // crown (rounded, not a corner)
-    -1500,
+    // sidecmp-02 iteration: the upper loop was FLAT-wide against the
+    // sheet's tall round arch and the head read mid-height. Steeper on
+    // both flanks (a narrower, taller loop), the crown still rising
+    // through -2400, and kBodyY re-solved -- head centre lands at ~63%%
+    // of the crown, the sheet's own proportion.
+    3000, -6000, -10000, -12800,
+    // crown (rounded, still rising)
+    -2400,
     // the dive, past vertical and back under itself
-    6500, 13000, 19500, 24500, 20000, 11500,
+    7800, 15000, 20800, 24800, 19800, 11400,
     // the grounded run, LONG. These slopes RAMP because the belly line must
     // follow the TAPER: the centreline of a grounded run sits one radius up,
     // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
@@ -1904,10 +1924,14 @@ inline zc::Clip build_fall() {
 // the blow, and the ring-out settles through two slow decaying
 // overshoots -- recoil, not vibration.
 constexpr int kHitKeys = 28;
-constexpr int32_t kHitDeepen = 900;    // recoil: the S snaps much tighter...
-constexpr int32_t kHitHeadJerk = 7800; // ...the head whips back-up hard
+constexpr int32_t kHitDeepen = 700;    // recoil: the S snaps much tighter
+                                       // (900 buried the face in the neck
+                                       // on the sidecmp-03 tighter loop)
+constexpr int32_t kHitHeadJerk = 7200; // ...the head whips back-up hard
 constexpr int32_t kHitSway = 4200;     // and away
-constexpr int32_t kHitShoveMm = 55;    // the body is MOVED by the blow
+constexpr int32_t kHitShoveMm = 85;    // the body is MOVED by the blow --
+                                       // the impact lives in DISPLACEMENT
+                                       // (the fold was eating the face)
 // DEATH, slot 6: shudder -> the S drains out -> the body keels onto its
 // side -> one last tail curl -> stillness. The player watches this one.
 constexpr int kDeathKeys = 96;
@@ -3241,6 +3265,180 @@ inline zc::Clip build_sweep() {
 }
 #endif
 
+
+// ============ run 0326: SALTO VARIATIONS (the planner's payoff) ============
+// Fabian: "We have salto controls now, so you should be able to make some
+// salto variations. Hit something in the air (use some target dummy
+// creature...). Hit a flying target dummy. One with 6 saltos, maybe you
+// get some ideas." The donor format has THREE attack slots -- these are
+// attack1/attack2, not extras (ANIMATION-VOCABULARY.md).
+constexpr int kSlotAtkDummy = 33;  // strike the grounded target dummy (air-hit outcome)
+constexpr int kSlotAtkFly = 34;    // strike the FLYING target dummy
+constexpr int kSlotAtkSix = 35;    // six somersaults, the long ground dive
+
+// integer atan2 in 1/1000 turns (offline bake only; deterministic scan --
+// 4096 candidates, argmax dot, ~0.09 deg steps)
+inline int32_t atan2_mturns(int32_t y, int32_t x) {
+  int64_t best = INT64_MIN;
+  int32_t best_phi = 0;
+  for (int i = 0; i < 4096; ++i) {
+    const uint16_t phi = static_cast<uint16_t>(i << 4);
+    const int32_t c = zref::fx_cos(zref::angle16{phi}).raw;
+    const int32_t sn = zref::fx_sin(zref::angle16{phi}).raw;
+    const int64_t dot = static_cast<int64_t>(c) * x + static_cast<int64_t>(sn) * y;
+    if (dot > best) { best = dot; best_phi = phi; }
+  }
+  return (best_phi * 1000) / 65536;  // 1/1000 turns
+}
+
+// The variant baker: local phase poses (the C2 slices' own source keys)
+// re-timed to the PLAN's phases, the plan's trajectory on the root, the
+// spin on bone 0 with the golden's own coil re-pivot law, and an authored
+// outcome tail (ground stick + recover, or mid-air hit + fall out of the
+// sky + settle). Pure integers; baked, replay-exact.
+inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
+                                     bool air_hit_outcome) {
+  const zc::Clip local = build_attack(true);
+  const zc::Clip recoil = build_air_hit();
+  // orient the spear along the committed vector: the local spear pose at
+  // theta 0 points -X, so theta_frac = atan2(spear) - half a turn
+  const int32_t phi = atan2_mturns(p.spear_dy_mm, p.spear_dx_mm);
+  int32_t frac = phi - 500;
+  while (frac < 0) frac += 1000;
+  const int32_t turns = p.spin_mturns / 1000;
+  p.spin_mturns = turns * 1000 + frac;
+  const int t0 = p.compress_keys + p.release_keys;
+  const int t1 = t0 + p.coil_keys;
+  const int t2 = t1 + p.unroll_keys;
+  const int t3 = t2 + p.plunge_keys;
+  const int kHold = air_hit_outcome ? 12 : 8;           // recoil / stick quiver
+  const int kDrop = air_hit_outcome ? 14 : 14;          // fall out of the sky / recover
+  const int kSettle = 6;
+  const int total = t3 + kHold + kDrop + kSettle;
+  zc::Clip c;
+  c.slot_id = slot;
+  c.interpolate = true;
+  c.hold_last = true;  // ends settled on the rest pose
+  c.frame_count = static_cast<uint16_t>(total);
+  c.root.assign(static_cast<size_t>(total) * 3, 0);
+  c.quats.assign(static_cast<size_t>(total) * kBoneCount, zc::quat16_identity());
+  const ChoreoSample end_s = zixx_plan_sample(p, t3);
+  // rest rig for the settle blend
+  Rig rest;
+  rest_rig(rest);
+  for (int k = 0; k < total; ++k) {
+    // ---- the local body pose for this phase --------------------------------
+    Rig g;
+    g.reset();
+    int32_t curl = 0;  // how coiled the body is (drives the wheel re-pivot)
+    if (k < t3) {
+      int lk;
+      if (k < 10) { lk = k; curl = curve(kAtkCurl, kAtkCurlN, k); }
+      else if (k < t0) { lk = 9 + (k - 10); curl = curve(kAtkCurl, kAtkCurlN, lk); }
+      else if (k < t1) { lk = 19; curl = 1000; }
+      else if (k < t2) { lk = 40 + ((k - t1) * 8) / (p.unroll_keys > 0 ? p.unroll_keys : 1); curl = 1000 - ((k - t1) * 1000) / (p.unroll_keys > 0 ? p.unroll_keys : 1); }
+      else { lk = 62; curl = 0; }
+      for (int b = 0; b < kBoneCount; ++b)
+        g.q[b] = local.quats[static_cast<size_t>(lk) * kBoneCount + b];
+    } else if (k < t3 + kHold) {
+      if (air_hit_outcome) {
+        const int rk = k - t3;
+        const int rmax = static_cast<int>(recoil.frame_count) - 1;
+        const int use = rk > rmax ? rmax : rk;
+        for (int b = 0; b < kBoneCount; ++b)
+          g.q[b] = recoil.quats[static_cast<size_t>(use) * kBoneCount + b];
+      } else {
+        for (int b = 0; b < kBoneCount; ++b)
+          g.q[b] = local.quats[static_cast<size_t>(62) * kBoneCount + b];
+      }
+    } else {
+      // the drop / recover and settle: nlerp from the phase's last pose
+      // toward the rest S (slow, loose -- a body reclaiming its shape)
+      Rig from;
+      from.reset();
+      if (air_hit_outcome) {
+        const int rmax = static_cast<int>(recoil.frame_count) - 1;
+        for (int b = 0; b < kBoneCount; ++b)
+          from.q[b] = recoil.quats[static_cast<size_t>(rmax) * kBoneCount + b];
+      } else {
+        for (int b = 0; b < kBoneCount; ++b)
+          from.q[b] = local.quats[static_cast<size_t>(62) * kBoneCount + b];
+      }
+      const int j = k - t3 - kHold;
+      const int32_t t = ss1000(j, 0, kDrop + kSettle - 2);
+      for (int b = 0; b < kBoneCount; ++b)
+        g.q[b] = zc::quat16_nlerp(from.q[b], rest.q[b], t, 1000);
+    }
+    // ---- spin + trajectory -------------------------------------------------
+    ChoreoSample sm;
+    if (k < t3) {
+      sm = zixx_plan_sample(p, k);
+    } else if (k < t3 + kHold) {
+      sm = end_s;
+      if (air_hit_outcome) {
+        // the recoil kick: shoved back along the spear line, briefly up
+        const int rk = k - t3;
+        const int32_t e = ss1000(rk, 0, 3) - ss1000(rk, 5, kHold - 1) / 2;
+        sm.x_mm -= (p.spear_dx_mm >= 0 ? 1 : -1) * (e * 260) / 1000;
+        sm.y_mm += (e * 140) / 1000;
+      }
+    } else {
+      // fall out of the sky (t^2) / recover to the ground beside the strike
+      const int j = k - t3 - kHold;
+      const int32_t tj = (j >= kDrop ? 1000 : (j * 1000) / kDrop);
+      const int32_t tt = (tj * tj) / 1000;
+      const int32_t gx = end_s.x_mm - (air_hit_outcome ? 420 : -380);
+      sm.x_mm = end_s.x_mm + ((gx - end_s.x_mm) * tj) / 1000;
+      sm.y_mm = end_s.y_mm - (static_cast<int32_t>(
+                    (static_cast<int64_t>(end_s.y_mm) * tt) / 1000));
+      if (j >= kDrop) sm.y_mm = 0;
+      // the landing bite, declared: two keys, -18 mm
+      if (j == kDrop || j == kDrop + 1) sm.y_mm = -18;
+      // theta unwinds to the next upright turn -- slow, with the body
+      const int32_t th_end = (turns + 1) * 1000;
+      sm.theta = static_cast<int32_t>(
+          ((static_cast<int64_t>(p.spin_mturns) +
+            (static_cast<int64_t>(th_end - p.spin_mturns) * ss1000(j, 0, kDrop + 2)) / 1000) *
+           65536) / 1000);
+    }
+    const uint16_t th16 = static_cast<uint16_t>(sm.theta & 0xFFFF);
+    const zc::quat16 spin_q = quat_z(sm.theta);
+    g.q[kBSpine0] = quat_mul(spin_q, g.q[kBSpine0]);
+    // the wheel re-pivot (the golden's law): while coiled, the spin acts
+    // about the coil centre (0, kCoilR) above the nose, scaled by curl
+    const int32_t sth = zref::fx_sin(zref::angle16{th16}).raw;
+    const int32_t cth = zref::fx_cos(zref::angle16{th16}).raw;
+    const int32_t piv_x = static_cast<int32_t>((static_cast<int64_t>(kCoilR) * sth) >> 16);
+    const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
+    g.write(c, k);
+    c.root[k * 3 + 0] = fxm(sm.x_mm + (piv_x * curl) / 1000);
+    c.root[k * 3 + 1] = fxm(sm.y_mm + (piv_y * curl) / 1000);
+  }
+  // event: the strike lands at t3 (collision verdict in the sim; here the
+  // baked showcase's own moment)
+  c.events = {{static_cast<uint16_t>(t3), zc::kEvAttack, air_hit_outcome ? uint8_t{1} : uint8_t{0}}};
+  return c;
+}
+
+// the three variants' PLANS, fixed for the reel showcases (the sim would
+// make its own): the grounded dummy stands 4.6 m out; the flyer hovers at
+// 3.2 m; the six-salto dives on a far ground mark with its spin forced
+inline zc::Clip build_attack_dummy() {
+  zc::AttackPlan p = zixx_plan_attack(4600, 350, 0, 0);
+  return build_attack_variant(kSlotAtkDummy, p, true);
+}
+inline zc::Clip build_attack_fly() {
+  zc::AttackPlan p = zixx_plan_attack(3800, 3200, 0, 0);
+  return build_attack_variant(kSlotAtkFly, p, true);
+}
+inline zc::Clip build_attack_six() {
+  zc::AttackPlan p = zixx_plan_attack(5200, 0, 0, 0);
+  p.spin_mturns = 6000;  // the ask: SIX somersaults
+  p.apex_mm = kAtkApexLift;          // the full showcase height earns them
+  p.coil_keys = 44;                  // the long flight to spend them in
+  return build_attack_variant(kSlotAtkSix, p, false);
+}
+
 // ------------------------------------------------------------ the build ----
 
 inline const zc::CreatureType& type() {
@@ -3476,6 +3674,10 @@ inline const zc::CreatureType& type() {
       zc::Clip corpse = build_corpse(*d0);
       bank.clips.push_back(corpse);
     }
+    // run 0326: the salto variations (attack1/attack2 -- the planner's payoff)
+    bank.clips.push_back(build_attack_dummy());
+    bank.clips.push_back(build_attack_fly());
+    bank.clips.push_back(build_attack_six());
     // the knockdown chain's shared poses and the death->corpse handoff are
     // asset invariants: compile_creature byte-compares them and FAILS the
     // creature if an edit ever splits them

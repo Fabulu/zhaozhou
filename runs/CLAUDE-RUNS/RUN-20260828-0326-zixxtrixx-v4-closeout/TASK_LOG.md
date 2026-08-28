@@ -495,3 +495,28 @@ rather than another oscillation.
   attack-coil-worstkey.png), hit 255->265. Probe exit 0 everywhere.
 - Goldens: clips 4+6 re-pinned (deliberate); pose-crcs re-pinned for the
   skeleton pivot (clip payloads pivot-independent, proven by cmp).
+
+### 2026-08-28 late - SILHOUETTE CONVERGENCE (sidecmp-02/-03) + salto variations
+
+- sidecmp-02: girth peak moved INTO the skull after the pinch diagnosis;
+  loop made taller/rounder (slopes steeper both flanks, crown -2400,
+  kBodyY re-solved 648->619->608 — the last 11 mm corrected against the
+  PROBE, hand-added sine tables drift).
+- OWNER EXACT ORDER relayed: "head shouldn't be the widest part, the neck
+  should be... body should quickly become smaller... head second widest."
+  sidecmp-03: taper 1150/1290/1360 -> NECK PEAK 1430@180 -> fast drop
+  1250/1000 by t=340. The side-by-side now genuinely resembles the sheet;
+  Front.png is confirmed (artist herself) as wonky — form judged from the
+  SIDE only, per the standing gate.
+- The tighter loop deepened every nesting family 15-60 mm: each figure
+  re-judged on a worst-key render, no blind widening. The hit was
+  REBALANCED rather than allowed through: deepen 900->700 with the shove
+  55->85 (displacement sells the blow; the fold was eating the face) —
+  hit-peak-final.png shows the worst key clean at 300.
+- SALTO VARIATIONS (attack1/attack2): build_attack_variant bakes the
+  planner's phases + trajectory + spin (integer atan2 orients the spear
+  along the committed vector) with authored outcomes: mid-air hit ->
+  recoil kick -> falls out of the sky -> settles (slots 33/34 vs the
+  grounded and FLYING watchdog dummy — reel-only), and the six-salto
+  (slot 35, 44-key flight at full apex). Root-tracking cameras follow
+  the baked trajectory; the dummy is a second CreatureInstance.
