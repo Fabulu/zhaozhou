@@ -40,6 +40,64 @@ not add one.
 
 ---
 
+## 2026-08-28 (evening) -- two real bugs in the shipped executor, and neither
+## was findable with one context
+
+*Short version: the executor has been computing wrong answers under bank
+contention whenever more than one context was busy. Found, fixed, and the block
+is now genuinely re-scored: 36 of 36 with nothing unaccounted for.*
+
+### The bug worth understanding
+
+The register file is read a clock ahead: the address goes out while an
+instruction is at one stage, and the data comes back while it is at the next.
+
+When the shared multiplier says "no", the engine freezes the front of the
+pipeline so the refused instruction can try again. **That freeze stops the
+instructions. It does not stop the read that is already in flight.** So the
+data arriving on the next clock belongs to the instruction BEHIND the stalled
+one -- and the stalled instruction was paired with somebody else's numbers.
+
+The result is a plausible wrong answer, written to the right register, by the
+right context. Nothing out of range, no flag, nothing that looks broken.
+
+The comment sitting above that stall says the refused instruction "retries with
+the same operands, because the read address is unchanged". **The address is
+unchanged. The data is one clock behind the address.** The reasoning was exactly
+right about the wrong signal.
+
+### Why nothing caught it
+
+With one context the pipeline is nearly empty -- 13 operations in 69 clocks,
+a number this same test has been printing all along -- so there is usually
+nothing behind the stalled instruction and the data that arrives is its own.
+The contention test has always run one context.
+
+Four contexts fill the pipeline and every refusal lands behind real work:
+**21 of 48 wrong.** Now 0.
+
+A second, separate fault fell out of the same investigation: the bookkeeping
+that checks the multiplier's timing lived inside the frozen region, so it
+stopped counting while the multiplier kept delivering. Its own alarm was firing
+on 12 of 12 programs. Also fixed; 0 of 12 now.
+
+### And one the deliberate-defect run had to catch for me
+
+A fault that writes the destination repeatedly while a dot product accumulates
+passes every value check, because the last write is always correct. The
+register file's own write counter cannot see it either -- both sides count the
+same duplicated events. The only statement that catches it is an absolute one:
+**one register written per operation, per context**, exact at 608 against 608.
+
+### The part that is not to my credit
+
+I spent hours on a different change, saw it fail this test, and reverted it. It
+was never the cause: the same failure happens with that change removed. I
+changed two things and blamed the one I had just written, which is the same
+mistake as reading the top of an error log and generalising -- twice more today.
+
+---
+
 ## 2026-08-28 (late afternoon) -- one of the nine was not actually closed
 
 *Short version: I have been quoting FIELD.V3.EXEC as closed at 31/31 all day.
