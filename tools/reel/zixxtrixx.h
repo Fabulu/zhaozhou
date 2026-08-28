@@ -149,9 +149,18 @@ struct TaperKey {
 // (1430, at the head/body junction) -> a FAST drop to normal body width
 // by t~340. No pinch anywhere; the reduction neck -> head is the drawn
 // one, not a reversal in the middle.
+// sidecmp-04: the head was a modest bulb against the sheet's LARGE
+// terminal lobe ("second widest is still big"). Head radii up ~4%,
+// neck peak follows (still the widest), fast drop unchanged.
+// sidecmp-05 -- THE OUTLINE GATE'S VERDICT (fronthalf overlay): the whole
+// front tube was a WIRE against the sheet's CHUBBY comma. The sheet's
+// tube reads ~40%% of the loop's height; ours read ~22%%. The front half
+// fattens boldly (neck 1900, head 1830 -- the girth order holds), the
+// fast drop lands on the approved body width by t~420, and the grounded
+// radii (t>=560) stay untouched to the millimetre.
 constexpr TaperKey kTaper[] = {
-    {0, 1150},  {50, 1290}, {110, 1360}, {180, 1430}, {260, 1250},
-    {340, 1000}, {440, 880}, {560, 860}, {620, 860},
+    {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1560},
+    {340, 1150}, {440, 900}, {560, 860}, {620, 860},
     {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
@@ -161,7 +170,7 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 608;  // re-solved with the taller loop (sidecmp-02,
+constexpr int32_t kBodyY = 538;  // re-solved with the taller loop (sidecmp-02,
                                  // then corrected -11 against the PROBE --
                                  // the sine table is hand-added);
                                  // node 11 keeps its height exactly  // retuned 2026-08-27 pass 3: the blade
@@ -332,7 +341,12 @@ constexpr int32_t kBladeThick0 = 16;   // half-thickness at the root (VERTICAL)
 // almost 90 degrees so [the fins] are almost lined up with body. But not
 // quite"): each blade now trails ~8 deg off the tail's own axis instead of
 // splaying ~38 deg across it.
-constexpr int32_t kBladeSplay = 1500;
+constexpr int32_t kBladeSplay = 3000;  // 1500 -> 3000 (run 0326 owner:
+                                       // "should be further apart")
+constexpr int32_t kBladeRoll = 14563;  // ~80 deg about the blade's own long
+                                       // axis (owner: "rotated 80 degrees")
+                                       // -- the broad face turns to the
+                                       // side view, the sheet's flat read
 constexpr int32_t kBladeRise = 2600;   // lifted past the raised stem, so the
                                        // fan reads against the sky as drawn
 // 280: Fabian 2026-08-27, "make the middle prong of the tail a bit longer"
@@ -440,11 +454,16 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // both flanks (a narrower, taller loop), the crown still rising
     // through -2400, and kBodyY re-solved -- head centre lands at ~63%%
     // of the crown, the sheet's own proportion.
-    3000, -6000, -10000, -12800,
-    // crown (rounded, still rising)
-    -2400,
+    // sidecmp-04: the head hung below the crown and the loop read tight
+    // and flat. The first neck segment steepens (the head hangs LESS below
+    // the crown), the crown keeps RISING through -4400 (a taller, more
+    // open arch whose apex sits behind the head), and the dive's entry
+    // shallows so the descending side opens out.
+    3000, -7400, -10600, -13000,
+    // crown (still climbing -- the arch's top is round and OPEN)
+    -4400,
     // the dive, past vertical and back under itself
-    7800, 15000, 20800, 24800, 19800, 11400,
+    6800, 14600, 21400, 25200, 20000, 11600,
     // the grounded run, LONG. These slopes RAMP because the belly line must
     // follow the TAPER: the centreline of a grounded run sits one radius up,
     // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
@@ -1055,8 +1074,8 @@ inline const zref::DirectPageSet& page_direct() {
     ma.bilinear = true;
     ma.wrap_u = zref::Tmu::kRepeat;  // seamless around the ring
     ma.wrap_v = zref::Tmu::kClamp;   // the nose must not bleed into the fork
-    ma.log2w = 7;                    // 128
-    ma.log2h = 8;                    // 256 -- LOG2W != LOG2H is legal today
+    ma.log2w = 8;                    // 256 (run 0326: the hi-res atlas)
+    ma.log2h = 9;                    // 512 -- LOG2W != LOG2H is legal today
     ma.max_level = 7;
     ma.mip_en = true;
     zref::Tmu::Mode mb = ma;  // the blade pages
@@ -1088,8 +1107,8 @@ struct Rig {
     for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
   }
   void tail_rest(int32_t splay = kBladeSplay, int32_t rise = kBladeRise) {
-    q[kBBladeL] = quat_mul(quat_y(splay), quat_z(-rise));
-    q[kBBladeR] = quat_mul(quat_y(-splay), quat_z(-rise));
+    q[kBBladeL] = quat_mul(quat_mul(quat_y(splay), quat_z(-rise)), quat_x(kBladeRoll));
+    q[kBBladeR] = quat_mul(quat_mul(quat_y(-splay), quat_z(-rise)), quat_x(-kBladeRoll));
     q[kBSpike] = quat_z(-rise / 2);
   }
   void write(zc::Clip& c, int f) const {
