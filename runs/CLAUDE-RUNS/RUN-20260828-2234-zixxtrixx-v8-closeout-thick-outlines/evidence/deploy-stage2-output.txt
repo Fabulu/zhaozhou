@@ -1,0 +1,13 @@
+assemble: wrote C:\programmieren\zencrifice\Upheaval\website\public\index.html - 1 creature(s), 75 render(s)
+deploying C:\programmieren\zencrifice\Upheaval\website\public -> project 'upheaval', branch 'main'
+
+ ⛅️ wrangler 4.86.0 (update available 4.127.1)
+──────────────────────────────────────────────
+Uploading... (116/152)
+Uploading... (128/152)
+Uploading... (140/152)
+Uploading... (152/152)
+✨ Success! Uploaded 36 files (116 already uploaded) (5.04 sec)
+
+🌎 Deploying...
+✨ Deployment complete! Take a peek over at https://3404f3ff.upheaval.pages.dev

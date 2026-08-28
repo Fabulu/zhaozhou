@@ -1,0 +1,50 @@
+Zixxtrixx stage-two production verification
+deployment: https://3404f3ff.upheaval.pages.dev
+production alias: https://upheaval.pages.dev
+root https://3404f3ff.upheaval.pages.dev: HTTP 200, text/html, 60167 bytes, sha256=43781ee78e2481ce972082157a5227179048fd8972ae1441f5010f4af87c0a91
+root https://upheaval.pages.dev: HTTP 200, text/html, 60167 bytes, sha256=43781ee78e2481ce972082157a5227179048fd8972ae1441f5010f4af87c0a91
+HTML noindex,nofollow: PASS
+HTML collection label once: PASS
+HTML exactly one collection panel: PASS
+HTML exactly 17 collection items: PASS
+HTML corrected canonical fall remains: PASS
+HTML normal thick menu remains: PASS
+HTML faceted thick menu remains: PASS
+HTML smooth toon thick menu remains: PASS
+HTML pencil menu remains: PASS
+HTML nested videos have controls: PASS
+media renders/zixxtrixx-exp-celthick-idle.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-idle.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-walk.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-walk.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-run.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-run.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-look.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-look.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-balance.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-balance.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-taunt.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-taunt.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-attack.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-attack.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-hit.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-hit.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-damage.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-damage.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-knockdown.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-knockdown.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-fall.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-fall.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-hitfloor.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-hitfloor.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-dummy.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-dummy.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-fly.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-fly.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-six.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-salto-six.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-death.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-death.png: HTTP 200, image/png, content-length=unknown
+media renders/zixxtrixx-exp-celthick-death2.webm: HTTP 200, video/webm, content-length=unknown
+media renders/zixxtrixx-exp-celthick-death2.png: HTTP 200, image/png, content-length=unknown
+RESULT: PASS - stage-two collection is live on production with noindex intact
