@@ -1084,3 +1084,42 @@ anchors, and six broken C++ literals.
 
 The rule is in docs/BUILD.md now: never type a backslash inside a heredoc.
 Build it at run time -- `BS = chr(92)` -- and substitute a placeholder.
+
+---
+
+## 2026-08-28 -- FIELD.V3.DISPATCH sweeps 25/25, and I committed a mutant again
+
+    dispatcher re-run:  25 attempted  25 caught  0 equivalent  0 survived  0 discarded
+
+All four gaps from the first run are closed, and the four sections written for
+them each catch their mutant.
+
+### The mutant I committed, by a route the guard could not see
+
+    committed:  g_s0_r[3 - fill_r[1:0]]  <= long_s0_i;   <-- D02's replacement
+    correct:    g_s0_r[fill_r[1:0]]      <= long_s0_i;
+
+The working tree was right the whole time. I staged the file while its own
+sweep was mid-run with D02 applied, and the sweep restored it afterwards -- so
+nothing on disk ever looked wrong and the defect lived in the commit.
+
+**The rule I wrote this morning was incomplete.** BUILD.md mode 7 banned git
+operations that WRITE the working tree and listed `commit` as safe. The hazard
+is READING: `git add` freezes whatever the file says at that instant.
+
+    NEVER `git add` A FILE A RUNNING SWEEP CAN MUTATE.
+
+**And the guard looked in the wrong place.** `sweep_check_clean.py` checks the
+working tree, because that is where a sweep killed mid-mutation strands one. It
+now checks HEAD too. Verified against the actual history: commit 2dc5daab
+carries D02's text and HEAD does not, so the new check would have fired.
+
+A full audit of every committed file against every mutant table: **39 files, 0
+carrying mutant text.** The dispatcher was the only one.
+
+### Twice today the same habit caught something
+
+Reading `git status` before a push, and asking why a file was modified when it
+should not be, found both this and the two files the proofs commit left behind.
+Staging by explicit path is not sufficient on its own -- the diff has to be
+read, and "why is that file dirty" is the question that does the work.

@@ -31,6 +31,7 @@ Exit 0 = clean. Exit 1 = a mutant's text is present. Exit 2 = usage/other.
 import importlib.util
 import io
 import os
+import subprocess
 import sys
 
 
@@ -100,6 +101,37 @@ def main(argv):
                 bad += 1
             else:
                 print("clean: %s (%d mutants checked)" % (path, len(entries)))
+
+            # AND THE COMMITTED FILE, WHICH IS WHERE THE LAST ONE HID.
+            #
+            # This tool checked the WORKING TREE only, because that is where a
+            # sweep killed mid-mutation strands a mutant. On 2026-08-28 a
+            # mutant reached a COMMIT by the other route: `git add` on a file
+            # while its own sweep had a mutation applied. The sweep restored
+            # the file afterwards, so the tree was clean at every moment this
+            # check looked, and the repository carried the defect anyway.
+            #
+            # Reading is the hazard, not writing. The rule is never to stage a
+            # file a running sweep can mutate -- and this is the check that
+            # notices when the rule is broken.
+            head = subprocess.run(["git", "show", "HEAD:" + path],
+                                  capture_output=True)
+            if head.returncode != 0:
+                continue
+            htext = head.stdout.decode("utf-8", "replace")
+            hnl = "\r\n" if "\r\n" in htext else "\n"
+            hfound = []
+            for name, old, new in entries:
+                o = old.replace("\n", hnl)
+                n = new.replace("\n", hnl)
+                if n in htext and o not in htext:
+                    hfound.append(name)
+            if hfound:
+                print("MUTANT TEXT COMMITTED in %s (from %s):" %
+                      (path, os.path.basename(table_path)))
+                for f in hfound:
+                    print("  %s" % f)
+                bad += 1
 
     return 1 if bad else 0
 

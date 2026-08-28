@@ -344,9 +344,37 @@ sweep: reverting the mutant mid-score at best, and at worst leaving the sweep's
 own restore to copy its startup snapshot over rebased content, which would look
 exactly like a lost commit.
 
-`commit`, `fetch`, `log`, `status` and `diff` are safe. `rebase`, `stash`,
-`checkout`, `reset` and `pull` are not. A local commit that cannot be pushed
-yet costs nothing; wait for the sweep.
+`fetch`, `log`, `status` and `diff` are safe. `rebase`, `stash`, `checkout`,
+`reset` and `pull` are not. A local commit that cannot be pushed yet costs
+nothing; wait for the sweep.
+
+### The half of this rule that was WRONG, and cost a committed mutant
+
+This section originally listed `commit` as safe. **It is not**, and the reason
+is that the hazard is READING, not writing.
+
+`git add` does not touch the working tree. It reads a file and freezes that
+read into the index -- and if a sweep has a mutation applied at that instant,
+the mutant is what gets frozen. The sweep then restores the file, so the
+working tree is clean at every moment anything looks at it, and the defect
+lives on in the commit.
+
+That happened on 2026-08-28 to `zhao_field_v3_dispatch.sv`: the committed file
+carried D02's replacement (`g_s0_r[3 - fill_r[1:0]]`) while the tree held the
+correct line. It was found by reading `git status` before a push and asking why
+a file the sweep had finished with was still showing as modified.
+
+    NEVER `git add` A FILE A RUNNING SWEEP CAN MUTATE.
+
+The set is exactly the files that sweep's mutant table names -- the driver
+snapshots them at startup for the same reason. Staging anything else is fine.
+
+**And `tools/sweep_check_clean.py` now checks HEAD as well as the working
+tree.** It was written for the other failure -- a sweep killed mid-mutation
+strands a mutant on disk -- so it only ever looked at the tree. Against this
+route it passed while the repository carried the defect. A guard that looks in
+one of the two places a mutant can hide is worse than no guard, because it
+reports "clean".
 
 The refusal was luck, not a guard -- it only happened because a concurrent
 session had pushed first. With nothing racing, the push would have succeeded
