@@ -29,11 +29,36 @@ survive, that is a finding about the test and not a blemish on the table, and
 the survivor is either closed or proven equivalent WITH ITS PROOF. Nothing is
 declared equivalent before the run.
 
-PREFER MUTATING A VALUE OVER DELETING A USE. Eight preflight refusals across
-the dispatch, ring and noise tables came from ignoring that: tying a port to a
-constant orphans the signal that fed it, Verilator refuses the file, and an
-unbuildable mutant is a DISCARD rather than evidence. Hence flush qualified by
-long_valid_i rather than tied low, and a seed perturbed rather than zeroed.
+PREFER MUTATING A VALUE OVER DELETING A USE -- AND MOVING A USE COUNTS AS
+DELETING ONE. That second half was learned here, on the first run of this
+table, when TEN of twenty-five mutants were refused at once.
+
+The rule had been stated as "do not tie a port to a constant, it orphans what
+fed it". Every mutant refused here obeyed that and was refused anyway, because
+a wiring mutant does not delete a read -- it MOVES one, and the thing it moved
+off is now unread:
+
+    bank_req_ready[1] -> [0]      orphans bit 1. Verilator tracks per-bit use.
+    nz_b[l] -> nz_a[l]            orphans nz_b entirely.
+    drain_data -> alu_wb_data_i   orphans drain_data.
+
+Which is obvious once seen and was not obvious before: this is the first table
+whose mutants are almost all redirections, so it is the first place the second
+half of the rule could bite.
+
+The repairs keep BOTH ends live and are not mechanical -- each had to be chosen
+for what it claims:
+
+  * coupled handshakes (V01-V04, V10, V11): `a & b` rather than `b`, which is
+    what somebody actually writes when they think ANDing two readys is safe;
+  * mirrored operands (V08): because the OBVIOUS repair -- swap A and B -- is
+    equivalent, multiplication commuting;
+  * crossed payloads (V12-V14): two claimants' fields exchanged, which is what
+    a mis-ordered port map really produces.
+
+Twenty-two orphan refusals across this family now, and the pattern has held
+every time: the reshape the linter forces is a better mutant than the one first
+written.
 
 WHAT IS DELIBERATELY NOT MUTATED
 --------------------------------
@@ -54,22 +79,37 @@ RTL = "fpga/rtl/field/zhao_field_v3_svcpath.sv"
 
 MUTANTS = [
     # ---- the bank's two slots ----------------------------------------------
-    # THE SHAPE OF EVERY DEFECT THIS FILE EXISTS TO CATCH: a claimant reading
-    # the wrong index of a vector it shares with somebody else. Verilator is
-    # perfectly happy, both signals exist, and the block it lives in cannot
-    # see the mistake because the index is chosen HERE.
-    ("V01 the service reads the RIVAL's grant",
+    # THE SHAPE OF EVERY DEFECT THIS FILE EXISTS TO CATCH: a claimant whose
+    # handshake is wired to the wrong part of a vector it shares with somebody
+    # else. The block it lives in cannot see the mistake, because the index is
+    # chosen HERE.
+    #
+    # RESHAPED, ALL FOUR, AND THE REASON IS A NEW FORM OF THE ORPHAN RULE.
+    # These first read `bank_req_ready[0]` where the design reads `[1]`, which
+    # is the more obvious way to say it -- and unbuildable, per the docstring.
+    # These read `bank_req_ready[0]` where the design reads `[1]`. That is not
+    # deleting a use -- it is MOVING one -- and it orphans the bit it moved
+    # off: Verilator tracks per-bit usage and refuses the file with "Bits of
+    # signal are not used: 'bank_req_ready'[1]".
+    #
+    # Coupling the two handshakes keeps BOTH bits live and states a defect that
+    # is at least as realistic as the redirect: somebody ANDs two ready lines
+    # thinking it is the safe thing to do. Each claimant then cannot proceed
+    # unless the OTHER one also could, which under contention is a deadlock and
+    # with an idle rival is invisible -- so it is caught by exactly the
+    # sections that drive the rival, and by nothing else.
+    ("V01 the service's grant is coupled to the RIVAL's",
      "  assign nz_mul_ready  = bank_req_ready[1];",
-     "  assign nz_mul_ready  = bank_req_ready[0];"),
-    ("V02 the service takes the RIVAL's product",
+     "  assign nz_mul_ready  = bank_req_ready[1] & bank_req_ready[0];"),
+    ("V02 the service's product is coupled to the RIVAL's",
      "  assign nz_mul_valid  = bank_rsp_valid[1];",
-     "  assign nz_mul_valid  = bank_rsp_valid[0];"),
-    ("V03 the rival's grant is reported from the service's slot",
+     "  assign nz_mul_valid  = bank_rsp_valid[1] & bank_rsp_valid[0];"),
+    ("V03 the rival's grant is coupled to the SERVICE's",
      "  assign rival_grant_o = bank_req_ready[0];",
-     "  assign rival_grant_o = bank_req_ready[1];"),
-    ("V04 the rival's reply is read from the service's slot",
+     "  assign rival_grant_o = bank_req_ready[0] & bank_req_ready[1];"),
+    ("V04 the rival's reply is coupled to the SERVICE's",
      "  assign rival_rsp_o   = bank_rsp_valid[0];",
-     "  assign rival_rsp_o   = bank_rsp_valid[1];"),
+     "  assign rival_rsp_o   = bank_rsp_valid[0] & bank_rsp_valid[1];"),
     ("V05 the two bank claimants' request-valid lines are crossed",
      "    bank_req_valid[0] = rival_req_i;\n"
      "    bank_req_valid[1] = nz_mul_issue;",
@@ -84,28 +124,64 @@ MUTANTS = [
     ("V07 the service's A operands are broadcast from point 0",
      "      bank_a[1][l] = nz_a[l];",
      "      bank_a[1][l] = nz_a[0];"),
-    ("V08 the service's B operand is its own A",
+    # Reshaped: pointing B at A orphans nz_b entirely. Swapping A and B would
+    # keep both live and be EQUIVALENT -- multiplication commutes -- so the
+    # obvious repair is the wrong one here. Mirroring B across the four points
+    # keeps every element used and states a real defect: each point multiplied
+    # against another point's operand.
+    ("V08 the service's B operands are mirrored across the four points",
      "      bank_b[1][l] = nz_b[l];",
-     "      bank_b[1][l] = nz_a[l];"),
+     "      bank_b[1][l] = nz_b[3 - l];"),
     ("V09 both bank claimants carry the same tag",
      "    bank_tag[1] = 8'd1;",
      "    bank_tag[1] = 8'd0;"),
 
     # ---- the write port's two slots ----------------------------------------
-    ("V10 the ALU's ready comes from the drain's slot",
+    # Same reshape, same reason: redirecting the slot orphans the bit left
+    # behind. Coupled here is if anything MORE plausible than at the bank --
+    # a single write port with two claimants is exactly where somebody reaches
+    # for an AND.
+    ("V10 the ALU's ready is coupled to the drain's",
      "  assign alu_wb_ready_o = wb_req_ready[0];",
-     "  assign alu_wb_ready_o = wb_req_ready[1];"),
-    ("V11 the drain's ready comes from the ALU's slot",
+     "  assign alu_wb_ready_o = wb_req_ready[0] & wb_req_ready[1];"),
+    ("V11 the drain's ready is coupled to the ALU's",
      "  assign drain_ready    = wb_req_ready[1];",
-     "  assign drain_ready    = wb_req_ready[0];"),
-    ("V12 the drain's write carries the ALU's data",
+     "  assign drain_ready    = wb_req_ready[1] & wb_req_ready[0];"),
+    # Reshaped: overwriting the drain's field with the ALU's orphans
+    # drain_data / drain_ctx / drain_reg, each of which is read in exactly one
+    # place. CROSSING the two claimants keeps both live and is the more
+    # realistic composition defect anyway -- the payloads of two claimants
+    # swapped is what a mis-ordered port map actually produces.
+    #
+    # The anchors SPAN from claimant 0's field to claimant 1's, because the
+    # mutation has to change both and the table's own rule is that an anchor
+    # must span every place a mutation touches.
+    ("V12 the two claimants' write DATA are crossed",
+     "    wb_data[0] = alu_wb_data_i;\n"
+     "    wb_ctx[1]  = drain_ctx;\n"
+     "    wb_reg[1]  = drain_reg;\n"
      "    wb_data[1] = drain_data;",
+     "    wb_data[0] = drain_data;\n"
+     "    wb_ctx[1]  = drain_ctx;\n"
+     "    wb_reg[1]  = drain_reg;\n"
      "    wb_data[1] = alu_wb_data_i;"),
-    ("V13 the drain's write lands in the ALU's context",
+    ("V13 the two claimants' write CONTEXTS are crossed",
+     "    wb_ctx[0]  = alu_wb_ctx_i;\n"
+     "    wb_reg[0]  = alu_wb_reg_i;\n"
+     "    wb_data[0] = alu_wb_data_i;\n"
      "    wb_ctx[1]  = drain_ctx;",
+     "    wb_ctx[0]  = drain_ctx;\n"
+     "    wb_reg[0]  = alu_wb_reg_i;\n"
+     "    wb_data[0] = alu_wb_data_i;\n"
      "    wb_ctx[1]  = alu_wb_ctx_i;"),
-    ("V14 the drain's write lands in the ALU's register",
+    ("V14 the two claimants' write REGISTERS are crossed",
+     "    wb_reg[0]  = alu_wb_reg_i;\n"
+     "    wb_data[0] = alu_wb_data_i;\n"
+     "    wb_ctx[1]  = drain_ctx;\n"
      "    wb_reg[1]  = drain_reg;",
+     "    wb_reg[0]  = drain_reg;\n"
+     "    wb_data[0] = alu_wb_data_i;\n"
+     "    wb_ctx[1]  = drain_ctx;\n"
      "    wb_reg[1]  = alu_wb_reg_i;"),
     ("V15 the two writeback claimants' request-valid lines are crossed",
      "    wb_req_valid[0] = alu_wb_valid_i;\n"
