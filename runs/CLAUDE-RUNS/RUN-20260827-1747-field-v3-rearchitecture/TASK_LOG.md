@@ -2171,3 +2171,67 @@ happened.
 
 `start()` goes through `step()` now, so nothing advances the hardware without
 the test looking.
+
+## The composed machine: engine + service path, 84/84 -- and it cost four fixes
+
+`zhao_probe_v3_full.sv` wires the engine to the service path. A SEPARATE file,
+not an edit to either: both are closed and editing one to fit would invalidate
+its tally.
+
+Two defects were found before the test ran a clock, and two by running it.
+
+### Found by reading: the executor and the dispatcher disagree
+
+`is_long()` routes TEN opcodes to the service path. `dst_width_of()` knows
+EIGHT. Neither SPLINE (0x1B) nor RING (0x21), and the dispatcher's default of
+width 0 means REFUSE -- correct there, because a wrong width writes the wrong
+number of registers.
+
+Together, a program with either PARKS THAT CONTEXT FOREVER. Neither block is
+wrong alone, which is why nine sweeps never saw it. **Not fixed** -- the fix
+follows Fabian's SPLINE decision, and is recorded in the RTL and STATUS.md.
+
+### Found by the port change: the register file is INSIDE the executor
+
+So whoever wins the write port must reach it. The engine takes `wr_*_i` for
+that and it is NOT looped back internally -- this engine is a CLAIMANT, and
+hiding that would hide the seam. With nothing attached the caller ties it back;
+42 checks unchanged.
+
+### Found by running: a release pulse the executor was deaf to
+
+`rel_valid_i` is a PULSE, not a handshake, and nothing re-sends it. It was
+handled inside `!hold_c`, so the executor could not hear it exactly while
+holding -- and one thing it holds for is waiting to hand over the NEXT long op.
+
+Deadlocks at FIVE contexts and up, and only there: four fit in one group, so
+there is never a fifth to offer while the first four are outstanding. n=4
+finished in 42 clocks; n=5 never finished. Moved outside every hold -- a parked
+context is not in the pipe, as the comment fifty lines above already said.
+
+### Found by narrowing: THE SAME DEFECT AS THIS MORNING, IN THE OTHER FREEZE
+
+Eight contexts mis-assigned exactly one point. The narrowing did the work:
+
+    exactly n=8      four is one group; 5-7 a group plus a partial; 8 is the
+                     only case with TWO FULL groups
+    rival irrelevant contention ruled out
+    reverse start    the fault MOVED -- ctx6/ctx7 became ctx1/ctx0, so it
+                     follows START ORDER, not context, lane or register
+    every guard mute desync, tag_mismatch, wrong_op_o, skid overflow -- none is
+                     built to see a mis-PAIRING, and that was the clue
+    groups=2 partial=0, 16/16 drain writes -- mapping complete, DATA wrong,
+                     which is only possible if two lanes got the same operands
+
+The register file's read is a pipeline stage that NO upstream freeze stops. I
+fixed that for `mul_denied_c` this morning and left `hold_c` alone -- and
+`hold_c` freezes the same registers, for a DOT accumulating and for a long op
+awaiting handover. `upstream_frozen_c` now names both, deliberately as the same
+expression that guards the upstream block, so they cannot drift apart.
+
+X47 and X48 pin both halves. X42 is REMOVED rather than repaired: "written
+without a grant" stopped being this block's claim when the file began taking
+the arbiter's output.
+
+**Five defects in shipped RTL today, four needing either multiple contexts or
+two blocks composed to appear at all.**
