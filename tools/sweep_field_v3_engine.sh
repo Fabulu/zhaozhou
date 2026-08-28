@@ -91,10 +91,30 @@ check_consumers() {
   return 0
 }
 
+# THE MODEL DIRECTORY IS NAMED FOR THE TOP, NOT FOR THE MUTATED FILE.
+#
+# This driver hardcoded `Vzhao_probe_v3_exec.dir` for both the presence check
+# and the binary-hash discard check. Once the executor became a submodule of
+# zhao_probe_v3_engine that directory stopped existing, and the sweep aborted
+# with "pristine model did not elaborate" over a build that had linked
+# cleanly.
+#
+# The abort was the harmless outcome. The discard check hashes this directory
+# to prove a mutant really re-elaborated -- so if a directory of that name had
+# happened to exist, every mutant would have passed the check as "changed"
+# while the sweep scored a model the mutation never touched. Full marks over
+# nothing at all.
+#
+# It is read from the verilate() PREFIX now, so it cannot drift again.
+MODEL=$(python tools/sweep_consumers.py --prefix "$(echo $TARGETS | cut -d" " -f1)") || {
+  echo "ABORT: cannot resolve the verilate PREFIX for $TARGETS"
+  exit 9
+}
+
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_engine.dir" -type f \
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -104,7 +124,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_engine.dir" ] || return 1
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" ] || return 1
   done
   return 0
 }

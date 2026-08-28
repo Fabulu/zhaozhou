@@ -5,6 +5,104 @@ at the top.*
 
 ---
 
+## 2026-08-28 (late morning) -- the multiply bug is fixed, and my own safety
+## net had a hole in it
+
+*Short version: the engine gave wrong answers when two things wanted the
+multiplier at once. It is fixed, it cost 14% of the engine's speed, and the
+reason it took six tries is worth one paragraph. Separately, the check that is
+supposed to stop me shipping a broken test had stopped being able to see
+half the design -- found, fixed, audited.*
+
+### The bug
+
+When the executor and a service both reach for the shared multiplier, one of
+them is refused. The dot-product instruction did not handle being refused: it
+issued its second and third multiplies on a fixed clock schedule and never
+checked whether either was accepted. Under contention, four or five of every
+twelve programs came out wrong.
+
+Five attempts to fix it failed, and the error count went 2, then 5, then 4,
+then 1, then 9 -- bouncing rather than converging, which is the signature of
+patching the wrong thing. What it actually was:
+
+> **An instruction cannot be stalled between asking for a multiply and the
+> answer arriving.**
+
+The multiplier is a conveyor belt. The answer comes out two clocks later
+whether you are ready or not. The old design spread one dot-product across
+three *moving* stages of the pipeline, so any refusal either made it consume
+an answer nobody asked for, or miss one that arrived anyway. Every patch
+traded one of those for the other.
+
+The fix moves the whole sequence to one stage where the operands sit still.
+Each multiply is asked for, retried if refused, and added when it lands.
+Nothing can miss anything now, by construction rather than by timing.
+
+**Measured: 0 of 12 wrong, where it was 4-5 of 12.** The skipped test is
+un-skipped, so it is tested rather than assumed.
+
+### What it cost, plainly
+
+    one context      66 -> 69 clocks    (+4.5%)
+    eight contexts  166 -> 190 clocks   (+14%)
+
+The old schedule was faster because it overlapped the dot-product's multiplies
+with the instruction's own progress through the pipe. It was also unfixable.
+This is the price of being correct when something else is using the
+multiplier, and I would rather you saw the number than had it buried.
+
+The figures in yesterday's section (66 and 166) are now superseded by these.
+
+### Still broken, same cause, and I am telling you rather than fixing it quietly
+
+The curve service and the distance service have **the identical bug**. Neither
+can even be told it was refused -- the wire does not exist. Same fix applies,
+and both will need their chip-area numbers redone afterwards. It is written
+down at the top of the blockers file.
+
+### The hole in my own safety net
+
+There is a check that refuses to run a mutation sweep if the file being tested
+is also compiled into a test the sweep does not run -- otherwise a deliberately
+broken version can sit in the build unnoticed. It worked by looking for the
+block as the *top* of a design.
+
+That stopped being true the moment I composed two blocks together. The check
+looked for something that no longer existed, found nothing, and refused to run.
+It was right to refuse; it just could not say why.
+
+Two things came out of fixing it:
+
+* **It now reads the actual source lists**, so it sees a file used three levels
+  down, not just at the top. The audit is in
+  `reports/SWEEP_CONSUMER_ROSTER_AUDIT.md` and found **five blocks** where the
+  sweep tests fewer places than the file is actually used -- the early-Z and
+  resolve blocks are each compiled into four more tests than their sweeps run.
+  Not a live fault, but the coverage is narrower than it looked.
+* **The same wrong assumption was in the check that proves a mutation really
+  took effect.** That one matters more: it hashes a directory to confirm the
+  design was rebuilt, and it was looking at a directory the mutation could not
+  reach. Had that directory existed by coincidence, every mutant would have
+  been scored as "changed" while nothing had changed -- a sweep reporting full
+  marks over nothing. It reads the real name from the build files now.
+
+Also: a scripted edit of mine had joined two lines of the sweep launcher into
+one, so every background sweep since yesterday ran with one environment
+variable unset and quietly created two junk folders in the repo. It kept
+working by luck -- the tool it needed happened to be findable another way.
+
+### Where the hardware stands
+
+    Field IR planner, context queue, register file, multiplier bank,
+    executor with working dot products, distance service, curve service,
+    patch accumulator, Earth lattice walker      -- all built and swept
+    nine remaining Field IR operations           -- not started
+    the sequencer that drives them               -- not started
+    the two services' refusal handling           -- KNOWN BROKEN, above
+
+---
+
 ## 2026-08-28 (morning) -- the engine has its arithmetic, and one item on your
 ## list was already done
 

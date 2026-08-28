@@ -80,10 +80,51 @@ def consumers(rtl, cmakelists):
     return sorted(found)
 
 
+def prefix_of(target, cmakelists):
+    """The verilate() PREFIX for a target -- the model directory's name.
+
+    THE MODEL DIRECTORY IS NAMED FOR THE TOP, NOT FOR THE MUTATED FILE. Every
+    driver hardcoded `V<its own module>.dir` for the presence check and for the
+    binary-hash discard check. That is the same TOP_MODULE assumption as the
+    roster guard, and it broke the same way: once zhao_probe_v3_exec became a
+    submodule its model directory stopped existing, the presence check failed,
+    and the sweep aborted on a build that had in fact linked cleanly.
+
+    Worse than the abort is what a coincidence would have done. The discard
+    check hashes that directory to prove a mutant really re-elaborated; hashing
+    a directory the mutation cannot reach would pass every mutant through as
+    "changed" while scoring a model that never moved -- a sweep reporting full
+    marks over nothing at all.
+    """
+    text = expand_vars(
+        io.open(cmakelists, encoding="utf-8", errors="replace").read())
+    for m in VERILATE.finditer(text):
+        if m.group(1) != target:
+            continue
+        i = text.index("(", m.start())
+        body = text[i:_balanced(text, i)]
+        pm = re.search(r"PREFIX\s+(\w+)", body)
+        if pm:
+            return pm.group(1)
+    return None
+
+
 def main(argv):
     if len(argv) < 2:
         sys.stderr.write("usage: sweep_consumers.py <rtl-path> [cmakelists]\n")
+        sys.stderr.write("       sweep_consumers.py --prefix <target> [cmakelists]\n")
         return 2
+    if argv[1] == "--prefix":
+        if len(argv) < 3:
+            sys.stderr.write("usage: sweep_consumers.py --prefix <target>\n")
+            return 2
+        got = prefix_of(argv[2],
+                        argv[3] if len(argv) > 3 else "tests/CMakeLists.txt")
+        if not got:
+            sys.stderr.write("no verilate() PREFIX for target %s\n" % argv[2])
+            return 1
+        print(got)
+        return 0
     lists = argv[2] if len(argv) > 2 else "tests/CMakeLists.txt"
     got = consumers(argv[1], lists)
     if not got:
