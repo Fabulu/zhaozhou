@@ -56,6 +56,43 @@ the work. Three things went wrong in one pass, all the same error:
    verified by CRC can all pass while the creature is unrecognisable. Look at
    the whole thing, in motion, against the concept.
 
+## Two more ways a measurement lies
+
+Added 2026-08-28, from the first creature. Both are the art law's failure mode
+wearing new clothes, and both cost days.
+
+**A measurement across MISMATCHED POSES measures the pose.** A ratio said the
+creature's tube was "a wire — 22% of loop height against the drawing's 40%", so it
+was thickened substantially. That comparison put our grounded gameplay stance
+against the sheet's aerial S: different pose, different foreshortening, different
+loop. A later overlay that laid our radii along **the sheet's own traced pose**
+showed we were **2x too thick** — we had moved the value confidently in the wrong
+direction, and the owner's eye had said "too broad" before the tools did. Compare
+like with like, or do not compare.
+
+**A gate passing is not the thing looking right.** A snout measured horizontal
+still hung from the bottom of a downward hook. Every automated gate passed while a
+stray triangle sat in a creature's eye. Fixing a genuine rotation-wrap bug did not
+turn a spin into an elegant wheel, because the fault was the shape changing during
+the rotation, not the interpolation. Gates catch regressions; only looking catches
+wrongness.
+
+## Instructions are not delivered until they are read
+
+Owner direction was posted four times because it kept not reaching the working
+agent, then relayed into a run folder that had already closed, and five passes
+solved the wrong problem in the meantime. **A run folder is the wrong home for
+anything durable** — every pass creates a new one, so a file left in the current
+run is orphaned by the next. Durable direction belongs beside the creature it
+governs. And before starting any creature run, read every `OWNER-DIRECTION-*.md`
+in the creature folder and check `reports/` for anything newer than the last run.
+
+## Stopping an agent does not stop its background work
+
+A stop instruction was sent and obeyed, and a build it had already launched ran to
+completion anyway. **Kill the background tasks too**, then verify nothing is
+running before assuming a lane is closed.
+
 ## Seeing the work properly
 
 Judging an animation from a handful of evenly-spaced stills does not work —
