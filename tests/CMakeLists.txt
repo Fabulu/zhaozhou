@@ -1545,6 +1545,25 @@ verilate(test_field_v3_svcpath_directed
 add_test(NAME field_v3_svcpath_directed COMMAND test_field_v3_svcpath_directed)
 set_tests_properties(field_v3_svcpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# FIELD v3 Phase 4: UOP_RING_PREP for four points at once -- nine
+# separately-rounded products on the shared bank and NO reciprocal, because the
+# planner computes both smoothstep reciprocals ONCE in the prep whenever the
+# radii are uniform. The oracle is zfield::steps::ring_prepared, which is the
+# step the plan actually emits, not exec_op(OP_RING) which is a different
+# lowering.
+add_executable(test_field_v3_ring_directed differential/field_v3_ring_directed.cpp)
+target_link_libraries(test_field_v3_ring_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_ring_directed
+  PREFIX Vzhao_field_v3_ring
+  TOP_MODULE zhao_field_v3_ring
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv)
+add_test(NAME field_v3_ring_directed COMMAND test_field_v3_ring_directed)
+set_tests_properties(field_v3_ring_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_ring_random COMMAND test_field_v3_ring_directed --random 40)
+set_tests_properties(field_v3_ring_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_ring_random_nightly COMMAND test_field_v3_ring_directed --random 400)
+set_tests_properties(field_v3_ring_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),
