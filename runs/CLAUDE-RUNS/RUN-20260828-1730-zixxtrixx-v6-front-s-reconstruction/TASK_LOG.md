@@ -283,3 +283,40 @@ rewrite across every agent working in the repo.
   on the render as a knock, not a float).
 - Probe 0, all overlaps within allowances (15,238 hits).
 
+
+### Never again: commit-time refusal, and 2.57 GB reclaimed
+
+*"make sure we never commit unwanted assets again. Gitignore?"* — and yes, plus
+the thing gitignore cannot do.
+
+**Why gitignore alone was not enough.** It is SILENT when a path it does not
+cover gets staged, and `git add -f` walks straight past it. The fault we are
+preventing was an over-broad `git add`, which is exactly the case a passive rule
+does not catch. So both:
+
+1. **Ignore rules** in `zhaozhou/.gitignore` and `Upheaval/.gitignore` — `*.rgb`,
+   `runs/**/renders/`, `renders-baseline/`, `scratch/`, `obj/`, `golden-work/`,
+   `golden-verify/`, `**/scratch-reel/`. Verified that a run's `evidence/*.png`
+   is still committable: the evidence must stay in history, only the frames go.
+2. **`tools/githooks/pre-commit` in both repos**, wired with
+   `core.hooksPath` so the hook is VERSIONED rather than living untracked in
+   `.git/hooks` where it would vanish on the next clone. It refuses staged raw
+   frames and working dirs, and **any staged blob over 2 MiB** — a size gate
+   catches the CLASS of fault rather than only the extensions we have already
+   met. Deliberate override is `ZHAO_ALLOW_BIG=1`, which has to be typed on
+   purpose.
+
+**Verified it actually fires**, in both repos, three ways: a staged `.rgb` is
+refused, a 2.9 MiB blob is refused, and a legitimate commit still passes. This
+matters — the project has already been bitten by a gate that skipped when its
+tool was absent and hid weeks of drift. **A gate that silently does nothing is
+worse than no gate**, because it also buys false confidence.
+
+**Disk:** 4.45 GB of raw frames existed — 3.26 GB across run folders, 1.19 GB in
+`Upheaval/website/scratch-reel`. Deleted **9,971 frames / 2.57 GB** from the two
+CLOSED runs (`RUN-20260827-1730-zixxtrixx-head-only`,
+`RUN-20260828-0227-zixxtrixx-v3-likeness-surgical`), confirming first that their
+48 and 18 evidence PNGs survive untouched. **The active run's frames and
+`scratch-reel` were deliberately left** — the modelling agent is rendering and
+encoding from them right now, and deleting working data under a running job is
+how you turn a tidy-up into a lost afternoon. They get cleaned when it closes.
