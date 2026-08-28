@@ -5,6 +5,105 @@ at the top.*
 
 ---
 
+## 2026-08-29 -- SPLINE's lookup is green, and the bug argued against being found
+
+*Short version: the hot SPLINE path now matches the reference oracle exactly --
+6930 checks -- and the defect that was blocking it is a good example of a
+symptom pointing away from its cause.*
+
+### Where the decision stands
+
+You chose the expensive option on 2026-08-28 and this is the first half of it
+landing. SPLINE now runs on the fast path: the curve service fetches all four
+control points itself and hands them to the spline arithmetic internally.
+
+    the lookup + the arithmetic, joined     DONE, 6930/6930 vs the oracle
+    ten new deliberate-defect checks        written, lint-clean, scoring now
+    the eighteen older ones, re-scored      scoring now (see below -- two of
+                                            them had quietly stopped working)
+    SPLINE into the opcode width table      next
+    a spline service on the service path    next
+    UOP_RING_PREP (0xF1) wired              next
+    the two-service starvation measurement  last, and it is the point of all
+                                            of the above
+
+### The bug, and why it hid
+
+The table's read is REGISTERED -- ask on one cycle, get the answer on the next.
+The neighbour fetch asked for six values on cycles 0..5 and then declared
+itself finished on cycle 6, which is the exact cycle the sixth answer was
+still arriving. So the spline maths got three good control points and one that
+had not been written yet.
+
+Everything about how it presented pointed the wrong way:
+
+* **96 wrong out of 6930.** That reads as a rare edge case. It was not; it was
+  present on every single spline evaluation.
+* **Only on points BETWEEN knots.** Exactly at a knot the answer is the knot's
+  own value no matter what the fourth point holds, so three quarters of the
+  checks passed with the fault fully present.
+* **Only on the biggest table.** On small tables the clamping happened to ask
+  for a value the previous group had already fetched, so the stale register
+  held the right number by luck.
+* **The same check PASSED when run on its own.** This is the part worth
+  keeping. A value that is correct in isolation and wrong in sequence is not a
+  flaky test -- it is stale state being read, and the fact that the answer
+  depends on what ran before it IS the diagnosis rather than noise obscuring
+  one.
+
+I did not reason it out. I bolted five temporary probes onto the hardware to
+carry the four control points out to the test and printed them next to what the
+oracle expected. One line of that settled it: three points right, the fourth
+not even a number that appears in the table. That turned "somewhere in the
+spline path" into "one of six fetches" without a single guess about the maths.
+The probes are removed.
+
+### Two of the eighteen old checks had stopped working, silently
+
+This is the more useful finding, and it is the reason re-scoring was in the
+plan rather than assuming the old result carried.
+
+Each deliberate-defect check works by naming a line of the hardware and
+breaking it. Two of them named lines that this run had since edited. They could
+no longer be applied AT ALL -- and the tool refused them, loudly, which is the
+system working.
+
+The thing to notice is what they would have looked like otherwise. Both were
+scored CAUGHT in the previous run. Any summary that carried that number forward
+would have reported them as passing, forever, while neither was testing
+anything. **A stale check is not a weaker test; it is no test, and from the
+outside it is indistinguishable from a passing one.**
+
+### Three gates I had broken, all repaired
+
+* The **ledger** wanted the clamp on the spline parameter to name what enforces
+  it. It now names the differential and the defect table -- and I checked the
+  out-of-range probes it points at actually exist rather than asserting it.
+* **Static analysis** found uninitialised arrays being passed into a
+  differential. A differential whose inputs are stack garbage has a verdict
+  that depends on the stack. Fixed at all five sites, not the one flagged.
+* The **defect-check preflight** had no include path, so it could not find the
+  newly added spline module. Every check would have failed identically --
+  which looks like a broken check table and is actually a broken command line.
+
+### And one guard did its job unprompted
+
+The spline arithmetic has its own sweep. The moment the curve service started
+using that block, that sweep REFUSED to run: a second consumer now exists, and
+a defect that dies in one consumer's tests can still be alive in another that
+nobody scored. I wired the new consumer in to be scored rather than declaring
+it exempt -- declaring it would have silenced the guard and left exactly the
+hole the guard exists to find. Doing that exposed a second latent bug in the
+same script, which had been harmless only because the list had one entry.
+
+### Not mine, still red
+
+`format_check` and `creature_core` are red on the concurrent Zixxtrixx
+toon-treatment session's files. I have left them alone rather than reformat
+files another session is actively editing.
+
+---
+
 ## FABIAN — ABOUT THE ZIXXTRIXX NOTE, SO YOU CAN STOP RE-POSTING IT
 
 You have now posted it three times: `reports/zixxheadadvice`, `…advice2` and

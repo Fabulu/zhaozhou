@@ -19,8 +19,8 @@ RTL = "fpga/rtl/synth/zhao_probe_curve_svc.sv"
 MUTANTS = [
     ("C01 lanes 0/2 search only five steps",
      RTL,
-     "    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd11);",
-     "    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd9);"),
+     "    consume[0] = s_busy && !s_done && !n_busy && cyc[0] && (cyc <= 4'd11);",
+     "    consume[0] = s_busy && !s_done && !n_busy && cyc[0] && (cyc <= 4'd9);"),
 
     # Reshaped for lint: deleting the whole clamp orphans meta_xn1
     # (UNUSEDSIGNAL); dropping only the LOWER bound keeps every signal read
@@ -140,8 +140,18 @@ MUTANTS = [
     # claimant that is asking.
     ("C18 the request is withdrawn while it is being refused",
      RTL,
-     "  assign mul_issue_o = (f_state == F_ISSUE);",
-     "  assign mul_issue_o = (f_state == F_ISSUE) && mul_ready_i;"),
+     "  assign mul_issue_o = (f_state == F_ISSUE) || ((f_state == F_SPL) && spl_mul_issue);",
+     "  assign mul_issue_o = ((f_state == F_ISSUE) && mul_ready_i) || ((f_state == F_SPL) && spl_mul_issue);"),
+    # C01 AND C18 WENT STALE ON 2026-08-29 and the preflight refused both.
+    # Their anchors named lines the neighbour phase then edited: consume[0]
+    # gained `!n_busy`, and mul_issue_o gained the SPLINE half of its mux.
+    #
+    # THIS IS THE ARGUMENT FOR RE-SCORING rather than carrying a score
+    # forward. Both mutants were CAUGHT in the 18/18 run and both would have
+    # stayed "caught" in any summary that trusted that number -- while
+    # neither could be applied to the RTL at all. A stale anchor is not a
+    # weaker test, it is NO test, and from the outside it looks exactly like
+    # a passing one.
     # ---- the neighbour phase, added 2026-08-29 with SPLINE -----------------
     # The eighteen above were scored against a service that had no such phase.
     # A NEW PHASE IS NEW LOGIC AND THE OLD SCORE DOES NOT COVER IT -- these
