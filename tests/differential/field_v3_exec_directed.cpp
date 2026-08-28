@@ -615,6 +615,7 @@ void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs
   printf("-- FOUR contexts while the bank is contended\n");
   Prng rng(0x0B7A1E5);
   int ran = 0, bad_val = 0, desyncs = 0;
+  int dbg_writes = 0, dbg_expect = 0;
   const int kUse = 4;
 
   for (int k = 0; k < programs; ++k) {
@@ -649,6 +650,8 @@ void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs
     top.rival_req_i = 0;
     ++ran;
     if (top.exec_desync_o) ++desyncs;
+    dbg_writes += d.writebacks;
+    dbg_expect += kUse * (int)(fp.uops.size());
 
     for (int c = 0; c < kUse; ++c) {
       const zfield::Prepared prep = zfield::prepare(fp, prog, in[c], (size_t)n_in);
@@ -669,6 +672,18 @@ void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs
   check(ran > 0, "programs ran with several contexts under contention", 1, ran > 0 ? 1 : 0);
   check(desyncs == 0, "the multiplier contract held", 0, desyncs);
   check(bad_val == 0, "and every context matched the interpreter", 0, bad_val);
+  // AN ABSOLUTE COUNT, NOT A COMPARISON BETWEEN TWO RUNS.
+  //
+  // Mutant X33 fires the write on every clock an instruction is HELD at S4,
+  // so a DOT writes its destination once per accumulation clock. The last
+  // write always carries the right value, so every value check passes; and
+  // the file's own counter cannot see it either, because the port and the
+  // file both count the same duplicated events.
+  //
+  // One register per uop per context is the only statement that catches it,
+  // and it is exact on the correct design: 608 against 608.
+  check(dbg_writes == dbg_expect, "one register written per uop, per context", (uint32_t)dbg_expect,
+        (uint32_t)dbg_writes);
 }
 
 // THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
