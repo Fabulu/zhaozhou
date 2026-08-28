@@ -89,3 +89,28 @@
 - sidecmp-09.png: sheet | lit render | outline overlay. The top contour is
   one unbroken flow from body over crown into head; the eye can no longer
   point at where the head begins.
+
+### 2026-08-28 09:0x - Coordinator gate feedback: the two confounds separated
+
+- QUESTION 1 (upper loop reads thinner than the sheet in the overlay):
+  settled with an HONEST pose-matched comparison -- the sheet's own medial
+  path traced and resampled to our 57 stations, OUR station radii drawn as
+  the circle envelope ON the drawing (evidence/sheetpose-girth-overlay.png).
+  VERDICT: the "thinner" read was ENTIRELY the pose confound -- and the truth
+  is the opposite: at matched pose our tube is roughly TWICE the drawn
+  tube's width (envelope swallows the whole drawn S with margin), and our S
+  is proportionally much TIGHTER than the sheet's. The v4 wire-fix measured
+  tube against LOOP HEIGHT on a compressed stance -- two departures
+  cancelling. NOT changed: the current girth is the owner-converged look
+  (sidecmp-05/06 verified); halving girth and opening the loop would upend
+  the approved character, so the finding is REPORTED for his call, loudly,
+  not acted on.
+- QUESTION 2 (blue lobe still reads separate in colour): the unlit outline
+  is continuous (sidecmp-08), so the residual read was PAINT, exactly the
+  colour-confound the brief warned about. The blue face's rear boundary
+  melded only ~48 mm and rendered as a hard wedge line; widened 4 -> 11
+  rows/side (~130 mm, the sheet's lazy crayon fade). Page regen
+  reproducible (two runs cmp-identical, crc32 law intact). The remaining
+  internal diagonal at the junction is the coil's LAP line -- the sheet
+  draws that same edge in ink; it is not a defect.
+  junction-paint-before.png / junction-paint-melded.png.

@@ -810,7 +810,13 @@ def build_atlas():
         start = start * (256.0 / H) * (H / 256.0)  # keep in atlas rows
         start_row = int(start * (H / 256.0)) if H != 256 else int(start)
         for y in range(0, V_J):
-            w = float(np.clip((start_row - y) / (4.0 * SC) + 0.5, 0.0, 1.0))
+            # MELD WIDENED 4 -> 11 (RUN 0757): the blue face's rear boundary
+            # was a ~48 mm crossfade -- at 240p it rendered as a hard wedge
+            # line and the colour edge read as a SHAPE edge at the head/neck
+            # junction (the notch's ghost, after the geometry was proven
+            # continuous on the unlit outline). Side.png fades blue -> green
+            # over a lazy ~150 mm of crayon; ~11 rows/side matches that.
+            w = float(np.clip((start_row - y) / (11.0 * SC) + 0.5, 0.0, 1.0))
             if w <= 0.0:
                 continue
             rgb[y, x] = rgb[y, x] * (1 - w) + bl_rgb[y, x] * w
