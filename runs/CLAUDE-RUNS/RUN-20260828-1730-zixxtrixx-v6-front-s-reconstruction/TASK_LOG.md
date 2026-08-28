@@ -383,3 +383,33 @@ how you turn a tidy-up into a lost afternoon. They get cleaned when it closes.
   by suspicion this time. Fresh binary: tips still 425/426/427 -- the
   spear lock adapts to kBodyY by construction.
 
+
+### The queue closed — and the coordinator took the last mechanical step
+
+By 19:07 the agent had landed everything outstanding:
+* **Salto pair fixed** (`37d728e`) — continuous spin and the TAIL TIP as the
+  weapon. The flicker was the shortest-path rotation wrap as hypothesised: six
+  somersaults is 2160°, so per-key deltas crossing 180° reversed direction, which
+  is why the six-salto variant was conspicuously worse than the three.
+* **Girth landed** (`ea44503`) — the deferred 2× finding shipped as an
+  **eye-picked 850**, off a ladder rather than derived from the ratio. Correct
+  procedure: the overlay removed the bias, the render chose the value.
+* **Hits** (`898738f`) — the blow now propagates through the whole serpent.
+* **Goldens PROMOTED**, closing the gap I flagged: verified 41/41 identical
+  **against the folder of record, not the staging copy**, with `PROVENANCE.txt`
+  now beside them naming the pin and explaining the 49-vs-41 file count.
+
+Gates re-run by me at 19:10: probe exit 0 (8,852 hits within allowances), choreo
+0, planner 0.
+
+**Only the renders were stale** — 41 minutes old, predating both the salto fix
+and the girth change. Publishing those would have repeated the earlier mistake of
+showing the owner a build that predates the work he is being asked to judge.
+
+**Behaviour worth recording about this agent:** it has now parked THREE times on
+a "holding for the completion event" that never arrives — twice with the work
+already complete. Not a correctness fault; its output was sound each time. But it
+means **a subagent's "still running" status is not evidence that work is
+progressing**, and the coordinator has to check artefacts (file mtimes, commits,
+gate output) rather than trust the status. Taking the final render/encode
+directly rather than resuming a fourth time.
