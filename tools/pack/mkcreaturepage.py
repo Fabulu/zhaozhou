@@ -1065,10 +1065,11 @@ def _class_edges(cls):
 def _smooth_noise(h, w, seed, blur_v, blur_u):
     rng = np.random.default_rng(seed)
     f = rng.standard_normal((h, w))
-    k_v = np.ones(blur_v) / blur_v
-    k_u = np.ones(blur_u) / blur_u
-    for axis, k in ((0, k_v), (1, k_u)):
-        pad = len(k) // 2
+    # kernels forced ODD: an even kernel left the valid-convolution one
+    # sample long and the first factory run broadcast-crashed on it
+    for axis, n in ((0, blur_v | 1), (1, blur_u | 1)):
+        k = np.ones(n) / n
+        pad = n // 2
         fp = np.concatenate([np.take(f, range(-pad, 0), axis=axis), f,
                              np.take(f, range(0, pad), axis=axis)], axis=axis)
         f = np.apply_along_axis(lambda m: np.convolve(m, k, mode="valid"), axis, fp)
