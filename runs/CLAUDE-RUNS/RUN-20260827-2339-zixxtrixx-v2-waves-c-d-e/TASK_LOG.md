@@ -122,3 +122,39 @@ CRCs match" (redirected to file). Direct g++ build harness committed
    corpse slopes, rear-node constraint, keyed fork curve, conjugated
    look follow). Contact sheets read as intended; look-around PROVES the
    head-aim rig with the body planted.
+
+
+## 2026-08-28 — Waves C/D/E landed; run closing
+- P2 complete: still-front, fall-side, unlit/unlit-front/normviz/wire,
+  walk-unlit, lodsweep subjects + T7 debug atlas. Normal viz proves the
+  smooth field is seam-free; wire shows the density budget.
+- T4/T5/T6 atlas shipped; the crayon grain reads at walk distance (the
+  goal). T3 amendment appended to creature_rules.
+- W1 verdict: NO WALK CHANGE (unlit sheet + wrap-step 10.3 deg < median
+  gait step 17.8 deg).
+- C2 phase clips (slots 10-17) + compiler-ENFORCED seams; the enforcement
+  caught two truncation seams (auth=1/curl=1 at keys 18/47) on its first
+  run — slices moved one key.
+- C4/C5 AttackPlan + planner + collision-only branch; zixx-planner.exe
+  committed and green (golden preset key-for-key exact; the proof caught
+  the flat lance out-flipping the high dive — spin now follows the apex).
+- C6/C7 SKIPPED AS SUPERSEDED: the owner ruled "the salto is great" and
+  licensed exactly the apex hold. Stated loudly in FINDINGS.
+- A1 baked 60 Hz companion (payloads + sub=0 CRCs proven identical).
+- F2 spring-chain baker built; PREVIEW-GATED (-DZIXX_F2_PREVIEW): still
+  curls ~330 mm at its tightest; the owner judges it against his directed
+  F1 relax. A half-tuned bake does not ship.
+- Wave E: lodsweep gate passed (crown survives, no pop); micro = 9
+  meshlets / 558 tris / error 2294 fx16 (compiler results, printed by the
+  probe). 8 live renders + posters encoded at 60 fps; A2 encode check
+  mean delta 0.9 LSB. archive-2026-08-27-* verified intact. Site
+  assembled with 9 tabs (MAX_TABS raised WITH the three style.css
+  families; nth-child/nth-of-type split preserved). NOT deployed — the
+  owner verifies and publishes.
+- Goldens refreshed: 16 clips + fresh 60 Hz contact sheets + probe +
+  sequence CRCs + source commit. Committed to Upheaval with provenance.
+- Heredoc trap recorded: this harness truncates bash heredocs somewhere
+  past ~8 KB and the parse error points at a phantom quote — write a
+  scratchpad .py with the Write tool and run it instead.
+
+**Status: COMPLETE** (see FINDINGS.md for the honest not-done list).
