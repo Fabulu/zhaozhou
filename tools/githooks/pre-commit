@@ -24,6 +24,10 @@ staged=$(git diff --cached --name-only --diff-filter=AM)
 
 for f in $staged; do
   case "$f" in
+    # PUBLISHED DELIVERABLES, not working data: the site's encoded clips and
+    # their posters are the product and belong in history. Listed FIRST so the
+    # */renders/* pattern below cannot swallow them.
+    website/public/renders/*) : ;;
     # Raw frame dumps and reel working directories, wherever they land.
     *.rgb|*/renders/*|*/renders-baseline/*|*/golden-work/*|*/golden-verify/*|*/scratch-reel/*|*/obj/*)
       bad="$bad  $f
@@ -32,6 +36,10 @@ for f in $staged; do
 
   # Size gate catches the CLASS of fault, not just the extensions we have met.
   # Blob size, not worktree size: that is what actually enters history.
+  # Published clips are legitimately a few MiB; exempt them from the size gate
+  # too, or the exemption above is undone by the next check.
+  case "$f" in website/public/renders/*) continue ;; esac
+
   if [ -f "$f" ]; then
     sz=$(git cat-file -s "$(git rev-parse ":$f" 2>/dev/null)" 2>/dev/null || echo 0)
     if [ "$sz" -gt "$max_bytes" ]; then
