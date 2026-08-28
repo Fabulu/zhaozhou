@@ -2084,6 +2084,15 @@ int render_scene(const SceneSubject& sub) {
       const zref::terrain::ColumnResult col =
           zref::terrain::column_query(lat, zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z});
       if (col.cls == zref::terrain::ColumnClass::kSolid) dog_inst.y = col.top.raw;
+      // the salto target dummy stands (or hovers) relative to the SAME
+      // terrain surface -- run 0326: at y=0 it stood eight metres under
+      // the crown and never rendered
+      if (sub.dummy) {
+        const zref::terrain::ColumnResult dcol = zref::terrain::column_query(
+            lat, zref::fx16{dummy_inst.x}, zref::fx16{dummy_inst.z});
+        if (dcol.cls == zref::terrain::ColumnClass::kSolid)
+          dummy_inst.y = dcol.top.raw + fxm(sub.dummy_y_mm);
+      }
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
       if (!gibs.empty()) {
