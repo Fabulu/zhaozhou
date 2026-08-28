@@ -137,3 +137,32 @@ fix (continuous theta) did not deliver the desired READ, because the fault was
 never only in the interpolation. **A gate passing is not the thing looking right**
 — the same lesson as the head, where a measured-horizontal snout still hung from a
 descending hook.
+
+### Item 12: the mouth
+
+*"The mouth should move up some closer to where the supposed nose is to be more
+visible. Should be in line with the drawing."*
+
+Move it up the head toward the snout end. With the head now carried level after
+the front-S reconstruction, a mouth low on the underside is invisible from every
+camera the creature is actually seen from.
+
+**Which sheet governs, and why this is not a contradiction:** the standing rule
+is `Side.png` owns FORM and `Front.png` owns MARKING PLACEMENT. **A mouth
+position is a marking-placement question, so `Front.png` IS authoritative here** —
+this is precisely the case the front sheet is for. The "front sheet is wonky"
+finding concerns its PROPORTIONS and apparent bulge, not where features sit on
+the face. Worth stating plainly, because the front sheet has been (correctly)
+distrusted for seven runs and that habit could now overshoot into ignoring it for
+the one job it is good at.
+
+Two things on record so they are not re-earned:
+* The mouth was once ink across **18 of 64 angular texels — about 101° of
+  circumference**, a cartoon grin wrapping a quarter of the head. It was cut down
+  deliberately. **Do not widen it while moving it.**
+* Moving a small feature up a curving dome risks it foreshortening into
+  invisibility or smearing across the crown. Judge it RENDERED at 240p from the
+  front and three-quarter cameras; a texel-space check cannot tell you whether it
+  reads.
+
+Texture-page change, not geometry — cheap. Sits with the head block.
