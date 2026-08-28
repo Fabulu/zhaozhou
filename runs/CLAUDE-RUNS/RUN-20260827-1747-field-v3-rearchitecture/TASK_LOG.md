@@ -2058,3 +2058,64 @@ was missing in all three failures above.
 BUILD.md's own remedy for a case-poisoned tree, now applied rather than just
 written down. The sweep driver reconfigures it fresh with the lowercase
 spelling it exports, so the tree can only ever hold one spelling.
+
+## THE REGISTER FILE'S READ IS A PIPELINE STAGE, AND A FREEZE DOES NOT FREEZE IT
+
+A real defect in shipped RTL, found and fixed.
+
+    12 programs x 4 contexts, bank contended
+    before:  21 of 48 context-programs wrong
+    after:    0 wrong, 0 desyncs
+
+**The defect.** The RF address is driven from S1 and the data arrives one clock
+later, while the instruction is at S2. Freezing S1 and S2 on a bank denial stops
+the INSTRUCTIONS moving -- it does not un-issue the read already in flight. So
+the data arriving next clock belongs to the instruction BEHIND the stalled one,
+and S3 captured the stalled instruction's context and destination together with
+its SUCCESSOR'S OPERANDS.
+
+A plausible wrong answer, in the right register, for the right context. Nothing
+out of range, no flag, smooth values.
+
+**The stall's own comment almost says it:** "the refused instruction retries
+next clock with the same operands, because the S1 read address is unchanged and
+the register file re-presents them". The address IS unchanged. The DATA is one
+clock behind it. The argument is exactly right about the wrong signal.
+
+**Why it survived everything.** With ONE context the pipe is nearly empty -- 13
+uops in 69 clocks, a number printed by this very test -- so S1 is usually a
+bubble during a denial, the address has not moved, and the data that arrives is
+the stalled instruction's own. The contention test has always driven one
+context.
+
+**Two halves.** Holding the operands for S3's capture took 21 wrong to 5. The
+rest was the multiplier: the retry issued `rf_a0`/`rf_b0` directly, multiplying
+the successor's numbers and handing the product to the stalled instruction.
+
+### And a second fix, verified separately
+
+The multiplier's accounting registers and its desync check lived INSIDE the
+upstream block, which a denial freezes -- while the multiplier, which cannot be
+frozen, kept delivering. Moved downstream: **desync latched 12 of 12 -> 0 of 12.**
+
+### How I got here, which is not to my credit
+
+I chased the SKID for hours. It failed a strengthened test, I reverted it and
+reported the cause as unexplained. It was never the skid: an isolation pass with
+the port always granting and the skid unused fails identically. I reverted a
+design for a defect it did not cause, and only learned that by adding the pass
+that removes the variable.
+
+**The lesson is the one the whole day keeps teaching**: I changed two things and
+attributed the failure to the one I had just written.
+
+### The sweep, and the law X33 needed
+
+31 caught, 4 equivalent, 1 survived. X33 fires the write on every clock an
+instruction is HELD at S4, so a DOT writes its destination once per accumulation
+clock. Every value check passes -- the last write always carries the right
+answer -- and the register file's own counter cannot see it either, because the
+port and the file count the same duplicated events.
+
+**One register per uop, per context** is the only statement that catches it, and
+it is exact on the correct design: 608 against 608.
