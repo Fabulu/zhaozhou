@@ -1219,3 +1219,55 @@ never capturing it.
 **The dispatcher's 25/25 became stale the moment the block gained a claim**, so
 it is being re-swept at 28 rather than left standing on a number that no longer
 describes it.
+
+---
+
+## 2026-08-28 -- FIELD.V3.DISPATCH 28/28 with the immediate, and ROT lands
+
+    dispatcher re-sweep:  28 attempted  28 caught  0 survived  0 discarded
+    ROT2/ROT3:            852 directed + 8,800 random checks
+                          16 groups under refusal, 49 refusals issued
+                          four points in 23 clocks, ROT2 and ROT3 alike
+
+### The defect ROT had, and why it was worth writing down as a mutant
+
+The first build captured **cos and sin swapped**. That is neither a subtle
+error nor a loud one: swapping them is exactly a rotation by (90 - theta), so
+every answer was a VALID rotation of the right point by the WRONG ANGLE.
+Nothing looked corrupt, no flag fired, no guard tripped, and the timing was
+unchanged.
+
+The differential caught it on the first run and pointed straight at it:
+
+    lane 0 at 22.5 degrees produced lane 2's 67.5-degree answer
+    lane 3 at 90 degrees   produced the 0-degree answer
+
+Two complements in the same failure is a signature rather than a coincidence,
+and it named the cause before any debugging.
+
+**R01 is that defect, kept as a mutant.** The check that found it cannot now be
+weakened without the sweep noticing -- which is the difference between fixing a
+bug and keeping it fixed.
+
+The cause was reading the parity of the COUNTER rather than of the ISSUE INDEX.
+They happen to be the same parity, which is why the correct line looks like the
+wrong one; the comment now says so at the line rather than leaving the next
+reader to re-derive it.
+
+### ROT3 costs the same as ROT2, and that is the design showing
+
+Both are 23 clocks: eight sine lookups at one per clock (the table is II 1),
+two to drain, then four four-wide bank requests. The axis is a MUX, not more
+work -- the rotation always produces two values, one for p's slot and one for
+q's, and the axis decides only which destination each reaches and which input
+is copied through.
+
+That is asserted rather than observed: `check(c3 == c2, "the axis is a mux,
+not more work")`.
+
+### R03 was refused by the preflight, on width rather than on orphaning
+
+A change of pace from the last three: `3 - (...)` mixes a 32-bit literal with
+four-bit counter arithmetic and Verilator refuses the expression. Fixed by
+writing the literal at the width it belongs to, `4'd3`. The preflight cost one
+minute and would have cost a whole sweep slot to discover otherwise.

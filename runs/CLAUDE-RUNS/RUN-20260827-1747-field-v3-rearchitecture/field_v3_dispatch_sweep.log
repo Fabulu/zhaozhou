@@ -5,6 +5,9 @@ preflight ok: D02 the operands land in a different lane than the context
 preflight ok: D03 a fifth context overwrites the fourth
 preflight ok: D04 a context with a different op or destination joins anyway
 preflight ok: D05 a short op is accepted as a long one
+preflight ok: D26 the immediate is not part of the group key
+preflight ok: D27 the request carries the WRONG group's immediate
+preflight ok: D28 the gathered immediate is never captured
 preflight ok: D06 a partial group is never issued, so one context alone DEADLOCKS
 preflight ok: D07 an EMPTY group is issued on flush
 preflight ok: D08 the group issues one context early
@@ -25,14 +28,17 @@ preflight ok: D22 the release names a different context than the one written
 preflight ok: D23 a context is released even when the write was refused
 preflight ok: D24 every group carries the same tag
 preflight ok: D25 the tag guard never reports a mismatch
-PREFLIGHT: all 25 mutants lint and restore
+PREFLIGHT: all 28 mutants lint and restore
 == pristine baseline ==
-   pristine lanes green (model 688180da9e947eb6)
+   pristine lanes green (model b9bc956cd91906b6)
   D01 a context lands in the wrong lane of the group  caught
   D02 the operands land in a different lane than the context  caught
   D03 a fifth context overwrites the fourth  caught
   D04 a context with a different op or destination joins anyway  caught
   D05 a short op is accepted as a long one  caught
+  D26 the immediate is not part of the group key  caught
+  D27 the request carries the WRONG group's immediate  caught
+  D28 the gathered immediate is never captured  caught
   D06 a partial group is never issued, so one context alone DEADLOCKS  caught
   D07 an EMPTY group is issued on flush  caught
   D08 the group issues one context early  caught
@@ -54,15 +60,15 @@ PREFLIGHT: all 25 mutants lint and restore
   D24 every group carries the same tag  caught
   D25 the tag guard never reports a mismatch  caught
 == final restore ==
-clean: fpga/rtl/field/zhao_field_v3_dispatch.sv (25 mutants checked)
+clean: fpga/rtl/field/zhao_field_v3_dispatch.sv (28 mutants checked)
 
 == tally ==
-  attempted:  25 / 25
-  caught:     25
+  attempted:  28 / 28
+  caught:     28
   equivalent: 0
   survived:   0
   discarded:  0
 SWEEP OK
 EXIT:0
-clean: fpga/rtl/field/zhao_field_v3_dispatch.sv (25 mutants checked)
+clean: fpga/rtl/field/zhao_field_v3_dispatch.sv (28 mutants checked)
 CLEAN:0

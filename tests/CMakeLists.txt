@@ -1504,6 +1504,28 @@ verilate(test_field_v3_wbarb_directed
 add_test(NAME field_v3_wbarb_directed COMMAND test_field_v3_wbarb_directed)
 set_tests_properties(field_v3_wbarb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# FIELD v3 Phase 4: ROT2 and ROT3 for four points at once. Eight sine lookups
+# stream at one per clock (the table is II 1), then the four products are FOUR
+# four-wide bank requests, because c, s, p and q are all per point.
+#
+# The sine table is PRIVATE here, unlike the multiplier: sharing is for scarce
+# resources -- 79 DSPs of 112 -- and the device has 553 M10K while the
+# quarter-wave table is about one. See reports/FIELD_V3_REMAINING_OPS.md.
+add_executable(test_field_v3_rot_directed differential/field_v3_rot_directed.cpp)
+target_link_libraries(test_field_v3_rot_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_rot_directed
+  PREFIX Vzhao_field_v3_rot
+  TOP_MODULE zhao_field_v3_rot
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME field_v3_rot_directed COMMAND test_field_v3_rot_directed)
+set_tests_properties(field_v3_rot_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_rot_random COMMAND test_field_v3_rot_directed --random 40)
+set_tests_properties(field_v3_rot_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_rot_random_nightly COMMAND test_field_v3_rot_directed --random 400)
+set_tests_properties(field_v3_rot_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),
