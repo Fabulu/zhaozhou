@@ -1564,6 +1564,24 @@ set_tests_properties(field_v3_ring_random PROPERTIES LABELS "fast;nightly" TIMEO
 add_test(NAME field_v3_ring_random_nightly COMMAND test_field_v3_ring_directed --random 400)
 set_tests_properties(field_v3_ring_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: NORMALIZE2 and NORMALIZE3 for four points at once. Owns an
+# isqrt (walked four times -- the documented slow path, and NORMALIZE is COLD in
+# the op table) and an rcp24 seed ROM, and takes ten four-wide bank requests.
+add_executable(test_field_v3_normalize_directed differential/field_v3_normalize_directed.cpp)
+target_link_libraries(test_field_v3_normalize_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_normalize_directed
+  PREFIX Vzhao_field_v3_normalize
+  TOP_MODULE zhao_field_v3_normalize
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME field_v3_normalize_directed COMMAND test_field_v3_normalize_directed)
+set_tests_properties(field_v3_normalize_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_normalize_random COMMAND test_field_v3_normalize_directed --random 40)
+set_tests_properties(field_v3_normalize_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_normalize_random_nightly COMMAND test_field_v3_normalize_directed --random 400)
+set_tests_properties(field_v3_normalize_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),
