@@ -349,8 +349,22 @@ module zhao_field_v3_rot (
           // The index is a LANE NUMBER, so it is two bits. Writing it as the
           // four-bit counter arithmetic and letting it truncate is how an
           // out-of-range write becomes a silent wrap.
-          if (trig_k[0] == 1'b0) h_s[2'((trig_k - 4'd2) >> 1)] <= sin_result;
-          else                   h_c[2'((trig_k - 4'd2) >> 1)] <= sin_result;
+          // THE PARITY IS THE ISSUE INDEX'S, NOT THE COUNTER'S, and getting
+          // that backwards is not a subtle error: swapping c and s is exactly
+          // a rotation by (90 - theta), so every answer is a VALID rotation of
+          // the right point by the wrong angle. Nothing looks corrupt.
+          //
+          // The differential caught it immediately and pointed straight at it:
+          // lane 0 at 22.5 degrees produced lane 2's 67.5-degree answer, and
+          // lane 3 at 90 degrees produced the 0-degree one. Two complements in
+          // the same failure is a signature, not a coincidence.
+          //
+          // Issue k belongs to point k>>1 and is a COSINE when k is even. The
+          // answer arriving while the counter reads `trig_k` is issue
+          // `trig_k - 2`, whose parity is the SAME as trig_k's -- so an even
+          // counter means a cosine.
+          if (trig_k[0] == 1'b0) h_c[2'((trig_k - 4'd2) >> 1)] <= sin_result;
+          else                   h_s[2'((trig_k - 4'd2) >> 1)] <= sin_result;
         end
       end
 
