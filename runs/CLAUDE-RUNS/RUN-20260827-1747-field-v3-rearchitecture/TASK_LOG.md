@@ -1709,3 +1709,55 @@ value. The routing bug is caught by V02 because the service's ANSWER is wrong
 
 **Second header disproved by a mutant tonight**, after SPLINE's rounding claim.
 Both were arguments by analogy from a block where the reasoning was sound.
+
+## SVCPATH closes 25/25 -- nine blocks, nothing unaccounted for
+
+    attempted 25   caught 21   equivalent 4 (all proven)   survived 0   discarded 0
+
+    FIELD.V3.EXEC 31    CURVE.SVC 18    NOISE 23    DISPATCH 28
+    WBARB 17            ROT 24          RING 23     SPLINE 21
+    NORMALIZE 26        SVCPATH 25
+
+V03 and V10 are caught by the new agreement law. The four equivalences are
+V08 (the noise unit's B operand is per STEP, not per point), V09 (the bank tag
+is folded away entirely -- byte-identical model), V22 (width 2 and 1 mean the
+third result is never drained) and V25 (nothing can read the rival's product).
+
+## READING THE SEAM BEFORE WIRING IT: the fourth open-loop producer
+
+While the sweep ran I read both sides of the engine/service-path seam properly,
+and they do not fit.
+
+The ports line up perfectly, which is the trap. `zhao_probe_v3_engine` exposes
+the whole long-op surface and `zhao_field_v3_svcpath` consumes exactly that
+shape; the ALU writeback matches port for port. But:
+
+    assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
+
+**There is no `wb_ready_i` on the executor at all.** It cannot be refused and
+has nowhere to hold a result that is not taken. The service path's write
+arbiter refuses the ALU BY DESIGN, and section 5 measures the ALU losing
+exactly eight clocks to the drain on every four-point group. Each of those
+eight would be a LOST REGISTER WRITE.
+
+Fourth instance of the defect that has cost this project most -- an open-loop
+producer meeting a consumer that can refuse -- and the first caught BEFORE the
+composition was built rather than minutes after. That is what
+compose-before-integrate was supposed to buy, and this is it paying.
+
+What it takes, in order:
+
+  1. `wb_ready_i` on the executor, and it must HOLD -- the rule every service
+     claimant already obeys;
+  2. which is a PIPELINE change: stage 4 cannot advance with a write
+     outstanding, so it is backpressure into the barrel;
+  3. re-score the executor's 31 mutants, written against a writeback that
+     cannot stall -- assuming they carry is the assumption CURVE.SVC's eighteen
+     are already flagged for;
+  4. then compose, with a test that counts ALU writes at the source and at the
+     register file and requires agreement.
+
+**And one number needs re-reading.** "The ALU loses exactly eight clocks and
+not a clock more" is still true of the arbiter, but it describes the ALU being
+REFUSED -- and today's engine cannot refuse it. It characterises a machine that
+does not exist yet, and becomes a statement about the engine when step 1 lands.
