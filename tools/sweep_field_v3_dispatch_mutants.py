@@ -53,6 +53,23 @@ MUTANTS = [
      "                        (dst_width_of(long_op_i) != 2'd0) && same_group_c;",
      "                        (dst_width_of(long_op_i) == 2'd0) && same_group_c;"),
 
+    # ---- the instruction's immediate, added 2026-08-28 ---------------------
+    # Found by trying to compose this with the noise unit: NOISE2's seed IS the
+    # immediate, and two different NOISE2 instructions with different seeds
+    # match on op AND destination. D26 lets them share a request, which hands
+    # four points one seed and answers three of them for a different program
+    # point -- values that are individually plausible and collectively wrong.
+    ("D26 the immediate is not part of the group key",
+     "                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r) &&\n"
+     "                         (long_imm_i == g_imm_r));",
+     "                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r));"),
+    ("D27 the request carries the WRONG group's immediate",
+     "            s_imm_r   <= g_imm_r;",
+     "            s_imm_r   <= g_imm_r + 32'd1;"),
+    ("D28 the gathered immediate is never captured",
+     "        g_imm_r <= long_imm_i;",
+     "        g_imm_r <= g_imm_r;"),
+
     # ---- the issue rule -----------------------------------------------------
     ("D06 a partial group is never issued, so one context alone DEADLOCKS",
      "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)));",

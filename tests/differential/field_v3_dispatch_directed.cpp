@@ -106,6 +106,7 @@ struct Dut {
   void reset() {
     t.rst_n = 0;
     t.long_valid_i = 0;
+    t.long_imm_i = 0;
     t.flush_i = 0;
     t.svc_ready_i = 0;
     t.rsp_valid_i = 0;
@@ -139,11 +140,13 @@ struct Dut {
   }
 
   /** Offer one context and wait for it to be taken. Returns false on timeout. */
-  bool offer(const Point& p, uint8_t op, int dst, int guard_max = 64) {
+  bool offer(const Point& p, uint8_t op, int dst, int guard_max = 64,
+             uint32_t imm = 0u) {
     t.long_valid_i = 1;
     t.long_ctx_i = (uint8_t)p.ctx;
     t.long_op_i = op;
     t.long_dst_i = (uint8_t)dst;
+    t.long_imm_i = imm;
     t.long_s0_i = (uint32_t)p.s0;
     t.long_s1_i = (uint32_t)p.s1;
     t.long_s2_i = (uint32_t)p.s2;
@@ -214,14 +217,14 @@ struct Dut {
 
 /** The whole round trip for one group, checked end to end. */
 void run_group(Vzhao_field_v3_dispatch& top, const std::vector<Point>& pts, uint8_t op, int dst,
-               const std::string& what) {
+               const std::string& what, uint32_t imm = 0xDECAFu) {
   Dut d(top);
   d.reset();
   const int n = (int)pts.size();
   const int w = width_of(op);
 
   for (int i = 0; i < n; ++i) {
-    const bool ok = d.offer(pts[(size_t)i], op, dst);
+    const bool ok = d.offer(pts[(size_t)i], op, dst, 64, imm);
     check(ok, (what + ": context " + std::to_string(i) + " accepted").c_str(), 1, ok ? 1 : 0);
     if (!ok) return;
   }
@@ -257,6 +260,11 @@ void run_group(Vzhao_field_v3_dispatch& top, const std::vector<Point>& pts, uint
     }
   }
   check(d.t.svc_op_o == op, (what + ": the request carries the op").c_str(), op, d.t.svc_op_o);
+  // THE IMMEDIATE IS AN OPERAND, not decoration: NOISE2 and RIDGE take their
+  // seed from it, CURVE and SPLINE a table index, ROT3 an axis. A request that
+  // loses it describes a different computation.
+  check(d.t.svc_imm_o == imm, (what + ": and the instruction's immediate").c_str(), imm,
+        d.t.svc_imm_o);
   const uint8_t tag = (uint8_t)d.t.svc_tag_o;
   d.accept_request();
   d.t.flush_i = 0;
@@ -363,6 +371,26 @@ int main(int argc, char** argv) {
     check(!other_op, "a DIFFERENT op cannot join the same request", 0, other_op ? 1 : 0);
     const bool other_dst = d.offer({1, 4, 5, 6}, OP_CURVE, 9, 8);
     check(!other_dst, "a different destination cannot join either", 0, other_dst ? 1 : 0);
+  }
+
+  printf("== section 5b: a different IMMEDIATE cannot join the group ==\n");
+  {
+    // Found by trying to compose this with the noise unit: NOISE2's seed IS
+    // the instruction's immediate, and two different NOISE2 instructions with
+    // different seeds match on op AND destination. Letting them share a
+    // request would hand four points one seed and answer three of them for a
+    // different program point -- values that are individually plausible and
+    // collectively wrong, which is the failure mode this whole block is shaped
+    // to avoid.
+    Dut d(top);
+    d.reset();
+    const bool first = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(first, "the first context joins", 1, first ? 1 : 0);
+    const bool other_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 8, 0xBBBBu);
+    check(!other_imm, "a different immediate cannot join the same request", 0,
+          other_imm ? 1 : 0);
+    const bool same_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(same_imm, "and the SAME immediate still can", 1, same_imm ? 1 : 0);
   }
 
   printf("== section 6: an offer arriving WITH flush is refused, not swallowed ==\n");

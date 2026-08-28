@@ -90,6 +90,19 @@ module zhao_field_v3_dispatch #(
     input  var logic signed [31:0]            long_s0_i,
     input  var logic signed [31:0]            long_s1_i,
     input  var logic signed [31:0]            long_s2_i,
+    // THE INSTRUCTION'S IMMEDIATE, which is an OPERAND to several long ops and
+    // was missing until the first attempt to compose this with a service.
+    // NOISE2 and RIDGE take their seed from it, CURVE and SPLINE their table
+    // index, ROT3 its axis. Without it the dispatcher can gather a group it
+    // cannot describe.
+    //
+    // It is part of the GROUP KEY, not just cargo: four contexts at the same
+    // instruction share it, but nothing in this block knows they are at the
+    // same instruction -- it only sees op and destination, and two different
+    // NOISE2 instructions with different seeds match on both. Letting those
+    // share a request would hand four points one seed and silently answer
+    // three of them for a different program point.
+    input  var logic        [31:0]            long_imm_i,
     // "No further context can join this group." See rule 1.
     input  var logic                          flush_i,
 
@@ -100,6 +113,7 @@ module zhao_field_v3_dispatch #(
     output var logic signed [31:0]            svc_s0_o [4],
     output var logic signed [31:0]            svc_s1_o [4],
     output var logic signed [31:0]            svc_s2_o [4],
+    output var logic        [31:0]            svc_imm_o,
     output var logic [TAGW-1:0]               svc_tag_o,
 
     // ---- from the service: four results, in accept order -------------------
@@ -170,6 +184,7 @@ module zhao_field_v3_dispatch #(
   logic [2:0]                fill_r;      // 0..4 points gathered
   logic [7:0]                g_op_r;
   logic [REGW-1:0]           g_dst_r;
+  logic [31:0]               g_imm_r;
   logic [CTXW-1:0]           g_ctx_r [4];
   logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4];
 
@@ -179,6 +194,7 @@ module zhao_field_v3_dispatch #(
 
   logic [7:0]                s_op_r;
   logic [REGW-1:0]           s_dst_r;
+  logic [31:0]               s_imm_r;
   logic [CTXW-1:0]           s_ctx_r [4];
   logic [2:0]                s_used_r;    // how many lanes were real
   logic [1:0]                s_width_r;
@@ -198,7 +214,8 @@ module zhao_field_v3_dispatch #(
   // destination base. Different ops cannot share a request -- the service is
   // told one opcode -- and different destinations cannot share a drain.
   assign same_group_c = (fill_r == 3'd0) ||
-                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r));
+                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r) &&
+                         (long_imm_i == g_imm_r));
 
   // `!flush_i` IS LOAD-BEARING AND IT CLOSES A LOST-CONTEXT HOLE. Without it,
   // a context offered on the same clock a partial group flushes would be
@@ -224,6 +241,7 @@ module zhao_field_v3_dispatch #(
   // ---- the request ports --------------------------------------------------
   assign svc_valid_o = (state_r == D_ISSUE);
   assign svc_op_o    = s_op_r;
+  assign svc_imm_o   = s_imm_r;
   assign svc_tag_o   = s_tag_r;
 
   always_comb begin
@@ -272,8 +290,10 @@ module zhao_field_v3_dispatch #(
       fill_r     <= 3'd0;
       g_op_r     <= 8'd0;
       g_dst_r    <= '0;
+      g_imm_r    <= 32'd0;
       s_op_r     <= 8'd0;
       s_dst_r    <= '0;
+      s_imm_r    <= 32'd0;
       s_used_r   <= 3'd0;
       s_width_r  <= 2'd0;
       s_tag_r    <= '0;
@@ -299,6 +319,7 @@ module zhao_field_v3_dispatch #(
       if (long_valid_i && long_ready_o) begin
         g_op_r  <= long_op_i;
         g_dst_r <= long_dst_i;
+        g_imm_r <= long_imm_i;
         g_ctx_r[fill_r[1:0]] <= long_ctx_i;
         g_s0_r[fill_r[1:0]]  <= long_s0_i;
         g_s1_r[fill_r[1:0]]  <= long_s1_i;
@@ -315,6 +336,7 @@ module zhao_field_v3_dispatch #(
           if (issue_now_c) begin
             s_op_r    <= g_op_r;
             s_dst_r   <= g_dst_r;
+            s_imm_r   <= g_imm_r;
             s_width_r <= dst_width_of(g_op_r);
             s_used_r  <= fill_r;
             s_tag_r   <= next_tag_r;
