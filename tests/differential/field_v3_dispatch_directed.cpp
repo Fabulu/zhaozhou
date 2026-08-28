@@ -92,6 +92,14 @@ struct Dut {
   Vzhao_field_v3_dispatch& t;
   std::vector<Wrote> writes;
   std::vector<int> released;
+  // HOW MANY OF ITS OWN REGISTERS A CONTEXT HAD WRITTEN WHEN IT WAS RELEASED.
+  //
+  // Mutant D21 -- releasing on member 0 instead of the last member -- SURVIVED
+  // the first sweep, because for a width-1 op those are the same clock and for
+  // wider ops the release COUNT and ORDER are unchanged. Only the timing
+  // moves, and nothing was looking at timing. This is what looks at it.
+  std::vector<std::pair<int, int>> rel_after;
+  int wrote_for[16] = {0};
 
   explicit Dut(Vzhao_field_v3_dispatch& top) : t(top) {}
 
@@ -109,6 +117,8 @@ struct Dut {
     zhao::tick(t);
     writes.clear();
     released.clear();
+    rel_after.clear();
+    for (int i = 0; i < 16; ++i) wrote_for[i] = 0;
   }
 
   /** One cycle, recording anything the DUT published on the way past. */
@@ -116,8 +126,15 @@ struct Dut {
     t.eval();
     if (t.wb_valid_o && t.wb_ready_i) {
       writes.push_back({(int)t.wb_ctx_o, (int)t.wb_reg_o, (int32_t)t.wb_data_o});
+      ++wrote_for[(int)t.wb_ctx_o & 15];
     }
-    if (t.rel_valid_o) released.push_back((int)t.rel_ctx_o);
+    // The release is combinational with the accepted write, so on the last
+    // write's clock BOTH fire. Counting the write first is what makes
+    // `rel_after` read "this many registers had landed, including this one".
+    if (t.rel_valid_o) {
+      released.push_back((int)t.rel_ctx_o);
+      rel_after.push_back({(int)t.rel_ctx_o, wrote_for[(int)t.rel_ctx_o & 15]});
+    }
     zhao::tick(t);
   }
 
@@ -284,6 +301,15 @@ void run_group(Vzhao_field_v3_dispatch& top, const std::vector<Point>& pts, uint
   for (size_t i = 0; i < d.released.size() && i < (size_t)n; ++i) {
     check(d.released[i] == pts[i].ctx, (what + ": release " + std::to_string(i)).c_str(),
           (uint32_t)pts[i].ctx, (uint32_t)d.released[i]);
+  }
+  // Law 4, with teeth: a context is released after its LAST register, so by
+  // the time its release fires exactly `w` of its registers have landed.
+  // Checking only the count and the order let D21 -- release on member 0 --
+  // survive the first sweep.
+  for (size_t i = 0; i < d.rel_after.size(); ++i) {
+    check(d.rel_after[i].second == w,
+          (what + ": release " + std::to_string(i) + " follows ALL its writes").c_str(),
+          (uint32_t)w, (uint32_t)d.rel_after[i].second);
   }
   check(d.t.tag_mismatch_o == 0, (what + ": no tag mismatch").c_str(), 0,
         (int)d.t.tag_mismatch_o);
@@ -453,6 +479,92 @@ int main(int argc, char** argv) {
     check(d.t.tag_mismatch_o == 1, "a reply with the wrong tag sets tag_mismatch_o", 1,
           (int)d.t.tag_mismatch_o);
     d.drain();
+  }
+
+  printf("== section 9: a FIFTH context is refused while the group is full ==\n");
+  {
+    // Mutant D03 -- `fill_r <= 4` -- SURVIVED the first sweep: a fifth context
+    // is accepted on the clock the full group is still in D_GATHER, and
+    // 4[1:0] is 0, so it OVERWRITES LANE 0. Nothing in the file offered a
+    // fifth context, so nothing reached it.
+    Dut d(top);
+    d.reset();
+    const std::vector<Point> four = {
+        {0, 900, 901, 902}, {1, 910, 911, 912}, {2, 920, 921, 922}, {3, 930, 931, 932}};
+    for (const Point& p : four) d.offer(p, OP_CURVE, 6);
+
+    d.t.long_valid_i = 1;
+    d.t.long_ctx_i = 7;
+    d.t.long_op_i = OP_CURVE;
+    d.t.long_dst_i = 6;
+    d.t.long_s0_i = (uint32_t)-1;
+    d.t.long_s1_i = (uint32_t)-1;
+    d.t.long_s2_i = (uint32_t)-1;
+    d.t.eval();
+    check(d.t.long_ready_o == 0, "a fifth context is REFUSED while four are gathered", 0,
+          (int)d.t.long_ready_o);
+
+    const bool got = d.take_request();
+    check(got, "the full group still issues", 1, got ? 1 : 0);
+    if (got) {
+      check((int32_t)d.t.svc_s0_o[0] == 900, "and lane 0 still holds the FIRST context", 900,
+            (int32_t)d.t.svc_s0_o[0]);
+      check((int32_t)d.t.svc_s0_o[3] == 930, "and lane 3 the fourth", 930,
+            (int32_t)d.t.svc_s0_o[3]);
+    }
+    d.t.long_valid_i = 0;
+    d.accept_request();
+  }
+
+  printf("== section 10: flush with NOTHING gathered issues nothing ==\n");
+  {
+    // Mutant D07 -- dropping `fill_r != 0` -- SURVIVED: an EMPTY group is
+    // issued on flush. Nothing asserted flush with an empty gather.
+    Dut d(top);
+    d.reset();
+    d.t.flush_i = 1;
+    d.t.svc_ready_i = 1;
+    d.t.eval();
+    for (int i = 0; i < 24; ++i) {
+      check(d.t.svc_valid_o == 0, "no request is issued for an EMPTY group", 0,
+            (int)d.t.svc_valid_o);
+      d.step();
+    }
+    check(d.t.groups_o == 0u, "and the group counter never moved", 0, (int)d.t.groups_o);
+    d.t.flush_i = 0;
+    d.t.svc_ready_i = 0;
+    d.t.eval();
+  }
+
+  printf("== section 11: consecutive groups carry DIFFERENT tags ==\n");
+  {
+    // Mutant D24 -- the tag never increments -- SURVIVED: every group carried
+    // the same tag and nothing compared two of them. One group per instance
+    // is exactly the shape that cannot see it.
+    Dut d(top);
+    d.reset();
+    uint8_t tags[3];
+    for (int g = 0; g < 3; ++g) {
+      const std::vector<Point> pts = {{0, 10 * g + 1, 0, 0}, {1, 10 * g + 2, 0, 0}};
+      for (const Point& p : pts) d.offer(p, OP_CURVE, 7);
+      d.t.flush_i = 1;
+      d.t.eval();
+      const bool got = d.take_request();
+      check(got, ("group " + std::to_string(g) + " issued").c_str(), 1, got ? 1 : 0);
+      tags[g] = (uint8_t)d.t.svc_tag_o;
+      d.accept_request();
+      d.t.flush_i = 0;
+      d.t.eval();
+      int32_t r[kLanes] = {1, 2, 3, 4};
+      d.reply(tags[g], r, r, r);
+      d.drain();
+    }
+    check(tags[1] != tags[0], "the second group's tag differs from the first",
+          1, tags[1] != tags[0] ? 1 : 0);
+    check(tags[2] != tags[1], "and the third from the second", 1,
+          tags[2] != tags[1] ? 1 : 0);
+    printf("   MEASURED tags: %u, %u, %u\n", tags[0], tags[1], tags[2]);
+    check(d.t.groups_o == 3u, "three groups issued", 3, (int)d.t.groups_o);
   }
 
   return zhao::report_and_exit("field_v3_dispatch_directed");

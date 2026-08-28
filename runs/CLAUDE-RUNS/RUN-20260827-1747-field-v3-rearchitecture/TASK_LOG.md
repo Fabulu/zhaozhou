@@ -1041,3 +1041,46 @@ N01 replays a neighbour's mix (wrong PER POINT, so it needs distinct points to
 be seen), and C16 sends a refused issue onward so it fails by value instead of
 by timeout. The rule is written into the dispatcher's mutant table where the
 next table will be copied from.
+
+---
+
+## 2026-08-28 -- the dispatcher sweep found FOUR gaps, and none of them was an
+## equivalence
+
+    first run:  25 attempted  21 caught  4 SURVIVED  0 discarded
+
+Unlike the noise block, where all three survivors were provable equivalences,
+every one of these is a real hole in the test. The suite passed 274 checks and
+was weaker than that number suggests.
+
+| mutant | why it survived |
+| --- | --- |
+| D03 `fill_r <= 4` | a FIFTH context is accepted on the clock the full group is still in D_GATHER, and 4[1:0] is 0, so it overwrites LANE 0. Nothing offered a fifth context. |
+| D07 drop `fill_r != 0` | an EMPTY group is issued on flush. Nothing asserted flush with an empty gather. |
+| D21 release on member 0 | for a width-1 op that IS the last member, so CURVE and RIDGE cannot see it. For widths 2 and 3 the release comes early -- but the release COUNT and ORDER are unchanged, and those were all the test checked. |
+| D24 tag never increments | every group carries the same tag. One group per instance is exactly the shape that cannot notice. |
+
+**D21 is the instructive one.** The test recorded every release and checked
+how many there were and in what order, and both were right under the mutant.
+What it never recorded was WHEN a release happened relative to that context's
+own writes. `rel_after` does now: it counts the registers that had landed for
+that context at the moment it was released, and the assertion is that the
+number equals the op's destination width. Under D21 a width-2 op releases
+after one write instead of two.
+
+The other three are plain omissions -- a fifth context, an empty flush, and a
+second group -- each of which is one section.
+
+    after:  327 checks, and the four sections name the mutant they exist for
+
+### The heredoc escape trap, now in BUILD.md because it has cost six edits
+
+Writing those sections split four `printf` literals across two lines, which is
+the sixth time today. A heredoc in this environment collapses a doubled
+backslash to a single one, so a patch meaning to write backslash-n writes a
+REAL LINE BREAK, silently. It has produced an unterminated Python string,
+three anchor searches that matched zero times and read exactly like stale
+anchors, and six broken C++ literals.
+
+The rule is in docs/BUILD.md now: never type a backslash inside a heredoc.
+Build it at run time -- `BS = chr(92)` -- and substitute a placeholder.

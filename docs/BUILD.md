@@ -195,6 +195,35 @@ Also note `cmake` itself is shadowed on PATH exactly like `ctest`: a bare
 `The CMAKE_CXX_COMPILER: C is not a full path`, which is a corrupted-looking
 error with a PATH cause.
 
+## Scripted edits: a heredoc EATS ONE BACKSLASH, and it is silent
+
+Every scripted edit here goes through a shell heredoc. This environment
+collapses a doubled backslash to a single one inside one, so a patch script
+that means to write the two characters backslash-n writes a REAL LINE BREAK
+instead -- and it does it without complaint.
+
+On 2026-08-28 that produced, in one session:
+
+* a Python file with an unterminated string literal;
+* three anchor searches that matched zero times and read as anchor drift;
+* six C++ `printf` calls split across two lines, each a compile error.
+
+None of them is hard to fix. All of them cost a build cycle to notice, and
+the anchor failures cost longer because "matched 0 times" is exactly what a
+genuinely stale anchor looks like.
+
+**The fix is to never type a backslash inside a heredoc.** Build the escape
+at run time and substitute it:
+
+```python
+BS = chr(92)
+old = 'printf("done@N@");'.replace("@N@", BS + "n")
+```
+
+The same applies to regex escapes in a patch script: `\\s` arrives as
+`\s` and Python then warns about an invalid escape sequence, which at
+least is loud. The newline case is the quiet one.
+
 ## Running a mutation sweep unattended, and the seven ways it fails
 
 2026-08-28. A single multiplier-bank sweep took **five aborted attempts** to
