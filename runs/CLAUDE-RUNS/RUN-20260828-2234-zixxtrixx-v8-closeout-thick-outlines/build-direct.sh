@@ -1,7 +1,7 @@
 #!/bin/bash
 # Direct g++ build for the reel and Zixxtrixx tools. Never use cmake --build:
 # the repository's build.ninja regeneration race can leave a stale binary.
-# Usage: build-direct.sh [clean|reel|probe|golden|choreo|all]
+# Usage: build-direct.sh [clean|reel|contour|probe|golden|choreo|all]
 # Objects are run-local; after a struct-layout change, run clean then all.
 set -e
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -23,7 +23,9 @@ for j in $(jobs -p); do wait "$j" || { echo "COMPILE FAILED"; exit 1; }; done
 LIBOBJS=$(for s in $ZREF_SRCS; do printf '%s ' "$OBJ/$(printf '%s' "$s" | tr / _).o"; done)
 want() { [ -z "$1" ] || [ "$1" = all ] || [ "$1" = "$2" ]; }
 T="$ROOT/tools/reel"
+CONTOUR_HEADER=$(cygpath -m "$T/exp/zixxtrixx_page_exp_contour.h")
 if want "$1" reel;        then echo "LD zhao-reel";        $CXX $FLAGS "$T/zhao_reel.cpp"        $LIBOBJS -o "$ROOT/build/tools/zhao-reel.exe" & fi
+if want "$1" contour;     then echo "LD zhao-reel-exp-contour"; $CXX $FLAGS "-DZIXX_PAGE_VARIANT=\"$CONTOUR_HEADER\"" "$T/zhao_reel.cpp" $LIBOBJS -o "$ROOT/build/tools/zhao-reel-exp-contour.exe" & fi
 if want "$1" probe;       then echo "LD zixx-probe";       $CXX $FLAGS "$T/zixx_probe.cpp"       $LIBOBJS -o "$ROOT/build/tools/zixx-probe.exe" & fi
 if want "$1" golden;      then echo "LD zixx-golden";      $CXX $FLAGS "$T/zixx_golden.cpp"      $LIBOBJS -o "$ROOT/build/tools/zixx-golden.exe" & fi
 if want "$1" choreo;      then echo "LD zixx-choreo";      $CXX $FLAGS "$T/zixx_choreo.cpp"      $LIBOBJS -o "$ROOT/build/tools/zixx-choreo.exe" & fi

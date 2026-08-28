@@ -1,0 +1,22 @@
+manifest: 36 live outer entries, 23 archived entries
+collection: exactly 1 outer tab, 17 controlled non-autoplay videos
+generated wiring: 37 radios, 37 labels, 37 panels (archive included)
+robots: noindex,nofollow
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-idle.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-walk.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-run.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-look.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-balance.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-taunt.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-attack.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-hit.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-damage.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-knockdown.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-fall.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-hitfloor.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-salto-dummy.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-salto-fly.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-salto-six.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-death.webm
+decode 384x240 yuv444p + poster 1152x720: zixxtrixx-exp-celthick-death2.webm
+stage-two media validation: PASS (17/17 fully decoded)
