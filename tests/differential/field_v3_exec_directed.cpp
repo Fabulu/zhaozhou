@@ -55,7 +55,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_v3_exec.h"
+#include "Vzhao_probe_v3_engine.h"
 
 #include "zfield/zfield.hpp"
 #include "zfield/zfield_plan.hpp"
@@ -161,11 +161,11 @@ zfield::Decoded alu_program(Prng& rng, int n_in, int n_body) {
 // ---------------------------------------------------------------------------
 
 struct Dut {
-  Vzhao_probe_v3_exec& t;
+  Vzhao_probe_v3_engine& t;
   // Shadow of the register file, rebuilt from the writeback stream.
   int32_t shadow[kCtx][kRegs] = {};
 
-  explicit Dut(Vzhao_probe_v3_exec& top) : t(top) {}
+  explicit Dut(Vzhao_probe_v3_engine& top) : t(top) {}
 
   void reset() {
     t.rst_n = 0;
@@ -213,9 +213,11 @@ struct Dut {
 
   int writebacks = 0;  // how many writes the block has actually made
 
+
   // Advance one clock, folding any writeback into the shadow. Returns true if
   // a context finished this clock, and reports which.
   bool step(int* done_ctx) {
+
     const bool wb = t.wb_valid_o != 0;
     if (wb) ++writebacks;
     const int wctx = (int)t.wb_ctx_o, wreg = (int)t.wb_reg_o;
@@ -284,7 +286,7 @@ bool install(Dut& d, int ctx, const zfield::Fplan& fp, const int32_t* in, size_t
 // ---------------------------------------------------------------------------
 
 // One program, one point, compared against execute_point.
-void test_one_point_matches_the_interpreter(Vzhao_probe_v3_exec& top) {
+void test_one_point_matches_the_interpreter(Vzhao_probe_v3_engine& top) {
   printf("-- one point against zfield::execute_point\n");
   Dut d(top);
   d.reset();
@@ -310,8 +312,8 @@ void test_one_point_matches_the_interpreter(Vzhao_probe_v3_exec& top) {
     if (d.step(&done_ctx) && done_ctx == 0) break;
   }
   check(guard < 4000, "the context reached END", 1, guard < 4000 ? 1 : 0);
-  check(top.desync_o == 0, "the multiplier stayed in step with the pipeline", 0,
-        (int)top.desync_o);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step with the pipeline", 0,
+        (int)top.exec_desync_o);
   check(top.unsupported_o == 0, "every op in the program is implemented", 0,
         (int)top.unsupported_o);
 
@@ -339,7 +341,7 @@ void test_one_point_matches_the_interpreter(Vzhao_probe_v3_exec& top) {
 }
 
 // A DOT program must be REFUSED, not answered with a zero product.
-void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
+void test_dot_is_refused_not_answered(Vzhao_probe_v3_engine& top) {
   printf("-- DOT is now COMPUTED, and an unknown opcode is still refused\n");
   Dut d(top);
   d.reset();
@@ -361,7 +363,7 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
   // from the other. DOT is implemented; it must be COMPUTED, not refused.
   check(top.unsupported_o == 0, "a DOT op is implemented now, not refused", 0,
         (int)top.unsupported_o);
-  check(top.desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.desync_o);
+  check(top.exec_desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.exec_desync_o);
   // 3*7 + 5*11 in fx16 = (3<<16)*(7<<16)>>16 + ... -- the value is checked
   // against the interpreter by the randomized lane; here the point is that a
   // DOT PRODUCES a write at all, which the refusing version never did.
@@ -424,7 +426,7 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_exec& top) {
 // three flags are checked every time -- including sat_rescale, which no test
 // read at all until X17 pointed at it. OP_ABS is the reachable rescale: the
 // ALU sets sat_rescale_o from abs_sat_fired, and |INT32_MIN| is off the rail.
-void test_each_saturation_lane_alone(Vzhao_probe_v3_exec& top) {
+void test_each_saturation_lane_alone(Vzhao_probe_v3_engine& top) {
   printf("-- each saturation lane fires alone\n");
   struct Case {
     const char* what;
@@ -460,7 +462,7 @@ void test_each_saturation_lane_alone(Vzhao_probe_v3_exec& top) {
 }
 
 // The barrel property, measured on both sides of it.
-void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
+void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
   printf("-- the barrel: one context stalls, eight fill the pipe\n");
   Prng rng(0xBA22E1);
   const int n_in = 4;
@@ -498,7 +500,7 @@ void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
   printf("   MEASURED: 1 context = %u uops in %d clocks; 8 contexts = %u uops in %d clocks\n",
          issued_1, clocks_1, issued_8, clocks_8);
   check(finished == kCtx, "all eight contexts finished", kCtx, finished);
-  check(top.desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.desync_o);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.exec_desync_o);
 
   // THE CYCLE COUNTS ARE PINNED, and that is the point of measuring them.
   // X05 -- releasing a context for re-issue one stage early -- SURVIVED the
@@ -538,7 +540,7 @@ void test_barrel_occupancy(Vzhao_probe_v3_exec& top) {
 }
 
 // Randomized: many programs, many points.
-void test_random(Vzhao_probe_v3_exec& top, int iters) {
+void test_random(Vzhao_probe_v3_engine& top, int iters) {
   printf("-- randomized differential, %d programs\n", iters);
   Prng rng(0x5A1AD5);
   int bad = 0, scalar_plans = 0, ran = 0;
@@ -580,7 +582,7 @@ void test_random(Vzhao_probe_v3_exec& top, int iters) {
   check(ran > 0, "some programs actually ran", 1, ran > 0 ? 1 : 0);
   check(scalar_plans == 0, "an all-varying plan never produces a scalar source", 0, scalar_plans);
   check(bad == 0, "every randomized program matches the interpreter", 0, bad);
-  check(top.desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.desync_o);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.exec_desync_o);
 }
 
 }  // namespace
@@ -592,7 +594,7 @@ int main(int argc, char** argv) {
     if (std::string(argv[i]) == "--random" && i + 1 < argc) iters = std::atoi(argv[++i]);
   }
 
-  Vzhao_probe_v3_exec top;
+  Vzhao_probe_v3_engine top;
 
   if (iters > 0) {
     test_random(top, iters);

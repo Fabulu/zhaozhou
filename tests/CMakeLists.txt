@@ -1435,9 +1435,11 @@ set_tests_properties(field_v3_mulbank_random_nightly PROPERTIES LABELS "nightly"
 add_executable(test_field_v3_exec_directed differential/field_v3_exec_directed.cpp)
 target_link_libraries(test_field_v3_exec_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_exec_directed
-  PREFIX Vzhao_probe_v3_exec
-  TOP_MODULE zhao_probe_v3_exec
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+  PREFIX Vzhao_probe_v3_engine
+  TOP_MODULE zhao_probe_v3_engine
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)

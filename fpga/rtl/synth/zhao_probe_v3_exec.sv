@@ -113,6 +113,16 @@ module zhao_probe_v3_exec #(
     output var logic [31:0] uops_issued_o,
     output var logic [31:0] idle_clocks_o,  // no context was ready to issue
 
+    // ---- the shared multiplier bank (this lane's claimant port) -----------
+    // One lane of a four-wide bank. The other three belong to the other three
+    // points of a vector group, which are replicas of this datapath.
+    output var logic               mul_req_valid_o,
+    input  var logic               mul_req_ready_i,
+    output var logic signed [32:0] mul_req_a_o,
+    output var logic signed [32:0] mul_req_b_o,
+    input  var logic               mul_rsp_valid_i,
+    input  var logic signed [65:0] mul_rsp_p_i,
+
     // The multiplier's own valid must arrive in the same clock as S3. If it
     // ever does not, the product being fed to the ALU belongs to a DIFFERENT
     // instruction, which is a wrong answer rather than a slow one -- so it is
@@ -164,13 +174,20 @@ module zhao_probe_v3_exec #(
     is_dot = (op == 8'h10) || (op == 8'h11);  // OP_DOT2, OP_DOT3
   endfunction
 
+  // The bank refused a request made this clock.
+  logic mul_denied_c;
+  assign mul_denied_c = mul_req_valid_o && !mul_req_ready_i;
+
   logic dot_inflight_c;
   assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||
                           (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));
 
   always_comb begin
     ready_c = active_r & ~inflight_r;
-    issue_c = |ready_c && !dot_inflight_c && !hold_c;
+    // A REFUSED REQUEST STALLS ISSUE. The register file's operands are live
+    // for exactly one clock, so an instruction whose product the bank
+    // declined to start cannot carry on -- its operands are gone next clock.
+    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;
     issue_ctx_c = '0;
     for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);
   end
@@ -289,15 +306,18 @@ module zhao_probe_v3_exec #(
     end
   end
 
-  zhao_field_mul u_mul (
-      .clk    (clk),
-      .rst_n  (rst_n),
-      .issue_i(mul_issue_c),
-      .a_i    (mul_a_c),
-      .b_i    (mul_b_c),
-      .p_o    (prod_ab),
-      .p_valid_o(prod_valid)
-  );
+  // THE MULTIPLIER IS NOT OURS. It lives in zhao_field_v3_mulbank, shared
+  // with the curve and distance services, because zhao_field_exec_shared
+  // measured what happens when every op unit owns one: 79 DSPs of a 112-DSP
+  // device, with nine units idle at any instant.
+  //
+  // This block was written with a private multiplier as a STATED
+  // simplification. Removing it is what lets the composition exist at all.
+  assign mul_req_valid_o = mul_issue_c;
+  assign mul_req_a_o     = mul_a_c;
+  assign mul_req_b_o     = mul_b_c;
+  assign prod_ab         = mul_rsp_p_i;
+  assign prod_valid      = mul_rsp_valid_i;
 
   // The sum is formed at the FULL 66-bit product width and rescaled ONCE by
   // the ALU. Rescaling each product and adding is a different answer, and
