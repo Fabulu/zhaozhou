@@ -264,7 +264,70 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "V08": (
+        "THE NOISE UNIT'S B OPERAND IS PER STEP, NOT PER POINT, so mirroring "
+        "it across the four points is the IDENTITY. Every branch of "
+        "zhao_field_v3_noise's operand mux assigns mul_b[l] a CONSTANT -- C_X, "
+        "C_Y, C_LCG_M, C_XSM, or zero -- with no dependence on l whatsoever. "
+        "So mul_b[0] == mul_b[1] == mul_b[2] == mul_b[3] at every instant and "
+        "nz_b[3 - l] == nz_b[l] identically. Exhaustive by inspection of the "
+        "mux, not measured over a sample. "
+        "THE ASYMMETRY IS THE POINT: mul_a[l] IS per point (ix[l], iy[l], "
+        "s_reg[l], rxs_in[l]), which is why V07 -- broadcasting A from point 0 "
+        "-- is caught while this is not. A four-wide bank request is cheap for "
+        "this service precisely because one side of every product is shared. "
+        "RE-SCORE THIS IF ANY mul_b BRANCH EVER INDEXES BY LANE. The lane salt "
+        "in S_LCG is the near miss to watch: it is added to mul_a, and moving "
+        "it to mul_b would break the equivalence on that step alone."
+    ),
+    "V09": (
+        "THE BANK'S REQUEST TAG IS DEAD IN THIS COMPOSITION, and the model "
+        "hash proves it rather than merely suggesting it: the mutant "
+        "elaborated to a BYTE-IDENTICAL model, which means Verilator folded "
+        "the tag away entirely. Nothing here consumes it -- bank_rsp_tag is "
+        "declared with an explicit UNUSEDSIGNAL waiver, and the bank's "
+        "desync_o does not depend on the request tags' VALUES. "
+        "This is not a hole in the test: the bank's tag is the BANK's claim, "
+        "and it is checked where it is made, by the mulbank sweep. What this "
+        "file can be wrong about is which claimant gets which slot, and that "
+        "is V01-V05, all caught. "
+        "RE-SCORE THIS THE MOMENT bank_rsp_tag IS READ -- the waiver comment "
+        "on it is the tripwire."
+    ),
+    "V22": (
+        "THE THIRD RESULT CANNOT BE DRAINED, so its value cannot be observed. "
+        "This service implements NOISE2 and RIDGE only, and the dispatcher's "
+        "dst_width_of gives them 2 and 1. The drain writes exactly `width` "
+        "registers per point, so index 2 is never read for either op -- not "
+        "rarely, never. "
+        "THE TIE-OFF STAYS, and its own comment already says why: it exists so "
+        "that a width-3 op routed here by mistake drains a DEFINED value, "
+        "wrong the same way twice rather than differently each run. That is a "
+        "statement about a case this composition makes unreachable, which is "
+        "exactly what wrong_op_o is for -- and V23, which breaks that "
+        "detector, is caught. "
+        "RE-SCORE THIS IF A WIDTH-3 OP IS EVER ROUTED TO THIS SERVICE, which "
+        "is the same event that would make wrong_op_o fire."
+    ),
+    "V25": (
+        "NOTHING CAN READ THE RIVAL'S PRODUCT, so its operands cannot matter. "
+        "The bank returns products on a SHARED rsp_p bus with a per-claimant "
+        "valid; the noise unit samples it only under bank_rsp_valid[1], and no "
+        "other reader exists. rival_rsp_o carries the VALID, not the value. "
+        "So RIVAL_A is unobservable by construction. "
+        "AND THIS CORRECTS THE HEADER THAT MOTIVATED IT. That header says the "
+        "constants are 'recognisable, so a routing bug into an unused lane "
+        "looks wrong rather than convincing'. The recognisability earns "
+        "nothing: V02 -- the service taking the rival's product -- is caught "
+        "because the service's ANSWER is wrong, and it would be wrong for any "
+        "rival operands at all, including zero. The constants are a debugging "
+        "convenience when reading a waveform, which is worth having and is not "
+        "what the header claimed. "
+        "RE-SCORE THIS IF THE BANK EVER GIVES EACH CLAIMANT ITS OWN PRODUCT "
+        "BUS, or if a check reads the rival's product directly."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):

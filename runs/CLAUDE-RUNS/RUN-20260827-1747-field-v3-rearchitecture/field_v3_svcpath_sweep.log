@@ -1,99 +1,19 @@
 == consumer roster ==
 == preflight ==
-PREFLIGHT FAIL: V01 the service reads the RIVAL's grant does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:244:39: Bits of signal are not used: 'bank_req_ready'[1]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  244 |   logic [1:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-      |                                       ^~~~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V02 the service takes the RIVAL's product does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:244:55: Bits of signal are not used: 'bank_rsp_valid'[1]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  244 |   logic [1:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-      |                                                       ^~~~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V03 the rival's grant is reported from the service's slot does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:244:39: Bits of signal are not used: 'bank_req_ready'[0]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  244 |   logic [1:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-      |                                       ^~~~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V04 the rival's reply is read from the service's slot does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:244:55: Bits of signal are not used: 'bank_rsp_valid'[0]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  244 |   logic [1:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-      |                                                       ^~~~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
+preflight ok: V01 the service's grant is coupled to the RIVAL's
+preflight ok: V02 the service's product is coupled to the RIVAL's
+preflight ok: V03 the rival's grant is coupled to the SERVICE's
+preflight ok: V04 the rival's reply is coupled to the SERVICE's
 preflight ok: V05 the two bank claimants' request-valid lines are crossed
 preflight ok: V06 the bank puts the LANES above the service
 preflight ok: V07 the service's A operands are broadcast from point 0
-PREFLIGHT FAIL: V08 the service's B operand is its own A does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:190:33: Signal is not used: 'nz_b'
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  190 |   logic signed [32:0] nz_a [4], nz_b [4];
-      |                                 ^~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
+preflight ok: V08 the service's B operands are mirrored across the four points
 preflight ok: V09 both bank claimants carry the same tag
-PREFLIGHT FAIL: V10 the ALU's ready comes from the drain's slot does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:281:37: Bits of signal are not used: 'wb_req_ready'[0]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  281 |   logic [1:0]         wb_req_valid, wb_req_ready;
-      |                                     ^~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V11 the drain's ready comes from the ALU's slot does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:281:37: Bits of signal are not used: 'wb_req_ready'[1]
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  281 |   logic [1:0]         wb_req_valid, wb_req_ready;
-      |                                     ^~~~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V12 the drain's write carries the ALU's data does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:154:23: Signal is not used: 'drain_data'
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  154 |   logic signed [31:0] drain_data;
-      |                       ^~~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V13 the drain's write lands in the ALU's context does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:152:23: Signal is not used: 'drain_ctx'
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  152 |   logic [CTXW-1:0]    drain_ctx;
-      |                       ^~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
-PREFLIGHT FAIL: V14 the drain's write lands in the ALU's register does not lint:
-%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_svcpath.sv:153:23: Signal is not used: 'drain_reg'
-                                                                                                          : ... note: In instance 'zhao_field_v3_svcpath'
-  153 |   logic [REGW-1:0]    drain_reg;
-      |                       ^~~~~~~~~
-                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
-                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
-%Error: Exiting due to 1 warning(s)
-
+preflight ok: V10 the ALU's ready is coupled to the drain's
+preflight ok: V11 the drain's ready is coupled to the ALU's
+preflight ok: V12 the two claimants' write DATA are crossed
+preflight ok: V13 the two claimants' write CONTEXTS are crossed
+preflight ok: V14 the two claimants' write REGISTERS are crossed
 preflight ok: V15 the two writeback claimants' request-valid lines are crossed
 preflight ok: V16 the writeback policy loses its top bit
 preflight ok: V17 RIDGE is decoded as NOISE2
@@ -105,7 +25,49 @@ preflight ok: V22 the third result is not zero
 preflight ok: V23 the wrong-op detector fires on the ops that ARE implemented
 preflight ok: V24 flush reaches the dispatcher only while an op is being offered
 preflight ok: V25 the rival's multiplicand is changed
-PREFLIGHT: 10 mutant(s) unusable
-EXIT:8
+PREFLIGHT: all 25 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 2afffa2eb1584c58)
+  V01 the service's grant is coupled to the RIVAL's  caught
+  V02 the service's product is coupled to the RIVAL's  caught
+  V03 the rival's grant is coupled to the SERVICE's  *** SURVIVED ***
+  V04 the rival's reply is coupled to the SERVICE's  caught
+  V05 the two bank claimants' request-valid lines are crossed  caught
+  V06 the bank puts the LANES above the service  caught
+  V07 the service's A operands are broadcast from point 0  caught
+  V08 the service's B operands are mirrored across the four points  *** SURVIVED ***
+  V09 both bank claimants carry the same tag  DISCARDED (model identical to pristine — did not re-elaborate)
+  V10 the ALU's ready is coupled to the drain's  *** SURVIVED ***
+  V11 the drain's ready is coupled to the ALU's  caught
+  V12 the two claimants' write DATA are crossed  caught
+  V13 the two claimants' write CONTEXTS are crossed  caught
+  V14 the two claimants' write REGISTERS are crossed  caught
+  V15 the two writeback claimants' request-valid lines are crossed  caught
+  V16 the writeback policy loses its top bit  caught
+  V17 RIDGE is decoded as NOISE2  caught
+  V18 the RIDGE opcode is off by one  caught
+  V19 the NOISE2 opcode is off by one  caught
+  V20 the seed handed to the service is perturbed  caught
+  V21 the tag handed to the service is not the one the dispatcher expects  caught
+  V22 the third result is not zero  *** SURVIVED ***
+  V23 the wrong-op detector fires on the ops that ARE implemented  caught
+  V24 flush reaches the dispatcher only while an op is being offered  caught
+  V25 the rival's multiplicand is changed  *** SURVIVED ***
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_svcpath.sv (25 mutants checked)
+
+== tally ==
+  attempted:  25 / 25
+  caught:     19
+  equivalent: 0
+  survived:   5
+  discarded:  1
+FAILED: 5 mutant(s) survived without a proof of equivalence
+  V03 the rival's grant is coupled to the SERVICE's
+  V08 the service's B operands are mirrored across the four points
+  V10 the ALU's ready is coupled to the drain's
+  V22 the third result is not zero
+  V25 the rival's multiplicand is changed
+EXIT:12
 clean: fpga/rtl/field/zhao_field_v3_svcpath.sv (25 mutants checked)
 CLEAN:0

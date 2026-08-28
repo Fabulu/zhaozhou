@@ -100,7 +100,16 @@ struct Dut {
   // The ALU is a background stream: it asks every clock with a distinctive
   // context so its writes can never be confused with the drain's.
   bool alu_busy = false;
+  // EVERY CLOCK THE ALU WAS TOLD IT WOULD BE SERVED. This was collected and
+  // never compared to anything, which is how mutant V10 -- the ALU's ready
+  // coupled to the drain's -- survived: the arbiter's own counters are
+  // computed INSIDE it from req_valid and its grant, so nothing downstream of
+  // this file's `assign alu_wb_ready_o = ...` was observed at all.
   int alu_offered = 0;
+  // The same hole on the bank side, which V03 found: rival_grant_o is an
+  // OUTPUT of this file that no check read.
+  int rival_grants = 0;
+  int rival_rsps = 0;
 
   explicit Dut(Vzhao_field_v3_svcpath& top) : t(top) {}
 
@@ -120,6 +129,8 @@ struct Dut {
     alu_writes.clear();
     released.clear();
     alu_offered = 0;
+    rival_grants = 0;
+    rival_rsps = 0;
   }
 
   /** One cycle. The ALU's writes use context 7 and register 31, so a write
@@ -143,6 +154,8 @@ struct Dut {
       }
     }
     if (alu_busy && t.alu_wb_ready_o) ++alu_offered;
+    if (t.rival_req_i && t.rival_grant_o) ++rival_grants;
+    if (t.rival_rsp_o) ++rival_rsps;
     if (t.rel_valid_o) released.push_back((int)t.rel_ctx_o);
     zhao::tick(t);
   }
@@ -245,10 +258,29 @@ void run_group(Vzhao_field_v3_svcpath& top, const std::vector<Ctx>& cs, bool rid
           rival_served > 0 ? 1 : 0);
     check(d.t.bank_stall_lanes_o > 0, (what + ": and the bank really refused somebody").c_str(),
           1, d.t.bank_stall_lanes_o > 0 ? 1 : 0);
+    // LAW 2b: A GRANT LINE MUST AGREE WITH THE SERVICE ACTUALLY RECEIVED.
+    //
+    // This is the law mutant V03 broke and nothing noticed: rival_grant_o was
+    // an output of this file that no check read. Counting the rival's replies
+    // is not enough on its own -- the replies come from the BANK, and this
+    // file could report any grant it liked while the bank went on serving.
+    //
+    // Every accepted request produces exactly one reply, so after the loop has
+    // drained the two counts must match. They are counted at the same instant,
+    // which is what makes the equality exact rather than approximate.
+    check(d.rival_grants == d.rival_rsps,
+          (what + ": every grant the rival was shown produced a reply").c_str(),
+          (uint32_t)d.rival_rsps, (uint32_t)d.rival_grants);
   }
   if (alu) {
     check(d.alu_writes.size() > 0, (what + ": the ALU got the port too").c_str(), 1,
           d.alu_writes.size() > 0 ? 1 : 0);
+    // LAW 2c: the same law on the write port, which V10 broke. The arbiter's
+    // served/stalled counters are computed INSIDE it, so they cannot see what
+    // this file does with req_ready_o -- only the claimant can.
+    check(d.alu_offered == (int)d.alu_writes.size(),
+          (what + ": the ALU's ready line agrees with the writes it got").c_str(),
+          (uint32_t)d.alu_writes.size(), (uint32_t)d.alu_offered);
   }
 }
 
@@ -308,6 +340,13 @@ int main(int argc, char** argv) {
       const std::string w = std::string(names[pol]);
       check(served_alu > 0, (w + ": the ALU was served at least once").c_str(), 1,
             served_alu > 0 ? 1 : 0);
+      // The same agreement law, under all three policies. wb_served_o[0] is
+      // the ARBITER's count of what it did; alu_offered is what this file's
+      // ready line TOLD the claimant. A policy is only measured honestly if
+      // those two are the same number.
+      check((int)served_alu == d.alu_offered,
+            (w + ": and its ready line agrees with the arbiter's count").c_str(),
+            served_alu, (uint32_t)d.alu_offered);
 
       if (pol == POL_ALU_FIRST) {
         // THE MEASUREMENT REJECTED THIS POLICY, and the starvation is PINNED

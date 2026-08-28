@@ -130,9 +130,21 @@ module zhao_field_v3_svcpath #(
   localparam logic [7:0] OP_NOISE2 = 8'h1C;
   localparam logic [7:0] OP_RIDGE  = 8'h22;
 
-  // Recognisable, so a routing bug into an unused lane looks wrong rather than
-  // convincing -- the same constants zhao_probe_v3_engine ties its spare bank
-  // lanes to, and the same argument.
+  // A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT. These are the same
+  // constants zhao_probe_v3_engine ties its spare bank lanes to, and this
+  // comment used to repeat that block's argument: "recognisable, so a routing
+  // bug into an unused lane looks wrong rather than convincing".
+  //
+  // Mutant V25 disproved the argument HERE by surviving. The bank returns
+  // products on a SHARED rsp_p bus with a per-claimant valid, the noise unit
+  // samples it only under bank_rsp_valid[1], and no other reader exists --
+  // rival_rsp_o carries the valid, not the value. So nothing can read the
+  // rival's product at all, and its operands cannot change any output.
+  //
+  // The routing bug the argument worried about IS caught, by V02, and for a
+  // different reason: the service's own ANSWER comes out wrong, which it would
+  // for any rival operands whatever, including zero. Recognisable values are
+  // worth having when reading a waveform by eye. They are not evidence.
   localparam logic signed [32:0] RIVAL_A = 33'sd3;
   localparam logic signed [32:0] RIVAL_B = 33'sd5;
 
