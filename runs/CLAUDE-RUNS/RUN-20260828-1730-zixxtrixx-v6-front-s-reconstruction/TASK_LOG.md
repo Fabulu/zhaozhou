@@ -113,3 +113,45 @@
   construction). Overlap probe: all hits within authored allowances --
   the open climb nests LESS than the hook did.
 
+
+### 2026-08-28 18:1x - Coordinator gate on sidecmp-13: THE COMPACT-S PASS
+
+- Verdict relayed: the droop is FIXED (the thing five passes could not do);
+  but the climb read as a long shallow ramp against the sheet's compact
+  curled S -- the target was never "any raised arc", it was the sheet's S
+  with the neck climbing.
+- THE FIX, inside the spline architecture exactly as designed: kFrontSegs
+  5 -> 4 (the mid-body anchor moves one segment toward the head; the dive
+  starts sooner; the upper loop closes; the head carries IN over the body);
+  the freed segment becomes kFrontApproachSlopeA16 = 0, a flat approach
+  where the landed body lies out along the ground before the walking
+  grounded set -- also the owner's standing "longer grounded part"
+  preference. Snout tangent and C1 handover untouched: the neck still
+  climbs, on a tighter curve. kStanceDescend0 follows the anchor (5->4);
+  the deepen is a multiplicative no-op on the flat segment by construction.
+- Both coordinator cautions held: every front slope still positive (no
+  descending neck can re-enter through this door), and the junction was
+  re-judged UNLIT -- no notch (sidecmp-14-compact).
+- kBodyY re-solved 1117 -> 1075 (same law, probe-planted: idle [-12..-2],
+  walk [-10..+5]). kFallLift 934 -> 890: the reshaped disc had 64 mm of
+  air where the approved character NEAR-BRUSHES (~20 mm); probe confirms
+  [20..2050]. Fall cameras 400000 -> 340000 in the reel (both fall
+  subjects): the raised S genuinely sweeps a bigger disc; at 400000 the
+  loop left the frame for ~2 contact-sheet rows (motion-fall-sheet vs
+  motion-fall-sheet-2 / final-fall-side-sheet: now in frame throughout).
+- PINK FLANK NOTE (coordinator asked; confirmed, NOT acted on): from
+  rear-quarter orbit views the pink dorsal band reads wide -- the raised
+  arc presents more BACK to the 15-degree-down showcase camera. Geometry
+  consequence, not a texture change; colours are frozen this run.
+- FINAL GATES: probe 0 (final-probe.txt), choreo 0, planner 0, headaim
+  +25.1 deg at idle key 0 (breath riders included; structural tangent ~5
+  deg up), reel --check "all sequence CRCs match" (final-check.txt).
+  GOLDENS RE-PINNED at the final state: 41 artefacts, golden-verify
+  cmp-identical, PROVENANCE.txt names the owner's instruction verbatim.
+- PROCESS FAULT, recorded honestly: an over-broad `git add` pushed 987
+  raw .rgb frames into two commits (untracked and fenced in d283dee; the
+  blobs remain in remote history -- owner's call whether to scrub).
+- Contact sheets: final idle/walk/attack/fall-side/balance/death -- the
+  head rides high through every clip family; salto, keel and balance
+  structures intact.
+
