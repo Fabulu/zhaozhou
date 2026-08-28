@@ -3589,7 +3589,10 @@ SceneSubject subject_zixx_fall_side() {
   s.frames = zixx::kFallKeys * 2;
   s.orbit = false;
   zixx_common(s);
-  s.cam_k = 340000;  // RUN 1730: match the orbit shot -- the bigger disc
+  s.cam_k = 290000;  // RUN 1939: kFallLift rose 916 -> 1371 for the rolled
+                     // fan's deeper sweep, and at 340000 the loop left the
+                     // frame top for two contact-sheet rows (fall-it4-sheet)
+                     // -- the recorded fault class, re-widened
   s.note = "DIAGNOSTIC: one full falling loop, fixed side camera, no orbit";
   return s;
 }
@@ -3980,8 +3983,9 @@ SceneSubject subject_zixx_fall() {
   s.frames = zixx::kFallKeys * 2 * 2;  // two 3.2 s tumbles per revolution
   s.orbit = true;
   zixx_common(s);
-  s.cam_k = 340000;  // RUN 1730: the raised front-S sweeps a ~11% bigger
-                     // tumble disc; 400000 cropped the apex (fall sheet)
+  s.cam_k = 290000;  // RUN 1939: re-widened with kFallLift 1371 (the rolled
+                     // fan sweeps deeper); at 340000 the loop cropped out
+                     // the frame top -- see fall-it4-sheet
   s.note =
       "The falling loop, SLOW on purpose (2026-08-26 rewrite): airborne "
       "throughout, the S at full authority every frame, and the whole animal "

@@ -5,6 +5,7 @@
 # dir and are MOVED to the experiment's site name before encoding.
 set -e
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+ROOTW="$(cygpath -m "$ROOT")"  # g++ cannot open /c/-style paths in -D includes
 RUN="$ROOT/runs/CLAUDE-RUNS/RUN-20260828-1939-zixxtrixx-v7-six-faults"
 SITE="$(cd "$ROOT/../Upheaval/website" && pwd)"
 OBJ="$RUN/obj"
@@ -16,7 +17,7 @@ for v in contour strokes wax tooth wobble markings misreg; do
   fi
   if [ ! -f "$ROOT/build/tools/zhao-reel-exp-$v.exe" ]; then
     echo "== reel $v"
-    g++ $FLAGS "-DZIXX_PAGE_VARIANT=\"$ROOT/tools/reel/exp/zixxtrixx_page_exp_$v.h\"" \
+    g++ $FLAGS "-DZIXX_PAGE_VARIANT=\"$ROOTW/tools/reel/exp/zixxtrixx_page_exp_$v.h\"" \
         "$ROOT/tools/reel/zhao_reel.cpp" $LIBOBJS -o "$ROOT/build/tools/zhao-reel-exp-$v.exe"
   fi
 done
