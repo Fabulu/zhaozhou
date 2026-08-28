@@ -40,6 +40,67 @@ not add one.
 
 ---
 
+## 2026-08-28 (late afternoon) -- one of the nine was not actually closed
+
+*Short version: I have been quoting FIELD.V3.EXEC as closed at 31/31 all day.
+That number stopped describing the executor at 10:36 and I did not notice.*
+
+### What happened
+
+    07:31   the executor's deliberate-defect run passes, 31 of 31
+    10:36   I add the executor's long-op path -- and move two of the lines
+            those defects are anchored to
+    ~15:00  the writeback change moves two more
+
+The runner is not fooled: handed a defect it can no longer place, it refuses to
+run at all rather than scoring anything. **But only if somebody runs it**, and
+nobody did. So for seven hours the tally sat in my summaries as though it
+described today's executor. It described the executor before the long-op path
+existed.
+
+That is the third time today the same thing has bitten: **a result that was
+true when it was measured, carried forward as though it were still true.** The
+ledger gate red since 04:20, the fast lane never run at all, and now this.
+Three is a pattern, not luck.
+
+### The fix is a one-second check
+
+`tools/sweep_anchors_check.py` asks, of every defect in every table, whether it
+can still be placed in the file it names. Across the whole repository that is
+675 of them in 26 tables, and it runs in under a second -- so it can be run
+after any edit, not just before a run.
+
+Result: **exec was the only stale one.** Everything else still lines up.
+
+The check says plainly what it does NOT prove, in its own text, because a check
+that oversells itself is how a green tick comes to mean less than people think.
+It proves a defect can still be PLACED. It does not prove the defect would
+still be CAUGHT. Only the run proves that, and re-running is what I am doing.
+
+### Why the executor changed at all -- and what it turned up
+
+It could not be told "no". Its register write was an announcement, not a
+request, and the block it is about to be wired to REFUSES that write by design
+-- eight clocks per group, measured. Each of those would have been a lost
+write.
+
+Giving it a grant found a bug older than the port. The test's law is
+deliberately not "the answers are right" but **a refusal may cost time and may
+not lose a write**, so it runs each program twice, granted and refused, and
+counts. The answers matched. The counts did not: 20 against 16.
+
+The 20 was wrong. The write was firing on every clock an instruction sat in the
+last stage -- so a dot product wrote its destination three or four times over
+while it accumulated. The final write was always right, which is why 34 checks
+passed and nobody saw it for weeks. It only became visible when the port could
+say no.
+
+With a shared port that is not cosmetic: every duplicate steals a slot, and
+each one briefly publishes a half-finished sum to a register another context
+can read.
+
+---
+
 ## 2026-08-28 (afternoon) -- the gates, and the two I had not been running
 
 *Short version: nine blocks closed, the ledger green, the fast lane at 305/306.
