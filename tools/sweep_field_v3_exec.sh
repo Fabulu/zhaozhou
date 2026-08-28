@@ -32,7 +32,18 @@ cd "$(dirname "$0")/.." || exit 1
 
 MUT=tools/sweep_field_v3_exec_mutants.py
 RTL=fpga/rtl/synth/zhao_probe_v3_exec.sv
-TARGETS="test_field_v3_exec_directed"
+# BOTH CONSUMERS, because the roster guard is right to insist.
+#
+# `zhao_probe_v3_full` elaborates this executor too, so a mutant reaches its
+# model as well. Running only one target would leave the other's binary
+# carrying mutant-derived code that nothing scores -- which is the exact hole
+# the guard exists to find, and it found it the moment the composed top was
+# added.
+#
+# Running BOTH also makes the sweep stronger rather than merely legal: the
+# composed test drives eight contexts through a real service path, which is
+# where three of this block's defects actually showed up.
+TARGETS="test_field_v3_exec_directed test_field_v3_full_directed"
 
 # An ABSOLUTE path inside the repo, not /tmp. Git-for-Windows bash and the
 # msys bash map /tmp to DIFFERENT directories, so a log written by a detached
@@ -106,15 +117,34 @@ check_consumers() {
 # nothing at all.
 #
 # It is read from the verilate() PREFIX now, so it cannot drift again.
-MODEL=$(python tools/sweep_consumers.py --prefix "$(echo $TARGETS | cut -d" " -f1)") || {
-  echo "ABORT: cannot resolve the verilate PREFIX for $TARGETS"
-  exit 9
+# THE PREFIX IS PER TARGET, not one for the sweep.
+#
+# It used to be resolved once from the first target. That was fine while every
+# sweep ran a single binary; with two targets whose models are named
+# differently -- Vzhao_probe_v3_engine and Vzhao_probe_v3_full -- a single
+# prefix makes the hash check look at a directory that does not exist for the
+# second, which reads as "model absent" and aborts the run.
+#
+# Worse if it had not aborted: hashing a directory the mutation cannot reach
+# passes every mutant as "changed" while scoring a model that never moved. That
+# is the failure this check exists to prevent, so it must not be able to happen
+# to the second target either.
+prefix_of() {
+  python tools/sweep_consumers.py --prefix "$1"
 }
 
+for t in $TARGETS; do
+  if ! prefix_of "$t" >/dev/null; then
+    echo "ABORT: cannot resolve the verilate PREFIX for $t"
+    exit 9
+  fi
+done
+
 model_hash() {
-  local t h=""
+  local t p h=""
   for t in $TARGETS; do
-    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" -type f \
+    p=$(prefix_of "$t")
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${p}.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -122,9 +152,10 @@ model_hash() {
 }
 
 models_present() {
-  local t
+  local t p
   for t in $TARGETS; do
-    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" ] || return 1
+    p=$(prefix_of "$t")
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${p}.dir" ] || return 1
   done
   return 0
 }
@@ -194,6 +225,12 @@ rebuild() {
 run_lanes() {
   ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe >/dev/null 2>&1 || return 1
   ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe --random 40 >/dev/null 2>&1 || return 1
+  # THE COMPOSED LANE. It has no --random of its own -- checked, not assumed:
+  # field_v3_full_directed.cpp contains no such handling, so passing the flag
+  # would run the same suite twice and let this driver claim a lane it does
+  # not have. It earns its place a different way: eight contexts through a
+  # real service path, which is where three of this block's defects appeared.
+  ./$BUILD_DIR/tests/test_field_v3_full_directed.exe >/dev/null 2>&1 || return 1
   return 0
 }
 
