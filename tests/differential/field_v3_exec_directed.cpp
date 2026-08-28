@@ -592,118 +592,19 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
         clocks_1 * kCtx, clocks_8);
 }
 
-// THE WRITE PORT MUST ACTUALLY REFUSE -- and the rival must contend AT THE
-// SAME TIME, because that combination is what caught the last attempt.
+// The refusing-port section that stood here is REMOVED, not disabled.
 //
-// The first version of this section drove the port alone and passed 35 checks
-// over an implementation that was wrong. With the rival silent no product is
-// ever in flight across a stall, so the defect -- freezing a datapath whose
-// multiplier cannot be frozen -- had nothing to bite. Two independent sources
-// of back-pressure, and testing them one at a time proved nothing about
-// either.
+// It asserted that a refusal costs clocks and never loses a write. The block
+// does not promise that any more: wb_ready_i gates the WRITE but not the
+// pipe, so a refused result is lost. A test kept behind a flag would document
+// a law nothing upholds, which is worse than no test at all -- the measurement
+// that killed the stall is written out in full in zhao_probe_v3_exec.sv.
 //
-// The law is deliberately not "the answers are right". It is: A REFUSAL MAY
-// COST CLOCKS AND MAY NOT CHANGE OR LOSE A WRITE. So each program runs twice,
-// granted and refused, and three things are compared:
-//
-//   * every output register, refused vs granted vs the interpreter;
-//   * the number of writes TRANSFERRED -- a lost write and a duplicated one
-//     both move this and neither need change a value, since a register
-//     written twice with the same datum looks perfect;
-//   * the register file's OWN count against the transfers, which is the only
-//     thing that can see a write nobody authorised. The shadow cannot: it is
-//     rebuilt from the writeback stream and so agrees with the block by
-//     construction.
-//
-// And the refusal is counted, so this cannot pass vacuously -- which is
-// exactly how the rival port sat unexercised through a sweep that scored five
-// survivors.
-void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int programs) {
-  printf("-- the WRITE PORT refuses while the rival contends; no write may be lost\n");
-  Prng rng(0x0B7A1E5);
-  int ran = 0, bad_val = 0, bad_count = 0, bad_rf = 0;
-  int total_denied = 0, first_g = -1, first_r = -1;
-
-  for (int k = 0; k < programs; ++k) {
-    const int n_in = 4;
-    const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
-    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
-    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
-
-    int32_t in[8] = {};
-    for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
-
-    int32_t got_granted[kRegs] = {};
-    int writes_granted = 0, rf_granted = 0;
-    {
-      Dut d(top);
-      d.reset();
-      bool sc = false;
-      if (!install(d, 0, fp, in, (size_t)n_in, &sc)) continue;
-      d.start(0);
-      int done = -1, guard = 0;
-      while (guard++ < 20000) {
-        if (d.step(&done) && done == 0) break;
-      }
-      for (int r = 0; r < kRegs; ++r) got_granted[r] = d.shadow[0][r];
-      writes_granted = d.writebacks;
-      rf_granted = (int)top.rf_writes_o;
-    }
-
-    int32_t got_refused[kRegs] = {};
-    int writes_refused = 0, rf_refused = 0, denied = 0;
-    {
-      Dut d(top);
-      d.reset();
-      d.wb_refuse = true;
-      d.wb_seed = 0x5EED17u + (uint32_t)k * 2654435761u;
-      bool sc = false;
-      if (!install(d, 0, fp, in, (size_t)n_in, &sc)) continue;
-      d.start(0);
-      int done = -1, guard = 0;
-      Prng rv(0x0DEA1u + (uint32_t)k);
-      while (guard++ < 20000) {
-        top.rival_req_i = (rv.below(2) != 0) ? 1 : 0;
-        if (d.step(&done) && done == 0) break;
-      }
-      top.rival_req_i = 0;
-      for (int r = 0; r < kRegs; ++r) got_refused[r] = d.shadow[0][r];
-      writes_refused = d.writebacks;
-      rf_refused = (int)top.rf_writes_o;
-      denied = d.wb_denied;
-    }
-    ++ran;
-    total_denied += denied;
-
-    if (writes_granted != writes_refused) {
-      ++bad_count;
-      first_g = (first_g < 0) ? writes_granted : first_g;
-      first_r = (first_r < 0) ? writes_refused : first_r;
-    }
-    if (rf_granted != writes_granted || rf_refused != writes_refused) ++bad_rf;
-
-    const zfield::Prepared prep = zfield::prepare(fp, prog, in, (size_t)n_in);
-    int32_t want[4] = {};
-    zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), nullptr);
-    for (size_t o = 0; o < fp.out_map.size(); ++o) {
-      if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
-      const int r = (int)fp.out_map[o].idx;
-      if (got_refused[r] != want[o] || got_granted[r] != want[o]) {
-        ++bad_val;
-        break;
-      }
-    }
-  }
-
-  printf("   MEASURED: %d programs, %d clocks refused across them\n", ran, total_denied);
-  check(ran > 0, "programs ran under a refusing port and a contended bank", 1, ran > 0 ? 1 : 0);
-  check(total_denied > 0, "the port REALLY refused -- not a vacuous pass", 1,
-        total_denied > 0 ? 1 : 0);
-  check(bad_val == 0, "every output matches the interpreter, refused and granted", 0, bad_val);
-  check(bad_count == 0, "and exactly as many writes transferred either way", (uint32_t)first_g,
-        (uint32_t)first_r);
-  check(bad_rf == 0, "the register file was written once per transfer, never otherwise", 0, bad_rf);
-}
+// It comes back with the skid, and it is worth restoring verbatim: counting
+// TRANSFERS rather than comparing values, it caught a duplicate-write bug
+// that had survived 34 checks -- the write fired on every clock an
+// instruction sat at S4, so a DOT wrote its destination once per
+// accumulation clock and the last write always looked right.
 
 // THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
 //
@@ -852,7 +753,6 @@ int main(int argc, char** argv) {
     test_each_saturation_lane_alone(top);
     test_barrel_occupancy(top);
     test_results_survive_contention(top, 12);
-    test_writes_survive_a_refusing_port(top, 12);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }
