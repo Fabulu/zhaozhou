@@ -50,13 +50,26 @@ def main(argv):
     for table_path in argv[1:]:
         mod = load_table(table_path)
 
+        # TABLES DO NOT ALL SPELL IT THE SAME WAY, and one that cannot be read
+        # must be reported rather than allowed to kill the run. This exited on
+        # a traceback at table 5 of 18 because sweep_field_dsp_mutants.py names
+        # its list MUTS, not MUTANTS -- and a checker that dies part-way has
+        # checked nothing after that point while looking like it ran.
+        table = getattr(mod, "MUTANTS", None)
+        if table is None:
+            table = getattr(mod, "MUTS", None)
+        if table is None:
+            sys.stderr.write("UNREADABLE TABLE (no MUTANTS/MUTS): %s\n" % table_path)
+            bad += 1
+            continue
+
         # A table may span more than one file: entries are (name, old, new)
         # against mod.RTL, or (name, path, old, new) for another file of the
         # cone. Checking only mod.RTL would report "clean" while a mutant sat
         # in the other file -- which is precisely the false assurance this
         # tool exists to prevent, so every path in the table is checked.
         by_file = {}
-        for entry in mod.MUTANTS:
+        for entry in table:
             path = entry[1] if len(entry) == 4 else mod.RTL
             by_file.setdefault(path, []).append((entry[0], entry[-2], entry[-1]))
 

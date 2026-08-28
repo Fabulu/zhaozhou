@@ -1,6 +1,11 @@
 # What is actually blocking every remaining block
 
-> ## OPEN DEFECT, 2026-08-28: OPEN-LOOP CLAIMANTS ON THE SHARED MULTIPLIER
+> ## HALF-CLOSED DEFECT, 2026-08-28: OPEN-LOOP CLAIMANTS ON THE SHARED MULTIPLIER
+>
+> **The EXECUTOR half is FIXED and verified. The two SERVICES still have it.**
+> The resolution is at the bottom of this entry; the history is kept because
+> the services need the same answer and five wrong attempts are cheaper to
+> read than to repeat.
 >
 > Found by the first composition test, and it is the reason composition tests
 > exist. Two blocks, one cause.
@@ -69,10 +74,49 @@
 > distance service), and two of those are already probed and fitted, so their
 > numbers would need redoing.
 >
-> **Until then the composition is correct only when nothing contends**, which
-> is exactly the condition that will not hold once the services are attached.
-> The contention test is written and passing for ALU ops, with DOT programs
-> skipped under a comment naming this entry.
+> ### RESOLVED FOR THE EXECUTOR, 2026-08-28 06:41
+>
+> The sixth attempt worked because it stopped patching and drew the pipeline
+> out cycle by cycle. The contradiction all five earlier attempts stood on:
+>
+> > **An instruction cannot be stalled between its multiply ISSUE and its
+> > product ARRIVAL.**
+>
+> The product lands two clocks later whatever the executor does. Advance
+> without it and the instruction consumes a product that was never issued;
+> hold for it and it misses one that arrives anyway. The old schedule spread
+> ONE DOT sequence across S2, S3 and S4 -- three MOVING stages -- so a refusal
+> at any of them hit one horn or the other. Hence the oscillation.
+>
+> **The fix is structural.** The whole sequence now issues from S4, where the
+> operands sit in registers that do not move for its duration. Each product is
+> issued, retried on refusal, and accumulated when it lands.
+>
+> | | before | after |
+> | --- | ---: | ---: |
+> | DOT programs wrong under contention | 4-5 of 12 | **0 of 12** |
+> | one context | 66 clocks | 69 clocks |
+> | eight contexts | 166 clocks | 190 clocks |
+>
+> 31 directed checks and 400 randomized programs green, **with the DOT skip
+> removed** -- the fix is tested, not assumed. The +14% on eight contexts is
+> what correctness under contention costs: the old schedule was cheaper
+> because it overlapped a DOT's products with the instruction's own progress,
+> and it was also unfixable. Barrel counts re-pinned, not hidden.
+>
+> Landed in commit **357a702**, whose message is about a creature -- a
+> concurrent session ran `git commit -a` over a staged tree. `git commit -a`
+> is banned here; three sessions share this worktree. The record is in
+> `runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture/TASK_LOG.md`.
+>
+> ### STILL OPEN: the two services
+>
+> Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
+> input at all, so a refused service advances as though its multiply happened.
+> Both are already probed and fitted, so their numbers need redoing with the
+> port added. The structural answer above applies unchanged to both: issue
+> from a stage that does not move, count ISSUE and ARRIVAL separately, retry
+> on refusal.
 
 
 
@@ -92,7 +136,7 @@
 > | barrel curve service | II 13, swept 15/15, fit RUNNING |
 > | four-bank patch accumulator | 297 updates in 297 clocks, swept 15/15, fit RUNNING |
 > | Earth lattice walker | 297 clocks/patch, swept 18/18 |
-> | v3 executor datapath | swept 31/31, ALU ops + sequenced DOT2/DOT3 |
+> | v3 executor datapath | swept 31/31; DOT closed-loop, correct under contention |
 > | functional register file | built; NOT the probe -- the probe implements no semantics |
 > | four-wide multiplier bank + arbiter | built, 18,202 routed with none lost; sweep RUNNING |
 >

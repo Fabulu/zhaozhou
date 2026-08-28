@@ -621,3 +621,71 @@ multi-file snapshot/restore in the drivers, rebuild exit-code logging,
 `run_sweep_detached.sh`, and the whole sequence written into docs/BUILD.md in
 the order the next person will hit it.
 
+
+---
+
+## 2026-08-28 06:41 -- THE DOT SEQUENCE MOVES TO S4, AND THE OPEN LOOP CLOSES
+
+Five undirected attempts failed (2 -> 5 -> 4 -> 1 -> 9 wrong of 12, table in
+reports/REMAINING_BLOCKERS.md). A cycle-by-cycle trace found the contradiction
+every one of them was standing on:
+
+> **An instruction cannot be stalled between its multiply ISSUE and its product
+> ARRIVAL.**
+
+The product lands two clocks later on a fixed schedule. Advance without it and
+the instruction consumes a product that was never issued; hold for it and it
+misses one that arrives anyway. The old schedule spread ONE DOT sequence across
+S2, S3 and S4 -- three MOVING stages -- so a refusal at any of them hit one horn
+or the other. That is why patching oscillated instead of converging: each fix
+traded one horn for the other.
+
+**The fix is structural, not another gate.** The whole sequence now issues from
+S4, where the operands sit in registers that do not move for its duration. Each
+product is issued, retried on refusal, and accumulated when it lands. Nothing
+can miss anything, by construction.
+
+Three corrections fell out of the same insight:
+
+* **ISSUE and ARRIVAL are different events and are counted separately**
+  (`dot_issue_r` vs `dot_cnt_r`). Conflating them had made the third product
+  never get issued at all -- the first arrival advanced the counter, and the
+  issue condition keyed on that same counter went false.
+* **The accumulator holds every product; the ALU reads the finished total.**
+  The old form consumed the last product combinationally on the release clock,
+  which is correct only if it arrives exactly then.
+* **`desync_o` now checks THE MULTIPLIER'S CONTRACT** -- a product arrives
+  exactly two clocks after a granted issue -- instead of stage occupancy. The
+  old form assumed one product per instruction and began firing on entirely
+  correct behaviour once a DOT had three. A guard that cries wolf is worse than
+  no guard, because it gets read as noise.
+
+### MEASURED
+
+    31 directed checks + 400 randomized programs        green
+    12 programs under contention, 16 lane stalls        answers unchanged
+    the DOT skip                                        REMOVED
+
+    one context     66 -> 69 clocks    (+4.5%)
+    eight contexts 166 -> 190 clocks   (+14%)
+
+The old schedule was cheaper because it overlapped a DOT's products with the
+instruction's own progress. It was also unfixable. That is what correctness
+under contention costs, and the barrel counts are re-pinned rather than hidden.
+
+### THE COMMIT THIS LANDED IN IS NOT THE ONE THAT NAMES IT
+
+A concurrent creature session ran `git commit -a` while this fix was staged and
+swallowed `zhao_probe_v3_exec.sv` and `field_v3_exec_directed.cpp` into
+**357a702 "run 0326: death organic, flailing alive"**. The content is correct
+and committed; only the attribution is wrong, and rewriting another live
+session's commit would cost more than it fixes. This entry is the record.
+
+**The rule that follows: `git commit -a` is banned in this tree.** Three
+sessions share it. Stage explicitly, by path, always.
+
+### STILL OPEN, and unchanged by this
+
+The curve and distance services have the IDENTICAL defect -- neither has a
+`mul_ready` input, so a refused service advances as though its multiply
+happened. The same structural answer applies to both.
