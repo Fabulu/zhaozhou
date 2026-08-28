@@ -155,3 +155,65 @@
   head rides high through every clip family; salto, keel and balance
   structures intact.
 
+
+---
+
+## Main-session entries for this run (owner direction relayed + verification)
+
+### Why this run exists
+Five head passes failed because they solved the wrong problem, and the owner had
+said so in writing — **`Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-3-2026-08-28.md`,
+posted FOUR times** (`reports/zixxheadadvice`, `2`, `3`, `zixxheavadvice4`)
+because it kept not reaching the working agent. It sat unread until he said
+*"please read your instructions."* **A relay is not delivery.**
+
+Its diagnosis: the head's position is set by the FINAL THIRD OF THE S. A local
+head joint cannot make a descending neck read as an upward-held head — *"you can
+mathematically measure the snout axis as 'horizontal' while the entire skull mass
+still hangs from the bottom of a downward hook."* **My own instruction "KEEP THE
+S, relax only how it is HELD" enforced exactly that bug**, repeatedly.
+
+### My read of `sidecmp-13-planted.png` (relayed to the agent)
+**The droop is FIXED** — the neck climbs and the head concludes it. That is the
+thing five passes could not do. Remaining: **the S became a long shallow climb
+where the sheet draws a compact, tightly-curled S** — ours spreads much further
+horizontally with the head out at arm's length; the sheet's upper loop is rounder,
+more closed, head carried in close above the body. Breaking the S was licensed
+and right, but the target was *the sheet's S with the neck climbing*, not any
+raised arc. Guards given: do not reintroduce the descending neck while tightening,
+and watch the junction contour unlit — a tighter bend is where a notch reappears,
+and the last run proved a "notch" that was purely texture meld width.
+
+### Owner feedback relayed this session
+**Salto variations** — *"a bit jittery. Particularly the 6 salto one flickers back
+and forth... Gold standard animated one looks so good, 6 salto one should look
+like that too, just with more saltos."* Hypothesis given: **shortest-path rotation
+interpolation wrapping.** nlerp/slerp takes the shortest arc; six somersaults is
+2160°, so per-key deltas crossing 180° reverse direction — which is exactly why
+the six-salto variant is worse than the three. Fix by accumulating the rotation
+explicitly rather than interpolating between orientations, so no per-key delta can
+wrap at any salto count. Also check the integer `atan2` for a wrap.
+
+**Target-dummy strike** — *"it doesn't hit, goes way through it before it stops.
+The tip of the tail should stab into it... I think you confused the middle of
+Zixxtrixx with the tip of its tail."* His diagnosis is precise: **the intercept is
+solved for the wrong body point.** The weapon is the TAIL TIP — the pointed blades
+— so the contact point is the posed tail-tip vertex, not the root, centroid or a
+mid-body station. Both dummy variants have this by construction. Deliberate,
+declared penetration is correct; stopping at the surface reads weightless.
+
+**Hits** — *"more of the snake should be affected and a hit should look a lot
+stronger. Right now it looks like a little flinch."* Two faults: the recoil is
+LOCAL where a blow on a serpent should propagate through the whole chain, losing
+amplitude but reaching the tail; and the blow lacks force. Note the cause of the
+weakness is on record — the previous run traded a deeper fold for an −85 mm shove
+because the fold was "eating the face", and that trade produced the flinch. Find
+the force elsewhere. Anticipation/impact/follow-through is what sells it; strong
+means a large sharp displacement then an unhurried yielding return, NOT fast and
+busy. The five directional slots must differ visibly or there is no point to them.
+
+### Flagged for the owner
+The agent recorded a process fault honestly: **an over-broad `git add` pushed 987
+raw `.rgb` frames into two commits.** Untracked and fenced going forward, but the
+blobs remain in remote history — a history scrub is the owner's call, not mine to
+take unasked.
