@@ -524,3 +524,30 @@ Every sweep driver already defaults to the lowercase form; the poisoning came
 from manual `export VERILATOR_ROOT=` and `export PATH=` lines typed with a
 capital. A tree that has seen both must be deleted -- reconfiguring does not
 clean it, because the stale entries name source files that still exist.
+
+### Correction: the poisoned tree could not be recovered by reconfiguring
+
+The section above said a contaminated tree "must be deleted -- reconfiguring
+does not clean it". That was an assumption when written. It is now measured,
+and the measurement is worth having because the cheap repair is the one anybody
+would reach for first:
+
+```
+cmake -U ZHAO_VERILATOR_BIN -U VERILATOR_BIN -U verilator_DIR -U VERILATOR_ROOT \
+      -S . -B build-verify -G Ninja ...
+```
+
+Clearing every cached Verilator variable and reconfiguring against the correct
+lowercase path **did not change the counts at all** -- still 108 objects of one
+case against 360 of the other, and the cache came back capitalised. The stale
+entries name source files that still exist under both spellings, so nothing in
+the regenerate has a reason to drop them.
+
+**Delete the tree.** A cold rebuild is expensive (1886 steps here against 1054
+incremental) and it is still the cheaper option, because the alternative is a
+link failure that only appears on targets with two models and looks nothing
+like a path problem.
+
+And do not run the repair attempt beside a cold build of another tree: two
+full builds compete for every core, and the reconfigure above never even
+finished before it was stopped.
