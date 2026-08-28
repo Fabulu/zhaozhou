@@ -1059,6 +1059,10 @@ struct SceneSubject {
                           // Phase-3 culls the whole patch when any lattice
                           // vertex lands behind the eye, terrain.cpp 310)
   const char* note = "";
+  // run 0326: scripted clip cuts for chained creature subjects -- at frame
+  // .first the instance cuts to clip slot .second, exactly the game's own
+  // hard-cut state change (no blend exists anywhere). Empty = single clip.
+  std::vector<std::pair<uint32_t, uint16_t>> clip_cuts;
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
   // legitimately change — update it in the same commit and say so.
@@ -1794,6 +1798,8 @@ int render_scene(const SceneSubject& sub) {
     if (zixx_subject) dog_inst.x = fxm(zixx::kStageCentreMm);
     if (sub.creature == 4)
       dog_inst.x -= fxm(zixx::kWalkSpeed * static_cast<int32_t>(sub.frames)) / 2;
+    if (sub.creature == 29)
+      dog_inst.x -= fxm(zixx::kRunSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     cr_ctx.gibs = &gibs;
@@ -1918,9 +1924,21 @@ int render_scene(const SceneSubject& sub) {
           patch, rtest::xform_identity(), fapps, tick, nullptr, nullptr);
 
       if (sub.creature >= 3) {
-        // Zixxtrixx. Only the caterpillar walk travels; the idle, the salto
-        // and the fall stay put, because each of those shots is about the
-        // animal rather than about it going somewhere. No gibs on this lane.
+        // run 0326: scripted state cuts (knockdown -> getUp chains, the
+        // directional-damage tour) -- the game's own hard cut, on a frame
+        for (const auto& cc : sub.clip_cuts)
+          if (f == cc.first) dog_inst.anim.cut(cc.second);
+        // Zixxtrixx. Only the gaits travel; the idle, the salto and the
+        // fall stay put, because each of those shots is about the animal
+        // rather than about it going somewhere. No gibs on this lane.
+        if (sub.creature == 29) {  // the run travels at its own speed
+          const int32_t fc = zref::fx_cos(dog_inst.facing).raw;
+          const int32_t fs = zref::fx_sin(dog_inst.facing).raw;
+          dog_inst.x += zref::rescale_s32(
+              static_cast<int64_t>(fxm(zixx::kRunSpeed)) * fc, 16, nullptr);
+          dog_inst.z -= zref::rescale_s32(
+              static_cast<int64_t>(fxm(zixx::kRunSpeed)) * fs, 16, nullptr);
+        }
         if (sub.creature == 4) {
           const int32_t fc = zref::fx_cos(dog_inst.facing).raw;
           const int32_t fs = zref::fx_sin(dog_inst.facing).raw;
@@ -3477,6 +3495,143 @@ SceneSubject subject_zixx_lodsweep() {
   return s;
 }
 
+// ---- run 0326: the vocabulary close-out subjects --------------------------
+// The KNOCKDOWN CHAIN: knocked flat, held down a beat, gets back up -- the
+// donor's knocked2Floor -> getUp state pair as one watchable shot.
+SceneSubject subject_zixx_knockdown() {
+  SceneSubject s;
+  s.name = "zixxtrixx-knockdown";
+  s.creature = 22;  // clip slot 20
+  s.frames = zixx::kKnockKeys * 2 + 28 + zixx::kGetUpKeys * 2 + 24;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 280000;
+  s.bump_ext = 18;
+  s.clip_cuts = {{static_cast<uint32_t>(zixx::kKnockKeys * 2 + 28), zixx::kSlotGetUp}};
+  s.note =
+      "The knockdown chain (run 0326 vocabulary): the blow lands on key 0 -- "
+      "head snap, the body drains onto its flank with one small rebound and "
+      "HOLDS; a beat later getUp cuts in on the byte-identical knocked pose "
+      "(compiler-enforced seam): the head wakes first, the roll rights "
+      "itself, and the S gathers back with its belly kissing the dirt";
+  return s;
+}
+
+// The HITFLOOR chain: the landing that ends `falling`, then the get-up.
+SceneSubject subject_zixx_hitfloor() {
+  SceneSubject s;
+  s.name = "zixxtrixx-hitfloor";
+  s.creature = 24;  // clip slot 22
+  s.frames = zixx::kHitFloorKeys * 2 + 20 + zixx::kGetUpKeys * 2 + 24;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 260000;
+  s.bump_ext = 18;
+  s.clip_cuts = {{static_cast<uint32_t>(zixx::kHitFloorKeys * 2 + 20), zixx::kSlotGetUp}};
+  s.note =
+      "The landing (run 0326 vocabulary, donor hitFloor): the falling body "
+      "flattens as it drops, slams with an authored bite, one small rebound "
+      "into the shared knocked pose, then the same getUp";
+  return s;
+}
+
+// The DIRECTIONAL DAMAGE TOUR: right, back, left, top, one flinch each.
+SceneSubject subject_zixx_damage() {
+  SceneSubject s;
+  s.name = "zixxtrixx-damage";
+  s.creature = 25;  // starts on slot 23 (damageRight)
+  s.frames = zixx::kDmgKeys * 2 * 4;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.clip_cuts = {{static_cast<uint32_t>(zixx::kDmgKeys * 2), zixx::kSlotDmgBack},
+                 {static_cast<uint32_t>(zixx::kDmgKeys * 4), zixx::kSlotDmgLeft},
+                 {static_cast<uint32_t>(zixx::kDmgKeys * 6), zixx::kSlotDmgTop}};
+  s.note =
+      "The directional damage set (run 0326 vocabulary): the donor picks the "
+      "flinch by the direction of the blow, and a missing slot means NO "
+      "reaction at all -- so all four are filled. Right, back, left, top, "
+      "in that order: lateral whiplash off the blow, a forward shove, the "
+      "mirror, and a crush that flattens the arch while the head ducks";
+  return s;
+}
+
+// The RUN, fixed camera like the walk, travelling.
+SceneSubject subject_zixx_run() {
+  SceneSubject s;
+  s.name = "zixxtrixx-run";
+  s.creature = 29;  // clip slot 27
+  s.frames = zixx::kRunKeys * 2 * 2;  // 2 loops: 3 walked it out of frame
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 310000;
+  s.bump_ext = 18;
+  s.note =
+      "The run (run 0326 vocabulary): the walk's caterpillar law at a hungry "
+      "cadence -- the hump travels once per 0.8 s loop, taller, the front "
+      "wave deeper, the nose leaning in, the travel half again the walk's";
+  return s;
+}
+
+// The SECOND DEATH, same staging as the first.
+SceneSubject subject_zixx_death2() {
+  SceneSubject s;
+  s.name = "zixxtrixx-death2";
+  s.creature = 30;  // clip slot 28
+  s.frames = zixx::kDeath1Keys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 280000;
+  s.bump_ext = 18;
+  s.note =
+      "Death, the second way (run 0326 vocabulary; the donor picks at random "
+      "among the filled deaths): agony rears the front up, the collapse runs "
+      "forward into a mostly-prone corpse, two decaying tail slaps, "
+      "stillness";
+  return s;
+}
+
+// The TAUNT, near-level three-quarter so the wag reads.
+SceneSubject subject_zixx_taunt() {
+  SceneSubject s;
+  s.name = "zixxtrixx-taunt";
+  s.creature = 32;  // clip slot 30
+  s.frames = zixx::kTauntKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 12288;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "The taunt (run 0326 vocabulary; the owner's ask, the donor's laugh "
+      "slot): the front lobe rears up proud, the blades flare wide, and the "
+      "head wags side to side -- slow and eased, the neck following, the "
+      "mid-body counter-swaying a whisper";
+  return s;
+}
+
+// DIAGNOSTIC: the corpse loop (death's final key + a barely-there blade
+// settle). Not in the library -- the site shows death; the corpse is the
+// engine's resting state for the dead.
+SceneSubject subject_zixx_corpse() {
+  SceneSubject s;
+  s.name = "zixxtrixx-corpse";
+  s.creature = 33;  // clip slot 31
+  s.frames = zixx::kCorpseKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 280000;
+  s.bump_ext = 18;
+  s.note = "DIAGNOSTIC: the corpse loop -- stillness with a sub-degree blade stir";
+  return s;
+}
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3591,6 +3746,18 @@ constexpr LibraryEntry kLibrary[] = {
      "Rears up on its tail toward an almost-spear, topples, gets back up", true},
     {"zixxtrixx-look", "Zixxtrixx look-around",
      "Curious head-aim idle: left, up, right, down, home", true},
+    {"zixxtrixx-knockdown", "Zixxtrixx knockdown",
+     "Slammed onto its flank, held down, wakes and gathers back up", true},
+    {"zixxtrixx-hitfloor", "Zixxtrixx landing",
+     "The fall's ending: flattens, slams with a bite, gets back up", true},
+    {"zixxtrixx-damage", "Zixxtrixx directional hits",
+     "Four flinches: off the blow right, back, left, and crushed from above", true},
+    {"zixxtrixx-run", "Zixxtrixx run",
+     "The caterpillar gait at a hungry cadence, taller hump, nose in", true},
+    {"zixxtrixx-death2", "Zixxtrixx death, second way",
+     "Agony rear-up, forward collapse to prone, two tail slaps, still", true},
+    {"zixxtrixx-taunt", "Zixxtrixx taunt",
+     "Rears up proud, blades flared, head wagging side to side", true},
 
     // Dead classes (no flare capability, stub entries only)
     {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -3710,6 +3877,13 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-death")) rc |= render_scene(subject_zixx_death());
   if (wanted("zixxtrixx-balance")) rc |= render_scene(subject_zixx_balance());
   if (wanted("zixxtrixx-look")) rc |= render_scene(subject_zixx_look());
+  if (wanted("zixxtrixx-knockdown")) rc |= render_scene(subject_zixx_knockdown());
+  if (wanted("zixxtrixx-hitfloor")) rc |= render_scene(subject_zixx_hitfloor());
+  if (wanted("zixxtrixx-damage")) rc |= render_scene(subject_zixx_damage());
+  if (wanted("zixxtrixx-run")) rc |= render_scene(subject_zixx_run());
+  if (wanted("zixxtrixx-death2")) rc |= render_scene(subject_zixx_death2());
+  if (wanted("zixxtrixx-taunt")) rc |= render_scene(subject_zixx_taunt());
+  if (wanted("zixxtrixx-corpse")) rc |= render_scene(subject_zixx_corpse());
   if (wanted("zixxtrixx-unlit")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit", 1, false, 1));
   if (wanted("zixxtrixx-unlit-front")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit-front", 1, true, 1));
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));

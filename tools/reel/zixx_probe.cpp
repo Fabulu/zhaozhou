@@ -206,6 +206,36 @@ int main() {
       // wheel closure, the rest pose's hook nesting)
       case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
         return 210;
+      // run 0326 vocabulary (each to be re-judged on its worst-key render
+      // before close): the knockdown family lies in the death's corpse
+      // family (drain to kCorpseSlope + flank roll -- death carries 265);
+      // the directional damage set is the hit family (215), with TOP's
+      // crush pressing like the breath extreme; the run is the walk family
+      // with a taller hump; death1 is a death; the taunt OPENS the S so it
+      // nests less; the corpse holds the death's own final pose.
+      // RE-AUTHORED on worst-key renders (run 0326 evidence
+      // overlap-worst-keys.png -- each judged layered-and-clean before its
+      // figure moved):
+      case 20: return 285;   // knocked2Floor: k2's head-snap presses the
+                             // skull into the hook 273 -- the hit family's
+                             // transient, eye clean on the render
+      case 21: return 265;   // getUp (passes back through the rest nesting)
+      case 22: return 265;   // hitFloor
+      case 23: return 215;   // damageRight
+      case 24: return 290;   // damageBack: the forward whip tucks the head
+                             // under the arch 275 for two keys -- violent
+                             // but layered (worst-key render)
+      case 25: return 215;   // damageLeft
+      case 26: return 270;   // damageTop: the crush presses like the breath
+                             // extreme (263; idle's own extreme carries 250)
+      case 27: return 200;   // run: the taller hump bunches the grounded
+                             // run 194 vs the walk's 154 -- same mechanism
+      case 28: return 360;   // death1: k20 is the crumple moment (agony
+                             // meets drain, 353) -- reads as the animal
+                             // collapsing into a heap, face clean
+      case 30: return 215;   // taunt (the crumple was FIXED in motion:
+                             // front-lift rear-up took 355 -> 211)
+      case 31: return 265;   // corpse
       default: return 0;
     }
   };

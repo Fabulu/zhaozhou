@@ -96,3 +96,30 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
 - DECISION (mine, per the standing barge-ahead order): F1 stays on slot 4;
   F2 keeps -DZIXX_F2_PREVIEW with the better tune. One-line reversal.
 - reel --check after eye changes: all sequence CRCs match (check-after-eye.txt).
+
+### 2026-08-28 05:3x - PART 3: sacengine + vocabulary + eleven new clips
+
+- sacengine FOUND already checked out at C:\programmieren\sacengine (it fed
+  the ANIMATION-NOTES study). Fetched submodules, LDC 1.41.0, dub build.
+  Reconstructed the never-committed data_.d (loadDATA = readFile; only
+  consumer is SacVolcano). First build ICE'd; -lowmem builds. 3d.exe RUNS
+  against the installed Steam Sacrifice (data/maps junctioned; the GERMAN
+  language wads shimmed to the engine's hardcoded lang_english names —
+  inner trees are identical). Startup now dies in initKeycodes on a
+  missing German key-name text; patched tolerant, rebuild in flight.
+- ANIMATION-VOCABULARY.md committed (Upheaval 81b7ece): all 64 donor slots
+  verbatim + engine fallback semantics + the Zixxtrixx scorecard.
+- ELEVEN new clips (slots 20-31): knocked2Floor/getUp/hitFloor (shared
+  knocked pose, compiler-ENFORCED seams — the check caught a real 1 mm
+  seam break from curve()'s negative-slope rounding), damageRight/Back/
+  Left/Top (donor law: missing direction = NO reaction), run (walk law at
+  0.8 s cadence, wider hump half after asin clamp dug -68), death1 (agony
+  rear-up -> prone collapse -> tail slaps), taunt (front-lift rear-up; the
+  first cut un-deepened the lobe and folded the hook OVER the head —
+  overlap 355 -> 211 after the mechanism swap), corpse (death's final key
+  + sub-degree blade stir, seam-checked).
+- The wave-lane law RE-LEARNED twice: raw neck quats in knock (+94 hover)
+  and damageBack (tail -233) — both moved onto compensated wave lanes.
+- Probe exit 0 (all allowances re-authored on worst-key renders,
+  overlap-worst-keys.png); choreo 0; planner 0. Goldens: 16 old clips
+  bit-identical, 11 new pinned, pose-crcs append-only (0 removed lines).

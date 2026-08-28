@@ -2160,6 +2160,579 @@ inline zc::Clip build_look() {
 }
 
 
+
+// ================= run 0326: THE VOCABULARY CLOSE-OUT ======================
+// (Fabian: "figure out from there how many more animations we need, then get
+// a fable agent started on making them. Zixxtrixx shall be nominally
+// complete.") Which donor slot each of these answers, and the engine
+// semantics behind the choices, is documented in
+// Upheaval/creature/Zixxtrixx/ANIMATION-VOCABULARY.md.
+constexpr int kSlotKnock = 20;     // donor knocked2Floor
+constexpr int kSlotGetUp = 21;     // donor getUp
+constexpr int kSlotHitFloor = 22;  // donor hitFloor (the landing after falling)
+constexpr int kSlotDmgRight = 23;  // donor damageRight (slot 5 IS damageFront)
+constexpr int kSlotDmgBack = 24;   // donor damageBack
+constexpr int kSlotDmgLeft = 25;   // donor damageLeft
+constexpr int kSlotDmgTop = 26;    // donor damageTop
+constexpr int kSlotRun = 27;       // donor run
+constexpr int kSlotDeath1 = 28;    // donor death1 (random pick with death0)
+constexpr int kSlotTaunt = 30;     // donor laugh -- the owner's taunt
+constexpr int kSlotCorpse = 31;    // donor corpse (the dead body is a clip)
+
+// ---- the knockdown chain --------------------------------------------------
+// THE KNOCKED POSE is ONE set of bytes: knocked2Floor and hitFloor END on it
+// and getUp STARTS on it, and the seams are declared in the bank so
+// compile_creature FAILS if an edit ever splits them.
+constexpr int kKnockKeys = 26;
+constexpr int kGetUpKeys = 40;
+constexpr int kHitFloorKeys = 26;
+constexpr int32_t kKnockRoll = -7400;    // ~41 deg onto the flank, AWAY from
+                                         // the site lens (the death's lesson:
+                                         // dorsal square at the camera reads
+                                         // as a magenta smear). Shallower
+                                         // than the death's -11600: knocked,
+                                         // not dead.
+constexpr int32_t kKnockRollLift = 58;   // h*(1-cos41): death's 132@64deg law
+constexpr int32_t kKnockFold = 650;      // blades fold most of the way
+constexpr int32_t kKnockJolt = 3100;     // the blow's head-snap, key 0..5
+                                         // (4200 on the wave lane carried
+                                         // the skull 301 mm into the hook;
+                                         // softened until the worst key sat
+                                         // back in the hit family)
+constexpr int32_t kKnockBounceMm = 12;   // the little rebound after the slam
+constexpr int32_t kHitFloorBiteMm = 24;  // authored impact bite, keys 9..13
+
+// The shared lying-body composer: the death clip's collapse law factored to
+// knobs. drain (stance -> corpse slopes), roll1000 (share of kKnockRoll),
+// head_extra (angle16 on top of the drain's own droop), fold1000 (blade
+// fold). Writes every spine joint + head + blades; root_mm gets the
+// pivot-corrected displacement (rear node planted, rolling-tube lift).
+// When roll1000 is 0 the roll compose is SKIPPED outright so a drain-0
+// roll-0 frame is BIT-IDENTICAL to the canonical rest pose (seam law).
+inline void lying_frame(Rig& g, int32_t drain, int32_t roll1000,
+                        int32_t head_extra, int32_t fold1000,
+                        int32_t root_mm[3], const int32_t* wave = nullptr) {
+  const int32_t segL = kBodyLenMm / (kSpineBones - 1);
+  static const int64_t base_rear_sin = [] {
+    int64_t acc = 0;
+    for (int k = 0; k <= kStanceGround1; ++k)
+      acc += zref::fx_sin(zref::angle16{static_cast<uint16_t>(kStanceSlope[k] & 0xFFFF)}).raw;
+    return acc;
+  }();
+  int64_t rear_sin = 0;
+  int32_t prev = 0;
+  for (int k = 0; k < kStanceSlopes; ++k) {
+    int64_t d = kStanceSlope[k];
+    d += ((kCorpseSlope[k] - d) * drain) / 1000;
+    // the wave lane (run 0326): a per-segment slope delta whose belly cost
+    // the rear-node constraint below absorbs EXACTLY -- composing raw neck
+    // quats after this function pitched the whole body and the probe caught
+    // the grounded run at +94 mm (the hit clip's recorded trap, repeated)
+    if (wave != nullptr && wave[k] != 0) d += wave[k];
+    const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
+    if (k <= kStanceGround1) rear_sin += zref::fx_sin(zref::angle16{a}).raw;
+    const int32_t pitch = static_cast<int32_t>(d) - prev;
+    prev = static_cast<int32_t>(d);
+    g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
+  }
+  const int32_t root_y =
+      static_cast<int32_t>((segL * (rear_sin - base_rear_sin)) >> 16);
+  g.q[kBHead] = quat_z(kHeadAttitude - (1400 * drain) / 1000 + head_extra);
+  g.tail_rest((kBladeSplay * (1000 - fold1000 / 2)) / 1000,
+              (kBladeRise * (1000 - fold1000)) / 1000);
+  if (roll1000 != 0) {
+    const int32_t roll = (kKnockRoll * roll1000) / 1000;
+    const int32_t roll_lift = (kKnockRollLift * roll1000) / 1000;
+    const zc::quat16 rq = quat_x(roll);
+    g.q[kBSpine0] = quat_mul(rq, g.q[kBSpine0]);
+    int32_t rx, ry, rz;
+    quat_rot_vec(rq, kDeathPivotX, -kBodyY - root_y, 0, rx, ry, rz);
+    root_mm[0] = kDeathPivotX - rx;
+    root_mm[1] = root_y + roll_lift + (-kBodyY - root_y - ry);
+    root_mm[2] = -rz;
+  } else {
+    root_mm[0] = 0;
+    root_mm[1] = root_y;
+    root_mm[2] = 0;
+  }
+}
+
+// Slot 20 - KNOCKED2FLOOR. The blow has already landed when the sim cuts to
+// this clip (donor semantics), so key 0 IS the impact: a hit-style head
+// snap, then the body drains fast onto the flank, one small rebound, and
+// the clip HOLDS the knocked pose until getUp cuts in.
+inline zc::Clip build_knock() {
+  zc::Clip c;
+  c.slot_id = kSlotKnock;
+  c.interpolate = true;
+  c.hold_last = true;  // held down until the state machine says get up
+  c.frame_count = static_cast<uint16_t>(kKnockKeys);
+  c.root.assign(static_cast<size_t>(kKnockKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kKnockKeys) * kBoneCount, zc::quat16_identity());
+  static const Key kJolt[] = {{0, 0}, {1, 900}, {3, 1000}, {6, 260}, {9, 0}, {25, 0}};
+  // the final segment is PINNED to zero one key early: curve()'s integer
+  // rounding on a falling segment returns 1 (not 0) at the last key, and
+  // one leftover millimetre of bounce broke the byte-identical seam to
+  // getUp key 0 (the compiler's seam check caught it, run 0326)
+  static const Key kBounce[] = {{0, 0}, {17, 0}, {19, 12}, {22, 3}, {24, 0}, {25, 0}};
+  constexpr int kJoltN = static_cast<int>(sizeof(kJolt) / sizeof(Key));
+  constexpr int kBounceN = static_cast<int>(sizeof(kBounce) / sizeof(Key));
+  for (int f = 0; f < kKnockKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t jolt = curve(kJolt, kJoltN, f);
+    const int32_t drain = ss1000(f, 2, 15);
+    const int32_t roll = ss1000(f, 8, 19);
+    // the neck's share of the snap rides the WAVE lane so the rear-node
+    // constraint keeps the grounded run planted (raw quats lifted it +94)
+    int32_t wave[kStanceSlopes] = {};
+    wave[1] = -(jolt * kKnockJolt) / 2600;
+    wave[2] = -(jolt * kKnockJolt) / 3400;
+    int32_t root_mm[3];
+    lying_frame(g, drain, roll, (jolt * kKnockJolt) / 1000,
+                (drain * kKnockFold) / 1000, root_mm, wave);
+    g.write(c, f);
+    c.root[f * 3 + 0] = fxm(root_mm[0]);
+    c.root[f * 3 + 1] = fxm(root_mm[1] + (curve(kBounce, kBounceN, f) * kKnockBounceMm) / 12);
+    c.root[f * 3 + 2] = fxm(root_mm[2]);
+  }
+  c.events = {{15, zc::kEvFoot, 5}};  // the flank hits the dirt
+  return c;
+}
+
+// Slot 21 - GET UP. Starts on the EXACT knocked pose (declared seam). The
+// head lifts first (intention), the roll rights itself, then the body
+// gathers back into the S with its belly kissing the dirt the whole way --
+// the balance clip's get-up hover (run 0326, minY +65) is the recorded
+// failure mode this build avoids by keeping the rear node planted.
+inline zc::Clip build_getup() {
+  zc::Clip c;
+  c.slot_id = kSlotGetUp;
+  c.interpolate = true;
+  c.hold_last = true;  // ends on the rest pose and stays there
+  c.frame_count = static_cast<uint16_t>(kGetUpKeys);
+  c.root.assign(static_cast<size_t>(kGetUpKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kGetUpKeys) * kBoneCount, zc::quat16_identity());
+  for (int f = 0; f < kGetUpKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t wake = ss1000(f, 2, 10);           // the head lifts first
+    const int32_t roll = 1000 - ss1000(f, 5, 20);    // rights itself
+    const int32_t drain = 1000 - ss1000(f, 14, 36);  // gathers into the S
+    int32_t root_mm[3];
+    lying_frame(g, drain, roll, 0, (drain * kKnockFold) / 1000, root_mm);
+    // the waking head-lift: a small extra pitch-up while the body is still
+    // down, so the head visibly wakes before the body moves. A smooth
+    // PRODUCT envelope (wake in, drain out) -- a threshold gate here is the
+    // recorded pop trap. Zero at f0 (seam law) and zero at the end.
+    const int32_t lift = (wake * drain) / 1000;
+    if (lift != 0) {
+      g.q[kBHead] = quat_mul(g.q[kBHead], quat_z(-(lift * 1100) / 1000));
+    }
+    g.write(c, f);
+    c.root[f * 3 + 0] = fxm(root_mm[0]);
+    c.root[f * 3 + 1] = fxm(root_mm[1]);
+    c.root[f * 3 + 2] = fxm(root_mm[2]);
+  }
+  c.events = {{36, zc::kEvFoot, 6}};  // back on the S
+  return c;
+}
+
+// Slot 22 - HITFLOOR. The landing that ends `falling` (donor semantics: the
+// state machine cuts falling -> hitFloor at ground contact, then getUp).
+// The body flattens as it drops, slams with an authored bite, one small
+// rebound, and HOLDS the same knocked pose getUp starts from.
+inline zc::Clip build_hitfloor() {
+  zc::Clip c;
+  c.slot_id = kSlotHitFloor;
+  c.interpolate = true;
+  c.hold_last = true;
+  c.frame_count = static_cast<uint16_t>(kHitFloorKeys);
+  c.root.assign(static_cast<size_t>(kHitFloorKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kHitFloorKeys) * kBoneCount, zc::quat16_identity());
+  // the drop accelerates (gravity), the bite releases over four keys, a
+  // small rebound rings out -- all one authored height curve (mm)
+  static const Key kDrop[] = {{0, 540}, {3, 430},  {6, 240},  {8, 80},
+                              {9, -24}, {12, -24}, {14, 8},   {17, 2},
+                              {20, 0},  {25, 0}};
+  constexpr int kDropN = static_cast<int>(sizeof(kDrop) / sizeof(Key));
+  for (int f = 0; f < kHitFloorKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t drain = 350 + (650 * ss1000(f, 0, 9)) / 1000;  // already loose
+    const int32_t roll = ss1000(f, 5, 14);
+    int32_t root_mm[3];
+    lying_frame(g, drain, roll, 0, (drain * kKnockFold) / 1000, root_mm);
+    g.write(c, f);
+    c.root[f * 3 + 0] = fxm(root_mm[0]);
+    c.root[f * 3 + 1] = fxm(root_mm[1] + curve(kDrop, kDropN, f));
+    c.root[f * 3 + 2] = fxm(root_mm[2]);
+  }
+  c.events = {{9, zc::kEvFoot, 7}};  // the slam
+  return c;
+}
+
+// ---- the directional damage set -------------------------------------------
+// Donor law (state.d damageAnimation): the direction of the blow picks the
+// slot, and a MISSING directional slot falls back to stance1 -- no reaction
+// at all. Slot 5 (the 2026-08-28 hit) IS damageFront; these four complete
+// the set. Same 18-key envelope as the hit (one damped overshoot -- wobble,
+// not vibration); what differs is WHERE the reaction lives.
+constexpr int kDmgKeys = kHitKeys;
+constexpr int32_t kDmgSideSway = 4600;   // lateral whiplash, right/left
+constexpr int32_t kDmgSideRollAmp = 900; // a touch of body roll with it
+constexpr int32_t kDmgBackJerk = 4400;   // head whips DOWN-forward
+constexpr int32_t kDmgBackSurge = 34;    // mm the body shoves forward
+constexpr int32_t kDmgTopCrush = 780;    // deepen: the arch flattens under it
+constexpr int32_t kDmgTopDuck = 3000;    // the head ducks
+
+inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
+  zc::Clip c;
+  c.slot_id = slot;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kDmgKeys);
+  c.root.assign(static_cast<size_t>(kDmgKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kDmgKeys) * kBoneCount, zc::quat16_identity());
+  static const Key kEnv[] = {{0, 0},   {2, 780},  {4, 1000}, {6, 620},
+                             {8, -180}, {10, 60},  {12, -20}, {14, 0},
+                             {17, 0}};
+  constexpr int kEnvN = static_cast<int>(sizeof(kEnv) / sizeof(Key));
+  for (int f = 0; f < kDmgKeys; ++f) {
+    const int32_t e = curve(kEnv, kEnvN, f);
+    Rig g;
+    g.reset();
+    int32_t deepen = 0;
+    if (dir == 3) deepen = (e * kDmgTopCrush) / 1000;   // crush flattens the arch
+    else if (dir == 1) deepen = -(e * 420) / 1000;      // back-shove opens the S
+    else deepen = (e * kHitDeepen) / 2500;              // side: a whisper of it
+    // the back-whip's neck share rides apply_stance's wave lane -- raw neck
+    // quats pitched the whole body and drove the TAIL 233 mm under (probe,
+    // run 0326; the same trap the hit clip's comment records)
+    int32_t bwave[kStanceSlopes] = {};
+    if (dir == 1) {
+      bwave[1] = (e * kDmgBackJerk) / 3000;
+      bwave[2] = (e * kDmgBackJerk) / 4200;
+    }
+    const int32_t rise = apply_stance(g, 1000, deepen, dir == 1 ? bwave : nullptr);
+    switch (dir) {
+      case 0:    // RIGHT: lateral whiplash, head and neck swing off the blow
+      case 2: {  // LEFT: mirrored
+        const int32_t sgn = dir == 0 ? 1 : -1;
+        g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (e * 1100) / 1000),
+                               quat_y(sgn * (e * kDmgSideSway) / 1000));
+        g.q[kBSpine0 + 1] = quat_mul(g.q[kBSpine0 + 1], quat_y(sgn * (e * kDmgSideSway) / 2600));
+        g.q[kBSpine0 + 2] = quat_mul(g.q[kBSpine0 + 2], quat_y(sgn * (e * kDmgSideSway) / 3600));
+        // a touch of roll through the raised front -- the body leans off
+        // the blow while the grounded run stays planted
+        for (int k = 3; k <= 6; ++k)
+          g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_x(sgn * (e * kDmgSideRollAmp) / 4000));
+        break;
+      }
+      case 1: {  // BACK: shoved forward, the head whips down then recovers
+        g.q[kBHead] = quat_z(kHeadAttitude - (e * kDmgBackJerk) / 1000);
+        break;
+      }
+      case 3: {  // TOP: crushed down -- the deepen lowers the whole front
+        g.q[kBHead] = quat_z(kHeadAttitude - (e * kDmgTopDuck) / 1000);
+        break;
+      }
+    }
+    g.tail_rest(kBladeSplay + (e * 1400) / 1000,
+                kBladeRise - (dir == 3 ? (e * 900) / 1000 : 0));
+    g.write(c, f);
+    c.root[f * 3 + 0] = fxm(dir == 1 ? (e * kDmgBackSurge) / 1000 : 0);
+    c.root[f * 3 + 1] = fxm(rise);
+  }
+  c.events = {{1, zc::kEvFoot, static_cast<uint8_t>(10 + dir)}};
+  return c;
+}
+
+// ---- Slot 27 - RUN --------------------------------------------------------
+// The walk's caterpillar law at a hungry cadence: the hump travels once per
+// 24-key loop (0.8 s vs the walk's 1.33), taller hump, deeper front wave,
+// the nose leaning in. One full cycle per clip, period held (03-ANIMATION:
+// hold the cadence, let the stride go -- the sim owns the travel).
+constexpr int kRunKeys = 24;
+constexpr int32_t kRunHumpMm = 300;
+constexpr int32_t kRunHumpHalf = 2400;  // WIDER than the walk's 1600: at 300 mm
+                                        // tall over the walk's half-width the
+                                        // per-segment climb exceeded segL and
+                                        // asin16 clamped -- the height error
+                                        // landed as a -68 mm dig (probe)
+constexpr int32_t kRunWaveAmp = 3400;
+constexpr int32_t kRunDeepen = 520;
+constexpr int32_t kRunSway = 220;
+constexpr int32_t kRunLean = 900;   // nose-forward
+constexpr int32_t kRunSpeed = 24;   // mm per reel frame (the walk moves 13)
+
+inline zc::Clip build_run() {
+  zc::Clip c;
+  c.slot_id = kSlotRun;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kRunKeys);
+  c.root.assign(static_cast<size_t>(kRunKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kRunKeys) * kBoneCount, zc::quat16_identity());
+  const int32_t per_key = 65536 / kRunKeys;
+  const int32_t bLo = kStanceGround0;
+  const int32_t bHi = kStanceGround1 + 2;
+  const int32_t span1000 = (bHi - bLo) * 1000;
+  const int32_t segL = kBodyLenMm / (kSpineBones - 1);
+  for (int f = 0; f < kRunKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t phw = f * per_key;
+    int32_t wave[kStanceSlopes] = {};
+    for (int k = 0; k + 1 < kStanceGround0; ++k) {
+      const int env =
+          k < 4 ? 550 + k * 150 : (kStanceGround0 - 1 - k) * 1000 / (kStanceGround0 - 5);
+      const int32_t pw = phw * 2 + 9000 - k * kWalkWaveSpatial;
+      const int32_t sw =
+          zref::fx_sin(zref::angle16{static_cast<uint16_t>(pw & 0xFFFF)}).raw;
+      wave[k] = static_cast<int32_t>(
+          (static_cast<int64_t>(sw) * kRunWaveAmp * env / 1000) >> 16);
+    }
+    const int32_t sb =
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((phw * 2 + 26000) & 0xFFFF)}).raw;
+    const int32_t breath = ((sb + 65536) * 500) >> 16;
+    const int32_t rise = apply_stance(g, 1000, (breath * kRunDeepen) / 1000, wave);
+    int32_t h[kSpineBones] = {};
+    const int32_t c1000 = bLo * 1000 + (f * span1000) / kRunKeys;
+    const int32_t env = zref::fx_sin(zref::angle16{static_cast<uint16_t>(
+                            ((c1000 - bLo * 1000) * 32768 / span1000) & 0xFFFF)})
+                            .raw;
+    for (int b = bLo; b <= bHi; ++b) {
+      const int32_t d = b * 1000 - c1000;
+      if (d <= -kRunHumpHalf || d >= kRunHumpHalf) continue;
+      const int32_t ca = zref::fx_cos(zref::angle16{static_cast<uint16_t>(
+                             ((d * 16384) / kRunHumpHalf) & 0xFFFF)})
+                             .raw;
+      const int64_t bump = (static_cast<int64_t>(ca) * ca) >> 16;
+      h[b] = static_cast<int32_t>((bump * env >> 16) * kRunHumpMm >> 16);
+    }
+    int32_t prev_extra = 0;
+    for (int k = bLo - 1; k <= bHi && k < kSpineBones - 1; ++k) {
+      const int32_t base = kStanceSlope[k];
+      const int32_t dy_base = -static_cast<int32_t>(
+          (static_cast<int64_t>(segL) *
+           zref::fx_sin(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw) >>
+          16);
+      const int32_t dh = h[k + 1] - h[k];
+      const int32_t s_new = -asin16(dy_base + dh, segL);
+      const int32_t extra = s_new - base;
+      if (extra != prev_extra) {
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(extra - prev_extra));
+      }
+      prev_extra = extra;
+    }
+    g.q[kBHead] = quat_z(kHeadAttitude - kRunLean + wave[1] + wave[2]);
+    for (int k = 5; k <= kStanceGround0 - 1; ++k) {
+      const int32_t ph = f * per_key + k * 5000;
+      const int32_t sw =
+          (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw * kRunSway) >> 16;
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(sw));
+    }
+    g.tail_rest();
+    g.write(c, f);
+    c.root[f * 3 + 1] = fxm(rise);
+  }
+  c.events = {{0, zc::kEvFoot, 0}, {static_cast<uint16_t>(kRunKeys / 2), zc::kEvFoot, 1}};
+  return c;
+}
+
+// ---- Slot 28 - DEATH 1 ----------------------------------------------------
+// The second death (the donor picks at random among the filled deaths):
+// agony rear-up, then the collapse runs FORWARD into a mostly-prone corpse
+// (a shallow tilt, same away-from-lens sign as death0's keel -- the
+// run-0326 magenta-smear lesson), two decaying tail slaps, stillness.
+constexpr int kDeath1Keys = 96;
+constexpr int32_t kD1Agony = 520;      // negative deepen: the front rears UP
+constexpr int32_t kD1HeadRear = 3200;  // the nose climbs with it
+constexpr int32_t kD1Roll = -5200;     // shallow flank tilt -- prone, not keeled
+constexpr int32_t kD1RollLift = 30;
+constexpr int32_t kD1Slap = 6000;      // the decaying tail slaps
+constexpr int32_t kD1Shudder = 2000;   // the head's dying tremor (angle16)
+
+inline zc::Clip build_death1() {
+  zc::Clip c;
+  c.slot_id = kSlotDeath1;
+  c.interpolate = true;
+  c.hold_last = true;
+  c.frame_count = static_cast<uint16_t>(kDeath1Keys);
+  c.root.assign(static_cast<size_t>(kDeath1Keys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kDeath1Keys) * kBoneCount, zc::quat16_identity());
+  const int32_t segL = kBodyLenMm / (kSpineBones - 1);
+  static const int64_t base_rear_sin = [] {
+    int64_t acc = 0;
+    for (int k = 0; k <= kStanceGround1; ++k)
+      acc += zref::fx_sin(zref::angle16{static_cast<uint16_t>(kStanceSlope[k] & 0xFFFF)}).raw;
+    return acc;
+  }();
+  for (int f = 0; f < kDeath1Keys; ++f) {
+    Rig g;
+    g.reset();
+    // agony: rises over k4..16, gone by k34 as the collapse takes over
+    const int32_t agony = ss1000(f, 4, 16) - ss1000(f, 16, 34);
+    const int32_t drain = ss1000(f, 18, 46);
+    // the head's dying tremor rides the agony (slow, two cycles)
+    int32_t shake = 0;
+    if (f < 20) {
+      const int32_t ph = f * 6554;
+      shake = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
+               kD1Shudder) >> 16;
+    }
+    int64_t rear_sin = 0;
+    int32_t prev = 0;
+    for (int k = 0; k < kStanceSlopes; ++k) {
+      int64_t d = kStanceSlope[k];
+      // the rear-up: the descent lobe UN-deepens (the breath's own formula
+      // run negative), so the whole front lobe climbs
+      if (k >= kStanceDescend0 && k <= kStanceDescend1 && agony != 0) {
+        const int64_t deepen = -(static_cast<int64_t>(agony) * kD1Agony) / 1000;
+        if (d <= 16384) d += (d * deepen) / 1000;
+        else d -= ((32768 - d) * deepen) / 1000;
+      }
+      d += ((kCorpseSlope[k] - d) * drain) / 1000;
+      // the tail slaps: two decaying cycles, k48..80, lift-dominant with a
+      // small authored bite on the down-beat (the sine's negative half is
+      // clamped to a quarter of the lift)
+      if (k > kStanceGround1 && f >= 48 && f < 80) {
+        const int32_t ph = ((f - 48) * 4096);  // two cycles over 32 keys
+        int32_t sl = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
+        if (sl < -16384) sl = -16384;
+        const int32_t decay = ((80 - f) * 1000) / 32;
+        d -= (static_cast<int64_t>(kD1Slap) * sl / 65536) * decay /
+             (1000 * (kSpineBones - kStanceGround1));
+      }
+      const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
+      if (k <= kStanceGround1) rear_sin += zref::fx_sin(zref::angle16{a}).raw;
+      const int32_t pitch = static_cast<int32_t>(d) - prev;
+      prev = static_cast<int32_t>(d);
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
+    }
+    const int32_t root_y =
+        static_cast<int32_t>((segL * (rear_sin - base_rear_sin)) >> 16);
+    const int32_t roll = (kD1Roll * ss1000(f, 26, 50)) / 1000;
+    const int32_t roll_lift = (kD1RollLift * ss1000(f, 26, 50)) / 1000;
+    g.q[kBHead] = quat_mul(
+        quat_z(kHeadAttitude + (agony * kD1HeadRear) / 1000 - (1400 * drain) / 1000 +
+               shake / 2),
+        quat_y(shake));
+    g.tail_rest((kBladeSplay * (1000 + (agony * 800) / 1000 - drain / 2)) / 1000,
+                (kBladeRise * (1000 - drain)) / 1000);
+    const zc::quat16 rq = quat_x(roll);
+    g.q[kBSpine0] = quat_mul(rq, g.q[kBSpine0]);
+    g.write(c, f);
+    int32_t rx, ry, rz;
+    quat_rot_vec(rq, kDeathPivotX, -kBodyY - root_y, 0, rx, ry, rz);
+    c.root[f * 3 + 0] = fxm(kDeathPivotX - rx);
+    c.root[f * 3 + 1] = fxm(root_y + roll_lift + (-kBodyY - root_y - ry));
+    c.root[f * 3 + 2] = fxm(-rz);
+  }
+  c.events = {{40, zc::kEvFoot, 3}};  // the body lands
+  return c;
+}
+
+// ---- Slot 30 - TAUNT ------------------------------------------------------
+// The owner's ask; the donor's `laugh` slot. The front lobe rears up proud,
+// the blades flare wide, and the head wags side to side -- slow, eased, the
+// neck following. Both ends on the rest pose so the cut back to stance is
+// clean.
+constexpr int kTauntKeys = 56;
+constexpr int32_t kTauntRear = 1250;  // angle16 PER FRONT SEGMENT (k0..4).
+                                      // The first cut un-deepened the
+                                      // descent lobe instead, which RAISED
+                                      // the descending stroke toward the
+                                      // head and folded the hook over it
+                                      // (overlap 355 mm; the proud peak
+                                      // read as a crumple). Lifting the
+                                      // ascending neck rears the front up
+                                      // WITH the head. ~35 deg accumulated.
+constexpr int32_t kTauntWag = 3600;
+constexpr int32_t kTauntFlare = 2600;
+constexpr int32_t kTauntRise = 1400;
+constexpr int32_t kTauntNose = 3400;  // the head rises WITH the rear-up
+
+inline zc::Clip build_taunt() {
+  zc::Clip c;
+  c.slot_id = kSlotTaunt;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kTauntKeys);
+  c.root.assign(static_cast<size_t>(kTauntKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kTauntKeys) * kBoneCount, zc::quat16_identity());
+  for (int f = 0; f < kTauntKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t up = ss1000(f, 6, 16) - ss1000(f, 42, 52);
+    const int32_t wag_env = ss1000(f, 14, 20) - ss1000(f, 38, 44);
+    // 2.5 wag cycles across the window, eased in and out by wag_env
+    int32_t wag = 0;
+    if (wag_env != 0) {
+      const int32_t ph = ((f - 14) * 5851);  // 2.5 cycles over 28 keys
+      wag = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
+             ((kTauntWag * wag_env) / 1000)) >> 16;
+    }
+    int32_t wave[kStanceSlopes] = {};
+    for (int k = 0; k <= 4; ++k) wave[k] = (up * kTauntRear) / 1000;
+    const int32_t rise = apply_stance(g, 1000, 0, wave);
+    g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (up * kTauntNose) / 1000),
+                           quat_y(wag));
+    if (wag != 0) {
+      g.q[kBSpine0 + 1] = quat_mul(g.q[kBSpine0 + 1], quat_y(wag / 3));
+      g.q[kBSpine0 + 2] = quat_mul(g.q[kBSpine0 + 2], quat_y(wag / 5));
+      // the mid-body counter-sways a whisper, so the wag reads as intent,
+      // not as the whole animal wobbling
+      for (int k = 6; k <= 9; ++k)
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(-wag / 8));
+    }
+    g.tail_rest(kBladeSplay + (up * kTauntFlare) / 1000,
+                kBladeRise + (up * kTauntRise) / 1000);
+    g.write(c, f);
+    c.root[f * 3 + 1] = fxm(rise);
+  }
+  c.events = {{14, zc::kEvSound, 1}};  // the taunt call
+  return c;
+}
+
+// ---- Slot 31 - CORPSE -----------------------------------------------------
+// The donor's law: the dead body is a playing clip. Frame 0 is the death
+// clip's own final key BYTE-FOR-BYTE (declared seam), and the loop adds only
+// a barely-there blade settle -- stillness after motion is the read, so the
+// motion here sits at the edge of perception.
+constexpr int kCorpseKeys = 32;
+constexpr int32_t kCorpseBladeStir = 130;  // angle16: sub-degree
+
+inline zc::Clip build_corpse(const zc::Clip& death) {
+  zc::Clip c;
+  c.slot_id = kSlotCorpse;
+  c.interpolate = true;  // loops
+  c.frame_count = static_cast<uint16_t>(kCorpseKeys);
+  c.root.assign(static_cast<size_t>(kCorpseKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kCorpseKeys) * kBoneCount, zc::quat16_identity());
+  const int last = death.frame_count - 1;
+  for (int f = 0; f < kCorpseKeys; ++f) {
+    for (int b = 0; b < kBoneCount; ++b)
+      c.quats[static_cast<size_t>(f) * kBoneCount + b] =
+          death.quats[static_cast<size_t>(last) * kBoneCount + b];
+    for (int i = 0; i < 3; ++i)
+      c.root[f * 3 + i] = death.root[static_cast<size_t>(last) * 3 + i];
+    // one whole sine cycle so the loop closes; f 0 composes NOTHING so the
+    // seam to the death's last key stays bit-identical
+    const int32_t ph = f * (65536 / kCorpseKeys);
+    const int32_t stir =
+        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
+         kCorpseBladeStir) >> 16;
+    if (stir != 0) {
+      const int blades[3] = {kBBladeL, kBBladeR, kBSpike};
+      for (int bi = 0; bi < 3; ++bi) {
+        const int b = blades[bi];
+        zc::quat16& q = c.quats[static_cast<size_t>(f) * kBoneCount + b];
+        q = quat_mul(q, quat_z(b == kBSpike ? stir / 2 : stir));
+      }
+    }
+  }
+  return c;
+}
+
 // ---- C2: THE PHASE CLIPS (2026-08-28) -------------------------------------
 // The programmable-salto architecture's shared local-body vocabulary
 // (amendment: "Shared clips own local body shape ... A per-instance full-3D
@@ -2684,6 +3257,32 @@ inline const zc::CreatureType& type() {
           {kSlotAtkRecover, 13, kSlotAtkCompress, 0},  // ...back to the S
       };
     }
+    // run 0326: the vocabulary close-out (see ANIMATION-VOCABULARY.md)
+    bank.clips.push_back(build_knock());
+    bank.clips.push_back(build_getup());
+    bank.clips.push_back(build_hitfloor());
+    bank.clips.push_back(build_damage(kSlotDmgRight, 0));
+    bank.clips.push_back(build_damage(kSlotDmgBack, 1));
+    bank.clips.push_back(build_damage(kSlotDmgLeft, 2));
+    bank.clips.push_back(build_damage(kSlotDmgTop, 3));
+    bank.clips.push_back(build_run());
+    bank.clips.push_back(build_death1());
+    bank.clips.push_back(build_taunt());
+    {
+      // the corpse starts on the death's own final key, byte-for-byte
+      const zc::Clip* d0 = nullptr;
+      for (const zc::Clip& cc : bank.clips)
+        if (cc.slot_id == 6) d0 = &cc;
+      zc::Clip corpse = build_corpse(*d0);
+      bank.clips.push_back(corpse);
+    }
+    // the knockdown chain's shared poses and the death->corpse handoff are
+    // asset invariants: compile_creature byte-compares them and FAILS the
+    // creature if an edit ever splits them
+    bank.seams.push_back({kSlotKnock, kKnockKeys - 1, kSlotGetUp, 0});
+    bank.seams.push_back({kSlotHitFloor, kHitFloorKeys - 1, kSlotGetUp, 0});
+    bank.seams.push_back({6, kDeathKeys - 1, kSlotCorpse, 0});
+
 #ifdef ZIXX_F2_PREVIEW
     // F2, slot 19: the baked spring-chain fall. PREVIEW-BUILD ONLY -- the
     // bake has real dynamics character (delayed waves, overshoot, mass)
