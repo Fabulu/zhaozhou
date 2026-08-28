@@ -1935,3 +1935,50 @@ to measurement, because clearing the cache is the first thing anyone would try.
 Clean tree built: **BUILD_EXIT 0, zero failures.** (The task reported "failed"
 only because the trailing `grep -c FAILED:` exits 1 when it matches nothing --
 my command's fault, not the build's.) Fast lane running there now.
+
+## The fast lane, at last -- and I misread its failure the same way I misread
+## everything else today
+
+`ctest -L fast` on the clean tree: **304 of 306**. Two failures.
+
+### I reported format_check as the creature session's. It was mostly MINE.
+
+The failure output opens with two creature headers. I read the head of it and
+generalised. The full list is SIXTEEN files and **TWELVE ARE MINE** -- every
+`tests/differential/field_*` file, three of them edited tonight. Four are
+theirs.
+
+That is the third time today the same error shape has cost me: the truncated
+build log, the v4/v5 run timestamp, and now this. **Read the whole thing before
+naming a cause.**
+
+### The gate itself was working perfectly
+
+clang-format is pinned as a devDependency and the gate reported `rc=1` rather
+than skipping -- which is the earlier drift fix doing exactly its job. The gate
+was never the problem. I simply never ran it, for eight hours, alongside the
+ledger check I also never ran.
+
+### Verified neutral rather than assumed
+
+"Formatting cannot change behaviour" is precisely the shape of claim this
+session spent all day proving false. So: rebuilt and re-ran normalize, svcpath,
+spline and exec -- all pass. Mutant tables anchor into RTL, not these files, so
+no anchor moved.
+
+For the creature four the risk was subtler. `creature_core` was ALREADY
+failing, so the question was not "did I break it" but **"did I change HOW it
+fails"** -- which would corrupt that session's own diagnosis. Captured the
+output before, reformatted, rebuilt, captured after:
+
+    BYTE IDENTICAL, including the FAIL line and both tolerance numbers.
+
+`format_check` now passes.
+
+### creature_core stays theirs, and that is a judgement not territoriality
+
+"FAIL: creature does not fill the frame", from their 01:00 and 03:37 commits.
+Fabian's direction #3 tells that agent to break the S-curve DELIBERATELY and
+**re-pin the goldens afterward** -- so a framing assertion going red mid-rework
+is plausibly the expected state. Guessing at a fix would be inventing creature
+behaviour, which is the one thing this session is explicitly told not to do.
