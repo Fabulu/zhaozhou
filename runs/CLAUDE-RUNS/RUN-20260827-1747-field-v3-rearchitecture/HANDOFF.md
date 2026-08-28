@@ -104,14 +104,26 @@ Both are recorded in `STATUS.md` with their prices. **Do not guess at either.**
 
 ## Next concrete steps
 
-1. Read the exec sweep tally (above).
-2. Re-run `ctest -L fast` — the skid landed after the last full lane run.
-3. Wire `zhao_field_v3_svcpath` into `zhao_probe_v3_engine`. **This is now
-   unblocked**: the executor's write port can be refused safely (see the skid,
-   below), which was the thing that would have silently dropped writes.
-4. The two-service starvation question on the bank still needs the curve
-   service and the noise unit attached at once. One service cannot starve
-   anybody, so it cannot be answered before then.
+1. **Wire `zhao_field_v3_svcpath` into `zhao_probe_v3_engine`.** This is now
+   unblocked: the executor's write port can be refused safely (see the skid,
+   below), which was the thing that would otherwise have silently dropped
+   writes — eight per four-point group, measured.
+
+   The engine already exposes the whole long-op surface (valid/ready, ctx, op,
+   dst, s0..s3, imm, flush, and the release pair) and svcpath consumes exactly
+   that shape, so the connection itself is small. What needs care is that the
+   register file lives INSIDE the executor while svcpath's arbiter produces the
+   write port — so the drain's writes have to reach that file, which is a port
+   change on the executor rather than a wiring job.
+
+2. **Then the two-service starvation question on the bank**, which still needs
+   the curve service and the noise unit attached at once. One service cannot
+   starve anybody, so it cannot be answered before then. `wb_served_o` and
+   `wb_stalled_o` are already per-claimant and the policy is already a runtime
+   input, so the measurement is ready when the second service is.
+
+3. **Whatever the SPLINE and RING decisions turn out to be** (above). Neither is
+   an agent's call.
 
 ---
 
