@@ -40,6 +40,50 @@ not add one.
 
 ---
 
+## FABIAN DECIDED: SPLINE GOES HOT, AND THE PREPARED RING GETS WIRED
+
+*2026-08-28, in his words: "so we spend work but get a better thing. Non-issue.
+Spend the work."*
+
+Both of the questions I had been holding open are answered the same way, and
+they are answered the EXPENSIVE way on purpose. Recording it here because a run
+that quietly widens an architecture looks identical, six weeks later, to one
+that overstepped.
+
+### What he turned down
+
+Cold cost nothing. The older curve unit already computes SPLINE exactly --
+search, clamp, all four control points with the ends replicated, coefficients,
+the lot -- one point at a time, and your own brief puts spline on the cold
+lane. The v3 engine would have refused it out loud and programs needing it
+would run the older path.
+
+### What it buys, and what it costs
+
+    buys    SPLINE and the prepared ring run on the FAST path, four points at a
+            time, instead of being exact-but-not-certified
+    buys    a SECOND service on the bank -- which is the only way the
+            starvation question you asked about can be measured at all. One
+            service cannot starve anybody.
+    costs   the curve service must fetch FOUR neighbours where it fetches one
+    costs   its eighteen deliberate-defect checks ride on the current shape and
+            all have to be re-scored, not assumed
+    costs   a spline service has to exist to join the lookup to the arithmetic
+
+The four-point spline arithmetic is already built and closed at 21/21 -- I
+built it before checking whether you wanted it hot, which was the wrong order
+and is why the question existed. It is the right block for this decision, so
+that work is not wasted.
+
+It has its own run: `RUN-20260828-2111-spline-hot-and-ring-prep`.
+
+**One thing stays cold and is not in scope:** `OP_RING` (0x21), the
+varying-radius form. The brief keeps it cold and nothing here changes that.
+What gets wired is `UOP_RING_PREP` (0xF1), the prepared one, which your brief
+already costs as the hot path at nine multiplier slots.
+
+---
+
 ## 2026-08-28 (evening) -- two real bugs in the shipped executor, and neither
 ## was findable with one context
 
