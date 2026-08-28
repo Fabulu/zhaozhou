@@ -648,10 +648,10 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         if (gouraud) {
           const PV* corner[3] = {&a, &b, &c};
           for (int k = 0; k < 3; ++k) {
-            const int32_t lk = static_cast<int32_t>(
-                (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_k +
-                 static_cast<int64_t>(1024 - kSmoothMixNum) * lam_key + 512) >>
-                10);
+            const int32_t lk =
+                static_cast<int32_t>((static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_k +
+                                      static_cast<int64_t>(1024 - kSmoothMixNum) * lam_key + 512) >>
+                                     10);
             const int32_t lf = static_cast<int32_t>(
                 (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_f +
                  static_cast<int64_t>(1024 - kSmoothMixNum) * lam_fill + 512) >>
@@ -672,9 +672,9 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // (x,y,z) -> (r,g,b), 0 -> 128. Rides the same gouraud lanes.
           const PV* corner[3] = {&a, &b, &c};
           for (int k = 0; k < 3; ++k) {
-            shc[k] = Shade3{(corner[k]->nx + 128) * 65536 / 255,
-                            (corner[k]->ny + 128) * 65536 / 255,
-                            (corner[k]->nz + 128) * 65536 / 255};
+            shc[k] =
+                Shade3{(corner[k]->nx + 128) * 65536 / 255, (corner[k]->ny + 128) * 65536 / 255,
+                       (corner[k]->nz + 128) * 65536 / 255};
           }
           tm.gouraud = gouraud;
         } else if (g_debug_shade == DebugShade::kWire) {
@@ -692,8 +692,14 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
               }
               if (x0 == x1 && y0 == y1) break;
               const int e2 = 2 * err;
-              if (e2 >= dy) { err += dy; x0 += sx; }
-              if (e2 <= dx) { err += dx; y0 += sy; }
+              if (e2 >= dy) {
+                err += dy;
+                x0 += sx;
+              }
+              if (e2 <= dx) {
+                err += dx;
+                y0 += sy;
+              }
             }
           };
           line(a.s.x, a.s.y, b.s.x, b.s.y);
@@ -708,8 +714,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // lanes (Gouraud): texel colour TIMES the per-channel rig, one
         // multiply, no second shading model.
         const bool want_tex = (T.page_direct != nullptr || T.page_set != nullptr) &&
-                              m.page != 255 &&
-                              g_debug_shade != DebugShade::kNormals;
+                              m.page != 255 && g_debug_shade != DebugShade::kNormals;
         const uint8_t em_r = g_debug_shade == DebugShade::kNormals ? 255 : m.r;
         const uint8_t em_g = g_debug_shade == DebugShade::kNormals ? 255 : m.g;
         const uint8_t em_b = g_debug_shade == DebugShade::kNormals ? 255 : m.b;
@@ -746,8 +751,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             // the level cap come from the tile's own mode word)
             const Tmu::Mode md = Tmu::Mode::unpack(T.page_direct->mode_of(m.page));
             const int sh = 16 - md.log2w - md.log2h;
-            const uint8_t cap =
-                std::min<uint8_t>(md.max_level, std::min(md.log2w, md.log2h));
+            const uint8_t cap = std::min<uint8_t>(md.max_level, std::min(md.log2w, md.log2h));
             uint8_t level = 0;
             if (cpx > 0) {
               uint64_t ratio =
@@ -763,9 +767,15 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           }
           render::ScreenV sa = a.s, sb = b.s, sc = c.s;
           if (gouraud) {
-            sa.cr = shc[0].r; sa.cg = shc[0].g; sa.cb = shc[0].b;
-            sb.cr = shc[1].r; sb.cg = shc[1].g; sb.cb = shc[1].b;
-            sc.cr = shc[2].r; sc.cg = shc[2].g; sc.cb = shc[2].b;
+            sa.cr = shc[0].r;
+            sa.cg = shc[0].g;
+            sa.cb = shc[0].b;
+            sb.cr = shc[1].r;
+            sb.cg = shc[1].g;
+            sb.cb = shc[1].b;
+            sc.cr = shc[2].r;
+            sc.cg = shc[2].g;
+            sc.cb = shc[2].b;
           }
           render::raster_tri(surf, vpp, sa, sb, sc, 255, 255, 255, tm, &tex);
         } else {
@@ -784,8 +794,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             sc.cb = static_cast<int32_t>((static_cast<int64_t>(em_b) * shc[2].b));
           }
           render::raster_tri(surf, vpp, sa, sb, sc, sat_u8((em_r * sh.r + 32768) >> 16),
-                             sat_u8((em_g * sh.g + 32768) >> 16), sat_u8((em_b * sh.b + 32768) >> 16),
-                             tm);
+                             sat_u8((em_g * sh.g + 32768) >> 16),
+                             sat_u8((em_b * sh.b + 32768) >> 16), tm);
         }
       }
     }

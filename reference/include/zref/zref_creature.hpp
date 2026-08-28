@@ -850,9 +850,9 @@ struct AttackPlan {
   uint16_t compress_keys = 10, release_keys = 10, coil_keys = 20;
   uint16_t unroll_keys = 9, plunge_keys = 10;
   // trajectory
-  int32_t apex_mm = 0;        // root lift at the top of the coil flight
-  int32_t apex_fwd_mm = 0;    // forward travel by the apex
-  int32_t spin_mturns = 0;    // total coil spin, 1/1000 turns (the ROOT's)
+  int32_t apex_mm = 0;      // root lift at the top of the coil flight
+  int32_t apex_fwd_mm = 0;  // forward travel by the apex
+  int32_t spin_mturns = 0;  // total coil spin, 1/1000 turns (the ROOT's)
   // the committed spear: from the commit point (apex) toward the intercept
   int32_t spear_dx_mm = 0, spear_dy_mm = 0;
   // sim expectation (the BRANCH still comes from actual collision -- C5)

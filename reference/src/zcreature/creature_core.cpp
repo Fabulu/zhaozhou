@@ -225,19 +225,19 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
       const quat16& q3r = c.quats[static_cast<size_t>(k3) * bc + b];
       // hemisphere-align every neighbour to q1
       const auto align = [&](const quat16& q) {
-        const int32_t dot = q1.q[0] * q.q[0] + q1.q[1] * q.q[1] +
-                            q1.q[2] * q.q[2] + q1.q[3] * q.q[3];
+        const int32_t dot =
+            q1.q[0] * q.q[0] + q1.q[1] * q.q[1] + q1.q[2] * q.q[2] + q1.q[3] * q.q[3];
         quat16 r = q;
         if (dot < 0)
           for (int i = 0; i < 4; ++i) r.q[i] = static_cast<int16_t>(-r.q[i]);
         return r;
       };
       const quat16 q0 = align(q0r), q2 = align(q2r), q3 = align(q3r);
-      c.mid_quats[static_cast<size_t>(k) * bc + b] = quat_renorm(
-          -q0.q[0] + 9 * q1.q[0] + 9 * q2.q[0] - q3.q[0],
-          -q0.q[1] + 9 * q1.q[1] + 9 * q2.q[1] - q3.q[1],
-          -q0.q[2] + 9 * q1.q[2] + 9 * q2.q[2] - q3.q[2],
-          -q0.q[3] + 9 * q1.q[3] + 9 * q2.q[3] - q3.q[3]);
+      c.mid_quats[static_cast<size_t>(k) * bc + b] =
+          quat_renorm(-q0.q[0] + 9 * q1.q[0] + 9 * q2.q[0] - q3.q[0],
+                      -q0.q[1] + 9 * q1.q[1] + 9 * q2.q[1] - q3.q[1],
+                      -q0.q[2] + 9 * q1.q[2] + 9 * q2.q[2] - q3.q[2],
+                      -q0.q[3] + 9 * q1.q[3] + 9 * q2.q[3] - q3.q[3]);
     }
   }
 }
@@ -257,8 +257,7 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
       for (int i = 0; i < 3; ++i) disp_i[i] = dm[i];
     } else {
       const uint16_t nf = static_cast<uint16_t>(
-          frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0)
-                                        : frame + 1);
+          frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0) : frame + 1);
       const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
       for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
     }
@@ -276,8 +275,7 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
         q = clip.mid_quats[static_cast<size_t>(frame) * bc + b];  // A1
       } else {
         const uint16_t nf = static_cast<uint16_t>(
-            frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0)
-                                          : frame + 1);
+            frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0) : frame + 1);
         q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
       }
     }
@@ -552,9 +550,8 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     // T4: map the ring index into the part's page V RANGE [v0..v1] (defaults
     // 0..255 keep every pre-atlas part bit-identical)
     const int span = part.v1 - part.v0;
-    return static_cast<uint8_t>(part.v0 +
-                                (static_cast<int64_t>(ri) * span + (n_rings - 1) / 2) /
-                                    (n_rings - 1));
+    return static_cast<uint8_t>(part.v0 + (static_cast<int64_t>(ri) * span + (n_rings - 1) / 2) /
+                                              (n_rings - 1));
   };
   const auto orient = [&](int32_t& x, int32_t& y, int32_t& z) {
     const int32_t nx = rot[0] / 65536 * x + rot[1] / 65536 * y + rot[2] / 65536 * z;
@@ -715,8 +712,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       if (c.slot_id == sp.slot_a) a = &c;
       if (c.slot_id == sp.slot_b) b = &c;
     }
-    if (a == nullptr || b == nullptr || sp.key_a >= a->frame_count ||
-        sp.key_b >= b->frame_count) {
+    if (a == nullptr || b == nullptr || sp.key_a >= a->frame_count || sp.key_b >= b->frame_count) {
       if (reason) *reason = "seam pair references a missing clip/key";
       return false;
     }
@@ -727,8 +723,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       bad_bone = k;
       const quat16& qa = a->quats[static_cast<size_t>(sp.key_a) * bc + k];
       const quat16& qb = b->quats[static_cast<size_t>(sp.key_b) * bc + k];
-      same = qa.q[0] == qb.q[0] && qa.q[1] == qb.q[1] && qa.q[2] == qb.q[2] &&
-             qa.q[3] == qb.q[3];
+      same = qa.q[0] == qb.q[0] && qa.q[1] == qb.q[1] && qa.q[2] == qb.q[2] && qa.q[3] == qb.q[3];
     }
     for (int k = 0; k < 3 && same; ++k)
       same = a->root[static_cast<size_t>(sp.key_a) * 3 + k] ==
@@ -737,8 +732,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       static char msg[96];
       std::snprintf(msg, sizeof(msg),
                     "phase seam mismatch (C2): slot %u key %u != slot %u key %u (bone %u)",
-                    sp.slot_a, sp.key_a, sp.slot_b, sp.key_b,
-                    static_cast<unsigned>(bad_bone));
+                    sp.slot_a, sp.key_a, sp.slot_b, sp.key_b, static_cast<unsigned>(bad_bone));
       if (reason) *reason = msg;
       return false;
     }

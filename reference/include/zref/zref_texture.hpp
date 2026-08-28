@@ -233,9 +233,7 @@ struct DirectPageSet {
   // TMU mode word is per-BIND by contract, so each tile may carry its own.
   // Empty = every tile uses `mode` (bit-identical to what it always was).
   std::vector<uint32_t> tile_mode;
-  uint32_t mode_of(uint8_t tile) const {
-    return tile < tile_mode.size() ? tile_mode[tile] : mode;
-  }
+  uint32_t mode_of(uint8_t tile) const { return tile < tile_mode.size() ? tile_mode[tile] : mode; }
 };
 
 }  // namespace zref
