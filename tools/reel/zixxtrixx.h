@@ -123,10 +123,23 @@ struct TaperKey {
 // Authored BY EYE against Side.png; the sheet's widest point reads about
 // 1.5-1.7x the mid-body width, which is a comparison-side check, not a
 // generator. Body thickness from t=620 back stays EXACTLY as approved.
+// RE-AUTHORED, RUN 0326 owner redirect: "The upper S part gets a bit too
+// broad and big. The broadest biggest should be neck and then head. Neck
+// doesn't really exist right now because it's just a huge dropoff." So the
+// profile now BUILDS through a broad NECK (the animal's widest stretch,
+// t~150..270, peak 1410) into the head, and the upper S behind it SLIMS
+// (1090/890 through the arc against the old 1040/940 ramp -- the body
+// reads as a distinct slimmer region so the neck can exist at all). The
+// neck arrives and departs on curves, not steps: one tube, no cliff --
+// both recorded failure modes (the sheer drop AND the dissolved blend)
+// judged against on the side render beside Side.png.
+// THE GROUNDED RUN'S RADII (t >= 560) ARE LOAD-BEARING: the grounded
+// slope table is asin(radius drop/segment) against exactly these values,
+// so they stay UNTOUCHED to the millimetre.
 constexpr TaperKey kTaper[] = {
-    {0, 1150},  {40, 1290}, {90, 1360}, {150, 1330}, {230, 1190},  // the CULMINATION
-    {330, 1040}, {450, 940}, {560, 885}, {620, 860},               // the swell builds in
-    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}    // tail stem
+    {0, 1120},  {40, 1250}, {90, 1330}, {150, 1370}, {220, 1410},  // head, then the NECK: broadest
+    {320, 1090}, {430, 890}, {560, 860}, {620, 860},               // the upper S, slimmed
+    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}    // tail stem (approved, exact)
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // Bind height of the body axis. This is the HEAD height: bone 0 is the nose
@@ -135,7 +148,8 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 539;  // retuned 2026-08-27 pass 3: the blade
+constexpr int32_t kBodyY = 648;  // 539 + the head's rise (owner: "way up");
+                                 // solved so node 11 keeps its height  // retuned 2026-08-27 pass 3: the blade
                                  // re-rake and the neck re-sum left the idle
                                  // belly touching 0 at one key -- 3 mm down
                                  // restores the authored sink (probe: idle
@@ -202,14 +216,24 @@ constexpr int kHeadEnd = kHeadStations + 2;  // station 11, x = 599 mm
 // face / side eyes / mouth like Front.png; the measurement removed the
 // bias, the render chose the value.
 #ifndef ZIXX_ATTITUDE
-#define ZIXX_ATTITUDE (-6000)
+// -12000, was -6000 (run 0326 owner redirect: "drops down like crazy...
+// needs to move way up"). Picked off the WIDE -16000..+14000 sweep sheet
+// (attitude-sweep-wide.png), judged with the re-authored shallow neck: at
+// -12000 the head CONTINUES the crown's line -- seamless, eye presented,
+// snout just above level; -6000 already tips down; -16000 creases the
+// crown. The render chose the value; the number is just its name.
+#define ZIXX_ATTITUDE (-12000)
 #endif
 constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
 // where the skull bone pivots, mm behind the nose (~station 3.5, the
 // culminating head's centroid — see the bone-table note)
 constexpr int32_t kHeadPivotMm = 0;
-constexpr int kSkullRigidTo = 5;  // stations 0..5 fully on the head bone
-constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
+constexpr int kSkullRigidTo = 4;  // stations 0..4 fully on the head bone
+                                  // (5 -> 4, run 0326: the hinge must be
+                                  // SEAMLESS -- a shorter rigid core and a
+                                  // longer falloff let the tube bend into
+                                  // the skull instead of creasing at it)
+constexpr int kSkullBlendTo = 11; // stations 5..11 blend head -> spine (seven
                                   // stations: three collapsed the fold onto
                                   // the eye's rear -- seen on the sweep)
 
@@ -381,11 +405,21 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // +4000 (~22 deg up), not less: the showcase cameras look DOWN ~15 deg,
     // so a merely-level head still presents its crown -- the lift must beat
     // the camera pitch before the face reads (checked on head-on frames).
-    4000, -11200, -12800, -12000,
-    // apex
-    0,
-    // the dive, past vertical and back under itself, exaggerated
-    8000, 16500, 23500, 27300, 21000, 12000,
+    // RE-AUTHORED, RUN 0326 OWNER REDIRECT ("You completely fucked up the
+    // head... drops down like crazy... droopy ball... It needs to move way
+    // up", and the rigid S is UNFROZEN as a named cause). Side.png measured
+    // by eye: the head is the fat end of the arc at ~62% of the crown
+    // height -- a SHORT fall out of the crown, the tube flowing into it --
+    // not the bottom of a 66-degree plunge. The neck behind the head now
+    // starts shallow (-27 deg) and curls progressively; the crown is
+    // rounded (-1500 instead of a flat 0 corner); the dive is slightly
+    // softened. kBodyY rises with it so the grounded run lands EXACTLY
+    // where it always did (sine-sum solved, then probe-verified).
+    3000, -5000, -8600, -11000,
+    // crown (rounded, not a corner)
+    -1500,
+    // the dive, past vertical and back under itself
+    6500, 13000, 19500, 24500, 20000, 11500,
     // the grounded run, LONG. These slopes RAMP because the belly line must
     // follow the TAPER: the centreline of a grounded run sits one radius up,
     // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
@@ -907,9 +941,14 @@ inline Bind station_bind(int i) {
 inline Bind head_station_bind(int i) {
   if (i <= kSkullRigidTo) return Bind{kBHead, kBHead, 64};
   if (i <= kSkullBlendTo) {
+    // long, even falloff across the blend window (run 0326 seamless-hinge
+    // rework): weight walks 64 -> 0 linearly over the window instead of
+    // the old four hard 13-steps
+
     const Bind sb = station_bind(i);
     const uint8_t spine = sb.w0 >= 32 ? sb.b0 : sb.b1;  // the majority bone
-    const int w = 51 - (i - kSkullRigidTo - 1) * 13;    // 51, 38, 25, 12 of 64
+    const int span = kSkullBlendTo + 1 - kSkullRigidTo;
+    const int w = (64 * (kSkullBlendTo + 1 - i)) / span;
     return Bind{kBHead, spine, static_cast<uint8_t>(w)};
   }
   return station_bind(i);

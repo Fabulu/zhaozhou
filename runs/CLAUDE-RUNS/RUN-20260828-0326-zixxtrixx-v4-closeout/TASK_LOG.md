@@ -356,3 +356,24 @@ slower, not more and faster.
 
 **The whole review resolves to one sentence: the shapes are right; the way the
 creature HOLDS them is mechanical.** Fix the holding, keep the shapes.
+
+### 2026-08-28 08:3x - THE MODEL WAVE (owner redirect, priority one)
+
+- Side.png measured by eye: the head is the arc's fat end at ~62% height,
+  a SHORT fall out of the crown. Ours plunged a 66-deg stroke and parked
+  the head at 33%. Stance re-authored: neck starts shallow (-27/-47/-60
+  deg), crown rounded (-1500), dive softened; kBodyY 539 -> 648 solved by
+  sine-sum so the grounded run keeps its exact height (probe: idle
+  [-8..-3], walk [-11..+10] — the belly law holds).
+- Attitude: WIDE sweep -16000..+14000 on one sheet from the fixed side
+  camera (attitude-sweep-wide.png). -12000 continues the crown's line —
+  seamless, eye up; -6000 already droops; -16000 creases. Picked -12000.
+- Hinge: kSkullRigidTo 5 -> 4, kSkullBlendTo 9 -> 11, linear 64->0
+  falloff replaces the four hard 13-steps.
+- Taper: neck now the BROADEST stretch (1410 at t=220), upper S slimmed
+  (1090/890 through the arc); grounded-run radii (t>=560) untouched to
+  the millimetre — they are load-bearing for the ground slopes.
+- Evidence: model-before-after-side.png, model-progression-side.png,
+  model-front-v1-v3.png, model-walk-sheet.png. Overlap hits fell 45k->6k
+  (the head left its own hook). All gates green; 22/27 clip payloads
+  re-pin (the model moved under every clip — the redirect's point).
