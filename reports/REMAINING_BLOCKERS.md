@@ -127,12 +127,19 @@
 > is not "the service is broken" but "the service had no port to be refused
 > on, so it could not be attached".
 >
-> **Fixed 2026-08-28 -- AUTHORED, NOT YET BUILT.** The executor's own sweep
-> owns the build trees for the next couple of hours and nothing else may build
-> while a sweep is in flight, so this is written and unverified. It becomes a
-> claim when it compiles and section 7 passes; until then read it as intent.
+> **Fixed and VERIFIED 2026-08-28.** `mul_ready_i` added, `F_ISSUE` holds
+> until granted.
 >
-> `mul_ready_i` added, `F_ISSUE` holds until granted.
+>     5,022 directed checks + 7,200 random checks   green
+>     24 groups under refusal, 11 real refusals     answers unchanged
+>     four-point CURVE II                           13 clocks, unmoved
+>     lone-reply latency                            17 cycles, unmoved
+>
+> The initiation interval did not move because a refusal costs a clock only
+> when one happens, and the gate measures a stream nobody is contending for.
+> Built in its own tree while the executor's sweep held `build-verify` -- the
+> two targets' source sets are disjoint, which is the condition BUILD.md rule
+> 5 actually names.
 > The operands are already parked in the finish registers and `mul_issue_o`
 > stays asserted across the refusal, so a retry costs one clock. Section 7 of
 > the differential refuses on a pseudo-random schedule and asserts that

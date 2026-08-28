@@ -474,8 +474,7 @@ int main(int argc, char** argv) {
       }
     }
 
-    printf("== section 7: the bank refuses, and the answers do not move ==
-");
+    printf("== section 7: the bank refuses, and the answers do not move ==\n");
     {
       // THE SERVICE COULD NOT BE ATTACHED WITHOUT THIS.
       //
@@ -528,8 +527,7 @@ int main(int argc, char** argv) {
         step(dut, mb);
         dut.eval();
       }
-      printf("   MEASURED: %d groups under refusal, %d refusals issued
-", kGroups,
+      printf("   MEASURED: %d groups under refusal, %d refusals issued\n", kGroups,
              mb.refusals);
       check(mb.refusals > 0, "the bank ACTUALLY refused -- the test is not vacuous", 1,
             mb.refusals > 0 ? 1 : 0);

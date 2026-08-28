@@ -120,8 +120,9 @@ Found while specifying the curve-service attach, before writing it.
 >   `mul_valid_i`, which after a refusal never arrives. It stalls forever
 >   rather than consuming a phantom product.
 >
-> Fixed the same day -- AUTHORED, NOT YET BUILT, because a sweep owns the
-> build trees: `mul_ready_i` added, `F_ISSUE` holds until granted.
+> Fixed and verified the same day: `mul_ready_i` added, `F_ISSUE` holds until
+> granted. 5,022 directed and 7,200 random checks green, 24 groups run under
+> refusal with 11 real refusals, and the II gate still measures 13.
 > What survives unchanged is the conclusion below -- services-first is a
 > requirement, not a preference -- and it is now belt AND braces rather than
 > the only thing standing between the design and a deadlock.

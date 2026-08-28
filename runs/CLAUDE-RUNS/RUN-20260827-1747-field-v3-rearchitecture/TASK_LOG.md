@@ -689,3 +689,94 @@ sessions share it. Stage explicitly, by path, always.
 The curve and distance services have the IDENTICAL defect -- neither has a
 `mul_ready` input, so a refused service advances as though its multiply
 happened. The same structural answer applies to both.
+
+---
+
+## 2026-08-28 -- STEP 1 FOR ALL NINE REMAINING OPS: the oracle resolves
+
+Checked before writing any RTL, which is the rule. All nine remaining Field IR
+ops are fully defined on the reference side, in all three places that matter:
+
+| | where |
+| --- | --- |
+| shape (dst width, src count, imm use, class) | `reference/include/zfield/generated/zfield_optable.hpp` |
+| decode acceptance | `reference/src/zfield/zfield_decode.cpp` |
+| semantics | `reference/include/zfield/zfield_steps.hpp` |
+
+So there is nothing to design on the reference side and no oracle to write --
+the differential for each op is `zfield::execute_point` against the RTL, the
+same shape the executor already uses.
+
+`zfield_plan.cpp` special-cases only RING (UOP_RING_PREP, for the nine
+separately-rounded products when its radii are invariant). The rest plan as
+ordinary uops.
+
+The costing that came out of this reading is in
+`reports/FIELD_V3_REMAINING_OPS.md`, together with the finding that matters
+more than any of the counts: **five more v2 units drive the shared lane with no
+`mul_ready`**, and they are correct today only because `zhao_field_seq` keeps
+one instruction in flight -- a premise the v3 bank exists to retire.
+
+### A git hazard worth writing down
+
+A push failed on a race with the creature session, and `git pull --rebase`
+refused because the tree had unstaged changes. **Those changes were a live
+mutant**: the exec sweep was mid-run and had a mutation applied to
+`zhao_probe_v3_exec.sv` at that moment.
+
+Rebasing or stashing there would have written the working tree underneath a
+running sweep -- reverting the mutant mid-score at best, and at worst leaving
+the sweep to restore a snapshot over rebased content. The commit is local and
+harmless; the push waits for the sweep.
+
+**The rule: no git operation that WRITES the working tree while a sweep is in
+flight.** Commit and fetch are fine. Rebase, stash, checkout and reset are not.
+
+---
+
+## 2026-08-28 -- the curve service's refusal loop is VERIFIED
+
+    5,022 directed checks + 7,200 random checks   green
+    24 groups under refusal, 11 real refusals     answers unchanged
+    four-point CURVE II                           13 clocks, unmoved
+    lone-reply latency                            17 cycles, unmoved
+
+The II did not move because a refusal costs a clock only when one happens, and
+the gate measures a stream that nothing is contending for. That is worth
+stating rather than celebrating: the gate does not exercise the fix, section 7
+does.
+
+### It was built WHILE the executor's sweep was running, on purpose
+
+BUILD.md rule 5 says the real condition is one tree, one writer -- not "no
+build anywhere", which was an earlier guess later explained by ccache. The two
+targets here are provably disjoint: `test_field_curve_svc_directed` elaborates
+`zhao_probe_curve_svc.sv` and nothing else, and the exec sweep mutates
+`zhao_probe_v3_exec.sv` and `zhao_field_v3_rf.sv`. Checked with
+`sweep_consumers.py` rather than assumed, in its own tree, with the object
+cache off to match.
+
+Configuring that tree cost 251 seconds and 136 Verilator invocations, because
+a fresh tree elaborates every target in the project.
+
+### THE BACKSLASH TRAP, which has now cost four edits
+
+Every scripted edit in this session goes through a shell heredoc, and this
+environment COLLAPSES a doubled backslash to a single one inside one. So a
+patch script that means to write the two characters backslash-n writes a
+line break instead, and it does it silently. It has produced:
+
+* a Python file with an unterminated string literal,
+* three anchor searches that matched zero times and looked like drift,
+* and two C++ `printf`s split across lines, which is what failed this build.
+
+The fix that works is to build the escape at run time -- `BS = chr(92)` and a
+`@N@` placeholder substituted in -- never to type a backslash inside a
+heredoc. Every patch script from here does that.
+
+### The other thing not to do while a sweep runs
+
+Do not edit the sweep's own `.sh` files. Bash reads a script INCREMENTALLY
+from a file offset, so editing one under a running shell shifts the offsets and
+the shell resumes mid-token. Nothing went wrong -- I nearly corrected a stale
+comment in `run_sweep_detached.sh` and stopped. It goes in when the sweep ends.

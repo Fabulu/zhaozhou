@@ -135,3 +135,55 @@ a defect that only exists at the seam. Every step above therefore ends at a
 COMPOSITION test with a rival claimant that is proven to have actually refused
 -- not at the block's own sweep. A sweep is how a block is checked against its
 own claims; it cannot test a claim the block makes about somebody else.
+
+---
+
+## The shape NOISE2 and RIDGE want on a four-wide bank
+
+Worked out before writing the unit, because the mapping turns out to be the
+whole design and it is a good fit rather than a compromise.
+
+**The v2 noise unit is scalar.** It walks one point through six product states
+with a wait state after each, because the shared lane answers two clocks after
+it is asked. The v3 executor is a FOUR-POINT machine and the bank is FOUR
+WIDE, so the port is not "run the v2 unit four times":
+
+> **One four-wide bank request = the same hash step for all four points.**
+
+A four-point NOISE2 is then SIX bank requests, not twenty-four products
+scheduled somehow. A four-point RIDGE is four. The v2 state machine survives
+almost unchanged -- the same six steps in the same order -- and only its
+datapath widens.
+
+    step 1   x[l] * 0x9E3779B1      all four points        (shared by lanes)
+    step 2   y[l] * 0x85EBCA77      all four points        (shared by lanes)
+    step 3   s0[l] * 747796405      lane 0's LCG advance
+    step 4   w0[l] * 277803737      lane 0's RXS-M-XS
+    step 5   s1[l] * 747796405      lane 1's LCG advance
+    step 6   w1[l] * 277803737      lane 1's RXS-M-XS
+
+RIDGE stops after step 4; it uses lane 0 only.
+
+Each step depends on the one before, so the sequence cannot be overlapped
+within a group and the latency is six requests x (issue + 2) plus the finish.
+That is the same dependent-chain shape as the executor's DOT, which is why
+this is the right op to attach FIRST: it is the smallest thing that exercises
+"a dependent product chain on a bank that can refuse", and that is precisely
+the shape that took six attempts to get right in the executor.
+
+### One correctness argument that has to be written down
+
+`zref::noise2_hash` is defined on `uint32_t` and every product is **modulo
+2^32**, never saturating. The bank lane is **33x33 signed**. Those agree on
+the only bits that are read: the low 32 bits of a signed product are
+bit-identical to the low 32 bits of the unsigned product of the same bit
+patterns, because sign extension only affects bits at or above the operand
+width. So the unit sign-extends into the lane, reads `mul_p_i[31:0]`, and the
+result is exact -- and `zhao_field_noise` already does exactly this, with the
+rule written at its operand mux as "law 3: modulo 2^32, never saturating".
+
+That is worth restating rather than inheriting, because it is the one place
+where the shared bank's signedness could silently disagree with an op's
+semantics, and the disagreement would show up as a hash that is right for
+small coordinates and wrong for large ones -- the failure that looks like a
+bad seed rather than a bad multiply.

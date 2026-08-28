@@ -195,7 +195,7 @@ Also note `cmake` itself is shadowed on PATH exactly like `ctest`: a bare
 `The CMAKE_CXX_COMPILER: C is not a full path`, which is a corrupted-looking
 error with a PATH cause.
 
-## Running a mutation sweep unattended, and the five ways it fails
+## Running a mutation sweep unattended, and the seven ways it fails
 
 2026-08-28. A single multiplier-bank sweep took **five aborted attempts** to
 run, and not one of them failed for the reason it appeared to. Every guard in
@@ -304,6 +304,25 @@ plausible hides the failure that produced it.** Every silent fallback here --
 the sweep name, the build directory, `/tmp`, `USERPROFILE` -- produced a run
 that looked normal and was wrong.
 
+### 7. No git operation that WRITES the working tree
+
+`git pull --rebase` refused with "cannot pull with rebase: You have unstaged
+changes" on 2026-08-28. The unstaged change was a **live mutant** -- the exec
+sweep was mid-run with a mutation applied to its RTL.
+
+Rebasing or stashing would have written the working tree underneath a running
+sweep: reverting the mutant mid-score at best, and at worst leaving the sweep's
+own restore to copy its startup snapshot over rebased content, which would look
+exactly like a lost commit.
+
+`commit`, `fetch`, `log`, `status` and `diff` are safe. `rebase`, `stash`,
+`checkout`, `reset` and `pull` are not. A local commit that cannot be pushed
+yet costs nothing; wait for the sweep.
+
+The refusal was luck, not a guard -- it only happened because a concurrent
+session had pushed first. With nothing racing, the push would have succeeded
+and the hazard would have gone unnoticed until the day it did not.
+
 ### And check the tree afterwards, from outside the sweep
 
 ```
@@ -315,4 +334,3 @@ mutated then, restore faithfully restores the mutant and every guard inside
 the driver agrees the tree is pristine. This checks against the mutant table
 instead -- and not against HEAD, because HEAD itself carried a mutant for one
 commit. It has caught five strandings.
-
