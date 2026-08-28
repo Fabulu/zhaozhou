@@ -419,3 +419,50 @@ mutated then, restore faithfully restores the mutant and every guard inside
 the driver agrees the tree is pristine. This checks against the mutant table
 instead -- and not against HEAD, because HEAD itself carried a mutant for one
 commit. It has caught five strandings.
+
+### 9. WRITING THE MUTANTS: prefer a VALUE change, and MOVING a use counts as
+### deleting one
+
+This is not style advice. An unbuildable mutant is a **discard**, not evidence,
+and a discard fails the run -- so a mutant that cannot lint costs the same as a
+mutant that was never written. Twenty-two have been refused across the Field v3
+family for one of two reasons, and the second was learned late.
+
+**Do not tie a port or a signal to a constant.** It orphans whatever fed it,
+Verilator raises `UNUSEDSIGNAL`, and `-Wall` makes that an error:
+
+```
+.flush_i(1'b0)          orphans flush_i        -> .flush_i(flush_i & long_valid_i)
+out_k[l] = 7'd31        orphans expo           -> out_k[l] = 7'(30 + expo[l])
+if (1'b0)               orphans newt_step      -> finish inside the first branch
+```
+
+**And do not MOVE a read either.** This half was missing until a table whose
+mutants were almost all port maps hit it ten times in one run. A wiring mutant
+does not delete a read, it redirects one -- and the thing it redirected off is
+now unread. Verilator tracks usage **per bit**, so this catches vector slots
+too:
+
+```
+bank_req_ready[1] -> [0]       orphans bit 1   -> a & b, a coupled handshake
+nz_b[l] -> nz_a[l]             orphans nz_b    -> nz_b[3 - l], mirrored
+drain_data -> alu_wb_data_i    orphans it      -> CROSS the two claimants
+```
+
+**The repair is not mechanical, and the obvious one is sometimes wrong.**
+Pointing a multiplier's B operand at its A orphans B; the obvious fix is to
+swap A and B, which keeps both live and is **equivalent**, because
+multiplication commutes. It would have scored as a survivor and taught nothing.
+
+**The pattern has held every single time: the reshape the linter forces is a
+better mutant than the one first written.** "Delete a use" makes a defect that
+is obvious and that almost any check trips over. "Change a value" makes one
+that needs the right stimulus, which is the thing actually being measured. Two
+of the NORMALIZE reshapes were strictly sharper than their originals -- one
+turned a hang into a wrong number, and a hang is caught by any guard at all.
+
+Run the preflight alone before spending a sweep on it:
+
+```
+python tools/sweep_<name>_preflight.py
+```
