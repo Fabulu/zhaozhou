@@ -300,7 +300,7 @@ module zhao_field_v3_dispatch #(
         g_op_r  <= long_op_i;
         g_dst_r <= long_dst_i;
         g_ctx_r[fill_r[1:0]] <= long_ctx_i;
-        g_s0_r[3 - fill_r[1:0]]  <= long_s0_i;
+        g_s0_r[fill_r[1:0]]  <= long_s0_i;
         g_s1_r[fill_r[1:0]]  <= long_s1_i;
         g_s2_r[fill_r[1:0]]  <= long_s2_i;
         fill_r <= fill_r + 3'd1;
