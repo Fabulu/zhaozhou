@@ -82,12 +82,19 @@ MUTANTS = [
     ("S09 the Horner's second step folds in C2 rather than C1",
      "            u[l] <= mad_fin(prod[l], c1[l]);",
      "            u[l] <= mad_fin(prod[l], c2[l]);"),
-    ("S10 the first multiply takes C2 instead of C3",
-     "        P_H1:    mul_b[l] = 33'(c3[l]);",
-     "        P_H1:    mul_b[l] = 33'(c2[l]);"),
-    ("S11 the multiplier's first operand is the coefficient, not t",
+    # Reshaped: pointing P_H1 at c2 ORPHANS c3, which is used in exactly one
+    # place. Pointing the SECOND Horner step at c3 keeps both live and is the
+    # same claim -- the Horner multiplies by the wrong thing.
+    ("S10 the second Horner step multiplies by C3 rather than by u",
+     "        P_H2:    mul_b[l] = 33'(u[l]);",
+     "        P_H2:    mul_b[l] = 33'(c3[l]);"),
+    # Reshaped: h_t is read in exactly one place, so replacing it orphans it.
+    # BROADCASTING lane 0's parameter keeps it live and is the sharper defect
+    # anyway -- it needs a group whose four points sit in different segments to
+    # be visible at all, which is what section 2 provides.
+    ("S11 every point uses point 0's segment parameter",
      "      mul_a[l] = 33'(h_t[l]);",
-     "      mul_a[l] = 33'(c3[l]);"),
+     "      mul_a[l] = 33'(h_t[0]);"),
     # fx_mad is ONE rounding: a*b + (c << 16) formed at full width and rescaled
     # once. Rescaling the product FIRST and adding after is two roundings, and
     # it is exactly the arrangement ROT uses -- so this mutant is the "same way

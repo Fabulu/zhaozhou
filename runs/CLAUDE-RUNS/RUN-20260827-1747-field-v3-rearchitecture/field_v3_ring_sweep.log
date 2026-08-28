@@ -1,0 +1,66 @@
+== consumer roster ==
+== preflight ==
+preflight ok: G01 t0 is formed against m rather than r0
+preflight ok: G02 the two smoothsteps use each other's reciprocal
+preflight ok: G03 the subtraction runs the wrong way round
+preflight ok: G04 t0 is squared against t1 instead of itself
+preflight ok: G05 the Horner constant is 2 where the law says 3
+preflight ok: G06 the doubling constant is three
+preflight ok: G07 the clamp's lower rail is dropped
+preflight ok: G08 the clamp's upper rail is twice as high
+preflight ok: G09 t1 is not clamped at all, only t0
+preflight ok: G10 the clamp is applied to the SQUARE rather than to t
+preflight ok: G11 the second smoothstep starts from r0 rather than m
+preflight ok: G12 the finish uses s1 where the law says ONE MINUS s1
+preflight ok: G13 the finish multiplies the two rising halves
+preflight ok: G14 the second Horner uses the FIRST smoothstep's doubled term
+preflight ok: G15 the rescale truncates instead of rounding half up
+preflight ok: G16 the rescale shifts by the wrong amount
+preflight ok: G17 two points' distances are exchanged
+preflight ok: G18 the answer is written from the wrong lane's product
+preflight ok: G19 an issue advances without a grant
+preflight ok: G20 a product is consumed on the clocks it is absent
+preflight ok: G21 the walk skips a step, so one product is never issued
+preflight ok: G22 a saturating subtraction is not reported
+preflight ok: G23 the multiply flag is reported on the mirrored lane
+PREFLIGHT: all 23 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 4754c324bd79d021)
+  G01 t0 is formed against m rather than r0  caught
+  G02 the two smoothsteps use each other's reciprocal  caught
+  G03 the subtraction runs the wrong way round  caught
+  G04 t0 is squared against t1 instead of itself  caught
+  G05 the Horner constant is 2 where the law says 3  caught
+  G06 the doubling constant is three  caught
+  G07 the clamp's lower rail is dropped  caught
+  G08 the clamp's upper rail is twice as high  caught
+  G09 t1 is not clamped at all, only t0  caught
+  G10 the clamp is applied to the SQUARE rather than to t  equivalent (proven)
+        THE CLAMP IS ALREADY IMPLIED BY THE ONE BEFORE IT. t is clamped to [0, 1] immediately after its own product and BEFORE the square, so t*t rescaled cannot leave [0, 1] -- measured across the whole domain of t, the square spans 0 .. 65532, which is inside the rail. Adding a clamp to the square is therefore the identity function for every input the block can be given. THE MUTANT IS NOT NONSENSE, which is why it is worth keeping: moving the clamp ONTO the square instead of leaving it on t would be a real defect, and G09 -- dropping t1's clamp entirely -- is caught. This one only ADDS a redundant clamp. RE-SCORE THIS IF t's OWN CLAMP EVER MOVES OR WIDENS: the redundancy is a consequence of t being in [0, 1], and nothing else.
+  G11 the second smoothstep starts from r0 rather than m  caught
+  G12 the finish uses s1 where the law says ONE MINUS s1  caught
+  G13 the finish multiplies the two rising halves  caught
+  G14 the second Horner uses the FIRST smoothstep's doubled term  caught
+  G15 the rescale truncates instead of rounding half up  caught
+  G16 the rescale shifts by the wrong amount  caught
+  G17 two points' distances are exchanged  caught
+  G18 the answer is written from the wrong lane's product  caught
+  G19 an issue advances without a grant  caught
+  G20 a product is consumed on the clocks it is absent  caught
+  G21 the walk skips a step, so one product is never issued  caught
+  G22 a saturating subtraction is not reported  equivalent (proven)
+        THE SUBTRACTION AT THE FINISH CANNOT SATURATE. s1 is a smoothstep output, t1s*(3 - 2*t1) with t1 in [0, 1], and measured across that domain it spans 0 .. 65536 exactly -- that is [0, 1]. So fx_sub(1, s1) lands in [0, 1] and never reaches a rail: zero saturations over the whole domain. Removing its report removes a report that can never fire. THE OTHER THREE REPORTS ARE REACHABLE and are not equivalent -- sub_fired(d - r0) fires for extreme d, and G22 does not touch it. Only the G_P9 site is dead. RE-SCORE THIS IF s1 EVER LEAVES [0, 1]: a change to the smoothstep's Horner constants, or to t's clamp, would put the rails back in range.
+  G23 the multiply flag is reported on the mirrored lane  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_ring.sv (23 mutants checked)
+
+== tally ==
+  attempted:  23 / 23
+  caught:     21
+  equivalent: 2
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_ring.sv (23 mutants checked)
+CLEAN:0

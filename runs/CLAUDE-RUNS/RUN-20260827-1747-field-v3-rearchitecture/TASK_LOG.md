@@ -1327,3 +1327,75 @@ replaced one of two, because `mutate()` does one replacement -- so rA was still
 orphaned. Moved to the CAPTURE, where the two assignments are adjacent and one
 anchor covers both. **A mutation that must change two places needs an anchor
 that spans them, or it changes one and breaks the build.**
+
+---
+
+## 2026-08-28 (evening) -- every op exists; RING closes; the executor parks
+
+    FIELD.V3.RING   23 mutants  21 caught  2 equivalent (proven)  0 survived
+    NORMALIZE       327 directed + 3,600 random
+    SPLINE          110 directed + 1,200 random
+    executor        31 checks, barrel still pinned at 69 and 190
+
+### The executor's long-op path
+
+It hands a service op out and PARKS its context, which is the lifecycle
+`zhao_probe_ctx_fifo` has described all along. A parked context keeps
+`inflight_r` so it cannot re-issue, gains `waiting_r` so the flush rule can see
+it, and does NOT advance its pc -- the instruction has not finished, it has
+been handed over.
+
+**Flush: an eager one costs group size, a late one deadlocks.** The safe rule
+is "no active context can still join", and a context can join exactly while it
+is RUNNING rather than parked, because every context runs the same program. So
+flush when every active context is parked.
+
+### A FOURTH missing field, found the same way as the third
+
+The dispatcher carried THREE source scalars; ROT3 needs FOUR -- three
+components and an angle, `n_src` 4 in the generated table.
+
+    the executor's open-loop DOT     no mul_ready to refuse it
+    the curve service's hang         no mul_ready port at all
+    the dispatcher's missing imm     no port to carry it
+    the dispatcher's missing s3      no port to carry it
+
+Four seam defects, none of them findable by sweeping either side, all found
+within minutes of wiring two blocks together.
+
+### THE RULE I HAD ONLY WRITTEN HALF OF, and it cost a sweep
+
+Mode 5's disjointness rule is about MUTATION: another build must not elaborate
+a file the sweep can mutate. I checked that -- ring.sv is disjoint from
+everything I was editing -- and it was not sufficient.
+
+**A sweep re-runs `cmake` over the WHOLE PROJECT before every rebuild.** So any
+file that breaks the CONFIGURE breaks the sweep, including files it never
+elaborates. Adding a port to the dispatcher and connecting it in svcpath is a
+two-file edit, and for the few minutes between them the project did not
+configure. The sweep's next rebuild landed there: seventeen of twenty-three
+mutants DISCARDED, exit 4.
+
+Nothing was corrupted and nothing was falsely scored. The guard discarded
+rather than pretending, and `sweep_check_clean.py` confirmed ring.sv was
+untouched. The cost was the run, and it was my fault twice: once for the edit,
+once for having written the rule too narrowly.
+
+BUILD.md gains mode 8. `git_add_safe.py --check` now answers "is a sweep
+running" for exactly this -- ask before starting a multi-file RTL edit, not
+only before staging one.
+
+### The orphan rule, seven and eight
+
+    S10  pointed P_H1 at c2      -> orphaned c3
+    S11  replaced h_t            -> orphaned h_t
+
+Both signals are read in exactly ONE place, so any mutation there orphans them.
+Reshaped to per-point defects, and both are sharper than what they replaced:
+S11 now broadcasts lane 0's parameter, which needs a group whose four points
+sit in DIFFERENT segments to be visible at all.
+
+Eight instances now, and the pattern holds every time: the reshape the linter
+forces is a better mutant than the one first written, because "delete a use"
+makes a defect that is obvious and "change a value" makes one that needs the
+right stimulus.
