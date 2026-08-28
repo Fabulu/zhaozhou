@@ -110,7 +110,18 @@ rebuild() {
   # link" abort with no cause -- a guard firing correctly while the reason sat
   # three layers away and invisible. The log is overwritten each rebuild and
   # is the first place to look when a sweep aborts at exit 6.
-  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >"$REBUILD_LOG" 2>&1
+  # -DOBJCACHE_ENABLED=OFF: Verilator's own CMake auto-detects ccache, and
+  # ccache refuses to run without USERPROFILE, which a DETACHED process does
+  # not inherit. Four sweeps aborted on "pristine target did not link" whose
+  # real cause was `ccache: error: The USERPROFILE environment variable must
+  # be set` -- ninja exited 1 and produced no binary.
+  #
+  # Setting USERPROFILE in the detached process did not work through any of
+  # inheritance, an inline export, or derivation from HOME. Turning the
+  # object cache OFF removes the dependency rather than negotiating with it.
+  # A sweep rebuilds one target dozens of times, so losing the cache costs
+  # real time -- but a sweep that cannot build costs all of it.
+  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
   echo "CMAKE_EXIT:$?" >>"$REBUILD_LOG"
   # shellcheck disable=SC2086
   ninja -C build-verify $TARGETS >>"$REBUILD_LOG" 2>&1

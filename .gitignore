@@ -55,3 +55,4 @@ __pycache__/
 gate.log
 sweep_*.log
 pf.txt
+.ccache/

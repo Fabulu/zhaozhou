@@ -53,20 +53,25 @@ LOGDIR="${2:-runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture}"
 
 cd "$(dirname "$0")/.." || exit 1
 
-# USERPROFILE MUST BE SET OR CCACHE FAILS AND THE BUILD DIES.
+# CCACHE NEEDS BOTH, AND I TESTED THEM ONE AT A TIME.
 #
-# This cost four aborted sweeps. The symptom was "ABORT: pristine target did
-# not link"; the cause was ccache refusing to run because USERPROFILE was
-# unset in the detached process, so ninja exited 1 and no binary was
-# produced. The driver's guard was right every time and said nothing about
-# why -- the answer only appeared once the rebuild logged CMAKE_EXIT,
-# NINJA_EXIT and the environment it ran in.
+# Four aborted sweeps, all showing "ABORT: pristine target did not link". The
+# real error was in the rebuild log all along once it started being written:
 #
-# docs/BUILD.md records this for the interactive case. A detached process
-# does not inherit it the same way, so it is set here explicitly.
-export USERPROFILE="${USERPROFILE:-C:\Users\Fabian Trunz}"
-
-export VERILATOR_ROOT="C:/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator"
+#     ccache: error: The USERPROFILE environment variable must be set
+#
+# A detached process does not inherit USERPROFILE the way an interactive shell
+# does. I tried inheritance, an inline export, and deriving it from HOME --
+# and then replaced that attempt with CCACHE_DIR, which removed the export
+# while adding the cache path. So the two fixes were never in the file at the
+# same time, and each looked like it had failed.
+#
+# Both are set here. CCACHE_DIR also puts the cache inside the repo, where
+# every shell agrees on the path, rather than in a per-user temp directory
+# that Git bash and msys bash resolve differently.
+export USERPROFILE="C:\Users\Fabian Trunz"
+export CCACHE_DIR="$(pwd)/.ccache"
+mkdir -p "$CCACHE_DIR"export VERILATOR_ROOT="C:/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator"
 export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
 
 LOG="$LOGDIR/${SWEEP}_sweep.log"
