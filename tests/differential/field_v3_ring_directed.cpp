@@ -128,13 +128,20 @@ Prep prepare(int32_t r0, int32_t r1) {
 
 struct Want {
   int32_t r[kLanes];
+  bool sat_mul[kLanes];
+  bool sat_add[kLanes];
 };
 
 Want oracle(const Prep& p, const int32_t* d) {
   Want w{};
   for (int l = 0; l < kLanes; ++l) {
+    // A LEDGER PER LANE, because the flags are per lane. One ledger for the
+    // whole group would smear four points' saturations into one answer and
+    // make a mirrored report indistinguishable from a correct one.
     zref::SatLedger L;
     w.r[l] = zfield::steps::ring_prepared(d[l], p.r0, p.m, p.rA, p.rB, &L);
+    w.sat_mul[l] = (L.mul != 0);
+    w.sat_add[l] = (L.add != 0);
   }
   return w;
 }
@@ -173,6 +180,12 @@ int run_one(Vzhao_field_v3_ring& dut, MulBank& mb, const Prep& p, const int32_t*
   for (int l = 0; l < kLanes; ++l) {
     check(got[l] == (uint32_t)w.r[l], (what + ": lane " + std::to_string(l)).c_str(),
           (uint32_t)w.r[l], got[l]);
+    check(((dut.sat_mul_o >> l) & 1) == (w.sat_mul[l] ? 1u : 0u),
+          (what + ": lane " + std::to_string(l) + " mul flag").c_str(), w.sat_mul[l] ? 1 : 0,
+          (dut.sat_mul_o >> l) & 1);
+    check(((dut.sat_add_o >> l) & 1) == (w.sat_add[l] ? 1u : 0u),
+          (what + ": lane " + std::to_string(l) + " add flag").c_str(), w.sat_add[l] ? 1 : 0,
+          (dut.sat_add_o >> l) & 1);
   }
   check(dut.tag_o == tag, (what + ": tag").c_str(), tag, dut.tag_o);
   step(dut, mb);
@@ -247,6 +260,52 @@ int main(int argc, char** argv) {
       const Prep p = prepare(1 << 16, (1 << 16) + 2);
       const int32_t d[kLanes] = {0, 1 << 16, (1 << 16) + 1, (1 << 16) + 2};
       run_one(dut, mb, p, d, 0x30, "one-LSB ring");
+    }
+
+    printf("== section 4b: an ODD radius sum, where rA and rB DIFFER ==\n");
+    {
+      // G02 -- swapping the two reciprocals -- survived the first sweep, and
+      // the reason is geometry: m is the MIDPOINT, so m - r0 and r1 - m are
+      // equal and rA == rB for every ring whose radii sum to an EVEN number.
+      // Every table in this file did. Swapping equal things is a no-op.
+      //
+      // The midpoint ROUNDS, so an odd sum splits the span unevenly by one
+      // LSB and the two reciprocals differ. That is the only shape in which
+      // the mutant is observable at all.
+      // THE SPAN HAS TO BE IN A NARROW BAND, and both ends were measured.
+      // Too LARGE and a one-LSB difference maps to the same reciprocal -- at a
+      // span of 131072 it does. Too SMALL and BOTH reciprocals saturate to
+      // INT32_MAX and are equal again -- at spans of one and two they do,
+      // because 2^32/s exceeds the rail for s <= 2.
+      //
+      // Around a thousand the reciprocal is neither railed nor flat, so an odd
+      // sum splits the span into 1001 and 1000 and the two differ.
+      const Prep p = prepare(0, 2001);
+      printf("   MEASURED m-r0 = %d, r1-m = %d (rA %s rB)\n", p.m - p.r0, p.r1 - p.m,
+             (p.rA == p.rB) ? "==" : "!=");
+      check(p.rA != p.rB, "the two prepared reciprocals really do differ", 1,
+            (p.rA != p.rB) ? 1 : 0);
+      const int32_t d[kLanes] = {0, 500, 1001, 2001};
+      run_one(dut, mb, p, d, 0x40, "odd radius sum");
+    }
+
+    printf("== section 4c: saturation on SOME lanes, so a mirrored flag shows ==\n");
+    {
+      // G23 -- reporting the multiply flag on the mirrored lane -- survived
+      // for the same reason ROT's R22 did: every earlier group saturates on no
+      // lane or on all four, and a mirror is invisible when the vector is
+      // symmetric.
+      //
+      // A one-LSB ring makes rA enormous, so a point far from r0 saturates and
+      // a point beside it does not.
+      const Prep p = prepare(1 << 16, (1 << 16) + 2);
+      const int32_t d[kLanes] = {(int32_t)0x80000000, 1 << 16, (1 << 16) + 1, (1 << 16) + 2};
+      run_one(dut, mb, p, d, 0x41, "saturation on lane 0 only");
+      printf("   MEASURED sat_mul_o = %X\n", dut.sat_mul_o);
+      check((dut.sat_mul_o & 1u) == 1u, "lane 0 reports its multiply saturation", 1,
+            dut.sat_mul_o & 1u);
+      check((dut.sat_mul_o & 0x8u) == 0u, "and lane 3 -- its mirror -- does NOT", 0,
+            (dut.sat_mul_o >> 3) & 1u);
     }
 
     printf("== section 5: the bank refuses, and the answers do not move ==\n");

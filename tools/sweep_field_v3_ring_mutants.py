@@ -185,7 +185,35 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "G10": (
+        "THE CLAMP IS ALREADY IMPLIED BY THE ONE BEFORE IT. t is clamped to "
+        "[0, 1] immediately after its own product and BEFORE the square, so "
+        "t*t rescaled cannot leave [0, 1] -- measured across the whole domain "
+        "of t, the square spans 0 .. 65532, which is inside the rail. Adding a "
+        "clamp to the square is therefore the identity function for every "
+        "input the block can be given. "
+        "THE MUTANT IS NOT NONSENSE, which is why it is worth keeping: moving "
+        "the clamp ONTO the square instead of leaving it on t would be a real "
+        "defect, and G09 -- dropping t1's clamp entirely -- is caught. This "
+        "one only ADDS a redundant clamp. "
+        "RE-SCORE THIS IF t's OWN CLAMP EVER MOVES OR WIDENS: the redundancy "
+        "is a consequence of t being in [0, 1], and nothing else."
+    ),
+    "G22": (
+        "THE SUBTRACTION AT THE FINISH CANNOT SATURATE. s1 is a smoothstep "
+        "output, t1s*(3 - 2*t1) with t1 in [0, 1], and measured across that "
+        "domain it spans 0 .. 65536 exactly -- that is [0, 1]. So "
+        "fx_sub(1, s1) lands in [0, 1] and never reaches a rail: zero "
+        "saturations over the whole domain. Removing its report removes a "
+        "report that can never fire. "
+        "THE OTHER THREE REPORTS ARE REACHABLE and are not equivalent -- "
+        "sub_fired(d - r0) fires for extreme d, and G22 does not touch it. "
+        "Only the G_P9 site is dead. "
+        "RE-SCORE THIS IF s1 EVER LEAVES [0, 1]: a change to the smoothstep's "
+        "Horner constants, or to t's clamp, would put the rails back in range."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):
