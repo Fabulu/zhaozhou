@@ -321,3 +321,38 @@ rather than as a lump with a ball stuck on it.
 
 Judged on the side diagnostic camera beside `Side.png`, candidate ladder on one
 contact sheet, frames committed to `evidence/`.
+
+### Correction: KEEP the S — relax how it is HELD, not its shape
+
+*"We really need to keep the S, but we also need to keep it less rigid. The
+rigidity worked in our favor a lot because it's a difficult shape, but we need to
+find ways to relax it without ruining it. It also needs to look organic and
+bobb-y."*
+
+**I had told the agent "the S is UNFROZEN — relax it", which reads as licence to
+change the shape. Corrected.** The S is the signature and it stays. It is a hard
+shape to hold and the rigidity is what has been holding it — hence "worked in our
+favor". Soften the wrong thing and the S is lost.
+
+**The distinction that makes this actionable: the S is a POSE; rigidity is how
+that pose is HELD.** Not where the body goes — the quality of it going there.
+From a wire bent into an S, to an animal choosing to sit in one.
+
+Levers offered (all authored by eye): non-uniform curvature (a mechanical arc has
+constant radius; an organic curve changes radius along its length — probably the
+single biggest win); slight asymmetry between the lobes; the whole S slowly
+DRIFTING so key 0's S is not key 40's; secondary motion travelling through the
+body; and "bobb-y", which is a direct instruction — the head-bob he calls magic,
+extended as a quality through the whole shape, remembering that the head is bone
+0 = ROOT so it is a root-displacement problem.
+
+**The idle's recipe is the model to copy**: four motions on four incommensurate
+periods so the loop never resolves. That is the clip he called "absolutely sick".
+
+**Frequency rule decides all of it: wobble is not jitter.** His "twitchy"
+look-around and "robotic" tail-balance are the same axis as the twice-rejected
+falling clip — too fast and too mechanical, not too little motion. Fewer and
+slower, not more and faster.
+
+**The whole review resolves to one sentence: the shapes are right; the way the
+creature HOLDS them is mechanical.** Fix the holding, keep the shapes.
