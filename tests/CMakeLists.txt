@@ -1489,6 +1489,21 @@ verilate(test_field_v3_dispatch_directed
 add_test(NAME field_v3_dispatch_directed COMMAND test_field_v3_dispatch_directed)
 set_tests_properties(field_v3_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# FIELD v3 Phase 4: the writeback arbiter. The register file has ONE write
+# port and, once the services are attached, three streams want it: the ALU
+# lanes, and one dispatcher per service. The POLICY is a runtime input rather
+# than a parameter, so one model can measure the policies against each other on
+# the same traffic -- which is the whole reason the choice is still open. Tie
+# it to a constant in the engine and synthesis prunes the unreachable arms.
+add_executable(test_field_v3_wbarb_directed differential/field_v3_wbarb_directed.cpp)
+target_link_libraries(test_field_v3_wbarb_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_wbarb_directed
+  PREFIX Vzhao_field_v3_wbarb
+  TOP_MODULE zhao_field_v3_wbarb
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv)
+add_test(NAME field_v3_wbarb_directed COMMAND test_field_v3_wbarb_directed)
+set_tests_properties(field_v3_wbarb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),

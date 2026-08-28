@@ -61,8 +61,9 @@ void drive(Vzhao_field_v3_wbarb& t, uint8_t asking) {
 struct Counts {
   int served[kClaimants] = {0, 0, 0};
   int writes = 0;
-  int crossed = 0;   // the port carried a field belonging to a different claimant
-  int multi = 0;     // more than one claimant told it was served
+  int crossed = 0;    // the port carried a field belonging to a different claimant
+  int multi = 0;      // more than one claimant told it was served
+  int ready_idle = 0; // somebody was told it was served with no write happening
 };
 
 /** Run `clocks` cycles with a fixed asking set and policy, recording what happened. */
@@ -87,6 +88,12 @@ Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks) {
       }
     }
     if (winners > 1) ++n.multi;
+    // READY WITHOUT A REQUEST IS ITS OWN FAULT. Everything else in this loop
+    // is guarded by wr_en_o, so a claimant told it was served while nobody
+    // asked would be recorded nowhere. Dropping the `any_c` term from
+    // req_ready_o is exactly that defect, and it would have survived a suite
+    // that only looks at the port.
+    if (winners > 0 && !t.wr_en_o) ++n.ready_idle;
     if (t.wr_en_o) {
       ++n.writes;
       if (who >= 0) {
@@ -113,6 +120,17 @@ int main(int argc, char** argv) {
   {
     const Counts n = run(t, 0x0, POL_HIGH_FIRST, 32);
     check(n.writes == 0, "wr_en_o stays low when nobody asks", 0, (uint32_t)n.writes);
+    check(n.ready_idle == 0, "and NOBODY is told it was served", 0, (uint32_t)n.ready_idle);
+    check(t.req_ready_o == 0, "req_ready_o is entirely zero with no requests", 0,
+          (int)t.req_ready_o);
+    for (int c = 0; c < kClaimants; ++c) {
+      check((int)t.served_o[c] == 0,
+            ("claimant " + std::to_string(c) + " was served nothing").c_str(), 0,
+            (int)t.served_o[c]);
+      check((int)t.stalled_o[c] == 0,
+            ("claimant " + std::to_string(c) + " stalled nothing -- it never asked").c_str(),
+            0, (int)t.stalled_o[c]);
+    }
   }
 
   printf("== section 2: a LONE claimant wins every clock and stalls ZERO times ==\n");
@@ -144,6 +162,8 @@ int main(int argc, char** argv) {
     check(n.served[1] == 0, "claimant 1 gets nothing", 0, (uint32_t)n.served[1]);
     check(n.served[0] == 0, "claimant 0 gets nothing", 0, (uint32_t)n.served[0]);
     check(n.multi == 0, "ready is one-hot throughout", 0, (uint32_t)n.multi);
+    check(n.ready_idle == 0, "and ready never fires without a write", 0,
+          (uint32_t)n.ready_idle);
     check(n.crossed == 0, "and the port always carried the winner's fields", 0,
           (uint32_t)n.crossed);
     // The starvation is REPORTED, not merely suffered. This is the number the
