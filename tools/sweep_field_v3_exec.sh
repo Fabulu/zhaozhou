@@ -19,7 +19,7 @@
 #             7 pristine tests red, 8 preflight, 9 consumer roster,
 #             12 undeclared survivor.
 #
-# DEDICATED BUILD DIR (build-verify), added after a MEASURED collision:
+# DEDICATED BUILD DIR ($BUILD_DIR), added after a MEASURED collision:
 # 2026-08-27, this sweep ran against the shared build/ while a concurrent
 # session's ninja was live in it; nine of fifteen mutants were DISCARDED
 # with "model or exe absent after rebuild" -- two writers, one build dir.
@@ -39,7 +39,16 @@ TARGETS="test_field_v3_exec_directed"
 # runner was invisible to the shell reading it -- which is why the rebuild
 # diagnostics appeared to be missing entirely when they were simply somewhere
 # else.
-REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild.log}"
+# THE BUILD DIRECTORY IS A KNOB, so two sweeps can run at once in trees of
+# their own. Separate build directories have separate caches and the source
+# tree is only read, so concurrent sweeps in DIFFERENT trees are fine -- what
+# breaks is two writers in the SAME tree, because a sweep deletes its target's
+# model directory and exe before every rebuild.
+#
+# (An earlier note here claimed no build could run anywhere during a sweep.
+# That was inferred from a failure later explained by ccache, and is wrong.)
+BUILD_DIR="${BUILD_DIR:-build-verify}"
+REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild_${BUILD_DIR}.log}"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
@@ -59,7 +68,7 @@ check_consumers() {
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build-verify/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_exec.dir" -type f \
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_exec.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -69,7 +78,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build-verify/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_exec.dir" ] || return 1
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/Vzhao_probe_v3_exec.dir" ] || return 1
   done
   return 0
 }
@@ -77,7 +86,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build-verify/tests/$t.exe" ] || return 1
+    [ -x "$BUILD_DIR/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -85,13 +94,13 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build-verify/tests/CMakeFiles/$t.dir"
+    rm -rf "$BUILD_DIR/tests/CMakeFiles/$t.dir"
     # guard 5: the exe lives OUTSIDE the target dir, so it must be deleted
     # too -- and it must be deleted from THIS sweep's own build dir. This
     # line said "build/tests" until 2026-08-27, which both left the real
     # stale exe in place (defeating the guard) and deleted another
     # session's binary out of the shared tree.
-    rm -f "build-verify/tests/$t.exe"
+    rm -f "$BUILD_DIR/tests/$t.exe"
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
   # (the house sweeps learned this the same way); VERILATOR_ROOT must be set
@@ -121,10 +130,10 @@ rebuild() {
   # object cache OFF removes the dependency rather than negotiating with it.
   # A sweep rebuilds one target dozens of times, so losing the cache costs
   # real time -- but a sweep that cannot build costs all of it.
-  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
+  cmake -S . -B $BUILD_DIR -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
   echo "CMAKE_EXIT:$?" >>"$REBUILD_LOG"
   # shellcheck disable=SC2086
-  ninja -C build-verify $TARGETS >>"$REBUILD_LOG" 2>&1
+  ninja -C $BUILD_DIR $TARGETS >>"$REBUILD_LOG" 2>&1
   # THE EXIT CODES ARE RECORDED. Without them a failed rebuild surfaces only
   # as the downstream "pristine target did not link", and the log's last line
   # is ninja ANNOUNCING the link step -- ninja prints a step before running
@@ -137,8 +146,8 @@ rebuild() {
 
 # Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
 run_lanes() {
-  ./build-verify/tests/test_field_v3_exec_directed.exe >/dev/null 2>&1 || return 1
-  ./build-verify/tests/test_field_v3_exec_directed.exe --random 40 >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe --random 40 >/dev/null 2>&1 || return 1
   return 0
 }
 

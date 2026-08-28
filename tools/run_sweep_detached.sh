@@ -50,6 +50,9 @@ set -u
 
 SWEEP="${1:?usage: run_sweep_detached.sh <sweep-name> [logdir]}"
 LOGDIR="${2:-runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture}"
+# Optional third argument: the build tree to use. Two sweeps can run at once
+# provided each has its OWN tree -- what breaks is two writers in one tree.
+export BUILD_DIR="${3:-build-verify}"
 
 cd "$(dirname "$0")/.." || exit 1
 
