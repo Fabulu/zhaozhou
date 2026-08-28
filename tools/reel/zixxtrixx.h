@@ -2549,7 +2549,9 @@ constexpr int32_t kD1Agony = 520;      // negative deepen: the front rears UP
 constexpr int32_t kD1HeadRear = 3200;  // the nose climbs with it
 constexpr int32_t kD1Roll = -5200;     // shallow flank tilt -- prone, not keeled
 constexpr int32_t kD1RollLift = 30;
-constexpr int32_t kD1Slap = 6000;      // the decaying tail slaps
+constexpr int32_t kD1Slap = 13000;     // the decaying tail slaps (6000
+                                       // read as a whisper on the strip;
+                                       // a dying slap must READ)
 constexpr int32_t kD1Shudder = 2000;   // the head's dying tremor (angle16)
 
 inline zc::Clip build_death1() {
@@ -2594,17 +2596,24 @@ inline zc::Clip build_death1() {
       d += ((kCorpseSlope[k] - d) * drain) / 1000;
       // the tail slaps: two decaying cycles, k48..80, lift-dominant with a
       // small authored bite on the down-beat (the sine's negative half is
-      // clamped to a quarter of the lift)
-      if (k > kStanceGround1 && f >= 48 && f < 80) {
+      // clamped to a quarter of the lift). The slap owns the last FIVE
+      // segments, not just the two past the stance's grounded run -- on the
+      // lying body only the thin 320 mm tip moved and a frame diff showed
+      // ~130 changed pixels: a whisper, not a slap (run 0326).
+      // the REAR-NODE CONSTRAINT MUST NOT SEE THE SLAP: three slap joints
+      // sit inside its window, and compensating them dove the whole root
+      // and pressed the FRONT 146 mm under (probe, run 0326). rear_sin
+      // accumulates the un-slapped slope; the slap moves only the tail.
+      const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
+      if (k <= kStanceGround1) rear_sin += zref::fx_sin(zref::angle16{a}).raw;
+      if (k >= kSpineBones - 6 && f >= 48 && f < 80) {
         const int32_t ph = ((f - 48) * 4096);  // two cycles over 32 keys
         int32_t sl = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
         if (sl < -16384) sl = -16384;
         const int32_t decay = ((80 - f) * 1000) / 32;
         d -= (static_cast<int64_t>(kD1Slap) * sl / 65536) * decay /
-             (1000 * (kSpineBones - kStanceGround1));
+             (1000 * 6);
       }
-      const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
-      if (k <= kStanceGround1) rear_sin += zref::fx_sin(zref::angle16{a}).raw;
       const int32_t pitch = static_cast<int32_t>(d) - prev;
       prev = static_cast<int32_t>(d);
       g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));

@@ -52,10 +52,14 @@ EXEC = "fpga/rtl/synth/zhao_probe_v3_exec.sv"
 # here rather than from a sweep that cannot exercise it.
 MUTANTS = [
     # ---- the refusal path, which exists only in the composition ------------
+    # Reshaped: dropping the term orphaned mul_denied_c, and a tautology is a
+    # constant expression the linter also refuses. INVERTING it keeps the
+    # operand and is a real defect -- issue happens only when the bank has
+    # just refused, which is the exact opposite of the rule.
     ("E01 a refused request does not stall issue, so operands are lost",
      EXEC,
      "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;",
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c;"),
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && mul_denied_c;"),
     ("E02 the denial is read from the wrong direction",
      EXEC,
      "  assign mul_denied_c = mul_req_valid_o && !mul_req_ready_i;",
@@ -66,20 +70,27 @@ MUTANTS = [
      "  assign mul_denied_c = mul_req_valid_o && mul_req_ready_i;"),
 
     # ---- who is which claimant --------------------------------------------
+    # Reordering two independent assignments inside an always_comb is
+    # SEMANTICALLY IDENTICAL and would come back byte-identical. The sources
+    # are what must swap.
     ("E04 the executor and the rival swap claimant slots",
      "    bank_req_valid[0] = ex_req_valid;\n"
      "    bank_req_valid[1] = rival_req_i;",
      "    bank_req_valid[0] = rival_req_i;\n"
      "    bank_req_valid[1] = ex_req_valid;"),
-    ("E05 the executor reads the rival's grant",
+    # Reshaped: reading slot 1 alone orphaned slot 0. ANDing keeps both and
+    # keeps the defect -- the executor is only granted when the rival is too.
+    ("E05 the executor is granted only when the rival is granted as well",
      "  assign ex_req_ready = bank_req_ready[0];",
-     "  assign ex_req_ready = bank_req_ready[1];"),
-    ("E06 the executor reads the rival's reply valid",
+     "  assign ex_req_ready = bank_req_ready[0] && bank_req_ready[1];"),
+    # Reshaped for the same reason as E05.
+    ("E06 the executor accepts a reply meant for either claimant",
      "  assign ex_rsp_valid = bank_rsp_valid[0];",
-     "  assign ex_rsp_valid = bank_rsp_valid[1];"),
-    ("E07 the executor is always told it was granted",
+     "  assign ex_rsp_valid = bank_rsp_valid[0] || bank_rsp_valid[1];"),
+    # Reshaped: a constant orphaned the whole ready vector.
+    ("E07 the executor is told it was granted whenever ANYONE was",
      "  assign ex_req_ready = bank_req_ready[0];",
-     "  assign ex_req_ready = 1'b1;"),
+     "  assign ex_req_ready = |bank_req_ready;"),
 
     # ---- the operands that reach the bank ----------------------------------
     ("E08 the executor's operands are swapped on the way to the bank",
@@ -106,16 +117,30 @@ def read_rtl(path=RTL):
 
 
 def mutate(gold, old, new):
-    """Return the mutated text, or raise if the anchor is not unique."""
-    nl = "\r\n" if "\r\n" in gold else "\n"
-    o = old.replace("\n", nl)
-    n = new.replace("\n", nl)
-    count = gold.count(o)
-    if count != 1:
-        raise ValueError("anchor matches %d times" % count)
-    if o == n:
-        raise ValueError("mutant identical to base")
-    return gold.replace(o, n, 1)
+    """Return the mutated text, or raise if the anchor is not unique.
+
+    MIXED LINE ENDINGS ARE REAL AND THEY DEFEAT A SINGLE GUESS. This used to
+    pick one ending -- CRLF if the file contained any -- and translate the
+    anchor to it. A file edited by a tool that writes LF into an otherwise
+    CRLF file then has BOTH, and a multi-line anchor silently matches zero
+    times in the region that differs. Two engine mutants failed exactly that
+    way on 2026-08-28 while every single-line anchor in the same table worked.
+
+    So both forms are tried. A multi-line anchor that matches under either is
+    accepted; one that matches under neither still raises, and one that
+    matches under both is still ambiguous and raises too.
+    """
+    for nl in ("\r\n", "\n"):
+        o = old.replace("\n", nl)
+        n = new.replace("\n", nl)
+        count = gold.count(o)
+        if count == 1:
+            if o == n:
+                raise ValueError("mutant identical to base")
+            return gold.replace(o, n, 1)
+        if count > 1:
+            raise ValueError("anchor matches %d times" % count)
+    raise ValueError("anchor matches 0 times (tried CRLF and LF)")
 
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the

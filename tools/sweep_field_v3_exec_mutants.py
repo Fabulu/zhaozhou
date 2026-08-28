@@ -189,9 +189,12 @@ MUTANTS = [
     # Reshaped: dropping the term orphaned dot_inflight_c. ORing it keeps the
     # operand and keeps the defect -- a DOT no longer blocks issue, so another
     # instruction reaches S2 and drives the multiplier out from under it.
+    # Re-pointed 2026-08-28: the issue line gained `&& !mul_denied_c` when the
+    # executor moved onto the shared bank, because a refused request must stall
+    # issue -- the register file holds operands for exactly one clock.
     ("X26 a DOT no longer freezes issue, so another op steals the multiplier",
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c;",
-     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c;"),
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;",
+     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c && !mul_denied_c;"),
     ("X27 only a DOT at S4 freezes issue, not one still upstream",
      "  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||\n"
      "                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));",
@@ -272,16 +275,30 @@ def read_rtl(path=RTL):
 
 
 def mutate(gold, old, new):
-    """Return the mutated text, or raise if the anchor is not unique."""
-    nl = "\r\n" if "\r\n" in gold else "\n"
-    o = old.replace("\n", nl)
-    n = new.replace("\n", nl)
-    count = gold.count(o)
-    if count != 1:
-        raise ValueError("anchor matches %d times" % count)
-    if o == n:
-        raise ValueError("mutant identical to base")
-    return gold.replace(o, n, 1)
+    """Return the mutated text, or raise if the anchor is not unique.
+
+    MIXED LINE ENDINGS ARE REAL AND THEY DEFEAT A SINGLE GUESS. This used to
+    pick one ending -- CRLF if the file contained any -- and translate the
+    anchor to it. A file edited by a tool that writes LF into an otherwise
+    CRLF file then has BOTH, and a multi-line anchor silently matches zero
+    times in the region that differs. Two engine mutants failed exactly that
+    way on 2026-08-28 while every single-line anchor in the same table worked.
+
+    So both forms are tried. A multi-line anchor that matches under either is
+    accepted; one that matches under neither still raises, and one that
+    matches under both is still ambiguous and raises too.
+    """
+    for nl in ("\r\n", "\n"):
+        o = old.replace("\n", nl)
+        n = new.replace("\n", nl)
+        count = gold.count(o)
+        if count == 1:
+            if o == n:
+                raise ValueError("mutant identical to base")
+            return gold.replace(o, n, 1)
+        if count > 1:
+            raise ValueError("anchor matches %d times" % count)
+    raise ValueError("anchor matches 0 times (tried CRLF and LF)")
 
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
