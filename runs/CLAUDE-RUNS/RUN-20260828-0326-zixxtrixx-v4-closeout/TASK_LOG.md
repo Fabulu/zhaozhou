@@ -123,3 +123,33 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
 - Probe exit 0 (all allowances re-authored on worst-key renders,
   overlap-worst-keys.png); choreo 0; planner 0. Goldens: 16 old clips
   bit-identical, 11 new pinned, pose-crcs append-only (0 removed lines).
+
+### 2026-08-28 06:0x - Site wave + final gates
+
+- creatures.json: 14 live renders reordered into three groups ("how it
+  lives / fights / dies") + Archive; six new entries voiced like the
+  existing ones. tovideo.py: six new POSTER frames.
+- style.css: ALL THREE positional families extended 9 -> 15 (label-lit,
+  panel-reveal nth-child, focus-visible — the two checked families stay
+  deliberately different). .tabgroup style added: group markers are
+  non-interactive spans that NEITHER family counts.
+- assemble.py: MAX_TABS 15 + check_css_wiring() — it now parses style.css
+  and refuses the build unless both checked families reach MAX_TABS (the
+  net the 2339 log described, now real).
+- Final gates: probe 0, choreo 0, planner 0, goldens all 27 clips +
+  pose-crcs cmp-clean. reel --check + assemble pending the encode queue.
+- sacengine: 3d.exe (pre-patch build) boots, indexes all WADs, selects a
+  map, loads deep, dies in initKeycodes on a German-localization gap;
+  tolerance patch written, -lowmem rebuild in flight.
+
+### 2026-08-28 06:4x - death1 slap loudness + close
+
+- The 6000-amplitude slap on the last two thin segments moved ~130 pixels
+  (frame diff) — a whisper. Widened to the last five segments at 13000;
+  first attempt let the rear-node constraint SEE the slap and the root
+  dove (front -146, probe). Constraint decoupled; two decaying slaps now
+  read (death2-tailslap-strip-v4.png). clip-28 re-pinned, provenance.
+- Site assembled: 14 live tabs + 3 groups + Archive verified in the HTML.
+  All renders re-encoded and committed (Upheaval 9ac4239). No deploy.
+- Final gates green (see FINDINGS). scratch-reel confirmed gitignored —
+  the 830 MB trap from run 0227 not repeated.
