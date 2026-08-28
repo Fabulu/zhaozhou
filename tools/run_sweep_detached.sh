@@ -22,7 +22,21 @@
 #
 #   bash tools/run_sweep_detached.sh field_v3_mulbank [logdir]
 #
-# AND NEVER PIPE A SWEEP. Running one as
+# AND NOTHING ELSE MAY TOUCH A BUILD TREE WHILE A SWEEP RUNS. Not just the
+# sweep's own tree -- anything. On 2026-08-28 a sweep aborted three times with
+# "pristine target did not link" while its rebuild log showed the target
+# reaching [10/12] Linking every time. The exe was being built and then
+# disappearing, because a build of a DIFFERENT tree was running concurrently
+# and the two share ccache and the source directory's cmake state.
+#
+# A sweep deletes the target's model directory AND its exe before rebuilding,
+# so anything that disturbs that rebuild leaves no binary at all and the
+# driver's guard correctly refuses to score. The guard is right every time;
+# the cost is that the cause is three layers away.
+#
+# The rule that actually works: one build tree, one writer, and no other
+# build anywhere while a sweep is in flight.
+## AND NEVER PIPE A SWEEP. Running one as
 #
 #     bash tools/sweep_x.sh 2>&1 | head -25
 #
