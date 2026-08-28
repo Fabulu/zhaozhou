@@ -453,8 +453,13 @@ module zhao_probe_v3_exec #(
 
   always_comb begin
     mul_issue_c = s2_v_r && !is_dot(s2_op_r);
-    mul_a_c     = 33'(rf_a0);
-    mul_b_c     = 33'(rf_b0);
+    // THE SAME HELD OPERANDS THE PIPE USES. The multiply is issued from S2,
+    // whose operands come from the register file's moving read -- so a retry
+    // after a denial would multiply the SUCCESSOR's numbers and hand the
+    // product to the stalled instruction. Fixing only the S3 capture left 5
+    // of 48 wrong; this is the other half of the same defect.
+    mul_a_c     = 33'(use_a0_c);
+    mul_b_c     = 33'(use_b0_c);
     // THE WHOLE DOT SEQUENCE IS ISSUED FROM S4, and that is the fix.
     //
     // An instruction CANNOT BE STALLED between its multiply issue and its
@@ -560,6 +565,47 @@ module zhao_probe_v3_exec #(
 
   logic wb_req_c, retire_hold_c;
 
+  // ---- OPERANDS HELD ACROSS A DENIAL --------------------------------------
+  //
+  // THE REGISTER FILE'S READ IS A PIPELINE STAGE, AND A FREEZE DOES NOT FREEZE
+  // IT. The address is driven from S1 and the data arrives one clock later,
+  // while the instruction is at S2. Freezing S1 and S2 on a denial stops the
+  // instructions moving -- it does NOT un-issue the read that is already in
+  // flight, so the data that arrives on the next clock belongs to the
+  // instruction BEHIND the stalled one.
+  //
+  // S3 then captures the stalled instruction's control (ctx, op, dst) together
+  // with its SUCCESSOR's operands, and computes a perfectly plausible wrong
+  // answer for the right destination.
+  //
+  // The comment on the stall says "the refused instruction retries next clock
+  // with the same operands, because the S1 read address is unchanged and the
+  // register file re-presents them". The address is indeed unchanged. The DATA
+  // is one clock behind it, and that is the half that was missed.
+  //
+  // WHY IT HID: with ONE context the pipe is nearly empty -- 13 uops in 69
+  // clocks -- so S1 is usually a bubble during a denial, the address has not
+  // moved, and the data that arrives is the stalled instruction's own. Four
+  // contexts fill the pipe and every denial lands behind a real instruction:
+  // 21 of 48 context-programs wrong, and the single-context test green
+  // throughout.
+  logic               opnd_held_r;
+  logic signed [31:0] h_a0_r, h_a1_r, h_a2_r, h_b0_r, h_b1_r, h_b2_r, h_c_r;
+
+  logic signed [31:0] use_a0_c, use_a1_c, use_a2_c, use_b0_c, use_b1_c, use_b2_c, use_c_c;
+  always_comb begin
+    // On the denial clock the data IS the stalled instruction's, so take it
+    // and remember it. On the clocks after, the file has moved on: use what
+    // was remembered.
+    use_a0_c = (opnd_held_r && !mul_denied_c) ? h_a0_r : rf_a0;
+    use_a1_c = (opnd_held_r && !mul_denied_c) ? h_a1_r : rf_a1;
+    use_a2_c = (opnd_held_r && !mul_denied_c) ? h_a2_r : rf_a2;
+    use_b0_c = (opnd_held_r && !mul_denied_c) ? h_b0_r : rf_b0;
+    use_b1_c = (opnd_held_r && !mul_denied_c) ? h_b1_r : rf_b1;
+    use_b2_c = (opnd_held_r && !mul_denied_c) ? h_b2_r : rf_b2;
+    use_c_c  = (opnd_held_r && !mul_denied_c) ? h_c_r  : rf_c;
+  end
+
 
 
   // ---- writeback ----------------------------------------------------------
@@ -646,6 +692,14 @@ module zhao_probe_v3_exec #(
       active_r      <= '0;
       inflight_r    <= '0;
       waiting_r     <= '0;
+      opnd_held_r   <= 1'b0;
+      h_a0_r        <= 32'sd0;
+      h_a1_r        <= 32'sd0;
+      h_a2_r        <= 32'sd0;
+      h_b0_r        <= 32'sd0;
+      h_b1_r        <= 32'sd0;
+      h_b2_r        <= 32'sd0;
+      h_c_r         <= 32'sd0;
       rf_writes_o   <= 32'd0;
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;
@@ -697,6 +751,24 @@ module zhao_probe_v3_exec #(
         dot_acc_r   <= '0;
         dot_cnt_r   <= 2'd0;
         dot_issue_r <= 2'd0;
+      end
+
+      // CAPTURE ON THE FIRST DENIED CLOCK, RELEASE WHEN THE INSTRUCTION MOVES.
+      // On the denial clock the file is still presenting the stalled
+      // instruction's operands, so that is the moment to keep them.
+      if (mul_denied_c) begin
+        if (!opnd_held_r) begin
+          opnd_held_r <= 1'b1;
+          h_a0_r <= rf_a0;
+          h_a1_r <= rf_a1;
+          h_a2_r <= rf_a2;
+          h_b0_r <= rf_b0;
+          h_b1_r <= rf_b1;
+          h_b2_r <= rf_b2;
+          h_c_r  <= rf_c;
+        end
+      end else begin
+        opnd_held_r <= 1'b0;
       end
 
       // THE MULTIPLIER'S ACCOUNTING LIVES OUT HERE, WITH THE MULTIPLIER.
@@ -798,13 +870,13 @@ module zhao_probe_v3_exec #(
       s3_op_r  <= s2_op_r;
       s3_dst_r <= s2_dst_r;
       s3_imm_r <= s2_imm_r;
-      s3_a0_r  <= rf_a0;
-      s3_a1_r  <= rf_a1;
-      s3_a2_r  <= rf_a2;
-      s3_b0_r  <= rf_b0;
-      s3_b1_r  <= rf_b1;
-      s3_b2_r  <= rf_b2;
-      s3_c_r   <= rf_c;
+      s3_a0_r  <= use_a0_c;
+      s3_a1_r  <= use_a1_c;
+      s3_a2_r  <= use_a2_c;
+      s3_b0_r  <= use_b0_c;
+      s3_b1_r  <= use_b1_c;
+      s3_b2_r  <= use_b2_c;
+      s3_c_r   <= use_c_c;
 
       // S3 -> S4: carry a second clock so the operands meet their product
       s4_v_r   <= s3_v_r;
