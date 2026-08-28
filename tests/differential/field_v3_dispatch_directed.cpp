@@ -68,10 +68,14 @@ int width_of(uint8_t op) {
   switch (op) {
     case OP_CURVE:
     case OP_DCURVE:
-    case OP_RIDGE: return 1;
-    case OP_NOISE2: return 2;
-    case OP_ROT3: return 3;
-    default: return 0;
+    case OP_RIDGE:
+      return 1;
+    case OP_NOISE2:
+      return 2;
+    case OP_ROT3:
+      return 3;
+    default:
+      return 0;
   }
 }
 
@@ -140,8 +144,7 @@ struct Dut {
   }
 
   /** Offer one context and wait for it to be taken. Returns false on timeout. */
-  bool offer(const Point& p, uint8_t op, int dst, int guard_max = 64,
-             uint32_t imm = 0u) {
+  bool offer(const Point& p, uint8_t op, int dst, int guard_max = 64, uint32_t imm = 0u) {
     t.long_valid_i = 1;
     t.long_ctx_i = (uint8_t)p.ctx;
     t.long_op_i = op;
@@ -320,8 +323,7 @@ void run_group(Vzhao_field_v3_dispatch& top, const std::vector<Point>& pts, uint
           (what + ": release " + std::to_string(i) + " follows ALL its writes").c_str(),
           (uint32_t)w, (uint32_t)d.rel_after[i].second);
   }
-  check(d.t.tag_mismatch_o == 0, (what + ": no tag mismatch").c_str(), 0,
-        (int)d.t.tag_mismatch_o);
+  check(d.t.tag_mismatch_o == 0, (what + ": no tag mismatch").c_str(), 0, (int)d.t.tag_mismatch_o);
   check(d.t.writes_o == (uint32_t)want_writes, (what + ": writes counter").c_str(),
         (uint32_t)want_writes, d.t.writes_o);
   check(d.t.groups_o == 1u, (what + ": one group issued").c_str(), 1, (int)d.t.groups_o);
@@ -388,8 +390,7 @@ int main(int argc, char** argv) {
     const bool first = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
     check(first, "the first context joins", 1, first ? 1 : 0);
     const bool other_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 8, 0xBBBBu);
-    check(!other_imm, "a different immediate cannot join the same request", 0,
-          other_imm ? 1 : 0);
+    check(!other_imm, "a different immediate cannot join the same request", 0, other_imm ? 1 : 0);
     const bool same_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 64, 0xAAAAu);
     check(same_imm, "and the SAME immediate still can", 1, same_imm ? 1 : 0);
   }
@@ -459,8 +460,7 @@ int main(int argc, char** argv) {
   {
     Dut d(top);
     d.reset();
-    const std::vector<Point> pts = {
-        {0, 1, 1, 1}, {1, 2, 2, 2}, {2, 3, 3, 3}, {3, 4, 4, 4}};
+    const std::vector<Point> pts = {{0, 1, 1, 1}, {1, 2, 2, 2}, {2, 3, 3, 3}, {3, 4, 4, 4}};
     for (const Point& p : pts) d.offer(p, OP_NOISE2, 10);
     d.take_request();
     const uint8_t tag = (uint8_t)d.t.svc_tag_o;
@@ -590,10 +590,9 @@ int main(int argc, char** argv) {
       d.reply(tags[g], r, r, r);
       d.drain();
     }
-    check(tags[1] != tags[0], "the second group's tag differs from the first",
-          1, tags[1] != tags[0] ? 1 : 0);
-    check(tags[2] != tags[1], "and the third from the second", 1,
-          tags[2] != tags[1] ? 1 : 0);
+    check(tags[1] != tags[0], "the second group's tag differs from the first", 1,
+          tags[1] != tags[0] ? 1 : 0);
+    check(tags[2] != tags[1], "and the third from the second", 1, tags[2] != tags[1] ? 1 : 0);
     printf("   MEASURED tags: %u, %u, %u\n", tags[0], tags[1], tags[2]);
     check(d.t.groups_o == 3u, "three groups issued", 3, (int)d.t.groups_o);
   }

@@ -53,12 +53,18 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (uint32_t)(next64() % n) : 0; }
   int32_t coord() {
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return (int32_t)0x00010000;
-      case 2: return -(int32_t)0x00010000;
-      case 3: return (int32_t)0x7FFFFFFF;
-      case 4: return (int32_t)0x80000000;
-      default: return (int32_t)next64();
+      case 0:
+        return 0;
+      case 1:
+        return (int32_t)0x00010000;
+      case 2:
+        return -(int32_t)0x00010000;
+      case 3:
+        return (int32_t)0x7FFFFFFF;
+      case 4:
+        return (int32_t)0x80000000;
+      default:
+        return (int32_t)next64();
     }
   }
   int32_t angle() {
@@ -184,10 +190,9 @@ void drive(Vzhao_field_v3_rot& dut, bool rot3, uint32_t axis, const Group& g, ui
 }
 
 void check_rsp(Vzhao_field_v3_rot& dut, const Want& w, uint8_t tag, const std::string& what) {
-  const uint32_t got[3][kLanes] = {
-      {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
-      {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
-      {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
+  const uint32_t got[3][kLanes] = {{dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
+                                   {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
+                                   {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
   for (int l = 0; l < kLanes; ++l) {
     for (int m = 0; m < 3; ++m) {
       check(got[m][l] == (uint32_t)w.r[m][l],
@@ -311,10 +316,8 @@ int main(int argc, char** argv) {
       // comparison alone would not say out loud.
       check(dut.o0_0_o == dut.o0_1_o && dut.o0_1_o == dut.o0_2_o && dut.o0_2_o == dut.o0_3_o,
             "all four lanes agree -- only the low sixteen bits mattered", 1,
-            (dut.o0_0_o == dut.o0_1_o && dut.o0_1_o == dut.o0_2_o &&
-             dut.o0_2_o == dut.o0_3_o)
-                ? 1
-                : 0);
+            (dut.o0_0_o == dut.o0_1_o && dut.o0_1_o == dut.o0_2_o && dut.o0_2_o == dut.o0_3_o) ? 1
+                                                                                               : 0);
     }
 
     printf("== section 4: four points, the SAME angle ==\n");
@@ -350,10 +353,9 @@ int main(int argc, char** argv) {
         }
         run_one(dut, mb, true, axis, g, (uint8_t)(0x40 + axis),
                 "axis " + std::to_string(axis) + " pass-through");
-        const uint32_t got[3][kLanes] = {
-            {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
-            {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
-            {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
+        const uint32_t got[3][kLanes] = {{dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
+                                         {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
+                                         {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
         const int32_t* src = (axis == 0) ? g.x : (axis == 1) ? g.y : g.z;
         for (int l = 0; l < kLanes; ++l) {
           check(got[axis][l] == (uint32_t)src[l],
@@ -404,8 +406,7 @@ int main(int argc, char** argv) {
         }
         mb.grant = true;
         const std::string what = "contended group " + std::to_string(k);
-        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1,
-              cycles < 1024 ? 1 : 0);
+        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1, cycles < 1024 ? 1 : 0);
         check_rsp(dut, w, tag, what);
         step(dut, mb);
         dut.eval();
@@ -474,8 +475,7 @@ int main(int argc, char** argv) {
       for (int l = 0; l < kLanes; ++l) h.z[l] = 0;
       run_one(dut, mb, false, 0, h, 0x71, "saturation on lane 3 only");
       printf("   MEASURED sat_mul_o = %X (lane 3 alone)\n", dut.sat_mul_o);
-      check((dut.sat_mul_o & 0x8u) == 0x8u, "lane 3 reports its own", 1,
-            (dut.sat_mul_o >> 3) & 1u);
+      check((dut.sat_mul_o & 0x8u) == 0x8u, "lane 3 reports its own", 1, (dut.sat_mul_o >> 3) & 1u);
       check((dut.sat_mul_o & 1u) == 0u, "and lane 0 does not", 0, dut.sat_mul_o & 1u);
     }
   } else {

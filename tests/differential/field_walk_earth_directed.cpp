@@ -233,8 +233,8 @@ void test_full_patch_gate(Vzhao_probe_walk_earth& t) {
   // them.
   check((int)t.groups_emitted_o == (int)got.size(), "groups_emitted_o counts the groups",
         (int)got.size(), (int)t.groups_emitted_o);
-  check((int)t.verts_covered_o == covered,
-        "verts_covered_o counts covered LANES, not groups", covered, (int)t.verts_covered_o);
+  check((int)t.verts_covered_o == covered, "verts_covered_o counts covered LANES, not groups",
+        covered, (int)t.verts_covered_o);
 }
 
 // Every group must lie in ONE row -- the property that lets a group carry a
@@ -345,14 +345,13 @@ void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
 
-  const Assoc empty_cols{0, 1 << 16, 0, 1 << 16, 20, 4, 0, kLat - 1};   // i0 > i1
-  const Assoc empty_rows{0, 1 << 16, 0, 1 << 16, 0, kLat - 1, 25, 3};   // j0 > j1
+  const Assoc empty_cols{0, 1 << 16, 0, 1 << 16, 20, 4, 0, kLat - 1};  // i0 > i1
+  const Assoc empty_rows{0, 1 << 16, 0, 1 << 16, 0, kLat - 1, 25, 3};  // j0 > j1
   const Assoc empty_both{0, 1 << 16, 0, 1 << 16, 20, 4, 25, 3};
 
   check(emitted_groups_for(t, empty_cols, 40) == 0, "an empty COLUMN range emits no groups", 0,
         emitted_groups_for(t, empty_cols, 40));
-  check(t.as_ready_o != 0, "and the walker is still ready after it", 1,
-        t.as_ready_o != 0 ? 1 : 0);
+  check(t.as_ready_o != 0, "and the walker is still ready after it", 1, t.as_ready_o != 0 ? 1 : 0);
 
   check(emitted_groups_for(t, empty_rows, 40) == 0, "an empty ROW range emits no groups", 0,
         emitted_groups_for(t, empty_rows, 40));

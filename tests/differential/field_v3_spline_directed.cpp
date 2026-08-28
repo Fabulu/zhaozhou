@@ -151,16 +151,26 @@ Point oracle_point(const std::vector<zfield::Table>& tabs, uint32_t slot, int32_
 
 void drive(Vzhao_field_v3_spline& dut, const Lookup* k, uint8_t tag) {
   dut.v_valid_i = 1;
-  dut.t_0_i = (uint32_t)k[0].t;   dut.t_1_i = (uint32_t)k[1].t;
-  dut.t_2_i = (uint32_t)k[2].t;   dut.t_3_i = (uint32_t)k[3].t;
-  dut.p0_0_i = (uint32_t)k[0].p0; dut.p0_1_i = (uint32_t)k[1].p0;
-  dut.p0_2_i = (uint32_t)k[2].p0; dut.p0_3_i = (uint32_t)k[3].p0;
-  dut.p1_0_i = (uint32_t)k[0].p1; dut.p1_1_i = (uint32_t)k[1].p1;
-  dut.p1_2_i = (uint32_t)k[2].p1; dut.p1_3_i = (uint32_t)k[3].p1;
-  dut.p2_0_i = (uint32_t)k[0].p2; dut.p2_1_i = (uint32_t)k[1].p2;
-  dut.p2_2_i = (uint32_t)k[2].p2; dut.p2_3_i = (uint32_t)k[3].p2;
-  dut.p3_0_i = (uint32_t)k[0].p3; dut.p3_1_i = (uint32_t)k[1].p3;
-  dut.p3_2_i = (uint32_t)k[2].p3; dut.p3_3_i = (uint32_t)k[3].p3;
+  dut.t_0_i = (uint32_t)k[0].t;
+  dut.t_1_i = (uint32_t)k[1].t;
+  dut.t_2_i = (uint32_t)k[2].t;
+  dut.t_3_i = (uint32_t)k[3].t;
+  dut.p0_0_i = (uint32_t)k[0].p0;
+  dut.p0_1_i = (uint32_t)k[1].p0;
+  dut.p0_2_i = (uint32_t)k[2].p0;
+  dut.p0_3_i = (uint32_t)k[3].p0;
+  dut.p1_0_i = (uint32_t)k[0].p1;
+  dut.p1_1_i = (uint32_t)k[1].p1;
+  dut.p1_2_i = (uint32_t)k[2].p1;
+  dut.p1_3_i = (uint32_t)k[3].p1;
+  dut.p2_0_i = (uint32_t)k[0].p2;
+  dut.p2_1_i = (uint32_t)k[1].p2;
+  dut.p2_2_i = (uint32_t)k[2].p2;
+  dut.p2_3_i = (uint32_t)k[3].p2;
+  dut.p3_0_i = (uint32_t)k[0].p3;
+  dut.p3_1_i = (uint32_t)k[1].p3;
+  dut.p3_2_i = (uint32_t)k[2].p3;
+  dut.p3_3_i = (uint32_t)k[3].p3;
   dut.tag_i = tag;
 }
 
@@ -287,14 +297,13 @@ int main(int argc, char** argv) {
       // Law 3: the final half rounds half up. A >>> 1 truncates toward
       // negative infinity, so the two differ on every odd NEGATIVE value.
       std::vector<zfield::Table> odd(1);
-      odd[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
-                          {-3, -1, 1, 3, 5});
+      odd[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16}, {-3, -1, 1, 3, 5});
       const int32_t a[kLanes] = {(1 << 14), (3 << 14), (5 << 14), (7 << 14)};
       run_one(dut, mb, odd, 0, a, 0x30, "odd control points");
       std::vector<zfield::Table> neg(1);
-      neg[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
-                          {-(5 << 16) - 1, -(3 << 16) - 1, -(1 << 16) - 1, (1 << 16) + 1,
-                           (3 << 16) + 1});
+      neg[0] = make_table(
+          {0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
+          {-(5 << 16) - 1, -(3 << 16) - 1, -(1 << 16) - 1, (1 << 16) + 1, (3 << 16) + 1});
       run_one(dut, mb, neg, 0, a, 0x31, "odd and negative");
     }
 
@@ -310,8 +319,7 @@ int main(int argc, char** argv) {
       // 2^31 + 2, and a p1 of 1 pulls the sum back to 2^31 - 3, which fits.
       // Clamped terms give 2147483642 where the law gives 2147483645.
       std::vector<zfield::Table> narrow(1);
-      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
-                             {(1 << 30) + 1, 1, 0, 0, 0});
+      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16}, {(1 << 30) + 1, 1, 0, 0, 0});
       const int32_t a[kLanes] = {(1 << 15), (3 << 15), (5 << 15), (7 << 15)};
       run_one(dut, mb, narrow, 0, a, 0x38, "term overflows, sum does not");
     }
@@ -327,8 +335,7 @@ int main(int argc, char** argv) {
       // are large, so a point there clamps and points in the later segments do
       // not.
       std::vector<zfield::Table> narrow(1);
-      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
-                             {(1 << 30) + 1, 1, 0, 0, 0});
+      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16}, {(1 << 30) + 1, 1, 0, 0, 0});
       const int32_t a[kLanes] = {(1 << 15), (5 << 15), (7 << 15), (4 << 16)};
       run_one(dut, mb, narrow, 0, a, 0x39, "clamp on the first segment only");
       printf("   MEASURED sat_rescale_o = %X\n", dut.sat_rescale_o);
@@ -372,8 +379,7 @@ int main(int argc, char** argv) {
         }
         mb.grant = true;
         const std::string what = "contended group " + std::to_string(g);
-        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1,
-              cycles < 1024 ? 1 : 0);
+        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1, cycles < 1024 ? 1 : 0);
         const uint32_t got[kLanes] = {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o};
         for (int l = 0; l < kLanes; ++l)
           check(got[l] == (uint32_t)want[l].v, (what + ": lane " + std::to_string(l)).c_str(),

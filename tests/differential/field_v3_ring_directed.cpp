@@ -339,8 +339,7 @@ int main(int argc, char** argv) {
         }
         mb.grant = true;
         const std::string what = "contended group " + std::to_string(k);
-        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1,
-              cycles < 1024 ? 1 : 0);
+        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1, cycles < 1024 ? 1 : 0);
         const uint32_t got[kLanes] = {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o};
         for (int l = 0; l < kLanes; ++l) {
           check(got[l] == (uint32_t)w.r[l], (what + ": lane " + std::to_string(l)).c_str(),

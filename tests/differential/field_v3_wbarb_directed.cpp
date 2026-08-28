@@ -52,8 +52,8 @@ constexpr int POL_ROUND_ROBIN = 2;
 void drive(Vzhao_field_v3_wbarb& t, uint8_t asking) {
   t.req_valid_i = asking;
   for (int c = 0; c < kClaimants; ++c) {
-    t.req_ctx_i[c] = (uint8_t)(c + 1);           // 1, 2, 3
-    t.req_reg_i[c] = (uint8_t)(8 * (c + 1));     // 8, 16, 24
+    t.req_ctx_i[c] = (uint8_t)(c + 1);        // 1, 2, 3
+    t.req_reg_i[c] = (uint8_t)(8 * (c + 1));  // 8, 16, 24
     t.req_data_i[c] = (uint32_t)(0xC0000000u | (uint32_t)c);
   }
 }
@@ -61,9 +61,9 @@ void drive(Vzhao_field_v3_wbarb& t, uint8_t asking) {
 struct Counts {
   int served[kClaimants] = {0, 0, 0};
   int writes = 0;
-  int crossed = 0;    // the port carried a field belonging to a different claimant
-  int multi = 0;      // more than one claimant told it was served
-  int ready_idle = 0; // somebody was told it was served with no write happening
+  int crossed = 0;     // the port carried a field belonging to a different claimant
+  int multi = 0;       // more than one claimant told it was served
+  int ready_idle = 0;  // somebody was told it was served with no write happening
   // WHO WON, IN ORDER. Counts and fairness both pass under a rotation that is
   // merely phase-shifted (W07: starting one claimant late is still 10/10/10
   // over 30 clocks). The sequence is the only thing that separates them.
@@ -71,8 +71,7 @@ struct Counts {
 };
 
 /** Run `clocks` cycles with a fixed asking set and policy, recording what happened. */
-Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks,
-           bool do_reset = true) {
+Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks, bool do_reset = true) {
   Counts n;
   // `do_reset = false` continues from whatever state the last run left. That
   // is not a convenience: the POLICY IS A RUNTIME INPUT, so changing it
@@ -142,8 +141,8 @@ int main(int argc, char** argv) {
             ("claimant " + std::to_string(c) + " was served nothing").c_str(), 0,
             (int)t.served_o[c]);
       check((int)t.stalled_o[c] == 0,
-            ("claimant " + std::to_string(c) + " stalled nothing -- it never asked").c_str(),
-            0, (int)t.stalled_o[c]);
+            ("claimant " + std::to_string(c) + " stalled nothing -- it never asked").c_str(), 0,
+            (int)t.stalled_o[c]);
     }
   }
 
@@ -176,16 +175,14 @@ int main(int argc, char** argv) {
     check(n.served[1] == 0, "claimant 1 gets nothing", 0, (uint32_t)n.served[1]);
     check(n.served[0] == 0, "claimant 0 gets nothing", 0, (uint32_t)n.served[0]);
     check(n.multi == 0, "ready is one-hot throughout", 0, (uint32_t)n.multi);
-    check(n.ready_idle == 0, "and ready never fires without a write", 0,
-          (uint32_t)n.ready_idle);
+    check(n.ready_idle == 0, "and ready never fires without a write", 0, (uint32_t)n.ready_idle);
     check(n.crossed == 0, "and the port always carried the winner's fields", 0,
           (uint32_t)n.crossed);
     // The starvation is REPORTED, not merely suffered. This is the number the
     // composed engine's measurement will read.
-    check((int)t.stalled_o[0] == clocks, "claimant 0's starvation is counted",
-          (uint32_t)clocks, (int)t.stalled_o[0]);
-    check((int)t.stalled_o[1] == clocks, "and claimant 1's", (uint32_t)clocks,
-          (int)t.stalled_o[1]);
+    check((int)t.stalled_o[0] == clocks, "claimant 0's starvation is counted", (uint32_t)clocks,
+          (int)t.stalled_o[0]);
+    check((int)t.stalled_o[1] == clocks, "and claimant 1's", (uint32_t)clocks, (int)t.stalled_o[1]);
     // W14: served_o counting REQUESTS instead of GRANTS is invisible for a
     // claimant that wins every clock, which is the only case section 2 has.
     // The separating case is a claimant that ASKS AND LOSES -- it is right
@@ -193,8 +190,8 @@ int main(int argc, char** argv) {
     check((int)t.served_o[0] == 0, "claimant 0 was SERVED nothing, though it asked", 0,
           (int)t.served_o[0]);
     check((int)t.served_o[1] == 0, "and claimant 1 likewise", 0, (int)t.served_o[1]);
-    check((int)t.served_o[2] == clocks, "while claimant 2 was served every clock",
-          (uint32_t)clocks, (int)t.served_o[2]);
+    check((int)t.served_o[2] == clocks, "while claimant 2 was served every clock", (uint32_t)clocks,
+          (int)t.served_o[2]);
     printf("   MEASURED policy 1: served %d/%d/%d, stalled %u/%u/%u\n", n.served[0], n.served[1],
            n.served[2], t.stalled_o[0], t.stalled_o[1], t.stalled_o[2]);
   }
@@ -207,8 +204,7 @@ int main(int argc, char** argv) {
           (uint32_t)n.served[0]);
     check(n.served[1] == 0, "claimant 1 gets nothing", 0, (uint32_t)n.served[1]);
     check(n.served[2] == 0, "claimant 2 gets nothing", 0, (uint32_t)n.served[2]);
-    check(n.crossed == 0, "the port always carried the winner's fields", 0,
-          (uint32_t)n.crossed);
+    check(n.crossed == 0, "the port always carried the winner's fields", 0, (uint32_t)n.crossed);
     printf("   MEASURED policy 0: served %d/%d/%d\n", n.served[0], n.served[1], n.served[2]);
   }
 
@@ -254,8 +250,7 @@ int main(int argc, char** argv) {
     for (const Case& c : cases) {
       const int clocks = 12;
       const Counts n = run(t, c.asking, c.policy, clocks);
-      check(n.served[c.winner] == clocks, c.what, (uint32_t)clocks,
-            (uint32_t)n.served[c.winner]);
+      check(n.served[c.winner] == clocks, c.what, (uint32_t)clocks, (uint32_t)n.served[c.winner]);
       check(n.crossed == 0, (std::string(c.what) + ": fields intact").c_str(), 0,
             (uint32_t)n.crossed);
     }
@@ -269,8 +264,8 @@ int main(int argc, char** argv) {
     std::string got;
     for (size_t i = 0; i < n.order.size(); ++i) got += std::to_string(n.order[i]);
     printf("   MEASURED grant order: %s\n", got.c_str());
-    check(got == "012012012", "the rotation runs 0,1,2 from reset and repeats",
-          0, (uint32_t)(got == "012012012" ? 0 : 1));
+    check(got == "012012012", "the rotation runs 0,1,2 from reset and repeats", 0,
+          (uint32_t)(got == "012012012" ? 0 : 1));
   }
 
   printf("== section 8: the rotation pointer does NOT move under a fixed policy ==\n");
@@ -290,8 +285,7 @@ int main(int argc, char** argv) {
     std::string got;
     for (size_t i = 0; i < n.order.size(); ++i) got += std::to_string(n.order[i]);
     printf("   MEASURED order after a policy-0 phase: %s\n", got.c_str());
-    check(got == "012012012",
-          "the rotation still starts at 0 -- a fixed policy left it alone", 0,
+    check(got == "012012012", "the rotation still starts at 0 -- a fixed policy left it alone", 0,
           (uint32_t)(got == "012012012" ? 0 : 1));
   }
 

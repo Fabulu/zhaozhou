@@ -78,12 +78,18 @@ struct Prng {
     // lattice boundary. The floor is an ARITHMETIC shift, so the sign of the
     // input is the interesting axis.
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return (int32_t)0x00010000;   // exactly 1.0
-      case 2: return -(int32_t)0x00010000;  // exactly -1.0
-      case 3: return (int32_t)0x7FFFFFFF;
-      case 4: return (int32_t)0x80000000;
-      default: return (int32_t)next64();
+      case 0:
+        return 0;
+      case 1:
+        return (int32_t)0x00010000;  // exactly 1.0
+      case 2:
+        return -(int32_t)0x00010000;  // exactly -1.0
+      case 3:
+        return (int32_t)0x7FFFFFFF;
+      case 4:
+        return (int32_t)0x80000000;
+      default:
+        return (int32_t)next64();
     }
   }
 };
@@ -179,8 +185,8 @@ Want oracle(bool ridge, const int32_t* x, const int32_t* y, uint32_t seed) {
 }
 
 // ---- driving ---------------------------------------------------------------
-void drive(Vzhao_field_v3_noise& dut, bool ridge, const int32_t* x, const int32_t* y,
-           uint32_t seed, uint8_t tag) {
+void drive(Vzhao_field_v3_noise& dut, bool ridge, const int32_t* x, const int32_t* y, uint32_t seed,
+           uint8_t tag) {
   dut.v_valid_i = 1;
   dut.is_ridge_i = ridge ? 1 : 0;
   dut.a0_0_i = (uint32_t)x[0];
@@ -214,8 +220,8 @@ void check_rsp(Vzhao_field_v3_noise& dut, const Want& w, uint8_t tag, const std:
 }
 
 /** One group through an idle unit; returns the reply latency in clocks. */
-int run_one(Vzhao_field_v3_noise& dut, MulBank& mb, bool ridge, const int32_t* x,
-            const int32_t* y, uint32_t seed, uint8_t tag, const std::string& what) {
+int run_one(Vzhao_field_v3_noise& dut, MulBank& mb, bool ridge, const int32_t* x, const int32_t* y,
+            uint32_t seed, uint8_t tag, const std::string& what) {
   const Want w = oracle(ridge, x, y, seed);
   drive(dut, ridge, x, y, seed, tag);
   dut.r_ready_i = 1;
@@ -419,8 +425,7 @@ int main(int argc, char** argv) {
         }
         mb.grant = true;
         const std::string what = "contended group " + std::to_string(g);
-        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1,
-              cycles < 1024 ? 1 : 0);
+        check(cycles < 1024, (what + ": reply arrived, no hang").c_str(), 1, cycles < 1024 ? 1 : 0);
         check_rsp(dut, w, tag, what);
         step(dut, mb);
         dut.eval();

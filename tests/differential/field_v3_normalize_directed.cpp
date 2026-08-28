@@ -172,10 +172,9 @@ int run_one(Vzhao_field_v3_normalize& dut, MulBank& mb, bool n3, const Group& g,
   check(cycles < 4000, (what + ": reply arrived").c_str(), 1, cycles < 4000 ? 1 : 0);
   if (cycles >= 4000) return cycles;
 
-  const uint32_t got[3][kLanes] = {
-      {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
-      {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
-      {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
+  const uint32_t got[3][kLanes] = {{dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
+                                   {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
+                                   {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
   for (int l = 0; l < kLanes; ++l) {
     for (int m = 0; m < 3; ++m) {
       check(got[m][l] == (uint32_t)w.r[m][l],
@@ -256,10 +255,18 @@ int main(int argc, char** argv) {
       run_one(dut, mb, true, all0, 0x20, "all four zero");
 
       Group mixed{};
-      mixed.x[0] = 0;             mixed.y[0] = 0;         mixed.z[0] = 0;
-      mixed.x[1] = 5 << 16;       mixed.y[1] = 12 << 16;  mixed.z[1] = 0;
-      mixed.x[2] = 0;             mixed.y[2] = 0;         mixed.z[2] = 0;
-      mixed.x[3] = -(7 << 16);    mixed.y[3] = 24 << 16;  mixed.z[3] = 1 << 16;
+      mixed.x[0] = 0;
+      mixed.y[0] = 0;
+      mixed.z[0] = 0;
+      mixed.x[1] = 5 << 16;
+      mixed.y[1] = 12 << 16;
+      mixed.z[1] = 0;
+      mixed.x[2] = 0;
+      mixed.y[2] = 0;
+      mixed.z[2] = 0;
+      mixed.x[3] = -(7 << 16);
+      mixed.y[3] = 24 << 16;
+      mixed.z[3] = 1 << 16;
       // THE TWO OPS DISAGREE ABOUT THE LEDGER, and that is the reference's
       // doing rather than a choice made here: zfield::steps::normalize2 bumps
       // RCP0 for the zero vector, while zref::normalize3_approx returns zeros
@@ -278,8 +285,7 @@ int main(int argc, char** argv) {
 
       run_one(dut, mb, true, mixed, 0x22, "zero on lanes 0 and 2, NORMALIZE3");
       printf("   MEASURED rcp0_o = %X (N3: nothing is reported)\n", dut.rcp0_o);
-      check(dut.rcp0_o == 0u, "N3 reports NOTHING for the same zero lanes", 0,
-            (int)dut.rcp0_o);
+      check(dut.rcp0_o == 0u, "N3 reports NOTHING for the same zero lanes", 0, (int)dut.rcp0_o);
     }
 
     printf("== section 4: components near the rail, where n2 needs all 64 bits ==\n");
@@ -287,8 +293,8 @@ int main(int argc, char** argv) {
       // Law 4: three squares of near-INT32_MAX components sum to nearly 3*2^62.
       // Any early rounding of n2 changes the length and every output.
       Group g{};
-      const int32_t big[kLanes] = {(int32_t)0x7FFFFFFF, (int32_t)0x80000000,
-                                   (int32_t)0x7FFFFFFE, (int32_t)0x40000000};
+      const int32_t big[kLanes] = {(int32_t)0x7FFFFFFF, (int32_t)0x80000000, (int32_t)0x7FFFFFFE,
+                                   (int32_t)0x40000000};
       for (int l = 0; l < kLanes; ++l) {
         g.x[l] = big[l];
         g.y[l] = big[(l + 1) % kLanes];
@@ -394,13 +400,11 @@ int main(int argc, char** argv) {
         }
         mb.grant = true;
         const std::string what = "contended group " + std::to_string(k);
-        check(cycles < 6000, (what + ": reply arrived, no hang").c_str(), 1,
-              cycles < 6000 ? 1 : 0);
+        check(cycles < 6000, (what + ": reply arrived, no hang").c_str(), 1, cycles < 6000 ? 1 : 0);
         if (cycles < 6000) {
-          const uint32_t got[3][kLanes] = {
-              {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
-              {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
-              {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
+          const uint32_t got[3][kLanes] = {{dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o},
+                                           {dut.o1_0_o, dut.o1_1_o, dut.o1_2_o, dut.o1_3_o},
+                                           {dut.o2_0_o, dut.o2_1_o, dut.o2_2_o, dut.o2_3_o}};
           for (int l = 0; l < kLanes; ++l)
             for (int m = 0; m < 3; ++m)
               check(got[m][l] == (uint32_t)w.r[m][l],

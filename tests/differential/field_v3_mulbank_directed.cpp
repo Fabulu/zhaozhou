@@ -69,12 +69,18 @@ struct Prng {
   // test here is ROUTING, and routing does not care how wide the operand is.
   int64_t operand() {
     switch (below(6)) {
-      case 0: return 0;
-      case 1: return 1;
-      case 2: return -1;
-      case 3: return INT32_MAX;
-      case 4: return INT32_MIN;
-      default: return (int32_t)next64();
+      case 0:
+        return 0;
+      case 1:
+        return 1;
+      case 2:
+        return -1;
+      case 3:
+        return INT32_MAX;
+      case 4:
+        return INT32_MIN;
+      default:
+        return (int32_t)next64();
     }
   }
 };
@@ -212,9 +218,8 @@ void test_priority_is_the_declared_one(Vzhao_field_v3_mulbank& top) {
   check(granted_to[2] == kClocks, "the highest-priority service wins every clock", kClocks,
         granted_to[2]);
   check(granted_to[0] == 0, "the lane group gets nothing while a service asks", 0, granted_to[0]);
-  check((int)top.stall_lanes_o == kClocks,
-        "and stall_lanes_o counts exactly those starved clocks", kClocks,
-        (int)top.stall_lanes_o);
+  check((int)top.stall_lanes_o == kClocks, "and stall_lanes_o counts exactly those starved clocks",
+        kClocks, (int)top.stall_lanes_o);
   check(top.desync_o == 0, "the lanes stayed in step with the tag shadow", 0, (int)top.desync_o);
 }
 
@@ -299,7 +304,7 @@ void test_lane_stalls_count_losses_not_requests(Vzhao_field_v3_mulbank& top) {
       p.b[l] = rng.operand();
     }
     p.tag = (uint8_t)(k & 0x3F);
-    b.set_request(0, p);          // ONLY the lane group asks
+    b.set_request(0, p);  // ONLY the lane group asks
     top.req_valid_i = 0x1;
     top.eval();
     if (top.req_ready_o & 1) {
@@ -312,8 +317,8 @@ void test_lane_stalls_count_losses_not_requests(Vzhao_field_v3_mulbank& top) {
   top.req_valid_i = 0;
   for (int k = 0; k < 8; ++k) b.step();
 
-  printf("   MEASURED: %d grants, %d lane stalls over %d clocks\n", granted,
-         (int)top.stall_lanes_o, kClocks);
+  printf("   MEASURED: %d grants, %d lane stalls over %d clocks\n", granted, (int)top.stall_lanes_o,
+         kClocks);
   check(granted == kClocks, "the lanes win every clock when nobody contends", kClocks, granted);
   check((int)top.stall_lanes_o == 0,
         "and stall_lanes_o stays ZERO -- it counts losses, not requests", 0,

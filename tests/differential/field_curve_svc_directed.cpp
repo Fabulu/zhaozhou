@@ -527,8 +527,7 @@ int main(int argc, char** argv) {
         step(dut, mb);
         dut.eval();
       }
-      printf("   MEASURED: %d groups under refusal, %d refusals issued\n", kGroups,
-             mb.refusals);
+      printf("   MEASURED: %d groups under refusal, %d refusals issued\n", kGroups, mb.refusals);
       check(mb.refusals > 0, "the bank ACTUALLY refused -- the test is not vacuous", 1,
             mb.refusals > 0 ? 1 : 0);
     }

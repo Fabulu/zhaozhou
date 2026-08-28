@@ -62,10 +62,14 @@ struct Prng {
   uint32_t below(uint32_t n) { return n ? (uint32_t)(next64() % n) : 0; }
   int32_t coord() {
     switch (below(5)) {
-      case 0: return 0;
-      case 1: return (int32_t)0x00010000;
-      case 2: return (int32_t)0x80000000;
-      default: return (int32_t)next64();
+      case 0:
+        return 0;
+      case 1:
+        return (int32_t)0x00010000;
+      case 2:
+        return (int32_t)0x80000000;
+      default:
+        return (int32_t)next64();
     }
   }
 };
@@ -242,12 +246,11 @@ void run_group(Vzhao_field_v3_svcpath& top, const std::vector<Ctx>& cs, bool rid
     }
   }
 
-  check(d.released.size() == (size_t)n, (what + ": one release per context").c_str(),
-        (uint32_t)n, (uint32_t)d.released.size());
+  check(d.released.size() == (size_t)n, (what + ": one release per context").c_str(), (uint32_t)n,
+        (uint32_t)d.released.size());
   check(d.t.bank_desync_o == 0, (what + ": the bank stayed in step").c_str(), 0,
         (int)d.t.bank_desync_o);
-  check(d.t.tag_mismatch_o == 0, (what + ": no tag mismatch").c_str(), 0,
-        (int)d.t.tag_mismatch_o);
+  check(d.t.tag_mismatch_o == 0, (what + ": no tag mismatch").c_str(), 0, (int)d.t.tag_mismatch_o);
   check(d.t.wrong_op_o == 0, (what + ": the service was never asked the wrong op").c_str(), 0,
         (int)d.t.wrong_op_o);
   check(d.t.groups_o == 1u, (what + ": one group issued").c_str(), 1, (int)d.t.groups_o);
@@ -256,8 +259,8 @@ void run_group(Vzhao_field_v3_svcpath& top, const std::vector<Ctx>& cs, bool rid
     // LAW 2: the rival must have been SERVED, not merely allowed to ask.
     check(rival_served > 0, (what + ": the rival was actually served").c_str(), 1,
           rival_served > 0 ? 1 : 0);
-    check(d.t.bank_stall_lanes_o > 0, (what + ": and the bank really refused somebody").c_str(),
-          1, d.t.bank_stall_lanes_o > 0 ? 1 : 0);
+    check(d.t.bank_stall_lanes_o > 0, (what + ": and the bank really refused somebody").c_str(), 1,
+          d.t.bank_stall_lanes_o > 0 ? 1 : 0);
     // LAW 2b: A GRANT LINE MUST AGREE WITH THE SERVICE ACTUALLY RECEIVED.
     //
     // This is the law mutant V03 broke and nothing noticed: rival_grant_o was
@@ -290,11 +293,10 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 
   Vzhao_field_v3_svcpath top;
-  const std::vector<Ctx> four = {
-      {0, 0x00012345, 0x00023456},
-      {1, -0x00034567, 0x00045678},
-      {2, 0x7FFFFFFF, (int32_t)0x80000000},
-      {3, 0, 0x00010000}};
+  const std::vector<Ctx> four = {{0, 0x00012345, 0x00023456},
+                                 {1, -0x00034567, 0x00045678},
+                                 {2, 0x7FFFFFFF, (int32_t)0x80000000},
+                                 {3, 0, 0x00010000}};
 
   printf("== section 1: one long op, all the way through, undisturbed ==\n");
   run_group(top, four, false, 8, 0xBEEFu, POL_DRAIN_FIRST, false, false, "quiet NOISE2");
@@ -333,9 +335,10 @@ int main(int argc, char** argv) {
       const uint32_t served_drn = d.t.wb_served_o[1];
       const uint32_t stall_alu = d.t.wb_stalled_o[0];
       const uint32_t stall_drn = d.t.wb_stalled_o[1];
-      printf("   %-12s drain finished in %4d clocks | served ALU %5u drain %2u | "
-             "stalled ALU %5u drain %2u\n",
-             names[pol], guard, served_alu, served_drn, stall_alu, stall_drn);
+      printf(
+          "   %-12s drain finished in %4d clocks | served ALU %5u drain %2u | "
+          "stalled ALU %5u drain %2u\n",
+          names[pol], guard, served_alu, served_drn, stall_alu, stall_drn);
 
       const std::string w = std::string(names[pol]);
       check(served_alu > 0, (w + ": the ALU was served at least once").c_str(), 1,
@@ -345,8 +348,8 @@ int main(int argc, char** argv) {
       // ready line TOLD the claimant. A policy is only measured honestly if
       // those two are the same number.
       check((int)served_alu == d.alu_offered,
-            (w + ": and its ready line agrees with the arbiter's count").c_str(),
-            served_alu, (uint32_t)d.alu_offered);
+            (w + ": and its ready line agrees with the arbiter's count").c_str(), served_alu,
+            (uint32_t)d.alu_offered);
 
       if (pol == POL_ALU_FIRST) {
         // THE MEASUREMENT REJECTED THIS POLICY, and the starvation is PINNED
@@ -360,8 +363,7 @@ int main(int argc, char** argv) {
         // FEEDBACK LOOP, and the arbiter's header said in advance that such
         // claims are the ones measurement overturns. It did.
         check(served_drn == 0u,
-              (w + ": STARVES the drain outright -- measured, not argued").c_str(), 0,
-              served_drn);
+              (w + ": STARVES the drain outright -- measured, not argued").c_str(), 0, served_drn);
         check(guard >= 4000, (w + ": and never finishes").c_str(), 1, guard >= 4000 ? 1 : 0);
       } else {
         check(guard < 4000, (w + ": the drain finished").c_str(), 1, guard < 4000 ? 1 : 0);

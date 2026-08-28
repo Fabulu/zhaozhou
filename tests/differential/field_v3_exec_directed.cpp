@@ -85,14 +85,22 @@ struct Prng {
   // Values that actually exercise the fx16 rails, not just the middle.
   int32_t interesting() {
     switch (below(8)) {
-      case 0: return 0;
-      case 1: return 1 << 16;
-      case 2: return -(1 << 16);
-      case 3: return INT32_MAX;
-      case 4: return INT32_MIN;
-      case 5: return INT32_MAX - (int32_t)below(4);
-      case 6: return INT32_MIN + (int32_t)below(4);
-      default: return (int32_t)next64();
+      case 0:
+        return 0;
+      case 1:
+        return 1 << 16;
+      case 2:
+        return -(1 << 16);
+      case 3:
+        return INT32_MAX;
+      case 4:
+        return INT32_MIN;
+      case 5:
+        return INT32_MAX - (int32_t)below(4);
+      case 6:
+        return INT32_MIN + (int32_t)below(4);
+      default:
+        return (int32_t)next64();
     }
   }
 };
@@ -103,9 +111,9 @@ struct Prng {
 // products are collected. They are in the RANDOM set deliberately: the
 // sequencer's interaction with ordinary ops around it is the part most likely
 // to be wrong, and only mixed programs exercise it.
-const uint8_t kOps[] = {zfield::OP_MOV, zfield::OP_ADD,    zfield::OP_SUB,  zfield::OP_MUL,
-                        zfield::OP_MAD, zfield::OP_MIN,    zfield::OP_MAX,  zfield::OP_ABS,
-                        zfield::OP_CLAMP, zfield::OP_SELECT, 0x10 /*DOT2*/, 0x11 /*DOT3*/};
+const uint8_t kOps[] = {zfield::OP_MOV,   zfield::OP_ADD,    zfield::OP_SUB, zfield::OP_MUL,
+                        zfield::OP_MAD,   zfield::OP_MIN,    zfield::OP_MAX, zfield::OP_ABS,
+                        zfield::OP_CLAMP, zfield::OP_SELECT, 0x10 /*DOT2*/,  0x11 /*DOT3*/};
 
 // Build a canonical program over `n_in` varying lanes using only kOps.
 // Maintains the validator's shape: def-before-use, dst outside the input
@@ -213,11 +221,9 @@ struct Dut {
 
   int writebacks = 0;  // how many writes the block has actually made
 
-
   // Advance one clock, folding any writeback into the shadow. Returns true if
   // a context finished this clock, and reports which.
   bool step(int* done_ctx) {
-
     const bool wb = t.wb_valid_o != 0;
     if (wb) ++writebacks;
     const int wctx = (int)t.wb_ctx_o, wreg = (int)t.wb_reg_o;
@@ -265,8 +271,7 @@ bool install(Dut& d, int ctx, const zfield::Fplan& fp, const int32_t* in, size_t
       for (int w = 1; w < aw; ++w) {
         const int s = starts[g] + w;
         if (s >= (int)q.n_src) continue;
-        if (q.src[s].kind != zfield::SrcKind::kVec ||
-            (int)q.src[s].idx != src[g] + w) {
+        if (q.src[s].kind != zfield::SrcKind::kVec || (int)q.src[s].idx != src[g] + w) {
           *saw_scalar = true;  // not consecutive: outside what the RF can read
           return false;
         }
@@ -334,10 +339,10 @@ void test_one_point_matches_the_interpreter(Vzhao_probe_v3_engine& top) {
   }
   check(all, "every output register matches the interpreter", 1, all ? 1 : 0);
 
-  check(top.sat_add_o == (led.add != 0), "the ADD saturation flag matches the ledger",
-        led.add != 0, (int)top.sat_add_o);
-  check(top.sat_mul_o == (led.mul != 0), "the MUL saturation flag matches the ledger",
-        led.mul != 0, (int)top.sat_mul_o);
+  check(top.sat_add_o == (led.add != 0), "the ADD saturation flag matches the ledger", led.add != 0,
+        (int)top.sat_add_o);
+  check(top.sat_mul_o == (led.mul != 0), "the MUL saturation flag matches the ledger", led.mul != 0,
+        (int)top.sat_mul_o);
 }
 
 // A DOT program must be REFUSED, not answered with a zero product.
@@ -363,7 +368,8 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_engine& top) {
   // from the other. DOT is implemented; it must be COMPUTED, not refused.
   check(top.unsupported_o == 0, "a DOT op is implemented now, not refused", 0,
         (int)top.unsupported_o);
-  check(top.exec_desync_o == 0, "and it does not desynchronise the pipeline", 0, (int)top.exec_desync_o);
+  check(top.exec_desync_o == 0, "and it does not desynchronise the pipeline", 0,
+        (int)top.exec_desync_o);
   // 3*7 + 5*11 in fx16 = (3<<16)*(7<<16)>>16 + ... -- the value is checked
   // against the interpreter by the randomized lane; here the point is that a
   // DOT PRODUCES a write at all, which the refusing version never did.
@@ -500,7 +506,8 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
   printf("   MEASURED: 1 context = %u uops in %d clocks; 8 contexts = %u uops in %d clocks\n",
          issued_1, clocks_1, issued_8, clocks_8);
   check(finished == kCtx, "all eight contexts finished", kCtx, finished);
-  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.exec_desync_o);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0,
+        (int)top.exec_desync_o);
 
   // THE CYCLE COUNTS ARE PINNED, and that is the point of measuring them.
   // X05 -- releasing a context for re-issue one stage early -- SURVIVED the
@@ -603,7 +610,10 @@ void test_results_survive_contention(Vzhao_probe_v3_engine& top, int programs) {
     zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), nullptr);
     for (size_t o = 0; o < fp.out_map.size(); ++o) {
       if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
-      if (d.shadow[0][fp.out_map[o].idx] != want[o]) { ++bad; break; }
+      if (d.shadow[0][fp.out_map[o].idx] != want[o]) {
+        ++bad;
+        break;
+      }
     }
   }
 
@@ -660,7 +670,8 @@ void test_random(Vzhao_probe_v3_engine& top, int iters) {
   check(ran > 0, "some programs actually ran", 1, ran > 0 ? 1 : 0);
   check(scalar_plans == 0, "an all-varying plan never produces a scalar source", 0, scalar_plans);
   check(bad == 0, "every randomized program matches the interpreter", 0, bad);
-  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0, (int)top.exec_desync_o);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step throughout", 0,
+        (int)top.exec_desync_o);
 }
 
 }  // namespace
