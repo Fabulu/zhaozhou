@@ -52,16 +52,42 @@ REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild_${BUILD_DIR}.l
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
+# CONSUMERS ARE READ FROM SOURCES, NOT FROM TOP_MODULE.
+#
+# This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
+# only while every swept block was its own top. The DOT fix composed this
+# executor into zhao_probe_v3_engine, the grep found nothing, and the sweep
+# aborted naming an EMPTY roster. The guard was right to refuse -- it could no
+# longer see what it was guarding.
+#
+# The rule is now: every target this sweep RUNS must really elaborate the
+# file, and every OTHER target that elaborates it must be declared here with a
+# reason. A consumer that is neither run nor declared is the hole the guard
+# exists to find.
+UNRUN_CONSUMERS="${UNRUN_CONSUMERS:-}"
+
 check_consumers() {
-  local declared
-  declared=$(grep -B12 "TOP_MODULE zhao_probe_v3_exec" tests/CMakeLists.txt \
-             | grep -oE "verilate\(test_[a-z_0-9]+" | sed 's/verilate(//' | sort -u)
-  if [ "$declared" != "$TARGETS" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_probe_v3_exec into target(s):"
-    echo "$declared"
-    echo "but this sweep runs: $TARGETS — update TARGETS or the roster."
+  local declared t c
+  declared=$(python tools/sweep_consumers.py "$RTL") || {
+    echo "ABORT: no verilate() target elaborates $RTL"
     return 1
-  fi
+  }
+  for t in $TARGETS; do
+    echo "$declared" | grep -qx "$t" || {
+      echo "ABORT: this sweep runs $t, which does not elaborate $RTL"
+      return 1
+    }
+  done
+  for c in $declared; do
+    case " $TARGETS $UNRUN_CONSUMERS " in
+      *" $c "*) ;;
+      *)
+        echo "ABORT: $c also elaborates $RTL and is neither run by this sweep"
+        echo "       nor declared in UNRUN_CONSUMERS -- its models would carry"
+        echo "       mutant-derived code that nothing scores."
+        return 1 ;;
+    esac
+  done
   return 0
 }
 

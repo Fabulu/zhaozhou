@@ -69,12 +69,22 @@ MUTANTS = [
     # Recorded here rather than silently omitted: a claim with no mutant
     # against it looks identical to a claim nobody thought of.
     # Re-pointed 2026-08-28: the issue moved into the operand mux.
+    # Re-pointed AGAIN 2026-08-28 06:41: the DOT fix moved the whole sequence
+    # to S4 and rewrote the desync guard, so EIGHT anchors in this table died.
+    # They are re-aimed at the SAME claims against the new shape, not dropped.
+    # A claim whose mutant stopped applying is a claim that silently stopped
+    # being tested, and it looks exactly like a claim nobody thought of.
     ("X02 the multiplier is issued a stage early, on operands not yet read",
-     "    mul_issue_c = s2_v_r;",
-     "    mul_issue_c = s1_v_r;"),
-    ("X03 the desync guard is inverted, so alignment is never reported",
-     "      if (s4_v_r != prod_valid) desync_o <= 1'b1;",
-     "      if (s4_v_r == prod_valid) desync_o <= 1'b1;"),
+     "    mul_issue_c = s2_v_r && !is_dot(s2_op_r);",
+     "    mul_issue_c = s1_v_r && !is_dot(s2_op_r);"),
+    # The guard now checks THE MULTIPLIER'S CONTRACT -- a product arrives
+    # exactly two clocks after a granted issue -- through a two-deep shadow.
+    # Inverting it outright is a constant alarm; WIDENING the window to "one
+    # or two clocks" keeps both shadow stages live and is the real defect,
+    # because a product arriving on the wrong clock then passes unreported.
+    ("X03 the desync guard accepts a product a clock early, so a shifted product passes",
+     "      if (prod_valid != issued_s2_r) desync_o <= 1'b1;",
+     "      if (prod_valid != (issued_s2_r || issued_s1_r)) desync_o <= 1'b1;"),
     # Re-pointed with X19, same reason.
     ("X04 the multiplier zero-extends its operands instead of sign-extending",
      "    mul_a_c     = 33'(rf_a0);\n"
@@ -158,34 +168,37 @@ MUTANTS = [
     # Every claim in reports/FIELD_V3_DOT_SEQUENCING.md gets a mutant. The
     # sequencer's failures are quiet: the pipeline keeps running and a dot
     # product comes out slightly wrong, or right for the wrong reason.
+    # The hold length is now ONE expression -- `dot_need_c` -- so the three
+    # mutants that used to attack the two-term form all point at it.
     ("X21 a DOT2 also issues the third product, which it does not have",
-     "    end else if (dot3_at_s4_c && dot_cnt_r == 2'd0) begin",
-     "    end else if ((dot3_at_s4_c || dot2_at_s4_c) && dot_cnt_r == 2'd0) begin"),
-    ("X22 a DOT3's hold ends one product early, dropping a2*b2",
-     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);",
-     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd1);"),
-    # Reshaped twice: dropping the DOT2 term orphaned dot2_at_s4_c, and a
-    # `< 0` threshold is a constant-false comparison the linter also refuses.
-    # SWAPPING the two thresholds keeps both operands live and is a real
-    # defect in both directions at once -- the DOT2 holds a clock too long and
-    # sums a stale product, the DOT3 a clock too few and drops a2*b2.
-    ("X23 the DOT2 and DOT3 hold lengths are swapped",
-     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);",
-     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd2) || (dot3_at_s4_c && dot_cnt_r < 2'd1);"),
+     "  assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;",
+     "  assign dot_need_c  = dot_at_s4_c ? 2'd3 : 2'd2;"),
+    ("X22 the hold ends one product early, dropping the last one",
+     "  assign hold_c = dot_at_s4_c && (dot_cnt_r < dot_need_c);",
+     "  assign hold_c = dot_at_s4_c && (dot_cnt_r < (dot_need_c - 2'd1));"),
+    ("X23 the DOT2 and DOT3 product counts are swapped",
+     "  assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;",
+     "  assign dot_need_c  = dot3_at_s4_c ? 2'd2 : 2'd3;"),
+    # Re-aimed at the RETIRE clear, which is where the accumulator is zeroed
+    # now. Self-assignment rather than deletion, so the mutant reads as a
+    # deliberate defect and orphans nothing.
     ("X24 the accumulator is not cleared between instructions",
-     "      end else if (s4_v_r) begin\n"
-     "        dot_acc_r <= '0;\n"
-     "        dot_cnt_r <= 2'd0;\n"
+     "      if (dot_at_s4_c && !hold_c) begin\n"
+     "        dot_acc_r   <= '0;\n"
+     "        dot_cnt_r   <= 2'd0;\n"
+     "        dot_issue_r <= 2'd0;\n"
      "      end",
-     "      end else if (s4_v_r) begin\n"
-     "        dot_acc_r <= dot_acc_r;\n"
-     "        dot_cnt_r <= 2'd0;\n"
+     "      if (dot_at_s4_c && !hold_c) begin\n"
+     "        dot_acc_r   <= dot_acc_r;\n"
+     "        dot_cnt_r   <= 2'd0;\n"
+     "        dot_issue_r <= 2'd0;\n"
      "      end"),
+    # The operand mux moved to S4 with the rest of the sequence. Every s4_*
+    # register also feeds the ALU, so re-pointing the second product at the
+    # third pair orphans nothing.
     ("X25 the second product is taken from the a2/b2 pair instead of a1/b1",
-     "      mul_a_c     = 33'(s3_a1_r);\n"
-     "      mul_b_c     = 33'(s3_b1_r);",
-     "      mul_a_c     = 33'(s3_a2_r);\n"
-     "      mul_b_c     = 33'(s3_b2_r);"),
+     "        2'd1:    begin mul_a_c = 33'(s4_a1_r); mul_b_c = 33'(s4_b1_r); end",
+     "        2'd1:    begin mul_a_c = 33'(s4_a2_r); mul_b_c = 33'(s4_b2_r); end"),
     # Reshaped: dropping the term orphaned dot_inflight_c. ORing it keeps the
     # operand and keeps the defect -- a DOT no longer blocks issue, so another
     # instruction reaches S2 and drives the multiplier out from under it.
@@ -200,8 +213,8 @@ MUTANTS = [
      "                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));",
      "  assign dot_inflight_c = (s4_v_r && is_dot(s4_op_r));"),
     ("X28 the sum drops the product arriving on the final clock",
-     "  assign dot_sum_c = dot_acc_r + prod_ab;",
-     "  assign dot_sum_c = dot_acc_r;"),
+     "  assign dot_sum_c   = dot_acc_r + prod_ab;",
+     "  assign dot_sum_c   = dot_acc_r;"),
     ("X29 DOT3 is treated as DOT2, so the third member never contributes",
      "    is_dot = (op == 8'h10) || (op == 8'h11);  // OP_DOT2, OP_DOT3",
      "    is_dot = (op == 8'h10);  // OP_DOT2, OP_DOT3"),

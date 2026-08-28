@@ -88,7 +88,15 @@ cd "$(dirname "$0")/.." || exit 1
 # that Git bash and msys bash resolve differently.
 export USERPROFILE="C:\Users\Fabian Trunz"
 export CCACHE_DIR="$(pwd)/.ccache"
-mkdir -p "$CCACHE_DIR"export VERILATOR_ROOT="C:/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator"
+mkdir -p "$CCACHE_DIR"
+
+# A LOST NEWLINE ATE THIS EXPORT. An earlier scripted edit joined the mkdir
+# and the next line into `mkdir -p "$CCACHE_DIR"export VERILATOR_ROOT=...`,
+# which silently created two junk directories and left VERILATOR_ROOT unset
+# for every detached sweep since. It kept working only because PATH below
+# still found verilator; the day it stops, the error will name something
+# else entirely.
+export VERILATOR_ROOT="C:/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator"
 export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/Programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
 
 LOG="$LOGDIR/${SWEEP}_sweep.log"
