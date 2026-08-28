@@ -198,3 +198,82 @@ pass while this is visibly wrong. The owner spotted it by looking. If a
 mesh-integrity check would have caught it, that gate is worth having — this is
 the same lesson as *"component checks passing is not likeness evidence"*, now in
 its correctness form rather than its art form.
+
+### 2026-08-28 2x:xx - Agent start: the thirteen-item run
+
+Read first, in full: CLAUDE.md (art law), 01-RING-CONSTRUCTION.md (sheet
+gate), 03-ANIMATION.md (house style), OWNER-DIRECTION-3 (front-S laws),
+RUN 1730 TASK_LOG, zixxtrixx.h complete (4776 lines), zhao_reel subjects,
+mkcreaturepage.py eye/mouth regions, sidecmp.py.
+
+THE PLAN, in blocks, head first (the owner looks there first):
+  H1 fat run behind the neck (fault 5): shorten + steepen the kTaper drop.
+  H2 flat face (fault 2): dome the terminal rings of the ONE tube -- extra
+     nose rings if V mapping allows (checking compiler V law first), no
+     overlay part, ever.
+  H3 eyes (fault 3): forward + down + more bulge; between the recorded
+     brim-42 and chinstrap failures. Geometry stations + page rows.
+  H4 mouth (item 12): up toward the snout per Front.png (marking placement
+     is the front sheet's jurisdiction). Not wider.
+  H5 neck seams (fault 4): DIAGNOSED FROM SOURCE before rendering: the
+     junction ring (station 11 = kHeadEnd) binds {kBHead w=6/64, spine}
+     in the head part but {spine3 w17, spine4} in the body part --
+     head_station_bind's blend window INCLUDES kHeadEnd, so the two
+     copies of the "bit-identical" ring skin apart whenever kBHead or
+     spine3 moves: a pose-dependent open seam, worst mid-breath.
+     ~12 mm at full idle head-lift by hand estimate. Will verify unlit +
+     with a junction-gap probe before fixing (fix: blend must reach ZERO
+     at kHeadEnd and hand over to station_bind exactly).
+  H6 stray right-eye triangle in death2 (item 13): probe the posed eye
+     vertices at the offending keys; no papering over.
+  T1 tail (fault 1): kBladeRoll -> 0; new kTailRoll rolls the END OF THE
+     TAIL (last spine joints, distributed) about the tube axis inside
+     tail_rest so every clip inherits it and the blades ride along.
+     Splay 3000 kept ("further apart" stays), spike + two-edge colours
+     verified after.
+  R1 balance fall (item 6): progressive buckling on the topple (per-joint
+     lag + overshoot), fight that grows and fails, impact ripple, head
+     reacts; idle-recipe life under the whole clip. Wobble not jitter.
+  R2 taunt (item 7): rebuilt on idle_body underneath the performance.
+  R3 hit deformation (item 8): sharp local fold at the struck stations,
+     few keys, released into the APPROVED ring-out (untouched).
+  R4 rigidity audit: strike/notify/knock family contact sheets, any
+     frozen region gets the idle recipe.
+  S1 salto camera jitter: track a smooth path, not the spinning body.
+  S2 six-salto: the authored three-salto's own curves with more turns --
+     the wheel must HOLD while theta advances.
+  S3 wings on the flying dummy (reel prop only).
+Then: gates green, goldens re-pinned with provenance, all 17 site clips
+re-rendered to canonical names, deploy NOT run.
+
+### Item 14: the taunt gets the Indian head wobble
+
+*"Taunt should include the snake doing a cheeky fast side to side to side etc.
+headshake, like the Indian 'I am being funny' headshake."*
+
+The defining characteristics, because getting them wrong makes it a different
+gesture:
+* **It is a TILT/ROLL, not a turn** — ear toward shoulder, not yaw. A yaw reads
+  as "no"; the roll reads as playful. Most important part.
+* A slight figure-eight quality rather than a flat metronome.
+* Quick and light, three to five repetitions, then done.
+
+**Rig check required:** the head-aim bone was built for yaw and pitch ("left and
+right, up and down"). If it cannot ROLL, this gesture cannot be authored on it.
+Adding the axis must obey the recorded rule to **compose rotations properly
+rather than switch axes on a threshold**, which pops on every crossing.
+
+**A DELIBERATE EXCEPTION to the house style, made consciously.** The standing law
+is *wobble is not jitter — fewer and slower, not more and faster*, and this
+creature has twice been rejected for motion reading as vibration. **This gesture
+is DEFINED by being fast and light**; slowing it into a languid sway destroys it.
+
+The resolution is a LAYERING, and it is worth keeping as a general technique:
+**fast crisp gesture on top, slow loose body underneath.** That contrast is what
+reads as personality — fast head plus fast body is the buzzing that was rejected.
+It also satisfies item 7 ("all parts of body should bend") without contradiction:
+the body's liveliness is the slow layer, the gesture is the fast layer on top.
+
+Judging note: **a roll is nearly invisible in pure side view** — use a front or
+three-quarter camera, and check it at 240p, where a subtle tilt on a small head
+can vanish entirely and may need more amplitude than looks right in a zoom.
