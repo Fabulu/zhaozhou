@@ -28,5 +28,6 @@ if want "$1" choreo; then echo "LD zixx-choreo"; $CXX $FLAGS "$T/zixx_choreo.cpp
 if want "$1" planner; then echo "LD zixx-planner"; $CXX $FLAGS "$T/zixx_planner.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-planner.exe" & fi
 if want "$1" headaim; then echo "LD zixx-headaim"; $CXX $FLAGS "$T/zixx_headaim.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-headaim.exe" & fi
 if want "$1" sideprofile; then echo "LD zixx-sideprofile"; $CXX $FLAGS "$T/zixx_sideprofile.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-sideprofile.exe" & fi
+if want "$1" striketip; then echo "LD zixx-striketip"; $CXX $FLAGS "$T/zixx_striketip.cpp" $LIBOBJS -o "$ROOT/build/tools/zixx-striketip.exe" & fi
 for j in $(jobs -p); do wait "$j" || { echo "LINK FAILED"; exit 1; }; done
 echo "build-direct: done"

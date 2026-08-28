@@ -165,6 +165,29 @@ struct TaperKey {
 // and finishes by t~400: still the owner's fast drop-off behind the neck
 // (girth order untouched: neck 1900 > head 1830 > body 860), the corner
 // gone. Judged on the unlit outline beside Side.png (sidecmp-08).
+// THE GIRTH KNOB (deferred from RUN 0757, UNBLOCKED this run: the owner
+// froze girth "until the head position, neck tangent, and unbroken
+// contour are correct" -- sidecmp-14 and the coordinator's own reading
+// say they are). The matched-pose instrument (sheetpose-girth-overlay,
+// RUN 0757) showed the tube ~2x the DRAWN tube at matched pose, and the
+// owner's eye said it first: "the upper S part gets a bit too broad and
+// big." Per-mille scale on every body/head radius; the girth ORDER
+// (body < head < neck, fast drop) is a ratio law and survives any
+// uniform scale. The VALUE is picked off a rendered ladder BY EYE
+// against the side gate and the site cameras (the overlay removes the
+// bias; the render chooses the value) -- a 2D outline is an
+// interpretation, not a cross-section, and 240p legibility votes too.
+#ifndef ZIXX_GIRTH
+// 850, PICKED OFF THE LADDER BY EYE (girth-ladder.png, rungs 1000/850/
+// 700/550 at the side gate and the site camera): 850 answers the owner's
+// "A BIT too broad and big" -- his own words scale the correction -- while
+// the chubby comma character and the culminating head survive; 700 opens
+// the loop but starts shedding the approved presence; 550 is the recorded
+// WIRE fault reborn. The 2x matched-pose instrument finding removed the
+// bias; the render chose the value (sidecmp-15-girth850).
+#define ZIXX_GIRTH 850
+#endif
+
 constexpr TaperKey kTaper[] = {
     {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1780},
     {330, 1400}, {400, 1000}, {470, 890}, {560, 860}, {620, 860},
@@ -177,7 +200,17 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 1075;  // RE-SOLVED AGAIN, compact-S pass (front
+constexpr int32_t kBodyY =
+    1075 - (152 * (1000 - ZIXX_GIRTH)) / 1000;
+                                 // 152, not the plain 138-mm radius
+                                 // carry: the skinned belly sags a
+                                 // shade more as the tube slims --
+                                 // PROBE-corrected at the 850 rung
+                                 // (idle grazed -1; now [-13..-3])
+                                 // the girth term drops the carry with the
+                                 // grounded radius (~138 mm at full girth)
+                                 // so the belly stays planted at every
+                                 // ladder rung. RE-SOLVED AGAIN, compact-S pass (front
                                  // sine sum 1.090 -> 0.826, flat approach
                                  // 0): same solve, same probe law. Was
                                  // 1117 at kFrontSegs 5. // RE-SOLVED, RUN 1730 front-S
@@ -598,7 +631,9 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // a flat centreline here lifts the thinning belly off the ground and a
     // flat 900-ish table dug it 30 mm under (probe, 2026-08-27). Each slope
     // is asin(radius drop / segment): the belly rides the ground exactly.
-    40, 380, 710, 960, 1100, 1220,
+    (40 * ZIXX_GIRTH) / 1000, (380 * ZIXX_GIRTH) / 1000,
+    (710 * ZIXX_GIRTH) / 1000, (960 * ZIXX_GIRTH) / 1000,
+    (1100 * ZIXX_GIRTH) / 1000, (1220 * ZIXX_GIRTH) / 1000,
     // the tail rises behind, short and steep
     -5600, -11400};
 // which slope entries the descent lobe occupies (breathing deepens these)
@@ -771,7 +806,10 @@ constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
 // posed S's planform centre, measured by the pose probe.
 constexpr int32_t kFallPivotX = -990;   // mm behind the nose
 constexpr int32_t kFallPivotY = -60;    // mm below the nose
-constexpr int32_t kFallLift = 890;    // 934 -> 890, compact-S pass: the
+constexpr int32_t kFallLift = 916;    // 890 -> 916, girth 850: the slimmer
+    // tube (and its kBodyY carry) lowered the tumble to a -6 mm ground
+    // kiss; +26 restores the authored ~20 mm near-brush (probe).
+    // 934 -> 890, compact-S pass: the
     // shorter front shrank the tumble disc and the bottom rose to 64 mm
     // of air; the approved character NEAR-BRUSHES (~20 mm).
     // RE-AUTHORED RUN 1730: the front-S
@@ -1077,6 +1115,7 @@ inline int32_t station_r(int i) {
     }
   }
   int64_t r = (static_cast<int64_t>(kHeadHalfMm) * r1000) / 1000;
+  r = (r * ZIXX_GIRTH) / 1000;  // the girth knob (see kTaper's header note)
   if (i < kNoseDomeStations) r = (r * kNoseDome[i]) / 1000;
   return static_cast<int32_t>(r);
 }

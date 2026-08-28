@@ -355,3 +355,31 @@ how you turn a tidy-up into a lost afternoon. They get cleaned when it closes.
 - The probe's first metre-scale numbers were PHANTOMS (root added twice);
   fixed before any constant was calibrated from them.
 
+
+### 2026-08-28 20:1x - THE GIRTH LADDER (deferred work unblocked)
+
+- The owner's freeze condition -- "until the head position, neck tangent,
+  and unbroken contour are correct" -- is MET (sidecmp-14, coordinator
+  concurring), so the RUN 0757 finding applies: the tube measured ~2x the
+  drawn tube at matched pose, and the owner's eye said it first ("the
+  upper S part gets a bit too broad and big").
+- ZIXX_GIRTH wired (the parked scaffold's design, adapted to the
+  reconstructed front): per-mille scale on station_r (head_ring follows by
+  construction), the grounded slope table scales with it (asin of radius
+  drop), kBodyY carries the grounded-radius drop.
+- THE LADDER (girth-ladder.png, 1000/850/700/550, side gate + site
+  camera): 550 is the recorded WIRE fault reborn; 700 opens the loop but
+  sheds the approved chubby presence; 850 answers "A BIT too broad" --
+  the owner's own words scale the correction -- with the culminating head
+  and 240p legibility intact. PICKED 850 BY EYE (sidecmp-15-girth850);
+  the 2x instrument removed the bias, the render chose the value.
+- Probe-corrected: carry coefficient 138 -> 152 (idle grazed -1; now
+  [-13..-3], walk [-13..+4]); kFallLift 890 -> 916 (the slimmer tumble
+  kissed -6; near-brush [18..] restored). Death keel re-declared -114
+  (was -161: the slimmer flank sinks less). Probe 0, overlaps all within
+  (8,852 hits -- down from 15,238: the slimmer tube nests less).
+- zixx-striketip added to build-direct.sh after its stale binary printed
+  pre-girth numbers once -- the trap's third appearance this run, caught
+  by suspicion this time. Fresh binary: tips still 425/426/427 -- the
+  spear lock adapts to kBodyY by construction.
+

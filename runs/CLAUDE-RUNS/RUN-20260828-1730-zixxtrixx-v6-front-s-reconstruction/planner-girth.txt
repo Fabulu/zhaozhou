@@ -1,0 +1,4 @@
+golden preset: 226 keys, apex 12000 mm, spin 3000 mturns — exact
+high aerial: coil 34 keys, apex 11098 mm, spin 3000 mturns, plunge 6 keys, impact at key 69 (1724, 9588) mm
+long forward: coil 44 keys, apex 3200 mm, spin 1000 mturns, plunge 6 keys, impact at key 79 (8617, 990) mm
+PLANNER PROOF: the golden preset is preserved, parametric plans hit their locked intercepts, and impact is a collision verdict

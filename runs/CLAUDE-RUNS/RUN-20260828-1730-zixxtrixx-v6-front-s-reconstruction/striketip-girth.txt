@@ -1,0 +1,27 @@
+salto-dummy (slot 33): impact key 53, plan intercept (4600, 350) mm
+  nose        (  1983,   2654)
+  station 52  (  4107,    782)
+  station 53  (  4147,    746)
+  station 54  (  4188,    709)
+  station 55  (  4229,    674)
+  station 56  (  4270,    637)
+  blade tip   (  4878,     28)   gap to intercept 425 mm
+  nose->tip: reach 3908 mm, angle -42.2 deg (the POSE's own weapon vector)
+salto-fly   (slot 34): impact key 54, plan intercept (3800, 3200) mm
+  nose        (  1638,   5935)
+  station 52  (  3387,   3709)
+  station 53  (  3421,   3666)
+  station 54  (  3455,   3623)
+  station 55  (  3488,   3581)
+  station 56  (  3522,   3537)
+  blade tip   (  4009,   2828)   gap to intercept 426 mm
+  nose->tip: reach 3908 mm, angle -52.7 deg (the POSE's own weapon vector)
+salto-six   (slot 35): impact key 82, plan intercept (5200, 0) mm
+  nose        (  4231,   3350)
+  station 52  (  5004,    626)
+  station 53  (  5019,    574)
+  station 54  (  5034,    521)
+  station 55  (  5048,    469)
+  station 56  (  5063,    416)
+  blade tip   (  5245,   -425)   gap to intercept 427 mm
+  nose->tip: reach 3908 mm, angle -75.0 deg (the POSE's own weapon vector)
