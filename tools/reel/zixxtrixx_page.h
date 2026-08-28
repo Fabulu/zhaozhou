@@ -6,8 +6,8 @@
 // over the measured pigment -- so the strokes, pressure marks and paper
 // tooth are the ones in the drawing, not procedural noise.
 //
-// U is the ring angle and local +Z maps to world DOWN, so U = 192/256 is
-// the animal's BACK. The dorsal band is painted at texel column 48.
+// U is the ring angle and local +Z maps to world DOWN, so stored U = 192/256
+// is the animal's BACK. The dorsal band is centred at atlas column 192.
 //
 // 6 tiles of 64x64, 252 of 256 palette entries used.
 //   tile 0: body flank, dark-green front band, dorsal band at U=192, throat wedge

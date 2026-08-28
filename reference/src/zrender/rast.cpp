@@ -75,6 +75,24 @@ inline int64_t orient(const ScreenV& a, const ScreenV& b, int64_t px, int64_t py
 
 inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (v < 0 ? 0 : v)); }
 
+inline void apply_toon_ramp(const ToonRamp* ramp, int32_t& r, int32_t& g, int32_t& b) {
+  if (ramp == nullptr || ramp->bands == 0) return;
+  const int32_t mean = static_cast<int32_t>(
+      (static_cast<int64_t>(r) + static_cast<int64_t>(g) + b) / 3);
+  const int32_t q = ramp->bands <= 2
+                        ? (mean < ramp->threshold[0] ? ramp->level[0] : ramp->level[1])
+                        : (mean < ramp->threshold[0]
+                               ? ramp->level[0]
+                               : (mean < ramp->threshold[1] ? ramp->level[1] : ramp->level[2]));
+  if (mean <= 0) {
+    r = g = b = q;
+    return;
+  }
+  r = static_cast<int32_t>(static_cast<int64_t>(r) * q / mean);
+  g = static_cast<int32_t>(static_cast<int64_t>(g) * q / mean);
+  b = static_cast<int32_t>(static_cast<int64_t>(b) * q / mean);
+}
+
 }  // namespace
 
 // The §8 scan box: exactly the pixels whose CENTRE can lie in the triangle,
@@ -278,9 +296,10 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 rq.mode = tex->direct->mode_of(tex->tile_a);
                 rq.lod = tex->lod;
                 const Tmu::Sample smp = Tmu::sample(rq, tex->direct->mem);
-                const int32_t mr = m.gouraud ? cr : tex->mod_r;
-                const int32_t mg = m.gouraud ? cg : tex->mod_g;
-                const int32_t mb = m.gouraud ? cb : tex->mod_b;
+                int32_t mr = m.gouraud ? cr : tex->mod_r;
+                int32_t mg = m.gouraud ? cg : tex->mod_g;
+                int32_t mb = m.gouraud ? cb : tex->mod_b;
+                apply_toon_ramp(m.toon, mr, mg, mb);
                 dst[0] = sat_u8((smp.r * mr + 32768) >> 16);
                 dst[1] = sat_u8((smp.g * mg + 32768) >> 16);
                 dst[2] = sat_u8((smp.b * mb + 32768) >> 16);
@@ -304,18 +323,21 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                     tex->ts->tiles[tile][(static_cast<size_t>(ty) << 6) + static_cast<size_t>(tx)];
                 const uint16_t c565 = tex->ts->palette[ci8];
                 const uint32_t r5 = (c565 >> 11) & 0x1F, g6 = (c565 >> 5) & 0x3F, b5 = c565 & 0x1F;
-                const int32_t mr = m.gouraud ? cr : tex->mod_r;
-                const int32_t mg = m.gouraud ? cg : tex->mod_g;
-                const int32_t mb = m.gouraud ? cb : tex->mod_b;
+                int32_t mr = m.gouraud ? cr : tex->mod_r;
+                int32_t mg = m.gouraud ? cg : tex->mod_g;
+                int32_t mb = m.gouraud ? cb : tex->mod_b;
+                apply_toon_ramp(m.toon, mr, mg, mb);
                 dst[0] = sat_u8((((r5 * 255 + 15) / 31) * mr + 32768) >> 16);
                 dst[1] = sat_u8((((g6 * 255 + 31) / 63) * mg + 32768) >> 16);
                 dst[2] = sat_u8((((b5 * 255 + 15) / 31) * mb + 32768) >> 16);
               } else if (m.gouraud) {
                 // untextured Gouraud: the lanes carry pre-lit colour on the
                 // 255 scale; ONE rounding per channel
-                dst[0] = sat_u8((cr + 32768) >> 16);
-                dst[1] = sat_u8((cg + 32768) >> 16);
-                dst[2] = sat_u8((cb + 32768) >> 16);
+                int32_t mr = cr, mg = cg, mb = cb;
+                apply_toon_ramp(m.toon, mr, mg, mb);
+                dst[0] = sat_u8((mr + 32768) >> 16);
+                dst[1] = sat_u8((mg + 32768) >> 16);
+                dst[2] = sat_u8((mb + 32768) >> 16);
               } else {
                 dst[0] = r;
                 dst[1] = g;

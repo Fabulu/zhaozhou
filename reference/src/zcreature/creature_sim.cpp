@@ -425,8 +425,12 @@ inline Shade3 creature_light(int32_t lam_key, int32_t lam_fill) {
 // three-light rig's colour stays and only the RAMP goes flat.
 constexpr int32_t kCel2Thresh = 52000;
 constexpr int32_t kCel2Level[2] = {36000, 70000};
-constexpr int32_t kCel3Thresh[2] = {44000, 62000};
-constexpr int32_t kCel3Level[3] = {33000, 54000, 74000};
+constexpr int32_t kCel3Thresh[2] = {43000, 57000};
+constexpr int32_t kCel3Level[3] = {28000, 50000, 82000};
+constexpr render::ToonRamp kSmoothCel2Ramp{2, {kCel2Thresh, 0},
+                                           {kCel2Level[0], kCel2Level[1], 0}};
+constexpr render::ToonRamp kSmoothCel3Ramp{3, {kCel3Thresh[0], kCel3Thresh[1]},
+                                           {kCel3Level[0], kCel3Level[1], kCel3Level[2]}};
 inline Shade3 cel_quantise(const Shade3& s) {
   const int32_t m = (s.r + s.g + s.b) / 3;
   int32_t q;
@@ -453,6 +457,7 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 
 DebugShade g_debug_shade = DebugShade::kOff;
 int g_cel_bands = 0;
+int g_smooth_toon_bands = 0;
 
 void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, const mat4fx& vp,
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
@@ -687,10 +692,22 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         } else {
           shc[0] = shc[1] = shc[2] = creature_light(lam_key, lam_fill);
         }
-        // RUN 1939 cel experiment (default 0: this branch never runs on
-        // the shipping path and the normal render stays bit-identical)
-        if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
-          for (int k = 0; k < 3; ++k) shc[k] = cel_quantise(shc[k]);
+        // RUN 1939/2234 cel experiment (default 0: this branch never runs on
+        // the shipping path and the normal render stays bit-identical). Cel
+        // bands must be FLAT: quantising each Gouraud corner and then letting
+        // the rasteriser interpolate simply rebuilt a gradient, which was
+        // mathematically different but visually indistinguishable at 240p.
+        // Use the triangle's authored face light, select one of the named
+        // levels, and hold it across the triangle.
+        if (g_smooth_toon_bands != 0 && g_debug_shade == DebugShade::kOff) {
+          // Honest smooth-surface toon: keep coherent local/shared normals and
+          // interpolate their ordinary light, then threshold that scalar per
+          // fragment in raster. This is deliberately separate from faceted cel.
+          tm.toon = g_smooth_toon_bands <= 2 ? &kSmoothCel2Ramp : &kSmoothCel3Ramp;
+        } else if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
+          const Shade3 cel = cel_quantise(creature_light(lam_key, lam_fill));
+          shc[0] = shc[1] = shc[2] = cel;
+          tm.gouraud = false;
         }
         // ---- DIAGNOSTIC SHADE MODES (P2; reel tooling, default off) ----
         if (g_debug_shade == DebugShade::kUnlit) {

@@ -587,11 +587,11 @@ def build_tiles():
 
 
 # ======================= THE CONTINUOUS BODY ATLAS (T4/T5/T6) ==============
-# One 128x256 RGB565 page for the whole head+body shell: U = circumference
-# (column 96 = the back, 32 = the belly, 64 and 0 = the side lines), V =
-# nose-to-tail (row 0 = nose tip, row V_JUNCTION = the head/body junction
-# station, row 255 = the fork). No repeated 64-px tile, no V restart at the
-# junction: one continuous surface, ~11.9 mm of animal per row everywhere.
+# One 256x512 RGB565 page for the whole head+body shell, authored on a
+# 128x256 coordinate grid and scaled by SC: base U column 96 = back, 32 =
+# belly, 64 and 0 = the side lines; base V row 0 = nose tip, V_JUNCTION =
+# head/body junction, 255 = fork. No repeated 64-px tile and no V restart at
+# the junction: one continuous surface, ~5.95 mm of animal per stored row.
 # The fins stay on their own small 64x64 pages (bilinear + mips BLEED across
 # atlas neighbours, so unrelated regions must not share one).
 # 256x512, was 128x256 (run 0326 owner: "more high res textures that look
@@ -768,7 +768,7 @@ _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6],
 
 
 def build_atlas():
-    """T4+T5: the one continuous 128x256 body atlas. Returns (rgb, tooth)."""
+    """T4+T5: the one continuous 256x512 body atlas. Returns (rgb, tooth)."""
     mats = {}
     for i, m in enumerate(["green", "green_dark", "pink", "blue"]):
         mats[m] = multiscale(m, ATLAS_W, ATLAS_H, i)
@@ -1201,20 +1201,54 @@ def exp_misreg(rgb, tooth):
     out[ee] = out[ee] * 0.15 + INK_RGB * 0.85
     return out, tooth
 
+# Graphite is a MEDIUM colour, not a creature pigment. These are screen-read
+# authoring knobs: the earlier two-texel, 16% ghost vanished completely through
+# the atlas mip at 384x240. A construction line has to remain visible before it
+# can be judged as subtle.
+PENCIL_RGB = np.array([45.0, 43.0, 42.0])
+PENCIL_CORE_ALPHA = 0.75
+PENCIL_EDGE_ALPHA = 0.42
+PENCIL_LINE_WIDTH = 9
+PENCIL_CROSS_STEP = 32
+PENCIL_CROSS_ALPHA = 0.58
+
+
 def exp_pencil(rgb, tooth):
-    """the construction sketch ghosting through: long faint graphite
-    curves under the crayon, heavier where the pigment is thin."""
+    """the construction sketch showing through: wandering graphite spines
+    and occasional cross-contour searches beneath the finished colour read."""
     H_, W_ = rgb.shape[:2]
     out = rgb.copy()
-    gph = np.array([96.0, 94.0, 92.0])
-    for k, (amp, per, ph, base) in enumerate(
-            [(14, 0.021, 0.0, 40), (11, 0.014, 2.1, 92), (17, 0.030, 4.2, 152),
-             (9, 0.017, 1.1, 205)]):
+
+    def graphite(y, x, alpha):
+        x %= W_
+        out[y, x] = out[y, x] * (1 - alpha) + PENCIL_RGB * alpha
+
+    # Long exploratory lines pulled with the body. Unequal curves keep this a
+    # hand searching for the form rather than evenly-spaced decoration.
+    for amp, per, ph, base in (
+            (14, 0.021, 0.0, 40), (11, 0.014, 2.1, 92),
+            (17, 0.030, 4.2, 152), (9, 0.017, 1.1, 205)):
         for y in range(H_):
-            x = int(base + amp * np.sin(y * per + ph)) % W_
-            for t in range(2):
-                a = 0.16 if t == 0 else 0.09
-                out[y, (x + t) % W_] = out[y, (x + t) % W_] * (1 - a) + gph * a
+            x = int(base + amp * np.sin(y * per + ph))
+            for t in range(PENCIL_LINE_WIDTH):
+                edge = abs(t - (PENCIL_LINE_WIDTH - 1) * 0.5) / max(
+                    1.0, (PENCIL_LINE_WIDTH - 1) * 0.5)
+                alpha = PENCIL_CORE_ALPHA + (PENCIL_EDGE_ALPHA - PENCIL_CORE_ALPHA) * edge
+                graphite(y, x + t, alpha)
+
+    # Sparse cross-contour attempts: slightly sloped, broken in two places, and
+    # offset from a ruler-perfect cadence. They read clearly on the head and
+    # broad front without turning the whole animal into stripes.
+    for band, y0 in enumerate(range(28, H_ - 12, PENCIL_CROSS_STEP)):
+        y0 += (band % 3 - 1) * 4
+        for x in range(W_):
+            if (x + band * 19) % 73 in range(56, 63):
+                continue
+            y = y0 + int(3.0 * np.sin(x * 0.055 + band * 1.7))
+            if 0 <= y < H_:
+                graphite(y, x, PENCIL_CROSS_ALPHA)
+                if y + 1 < H_:
+                    graphite(y + 1, x, PENCIL_EDGE_ALPHA)
     return out, tooth
 
 EXPERIMENTS = {
@@ -1289,8 +1323,8 @@ def emit(tiles, names, dst, atlas=None):
     out.append("// over the measured pigment -- so the strokes, pressure marks and paper")
     out.append("// tooth are the ones in the drawing, not procedural noise.")
     out.append("//")
-    out.append("// U is the ring angle and local +Z maps to world DOWN, so U = 192/256 is")
-    out.append("// the animal's BACK. The dorsal band is painted at texel column 48.")
+    out.append("// U is the ring angle and local +Z maps to world DOWN, so stored U = 192/256")
+    out.append("// is the animal's BACK. The dorsal band is centred at atlas column 192.")
     out.append("//")
     out.append(f"// {n} tiles of {TILE}x{TILE}, {used} of 256 palette entries used.")
     for i, nm in enumerate(names):
@@ -1305,9 +1339,9 @@ def emit(tiles, names, dst, atlas=None):
     out.append(f"constexpr int kPageTiles = {n};")
     if atlas is not None:
         # ---- THE CONTINUOUS BODY ATLAS (T4/T5/T6) ----------------------
-        # 128x256 RGB565, U = circumference (col 96 = back), V = nose-to-
-        # tail (row 50 = the head/body junction). Full mip chain, levels
-        # 0..7, level offsets per Tmu::level_offset_texels. The multi-scale
+        # 256x512 RGB565, U = circumference (stored col 192 = back), V =
+        # nose-to-tail (stored row 100 = the head/body junction). Mip chain,
+        # levels 0..7, offsets per Tmu::level_offset_texels. The multi-scale
         # crayon (coverage/strokes/tooth), the quilting and the hue drift
         # are described at build_atlas/multiscale above; every value is a
         # named knob. Fins stay on the kPageDirect 64x64 pages.

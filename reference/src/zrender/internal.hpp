@@ -112,6 +112,18 @@ int32_t div_rhu_s128(__int128 n, __int128 d);
 
 enum class BlendMode { kOpaque, kAlpha, kAdditive };
 
+// Experiment-only smooth toon ramp. The creature path still supplies ordinary
+// Gouraud RGB light gains; when this pointer is non-null the raster thresholds
+// their interpolated mean light PER FRAGMENT, then rescales the three lanes to
+// the selected authored level. Default null keeps every existing raster call
+// byte-identical and models a comparator/table after interpolation rather than
+// quantised vertices whose interpolation merely rebuilds a gradient.
+struct ToonRamp {
+  uint8_t bands = 0;
+  int32_t threshold[2] = {0, 0};
+  int32_t level[3] = {0, 0, 0};
+};
+
 struct TriMode {
   bool depth_test = true;
   bool depth_write = true;
@@ -128,6 +140,7 @@ struct TriMode {
   // row walker owns the division in RTL too). Default false: every existing
   // caller renders bit-identically.
   bool gouraud = false;
+  const ToonRamp* toon = nullptr;  // optional per-fragment light comparator/table
 };
 
 /**

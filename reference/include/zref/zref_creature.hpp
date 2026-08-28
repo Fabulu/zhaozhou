@@ -884,12 +884,13 @@ inline AttackOutcome attack_plan_branch(bool hit_terrain, bool hit_creature) {
  */
 enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire };
 extern DebugShade g_debug_shade;
-// RUN 1939 texture-experiment lane (owner: "maybe try to cel shade one or
-// two versions"): 0 = off (the shipping path, bit-identical); 2 or 3 =
-// quantise the computed light gain into that many bands before it
-// modulates the texel. A pure integer step on a value the pipeline
-// already produces -- no new lane, reel experiments only.
+// RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
+// bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.
+// g_smooth_toon_bands 2/3 keeps coherent shared normals/Gouraud light and asks
+// the raster to threshold the interpolated light per fragment. They are two
+// explicit style reads, never simultaneous and never part of the asset.
 extern int g_cel_bands;
+extern int g_smooth_toon_bands;
 
 /* ---------------------------------------------------------------------------
  * THE CREATURE EXTENT LAW (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 3)

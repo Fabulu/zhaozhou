@@ -1706,11 +1706,13 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
 };
 
-// RUN 1939 texture-experiment lane: reel-side post effects, env-gated
-// (ZIXX_EXP=contour|boil|cel2|cel3|celcontour). Default off: the normal
-// render never enters these branches and stays byte-identical.
-int g_exp_contour = 0;  // ink the creature's silhouette (the sheets' line)
-int g_exp_boil = 0;     // hand-drawn shimmer: a chunky deterministic
+// RUN 1939/2234 texture-experiment lane: reel-side post effects, env-gated.
+// Default off: the normal render never enters these branches and stays
+// byte-identical. The radius is a SCREEN-SPACE authoring knob so a thick line
+// stays thick through distance and mips instead of being baked into the atlas.
+int g_exp_contour = 0;         // ink the creature's silhouette (the sheets' line)
+int g_exp_contour_radius = 2;  // pixels, inward from the rendered silhouette
+int g_exp_boil = 0;            // hand-drawn shimmer: a chunky deterministic
                         // per-4-frame displacement of the creature's pixels
                         // (a function of x, y and FRAME -- never wall-clock)
 uint32_t g_exp_frame = 0;
@@ -1790,16 +1792,17 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       std::fprintf(stderr, "exp mask %zu of %zu" "\n", mc, n);
     }
     if (g_exp_contour) {
-      // the sheets' bold ink line around the whole creature: a 2 px edge
-      // (1 px vanished into the creature's own dark edges at 240p). With
-      // boil active the line inherits the boil's wobble via the mask.
+      // The sheets' bold ink line around the whole creature. The ordinary
+      // contour is 2 px (1 px vanished into the creature's own dark edges at
+      // 240p); RUN 2234's deliberately thick variants select 5 px. With boil
+      // active the line inherits the boil's wobble via the mask.
       std::vector<uint8_t> edge(n, 0);
       for (uint32_t y = 0; y < h; ++y) {
         for (uint32_t x = 0; x < w; ++x) {
           const size_t i = static_cast<size_t>(y) * w + x;
           if (!mask[i]) continue;
           bool e = false;
-          for (int r = 1; r <= 2 && !e; ++r) {
+          for (int r = 1; r <= g_exp_contour_radius && !e; ++r) {
             e = (static_cast<int>(x) - r < 0 || !mask[i - r]) ||
                 (x + r >= w || !mask[i + r]) ||
                 (static_cast<int>(y) - r < 0 || !mask[i - static_cast<size_t>(r) * w]) ||
@@ -3983,9 +3986,15 @@ SceneSubject subject_zixx_fall() {
   s.frames = zixx::kFallKeys * 2 * 2;  // two 3.2 s tumbles per revolution
   s.orbit = true;
   zixx_common(s);
-  s.cam_k = 290000;  // RUN 1939: re-widened with kFallLift 1371 (the rolled
-                     // fan sweeps deeper); at 340000 the loop cropped out
-                     // the frame top -- see fall-it4-sheet
+  // RUN 2234: judge the whole tumble, not one average frame. At 290000 the
+  // long body still crossed the top edge for a large part of the loop and the
+  // automatically chosen poster was only a cropped flank. These are named,
+  // eye-authored shot knobs: pull back enough for the longest vertical pose,
+  // then lower the airborne animal without moving the authored root.
+  constexpr int32_t kFallCamScale = 210000;
+  constexpr int32_t kFallCamBias = 16000;
+  s.cam_k = kFallCamScale;
+  s.cam_bias = kFallCamBias;
   s.note =
       "The falling loop, SLOW on purpose (2026-08-26 rewrite): airborne "
       "throughout, the S at full authority every frame, and the whole animal "
@@ -4356,14 +4365,28 @@ int main(int argc, char** argv) {
     return rc;
   }
   g_out = argc > 1 ? argv[1] : ".";
-  // RUN 1939 experiment gate: ZIXX_EXP=contour|boil|cel2|cel3|celcontour.
-  // Unset (the normal case) leaves every render byte-identical.
+  // RUN 1939/2234 experiment gate. Unset (the normal case) leaves every
+  // render byte-identical. Faceted cel holds a face at one band; smoothcel3
+  // thresholds interpolated light per fragment. Thick modes use the contour
+  // atlas for interior ink and add a five-pixel render-side silhouette below.
   if (const char* ex = std::getenv("ZIXX_EXP")) {
     const std::string e = ex;
     if (e == "cel2") zc::g_cel_bands = 2;
     else if (e == "cel3") zc::g_cel_bands = 3;
+    else if (e == "smoothcel3") zc::g_smooth_toon_bands = 3;
     else if (e == "contour") g_exp_contour = 1;
     else if (e == "celcontour") { zc::g_cel_bands = 3; g_exp_contour = 1; }
+    else if (e == "thick") { g_exp_contour = 1; g_exp_contour_radius = 5; }
+    else if (e == "celthick") {
+      zc::g_cel_bands = 3;
+      g_exp_contour = 1;
+      g_exp_contour_radius = 5;
+    }
+    else if (e == "smoothcelthick") {
+      zc::g_smooth_toon_bands = 3;
+      g_exp_contour = 1;
+      g_exp_contour_radius = 5;
+    }
     else if (e == "boil") g_exp_boil = 1;
     if (!e.empty())
       std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
