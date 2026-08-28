@@ -34,6 +34,65 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+> **INDEX DRIFT, noted 2026-08-28.** Fifteen run folders exist from 2026-08-26
+> onward and only one of them was logged here. The folders themselves are all
+> tracked in git, so nothing is lost — but this index stopped being a usable
+> map of them, which is the one job it has.
+>
+> The entry below for RUN-20260827-1747 was written by the hardware session for
+> its own run. The creature-lane runs from that window are **deliberately not
+> summarised here**: they are another session's work, several ended mid-pass,
+> and inventing closures for them would put fiction in the index that is meant
+> to protect against exactly that.
+
+---
+
+### [RUN-20260827-1747] Field v3: ten blocks swept closed, and two real defects in the shipped executor
+
+**Status:** ACTIVE — this entry is the index, not a closure.
+**Created:** 2026-08-27 17:47
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture/`
+**Handoff:** `HANDOFF.md` in that folder — state of play, commands, open decisions
+
+**Summary:**
+
+The Field IR engine's four-wide fabric, block by block, each checked against the
+shipped interpreter and then mutation-swept. Ten blocks closed with nothing
+unaccounted for: EXEC, CURVE.SVC, NOISE, DISPATCH, WBARB, ROT, RING, SPLINE,
+NORMALIZE, SVCPATH. Every equivalence carries a written proof and a re-score
+trigger; the drivers refuse a survivor without one.
+
+**Two defects found in shipped RTL, both needing more than one context to see:**
+
+* the register file's read is a pipeline stage that a bank-denial freeze does
+  NOT freeze, so a stalled instruction was paired with its successor's operands
+  — 21 of 48 context-programs wrong, 0 after;
+* the multiplier's accounting sat inside the frozen block while the multiplier
+  kept delivering — its own desync alarm latched on 12 of 12 programs, 0 after.
+
+**Three mutants disproved something written in the RTL** rather than finding a
+coding error: SPLINE's rounding law, SVCPATH's claim that its rival constants
+earn their keep, and the executor's write firing once per retire (it fired on
+every held clock, and 34 checks passed for weeks because the last write is
+always correct).
+
+**Tooling this run added, each because something got through:**
+
+* `tools/sweep_anchors_check.py` — every mutant anchor against today's RTL in a
+  second. A block's 31/31 was quoted for seven hours after the RTL it described
+  had moved.
+* `tools/git_add_safe.py` — refuses to stage a file a live sweep can mutate.
+  Caught three attempts, one of them before the mistake rather than after.
+* `docs/BUILD.md` modes 7, 8 and 9, and the path-case section — including the
+  MEASURED finding that clearing the cache does not repair a poisoned tree.
+
+**Still open, and both are Fabian's to decide, not an agent's:** whether SPLINE
+is hot or cold (a four-point block exists for an op the brief classifies cold),
+and `UOP_RING_PREP`, which the brief costs as a hot path and the dispatcher
+cannot reach.
+
+---
+
 ### [RUN-20260826-0617] Zixxtrixx — the first Upheaval creature, concept art to published site
 
 **Archived:** 2026-08-26 UTC+02:00
