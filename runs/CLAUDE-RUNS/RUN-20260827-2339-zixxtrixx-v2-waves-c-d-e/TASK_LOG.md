@@ -158,3 +158,63 @@ CRCs match" (redirected to file). Direct g++ build harness committed
   scratchpad .py with the Write tool and run it instead.
 
 **Status: COMPLETE** (see FINDINGS.md for the honest not-done list).
+
+## Published + main-session verification (2026-08-28)
+
+Deployed https://upheaval.pages.dev (build `8b4eb4fc`). 8 live clips + Archive.
+
+**Re-run independently, not taken on report:** goldens re-dumped and cmp'd —
+**17/17 identical** (all clips + pose CRCs); `zixx-probe` exit 0 (28,884 hits,
+all within authored allowances); `zixx-choreo` exit 0; `zixx-planner` exit 0
+("golden preset preserved, parametric plans hit their locked intercepts, impact
+is a collision verdict"); `zhao-reel --check` → "all sequence CRCs match".
+Archive copies intact; 9 tabs assembled.
+
+**What is genuinely excellent:** the T5 crayon grain. It reads as real stroke
+texture at head-crop zoom AND survives to gameplay distance — the #1 gap named
+at the end of the previous run is closed. The orange eye surround is present and
+reads. Surface is smooth, no faceting anywhere.
+
+### REGRESSION FOUND BY LOOKING — the pink now dominates the animal
+
+Every gate above is green and the creature is nonetheless further from
+`Side.png` than the previous pass in one specific way. Built an 8-poster contact
+sheet and a walk before/after: **from the cameras we actually use, Zixxtrixx now
+reads as a MAGENTA animal with a green sliver.** The sheet has GREEN as the
+dominant body colour with pink as a dorsal band.
+
+This is the SAME MECHANISM recorded in 03-ANIMATION.md, in the other direction:
+*"a creature shot from above shows its BACK, so a dorsal marking sized to read
+in a side-view drawing will dominate the render."* Our cameras sit slightly
+above, so a ~41%-of-circumference band is most of the visible surface.
+
+The band's history is now a full oscillation, and the truth is in the middle:
+6.0 texels → 4.5 (my narrowing, for a camera cause already fixed — wrong) → 13
+(owner's "cover the entire top" — right instruction, over-delivered). The fix is
+a value between, **chosen by rendering candidates from the SITE cameras and
+looking**, not by computing a circumference fraction. Measurement can remove the
+bias; it cannot choose this value.
+
+**Second likeness issue: the head reads as mostly EYE.** In `Side.png` the head
+is a substantial blunt dome with the eye as a feature inside it (roughly a third
+of head height); in our renders the eye plus its orange ring occupies nearly the
+whole head, so the culmination the owner asked for is being read as an eyeball
+rather than as a head. Either the eye is too large or the head's peak is still
+too small — judge that pair together, on the side camera, against the sheet.
+
+**Third, already self-declared by the agent and confirmed:** the wavy pupil
+reads softer than the sheet's bold vertical slit at 240p.
+
+### Also carried forward from the agent's own honest list
+* C6/C7 skipped as superseded (owner ruled the salto great; only the apex hold
+  was licensed) — correct call.
+* F2 spring baker built but preview-gated; curls ~330 mm into itself, F1 reads
+  calmer. Owner's side-by-side to judge.
+* Balance gather-to-stand has a ~200 mm push-up hop (one knob).
+* Head-in-hook nesting deeper than pre-rework (239 vs 69 mm), declared.
+* Vocabulary gaps named: getUp/knockdown, directional hits, more deaths, run
+  gait, taunt.
+
+**Tooling note recorded by the agent and worth keeping:** this harness truncates
+bash heredocs past ~8 KB with a phantom-quote parse error — write a scratchpad
+`.py` and run it. That matches two file corruptions earlier in this project.
