@@ -558,3 +558,66 @@ has since survived several task kills.
 **Outstanding:** the mulbank sweep score; place-and-route for probes 4 and 5;
 the composition against the 850,000-cycle gate; the scalar bank.
 
+### 2026-08-28 (morning) - the bank, the composition, and a night spent on tooling
+
+**BUILT AND VERIFIED.** `zhao_field_v3_mulbank` -- the four-wide multiplier
+bank and its arbiter, the piece nothing arbitrated. Reading the service probes
+first is what found it: `zhao_probe_curve_svc` contains no multiplier, it
+DRIVES one, and says so. MEASURED: 18,202 accepted, 18,202 delivered, 18,202
+grants over 20,000 clocks of contention; one four-wide request per clock
+sustained; priority exactly as declared with the lane group taking ZERO while a
+service asks; 8,884 lane stalls, which is the measured price of fixed priority.
+
+**`zhao_probe_v3_engine`** composes the executor with that bank. The executor's
+private multiplier is gone. 26 directed checks and 400 randomized programs
+against `execute_point`, and the barrel lands on exactly its pinned 66 and 166
+clocks -- the shared bank uncontended behaves identically to the private
+multiplier, so the rewiring is behaviour-preserving.
+
+**PRIORITY (a) WAS ALREADY DONE.** REMAINING_BLOCKERS gated FRAMEBLIT step 8 on
+a CMD.DMA redesign described as "NOT yet done". It is done -- incremental
+payload CRC, slot_ram in M10K shape -- and both blocks now FIT (cmd_dma ok at
+3,607 ALM, frameblit ok at 962). Checking before starting is the only reason
+that was not redone. A stale blocker is worse than no blocker.
+
+---
+
+**THE NIGHT'S REAL COST WAS TOOLING, and it is worth an honest tally.**
+
+One multiplier-bank sweep took SIX attempts. Not one failed for the reason it
+appeared to, and every guard in the driver reported correctly throughout:
+
+| attempt | apparent cause | actual cause |
+| --- | --- | --- |
+| 1-2 | contention | ccache: USERPROFILE unset |
+| 3 | my concurrent build | same |
+| 4 | PATH wrong | same (PATH WAS wrong, separately) |
+| 5 | SIGPIPE from `\| head -25` | mine, and it stranded a mutant |
+| 6 | -- | fixed by -DOBJCACHE_ENABLED=OFF |
+
+What made the difference was instrumentation, not insight. The answer appeared
+in ONE run once the rebuild logged CMAKE_EXIT, NINJA_EXIT and its environment.
+Before that I had three wrong diagnoses and had read a log from a `/tmp` that
+Git bash and msys bash resolve differently.
+
+**Four mistakes of my own, recorded because they repeat:**
+
+1. I read per-mutant verdicts out of a run that had ABORTED declaring itself
+   unclean, and retracted a CORRECT equivalence proof on that basis.
+2. I declared two equivalences PREDICTIVELY, against the rule written in the
+   file I was editing.
+3. I piped a sweep to `head`, which SIGPIPEd it mid-mutation.
+4. One fix silently deleted another -- the regex that added CCACHE_DIR removed
+   the USERPROFILE export, so the two candidates were never both present and
+   each looked independently failed.
+
+**And one rule I wrote from a disproved hypothesis** ("no other build
+anywhere") and have now corrected in docs/BUILD.md. Separate build trees are
+fine; two writers in the SAME tree are not. A rule inferred from a failure
+later explained by something else is a superstition with a changelog entry.
+
+**Permanent guards added:** `sweep_check_clean.py` (five strandings caught),
+multi-file snapshot/restore in the drivers, rebuild exit-code logging,
+`run_sweep_detached.sh`, and the whole sequence written into docs/BUILD.md in
+the order the next person will hit it.
+
