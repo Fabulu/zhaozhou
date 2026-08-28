@@ -995,6 +995,7 @@ struct SceneSubject {
   bool cam_pull = false;
   uint32_t cam_pull0 = 0;
   int32_t cam2_eye = 0, cam2_dist = 0, cam2_bias = 0;  // (cam2_k == cam_k)
+  int32_t cam_k_end = 0;  // Wave E LOD sweep: lerp cam_k -> cam_k_end over the subject
   // debris: spawned at spawn_frame, integer gravity fxm per frame^2
   uint32_t debris_spawn_frame = 0;
   int32_t debris_gravity = 0;      // fx raw per frame^2 (subtracted from vy)
@@ -2056,8 +2057,15 @@ int render_scene(const SceneSubject& sub) {
       // sunlit-side camera (zsign −1), bias recentres the island; k/eye/dist
       // are per-subject (the island scenes stand much further back; creature
       // subjects lerp them for the LOD pull-back)
+      // Wave E: an optional camera-distance SWEEP (cam_k_end != 0 lerps k
+      // over the subject) -- the LOD-ladder acceptance ride
+      int32_t k_now = sub.cam_k;
+      if (sub.cam_k_end != 0 && sub.frames > 1) {
+        k_now = sub.cam_k + static_cast<int32_t>(
+            (static_cast<int64_t>(sub.cam_k_end - sub.cam_k) * f) / (sub.frames - 1));
+      }
       sv.payload.view_projection =
-          cam_pitch(sub.cam_k, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw);
+          cam_pitch(k_now, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw);
       if (sub.orbit) {
         // one exact turn per loop: theta = f * 65536 / frames (integer)
         const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
@@ -3451,6 +3459,24 @@ SceneSubject subject_zixx_fall_baked() {
 }
 #endif
 
+// WAVE E: the LOD-ladder distance sweep -- the camera pulls back from the
+// showcase distance to the horizon over one idle loop, riding the ladder
+// mesh -> micro -> splat -> glint. The gate: the pink crown survives, the
+// silhouette holds, no rung pops. Diagnostic; not in the library.
+SceneSubject subject_zixx_lodsweep() {
+  SceneSubject s;
+  s.name = "zixxtrixx-lodsweep";
+  s.creature = 3;
+  s.frames = zixx::kIdleKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 310000;
+  s.cam_k_end = 26000;
+  s.bump_ext = 18;
+  s.note = "DIAGNOSTIC (Wave E): distance sweep over the hardware LOD ladder";
+  return s;
+}
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3689,6 +3715,7 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));
   if (wanted("zixxtrixx-wire")) rc |= render_scene(subject_zixx_mode("zixxtrixx-wire", 3, false, 1));
   if (wanted("zixxtrixx-walk-unlit")) rc |= render_scene(subject_zixx_walk_unlit());
+  if (wanted("zixxtrixx-lodsweep")) rc |= render_scene(subject_zixx_lodsweep());
 #ifdef ZIXX_F2_PREVIEW
   if (wanted("zixxtrixx-fall-baked")) rc |= render_scene(subject_zixx_fall_baked());
 #endif

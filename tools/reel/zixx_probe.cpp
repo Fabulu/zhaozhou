@@ -94,8 +94,13 @@ int main() {
     nv += m.verts.size();
     nt += m.idx.size() / 3;
   }
-  std::printf("bones=%d meshlets=%zu verts=%zu tris=%zu\n", (int)T.bank.bone_count, T.mesh.size(),
-              nv, nt);
+  size_t mnt = 0;
+  for (const auto& m : T.micro) mnt += m.idx.size() / 3;
+  std::printf("bones=%d meshlets=%zu verts=%zu tris=%zu | micro: %zu meshlets "
+              "%zu tris, compiler micro_error=%d (a MEASURED result, never an "
+              "art target)\n",
+              (int)T.bank.bone_count, T.mesh.size(), nv, nt, T.micro.size(), mnt,
+              (int)T.micro_error);
 
   for (const zc::Clip& clip : T.bank.clips) {
     int32_t worst_min = INT32_MAX, worst_max = INT32_MIN;
@@ -196,6 +201,11 @@ int main() {
       case 6: return 265;
       case 7: return 210;
       case 8: return 250;
+      // the C2 phase clips are SLICES of the attack (slots 10..17): they
+      // inherit its authored nesting wholesale (the coil's nose-to-tail
+      // wheel closure, the rest pose's hook nesting)
+      case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
+        return 210;
       default: return 0;
     }
   };
