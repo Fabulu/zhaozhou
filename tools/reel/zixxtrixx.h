@@ -158,9 +158,16 @@ struct TaperKey {
 // fattens boldly (neck 1900, head 1830 -- the girth order holds), the
 // fast drop lands on the approved body width by t~420, and the grounded
 // radii (t>=560) stay untouched to the millimetre.
+// RUN 0757 notch campaign, iteration 2: the last visible bump-dip on the
+// upper contour was the fast neck->body drop LANDING ON the crown's right
+// flank -- 1900 -> 1560 across one key span put a girth corner exactly
+// where the arch turns. The drop now arrives on a curve (1780 at 260)
+// and finishes by t~400: still the owner's fast drop-off behind the neck
+// (girth order untouched: neck 1900 > head 1830 > body 860), the corner
+// gone. Judged on the unlit outline beside Side.png (sidecmp-08).
 constexpr TaperKey kTaper[] = {
-    {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1560},
-    {340, 1150}, {440, 900}, {560, 860}, {620, 860},
+    {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1780},
+    {330, 1400}, {400, 1000}, {470, 890}, {560, 860}, {620, 860},
     {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
@@ -170,7 +177,10 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 538;  // re-solved with the taller loop (sidecmp-02,
+constexpr int32_t kBodyY = 570;  // +32, RUN 0757: the notch-campaign neck
+                                 // redistribution (sine sum -2.859 -> -2.637
+                                 // over seg0..4) lowered everything behind the
+                                 // head by 36 mm; re-planted, then probe-run  // re-solved with the taller loop (sidecmp-02,
                                  // then corrected -11 against the PROBE --
                                  // the sine table is hand-added);
                                  // node 11 keeps its height exactly  // retuned 2026-08-27 pass 3: the blade
@@ -191,7 +201,10 @@ constexpr int32_t kStageCentreMm = 920;
 // the head-only retaper: the nose base radius shrank, so the dome rounds
 // off BLUNTER rather than drawing the smaller radius out into a point.
 constexpr int kNoseDomeStations = 4;
-constexpr int16_t kNoseDome[kNoseDomeStations] = {380, 760, 925, 985};
+constexpr int16_t kNoseDome[kNoseDomeStations] = {520, 840, 950, 990};
+// (380/760/925/985 -> 520/840/950/990, RUN 0757: the sheet's terminal lobe
+// ends BLUNTER -- the old dome drew the tip out into a soft point once the
+// head reached forward level; judged unlit beside Side.png, sidecmp-08)
 
 // section ellipticity, measured: wider than tall
 constexpr int32_t kHeadWideNum = 112;  // head 1.12 : 1
@@ -257,7 +270,13 @@ constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
 // the cranium about its own snout (the sweep sheet shows the arc). At
 // the centroid the head turns roughly about itself.
 constexpr int32_t kHeadPivotMm = 190;
-constexpr int kSkullRigidTo = 4;  // stations 0..4 fully on the head bone
+constexpr int kSkullRigidTo = 2;  // stations 0..2 fully on the head bone
+                                  // (4 -> 2, RUN 0757 notch campaign: the
+                                  // remaining head/neck notch is the hinge
+                                  // elbow -- an even longer falloff lets the
+                                  // dorsal contour carry the skull's unwind
+                                  // across five more stations; judged on the
+                                  // unlit outline beside Side.png)
                                   // (5 -> 4, run 0326: the hinge must be
                                   // SEAMLESS -- a shorter rigid core and a
                                   // longer falloff let the tube bend into
@@ -459,9 +478,20 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the crown), the crown keeps RISING through -4400 (a taller, more
     // open arch whose apex sits behind the head), and the dive's entry
     // shallows so the descending side opens out.
-    3000, -7400, -10600, -13000,
-    // crown (still climbing -- the arch's top is round and OPEN)
-    -4400,
+    // RUN 0757, THE NOTCH CAMPAIGN. The residual head/neck notch was the
+    // AXIS, not the hinge: stations 0..10 ran as a nearly straight -28..-49
+    // deg diagonal (sideprofile probe) with the whole unwind concentrated
+    // at the skull joint -- a polygonal elbow between two round lobes, and
+    // the envelope of the posed station circles reproduces the notch with
+    // no skinning at all. The sheet's comma turns CONTINUOUSLY: the head
+    // reaches FORWARD just under the crown and the descent unwinds ~20 deg
+    // per joint. So: seg1 shallows hard (the head reaches forward), seg2/3
+    // carry the descent, seg4 steepens (the crown hands its steepness to
+    // the descent earlier). Sine sum seg0..4 -2.859 -> -2.637; kBodyY
+    // +36 re-plants the grounded run (probe-verified).
+    3000, -4000, -8000, -11650,
+    // crown (steeper entry into the descent -- see the 0757 note above)
+    -7650,
     // the dive, past vertical and back under itself
     6800, 14600, 21400, 25200, 20000, 11600,
     // the grounded run, LONG. These slopes RAMP because the belly line must

@@ -239,11 +239,15 @@ int main() {
                              // transient, eye clean on the render
       case 21: return 265;   // getUp (passes back through the rest nesting)
       case 22: return 265;   // hitFloor
-      case 23: return 215;   // damageRight
+      case 23: return 235;   // damageRight (215 -> 235, RUN 0757: the
+                             // notch-campaign neck reaches FORWARD, so the
+                             // lateral whiplash nests the head 15 mm deeper
+                             // into the arch at its peak -- worst key 4
+                             // rendered clean, dmg-worst-keys.png)
       case 24: return 290;   // damageBack: the forward whip tucks the head
                              // under the arch 275 for two keys -- violent
                              // but layered (worst-key render)
-      case 25: return 215;   // damageLeft
+      case 25: return 235;   // damageLeft (mirror of 23; same 0757 provenance)
       case 26: return 400;   // damageTop: the crush presses like the breath
                              // extreme (263; idle's own extreme carries 250)
       case 27: return 340;   // run: the taller hump bunches the grounded
