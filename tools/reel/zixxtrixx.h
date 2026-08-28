@@ -177,7 +177,21 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 570;  // +32, RUN 0757: the notch-campaign neck
+constexpr int32_t kBodyY = 1117;  // RE-SOLVED, RUN 1730 front-S
+                                 // (1121 by the sine solve, then -4 off
+                                 // the PROBE: the breath's belly ripple
+                                 // widened to 9 mm with the climbing
+                                 // front and key 24 rode +1 -- one key
+                                 // of hover is the recorded fault class)
+                                 // reconstruction: grounded height is
+                                 // kBodyY - segL*sum(sin(slope 0..10)),
+                                 // and the raised front (sine sum seg0..4
+                                 // -2.353 -> +1.090) carries the head at
+                                 // the TOP of the climb while the belly
+                                 // lands exactly where the approved table
+                                 // put it. Solved numerically, then
+                                 // probe-corrected like every kBodyY
+                                 // before it. Was 570 (+32, RUN 0757: the notch-campaign neck
                                  // redistribution (sine sum -2.859 -> -2.637
                                  // over seg0..4) lowered everything behind the
                                  // head by 36 mm; re-planted, then probe-run  // re-solved with the taller loop (sidecmp-02,
@@ -187,7 +201,7 @@ constexpr int32_t kBodyY = 570;  // +32, RUN 0757: the notch-campaign neck
                                  // re-rake and the neck re-sum left the idle
                                  // belly touching 0 at one key -- 3 mm down
                                  // restores the authored sink (probe: idle
-                                 // [-7..-3] mm, walk [-13..+10] mm)
+                                 // [-7..-3] mm, walk [-13..+10] mm.)
 // Planform centre of the posed S, nose to tail extent midpoint, for staging:
 // the folded S spans ~1.8 m behind the nose, so the reel offsets the instance
 // by this to keep the animal centred in an orbit shot.
@@ -259,7 +273,15 @@ constexpr int kHeadEnd = kHeadStations + 2;  // station 11, x = 599 mm
 // -12000 the head CONTINUES the crown's line -- seamless, eye presented,
 // snout just above level; -6000 already tips down; -16000 creases the
 // crown. The render chose the value; the number is just its name.
-#define ZIXX_ATTITUDE (-12000)
+// NEUTRAL, RUN 1730 (owner direction #3, followed literally): "Return
+// the head attitude bone close to neutral. It should provide small
+// expressive look adjustments, not compensate for a fundamentally
+// wrong body curve." The -12000 was exactly that compensation --
+// counter-rotation against a neck that DESCENDED into the skull. The
+// front spline (kFrontSnoutSlopeA16) now arrives slightly upward and
+// the skull CONTINUES the final neck tangent at attitude 0 by
+// construction. The sweep mechanism stays for expressive trims.
+#define ZIXX_ATTITUDE (0)
 #endif
 constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
 // where the skull bone pivots, mm behind the nose (~station 3.5, the
@@ -453,6 +475,51 @@ constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
 //     steepest slope is now 150 deg past horizontal (was 137) -- the middle
 //     stroke of the letter cuts back under itself further;
 //   - the TAIL rise drops to 2 steep segments.
+// ==== THE FRONT SPLINE (RUN 1730, owner direction #3, 2026-08-28) ====
+// FIVE PASSES FAILED THE SAME WAY: preserve the descending S, improve
+// the head, rotate it locally. Owner: "The head's baseline position
+// and apparent gaze are primarily determined by the final third of the
+// S-curve. A local head joint can rotate the skull, but it cannot make
+// a descending neck suddenly read as a proud, upward-held head." And:
+// "Today the head position is an accidental consequence of a preserved
+// S plus local rotation. That is why it keeps oscillating."
+// So the front segments are no longer five hand-fought angle constants.
+// They are GENERATED: one smooth C1-continuous tangent ramp between two
+// authored knobs (a spline constraint, the owner's named architecture):
+//   - kFrontSnoutSlopeA16 -- the final neck tangent INTO the skull;
+//     with kHeadAttitude neutral this IS the snout direction. Tailward-
+//     positive = the neck CLIMBS toward the head. Authored from
+//     Side.png: "slightly upward into the skull".
+//   - the mid-body ANCHOR -- seg kFrontSegs keeps the dive entry's own
+//     slope (kFrontAnchorSlopeA16), so everything from the dive down is
+//     untouched and the handover turn equals the ramp's own turn rate:
+//     no single hinge anywhere, the correction spans six bones.
+// The ramp is MONOTONE: every front slope is positive, so walking
+// headward the chain rises the whole way -- the neck carries the head
+// UP and the head is the swollen conclusion at the top of the climb,
+// never a lobe hanging under a hook. The existing S is broken here ON
+// PURPOSE; preserving it was preserving the failure (the owner's own
+// words), and the goldens are re-pinned for it with loud provenance.
+// kFrontEaseQ bends the ramp (0 = constant turn per joint; 1000 =
+// fully quadratic, turn gathering toward the anchor) -- a named knob,
+// picked by looking at the Side.png overlay, like every value here.
+constexpr int kFrontSegs = 5;                   // seg0..4 generated
+constexpr int32_t kFrontSnoutSlopeA16 = 900;    // ~4.9 deg up into the skull
+    // 900, was 1600 (sidecmp-11): at 1600 the whole skull rode a ~29 deg
+    // rocket climb; the sheet's terminal lobe runs nearly LEVEL, arcing
+    // gently over. Snout shallower, still up -- the climb is real.
+constexpr int32_t kFrontAnchorSlopeA16 = 6800;  // the dive entry, unchanged
+constexpr int32_t kFrontEaseQ = 1000;           // 0 linear .. 1000 quadratic
+    // 1000, was 0 (sidecmp-11): the sheet's comma is straightish through
+    // the fat lobe and gathers its turn into the dive; the constant-rate
+    // ramp spent too much turn at the head end.
+constexpr int32_t front_slope(int k) {
+  const int32_t u = (k * 1000) / kFrontSegs;  // 0 at the snout
+  const int32_t v = u + (kFrontEaseQ * ((u * u) / 1000 - u)) / 1000;
+  return kFrontSnoutSlopeA16 +
+         ((kFrontAnchorSlopeA16 - kFrontSnoutSlopeA16) * v) / 1000;
+}
+
 constexpr int kStanceSlopes = kSpineBones - 1;  // 19 segments
 constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // neck: the cobra hook. THE HEAD LOOKS UP (2026-08-27 pass 3, Fabian:
@@ -496,11 +563,15 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // carry the descent, seg4 steepens (the crown hands its steepness to
     // the descent earlier). Sine sum seg0..4 -2.859 -> -2.637; kBodyY
     // +36 re-plants the grounded run (probe-verified).
-    3000, -4000, -8000, -11650,
-    // crown (steeper entry into the descent -- see the 0757 note above)
-    -7650,
-    // the dive, past vertical and back under itself
-    6800, 14600, 21400, 25200, 20000, 11600,
+    // THE FRONT IS GENERATED -- see THE FRONT SPLINE above (RUN 1730,
+    // owner direction #3). The 2026-08-27/28 hand tables that lived here
+    // (3000/-4000/-8000/-11650/-7650 and their ancestors) preserved the
+    // descending hook that five head passes could not compensate away.
+    front_slope(0), front_slope(1), front_slope(2), front_slope(3),
+    front_slope(4),
+    // the dive, past vertical and back under itself; its entry is the
+    // front spline's mid-body anchor
+    kFrontAnchorSlopeA16, 14600, 21400, 25200, 20000, 11600,
     // the grounded run, LONG. These slopes RAMP because the belly line must
     // follow the TAPER: the centreline of a grounded run sits one radius up,
     // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
