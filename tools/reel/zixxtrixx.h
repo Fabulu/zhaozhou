@@ -350,12 +350,19 @@ constexpr int32_t kCrestLift = 104;  // crest centre, as a % of body half-height
 // sheet draws while dropping a third of the fin cost.
 constexpr int kBladeSides = 6;
 constexpr int kBladeRings = 6;
-// 780: the sheet's fins are LONG slivers -- ~26% of the body's path length --
-// not paddles (the first "gargantuan" verdict was about their WIDTH). Length
-// up, half-width kept slim.
-constexpr int32_t kBladeLen = 780;
-constexpr int32_t kBladeW0 = 70;       // half-width at the root (LATERAL)
-constexpr int32_t kBladeThick0 = 16;   // half-thickness at the root (VERTICAL)
+// RUN 0757, THE BLADE DECISION (the owner left the shape open; the sheet is
+// the gold standard and draws LONG SLENDER blades, so they are rebuilt to
+// its proportion). Measured off Side.png on the comparison side: the drawn
+// blades are ~420 mm at body scale -- SHORTER than the old 780 -- but read
+// long because they are ~12:1 slender; ours were 5.6:1, which is why every
+// review called them "short and broad" despite being the longer ones. So:
+// slenderness is the fix, not length. 860 long, 36 half-width (~12:1),
+// thinner, with a LEAF profile (widest ~30% out, then one long straight
+// taper to the point) replacing the root-heavy 1-t^2 paddle. Splay 3000
+// and the 80-deg roll keep their owner-ordered values.
+constexpr int32_t kBladeLen = 860;
+constexpr int32_t kBladeW0 = 36;       // half-width at the leaf's widest (LATERAL)
+constexpr int32_t kBladeThick0 = 12;   // half-thickness at the root (VERTICAL)
 // 1500, was 6900 (Fabian, 2026-08-27 pass 3: the fins "should be rotated
 // almost 90 degrees so [the fins] are almost lined up with body. But not
 // quite"): each blade now trails ~8 deg off the tail's own axis instead of
@@ -3617,7 +3624,11 @@ inline const zc::CreatureType& type() {
       const int32_t bz = side == 0 ? 56 : -56;
       for (int i = 0; i < kBladeRings; ++i) {
         const int t = (i * 1000) / (kBladeRings - 1);
-        const int32_t k = 1000 - (t * t) / 1000;  // pointy: taper accelerates
+        // LEAF profile (RUN 0757): rises 700 -> 1000 by t=300, then one long
+        // straight-ish taper to the point -- the sheet's sliver, not the old
+        // root-heavy paddle (k = 1000 - t^2/1000).
+        const int32_t k = t < 300 ? 700 + t
+                                  : (1000 * (1000 - t)) / 700;
         zc::RingSpec rs;
         rs.y = fxm(bx + (kBladeLen * t) / 1000);
         rs.segments = static_cast<uint8_t>(kBladeSides);

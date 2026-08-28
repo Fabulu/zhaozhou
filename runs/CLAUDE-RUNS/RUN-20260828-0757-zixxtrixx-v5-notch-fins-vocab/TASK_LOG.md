@@ -114,3 +114,21 @@
   internal diagonal at the junction is the coil's LAP line -- the sheet
   draws that same edge in ink; it is not a defect.
   junction-paint-before.png / junction-paint-melded.png.
+
+### 2026-08-28 09:2x - TASK 2: the blades are the sheet's slivers now
+
+- The call (made in the brief, stated here): rebuild long and slender per
+  Side.png. The MEASUREMENT that reframed it (comparison side): the drawn
+  blades are ~420 mm at body scale -- SHORTER than our old 780 -- but ~12:1
+  slender; ours were 5.6:1. "Short and broad" was an ASPECT fault, not a
+  length fault.
+- kBladeLen 780 -> 860, kBladeW0 70 -> 36, kBladeThick0 16 -> 12, and the
+  root-heavy 1-t^2 paddle taper replaced with a LEAF profile (widest ~30%
+  out, one long straight taper to the point). Splay 3000 and the 80-deg
+  roll keep their owner-ordered values.
+- evidence/fins-leaf-pair.png: before | after | sheet. The two blades now
+  read separated, slender, pink with the green edge slice (tiles 4/5
+  unchanged -- both faces both colours, his prior ruling). The middle
+  prong (kSpikeLen 280) is present and pink; from the true side it hides
+  behind the blades, which the sheet's own three-quarter fork also does
+  mostly.
