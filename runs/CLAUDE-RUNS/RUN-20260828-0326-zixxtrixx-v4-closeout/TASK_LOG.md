@@ -429,3 +429,34 @@ weighting falloff means lengthen and soften it. Still one continuous tube.
 
 **Lesson worth keeping beyond this creature: a hard-won rig lesson has a SCOPE,
 and re-citing it after the rig changed made me argue against the correct fix.**
+
+### Death and flailing: refine, do not restart
+
+*"Death is unusually good for a first attempt, but needs to be more organic.
+Flailing is getting better but try making it more alive."*
+
+First praise either clip has had — both are on track, so this is refinement.
+
+**DEATH → ORGANIC.** What reads as inorganic in a death is UNIFORMITY: a body
+giving way at a constant rate, keeling as one rigid unit along a single smooth
+curve. Levers: collapse in STAGES rather than one continuous keel (the front
+gives, half-catches, then the rest follows — the pauses sell it); uneven rate
+(slow fail, sudden give, slow settle, never constant velocity); asymmetry, since
+a smooth balanced death reads as choreography; and **a last small settle after it
+looks finished**, which does enormous work for "this was alive a moment ago". The
+`corpse` slot exists, so the death can END somewhere instead of resolving tidily
+inside its own loop.
+
+**FLAILING → ALIVE, and the distinction is the whole thing: an object falling is
+passive and gets tossed; a living creature falling FIGHTS.** Intention — brief
+attempts at control between losses of it, trying to right itself, failing,
+trying again. Vary the character across the loop so no two seconds read alike.
+**And USE THE HEAD-AIM RIG:** head rotation is a proper joint rotation now, and a
+falling animal's head is the most alive thing about it — it looks where it is
+going, snaps toward the ground, reacts. That is the payoff for the rig and costs
+nothing new to build; probably the strongest "alive" signal available here.
+
+**Frequency rule still governs, and this clip has twice been rejected for the
+opposite failure: wobble is not jitter.** "Alive" means loose, yielding and
+intentional — NOT faster or busier. If in doubt, slow it down and add a REACTION
+rather than another oscillation.

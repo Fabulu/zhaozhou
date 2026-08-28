@@ -529,8 +529,21 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
   // others issue -- needs an arbiter on the multiplier port. Whether it is
   // worth it depends on DOT density in real Earth programs, which the Phase 4
   // composition test measures and this microbenchmark cannot.
-  check(clocks_1 == 66, "one context: the measured cost, pinned", 66, clocks_1);
-  check(clocks_8 == 166, "eight contexts: the measured cost, pinned", 166, clocks_8);
+  // RE-PINNED 2026-08-28 when the DOT sequence moved entirely to S4:
+  //
+  //     one context    66 -> 69 clocks   (+4.5%)
+  //     eight contexts 166 -> 190 clocks (+14%)
+  //
+  // That is the price of correctness under contention, and it is worth naming
+  // precisely. The old schedule issued a DOT's products from S2, S3 and S4 --
+  // overlapping them with the instruction's own progress, which is why it was
+  // cheaper. It was also unfixable: an instruction cannot be stalled between
+  // its multiply issue and its product arrival, so any refusal broke it.
+  //
+  // Issuing all products from S4 costs those extra clocks and cannot miss a
+  // product, because the operands do not move for the whole sequence.
+  check(clocks_1 == 69, "one context: the measured cost, pinned", 69, clocks_1);
+  check(clocks_8 == 190, "eight contexts: the measured cost, pinned", 190, clocks_8);
 
   // Eight contexts do eight times the work in far less than eight times the
   // clocks -- that IS the barrel. Stated as a measured inequality rather than
@@ -567,34 +580,6 @@ void test_results_survive_contention(Vzhao_probe_v3_engine& top, int programs) {
     const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
     const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
     if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
-    // ############################################################
-    // KNOWN DEFECT: DOT PROGRAMS ARE SKIPPED HERE BECAUSE THEY FAIL.
-    // ############################################################
-    //
-    // This is not a convenience skip. Under contention, programs containing
-    // DOT2/DOT3 produce WRONG ANSWERS -- measured at 4 to 5 of 12 across
-    // three attempted fixes. ALU-only programs pass every time, which is what
-    // localises it.
-    //
-    // THE CAUSE: the DOT sequencer's multiply schedule is OPEN-LOOP. It
-    // issues a1*b1 at S3 and a2*b2 at S4 on a fixed clock schedule and never
-    // checks that either was granted. Refuse one and the accumulator sums a
-    // product that never arrived. Stalling does not fix it -- the multiplier
-    // is a fixed-latency pipe, so holding the instruction desynchronises it
-    // from a product that arrives anyway.
-    //
-    // It is the SAME class of defect as the curve and distance services
-    // lacking a mul_ready input (reports/FIELD_V3_SERVICE_ATTACH.md): an
-    // open-loop claimant on a shared resource. The fix is the same shape --
-    // the sequencer must hold its state until each product is granted, or
-    // reserve the bank for the whole sequence.
-    //
-    // Recorded in reports/REMAINING_BLOCKERS.md. REMOVE THIS SKIP when the
-    // sequencer closes the loop; the test is otherwise ready to catch it.
-    bool has_dot = false;
-    for (const zfield::VecUop& q : fp.uops)
-      if (q.op == 0x10 || q.op == 0x11) has_dot = true;
-    if (has_dot) continue;
 
     int32_t in[8] = {};
     for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();

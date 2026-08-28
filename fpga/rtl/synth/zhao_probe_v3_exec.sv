@@ -285,24 +285,47 @@ module zhao_probe_v3_exec #(
   logic signed [65:0] dot_acc_r;
 
   logic dot2_at_s4_c, dot3_at_s4_c, hold_c;
+  logic dot_at_s4_c;
+  logic [1:0] dot_need_c;    // products this op needs: 2 for DOT2, 3 for DOT3
+  logic [1:0] dot_issue_r;   // products ISSUED AND GRANTED so far
+  // A two-deep shadow of "a multiply was granted", matching the multiplier's
+  // two-clock latency. This is the invariant desync_o should always have been
+  // checking.
+  logic issued_s1_r, issued_s2_r;
   assign dot2_at_s4_c = s4_v_r && (s4_op_r == 8'h10);
   assign dot3_at_s4_c = s4_v_r && (s4_op_r == 8'h11);
   // DOT2 owes one more product after its first, DOT3 owes two. The hold ends
   // when the last one has been accumulated.
-  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);
+  assign dot_at_s4_c = dot2_at_s4_c || dot3_at_s4_c;
+  assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;
+  // Hold until every product this op needs has ARRIVED and been accumulated.
+  assign hold_c = dot_at_s4_c && (dot_cnt_r < dot_need_c);
 
   always_comb begin
-    mul_issue_c = s2_v_r;
+    mul_issue_c = s2_v_r && !is_dot(s2_op_r);
     mul_a_c     = 33'(rf_a0);
     mul_b_c     = 33'(rf_b0);
-    if (s3_v_r && is_dot(s3_op_r)) begin
+    // THE WHOLE DOT SEQUENCE IS ISSUED FROM S4, and that is the fix.
+    //
+    // An instruction CANNOT BE STALLED between its multiply issue and its
+    // product arrival: the product lands two clocks later on a fixed
+    // schedule, so any delay makes the instruction miss it. Issuing a0*b0 at
+    // S2 and a1*b1 at S3 spread ONE sequence across THREE MOVING STAGES, and
+    // a refusal at any of them broke it on one of two horns -- advance and
+    // consume a product that was never issued, or hold and miss one that
+    // arrived anyway. Five attempts failed alternately on each.
+    //
+    // At S4 the operands sit in registers that do not move for the whole
+    // sequence. Each product is issued, retried on refusal, and accumulated
+    // when it lands. Nothing can miss anything, by construction, and a
+    // refusal costs only a clock.
+    if (dot_at_s4_c && (dot_issue_r < dot_need_c)) begin
       mul_issue_c = 1'b1;
-      mul_a_c     = 33'(s3_a1_r);
-      mul_b_c     = 33'(s3_b1_r);
-    end else if (dot3_at_s4_c && dot_cnt_r == 2'd0) begin
-      mul_issue_c = 1'b1;
-      mul_a_c     = 33'(s4_a2_r);
-      mul_b_c     = 33'(s4_b2_r);
+      unique case (dot_issue_r)
+        2'd0:    begin mul_a_c = 33'(s4_a0_r); mul_b_c = 33'(s4_b0_r); end
+        2'd1:    begin mul_a_c = 33'(s4_a1_r); mul_b_c = 33'(s4_b1_r); end
+        default: begin mul_a_c = 33'(s4_a2_r); mul_b_c = 33'(s4_b2_r); end
+      endcase
     end
   end
 
@@ -322,8 +345,13 @@ module zhao_probe_v3_exec #(
   // The sum is formed at the FULL 66-bit product width and rescaled ONCE by
   // the ALU. Rescaling each product and adding is a different answer, and
   // zfield's dot2/dot3 are the single-rounding form.
-  logic signed [65:0] dot_sum_c;
-  assign dot_sum_c = dot_acc_r + prod_ab;
+  logic signed [65:0] dot_sum_c;
+  logic signed [65:0] dot_total_c;
+  // The adder takes the product arriving this clock; the ALU takes the
+  // finished total. Keeping these separate is what removes the old
+  // requirement that the LAST product arrive on exactly the release clock.
+  assign dot_sum_c   = dot_acc_r + prod_ab;
+  assign dot_total_c = dot_acc_r;
 
   // ---- the op law, reused verbatim from the v2 engine ---------------------
   logic signed [31:0] alu_result;
@@ -341,8 +369,8 @@ module zhao_probe_v3_exec #(
       // Only one of these is read per op, and both carry the same accumulator
       // because only one DOT is ever in flight -- the issue freeze guarantees
       // it.
-      .dot2_i(dot_sum_c),
-      .dot3_i(dot_sum_c),
+      .dot2_i(dot_total_c),
+      .dot3_i(dot_total_c),
       .result_o(alu_result),
       .is_end_o(alu_is_end),
       .writes_o(alu_writes),
@@ -407,9 +435,12 @@ module zhao_probe_v3_exec #(
       active_r      <= '0;
       inflight_r    <= '0;
       unsupported_o <= 1'b0;
-      desync_o      <= 1'b0;
+      desync_o      <= 1'b0;
+      issued_s1_r   <= 1'b0;
+      issued_s2_r   <= 1'b0;
       dot_acc_r     <= '0;
       dot_cnt_r     <= 2'd0;
+      dot_issue_r   <= 2'd0;
       sat_add_o     <= 1'b0;
       sat_mul_o     <= 1'b0;
       sat_rescale_o <= 1'b0;
@@ -430,12 +461,29 @@ module zhao_probe_v3_exec #(
       // is the counter that ENDS the hold, so gating it with `!hold_c` would
       // deadlock the pipe -- which is exactly what the first version did, and
       // the barrel test caught it as every context failing to finish.
-      if (hold_c) begin
+      // TWO SEPARATE EVENTS, TRACKED SEPARATELY. `dot_issue_r` counts products
+      // the bank GRANTED; `dot_cnt_r` counts products that ARRIVED. Conflating
+      // them is what made the third product never get issued in an earlier
+      // attempt: the first arrival advanced the counter and the issue
+      // condition, keyed on that same counter, went false.
+      if (dot_at_s4_c && (dot_issue_r < dot_need_c) && !mul_denied_c)
+        dot_issue_r <= dot_issue_r + 2'd1;
+
+      if (dot_at_s4_c && prod_valid && (dot_cnt_r < dot_need_c)) begin
         dot_acc_r <= dot_sum_c;
         dot_cnt_r <= dot_cnt_r + 2'd1;
-      end else if (s4_v_r) begin
-        dot_acc_r <= '0;
-        dot_cnt_r <= 2'd0;
+      end else if (s4_v_r && !dot_at_s4_c) begin
+        dot_acc_r   <= '0;
+        dot_cnt_r   <= 2'd0;
+        dot_issue_r <= 2'd0;
+      end
+
+      // Clear on the clock the DOT actually retires, so the next one starts
+      // from zero whatever the timing was.
+      if (dot_at_s4_c && !hold_c) begin
+        dot_acc_r   <= '0;
+        dot_cnt_r   <= 2'd0;
+        dot_issue_r <= 2'd0;
       end
 
       // Every stage advance below is gated on `!hold_c` AND `!mul_denied_c`.
@@ -470,9 +518,20 @@ module zhao_probe_v3_exec #(
       s2_imm_r <= s1_uop_r.imm;
 
 
-      // While the pipe is frozen no product is due, so the guard must not
-      // compare -- a stall is not a desynchronisation.
-      if (!mul_denied_c && (s4_v_r != prod_valid)) desync_o <= 1'b1;
+      // DESYNC IS ABOUT THE MULTIPLIER'S CONTRACT, not about stage occupancy.
+      //
+      // This used to compare s4_v_r against prod_valid, which assumed exactly
+      // one product per instruction, aligned with S4. True until a DOT began
+      // issuing two or three products during a hold -- and then the guard
+      // fired on entirely correct behaviour, which is worse than not having
+      // it, because a guard that cries wolf gets read as noise.
+      //
+      // The real invariant is the multiplier's own: a product arrives exactly
+      // two clocks after a GRANTED issue and at no other time. That holds for
+      // every op, contended or not, and needs no knowledge of the pipeline.
+      issued_s1_r <= mul_issue_c && !mul_denied_c;
+      issued_s2_r <= issued_s1_r;
+      if (prod_valid != issued_s2_r) desync_o <= 1'b1;
 
 
       end  // upstream: !hold_c && !mul_denied_c
