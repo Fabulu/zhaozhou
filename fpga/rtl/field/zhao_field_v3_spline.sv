@@ -46,11 +46,19 @@
 //    clamped. Doing them in 32 bits would wrap on large control points and
 //    give a smooth, wrong curve.
 //
-// 2. **fx_mad IS ONE ROUNDING, not two.** `a*b + (c << 16)` is formed at 64
-//    bits and rescaled ONCE. That is the opposite of ROT, where the reference
-//    deliberately rounds each product separately -- and getting them the same
-//    way round is exactly the mistake the ROT header warns about. The rule is
-//    match the reference, per op.
+// 2. **fx_mad IS ONE ROUNDING -- AND HERE THAT IS NOT OBSERVABLE.** `a*b +
+//    (c << 16)` is formed at full width and rescaled once. Writing it the
+//    other way round -- rescale the product, then add c -- gives THE SAME
+//    NUMBER, because `c << 16` has sixteen zero low bits and adding it
+//    commutes with the `>> 16`. Measured over 200,000 random pairs: zero
+//    differences. Mutant S12 survives for exactly that reason and carries the
+//    proof.
+//
+//    An earlier version of this comment claimed the distinction mattered here,
+//    by analogy with ROT. It does not. The rounding difference that IS real is
+//    rounding each PRODUCT separately, which is what ROT does deliberately --
+//    and SPLINE's Horner has only one product per step, so the question never
+//    arises. The analogy was the error, not the arithmetic.
 //
 // 3. **THE FINAL HALF IS A RESCALE BY ONE, not a shift.** `rescale(v, 1)`
 //    rounds half up and saturates; `v >>> 1` does neither.

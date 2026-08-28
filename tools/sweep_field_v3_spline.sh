@@ -184,12 +184,18 @@ rebuild() {
 }
 
 # Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
-# Guard 8 says run every FAST ctest lane of this binary. THIS BINARY HAS ONE.
-# The clone this driver came from has a --random lane; the dispatcher does not,
-# because it computes no answer and there is nothing to randomise against -- the
-# properties are exhaustive over the shapes that exist (widths 1, 2 and 3, group
-# sizes 1 to 4). Running `--random 40` here would silently re-run the directed
-# suite and let the driver claim two lanes where there is one.
+#
+# The paragraph that stood here was inherited verbatim from the DISPATCH
+# driver and said "THIS BINARY HAS ONE" lane -- directly above two lines that
+# run two. The CODE was right and the COMMENT was wrong:
+# field_v3_spline_directed.cpp does implement --random, so both lanes are real.
+#
+# Left uncorrected it was the more dangerous half of a stale comment: it
+# argued, persuasively and in the wrong file, for deleting a lane that
+# genuinely tests something. Whether a binary HAS a random lane is a
+# one-line grep of its source, and that is now the check rather than the
+# inherited prose -- svcpath's driver, derived from this one, really does
+# have only one lane and says so with the grep behind it.
 run_lanes() {
   ./$BUILD_DIR/tests/test_field_v3_spline_directed.exe >/dev/null 2>&1 || return 1
   ./$BUILD_DIR/tests/test_field_v3_spline_directed.exe --random 40 >/dev/null 2>&1 || return 1

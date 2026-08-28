@@ -1,0 +1,61 @@
+== consumer roster ==
+== preflight ==
+preflight ok: S01 the coefficients are formed on the clock they are USED
+preflight ok: S02 C1 is p0 - p2 rather than p2 - p0
+preflight ok: S03 C2's middle term has the wrong weight
+preflight ok: S04 C2's last term has the wrong weight
+preflight ok: S05 C3's sign is inverted
+preflight ok: S06 C3's last term takes the wrong control point
+preflight ok: S07 the coefficient is clamped before its terms are summed
+preflight ok: S08 the Horner's first step folds in C1 rather than C2
+preflight ok: S09 the Horner's second step folds in C2 rather than C1
+preflight ok: S10 the second Horner step multiplies by C3 rather than by u
+preflight ok: S11 every point uses point 0's segment parameter
+preflight ok: S12 the mad rounds twice, ROT-style, instead of once
+preflight ok: S13 the half is a SHIFT, which neither rounds nor saturates
+preflight ok: S14 the finish adds p0 rather than p1
+preflight ok: S15 the half is applied twice
+preflight ok: S16 the last product is t*t rather than t*u
+preflight ok: S17 two points' parameters are exchanged
+preflight ok: S18 a lane's answer is written from another lane's product
+preflight ok: S19 the first issue advances on a REFUSED request
+preflight ok: S20 the last issue reads its grant inverted
+preflight ok: S21 a coefficient saturation is reported on the wrong lane
+PREFLIGHT: all 21 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 16e60a2a2917ea02)
+  S01 the coefficients are formed on the clock they are USED  caught
+  S02 C1 is p0 - p2 rather than p2 - p0  caught
+  S03 C2's middle term has the wrong weight  caught
+  S04 C2's last term has the wrong weight  caught
+  S05 C3's sign is inverted  caught
+  S06 C3's last term takes the wrong control point  caught
+  S07 the coefficient is clamped before its terms are summed  caught
+  S08 the Horner's first step folds in C1 rather than C2  caught
+  S09 the Horner's second step folds in C2 rather than C1  caught
+  S10 the second Horner step multiplies by C3 rather than by u  caught
+  S11 every point uses point 0's segment parameter  caught
+  S12 the mad rounds twice, ROT-style, instead of once  equivalent (proven)
+        THE ADDEND IS EXACT AT THE RESCALE'S SCALE, so the two arrangements are the SAME NUMBER and not merely close. fx_mad forms a*b + (c << 16) and rescales by 16. The mutant rescales a*b first and adds c after. Since (c << 16) has sixteen zero low bits, adding it COMMUTES with the shift: ((p + (c<<16)) + 2^15) >> 16 == ((p + 2^15) >> 16) + c, exactly, for every p and c. MEASURED over 200,000 random pairs across the full range: zero differences. THIS CORRECTS THE BLOCK'S OWN HEADER, which said fx_mad is 'one rounding, not two' as though the distinction were observable here. It is not. The rounding difference that IS real -- and that ROT's header warns about -- is rounding each PRODUCT separately, and SPLINE's Horner has only one product per step, so the question does not arise. The mutant is kept because it states a claim worth checking, and because if the addend ever stops being a multiple of 2^16 the equivalence dies with it. RE-SCORE THIS IF THE ADDEND IS EVER SHIFTED BY ANYTHING OTHER THAN THE RESCALE AMOUNT.
+  S13 the half is a SHIFT, which neither rounds nor saturates  caught
+  S14 the finish adds p0 rather than p1  caught
+  S15 the half is applied twice  caught
+  S16 the last product is t*t rather than t*u  caught
+  S17 two points' parameters are exchanged  caught
+  S18 a lane's answer is written from another lane's product  caught
+  S19 the first issue advances on a REFUSED request  caught
+  S20 the last issue reads its grant inverted  caught
+  S21 a coefficient saturation is reported on the wrong lane  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_spline.sv (21 mutants checked)
+
+== tally ==
+  attempted:  21 / 21
+  caught:     20
+  equivalent: 1
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_spline.sv (21 mutants checked)
+CLEAN:0
