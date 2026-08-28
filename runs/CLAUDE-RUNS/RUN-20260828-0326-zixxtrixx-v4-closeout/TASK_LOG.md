@@ -254,3 +254,42 @@ peasant-reuse families; `stance2` = "stance when damaged").
   with one spare.
 * Unfilled and relevant: `tumble`, `hitFloor`, `corpse`, `stance2`, `rise`,
   `thrash`, `notify`. Not applicable: wizard, carry/pull and flying families.
+
+## Texture direction from the owner
+
+1. *"Try to see if you can get more high res textures that look more textured
+   onto the snake. It looks much better but still a bit single coloured."*
+   Two levers, and the second is probably the bigger one. **Resolution:** the
+   atlas is 128×256; `zref_texture.hpp` gives `log2w`/`log2h` FOUR BITS EACH
+   ([11:8], [15:12]), so the format allows far more than we use — 128×256 was
+   chosen, not imposed. The real constraint is the texture memory budget (64 KiB
+   L0, ~85 KiB with mips today); check it and go as high as it truly allows,
+   stating the number. **Grain amplitude:** "still a bit single coloured" is
+   almost exactly the earlier failure where crayon grain was clipped to ±16% of
+   luminance — narrower than the light rig's own range, so mathematically present
+   and visually invisible, and it measured fine while reading as flat plastic.
+   Resolution without amplitude will not fix this. Judge in-scene at gameplay
+   distance; **the atlas preview looking mottled is not evidence.**
+2. *"Maybe a bit too much dark blue in front and too little of the awesome dark
+   green."* This partially reverses his earlier "carry the blue further down the
+   front body" — it overshot. Pull blue back, give the room to dark green.
+   `Side.png` has green dominant with blue as a front region, not half the animal.
+3. *"Blue and dark green should kind of meld into each other, which should meld
+   into the light green."* The structural note: the three are a CONTINUOUS
+   PROGRESSION, not three bands with edges. Soften into gradients so the eye
+   cannot find a boundary — crayon strokes overlap at transitions rather than
+   butting against a line.
+
+Fenced off: the pink band at 9, the pink crown, the eye disc size/separation
+(brim and chinstrap failures both on record). Priority still model-and-head first.
+
+## Sacengine, closed out properly
+
+Two background shell tasks of the agent were still polling a sacengine BUILD log
+and `3d.exe` was produced at 06:09 — **after** the owner's stop instruction.
+Killed both; confirmed no sacengine process running; the clone left untouched.
+**My fault twice:** the original brief said "build or run it as far as you
+reasonably can", and when that was overruled I sent the stop without checking for
+already-spawned background tasks. Lesson: **a stop instruction to an agent does
+not stop the background work it has already launched — kill the tasks too.**
+None of it was needed; the vocabulary came from one grep of `animations.d`.
