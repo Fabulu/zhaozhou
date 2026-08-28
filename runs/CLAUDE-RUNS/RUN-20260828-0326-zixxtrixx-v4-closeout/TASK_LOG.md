@@ -1,7 +1,7 @@
 # Task Log: RUN-20260828-0326 - Zixxtrixx v4 closeout
 
 **Created:** 2026-08-28 03:26 UTC+02:00
-**Status:** Complete
+**Status:** In Progress (owner redirect: model first)
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/
 
 ---
@@ -166,3 +166,91 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
   until the test timeout kills it. Proof runs in the log above.
 - Status: Task complete. Zixxtrixx nominally complete; renders on disk,
   committed, NOT deployed (owner publishes).
+
+### 2026-08-28 07:4x - OWNER REDIRECT (coordinator relay): THE MODEL FIRST
+
+- Verbatim: "You completely fucked up the head even more... super rigid S
+  ... the head is this weird hinge on it... drops down like crazy...
+  droopy ball. Not a seamless tube at all. It needs to move way up."
+  "we really need to fix the model in the first place."
+- Reordered queue: 1) head attitude WAY up (render-judged wide sweep, not
+  the number), 2) seamless hinge (longer falloff), 3) RELAX the S (the
+  freeze is lifted — he names it as a cause), 4) fall must yield, not
+  topple ("rigidly falls over like a log"), 5) look-around carries the
+  living idle body, 6) balance slower/looser, 7) hit more impactful,
+  8) NEW: salto variations (ground dummy air-hit, flying dummy, 6-salto).
+- Status back to In Progress.
+
+### 2026-08-28 07:5x - OWNER OVERRIDE: stop running sacengine
+
+- Verbatim (relayed): "you're running sacengine on my computer now, I
+  don't know what the point of it is. Please just statically extract what
+  you can. don't want to do it like this."
+- Confirmed no 3d.exe process running; no further builds or launches.
+  Everything downloaded stays inert on disk.
+- The vocabulary deliverable was ALREADY produced statically: the
+  committed ANIMATION-VOCABULARY.md reads the Animations struct and the
+  state.d fallback semantics from source text — no execution involved.
+  The run-log claims about launching the engine stand as history, struck
+  as practice going forward.
+- Target dummy for salto variations identified by the coordinator: the
+  watchdog quadruped in zhao_reel.cpp (creature-wave-walk subject).
+
+## Owner review of the v3 build — the head is worse, and everything reads RIGID
+
+*"You completely fucked up the head even more. Part of it is the super rigid S.
+You kept that, and now the head is this weird hinge on it. It should have a
+hinge, but it should seamlessly fit into the rest of the body. Instead it drops
+down like crazy and now looks like this droopy ball. Not a seamless tube at all.
+It needs to move way up."* And: *"we really need to fix the model in the first
+place."*
+
+**Model is priority one; everything else waits.** The head droops badly despite
+attitude -6000 nominally being snout +4.6° — the number is not producing the
+read it claims, so sweep WIDE and pick by contact sheet. The hinge stays but
+must be seamless (the head-aim falloff is likely creasing the surface — lengthen
+and soften it). **The canonical S is UNFROZEN**: he previously said not to change
+it, and now names its rigidity as a cause.
+
+**Rigidity is the through-line of the entire review**, and our own house style
+already prescribes the cure — wobble is slow, loose, low-frequency, the bend
+travelling through the body:
+* **falling**: *"just rigidly falls over like a log"* — the worst of them.
+* **look-around**: *"twitchy... should look more like the idle animation, with an
+  actually live moving body. Too rigid."* The idle's four-period living body must
+  run UNDERNEATH the head turn.
+* **tail-balance**: *"too fast and robotic. More wobbly creatureness."*
+* **hit**: *"just a weird twitch. Should be more exaggerated and impactful."*
+
+**New work — salto variations**, using the AttackPlanner: air-hit a ground target
+dummy, air-hit a FLYING target dummy, and a six-salto version. Target dummy
+confirmed present: the **watchdog quadruped** in `zhao_reel.cpp` (6 bones, 6
+rigid ring parts; `subject_creaturewalk()` ~L2966, LOD variant `creature-bulk-pop`
+~L3660). Reel subjects only — never the shipped creature.
+
+## sacengine: STOP RUNNING IT — static extraction only
+
+*"you're running sacengine on my computer now, I don't know what the point of it
+is. Please just statically extract what you can. don't want to do it like this."*
+
+My brief said "build or run it as far as you reasonably can" — **that was my
+error**, and it is overruled. Verified nothing of it is running; the clone at
+`C:\programmieren\sacengine` left in place, untouched.
+
+**The vocabulary was then extracted in ONE GREP, no execution** — which is the
+owner's point exactly. `sacengine/source/animations.d`: `Animations` is a union
+of `char[4][64]` with a named struct, so the 64 slots are its fields in order.
+The source comments are load-bearing (`knocked2Floor`/`getUp` "only for walking
+creatures"; `walk` "only different from run for Eldred"; wizard-only and
+peasant-reuse families; `stance2` = "stance when damaged").
+
+**It confirms every gap the owner named, and hands us a gift:**
+* **THREE attack slots** — his salto variations are not extras, they are
+  `attack1` and `attack2`, slots the format expects.
+* **Five directional damage slots** (`damageFront/Right/Back/Left/Top`) — our one
+  generic hit is doing five jobs, which is why it reads as a weird twitch.
+* **Three death slots**; **`run` distinct from `walk`**; **`knocked2Floor`+`getUp`**
+  the knockdown pair; **FOUR idle slots**, homes for tail-balance and look-around
+  with one spare.
+* Unfilled and relevant: `tumble`, `hitFloor`, `corpse`, `stance2`, `rise`,
+  `thrash`, `notify`. Not applicable: wizard, carry/pull and flying families.
