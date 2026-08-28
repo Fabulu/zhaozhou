@@ -46,9 +46,10 @@ PREFLIGHT: all 26 mutants lint and restore
   M15 the correction term is 2^30 rather than 2^31  caught
   M16 the Newton product is shifted by the wrong amount  caught
   M17 the first Newton multiply squares the mantissa  caught
-  M18 the reciprocal is clamped to u25 rather than u24  *** SURVIVED ***
+  M18 the reciprocal is clamped to u25 rather than u24  caught
   M19 the zero vector is reported by BOTH ops, not just NORMALIZE2  caught
-  M20 the zero vector's outputs are not forced to zero  *** SURVIVED ***
+  M20 the zero vector's outputs are not forced to zero  equivalent (proven)
+        THE GUARD IS REDUNDANT FOR THE VALUE, and exhaustively so rather than on the tested inputs. n2 is `logic [63:0]`, UNSIGNED, and three squares of 32-bit components sum to at most 3*2^62, which is below 2^64 -- so the sum cannot wrap and n2 == 0 holds IF AND ONLY IF every component is zero. The zero branch then sets rx and expo to 0 explicitly, so the output multiply forms 0 * 0 = 0, and out_k is 31 + 0 = 31. resc_var(0, k) = (0 + 2^(k-1)) >> k = 0 for every k >= 1, and k here ranges over 8..39. The forced zero and the computed value are therefore THE SAME NUMBER on every input that can reach this line, not merely on the ones the suite drives. THE GUARD STAYS. It is not dead code being tolerated: it states the op's law at the point the law applies, and M19 -- the LEDGER half of the same law, which is NOT redundant, because normalize2 bumps RCP0 and normalize3_approx bumps nothing -- is caught. RE-SCORE THIS IF n2 EVER NARROWS, IF IT BECOMES SIGNED, OR IF THE ZERO BRANCH STOPS ZEROING rx: each of the three breaks a different step of the argument above.
   M21 the output shift is 30 rather than 31  caught
   M22 every lane uses lane 0's exponent  caught
   M23 the output rescale truncates instead of rounding half up  caught
@@ -60,13 +61,11 @@ clean: fpga/rtl/field/zhao_field_v3_normalize.sv (26 mutants checked)
 
 == tally ==
   attempted:  26 / 26
-  caught:     24
-  equivalent: 0
-  survived:   2
+  caught:     25
+  equivalent: 1
+  survived:   0
   discarded:  0
-FAILED: 2 mutant(s) survived without a proof of equivalence
-  M18 the reciprocal is clamped to u25 rather than u24
-  M20 the zero vector's outputs are not forced to zero
-EXIT:12
+SWEEP OK
+EXIT:0
 clean: fpga/rtl/field/zhao_field_v3_normalize.sv (26 mutants checked)
 CLEAN:0

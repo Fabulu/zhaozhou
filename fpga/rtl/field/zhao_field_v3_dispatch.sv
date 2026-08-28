@@ -182,6 +182,42 @@ module zhao_field_v3_dispatch #(
   // 0 means "not a long op this block knows", and it is REFUSED rather than
   // guessed: a wrong width writes the wrong number of registers, which is a
   // corruption rather than an error.
+  //
+  // TWO OPS HAVE FOUR-POINT BLOCKS BUILT AND CLOSED AND ARE STILL ABSENT FROM
+  // THIS LIST. That is worth saying out loud, because absence here looks
+  // exactly like an omission and one of the two IS deliberate. A reader who
+  // finds no OP_SPLINE case, knowing zhao_field_v3_spline.sv is closed at
+  // 21/21, has every reason to think a case was forgotten.
+  //
+  //   OP_SPLINE (0x1B) -- DELIBERATE. Fieldv3.md section 6 puts spline on the
+  //     COLD SERVICE LANE: keep the complete exact scalar implementation,
+  //     classify it as exact but not certified for the maximum live-field
+  //     workload. zhao_probe_curve_svc.sv states the same in its own header --
+  //     "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the brief's
+  //     own service split and is not barreled." The scalar path in
+  //     zhao_field_curve.sv implements the whole op, lookup included, and is
+  //     live in four test targets. A SPLINE arriving here SHOULD be refused.
+  //
+  //     What is not settled is whether that stays true. The four-point block
+  //     exists and its shape only pays if SPLINE becomes hot -- a decision
+  //     recorded in STATUS.md and reports/FIELD_V3_REMAINING_OPS.md, not one
+  //     this file may make. If it goes hot, this case list is the first thing
+  //     that changes, and it needs a four-point table lookup that does not
+  //     exist yet.
+  //
+  //   UOP_RING_PREP (0xF1) -- NOT YET WIRED, and NOT for the cold-lane reason.
+  //     The brief cools "unprepared ring" only; the PREPARED ring is its hot
+  //     path, costed there at "approximately nine vector-multiplier issue
+  //     slots, not four scalar runs through a 50-clock FSM", which is exactly
+  //     what zhao_field_v3_ring.sv implements and what its 23/23 sweep scores.
+  //     So this one is a genuine gap rather than a decision: the block is
+  //     ready and the dispatcher cannot reach it.
+  //
+  //     Note it is 0xF1, a UOP, not OP_RING (0x21) -- the canonical opcode a
+  //     varying-radius ring would arrive as, which stays cold. Adding the
+  //     wrong one of those two would route the expensive form into a block
+  //     that does not implement it, which is the mistake wrong_op_o in
+  //     zhao_field_v3_svcpath.sv exists to catch.
   function automatic logic [1:0] dst_width_of(input logic [7:0] op);
     case (op)
       OP_CURVE, OP_DCURVE, OP_RIDGE:            dst_width_of = 2'd1;
