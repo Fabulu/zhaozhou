@@ -49,33 +49,44 @@ def main(argv):
     bad = 0
     for table_path in argv[1:]:
         mod = load_table(table_path)
-        rtl = mod.RTL
-        if not os.path.exists(rtl):
-            sys.stderr.write("MISSING: %s\n" % rtl)
-            bad += 1
-            continue
-        text = io.open(rtl, encoding="utf-8", newline="").read()
-        nl = "\r\n" if "\r\n" in text else "\n"
 
-        found = []
+        # A table may span more than one file: entries are (name, old, new)
+        # against mod.RTL, or (name, path, old, new) for another file of the
+        # cone. Checking only mod.RTL would report "clean" while a mutant sat
+        # in the other file -- which is precisely the false assurance this
+        # tool exists to prevent, so every path in the table is checked.
+        by_file = {}
         for entry in mod.MUTANTS:
-            name, old, new = entry[0], entry[-2], entry[-1]
-            o = old.replace("\n", nl)
-            n = new.replace("\n", nl)
-            # A mutant is PRESENT when its replacement text is in the file and
-            # the text it replaced is not. Checking both ways matters: some
-            # mutations only add a term, so the mutated text can legitimately
-            # contain the original as a substring.
-            if n in text and o not in text:
-                found.append(name)
+            path = entry[1] if len(entry) == 4 else mod.RTL
+            by_file.setdefault(path, []).append((entry[0], entry[-2], entry[-1]))
 
-        if found:
-            print("MUTANT TEXT PRESENT in %s (from %s):" % (rtl, os.path.basename(table_path)))
-            for f in found:
-                print("  %s" % f)
-            bad += 1
-        else:
-            print("clean: %s (%d mutants checked)" % (rtl, len(mod.MUTANTS)))
+        for path, entries in sorted(by_file.items()):
+            if not os.path.exists(path):
+                sys.stderr.write("MISSING: %s\n" % path)
+                bad += 1
+                continue
+            text = io.open(path, encoding="utf-8", newline="").read()
+            nl = "\r\n" if "\r\n" in text else "\n"
+
+            found = []
+            for name, old, new in entries:
+                o = old.replace("\n", nl)
+                n = new.replace("\n", nl)
+                # A mutant is PRESENT when its replacement text is in the file
+                # and the text it replaced is not. Checking both ways matters:
+                # some mutations only add a term, so the mutated text can
+                # legitimately contain the original as a substring.
+                if n in text and o not in text:
+                    found.append(name)
+
+            if found:
+                print("MUTANT TEXT PRESENT in %s (from %s):" %
+                      (path, os.path.basename(table_path)))
+                for f in found:
+                    print("  %s" % f)
+                bad += 1
+            else:
+                print("clean: %s (%d mutants checked)" % (path, len(entries)))
 
     return 1 if bad else 0
 

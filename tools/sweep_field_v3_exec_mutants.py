@@ -38,6 +38,13 @@ import os
 import sys
 
 RTL = "fpga/rtl/synth/zhao_probe_v3_exec.sv"
+RF = "fpga/rtl/field/zhao_field_v3_rf.sv"
+
+# Entries are (name, old, new) against RTL, or (name, path, old, new) when the
+# mutation lands in another file of the cone. The register file is a separate
+# module and its group addressing is exactly the thing that hid behind 440
+# passing programs, so it is swept here rather than left to a sweep of its own
+# that does not exist yet.
 
 # name, old, new -- each applied to the PRISTINE file, one at a time.
 MUTANTS = [
@@ -61,17 +68,19 @@ MUTANTS = [
     #
     # Recorded here rather than silently omitted: a claim with no mutant
     # against it looks identical to a claim nobody thought of.
+    # Re-pointed 2026-08-28: the issue moved into the operand mux.
     ("X02 the multiplier is issued a stage early, on operands not yet read",
-     "      .issue_i(s2_v_r),",
-     "      .issue_i(s1_v_r),"),
+     "    mul_issue_c = s2_v_r;",
+     "    mul_issue_c = s1_v_r;"),
     ("X03 the desync guard is inverted, so alignment is never reported",
      "      if (s4_v_r != prod_valid) desync_o <= 1'b1;",
      "      if (s4_v_r == prod_valid) desync_o <= 1'b1;"),
+    # Re-pointed with X19, same reason.
     ("X04 the multiplier zero-extends its operands instead of sign-extending",
-     "      .a_i    (33'(rf_a0)),\n"
-     "      .b_i    (33'(rf_b0)),",
-     "      .a_i    (33'($unsigned(rf_a0))),\n"
-     "      .b_i    (33'($unsigned(rf_b0))),"),
+     "    mul_a_c     = 33'(rf_a0);\n"
+     "    mul_b_c     = 33'(rf_b0);",
+     "    mul_a_c     = 33'($unsigned(rf_a0));\n"
+     "    mul_b_c     = 33'($unsigned(rf_b0));"),
 
     # ---- one instruction in flight per context -----------------------------
     ("X05 a context is released for re-issue a stage before its write lands",
@@ -145,6 +154,71 @@ MUTANTS = [
      "        if (alu_sat_mul) sat_mul_o <= 1'b1;",
      "        if (alu_sat_mul || alu_sat_rescale) sat_mul_o <= 1'b1;"),
 
+    # ---- the DOT sequencer (landed 2026-08-28) -----------------------------
+    # Every claim in reports/FIELD_V3_DOT_SEQUENCING.md gets a mutant. The
+    # sequencer's failures are quiet: the pipeline keeps running and a dot
+    # product comes out slightly wrong, or right for the wrong reason.
+    ("X21 a DOT2 also issues the third product, which it does not have",
+     "    end else if (dot3_at_s4_c && dot_cnt_r == 2'd0) begin",
+     "    end else if ((dot3_at_s4_c || dot2_at_s4_c) && dot_cnt_r == 2'd0) begin"),
+    ("X22 a DOT3's hold ends one product early, dropping a2*b2",
+     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);",
+     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd1);"),
+    # Reshaped twice: dropping the DOT2 term orphaned dot2_at_s4_c, and a
+    # `< 0` threshold is a constant-false comparison the linter also refuses.
+    # SWAPPING the two thresholds keeps both operands live and is a real
+    # defect in both directions at once -- the DOT2 holds a clock too long and
+    # sums a stale product, the DOT3 a clock too few and drops a2*b2.
+    ("X23 the DOT2 and DOT3 hold lengths are swapped",
+     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd1) || (dot3_at_s4_c && dot_cnt_r < 2'd2);",
+     "  assign hold_c = (dot2_at_s4_c && dot_cnt_r < 2'd2) || (dot3_at_s4_c && dot_cnt_r < 2'd1);"),
+    ("X24 the accumulator is not cleared between instructions",
+     "      end else if (s4_v_r) begin\n"
+     "        dot_acc_r <= '0;\n"
+     "        dot_cnt_r <= 2'd0;\n"
+     "      end",
+     "      end else if (s4_v_r) begin\n"
+     "        dot_acc_r <= dot_acc_r;\n"
+     "        dot_cnt_r <= 2'd0;\n"
+     "      end"),
+    ("X25 the second product is taken from the a2/b2 pair instead of a1/b1",
+     "      mul_a_c     = 33'(s3_a1_r);\n"
+     "      mul_b_c     = 33'(s3_b1_r);",
+     "      mul_a_c     = 33'(s3_a2_r);\n"
+     "      mul_b_c     = 33'(s3_b2_r);"),
+    # Reshaped: dropping the term orphaned dot_inflight_c. ORing it keeps the
+    # operand and keeps the defect -- a DOT no longer blocks issue, so another
+    # instruction reaches S2 and drives the multiplier out from under it.
+    ("X26 a DOT no longer freezes issue, so another op steals the multiplier",
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c;",
+     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c;"),
+    ("X27 only a DOT at S4 freezes issue, not one still upstream",
+     "  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||\n"
+     "                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));",
+     "  assign dot_inflight_c = (s4_v_r && is_dot(s4_op_r));"),
+    ("X28 the sum drops the product arriving on the final clock",
+     "  assign dot_sum_c = dot_acc_r + prod_ab;",
+     "  assign dot_sum_c = dot_acc_r;"),
+    ("X29 DOT3 is treated as DOT2, so the third member never contributes",
+     "    is_dot = (op == 8'h10) || (op == 8'h11);  // OP_DOT2, OP_DOT3",
+     "    is_dot = (op == 8'h10);  // OP_DOT2, OP_DOT3"),
+
+    # ---- the functional register file's group addressing -------------------
+    # This is the defect that hid behind 440 passing programs: the fit probe
+    # addresses every bank with the same row, which only reads a group
+    # correctly when it does not cross a multiple of four.
+    ("X30 every bank presents the base row, the fit probe's non-functional form",
+     RF,
+     "    row = base[RSEL-1:2] + {{(RSEL-3){1'b0}}, low_sum[2]};",
+     "    row = base[RSEL-1:2];"),
+    ("X31 the group carry is taken from the wrong bit",
+     RF,
+     "    low_sum = {1'b0, base[1:0]} + {1'b0, off};",
+     "    low_sum = {1'b0, base[1:0]} + {1'b0, off} + 3'd1;"),
+    ("X32 the member offset runs the wrong way round the banks",
+     RF,
+     "    off = bk - base[1:0];",
+     "    off = base[1:0] - bk;"),
     # ---- issue order and commutativity: both expected to be EQUIVALENT -----
     # Kept because an equivalence that is PROVEN is evidence about the block,
     # while an equivalence that is merely absent from the table is a hole
@@ -152,11 +226,15 @@ MUTANTS = [
     ("X18 the ready scan picks the highest-numbered context rather than the lowest",
      "    for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);",
      "    for (int i = 0; i < CTX; i++) if (ready_c[i]) issue_ctx_c = CW'(i);"),
+    # Re-pointed 2026-08-28: the multiplier's ports are driven by a MUX now
+    # that DOT sequencing shares them, so the swap moves to the mux's default
+    # arm -- which is still the a0*b0 product, so the equivalence proof below
+    # is unchanged.
     ("X19 the multiplier's operands are swapped",
-     "      .a_i    (33'(rf_a0)),\n"
-     "      .b_i    (33'(rf_b0)),",
-     "      .a_i    (33'(rf_b0)),\n"
-     "      .b_i    (33'(rf_a0)),"),
+     "    mul_a_c     = 33'(rf_a0);\n"
+     "    mul_b_c     = 33'(rf_b0);",
+     "    mul_a_c     = 33'(rf_b0);\n"
+     "    mul_b_c     = 33'(rf_a0);"),
 ]
 
 
@@ -265,9 +343,12 @@ def main(argv):
         print(proof)
         return 0
     if len(argv) >= 3 and argv[1] == "--apply":
-        name, old, new = MUTANTS[int(argv[2])]
+        entry = MUTANTS[int(argv[2])]
+        name = entry[0]
+        path = entry[1] if len(entry) == 4 else RTL
+        old, new = entry[-2], entry[-1]
         try:
-            write_rtl(mutate(read_rtl(), old, new))
+            write_rtl(mutate(read_rtl(path), old, new), path)
         except ValueError as exc:
             sys.stderr.write("%s: %s\n" % (name, exc))
             return 9

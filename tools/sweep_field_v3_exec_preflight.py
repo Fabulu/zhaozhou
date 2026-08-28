@@ -23,7 +23,7 @@ VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.ex
 # equally -- which reads as "no mutant builds" rather than as a broken command.
 CONE = [
     RTL,
-    "fpga/rtl/synth/zhao_probe_banked_rf.sv",
+    "fpga/rtl/field/zhao_field_v3_rf.sv",
     "fpga/rtl/field/zhao_field_alu.sv",
     "fpga/rtl/field/zhao_field_mul.sv",
 ]
@@ -45,12 +45,25 @@ def main():
         return 1
 
     bad = 0
-    # This block's mutants all live in one file, so the table is a 3-tuple
-    # (name, old, new) rather than the multi-file 4-tuple form.
-    for name, old, new in MUTANTS:
+    # Entries are (name, old, new) against RTL, or (name, path, old, new) when
+    # the mutation lands in another file of the cone -- the register file is a
+    # separate module and is swept from this table. Each file gets its own gold
+    # snapshot, and each is restored after every mutant.
+    golds = {}
+    for entry in MUTANTS:
+        f_rel = entry[1] if len(entry) == 4 else RTL
+        if f_rel not in golds:
+            with open(os.path.join(ROOT, f_rel), encoding="utf-8", newline="") as f:
+                golds[f_rel] = f.read()
+
+    for entry in MUTANTS:
+        name = entry[0]
+        f_rel = entry[1] if len(entry) == 4 else RTL
+        old, new = entry[-2], entry[-1]
+        f_abs = os.path.join(ROOT, f_rel)
         try:
-            with open(path, "w", encoding="utf-8", newline="") as f:
-                f.write(mutate(gold, old, new))
+            with open(f_abs, "w", encoding="utf-8", newline="") as f:
+                f.write(mutate(golds[f_rel], old, new))
             r = subprocess.run(CMD, capture_output=True, text=True, env=env)
             if r.returncode != 0:
                 print("PREFLIGHT FAIL: %s does not lint:" % name)
@@ -62,13 +75,14 @@ def main():
             print("PREFLIGHT FAIL: %s anchor: %s" % (name, e))
             bad += 1
         finally:
-            with open(path, "w", encoding="utf-8", newline="") as f:
-                f.write(gold)
+            with open(f_abs, "w", encoding="utf-8", newline="") as f:
+                f.write(golds[f_rel])
 
-    with open(path, "r", encoding="utf-8", newline="") as f:
-        if f.read() != gold:
-            print("PREFLIGHT BROKEN: RTL not restored")
-            return 1
+    for f_rel, g in golds.items():
+        with open(os.path.join(ROOT, f_rel), encoding="utf-8", newline="") as f:
+            if f.read() != g:
+                print("PREFLIGHT BROKEN: %s not restored" % f_rel)
+                return 1
 
     if bad:
         print("PREFLIGHT: %d mutant(s) unusable" % bad)
