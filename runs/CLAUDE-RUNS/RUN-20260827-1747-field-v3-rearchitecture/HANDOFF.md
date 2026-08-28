@@ -21,7 +21,7 @@ with every block checked against the shipped interpreter and then mutation-swept
 
 | block | mutants | result |
 | --- | ---: | --- |
-| FIELD.V3.EXEC | 42 | **re-scoring as this was written** — see "In flight" |
+| FIELD.V3.EXEC | 42 | 38 caught, 4 proven equivalent |
 | CURVE.SVC | 18 | 18 caught |
 | NOISE | 23 | 23 caught |
 | DISPATCH | 28 | 28 caught |
@@ -63,21 +63,26 @@ Both were invisible to every test that existed that morning, and both needed
 
 ---
 
-## In flight at handoff
+## Nothing is in flight
 
-A 42-mutant re-score of FIELD.V3.EXEC:
+The 42-mutant re-score of FIELD.V3.EXEC finished: **38 caught, 4 proven
+equivalent, 0 survived, 0 discarded.** `ctest -L fast` afterwards: **305/306**,
+the one failure being `creature_core` as above.
 
-    runs/CLAUDE-RUNS/RUN-20260827-1747-field-v3-rearchitecture/field_v3_exec_sweep.log
+`X46` is worth knowing about because of HOW it closed. It states the off-by-one
+that was actually made -- gating issue on the REGISTERED `sk_ne_c`, so issue
+stops a clock late and a fifth instruction enters when the depth allows four.
 
-**Read the tally at the end of that file before doing anything else.** The
-previous run of it left one survivor, `X46`, and the test was widened to eight
-contexts specifically to kill it — that is the question this run answers.
+**It survived at four contexts and is caught at eight.** Four leaves gaps in
+S1..S3, and the depth argument is precisely about how many instructions are
+already past issue when the queue fills; with gaps, a late gate never admits
+the extra one. The mutant was stating a real fragility the traffic could not
+reach.
 
-If X46 survives again: it says the issue gate may stop a clock late without any
-test noticing. It is a real fragility, not a nuisance. Either find traffic that
-exposes it or prove it equivalent WITH a measurement; do not delete it.
-
----
+That is three defects in this run needing three different degrees of pipeline
+occupancy: two needed four contexts, one needed eight. **If a sweep here leaves
+a survivor, ask what traffic the test is not generating before you consider
+the mutant equivalent.**
 
 ## The two decisions that are Fabian's, not an agent's
 
