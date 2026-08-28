@@ -162,3 +162,62 @@
   cmp-clean (LOUD provenance in SOURCE-COMMIT.txt: THE NOTCH + THE
   BLADES full re-pin, VOCABULARY EXTEND), reel --check "all sequence
   CRCs match" (final-check.txt, exit 0, redirected to file).
+
+## RUN STOPPED — the whole approach was wrong, and the owner had said so in writing
+
+Stopped mid-girth-ladder. Not because of its work, which was good, but because
+**`Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-3-2026-08-28.md` had been sitting
+unread**, and it invalidates the premise of the last five passes.
+
+**Fabian posted that note FOUR times** (`reports/zixxheadadvice`, `2`, `3`,
+`zixxheavadvice4`) because it kept not reaching the working agent. It was then
+relayed into the *already-closed* v4 run folder, moved to the creature folder,
+and still nobody read it. He finally had to say: *"please read your
+instructions."* That is a process failure, not a modelling one.
+
+### What it says, and why it invalidates the approach
+**The head's position is determined by the FINAL THIRD OF THE S-CURVE.** A local
+head joint can rotate a skull but cannot make a DESCENDING neck read as a proud,
+upward-held head. *"You can mathematically measure the snout axis as 'horizontal'
+while the entire skull mass still hangs from the bottom of a downward hook."*
+
+Every pass did: preserve the descending S → enlarge/re-angle the head → rotate
+locally to compensate. **The better the head got, the worse the droop read.**
+
+**My own contribution to this:** I instructed "KEEP THE S, relax only how it is
+HELD." The note says plainly that **the S is not sacred and preserving it is
+preserving the failure.** I was enforcing the bug, in writing, repeatedly.
+
+### The replacement approach
+FREEZE skull dimensions, eyes, texture, colours, atlas resolution, **body girth**
+and head pivot. Change the front 30-40% of the CENTRELINE: raise the whole upper
+arc so the neck CLIMBS toward the head; distribute across 5-8 neck bones with no
+single hinge; final neck tangent points slightly up INTO the skull and the head
+CONTINUES that tangent; head attitude bone back to NEUTRAL; break the S
+deliberately; re-pin goldens as an intentional pose correction.
+
+Architecture: **a spline constraint, not more angle constants** — anchor the
+mid-body, author the head centre and snout tangent from the concept, generate a
+C¹-continuous neck curve between them. The oscillation happened because head
+position was an accidental consequence of a preserved S plus local rotation.
+
+New gate: fixed concept-matched side view only — head centre height vs the S
+crown, world snout direction, neck tangent behind the skull, bounded angular
+discontinuity between those two, and no visible inward notch. **No three-quarter
+beauty shot, no "the probe says horizontal", no acceptance on the head alone.**
+His warning is exact: *"Ground contact, overlap allowance, deterministic clips
+and a measured snout vector can all pass while the animal still looks completely
+fucking wrong."*
+
+### Deferred, not dropped
+The girth finding from this run — our tube ~2× the drawn tube at matched pose,
+`evidence/sheetpose-girth-overlay.png` — is REAL and corroborated by his own eye
+("the upper S part gets a bit too broad and big"). But his freeze list includes
+girth, so it waits until head position, neck tangent and contour are right.
+
+### Process lesson, and it is the expensive one
+**Owner direction posted in the repo is not optional reading, and a relay is not
+delivery.** Four copies of a note existed for hours while five passes solved the
+wrong problem. Before starting any creature run: read every
+`OWNER-DIRECTION-*.md` in the creature folder and check `zhaozhou/reports/` for
+anything newer than the last run.
