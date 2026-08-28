@@ -466,3 +466,61 @@ Run the preflight alone before spending a sweep on it:
 ```
 python tools/sweep_<name>_preflight.py
 ```
+
+## A build tree can be poisoned by the CASE of a path, and it fails at LINK
+
+Symptom: one target fails to link with hundreds of
+
+```
+multiple definition of `VerilatedModel::traceConfig() const'
+```
+
+while every other target builds and every test that touches the same RTL passes.
+
+Cause: the target linked Verilator's `verilated.cpp` **twice**, as two objects
+whose paths differ only in the case of a directory:
+
+```
+tests/CMakeFiles/<target>.dir/C_/programmieren/.../include/verilated.cpp.obj
+tests/CMakeFiles/<target>.dir/C_/Programmieren/.../include/verilated.cpp.obj
+```
+
+Windows treats those as the same file; CMake treats them as two sources and
+emits two compile rules, so the linker gets two copies of every Verilator
+runtime symbol. It only shows up on a target that calls `verilate()` TWICE
+(two models in one binary) -- with one model the duplicate has nothing to
+collide with.
+
+**The on-disk truth here is lowercase** — `(Get-Item C:\programmieren).Name`
+returns `programmieren`. The capitalised spelling is accepted by Windows and
+is what `find_program` cached, because the shell that first configured the
+tree had `C:\Programmieren\...` on its PATH.
+
+### It is STALENESS, not a CMakeLists bug — proved, not assumed
+
+A fresh configure into a new directory with one consistent spelling gives
+**450 objects of one case and 0 of the other**. The mixture only exists in a
+tree that has been reconfigured repeatedly with `VERILATOR_ROOT` spelled
+differently -- which is exactly what a run of sweeps does, because every sweep
+driver reconfigures the whole project before every rebuild.
+
+So the check is a two-minute configure into a throwaway directory, and the
+question it settles is worth the two minutes:
+
+```
+cmake -S . -B build-casecheck -G Ninja ... >/dev/null 2>&1
+grep -c 'C_/programmieren/zencrifice/\.tools' build-casecheck/build.ninja
+grep -c 'C_/Programmieren/zencrifice/\.tools' build-casecheck/build.ninja
+```
+
+One of those must be zero. If both are non-zero in a FRESH tree, it is a real
+bug in the CMake files. If they are only both non-zero in the working tree,
+the working tree is contaminated and the fix is to delete it.
+
+### The rule
+
+**Spell the path the same way every time, and spell it the way the disk does.**
+Every sweep driver already defaults to the lowercase form; the poisoning came
+from manual `export VERILATOR_ROOT=` and `export PATH=` lines typed with a
+capital. A tree that has seen both must be deleted -- reconfiguring does not
+clean it, because the stale entries name source files that still exist.
