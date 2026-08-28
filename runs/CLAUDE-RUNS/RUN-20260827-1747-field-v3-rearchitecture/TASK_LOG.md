@@ -896,3 +896,79 @@ It credited "N05, N09 and N11" with the vector-specific claims and "N18 and
 N19" with the refusal hold. The real answers are N01/N05/N07/N09 and N20/N21.
 Nothing depended on it, but a table whose map of itself is wrong is how the
 next person aims a mutant at the wrong claim.
+
+---
+
+## 2026-08-28 -- the noise sweep found THREE things my own comments got wrong
+
+    first run:  21 attempted  18 caught  3 SURVIVED  0 discarded
+
+All three survivors are genuine equivalences, and each one disproves a claim I
+had written down as fact. That is the sweep doing the job the whole discipline
+exists for, and it is worth recording in that order -- the finding first, the
+correction second.
+
+### N07: the operand extension cannot matter, and my header said it did
+
+The RTL claimed a sign-extended operand would be "right for small coordinates
+and wrong for large ones". **False.** For any 32-bit a:
+
+    A0 = a                      zero-extended
+    A1 = a - 2^32*(a>>31)       sign-extended
+    A0*B - A1*B = 2^32*(a>>31)*B
+
+The products differ by an exact multiple of 2^32, so their low 32 bits -- the
+only bits this unit reads -- are identical for every input. Section 5 of the
+differential was written specifically to catch this and was aimed at a
+divergence that does not exist. Both comments are corrected.
+
+The zero-extension STAYS, as defence in depth: it states that these are
+unsigned hash words and it is the form that survives anything reading above
+bit 31, or a lane narrower than 33 bits where the operand would be truncated
+rather than extended.
+
+### N10: the final xor-shift is unobservable to these two ops
+
+The hash ends `(w >> 22) ^ w` and both ops take bits [31:16]. A right shift by
+S lets the xor term reach bits 31-S and below, so for any S >= 16 it cannot
+touch a bit either op reads.
+
+MEASURED rather than only argued: 200,000 random words show zero differences
+between S=22 and S=21 in bits [31:16], and sweeping S from 10 to 19 puts the
+boundary at exactly 16 -- S <= 15 differs on most words, S >= 16 on none.
+
+**An equivalence must not become an excuse to leave a step untested**, so N22
+is the same claim at S = 15, on the observable side of that boundary. The
+shift stays 22 because it is the reference's law and `zref::noise2_hash` is
+used elsewhere -- creature gibs, the star bake -- where the low bits ARE read.
+The equivalence belongs to these two ops, not to the hash.
+
+### N19: RIDGE cannot saturate at all
+
+Swapping one rail for the other changes nothing because BOTH are unreachable.
+u is the top 16 bits of a hash word, so its entire domain is 0..65535.
+Checked EXHAUSTIVELY over all 65,536 values:
+
+    ridge_t range          -65536 .. 65534
+    ridge_t == INT32_MIN   0 times
+    ridge_t == INT32_MAX   0 times
+    any add saturation     0
+    any sub saturation     0
+
+So `sat_add_o` and `sat_rescale_o` are identically zero for every input this
+op can be given, and the reference agrees -- its SatLedger never bumps, which
+is why the differential passes with both sides reading zero.
+
+The logic is KEPT, because it mirrors the reference's fold and becomes live
+the moment the domain widens, but it is now documented in the RTL as
+unreachable so it does not read as tested logic. N23 is the reachable
+counterpart, so "the flags are zero" is an assertion with teeth rather than a
+region nothing exercises.
+
+### The pattern across all three
+
+Every one of them was a place where I had written a confident sentence about
+why something mattered, and the sweep showed the sentence was decoration. None
+was a bug in the RTL. All three were bugs in the JUSTIFICATION, which is worse
+in one specific way: a wrong comment survives refactors that a wrong line
+would not.

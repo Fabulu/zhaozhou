@@ -89,9 +89,16 @@ MUTANTS = [
      "          mul_a[l] = ix[0];"),
 
     # ---- the hash tail ------------------------------------------------------
+    # N10 SURVIVED and is equivalent -- see EQUIVALENT below for the proof and
+    # the exact boundary. N22 is the same claim moved to the other side of that
+    # boundary, so the tail is not left untested just because one shift value
+    # happens to be unobservable.
     ("N10 the final xor-shift shifts by the wrong amount",
      "      lane1_h[l] = (s_reg[l] >> 22) ^ s_reg[l];",
      "      lane1_h[l] = (s_reg[l] >> 21) ^ s_reg[l];"),
+    ("N22 the final xor-shift reaches into the bits the op actually reads",
+     "      lane1_h[l] = (s_reg[l] >> 22) ^ s_reg[l];",
+     "      lane1_h[l] = (s_reg[l] >> 15) ^ s_reg[l];"),
     ("N11 the output takes the low half of the hash instead of the top",
      "    for (int l = 0; l < LANES; l++) u_val[l] = $signed({16'd0, lane0[l][31:16]});",
      "    for (int l = 0; l < LANES; l++) u_val[l] = $signed({16'd0, lane0[l][15:0]});"),
@@ -124,9 +131,17 @@ MUTANTS = [
     ("N18 RIDGE's fold omits the absolute value",
      "      ridge_r[l] = sub_sat(FX_ONE, abs_sat(ridge_t[l]));",
      "      ridge_r[l] = sub_sat(FX_ONE, ridge_t[l]);"),
+    # N19 SURVIVED and is equivalent: BOTH rails are unreachable, so swapping
+    # one constant-false condition for another changes nothing. The proof is
+    # below. N23 is the catchable version -- a condition that IS reachable --
+    # so "the flags are zero" stays an assertion with teeth rather than a
+    # region nothing tests.
     ("N19 the rescale flag watches the wrong rail",
      "              sat_rescale_o[l] <= (ridge_t[l] == 32'sh8000_0000);",
      "              sat_rescale_o[l] <= (ridge_t[l] == 32'sh7FFF_FFFF);"),
+    ("N23 RIDGE reports a saturation it did not have",
+     "              sat_rescale_o[l] <= (ridge_t[l] == 32'sh8000_0000);",
+     "              sat_rescale_o[l] <= (ridge_t[l] < 32'sd0);"),
 
     # ---- the refusal loop ---------------------------------------------------
     # mul_ready_i is read in four issue states, so dropping ONE of them leaves
@@ -170,8 +185,74 @@ def mutate(gold, old, new):
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY -- that rule was broken twice on
 # FIELD.V3.EXEC, with two proofs written before any evidence and both then
-# contradicted by a run.
-EQUIVALENT = {}
+# contradicted by a run. Every entry below was written AFTER a run showed the
+# mutant surviving.
+EQUIVALENT = {
+    "N07": (
+        "THE EXTENSION CANNOT REACH THE BITS THIS UNIT READS, and the mutant "
+        "proved my own comment wrong. For any 32-bit a, the zero-extended "
+        "33-bit value is A0 = a and the sign-extended one is A1 = a - "
+        "2^32*(a>>31), so A1 = A0 or A1 = A0 - 2^32. Their products with the "
+        "same B therefore differ by 2^32*B -- an exact multiple of 2^32. The "
+        "unit reads mul_p_*_i[31:0] and NOTHING ELSE, and residues mod 2^32 "
+        "are unchanged by adding a multiple of 2^32. So the two forms are "
+        "bit-identical on every bit this block can observe, for every input. "
+        "No stimulus can distinguish them, and section 5 of the differential "
+        "-- written to catch exactly this -- was aimed at a divergence that "
+        "does not exist. "
+        "THE ZERO-EXTENSION IS KEPT ANYWAY, as defence in depth: it states "
+        "that these are unsigned hash words, and it is the form that stays "
+        "correct if anything ever reads above bit 31. "
+        "RE-SCORE THIS THE MOMENT ANY BIT ABOVE 31 OF A PRODUCT IS READ -- by "
+        "this unit or by a bank change that makes the lane narrower than 33 "
+        "bits, where the operand would be truncated rather than extended and "
+        "the two forms would separate."
+    ),
+    "N10": (
+        "THE XOR-SHIFT TAIL CANNOT REACH THE BITS THE OP READS. The hash "
+        "finishes as (w >> 22) ^ w, and both NOISE2 and RIDGE take bits "
+        "[31:16] of that -- the reference does the same, `>> 16`. A right "
+        "shift by S moves bit 31 down to bit 31-S, so the xor term can only "
+        "alter bits 31-S and below. For any S >= 16 that is bits 15 and "
+        "below, which this op never reads. Shift 22 and shift 21 are "
+        "therefore bit-identical on every observable output, for every input. "
+        "MEASURED rather than only argued: 200,000 random words, zero "
+        "differences in bits [31:16] between shift 22 and 21; and sweeping S "
+        "from 10 to 19 over 2,000 words each, S <= 15 differs on most words "
+        "while S >= 16 differs on none. The boundary is exactly 16. "
+        "N22 IS THE SAME CLAIM AT S = 15, on the observable side of that "
+        "boundary, so the tail is still tested -- an equivalence must not "
+        "become an excuse to leave a step unchecked. "
+        "THE SHIFT STAYS 22 because it is the reference's law and "
+        "zref::noise2_hash is used elsewhere -- creature gib velocities, the "
+        "star bake -- where the low bits ARE read. The equivalence is a "
+        "property of THESE TWO OPS, not of the hash. "
+        "RE-SCORE THIS IF ANY OP EVER READS BELOW BIT 16 OF THE HASH."
+    ),
+    "N19": (
+        "RIDGE CANNOT SATURATE, so both rails are unreachable and swapping "
+        "one constant-false condition for another is a no-op. u is the TOP 16 "
+        "BITS of a hash word, so its whole domain is 0..65535 and nothing "
+        "else. EXHAUSTIVELY CHECKED over all 65,536 values: ridge_t = "
+        "sub_sat(add_sat(u,u), 1<<16) lands in [-65536, 65534], hits "
+        "INT32_MIN zero times and INT32_MAX zero times, and no add or sub in "
+        "the fold saturates even once. So sat_rescale_o and sat_add_o are "
+        "BOTH identically zero for every input this op can be given, and the "
+        "reference agrees -- its SatLedger never bumps either, which is why "
+        "the differential passes with both sides reading zero. "
+        "THE LOGIC STAYS because it mirrors the reference's fold exactly, and "
+        "the reference keeps its saturating forms for the same reason: they "
+        "become live the moment the domain widens. It is documented as "
+        "unreachable rather than removed, so it does not read as tested "
+        "logic. "
+        "N23 IS THE CATCHABLE COUNTERPART -- a rescale condition that IS "
+        "reachable -- so the differential's 'the flags are zero' assertion is "
+        "proven to have teeth. "
+        "RE-SCORE THIS IF u EVER BECOMES WIDER THAN 16 BITS: a change to the "
+        "`>> 16` in the op's definition, or a fold that scales u before "
+        "doubling it, puts the rails back in range."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):
