@@ -320,3 +320,38 @@ CLOSED runs (`RUN-20260827-1730-zixxtrixx-head-only`,
 `scratch-reel` were deliberately left** — the modelling agent is rendering and
 encoding from them right now, and deleting working data under a running job is
 how you turn a tidy-up into a lost afternoon. They get cleaned when it closes.
+
+### 2026-08-28 19:4x - THE SALTO PAIR: the flicker and the weapon
+
+- THE FLICKER (six-salto "flickers back and forth"): the coil phase spun
+  to whole+frac turns while the unroll phase restarted from whole -- a
+  backward snap of up to a full turn at the apex that the presentation
+  interpolator rendered as the flick (the coordinator's shortest-path
+  hypothesis, wearing integer clothes). The coil now spins WHOLE turns
+  only; the alignment fraction belongs to the unroll; theta is one
+  continuous, explicitly accumulated function of the key across every
+  phase. salto-six-sheet.png: one direction the whole flight.
+- THE WEAPON IS THE TAIL TIP: three separate faults found by the NEW
+  COMMITTED probe zixx_striketip.cpp (decodes each variant's impact key,
+  skins the nose and the blade-tip vertex, prints them against the plan's
+  intercept -- ground-contact doctrine applied to target contact):
+  1. the plan stopped the ROOT on the intercept while the blade tip leads
+     the nose by a MEASURED 3908 mm (the ideal-straight 3830 was 78 short);
+  2. the NOSE rides exactly kBodyY above the plan's root (bone 0's joint
+     sits at (0, kBodyY)) -- the uncorrected carry struck 1.07 m high;
+  3. the SIX variant's apex override happened AFTER the spear lock, so its
+     committed vector still aimed at the planner's 8 m apex (tip 4.6 m off
+     the mark) -- pre-existing, invisible until the probe.
+  The law now lives in zixx_plan_lock_spear (shared; re-lock after any
+  override is mandatory), the body orients along the AIM line (root-path
+  orientation pitched the dummies ~30 deg steep -- caught, fixed), and the
+  planner proof asserts the TIP law instead of enshrining the root bug.
+- MEASURED at the impact keys: tip 425 / 426 / 427 mm past the intercept
+  along the aim -- the declared kAtkStickDepth (420) burial, in the
+  dummy's body, the flyer's body, and the ground mark respectively.
+  strike-contact-dummy-3x / strike-contact-fly-3x: the tip IS inside the
+  dummy with the spear arrested behind it. Probe double-add lesson kept in
+  the probe's own comment (decode_pose already bakes the root).
+- The probe's first metre-scale numbers were PHANTOMS (root added twice);
+  fixed before any constant was calibrated from them.
+

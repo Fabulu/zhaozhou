@@ -741,6 +741,24 @@ constexpr int32_t kAtkStickDepth = 420;  // mm of authored burial
 constexpr int32_t kAtkTipDrop = 3317;    // reach * sin(60 deg), see above
 constexpr int32_t kAtkTipFwd = 1915;     // reach * cos(60 deg): how far the
                                          // buried tip leads the nose in +X
+constexpr int32_t kAtkTipReachMm = 3908; // nose -> blade tip of the POSED
+                                         // spear, MEASURED by the committed
+                                         // zixx-striketip probe (3908/3909/
+                                         // 3910 across all three variants;
+                                         // the ideal-straight 3830 was 78 mm
+                                         // short -- the blades extend). THE
+                                         // WEAPON IS THE TAIL TIP: every
+                                         // parametric plan stops the ROOT
+                                         // short by this so the TIP lands
+                                         // the strike. The probe also proved
+                                         // the pose's weapon vector tracks
+                                         // the committed aim within ~1 deg,
+                                         // and that the NOSE rides kBodyY
+                                         // above the plan's root -- see
+                                         // zixx_plan_lock_spear.
+constexpr int32_t kAtkPlungeMinMm = 600; // the dive must exist: the commit
+                                         // point sits at least reach+this
+                                         // from the intercept
 constexpr int32_t kAtkStickLift = kAtkTipDrop - kBodyY - kAtkStickDepth;
 constexpr int kAtkImpactKey = 62;        // reel frame 124 (keys held 2 ticks)
 constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
@@ -1784,6 +1802,71 @@ inline ChoreoSample attack_choreo_sample(int key) {
 }
 
 
+// THE SPEAR LOCK -- shared by the planner and by any variant that edits
+// apex/spin AFTER planning (the six-salto did, and its committed vector
+// still aimed at the PRE-override apex: the probe read its tip 4.6 m from
+// the mark; re-locking after overrides is now the law).
+//
+// THE WEAPON IS THE TAIL TIP (owner, 2026-08-28: "The tip of the tail
+// should stab into it, then it should stop. Right now I think you
+// confused the middle of Zixxtrixx with the tip of its tail"). The
+// trajectory drives the ROOT, and two measured facts (zixx-striketip,
+// committed) place the weapon relative to it: the blade tip leads the
+// NOSE by kAtkTipReachMm along the committed line (within ~1 deg), and
+// the nose rides exactly kBodyY above the root (bone 0's joint sits at
+// (0, kBodyY)). The first cut stopped the ROOT on the intercept, so the
+// tip had already passed ~3.9 m through the target ("goes way through it
+// before it stops"), and the second cut ignored the kBodyY carry and
+// struck 1.07 m high. Law: the ROOT stops where the TIP arrives at the
+// intercept and buries the declared kAtkStickDepth -- a stab that lands
+// and plants, never a pass-through, never a weightless surface stop.
+inline void zixx_plan_lock_spear(zc::AttackPlan& p) {
+  // the committed AIM line, apex -> intercept
+  p.spear_dx_mm = p.intercept_x_mm - p.apex_fwd_mm;
+  p.spear_dy_mm = p.intercept_y_mm - p.apex_mm;
+  const int32_t back = kAtkTipReachMm - kAtkStickDepth;
+  int64_t sx0 = p.spear_dx_mm, sy0 = p.spear_dy_mm;
+  int32_t sl = static_cast<int32_t>(
+      zref::isqrt_u64(static_cast<uint64_t>(sx0 * sx0 + sy0 * sy0)));
+  if (sl < back + kAtkPlungeMinMm) {
+    // the commit point must sit at least the animal's own reach from the
+    // intercept, or the TIP starts past the target: raise the apex (dx
+    // kept, the dive steepens) until the aim line is long enough
+    const int64_t need = back + kAtkPlungeMinMm;
+    const int64_t dx2 = sx0 * sx0;
+    int32_t dyn = static_cast<int32_t>(need);
+    if (need * need > dx2)
+      dyn = static_cast<int32_t>(
+          zref::isqrt_u64(static_cast<uint64_t>(need * need - dx2)));
+    p.apex_mm = p.intercept_y_mm + dyn;
+    if (p.apex_mm > kAtkApexLift) p.apex_mm = kAtkApexLift;
+    p.spear_dy_mm = p.intercept_y_mm - p.apex_mm;
+    sy0 = p.spear_dy_mm;
+    sl = static_cast<int32_t>(
+        zref::isqrt_u64(static_cast<uint64_t>(sx0 * sx0 + sy0 * sy0)));
+  }
+  // the ROOT's terminus: intercept, minus the tip lead along the aim
+  // line, minus the nose's kBodyY carry -- the plunge line the root
+  // travels is the aim line offset by those two constants, so the TIP
+  // crosses the intercept exactly at the impact key
+  if (sl > back) {
+    const int32_t rex = p.intercept_x_mm -
+                        static_cast<int32_t>(sx0 * back / sl);
+    const int32_t rey = p.intercept_y_mm -
+                        static_cast<int32_t>(sy0 * back / sl) - kBodyY;
+    p.spear_dx_mm = rex - p.apex_fwd_mm;
+    p.spear_dy_mm = rey - p.apex_mm;
+  }
+  // plunge duration from its length (t^2 law, ~110 mm/key^2 at T=10)
+  const int64_t sx = p.spear_dx_mm, sy = p.spear_dy_mm;
+  const int32_t slen2 = static_cast<int32_t>(
+      zref::isqrt_u64(static_cast<uint64_t>(sx * sx + sy * sy)));
+  int32_t pk = slen2 / 1100;
+  if (pk < 6) pk = 6;
+  if (pk > 14) pk = 14;
+  p.plunge_keys = static_cast<uint16_t>(pk);
+}
+
 // ---- C4: THE ZIXXTRIXX ATTACK PLANNER -------------------------------------
 // Builds an AttackPlan from sim truth. The NUMBERS here are Zixxtrixx
 // authoring (its jump heights, its spin appetite); the plan record and the
@@ -1837,18 +1920,10 @@ inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
   if (turns < 1) turns = 1;
   if (turns > 5) turns = 5;
   p.spin_mturns = turns * 1000;
-  // THE COMMITMENT: the spear vector is the line from the commit point
-  // (the apex) to the intercept, LOCKED here. Projectile, not missile.
-  p.spear_dx_mm = p.intercept_x_mm - p.apex_fwd_mm;
-  p.spear_dy_mm = p.intercept_y_mm - p.apex_mm;
-  // plunge duration from its length (t^2 law, ~110 mm/key^2 at T=10)
-  const int64_t sx = p.spear_dx_mm, sy = p.spear_dy_mm;
-  const int32_t slen = static_cast<int32_t>(
-      zref::isqrt_u64(static_cast<uint64_t>(sx * sx + sy * sy)));
-  int32_t pk = slen / 1100;
-  if (pk < 6) pk = 6;
-  if (pk > 14) pk = 14;
-  p.plunge_keys = static_cast<uint16_t>(pk);
+  // THE COMMITMENT: the spear is locked from the apex toward the
+  // intercept by the shared lock (aim, tip lead, kBodyY carry, plunge
+  // sizing). Projectile, not missile.
+  zixx_plan_lock_spear(p);
   return p;
 }
 
@@ -1876,8 +1951,16 @@ inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
     out.x_mm = static_cast<int32_t>(
         (static_cast<int64_t>(p.apex_fwd_mm) * t) / 1000);
     const int32_t sm = t * t / 1000 * (3000 - 2 * t) / 1000;  // smoothstep
+    // WHOLE turns only in the coil (RUN 1730, the six-salto flicker): the
+    // spear-alignment FRACTION belongs to the unroll, which starts from
+    // the whole-turn count -- the first cut spun the coil to whole+frac
+    // and the unroll restarted at whole, a backward snap of up to a full
+    // turn at the apex that the presentation interpolator rendered as the
+    // owner's "flickers back and forth". Theta is one continuous,
+    // explicitly accumulated function of the key across every phase now.
+    const int32_t whole_mt = (p.spin_mturns / 1000) * 1000;
     out.theta = static_cast<int32_t>(
-        (static_cast<int64_t>(p.spin_mturns) * sm / 1000) * 65536 / 1000);
+        (static_cast<int64_t>(whole_mt) * sm / 1000) * 65536 / 1000);
     return out;
   }
   if (key <= t2) {
@@ -4215,9 +4298,15 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
                                      bool air_hit_outcome) {
   const zc::Clip local = build_attack(true);
   const zc::Clip recoil = build_air_hit();
-  // orient the spear along the committed vector: the local spear pose at
-  // theta 0 points -X, so theta_frac = atan2(spear) - half a turn
-  const int32_t phi = atan2_mturns(p.spear_dy_mm, p.spear_dx_mm);
+  // orient the spear along the committed AIM line (apex -> intercept):
+  // that is the line the eye reads and the line the TIP travels. The
+  // spear_d fields hold the ROOT's offset path since the tail-tip lock
+  // (tip lead + kBodyY carry) -- orienting on THOSE pitched the dummy
+  // variants ~30 deg too steep (striketip probe, this run). The local
+  // spear pose at theta 0 points -X, so theta_frac = atan2(aim) - half
+  // a turn.
+  const int32_t phi = atan2_mturns(p.intercept_y_mm - p.apex_mm,
+                                   p.intercept_x_mm - p.apex_fwd_mm);
   int32_t frac = phi - 500;
   while (frac < 0) frac += 1000;
   const int32_t turns = p.spin_mturns / 1000;
@@ -4351,6 +4440,9 @@ inline zc::Clip build_attack_six() {
   p.spin_mturns = 6000;  // the ask: SIX somersaults
   p.apex_mm = kAtkApexLift;          // the full showcase height earns them
   p.coil_keys = 44;                  // the long flight to spend them in
+  zixx_plan_lock_spear(p);  // the overrides moved the commit point: the
+                            // spear MUST re-lock or it still aims at the
+                            // planner's 8 m apex (probe: tip 4.6 m off)
   return build_attack_variant(kSlotAtkSix, p, false);
 }
 

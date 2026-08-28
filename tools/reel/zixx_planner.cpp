@@ -62,10 +62,22 @@ int main() {
     const int t3 = p.compress_keys + p.release_keys + p.coil_keys +
                    p.unroll_keys + p.plunge_keys;
     const zixx::ChoreoSample at_impact = zixx::zixx_plan_sample(p, t3);
+    // THE WEAPON IS THE TAIL TIP (owner, 2026-08-28). The old assertion
+    // "plunge terminus == locked intercept" checked the ROOT -- exactly
+    // the wrong body point the owner diagnosed ("you confused the middle
+    // of Zixxtrixx with the tip of its tail"), enshrined as a green gate.
+    // The law now: the ROOT stops kAtkTipReachMm - kAtkStickDepth short
+    // of the intercept along the spear line, so the TIP lands the strike
+    // and buries the declared depth.
+    // the NOSE rides kBodyY above the root (bone 0's joint), and the TIP
+    // leads the nose by the measured pose reach along the committed line
     const int64_t ex = at_impact.x_mm - p.intercept_x_mm;
-    const int64_t ey = at_impact.y_mm - p.intercept_y_mm;
-    expect(ex * ex + ey * ey <= 40 * 40,
-           "plunge terminus == locked intercept (<= 40 mm)");
+    const int64_t ey = (at_impact.y_mm + zixx::kBodyY) - p.intercept_y_mm;
+    const int64_t back = zixx::kAtkTipReachMm - zixx::kAtkStickDepth;
+    const int64_t gap2 = ex * ex + ey * ey;
+    expect(gap2 >= (back - 80) * (back - 80) && gap2 <= (back + 80) * (back + 80),
+           "nose terminus sits one tip-lead from the intercept: the TIP "
+           "lands the strike (+/- 80 mm)");
     // the spear axis: from commit to impact the samples must sit ON the
     // locked line (t^2 scaling of one fixed vector -- collinear exactly)
     const int t2 = t3 - p.plunge_keys;
