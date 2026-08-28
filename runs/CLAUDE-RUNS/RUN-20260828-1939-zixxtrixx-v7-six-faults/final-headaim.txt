@@ -1,0 +1,16 @@
+idle key 0, kHeadAttitude=0
+station   x_mm    y_mm   (world: +x fwd, +y up; nose=station 0)
+   0      -17    1179
+   1      -33    1171
+   2      -57    1159
+   3      -93    1140
+   4     -137    1117
+   5     -187    1096
+   6     -243    1074
+   7     -304    1054
+   8     -374    1042
+   9     -441    1021
+  10     -508    1001
+  11     -580     981
+  12     -633     958
+snout axis (station 5 -> 0): +26.0 deg from horizontal (positive = nose UP)
