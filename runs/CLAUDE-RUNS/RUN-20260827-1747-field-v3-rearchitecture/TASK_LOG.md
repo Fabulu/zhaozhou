@@ -1761,3 +1761,62 @@ What it takes, in order:
 not a clock more" is still true of the arbiter, but it describes the ALU being
 REFUSED -- and today's engine cannot refuse it. It characterises a machine that
 does not exist yet, and becomes a statement about the engine when step 1 lands.
+
+## THE LEDGER GATE WAS RED FOR EIGHT HOURS AND I DID NOT RUN IT
+
+`npm run ledger:check` failed on four V20 errors -- invariant claims with no
+machine-resolvable enforcer. `git blame` puts all four at **04:20, 06:43, 09:25
+and 10:12 TODAY**. They are mine, from earlier in this same run.
+
+The working rules put the ledger check in step 5, immediately before "commit
+and push". I have been committing and pushing all morning without invoking it
+once.
+
+**Nothing hid this.** It is not the earlier failure mode -- a gate that SKIPPED
+when its tool was absent and so hid weeks of drift. This gate works, reports
+clearly, and fails loudly. I did not look. A gate you do not run is worse than
+one that skips, because at least a skip leaves a line in a log.
+
+### The four claims, and why each enforcer was checked rather than picked
+
+Silencing a gate with a plausible-looking pointer would be worse than leaving
+it red, so each was verified to actually enforce the claim:
+
+    mulbank    the starvation bound   -> field_v3_mulbank_directed.cpp:
+                                         test_priority_is_the_declared_one.
+                                         It does not merely observe starvation:
+                                         it holds a service busy for a KNOWN
+                                         number of clocks and requires
+                                         stall_lanes_o to equal exactly that. A
+                                         counter that under-reported would
+                                         leave "measured rather than argued"
+                                         true in wording and false in fact.
+
+    normalize  never saturates        -> field_v3_normalize_directed.cpp:main.
+               "by construction"        The reasoning was already wrong here
+                                        ONCE: the iterate REACHES 2^31 at any
+                                        exact power-of-two length and a 31-bit
+                                        register wrapped it to zero. Kept as
+                                        mutant M02, caught.
+
+    svcpath    "cannot happen"        -> field_v3_svcpath_directed.cpp:main.
+                                        Every group asserts wrong_op_o == 0 and
+                                        V23 proves the wire is live rather than
+                                        tied low.
+
+    exec       the DOT-at-S4 hold     -> field_v3_exec_directed.cpp:
+                                        test_results_survive_contention, which
+                                        drives the rival so the bank REALLY
+                                        refuses. With the rival silent that
+                                        path is dead code -- which is how an
+                                        earlier sweep of it scored 4 of 11.
+
+### A detail about the tag's placement
+
+My first fix put `ENFORCED-BY` ABOVE the prose and two of the four stayed red.
+The trailing paragraphs RESTATED the claim, so the checker found a fresh one
+with the tag now behind it. **The tag has to follow the claim, within ten
+lines.** Reworded so each block states its claim once and ends with its
+enforcer.
+
+    ledger: check OK -- 92 blocks (6 blocked_on: hardware) / 40 ops
