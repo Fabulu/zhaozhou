@@ -1399,3 +1399,126 @@ Eight instances now, and the pattern holds every time: the reshape the linter
 forces is a better mutant than the one first written, because "delete a use"
 makes a defect that is obvious and "change a value" makes one that needs the
 right stimulus.
+
+---
+
+## SPLINE closed 21/21, and the survivor corrected the RTL's own header
+
+    attempted 21   caught 20   equivalent 1 (proven)   survived 0   discarded 0
+
+**S12 disproved a claim I had written into the hardware.** The header said
+`fx_mad` is "one rounding, not two" and warned that doing it the other way
+round is the mistake to avoid -- reasoning by analogy with ROT, where the
+distinction is real. The analogy was the error.
+
+`fx_mad` forms `a*b + (c << 16)` and rescales by 16. The mutant rescales the
+product first and adds `c` after. `c << 16` has sixteen zero low bits, so
+adding it COMMUTES with the shift:
+
+    ((p + (c<<16)) + 2^15) >> 16  ==  ((p + 2^15) >> 16) + c
+
+exactly, for every p and c. Measured over 200,000 random pairs across the full
+range: zero differences. The rounding difference that IS real is rounding each
+PRODUCT separately, which is what ROT does deliberately -- and SPLINE's Horner
+has one product per step, so the question never arises.
+
+Header corrected. The mutant stays with its proof and its re-score trigger:
+the addend ceasing to be a multiple of 2^16.
+
+**S07 needed a case built on purpose.** Clamping a coefficient's TERMS instead
+of its RESULT survived because section 3's control points are extreme enough
+that both forms saturate to the same rail -- same answer, wrong reason. The
+separating case needs `2*p0` to overflow while `2*p0 - 5*p1 + 4*p2 - p3` does
+not: `p0 = 2^30 + 1` doubles to `2^31 + 2`, and `p1 = 1` pulls the sum back to
+`2^31 - 3`, which fits. Clamped terms give 2147483642 where the law gives
+2147483645.
+
+**S21 is the third mirrored-flag survivor in a row**, always the same cause:
+every test group clamped on all four points or on none.
+
+**AND THE FLAGS WERE NOT CHECKED AT ALL** -- values and tags only, which is
+why one of three survivors was a flag mutant. Now compared per lane against a
+PER-LANE ledger: one ledger for the group would smear four points' saturations
+together and make a mirrored report indistinguishable from a correct one.
+
+164 checks after.
+
+## The staging guard caught me for the third time -- and the first time EARLY
+
+I tried to commit `zhao_field_v3_spline.sv` while its own sweep still had
+control of the file. `git_add_safe.py` refused. That is exactly the sequence
+that put mutant D02 into a pushed commit yesterday: the sweep restores the
+file afterwards, so the working tree is clean every time anything looks, and
+the defect ships anyway.
+
+The first two catches were after the fact. This one was before. I staged the
+other two files and waited for the sweep to exit.
+
+## A stale comment that argued for deleting a real test
+
+Above SPLINE's two ctest lanes sat a paragraph inherited verbatim from the
+DISPATCH driver, explaining at length why THIS BINARY HAS ONE lane -- directly
+above two lines that run two. The code was right; the comment was wrong.
+`field_v3_spline_directed.cpp` does implement `--random`.
+
+That is the dangerous kind of stale. It did not merely describe the wrong
+thing, it made a persuasive case for REMOVING something that works, in a file
+where the case does not hold. I nearly acted on it while deriving the svcpath
+driver.
+
+Whether a binary has a random lane is a one-line grep of its source. That is
+the check now. svcpath -- which really does have one lane -- says so with the
+grep behind it rather than with inherited prose.
+
+## The svcpath sweep: 25 mutants, almost all of them wiring
+
+Every block inside `zhao_field_v3_svcpath` is swept and closed on its own, so
+this table does not re-check their arithmetic. It mutates SLOT INDICES AND
+PORT MAPS, because that is where all four expensive defects lived and a sweep
+cannot mutate a port that does not exist.
+
+Four of the twenty-five ask a question rather than stating a defect -- V06
+(the bank's service-first priority), V09 (both claimants sharing a tag), V22
+(the third result's tie-off) and V25 (the rival's multiplicand). Each states a
+claim the file makes in its own comments; whether any check observes it is
+unknown. A survivor there is a finding about the test.
+
+`s2` and `s3` are deliberately NOT mutated: the directed test drives both as
+zero for every context, so a mutation of either is equivalent BY CONSTRUCTION
+rather than by argument. They belong to the dispatcher's sweep.
+
+The preflight cone here is SIX files, not one. Every other block in this family
+is a leaf reaching the bank through ports; this one instantiates what it
+composes -- and port-map mutants are precisely the class that lints fine in
+isolation and fails only when the module on the other end is real.
+
+## The orphan rule reaches TWELVE, and two reshapes came out sharper
+
+NORMALIZE's first run stopped at the preflight, exit 8, zero mutants scored,
+tree clean:
+
+    M04  dropped isq_ready
+    M14  dropped newt_step
+    M18  dropped bit 32 of an internal by truncating instead of clamping
+    M21  dropped expo
+
+**M14's reshape is better than what it replaced.** `if (1'b0)` orphans the flag
+AND makes the machine take the SECOND branch first, which is a different defect
+from the one the name claims. Finishing inside the FIRST branch is literally
+"only one Newton step": the flag stays live, the second branch goes
+unreachable, and the result is a wrong reciprocal rather than a hang. A hang is
+caught by any guard at all, so it tests almost nothing.
+
+**M18's is better too.** Dropping the clamp leaves a truncation, which is what
+orphaned bit 32. Moving the rail one binade keeps the 33-bit comparison alive
+and asks whether the clamp is at the right VALUE rather than whether it exists.
+
+**M21's reshape was NOT the obvious one.** The obvious repair -- invert the
+exponent's sign at its use -- is worse than useless: `expo` is read in exactly
+one place, so negating it there and negating it at its source (M11) are THE
+SAME MUTANT, and the table would carry a duplicate under two names. Changed the
+shift CONSTANT instead, which is the one claim in that line not made elsewhere.
+What it gave up stays covered: an `out_k` ignoring `expo` differs from `31 + e`
+for exactly the inputs where M11 differs.
+
+Preflight then passed all 26. Full sweep running.
