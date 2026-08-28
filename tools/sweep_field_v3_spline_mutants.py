@@ -165,7 +165,28 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "S12": (
+        "THE ADDEND IS EXACT AT THE RESCALE'S SCALE, so the two arrangements "
+        "are the SAME NUMBER and not merely close. fx_mad forms "
+        "a*b + (c << 16) and rescales by 16. The mutant rescales a*b first and "
+        "adds c after. Since (c << 16) has sixteen zero low bits, adding it "
+        "COMMUTES with the shift: "
+        "((p + (c<<16)) + 2^15) >> 16 == ((p + 2^15) >> 16) + c, exactly, for "
+        "every p and c. MEASURED over 200,000 random pairs across the full "
+        "range: zero differences. "
+        "THIS CORRECTS THE BLOCK'S OWN HEADER, which said fx_mad is 'one "
+        "rounding, not two' as though the distinction were observable here. It "
+        "is not. The rounding difference that IS real -- and that ROT's header "
+        "warns about -- is rounding each PRODUCT separately, and SPLINE's "
+        "Horner has only one product per step, so the question does not arise. "
+        "The mutant is kept because it states a claim worth checking, and "
+        "because if the addend ever stops being a multiple of 2^16 the "
+        "equivalence dies with it. "
+        "RE-SCORE THIS IF THE ADDEND IS EVER SHIFTED BY ANYTHING OTHER THAN "
+        "THE RESCALE AMOUNT."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):

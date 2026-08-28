@@ -133,12 +133,20 @@ Lookup lookup_of(const zfield::Table& tab, int32_t a_in) {
   return k;
 }
 
-int32_t oracle_point(const std::vector<zfield::Table>& tabs, uint32_t slot, int32_t a) {
+struct Point {
+  int32_t v;
+  bool sat_rescale;  // a coefficient clamped at 32 bits
+};
+
+Point oracle_point(const std::vector<zfield::Table>& tabs, uint32_t slot, int32_t a) {
+  // A LEDGER PER POINT. One for the whole group would smear four points'
+  // saturations together and make a mirrored report indistinguishable from a
+  // correct one -- which is exactly how S21 survived the first sweep.
   zref::SatLedger L;
   const int32_t src[1] = {a};
   int32_t dst[1] = {0};
   zfield::steps::exec_op(zfield::OP_SPLINE, slot, tabs, src, dst, &L);
-  return dst[0];
+  return Point{dst[0], L.rescale != 0};
 }
 
 void drive(Vzhao_field_v3_spline& dut, const Lookup* k, uint8_t tag) {
@@ -159,7 +167,7 @@ void drive(Vzhao_field_v3_spline& dut, const Lookup* k, uint8_t tag) {
 int run_one(Vzhao_field_v3_spline& dut, MulBank& mb, const std::vector<zfield::Table>& tabs,
             uint32_t slot, const int32_t* a, uint8_t tag, const std::string& what) {
   Lookup k[kLanes];
-  int32_t want[kLanes];
+  Point want[kLanes];
   for (int l = 0; l < kLanes; ++l) {
     k[l] = lookup_of(tabs[slot], a[l]);
     want[l] = oracle_point(tabs, slot, a[l]);
@@ -181,8 +189,11 @@ int run_one(Vzhao_field_v3_spline& dut, MulBank& mb, const std::vector<zfield::T
   if (cycles >= 512) return cycles;
   const uint32_t got[kLanes] = {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o};
   for (int l = 0; l < kLanes; ++l) {
-    check(got[l] == (uint32_t)want[l], (what + ": lane " + std::to_string(l)).c_str(),
-          (uint32_t)want[l], got[l]);
+    check(got[l] == (uint32_t)want[l].v, (what + ": lane " + std::to_string(l)).c_str(),
+          (uint32_t)want[l].v, got[l]);
+    check(((dut.sat_rescale_o >> l) & 1) == (want[l].sat_rescale ? 1u : 0u),
+          (what + ": lane " + std::to_string(l) + " coefficient-clamp flag").c_str(),
+          want[l].sat_rescale ? 1 : 0, (dut.sat_rescale_o >> l) & 1);
   }
   check(dut.tag_o == tag, (what + ": tag").c_str(), tag, dut.tag_o);
   step(dut, mb);
@@ -287,6 +298,45 @@ int main(int argc, char** argv) {
       run_one(dut, mb, neg, 0, a, 0x31, "odd and negative");
     }
 
+    printf("== section 4b: a TERM overflows while the SUM does not ==\n");
+    {
+      // S07 -- clamping the coefficient's TERMS instead of its result --
+      // survived the first sweep, because section 3's control points are so
+      // extreme that BOTH forms saturate to the same rail. Same answer, wrong
+      // reason.
+      //
+      // The separating case is narrow and has to be built: 2*p0 must overflow
+      // while 2*p0 - 5*p1 + 4*p2 - p3 does NOT. p0 = 2^30 + 1 doubles to
+      // 2^31 + 2, and a p1 of 1 pulls the sum back to 2^31 - 3, which fits.
+      // Clamped terms give 2147483642 where the law gives 2147483645.
+      std::vector<zfield::Table> narrow(1);
+      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
+                             {(1 << 30) + 1, 1, 0, 0, 0});
+      const int32_t a[kLanes] = {(1 << 15), (3 << 15), (5 << 15), (7 << 15)};
+      run_one(dut, mb, narrow, 0, a, 0x38, "term overflows, sum does not");
+    }
+
+    printf("== section 4c: coefficients that clamp on ONE segment only ==\n");
+    {
+      // S21 -- reporting the coefficient clamp on the MIRRORED lane -- survived
+      // for the reason its cousins in ROT and RING did: every earlier group
+      // clamps on no lane or on all four, and a mirror is invisible when the
+      // vector is symmetric.
+      //
+      // The same table as above does it: only the FIRST segment's neighbours
+      // are large, so a point there clamps and points in the later segments do
+      // not.
+      std::vector<zfield::Table> narrow(1);
+      narrow[0] = make_table({0, 1 << 16, 2 << 16, 3 << 16, 4 << 16},
+                             {(1 << 30) + 1, 1, 0, 0, 0});
+      const int32_t a[kLanes] = {(1 << 15), (5 << 15), (7 << 15), (4 << 16)};
+      run_one(dut, mb, narrow, 0, a, 0x39, "clamp on the first segment only");
+      printf("   MEASURED sat_rescale_o = %X\n", dut.sat_rescale_o);
+      check(dut.sat_rescale_o != 0u, "some lane clamped", 1, dut.sat_rescale_o != 0u ? 1 : 0);
+      check(dut.sat_rescale_o != 0xFu, "and NOT every lane -- the vector is asymmetric", 1,
+            dut.sat_rescale_o != 0xFu ? 1 : 0);
+    }
+
     printf("== section 5: the bank refuses, and the answers do not move ==\n");
     {
       Prng r(0x5AFEu);
@@ -296,7 +346,7 @@ int main(int argc, char** argv) {
         int32_t a[kLanes];
         for (int l = 0; l < kLanes; ++l) a[l] = (int32_t)r.below(5u << 16);
         Lookup k[kLanes];
-        int32_t want[kLanes];
+        Point want[kLanes];
         for (int l = 0; l < kLanes; ++l) {
           k[l] = lookup_of(tabs[0], a[l]);
           want[l] = oracle_point(tabs, 0, a[l]);
@@ -326,8 +376,8 @@ int main(int argc, char** argv) {
               cycles < 1024 ? 1 : 0);
         const uint32_t got[kLanes] = {dut.o0_0_o, dut.o0_1_o, dut.o0_2_o, dut.o0_3_o};
         for (int l = 0; l < kLanes; ++l)
-          check(got[l] == (uint32_t)want[l], (what + ": lane " + std::to_string(l)).c_str(),
-                (uint32_t)want[l], got[l]);
+          check(got[l] == (uint32_t)want[l].v, (what + ": lane " + std::to_string(l)).c_str(),
+                (uint32_t)want[l].v, got[l]);
         step(dut, mb);
         dut.eval();
       }
