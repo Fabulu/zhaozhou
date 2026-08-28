@@ -34,6 +34,8 @@ MUT=tools/sweep_field_v3_exec_mutants.py
 RTL=fpga/rtl/synth/zhao_probe_v3_exec.sv
 TARGETS="test_field_v3_exec_directed"
 
+REBUILD_LOG="${REBUILD_LOG:-/tmp/zhao_sweep_rebuild.log}"
+
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
 check_consumers() {
@@ -98,9 +100,14 @@ rebuild() {
   # tree that had once configured successfully kept working while a fresh one
   # would fail its verilator guard and leave the target unbuilt.
   export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
-  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
+  # THE REBUILD LOGS. It used to send both commands to /dev/null, so a failed
+  # configure or link produced only the downstream "pristine target did not
+  # link" abort with no cause -- a guard firing correctly while the reason sat
+  # three layers away and invisible. The log is overwritten each rebuild and
+  # is the first place to look when a sweep aborts at exit 6.
+  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >"$REBUILD_LOG" 2>&1
   # shellcheck disable=SC2086
-  ninja -C build-verify $TARGETS >/dev/null 2>&1
+  ninja -C build-verify $TARGETS >>"$REBUILD_LOG" 2>&1
 }
 
 # Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
