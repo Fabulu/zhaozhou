@@ -84,3 +84,15 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
   distance — declared; it reads at look/idle poster distance.
 - Page regen reproducible (two regens cmp-identical). Goldens cmp-clean
   after texture+mesh changes (clip payloads untouched, as expected).
+
+### 2026-08-28 04:4x - PART 2 DECIDED: F1 ships, F2 stays gated
+
+- Rendered both falls on the fixed side camera, contact-sheeted every 2nd
+  frame. F2 as shipped: knotted ball most of the loop (fall-F2-sheet.png).
+  One tuning pass (springs +~80%, damping up, aero/inertia down ~40%):
+  opens into hooks/half-S (fall-F2-tune1-sheet.png) but still crumpled and
+  high-energy — jitter-adjacent by the house table. F1: long legible
+  serpent, slow travelling S, calm (fall-F1-sheet.png).
+- DECISION (mine, per the standing barge-ahead order): F1 stays on slot 4;
+  F2 keeps -DZIXX_F2_PREVIEW with the better tune. One-line reversal.
+- reel --check after eye changes: all sequence CRCs match (check-after-eye.txt).

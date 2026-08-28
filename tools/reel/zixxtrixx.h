@@ -2272,20 +2272,31 @@ inline zc::Clip build_air_hit() {
 // damping -- run OFFLINE at 60 Hz and BAKED to poses. No runtime physics:
 // the shipped bytes are keys, replay-exact by construction.
 //
-// SHIPPING STATUS: the baked result lives on SLOT 19 as an ALTERNATE fall
-// beside the owner-directed F1 relax on slot 4 (Fabian's "relax by a ton"
-// landed today and is the shipped look; promoting the baked chain over it
-// is one line, after his eye rules). House style holds either way: the
-// chain's terms are FEW and SLOW.
+// SHIPPING STATUS — DECIDED, RUN 0326 (owner's standing order: decide by
+// eye, do not defer). Both falls rendered on the same fixed side camera,
+// contact-sheeted every frame (fall-F1-sheet.png / fall-F2-sheet.png /
+// fall-F2-tune1-sheet.png in the run): as shipped, F2 knotted the animal
+// into a ball for most of the loop; after the tune below it opens into
+// hooks and half-S shapes but still reads crumpled and BUSY -- adjacent
+// thumbnails differ wildly, the high-energy read the house style calls
+// jitter-adjacent. F1 is a long legible serpent with slow travelling
+// S-language in every frame: the owner's "relax by a ton" look.
+// F1 SHIPS on slot 4. F2 stays preview-gated (-DZIXX_F2_PREVIEW) with the
+// improved tune kept; promotion is still one line if his eye ever rules
+// the other way.
 constexpr int kFallBakeWarmLoops = 4;   // settle into the periodic orbit
 constexpr int kFallBakeBlend = 16;      // keys of tail->head closure fade
 // region dynamics, indexed head..tail in 4 bands: heavy slow head, loose
 // neck, heavier middle, light delayed tail (masses as inverse-acc scale)
-constexpr int32_t kFbSpring[4] = {150, 210, 170, 250}; // pull to the rest S
+// run 0326 TUNE ATTEMPT: the shipped values knotted the animal into a ball
+// for most of the loop (fall-F2-sheet.png) -- the inertia+aero drive
+// saturated the +-9000 clamp and the weak springs never pulled it open.
+// Stronger rest pull, heavier damping, gentler drives:
+constexpr int32_t kFbSpring[4] = {280, 340, 300, 380}; // pull to the rest S
 constexpr int32_t kFbCouple[4] = {160, 220, 190, 260}; // neighbour bend
-constexpr int32_t kFbDamp[4] = {120, 104, 112, 86};    // per-mille per step
-constexpr int32_t kFbInertia[4] = {150, 100, 60, 120}; // root spin coupling
-constexpr int32_t kFbAero[4] = {500, 700, 400, 1100};  // slow flutter drive
+constexpr int32_t kFbDamp[4] = {155, 140, 148, 120};   // per-mille per step
+constexpr int32_t kFbInertia[4] = {80, 55, 32, 65};    // root spin coupling
+constexpr int32_t kFbAero[4] = {320, 450, 260, 700};   // slow flutter drive
 constexpr int32_t kFbRestAuth = 350;    // the weak rest S, 1/1000
 inline int fb_region(int j) {
   if (j <= 3) return 0;
