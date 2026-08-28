@@ -106,8 +106,17 @@ rebuild() {
   # three layers away and invisible. The log is overwritten each rebuild and
   # is the first place to look when a sweep aborts at exit 6.
   cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >"$REBUILD_LOG" 2>&1
+  echo "CMAKE_EXIT:$?" >>"$REBUILD_LOG"
   # shellcheck disable=SC2086
   ninja -C build-verify $TARGETS >>"$REBUILD_LOG" 2>&1
+  # THE EXIT CODES ARE RECORDED. Without them a failed rebuild surfaces only
+  # as the downstream "pristine target did not link", and the log's last line
+  # is ninja ANNOUNCING the link step -- ninja prints a step before running
+  # it, so a log ending at "Linking" says the link STARTED, not that it
+  # finished. That ambiguity cost several misdiagnoses.
+  echo "NINJA_EXIT:$?" >>"$REBUILD_LOG"
+  echo "ENV: USERPROFILE=${USERPROFILE:-<unset>} VERILATOR_ROOT=${VERILATOR_ROOT:-<unset>}" >>"$REBUILD_LOG"
+  command -v verilator_bin >/dev/null 2>&1 && echo "verilator_bin: found" >>"$REBUILD_LOG" || echo "verilator_bin: NOT ON PATH" >>"$REBUILD_LOG"
 }
 
 # Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
