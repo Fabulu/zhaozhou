@@ -47,6 +47,49 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260828-2234] Zixxtrixx v8 closeout, selectable render strategies, and two-stage publication
+
+**Archived:** 2026-08-29 01:55 UTC+02:00
+**Created:** 2026-08-28 22:34 UTC+02:00
+**Completed:** 2026-08-29 01:52 UTC+02:00
+**Duration:** ~3 hours 18 minutes
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260828-2234-zixxtrixx-v8-closeout-thick-outlines/`
+**Branch:** `zixxtrixx-v8-stage2-clean` / `main`
+
+**Summary:**
+Re-audited every frame of all 17 canonical Zixxtrixx clips at 384x240, corrected
+the fall framing, and closed the first creature with a broad intelligible
+presentation menu. One shared renderer now keeps normal shading, face-flat cel3,
+and smooth-surface toon independently selectable; normal and faceted cel3 each
+have the required thick render-side silhouette treatment. The shipping/default
+path remained byte-identical.
+
+The binding publication order was completed literally. The corrected canonical
+set and initial menu went live first and were verified without the complete
+collection. Only afterward were all 17 faceted-cel3-plus-thick alternates rendered,
+reviewed through every-frame sheets, placed behind one controlled responsive tab,
+committed, pushed, and deployed in a second production publication.
+
+**Deliverables:**
+- Shared style implementation in `reference/src/zcreature/creature_sim.cpp`, `reference/src/zrender/rast.cpp`, and `tools/reel/zhao_reel.cpp`
+- Deterministic creature-page experiments in `tools/pack/mkcreaturepage.py`
+- Every-frame canonical and alternate contact sheets plus complete gate and deployment evidence in the run folder
+- 17-clip faceted-cel3-plus-thick collection and responsive no-script site panel in `Upheaval/website/`
+- Durable visual and publication record in `Upheaval/creature/Zixxtrixx/WORKLOG.md`
+
+**Notes:**
+All model, choreography, planner, strike-tip, mesh, golden, sequence, deterministic
+assembly, media-decode, browser-layout and production HTTP/MIME checks passed.
+Unrelated FPGA-lane commits discovered on the shared feature ancestry were kept out
+of `main` by reconstructing only the explicit Zixxtrixx deltas on clean main.
+
+**Outcome:** Complete and live. The immutable second deployment is
+`https://3404f3ff.upheaval.pages.dev`; `https://upheaval.pages.dev` serves the same
+HTTP 200 page with `noindex, nofollow`, exactly one 17-item collection, and all
+collection media available with correct MIME types.
+
+---
+
 ### [RUN-20260827-1747] Field v3: ten blocks swept closed, and two real defects in the shipped executor
 
 **Status:** ACTIVE — this entry is the index, not a closure.

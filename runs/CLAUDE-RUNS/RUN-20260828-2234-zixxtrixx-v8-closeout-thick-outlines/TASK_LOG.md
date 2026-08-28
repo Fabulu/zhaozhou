@@ -70,6 +70,7 @@ Continue the interrupted v7 creature pass with a strong dedicated modelling agen
 - Committed and pushed stage two as zhaozhou feature evidence `09888b5` and Upheaval site/media `f8ffab7`. Because the shared zhaozhou feature ancestry had independently acquired two unrelated commits, reconstructed the exact 27-path evidence delta directly on clean `origin/main` as `78a0b8d`; that clean commit alone fast-forwarded remote `main`, so no FPGA-lane ancestry hitchhiked. Upheaval remote `main` fast-forwarded cleanly to `f8ffab7`.
 - Ran the required second production publication with `deploy.ps1 -Project upheaval -Branch main`. Immutable deployment `https://3404f3ff.upheaval.pages.dev` and production alias `https://upheaval.pages.dev` return byte-identical HTTP 200 HTML with `noindex, nofollow` intact.
 - Production verification found exactly one collection panel and exactly 17 controlled items, retained the corrected canonical fall and all four new first-stage menu treatments, and received HTTP 200 with the expected `video/webm` or `image/png` MIME type for all 34 collection assets. Evidence is `evidence/deploy-stage2-verify.txt`; raw publication output is `evidence/deploy-stage2-output.txt`.
+- Indexed the completed run in `runs/CLAUDE-RUNS/ARCHIVE.md`; the run folder and all durable evidence are committed rather than left as local-only work.
 
 ---
 
