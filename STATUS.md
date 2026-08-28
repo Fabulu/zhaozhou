@@ -152,11 +152,47 @@ composed path, swept 20/20 on the atomicity law, and fitted at 7,442 ALM
 be fitted at all is now smaller than most of the design. Nothing there needs
 you.
 
+### One thing I told you an hour ago that was wrong, and it needs you
+
+Earlier tonight I wrote that SPLINE's table lookup "is not built" and that the
+next job was widening the curve service to fetch four control points. **I wrote
+that without opening the file I was describing, and both halves are wrong.**
+
+The lookup is built and has been for a while. The older curve unit implements
+the whole of SPLINE -- the search, the clamp, all four control points with the
+ends replicated, the coefficients, the lot -- and it is live in four test
+targets. What it does not do is four points at once.
+
+And widening the newer service is not obviously right, because **your own
+architecture brief already decided the opposite.** Section 6 puts spline on the
+"cold service lane": keep the exact scalar implementation, classify it as exact
+but not certified for the heaviest live workload. The service's own header says
+so in as many words.
+
+Which leaves a decision I made by accident and should not have:
+
+**I built a four-point SPLINE block for an operation the architecture had
+classified as cold.** Nothing is broken -- it is correct and closed at full
+marks -- but it is only worth having if SPLINE is meant to be fast.
+
+    if SPLINE stays COLD    the old unit already does the whole job.
+                            Nothing further is needed. The new four-point
+                            block gets labelled as a spare part rather than
+                            left looking like an unfinished gap.
+
+    if SPLINE goes HOT      the four-point block is right, and it needs a
+                            four-point lookup -- a width change on a shared
+                            service that already has eighteen deliberate-defect
+                            checks riding on its current shape. Those would all
+                            have to be re-scored, not assumed.
+
+The two cost very differently and I am not going to guess. Do you want spline
+fast, or exact-and-cold as the brief says?
+
 ### Still to do
 
     NORMALIZE's run to finish, then the service path's
-    the curve service widened to fetch four neighbours, which SPLINE's
-      lookup half needs -- the maths half is built, the lookup half is not
+    the SPLINE hot/cold decision above -- yours
     wiring the service path into the engine as one machine
     the two-service starvation question, which needs both services attached
       before it can be measured rather than argued about

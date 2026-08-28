@@ -19,38 +19,78 @@ has quietly gone stale. **The six-step order below was followed and it held.**
     step 3  ROT2 / ROT3                              DONE, swept 24/24
     step 4  RING                                     DONE, swept 23/23
     step 5  NORMALIZE2 / 3                           DONE, sweep running
-    step 6  SPLINE                                   MATHS HALF DONE, swept 21/21
-                                                     LOOKUP HALF NOT BUILT
+    step 6  SPLINE                                   DONE FOUR-WIDE, swept 21/21
+                                                     (see the CORRECTION below --
+                                                      the lookup was already built
+                                                      scalar, and four-wide SPLINE
+                                                      may not be wanted at all)
 
 Plus the carriers the plan did not name because they were not ops: a
 dispatcher that gathers four points into one request, a writeback arbiter, and
 the executor's path for parking a point while its answer is computed.
 
-### The one item that is genuinely unfinished, and why it is not a detail
+### CORRECTION, same night, an hour later: I had this wrong
 
-**SPLINE's lookup half needs the curve service to fetch FOUR neighbours, and
-today it fetches one.**
+The paragraph that stood here said "SPLINE's lookup half is not built" and
+named widening the curve service as the next step. **Both halves of that are
+wrong, and I wrote them without opening the file I was making claims about.**
 
-Step 6 predicted this in one line -- "it needs a second reader on the table
-cache" -- and that line turned out to be the only part of the plan that
-understated its work. A Catmull-Rom segment is defined by four control points,
-p0 through p3, and the arithmetic half now built takes all four as operands.
-Something has to READ them out of the table, and the curve service is the only
-thing that reads that table.
+**The lookup IS built, and it is verified.** `fpga/rtl/field/zhao_field_curve.sv`
+implements OP_CURVE, OP_DCURVE *and OP_SPLINE* -- the six-step segment search,
+the clamp, `t`, all four control points with the ends replicated
+(`S_P0/S_P2/S_P3` carry exactly the reference's `i-1`, `i+1`, `i+2` index
+clamping), the three coefficients and the Horner. It is live in four test
+targets and instantiated by both `zhao_field_v2_core` and
+`zhao_field_exec_shared`. What it does NOT do is four points at a time.
 
-So this is not "wire up a lookup". It is a width change on a shared service
-that already has a proven refusal path, four proven states and eighteen
-mutants riding on its current shape. Widening it means re-deriving the state
-machine (four fetches where there is one), re-deriving its bank arithmetic if
-the fetches are to be issued four-wide like every other service, and
-re-scoring CURVE.SVC's eighteen mutants against the new shape rather than
-assuming they still apply.
+**And widening the v3 curve service is not obviously the right move, because
+the brief already decided the opposite.** `zhao_probe_curve_svc.sv` says so in
+its own header -- "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the
+brief's own service split (section 6 'cold service lane': spline) and is not
+barreled." Fieldv3.md section 6 lists spline among the operations that keep
+their complete exact SCALAR implementation and are classified cold: exact, but
+not certified for the maximum live-field workload.
 
-Until that lands, SPLINE computes correct splines from control points handed
-to it directly, which is what its differential does. It cannot yet be driven
-from a table by a program, so **SPLINE is not usable from the IR yet** even
-though the block is closed at full marks. Those two facts are easy to confuse
-and worth keeping apart.
+So the accurate statement of the gap is this:
+
+    SPLINE, one point at a time, from a table    BUILT and verified (v2)
+    SPLINE, four points at once, given p0..p3    BUILT and swept 21/21 (v3)
+    SPLINE, four points at once, from a table    NOT BUILT -- and possibly
+                                                 SHOULD NOT BE
+
+### The real open question, which is architectural and was decided by accident
+
+`zhao_field_v3_spline.sv` computes FOUR points at once. That shape is only
+motivated if SPLINE is a hot op. The brief says it is cold. **I built a hot
+block for an op the architecture had classified cold, and I did not notice
+until I went looking for its lookup.**
+
+Nothing is broken by this -- the block is correct, closed at full marks, and
+the four-wide maths is a superset of the one-wide maths. But it is unpaid work
+if SPLINE stays cold, and the decision deserves to be made rather than drifted
+into:
+
+* **If SPLINE stays COLD** (the brief's position): the v2 unit already
+  implements the whole op and nothing further is needed for correctness. The
+  v3 four-point block becomes either unused or the seed of a later promotion,
+  and should be labelled as such rather than left looking like a gap.
+* **If SPLINE goes HOT**: the four-point block is right, and it needs a
+  four-point table lookup -- which is a width change on a service that already
+  has a proven refusal path and eighteen mutants riding on its current shape.
+  Widening means re-deriving the state machine, re-deriving its bank
+  arithmetic, and RE-SCORING those eighteen rather than assuming they carry.
+
+The cost is very different, and it is not mine to guess at silently. It goes to
+Fabian with both prices attached.
+
+### A related gap that is not recorded as a decision anywhere
+
+`zhao_field_v3_dispatch.sv`'s `dst_width_of` has no entry for SPLINE, so the
+dispatcher REFUSES it -- correctly, since 0 means "not a long op this block
+knows" and refusing beats guessing a width. That is consistent with SPLINE
+being cold. But it is consistent by accident: nothing in that file says "SPLINE
+is deliberately absent because it is a cold-lane op". A reader finds a missing
+case, not a decision. It should say which it is.
 
 ### The composition rule below was right, and it earned its keep four times
 
