@@ -261,6 +261,22 @@ int main() {
       case 33: case 34: case 35:
         return 370;          // the salto variations inherit the attack
                              // family's pivot-era wheel-closure allowance
+      // RUN 0757 vocabulary close-out -- each authored just above its
+      // worst key, which was RENDERED and judged clean first
+      // (worst_tumble/worst_death3/worst_stretch in the run evidence):
+      case 29: return 285;   // death3: k2 pre-shake = the rest nesting
+      case 32: return 190;   // stance2: the sagged front nests less deep
+      case 36: return 390;   // tumble: the bunched ball at k40 -- the
+                             // thrown animal curled around itself, layered
+                             // clean; the attack coil's family, deeper
+      case 37: return 275;   // idle2/stretch: the lift peak vs the arch
+      case 38: return 250;   // idle3/fork-watch
+      case 39: return 240;   // strike: the cocked hook
+      case 40: return 240;   // notify: the alert gather
+      case 41: return 215;   // bow: the dip passes the rest nesting
+      case 42: return 245;   // talk
+      case 43: return 125;   // sorrow: the sag OPENS the S -- follows the
+                             // evidence DOWN like the taunt
       default: return 0;
     }
   };

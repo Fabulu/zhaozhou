@@ -3775,6 +3775,170 @@ SceneSubject subject_zixx_fall() {
   return s;
 }
 
+// ---- RUN 0757: the vocabulary close-out subjects --------------------------
+SceneSubject subject_zixx_stance2() {
+  SceneSubject s;
+  s.name = "zixxtrixx-stance2";
+  s.creature = 34;  // clip slot 32
+  s.frames = zixx::kStance2Keys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "The damaged stance (run 0757 vocabulary, donor stance2): the proud S "
+      "sags, the head hangs below its line, the breath weakens with a slow "
+      "second tremor riding it, the fins droop -- wounded with no HP bar";
+  return s;
+}
+SceneSubject subject_zixx_tumble() {
+  SceneSubject s;
+  s.name = "zixxtrixx-tumble";
+  s.creature = 38;  // clip slot 36
+  s.frames = zixx::kTumbleKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 270000;
+  s.bump_ext = 18;
+  s.note =
+      "The tumble (donor's thrown-through-the-air state): the body bunches "
+      "around itself and turns end over end, once per 2.4 s -- the "
+      "somersault hesitates and tips rather than turntabling, a slow roll "
+      "wobble rides along, and the head looks into the turn";
+  return s;
+}
+SceneSubject subject_zixx_death3() {
+  SceneSubject s;
+  s.name = "zixxtrixx-death3";
+  s.creature = 31;  // clip slot 29 (death2 in donor terms; our third death)
+  s.frames = zixx::kDeath2Keys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 280000;
+  s.bump_ext = 18;
+  s.note =
+      "The third death, the UNWINDING: after two slow head-shakes the S "
+      "itself dies -- the letter unrolls forward into a stretched line, "
+      "belly down, the nose sliding out along the dirt as the coils pay "
+      "out; two decaying struggle-waves; the fork folds; one small late "
+      "tail beat, then stillness";
+  return s;
+}
+SceneSubject subject_zixx_stretch() {
+  SceneSubject s;
+  s.name = "zixxtrixx-stretch";
+  s.creature = 39;  // clip slot 37 (idle flourish 3)
+  s.frames = zixx::kIdle2Keys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 4096;  // near-side: the lift must read in profile
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "Idle flourish 3, the STRETCH: once per loop a slow luxurious wave "
+      "travels up the front -- each segment lifts a beat after the one "
+      "behind it, the head pitches up and back, the fins flare, and it all "
+      "releases even slower than it rose";
+  return s;
+}
+SceneSubject subject_zixx_forkwatch() {
+  SceneSubject s;
+  s.name = "zixxtrixx-forkwatch";
+  s.creature = 40;  // clip slot 38 (idle flourish 4)
+  s.frames = zixx::kIdle3Keys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 4096;  // near-side: head-turn AND fork in one legible line
+  s.cam_k = 290000;
+  s.bump_ext = 18;
+  s.note =
+      "Idle flourish 4, FORK-WATCH: the head turns back over its shoulder "
+      "and watches its own tail while the fork fans open and shut twice "
+      "and the middle spike wiggles; two interested head-tilts, then home";
+  return s;
+}
+SceneSubject subject_zixx_strike() {
+  SceneSubject s;
+  s.name = "zixxtrixx-strike";
+  s.creature = 41;  // clip slot 39 (the quick melee, donor attack1's role)
+  s.frames = zixx::kStrikeKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 290000;
+  s.bump_ext = 18;
+  s.note =
+      "The quick strike (the salto is the spectacle; a battle needs a fast "
+      "bite): the hook cocks back with the head rising, SNAPS open along "
+      "the strike line with the body shoved forward, and two slow decaying "
+      "overshoots ring it back into the S";
+  return s;
+}
+SceneSubject subject_zixx_notify() {
+  SceneSubject s;
+  s.name = "zixxtrixx-notify";
+  s.creature = 42;  // clip slot 40
+  s.frames = zixx::kNotifyKeys * 2 * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 12288;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "The alert (donor notify): one sharp rise -- head up, fins flared -- "
+      "then the tell is STILLNESS: the breath nearly stops while the head "
+      "makes two slow scanning turns, and it stands down just as slowly";
+  return s;
+}
+SceneSubject subject_zixx_bow() {
+  SceneSubject s;
+  s.name = "zixxtrixx-bow";
+  s.creature = 43;  // clip slot 41
+  s.frames = zixx::kBowKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;
+  s.cam_k = 290000;
+  s.bump_ext = 18;
+  s.note =
+      "The bow: the front lowers in one stately ease, the head dips to "
+      "just above the dirt, the fins fold flat along the tail; a held "
+      "breath of a beat, then back up with a small arrival overshoot";
+  return s;
+}
+SceneSubject subject_zixx_talk() {
+  SceneSubject s;
+  s.name = "zixxtrixx-talk";
+  s.creature = 44;  // clip slot 42
+  s.frames = zixx::kTalkKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 12288;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "Talk: the living idle body with the head doing the talking -- nod "
+      "accents of varying depth at irregular intervals, small yaw shifts "
+      "between phrases, one emphatic dip with a blade flick";
+  return s;
+}
+SceneSubject subject_zixx_sorrow() {
+  SceneSubject s;
+  s.name = "zixxtrixx-sorrow";
+  s.creature = 45;  // clip slot 43
+  s.frames = zixx::kSorrowKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 10240;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "Sorrow: the damaged stance pushed all the way down -- the head "
+      "hangs near the dirt, one slow heavy sigh per loop, the tail-tip "
+      "dragging a slow half-arc. Mourning at the pace of weather";
+  return s;
+}
+
 // 17. creature-bulk-pop — bulk inflation then a detached-geometry burst: the
 // watchdog idles while its root SCALE inflates 1.0 -> ~2.3; crossing the species
 // pop threshold (2.2) removes the mesh. Eighteen deterministic donor samples
@@ -3888,6 +4052,26 @@ constexpr LibraryEntry kLibrary[] = {
      "The committed spear intercepts a hovering dummy at 3.2 m", true},
     {"zixxtrixx-salto-six", "Zixxtrixx salto: six somersaults",
      "The full apex earns six flips before the committed dive", true},
+    {"zixxtrixx-stance2", "Zixxtrixx damaged stance",
+     "Wounded with no HP bar: the S sags, weak breath, drooping fins", true},
+    {"zixxtrixx-tumble", "Zixxtrixx tumble",
+     "Thrown: bunched around itself, end over end, hesitating as it tips", true},
+    {"zixxtrixx-death3", "Zixxtrixx death, third way",
+     "The S itself dies: unrolls forward into a line, nose sliding out", true},
+    {"zixxtrixx-stretch", "Zixxtrixx stretch",
+     "A slow luxurious wave climbs the front; head back, fins flared", true},
+    {"zixxtrixx-forkwatch", "Zixxtrixx fork-watch",
+     "Looks back and watches its own tail fan open and shut, twice", true},
+    {"zixxtrixx-strike", "Zixxtrixx quick strike",
+     "The fast bite beside the salto: cock, snap forward, ring out", true},
+    {"zixxtrixx-notify", "Zixxtrixx alert",
+     "Head up, fins flared, then listening stillness with slow scans", true},
+    {"zixxtrixx-bow", "Zixxtrixx bow",
+     "One stately dip to the dirt, fins folded, and back up", true},
+    {"zixxtrixx-talk", "Zixxtrixx talk",
+     "The head talks: irregular nods, phrase-turns, one emphatic dip", true},
+    {"zixxtrixx-sorrow", "Zixxtrixx sorrow",
+     "The front sinks, one heavy sigh per loop, the tail-tip drags", true},
 
     // Dead classes (no flare capability, stub entries only)
     {"star-s05-brown-dwarf", "Brown dwarf", "Dim substellar object, no flare capability", false},
@@ -4017,6 +4201,16 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-salto-dummy")) rc |= render_scene(subject_zixx_salto_dummy());
   if (wanted("zixxtrixx-salto-fly")) rc |= render_scene(subject_zixx_salto_fly());
   if (wanted("zixxtrixx-salto-six")) rc |= render_scene(subject_zixx_salto_six());
+  if (wanted("zixxtrixx-stance2")) rc |= render_scene(subject_zixx_stance2());
+  if (wanted("zixxtrixx-tumble")) rc |= render_scene(subject_zixx_tumble());
+  if (wanted("zixxtrixx-death3")) rc |= render_scene(subject_zixx_death3());
+  if (wanted("zixxtrixx-stretch")) rc |= render_scene(subject_zixx_stretch());
+  if (wanted("zixxtrixx-forkwatch")) rc |= render_scene(subject_zixx_forkwatch());
+  if (wanted("zixxtrixx-strike")) rc |= render_scene(subject_zixx_strike());
+  if (wanted("zixxtrixx-notify")) rc |= render_scene(subject_zixx_notify());
+  if (wanted("zixxtrixx-bow")) rc |= render_scene(subject_zixx_bow());
+  if (wanted("zixxtrixx-talk")) rc |= render_scene(subject_zixx_talk());
+  if (wanted("zixxtrixx-sorrow")) rc |= render_scene(subject_zixx_sorrow());
   if (wanted("zixxtrixx-unlit")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit", 1, false, 1));
   if (wanted("zixxtrixx-unlit-front")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit-front", 1, true, 1));
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));

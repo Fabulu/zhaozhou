@@ -1,0 +1,3 @@
+SHARING: one palette serves both roots (pointer-identical)
+SPIN MIGRATION: worst |Δ| 2 mm at key 218 station 19 (tolerance 12)
+CHOREO PROOF: the root decomposition reproduces the approved salto

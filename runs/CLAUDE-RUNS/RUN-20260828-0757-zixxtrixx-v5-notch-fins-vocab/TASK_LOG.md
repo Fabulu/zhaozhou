@@ -132,3 +132,33 @@
   prong (kSpikeLen 280) is present and pink; from the true side it hides
   behind the blades, which the sheet's own three-quarter fork also does
   mostly.
+
+### 2026-08-28 10:3x - TASK 3: the vocabulary close-out (ten clips)
+
+- FILLED: stance2(32) the sagging damaged loop; tumble(36) the thrown
+  ball, end over end with warped hesitation; death3(29) THE UNWINDING --
+  the S itself dies, paying out forward into a line (the first cut tucked
+  the skull chin-under and buried the mid-body -316: the head now eases
+  TOWARD the line and the root is COMPUTED so the lowest underside holds
+  a declared -10 bite); idle2(37) the travelling stretch (first cut
+  crumpled the skull into an over-climbing crown -- neck climb halved);
+  idle3(38) fork-watch (first cut faced the CAMERA, yaw flipped) -- the
+  donor's 4-flourish convention is now met; strike(39) the quick bite
+  (overshoot + heavier shove after a polite first render); notify(40),
+  bow(41, deepened from a nod), talk(42), sorrow(43).
+- SKIPPED, deliberately: doubletake, ambivalence, disgust, disoriented
+  (no face rig -- they would be timing nuances of notify/look/talk and
+  dilute the 64-slot budget); thrash/carried/float/rise wait for their
+  mechanics. Stated in ANIMATION-VOCABULARY.md terms: every donor slot a
+  land serpent needs is now filled or consciously parked.
+- House style held: every loop rides idle_body's living base on
+  incommensurate periods; every one-shot ends on the exact rest pose for
+  clean cuts; the head reacts in all ten (aim, scan, droop, watch).
+- Allowances authored just above rendered worst keys (worst_tumble/
+  worst_death3/worst_stretch committed); sorrow follows the evidence DOWN
+  (125). Ground bands: all loops in the idle family [-8..-4]; tumble
+  airborne [384..969]; death3 [-25..-1] with the declared bite.
+- GATES: probe 0, choreo 0, planner 0, goldens re-pinned 41 artefacts
+  cmp-clean (LOUD provenance in SOURCE-COMMIT.txt: THE NOTCH + THE
+  BLADES full re-pin, VOCABULARY EXTEND), reel --check "all sequence
+  CRCs match" (final-check.txt, exit 0, redirected to file).
