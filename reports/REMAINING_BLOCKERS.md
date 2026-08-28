@@ -29,6 +29,38 @@
 > this reason -- seven mutants were unreachable because the test never drove
 > the rival.
 >
+> ### FIVE ATTEMPTS, ALL MEASURED, SO THE NEXT ONE DOES NOT REPEAT THEM
+>
+> | attempt | change | result |
+> | --- | --- | ---: |
+> | 1 | freeze the whole pipe on a denial | 2 of 12 wrong |
+> | 2 | back-pressure upstream only | 5 of 12 wrong |
+> | 3 | stall with a bubble at S3 | 4 of 12 wrong |
+> | 4 | count PRODUCTS not clocks; hold S3 on a refused second product; track issue separately from count | **1 of 12 wrong** |
+> | 5 | 4 + accumulate ALL products, ALU reads the total | 9 of 12 wrong, and the pinned barrel counts moved |
+>
+> Attempt 4 is the closest and the most nearly right in shape. Three separate
+> confusions were found and fixed inside it, all the same mistake wearing
+> different clothes:
+>
+> * the accumulator counted CLOCKS where it should have counted PRODUCTS;
+> * a DOT at S3 advanced to S4 even when its second product was refused;
+> * the third product's ISSUE was conditioned on the arrival COUNTER, so the
+>   first product landing made the issue condition false and a2*b2 was never
+>   sent at all.
+>
+> Attempt 5 tried to remove the remaining coupling -- the last product is
+> consumed combinationally as `acc + prod_ab` on the release clock, which is
+> correct only if it arrives exactly then -- by accumulating everything and
+> having the ALU read the total. That is the right IDEA and it regressed
+> badly, which says the release/reset edge interacts with it in a way I did
+> not model.
+>
+> **The tree holds the COMMITTED state, not attempt 4 or 5**: correct for ALU
+> ops, DOT-under-contention skipped with a loud comment. Five undirected
+> attempts is the point at which trial should stop and the sequencer should be
+> drawn out cycle by cycle before it is edited again.
+>
 > ### The fix, which is one decision for three blocks
 >
 > Every claimant on the bank must close the loop: hold state until its
