@@ -271,7 +271,10 @@ module zhao_probe_v3_exec #(
     // A REFUSED REQUEST STALLS ISSUE. The register file's operands are live
     // for exactly one clock, so an instruction whose product the bank
     // declined to start cannot carry on -- its operands are gone next clock.
-    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;
+    // `!sk_ne_c`: nothing new may enter while a write is waiting. This is what
+    // makes the skid's depth of four sufficient AND removes the read-after-write
+    // hazard in one stroke -- see the skid's own comment.
+    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_ne_c;
     issue_ctx_c = '0;
     for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);
   end
@@ -560,6 +563,59 @@ module zhao_probe_v3_exec #(
 
   logic wb_req_c, retire_hold_c;
 
+
+  // ---- THE WRITEBACK SKID -------------------------------------------------
+  //
+  // S4 CANNOT BE STALLED, and that is not a preference. The multiplier is a
+  // fixed-latency pipe: a product issued at T arrives at T+2 whatever this
+  // block does. Freezing the datapath to wait for a write port therefore holds
+  // an instruction back while its product still arrives on schedule, and the
+  // two desynchronise. That was measured twice -- 2 of 12 programs wrong when
+  // it was tried for multiplier denials, and 1 of 12 when I tried it again for
+  // the write port on 2026-08-28.
+  //
+  // So the write LEAVES the pipe on time and waits here instead.
+  //
+  // DEPTH IS DERIVED, NOT CHOSEN. Issue stops the moment the skid is
+  // non-empty. At that instant S1, S2 and S3 may each hold an instruction, and
+  // those three drain into S4 over the next three clocks whatever the port
+  // does. One entry for the write that could not go out, plus three that must
+  // be allowed to retire behind it, is FOUR. Nothing else can arrive, because
+  // by then the pipe is empty and issue is stopped.
+  //
+  // A BYPASS KEEPS THE COMMON CASE FREE. When the skid is empty and the port
+  // is granting, the write goes straight out and nothing is ever pushed -- so
+  // an ungontended engine never stalls issue at all. Without it the skid would
+  // fill and drain on every single write and halve the issue rate.
+  //
+  // AND THE HAZARD ANSWERS ITSELF. A context whose write is still in the skid
+  // has retired, so `inflight_r` is clear and it could re-issue and read its
+  // own stale register. It cannot: issue is stopped while the skid is
+  // non-empty, so the earliest it can issue again is the clock after the skid
+  // empties -- by which time its write has landed. No forwarding, no
+  // scoreboard, and the argument is one sentence rather than a case analysis.
+  localparam int SKD = 4;
+
+  logic [$clog2(SKD+1)-1:0] sk_n_r;          // occupancy, 0..SKD
+  logic [CW-1:0]            sk_ctx_r  [SKD];
+  logic [RW-1:0]            sk_reg_r  [SKD];
+  logic signed [31:0]       sk_data_r [SKD];
+  logic [$clog2(SKD)-1:0]   sk_hd_r, sk_tl_r;
+
+  logic sk_ne_c, sk_push_c, sk_pop_c;
+  assign sk_ne_c = (sk_n_r != '0);
+
+  // The port shows the skid's head if it has one, otherwise S4 directly.
+  assign wb_valid_o = sk_ne_c || wb_req_c;
+  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_hd_r]  : s4_ctx_r;
+  assign wb_reg_o   = sk_ne_c ? sk_reg_r[sk_hd_r]  : s4_dst_r;
+  assign wb_data_o  = sk_ne_c ? sk_data_r[sk_hd_r] : alu_result;
+
+  assign sk_pop_c  = sk_ne_c && wb_ready_i;
+  // Pushed when S4 has a write that could NOT go straight out -- either the
+  // skid already holds something (order must be kept) or the port said no.
+  assign sk_push_c = wb_req_c && (sk_ne_c || !wb_ready_i);
+
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
   // running during preload, so there is no contention to arbitrate.
@@ -575,10 +631,13 @@ module zhao_probe_v3_exec #(
       // port -- and then, once granted, write it a SECOND time through the
       // shared port. A duplicated write is invisible for an idempotent value
       // and wrong for every accumulating one.
-      rf_we_c    = wb_req_c && wb_ready_i;
-      rf_wctx_c  = s4_ctx_r;
-      rf_wreg_c  = s4_dst_r;
-      rf_wdata_c = alu_result;
+      // ONE SOURCE FOR THE FILE AND THE PORT. `wb_*_o` already selects skid
+      // head or S4; the file follows it exactly, so the two can never disagree
+      // about what was written.
+      rf_we_c    = wb_valid_o && wb_ready_i;
+      rf_wctx_c  = wb_ctx_o;
+      rf_wreg_c  = wb_reg_o;
+      rf_wdata_c = wb_data_o;
     end
   end
 
@@ -607,10 +666,6 @@ module zhao_probe_v3_exec #(
   assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&
                       !retire_hold_c && !mul_denied_c;
 
-  assign wb_valid_o = wb_req_c;
-  assign wb_ctx_o   = s4_ctx_r;
-  assign wb_reg_o   = s4_dst_r;
-  assign wb_data_o  = alu_result;
 
   assign done_valid_o = s4_v_r && alu_is_end;
   assign done_ctx_o   = s4_ctx_r;
@@ -625,6 +680,14 @@ module zhao_probe_v3_exec #(
       inflight_r    <= '0;
       waiting_r     <= '0;
       rf_writes_o   <= 32'd0;
+      sk_n_r        <= '0;
+      sk_hd_r       <= '0;
+      sk_tl_r       <= '0;
+      for (int i = 0; i < SKD; i++) begin
+        sk_ctx_r[i]  <= '0;
+        sk_reg_r[i]  <= '0;
+        sk_data_r[i] <= 32'sd0;
+      end
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;
       issued_s1_r   <= 1'b0;
@@ -676,6 +739,21 @@ module zhao_probe_v3_exec #(
         dot_cnt_r   <= 2'd0;
         dot_issue_r <= 2'd0;
       end
+
+      // THE SKID MOVES EVERY CLOCK, outside every hold. It exists so the pipe
+      // can keep draining while a write waits; holding it with the pipe would
+      // defeat the only reason it is here.
+      if (sk_push_c) begin
+        sk_ctx_r[sk_tl_r]  <= s4_ctx_r;
+        sk_reg_r[sk_tl_r]  <= s4_dst_r;
+        sk_data_r[sk_tl_r] <= alu_result;
+        sk_tl_r            <= (sk_tl_r == $clog2(SKD)'(SKD - 1)) ? '0 : sk_tl_r + 1'b1;
+      end
+      if (sk_pop_c) begin
+        sk_hd_r <= (sk_hd_r == $clog2(SKD)'(SKD - 1)) ? '0 : sk_hd_r + 1'b1;
+      end
+      if (sk_push_c && !sk_pop_c)      sk_n_r <= sk_n_r + 1'b1;
+      else if (sk_pop_c && !sk_push_c) sk_n_r <= sk_n_r - 1'b1;
 
       // COUNTED HERE rather than beside `rf_we_c`, because `rf_we_c` is
       // combinational and this must tick once per CLOCK on which the file is

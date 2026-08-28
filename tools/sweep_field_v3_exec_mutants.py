@@ -155,11 +155,11 @@ MUTANTS = [
      "  assign wb_req_c   = s4_v_r && alu_writes && !dot_here_c &&\n"
      "                      !retire_hold_c && !mul_denied_c;"),
     ("X13 the writeback lands in the wrong context",
-     "      rf_wctx_c  = s4_ctx_r;",
-     "      rf_wctx_c  = s4_ctx_r + CW'(1);"),
+     "      rf_wctx_c  = wb_ctx_o;",
+     "      rf_wctx_c  = s4_ctx_r;"),
     ("X14 the observed writeback stream disagrees with what the file was told",
-     "  assign wb_reg_o   = s4_dst_r;",
-     "  assign wb_reg_o   = s4_dst_r + RW'(1);"),
+     "      rf_wdata_c = wb_data_o;",
+     "      rf_wdata_c = alu_result;"),
 
     # ---- refusal and the ledger --------------------------------------------
     # Reshaped: dropping the term orphaned dot_here_c. AND keeps the operand
@@ -221,8 +221,8 @@ MUTANTS = [
     # executor moved onto the shared bank, because a refused request must stall
     # issue -- the register file holds operands for exactly one clock.
     ("X26 a DOT no longer freezes issue, so another op steals the multiplier",
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;",
-     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c && !mul_denied_c;"),
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_ne_c;",
+     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c && !mul_denied_c && !sk_ne_c;"),
     ("X27 only a DOT at S4 freezes issue, not one still upstream",
      "  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||\n"
      "                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));",
@@ -322,6 +322,36 @@ MUTANTS = [
      "                      !retire_hold_c && !mul_denied_c;",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c;"),
+    # ---- the writeback skid, 2026-08-28 -------------------------------------
+    # The write leaves the pipe on time and waits here, because S4 cannot be
+    # stalled: the multiplier is fixed-latency and a product issued at T arrives
+    # at T+2 whatever this block does. Stalling it was tried twice and measured
+    # wrong both times -- 2 of 12 programs for multiplier denials, 1 of 12 when
+    # I repeated the mistake for the write port.
+    ("X35 the skid pops whether or not the port granted",
+     "  assign sk_pop_c  = sk_ne_c && wb_ready_i;",
+     "  assign sk_pop_c  = sk_ne_c;"),
+    ("X36 the register file is written without a grant",
+     "      rf_we_c    = wb_valid_o && wb_ready_i;",
+     "      rf_we_c    = wb_valid_o;"),
+    ("X37 a refused write is not pushed, so it is simply dropped",
+     "  assign sk_push_c = wb_req_c && (sk_ne_c || !wb_ready_i);",
+     "  assign sk_push_c = wb_req_c && sk_ne_c;"),
+    ("X38 the skid is bypassed even when it already holds something",
+     "  assign wb_valid_o = sk_ne_c || wb_req_c;",
+     "  assign wb_valid_o = wb_req_c;"),
+    # Order is the whole reason this is a queue and not a register: two writes
+    # to the same destination must land in program order or the later value is
+    # overwritten by the earlier one.
+    ("X39 the skid is read from its tail rather than its head",
+     "  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_hd_r]  : s4_ctx_r;",
+     "  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_tl_r]  : s4_ctx_r;"),
+    # THE HAZARD MUTANT. A context whose write is still in the skid has already
+    # retired, so it could re-issue and read its own stale register. Nothing but
+    # this gate prevents it -- there is no forwarding and no scoreboard.
+    ("X40 issue continues while a write is still waiting in the skid",
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_ne_c;",
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;"),
 ]
 
 
