@@ -1,0 +1,2 @@
+fresh dumps A/B byte-identical
+41 generated files cmp-clean against Upheaval/creature/Zixxtrixx/golden

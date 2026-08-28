@@ -32,3 +32,18 @@ tovideo: 1 subject(s)
 tovideo: 1 subject(s)
   zixxtrixx-exp-boil-idle: 576 frames, 9.6 s at 60 fps, 2,734,508 B webm (VP9 crf16 4:4:4), poster frame 144
 == zixxtrixx-exp-boil-walk
+tovideo: 1 subject(s)
+  zixxtrixx-exp-boil-walk: 160 frames, 2.7 s at 60 fps, 639,005 B webm (VP9 crf16 4:4:4), poster frame 40
+== zixxtrixx-exp-cel2-idle
+tovideo: 1 subject(s)
+  zixxtrixx-exp-cel2-idle: 576 frames, 9.6 s at 60 fps, 2,123,448 B webm (VP9 crf16 4:4:4), poster frame 144
+== zixxtrixx-exp-cel3-idle
+tovideo: 1 subject(s)
+  zixxtrixx-exp-cel3-idle: 576 frames, 9.6 s at 60 fps, 2,050,629 B webm (VP9 crf16 4:4:4), poster frame 144
+== zixxtrixx-exp-celcontour-idle
+tovideo: 1 subject(s)
+  zixxtrixx-exp-celcontour-idle: 576 frames, 9.6 s at 60 fps, 2,104,232 B webm (VP9 crf16 4:4:4), poster frame 144
+== zixxtrixx-exp-celcontour-walk
+tovideo: 1 subject(s)
+  zixxtrixx-exp-celcontour-walk: 160 frames, 2.7 s at 60 fps, 449,697 B webm (VP9 crf16 4:4:4), poster frame 40
+EXPERIMENTS DONE

@@ -1,0 +1,5 @@
+manifest renders: 58
+WebMs decoding at native 384x240: 56
+poster sizes (site uses 3x nearest-neighbour presentation assets): {(1152, 720): 56}
+non-WebM archive media: {('.gif', (384, 240)): 2}
+all declared media and posters exist; every current video decodes at native 384x240
