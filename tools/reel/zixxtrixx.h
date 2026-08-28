@@ -52,6 +52,13 @@ namespace zixx {
 // real paint is judged. Diagnostic builds only, never shipped.
 #ifdef ZIXX_DEBUG_PAGE
 #include "zixxtrixx_page_debug.h"
+#elif defined(ZIXX_PAGE_VARIANT)
+// RUN 1939 texture experiments: a generated variant page (same symbols,
+// written by mkcreaturepage.py --experiment NAME into tools/reel/exp/,
+// which is gitignored -- the generator is committed and deterministic,
+// the headers are reproducible artefacts). Experimental builds only; a
+// build without the define is bit-identical to the shipping page.
+#include ZIXX_PAGE_VARIANT
 #else
 #include "zixxtrixx_page.h"
 #endif

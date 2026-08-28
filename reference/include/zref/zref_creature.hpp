@@ -884,6 +884,12 @@ inline AttackOutcome attack_plan_branch(bool hit_terrain, bool hit_creature) {
  */
 enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire };
 extern DebugShade g_debug_shade;
+// RUN 1939 texture-experiment lane (owner: "maybe try to cel shade one or
+// two versions"): 0 = off (the shipping path, bit-identical); 2 or 3 =
+// quantise the computed light gain into that many bands before it
+// modulates the texel. A pure integer step on a value the pipeline
+// already produces -- no new lane, reel experiments only.
+extern int g_cel_bands;
 
 /* ---------------------------------------------------------------------------
  * THE CREATURE EXTENT LAW (owner ruling, docs/OWNER_DOCKET.md 2026-08-24 item 3)

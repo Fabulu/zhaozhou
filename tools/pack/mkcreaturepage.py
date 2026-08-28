@@ -600,6 +600,9 @@ def build_tiles():
 # RGB565 is 256 KiB L0, ~341 KiB with mips -- ~0.7% of the ~47 MB texture
 # pool the sky budget note implies. Chosen, stated, affordable.
 ATLAS_W, ATLAS_H = 256, 512
+# RUN 1939 experiments: one scale on every hand-wobble amplitude in the
+# atlas painter. 1.0 ships; the "wobble" experiment rebuilds at 3.0.
+WOB_SCALE = 1.0
 V_JUNCTION = 50           # station 11 of 57 = x 599 mm of 3050 -> 50 of 255
 BACK_COL, BELLY_COL = 96, 32
 SIDE_A_COL, SIDE_B_COL = 64, 0
@@ -804,7 +807,7 @@ def build_atlas():
 
     # 1. UNDERSIDE = DARK GREEN, the whole animal, melding up into the flanks
     for y in range(0, H):
-        wob = SC * (3.5 * np.sin(y * 0.055 / max(1, H // 256) + 0.9)
+        wob = WOB_SCALE * SC * (3.5 * np.sin(y * 0.055 / max(1, H // 256) + 0.9)
                     + 2.0 * np.sin(y * 0.017 / max(1, H // 256) + 2.1))
         for x in range(W):
             d = wrapd(x, belly + wob)
@@ -844,7 +847,7 @@ def build_atlas():
         half = 26.0 * SC * (1.0 - yt) ** 1.15  # the triangle's straightish sides
         if half < 0.8:
             continue
-        wob = SC * 2.2 * np.sin(y * 0.097 / max(1, H // 256))
+        wob = WOB_SCALE * SC * 2.2 * np.sin(y * 0.097 / max(1, H // 256))
         # the tip melds long: the last third fades rather than cutting
         tipfade = float(np.clip((1.0 - yt) / 0.33, 0.0, 1.0))
         for x in range(W):
@@ -874,7 +877,7 @@ def build_atlas():
         half = pink_half_atlas(y)
         if half <= 0:
             continue
-        wob = SC * (3.4 * np.sin(y * 0.058 / max(1, H // 256) + 0.8)
+        wob = WOB_SCALE * SC * (3.4 * np.sin(y * 0.058 / max(1, H // 256) + 0.8)
                     + 2.0 * np.sin(y * 0.019 / max(1, H // 256) + 1.1))
         for x in range(W):
             d = wrapd(x, back + wob)
@@ -1032,7 +1035,217 @@ def debug_tile():
     return t
 
 
+# =================== RUN 1939: THE TEXTURE EXPERIMENTS =====================
+# Owner: "see if you can make textures cooler. Not with more resolution...
+# Tag them as experimental so you can go ham" / "The colour scheme should
+# stick but texture details are fair game." Each experiment is an ISOLATED
+# post-transform on the finished atlas (or a parameter rebuild), written to
+# a gitignored header by --experiment NAME; the shipping page is untouched
+# and byte-identical. Paper white, graphite grey and ink black are the
+# MEDIUM's colours, not the creature's -- in scope. All deterministic
+# (fixed seeds, zlib.crc32).
+PAPER = np.array([242.0, 238.0, 229.0])
+INK_RGB = np.array([30.0, 27.0, 24.0])
+
+def _classify(rgb):
+    """each texel -> nearest creature pigment (0 green,1 dark,2 pink,3 blue,
+    4 eye-ish). The boundary structure of the painted regions, recovered
+    from the finished paint so every experiment shares one definition."""
+    anchors = np.array([GREEN, GREEN_DARK, PINK, BLUE, (235, 210, 120)],
+                       dtype=np.float64)
+    d = ((rgb[:, :, None, :] - anchors[None, None, :, :]) ** 2).sum(-1)
+    return d.argmin(-1)
+
+def _class_edges(cls):
+    e = np.zeros(cls.shape, bool)
+    e[:-1, :] |= cls[:-1, :] != cls[1:, :]
+    e[:, :] |= cls != np.roll(cls, 1, axis=1)  # U wraps
+    return e
+
+def _smooth_noise(h, w, seed, blur_v, blur_u):
+    rng = np.random.default_rng(seed)
+    f = rng.standard_normal((h, w))
+    k_v = np.ones(blur_v) / blur_v
+    k_u = np.ones(blur_u) / blur_u
+    for axis, k in ((0, k_v), (1, k_u)):
+        pad = len(k) // 2
+        fp = np.concatenate([np.take(f, range(-pad, 0), axis=axis), f,
+                             np.take(f, range(0, pad), axis=axis)], axis=axis)
+        f = np.apply_along_axis(lambda m: np.convolve(m, k, mode="valid"), axis, fp)
+    f = f - f.mean()
+    m = np.abs(f).max()
+    return f / m if m > 0 else f
+
+def exp_contour(rgb, tooth):
+    """the sheets' own bold ink line along every colour-region boundary,
+    drawn from the SAME boundary curves the painter uses (classification
+    edges picked up the crayon noise and read as dirt, not line work).
+    The silhouette line is the reel's half of this experiment."""
+    H_, W_ = rgb.shape[:2]
+    SC = W_ // 128
+    out = rgb.copy()
+    yy = np.arange(H_)
+
+    def stroke(y, x, wgt=0.85, thick=2):
+        for t in range(thick):
+            out[y, int(x + t) % W_] = out[y, int(x + t) % W_] * (1 - wgt) + INK_RGB * wgt
+
+    back = BACK_COL * SC
+    belly = BELLY_COL * SC
+    V_J = V_JUNCTION * (H_ // 256)
+    for y in range(2, H_):
+        wob = SC * (3.4 * np.sin(y * 0.058 / max(1, H_ // 256) + 0.8)
+                    + 2.0 * np.sin(y * 0.019 / max(1, H_ // 256) + 1.1))
+        # pink band edges (same half law as the painter)
+        y128 = y / (H_ / 256.0)
+        full = PINK_HALF_TILE * 2.0 * SC
+        if y128 >= 17:
+            half = full if y128 >= 30 else 8.0 * SC + (full - 8.0 * SC) * (y128 - 17) / 13.0
+            stroke(y, back + wob - half - 1)
+            stroke(y, back + wob + half - 1)
+        # underside dark-green band edges
+        wob2 = SC * (3.5 * np.sin(y * 0.055 / max(1, H_ // 256) + 0.9)
+                     + 2.0 * np.sin(y * 0.017 / max(1, H_ // 256) + 2.1))
+        stroke(y, belly + wob2 - 25.0 * SC - 1, 0.7)
+        stroke(y, belly + wob2 + 25.0 * SC - 1, 0.7)
+        # the blue bib's triangle edges
+        bib_end = V_J + 100 * (H_ // 256)
+        if V_J <= y < bib_end:
+            yt = (y - V_J) / float(bib_end - V_J)
+            bh = 26.0 * SC * (1.0 - yt) ** 1.15
+            if bh >= 2.0:
+                wob3 = SC * 2.2 * np.sin(y * 0.097 / max(1, H_ // 256))
+                stroke(y, belly + wob3 - bh, 0.8)
+                stroke(y, belly + wob3 + bh, 0.8)
+    # the blue face's rear boundary (head rows)
+    for x in range(W_):
+        start = (37 + 2.3 * np.sin(x * 0.24 / SC) + 1.6 * np.sin(x * 0.065 / SC + 0.7))
+        yb = int(start * (H_ / 256.0))
+        for t in range(2):
+            if 0 <= yb + t < H_:
+                out[yb + t, x] = out[yb + t, x] * 0.2 + INK_RGB * 0.8
+    return out, tooth
+
+def exp_strokes(rgb, tooth):
+    """directional crayon: the luminance field stretched hard ALONG the
+    body (V), so the strokes read as long pulls of the crayon."""
+    f = _smooth_noise(rgb.shape[0], rgb.shape[1], 20260828, 31, 3)
+    mult = 1.0 + 0.22 * f[..., None]
+    return np.clip(rgb * mult, 0, 255), tooth
+
+def exp_wax(rgb, tooth):
+    """wax build-up at the melds: heavier, darker, more saturated deposit
+    in a wobbled band along every region boundary."""
+    cls = _classify(rgb)
+    e = _class_edges(cls).astype(np.float64)
+    band = e.copy()
+    for r in (1, 2, 3):
+        band = np.maximum(band, np.roll(e, r, 0) * (1 - r * 0.28))
+        band = np.maximum(band, np.roll(e, -r, 0) * (1 - r * 0.28))
+        band = np.maximum(band, np.roll(e, r, 1) * (1 - r * 0.28))
+        band = np.maximum(band, np.roll(e, -r, 1) * (1 - r * 0.28))
+    f = _smooth_noise(rgb.shape[0], rgb.shape[1], 77, 9, 9)
+    band = np.clip(band * (0.7 + 0.5 * f), 0, 1)[..., None]
+    mean = rgb.mean(-1, keepdims=True)
+    saturated = np.clip(rgb + (rgb - mean) * 0.55, 0, 255)
+    return rgb * (1 - band) + saturated * 0.82 * band, tooth
+
+def exp_tooth(rgb, tooth):
+    """paper tooth breaking through: the white of the sheet on the high
+    points, plus a coarser grain everywhere."""
+    f = _smooth_noise(rgb.shape[0], rgb.shape[1], 4242, 2, 2)
+    brk = np.clip((f - 0.55) * 4.0, 0, 1)[..., None]
+    g = _smooth_noise(rgb.shape[0], rgb.shape[1], 999, 3, 3)
+    out = np.clip(rgb * (1.0 + 0.10 * g[..., None]), 0, 255)
+    return out * (1 - brk * 0.8) + PAPER * (brk * 0.8), tooth
+
+def exp_markings(rgb, tooth):
+    """drawn snake markings: crayon chevrons along the dorsal band, in the
+    creature's own pink pushed darker -- value variation, not a re-hue."""
+    H_, W_ = rgb.shape[:2]
+    cls = _classify(rgb)
+    deep = np.array(PINK, dtype=np.float64) * 0.55
+    out = rgb.copy()
+    back = BACK_COL * (W_ // 128)
+    for v0 in range(30, H_ - 20, 56):
+        for y in range(0, 26):
+            half = int(2 + y * 0.9)
+            for xx in (back - half, back + half):
+                for t in range(3):
+                    x = int(xx + 0.8 * np.sin((v0 + y) * 0.31)) + t - 1
+                    yy_ = v0 + y
+                    if 0 <= yy_ < H_ and cls[yy_, x % W_] == 2:
+                        out[yy_, x % W_] = out[yy_, x % W_] * 0.25 + deep * 0.75
+    return out, tooth
+
+def exp_misreg(rgb, tooth):
+    """colouring outside the lines: ink at the TRUE boundary, each pigment
+    region's fill shifted by its own wandering offset -- slivers of bare
+    paper where the crayon fell short, spill where it overshot."""
+    H_, W_ = rgb.shape[:2]
+    cls = _classify(rgb)
+    yy = np.arange(H_)
+    out = np.tile(PAPER, (H_, W_, 1))
+    order = [3, 1, 0, 2, 4]  # blue under, eye last
+    for ci, c in enumerate(order):
+        du = np.round(3.0 * np.sin(yy * 0.037 + ci * 1.7)
+                      + 1.5 * np.sin(yy * 0.011 + ci * 0.6)).astype(int)
+        mask = cls == c
+        for y in range(H_):
+            m = np.roll(mask[y], du[y])
+            src = np.roll(rgb[y], du[y], axis=0)
+            out[y, m] = src[m]
+    e = _class_edges(cls)
+    ee = e | np.roll(e, 1, 1)
+    out[ee] = out[ee] * 0.15 + INK_RGB * 0.85
+    return out, tooth
+
+def exp_pencil(rgb, tooth):
+    """the construction sketch ghosting through: long faint graphite
+    curves under the crayon, heavier where the pigment is thin."""
+    H_, W_ = rgb.shape[:2]
+    out = rgb.copy()
+    gph = np.array([96.0, 94.0, 92.0])
+    for k, (amp, per, ph, base) in enumerate(
+            [(14, 0.021, 0.0, 40), (11, 0.014, 2.1, 92), (17, 0.030, 4.2, 152),
+             (9, 0.017, 1.1, 205)]):
+        for y in range(H_):
+            x = int(base + amp * np.sin(y * per + ph)) % W_
+            for t in range(2):
+                a = 0.16 if t == 0 else 0.09
+                out[y, (x + t) % W_] = out[y, (x + t) % W_] * (1 - a) + gph * a
+    return out, tooth
+
+EXPERIMENTS = {
+    "contour": exp_contour,
+    "strokes": exp_strokes,
+    "wax": exp_wax,
+    "tooth": exp_tooth,
+    "wobble": None,      # parameter rebuild: WOB_SCALE 3.0
+    "markings": exp_markings,
+    "misreg": exp_misreg,
+    "pencil": exp_pencil,
+}
+
+
 def main():
+    global WOB_SCALE
+    if "--experiment" in sys.argv:
+        i = sys.argv.index("--experiment")
+        name = sys.argv[i + 1]
+        out = Path(sys.argv[i + 2]) if len(sys.argv) > i + 2 else (
+            HERE.parents[1] / "tools" / "reel" / "exp" / f"zixxtrixx_page_exp_{name}.h")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if name == "wobble":
+            WOB_SCALE = 3.0
+            atlas = build_atlas()
+        else:
+            fn = EXPERIMENTS[name]
+            a_rgb, a_tooth = build_atlas()
+            atlas = fn(a_rgb, a_tooth)
+        tiles, names = build_tiles()
+        emit(tiles, names, out, atlas=atlas)
+        return
     if "--debug" in sys.argv:
         # T7: the sector/band debug page. Same symbol layout as the real one,
         # written to zixxtrixx_page_debug.h; the reel selects it with

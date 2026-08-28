@@ -511,3 +511,42 @@ of fidelity", in a new costume.
 - WINGS (9.3): winged_dummy_type -- the watchdog plus two membrane wings
   on their own bones with a slow +-16 deg flap baked into its idle.
   FLYING dummy only (subject creature 36); a reel prop, not a creature.
+
+### 2026-08-28 late - THE EXPERIMENTS (items 15+, the owner's menu) + goldens
+
+- The menu, each variant ISOLATED (the point is pickability): contour
+  (the sheets' black line -- atlas ink along the painter's own boundary
+  curves + a 2 px render-time silhouette line via a mask-edge post-pass),
+  directional strokes, wax build-up at the melds, paper tooth breaking
+  through, 3x hand-wobbled boundaries, drawn chevron markings (the
+  band's own pink pushed darker), outside-the-lines misregistration
+  (per-region wandering fill offsets against an inked boundary), BOIL
+  (deterministic per-4-frame chunky displacement -- a function of the
+  frame index, never a clock), cel two-tone, cel three-tone, and the ONE
+  authorised combination: cel + contour. Idle for every variant; walk
+  additionally for contour, boil and celcontour.
+- MACHINERY: g_cel_bands in the reference shade path (a named-constant
+  quantiser on the already-computed light gain, hue preserved; ZERO
+  cost when off -- the branch never runs), ZIXX_EXP env gate in the
+  reel, ZIXX_PAGE_VARIANT include seam in zixxtrixx.h, and
+  mkcreaturepage.py --experiment NAME writing to gitignored
+  tools/reel/exp/. The generator is committed and deterministic; the
+  variant headers are reproducible artefacts.  The classification-edge
+  first cut of the atlas ink read as DIRT (crayon noise); the shipped
+  ink follows the painter's own analytic boundary curves. The reel
+  post-pass initially sat after an early-return the idle always takes
+  (no gibs) -- found by counting ink pixels (0) and mask pixels (11021).
+- THE COLOUR SCHEME STICKS: ink black, paper white and graphite are the
+  MEDIUM's colours; every pigment and the circumferential law untouched.
+  The normal snake's page bytes and render path are byte-identical with
+  the experiments off (guarded branches + untouched shipping page,
+  regen cmp-verified).
+- Site: an "experiments" tab group (14 tabs, each labelled EXP);
+  MAX_TABS 18 -> 32 with ALL THREE style.css nth families extended
+  (check_css_wiring enforces).
+- GOLDENS RE-PINNED at the final state: dumped to the folder of record,
+  second dump verified 41/41 cmp-identical AGAINST THAT FOLDER;
+  PROVENANCE.txt names the thirteen-item review; SOURCE-COMMIT.txt tops
+  the ledger with the owner's instructions verbatim; probe-golden.txt
+  refreshed. reel --check "all sequence CRCs match" -> final-check.txt
+  (exit 0, REDIRECTED TO A FILE).

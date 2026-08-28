@@ -1706,9 +1706,20 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
 };
 
+// RUN 1939 texture-experiment lane: reel-side post effects, env-gated
+// (ZIXX_EXP=contour|boil|cel2|cel3|celcontour). Default off: the normal
+// render never enters these branches and stays byte-identical.
+int g_exp_contour = 0;  // ink the creature's silhouette (the sheets' line)
+int g_exp_boil = 0;     // hand-drawn shimmer: a chunky deterministic
+                        // per-4-frame displacement of the creature's pixels
+                        // (a function of x, y and FRAME -- never wall-clock)
+uint32_t g_exp_frame = 0;
+
 void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                    uint32_t /*tick*/) {
   CreatureReelCtx& c = *static_cast<CreatureReelCtx*>(vctx);
+  static std::vector<uint8_t> pre;
+  if (g_exp_contour || g_exp_boil) pre.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
 #ifdef ZHAO_CREATURE_DEBUG
   {
     // telemetry: rung, projected radius, screen bbox of the skinned mesh
@@ -1735,6 +1746,76 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
+  }
+  // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
+  // HERE because the hook returns early when there are no gibs -- the
+  // first cut sat after that return and never ran on the idle. ----------
+  if (g_exp_contour || g_exp_boil) {
+    const size_t n = static_cast<size_t>(w) * h;
+    std::vector<uint8_t> mask(n, 0);
+    for (size_t i = 0; i < n; ++i) {
+      const size_t b3 = i * 3;
+      if (rgb[b3] != pre[b3] || rgb[b3 + 1] != pre[b3 + 1] ||
+          rgb[b3 + 2] != pre[b3 + 2])
+        mask[i] = 1;
+    }
+    if (g_exp_boil) {
+      // the redrawn-every-frame look: displace the creature's pixels by a
+      // chunky 6x6-cell field that re-rolls every 4 frames. Deterministic
+      // integer hash of (cell, frame) -- replay-exact by construction.
+      const std::vector<uint8_t> src(rgb, rgb + n * 3);
+      const uint32_t fq = g_exp_frame / 4;
+      for (uint32_t y = 0; y < h; ++y) {
+        for (uint32_t x = 0; x < w; ++x) {
+          const size_t i = static_cast<size_t>(y) * w + x;
+          if (!mask[i]) continue;
+          uint32_t hsh = (x / 6) * 73856093u ^ (y / 6) * 19349663u ^ fq * 83492791u;
+          hsh ^= hsh >> 13;
+          const int dx = static_cast<int>((hsh >> 3) % 3) - 1;
+          const int dy = static_cast<int>((hsh >> 7) % 3) - 1;
+          const int sx = static_cast<int>(x) + dx, sy = static_cast<int>(y) + dy;
+          if (sx < 0 || sy < 0 || sx >= static_cast<int>(w) || sy >= static_cast<int>(h))
+            continue;
+          const size_t j = static_cast<size_t>(sy) * w + sx;
+          if (!mask[j]) continue;
+          rgb[i * 3] = src[j * 3];
+          rgb[i * 3 + 1] = src[j * 3 + 1];
+          rgb[i * 3 + 2] = src[j * 3 + 2];
+        }
+      }
+    }
+    if (std::getenv("ZIXX_EXP_DEBUG")) {
+      size_t mc = 0;
+      for (size_t i = 0; i < n; ++i) mc += mask[i];
+      std::fprintf(stderr, "exp mask %zu of %zu" "\n", mc, n);
+    }
+    if (g_exp_contour) {
+      // the sheets' bold ink line around the whole creature: a 2 px edge
+      // (1 px vanished into the creature's own dark edges at 240p). With
+      // boil active the line inherits the boil's wobble via the mask.
+      std::vector<uint8_t> edge(n, 0);
+      for (uint32_t y = 0; y < h; ++y) {
+        for (uint32_t x = 0; x < w; ++x) {
+          const size_t i = static_cast<size_t>(y) * w + x;
+          if (!mask[i]) continue;
+          bool e = false;
+          for (int r = 1; r <= 2 && !e; ++r) {
+            e = (static_cast<int>(x) - r < 0 || !mask[i - r]) ||
+                (x + r >= w || !mask[i + r]) ||
+                (static_cast<int>(y) - r < 0 || !mask[i - static_cast<size_t>(r) * w]) ||
+                (y + r >= h || !mask[i + static_cast<size_t>(r) * w]);
+          }
+          edge[i] = e ? 1 : 0;
+        }
+      }
+      for (size_t i = 0; i < n; ++i) {
+        if (!edge[i]) continue;
+        rgb[i * 3] = 26;
+        rgb[i * 3 + 1] = 24;
+        rgb[i * 3 + 2] = 22;
+      }
+    }
+    ++g_exp_frame;
   }
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
@@ -4271,6 +4352,18 @@ int main(int argc, char** argv) {
     return rc;
   }
   g_out = argc > 1 ? argv[1] : ".";
+  // RUN 1939 experiment gate: ZIXX_EXP=contour|boil|cel2|cel3|celcontour.
+  // Unset (the normal case) leaves every render byte-identical.
+  if (const char* ex = std::getenv("ZIXX_EXP")) {
+    const std::string e = ex;
+    if (e == "cel2") zc::g_cel_bands = 2;
+    else if (e == "cel3") zc::g_cel_bands = 3;
+    else if (e == "contour") g_exp_contour = 1;
+    else if (e == "celcontour") { zc::g_cel_bands = 3; g_exp_contour = 1; }
+    else if (e == "boil") g_exp_boil = 1;
+    if (!e.empty())
+      std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
+  }
   std::vector<std::string> want;
   for (int i = 2; i < argc; ++i) want.push_back(argv[i]);
   const auto wanted = [&](const char* n) {

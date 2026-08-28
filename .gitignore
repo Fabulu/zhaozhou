@@ -75,3 +75,4 @@ runs/**/golden-work/
 runs/**/golden-verify/
 # scratch reel output, wherever a subject dir lands
 **/scratch-reel/
+tools/reel/exp/

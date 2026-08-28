@@ -419,6 +419,30 @@ inline Shade3 creature_light(int32_t lam_key, int32_t lam_fill) {
 
 // the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
 // because the gib/debris path still uses the single-scalar form
+// RUN 1939 cel experiment: the light gain quantised into 2 or 3 bands.
+// Thresholds and band levels are named, editable constants (Q16.16 gain);
+// hue is preserved by scaling each channel by quantised/mean, so the
+// three-light rig's colour stays and only the RAMP goes flat.
+constexpr int32_t kCel2Thresh = 52000;
+constexpr int32_t kCel2Level[2] = {36000, 70000};
+constexpr int32_t kCel3Thresh[2] = {44000, 62000};
+constexpr int32_t kCel3Level[3] = {33000, 54000, 74000};
+inline Shade3 cel_quantise(const Shade3& s) {
+  const int32_t m = (s.r + s.g + s.b) / 3;
+  int32_t q;
+  if (g_cel_bands <= 2) {
+    q = m < kCel2Thresh ? kCel2Level[0] : kCel2Level[1];
+  } else {
+    q = m < kCel3Thresh[0] ? kCel3Level[0]
+        : m < kCel3Thresh[1] ? kCel3Level[1]
+                             : kCel3Level[2];
+  }
+  if (m <= 0) return Shade3{q, q, q};
+  return Shade3{static_cast<int32_t>(static_cast<int64_t>(s.r) * q / m),
+                static_cast<int32_t>(static_cast<int64_t>(s.g) * q / m),
+                static_cast<int32_t>(static_cast<int64_t>(s.b) * q / m)};
+}
+
 inline int32_t ambient_floor(int32_t shade) {
   return 16384 + static_cast<int32_t>((static_cast<int64_t>(shade) * 49152 + 32768) >> 16);
 }
@@ -428,6 +452,7 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 }  // namespace
 
 DebugShade g_debug_shade = DebugShade::kOff;
+int g_cel_bands = 0;
 
 void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, const mat4fx& vp,
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
@@ -661,6 +686,11 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           tm.gouraud = true;
         } else {
           shc[0] = shc[1] = shc[2] = creature_light(lam_key, lam_fill);
+        }
+        // RUN 1939 cel experiment (default 0: this branch never runs on
+        // the shipping path and the normal render stays bit-identical)
+        if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
+          for (int k = 0; k < 3; ++k) shc[k] = cel_quantise(shc[k]);
         }
         // ---- DIAGNOSTIC SHADE MODES (P2; reel tooling, default off) ----
         if (g_debug_shade == DebugShade::kUnlit) {
