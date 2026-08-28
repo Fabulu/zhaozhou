@@ -148,7 +148,63 @@ def mutate(gold, old, new):
 # and NOTHING IS DECLARED PREDICTIVELY -- that rule was broken twice on
 # FIELD.V3.EXEC, with two proofs written before any evidence and both then
 # contradicted by a run.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "E08": (
+        "MULTIPLICATION COMMUTES. The bank computes a*b and nothing else -- no "
+        "addend, no asymmetric rounding, no saturation that depends on which "
+        "operand is which -- so swapping the pair on the way in cannot change "
+        "the product. This is the same trap svcpath's V08 hit from the other "
+        "side: there, swapping A and B was the OBVIOUS repair for an orphaned "
+        "signal and had to be rejected precisely because it changes nothing. "
+        "RE-SCORE THIS IF THE BANK EVER STOPS BEING A PLAIN MULTIPLIER -- an "
+        "a*b+c form, or per-operand rounding, breaks the symmetry immediately."
+    ),
+    "E09": (
+        "NOTHING CONSUMES A NON-SERVED CLAIMANT'S PRODUCT, so the rival's "
+        "operands cannot reach any output. `ex_rsp_p` is `bank_p[0]` and the "
+        "executor samples it only under its own response valid; no other "
+        "reader exists. "
+        "AND THIS CORRECTS THE COMMENT DIRECTLY ABOVE THE MUTATED LINE, which "
+        "says the spare operands are 'NOT zero because zero is a plausible "
+        "product -- they are tied to the executor's own operands so a routing "
+        "bug that reached them would produce a recognisable value rather than "
+        "a convincing one'. The recognisability earns nothing: a routing bug "
+        "IS caught, by E11's neighbourhood and by the executor's answers going "
+        "wrong, and it would be caught for any operands at all including zero. "
+        "svcpath's V25 disproved the identical claim in the identical words on "
+        "the same day, which is what happens when a rationale is copied "
+        "between blocks instead of re-derived. "
+        "RE-SCORE THIS IF ANY CLAIMANT'S PRODUCT IS READ WITHOUT ITS OWN "
+        "RESPONSE VALID, or if the bank gains per-claimant product buses."
+    ),
+    "E10": (
+        "THE REQUEST TAG IS NOT READ IN THIS COMPOSITION. `bank_tag_o` is "
+        "exposed but no check reads it, and the bank's `desync_o` does not "
+        "depend on the tags' VALUES. Giving both claimants tag 0 therefore "
+        "changes nothing observable here. "
+        "This is not a hole in this test: the tag is the BANK's claim and is "
+        "checked where it is made, by the mulbank sweep. What this file can be "
+        "wrong about is which claimant occupies which slot, and that is E11 "
+        "and its neighbours. svcpath's V09 is the same mutant with the same "
+        "proof, and there the model came back byte-identical. "
+        "RE-SCORE THIS THE MOMENT bank_tag_o IS CHECKED or desync starts "
+        "comparing tag values."
+    ),
+    "E11": (
+        "CLAIMANT 0 BROADCASTS ONE SCALAR ACROSS ALL FOUR LANES, so every lane "
+        "of its response carries the same number and reading lane 1 instead of "
+        "lane 0 is the identity. The assignment is explicit about it: "
+        "`bank_a[c][l] = (c == 0) ? ex_req_a : 33'sd3` runs over every l with "
+        "no lane term, so the four products are equal by construction rather "
+        "than by coincidence of the tested inputs. "
+        "THE EXECUTOR IS STILL SCALAR. That is the whole reason this holds, "
+        "and it is exactly what the v3 architecture is meant to stop being -- "
+        "so this equivalence has a SHELF LIFE, and a short one. "
+        "RE-SCORE THIS THE DAY THE EXECUTOR ISSUES FOUR DIFFERENT PRODUCTS. On "
+        "that day the mutant becomes a real defect and this proof becomes a "
+        "lie, and nothing but this note will say so."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):

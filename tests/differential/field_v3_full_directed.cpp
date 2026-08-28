@@ -406,5 +406,31 @@ int main(int argc, char** argv) {
            (unsigned)top.wrong_op_o);
   }
 
+  printf("== section 6: an op the TABLE does not know is refused, not handed over ==\n");
+  {
+    // zhao_field_ops_pkg is the single answer to "does this op leave the pipe".
+    // SPLINE (0x1B) is not in it today, so the executor must NOT offer it: the
+    // ALU reports it through unsupported_o and the context RETIRES.
+    //
+    // If the executor ever regains a private opinion and offers an op the
+    // dispatcher will not take, that context parks forever -- which is exactly
+    // the deadlock this table was created to make impossible. So the check that
+    // matters is not the flag, it is that THE PROGRAM FINISHES AT ALL.
+    //
+    // Mutant X49 is that defect, and it survived until this section existed:
+    // no test program contained a SPLINE, so nothing could reach it. Same shape
+    // as X46 before the barrel was full -- a mutant stating a real fragility
+    // that the traffic could not exercise.
+    int32_t xs[1] = {3 << 16}, ys[1] = {5 << 16}, got[1][2];
+    int clocks = 0;
+    (void)run_long(top, zfield::OP_SPLINE, 1, xs, ys, 0u, 1, false, got, &clocks);
+    check(clocks < 20000, "a SPLINE program finishes rather than parking forever", 1,
+          clocks < 20000 ? 1 : 0);
+    check(top.unsupported_o == 1, "and the ALU reports it as unsupported", 1,
+          (uint32_t)top.unsupported_o);
+    printf("   MEASURED: SPLINE retired in %d clocks, unsupported_o = %u\n", clocks,
+           (unsigned)top.unsupported_o);
+  }
+
   return zhao::report_and_exit("field_v3_full_directed");
 }

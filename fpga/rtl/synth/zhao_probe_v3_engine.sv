@@ -172,9 +172,18 @@ module zhao_probe_v3_engine #(
 
   // The executor drives lane 0 of the four-wide request; the other three lanes
   // carry the other three points of a vector group and are tied off here.
-  // They are NOT zero because zero is a plausible product -- they are tied to
-  // the executor's own operands so a routing bug that reached them would
-  // produce a recognisable value rather than a convincing one.
+  // THEY ARE A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT.
+  //
+  // This used to say they are 'NOT zero because zero is a plausible product',
+  // so a routing bug reaching them would produce a recognisable value. Mutant
+  // E09 disproved that by surviving: nothing consumes a non-served claimant's
+  // product, so these operands cannot reach any output whatever they are.
+  //
+  // A routing bug IS caught -- by the executor's own answers coming out wrong
+  // -- and it would be caught for any operands at all, zero included.
+  // Recognisable values help when reading a waveform by eye. They are not
+  // evidence, and zhao_field_v3_svcpath carried the identical sentence and had
+  // it disproved by its own mutant on the same day.
   always_comb begin
     for (int c = 0; c < CLAIMANTS; c++) begin
       for (int l = 0; l < 4; l++) begin
