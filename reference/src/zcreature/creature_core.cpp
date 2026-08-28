@@ -194,7 +194,12 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
       plain[static_cast<size_t>(k)] = true;
     }
   }
-  const auto wrap = [&](int k) { return (k + n) % n; };
+  // hold_last: the final segment clamps instead of wrapping (a one-shot
+  // clip's held corpse must not blend back toward key 0)
+  const auto wrap = [&](int k) {
+    if (c.hold_last) return k < 0 ? 0 : (k >= n ? n - 1 : k);
+    return (k + n) % n;
+  };
   for (int k = 0; k < n; ++k) {
     const int k0 = wrap(k - 1), k1 = k, k2 = wrap(k + 1), k3 = wrap(k + 2);
     // root: Catmull-Rom at t=1/2, clamped into the segment interval
@@ -251,7 +256,9 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
       const int32_t* dm = clip.mid_root.data() + static_cast<size_t>(frame) * 3;
       for (int i = 0; i < 3; ++i) disp_i[i] = dm[i];
     } else {
-      const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+      const uint16_t nf = static_cast<uint16_t>(
+          frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0)
+                                        : frame + 1);
       const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
       for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
     }
@@ -268,7 +275,9 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
       if (!clip.mid_quats.empty()) {
         q = clip.mid_quats[static_cast<size_t>(frame) * bc + b];  // A1
       } else {
-        const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+        const uint16_t nf = static_cast<uint16_t>(
+            frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0)
+                                          : frame + 1);
         q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
       }
     }

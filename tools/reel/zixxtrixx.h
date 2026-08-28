@@ -1744,8 +1744,14 @@ constexpr int32_t kHitSway = 2600;     // and a little away
 constexpr int kDeathKeys = 96;
 constexpr int32_t kDeathShudder = 260;   // deepen tremor amplitude (two slow cycles)
 constexpr int32_t kDeathAuthEnd = 240;   // how much S is left in the corpse
-constexpr int32_t kDeathRoll = 11600;    // ~64 deg: keels onto the flank
-                                         // (84 pressed the down-side fin
+constexpr int32_t kDeathRoll = -11600;   // ~64 deg: keels onto the flank
+                                         // AWAY from the site camera (run
+                                         // 0326: +11600 turned the dorsal
+                                         // band square at the lens and the
+                                         // death read as a magenta smear;
+                                         // negative shows flank+belly with
+                                         // the pink on the top edge.
+                                         // |84| pressed the down-side fin
                                          // 294 mm through the dirt)
 constexpr int32_t kDeathPivotX = -990;   // roll pivot: under the S centre...
 constexpr int32_t kDeathDropMm = 300;    // ...while the carried front sinks
@@ -1861,6 +1867,7 @@ inline zc::Clip build_death() {
   zc::Clip c;
   c.slot_id = 6;
   c.interpolate = true;
+  c.hold_last = true;  // one-shot: the corpse holds; no wrap-to-stance flash
   c.frame_count = static_cast<uint16_t>(kDeathKeys);
   c.root.assign(static_cast<size_t>(kDeathKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kDeathKeys) * kBoneCount, zc::quat16_identity());

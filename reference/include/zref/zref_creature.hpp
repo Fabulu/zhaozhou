@@ -222,6 +222,18 @@ struct Clip {
    */
   bool interpolate = false;
   /**
+   * HOLD-LAST (2026-08-28, run 0326). Frames loop by default (the donor's
+   * cycles), and the presentation interpolation wraps the final key toward
+   * key 0 to keep the loop seam smooth. A ONE-SHOT clip (death) holds its
+   * last key instead -- and there the wrap is a defect: the held corpse
+   * blended half-way back to the stance and the last shown frame flashed
+   * the animal alive (caught on the run-0326 death contact sheet, final
+   * thumbnail). With this set, interpolation CLAMPS at the last key: the
+   * root and quat midpoints of the final segment are the final key itself.
+   * Presentation only; authored keys, events and the sim clock untouched.
+   */
+  bool hold_last = false;
+  /**
    * A1 — THE BAKED 60 Hz PRESENTATION COMPANION (2026-08-28, kind-9
    * unfrozen). When present (bake60 on the bank, baked by
    * compile_creature), the half-tick pose is an EXPLICIT baked midpoint

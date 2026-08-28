@@ -35,7 +35,12 @@ void anim_advance(AnimPlayer& a, const ClipBank& bank, const ClipEvent** fired,
   if (++a.sub < 2) return;  // each key shown 2 sim ticks (2.1)
   a.sub = 0;
   const uint16_t next = static_cast<uint16_t>(a.frame + 1);
-  a.frame = next >= clip->frame_count ? 0 : next;
+  // hold_last (run 0326): a one-shot clip (death) HOLDS its final key
+  // instead of wrapping -- the sim previously flashed key 0 on the tick
+  // after a corpse finished dying. Loops are untouched.
+  a.frame = next >= clip->frame_count
+                ? (clip->hold_last ? static_cast<uint16_t>(clip->frame_count - 1) : 0)
+                : next;
   // events fire on ENTERING a tagged frame (the wrap into frame 0 included)
   for (const ClipEvent& e : clip->events) {
     if (e.frame != a.frame) continue;
