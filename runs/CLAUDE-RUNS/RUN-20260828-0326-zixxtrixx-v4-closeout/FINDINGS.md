@@ -124,11 +124,13 @@ THREE style.css families extended together, and assemble.py now actually
 VERIFIES both checked families reach MAX_TABS before it will build — the
 safety net the 2339 log described is now real code.
 
-## Gates at close
+## Gates at close (FINAL, after the redirect campaign)
 * zixx-probe exit 0 (final-probe.txt): every clip's ground band and every
-  overlap inside its authored allowance (45k+ station-pair hits measured).
+  overlap inside its authored allowance — the allowances re-authored twice
+  along the way, each time against worst-key renders, ending on the
+  fat-body families whose provenance is the sheet's own lapping coils.
 * zixx-choreo exit 0; zixx-planner exit 0.
-* Goldens: all 27 clip payloads + pose-crcs cmp-clean against the
+* Goldens: all 30 clip payloads + pose-crcs cmp-clean against the
   committed set (16 originals bit-identical all run; 20-31 pinned new;
   deliberate re-pins: clip-6 keel, clip-7 get-up, clip-28 slap — each with
   LOUD provenance in SOURCE-COMMIT.txt naming its instruction).
@@ -136,7 +138,9 @@ safety net the 2339 log described is now real code.
   REDIRECTED TO FILE) — no pinned subject moved.
 * Page regen reproducible (two mkcreaturepage runs cmp-identical; the
   crc32 law holds, no hash() reintroduced — checked).
-* Site assembled: 14 live tabs + 3 group markers + Archive; renders on
+* Site assembled: 17 live tabs (the three salto variations joined "how
+  it fights") + 3 group markers + Archive; MAX_TABS 18 with all three CSS
+  families moved together and the wiring check verifying them. Renders on
   disk and committed. NOT deployed — the owner verifies and publishes.
 
 ## Honest remainders

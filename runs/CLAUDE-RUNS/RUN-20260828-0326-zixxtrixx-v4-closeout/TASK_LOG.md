@@ -1,7 +1,7 @@
 # Task Log: RUN-20260828-0326 - Zixxtrixx v4 closeout
 
 **Created:** 2026-08-28 03:26 UTC+02:00
-**Status:** In Progress (owner redirect: model first)
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/
 
 ---
@@ -540,3 +540,15 @@ rather than another oscillation.
   slender blades — declared honestly for his call.
 - Site wiring 15 -> 18 tabs (all three CSS families + MAX_TABS together;
   the check_css_wiring net verifies); three salto tabs in "how it fights".
+
+### 2026-08-28 close - RUN COMPLETE (second time, after the redirect)
+
+- Salto target dummy stood 8 m under the terrain crown (planted at y=0);
+  now column-queried onto the same lattice — the strike frames show the
+  spear meeting the quadruped (salto-dummy-visible.png).
+- All 17 site subjects re-rendered on the converged model, re-encoded,
+  page assembled (17 tabs verified in the HTML). Renders committed
+  (Upheaval 006c2a8). NOT deployed.
+- FINAL GATES: probe 0 / choreo 0 / planner 0 / goldens 30 clips +
+  pose-crcs cmp-clean / reel --check "all sequence CRCs match" (file).
+- Status: Complete.
