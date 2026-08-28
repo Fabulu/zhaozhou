@@ -520,3 +520,23 @@ rather than another oscillation.
   grounded and FLYING watchdog dummy — reel-only), and the six-salto
   (slot 35, 44-key flight at full apex). Root-tracking cameras follow
   the baked trajectory; the dummy is a second CreatureInstance.
+
+### 2026-08-28 late III - the chubby body, colour law, hi-res atlas, fins
+
+- OUTLINE GATE verdict (silhouette_overlay + front-half crop): the tube
+  was a WIRE — ~22% of loop height vs the sheet's ~40%. Front half
+  fattened to the sheet's chubby comma (neck 190 mm half-width, head
+  second); the coils now LAP as the sheet draws them; all nesting
+  families re-authored with that provenance (fat-body law, probe 0).
+- sidecmp-04/-05/-06 committed; front-half IoU 32→35% but the CHARACTER
+  converged (the number is blunted by crop alignment; the eye rules).
+- Circumferential colour law (owner): pink top / light green sides / dark
+  green ENTIRE underside / blue bib tapering to a triangle; every
+  boundary a wide crayon crossfade. Atlas 256x512 (256 KiB L0 — stated
+  budget ~0.7% of pool), grain amps raised, eye scaled to the sheet's
+  big-eye read. Regen reproducible.
+- Fins: splay 3000, rolled 80 deg (owner's ask); pink-dominance is his
+  prior ruling and stands; LENGTH still diverges from the sheet's long
+  slender blades — declared honestly for his call.
+- Site wiring 15 -> 18 tabs (all three CSS families + MAX_TABS together;
+  the check_css_wiring net verifies); three salto tabs in "how it fights".

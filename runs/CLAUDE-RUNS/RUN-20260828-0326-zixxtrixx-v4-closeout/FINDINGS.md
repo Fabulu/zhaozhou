@@ -155,3 +155,95 @@ safety net the 2339 log described is now real code.
 * The directional flinches read subtle at thumbnail scale; at the site's
   full 384x240 they read. If the owner wants them louder, kDmgSideSway /
   kDmgBackJerk / kDmgTopCrush are the knobs.
+
+# THE OWNER REDIRECT (second half of the run)
+
+The owner reviewed the published v3 build mid-run and reordered everything:
+"You completely fucked up the head even more... we really need to fix the
+model in the first place." What follows is the record of that campaign.
+
+## The model (the head, the neck, the S — five iterations, gate-judged)
+
+* **The stance re-authored against Side.png** (the gate: every head/neck
+  change judged ONLY beside the sheet — sidecmp-01..06 in evidence/ are
+  the sequence): the neck now starts shallow behind the head and curls
+  progressively; the crown is round and OPEN; the head rides at ~63% of
+  the crown height, essentially horizontal.
+* **The head pivot was at the NOSE TIP** (kHeadPivotMm=0 — the comment
+  said "centroid", the number never followed): every attitude change
+  ORBITED the cranium about its own snout — the owner's "the joint needs
+  to fit onto a body that doesn't suddenly have the head drop 5 meters".
+  At 190 mm the head turns about itself (attitude-sweep-pivoted.png).
+  Attitude -6000 -> -12000, picked twice off WIDE rendered sweeps.
+* **The hinge is seamless**: skull rigid to station 4, blend to 11,
+  linear 64->0 falloff.
+* **THE OUTLINE GATE'S BIG LESSON: the tube was a WIRE.** The front-half
+  silhouette overlay showed the sheet's tube is ~40% of its loop height;
+  ours was ~22%. The final geometry is the sheet's CHUBBY comma: neck
+  190 mm half-width (the widest — the owner's exact order: "neck widest,
+  head second, body drops off quickly behind"), and the S's own coils
+  now LAP exactly as the drawing laps them. Every overlap allowance was
+  re-authored as the fat-body family with that provenance — none of it
+  is drift.
+* kBodyY was re-solved twice and finally corrected against the PROBE
+  (hand-added sine tables drift; the probe is the measure). Grounded
+  bands preserved: idle [-8..-3], walk EXACT family.
+
+## Rigidity (his review, clip by clip)
+
+* **Fall** ("rigidly falls over like a log", then "getting better but try
+  making it more alive"): every bend term grew, the rotation wanders, the
+  warp hesitates NEAR UPRIGHT (righting attempts that fail — a second
+  zero-at-ends harmonic), and the head now LOOKS WHERE IT FALLS through
+  the aim rig. No new fast terms. fall-yielding-sheet.png /
+  fall-alive-sheet.png.
+* **Death** ("unusually good for a first attempt, but needs to be more
+  organic"): the collapse is STAGED — gives, half-catches, gives suddenly,
+  settles slow — with one last small shift after it looks finished.
+* **Look-around** ("twitchy... should look more like the idle"): the
+  idle's living body was EXTRACTED as idle_body(amp) — the idle proven
+  BIT-IDENTICAL at amp 1000 — and the look rebuilt on it at 800/1000,
+  the itinerary retimed onto 192 keys.
+* **Tail-balance** ("too fast and robotic"): 224 keys, same choreography
+  1.4x slower, wobble bigger on a slower cycle.
+* **Hit** ("just a weird twitch"): 28 keys, violent recoil, the body
+  SHOVED -85 mm along the blow (displacement sells impact; the deeper
+  fold was eating the face and was traded back), two slow decaying
+  overshoots. Directional set scaled to match.
+
+## Colour and texture (his three asks)
+
+* **Positional colour law**: pink top, light green sides, dark green the
+  ENTIRE underside, blue a bib from the head TAPERING INTO A TRIANGLE —
+  and no hard edges anywhere: every boundary is a wide crayon crossfade
+  with a hand wobble (his meld rule).
+* **Atlas 128x256 -> 256x512** (the format field allows far more; the real
+  budget: 256 KiB L0 / ~341 KiB with mips ≈ 0.7% of the ~47 MB texture
+  pool the sky budget note implies — chosen and stated, not assumed).
+  Grain amplitudes raised (coverage .15, strokes .34, tooth .13, hue
+  drift .45) — "still a bit single coloured" is the ±16%-invisible-grain
+  lesson and amplitude was the real lever. Page regen proven reproducible
+  twice (zlib.crc32 law intact; no hash() anywhere).
+* **The eye scaled with the atlas** to the sheet's big-eye read.
+
+## Fins (his ask, judged honestly)
+
+Splay 1500 -> 3000 ("further apart") and rolled 80 deg about their own
+long axis ("rotated 80 degrees") — the broad face now presents to the
+side view. Their pink-dominant colouring is his OWN prior ruling
+(2026-08-27: "big slice of pink, weaker slice of green") and stands.
+**Still divergent from the sheet: length.** The drawn blades are long
+and slender; ours are short and broad. That is a mesh change (blade ring
+specs) awaiting his call — declared, not hidden (fins-rolled.png).
+
+## Salto variations (his enthusiastic ask — the planner's payoff)
+
+build_attack_variant bakes the planner's phases, trajectory and spin
+(integer atan2 orients the spear along the committed vector) with
+authored outcomes. Three ship as the donor's attack1/attack2 family:
+* slot 33 — mid-air hit against the GROUNDED watchdog dummy 4.6 m out
+  (recoil off the body, falls out of the sky, gathers, settles);
+* slot 34 — the FLYING dummy at 3.2 m, intercepted in the air;
+* slot 35 — SIX somersaults on a 44-key flight at the full apex.
+The dummy is a second CreatureInstance in the REEL ONLY; root-tracking
+cameras follow each baked trajectory.
