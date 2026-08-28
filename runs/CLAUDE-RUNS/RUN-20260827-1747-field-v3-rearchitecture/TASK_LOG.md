@@ -1171,3 +1171,51 @@ per counter, not once per file.
 That last point is the one to remember: a test that exercises a defect through
 the state that HAPPENS TO WRAP proves nothing. Choosing the stimulus that
 leaves the state somewhere visible is the work.
+
+---
+
+## 2026-08-28 -- FIELD.V3.WBARB green, and composing found the dispatcher's
+## missing immediate
+
+    writeback arbiter:  17 attempted  17 caught  0 equivalent  0 survived  0 discarded
+    55 checks, three policies in one model
+
+### The gap neither block's sweep could have found
+
+The dispatcher passes 25/25 and 327 checks. The noise unit passes 23 mutants
+and 8,250 checks. Wiring one to the other takes about a minute to discover it
+**cannot be done**: NOISE2's seed is the instruction's IMMEDIATE, and the
+dispatcher carried operands, an opcode and a destination -- and no imm.
+
+Neither sweep could see it, and the reason is structural: **a missing field is
+not a mutable line.** No sweep can mutate a port that does not exist. This is
+the third time today the same shape has appeared --
+
+    the executor's open-loop DOT        no mul_ready to refuse it
+    the curve service's hang            no mul_ready port at all
+    the dispatcher's missing imm        no port to carry it
+
+-- and all three were found by composition, after full marks alone.
+
+### It belongs in the GROUP KEY, which is the half worth writing down
+
+Four contexts at the same instruction share an immediate. But this block does
+not know they are at the same instruction: it sees an op and a destination, and
+two DIFFERENT NOISE2 instructions with different seeds match on both.
+
+Sharing a request between them would hand four points ONE seed and answer three
+of them for a different program point -- values that are individually plausible
+and collectively wrong, which is the exact failure mode the whole block exists
+to prevent.
+
+Section 5b drives two offers differing ONLY in the immediate, asserts the
+second is refused, and then asserts the SAME immediate still joins. The second
+half matters: a group key that refuses everything is also wrong, and would pass
+a test that only checked the refusal.
+
+D26, D27, D28: dropping it from the key, carrying the wrong group's value,
+never capturing it.
+
+**The dispatcher's 25/25 became stale the moment the block gained a claim**, so
+it is being re-swept at 28 rather than left standing on a number that no longer
+describes it.

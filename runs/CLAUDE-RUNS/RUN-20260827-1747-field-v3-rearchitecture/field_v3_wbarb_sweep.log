@@ -1,0 +1,52 @@
+== consumer roster ==
+== preflight ==
+preflight ok: W01 policy 0 picks the highest claimant instead of the lowest
+preflight ok: W02 policy 1 picks the lowest claimant instead of the highest
+preflight ok: W03 policy 0 is decoded as policy 1, so the lowest-first arm is dead
+preflight ok: W04 round robin never advances, so it is a fixed priority in disguise
+preflight ok: W05 round robin advances by two, so one claimant is skipped every turn
+preflight ok: W06 the rotation runs under EVERY policy, so a fixed priority drifts
+preflight ok: W07 round robin starts one claimant late
+preflight ok: W08 the context comes from claimant 0 whoever won
+preflight ok: W09 the register number comes from claimant 0 whoever won
+preflight ok: W10 the data comes from claimant 0 whoever won
+preflight ok: W11 a write is asserted every clock, including when nobody asked
+preflight ok: W12 every asking claimant is told it won, so ready is not one-hot
+preflight ok: W13 ready fires with no request outstanding
+preflight ok: W14 served_o counts requests rather than grants
+preflight ok: W15 stalled_o counts REQUESTS rather than losses -- the M08 defect
+preflight ok: W16 stalled_o counts every claimant that did not win, asking or not
+preflight ok: W17 the two counters are swapped
+PREFLIGHT: all 17 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 123d5da9ffa0d82d)
+  W01 policy 0 picks the highest claimant instead of the lowest  caught
+  W02 policy 1 picks the lowest claimant instead of the highest  caught
+  W03 policy 0 is decoded as policy 1, so the lowest-first arm is dead  caught
+  W04 round robin never advances, so it is a fixed priority in disguise  caught
+  W05 round robin advances by two, so one claimant is skipped every turn  caught
+  W06 the rotation runs under EVERY policy, so a fixed priority drifts  caught
+  W07 round robin starts one claimant late  caught
+  W08 the context comes from claimant 0 whoever won  caught
+  W09 the register number comes from claimant 0 whoever won  caught
+  W10 the data comes from claimant 0 whoever won  caught
+  W11 a write is asserted every clock, including when nobody asked  caught
+  W12 every asking claimant is told it won, so ready is not one-hot  caught
+  W13 ready fires with no request outstanding  caught
+  W14 served_o counts requests rather than grants  caught
+  W15 stalled_o counts REQUESTS rather than losses -- the M08 defect  caught
+  W16 stalled_o counts every claimant that did not win, asking or not  caught
+  W17 the two counters are swapped  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_wbarb.sv (17 mutants checked)
+
+== tally ==
+  attempted:  17 / 17
+  caught:     17
+  equivalent: 0
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_wbarb.sv (17 mutants checked)
+CLEAN:0
