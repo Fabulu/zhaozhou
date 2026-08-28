@@ -404,3 +404,66 @@ of an isolated variant.
 AXIS, not the best point on it.** Pre-mixing effects is a way of making the choice
 for him — which is the same fault as "never remove the owner's control in the name
 of fidelity", in a new costume.
+
+### 2026-08-28 2x:xx - THE HEAD BLOCK LANDS (faults 2,3,4,5,12,13 + fault 1)
+
+- BASELINE first (sidecmp-17-baseline, front-baseline-vs-sheet): the fat
+  run visibly fills the dive and the S is illegible; the face is a flat
+  navy disc head-on; the eyes hide at the top silhouette edges.
+- FAULT 4 DIAGNOSED FROM SOURCE, then MEASURED before any fix: the new
+  COMMITTED zixx-meshcheck probe (tools/reel/zixx_meshcheck.cpp) groups
+  vertices by bind position and found exactly 22 disagreeing pairs -- the
+  junction ring (station 11): head part {kBHead,4,w6} vs body part
+  {3,4,w17}. Worst posed split: idle 24 mm, walk 34 mm, FALL 79 mm --
+  "you can't always see it, but even in idle you see it in some
+  positions" in numbers. FIX: kSkullBlendTo 11 -> 10 with a SMOOTHSTEP
+  falloff (integer ss1000 law; the first cut divided twice and zeroed the
+  whole blend -- caught by the probe reading w0=0 at station 3). The
+  junction ring now takes station_bind EXACTLY in both parts: meshcheck
+  reports 0 disagreeing groups, 0 mm splits, all clips.
+- FAULT 2: THE DOME REPACK. Ring count is frozen (V maps by ring index)
+  but ring POSITIONS are free: kHeadStationYMm packs the head stations
+  toward the nose (0,18,45,85,135,...,599 -- station 11 exactly the
+  linear value, it is the shared junction ring) and kNoseDome goes
+  270/590/810/950 -- a blunt superellipse instead of a 114 mm flat cap.
+  The face ROUNDS head-on (front-it1/it2 evidence) with no overlay part.
+- FAULT 3: eyes forward (the repack carries the painted rows ~70 mm
+  nose-ward; A_EYE_ROW 12 -> 18 keeps the disc ON the ball), DOWN
+  (A_EYE_COL 74/118 -> 66/126: 5 -> 3... -> centred at the head's
+  midline, judged beside Front.png), bulge 22 -> 26 (under the recorded
+  28 wedge threshold). Crown gap intact -- no chinstrap, no brim.
+- ITEM 12: the mouth's dome rows ride the repack forward; head-on it now
+  reads as the small slit on the face (front-it2). Not widened.
+- FAULT 5: kTaper drop re-authored -- peak 1900 held at t=170, landing on
+  body width by t~340 (was still >1000 at t=400). sidecmp-18: the S reads
+  as an S again; the dive is a stroke, not a mass.
+- ITEM 13: the death2 stray eye triangle DIAGNOSED before fixing: hunted
+  with meshcheck --hunt (no flying vertices, both rungs), then rendered
+  unlit via the new zixxtrixx-death2-unlit/wire diagnostic subjects --
+  the pink/green sliver was GEOMETRY (survives unlit) and died with the
+  seam closure + repack (death2-it1-eye-check vs death2-head-zoom
+  baseline). Remaining pale patch under the eye is bulge SHADING (clean
+  in unlit) -- recorded, cosmetic. The meshcheck gate now guards the
+  class: no gate existed that could see it (probe/choreo/CRC all green
+  around it), which is exactly why the probe is committed.
+- FAULT 1: kBladeRoll -> 0; kTailRoll 14563 rolls THE END OF THE TAIL
+  (last three spine joints, distributed thirds, inside tail_rest so every
+  clip inherits it); the blades ride along -- and in the side view the
+  fork now separates in the sagittal plane exactly as Side.png draws it.
+  Splay stays 3000 ("further apart" kept). kBladeUpBias -2600-effective
+  (sign PROBE-CHOSEN: +2600 dug the fall 60 mm deeper) makes the fork
+  asymmetric the way the sheet draws it: lower blade continues the tail
+  line. The attack closes the fan with authority (bias*auth), the spear
+  rig closes it fully -- the javelin stays a javelin.
+- CLEARANCES RE-AUTHORED off the probe, per ground-contact law:
+  kFallLift 916 -> 1371 (the rolled fan sweeps a deeper arc; back to the
+  approved ~20 mm near-brush, band [20..2562]). Lying family re-declared:
+  death -104 (was -114), knock/getup -127, hitfloor -149 (was -177/-178),
+  corpse -104 (was -161), death1 -132 -- same keel class, the rolled fan
+  and repacked head press differently. Attack impact keel -547 (was
+  -496): the un-rolled blade section reaches deeper in-plane; the tip law
+  itself is unchanged -- striketip measures 424/426/426 mm burial along
+  the aim (declared 420; reach re-measured 3911 vs constant 3908, within
+  the class). dmg-right blades kiss -31 for two keys mid-throw.
+  Probe exit 0; overlaps 8,177 hits all within allowances.
+- Page regen VERIFIED deterministic (two regens cmp-identical).

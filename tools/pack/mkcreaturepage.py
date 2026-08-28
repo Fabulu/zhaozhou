@@ -737,10 +737,23 @@ def tinted(base, drift_anchor, mult, drift, tooth=None):
 
 
 # atlas-space constants (the tile-space knobs x2 in U, x50/64 or x205/64 in V)
-A_EYE_COL_A = EYE_COL_A * 2          # 74
-A_EYE_COL_B = EYE_COL_B * 2          # 118
-A_EYE_ROW = 12                       # head-tile row 16 -> atlas V 12 (the
-                                     # smaller disc keeps the old centre)
+# RUN 1939, owner: "They also need to move downwards a little" -- the discs
+# drop from 5 tile texels above the side lines to 3 (74/118 -> 70/122 in
+# atlas columns). The recorded chinstrap fault was the rings MEETING over
+# the crown; moving AWAY from the crown is the safe direction.
+A_EYE_COL_A = EYE_COL_A * 2 - 8      # 66: judged on the head-on still --
+# at 70 the discs still rode high and the ball read mushroom-topped;
+# Front.png centres the eyes at the head's midline
+A_EYE_COL_B = EYE_COL_B * 2 + 8      # 126 (mirror)
+A_EYE_ROW = 18                       # 12 -> 18, RUN 1939: the dome repack
+                                     # (kHeadStationYMm) carries every head
+                                     # V row ~70 mm nose-ward, which IS the
+                                     # owner's "eyes need to come forward
+                                     # more" -- but at row 12 the disc's
+                                     # front edge landed on the dome curve
+                                     # (the recorded wrap fault); 15 keeps
+                                     # the whole disc on the ball with the
+                                     # net move still firmly forward
 A_EYE_U = 24                         # 12 tile texels of angle -> 24 atlas cols
 A_EYE_V = 19                         # 24 head rows -> 19 atlas rows
 A_EYE_RING = 3                       # orange surround, atlas texels of U --
@@ -845,12 +858,17 @@ def build_atlas():
     # 4. PINK DORSAL BAND, crown to fork, melded edges (starts behind the
     # dome so the frontal face is not split -- run 2339 r5/r6 lesson)
     def pink_half_atlas(y):
+        # start pushed 12 -> 20 (RUN 1939): the dome repack pulls V rows
+        # nose-ward, so a band starting at V 12 would paint ONTO the new
+        # dome (ring 2.6 now sits at ~70 mm) and re-earn the recorded
+        # pink-stripe-down-the-face fault. V 20 = ring ~4.4 = just behind
+        # the dome's end; the ramp completes by the mid-skull as before.
         y128 = y / (H / 256.0)
         full = PINK_HALF_TILE * 2.0 * SC
-        if y128 < 12:
+        if y128 < 17:
             return 0.0
-        if y128 < 25:
-            return 8.0 * SC + (full - 8.0 * SC) * (y128 - 12) / 13.0
+        if y128 < 30:
+            return 8.0 * SC + (full - 8.0 * SC) * (y128 - 17) / 13.0
         return full
     for y in range(2 * SC, H):
         half = pink_half_atlas(y)

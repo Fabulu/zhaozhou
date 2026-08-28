@@ -188,9 +188,19 @@ struct TaperKey {
 #define ZIXX_GIRTH 850
 #endif
 
+// RUN 1939, fault 5 (owner: "Snake is too fat in front after the neck and
+// keeps being fat for too long, you barely see the S anymore"). The girth
+// ORDER stands (body < head 1830 < neck 1900) -- what changes is the SHAPE
+// of the drop: the previous profile was still >1000 at t=400 and only
+// reached body width at t~470-560, so the thick tube ran through most of
+// the dive and the S's middle stroke read as one fat mass. The drop now
+// leaves the peak immediately and lands on body width by t~340 -- "behind
+// the neck the body drops off QUICKLY to normal". Judged on the unlit
+// side outline beside Side.png (the S must read as an S at a glance).
+// Grounded radii t>=560 stay untouched to the millimetre (load-bearing).
 constexpr TaperKey kTaper[] = {
-    {0, 1620},  {50, 1760}, {110, 1830}, {180, 1900}, {260, 1780},
-    {330, 1400}, {400, 1000}, {470, 890}, {560, 860}, {620, 860},
+    {0, 1620},  {50, 1760}, {110, 1830}, {170, 1900}, {230, 1620},
+    {290, 1180}, {340, 950}, {400, 880}, {470, 865}, {560, 860}, {620, 860},
     {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
@@ -251,10 +261,19 @@ constexpr int32_t kStageCentreMm = 920;
 // the head-only retaper: the nose base radius shrank, so the dome rounds
 // off BLUNTER rather than drawing the smaller radius out into a point.
 constexpr int kNoseDomeStations = 4;
-constexpr int16_t kNoseDome[kNoseDomeStations] = {520, 840, 950, 990};
-// (380/760/925/985 -> 520/840/950/990, RUN 0757: the sheet's terminal lobe
-// ends BLUNTER -- the old dome drew the tip out into a soft point once the
-// head reached forward level; judged unlit beside Side.png, sidecmp-08)
+// RUN 1939, fault 2 (owner: "The front of the face is completely flat
+// instead of rounded. I hope we can do that without attaching a weird
+// helmet."). No overlay part, ever -- the rounding comes from the terminal
+// rings of the ONE tube: the head stations are REPACKED toward the nose
+// (kHeadStationYMm below) and these factors put the packed rings on a
+// blunt superellipse (n~2.4, run-in ~135 mm), so the face is a genuine
+// dome ending in a small cap dot instead of a 114 mm flat disc. The old
+// 520/840/950/990 factors on 54.5 mm uniform spacing WERE the flat face:
+// the first ring still carried half the full radius. Blunt, not pointed:
+// the 270 tip factor keeps a real cap (the recorded soft-point fault came
+// from drawing a SMALL radius out over a LONG first segment; the packed
+// 18 mm first segment cannot do that).
+constexpr int16_t kNoseDome[kNoseDomeStations] = {270, 590, 810, 950};
 
 // section ellipticity, measured: wider than tall
 constexpr int32_t kHeadWideNum = 112;  // head 1.12 : 1
@@ -339,9 +358,22 @@ constexpr int kSkullRigidTo = 2;  // stations 0..2 fully on the head bone
                                   // SEAMLESS -- a shorter rigid core and a
                                   // longer falloff let the tube bend into
                                   // the skull instead of creasing at it)
-constexpr int kSkullBlendTo = 11; // stations 5..11 blend head -> spine (seven
-                                  // stations: three collapsed the fold onto
-                                  // the eye's rear -- seen on the sweep)
+constexpr int kSkullBlendTo = 10; // last station that carries any kBHead
+                                  // weight. 11 -> 10, RUN 1939 (fault 4,
+                                  // "you can see the seams"): at 11 the
+                                  // blend window INCLUDED the junction ring
+                                  // (kHeadEnd), so the head part's copy of
+                                  // that ring carried {kBHead, spine, 6/64}
+                                  // while the body part's copy carried pure
+                                  // station_bind -- identical bind POSITIONS
+                                  // but disagreeing binds, and the two
+                                  // copies skinned APART whenever the head
+                                  // bone moved: a pose-dependent OPEN seam,
+                                  // 24 mm at the idle's breath, 79 mm in the
+                                  // fall (zixx-meshcheck, committed this
+                                  // run). The junction ring now takes
+                                  // station_bind EXACTLY in both parts; the
+                                  // meshcheck gate holds it at zero.
 
 // THE EYE IS NOT GEOMETRY. A yellow ball on the side of the head was the
 // obvious thing and it looked exactly like what it was: a sphere glued to a
@@ -360,7 +392,12 @@ constexpr int kEyeStation1 = 7;      // last. 4..7, was 3..8 (v3 run): six
                                      // whole head -- the "brim". Two fewer
                                      // stations localise it at the eyes.
 #ifndef ZIXX_EYEBULGE
-#define ZIXX_EYEBULGE 22
+// 26, was 22 (RUN 1939, owner: "bulge a little more" -- the third ask on
+// this knob, and the ladder history brackets it: 16 was thin crescents,
+// 42 was the mushroom brim, 28 "starts wedging the skull outline". 26
+// sits under the recorded wedge threshold; judged on the head-on still
+// beside Front.png with the crown gap intact).
+#define ZIXX_EYEBULGE 26
 #endif
 constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
                                      // extra lateral half-width, % of the ring.
@@ -427,12 +464,33 @@ constexpr int32_t kBladeThick0 = 12;   // half-thickness at the root (VERTICAL)
 // splaying ~38 deg across it.
 constexpr int32_t kBladeSplay = 3000;  // 1500 -> 3000 (run 0326 owner:
                                        // "should be further apart")
-constexpr int32_t kBladeRoll = 14563;  // ~80 deg about the blade's own long
-                                       // axis (owner: "rotated 80 degrees")
-                                       // -- the broad face turns to the
-                                       // side view, the sheet's flat read
-constexpr int32_t kBladeRise = 2600;   // lifted past the raised stem, so the
-                                       // fan reads against the sky as drawn
+// RUN 1939, fault 1 (owner: "You rotated fins by 80 degrees. That wasn't
+// the idea. You were supposed to rotate the entire tail. Unrotate the
+// fins, rotate the end of the tail, the fins should go along with it
+// automatically."). So the 80 degrees moves OFF the blades' own bones and
+// ONTO THE END OF THE TAIL: kTailRoll twists the last three spine joints
+// about the tube's own axis (a roll moves no centreline nodes), and the
+// blades -- children of the fork -- inherit it in every clip for free.
+// This is also the sounder construction: a blade rotated independently of
+// the limb it grows from fights that limb in every animation.
+constexpr int32_t kBladeRoll = 0;      // owner: "Unrotate the fins"
+constexpr int32_t kTailRoll = 14563;   // ~80 deg, distributed over the
+                                       // tail-rise joints so the tube
+                                       // twists organically instead of
+                                       // snapping at one ring
+constexpr int32_t kBladeRise = 2600;   // in the ROLLED frame this is the
+                                       // lateral flap component; clips
+                                       // animate it for blade life
+// THE FAN'S UP-BIAS (RUN 1939, with the tail roll): in the rolled frame
+// the splay spreads the pair in the SAGITTAL plane, so a symmetric +-3000
+// hung one blade ~240 mm under the tail line and the fall/hit/balance
+// probes caught it sweeping dirt. Side.png draws the fork ASYMMETRIC:
+// the lower blade nearly CONTINUES the tail's own line, the upper one
+// splays high. The bias recreates exactly that: pair spread stays
+// 2*kBladeSplay ("should be further apart" kept), nothing reaches below
+// the stem. Sign judged on the render (the rolled frame's up is not
+// guessable on paper).
+constexpr int32_t kBladeUpBias = 2600;
 // 280: Fabian 2026-08-27, "make the middle prong of the tail a bit longer"
 constexpr int32_t kSpikeLen = 280;
 constexpr int32_t kSpikeR = 26;
@@ -806,7 +864,9 @@ constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
 // posed S's planform centre, measured by the pose probe.
 constexpr int32_t kFallPivotX = -990;   // mm behind the nose
 constexpr int32_t kFallPivotY = -60;    // mm below the nose
-constexpr int32_t kFallLift = 916;    // 890 -> 916, girth 850: the slimmer
+constexpr int32_t kFallLift = 1371;  // 916 -> 1371, RUN 1939: the rolled
+    // fan swings a deeper arc through the tumble; probe-set back to the
+    // approved ~20 mm near-brush after the up-bias reclaimed most of it.    // 890 -> 916, girth 850: the slimmer
     // tube (and its kBodyY carry) lowered the tumble to a -6 mm ground
     // kiss; +26 restores the authored ~20 mm near-brush (probe).
     // 934 -> 890, compact-S pass: the
@@ -1097,9 +1157,22 @@ enum : uint8_t {
 };
 static_assert(kBoneCount <= 32, "creature_rules 1.2: <= 32 bones");
 
-// station -> world distance back from the nose
-inline int32_t station_x(int i) {
+// station -> world distance back from the nose.
+// THE DOME REPACK (RUN 1939, fault 2): ring COUNT in the head part is
+// frozen (V maps by ring index, so inserting rings would shift every
+// painted face row), but ring POSITIONS are authoring-free. The head
+// stations pack toward the nose so the dome factors above have close
+// stations to curve through -- and the eye/mouth paint rides its rings
+// ~70 mm forward with the repack ("The eyes need to come forward more").
+// Station kHeadEnd stays EXACTLY the linear station_x value: it is the
+// junction ring shared bit-identically with the body part.
+constexpr int16_t kHeadStationYMm[kHeadEnd + 1] = {
+    0, 18, 45, 85, 135, 190, 250, 315, 385, 455, 525, 599};
+inline int32_t station_x_linear(int i) {
   return static_cast<int32_t>((static_cast<int64_t>(kBodyLenMm) * i) / (kProfileStations - 1));
+}
+inline int32_t station_x(int i) {
+  return i <= kHeadEnd ? kHeadStationYMm[i] : station_x_linear(i);
 }
 // station -> half-thickness in mm, off the HAND-AUTHORED taper (kTaper in
 // KNOBS -- adjust by rendering and looking), with the first stations rounded
@@ -1200,8 +1273,16 @@ inline Bind head_station_bind(int i) {
 
     const Bind sb = station_bind(i);
     const uint8_t spine = sb.w0 >= 32 ? sb.b0 : sb.b1;  // the majority bone
+    // SMOOTHSTEP falloff (RUN 1939): the linear ramp ended on a 7/64 step
+    // at the junction, and the meshcheck read the last head segment
+    // stretching 2.8x under the walk's head surge -- the seam was closed
+    // but the skin next to it still tore. Smoothstep is flat at BOTH ends:
+    // the rigid core hands over gently and the junction arrives at zero
+    // with a ~2/64 final step.
     const int span = kSkullBlendTo + 1 - kSkullRigidTo;
-    const int w = (64 * (kSkullBlendTo + 1 - i)) / span;
+    const int t = ((kSkullBlendTo + 1 - i) * 1000) / span;
+    const int ss = t * t * (3000 - 2 * t) / 1000000;  // 0..1000 (ss1000 law)
+    const int w = (64 * ss) / 1000;
     return Bind{kBHead, spine, static_cast<uint8_t>(w)};
   }
   return station_bind(i);
@@ -1301,9 +1382,24 @@ struct Rig {
   void reset() {
     for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
   }
-  void tail_rest(int32_t splay = kBladeSplay, int32_t rise = kBladeRise) {
-    q[kBBladeL] = quat_mul(quat_mul(quat_y(splay), quat_z(-rise)), quat_x(kBladeRoll));
-    q[kBBladeR] = quat_mul(quat_mul(quat_y(-splay), quat_z(-rise)), quat_x(-kBladeRoll));
+  void tail_rest(int32_t splay = kBladeSplay, int32_t rise = kBladeRise,
+                 int32_t bias = kBladeUpBias) {
+    // THE END OF THE TAIL ROLLS (kTailRoll, fault 1): composed onto the
+    // last three spine joints AFTER their stance pitch, about local X --
+    // the tube's own axis -- so the centreline never moves and the whole
+    // fan assembly (blades, spike, their offsets) inherits the turn.
+    // Every clip calls tail_rest, so every clip carries the construction.
+    const int32_t third = kTailRoll / 3;
+    q[kSpineBones - 3] = quat_mul(q[kSpineBones - 3], quat_x(third));
+    q[kSpineBones - 2] = quat_mul(q[kSpineBones - 2], quat_x(third));
+    q[kSpineBones - 1] =
+        quat_mul(q[kSpineBones - 1], quat_x(kTailRoll - 2 * third));
+    // bias sign PROBE-CHOSEN (the rolled frame's +yaw turned out to point
+    // DOWN: the first cut biased +2600 and the fall/hit worst-Y numbers
+    // DEEPENED ~60-160 mm; negative lifts the pair so the lower blade
+    // continues the tail line, the sheet's own asymmetry)
+    q[kBBladeL] = quat_mul(quat_y(splay - bias), quat_z(-rise));
+    q[kBBladeR] = quat_mul(quat_y(-splay - bias), quat_z(-rise));
     q[kBSpike] = quat_z(-rise / 2);
   }
   void write(zc::Clip& c, int f) const {
@@ -1791,7 +1887,7 @@ inline zc::Clip build_attack(bool choreo = false) {
     // the blades close to the spear line while coiled or straight-diving,
     // and flare as the S returns
     g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5,
-                (kBladeRise * auth) / 1000);
+                (kBladeRise * auth) / 1000, (kBladeUpBias * auth) / 1000);
     g.write(c, f);
     if (!choreo) {
       c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
@@ -3410,7 +3506,7 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
 inline void spear_rig(Rig& g) {
   g.reset();
   g.q[kBHead] = quat_z(0);
-  g.tail_rest(kBladeSplay / 5, 0);
+  g.tail_rest(kBladeSplay / 5, 0, 0);  // the javelin closes the fan: no bias
 }
 
 // SPEAR FLEX (slot 14): while embedded (or held), the otherwise straight

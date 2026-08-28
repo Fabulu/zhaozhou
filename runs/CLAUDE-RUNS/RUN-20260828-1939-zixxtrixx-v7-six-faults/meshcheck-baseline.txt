@@ -1,0 +1,53 @@
+meshcheck: 1702 verts, 1046 shared-position groups, 22 with DISAGREEING binds
+  bind (-599,800,-44)mm: [m10 v29 b0=25 b1=4 w0=6] [m11 v6 b0=3 b1=4 w0=17]
+  bind (-599,800,43)mm: [m10 v28 b0=25 b1=4 w0=6] [m11 v5 b0=3 b1=4 w0=17]
+  bind (-599,821,-126)mm: [m10 v30 b0=25 b1=4 w0=6] [m11 v7 b0=3 b1=4 w0=17]
+  bind (-599,821,125)mm: [m10 v27 b0=25 b1=4 w0=6] [m11 v4 b0=3 b1=4 w0=17]
+  bind (-599,860,-199)mm: [m10 v31 b0=25 b1=4 w0=6] [m11 v8 b0=3 b1=4 w0=17]
+  bind (-599,860,198)mm: [m10 v26 b0=25 b1=4 w0=6] [m11 v3 b0=3 b1=4 w0=17]
+  bind (-599,915,-255)mm: [m10 v32 b0=25 b1=4 w0=6] [m11 v9 b0=3 b1=4 w0=17]
+  bind (-599,915,254)mm: [m10 v25 b0=25 b1=4 w0=6] [m11 v2 b0=3 b1=4 w0=17]
+  bind (-599,981,-291)mm: [m10 v33 b0=25 b1=4 w0=6] [m11 v10 b0=3 b1=4 w0=17]
+  bind (-599,981,290)mm: [m10 v24 b0=25 b1=4 w0=6] [m11 v1 b0=3 b1=4 w0=17]
+  bind (-599,1052,-303)mm: [m10 v34 b0=25 b1=4 w0=6] [m11 v11 b0=3 b1=4 w0=17]
+  bind (-599,1052,302)mm: [m10 v23 b0=25 b1=4 w0=6] [m10 v45 b0=25 b1=4 w0=6] [m11 v0 b0=3 b1=4 w0=17] [m11 v22 b0=3 b1=4 w0=17]
+  bind (-599,1124,-291)mm: [m10 v35 b0=25 b1=4 w0=6] [m11 v12 b0=3 b1=4 w0=17]
+  bind (-599,1124,290)mm: [m10 v44 b0=25 b1=4 w0=6] [m11 v21 b0=3 b1=4 w0=17]
+  bind (-599,1190,-255)mm: [m10 v36 b0=25 b1=4 w0=6] [m11 v13 b0=3 b1=4 w0=17]
+  bind (-599,1190,254)mm: [m10 v43 b0=25 b1=4 w0=6] [m11 v20 b0=3 b1=4 w0=17]
+  bind (-599,1245,-199)mm: [m10 v37 b0=25 b1=4 w0=6] [m11 v14 b0=3 b1=4 w0=17]
+  bind (-599,1245,198)mm: [m10 v42 b0=25 b1=4 w0=6] [m11 v19 b0=3 b1=4 w0=17]
+  bind (-599,1284,-126)mm: [m10 v38 b0=25 b1=4 w0=6] [m11 v15 b0=3 b1=4 w0=17]
+  bind (-599,1284,125)mm: [m10 v41 b0=25 b1=4 w0=6] [m11 v18 b0=3 b1=4 w0=17]
+  bind (-599,1305,-44)mm: [m10 v39 b0=25 b1=4 w0=6] [m11 v16 b0=3 b1=4 w0=17]
+  bind (-599,1305,43)mm: [m10 v40 b0=25 b1=4 w0=6] [m11 v17 b0=3 b1=4 w0=17]
+clip slot 1: worst seam split 24 mm (key 56)  STRETCH FAIL ratio 3.00 (+108 mm) key 49 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 2: worst seam split 34 mm (key 14)  STRETCH FAIL ratio 3.83 (+152 mm) key 15 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 3: worst seam split 29 mm (key 6)  STRETCH FAIL ratio 4.13 (+168 mm) key 6 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 4: worst seam split 79 mm (key 130)  STRETCH FAIL ratio 4.86 (+208 mm) key 32 m10 [v11 b25/3 w12 uv 128,45]-[v34 b25/4 w6 uv 128,50]
+clip slot 5: worst seam split 66 mm (key 3)  STRETCH FAIL ratio 4.86 (+208 mm) key 3 m10 [v17 b25/3 w12 uv 197,45]-[v40 b25/4 w6 uv 197,50]
+clip slot 6: worst seam split 18 mm (key 2)  STRETCH FAIL ratio 2.91 (+103 mm) key 2 m10 [v17 b25/3 w12 uv 197,45]-[v40 b25/4 w6 uv 197,50]
+clip slot 7: worst seam split 11 mm (key 36)
+clip slot 8: worst seam split 29 mm (key 59)  STRETCH FAIL ratio 2.87 (+101 mm) key 62 m10 [v17 b25/3 w12 uv 197,45]-[v40 b25/4 w6 uv 197,50]
+clip slot 10: worst seam split 29 mm (key 6)  STRETCH FAIL ratio 4.13 (+168 mm) key 6 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 11: worst seam split 29 mm (key 0)  STRETCH FAIL ratio 4.13 (+168 mm) key 0 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 12: worst seam split 23 mm (key 0)  STRETCH FAIL ratio 2.85 (+99 mm) key 0 m10 [v5 b25/3 w12 uv 58,45]-[v28 b25/4 w6 uv 58,50]
+clip slot 13: worst seam split 23 mm (key 0)  STRETCH FAIL ratio 2.85 (+99 mm) key 0 m10 [v5 b25/3 w12 uv 58,45]-[v28 b25/4 w6 uv 58,50]
+clip slot 14: worst seam split 13 mm (key 4)
+clip slot 15: worst seam split 0 mm (key -1)
+clip slot 16: worst seam split 3 mm (key 1)
+clip slot 17: worst seam split 11 mm (key 13)
+clip slot 20: worst seam split 14 mm (key 3)
+clip slot 21: worst seam split 11 mm (key 31)
+clip slot 22: worst seam split 8 mm (key 0)
+clip slot 23: worst seam split 32 mm (key 3)  STRETCH FAIL ratio 3.35 (+126 mm) key 3 m10 [v17 b25/3 w12 uv 197,45]-[v40 b25/4 w6 uv 197,50]
+clip slot 24: worst seam split 50 mm (key 3)  STRETCH FAIL ratio 2.94 (+110 mm) key 3 m13 [v14 b5/6 w58 uv 199,68]-[v33 b5/6 w37 uv 199,73]
+clip slot 25: worst seam split 32 mm (key 3)  STRETCH FAIL ratio 3.35 (+126 mm) key 3 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 26: worst seam split 58 mm (key 3)  STRETCH FAIL ratio 5.90 (+264 mm) key 3 m10 [v17 b25/3 w12 uv 197,45]-[v40 b25/4 w6 uv 197,50]
+clip slot 27: worst seam split 48 mm (key 8)  STRETCH FAIL ratio 4.40 (+183 mm) key 9 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 28: worst seam split 14 mm (key 7)  STRETCH FAIL ratio 3.12 (+120 mm) key 16 m13 [v13 b5/6 w58 uv 184,68]-[v32 b5/6 w37 uv 184,73]
+clip slot 30: worst seam split 14 mm (key 22)
+clip slot 31: worst seam split 4 mm (key 0)
+clip slot 33: worst seam split 29 mm (key 6)  STRETCH FAIL ratio 4.13 (+168 mm) key 6 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 34: worst seam split 29 mm (key 6)  STRETCH FAIL ratio 4.13 (+168 mm) key 6 m10 [v16 b25/3 w12 uv 186,45]-[v39 b25/4 w6 uv 186,50]
+clip slot 35: worst seam split 29 mm (key 6)  STRETCH FAIL ratio 4.13 (+168 mm) key 6 m10 [v16 b25/3 w12 uv 186,4

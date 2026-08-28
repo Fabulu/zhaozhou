@@ -3649,6 +3649,14 @@ SceneSubject subject_zixx_death2() {
   return s;
 }
 
+// item 13 diagnostic: the death2 subject re-shot in a debug shade mode.
+SceneSubject subject_zixx_death2_mode(const char* name, int shade) {
+  SceneSubject s = subject_zixx_death2();
+  s.name = name;
+  s.creature_shade = shade;
+  return s;
+}
+
 // The TAUNT, near-level three-quarter so the wag reads.
 SceneSubject subject_zixx_taunt() {
   SceneSubject s;
@@ -4217,6 +4225,12 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-unlit")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit", 1, false, 1));
   if (wanted("zixxtrixx-unlit-front")) rc |= render_scene(subject_zixx_mode("zixxtrixx-unlit-front", 1, true, 1));
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));
+  // item 13 (RUN 1939): the death2 stray-eye-triangle hunt -- the same
+  // death2 subject in unlit / normal-viz / wireframe so a defect can be
+  // separated into "geometry in the wrong place" vs "shaded wrong".
+  if (wanted("zixxtrixx-death2-unlit")) rc |= render_scene(subject_zixx_death2_mode("zixxtrixx-death2-unlit", 1));
+  if (wanted("zixxtrixx-death2-normviz")) rc |= render_scene(subject_zixx_death2_mode("zixxtrixx-death2-normviz", 2));
+  if (wanted("zixxtrixx-death2-wire")) rc |= render_scene(subject_zixx_death2_mode("zixxtrixx-death2-wire", 3));
   if (wanted("zixxtrixx-wire")) rc |= render_scene(subject_zixx_mode("zixxtrixx-wire", 3, false, 1));
   if (wanted("zixxtrixx-walk-unlit")) rc |= render_scene(subject_zixx_walk_unlit());
   if (wanted("zixxtrixx-lodsweep")) rc |= render_scene(subject_zixx_lodsweep());
