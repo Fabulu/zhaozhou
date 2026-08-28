@@ -1,7 +1,7 @@
 # Task Log: RUN-20260828-2234 - Zixxtrixx v8 closeout and thick outlines
 
 **Created:** 2026-08-28 22:34 UTC+02:00
-**Status:** In Progress
+**Status:** Finished
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260828-2234-zixxtrixx-v8-closeout-thick-outlines/
 
 ---
@@ -65,6 +65,12 @@ Continue the interrupted v7 creature pass with a strong dedicated modelling agen
 - Added one responsive collection panel, not seventeen outer tabs. It presents two native 384x240 clips per row where width permits and one per row on narrow screens; each nested video has controls and does not autoplay. Headless-browser captures `site-stage2-collection-desktop.png` and `site-stage2-collection-mobile.png` were inspected and show the selected collection wired correctly in both layouts.
 - Reassembled the 75-media final site twice at byte-identical SHA-256 `3fe08dcb7f1c0f173e78f7b654dbd5f2740943d381de546eb803a7240d4c934e`. Final validation proves exactly 36 live outer entries plus one archive tab, one collection containing 17 controlled videos, intact `noindex,nofollow`, 17/17 WebMs fully decoding as 384x240 `yuv444p`, and 17/17 nearest-neighbour posters at 1152x720.
 
+### 2026-08-29 01:52 UTC+02:00 - Ordered second publication verified; run finished
+
+- Committed and pushed stage two as zhaozhou feature evidence `09888b5` and Upheaval site/media `f8ffab7`. Because the shared zhaozhou feature ancestry had independently acquired two unrelated commits, reconstructed the exact 27-path evidence delta directly on clean `origin/main` as `78a0b8d`; that clean commit alone fast-forwarded remote `main`, so no FPGA-lane ancestry hitchhiked. Upheaval remote `main` fast-forwarded cleanly to `f8ffab7`.
+- Ran the required second production publication with `deploy.ps1 -Project upheaval -Branch main`. Immutable deployment `https://3404f3ff.upheaval.pages.dev` and production alias `https://upheaval.pages.dev` return byte-identical HTTP 200 HTML with `noindex, nofollow` intact.
+- Production verification found exactly one collection panel and exactly 17 controlled items, retained the corrected canonical fall and all four new first-stage menu treatments, and received HTTP 200 with the expected `video/webm` or `image/png` MIME type for all 34 collection assets. Evidence is `evidence/deploy-stage2-verify.txt`; raw publication output is `evidence/deploy-stage2-output.txt`.
+
 ---
 
 ## Subagent Spawns
@@ -90,6 +96,4 @@ No subagents. Implementation remains serial as required.
 
 ## Next Steps
 
-1. Commit and push the completed second-stage render evidence and site collection on the two dedicated branches, staging only explicit Zixxtrixx/run/site paths.
-2. Fast-forward both remote `main` branches without absorbing unrelated working-tree lanes.
-3. **SECOND PUBLICATION:** run `deploy.ps1 -Project upheaval -Branch main`, verify the production alias, nested media and `noindex,nofollow`, then record the deployment and mark this run finished.
+None. The two-stage publication, production verification, evidence delivery and both-repository pushes are complete.

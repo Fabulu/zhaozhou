@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260828-2234
 **Created:** 2026-08-28 22:34 UTC+02:00
-**Status:** Active
+**Status:** Complete
 **Previous Version:** v7 handoff in `RUN-20260828-1939-zixxtrixx-v7-six-faults/`
 
 ---
