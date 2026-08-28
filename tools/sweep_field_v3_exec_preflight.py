@@ -22,6 +22,7 @@ VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.ex
 # Linting the top file alone would fail on missing modules for every mutant
 # equally -- which reads as "no mutant builds" rather than as a broken command.
 CONE = [
+    "fpga/rtl/field/zhao_field_ops_pkg.sv",
     RTL,
     "fpga/rtl/field/zhao_field_v3_rf.sv",
     "fpga/rtl/field/zhao_field_alu.sv",

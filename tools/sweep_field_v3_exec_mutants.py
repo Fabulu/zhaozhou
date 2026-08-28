@@ -398,6 +398,24 @@ MUTANTS = [
     ("X48 the operand hold covers only a HOLD, not a denial",
      "  assign upstream_frozen_c = hold_c || mul_denied_c;",
      "  assign upstream_frozen_c = hold_c;"),
+    # ---- the two lists must stay ONE list ----------------------------------
+    # This block and the dispatcher each used to carry an opinion about which
+    # opcodes leave the pipe: ten here, eight there. The two they disagreed
+    # about parked their context FOREVER, and neither block was wrong alone.
+    #
+    # `is_long` derives from zhao_field_ops_pkg now. X49 gives it back its own
+    # opinion -- the exact shape of the original defect -- by adding an opcode
+    # the dispatcher's width table does not know. A context using it hangs, so
+    # the composed test's completion checks are what catch this.
+    ("X49 the executor keeps a private opinion about what is long, and it differs",
+     "    is_long = zhao_field_ops_pkg::field_is_long(op);",
+     "    is_long = zhao_field_ops_pkg::field_is_long(op) || (op == 8'h1B);"),
+    # And the other direction: an op the dispatcher WOULD take that this block
+    # never offers is not a hang, it is an instruction the ALU cannot do -- so
+    # it must surface as unsupported rather than as a wrong answer.
+    ("X50 the executor offers nothing long at all",
+     "    is_long = zhao_field_ops_pkg::field_is_long(op);",
+     "    is_long = 1'b0 && zhao_field_ops_pkg::field_is_long(op);"),
 ]
 
 

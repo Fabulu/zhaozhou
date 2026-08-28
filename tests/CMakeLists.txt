@@ -1437,7 +1437,8 @@ target_link_libraries(test_field_v3_exec_directed PRIVATE zhao_harness zhao_zref
 verilate(test_field_v3_exec_directed
   PREFIX Vzhao_probe_v3_engine
   TOP_MODULE zhao_probe_v3_engine
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
@@ -1485,7 +1486,8 @@ target_link_libraries(test_field_v3_dispatch_directed PRIVATE zhao_harness zhao_
 verilate(test_field_v3_dispatch_directed
   PREFIX Vzhao_field_v3_dispatch
   TOP_MODULE zhao_field_v3_dispatch
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv)
 add_test(NAME field_v3_dispatch_directed COMMAND test_field_v3_dispatch_directed)
 set_tests_properties(field_v3_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
@@ -1536,7 +1538,8 @@ target_link_libraries(test_field_v3_full_directed PRIVATE zhao_harness zhao_zref
 verilate(test_field_v3_full_directed
   PREFIX Vzhao_probe_v3_full
   TOP_MODULE zhao_probe_v3_full
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
@@ -1556,7 +1559,8 @@ target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_z
 verilate(test_field_v3_svcpath_directed
   PREFIX Vzhao_field_v3_svcpath
   TOP_MODULE zhao_field_v3_svcpath
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv

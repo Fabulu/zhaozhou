@@ -58,8 +58,8 @@ MUTANTS = [
     # just refused, which is the exact opposite of the rule.
     ("E01 a refused request does not stall issue, so operands are lost",
      EXEC,
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;",
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && mul_denied_c;"),
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_busy_c;",
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && mul_denied_c && !sk_busy_c;"),
     ("E02 the denial is read from the wrong direction",
      EXEC,
      "  assign mul_denied_c = mul_req_valid_o && !mul_req_ready_i;",

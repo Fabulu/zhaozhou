@@ -38,6 +38,7 @@ VROOT = os.environ.get(
 VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.exe"))
 
 CONE = [
+    "fpga/rtl/field/zhao_field_ops_pkg.sv",
     RTL,
     "fpga/rtl/field/zhao_field_v3_dispatch.sv",
     "fpga/rtl/field/zhao_field_v3_noise.sv",

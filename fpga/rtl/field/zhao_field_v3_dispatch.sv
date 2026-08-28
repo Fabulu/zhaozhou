@@ -170,14 +170,10 @@ module zhao_field_v3_dispatch #(
   localparam logic signed [31:0] PAD_D = 32'sd11;
 
   // ---- the op table's dst_width, mirrored and nothing else ----------------
-  localparam logic [7:0] OP_NORMALIZE2 = 8'h15;
-  localparam logic [7:0] OP_NORMALIZE3 = 8'h16;
-  localparam logic [7:0] OP_CURVE      = 8'h1A;
-  localparam logic [7:0] OP_NOISE2     = 8'h1C;
-  localparam logic [7:0] OP_DCURVE     = 8'h1D;
-  localparam logic [7:0] OP_RIDGE      = 8'h22;
-  localparam logic [7:0] OP_ROT2       = 8'h28;
-  localparam logic [7:0] OP_ROT3       = 8'h29;
+  // The opcode constants that stood here are GONE, not moved twice: they
+  // live in zhao_field_ops_pkg.sv with the width table that uses them.
+  // Keeping a private copy is how this block and the executor came to
+  // disagree about SPLINE and RING in the first place.
 
   // 0 means "not a long op this block knows", and it is REFUSED rather than
   // guessed: a wrong width writes the wrong number of registers, which is a
@@ -218,13 +214,11 @@ module zhao_field_v3_dispatch #(
   //     wrong one of those two would route the expensive form into a block
   //     that does not implement it, which is the mistake wrong_op_o in
   //     zhao_field_v3_svcpath.sv exists to catch.
+  // DERIVED, NOT DECLARED -- see zhao_field_ops_pkg.sv. The executor asks
+  // the same table whether to offer an op that this one asks whether to
+  // accept, so the two cannot disagree. They did, and it deadlocked.
   function automatic logic [1:0] dst_width_of(input logic [7:0] op);
-    case (op)
-      OP_CURVE, OP_DCURVE, OP_RIDGE:            dst_width_of = 2'd1;
-      OP_NOISE2, OP_ROT2, OP_NORMALIZE2:        dst_width_of = 2'd2;
-      OP_ROT3, OP_NORMALIZE3:                   dst_width_of = 2'd3;
-      default:                                  dst_width_of = 2'd0;
-    endcase
+    dst_width_of = zhao_field_ops_pkg::field_long_width(op);
   endfunction
 
   // ---- the gather ---------------------------------------------------------

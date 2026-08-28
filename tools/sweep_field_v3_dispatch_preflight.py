@@ -22,7 +22,11 @@ VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.ex
 # engine's and reaches it through ports, which is the whole point of the shape.
 # So the cone is one file, and a lint failure here is the mutant's fault rather
 # than a missing module.
-CONE = [RTL]
+# THE PACKAGE COMES FIRST. This block stopped carrying its own opcode table
+# on 2026-08-28 and derives it from zhao_field_ops_pkg instead, because the
+# private copy is how it and the executor came to disagree about SPLINE and
+# RING -- a disagreement that parked a context forever.
+CONE = ["fpga/rtl/field/zhao_field_ops_pkg.sv", RTL]
 
 CMD = [VBIN, "--lint-only", "-Wall", "-Wno-DECLFILENAME",
        "--top-module", "zhao_field_v3_dispatch"] + [os.path.join(ROOT, f) for f in CONE]

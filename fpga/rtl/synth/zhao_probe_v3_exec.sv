@@ -249,16 +249,13 @@ module zhao_probe_v3_exec #(
   // The ops this block hands to a service rather than executing. Every one of
   // them is a four-point unit that borrows the shared bank; the list is the
   // generated op table's, not a guess.
+  // DERIVED, NOT DECLARED. This used to be its own case list of ten
+  // opcodes while the dispatcher kept a different list of eight -- and a
+  // program using one of the two they disagreed about parked its context
+  // forever. One table now answers both questions; see
+  // zhao_field_ops_pkg.sv for what that cost and why it is not a patch.
   function automatic logic is_long(input logic [7:0] op);
-    case (op)
-      8'h15, 8'h16,          // NORMALIZE2, NORMALIZE3
-      8'h1A, 8'h1B, 8'h1C,   // CURVE, SPLINE, NOISE2
-      8'h1D,                 // DCURVE
-      8'h21, 8'h22,          // RING, RIDGE
-      8'h28, 8'h29:          // ROT2, ROT3
-        is_long = 1'b1;
-      default: is_long = 1'b0;
-    endcase
+    is_long = zhao_field_ops_pkg::field_is_long(op);
   endfunction
 
   logic long_at_s4_c;
