@@ -187,3 +187,82 @@ where the shared bank's signedness could silently disagree with an op's
 semantics, and the disagreement would show up as a hash that is right for
 small coordinates and wrong for large ones -- the failure that looks like a
 bad seed rather than a bad multiply.
+
+---
+
+## The attach question the bank raises, before anything attaches to it
+
+`zhao_field_v3_mulbank` is already parameterised for three claimants, so
+wiring the noise unit alongside the curve service needs no change to it. What
+does need deciding first is the PRIORITY, and the bank states its own rule:
+
+> Claimant 0 is the ALU lanes; 1 and above are services. With
+> `PRIO_SERVICES_FIRST` the highest index wins, so services outrank lanes.
+
+**Highest index wins is a total order, so with TWO services the lower-indexed
+one can be starved by the higher.** Today that is untested in both directions:
+the bank's own differential measures a service beating the lanes on every
+clock, which is the starvation it was built to demonstrate, but it has never
+had two services asking at once.
+
+The reason to raise this before the attach rather than after is the shape of
+every defect found in the last two days: each block was correct alone, scored
+full marks alone, and the fault lived at the SEAM. A starvation between two
+services is exactly that kind of fault -- it cannot appear in either service's
+sweep, and it will not appear in a composition test unless the test makes both
+services ask at once and MEASURES that both were served.
+
+### What the duty cycles say, which is not the same as a proof
+
+Neither service saturates the bank on its own:
+
+    four-point NOISE2   six requests, each followed by a two-clock wait
+    four-point RIDGE    four requests, same shape
+    four-point CURVE    ONE request per group, at an II of 13
+
+So on a first reading the two cannot conflict often, and a fixed priority
+looks harmless. That reading is a duty-cycle argument, not a starvation
+argument: it says collisions are rare, not that a starved claimant recovers.
+The measurement that would settle it is a composition test in which both
+services run continuously and each one's completion count is asserted, which
+is what the attach should carry.
+
+**Do not resolve this by changing the arbiter first.** `PRIO_SERVICES_FIRST`
+is a requirement rather than a preference -- `reports/FIELD_V3_SERVICE_ATTACH.md`
+records why, and it was written after a round-robin proposal would have
+silently broken a service that could not be refused. That reason has since
+weakened, because the curve service and the noise unit both handle refusal
+now, but "the reason for a rule has weakened" is not the same as "the rule is
+wrong", and the order matters: measure the starvation, then decide.
+
+## ROT's sine table probably should NOT be shared, and that is not a shortcut
+
+The blocker table lists ROT2/ROT3 as needing "the shared sine table". Reading
+`zhao_field_sin_rom.sv` changes the recommendation.
+
+The ROM is **257 entries of 17 bits -- about 4.4 kbit, one M10K** -- with TWO
+read ports, which is exactly the shape a four-point unit wants: each sine
+evaluation reads `base` and `base+1`, so one point's lookup is one clock. Four
+points needing cos and sin each is sixteen reads, eight clocks on two ports,
+and then the four products are FOUR four-wide bank requests rather than
+sixteen.
+
+So a four-point ROT2 costs roughly eight lookup clocks plus four bank
+requests, which puts it in the same range as NOISE2's twenty.
+
+**The reason not to share it is the owner's own rule.** The sharing rule this
+whole architecture came from is about SCARCITY: the first Field synthesis
+measured 79 DSPs against a device with 112, and the answer was to share the
+multipliers. The device has **553 M10K**. A private sine ROM costs one of
+them and removes an arbitration path, a refusal path, and a starvation
+question entirely -- all of which have now cost real time on the multiplier
+side.
+
+Sharing a plentiful resource buys nothing and adds exactly the class of defect
+that has been the expensive one all week. Share what is scarce.
+
+This is a recommendation with a number behind it, not a decision: if SIN and
+COS as standalone ops also want a table, that is a second M10K, and two out of
+553 is still the right trade. If a later count shows M10K pressure -- the
+terrain and texture caches are the plausible source -- this is the first thing
+to revisit, and the arbitration it would need is already designed twice over.
