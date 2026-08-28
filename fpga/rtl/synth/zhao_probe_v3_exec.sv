@@ -502,7 +502,7 @@ module zhao_probe_v3_exec #(
   // The sum is formed at the FULL 66-bit product width and rescaled ONCE by
   // the ALU. Rescaling each product and adding is a different answer, and
   // zfield's dot2/dot3 are the single-rounding form.
-  logic signed [65:0] dot_sum_c;
+  logic signed [65:0] dot_sum_c;
   logic signed [65:0] dot_total_c;
   // The adder takes the product arriving this clock; the ALU takes the
   // finished total. Keeping these separate is what removes the old
@@ -560,6 +560,8 @@ module zhao_probe_v3_exec #(
 
   logic wb_req_c, retire_hold_c;
 
+
+
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
   // running during preload, so there is no contention to arbitrate.
@@ -575,6 +577,9 @@ module zhao_probe_v3_exec #(
       // port -- and then, once granted, write it a SECOND time through the
       // shared port. A duplicated write is invisible for an idempotent value
       // and wrong for every accumulating one.
+      // ONE SOURCE FOR THE FILE AND THE PORT. `wb_*_o` already selects skid
+      // head or S4; the file follows it exactly, so the two can never disagree
+      // about what was written.
       rf_we_c    = wb_req_c && wb_ready_i;
       rf_wctx_c  = s4_ctx_r;
       rf_wreg_c  = s4_dst_r;
@@ -628,6 +633,7 @@ module zhao_probe_v3_exec #(
   assign wb_reg_o   = s4_dst_r;
   assign wb_data_o  = alu_result;
 
+
   assign done_valid_o = s4_v_r && alu_is_end;
   assign done_ctx_o   = s4_ctx_r;
 
@@ -642,8 +648,8 @@ module zhao_probe_v3_exec #(
       waiting_r     <= '0;
       rf_writes_o   <= 32'd0;
       unsupported_o <= 1'b0;
-      desync_o      <= 1'b0;
-      issued_s1_r   <= 1'b0;
+      desync_o      <= 1'b0;
+      issued_s1_r   <= 1'b0;
       issued_s2_r   <= 1'b0;
       dot_acc_r     <= '0;
       dot_cnt_r     <= 2'd0;
@@ -692,6 +698,25 @@ module zhao_probe_v3_exec #(
         dot_cnt_r   <= 2'd0;
         dot_issue_r <= 2'd0;
       end
+
+      // THE MULTIPLIER'S ACCOUNTING LIVES OUT HERE, WITH THE MULTIPLIER.
+      //
+      // It used to sit inside the upstream block, which a denial freezes. The
+      // multiplier is not frozen by anything -- a product issued at T arrives
+      // at T+2 regardless -- so during a denial these registers stopped
+      // shifting while products kept arriving, and the two lost each other.
+      //
+      // With ONE context the pipe is mostly empty (13 uops in 69 clocks) and a
+      // denial almost never lands on a clock with a product in flight. With
+      // FOUR it is constant: desync latched on 12 of 12 programs and 21 of 48
+      // context-programs came out wrong, with no write port involved at all.
+      //
+      // This is the same law the region below is introduced with, applied to
+      // the bookkeeping as well as the datapath: a denial is BACK-PRESSURE
+      // UPSTREAM ONLY.
+      issued_s1_r <= mul_issue_c && !mul_denied_c;
+      issued_s2_r <= issued_s1_r;
+      if (prod_valid != issued_s2_r) desync_o <= 1'b1;
 
       // COUNTED HERE rather than beside `rf_we_c`, because `rf_we_c` is
       // combinational and this must tick once per CLOCK on which the file is
@@ -742,9 +767,6 @@ module zhao_probe_v3_exec #(
       // The real invariant is the multiplier's own: a product arrives exactly
       // two clocks after a GRANTED issue and at no other time. That holds for
       // every op, contended or not, and needs no knowledge of the pipeline.
-      issued_s1_r <= mul_issue_c && !mul_denied_c;
-      issued_s2_r <= issued_s1_r;
-      if (prod_valid != issued_s2_r) desync_o <= 1'b1;
 
 
       end  // upstream: !hold_c && !mul_denied_c

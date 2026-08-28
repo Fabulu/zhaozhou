@@ -227,7 +227,8 @@ struct Dut {
     t.start_i = 0;
   }
 
-  int writebacks = 0;  // how many writes the block has actually made
+  int writebacks = 0;           // how many writes the block has actually made
+  std::vector<uint32_t> trace;  // (ctx<<24)|(reg<<16) and the datum, in order
 
   // THE WRITE PORT CAN NOW SAY NO. zhao_field_v3_svcpath arbitrates this port
   // between the ALU and the long-op drain and refuses the ALU by design -- its
@@ -264,7 +265,11 @@ struct Dut {
     const bool dn = t.done_valid_o != 0;
     if (done_ctx && dn) *done_ctx = (int)t.done_ctx_o;
     zhao::tick(t);
-    if (xfer) shadow[wctx][wreg] = wdata;
+    if (xfer) {
+      trace.push_back(((uint32_t)wctx << 24) | ((uint32_t)wreg << 16));
+      trace.push_back((uint32_t)wdata);
+      shadow[wctx][wreg] = wdata;
+    }
     return dn;
   }
 };
@@ -606,6 +611,66 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
 // instruction sat at S4, so a DOT wrote its destination once per
 // accumulation clock and the last write always looked right.
 
+void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs) {
+  printf("-- FOUR contexts while the bank is contended\n");
+  Prng rng(0x0B7A1E5);
+  int ran = 0, bad_val = 0, desyncs = 0;
+  const int kUse = 4;
+
+  for (int k = 0; k < programs; ++k) {
+    const int n_in = 4;
+    const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
+    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
+
+    int32_t in[kUse][8] = {};
+    for (int c = 0; c < kUse; ++c)
+      for (int i = 0; i < n_in; ++i) in[c][i] = rng.interesting();
+
+    Dut d(top);
+    d.reset();
+    bool skipped = false;
+    for (int c = 0; c < kUse; ++c) {
+      bool sc = false;
+      if (!install(d, c, fp, in[c], (size_t)n_in, &sc)) {
+        skipped = true;
+        break;
+      }
+    }
+    if (skipped) continue;
+    for (int c = 0; c < kUse; ++c) d.start(c);
+
+    int fin = 0, guard = 0, done = -1;
+    Prng rv(0x0DEA1u + (uint32_t)k);
+    while (guard++ < 40000 && fin < kUse) {
+      top.rival_req_i = (rv.below(2) != 0) ? 1 : 0;
+      if (d.step(&done)) ++fin;
+    }
+    top.rival_req_i = 0;
+    ++ran;
+    if (top.exec_desync_o) ++desyncs;
+
+    for (int c = 0; c < kUse; ++c) {
+      const zfield::Prepared prep = zfield::prepare(fp, prog, in[c], (size_t)n_in);
+      int32_t want[4] = {};
+      zfield::execute_point(fp, prog, prep, in[c], (size_t)n_in, want, fp.out_map.size(), nullptr);
+      for (size_t o = 0; o < fp.out_map.size(); ++o) {
+        if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+        if (d.shadow[c][fp.out_map[o].idx] != want[o]) {
+          ++bad_val;
+          break;
+        }
+      }
+    }
+  }
+
+  printf("   MEASURED: %d programs x %d contexts, %d desyncs, %d wrong\n", ran, kUse, desyncs,
+         bad_val);
+  check(ran > 0, "programs ran with several contexts under contention", 1, ran > 0 ? 1 : 0);
+  check(desyncs == 0, "the multiplier contract held", 0, desyncs);
+  check(bad_val == 0, "and every context matched the interpreter", 0, bad_val);
+}
+
 // THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
 //
 // The engine carries a `rival_req_i` port for one reason: the executor shares
@@ -753,6 +818,7 @@ int main(int argc, char** argv) {
     test_each_saturation_lane_alone(top);
     test_barrel_occupancy(top);
     test_results_survive_contention(top, 12);
+    test_contention_with_many_contexts(top, 12);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }
