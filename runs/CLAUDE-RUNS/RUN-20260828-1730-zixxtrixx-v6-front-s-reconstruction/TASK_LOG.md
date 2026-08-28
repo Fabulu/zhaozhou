@@ -413,3 +413,31 @@ means **a subagent's "still running" status is not evidence that work is
 progressing**, and the coordinator has to check artefacts (file mtimes, commits,
 gate output) rather than trust the status. Taking the final render/encode
 directly rather than resuming a fourth time.
+
+### 2026-08-28 20:5x - CLOSE-OUT
+
+- GOLDENS PROMOTED to the canonical Upheaval/creature/Zixxtrixx/golden/
+  (coordinator verification finding acted on): 41 artefacts installed and
+  VERIFIED AGAINST THE FOLDER OF RECORD ITSELF (re-dump, 41/41
+  cmp-identical, no staging-copy self-check); PROVENANCE.txt lives beside
+  the bytes; SOURCE-COMMIT.txt gains the ledger entry with the owner's
+  re-pin instruction verbatim; the 48-vs-41 discrepancy resolved -- the
+  extras are the ledger files plus REFRESHED evidence (four 60 Hz contact
+  sheets and probe-golden.txt regenerated from the final girth-850 state,
+  because evidence showing the pre-reconstruction animal proves nothing
+  about these bytes); SEQUENCE-CRCS.txt refreshed from the final render
+  of all 17 site subjects. Run-local golden-work/golden-verify untracked
+  and fenced (.gitignore), per the coordinator's list.
+- ALL 17 site clips re-rendered at the final state and re-encoded
+  (lossless VP9 + posters) into Upheaval/website/public/renders --
+  RENDERS ON DISK; deploy NOT run (the coordinator publishes).
+- FINAL GATES, fresh binaries: probe 0 (planted: idle [-13..-3], walk
+  [-13..+4], fall [18..2095] near-brush; overlaps 8,852 hits all within);
+  choreo 0; planner 0 (the TIP law); striketip 425/426/427 mm declared
+  burial; reel --check "all sequence CRCs match" (final-check.txt).
+- sidecmp-16-final.png: the closing side gate -- the neck climbs, the
+  head concludes level and high, the 850 tube sits on the sheet's comma,
+  no notch, colour removed.
+- Golden contact sheets refreshed AGAIN after the girth pick (the first
+  refresh showed the girth-1000 animal; evidence must show its bytes).
+
