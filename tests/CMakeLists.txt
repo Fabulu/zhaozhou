@@ -1472,6 +1472,23 @@ set_tests_properties(field_v3_noise_random PROPERTIES LABELS "fast;nightly" TIME
 add_test(NAME field_v3_noise_random_nightly COMMAND test_field_v3_noise_directed --random 400)
 set_tests_properties(field_v3_noise_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: the long-op dispatcher. Gathers four CONTEXTS into one
+# four-point service request, holds what the reply needs, drains the results
+# one register per clock (the register file has ONE write port), and releases
+# each context after its last write.
+#
+# This block computes no answer, so there is nothing in zfield to differ
+# against -- the oracle is the CONTRACT, checked as properties. The test says
+# so rather than pretending otherwise. Design: reports/FIELD_V3_DISPATCH.md.
+add_executable(test_field_v3_dispatch_directed differential/field_v3_dispatch_directed.cpp)
+target_link_libraries(test_field_v3_dispatch_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_dispatch_directed
+  PREFIX Vzhao_field_v3_dispatch
+  TOP_MODULE zhao_field_v3_dispatch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv)
+add_test(NAME field_v3_dispatch_directed COMMAND test_field_v3_dispatch_directed)
+set_tests_properties(field_v3_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),

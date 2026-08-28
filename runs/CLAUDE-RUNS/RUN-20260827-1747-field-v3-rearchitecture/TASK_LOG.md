@@ -972,3 +972,72 @@ why something mattered, and the sweep showed the sentence was decoration. None
 was a bug in the RTL. All three were bugs in the JUSTIFICATION, which is worse
 in one specific way: a wrong comment survives refactors that a wrong line
 would not.
+
+---
+
+## 2026-08-28 -- FIELD.V3.NOISE closes, and the dispatcher exists
+
+    noise re-run:  23 attempted  20 caught  3 equivalent (proven)  0 survived  0 discarded
+
+N22 and N23 -- the catchable counterparts written beside the two equivalences
+that had no reachable form -- are both CAUGHT. That was the point of adding
+them: an equivalence must not become an excuse to leave a step untested, and
+now there is evidence rather than an intention.
+
+## The long-op dispatcher: 274 checks, and one real hole closed before any test
+
+`fpga/rtl/field/zhao_field_v3_dispatch.sv` gathers four CONTEXTS into one
+four-point service request, holds the slot the reply needs, drains results one
+register per clock, and releases each context after its last write.
+
+Three shapes came from the shipped RTL rather than from preference:
+
+* **One write port** in `zhao_field_v3_rf`, so a reply drains over
+  `used x dst_width` clocks -- 4 for CURVE, 8 for NOISE2, 12 for ROT3. A
+  four-point NOISE2 is 20 clocks in its unit and eight more here. That is the
+  first real argument for a second write port and it is NOT taken: the
+  measurement that should decide it is the composed engine's occupancy, which
+  does not exist yet.
+* **`dst_width` from the generated op table**, checked row by row, not a
+  special case per opcode. An opcode the block does not know is REFUSED, since
+  a wrong width writes the wrong NUMBER of registers -- corruption rather than
+  an error.
+* **`flush_i` is an input, not a timeout.** A timeout turns a deadlock into a
+  slow path that still passes, which hides the condition AND costs clocks. The
+  executor knows which contexts are active, so it says so.
+
+### The hole, found by writing the code rather than by running it
+
+With `flush_i` high and the group part-full, a context offered on the same
+clock would have been ACCEPTED into `g_*`, landed outside the snapshot (which
+takes the pre-accept `fill_r`), and then been cleared by D_ISSUE. Handshaked
+and gone -- a LOST instruction, not a slow one.
+
+`long_ready_o` now drops while flushing, so the offer stands and joins the next
+group. D14 is that exact defect as a mutant, and section 6 of the differential
+asserts the offer survives a whole round trip.
+
+### My test was wrong once, and the RTL was right
+
+Section 6 first expected the standing offer to be taken immediately after the
+partial group issued. It FAILED, correctly: one slot is outstanding, so ready
+must stay low until the reply has come back and drained. The section now
+asserts that explicitly and then completes the round trip, which is worth more
+than the check that was wrong.
+
+### THE RULE THREE PREFLIGHT REFUSALS TAUGHT, ALL IN ONE DAY
+
+    C16  dropped the only read of mul_ready_i   -> orphaned port
+    N01  replaced s_mix[l] with s_reg[l]        -> orphaned signal
+    D09  replaced PAD_A with a literal          -> orphaned parameter
+
+Same cause every time: **deleting a USE orphans a thing, and Verilator refuses
+it**, so the mutant cannot build -- and a mutant that cannot build is a
+discard, not evidence, costing a whole rebuild to discover.
+
+**Prefer mutating a VALUE over deleting a USE.** All three reshapes are better
+mutants than the originals: D09 sets the pad to zero rather than bypassing it,
+N01 replays a neighbour's mix (wrong PER POINT, so it needs distinct points to
+be seen), and C16 sends a refused issue onward so it fails by value instead of
+by timeout. The rule is written into the dispatcher's mutant table where the
+next table will be copied from.

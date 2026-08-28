@@ -1,0 +1,67 @@
+== consumer roster ==
+== preflight ==
+preflight ok: N01 lane 1 replays a neighbouring point's lattice mix
+preflight ok: N02 the lane salt is applied to lane 0 as well, so both lanes are lane 1
+preflight ok: N03 the lane salt is off by one
+preflight ok: N04 the RXS shift loses its +4 bias
+preflight ok: N05 every point uses point 0's shift -- the vector-specific defect
+preflight ok: N06 the shift is taken from the wrong nibble
+preflight ok: N07 point 0's operand is sign-extended instead of zero-extended
+preflight ok: N08 point 0 reads the wrong half of its product
+preflight ok: N09 point 0's x is broadcast to every lane
+preflight ok: N10 the final xor-shift shifts by the wrong amount
+preflight ok: N22 the final xor-shift reaches into the bits the op actually reads
+preflight ok: N11 the output takes the low half of the hash instead of the top
+preflight ok: N12 NOISE2's second output repeats the first
+preflight ok: N13 the LCG addend is subtracted rather than added
+preflight ok: N14 the seed is added into the mix rather than xored
+preflight ok: N15 RIDGE walks the second hash lane before folding
+preflight ok: N16 RIDGE leaves its second output non-zero
+preflight ok: N17 RIDGE's fold drops the doubling
+preflight ok: N18 RIDGE's fold omits the absolute value
+preflight ok: N19 the rescale flag watches the wrong rail
+preflight ok: N23 RIDGE reports a saturation it did not have
+preflight ok: N20 the first issue advances on a REFUSED request
+preflight ok: N21 the LCG issue reads its grant inverted
+PREFLIGHT: all 23 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 6694c47462abbc90)
+  N01 lane 1 replays a neighbouring point's lattice mix  caught
+  N02 the lane salt is applied to lane 0 as well, so both lanes are lane 1  caught
+  N03 the lane salt is off by one  caught
+  N04 the RXS shift loses its +4 bias  caught
+  N05 every point uses point 0's shift -- the vector-specific defect  caught
+  N06 the shift is taken from the wrong nibble  caught
+  N07 point 0's operand is sign-extended instead of zero-extended  equivalent (proven)
+        THE EXTENSION CANNOT REACH THE BITS THIS UNIT READS, and the mutant proved my own comment wrong. For any 32-bit a, the zero-extended 33-bit value is A0 = a and the sign-extended one is A1 = a - 2^32*(a>>31), so A1 = A0 or A1 = A0 - 2^32. Their products with the same B therefore differ by 2^32*B -- an exact multiple of 2^32. The unit reads mul_p_*_i[31:0] and NOTHING ELSE, and residues mod 2^32 are unchanged by adding a multiple of 2^32. So the two forms are bit-identical on every bit this block can observe, for every input. No stimulus can distinguish them, and section 5 of the differential -- written to catch exactly this -- was aimed at a divergence that does not exist. THE ZERO-EXTENSION IS KEPT ANYWAY, as defence in depth: it states that these are unsigned hash words, and it is the form that stays correct if anything ever reads above bit 31. RE-SCORE THIS THE MOMENT ANY BIT ABOVE 31 OF A PRODUCT IS READ -- by this unit or by a bank change that makes the lane narrower than 33 bits, where the operand would be truncated rather than extended and the two forms would separate.
+  N08 point 0 reads the wrong half of its product  caught
+  N09 point 0's x is broadcast to every lane  caught
+  N10 the final xor-shift shifts by the wrong amount  equivalent (proven)
+        THE XOR-SHIFT TAIL CANNOT REACH THE BITS THE OP READS. The hash finishes as (w >> 22) ^ w, and both NOISE2 and RIDGE take bits [31:16] of that -- the reference does the same, `>> 16`. A right shift by S moves bit 31 down to bit 31-S, so the xor term can only alter bits 31-S and below. For any S >= 16 that is bits 15 and below, which this op never reads. Shift 22 and shift 21 are therefore bit-identical on every observable output, for every input. MEASURED rather than only argued: 200,000 random words, zero differences in bits [31:16] between shift 22 and 21; and sweeping S from 10 to 19 over 2,000 words each, S <= 15 differs on most words while S >= 16 differs on none. The boundary is exactly 16. N22 IS THE SAME CLAIM AT S = 15, on the observable side of that boundary, so the tail is still tested -- an equivalence must not become an excuse to leave a step unchecked. THE SHIFT STAYS 22 because it is the reference's law and zref::noise2_hash is used elsewhere -- creature gib velocities, the star bake -- where the low bits ARE read. The equivalence is a property of THESE TWO OPS, not of the hash. RE-SCORE THIS IF ANY OP EVER READS BELOW BIT 16 OF THE HASH.
+  N22 the final xor-shift reaches into the bits the op actually reads  caught
+  N11 the output takes the low half of the hash instead of the top  caught
+  N12 NOISE2's second output repeats the first  caught
+  N13 the LCG addend is subtracted rather than added  caught
+  N14 the seed is added into the mix rather than xored  caught
+  N15 RIDGE walks the second hash lane before folding  caught
+  N16 RIDGE leaves its second output non-zero  caught
+  N17 RIDGE's fold drops the doubling  caught
+  N18 RIDGE's fold omits the absolute value  caught
+  N19 the rescale flag watches the wrong rail  equivalent (proven)
+        RIDGE CANNOT SATURATE, so both rails are unreachable and swapping one constant-false condition for another is a no-op. u is the TOP 16 BITS of a hash word, so its whole domain is 0..65535 and nothing else. EXHAUSTIVELY CHECKED over all 65,536 values: ridge_t = sub_sat(add_sat(u,u), 1<<16) lands in [-65536, 65534], hits INT32_MIN zero times and INT32_MAX zero times, and no add or sub in the fold saturates even once. So sat_rescale_o and sat_add_o are BOTH identically zero for every input this op can be given, and the reference agrees -- its SatLedger never bumps either, which is why the differential passes with both sides reading zero. THE LOGIC STAYS because it mirrors the reference's fold exactly, and the reference keeps its saturating forms for the same reason: they become live the moment the domain widens. It is documented as unreachable rather than removed, so it does not read as tested logic. N23 IS THE CATCHABLE COUNTERPART -- a rescale condition that IS reachable -- so the differential's 'the flags are zero' assertion is proven to have teeth. RE-SCORE THIS IF u EVER BECOMES WIDER THAN 16 BITS: a change to the `>> 16` in the op's definition, or a fold that scales u before doubling it, puts the rails back in range.
+  N23 RIDGE reports a saturation it did not have  caught
+  N20 the first issue advances on a REFUSED request  caught
+  N21 the LCG issue reads its grant inverted  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_noise.sv (23 mutants checked)
+
+== tally ==
+  attempted:  23 / 23
+  caught:     20
+  equivalent: 3
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_noise.sv (23 mutants checked)
+CLEAN:0
