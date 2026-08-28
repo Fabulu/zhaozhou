@@ -197,7 +197,11 @@ int main() {
       case 2: return 165;
       case 3: return 210;
       case 4: return 40;
-      case 5: return 215;
+      case 5: return 255;   // RE-AUTHORED run 0326: the exaggerated hit's
+                             // peak recoil (owner: "more exaggerated and
+                             // impactful") bunches mid-body vs grounded
+                             // run 245 for ~3 keys -- worst-key render
+                             // (hit-impact-frames.png) layers cleanly
       case 6: return 265;
       case 7: return 210;
       case 8: return 250;

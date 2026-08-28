@@ -377,3 +377,21 @@ creature HOLDS them is mechanical.** Fix the holding, keep the shapes.
   model-front-v1-v3.png, model-walk-sheet.png. Overlap hits fell 45k->6k
   (the head left its own hook). All gates green; 22/27 clip payloads
   re-pin (the model moved under every clip — the redirect's point).
+
+### 2026-08-28 09:0x - THE RIGIDITY WAVE (owner redirect items 4-7)
+
+- FALL ("rigidly falls over like a log"): every bend term grew, the
+  rotation wanders (roll 5600/yaw 4200), warp 8200 hesitates harder,
+  authority swings 8..92% travelling faster down the body. Contact sheet
+  (fall-yielding-sheet.png): adjacent thumbnails differ in SHAPE — a body
+  crumpling and unfurling, not a log. Airborne min 268mm; overlap 36<40.
+- LOOK-AROUND ("twitchy... should look like the idle"): the idle's living
+  body EXTRACTED into idle_body(amp) — the idle proven BIT-IDENTICAL at
+  amp 1000 — and the look rebuilt on it at 800 with the itinerary
+  retimed onto 192 keys (1.5x slower).
+- TAIL-BALANCE ("too fast and robotic"): 160 -> 224 keys, same
+  choreography 1.4x slower, wobble 900 -> 1150 on a slower cycle.
+- HIT ("just a weird twitch"): 18 -> 28 keys, deepen 900, jerk 7800, the
+  body SHOVED -55mm along the blow, two slow decaying overshoots.
+  Worst-key render layers cleanly; allowance re-authored 215 -> 255 with
+  evidence. Directional set scaled to match (6400/6200/980/4200).
