@@ -42,6 +42,26 @@ Nothing can miss anything now, by construction rather than by timing.
 **Measured: 0 of 12 wrong, where it was 4-5 of 12.** The skipped test is
 un-skipped, so it is tested rather than assumed.
 
+### And the sweep confirms it
+
+The executor's full mutation sweep re-ran against the fixed design:
+
+    31 deliberate defects introduced, one at a time
+    27 caught by the tests
+     4 proven to be no defect at all, each with the proof written down
+     0 survived
+     0 discarded
+
+Eight of those thirty-one had to be **re-aimed** first. They pointed at lines
+the fix deleted, so they had silently stopped testing anything -- and a test
+that has stopped testing looks exactly like a test nobody thought to write. All
+eight are now aimed at the same claims in the new shape, and every one of them
+is caught.
+
+The curve service passed its own check the same way: 5,022 directed and 7,200
+random checks, with 24 groups run while the multiplier refused it 11 times, and
+the answers did not move.
+
 ### What it cost, plainly
 
     one context      66 -> 69 clocks    (+4.5%)

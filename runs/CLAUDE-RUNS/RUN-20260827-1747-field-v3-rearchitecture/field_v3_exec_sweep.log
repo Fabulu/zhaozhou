@@ -1,0 +1,86 @@
+== consumer roster ==
+== preflight ==
+preflight ok: X02 the multiplier is issued a stage early, on operands not yet read
+preflight ok: X03 the desync guard accepts a product a clock early, so a shifted product passes
+preflight ok: X04 the multiplier zero-extends its operands instead of sign-extending
+preflight ok: X05 a context is released for re-issue a stage before its write lands
+preflight ok: X06 an in-flight context is offered for issue again
+preflight ok: X07 the context is never released, so each runs one instruction only
+preflight ok: X08 the pc advances past END as well
+preflight ok: X09 the pc advances by two, so every other instruction is skipped
+preflight ok: X10 the uop store is indexed by register count rather than plan length
+preflight ok: X20 the uop store stride is 16 rather than the plan length
+preflight ok: X11 every op writes, including the ones that do not
+preflight ok: X12 END writes its result over a register
+preflight ok: X13 the writeback lands in the wrong context
+preflight ok: X14 the observed writeback stream disagrees with what the file was told
+preflight ok: X15 a DOT op is refused only if the ALU also objects, which it does not
+preflight ok: X16 the ADD saturation flag also latches on a MUL clamp
+preflight ok: X17 the MUL saturation flag also latches on a rescale clamp
+preflight ok: X21 a DOT2 also issues the third product, which it does not have
+preflight ok: X22 the hold ends one product early, dropping the last one
+preflight ok: X23 the DOT2 and DOT3 product counts are swapped
+preflight ok: X24 the accumulator is not cleared between instructions
+preflight ok: X25 the second product is taken from the a2/b2 pair instead of a1/b1
+preflight ok: X26 a DOT no longer freezes issue, so another op steals the multiplier
+preflight ok: X27 only a DOT at S4 freezes issue, not one still upstream
+preflight ok: X28 the sum drops the product arriving on the final clock
+preflight ok: X29 DOT3 is treated as DOT2, so the third member never contributes
+preflight ok: X30 every bank presents the base row, the fit probe's non-functional form
+preflight ok: X31 the group carry is taken from the wrong bit
+preflight ok: X32 the member offset runs the wrong way round the banks
+preflight ok: X18 the ready scan picks the highest-numbered context rather than the lowest
+preflight ok: X19 the multiplier's operands are swapped
+PREFLIGHT: all 31 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 61f05afb2b346c7c)
+  X02 the multiplier is issued a stage early, on operands not yet read  caught
+  X03 the desync guard accepts a product a clock early, so a shifted product passes  caught
+  X04 the multiplier zero-extends its operands instead of sign-extending  caught
+  X05 a context is released for re-issue a stage before its write lands  caught
+  X06 an in-flight context is offered for issue again  caught
+  X07 the context is never released, so each runs one instruction only  caught
+  X08 the pc advances past END as well  equivalent (proven)
+        DEAD STATE. Advancing the pc past END writes a value nobody reads: the same arm clears active_r, so the context never issues again, and the only path back is start_i -- which resets pc_r to zero. So the post-END pc is unobservable through any port. RE-SCORE THIS IF A CONTEXT IS EVER RESUMED WITHOUT start_i, or if start_i stops resetting the pc. Either change makes the value live.
+  X09 the pc advances by two, so every other instruction is skipped  caught
+  X10 the uop store is indexed by register count rather than plan length  equivalent (proven, and the model is byte-identical)
+        DEGENERATE WHILE PLAN == REGS. Both are 32 in this probe, so `ctx * PLAN` and `ctx * REGS` are the same expression and Verilator emits a byte-identical model -- the binary-hash guard reported it as a discard, which is that guard working. The defect it was meant to probe IS scored, by X20, which uses a literal 16. RE-SCORE THIS THE MOMENT PLAN != REGS.
+  X20 the uop store stride is 16 rather than the plan length  caught
+  X11 every op writes, including the ones that do not  caught
+  X12 END writes its result over a register  equivalent (proven)
+        REDUNDANT TERM, PROVEN FROM THE ALU'S OWN DECODE. The write enable is `s4_v_r && alu_writes && !alu_is_end`, and X12 drops the last term. In zhao_field_alu exactly ONE op sets is_end_o -- OP_END -- and that same arm also sets writes_o = 1'b0. So alu_is_end implies !alu_writes, which makes `alu_writes && !alu_is_end` identical to `alu_writes` for every op the ALU can decode. No stimulus can distinguish them. The term is KEPT in the shipped RTL as defence in depth: it costs one gate and it states the intent at the write port rather than relying on a property of a different module's decode. RE-SCORE THIS THE MOMENT ANY OP SETS BOTH is_end_o AND writes_o. That combination -- an instruction that both ends the program and writes a result -- is what makes the term load-bearing, and the ALU's decode, not this note, is the thing to watch.
+  X13 the writeback lands in the wrong context  caught
+  X14 the observed writeback stream disagrees with what the file was told  caught
+  X15 a DOT op is refused only if the ALU also objects, which it does not  caught
+  X16 the ADD saturation flag also latches on a MUL clamp  caught
+  X17 the MUL saturation flag also latches on a rescale clamp  caught
+  X21 a DOT2 also issues the third product, which it does not have  caught
+  X22 the hold ends one product early, dropping the last one  caught
+  X23 the DOT2 and DOT3 product counts are swapped  caught
+  X24 the accumulator is not cleared between instructions  caught
+  X25 the second product is taken from the a2/b2 pair instead of a1/b1  caught
+  X26 a DOT no longer freezes issue, so another op steals the multiplier  caught
+  X27 only a DOT at S4 freezes issue, not one still upstream  caught
+  X28 the sum drops the product arriving on the final clock  caught
+  X29 DOT3 is treated as DOT2, so the third member never contributes  caught
+  X30 every bank presents the base row, the fit probe's non-functional form  caught
+  X31 the group carry is taken from the wrong bit  caught
+  X32 the member offset runs the wrong way round the banks  caught
+  X18 the ready scan picks the highest-numbered context rather than the lowest  caught
+  X19 the multiplier's operands are swapped  equivalent (proven)
+        MULTIPLICATION IS COMMUTATIVE. The swap reaches only the operand mux's DEFAULT arm, which carries a0*b0; the DOT arms that supply a1*b1 and a2*b2 are untouched, and the ALU still receives a0_i and b0_i unswapped. Both operands are sign-extended to 33 bits by the same expression before the multiply, so the products are bit-identical rather than merely numerically equal. This proof was retracted once on the strength of a CONTAMINATED run -- see the note above the mutant -- and restored when a clean run showed it surviving. RE-SCORE THIS IF THE MULTIPLIER EVER TREATS ITS PORTS ASYMMETRICALLY: different widths, a signed/unsigned split, or an accumulate that reads one port twice.
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_rf.sv (3 mutants checked)
+clean: fpga/rtl/synth/zhao_probe_v3_exec.sv (28 mutants checked)
+
+== tally ==
+  attempted:  31 / 31
+  caught:     27
+  equivalent: 4
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_rf.sv (3 mutants checked)
+clean: fpga/rtl/synth/zhao_probe_v3_exec.sv (28 mutants checked)
+CLEAN:0

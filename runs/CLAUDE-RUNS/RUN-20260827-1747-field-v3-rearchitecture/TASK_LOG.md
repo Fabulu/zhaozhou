@@ -780,3 +780,68 @@ Do not edit the sweep's own `.sh` files. Bash reads a script INCREMENTALLY
 from a file offset, so editing one under a running shell shifts the offsets and
 the shell resumes mid-token. Nothing went wrong -- I nearly corrected a stale
 comment in `run_sweep_detached.sh` and stopped. It goes in when the sweep ends.
+
+---
+
+## 2026-08-28 -- FIELD.V3.EXEC sweep GREEN after the DOT rework
+
+    31 mutants   27 caught   4 equivalent (proven)   0 survived   0 discarded
+    tree checked clean from outside the sweep: 31 mutant texts, none present
+
+Eight of the thirty-one had DEAD ANCHORS before this run -- they pointed at
+lines the DOT fix deleted, so they had silently stopped testing anything. They
+were re-aimed at the same claims in the new shape rather than dropped, and all
+eight are caught. A claim whose mutant stopped applying looks exactly like a
+claim nobody thought of.
+
+The four equivalences are unchanged from before and each carries its own proof
+and its own re-score trigger (X10 while PLAN == REGS, X12 while no op sets both
+is_end and writes, X18 the ready scan, X19 commutativity).
+
+## The same two guards were wrong in the curve driver, and were fixed before use
+
+`tools/sweep_field_curve_svc.sh` was an older generation: hardcoded build dir,
+no rebuild log, no `-DOBJCACHE_ENABLED=OFF`, cmake output to /dev/null, and the
+TOP_MODULE roster grep. Left alone it would have failed on ccache in a detached
+process -- the exact five-abort sequence already in BUILD.md -- and reported
+"pristine target did not link" with the cause three layers away. Modernised
+first, then run.
+
+## C16 was refused by the preflight, and that was correct
+
+The first mutant for the new refusal loop deleted the only read of
+`mul_ready_i`, orphaning the port so Verilator would not build it. A mutant
+that cannot build is a DISCARD, not evidence, and the preflight said so before
+anything was scored.
+
+Reshaped to send a refused issue straight to F_PUSH: the port stays live and
+the claim is the same one from the other side. The pre-fix RTL hung waiting for
+a product nobody started; this publishes the finish registers without one, so
+it fails by VALUE rather than by timeout. Both are "a refusal is not noticed".
+
+## NOISE2 and RIDGE: unit written, lints clean, test written, NOT YET WIRED
+
+`fpga/rtl/field/zhao_field_v3_noise.sv` -- the v2 state machine step for step,
+datapath widened to four points, and every issue state holding until granted.
+Lints clean under `-Wall` first time.
+
+    ONE four-wide bank request = the SAME hash step for all four points
+
+so a four-point NOISE2 is SIX bank requests rather than twenty-four products
+that need scheduling, and RIDGE is four.
+
+`tests/differential/field_v3_noise_directed.cpp` is written against
+`zfield::steps::exec_op` -- the shipped interpreter, never a hash rewritten in
+the test, which would only prove two rewrites agree. Seven sections, and two of
+them exist because a vector unit can pass a scalar test suite:
+
+* four DIFFERENT points in one group, paired with four IDENTICAL ones, so
+  "broadcasts point 0" and "indexes the wrong lane" separate;
+* groups whose RXS shift DIFFERS BETWEEN POINTS, hunted for and asserted to
+  have been found -- the shift is `(s>>28)+4`, a function of the data, so it is
+  a per-point quantity and a unit computing one shift per request would pass
+  everything else here.
+
+Neither is wired into CMake yet: `tests/CMakeLists.txt` must not be edited
+while a sweep runs, because the driver re-runs `cmake` on every rebuild and
+would configure the edit underneath itself.

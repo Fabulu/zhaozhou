@@ -22,12 +22,39 @@
 #
 #   bash tools/run_sweep_detached.sh field_v3_mulbank [logdir]
 #
-# AND NOTHING ELSE MAY TOUCH A BUILD TREE WHILE A SWEEP RUNS. Not just the
-# sweep's own tree -- anything. On 2026-08-28 a sweep aborted three times with
+# WHAT MAY AND MAY NOT RUN BESIDE A SWEEP.
+#
+# The rule here used to be "nothing else may touch a build tree -- not just the
+# sweep's own, anything", written after a sweep aborted three times with
 # "pristine target did not link" while its rebuild log showed the target
-# reaching [10/12] Linking every time. The exe was being built and then
-# disappearing, because a build of a DIFFERENT tree was running concurrently
-# and the two share ccache and the source directory's cmake state.
+# reaching [10/12] Linking every time. That was the right observation and the
+# wrong cause: the exe was disappearing because ccache could not run, which
+# BUILD.md now records, not because another tree existed.
+#
+# The real conditions are narrower and both are checkable:
+#
+#   * ONE TREE, ONE WRITER. A sweep deletes its target's model directory and
+#     exe before every rebuild, so a second writer in the same tree loses.
+#   * DISJOINT SOURCES. The sweep MUTATES its RTL, so another build must not
+#     elaborate any file this sweep can mutate. `sweep_consumers.py` answers
+#     that, and it is a check rather than a guess.
+#
+# On 2026-08-28 the curve service was built and verified in `build-curve`
+# while the executor sweep held `build-verify` -- disjoint targets, object
+# cache off in both -- and neither disturbed the other.
+#
+# TWO THINGS THAT REALLY ARE FORBIDDEN while a sweep is in flight:
+#
+#   * EDITING A SWEEP SCRIPT. Bash reads a script INCREMENTALLY from a file
+#     offset; an edit shifts the offsets under the running shell and it
+#     resumes mid-token.
+#   * ANY GIT OPERATION THAT WRITES THE WORKING TREE. The tree holds a live
+#     mutant for most of a sweep. `commit` and `fetch` are safe; `rebase`,
+#     `stash`, `checkout`, `reset` and `pull` are not. See BUILD.md mode 7.
+#
+#   * EDITING tests/CMakeLists.txt, for the same reason as the sweep script:
+#     the driver re-runs `cmake` on every rebuild, so a mid-sweep edit changes
+#     what it configures underneath it.
 #
 # A sweep deletes the target's model directory AND its exe before rebuilding,
 # so anything that disturbs that rebuild leaves no binary at all and the

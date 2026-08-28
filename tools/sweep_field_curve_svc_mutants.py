@@ -116,10 +116,20 @@ MUTANTS = [
     # after the service was attached to the engine. Section 7 of the
     # differential refuses on a pseudo-random schedule; these attack the three
     # ways the hold can be got wrong.
-    ("C16 the finish stage advances on a REFUSED issue, so it waits forever",
+    # Reshaped after the preflight refused it: dropping the condition removes
+    # the ONLY read of mul_ready_i, so the port is orphaned and Verilator will
+    # not build it. That is the preflight doing its job -- a mutant that cannot
+    # build is a discard, not evidence.
+    #
+    # Sending the refused issue STRAIGHT TO F_PUSH keeps the port live and is
+    # the same claim from the other side: the stage advances on a refused
+    # issue. The pre-fix RTL hung waiting for a product nobody started; this
+    # publishes the finish registers without one, so it fails by VALUE rather
+    # than by timeout. Either way it is "a refusal is not noticed".
+    ("C16 a refused issue advances anyway, publishing without its product",
      RTL,
      "        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT;",
-     "        F_ISSUE: f_state <= F_WAIT;"),
+     "        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT; else f_state <= F_PUSH;"),
     ("C17 the grant is read inverted, so it advances only when refused",
      RTL,
      "        F_ISSUE: if (mul_ready_i) f_state <= F_WAIT;",

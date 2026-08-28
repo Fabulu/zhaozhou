@@ -28,29 +28,64 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
+# THE BUILD DIRECTORY IS A KNOB, as it is in the executor and bank drivers.
+# Two sweeps in DIFFERENT trees are fine; what breaks is two writers in one.
+BUILD_DIR="${BUILD_DIR:-build-fieldv3}"
+REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild_${BUILD_DIR}.log}"
+
 MUT=tools/sweep_field_curve_svc_mutants.py
 RTL=fpga/rtl/synth/zhao_probe_curve_svc.sv
 TARGETS="test_field_curve_svc_directed"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
+# CONSUMERS ARE READ FROM SOURCES, NOT FROM TOP_MODULE.
+#
+# The old form grepped for this block as a TOP_MODULE, which is correct only
+# while it IS one. The executor's sweep aborted naming an EMPTY roster the day
+# zhao_probe_v3_exec became a submodule -- the guard was right to refuse and
+# could not say why. This block is still a top, so the old check happened to
+# work; it is replaced anyway, because "happens to work" is exactly what the
+# other driver was doing too.
+UNRUN_CONSUMERS="${UNRUN_CONSUMERS:-}"
+
 check_consumers() {
-  local declared
-  declared=$(grep -B12 "TOP_MODULE zhao_probe_curve_svc" tests/CMakeLists.txt \
-             | grep -oE "verilate\(test_[a-z_0-9]+" | sed 's/verilate(//' | sort -u)
-  if [ "$declared" != "$TARGETS" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_probe_curve_svc into target(s):"
-    echo "$declared"
-    echo "but this sweep runs: $TARGETS — update TARGETS or the roster."
+  local declared t c
+  declared=$(python tools/sweep_consumers.py "$RTL") || {
+    echo "ABORT: no verilate() target elaborates $RTL"
     return 1
-  fi
+  }
+  for t in $TARGETS; do
+    echo "$declared" | grep -qx "$t" || {
+      echo "ABORT: this sweep runs $t, which does not elaborate $RTL"
+      return 1
+    }
+  done
+  for c in $declared; do
+    case " $TARGETS $UNRUN_CONSUMERS " in
+      *" $c "*) ;;
+      *)
+        echo "ABORT: $c also elaborates $RTL and is neither run by this sweep"
+        echo "       nor declared in UNRUN_CONSUMERS."
+        return 1 ;;
+    esac
+  done
   return 0
+}
+
+# THE MODEL DIRECTORY IS NAMED FOR THE TOP, NOT FOR THE MUTATED FILE, and the
+# binary-hash DISCARD check hashes it. Hardcoding a name the mutation cannot
+# reach would pass every mutant through as "changed" while scoring a model
+# that never moved. Read it from the verilate() PREFIX.
+MODEL=$(python tools/sweep_consumers.py --prefix "$(echo $TARGETS | cut -d" " -f1)") || {
+  echo "ABORT: cannot resolve the verilate PREFIX for $TARGETS"
+  exit 9
 }
 
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_curve_svc.dir" -type f \
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -60,7 +95,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_curve_svc.dir" ] || return 1
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" ] || return 1
   done
   return 0
 }
@@ -68,7 +103,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build-fieldv3/tests/$t.exe" ] || return 1
+    [ -x "$BUILD_DIR/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -76,13 +111,13 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build-fieldv3/tests/CMakeFiles/$t.dir"
+    rm -rf "$BUILD_DIR/tests/CMakeFiles/$t.dir"
     # guard 5: the exe lives OUTSIDE the target dir, so it must be deleted
     # too -- and it must be deleted from THIS sweep's own build dir. This
     # line said "build/tests" until 2026-08-27, which both left the real
     # stale exe in place (defeating the guard) and deleted another
     # session's binary out of the shared tree.
-    rm -f "build-fieldv3/tests/$t.exe"
+    rm -f "$BUILD_DIR/tests/$t.exe"
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
   # (the house sweeps learned this the same way); VERILATOR_ROOT must be set
@@ -96,15 +131,19 @@ rebuild() {
   # tree that had once configured successfully kept working while a fresh one
   # would fail its verilator guard and leave the target unbuilt.
   export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
-  cmake -S . -B build-fieldv3 -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
+  cmake -S . -B $BUILD_DIR -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
+  echo "CMAKE_EXIT:$?" >>"$REBUILD_LOG"
   # shellcheck disable=SC2086
-  ninja -C build-fieldv3 $TARGETS >/dev/null 2>&1
+  ninja -C $BUILD_DIR $TARGETS >>"$REBUILD_LOG" 2>&1
+  echo "NINJA_EXIT:$?" >>"$REBUILD_LOG"
+  echo "ENV: USERPROFILE=${USERPROFILE:-<unset>} VERILATOR_ROOT=${VERILATOR_ROOT:-<unset>}" >>"$REBUILD_LOG"
+  command -v verilator_bin >/dev/null 2>&1 && echo "verilator_bin: found" >>"$REBUILD_LOG" || echo "verilator_bin: NOT ON PATH" >>"$REBUILD_LOG"
 }
 
 # Guard 8: bare AND --random 400, the two fast ctest lanes of this binary.
 run_lanes() {
-  ./build-fieldv3/tests/test_field_curve_svc_directed.exe >/dev/null 2>&1 || return 1
-  ./build-fieldv3/tests/test_field_curve_svc_directed.exe --random 400 >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_curve_svc_directed.exe >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_curve_svc_directed.exe --random 400 >/dev/null 2>&1 || return 1
   return 0
 }
 
