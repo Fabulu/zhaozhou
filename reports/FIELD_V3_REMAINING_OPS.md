@@ -116,6 +116,69 @@ trip and to price a refusal, not enough to answer this.
 
 ---
 
+## THE NEXT STEP IS NOT "WIRE THEM TOGETHER" (added 2026-08-28, night)
+
+The engine and the service path look ready to compose. `zhao_probe_v3_engine`
+already exposes the whole long-op surface -- valid/ready, ctx, op, dst, s0..s3,
+imm, flush, and the release pair -- and `zhao_field_v3_svcpath` consumes exactly
+that shape. The ALU writeback matches too: the executor emits
+`wb_valid_o/wb_ctx_o/wb_reg_o/wb_data_o` and the service path wants
+`alu_wb_valid_i/alu_wb_ctx_i/alu_wb_reg_i/alu_wb_data_i`.
+
+**Connecting them as they stand would silently drop ALU writes.**
+
+`wb_valid_o` is a bare combinational assign:
+
+    assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
+
+There is **no `wb_ready_i` port on the executor at all**. It cannot be refused,
+and it has nowhere to hold a result that is not taken. The service path's write
+arbiter, meanwhile, refuses the ALU by design -- that is the entire point of it,
+and section 5 of its differential MEASURES the ALU losing exactly eight clocks
+to the drain on every four-point group. Every one of those eight clocks would
+be a lost register write.
+
+### This is the same defect the project has already paid for three times
+
+`zhao_field_v3_svcpath`'s own header lists them:
+
+    the executor's open-loop DOT      no mul_ready port to refuse it
+    the curve service's hang          no mul_ready port at all
+    the dispatcher's missing imm      no port to carry it
+
+An open-loop producer meeting a consumer that can refuse. It is the fourth
+instance, and the first one caught BEFORE the composition was built rather than
+minutes after -- which is what the "compose before you integrate" rule was for.
+
+### What it actually takes
+
+1. **Give `zhao_probe_v3_exec` a `wb_ready_i`, and make it HOLD.** This is the
+   structural rule every service claimant in this engine already obeys: an
+   instruction may not be stalled between issue and arrival, so the claimant
+   holds its request until granted. The executor's writeback must do the same.
+2. **That is a pipeline change, not a port change.** The writeback is currently
+   a pure function of stage 4's registers; holding means stage 4 cannot advance
+   while a write is outstanding, which is backpressure into the barrel.
+3. **Re-score the executor's 31 mutants.** They were written against a
+   writeback that cannot stall. Assuming they carry to a shape with
+   backpressure is exactly the assumption CURVE.SVC's eighteen are already
+   flagged for.
+4. **Only then compose**, and the composition test must prove ALU writes are
+   never lost -- count them at the source and at the register file and require
+   the two to agree, the same law the service path just gained for its ready
+   lines.
+
+### And one number needs re-reading
+
+"The ALU loses exactly eight clocks and not a clock more" is the measurement
+that makes services-first cheap rather than a trade-off. It is still true of the
+arbiter. But it describes the ALU being REFUSED, and in the engine as it stands
+today the ALU cannot be refused -- so the number characterises a machine that
+does not exist yet. It becomes a real statement about the engine on the day
+step 1 lands, and not before.
+
+---
+
 ## THE FINDING THAT MATTERS MOST
 
 **Six v2 op units drive the shared multiplier with no `mul_ready` input, and
