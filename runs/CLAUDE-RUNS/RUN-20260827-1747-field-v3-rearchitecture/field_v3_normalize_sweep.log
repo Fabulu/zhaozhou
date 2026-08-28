@@ -1,0 +1,64 @@
+== consumer roster ==
+== preflight ==
+preflight ok: M01 the reciprocal's final rescale-by-7 is dropped
+preflight ok: M02 the Newton iterate loses its top bit
+preflight ok: M03 the isqrt request is gated on the ZERO REGISTER, one clock late
+PREFLIGHT FAIL: M04 the isqrt's grant is ignored, so the same n2 can be re-accepted does not lint:
+%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_normalize.sv:148:27: Signal is not used: 'isq_ready'
+                                                                                                            : ... note: In instance 'zhao_field_v3_normalize'
+  148 |   logic        isq_valid, isq_ready, isq_rvalid, isq_rready;
+      |                           ^~~~~~~~~
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Error: Exiting due to 1 warning(s)
+
+preflight ok: M05 the second square OVERWRITES the first rather than summing
+preflight ok: M06 NORMALIZE2 sums the third square too
+preflight ok: M07 the first square is taken from the second component
+preflight ok: M08 the sum of squares is rounded rather than kept exact
+preflight ok: M09 the mantissa is shifted the wrong way
+preflight ok: M10 the exponent is off by one binade
+preflight ok: M11 the exponent's sign is inverted
+preflight ok: M12 top_bit reports the LOWEST set bit
+preflight ok: M13 the seed index takes the wrong slice of the mantissa
+PREFLIGHT FAIL: M14 only ONE Newton step is taken does not lint:
+%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_normalize.sv:145:16: Signal is not used: 'newt_step'
+                                                                                                            : ... note: In instance 'zhao_field_v3_normalize'
+  145 |   logic        newt_step;             
+      |                ^~~~~~~~~
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Error: Exiting due to 1 warning(s)
+
+preflight ok: M15 the correction term is 2^30 rather than 2^31
+preflight ok: M16 the Newton product is shifted by the wrong amount
+preflight ok: M17 the first Newton multiply squares the mantissa
+PREFLIGHT FAIL: M18 the reciprocal's u24 clamp is dropped does not lint:
+%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_normalize.sv:279:18: Bits of function variable are not used: 'r'[32]
+                                                                                                            : ... note: In instance 'zhao_field_v3_normalize'
+  279 |     logic [32:0] r;
+      |                  ^
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Error: Exiting due to 1 warning(s)
+
+preflight ok: M19 the zero vector is reported by BOTH ops, not just NORMALIZE2
+preflight ok: M20 the zero vector's outputs are not forced to zero
+PREFLIGHT FAIL: M21 the output shift ignores the exponent does not lint:
+%Warning-UNUSEDSIGNAL: C:\programmieren\zencrifice\zhaozhou\fpga/rtl/field\zhao_field_v3_normalize.sv:125:22: Signal is not used: 'expo'
+                                                                                                            : ... note: In instance 'zhao_field_v3_normalize'
+  125 |   logic signed [7:0] expo [LANES];    
+      |                      ^~~~
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.051
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Error: Exiting due to 1 warning(s)
+
+preflight ok: M22 every lane uses lane 0's exponent
+preflight ok: M23 the output rescale truncates instead of rounding half up
+preflight ok: M24 NORMALIZE2 writes a third lane
+preflight ok: M25 the first square advances on a REFUSED request
+preflight ok: M26 the first output issue reads its grant inverted
+PREFLIGHT: 4 mutant(s) unusable
+EXIT:8
+clean: fpga/rtl/field/zhao_field_v3_normalize.sv (26 mutants checked)
+CLEAN:0

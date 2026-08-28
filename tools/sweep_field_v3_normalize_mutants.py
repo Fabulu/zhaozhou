@@ -29,6 +29,20 @@ WHAT ELSE THIS BLOCK CLAIMS
 PREFER MUTATING A VALUE OVER DELETING A USE, and an anchor must SPAN every
 place a mutation has to change.
 
+FOUR OF THESE MUTANTS WERE REFUSED BY THE PREFLIGHT ON THEIR FIRST RUN, which
+takes the running total of orphan refusals across this family to TWELVE. M04
+dropped isq_ready, M14 dropped newt_step, M18 dropped bit 32 of an internal by
+truncating instead of clamping, and M21 dropped expo. Each is now a value
+change, each is annotated with what it replaced and why, and two of them came
+out SHARPER for it -- M14 now produces a wrong reciprocal instead of a hang,
+and M18 now asks whether the clamp is at the right VALUE rather than merely
+present.
+
+The refusals cost nothing: the preflight runs before anything is scored, so
+the sweep stopped at exit 8 with zero mutants scored and the tree clean. That
+is the whole reason the preflight exists -- an unbuildable mutant scored as
+"caught" is the most flattering possible way to be wrong.
+
 CRLF: the worktree is checked out with CRLF. Anchors are written with plain
 "\\n" and translated to whatever the file actually uses.
 """
@@ -50,9 +64,12 @@ MUTANTS = [
     ("M03 the isqrt request is gated on the ZERO REGISTER, one clock late",
      "  assign isq_valid  = (state == S_ROOT) && (n2[root_lane] != 64'd0) && !root_busy;",
      "  assign isq_valid  = (state == S_ROOT) && !zero[root_lane] && !root_busy;"),
-    ("M04 the isqrt's grant is ignored, so the same n2 can be re-accepted",
+    # Reshaped: dropping isq_ready ORPHANS it -- it is read in exactly one
+    # place. Requiring only ONE of the two is the same claim (the grant is not
+    # what gates acceptance) and keeps the signal live.
+    ("M04 the isqrt's grant is not REQUIRED, only welcomed",
      "          end else if (isq_valid && isq_ready) begin",
-     "          end else if (isq_valid) begin"),
+     "          end else if (isq_valid || isq_ready) begin"),
 
     # ---- the sum of squares -------------------------------------------------
     ("M05 the second square OVERWRITES the first rather than summing",
@@ -102,13 +119,22 @@ MUTANTS = [
      "    assign seed_idx[g] = mant[g][23:16];"),
 
     # ---- the Newton steps ---------------------------------------------------
+    # Reshaped, and the reshape is SHARPER than what it replaces. `if (1'b0)`
+    # orphans newt_step, and it also makes the machine take the SECOND branch
+    # first -- which is a different defect from the one the name claims.
+    # Finishing in the first branch is literally "only one Newton step": the
+    # flag stays live, the second branch becomes unreachable, and the result is
+    # a WRONG RECIPROCAL rather than a hang. A wrong number is a better mutant
+    # than a timeout, because a timeout is caught by any guard at all.
     ("M14 only ONE Newton step is taken",
      "          if (newt_step == 1'b0) begin\n"
      "            for (int l = 0; l < LANES; l++) rx[l] <= resc_u30(prod[l]);\n"
-     "            newt_step <= 1'b1;",
-     "          if (1'b0) begin\n"
-     "            for (int l = 0; l < LANES; l++) rx[l] <= resc_u30(prod[l]);\n"
-     "            newt_step <= 1'b1;"),
+     "            newt_step <= 1'b1;\n"
+     "            state <= S_NEWT_A;",
+     "          if (newt_step == 1'b0) begin\n"
+     "            for (int l = 0; l < LANES; l++) rx[l] <= rcp_finish(resc_u30(prod[l]));\n"
+     "            newt_step <= 1'b1;\n"
+     "            state <= S_OUT0;"),
     ("M15 the correction term is 2^30 rather than 2^31",
      "          mul_b[l] = $signed({1'b0, 32'h8000_0000 - newt_w[l]});",
      "          mul_b[l] = $signed({1'b0, 32'h4000_0000 - newt_w[l]});"),
@@ -120,9 +146,14 @@ MUTANTS = [
      "          mul_b[l] = $signed({1'b0, rx[l]});",
      "          mul_a[l] = $signed({9'd0, mant[l]});\n"
      "          mul_b[l] = $signed({9'd0, mant[l]});"),
-    ("M18 the reciprocal's u24 clamp is dropped",
+    # Reshaped: removing the clamp leaves `32'(r)`, which TRUNCATES, so bit 32
+    # of r goes unread and Verilator refuses the file. Moving the rail one
+    # binade keeps the 33-bit comparison -- and therefore bit 32 -- alive, and
+    # asks the sharper question anyway: not "is there a clamp" but "is it at
+    # the right value".
+    ("M18 the reciprocal is clamped to u25 rather than u24",
      "      rcp_finish = (r > 33'h0_00FF_FFFF) ? 32'h00FF_FFFF : 32'(r);",
-     "      rcp_finish = 32'(r);"),
+     "      rcp_finish = (r > 33'h0_01FF_FFFF) ? 32'h01FF_FFFF : 32'(r);"),
 
     # ---- the zero vector and its ledger ------------------------------------
     ("M19 the zero vector is reported by BOTH ops, not just NORMALIZE2",
@@ -133,9 +164,19 @@ MUTANTS = [
      "          o0_0_o <= resc_var(prod[0], out_k[0]);"),
 
     # ---- the output scaling -------------------------------------------------
-    ("M21 the output shift ignores the exponent",
+    # Reshaped, and NOT to the obvious replacement. Tying out_k to 7'd31
+    # orphans expo. The obvious repair -- invert its sign -- is worse than
+    # useless: expo is READ IN THIS ONE PLACE, so negating it here and negating
+    # it at its source (M11) are THE SAME MUTANT, and the table would carry a
+    # duplicate wearing two names. The shift CONSTANT is the one claim in this
+    # line not already made elsewhere.
+    #
+    # "The exponent is ignored entirely" stays covered: out_k would be 31 for
+    # every lane, which differs from 31 + e for exactly the inputs where M11
+    # differs, so whatever check catches M11 catches that too.
+    ("M21 the output shift is 30 rather than 31",
      "    for (int l = 0; l < LANES; l++) out_k[l] = 7'(31 + expo[l]);",
-     "    for (int l = 0; l < LANES; l++) out_k[l] = 7'd31;"),
+     "    for (int l = 0; l < LANES; l++) out_k[l] = 7'(30 + expo[l]);"),
     ("M22 every lane uses lane 0's exponent",
      "    for (int l = 0; l < LANES; l++) out_k[l] = 7'(31 + expo[l]);",
      "    for (int l = 0; l < LANES; l++) out_k[l] = 7'(31 + expo[0]);"),
