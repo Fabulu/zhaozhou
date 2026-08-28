@@ -5,6 +5,92 @@ at the top.*
 
 ---
 
+## 2026-08-28 (afternoon) -- two new pieces of the Field engine, and what the
+## tests found out about my tests
+
+*Short version: the noise operations work, the piece that feeds work to them
+exists, and in both cases the deliberate-defect testing found holes in my test
+suite rather than in the hardware. That is the good outcome, and it is worth
+explaining why.*
+
+### Two blocks that did not exist this morning
+
+**NOISE2 and RIDGE** -- the operations that give terrain and creatures their
+randomness -- now run four points at a time on the shared multiplier. The
+mapping turned out to be the whole design and it is a genuinely good fit: one
+request to the multiplier does the same step for all four points, so a
+four-point NOISE2 is six requests rather than twenty-four separate
+multiplications that would need scheduling. RIDGE is cheaper still at four,
+because it stops after the first half. Measured at 20 and 14 clocks.
+
+**The dispatcher** is the piece that collects work for those units. The
+services want four points at once; the executor produces one point at a time.
+Different axes, and something has to cross them. It gathers four, sends one
+request, and drains the answers back one register per clock -- because the
+register file has exactly one write port.
+
+That last constraint is worth flagging to you: a four-point NOISE2 takes 20
+clocks to compute and **8 more just to write the answers down**. A 40% tail.
+It is the first real argument for a second write port, and I have deliberately
+NOT built one, because the measurement that should decide it does not exist
+yet. I would rather show you the number than quietly spend area on it.
+
+### What the deliberate-defect testing found, which was mostly me
+
+I break the hardware on purpose, one change at a time, and check the tests
+notice. Three rounds today:
+
+**On the noise unit, three defects went unnoticed -- and all three turned out
+to be things I had claimed were important and were not.** One was a comment
+saying a certain choice of number format "matters for large coordinates". It
+does not, provably: the two forms differ by an amount that cannot reach any bit
+the operation reads. Another said a final scrambling step affected the result.
+It cannot -- it only touches bits nobody looks at. The third said an overflow
+check was doing work; over every one of the 65,536 possible inputs, it can
+never fire.
+
+None of those was a bug in the hardware. All three were bugs in my
+*justification*, which is worse in one specific way: a wrong comment survives
+rewrites that a wrong line of code would not. All three are now corrected with
+the proof written next to them, and where a claim became untestable I added a
+different deliberate defect that IS catchable, so nothing quietly stopped being
+checked.
+
+**On the dispatcher, four defects went unnoticed, and every one was a real gap
+in my tests.** The suite passed 274 checks and was weaker than that sounds. It
+never offered a fifth item to a full group, never asked what happens when the
+flush arrives with nothing waiting, never compared two consecutive
+transactions, and -- the interesting one -- it checked *what* happened but
+never *when*. A context is supposed to be freed after its last register is
+written; freeing it after the FIRST one produced the same counts in the same
+order, so nothing noticed. It does now. 327 checks.
+
+### The honest note about my own tooling
+
+Writing those fixes, I hit the same environment quirk six times: the way I
+apply scripted edits silently eats a backslash, which turns an escaped newline
+into a real one and breaks the file. Twice it looked like something else
+entirely. It is now written into the build notes with the workaround, so it
+stops costing time.
+
+### Where the hardware stands
+
+    working, swept, and committed
+      Field planner, context queue, register file, multiplier bank,
+      executor with correct dot products under contention,
+      curve service, distance service, patch accumulator,
+      Earth lattice walker, NOISE2/RIDGE, the long-op dispatcher
+
+    written, lint-clean, not yet built
+      the writeback arbiter -- three streams, one write port
+
+    still to do
+      ROT2/ROT3, RING, NORMALIZE2/3, SPLINE
+      wiring the services into the engine (the interesting part)
+      the two-service starvation question, which needs measuring
+
+---
+
 ## 2026-08-28 (late morning) -- the multiply bug is fixed, and my own safety
 ## net had a hole in it
 
