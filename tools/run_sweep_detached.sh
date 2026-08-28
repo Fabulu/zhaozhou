@@ -21,6 +21,17 @@
 # place, exactly as the working invocations set it.
 #
 #   bash tools/run_sweep_detached.sh field_v3_mulbank [logdir]
+#
+# AND NEVER PIPE A SWEEP. Running one as
+#
+#     bash tools/sweep_x.sh 2>&1 | head -25
+#
+# kills it with SIGPIPE the moment the 25th line arrives -- which lands
+# mid-run, between applying a mutant and restoring it, and strands that mutant
+# in the RTL. That is exactly how M07 was stranded on 2026-08-28, and it is
+# self-inflicted rather than a harness problem: `head` closing the pipe IS a
+# kill signal. Redirect to a file and tail the file instead, which is what
+# this runner does.
 set -u
 
 SWEEP="${1:?usage: run_sweep_detached.sh <sweep-name> [logdir]}"
