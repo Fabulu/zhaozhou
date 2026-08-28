@@ -169,7 +169,8 @@ struct Dut {
 
 /** One long op per context: preload x,y then run `op` into r2 (and r3). */
 int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs, const int32_t* ys,
-             uint32_t seed, int policy, bool rival, int32_t out[][2], int* clocks) {
+             uint32_t seed, int policy, bool rival, int32_t out[][2], int* clocks,
+             bool reverse_start = false) {
   Dut d(top);
   d.reset(policy);
   for (int c = 0; c < n_ctx; ++c) {
@@ -178,7 +179,11 @@ int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs,
     d.load_uop(c, 0, op, 2, 0, 1, 0, seed);
     d.load_uop(c, 1, zfield::OP_END, 0, 0, 0, 0, 0);
   }
-  for (int c = 0; c < n_ctx; ++c) d.start(c);
+  if (reverse_start) {
+    for (int c = n_ctx - 1; c >= 0; --c) d.start(c);
+  } else {
+    for (int c = 0; c < n_ctx; ++c) d.start(c);
+  }
 
   Prng rv(0xC0FFEEu + seed);
   int fin = 0, guard = 0, done = -1;
@@ -313,6 +318,32 @@ int main(int argc, char** argv) {
   check_group(top, zfield::OP_NOISE2, kCtx, 0x5A5Au, 1, false, rng, "NOISE2 x8 quiet");
   check_group(top, zfield::OP_NOISE2, kCtx, 0x5A5Au, 1, true, rng, "NOISE2 x8 contended");
   check_group(top, zfield::OP_RIDGE, kCtx, 0x5A5Au, 1, true, rng, "RIDGE x8 contended");
+
+  {
+    // WHICH DOES THE FAULT FOLLOW -- the context number, or the slot it lands
+    // in? Starting the contexts in reverse changes which context reaches the
+    // dispatcher first without changing anything else.
+    int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+    for (int c = 0; c < kCtx; ++c) {
+      xs[c] = (int32_t)((c + 1) << 16);
+      ys[c] = (int32_t)((c + 2) << 16);
+    }
+    int clocks = 0;
+    (void)run_long(top, zfield::OP_NOISE2, kCtx, xs, ys, 0x11u, 1, false, got, &clocks, true);
+    for (int c = 0; c < kCtx; ++c) {
+      int32_t s2[4] = {xs[c], ys[c], 0, 0}, w2[4] = {};
+      oracle(zfield::OP_NOISE2, 0x11u, s2, w2);
+      if (got[c][0] != w2[0] || got[c][1] != w2[1]) {
+        int src_of = -1;
+        for (int o = 0; o < kCtx; ++o) {
+          int32_t s3[4] = {xs[o], ys[o], 0, 0}, w3[4] = {};
+          oracle(zfield::OP_NOISE2, 0x11u, s3, w3);
+          if (got[c][0] == w3[0] && got[c][1] == w3[1]) src_of = o;
+        }
+        printf("   REVERSE START: ctx%d holds ctx%d answer\n", c, src_of);
+      }
+    }
+  }
 
   printf("== section 4: THE POLICY, measured on the composed machine ==\n");
   {
