@@ -1013,16 +1013,34 @@ module zhao_probe_v3_exec #(
         if (alu_sat_rescale) sat_rescale_o <= 1'b1;
       end
 
+      end  // downstream: !hold_c
+
       // THE SERVICE ANSWERED. The context leaves the parked set, leaves the
       // pipe, and only NOW advances -- the write has already landed through
       // the writeback arbiter, which is why the release is the dispatcher's to
       // send and not this block's to guess.
+      //
+      // OUTSIDE EVERY HOLD, AND THAT IS NOT A DETAIL. `rel_valid_i` is a
+      // PULSE from the dispatcher's drain; it is not a handshake and nothing
+      // re-sends it. Gated by `!hold_c` this block is DEAF to it exactly when
+      // it is holding -- and one of the things it holds for is waiting to hand
+      // over the NEXT long op.
+      //
+      // That deadlocks with five contexts and up, and only with five: four fit
+      // in one group, so the executor never has a fifth to hand over while the
+      // first four are outstanding. Measured in the composed machine --
+      // n=4 finishes in 42 clocks, n=5 never finishes at all, and the rival
+      // makes no difference either way.
+      //
+      // The comment fifty lines above already says a parked context "is not in
+      // the pipe". Its bookkeeping therefore has no business being gated by a
+      // PIPELINE hold, which is the same argument that moved the multiplier's
+      // accounting out of the upstream region earlier today.
       if (rel_valid_i) begin
         waiting_r[rel_ctx_i]  <= 1'b0;
         inflight_r[rel_ctx_i] <= 1'b0;
         pc_r[rel_ctx_i]       <= pc_r[rel_ctx_i] + PW'(1);
       end
-      end  // downstream: !hold_c
     end
   end
 

@@ -1531,6 +1531,26 @@ set_tests_properties(field_v3_rot_random_nightly PROPERTIES LABELS "nightly" TIM
 # real. Every piece is green alone; this is the only place their handovers are
 # tested, and every defect that has cost real time in this engine lived exactly
 # there. Design: reports/FIELD_V3_DISPATCH.md.
+add_executable(test_field_v3_full_directed differential/field_v3_full_directed.cpp)
+target_link_libraries(test_field_v3_full_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_full_directed
+  PREFIX Vzhao_probe_v3_full
+  TOP_MODULE zhao_probe_v3_full
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
+add_test(NAME field_v3_full_directed COMMAND test_field_v3_full_directed)
+set_tests_properties(field_v3_full_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
 target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_svcpath_directed
