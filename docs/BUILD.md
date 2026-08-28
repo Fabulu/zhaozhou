@@ -194,3 +194,76 @@ Also note `cmake` itself is shadowed on PATH exactly like `ctest`: a bare
 `cmake -S . -B build` picked up a different CMake and reported
 `The CMAKE_CXX_COMPILER: C is not a full path`, which is a corrupted-looking
 error with a PATH cause.
+
+## Running a mutation sweep unattended, and the five ways it fails
+
+2026-08-28. A single multiplier-bank sweep took **five aborted attempts** to
+run, and not one of them failed for the reason it appeared to. Every guard in
+the driver reported correctly; none of them could say why. Recorded here
+because the next person will hit these in the same order.
+
+### Use the detached runner
+
+```
+bash tools/run_sweep_detached.sh field_v3_mulbank
+```
+
+It launches the sweep so it is **not a child of the agent task**. A sweep
+killed between applying a mutant and restoring it strands that mutant in the
+RTL. That happened five times in one session and once reached a pushed
+commit whose message said the block was fixed.
+
+### 1. ccache refuses to run without `USERPROFILE`, and a detached process
+### does not have it
+
+Verilator's own CMake auto-detects ccache (`OBJCACHE_ENABLED`, default ON).
+Without `USERPROFILE` ccache errors, ninja exits 1, and no binary is
+produced -- surfacing as `ABORT: pristine target did not link`.
+
+Setting `USERPROFILE` in the detached process does **not** work, through
+inheritance, an inline export, or derivation from `HOME`. The fix is
+`-DOBJCACHE_ENABLED=OFF` in the sweep's reconfigure, which the drivers now
+pass. **And clear `CMakeCache.txt` first** -- `OBJCACHE_PATH` is a cache
+variable and survives a reconfigure.
+
+### 2. `/tmp` is not one directory
+
+Git-for-Windows bash and the msys bash map `/tmp` to **different**
+directories. A log written by the detached runner is invisible to a shell
+reading `/tmp` from the other. Sweep logs now use absolute paths inside the
+repo for exactly this reason.
+
+### 3. `ninja` prints a step BEFORE running it
+
+A build log ending at `[10/12] Linking ...` says the link **started**, not
+that it finished. Reading it as success cost three wrong diagnoses. The
+drivers now record `CMAKE_EXIT` and `NINJA_EXIT` explicitly.
+
+### 4. Never pipe a sweep
+
+```
+bash tools/sweep_x.sh 2>&1 | head -25      # DO NOT
+```
+
+`head` exits at line 25 and the sweep takes SIGPIPE mid-run, stranding a
+mutant. Redirect to a file and tail the file.
+
+### 5. One build tree, one writer, and no other build anywhere
+
+Separate build directories are not separate enough -- they share the source
+tree's cmake state. A build of a *different* tree running concurrently is
+enough to break a sweep's rebuild, because the sweep deletes its target's
+model directory and exe before rebuilding.
+
+### And check the tree afterwards, from outside the sweep
+
+```
+python tools/sweep_check_clean.py tools/sweep_<name>_mutants.py
+```
+
+`restore` copies back a snapshot taken at startup. If the file was **already**
+mutated then, restore faithfully restores the mutant and every guard inside
+the driver agrees the tree is pristine. This checks against the mutant table
+instead -- and not against HEAD, because HEAD itself carried a mutant for one
+commit. It has caught five strandings.
+
