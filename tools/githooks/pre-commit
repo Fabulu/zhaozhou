@@ -1,0 +1,60 @@
+#!/bin/sh
+# Refuse to commit regenerable working data.
+#
+# WHY THIS EXISTS: on 2026-08-28 an over-broad `git add` swept 867 raw .rgb
+# render frames into three commits. Removing them cost a coordinated history
+# rewrite across every agent working in the repo. .gitignore alone does not
+# prevent this -- it is silent when a path it does not cover gets staged, and
+# `git add -f` walks straight past it. This hook REFUSES the commit instead.
+#
+# THE RULE IT ENFORCES: the evidence is the PNG contact sheet, not the frames
+# it was made from. Committed evidence is small and permanent; raw frames,
+# object files and golden staging dirs are regenerable working data.
+#
+# To bypass deliberately (you had better mean it):  ZHAO_ALLOW_BIG=1 git commit
+set -u
+
+max_bytes=$(( 2 * 1024 * 1024 ))   # 2 MiB: bigger than any legitimate source or evidence PNG
+bad=""
+big=""
+
+# Only inspect what is actually staged for this commit.
+staged=$(git diff --cached --name-only --diff-filter=AM)
+[ -z "$staged" ] && exit 0
+
+for f in $staged; do
+  case "$f" in
+    # Raw frame dumps and reel working directories, wherever they land.
+    *.rgb|*/renders/*|*/renders-baseline/*|*/golden-work/*|*/golden-verify/*|*/scratch-reel/*|*/obj/*)
+      bad="$bad  $f
+" ;;
+  esac
+
+  # Size gate catches the CLASS of fault, not just the extensions we have met.
+  # Blob size, not worktree size: that is what actually enters history.
+  if [ -f "$f" ]; then
+    sz=$(git cat-file -s "$(git rev-parse ":$f" 2>/dev/null)" 2>/dev/null || echo 0)
+    if [ "$sz" -gt "$max_bytes" ]; then
+      big="$big  $f ($((sz / 1024)) KiB)
+"
+    fi
+  fi
+done
+
+if [ -n "$bad" ]; then
+  printf '\nCOMMIT REFUSED: regenerable working data is staged.\n\n%s\n' "$bad" >&2
+  printf 'These are render frames or staging dirs, not evidence. Commit the PNG\n' >&2
+  printf 'contact sheet instead, and stage by explicit path -- never `git add -A`\n' >&2
+  printf 'or `git add .` from the repo root.\n\n' >&2
+  printf 'Unstage with:  git restore --staged <path>\n\n' >&2
+  exit 1
+fi
+
+if [ -n "$big" ] && [ "${ZHAO_ALLOW_BIG:-0}" != "1" ]; then
+  printf '\nCOMMIT REFUSED: staged blob(s) over 2 MiB.\n\n%s\n' "$big" >&2
+  printf 'Large binaries are almost never evidence. If this one genuinely is,\n' >&2
+  printf 'say so out loud and repeat with:  ZHAO_ALLOW_BIG=1 git commit ...\n\n' >&2
+  exit 1
+fi
+
+exit 0

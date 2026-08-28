@@ -56,3 +56,22 @@ gate.log
 sweep_*.log
 pf.txt
 .ccache/
+
+# ---------------------------------------------------------------------------
+# RAW RENDER FRAMES AND RUN WORKING DATA — never committed.
+#
+# Added 2026-08-28 after an over-broad `git add` swept 867 raw .rgb frames into
+# three commits and the owner had to authorise a history rewrite to remove them.
+# THE EVIDENCE IS THE PNG CONTACT SHEET, NOT THE FRAMES IT WAS MADE FROM.
+# A run's evidence/*.png is committed and belongs in history; the raw frames,
+# object files and golden staging dirs are regenerable working data.
+# ---------------------------------------------------------------------------
+*.rgb
+runs/**/renders/
+runs/**/renders-baseline/
+runs/**/scratch/
+runs/**/obj/
+runs/**/golden-work/
+runs/**/golden-verify/
+# scratch reel output, wherever a subject dir lands
+**/scratch-reel/
