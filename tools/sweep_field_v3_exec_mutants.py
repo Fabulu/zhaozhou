@@ -219,10 +219,39 @@ MUTANTS = [
      RF,
      "    off = bk - base[1:0];",
      "    off = base[1:0] - bk;"),
-    # ---- issue order and commutativity: both expected to be EQUIVALENT -----
-    # Kept because an equivalence that is PROVEN is evidence about the block,
-    # while an equivalence that is merely absent from the table is a hole
-    # nobody looked at.
+    # ---- issue order and commutativity ------------------------------------
+    # These two were written under the heading "both expected to be
+    # EQUIVALENT", with proofs, BEFORE any run. Both were then CAUGHT.
+    #
+    # That was a self-inflicted error and this file's own header says so:
+    # "Nothing is declared until the first run says what actually survives --
+    # writing a proof before the evidence is how a hole acquires a note."
+    # I wrote the proofs predictively anyway, and predicting is exactly what
+    # the rule forbids.
+    #
+    # X18's proof was wrong on the facts: contexts are STARTED one at a time,
+    # so during the staggered start "highest ready" and "lowest ready" are
+    # different contexts and the pinned cycle count sees it.
+    #
+    # X19 IS equivalent after all, and how that was established twice-wrongly
+    # is the more useful record.
+    #
+    # Declared equivalent predictively (against the rule). Then a run reported
+    # it CAUGHT, so the proof was retracted. Then a CLEAN run reported it
+    # SURVIVING, restoring the proof below.
+    #
+    # The middle result was garbage, and its own run had already said so: that
+    # sweep aborted with exit 4 and the message "restored model differs from
+    # pristine -- the tree is NOT clean", because the driver was snapshotting
+    # only one of the two files the table mutates. The register file had
+    # X30/X31/X32 accumulated in it, so it was returning wrong operands and an
+    # a0/b0 swap became observable. Commutativity never failed; the register
+    # file underneath it did.
+    #
+    # THE LESSON IS NOT ABOUT COMMUTATIVITY. It is that I read per-mutant
+    # verdicts out of a run that had ABORTED and declared itself unclean. A
+    # run that fails its own integrity check has no verdicts, only noise --
+    # and the guard said exactly that before I ignored it.
     ("X18 the ready scan picks the highest-numbered context rather than the lowest",
      "    for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);",
      "    for (int i = 0; i < CTX; i++) if (ready_c[i]) issue_ctx_c = CW'(i);"),
@@ -298,15 +327,18 @@ EQUIVALENT = {
     # mutant with no proof, which is what it is. Recorded rather than deleted
     # because a proof that turned out to be false is worth remembering.
     "X19":
-        "MULTIPLICATION IS COMMUTATIVE. The swap reaches only the multiplier's "
-        "two operand ports; the ALU still receives a0_i and b0_i unswapped, so "
-        "the ONLY affected value is prod_ab = a*b versus b*a. Both operands are "
-        "sign-extended to 33 bits by the same expression before the multiply, "
-        "so the products are bit-identical, not merely numerically equal. "
-        "RE-SCORE THIS IF THE MULTIPLIER EVER TREATS ITS PORTS ASYMMETRICALLY "
-        "-- different widths, a signed/unsigned split, or an accumulate that "
-        "reads one port twice.",
-    "X12":
+        "MULTIPLICATION IS COMMUTATIVE. The swap reaches only the operand mux's "
+        "DEFAULT arm, which carries a0*b0; the DOT arms that supply a1*b1 and "
+        "a2*b2 are untouched, and the ALU still receives a0_i and b0_i "
+        "unswapped. Both operands are sign-extended to 33 bits by the same "
+        "expression before the multiply, so the products are bit-identical "
+        "rather than merely numerically equal. "
+        "This proof was retracted once on the strength of a CONTAMINATED run "
+        "-- see the note above the mutant -- and restored when a clean run "
+        "showed it surviving. "
+        "RE-SCORE THIS IF THE MULTIPLIER EVER TREATS ITS PORTS "
+        "ASYMMETRICALLY: different widths, a signed/unsigned split, or an "
+        "accumulate that reads one port twice.",    "X12":
         "REDUNDANT TERM, PROVEN FROM THE ALU'S OWN DECODE. The write enable "
         "is `s4_v_r && alu_writes && !alu_is_end`, and X12 drops the last "
         "term. In zhao_field_alu exactly ONE op sets is_end_o -- OP_END -- "

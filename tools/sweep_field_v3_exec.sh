@@ -113,6 +113,33 @@ python tools/sweep_field_v3_exec_preflight.py || exit 8
 
 expected=$(python "$MUT" --count) || exit 3
 
+# EVERY FILE THE TABLE CAN MUTATE GETS A SNAPSHOT, not just $RTL.
+#
+# 2026-08-28: this driver snapshotted $RTL alone while the mutant table had
+# grown to cover the register file too. Mutants applied to that second file
+# were therefore NEVER RESTORED, and because X30/X31/X32 touch three different
+# lines they ACCUMULATED -- each later mutant was scored against a file that
+# still carried the earlier ones. Every result for that file was contaminated.
+#
+# The driver's own model-hash guard caught it at the final restore and the run
+# aborted with exit 4, which is that guard doing its job. This removes the
+# cause rather than relying on the guard to keep finding it.
+FILES=$(python - "$MUT" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("mut", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+paths = {e[1] if len(e) == 4 else m.RTL for e in m.MUTANTS}
+print(" ".join(sorted(paths)))
+PY
+) || exit 3
+
+GOLDDIR=$(mktemp -d)
+gi=0
+for f in $FILES; do
+  cp "$f" "$GOLDDIR/g$gi" || exit 4
+  gi=$((gi + 1))
+done
 GOLDTMP=$(mktemp)
 cp "$RTL" "$GOLDTMP" || exit 4
 GOLDHASH=$(hash_of "$RTL")
@@ -120,8 +147,18 @@ GOLDHASH=$(hash_of "$RTL")
 restore() {
   local i
   for i in 1 2 3 4 5 6 7 8 9 10; do
-    cp "$GOLDTMP" "$RTL" 2>/dev/null
-    if [ "$(hash_of "$RTL")" = "$GOLDHASH" ]; then return 0; fi
+    ri=0
+    for f in $FILES; do
+      cp "$GOLDDIR/g$ri" "$f" 2>/dev/null
+      ri=$((ri + 1))
+    done
+    ok=1
+    ri=0
+    for f in $FILES; do
+      cmp -s "$GOLDDIR/g$ri" "$f" || ok=0
+      ri=$((ri + 1))
+    done
+    if [ "$ok" = "1" ] && [ "$(hash_of "$RTL")" = "$GOLDHASH" ]; then return 0; fi
     sleep 1
   done
   return 1
@@ -216,6 +253,7 @@ if ! python tools/sweep_check_clean.py "$MUT"; then
   exit 14
 fi
 rm -f "$GOLDTMP"
+rm -rf "$GOLDDIR"
 
 attempted=$k
 accounted=$((caught + ${#survivors[@]} + ${#equivalents[@]} + ${#discards[@]}))

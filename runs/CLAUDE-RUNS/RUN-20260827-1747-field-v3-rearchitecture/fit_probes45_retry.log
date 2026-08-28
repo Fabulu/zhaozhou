@@ -1,1 +1,5 @@
-﻿=== probe 5 then probe 4, sequential, generous budgets ===
+﻿=== probe 5 then probe 4, sequential, 14000s each ===
+started 02:26:12
+zhao_probe_patch_acc               failed:quartus_fit.exe  4380.1s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (71 block(s); 1 measured this run)
+=== probe 4 ===
