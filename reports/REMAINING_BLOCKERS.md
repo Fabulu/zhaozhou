@@ -1,5 +1,65 @@
 # What is actually blocking every remaining block
 
+> ## FIELD v3 STATE, 2026-08-28. The Field IR engine is no longer one block.
+>
+> The ledger treats `FIELD.SEQ.*` as sequencer blocks blocked on one another.
+> That is no longer the shape of the work. Field v3 decomposed the engine into
+> measured pieces, and what blocks the remaining ops is now a RESOURCE, not a
+> sequencer:
+>
+> | piece | state |
+> | --- | --- |
+> | FIELD.PLAN (software planner) | swept 16/16 |
+> | ready-context FIFO | fitted, 257 ALM, 97.8 MHz |
+> | banked register file (probe) | fitted, 372 ALM, 93.14 MHz -- a FLOOR, see below |
+> | two-bank distance service | fitted, 1,745 ALM, 90.6 MHz |
+> | barrel curve service | II 13, swept 15/15, fit RUNNING |
+> | four-bank patch accumulator | 297 updates in 297 clocks, swept 15/15, fit RUNNING |
+> | Earth lattice walker | 297 clocks/patch, swept 18/18 |
+> | v3 executor datapath | swept 31/31, ALU ops + sequenced DOT2/DOT3 |
+> | functional register file | built; NOT the probe -- the probe implements no semantics |
+> | four-wide multiplier bank + arbiter | built, 18,202 routed with none lost; sweep RUNNING |
+>
+> ### What actually blocks the nine remaining ops
+>
+> Not a sequencer. `zhao_field_exec_shared.sv` holds FIVE shared resources --
+> one multiplier, one isqrt, one sine, one reciprocal, one rcp24 ROM -- and
+> the ops take turns on them. That block exists because the first synthesis of
+> the Field engine measured **79 DSPs against a device with 112**, with nine
+> of ten units idle at any instant.
+>
+> So each remaining op is blocked on ARBITRATING the resources it borrows:
+>
+> | op | needs, beyond the multiplier |
+> | --- | --- |
+> | CURVE, DCURVE, SPLINE, NOISE2, RIDGE | nothing -- the bank arbiter unblocks these |
+> | ROT2, ROT3 | the shared sine table |
+> | RING | the shared reciprocal |
+> | NORMALIZE2/3 | the shared isqrt and the rcp24 seed ROM |
+>
+> Full reasoning in `reports/FIELD_V3_SERVICE_ATTACH.md`, including the
+> correction where I claimed ROT and RING needed only the bank and the RTL
+> said otherwise.
+>
+> ### One measurement that is NOT what it looks like
+>
+> The banked register file's 372 ALM / 12 M10K / 93.14 MHz is a fit of
+> `zhao_probe_banked_rf`, which addresses every bank with the SAME ROW and
+> therefore cannot read a register group that crosses a multiple of four. Its
+> own header says it implements no Field semantics. The functional file
+> (`zhao_field_v3_rf.sv`) does per-bank address arithmetic the probe does not,
+> so **that number is a floor, not a measurement of the shipped part.** It
+> needs its own fit before it is quoted anywhere.
+>
+> ### Still owner-blocked, unchanged
+>
+> The `material` writer-selection and `nav_cost` reduction laws are declared
+> in `design/contracts/FIELD.SEQ.EARTH.md` as CHOSEN, NOT FOUND. Nothing in
+> the tree defined them; they are reducer semantics rather than game content,
+> but they are still a choice the owner has to own.
+
+
+
 > ## RULE-1 SURVEY, 2026-08-26. Read before planning any greenfield block.
 >
 > ### SIX OF THE NINE REMAINING NON-GAMEPLAY BLOCKS HAVE NO ORACLE
