@@ -221,6 +221,24 @@ struct Clip {
    * Default OFF, so nothing that already exists changes by a single bit.
    */
   bool interpolate = false;
+  /**
+   * A1 — THE BAKED 60 Hz PRESENTATION COMPANION (2026-08-28, kind-9
+   * unfrozen). When present (bake60 on the bank, baked by
+   * compile_creature), the half-tick pose is an EXPLICIT baked midpoint
+   * instead of the runtime nlerp: root midpoints are Catmull-Rom cubics
+   * CLAMPED to the segment interval (monotone near impact/burial by
+   * construction — a baked curve cannot overshoot its keys), and quat
+   * midpoints are the 4-tap Catmull-Rom of hemisphere-aligned lanes,
+   * renormalized, falling back to the plain nlerp midpoint on segments
+   * adjacent to an event frame (the event's timing is gameplay truth and
+   * its pose must not be smoothed across). PRESENTATION ONLY: keys,
+   * events and the sim clock are untouched; sub=1 simply selects a
+   * better pose than nlerp could make at runtime. Hero-tier opt-in —
+   * ordinary creatures keep the nlerp fallback (the pose-cache economy
+   * is sized for armies, not for every creature carrying double frames).
+   */
+  std::vector<quat16> mid_quats;  // frame_count * bone_count, or empty
+  std::vector<int32_t> mid_root;  // frame_count * 3, or empty
 };
 
 /**
@@ -243,6 +261,7 @@ struct ClipBank {
   uint8_t bone_count = 0;
   std::vector<Clip> clips;
   std::vector<SeamPair> seams;  // enforced by compile_creature (C2)
+  bool bake60 = false;          // A1: bake presentation midpoints at compile
 };
 
 /** Byte size of one frame as shipped: 12 + 8 * bone_count (creature_rules 2.1). */
@@ -509,6 +528,9 @@ struct CreatureType {
  * events/frame, frame-sorted events). Returns false + reason on a malformed
  * input (fail-safe: nothing compiled).
  */
+/** A1: fill Clip::mid_* for one clip (compile_creature calls it per bank). */
+void bake_presentation_midpoints(Clip& c, uint8_t bone_count);
+
 bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
                       CreatureType& out, const char** reason);
 

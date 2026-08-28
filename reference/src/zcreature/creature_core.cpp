@@ -167,6 +167,76 @@ bool bake_skeleton(const Skeleton& sk, SkeletonBake& out) {
   return true;
 }
 
+// ---- A1: bake the 60 Hz presentation companion ----------------------------
+namespace {
+quat16 quat_renorm(int64_t w, int64_t x, int64_t y, int64_t z) {
+  const uint64_t n2 = static_cast<uint64_t>(w * w + x * x + y * y + z * z);
+  const int64_t n = static_cast<int64_t>(isqrt_u64(n2));
+  if (n == 0) return quat16_identity();
+  const auto d = [&](int64_t v) {
+    return static_cast<int16_t>((v * kQuatOne + (v >= 0 ? n / 2 : -n / 2)) / n);
+  };
+  return quat16{{d(w), d(x), d(y), d(z)}};
+}
+}  // namespace
+
+void bake_presentation_midpoints(Clip& c, uint8_t bc) {
+  if (!c.interpolate || c.frame_count < 2) return;
+  const int n = c.frame_count;
+  c.mid_quats.assign(static_cast<size_t>(n) * bc, quat16_identity());
+  c.mid_root.assign(static_cast<size_t>(n) * 3, 0);
+  // event-adjacent segments keep the plain nlerp midpoint (monotone at
+  // impact/burial/extraction: no smoothing across a gameplay moment)
+  std::vector<bool> plain(n, false);
+  for (const ClipEvent& e : c.events) {
+    for (int d = -2; d <= 1; ++d) {
+      const int k = (static_cast<int>(e.frame) + d + n) % n;
+      plain[static_cast<size_t>(k)] = true;
+    }
+  }
+  const auto wrap = [&](int k) { return (k + n) % n; };
+  for (int k = 0; k < n; ++k) {
+    const int k0 = wrap(k - 1), k1 = k, k2 = wrap(k + 1), k3 = wrap(k + 2);
+    // root: Catmull-Rom at t=1/2, clamped into the segment interval
+    for (int i = 0; i < 3; ++i) {
+      const int64_t p0 = c.root[static_cast<size_t>(k0) * 3 + i];
+      const int64_t p1 = c.root[static_cast<size_t>(k1) * 3 + i];
+      const int64_t p2 = c.root[static_cast<size_t>(k2) * 3 + i];
+      const int64_t p3 = c.root[static_cast<size_t>(k3) * 3 + i];
+      int64_t m = (-p0 + 9 * p1 + 9 * p2 - p3) / 16;
+      const int64_t lo = p1 < p2 ? p1 : p2, hi = p1 < p2 ? p2 : p1;
+      if (m < lo) m = lo;
+      if (m > hi) m = hi;
+      c.mid_root[static_cast<size_t>(k) * 3 + i] = static_cast<int32_t>(m);
+    }
+    for (int b = 0; b < bc; ++b) {
+      const quat16& q1 = c.quats[static_cast<size_t>(k1) * bc + b];
+      const quat16& q2r = c.quats[static_cast<size_t>(k2) * bc + b];
+      if (plain[static_cast<size_t>(k)]) {
+        c.mid_quats[static_cast<size_t>(k) * bc + b] = quat16_nlerp(q1, q2r, 1, 2);
+        continue;
+      }
+      const quat16& q0r = c.quats[static_cast<size_t>(k0) * bc + b];
+      const quat16& q3r = c.quats[static_cast<size_t>(k3) * bc + b];
+      // hemisphere-align every neighbour to q1
+      const auto align = [&](const quat16& q) {
+        const int32_t dot = q1.q[0] * q.q[0] + q1.q[1] * q.q[1] +
+                            q1.q[2] * q.q[2] + q1.q[3] * q.q[3];
+        quat16 r = q;
+        if (dot < 0)
+          for (int i = 0; i < 4; ++i) r.q[i] = static_cast<int16_t>(-r.q[i]);
+        return r;
+      };
+      const quat16 q0 = align(q0r), q2 = align(q2r), q3 = align(q3r);
+      c.mid_quats[static_cast<size_t>(k) * bc + b] = quat_renorm(
+          -q0.q[0] + 9 * q1.q[0] + 9 * q2.q[0] - q3.q[0],
+          -q0.q[1] + 9 * q1.q[1] + 9 * q2.q[1] - q3.q[1],
+          -q0.q[2] + 9 * q1.q[2] + 9 * q2.q[2] - q3.q[2],
+          -q0.q[3] + 9 * q1.q[3] + 9 * q2.q[3] - q3.q[3]);
+    }
+  }
+}
+
 // ---------------------------------------------------------- pose decode ----
 
 void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
@@ -176,9 +246,15 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
   const int32_t* disp = clip.root.data() + static_cast<size_t>(frame) * 3;
   int32_t disp_i[3] = {disp[0], disp[1], disp[2]};
   if (clip.interpolate && sub != 0) {
-    const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
-    const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
-    for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
+    if (!clip.mid_root.empty()) {
+      // A1: the baked companion midpoint (cubic, monotone-clamped)
+      const int32_t* dm = clip.mid_root.data() + static_cast<size_t>(frame) * 3;
+      for (int i = 0; i < 3; ++i) disp_i[i] = dm[i];
+    } else {
+      const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+      const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
+      for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
+    }
   }
   disp = disp_i;
   std::array<mat3x4fx, kMaxBones> a{};  // animated world chains
@@ -189,8 +265,12 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
     // clip; the sim clock and every event frame are untouched.
     quat16 q = clip.quats[static_cast<size_t>(frame) * bc + b];
     if (clip.interpolate && sub != 0) {
-      const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
-      q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
+      if (!clip.mid_quats.empty()) {
+        q = clip.mid_quats[static_cast<size_t>(frame) * bc + b];  // A1
+      } else {
+        const uint16_t nf = static_cast<uint16_t>(frame + 1 >= clip.frame_count ? 0 : frame + 1);
+        q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
+      }
     }
     quat16_to_mat3(q, r, L);
     mat3x4fx lr = r;  // LR = R with the rest translation (+ root displacement)
@@ -614,6 +694,9 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   }
   out.skeleton = sk;
   out.bank = bank;
+  // A1: bake the presentation companion for hero banks (kind-9 unfrozen)
+  if (bank.bake60)
+    for (Clip& c : out.bank.clips) bake_presentation_midpoints(c, bank.bone_count);
 
   // ---- C2: enforce the declared phase seams (bit-identical poses) --------
   for (const SeamPair& sp : bank.seams) {

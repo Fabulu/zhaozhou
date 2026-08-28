@@ -3431,6 +3431,26 @@ SceneSubject subject_zixx_walk_unlit() {
   return s;
 }
 
+// DIAGNOSTIC: the F2 BAKED spring-chain fall (slot 19), fixed side camera,
+// beside the shipped F1 relax for the owner's eye. Not in the library.
+#ifdef ZIXX_F2_PREVIEW
+SceneSubject subject_zixx_fall_baked() {
+  SceneSubject s;
+  s.name = "zixxtrixx-fall-baked";
+  s.creature = 21;  // clip slot 19
+  s.frames = zixx::kFallKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  s.note =
+      "DIAGNOSTIC (F2): the offline deterministic spring-chain fall -- "
+      "per-joint springs to a weak rest S, neighbour coupling, root "
+      "inertia, slow aero forcing, damping; 60 Hz fixed-point, baked, no "
+      "runtime physics. An ALTERNATE beside the owner-directed F1 relax "
+      "(slot 4): promotion is his call, made by eye.";
+  return s;
+}
+#endif
+
 // The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
 SceneSubject subject_zixx_fall() {
   SceneSubject s;
@@ -3669,6 +3689,9 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-normviz")) rc |= render_scene(subject_zixx_mode("zixxtrixx-normviz", 2, false, 1));
   if (wanted("zixxtrixx-wire")) rc |= render_scene(subject_zixx_mode("zixxtrixx-wire", 3, false, 1));
   if (wanted("zixxtrixx-walk-unlit")) rc |= render_scene(subject_zixx_walk_unlit());
+#ifdef ZIXX_F2_PREVIEW
+  if (wanted("zixxtrixx-fall-baked")) rc |= render_scene(subject_zixx_fall_baked());
+#endif
 #ifdef ZIXX_SWEEP
   if (wanted("zixxtrixx-sweep")) rc |= render_scene(subject_zixx_sweep());
 #endif

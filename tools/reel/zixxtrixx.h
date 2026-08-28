@@ -2234,6 +2234,167 @@ inline zc::Clip build_air_hit() {
   return c;
 }
 
+
+// ---- F2: THE OFFLINE SPRING-CHAIN BAKER (2026-08-28) ----------------------
+// The lasting falling architecture: per-joint pitch/yaw driven by a
+// deterministic fixed-point spring chain -- spring to a weak rest S,
+// neighbour bend coupling, root angular inertia, slow aero forcing, minus
+// damping -- run OFFLINE at 60 Hz and BAKED to poses. No runtime physics:
+// the shipped bytes are keys, replay-exact by construction.
+//
+// SHIPPING STATUS: the baked result lives on SLOT 19 as an ALTERNATE fall
+// beside the owner-directed F1 relax on slot 4 (Fabian's "relax by a ton"
+// landed today and is the shipped look; promoting the baked chain over it
+// is one line, after his eye rules). House style holds either way: the
+// chain's terms are FEW and SLOW.
+constexpr int kFallBakeWarmLoops = 4;   // settle into the periodic orbit
+constexpr int kFallBakeBlend = 16;      // keys of tail->head closure fade
+// region dynamics, indexed head..tail in 4 bands: heavy slow head, loose
+// neck, heavier middle, light delayed tail (masses as inverse-acc scale)
+constexpr int32_t kFbSpring[4] = {150, 210, 170, 250}; // pull to the rest S
+constexpr int32_t kFbCouple[4] = {160, 220, 190, 260}; // neighbour bend
+constexpr int32_t kFbDamp[4] = {120, 104, 112, 86};    // per-mille per step
+constexpr int32_t kFbInertia[4] = {150, 100, 60, 120}; // root spin coupling
+constexpr int32_t kFbAero[4] = {500, 700, 400, 1100};  // slow flutter drive
+constexpr int32_t kFbRestAuth = 350;    // the weak rest S, 1/1000
+inline int fb_region(int j) {
+  if (j <= 3) return 0;
+  if (j <= 8) return 1;
+  if (j <= 14) return 2;
+  return 3;
+}
+
+inline zc::Clip build_fall_baked() {
+  zc::Clip c;
+  c.slot_id = 19;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kFallKeys);
+  c.root.assign(static_cast<size_t>(kFallKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kFallKeys) * kBoneCount, zc::quat16_identity());
+  const int nj = kStanceSlopes;
+  // state: per joint pitch/yaw (angle16) and velocity (angle16 per step)
+  std::vector<int32_t> th_p(nj, 0), om_p(nj, 0), th_y(nj, 0), om_y(nj, 0);
+  // recorded pitch/yaw per key of the LAST loop
+  std::vector<int32_t> rec_p(static_cast<size_t>(kFallKeys) * nj, 0);
+  std::vector<int32_t> rec_y(static_cast<size_t>(kFallKeys) * nj, 0);
+  const int steps_per_loop = kFallKeys * 2;  // 60 Hz, keys are 30 Hz
+  int32_t prev_theta = 0, prev_om_root = 0;
+  for (int loop = 0; loop <= kFallBakeWarmLoops; ++loop) {
+    for (int st = 0; st < steps_per_loop; ++st) {
+      const int key = st / 2;
+      const int32_t ph = key * (65536 / kFallKeys) + (st & 1) * (32768 / kFallKeys);
+      // the tumble's warped phase (build_fall's own law) -> root angular
+      // velocity -> its DERIVATIVE is the inertia forcing
+      const int32_t theta_u = static_cast<int32_t>((static_cast<int64_t>(st) << 16) / steps_per_loop);
+      const int32_t warp = static_cast<int32_t>(
+          (static_cast<int64_t>(kFallTumbleWarp) *
+           zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >> 16);
+      const int32_t theta = theta_u + warp;
+      const int32_t om_root = theta - prev_theta;
+      const int32_t al_root = om_root - prev_om_root;  // root angular accel
+      prev_theta = theta;
+      prev_om_root = om_root;
+      for (int j = 0; j < nj; ++j) {
+        const int r = fb_region(j);
+        // the weak rest S (region-scaled stance slope delta from straight)
+        const int32_t rest =
+            static_cast<int32_t>((static_cast<int64_t>(kStanceSlope[j]) * kFbRestAuth) / 1000) -
+            (j > 0 ? static_cast<int32_t>(
+                         (static_cast<int64_t>(kStanceSlope[j - 1]) * kFbRestAuth) / 1000)
+                   : 0);
+        const int32_t left_p = j > 0 ? th_p[j - 1] : 0;
+        const int32_t right_p = j + 1 < nj ? th_p[j + 1] : 0;
+        const int32_t left_y = j > 0 ? th_y[j - 1] : 0;
+        const int32_t right_y = j + 1 < nj ? th_y[j + 1] : 0;
+        // slow aero flutter: ONE incommensurate slow wave per axis (house
+        // style: fewer and slower, never a noise bank)
+        const int32_t aero_p = static_cast<int32_t>(
+            (static_cast<int64_t>(kFbAero[r]) *
+             zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph - j * 4200 + 11000) & 0xFFFF)}).raw) >> 16);
+        const int32_t aero_y = static_cast<int32_t>(
+            (static_cast<int64_t>(kFbAero[r]) *
+             zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 - j * 3600 + 30000) & 0xFFFF)}).raw) >> 17);
+        int64_t acc_p = (static_cast<int64_t>(kFbSpring[r]) * (rest - th_p[j])) / 1000 +
+                        (static_cast<int64_t>(kFbCouple[r]) * (left_p + right_p - 2 * th_p[j])) / 1000 +
+                        (static_cast<int64_t>(kFbInertia[r]) * al_root) / 100 + aero_p / 8;
+        int64_t acc_y = (static_cast<int64_t>(kFbSpring[r]) * (0 - th_y[j])) / 1000 +
+                        (static_cast<int64_t>(kFbCouple[r]) * (left_y + right_y - 2 * th_y[j])) / 1000 +
+                        aero_y / 8;
+        om_p[j] += static_cast<int32_t>(acc_p);
+        om_y[j] += static_cast<int32_t>(acc_y);
+        om_p[j] -= static_cast<int32_t>((static_cast<int64_t>(kFbDamp[r]) * om_p[j]) / 1000);
+        om_y[j] -= static_cast<int32_t>((static_cast<int64_t>(kFbDamp[r]) * om_y[j]) / 1000);
+        th_p[j] += om_p[j];
+        th_y[j] += om_y[j];
+        // hard sanity clamp so a mis-tuned knob cannot explode the bake
+        if (th_p[j] > 9000) th_p[j] = 9000;
+        if (th_p[j] < -9000) th_p[j] = -9000;
+        if (th_y[j] > 9000) th_y[j] = 9000;
+        if (th_y[j] < -9000) th_y[j] = -9000;
+      }
+      if (loop == kFallBakeWarmLoops && (st & 1) == 0) {
+        for (int j = 0; j < nj; ++j) {
+          rec_p[static_cast<size_t>(key) * nj + j] = th_p[j];
+          rec_y[static_cast<size_t>(key) * nj + j] = th_y[j];
+        }
+      }
+    }
+  }
+  // exact loop closure: cross-fade the recorded tail into the head
+  for (int k = 0; k < kFallBakeBlend; ++k) {
+    const int kk = kFallKeys - kFallBakeBlend + k;
+    const int32_t w = ((k + 1) * 1000) / (kFallBakeBlend + 1);
+    for (int j = 0; j < nj; ++j) {
+      const int32_t hp = rec_p[static_cast<size_t>(0) * nj + j];
+      const int32_t hy = rec_y[static_cast<size_t>(0) * nj + j];
+      int32_t& tp = rec_p[static_cast<size_t>(kk) * nj + j];
+      int32_t& ty = rec_y[static_cast<size_t>(kk) * nj + j];
+      tp += ((hp - tp) * w) / 1000;
+      ty += ((hy - ty) * w) / 1000;
+    }
+  }
+  // pose the loop: baked chain angles + the F1 tumble root (unchanged law)
+  for (int f = 0; f < kFallKeys; ++f) {
+    Rig g;
+    g.reset();
+    int32_t prev = 0;
+    for (int j = 0; j < nj; ++j) {
+      const int32_t d = rec_p[static_cast<size_t>(f) * nj + j] + prev;  // absolute-ish
+      const int32_t pitch = rec_p[static_cast<size_t>(f) * nj + j];
+      g.q[kBSpine0 + j] = quat_mul(quat_z(pitch),
+                                   quat_y(rec_y[static_cast<size_t>(f) * nj + j]));
+      (void)d;
+      prev = 0;
+    }
+    // the head lolls with the first joints' baked motion, on its bone
+    g.q[kBHead] = quat_mul(
+        quat_z(kHeadAttitude + rec_p[static_cast<size_t>(f) * nj + 0]),
+        quat_y(rec_y[static_cast<size_t>(f) * nj + 0] * 2));
+    const int32_t fl = zref::fx_sin(
+        zref::angle16{static_cast<uint16_t>((f * (65536 / kFallKeys) * 2 + 9000) & 0xFFFF)}).raw;
+    g.tail_rest(kBladeSplay + ((fl * 1800) >> 16), kBladeRise + ((fl * 1000) >> 16));
+    // the tumble root, exactly build_fall's law
+    const int32_t theta_u = static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
+    const int32_t theta = theta_u + static_cast<int32_t>(
+        (static_cast<int64_t>(kFallTumbleWarp) *
+         zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >> 16);
+    const int32_t ph = f * (65536 / kFallKeys);
+    const int32_t t2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
+    const int32_t t3 = zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 40000) & 0xFFFF)}).raw;
+    const zc::quat16 tumble =
+        quat_mul(quat_z(theta), quat_mul(quat_x((t2 * kFallRollAmp) >> 16),
+                                         quat_y((t3 * kFallYawAmp) >> 16)));
+    g.q[kBSpine0] = quat_mul(tumble, g.q[kBSpine0]);
+    g.write(c, f);
+    int32_t rx, ry, rz;
+    quat_rot_vec(tumble, kFallPivotX, kFallPivotY, 0, rx, ry, rz);
+    c.root[f * 3 + 0] = fxm(kFallPivotX - rx);
+    c.root[f * 3 + 1] = fxm(kFallLift + kFallPivotY - ry);
+    c.root[f * 3 + 2] = fxm(-rz);
+  }
+  return c;
+}
+
 #ifdef ZIXX_SWEEP
 #ifndef ZIXX_SWEEP_BASE
 #define ZIXX_SWEEP_BASE (-8000)
@@ -2438,6 +2599,10 @@ inline const zc::CreatureType& type() {
 
     zc::ClipBank bank;
     bank.bone_count = kBoneCount;
+    // A1: Zixxtrixx is the hero tier -- bake the 60 Hz presentation
+    // companion at compile (~doubles this bank's pose bytes; poses are
+    // final for this pass, which is why A1 lands LAST in Wave D)
+    bank.bake60 = true;
     bank.clips.push_back(build_idle());
     bank.clips.push_back(build_walk());
     bank.clips.push_back(build_attack());
@@ -2478,6 +2643,14 @@ inline const zc::CreatureType& type() {
           {kSlotAtkRecover, 13, kSlotAtkCompress, 0},  // ...back to the S
       };
     }
+#ifdef ZIXX_F2_PREVIEW
+    // F2, slot 19: the baked spring-chain fall. PREVIEW-BUILD ONLY -- the
+    // bake has real dynamics character (delayed waves, overshoot, mass)
+    // but still curls ~330 mm into itself at its tightest, and the owner
+    // has not ruled on it against the F1 relax he directed. It does not
+    // ship half-tuned; -DZIXX_F2_PREVIEW builds it for the side-by-side.
+    bank.clips.push_back(build_fall_baked());
+#endif
 #ifdef ZIXX_SWEEP
     bank.clips.push_back(build_sweep());
 #endif
