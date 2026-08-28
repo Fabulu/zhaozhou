@@ -151,6 +151,12 @@ MUTANTS = [
     # binade keeps the 33-bit comparison -- and therefore bit 32 -- alive, and
     # asks the sharper question anyway: not "is there a clamp" but "is it at
     # the right value".
+    # SURVIVED its first run, and the reason is the "same answer, wrong reason"
+    # pattern for the third time tonight: section 1 ALREADY drove an input that
+    # reaches the rail -- the rail is hit whenever the length is an exact power
+    # of two -- but the two clamps differ by 1 in a u24 reciprocal, which is at
+    # most 1/256 of an output LSB, so it shows only where it straddles a
+    # rounding boundary. Section 4b solves for four components that do.
     ("M18 the reciprocal is clamped to u25 rather than u24",
      "      rcp_finish = (r > 33'h0_00FF_FFFF) ? 32'h00FF_FFFF : 32'(r);",
      "      rcp_finish = (r > 33'h0_01FF_FFFF) ? 32'h01FF_FFFF : 32'(r);"),
@@ -222,7 +228,27 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "M20": (
+        "THE GUARD IS REDUNDANT FOR THE VALUE, and exhaustively so rather than "
+        "on the tested inputs. n2 is `logic [63:0]`, UNSIGNED, and three "
+        "squares of 32-bit components sum to at most 3*2^62, which is below "
+        "2^64 -- so the sum cannot wrap and n2 == 0 holds IF AND ONLY IF every "
+        "component is zero. The zero branch then sets rx and expo to 0 "
+        "explicitly, so the output multiply forms 0 * 0 = 0, and out_k is "
+        "31 + 0 = 31. resc_var(0, k) = (0 + 2^(k-1)) >> k = 0 for every k >= 1, "
+        "and k here ranges over 8..39. The forced zero and the computed value "
+        "are therefore THE SAME NUMBER on every input that can reach this "
+        "line, not merely on the ones the suite drives. "
+        "THE GUARD STAYS. It is not dead code being tolerated: it states the "
+        "op's law at the point the law applies, and M19 -- the LEDGER half of "
+        "the same law, which is NOT redundant, because normalize2 bumps RCP0 "
+        "and normalize3_approx bumps nothing -- is caught. "
+        "RE-SCORE THIS IF n2 EVER NARROWS, IF IT BECOMES SIGNED, OR IF THE "
+        "ZERO BRANCH STOPS ZEROING rx: each of the three breaks a different "
+        "step of the argument above."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):

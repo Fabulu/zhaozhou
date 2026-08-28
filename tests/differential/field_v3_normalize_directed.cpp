@@ -298,6 +298,53 @@ int main(int argc, char** argv) {
       run_one(dut, mb, false, g, 0x31, "near the rail, N2");
     }
 
+    printf("== section 4b: the reciprocal's u24 RAIL, and the ONE mantissa\n");
+    printf("               that reaches it ==\n");
+    {
+      // WHY THIS SECTION EXISTS: mutant M18 moved the reciprocal's clamp one
+      // binade -- u25 instead of u24 -- and SURVIVED, even though section 1
+      // already drives an input that reaches the rail.
+      //
+      // The reference pins the rail exactly: rcp_u24_norm's ONLY saturating
+      // input is m == 2^23, where the pre-clamp value is exactly 2^24 and the
+      // clamp gives 0xFFFFFF -- "pinned law, not overflow", in its own words.
+      // m is 2^23 precisely when the LENGTH is an exact power of two, and
+      // section 1's first lane, (1<<16, 0, 0), is such a vector. So the rail
+      // was BEING HIT and the answer was still right.
+      //
+      // It was right for the wrong reason. The two clamps differ by exactly 1
+      // in a u24 reciprocal, so the products differ by the component itself,
+      // while the output rescale is by 31 + e = 8 + log2(len). The component
+      // is at most the length, so the gap is at most 1/256 of an output LSB:
+      // invisible UNLESS it straddles a rounding boundary. Roughly one
+      // component in 256 does. Section 1's did not.
+      //
+      // These four do. Each has an exact power-of-two length (2^17) and a
+      // component chosen so that half-up rounding lands on opposite sides:
+      //
+      //   (131072,      1)   component 1       0 vs 1
+      //   (131071,    512)   component 131071  65535 vs 65536
+      //   (131071,    513)   component 513     256 vs 257
+      //   (131070,    725)   component 725     362 vs 363
+      //
+      // The second is worth a second look: 131071^2 + 512^2 is 2^34 + 1,
+      // one above the square of 2^17, so the floor-root lands on the power of
+      // two by a single count. A length that is "nearly" a power of two does
+      // NOT reach the rail, which is why these had to be solved for rather
+      // than guessed.
+      Group g{};
+      const int32_t xs[kLanes] = {131072, 131071, 131071, 131070};
+      const int32_t ys[kLanes] = {1, 512, 513, 725};
+      for (int l = 0; l < kLanes; ++l) {
+        g.x[l] = xs[l];
+        g.y[l] = ys[l];
+        g.z[l] = 0;  // N3 with a zero third component has the SAME length,
+                     // so both widths meet the same rail
+      }
+      run_one(dut, mb, false, g, 0x34, "the u24 rail, N2");
+      run_one(dut, mb, true, g, 0x35, "the u24 rail, N3");
+    }
+
     printf("== section 5: NORMALIZE2 writes no third lane ==\n");
     {
       Group g{};
