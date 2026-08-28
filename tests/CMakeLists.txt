@@ -1526,6 +1526,25 @@ set_tests_properties(field_v3_rot_random PROPERTIES LABELS "fast;nightly" TIMEOU
 add_test(NAME field_v3_rot_random_nightly COMMAND test_field_v3_rot_directed --random 400)
 set_tests_properties(field_v3_rot_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: the long-op path COMPOSED -- dispatcher, service, shared
+# multiplier bank and writeback arbiter, with a rival on the bank so refusal is
+# real. Every piece is green alone; this is the only place their handovers are
+# tested, and every defect that has cost real time in this engine lived exactly
+# there. Design: reports/FIELD_V3_DISPATCH.md.
+add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
+target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_svcpath_directed
+  PREFIX Vzhao_field_v3_svcpath
+  TOP_MODULE zhao_field_v3_svcpath
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+add_test(NAME field_v3_svcpath_directed COMMAND test_field_v3_svcpath_directed)
+set_tests_properties(field_v3_svcpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),

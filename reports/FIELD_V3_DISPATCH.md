@@ -185,3 +185,39 @@ to claim 1. It says collisions are rare, not that a starved claimant recovers.
 
 Step 3 is where the interesting failure lives, which is the argument for not
 stopping after step 2 and calling the attach done.
+
+---
+
+## MEASURED, 2026-08-28: the writeback policy is DRAIN FIRST
+
+The composition exists now (`zhao_field_v3_svcpath`), so the question this
+document left open has an answer instead of an argument. Same traffic, one
+model, an ALU asking every clock against a single four-point NOISE2 drain:
+
+| policy | drain finished | drain served | ALU stalled |
+| --- | ---: | ---: | ---: |
+| ALU first | **never** | 0 | 0 |
+| drain first | 31 clocks | 8 | 8 |
+| round robin | 38 clocks | 8 | 8 |
+
+**ALU-first starves the drain outright.** The argument for why it might be
+tolerable -- a stalled drain holds contexts out of the ready set, which reduces
+the ALU's own supply of work, so it is self-limiting -- is a claim about a
+feedback loop. Both this document and the arbiter's header said in advance that
+feedback-loop claims are the ones measurement overturns. It took one run.
+
+**Drain-first costs the ALU exactly the drain's length**: eight stalls for
+eight writes, once per group. Not a trade-off, a fixed and small price. Round
+robin works too and is strictly worse -- the same eight ALU stalls plus seven
+more clocks for the drain.
+
+The starvation is now PINNED as a check rather than treated as a failure. It is
+the evidence for the choice, and if a later change makes ALU-first live, that
+is worth noticing rather than absorbing silently.
+
+### What this does NOT settle
+
+The second write port. A four-point NOISE2 still costs 20 clocks in the unit
+and eight draining, and drain-first only decides who waits for the one port --
+it does not make the tail shorter. That number wants the executor attached and
+a real program mix before anyone spends the area.

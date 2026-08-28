@@ -36,9 +36,35 @@
 //     about a feedback loop and those are exactly the claims that turn out to
 //     be wrong under measurement.
 //
-// So both are built and `served_o` counts each claimant separately. The
-// composed engine's occupancy decides it, and until that measurement exists
-// this block refuses to pretend the answer is obvious.
+// So both are built and `served_o` counts each claimant separately.
+//
+// ---------------------------------------------------------------------------
+// MEASURED 2026-08-28, AND THE ANSWER IS THE DRAIN FIRST
+// ---------------------------------------------------------------------------
+// tests/differential/field_v3_svcpath_directed.cpp, same traffic, one model,
+// an ALU asking every clock against one four-point NOISE2 drain:
+//
+//     ALU first     drain never finished     drain served 0, stalled 3985
+//     drain first   drain done in 31 clocks  drain served 8, ALU stalled 8
+//     round robin   drain done in 38 clocks  drain served 8, ALU stalled 8
+//
+// ALU-FIRST STARVES THE DRAIN OUTRIGHT. The argument above for why it might be
+// acceptable -- that a stalled drain holds contexts out of the ready set and so
+// reduces the ALU's own supply of work -- is a claim about a FEEDBACK LOOP, and
+// this file said in advance that such claims are the ones measurement
+// overturns. It did, on the first run.
+//
+// DRAIN FIRST COSTS THE ALU EXACTLY THE DRAIN'S LENGTH and not one clock more:
+// eight stalls for eight writes, once per four-point NOISE2 group. That is what
+// makes services-first cheap here rather than a trade-off.
+//
+// Round robin also works and is strictly worse: the same eight ALU stalls, and
+// seven more clocks before the drain finishes.
+//
+// So the engine should tie `policy_i` to 1. The knob stays because the
+// measurement was worth having and will be worth repeating when a second
+// service is attached -- and synthesis prunes the unreachable arms once the
+// input is a constant.
 //
 // ROUND ROBIN IS ALSO OFFERED, and unlike on the multiplier bank it is safe
 // here for the same reason the choice is open at all: everyone can be refused.
