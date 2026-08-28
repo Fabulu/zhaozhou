@@ -845,3 +845,54 @@ them exist because a vector unit can pass a scalar test suite:
 Neither is wired into CMake yet: `tests/CMakeLists.txt` must not be edited
 while a sweep runs, because the driver re-runs `cmake` on every rebuild and
 would configure the edit underneath itself.
+
+---
+
+## 2026-08-28 -- FIELD.CURVE.SVC sweep GREEN, and NOISE2/RIDGE runs
+
+    curve service:  18 mutants  18 caught  0 equivalent  0 survived  0 discarded
+
+That includes C16, C17 and C18, the three that attack the new refusal hold.
+C16 had to be reshaped first -- see the previous entry -- and the reshaped
+form is caught.
+
+### The noise unit works, and every value check passed on the FIRST run
+
+    1,050 directed checks + 7,200 random checks    green
+    24 groups under refusal, 118 refusals issued   answers unchanged
+    four-point NOISE2  20 clocks                   six bank requests
+    four-point RIDGE   14 clocks                   four bank requests
+
+RIDGE being strictly cheaper is the design showing through rather than a
+coincidence: it stops after the first hash lane, so it makes four requests
+where NOISE2 makes six.
+
+**The one failure was my own test's search budget, not the RTL.** Section 5
+wants a group where ALL EIGHT lattice terms have bit 31 set, to put every lane
+on the divergent side of the signed/unsigned question at once. That is a
+1-in-256 draw and I gave it 400 attempts, which found two. The attempts are
+pure arithmetic and only the eight accepted groups cost DUT time, so the budget
+is now 40,000 and the reason is written at the loop.
+
+Worth being explicit about: the check FAILED rather than quietly accepting two
+groups, because it asserts the count it needs. A search that silently settles
+for what it found is how a section ends up proving less than its comment says.
+
+### N01 was refused by the preflight, and the reshape is better than the original
+
+`s_reg[l] <= s_reg[l]` removed the only READ of `s_mix`, orphaning it. Same
+class as C16 an hour earlier, same verdict: a mutant that cannot build is a
+discard, not evidence.
+
+The replacement replays the NEIGHBOURING point's mix. It keeps the signal live
+and it is sharper than what it replaced -- it is wrong PER POINT, so section
+3's four-identical-points groups would pass it and only section 2's
+four-different-points groups can see it. That pairing is why both sections
+exist.
+
+### Two index errors in the table's own docstring, corrected
+
+It credited "N05, N09 and N11" with the vector-specific claims and "N18 and
+N19" with the refusal hold. The real answers are N01/N05/N07/N09 and N20/N21.
+Nothing depended on it, but a table whose map of itself is wrong is how the
+next person aims a mutant at the wrong claim.

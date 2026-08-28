@@ -1450,6 +1450,28 @@ set_tests_properties(field_v3_exec_random PROPERTIES LABELS "fast;nightly" TIMEO
 add_test(NAME field_v3_exec_random_nightly COMMAND test_field_v3_exec_directed --random 400)
 set_tests_properties(field_v3_exec_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: NOISE2 and RIDGE for four points at once, on the shared
+# four-wide multiplier bank. ONE four-wide bank request is the SAME hash step
+# for all four points, so a four-point NOISE2 is six requests and RIDGE is
+# four. The differential is against zfield::steps::exec_op -- the shipped
+# interpreter -- never a hash rewritten in the test, which would only prove
+# two rewrites agree.
+#
+# The cone is ONE FILE: this block instantiates nothing, because the bank is
+# the engine's and is reached through ports.
+add_executable(test_field_v3_noise_directed differential/field_v3_noise_directed.cpp)
+target_link_libraries(test_field_v3_noise_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_noise_directed
+  PREFIX Vzhao_field_v3_noise
+  TOP_MODULE zhao_field_v3_noise
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv)
+add_test(NAME field_v3_noise_directed COMMAND test_field_v3_noise_directed)
+set_tests_properties(field_v3_noise_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_noise_random COMMAND test_field_v3_noise_directed --random 40)
+set_tests_properties(field_v3_noise_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_noise_random_nightly COMMAND test_field_v3_noise_directed --random 400)
+set_tests_properties(field_v3_noise_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the Earth lattice walker -- the front of the composed
 # Earth machine. The differential is against the reference walk itself
 # (zref::terrain::lattice_lerp + the 9.1 closed-interval coverage test),

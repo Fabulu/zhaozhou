@@ -341,9 +341,15 @@ int main(int argc, char** argv) {
     {
       // Law 5: the products are modulo 2^32 and the bank lane is signed. A
       // sign-extended operand diverges exactly here and nowhere else.
+      // THE BUDGET IS A 1-IN-256 DRAW, and 400 attempts found two groups.
+      // Requiring all EIGHT lattice terms of a group to have bit 31 set is
+      // deliberate -- it puts every lane on the divergent side at once -- but
+      // that is (1/2)^8 per attempt, so the search has to be sized for it.
+      // The attempts are pure arithmetic; only the eight accepted groups cost
+      // DUT time.
       int groups = 0;
       Prng sr(0x80B17u);
-      for (int attempt = 0; attempt < 400 && groups < 8; ++attempt) {
+      for (int attempt = 0; attempt < 40000 && groups < 8; ++attempt) {
         int32_t x[kLanes], y[kLanes];
         bool all_top = true;
         for (int l = 0; l < kLanes; ++l) {

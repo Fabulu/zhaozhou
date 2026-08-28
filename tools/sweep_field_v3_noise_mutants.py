@@ -13,14 +13,14 @@ new about it is per-point:
   * each point's saturation flags are its own.
 
 A vector unit that broadcast point 0, or computed one shift for the whole
-request, would pass every value check written for the scalar unit. Mutants
-N05, N09 and N11 attack exactly that, and the differential's sections 2, 3 and
-4 exist to make them reachable.
+request, would pass every value check written for the scalar unit. N01, N05,
+N07 and N09 attack exactly that, and the differential's sections 2, 3, 4 and 5
+exist to make them reachable.
 
 THE OTHER NEW CLAIM IS REFUSAL. The bank is shared and can say no, so every
 issue state holds until granted. The v2 unit does not do this and did not need
 to -- zhao_field_seq keeps one instruction in flight, so every request was
-granted. N18 and N19 attack the hold.
+granted. N20 and N21 attack the hold.
 
 CRLF: the worktree is checked out with CRLF. Anchors are written with plain
 "\\n" and translated to whatever the file actually uses.
@@ -38,9 +38,19 @@ MUTANTS = [
     # cost two more bank requests; carrying on from the post-RXS word instead
     # is the cheap-looking mistake, and it produces a lane 1 that is a hash of
     # a hash rather than the same lattice point one salt further.
-    ("N01 lane 1 continues from the finished word instead of replaying the mix",
+    #
+    # Reshaped after the preflight refused the direct form: `s_reg[l] <=
+    # s_reg[l]` removes the only READ of s_mix, orphaning it, and Verilator
+    # will not build that. A mutant that cannot build is a discard, not
+    # evidence -- the same refusal C16 earned in the curve table.
+    #
+    # Replaying the NEIGHBOUR's mix keeps the signal live and is a sharper
+    # mutant than the one it replaces: it is wrong per point, so it needs a
+    # group whose four points differ to be seen at all. Section 3's identical
+    # points would pass it, which is exactly why section 2 exists.
+    ("N01 lane 1 replays a neighbouring point's lattice mix",
      "              s_reg[l] <= s_mix[l];",
-     "              s_reg[l] <= s_reg[l];"),
+     "              s_reg[l] <= s_mix[(l + 1) % LANES];"),
 
     # ---- the lane salt ------------------------------------------------------
     ("N02 the lane salt is applied to lane 0 as well, so both lanes are lane 1",
