@@ -8,6 +8,74 @@ argued about.
 
 ---
 
+## WHERE THIS PLAN ACTUALLY GOT TO (added 2026-08-28, night)
+
+Everything below was written before any of it existed. This block says what is
+now true, so the plan can be read as a record rather than as a to-do list that
+has quietly gone stale. **The six-step order below was followed and it held.**
+
+    step 1  mul_ready into the remaining units       DONE
+    step 2  NOISE2 / RIDGE                           DONE, swept 23/23
+    step 3  ROT2 / ROT3                              DONE, swept 24/24
+    step 4  RING                                     DONE, swept 23/23
+    step 5  NORMALIZE2 / 3                           DONE, sweep running
+    step 6  SPLINE                                   MATHS HALF DONE, swept 21/21
+                                                     LOOKUP HALF NOT BUILT
+
+Plus the carriers the plan did not name because they were not ops: a
+dispatcher that gathers four points into one request, a writeback arbiter, and
+the executor's path for parking a point while its answer is computed.
+
+### The one item that is genuinely unfinished, and why it is not a detail
+
+**SPLINE's lookup half needs the curve service to fetch FOUR neighbours, and
+today it fetches one.**
+
+Step 6 predicted this in one line -- "it needs a second reader on the table
+cache" -- and that line turned out to be the only part of the plan that
+understated its work. A Catmull-Rom segment is defined by four control points,
+p0 through p3, and the arithmetic half now built takes all four as operands.
+Something has to READ them out of the table, and the curve service is the only
+thing that reads that table.
+
+So this is not "wire up a lookup". It is a width change on a shared service
+that already has a proven refusal path, four proven states and eighteen
+mutants riding on its current shape. Widening it means re-deriving the state
+machine (four fetches where there is one), re-deriving its bank arithmetic if
+the fetches are to be issued four-wide like every other service, and
+re-scoring CURVE.SVC's eighteen mutants against the new shape rather than
+assuming they still apply.
+
+Until that lands, SPLINE computes correct splines from control points handed
+to it directly, which is what its differential does. It cannot yet be driven
+from a table by a program, so **SPLINE is not usable from the IR yet** even
+though the block is closed at full marks. Those two facts are easy to confuse
+and worth keeping apart.
+
+### The composition rule below was right, and it earned its keep four times
+
+"What must not be assumed" says every step ends at a COMPOSITION test, not at
+the block's own sweep, because a sweep cannot test a claim a block makes about
+somebody else. That has now paid four times over -- the executor's open-loop
+multiply, the curve service's hang, and the dispatcher's two missing operands
+were all invisible to sweeps that scored full marks, and all four were found
+within minutes of wiring two blocks together.
+
+It is now a run of its own rather than a rule to remember:
+`tools/sweep_field_v3_svcpath.sh`, twenty-five mutants, almost every one of
+them a port map or a slot index. It does not re-check any block's arithmetic.
+
+### Still argued rather than measured
+
+The **two-service starvation question** in "The attach question the bank
+raises" below is still open, and still for the reason given there: it needs
+the curve service and the noise unit attached to the same bank at once. One
+service cannot starve anybody. The composition built so far has one service
+and a rival that exists to make refusal reachable -- enough to prove the round
+trip and to price a refusal, not enough to answer this.
+
+---
+
 ## THE FINDING THAT MATTERS MOST
 
 **Six v2 op units drive the shared multiplier with no `mul_ready` input, and
